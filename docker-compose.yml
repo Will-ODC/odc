@@ -1,4 +1,7 @@
-# Root compose. Each service adds its own block + its OWN postgres instance
+# Root compose = the FULL stack for `just up` and cross-service smoke tests.
+# Each service ALSO ships its own docker-compose.yml (per odc-service-boundaries)
+# for standalone dev/testing — both exist on purpose.
+# Each service block here includes its OWN postgres instance
 # (rule 1: no shared databases, ever — one db container per service).
 # Populated as services land in Phase 1+.
 services: {}

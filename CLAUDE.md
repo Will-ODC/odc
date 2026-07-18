@@ -19,7 +19,7 @@ services/
 docs/            # charter.md, implementation-plan.md, mockups/, decisions/ (ADRs)
 memory/          # STATE.md (phase progress, next steps), OPEN-QUESTIONS.md
 .claude/
-  skills/        # odc-* skills (review, testing, pipeline, boundaries, ui)
+  skills/        # odc-* skills (contracts, storage, review, testing, pipeline, boundaries, ui)
   agents/        # role definitions with model routing baked in
 ```
 
@@ -31,10 +31,11 @@ memory/          # STATE.md (phase progress, next steps), OPEN-QUESTIONS.md
 4. Skills auto-trigger by description; when in doubt, `odc-service-boundaries`
    before writing any endpoint and `odc-testing` before writing any code.
 
-At the end of every working session, update `memory/STATE.md` (done / next /
-blockers) and log any architectural choice as an ADR in `docs/decisions/`
-(copy `0000-template.md`). Unresolved design questions go in
-`memory/OPEN-QUESTIONS.md`, not in your head.
+`memory/STATE.md` is updated **on main at merge time** (merge checklist in
+`odc-pipeline`, owned by `odc-navigator`) — never on feature branches, where
+parallel agents would conflict. Log any architectural choice as an ADR in
+`docs/decisions/` (copy `0000-template.md`). Unresolved design questions go
+in `memory/OPEN-QUESTIONS.md`, not in your head.
 
 ## Non-negotiable rules (from the implementation plan)
 
@@ -50,11 +51,12 @@ blockers) and log any architectural choice as an ADR in `docs/decisions/`
 
 | Task | Model | Agent |
 |---|---|---|
-| Architecture, cross-service planning, contracts drafting, audits | **Fable** | `odc-architect` |
+| Architecture, cross-service planning, contracts drafting | **Fable** | `odc-architect` |
 | Implementing a service, feature, or fix | **Opus** | `odc-implementer` |
-| Building the verifier (contracts-only context) | **Opus** | `odc-verifier-builder` |
+| Building the verifier (contracts-only context, incl. Phase 0 rehearsal) | **Opus** | `odc-verifier-builder` |
 | Pre-merge review (fresh context) | **Opus** | `odc-reviewer` |
-| Navigation, lookups, renames, running tests, small helpers | **Sonnet** | `odc-navigator` |
+| Security audit at phase gates (fresh context, never the designing context) | **Opus** | `odc-security-auditor` |
+| Navigation, lookups, renames, tests, merge mechanics | **Sonnet** | `odc-navigator` |
 
 Default flow per unit of work: Fable plans → Opus implements on a small branch →
 fresh-context review per `.claude/skills/odc-code-review` → merge on green CI.

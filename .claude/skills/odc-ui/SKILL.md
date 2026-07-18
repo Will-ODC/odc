@@ -5,9 +5,9 @@ description: UI conventions and plain-language rules for the ODC web client. Use
 
 # ODC UI Conventions
 
-Audience: an average citizen, not a developer. The charter demands the
-system be "easy to understand, encapsulating complex logic." The UI is
-where that promise is kept or broken.
+Audience: an average citizen, not a developer. The implementation plan
+demands that complexity stays inside while the API speaks plain nouns and
+verbs; the UI is where that promise is kept or broken.
 
 ## Plain-language dictionary (enforced)
 
@@ -43,7 +43,7 @@ A component PR without all four is incomplete.
   contrast, alt text, full keyboard operability. Test with keyboard only
   before merging any interactive component.
 
-## Hub feed rules
+## Hub feed rules (post-MVP — do not build a feed before it is planned; MVP pages have none)
 
 - Three lanes, unmistakable at a glance: Opinion (quiet neutral chip),
   Ballot (accent border — the only emphasized card class), Action

@@ -1,6 +1,6 @@
 ---
 name: odc-pipeline
-description: CI/CD, git hooks, and branch discipline for the ODC monorepo. Use this skill whenever setting up or modifying CI, creating branches or PRs, configuring hooks, preparing a merge, or when the user mentions pipelines, Buildkite, CodeRabbit, deployment, or automation. Also consult before the first commit of any new service.
+description: CI/CD, git hooks, and branch discipline for the ODC monorepo. Use this skill whenever setting up or modifying CI, creating branches or PRs, configuring hooks, preparing a merge, or when the user mentions pipelines, CI, deployment, merging, or automation. Also consult before the first commit of any new service.
 ---
 
 # ODC Pipeline & Branch Discipline
@@ -71,4 +71,14 @@ IS the ticket.
 - Branch names: `svc/short-description` (e.g. `ledger/insert-only-guard`).
 - Commits: imperative subject ≤ 72 chars; body says WHY, not what.
 - PR description: what changed, how it was tested, which contract version
-  it targets. A reviewer should need nothing else to start.
+  it targets. A reviewer should need nothing else to start. (The PR template
+  in `.github/` mirrors these three fields.)
+
+## Merge checklist (owned by odc-navigator, on main)
+
+1. CI green, all required stages.
+2. Review verdict recorded (APPROVE or APPROVE WITH NITS, per `odc-code-review`).
+3. Squash-merge; message references the issue.
+4. Update `memory/STATE.md` (done / next / blockers) — this happens HERE, on
+   main at merge time, never on feature branches (parallel agents would conflict).
+5. Move the board card to Done.

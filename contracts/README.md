@@ -14,9 +14,18 @@ detail of some service. Deliverables (implementation-plan §Phase 0):
    vote_cast. No free-text content in the log at MVP.
 6. `read-api.md` — GET /events?since= pagination and limits
 7. `evolution.md` — additive-only versions; hashing never changes retroactively
+8. `fixtures/` — golden vectors: canonical events + precomputed hashes, one per
+   normative rule plus adversarial cases. Produced by the rehearsal; consumed
+   by every service's CI and the verifier. Hashes must be reproduced
+   independently in TypeScript and Go before freeze.
 
-**Exit gate — genesis rehearsal:** build a throwaway chain against the drafts,
-export, verify, tamper-test. Only then freeze and declare genesis. A hashing
-mistake found after real events exist is permanent.
+**Exit gate — genesis rehearsal:** the full procedure lives in the
+`odc-contracts` skill. Build a throwaway chain against the drafts, export,
+verify with a fresh-context throwaway Go verifier, run the tamper matrix.
+Only then freeze and declare genesis. A hashing mistake found after real
+events exist is permanent.
 
-Changes after freeze: additive-only, version-bumped, never retroactive.
+**Freeze mechanics (all three, same day, or it isn't frozen):**
+status flip in this README → git tag `contracts-v1` → `contracts-guard` CI
+workflow active. Changes after freeze: additive-only, version-bumped, with a
+`CONTRACTS-CHANGE.md` entry — never retroactive.
