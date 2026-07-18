@@ -2,8 +2,10 @@
 
 Unresolved design questions. Move each to an ADR when decided; delete when moot.
 
-- Canonical JSON serialization for hashing: JCS (RFC 8785) vs. fixed field
-  order? Must be trivially implementable in Go and TypeScript. (Phase 0)
+- ~~Canonical JSON serialization~~ → DECIDED: fixed-field-order byte
+  construction, strict rejection (D3/D5 in docs/plans/phase-0.md; ADR in T3).
+- ~~Signature scheme~~ → DECIDED: Ed25519 (D2; ADR in T3).
 - Operator key + identity service key management for MVP: file, env, or KMS?
-- Anchoring cadence and venue for the chain head in v1 (which public repo, how often)?
-- Signature scheme for participant keys (Ed25519 assumed — confirm in contracts/).
+  (Needed by Phase 1 identity/ledger tickets, not Phase 0.)
+- Anchoring cadence and venue for the chain head in v1 (manual README anchor
+  at genesis per phase-0 plan; automation cadence is a Phase 1+ question.)

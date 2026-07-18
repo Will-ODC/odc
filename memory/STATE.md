@@ -12,19 +12,11 @@ contracts/ passes the genesis rehearsal and is frozen.
 - Monorepo scaffolded: skills, agents, memory, toolchain stubs (2026-07-18).
 
 ## Next
-1. Draft contracts/ (odc-architect, with the `odc-contracts` skill): event
-   schema, canonical hashing rule, export format, IDs, event type registry,
-   read-API shape, evolution rule, golden fixtures.
-2. Enforcement bootstrap — MUST exist before freeze or the freeze is
-   honor-system: `.github/workflows/` (contracts-guard + lint/typecheck/test
-   per service + diff-size check), lefthook config, PR template
-   (what changed / how tested / contract version).
-3. Genesis rehearsal per `odc-contracts`: throwaway chain → export →
-   fresh-context throwaway Go verifier → tamper matrix → cross-language
-   fixture check. Rerun until clean.
-4. Freeze contracts/ (README flip + tag `contracts-v1` + contracts-guard
-   live), declare genesis. Security audit gate (odc-security-auditor) before
-   freeze. Then Phase 1 in parallel: ledger · verifier (fresh context) · identity.
+**Execute `docs/plans/phase-0.md`** — the full Phase 0 ticket stack
+(T1–T10: hooks/CI → contract drafts → fixtures → rehearsal → audit → freeze),
+written 2026-07-18 with pinned decisions D1–D8. Start with T1, and T2 after
+the user creates the public GitHub repo. Each ticket names its agent, its
+required reading, and its acceptance bullets — take one ticket per session.
 
 ## Blockers
 - None.
