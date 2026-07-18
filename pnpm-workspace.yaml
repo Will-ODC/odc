@@ -1,0 +1,7 @@
+packages:
+  # verifier is Go and deliberately excluded from the JS workspace
+  - "services/ledger"
+  - "services/identity"
+  - "services/tally"
+  - "services/web"
+  - "services/mcp"

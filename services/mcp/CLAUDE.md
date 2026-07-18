@@ -1,0 +1,5 @@
+# mcp — service rules
+
+- Resources = tally and ledger reads; tools = vote casting via identity-authenticated signatures.
+- Built last: everything below it must already be trustworthy.
+- Any logic beyond wrapping is a design smell — push it down and flag it.

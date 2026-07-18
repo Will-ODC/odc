@@ -1,0 +1,157 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>ODC hub feed — card layout mockups</title>
+<style>
+  :root { --bg:#faf9f5; --card:#fff; --ink:#1a1a17; --sub:#6b6a64; --mut:#9a9890; --line:#e4e2da; }
+  body { font-family: -apple-system, "Segoe UI", Roboto, sans-serif; background: var(--bg); color: var(--ink); margin:0; padding: 32px 16px; }
+  h1 { font-size:20px; font-weight:600; margin:0 0 4px; }
+  h2 { font-size:15px; font-weight:600; margin:0 0 12px; }
+  .intro { max-width:820px; margin:0 auto 28px; font-size:14px; color:var(--sub); line-height:1.6; }
+  .row { display:flex; flex-wrap:wrap; gap:28px; justify-content:center; align-items:flex-start; }
+  .phone { width:360px; background:#f1efe8; border-radius:16px; padding:16px 12px; }
+  .hdr { display:flex; justify-content:space-between; align-items:center; margin-bottom:12px; padding:0 4px; font-size:15px; font-weight:600; }
+  .hdr span { font-size:12px; font-weight:400; color:var(--sub); }
+  .card { background:var(--card); border:0.5px solid var(--line); border-radius:12px; padding:14px; margin-bottom:12px; }
+  .chip { font-size:11px; font-weight:600; padding:2px 8px; border-radius:6px; background:#f1efe8; color:var(--sub); }
+  .meta { font-size:11px; color:var(--mut); margin-left:6px; }
+  .title { font-size:14px; font-weight:600; margin:8px 0 4px; }
+  .sub { font-size:12px; color:var(--sub); margin:0 0 12px; }
+  .btnrow { display:flex; gap:8px; }
+  button { flex:1; font-size:12px; padding:8px 6px; border-radius:8px; border:0.5px solid #c9c7bf; background:transparent; color:var(--ink); cursor:default; }
+  .wide { width:100%; }
+  .fine { font-size:11px; color:var(--mut); text-align:center; margin:8px 0 0; }
+  .bar { border-radius:12px; padding:10px 14px; margin-bottom:12px; }
+  .bar p { margin:0; } .bar .b1 { font-size:12px; font-weight:600; } .bar .b2 { font-size:11px; }
+  .split { display:flex; justify-content:space-between; align-items:center; margin-top:10px; font-size:12px; }
+  .split button { flex:0 0 auto; }
+  .notes { max-width:820px; margin:32px auto 0; font-size:13px; color:var(--sub); line-height:1.7; }
+  .notes strong { color:var(--ink); }
+</style>
+</head>
+<body>
+
+<div class="intro">
+  <h1>ODC hub feed — card layout</h1>
+  Three lanes, asymmetric interaction. One-tap actions exist only on opinion cards; ballot and action cards are
+  navigational doors — binding acts happen on their own pages, in slow mode. Ballots are surfaced deterministically
+  by the pinned bar, never left to feed ranking.
+</div>
+
+<div class="row">
+
+  <div class="phone">
+    <div class="hdr">Variant A — neutral, ballot-only accent <span>Feed · Actions · Record</span></div>
+
+    <div class="bar" style="background:#E6F1FB; border:0.5px solid #B5D4F4;">
+      <p class="b1" style="color:#0C447C;">&#128337; 2 open ballots · you haven't voted</p>
+      <p class="b2" style="color:#185FA5;">Transit levy closes in 3 days</p>
+    </div>
+
+    <div class="card">
+      <span class="chip">Opinion</span><span class="meta">shared by m-heron · 2h</span>
+      <p class="title">City report: bike lane usage up 40% since 2024</p>
+      <p class="sub">vancouver.ca · reactions are opinion only, not a vote</p>
+      <div class="btnrow"><button>&#128077; Agree · 214</button><button>&#128078; Disagree · 58</button><button>&#128172; 31</button></div>
+    </div>
+
+    <div class="card" style="border:2px solid #378ADD;">
+      <span class="chip" style="background:#E6F1FB; color:#0C447C;">Ballot</span><span class="meta">binding · closes in 3 days</span>
+      <p class="title">Should we adopt the 0.2% transit levy?</p>
+      <p class="sub">Briefing: 4 min read · 12 positions published · 61% turnout so far</p>
+      <button class="wide" style="border-color:#378ADD; color:#0C447C;">Read briefing and vote &#8594;</button>
+      <p class="fine">Voting happens on the issue page — no one-tap ballots</p>
+    </div>
+
+    <div class="card">
+      <span class="chip" style="background:#E1F5EE; color:#085041;">Action</span><span class="meta">unclaimed · posted by k-osprey</span>
+      <p class="title">Photograph and log the 6 damaged benches on Commercial Dr</p>
+      <div class="split"><span style="color:#0F6E56;">&#11044; 40 credits · proof required</span><button>View on board &#8594;</button></div>
+    </div>
+  </div>
+
+  <div class="phone">
+    <div class="hdr">Variant B — colored lanes <span>Feed · Actions · Record</span></div>
+
+    <div class="bar" style="background:#E6F1FB; border:0.5px solid #378ADD;">
+      <p class="b1" style="color:#0C447C;">&#128337; 2 open ballots · you haven't voted</p>
+      <p class="b2" style="color:#185FA5;">Transit levy closes in 3 days</p>
+    </div>
+
+    <div class="card" style="border-color:#AFA9EC;">
+      <span class="chip" style="background:#EEEDFE; color:#3C3489;">&#128488; Opinion</span><span class="meta">shared by m-heron · 2h</span>
+      <p class="title">City report: bike lane usage up 40% since 2024</p>
+      <p class="sub">vancouver.ca · reactions are opinion only, not a vote</p>
+      <div class="btnrow"><button>&#128077; Agree · 214</button><button>&#128078; Disagree · 58</button><button>&#128172; 31</button></div>
+    </div>
+
+    <div class="card" style="border:2px solid #378ADD;">
+      <span class="chip" style="background:#E6F1FB; color:#0C447C;">&#9745; Ballot</span><span class="meta" style="color:#185FA5;">binding · closes in 3 days</span>
+      <p class="title">Should we adopt the 0.2% transit levy?</p>
+      <p class="sub">Briefing: 4 min read · 12 positions published · 61% turnout so far</p>
+      <button class="wide" style="border-color:#378ADD; color:#0C447C; background:#E6F1FB;">Read briefing and vote &#8594;</button>
+      <p class="fine">Voting happens on the issue page — no one-tap ballots</p>
+    </div>
+
+    <div class="card" style="border-color:#5DCAA5;">
+      <span class="chip" style="background:#E1F5EE; color:#085041;">&#128295; Action</span><span class="meta">unclaimed · posted by k-osprey</span>
+      <p class="title">Photograph and log the 6 damaged benches on Commercial Dr</p>
+      <div class="split"><span style="color:#0F6E56;">&#11044; 40 credits · proof required</span><button style="border-color:#5DCAA5; color:#085041;">View on board &#8594;</button></div>
+    </div>
+  </div>
+
+  <div class="phone">
+    <div class="hdr">Variant C — tinted card backgrounds <span>Feed · Actions · Record</span></div>
+
+    <div class="bar" style="background:#E6F1FB; border:0.5px solid #378ADD;">
+      <p class="b1" style="color:#0C447C;">&#128337; 2 open ballots · you haven't voted</p>
+      <p class="b2" style="color:#185FA5;">Transit levy closes in 3 days</p>
+    </div>
+
+    <div class="card" style="background:#EEEDFE; border-color:#AFA9EC;">
+      <span class="chip" style="background:#CECBF6; color:#26215C;">&#128488; Opinion</span><span class="meta" style="color:#534AB7;">shared by m-heron · 2h</span>
+      <p class="title" style="color:#26215C;">City report: bike lane usage up 40% since 2024</p>
+      <p class="sub" style="color:#534AB7;">vancouver.ca · reactions are opinion only, not a vote</p>
+      <div class="btnrow">
+        <button style="border-color:#AFA9EC; color:#3C3489;">&#128077; Agree · 214</button>
+        <button style="border-color:#AFA9EC; color:#3C3489;">&#128078; Disagree · 58</button>
+        <button style="border-color:#AFA9EC; color:#3C3489;">&#128172; 31</button>
+      </div>
+    </div>
+
+    <div class="card" style="background:#E6F1FB; border:2px solid #378ADD;">
+      <span class="chip" style="background:#B5D4F4; color:#042C53;">&#9745; Ballot</span><span class="meta" style="color:#185FA5;">binding · closes in 3 days</span>
+      <p class="title" style="color:#042C53;">Should we adopt the 0.2% transit levy?</p>
+      <p class="sub" style="color:#185FA5;">Briefing: 4 min read · 12 positions published · 61% turnout so far</p>
+      <button class="wide" style="border-color:#0C447C; color:#E6F1FB; background:#185FA5;">Read briefing and vote &#8594;</button>
+      <p class="fine" style="color:#185FA5;">Voting happens on the issue page — no one-tap ballots</p>
+    </div>
+
+    <div class="card" style="background:#E1F5EE; border-color:#5DCAA5;">
+      <span class="chip" style="background:#9FE1CB; color:#04342C;">&#128295; Action</span><span class="meta" style="color:#0F6E56;">unclaimed · posted by k-osprey</span>
+      <p class="title" style="color:#04342C;">Photograph and log the 6 damaged benches on Commercial Dr</p>
+      <div class="split"><span style="color:#0F6E56;">&#11044; 40 credits · proof required</span><button style="border-color:#0F6E56; color:#085041;">View on board &#8594;</button></div>
+    </div>
+  </div>
+
+</div>
+
+<div class="notes">
+  <strong>Design rules (lodged in odc-ui skill):</strong> binding actions never execute from feed context — ballot and
+  action cards are doors only. Pinned ballot bar sits outside feed ranking (deterministic surfacing). Sentiment-lane
+  sort orders are user-selectable and transparent; no engagement-optimized default. Lane identity never rests on color
+  alone — chips carry text and icons for colorblind accessibility.<br><br>
+  <strong>Variant C notes:</strong> tinted backgrounds give the strongest lane separation and make the feed feel
+  segmented rather than uniform — good for scanability, but it is the loudest option: a long feed of colored blocks
+  can read as busy, and the ballot loses its "only colored thing on screen" status entirely, so its solid-fill CTA
+  button now carries the emphasis instead. Text on tints uses dark same-family stops for contrast.<br><br>
+  <strong>Variant trade-off (A vs B):</strong> A preserves hierarchy — the ballot's accent border is the only color, so
+  importance and color are one signal. B gives instant lane recognition but ballots compete with purple/teal for
+  attention. Suggested middle path: colored chips for lane identity, neutral card borders except the ballot's single
+  emphasized border. Decide with real content density on screen.
+</div>
+
+</body>
+</html>

@@ -1,0 +1,4 @@
+# Root compose. Each service adds its own block + its OWN postgres instance
+# (rule 1: no shared databases, ever — one db container per service).
+# Populated as services land in Phase 1+.
+services: {}
