@@ -1,0 +1,47 @@
+name: repo
+
+# Repo-wide checks on every PR. Service-specific pipelines are added per service
+# under their own path filters later (odc-pipeline).
+on:
+  pull_request:
+
+permissions:
+  contents: read
+
+concurrency:
+  group: repo-${{ github.ref }}
+  cancel-in-progress: true
+
+jobs:
+  checks:
+    name: format / lint / typecheck
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+      - uses: pnpm/action-setup@v4
+        with:
+          version: 9
+      - uses: actions/setup-node@v4
+        with:
+          node-version: 20
+          cache: pnpm
+      - run: pnpm install --frozen-lockfile
+      # These pass trivially while the workspace has no packages yet (turbo runs
+      # nothing, prettier checks the tracked files) and grow real teeth as
+      # services land.
+      - run: pnpm run format:check
+      - run: pnpm run lint
+      - run: pnpm run typecheck
+
+  diff-size:
+    name: diff-size
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+        with:
+          fetch-depth: 0
+      - name: Check diff size
+        env:
+          BASE: ${{ github.event.pull_request.base.sha }}
+          HEAD: ${{ github.event.pull_request.head.sha }}
+        run: bash .github/scripts/diff-size.sh
