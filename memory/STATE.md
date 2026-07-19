@@ -38,11 +38,16 @@ nothing yet blocking it. Then T4 (hashing/export/read-api/evolution) → T5–T1
 Each spec file must carry a `Version:` line or contracts-guard fails the PR.
 
 Ticket discipline: one ticket = one branch = one PR = one session; fresh-context
-review before merge; squash-merge; update this file on master at merge time.
+review before merge; squash-merge. **STATE.md update note:** branch protection
+now blocks direct pushes to master, so this file can no longer be committed
+straight to master — update it in a small follow-up PR right after the ticket
+merges (still separate from the feature branch, so parallel agents don't
+conflict). Required checks to go green: `format / lint / typecheck`,
+`diff-size`, `guard-tests`, `guard`.
 
 ## Blockers
 
-- None for T3/T4 authoring. **Pending user action:** enable branch protection
-  on `master` now that T2's CI exists — checklist in `docs/plans/phase-0.md`
-  §"Branch-protection checklist". Until then the required-checks rules T2
-  documents are not actually enforced (PRs can still merge without green CI).
+- None for T3/T4 authoring. Branch protection is **ON** (2026-07-19, ruleset
+  `protect-master`): PR required, four status checks strict, linear history, no
+  bypass. Both Phase-0 user actions are complete — T2's documented rules are
+  now actually enforced.
