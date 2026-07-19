@@ -1,0 +1,25 @@
+# Local git hooks. Fast by design: pre-commit must stay well under 5s or it
+# gets bypassed and then trusted falsely (odc-pipeline). Install with:
+#   pnpm lefthook install
+#
+# Hooks run on STAGED FILES ONLY, in check mode — a failure BLOCKS the commit,
+# it does not silently rewrite your tree.
+
+pre-commit:
+  parallel: true
+  commands:
+    prettier:
+      glob: "*.{js,jsx,ts,tsx,mjs,cjs,json,md,yml,yaml,css,html}"
+      run: pnpm prettier --check {staged_files}
+    eslint:
+      glob: "*.{js,jsx,ts,tsx,mjs,cjs}"
+      run: pnpm eslint {staged_files}
+
+pre-push:
+  commands:
+    unit:
+      # Only the services whose files changed relative to the default branch.
+      # TURBO_SCM_BASE is pinned to master because turbo's --affected default is
+      # `main`; without this it would diff against a ref that does not exist here.
+      # No packages / no changes → turbo runs nothing and exits clean.
+      run: TURBO_SCM_BASE=master pnpm turbo run test --affected

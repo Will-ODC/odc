@@ -1,6 +1,6 @@
 # Online Democratic Community — Charter
 
-*A whitepaper. This document is the argument and the architecture; implementation details live in component specs.*
+_A whitepaper. This document is the argument and the architecture; implementation details live in component specs._
 
 ---
 
@@ -29,15 +29,16 @@ All activity — votes, arguments, positions, trust grants, disbursements, proof
 
 **P2. One verified human, two planes.**
 A single personhood credential ("real, unique human") backs two identities that the system guarantees are the same person but cannot link:
+
 - the **ballot plane** — anonymous, unlinkable, strictly equal;
 - the **public plane** — persistent, named, reputation-bearing.
-Secrecy where power could coerce; accountability where money and advocacy live.
+  Secrecy where power could coerce; accountability where money and advocacy live.
 
 **P3. The platform characterizes; it never weighs.**
 It records who said what with what attestations, and publishes many views in parallel. It never selects a winning aggregation method, weights a ballot, gates a community, or ranks an expert. Interpretation belongs to readers; legitimacy belongs to the community and whatever rule it chooses for itself.
 
 **P4. Floors, not ladders.**
-Requirements to participate must be achievable by anyone, for free (personhood; an accessible issue briefing). Nothing creates a class of superior voters. Trust ladders exist only for execution capacity — what you may be entrusted to *do*, never how much your vote counts.
+Requirements to participate must be achievable by anyone, for free (personhood; an accessible issue briefing). Nothing creates a class of superior voters. Trust ladders exist only for execution capacity — what you may be entrusted to _do_, never how much your vote counts.
 
 ## 4. The record
 
@@ -49,7 +50,7 @@ Requirements to participate must be achievable by anyone, for free (personhood; 
 
 - **Secret, equal, unlinkable — always.** The canonical tally is one verified human, one vote, and this never varies.
 - **Receipt-free by design.** No one can prove how they voted, even voluntarily. A disclosure option that exists can be demanded; only impossible proof protects the coercible. Public advocacy is served by the public plane instead (§6).
-- **Parallel tallies, not weights.** Ballots may carry anonymous attributes (verified human; completed the issue briefing; holds a domain attestation). Results publish side by side — all voters, briefing-completers, attested experts — and the gaps between them are public information. No tally is declared the winner; expertise becomes *legible* rather than *imposed*.
+- **Parallel tallies, not weights.** Ballots may carry anonymous attributes (verified human; completed the issue briefing; holds a domain attestation). Results publish side by side — all voters, briefing-completers, attested experts — and the gaps between them are public information. No tally is declared the winner; expertise becomes _legible_ rather than _imposed_.
 - **The briefing credential.** Each issue ships a free, short, accessible briefing presenting the steelman of each position. Completing it attaches a credential to your ballot and feeds a parallel tally. Briefing content is itself contestable through the platform's deliberation — whoever writes the curriculum must not control the electorate.
 - **Multiple aggregation methods in parallel** (approval, ranked-choice/STV, quadratic, others) computed from the same ballots. Choosing among them is a downstream act.
 

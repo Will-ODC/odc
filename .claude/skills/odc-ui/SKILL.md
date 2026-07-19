@@ -11,14 +11,14 @@ verbs; the UI is where that promise is kept or broken.
 
 ## Plain-language dictionary (enforced)
 
-| Never show | Show instead |
-|---|---|
+| Never show                     | Show instead                 |
+| ------------------------------ | ---------------------------- |
 | keypair, public key, signature | "your account" / "signed in" |
-| event, event log, append | "the public record" |
-| hash chain, hash, NDJSON | "tamper-proof record" |
-| participant_id, pseudonym | "your voting name" |
-| tally derivation | "results" |
-| verify the export | "check the record yourself" |
+| event, event log, append       | "the public record"          |
+| hash chain, hash, NDJSON       | "tamper-proof record"        |
+| participant_id, pseudonym      | "your voting name"           |
+| tally derivation               | "results"                    |
+| verify the export              | "check the record yourself"  |
 
 Keys are generated, stored, and used invisibly. "Sign up" creates a
 keypair; "Vote" signs an event; the user is told neither unless they open
@@ -62,7 +62,7 @@ A component PR without all four is incomplete.
 ## Trust affordances (product requirements, not decoration)
 
 - Results pages always link "check the record yourself" → export download
-  + one-paragraph plain explanation of what the verifier proves.
+  - one-paragraph plain explanation of what the verifier proves.
 - Anything monetizable (future sentiment instruments) is visually
   unmistakable from governance, with the consent sentence at the point of
   action — per the charter, never buried in settings.

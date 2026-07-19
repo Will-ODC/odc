@@ -1,0 +1,16 @@
+# Generated / vendored — never format
+node_modules/
+dist/
+.turbo/
+coverage/
+pnpm-lock.yaml
+
+# Go verifier: formatted by gofmt, never prettier
+services/verifier/
+
+# contracts/ is on the frozen track — hashing.md and fixtures are byte-exact
+# artifacts, not prose to be reflowed. Never let prettier touch them.
+contracts/
+
+# Mockups are throwaway visual references, not maintained source.
+docs/mockups/

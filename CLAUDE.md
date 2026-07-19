@@ -31,7 +31,7 @@ memory/          # STATE.md (phase progress, next steps), OPEN-QUESTIONS.md
 4. Skills auto-trigger by description; when in doubt, `odc-service-boundaries`
    before writing any endpoint and `odc-testing` before writing any code.
 
-`memory/STATE.md` is updated **on main at merge time** (merge checklist in
+`memory/STATE.md` is updated **on master at merge time** (merge checklist in
 `odc-pipeline`, owned by `odc-navigator`) — never on feature branches, where
 parallel agents would conflict. Log any architectural choice as an ADR in
 `docs/decisions/` (copy `0000-template.md`). Unresolved design questions go
@@ -49,14 +49,14 @@ in `memory/OPEN-QUESTIONS.md`, not in your head.
 
 ## Model routing
 
-| Task | Model | Agent |
-|---|---|---|
-| Architecture, cross-service planning, contracts drafting | **Fable** | `odc-architect` |
-| Implementing a service, feature, or fix | **Opus** | `odc-implementer` |
-| Building the verifier (contracts-only context, incl. Phase 0 rehearsal) | **Opus** | `odc-verifier-builder` |
-| Pre-merge review (fresh context) | **Opus** | `odc-reviewer` |
-| Security audit at phase gates (fresh context, never the designing context) | **Opus** | `odc-security-auditor` |
-| Navigation, lookups, renames, tests, merge mechanics | **Sonnet** | `odc-navigator` |
+| Task                                                                       | Model      | Agent                  |
+| -------------------------------------------------------------------------- | ---------- | ---------------------- |
+| Architecture, cross-service planning, contracts drafting                   | **Fable**  | `odc-architect`        |
+| Implementing a service, feature, or fix                                    | **Opus**   | `odc-implementer`      |
+| Building the verifier (contracts-only context, incl. Phase 0 rehearsal)    | **Opus**   | `odc-verifier-builder` |
+| Pre-merge review (fresh context)                                           | **Opus**   | `odc-reviewer`         |
+| Security audit at phase gates (fresh context, never the designing context) | **Opus**   | `odc-security-auditor` |
+| Navigation, lookups, renames, tests, merge mechanics                       | **Sonnet** | `odc-navigator`        |
 
 Default flow per unit of work: Fable plans → Opus implements on a small branch →
 fresh-context review per `.claude/skills/odc-code-review` → merge on green CI.

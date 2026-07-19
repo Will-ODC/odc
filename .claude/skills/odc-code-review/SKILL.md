@@ -19,21 +19,24 @@ description: Code review procedure and checklist for ODC. Use this skill wheneve
 
 Verdict first: **APPROVE** / **APPROVE WITH NITS** / **REQUEST CHANGES**.
 Then findings, each tagged:
+
 - `[BLOCKING]` correctness, security, charter, or boundary violation
 - `[SHOULD]` worth fixing now, wouldn't block alone
 - `[NIT]` style/preference — author may ignore
-Every `[BLOCKING]` cites file:line and says concretely what to change.
-Max ~10 findings; prioritize. A wall of nits is a failed review.
+  Every `[BLOCKING]` cites file:line and says concretely what to change.
+  Max ~10 findings; prioritize. A wall of nits is a failed review.
 
 ## Checklist
 
 **Boundaries & contracts**
+
 - No reads of another service's tables or private modules.
 - No event schema drift: fields, types, hashing untouched, or a legal
   additive contracts change is included with version bump.
 - New/changed endpoints are reflected in the service's `API.md`.
 
 **Charter red flags (always blocking)**
+
 - Any UPDATE/DELETE on event tables, or code paths that could produce one.
 - Linkage-map data in any response, log line, metric, or error message.
 - Ballot and sentiment data touching the same store, queue, or endpoint.
@@ -41,11 +44,13 @@ Max ~10 findings; prioritize. A wall of nits is a failed review.
 - Free-text user content written into the log (MVP).
 
 **Security**
+
 - Every mutating endpoint authenticates; signatures verified before append.
 - Parameterized queries only; no string-built SQL.
 - Keys and secrets never logged, never in fixtures, never in error output.
 
 **Quality**
+
 - Tests required by `odc-testing` are present and meaningful (assert
   behavior, not implementation details).
 - Errors handled at boundaries; no swallowed exceptions; failure messages

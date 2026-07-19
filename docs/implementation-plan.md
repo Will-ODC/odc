@@ -31,21 +31,24 @@ Everything not in `contracts/` is a private detail of some service.
 ## Services
 
 ### 1. `ledger` — Phase 1
+
 The append-only event log. The single writer of truth.
 
 - API: `POST /events` · `GET /events?since={seq}` · `GET /head` · `GET /export`
 - Inside: hash computed at insert; insert-only enforced at the storage layer; `seq` assigned here (timestamps are advisory).
-- Validation is self-contained: a `vote_cast` is accepted only if signed by a public key found in a prior `participant_registered` event *in its own log*. No calls to other services.
+- Validation is self-contained: a `vote_cast` is accepted only if signed by a public key found in a prior `participant_registered` event _in its own log_. No calls to other services.
 - Duplicate votes are **recorded, not rejected**; interpretation belongs to tally (latest per participant wins). The log records what happened; views decide what it means.
 - MVP authorization: `issue_created` requires the operator key; `participant_registered` requires the `identity` service's key (identity is the sole gate to personhood); `vote_cast` requires a registered participant's signature.
 - Write path: clients sign locally and `POST /events` directly. `identity` is not in the vote path.
 
 ### 2. `verifier` — Phase 1, independent
+
 Standalone CLI, written **from `contracts/` alone in a fresh context** — an agent that has never seen `ledger` source or discussion. This independence is the test that the spec is real.
 
 - `verify <export.ndjson> [--head <hash>]` → `VALID` or `INVALID at line N`.
 
 ### 3. `identity` — Phase 1
+
 Human-facing registration; keeper of the private linkage map (own database, never exposed, physically separate from `ledger`).
 
 - API: `POST /register` (new participant: generates/receives pubkey, emits `participant_registered` to ledger, records linkage privately) · `POST /challenge` (auth for clients).
@@ -53,6 +56,7 @@ Human-facing registration; keeper of the private linkage map (own database, neve
 - Ordering: emit `participant_registered` to `ledger` first; record the private linkage only on confirmed append; retries must be safe. A person must never exist in one store but not the other.
 
 ### 4. `tally` — Phase 2
+
 All derived views. Holds no truth; rebuildable from the export at any time (and tested that way).
 
 - Reads `ledger` via `GET /events?since=` polling.
@@ -60,26 +64,29 @@ All derived views. Holds no truth; rebuildable from the export at any time (and 
 - v1 = approval counting, latest-vote-per-participant. Parallel methods, reputation, and delegation views arrive later behind the same API shape.
 
 ### 5. `web` — Phase 2
+
 The human client. Talks only to public APIs. Can start against mocks generated from `contracts/`.
 
 - Key handling is encapsulated: the user sees "sign up" and "vote"; keys are generated and stored client-side invisibly, exportable for the curious.
 - MVP pages: register · issue list · issue detail with vote button · results · a "verify this yourself" link that downloads the export and links the verifier.
 
 ### 6. `mcp` — Phase 3
+
 Thin protocol wrapper. Resources = `tally` and `ledger` reads; tools = vote casting via `identity`-authenticated signatures. Contains no logic of its own.
 
 ### Deferred services (reserve event types in `contracts/` now; build later)
+
 - `sentiment` — private encrypted response store; commits only anonymous hashes to `ledger`. Its separation from ballots is a Phase 0 schema decision even though the service comes much later. Roadmap within the service: encrypt on ingest from day one; canary entries per license/snapshot; threshold custody (k-of-n key shares, decryption gated on a recorded license-vote event) when real data accumulates — expert-tier, external review required.
 - `treasury`, `reputation`, `briefing` — extensions of the derived-view and initiative patterns.
 
 ## Build order
 
-| Phase | Work | Parallel? |
-|---|---|---|
-| 0 | `contracts/` — write, review, freeze | — |
-| 1 | `ledger` · `verifier` · `identity` | yes — three agents |
-| 2 | `tally` · `web` | yes — mocks until Phase 1 lands |
-| 3 | `mcp`; first deferred service when needed | — |
+| Phase | Work                                      | Parallel?                       |
+| ----- | ----------------------------------------- | ------------------------------- |
+| 0     | `contracts/` — write, review, freeze      | —                               |
+| 1     | `ledger` · `verifier` · `identity`        | yes — three agents              |
+| 2     | `tally` · `web`                           | yes — mocks until Phase 1 lands |
+| 3     | `mcp`; first deferred service when needed | —                               |
 
 ## MVP acceptance test
 
