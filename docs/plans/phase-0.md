@@ -50,6 +50,11 @@ T4 blocks T5/T6. T6 blocks T7/T8. Nothing after T2 merges without CI green.
 
 ### T1 — Local hooks + PR template + workspace hygiene · odc-implementer
 
+**✅ DONE 2026-07-19 — PR #1, squash `874bb4f`.** eslint uses typescript-eslint
+(non-type-checked recommended) so `.ts` is actually linted while pre-commit
+stays ~1.6s; `contracts/`, the Go verifier, and mockups excluded from both
+prettier and eslint. Reviewed APPROVE WITH NITS; both [SHOULD]s fixed pre-merge.
+
 - `lefthook.yml`: pre-commit = format+lint on staged files (<5s); pre-push =
   unit tests of changed services. `lefthook` added as root devDependency;
   `pnpm lefthook install` documented in README quickstart.
@@ -64,6 +69,9 @@ T4 blocks T5/T6. T6 blocks T7/T8. Nothing after T2 merges without CI green.
 ### T2 — CI skeleton: contracts-guard + repo checks · odc-implementer
 
 - **Prereq (user action): create the public GitHub repo and push `master`.**
+  ✅ Done — public at github.com/Will-ODC/odc, remote set, `master` pushed.
+  (Branch protection is still OFF; enable it at/after this ticket's merge —
+  see "User (human) actions required" #2.)
 - `.github/workflows/repo.yml`: on PR — format:check, lint, typecheck (stub
   passes with no packages yet), diff-size check (fail >800 changed lines,
   warn >400; lockfiles/generated exempt).
