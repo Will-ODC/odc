@@ -16,7 +16,11 @@ set -euo pipefail
 BASE="${BASE:?BASE (base sha/ref) required}"
 HEAD="${HEAD:?HEAD (head sha/ref) required}"
 
-mapfile -t changed < <(git diff --name-only "$BASE...$HEAD" -- 'contracts/')
+# Portable array fill (no mapfile — keep it runnable on bash 3.2 too).
+changed=()
+while IFS= read -r line; do
+  [[ -n "$line" ]] && changed+=("$line")
+done < <(git diff --name-only "$BASE...$HEAD" -- 'contracts/')
 
 if ((${#changed[@]} == 0)); then
   echo "No contracts/ changes; contracts-guard passes."
