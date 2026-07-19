@@ -208,7 +208,7 @@ The CI that T2 adds (`repo`, `contracts-guard`) only has teeth once master
 requires it. On GitHub → Settings → Branches → add a rule for `master`:
 
 - [ ] **Require a pull request before merging**, with **1 approving review** — no direct pushes to `master`, including the operator (odc-pipeline).
-- [ ] **Require status checks to pass**, and **Require branches to be up to date** — mark required: `format / lint / typecheck` and `diff-size` (from `repo`), and `guard` (from `contracts-guard`).
+- [ ] **Require status checks to pass**, and **Require branches to be up to date** — mark required: `format / lint / typecheck`, `diff-size`, and `guard-tests` (from `repo`), and `guard` (from `contracts-guard`). `guard-tests` must be required: it protects the guard scripts themselves, so a change that quietly defangs `contracts-guard.sh` can't merge on a still-green `guard`.
 - [ ] **Require linear history** — squash-merge only; matches the one-ticket-one-commit merge log (odc-pipeline).
 - [ ] **Do not allow bypassing the above** — apply the rule to administrators.
 - [ ] Leave **Allow force pushes** and **Allow deletions** off.

@@ -118,6 +118,19 @@ printf '## fixtures — v2 — 2026-01-01 — X\n- tweak\n' >"$R/contracts/CONTR
 git -C "$R" add -A && git -C "$R" commit -qm change
 assert 1 "$(run_guard "$R")" "frozen fixture edited after contracts-v1 → fail"
 
+# --- Scenario 7b: per-file version check — spec A edited unbumped while spec B
+# is added WITH a Version line must still FAIL (B's bump can't cover A).
+R="$TMP/s7b"
+new_repo "$R"
+printf '# Spec A\n\n**Version:** v1\n\noriginal text\n' >"$R/contracts/a.md"
+git -C "$R" add -A && git -C "$R" commit -qm "add spec a"
+git -C "$R" checkout -q -b work
+printf '# Spec A\n\n**Version:** v1\n\nEDITED text, no bump\n' >"$R/contracts/a.md"
+printf '# Spec B\n\n**Version:** v1\n\nnew spec\n' >"$R/contracts/b.md"
+printf '## specs — v1 — 2026-01-01 — T4\n- add b, edit a\n' >"$R/contracts/CONTRACTS-CHANGE.md"
+git -C "$R" add -A && git -C "$R" commit -qm change
+assert 1 "$(run_guard "$R")" "spec A edited unbumped, spec B added bumped → fail"
+
 # --- Scenario 8: diff-size fails past the hard ceiling (>800 changed lines)
 R="$TMP/s8"
 new_repo "$R"

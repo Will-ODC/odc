@@ -13,7 +13,9 @@ HEAD="${HEAD:?HEAD (head sha/ref) required}"
 WARN=400
 FAIL=800
 
-# added+deleted lines, excluding lockfiles and generated output.
+# added+deleted lines, excluding lockfiles and generated output. Deletions count
+# too (churn is churn) — a large legitimate removal can trip the ceiling and
+# force a split; that's intended, keep removals on their own branch.
 total=0
 while IFS=$'\t' read -r add del _path; do
   # Binary files report '-' for both counts; skip them.

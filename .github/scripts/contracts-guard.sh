@@ -45,23 +45,23 @@ if git rev-parse -q --verify "refs/tags/contracts-v1" >/dev/null 2>&1; then
   done
 fi
 
-# 2. Version bump — required only when an actual spec file is touched.
-spec_touched=0
+# 2. Version bump — checked PER spec file: each touched spec must add a Version
+# line in ITS OWN diff, so one spec's bump can't cover another's silent edit.
+# The Version match is intentionally lenient (any added `Version:` line in the
+# file's diff, header or not) — it's a tripwire for "you forgot to bump", not a
+# strict header parser.
 for f in "${changed[@]}"; do
   case "$f" in
-  contracts/README.md | contracts/CONTRACTS-CHANGE.md) : ;;
-  contracts/*.md) spec_touched=1 ;;
+  contracts/README.md | contracts/CONTRACTS-CHANGE.md) continue ;;
+  contracts/*.md) : ;; # a spec file — check it below
+  *) continue ;;        # non-spec (e.g. fixtures/) — no version line to bump
   esac
-done
-
-if ((spec_touched)); then
-  added_version="$(git diff "$BASE...$HEAD" -- 'contracts/*.md' \
-    ':(exclude)contracts/README.md' ':(exclude)contracts/CONTRACTS-CHANGE.md' \
+  added_version="$(git diff "$BASE...$HEAD" -- "$f" \
     | grep -E '^\+' | grep -Ei '^\+[[:space:]]*\*{0,2}version:\*{0,2}[[:space:]]*v?[0-9]+' || true)"
   if [[ -z "$added_version" ]]; then
-    err "A touched spec has no added 'Version:' line. Bump the spec's version — contracts/ is version-bumped, never edited in place (odc-service-boundaries)."
+    err "Spec $f has no added 'Version:' line. Bump its version — contracts/ is version-bumped, never edited in place (odc-service-boundaries)."
   fi
-fi
+done
 
 # 3. Changelog entry — every contracts/ change must be logged.
 added_changelog="$(git diff "$BASE...$HEAD" -- 'contracts/CONTRACTS-CHANGE.md' \
