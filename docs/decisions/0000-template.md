@@ -5,7 +5,11 @@
 - **Phase:** 0–3
 
 ## Context
+
 ## Decision
+
 ## Consequences
+
 ## Charter check
+
 Which principles (P1–P4) does this touch, and how is each honored?

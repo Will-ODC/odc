@@ -22,14 +22,15 @@ One workflow per service, triggered by path filter
 6. `build`
 
 Plus one repo-wide workflow:
+
 - `contracts-guard` — fails if any diff touches `contracts/` without a
   version bump and a `CONTRACTS-CHANGE.md` entry; fails on ANY edit to
   frozen hashing rules.
 - `chain-smoke` — nightly: boot ledger, append events, export, run verifier,
   tamper, expect INVALID.
 
-Merges to `main` require: green CI + one review + linear history.
-No direct pushes to `main`, no exceptions, including the operator.
+Merges to `master` require: green CI + one review + linear history.
+No direct pushes to `master`, no exceptions, including the operator.
 
 ## Local hooks (lefthook)
 
@@ -55,7 +56,7 @@ IS the ticket.
    the session's prompt; branch name carries the issue number
    (`ledger/14-insert-only-guard`).
 3. **Review in a fresh context** per `odc-code-review`; **CI green** per this
-   skill; **squash-merge** so main reads as one commit per ticket, message
+   skill; **squash-merge** so master reads as one commit per ticket, message
    referencing the issue.
 4. Board columns = pipeline stages: Backlog → In progress (branch open) →
    Review (PR open) → Done (merged). GitHub Projects, nothing fancier.
@@ -74,11 +75,11 @@ IS the ticket.
   it targets. A reviewer should need nothing else to start. (The PR template
   in `.github/` mirrors these three fields.)
 
-## Merge checklist (owned by odc-navigator, on main)
+## Merge checklist (owned by odc-navigator, on master)
 
 1. CI green, all required stages.
 2. Review verdict recorded (APPROVE or APPROVE WITH NITS, per `odc-code-review`).
 3. Squash-merge; message references the issue.
 4. Update `memory/STATE.md` (done / next / blockers) — this happens HERE, on
-   main at merge time, never on feature branches (parallel agents would conflict).
+   master at merge time, never on feature branches (parallel agents would conflict).
 5. Move the board card to Done.

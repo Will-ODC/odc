@@ -39,6 +39,7 @@ If the API can't be written down simply, the design isn't done.
 ## Changing `contracts/`
 
 Additive only. The procedure:
+
 1. Propose in `CONTRACTS-CHANGE.md`: what, why, which services affected.
 2. Bump the version; old events remain valid forever; verifiers must
    accept all published versions.
