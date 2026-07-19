@@ -197,10 +197,25 @@ prev_hash, hash`; types and normative constraints per field; RFC-2119
 
 ## User (human) actions required
 
-1. Before T2: create the public GitHub repo, add remote, push `master`.
-2. After T2: enable branch protection per T2's documented checklist.
+1. Before T2: create the public GitHub repo, add remote, push `master`. ✅ Done.
+2. After T2: enable branch protection per the checklist below.
 3. T10 is the last chance to change hashing cheaply. Skim `hashing.md` and
    the worked example before approving the freeze.
+
+### Branch-protection checklist (enable after T2 merges)
+
+The CI that T2 adds (`repo`, `contracts-guard`) only has teeth once master
+requires it. On GitHub → Settings → Branches → add a rule for `master`:
+
+- [ ] **Require a pull request before merging**, with **1 approving review** — no direct pushes to `master`, including the operator (odc-pipeline).
+- [ ] **Require status checks to pass**, and **Require branches to be up to date** — mark required: `format / lint / typecheck`, `diff-size`, and `guard-tests` (from `repo`), and `guard` (from `contracts-guard`). `guard-tests` must be required: it protects the guard scripts themselves, so a change that quietly defangs `contracts-guard.sh` can't merge on a still-green `guard`.
+- [ ] **Require linear history** — squash-merge only; matches the one-ticket-one-commit merge log (odc-pipeline).
+- [ ] **Do not allow bypassing the above** — apply the rule to administrators.
+- [ ] Leave **Allow force pushes** and **Allow deletions** off.
+
+`contracts-guard`'s `guard` check runs on every PR and passes immediately when
+no `contracts/` file changed, so it is safe to require without blocking
+unrelated PRs. Verify with T2's own acceptance PRs before turning the rule on.
 
 ## Out of scope for Phase 0
 
