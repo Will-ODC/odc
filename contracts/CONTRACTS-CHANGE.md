@@ -16,6 +16,17 @@ Format (newest first, one entry per merged contracts change):
 
 ---
 
+## event-schema.md · ids.md · event-types.md — v1 — 2026-07-21 — T3
+
+- First spec content. Drafted the event envelope (seven fields, strict
+  reject-don't-repair, genesis = seq 1 / prev_hash 64 zeros), content-addressed
+  `participant_id` = sha256(pubkey bytes) and `issue_id` = creating event hash,
+  and the v1 type registry (`genesis`, `participant_registered`, `issue_created`,
+  `vote_cast`) with per-type signing keys. Preimage byte layout deferred to T4
+  (`hashing.md`). ADRs 0002 (SHA-256 + Ed25519) and 0003 (explicit-byte preimage,
+  strict rejection) added. Charter §5 ballot-unlinkability tension flagged in
+  event-types.md ET-21 and memory/OPEN-QUESTIONS.md. `contracts/` stays DRAFTING.
+
 ## tooling — n/a — 2026-07-19 — T2
 
 - Introduced this changelog and the `contracts-guard` CI workflow. No spec
