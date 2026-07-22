@@ -152,6 +152,30 @@ ds=$( (cd "$R" && BASE=base HEAD=HEAD bash "$DIFFSIZE" >/dev/null 2>&1)
   echo $?)
 assert 0 "$ds" "diff-size ignores lockfile churn → pass"
 
+# --- Scenario 10: diff-size ignores markdown churn (specs/docs exempt)
+R="$TMP/s10"
+new_repo "$R"
+git -C "$R" checkout -q -b work
+mkdir -p "$R/contracts" "$R/docs"
+seq 1 600 >"$R/contracts/event-schema.md"
+seq 1 600 >"$R/docs/some-adr.md"
+git -C "$R" add -A && git -C "$R" commit -qm specs
+ds=$( (cd "$R" && BASE=base HEAD=HEAD bash "$DIFFSIZE" >/dev/null 2>&1)
+  echo $?)
+assert 0 "$ds" "diff-size ignores markdown churn (1200 md lines) → pass"
+
+# --- Scenario 11: markdown exemption does not mask non-exempt code churn
+R="$TMP/s11"
+new_repo "$R"
+git -C "$R" checkout -q -b work
+mkdir -p "$R/contracts" "$R/src"
+seq 1 900 >"$R/contracts/spec.md" # exempt
+seq 1 900 >"$R/src/big.ts"        # counted → over the 800 ceiling
+git -C "$R" add -A && git -C "$R" commit -qm mixed
+ds=$( (cd "$R" && BASE=base HEAD=HEAD bash "$DIFFSIZE" >/dev/null 2>&1)
+  echo $?)
+assert 1 "$ds" "diff-size still counts code alongside exempt markdown → fail"
+
 echo
 echo "guards.test.sh: $pass passed, $fail failed"
 [[ "$fail" -eq 0 ]]
