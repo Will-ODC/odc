@@ -47,14 +47,18 @@ fewer:
 ## 2. `seq` — sequence number
 
 - **ES-5.** `seq` MUST be a JSON integer in **canonical integer form**: no
-  fractional part, no exponent, no leading zeros, and no sign (`1`, never `1.0`,
-  `1e0`, `01`, or `+1`). Wherever this spec requires "a JSON integer" — `seq`,
-  `version` (ES-12), and every integer payload value (ES-16, including
-  `vote_cast.choice` and `issue_created.choice_count`) — the value MUST be in
-  this canonical integer form and MUST lie within the closed range
-  −(2^53 − 1) … 2^53 − 1, so it round-trips losslessly through a standard JSON
+  fractional part, no exponent, no leading zeros, and no sign character —
+  neither `+` nor `-` (`1`, never `1.0`, `1e0`, `01`, `+1`, or `-1`). Wherever
+  this spec requires "a JSON integer" — `seq`, `version` (ES-12), and every
+  integer payload value (ES-16, including `vote_cast.choice` and
+  `issue_created.choice_count`) — the value MUST be in this canonical integer
+  form and MUST lie within the closed range `0 … 2^53 − 1`. Integers are
+  therefore non-negative and round-trip losslessly through a standard JSON
   number in both TypeScript and Go (D4). A verifier MUST reject any integer that
-  is out of form or out of range.
+  is out of form or out of range. v1 defines no negative or fractional numbers;
+  a future type that needs one carries it as a decimal **string** (D4), never as
+  a signed or fractional JSON number — so this integer encoding never has to
+  change (which matters because `hashing.md` freezes it, T4).
 - **ES-6.** The first event in a chain MUST have `seq` equal to `1`.
 - **ES-7.** For every event after the first, `seq` MUST equal the previous
   event's `seq` plus `1`. There are no gaps and no repeats.
