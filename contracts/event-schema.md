@@ -37,16 +37,24 @@ fewer:
   `payload`, `ts`, `prev_hash`, `hash`.
 - **ES-2.** An event MUST NOT contain any top-level field other than those
   seven. A verifier MUST reject an event carrying an unknown top-level field.
-- **ES-3.** No field value MUST be JSON `null`. A verifier MUST reject an event
-  in which any of the seven fields is `null` or absent.
+- **ES-3.** A field value MUST NOT be JSON `null`, and no field may be absent.
+  A verifier MUST reject an event in which any of the seven fields is `null` or
+  absent.
 - **ES-4.** A verifier MUST NOT re-order, re-serialize, or otherwise
   "normalize" an event to make it conform. Non-conforming input is rejected as
   received; it is never repaired (D5).
 
 ## 2. `seq` — sequence number
 
-- **ES-5.** `seq` MUST be a JSON integer (no fractional part, no exponent, no
-  leading zeros, no sign).
+- **ES-5.** `seq` MUST be a JSON integer in **canonical integer form**: no
+  fractional part, no exponent, no leading zeros, and no sign (`1`, never `1.0`,
+  `1e0`, `01`, or `+1`). Wherever this spec requires "a JSON integer" — `seq`,
+  `version` (ES-12), and every integer payload value (ES-16, including
+  `vote_cast.choice` and `issue_created.choice_count`) — the value MUST be in
+  this canonical integer form and MUST lie within the closed range
+  −(2^53 − 1) … 2^53 − 1, so it round-trips losslessly through a standard JSON
+  number in both TypeScript and Go (D4). A verifier MUST reject any integer that
+  is out of form or out of range.
 - **ES-6.** The first event in a chain MUST have `seq` equal to `1`.
 - **ES-7.** For every event after the first, `seq` MUST equal the previous
   event's `seq` plus `1`. There are no gaps and no repeats.
@@ -56,7 +64,9 @@ fewer:
 ## 3. `type` — event type
 
 - **ES-9.** `type` MUST be a string naming a type registered in
-  `event-types.md` for this chain's `version`.
+  `event-types.md`, and the event's `(type, version)` pair MUST be a
+  registered combination (`version` is per-type, ES-13 — there is no
+  chain-wide version).
 - **ES-10.** `type` MUST match the pattern `^[a-z][a-z0-9_]*$` (lowercase
   ASCII, underscores allowed, no leading digit or underscore).
 - **ES-11.** A verifier MUST reject an event whose `type` is not a registered
@@ -64,7 +74,8 @@ fewer:
 
 ## 4. `version` — per-type payload schema version
 
-- **ES-12.** `version` MUST be a JSON integer greater than or equal to `1`.
+- **ES-12.** `version` MUST be a JSON integer greater than or equal to `1`, in
+  the canonical integer form of ES-5.
 - **ES-13.** `version` identifies the schema version of `payload` **for this
   `type`** — it is not a protocol-wide version. Each event type versions its
   payload independently (see `evolution.md`, T4).
@@ -75,23 +86,33 @@ fewer:
 ## 5. `payload` — the typed body
 
 - **ES-15.** `payload` MUST be a JSON object.
-- **ES-16.** Every value in `payload` MUST be either a JSON integer or a JSON
-  string. Floats, booleans, `null`, nested objects, and arrays MUST NOT appear
-  in a v1 payload (D4). A verifier MUST reject a payload containing any of them.
+- **ES-16.** Every value in `payload` MUST be either a JSON integer (in the
+  canonical integer form of ES-5) or a JSON string. Floats, booleans, `null`,
+  nested objects, and arrays MUST NOT appear in a v1 payload (D4). A verifier
+  MUST reject a payload containing any of them.
 - **ES-17.** `payload` MUST be flat: it MUST NOT nest objects or arrays. (This
   is what lets `hashing.md` spell the preimage byte-for-byte without recursion.)
 - **ES-18.** The set of keys a payload MUST carry, and their value types, is
   fixed per `(type, version)` in `event-types.md`. A verifier MUST reject a
   payload that is missing a required key or carries a key not defined for that
   `(type, version)`.
-- **ES-19.** Integer payload values MUST be representable and are unbounded in
-  the schema; string payload values MUST be valid UTF-8 (see ES-25).
+- **ES-19.** Integer payload values are bounded and formatted per ES-5; string
+  payload values MUST be valid UTF-8 (the byte-exact string encoding, including
+  normalization stance, is fixed in `hashing.md`, T4).
 
 ## 6. `ts` — timestamp (advisory)
 
-- **ES-20.** `ts` MUST be an RFC 3339 timestamp in UTC with exactly
-  millisecond precision and a trailing uppercase `Z`, matching
-  `^\d{4}-\d{2}-\d{2}T\d{2}:\d{2}:\d{2}\.\d{3}Z$` (D6).
+- **ES-20.** `ts` MUST satisfy BOTH of these tests, in order (D6):
+  1. **Syntactic gate:** it MUST match `^\d{4}-\d{2}-\d{2}T\d{2}:\d{2}:\d{2}\.\d{3}Z$`
+     (UTC, exactly millisecond precision, trailing uppercase `Z`).
+  2. **Calendar gate:** the matched value MUST additionally be a real UTC
+     calendar instant — month `01`–`12`, day valid for that month and year
+     (leap years included), hour `00`–`23`, minute `00`–`59`, second `00`–`59`.
+     **Leap seconds (`60`) are REJECTED** even though RFC 3339 permits them, so
+     that a regex-only implementation and a calendar-parsing one (e.g. Go's
+     `time.Parse`) reach the SAME verdict. A value that passes the regex but is
+     not a real instant (e.g. `2026-13-40T25:61:61.999Z`) MUST be rejected.
+  A verifier MUST reject any `ts` failing either gate.
 - **ES-21.** `ts` is advisory metadata only. It MUST NOT be used to order,
   select, or validate events beyond the format check in ES-20. `seq` orders
   (ES-8).
@@ -145,8 +166,10 @@ Some event types are **signed**; which ones, and the exact signing rule, are in
 ## 10. Genesis event
 
 - **ES-33.** A chain's first event (`seq` = 1, `prev_hash` = 64 zeros per ES-24)
-  MUST be of type `genesis` (defined in `event-types.md`). No other event MUST
-  have `seq` = 1, and `genesis` MUST NOT appear at any other `seq`.
+  MUST be of type `genesis` (defined in `event-types.md`). A `genesis` event
+  MUST NOT appear at any `seq` other than `1`. Equivalently: `genesis` occurs
+  exactly once, at `seq` = 1, and the `seq` = 1 event is always `genesis`. A
+  verifier MUST reject a chain that violates this.
 
 ---
 
