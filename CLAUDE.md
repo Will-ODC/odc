@@ -51,7 +51,7 @@ in `memory/OPEN-QUESTIONS.md`, not in your head.
 
 | Task                                                                       | Model      | Agent                  |
 | -------------------------------------------------------------------------- | ---------- | ---------------------- |
-| Architecture, cross-service planning, contracts drafting                   | **Fable**  | `odc-architect`        |
+| Architecture, cross-service planning, contracts drafting                   | **Fable** (or Opus, see note) | `odc-architect`        |
 | Implementing a service, feature, or fix                                    | **Opus**   | `odc-implementer`      |
 | Building the verifier (contracts-only context, incl. Phase 0 rehearsal)    | **Opus**   | `odc-verifier-builder` |
 | Pre-merge review (fresh context)                                           | **Opus**   | `odc-reviewer`         |
@@ -60,6 +60,19 @@ in `memory/OPEN-QUESTIONS.md`, not in your head.
 
 Default flow per unit of work: Fable plans → Opus implements on a small branch →
 fresh-context review per `.claude/skills/odc-code-review` → merge on green CI.
+
+**Model note — Opus can architect too.** Fable is the *preferred* architect (its
+strength is open-ended, cross-service design). But **when Opus is the session's
+starting/driving model, it may do architecture, cross-service planning, and
+contracts drafting directly — as `odc-architect` work — rather than spawning a
+fresh Fable subagent just to plan.** A cold subagent spawn re-derives context the
+Opus session already holds; don't pay that cost when the driving model is already
+capable. Prefer dispatching Fable for large, greenfield, or especially
+open-ended design; keep Opus-as-architect for design that arises inside an Opus
+session's existing flow. Either way the architect *discipline* is identical
+(charter-first; outputs are ADRs/plans/contracts, not code) and the fresh-context
+rules are unchanged: pre-merge review and the security audit must run in a
+context that did **not** design the thing.
 
 ## Workflow
 

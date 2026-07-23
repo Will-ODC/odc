@@ -45,8 +45,9 @@ Additive only. The procedure:
    accept all published versions.
 3. Add/extend golden fixtures for the new version.
 4. NEVER: rename/remove fields, alter hashing, reinterpret existing types.
-   If it feels necessary, stop and escalate to a Fable planning session —
-   this is an architecture decision, not an edit.
+   If it feels necessary, stop and escalate to an architect planning session
+   (Fable, or an Opus starting session acting as architect per the `CLAUDE.md`
+   model note) — this is an architecture decision, not an edit.
 
 ## Encapsulation test
 

@@ -49,9 +49,11 @@ IS the ticket.
 
 ## Ticket-shaped workflow
 
-1. **Fable cuts issues** from the plan: each issue = one behavior, with
-   3–5 acceptance bullets. If it can't be described that tightly, split it.
-   Dependent issues are planned as an ordered stack up front.
+1. **Fable cuts issues** from the plan (or an Opus session acting as architect
+   when Opus is the starting model — see the model note in `CLAUDE.md`): each
+   issue = one behavior, with 3–5 acceptance bullets. If it can't be described
+   that tightly, split it. Dependent issues are planned as an ordered stack up
+   front.
 2. **One issue = one branch = one PR = one Opus session.** The issue text is
    the session's prompt; branch name carries the issue number
    (`ledger/14-insert-only-guard`).
