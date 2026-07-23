@@ -36,10 +36,10 @@ The append-only event log. The single writer of truth.
 
 - API: `POST /events` · `GET /events?since={seq}` · `GET /head` · `GET /export`
 - Inside: hash computed at insert; insert-only enforced at the storage layer; `seq` assigned here (timestamps are advisory).
-- Validation is self-contained: a `vote_cast` is accepted only if signed by a public key found in a prior `participant_registered` event _in its own log_. No calls to other services.
-- Duplicate votes are **recorded, not rejected**; interpretation belongs to tally (latest per participant wins). The log records what happened; views decide what it means.
-- MVP authorization: `issue_created` requires the operator key; `participant_registered` requires the `identity` service's key (identity is the sole gate to personhood); `vote_cast` requires a registered participant's signature.
-- Write path: clients sign locally and `POST /events` directly. `identity` is not in the vote path.
+- Validation is self-contained: a `vote_cast` is accepted only if signed by the chain's `registrar_pk` (declared in the `genesis` event) and its `choice` is in range for the referenced issue — all checkable from the log itself, no calls to other services (ADR-0004).
+- v1 ballots are **final**: the registrar enforces one ballot per human per issue off-log and refuses re-votes, so duplicate ballots never reach the log (ADR-0004 / ADR-0005). On-log ballots carry no per-participant field, so there is no "latest-per-participant" resolution to compute. The "log records, views resolve" philosophy still governs future _correctable, non-ballot_ types (ADR-0005).
+- MVP authorization: `issue_created` requires the operator key; `participant_registered` is admitted by the `identity` service (the sole gate to personhood) and self-signed by the registrant's own key (ET-10); `vote_cast` requires the chain's `registrar_pk` signature (ADR-0004).
+- Write path: `participant_registered` and `issue_created` are signed locally (registrant / operator) and `POST /events`. `vote_cast` is signed by the identity service (registrar) after its off-log eligibility check and submitted for append — so `identity` **is** in the vote path in v1 (ADR-0004; trust-by-policy, removed by blind signatures in identity v2). The exact client↔identity↔ledger mechanism is Phase-1 identity design (`memory/OPEN-QUESTIONS.md`).
 
 ### 2. `verifier` — Phase 1, independent
 

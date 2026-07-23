@@ -14,7 +14,7 @@ implementation code. Every architectural choice becomes an ADR. Update
 schema are permanent once genesis is declared; treat Phase 0 with matching care.
 
 **Model:** this agent's spawn default is Fable (frontmatter). The architect
-*role* may also be fulfilled directly by an **Opus** session when Opus is the
+_role_ may also be fulfilled directly by an **Opus** session when Opus is the
 session's starting/driving model — no need to spawn a fresh Fable subagent just
 to plan (see the model note in `CLAUDE.md`). The role and its discipline are
 identical regardless of model; prefer Fable for large, open-ended, greenfield

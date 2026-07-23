@@ -1,7 +1,7 @@
 # ADR-0005: Correction and retraction model
 
-- **Status:** proposed — NEEDS HUMAN RATIFICATION before contracts freeze (T10)
-- **Date:** 2026-07-21
+- **Status:** accepted — human-ratified 2026-07-23 (pre-freeze bit and full model)
+- **Date:** 2026-07-21 (proposed) · 2026-07-23 (ratified)
 - **Phase:** 0
 
 ## Context
@@ -116,12 +116,14 @@ moderation be its own public event type as §9 wants anyway. Uniformity is
 preserved _by convention_ — `evolution.md` records the naming and reference
 rules once, and every future correctable type follows them.
 
-## Decision (proposed)
+## Decision
+
+_Ratified 2026-07-23 as proposed (no changes to items 1–4)._
 
 1. **The envelope will never carry correction machinery.** Option A is
    rejected; the seven-field envelope and six-field preimage freeze as
-   drafted. This sentence is the pre-freeze bit and the reason this ADR must
-   be ratified (or overturned) before T10.
+   drafted. This was the pre-freeze bit; it is ratified — T4 may draft
+   `hashing.md` with the six-field preimage and no `supersedes` envelope field.
 2. **Corrections are additive, in two conventional forms**, recorded as a
    normative template in `contracts/evolution.md` (T4):
    - **Scoped streams** (Option B): a correctable type MAY define a scope key

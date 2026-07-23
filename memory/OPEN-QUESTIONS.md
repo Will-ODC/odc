@@ -31,10 +31,9 @@ choice}` at eligibility-check time — trust-by-policy per charter §10 v1,
   it must land before T4 drafts `hashing.md`. Also fixes v1 ballot finality
   (registrar refuses re-votes; no correction may ever touch the ballot plane
   per ADR-0004).
-  **→ RATIFIED 2026-07-23 (pre-freeze bit): no `supersedes` envelope field;
-  corrections arrive as additive payload conventions; v1 ballot finality
-  (registrar refuses re-votes). Unblocks T4. Flip ADR-0005 status and record
-  full acceptance by T10.**
+  **→ RATIFIED 2026-07-23 → ADR-0005 status now `accepted` (full model): no
+  `supersedes` envelope field; corrections arrive as additive payload
+  conventions; v1 ballot finality (registrar refuses re-votes). T4 unblocked.**
 - **Verifier scope & forward compatibility — needs an ADR (next free number)
   BEFORE T4 starts.** Two coupled decisions: (1) ES-9/ES-11/ET-1 as drafted
   make the verifier reject any unregistered `type`, so every future additive
@@ -49,9 +48,11 @@ choice}` at eligibility-check time — trust-by-policy per charter §10 v1,
   payload checks stay in the verifier for v1 types — ADR-0004's choice-range
   check is load-bearing for receipt-freeness and cannot move to a tally-side
   interpreter.
-  **→ DECIDED 2026-07-23: adopt two-stage verification + a generic flat
-  int/string payload preimage (approaches (1) and (2) above). ADR still to be
-  written by odc-architect (Fable) before T4 drafts `hashing.md`.**
+  **→ DECIDED 2026-07-23 → ADR-0006 (accepted): two-stage verification
+  (Stage 1 type-agnostic chain integrity; Stage 2 per-known-type semantics),
+  an `UNVERIFIED` verdict for unknown `(type, version)`, and a generic flat
+  int/string payload preimage. T4 reworks ES-9/ES-11/ET-1 and writes the
+  generic preimage in `hashing.md`.**
 - **Sanction/negative events (Phase 2, deferred — NOT a freeze blocker).**
   Contribution-style derived views only count up until negative events exist;
   charter §7 requires failure/fraud to crater standing and §9 makes
@@ -132,6 +133,6 @@ choice}` at eligibility-check time — trust-by-policy per charter §10 v1,
   re-votes; duplicates never reach the log). Resolve before T4 freezes anything
   assuming either behaviour. NOT yet ratified.
   **→ RESOLVED 2026-07-23 by ratifying ADR-0005 ballot finality (registrar
-  refuses re-votes; no duplicate ballots on-log). Action: correct
-  `docs/implementation-plan.md` §ledger wording ("latest per participant wins")
-  during the ADR-writing step, so plan and ADRs stay consistent.**
+  refuses re-votes; no duplicate ballots on-log). `docs/implementation-plan.md`
+  §ledger reconciled 2026-07-23 (vote signing key → `registrar_pk`; ballot
+  finality; `identity` is in the v1 vote path per ADR-0004).**
