@@ -105,16 +105,37 @@ prev_hash, hash`; types and normative constraints per field; RFC-2119
 
 ### T4 — Draft: hashing, export, read API, evolution · odc-implementer, fresh session
 
+**Prerequisites (both cleared 2026-07-23 — do not relitigate):** ADR-0006
+(verifier scope & forward-compat, two-stage verification) is accepted; ADR-0005
+item 1 (six-field envelope, no `supersedes`) is human-ratified. The envelope /
+preimage stays six content fields.
+
 - `contracts/hashing.md` (~1 page): the preimage as an exact byte-string
   construction (fixed field order, length-prefix or delimiter scheme —
   drafting decision, spelled byte-by-byte with a worked example); SHA-256;
-  lowercase hex; what `prev_hash` of genesis is; hash covers which fields.
+  lowercase hex; what `prev_hash` of genesis is; hash covers which six fields.
+  **ADR-0006 constraint:** the payload contribution MUST be a *generic* walk of
+  the flat int/string payload in one pinned language-neutral order (sort by key
+  bytes), NOT a per-type field list — so any current or future `(type, version)`
+  is hashable by any conforming verifier. Also spell the signing preimage
+  (`sig` key omitted from payload) and the UTF-8 string-encoding /
+  no-normalization rule (ET-16).
 - `contracts/export-format.md`: hash-chained NDJSON per D7; the stored line
   IS the hashed bytes' carrier (strict mode, D5); `--head` semantics.
 - `contracts/read-api.md`: `GET /events?since={seq}` — pagination, limits,
   ordering guarantee, response envelope.
 - `contracts/evolution.md`: additive-only versioning; verifiers accept all
-  published versions; hashing never changes retroactively.
+  published versions; hashing never changes retroactively. **ADR-0006
+  section (required):** record the two-stage model and the three-verdict /
+  exit-code contract (0 valid · 1 invalid · 2 chain-intact-but-unknown-type);
+  re-scope `event-schema.md` ES-9/ES-11 and `event-types.md` ET-1 from "reject
+  unknown type" to "Stage-2 checks apply to known types; unknown types get
+  exit 2" (re-scoped in prose here, T3 not edited in place); state that the
+  ballot carve-out (ET-18a range check, ET-22 no-unbounded-voter-value) binds
+  every future `vote_cast` version. **ADR-0005 section (required):** the
+  correction-conventions template (scoped last-write-wins + payload-level
+  `supersedes`/`reason`; ballot plane excluded); flip ADR-0005 `proposed` →
+  `accepted` when this lands.
 - Acceptance: a reader can hand-compute the hash of the worked example with
   pencil and a SHA-256 tool; every normative sentence numbered; acid-test
   walkthrough included.

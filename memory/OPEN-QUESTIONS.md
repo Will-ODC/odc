@@ -24,27 +24,29 @@ choice}` at eligibility-check time — trust-by-policy per charter §10 v1,
   (Needed by Phase 1 identity/ledger tickets, not Phase 0.)
 - Anchoring cadence and venue for the chain head in v1 (manual README anchor
   at genesis per phase-0 plan; automation cadence is a Phase 1+ question.)
-- **Correction/retraction model — ADR-0005 `proposed`, needs human
-  ratification BEFORE freeze (T10).** The only pre-freeze bit: the envelope
-  will never carry a `supersedes` field (rejected; corrections arrive as
-  additive payload conventions per the ADR). If ratification overturns this,
-  it must land before T4 drafts `hashing.md`. Also fixes v1 ballot finality
+- ~~Correction/retraction model — ADR-0005 needs human ratification~~ →
+  **RATIFIED 2026-07-23.** Item 1 (the envelope will never carry a `supersedes`
+  field) is confirmed by the human; the six-field envelope / six-field preimage
+  freeze as drafted. Corrections arrive as additive payload conventions per
+  ADR-0005 (T4 `evolution.md` carries the template). v1 ballot finality stands
   (registrar refuses re-votes; no correction may ever touch the ballot plane
-  per ADR-0004).
-- **Verifier scope & forward compatibility — needs an ADR (next free number)
-  BEFORE T4 starts.** Two coupled decisions: (1) ES-9/ES-11/ET-1 as drafted
-  make the verifier reject any unregistered `type`, so every future additive
-  event type would invalidate every deployed frozen verifier — contradicting
-  the evolution rule ("verifiers accept all published versions") and the
-  fork/exit right (§8). Candidate fix: two-stage verification — chain/envelope
-  checks are type-agnostic; registry checks (sigs, payload keys, title,
-  choice range, back-refs) apply to known types; unknown types get a defined
-  non-silent verdict. (2) For that to work, T4 `hashing.md` MUST define the
-  payload preimage generically over any flat int/string payload (not
-  per-type field lists), or unknown-type hashes are uncomputable. Semantic
-  payload checks stay in the verifier for v1 types — ADR-0004's choice-range
-  check is load-bearing for receipt-freeness and cannot move to a tally-side
-  interpreter.
+  per ADR-0004). ADR-0005 should be flipped `proposed` → `accepted` when T4
+  lands its `evolution.md` correction-conventions section.
+- ~~Verifier scope & forward compatibility — needs an ADR BEFORE T4 starts.~~ →
+  **RESOLVED by ADR-0006 (accepted 2026-07-23).** Two-stage verification:
+  Stage 1 (envelope/chain/hash) is type-agnostic and runs on every event;
+  Stage 2 (sigs, payload keys, title, choice range, back-refs) applies only to
+  known `(type, version)`; unknown types yield a distinct non-silent verdict at
+  **exit code 2** (chain intact, semantics unchecked) — 0 = fully valid,
+  1 = invalid. ES-9/ES-11/ET-1's blanket "reject unknown type" is re-scoped to
+  Stage 2 by T4 `evolution.md` (T3 not edited in place). **Binds T4:**
+  `hashing.md` MUST define the payload preimage generically over any flat
+  int/string payload (mechanical key-walk, sort by key bytes), not per-type
+  field lists. The ballot carve-out stays type-aware: ADR-0004's choice-range
+  check (ET-18a) and ET-22's no-unbounded-voter-value rule are load-bearing for
+  receipt-freeness and stay Stage-2, not generic. The "one generic/flagged
+  ballot-poll event" alternative is rejected in ADR-0006 §6 (violates plane
+  separation, rule 7, and receipt-freeness).
 - **Sanction/negative events (Phase 2, deferred — NOT a freeze blocker).**
   Contribution-style derived views only count up until negative events exist;
   charter §7 requires failure/fraud to crater standing and §9 makes

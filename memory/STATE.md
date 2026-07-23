@@ -29,12 +29,28 @@ contracts/ passes the genesis rehearsal and is frozen.
   check. Convention introduced: each `contracts/*.md` spec carries a `Version:`
   line — T3/T4 authors must include it. Reviewed APPROVE WITH NITS; both
   [SHOULD]s (per-file version check; guard-tests required) fixed pre-merge.
+- **T3 — Draft: event schema, IDs, event types** (2026-07-21, PR #4, squash
+  `c432cc5`). `contracts/event-schema.md` (ES-1…33), `ids.md` (ID-1…10),
+  `event-types.md` (ET-1…22, four v1 types: `genesis` ·
+  `participant_registered` · `issue_created` · `vote_cast`); ADRs 0002 (hash+sig)
+  0003 (preimage & strict reject) 0004 (receipt-free ballots) 0005 (correction
+  model, proposed). All DRAFTING, not frozen.
+- **Phase-0 prep — ADR-0006 + T4 unblock** (2026-07-23, this branch). ADR-0006
+  (verifier scope & forward-compat: two-stage verification, generic flat-payload
+  preimage, exit codes 0/1/2) **accepted**; ADR-0005 item 1 (six-field envelope,
+  no `supersedes`) **human-ratified**. Both T4 prerequisites in OPEN-QUESTIONS
+  cleared. `docs/plans/phase-0.md` T4 ticket updated with the constraints
+  ADR-0006 places on `hashing.md` (generic preimage) and `evolution.md`
+  (two-stage/exit-code contract + re-scope of ES-9/ES-11/ET-1).
 
 ## Next
 
-**T3 — Draft: event schema, IDs, event types** (`odc-implementer`, Opus;
-fresh-context review), per `docs/plans/phase-0.md`. May run in parallel with
-nothing yet blocking it. Then T4 (hashing/export/read-api/evolution) → T5–T10.
+**T4 — Draft: hashing, export, read API, evolution** (`odc-implementer`, Opus,
+fresh session; fresh-context review), per `docs/plans/phase-0.md`. Now
+unblocked — both prerequisite decisions (ADR-0006, ADR-0005 ratification) are in.
+`hashing.md` MUST use the generic flat-payload preimage (ADR-0006 item 4);
+`evolution.md` MUST carry the two-stage/exit-code contract and the ADR-0005
+correction template, and flip ADR-0005 `proposed` → `accepted`. Then T5–T10.
 Each spec file must carry a `Version:` line or contracts-guard fails the PR.
 
 Ticket discipline: one ticket = one branch = one PR = one session; fresh-context
