@@ -105,6 +105,16 @@ prev_hash, hash`; types and normative constraints per field; RFC-2119
 
 ### T4 — Draft: hashing, export, read API, evolution · odc-implementer, fresh session
 
+**Prereq — resolve before drafting `hashing.md` (all three shape the frozen
+bytes; see `memory/OPEN-QUESTIONS.md`):** (1) the verifier-scope / forward-compat
+ADR — two-stage verification + a **generic** payload preimage over any flat
+int/string payload, else future additive event types are unhashable and break
+every frozen verifier (evolution rule, §8 fork/exit); (2) **ADR-0005**
+(correction/retraction) human ratification — fixes whether the preimage must ever
+accommodate a `supersedes` envelope field (proposed: no); (3) the
+`latest-per-participant` tally inconsistency (plan §ledger vs ADR-0004's
+unlinkable ballots), reconciled via ADR-0005 ballot finality.
+
 - `contracts/hashing.md` (~1 page): the preimage as an exact byte-string
   construction (fixed field order, length-prefix or delimiter scheme —
   drafting decision, spelled byte-by-byte with a worked example); SHA-256;
