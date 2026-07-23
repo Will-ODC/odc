@@ -63,3 +63,64 @@ choice}` at eligibility-check time — trust-by-policy per charter §10 v1,
   later per-type `version` bump, not a null (ES-3/ES-16). Attestation tiers
   may gate _execution_ capabilities and which parallel tallies a ballot
   feeds — never ballot access itself (P4).
+
+## From the hash-chain / schema / identity design review (2026-07-23)
+
+- **v1 eligibility / enrollment mechanism — undecided (Phase 1 identity).**
+  ADR-0004 fixes that the registrar admits ballots after an _off-log_
+  eligibility check, but not _how_ personhood/eligibility is established. SSO
+  (e.g. a UBC login) is a plausible v1 registration gate, but it proves
+  _affiliation_, not _unique personhood_ — so it is best modelled as an
+  attribute/eligibility gate (feeding a parallel tally, §5), NOT the personhood
+  root, which the charter roots in humans-vouching-for-humans (§7, in-person
+  strongest). "Registrar" here is an ODC-internal role (the identity service
+  holding `registrar_pk`), not an external IdP; an SSO provider would be a tool
+  it _consults_, not the registrar itself. If SSO is adopted as the v1 gate,
+  record it as an ADR. Couples to the registrar-key-custody item above.
+- **Ballot-payload extensibility guardrails / poll types.** v1 `vote_cast` is a
+  single bounded integer `choice` (`0 ≤ choice < choice_count`, 2–64) —
+  natively covers agree/disagree and single-select. Multi-select (approval),
+  ranked (RCV/STV), and score ballots need a _different payload structure_ and
+  therefore an additive `vote_cast` version, bounded by TWO permanent rules:
+  bounded domain (ET-22 — no unbounded voter-chosen value = no receipt channel)
+  and flat/byte-exact serialization (ES-16/17 forbid arrays today, so a bounded
+  encoding must be defined). Aggregation method is unconstrained and free —
+  parallel tallies interpret the same ballots (§5). Poll-type polymorphism
+  belongs in the app/tally layer as an interface; the _on-log_ payload stays a
+  closed, versioned, concretely-specified set (you hash concrete bytes, not an
+  abstract interface). Couples to the generic-payload-preimage requirement in
+  the verifier-scope item above.
+- **Individual ballot verifiability is traded away in v1 (by design).** The
+  _record_ is universally verifiable (counted-as-recorded: anyone recomputes
+  every tally, P1), but a voter cannot verify _cast-as-intended_ or
+  _recorded-as-cast_ for their own ballot — the voter holds no signing key and
+  there is no voter-provable inclusion, because either would be a receipt
+  (ADR-0004, §5/§8). Known way to regain _cast-as-intended_ confidence without a
+  receipt: a Benaloh-style challenge (spoil-and-audit). Deferred; candidate for
+  the identity-v2 / coercion-resistance work (§11).
+- **Pseudonym reset / rotation after an outing.** A "get a new id" remedy is
+  forward-only (append-only log never erases the past — §8, "remedies the
+  future, not the past"). Ballot plane: nothing to reset (ballots carry no id);
+  the v1 outing vectors (registrar knowledge, small-tally statistics) are
+  untouched by a new key. Public plane: rotation is possible, but in v1 the
+  registrar re-links it to the same human (so it does not hide from the
+  operator), and it must be costly / rate-limited or it becomes a Sybil +
+  reputation-laundering hole (§7). Real unlinkable rotation needs blind
+  credentials + deniable-credential / re-voting machinery (JCJ/Civitas lineage)
+  — identity v2, §11.
+- **Attribute visibility differs by plane.** The same attestation (e.g. a UBC
+  credential) is _fully public_ on the public plane (named, reputation-bearing,
+  §6) but on the ballot plane may appear only in _aggregate_ and must stay
+  coarse — a rare per-ballot attribute is a deanonymization / tagging channel
+  (same hazard family as bounded `choice_count`). Unlinkability between the two
+  uses is registrar-policy in v1, cryptographic (blind credentials) in v2.
+  Design the attribute/attestation event types with this two-plane visibility
+  split explicit (couples to the deferred attestation-event design above).
+- **Doc inconsistency: `latest-per-participant` tally is unimplementable
+  on-log.** `docs/implementation-plan.md` (§ledger: "Duplicate votes are
+  recorded, not rejected … latest per participant wins") predates ADR-0004,
+  which removed the voter key — so ballots are NOT linkable per-participant
+  on-log and tally has no per-participant field to take the "latest" of.
+  Reconcile with ADR-0005's proposed v1 ballot finality (registrar refuses
+  re-votes; duplicates never reach the log). Resolve before T4 freezes anything
+  assuming either behaviour. NOT yet ratified.
