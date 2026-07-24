@@ -16,6 +16,36 @@ Format (newest first, one entry per merged contracts change):
 
 ---
 
+## hashing.md · export-format.md · read-api.md · evolution.md — v1 — 2026-07-24 — T4
+
+- First content for the four T4 specs (all v1). `hashing.md`: the byte-exact
+  preimage — `DOMAIN "ODC1"` ‖ 8-byte-big-endian ints ‖ length-prefixed UTF-8
+  strings ‖ a **generic, per-type-agnostic** payload rule (sorted keys, 1-octet
+  int/string tag); SHA-256, lowercase hex; hex fields hashed as text; signing
+  preimage = payload minus `sig`. Includes a real, valid, hand-verifiable
+  `genesis` worked example (hash `78ed980b…f6409a`, operator self-sig verifies)
+  — reused verbatim as fixture 001 in T5. `export-format.md`: NDJSON (D7),
+  strict as-received verification, `--head`, and the explicit rule that
+  end-truncation is only detectable with `--head`. `read-api.md`: `GET /events`
+  `since`/`limit`/`next`/`head`, ordering + pagination stability, error codes.
+  `evolution.md`: additive-only versioning, hashing never retroactive, and the
+  authoritative cross-version verifier rule.
+- **Two ADRs land with this ticket.** ADR-0005 (correction/retraction) is
+  **ratified** (operator, 2026-07-24): the envelope never carries correction
+  machinery; corrections are additive payload conventions (`evolution.md`
+  EV-11–EV-14), ballot plane permanently excluded (ET-22). ADR-0006 (verifier
+  scope & forward compatibility) is **accepted**: two-stage verification and a
+  third verdict `PARTIAL` for well-formed-but-unregistered types, plus the
+  requirement that the payload preimage be generic — both realized in
+  `hashing.md` (HA-7) and `evolution.md` (EV-6–EV-10).
+- **No T3 spec edited.** `evolution.md` EV-9 refines what ES-9/ES-11/ET-1/ET-2's
+  "reject" means for a well-formed unregistered `(type, version)` (→ `PARTIAL`,
+  not structural `INVALID`) as the authoritative cross-version rule; those T3
+  sentences SHOULD gain a cross-reference at their next revision (flagged, not
+  done pre-freeze).
+- `contracts/` stays DRAFTING. Freeze remains gated on the genesis rehearsal
+  (T6–T8) and security audit (T9).
+
 ## event-schema.md · ids.md · event-types.md — v1 — 2026-07-21 — T3
 
 - First spec content. Drafted the event envelope (seven fields, strict
