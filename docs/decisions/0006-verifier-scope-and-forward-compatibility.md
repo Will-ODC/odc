@@ -48,7 +48,7 @@ There are two coupled decisions:
 ## Decision
 
 **1. Two-stage verification.** Verification splits into a type-agnostic stage
-that applies to *every* event, and a type-specific stage that applies only to
+that applies to _every_ event, and a type-specific stage that applies only to
 `(type, version)` pairs the verifier's contracts version registers.
 
 - **Stage A — structural, type-agnostic (always applied).** Envelope
@@ -70,7 +70,7 @@ verdict:
   is registered and passes Stage B.
 - **`INVALID` (at line N, reason code)** — the first fatal failure: any Stage A
   failure (broken chain, malformed field, non-canonical bytes, a `type` that
-  fails ES-10), **or** a Stage B failure on a *registered* type. Fatal: it taints
+  fails ES-10), **or** a Stage B failure on a _registered_ type. Fatal: it taints
   the chain from line N and verification stops there.
 - **`PARTIAL`** — Stage A passes for the entire chain and no registered event
   fails Stage B, but one or more events carry a well-formed (ES-10) `type` or
@@ -78,8 +78,8 @@ verdict:
   them. The verifier MUST enumerate the affected line numbers and MUST NOT
   report the chain `INVALID` solely for this reason.
 
-`PARTIAL` means: *the record's structure and hash-chain are sound; some events
-are of kinds newer than I understand, and I have said which.* This is the
+`PARTIAL` means: _the record's structure and hash-chain are sound; some events
+are of kinds newer than I understand, and I have said which._ This is the
 non-silent verdict P1 and §8 require — an old verifier confirms integrity of a
 newer chain instead of lying about it.
 
@@ -95,8 +95,8 @@ possible for an unknown type.
 **4. Home of the normative rule, and scope boundary.** The two-stage model and
 the three verdicts are written normatively in `evolution.md` (T4), which is the
 authoritative statement of cross-version verifier behavior. This ADR does **not**
-edit ES-9/ES-11/ET-1/ET-2: those remain correct as the statement of the *v1
-registry*. `evolution.md` refines what their word "reject" means for a
+edit ES-9/ES-11/ET-1/ET-2: those remain correct as the statement of the _v1
+registry_. `evolution.md` refines what their word "reject" means for a
 well-formed but unregistered `(type, version)` — it yields the per-event
 `PARTIAL`/unknown treatment, never a structural `INVALID`. Only a malformed
 `type` (ES-10) or a Stage A failure is `INVALID`. `evolution.md` EV-9 states this
