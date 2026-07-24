@@ -1,7 +1,7 @@
 # ADR-0005: Correction and retraction model
 
-- **Status:** proposed — NEEDS HUMAN RATIFICATION before contracts freeze (T10)
-- **Date:** 2026-07-21
+- **Status:** accepted (ratified by operator 2026-07-24)
+- **Date:** 2026-07-21 (ratified 2026-07-24)
 - **Phase:** 0
 
 ## Context
