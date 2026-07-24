@@ -33,11 +33,16 @@ All lengths and counts are **octet** (byte) counts, never character counts.
   big-endian** (most-significant octet first), unsigned. Because every integer
   in an event is bounded to `0 … 2^53 − 1` (`event-schema.md` ES-5), it always
   fits in 8 octets with no overflow.
-- **HA-2.** `UTF8(s)` is the UTF-8 encoding of string `s`, with **no** byte-order
-  mark and **no** Unicode normalization of any form (NFC/NFD/NFKC/NFKD MUST NOT
-  be applied). The string's octets are taken exactly as they appear in the
-  stored event. An implementation MUST reject a string that is not
-  well-formed UTF-8.
+- **HA-2.** `UTF8(s)` is the UTF-8 encoding of the **decoded** JSON string value
+  `s` — i.e. the sequence of Unicode scalar values obtained *after* resolving all
+  JSON escapes (`\n`, `\uXXXX`, `\"`, …), not the raw escaped token as it appears
+  in the stored line. Two lines whose `type`/`ts`/payload strings decode to the
+  same scalar values hash identically even if one wrote a character literally and
+  the other as a `\u` escape; the stored line's escaping is separately pinned in
+  `export-format.md` EX-9. `UTF8(s)` applies **no** byte-order mark and **no**
+  Unicode normalization of any form (NFC/NFD/NFKC/NFKD MUST NOT be applied): the
+  decoded scalar values are UTF-8-encoded exactly as decoded. An implementation
+  MUST reject a string whose decoded value is not well-formed UTF-8.
 - **HA-3.** `LP(x)` (length-prefixed octets) is `U64(len) || x`, where `len` is
   the octet count of `x` and `||` is concatenation. Length-prefixing (never a
   delimiter) is what makes the construction unambiguous even when a string value

@@ -57,7 +57,7 @@ Every normative sentence is numbered `RA-n`. RFC-2119 keywords are normative.
 - **RA-8.** `head` describes the server's current knowledge and MAY advance
   between requests as new events are appended. `head` is advisory for liveness;
   it is **not** a substitute for the anchored head a verifier checks against
-  (`export-format.md` EX-13, charter §4). A client MUST NOT treat `head` from
+  (`export-format.md` EX-15, charter §4). A client MUST NOT treat `head` from
   this endpoint as the non-equivocation anchor.
 
 ## 3. Pagination
@@ -65,7 +65,9 @@ Every normative sentence is numbered `RA-n`. RFC-2119 keywords are normative.
 - **RA-9.** To page forward a client requests `GET /events?since={next}` using
   the `next` value from the previous response. When `next` is `null`, the client
   has reached the end of what the server holds; there is no further page until
-  the log grows.
+  the log grows. To resume polling the tail after `next` was `null`, the client
+  requests `since = {highest seq it has consumed}` per RA-10 — `next` is a
+  forward cursor within a page walk, not the resume value once it goes `null`.
 - **RA-10.** Pagination MUST be stable under append: because the log is
   append-only (never reordered or deleted) and `seq` is dense and monotonic
   (ES-7), a given `since` always yields the same events regardless of when it is

@@ -99,9 +99,15 @@ edit ES-9/ES-11/ET-1/ET-2: those remain correct as the statement of the *v1
 registry*. `evolution.md` refines what their word "reject" means for a
 well-formed but unregistered `(type, version)` — it yields the per-event
 `PARTIAL`/unknown treatment, never a structural `INVALID`. Only a malformed
-`type` (ES-10) or a Stage A failure is `INVALID`. At the next contracts revision
-the ES-/ET- prose SHOULD gain a cross-reference to that rule; it is flagged, not
-done here, to avoid re-versioning freshly-reviewed T3 drafts pre-freeze.
+`type` (ES-10) or a Stage A failure is `INVALID`. `evolution.md` EV-9 states this
+reconciliation normatively; the T3 prose is not edited in T4, to avoid
+re-versioning freshly-reviewed drafts mid-ticket. **Pre-freeze gate (MUST):**
+before the `contracts-v1` freeze (T10), ES-9/ES-11 and ET-1/ET-2 MUST gain an
+inline cross-reference to EV-9, so a verifier-builder reading only those
+sentences is not misled by the bare "MUST reject". Shipping a bare "MUST reject"
+into the freeze with its override living only in `evolution.md` is not
+acceptable; the freeze review (T9/T10) MUST confirm the cross-references are
+present.
 
 ## Consequences
 
