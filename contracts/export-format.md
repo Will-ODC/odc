@@ -1,7 +1,7 @@
 # Export Format — contracts/export-format.md
 
-**Version:** 1
-**Status:** DRAFTING (Phase 0 · T4). Not frozen.
+**Version:** 2
+**Status:** DRAFTING (Phase 0 · T4a). Not frozen.
 **Companion specs:** `event-schema.md` (envelope), `hashing.md` (preimage +
 `hash`), `read-api.md` (the online read interface), `evolution.md` (versioning).
 
@@ -119,6 +119,34 @@ a portable content fingerprint (the `hash`) and a unique on-disk form (this §2)
   `prev_hash` link. Only clean end-truncation escapes detection, and only §4's
   `--head` closes it.
 
+## 5. Line attribution for whole-file failures (added in v2)
+
+`evolution.md` EV-17 requires every `INVALID` to name a line. Three failures have
+no line to name from the rules above — the export has no offending *event*, or
+the fault is a property of the file as a whole. Without these sentences two
+conforming verifiers agree the file is bad and disagree about where, which the
+tamper matrix ("`INVALID` at the right line") would score as a failure.
+
+- **EX-18.** **An empty export verified as a chain is `INVALID`, attributed to
+  line 1.** EX-6 makes the zero-length file a well-formed *export*; it is not a
+  valid *chain*, because a chain MUST begin with a genesis event (EX-12,
+  `event-schema.md` ES-33). Line 1 is named as the position where the required
+  genesis line is absent. (A verifier asked only to parse an export, rather than
+  to verify a chain, is outside this spec.) EX-14's 64-zero head for an empty
+  export is therefore **moot for chain verification**: no `--head` value can make
+  an empty export `VALID`. That clause survives only as the definition of the head
+  an empty ledger reports.
+- **EX-19.** **A `--head` mismatch (EX-15) is `INVALID`, attributed to the last
+  line of the export** — the line whose `hash` is the head that failed to match
+  (EX-14). This holds whether the mismatch is caused by end-truncation (EX-16) or
+  by a substituted chain.
+- **EX-20.** **Framing violations are attributed as follows:** a `CR` (EX-3) at
+  the first line containing one; a missing final `LF` (EX-4) at the last line; a
+  blank or whitespace-only line (EX-5) at that line; and a byte-order mark or any
+  other leading garbage (EX-2) at line 1. Where a framing violation makes line
+  boundaries themselves ambiguous, the verifier MUST attribute to the lowest line
+  number consistent with the bytes it could parse — never to a later line.
+
 ---
 
 ## Degrees of freedom closed (acid-test checklist)
@@ -140,6 +168,9 @@ a portable content fingerprint (the `hash`) and a unique on-disk form (this §2)
 | Head definition                               | EX-14            |
 | `--head` semantics                            | EX-15            |
 | Truncation detectability + required `--head`  | EX-16, EX-17     |
+| Verdict + line for an empty export            | EX-18            |
+| Line blamed for a `--head` mismatch           | EX-19            |
+| Line blamed for framing violations            | EX-20            |
 
 ## Acid-test walkthrough
 

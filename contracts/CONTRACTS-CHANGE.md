@@ -16,6 +16,58 @@ Format (newest first, one entry per merged contracts change):
 
 ---
 
+## evolution.md · export-format.md · event-schema.md · event-types.md — v2 — 2026-07-25 — T4a
+
+- **The verifier report surface, so T7 can be built from `contracts/` alone.**
+  ADR-0006 deferred exit codes to "decided in T7", but that session may read only
+  `contracts/`, its ticket, and charter §4 — it cannot see the ADR. The surface
+  therefore has to live in a spec. `evolution.md` v2 adds:
+  - **EV-15** — Stage A is *exactly* the checks that do not consult the type
+    registry, enumerated exhaustively. EV-6's list was illustrative and omitted
+    ES-12, ES-15–ES-17, ES-19, ES-26 and the whole `export-format.md` layer; the
+    boundary is verdict-determining, so an incomplete list is a real ambiguity.
+  - **EV-16** — a payload-shape failure (ES-15/ES-16/ES-17) is `INVALID` even on
+    an *unregistered* type. HA-7 encodes only flat int/string values, so such an
+    event has no computable preimage and EV-8's "integrity confirmed" rationale
+    for `PARTIAL` does not hold.
+  - **EV-17** — verdict precedence (INVALID > PARTIAL > VALID), 1-based line
+    attribution, ascending `PARTIAL` line enumeration, exit codes 0/1/2 with ≥3
+    reserved for tool errors, and **reason text as advisory only**. Conformance is
+    judged on verdict token + line number alone; fixtures MUST NOT assert reason
+    text or exit codes. This deliberately keeps the diagnostic vocabulary and the
+    CLI surface revisable while the verdict itself is fixed — no reason-code
+    registry is defined, and none is needed for T5/T7/T8.
+  - **EV-18** — the `x_` type-name prefix is reserved permanently and may never be
+    registered, so `PARTIAL` conformance vectors have a placeholder type that
+    cannot later become real. Without it a frozen `PARTIAL` fixture is a time
+    bomb: registering its placeholder for real would make a newer verifier
+    contradict a vector `contracts-guard` has made uneditable.
+- **Line attribution for whole-file failures** (`export-format.md` v2). EV-17
+  requires every `INVALID` to name a line, and three failures had none: **EX-18**
+  an empty export verified as a chain is `INVALID` at line 1 (EX-6 made it a
+  well-formed *export* but never said what the verdict is); **EX-19** a `--head`
+  mismatch is attributed to the last line; **EX-20** framing violations (CR,
+  missing final LF, blank line, BOM) each get a defined line, with a
+  lowest-consistent-line rule where framing makes boundaries ambiguous.
+- **EV-9 cross-references land now, not at T9/T10** (`event-schema.md` ES-11,
+  `event-types.md` new **ET-2a**). ADR-0006 made these a pre-freeze gate, but T7
+  runs *before* the freeze review and is the session most likely to be misled by a
+  flat "MUST reject". The sentences are unchanged in meaning and keep their
+  numbers; each now points at EV-9.
+- **Ticket text reconciled in the same PR**, per ADR-0006's explicit MUST. The
+  T5 and T7 tickets in `docs/plans/phase-0.md` and the deliverable line in
+  `.claude/agents/odc-verifier-builder.md` still described two verdicts, exit
+  codes 0/1, and a required reason code. T7 reads its ticket **and**
+  `contracts/` but cannot see the ADR that would arbitrate, so leaving them
+  stale would have been worse than not touching `contracts/` at all: a verifier
+  built to its ticket cannot emit `PARTIAL`, while T5 must ship `PARTIAL`
+  fixtures — T8 would then fail on a documentation conflict, not a spec one.
+- No `hashing.md` change, no renumbering of any existing sentence, no fixture
+  change (`contracts/fixtures/` does not exist yet — T5 creates it).
+- `contracts/` stays DRAFTING. Per the 2026-07-25 direction decision the freeze is
+  now gated on operational experience, not only on T9 approval — T5–T9 proceed on
+  schedule, the `contracts-v1` tag waits.
+
 ## hashing.md · export-format.md · read-api.md · evolution.md — v1 — 2026-07-24 — T4
 
 - First content for the four T4 specs (all v1). `hashing.md`: the byte-exact

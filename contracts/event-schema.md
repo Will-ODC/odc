@@ -1,7 +1,7 @@
 # Event Schema — contracts/event-schema.md
 
-**Version:** 1
-**Status:** DRAFTING (Phase 0 · T3). Not frozen.
+**Version:** 2
+**Status:** DRAFTING (Phase 0 · T3, amended T4a). Not frozen.
 **Companion specs:** `event-types.md` (payloads), `ids.md` (identifiers),
 `hashing.md` (byte-exact preimage — T4), `export-format.md` (NDJSON — T4).
 
@@ -74,7 +74,12 @@ fewer:
 - **ES-10.** `type` MUST match the pattern `^[a-z][a-z0-9_]*$` (lowercase
   ASCII, underscores allowed, no leading digit or underscore).
 - **ES-11.** A verifier MUST reject an event whose `type` is not a registered
-  type name.
+  type name. **What "reject" means here is refined by `evolution.md` EV-9:** for
+  a *well-formed* (ES-10) but unregistered `type` or `(type, version)`, the
+  outcome is the per-event `PARTIAL` treatment of EV-7/EV-8 — the event is denied
+  a `VALID` **semantic** verdict, not condemned as structurally `INVALID`. Only a
+  malformed `type` (ES-10) or a Stage A failure is `INVALID`. This applies to
+  ES-9 above as well.
 
 ## 4. `version` — per-type payload schema version
 

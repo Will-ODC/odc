@@ -130,7 +130,13 @@ prev_hash, hash`; types and normative constraints per field; RFC-2119
   examples before merge. **Golden values never regenerate to make anything
   pass** (`odc-testing`).
 - Format: each vector = input event JSON + expected preimage bytes (hex) +
-  expected hash + expected verdict (VALID/reason-coded INVALID).
+  expected hash + expected verdict. The verdict is a token plus line
+  attribution — `VALID`, `INVALID` at line N, or `PARTIAL` at lines [...] —
+  per `contracts/evolution.md` EV-7/EV-17. **A vector MUST NOT assert reason
+  text or a process exit code**: conformance is judged on verdict token and
+  line number alone, and no reason-code registry exists (EV-17). Vectors
+  exercising the unregistered-type path MUST use an `x_`-prefixed `type`
+  (EV-18).
 - Acceptance: `pnpm --filter fixtures-gen test` recomputes and matches all
   committed vectors; the T4 worked example appears verbatim as vector 001.
 
@@ -152,8 +158,11 @@ prev_hash, hash`; types and normative constraints per field; RFC-2119
 - Session may read ONLY: `contracts/*.md`, `contracts/fixtures/`, its own
   `services/verifier/` dir, `docs/charter.md` §4, and this ticket's text.
   NOT T5/T6 source, NOT this plan's other tickets, NOT any prior discussion.
-- Go, stdlib only. `verify <export.ndjson> [--head <hash>]` →
-  `VALID` | `INVALID at line N` (+ reason code). Exit codes 0/1.
+- Go, stdlib only. `verify <export.ndjson> [--head <hash>]` → one of the three
+  verdicts in `contracts/evolution.md` EV-7/EV-17: `VALID`, `INVALID at line N`,
+  or `PARTIAL` naming the affected lines. Exit codes 0/1/2 respectively, ≥3 for
+  tool-level errors. Any reason text is advisory and is not conformance-checked
+  — do not invent a reason-code registry; none exists (EV-17).
 - Must pass every fixture (valid AND adversarial verdicts) from
   `contracts/fixtures/` alone.
 - Every ambiguity the builder hits is reported as a numbered spec-bug list in

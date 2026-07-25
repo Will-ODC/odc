@@ -1,7 +1,7 @@
 # Event Types — contracts/event-types.md
 
-**Version:** 1
-**Status:** DRAFTING (Phase 0 · T3). Not frozen.
+**Version:** 2
+**Status:** DRAFTING (Phase 0 · T3, amended T4a). Not frozen.
 **Companion specs:** `event-schema.md` (envelope), `ids.md` (identifiers),
 `hashing.md` (preimage — T4).
 
@@ -19,6 +19,14 @@ Each payload table column: **key** · **type** · **constraint**.
 - **ET-2.** Each type below is defined at `version` = 1. An event of a listed
   type with `version` ≠ 1 has no v1 schema and MUST be rejected until a future
   contracts version defines it (`evolution.md`, T4).
+- **ET-2a.** **"Reject" in ET-1 and ET-2 is refined by `evolution.md` EV-9.** A
+  *well-formed* (`event-schema.md` ES-10) `type` or `(type, version)` outside this
+  registry yields the per-event `PARTIAL` treatment of EV-7/EV-8 — Stage A still
+  confirms the event's hash and chain position; only its type-specific semantics
+  go unchecked. A frozen verifier therefore does **not** condemn a chain that has
+  legally grown past it (charter §8, P1). Only a malformed `type` or a Stage A
+  failure is structurally `INVALID`; a malformed payload is `INVALID` even on an
+  unregistered type (EV-16).
 
 ---
 
