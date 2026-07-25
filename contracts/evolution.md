@@ -68,7 +68,10 @@ chain, or a fork that added types, charter §8).
 - **EV-7.** A verifier MUST report exactly one of three chain verdicts:
   - **`VALID`** — every event passes Stage A, and every event's `(type,
     version)` is registered and passes Stage B.
-  - **`INVALID` (at line N, reason code)** — the first fatal failure: any Stage A
+  - **`INVALID` (at line N, reason code)** — the reason accompanying `INVALID` is
+    **advisory**; no reason-code registry exists or is required, and conformance
+    is judged on the verdict token and line number alone (EV-17). The first fatal
+    failure: any Stage A
     failure, **or** a Stage B failure on a **registered** `(type, version)`,
     **or** a `type` that fails the ES-10 character set. Verification stops at
     line N; the chain is tainted from there.
@@ -145,12 +148,18 @@ the surface has to live here.
 - **EV-15.** **Stage A is exactly the set of checks that do not consult the type
   registry**; EV-6's enumeration is illustrative, not exhaustive. Stage A
   comprises, in full: every rule of `export-format.md` (EX-1–EX-20 — framing,
-  canonical line form, chain linkage, head); from `event-schema.md` ES-1–ES-8,
+  canonical line form, chain linkage, head) **except the `sig` clause of EX-11,
+  which is Stage B** (verifying `sig` per `hashing.md` HA-16 requires the
+  per-type signing key, ET-8/ET-10/ET-13/ET-17); from `event-schema.md` ES-1–ES-8,
   ES-10, ES-12, ES-15–ES-17, ES-19, ES-20, ES-23–ES-28, and ES-33; and from
-  `hashing.md` HA-6 and HA-14. **Stage B is exactly the remainder** — the checks
-  that require knowing the `(type, version)`: ES-9 and ES-11 (registration),
-  ES-18 (payload key set), ES-30–ES-32 as instantiated per type, and every rule
-  of `event-types.md` (ET-\*).
+  `hashing.md` HA-6 and HA-14. **Stage B is exactly the remainder of the
+  per-event checks** — those requiring knowledge of the `(type, version)`: ES-9
+  and ES-11 (registration), ES-18 (payload key set), ES-30–ES-32 as instantiated
+  per type, the EX-11 `sig` clause above, every rule of `event-types.md` (ET-\*),
+  and `ids.md` ID-1/ID-2/ID-8, which a verifier reaches only through ET-18.
+  `event-schema.md` ES-13, ES-14, ES-21, ES-22 and ES-29 state definitions, or
+  constraints on the verifier itself, rather than per-event checks; they are
+  outside this split and belong to neither stage.
 - **EV-16.** **A payload-shape failure is `INVALID`, never `PARTIAL`.** An event
   violating `event-schema.md` ES-15, ES-16, or ES-17 — a non-object `payload`, or
   a float, boolean, `null`, nested object, or array anywhere in it — MUST be
@@ -170,24 +179,31 @@ the surface has to live here.
     Failures with no natural line are attributed by `export-format.md` EX-18–EX-20.
   - **`PARTIAL` enumeration.** `PARTIAL` MUST enumerate the affected line numbers
     in ascending order (EV-7).
-  - **Exit codes.** `0` = `VALID`, `1` = `INVALID`, `2` = `PARTIAL`. Codes `3` and
-    above are reserved for tool-level failures (unreadable file, bad usage), which
-    MUST NOT be reported as any chain verdict.
   - **Reason text is advisory.** A verifier SHOULD accompany `INVALID` with a
     human-readable reason and SHOULD name the violated normative sentence (`ES-7`,
     `HA-14`, `EX-10`, …), reusing the identifiers these specs already assign. That
     text is **not** conformance-checked. **Conformance is judged on the verdict
     token and the line number(s) alone**, and golden fixtures MUST assert only
-    those — never the reason text, and never the exit code. This keeps the
+    those — never the reason text, and never the process exit code. This keeps the
     diagnostic vocabulary and the CLI surface revisable while the verdict itself
     is fixed.
+
+  _Non-normative CLI note (not a conformance requirement, and deliberately
+  fixture-free so it stays revisable): a command-line verifier exits `0` for
+  `VALID`, `1` for `INVALID`, `2` for `PARTIAL`, and `3` or above for tool-level
+  failures such as an unreadable file or bad usage — which are never a chain
+  verdict. This is pinned here only so two independent implementations do not
+  invent conflicting schemes; it constrains the CLI, not the protocol._
+
 - **EV-18.** **Reserved type-name prefix.** No contracts version — v1 or any
-  successor — MAY register an event `type` beginning `x_`. The prefix satisfies
-  ES-10 and is set aside permanently for conformance fixtures that must exercise
-  the unregistered-type path (`PARTIAL`, EV-7/EV-8). Without this reservation a
-  frozen `PARTIAL` vector is a time bomb: were its placeholder type later
-  registered for real, a newer verifier would run Stage B on it and contradict a
-  fixture that `contracts-guard` makes uneditable.
+  successor — MAY register an event `type` beginning `x_`, and a conformance
+  fixture exercising the unregistered-type path (`PARTIAL`, EV-7/EV-8) MUST use a
+  `type` beginning `x_`. The prefix satisfies ES-10. Both halves are needed:
+  without the reservation, a frozen `PARTIAL` vector is a time bomb — were its
+  placeholder type later registered for real, a newer verifier would run Stage B
+  on it and contradict a fixture that `contracts-guard` makes uneditable; without
+  the obligation on fixtures, a vector could simply pick a plausible future type
+  name and re-arm it.
 
 ---
 

@@ -1,7 +1,7 @@
 # Event Schema — contracts/event-schema.md
 
 **Version:** 2
-**Status:** DRAFTING (Phase 0 · T3). Not frozen.
+**Status:** DRAFTING (Phase 0 · T3, amended T4a). Not frozen.
 **Companion specs:** `event-types.md` (payloads), `ids.md` (identifiers),
 `hashing.md` (byte-exact preimage — T4), `export-format.md` (NDJSON — T4).
 

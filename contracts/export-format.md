@@ -132,7 +132,10 @@ tamper matrix ("`INVALID` at the right line") would score as a failure.
   valid *chain*, because a chain MUST begin with a genesis event (EX-12,
   `event-schema.md` ES-33). Line 1 is named as the position where the required
   genesis line is absent. (A verifier asked only to parse an export, rather than
-  to verify a chain, is outside this spec.)
+  to verify a chain, is outside this spec.) EX-14's 64-zero head for an empty
+  export is therefore **moot for chain verification**: no `--head` value can make
+  an empty export `VALID`. That clause survives only as the definition of the head
+  an empty ledger reports.
 - **EX-19.** **A `--head` mismatch (EX-15) is `INVALID`, attributed to the last
   line of the export** — the line whose `hash` is the head that failed to match
   (EX-14). This holds whether the mismatch is caused by end-truncation (EX-16) or

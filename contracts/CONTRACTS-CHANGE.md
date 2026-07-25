@@ -54,6 +54,14 @@ Format (newest first, one entry per merged contracts change):
   runs *before* the freeze review and is the session most likely to be misled by a
   flat "MUST reject". The sentences are unchanged in meaning and keep their
   numbers; each now points at EV-9.
+- **Ticket text reconciled in the same PR**, per ADR-0006's explicit MUST. The
+  T5 and T7 tickets in `docs/plans/phase-0.md` and the deliverable line in
+  `.claude/agents/odc-verifier-builder.md` still described two verdicts, exit
+  codes 0/1, and a required reason code. T7 reads its ticket **and**
+  `contracts/` but cannot see the ADR that would arbitrate, so leaving them
+  stale would have been worse than not touching `contracts/` at all: a verifier
+  built to its ticket cannot emit `PARTIAL`, while T5 must ship `PARTIAL`
+  fixtures — T8 would then fail on a documentation conflict, not a spec one.
 - No `hashing.md` change, no renumbering of any existing sentence, no fixture
   change (`contracts/fixtures/` does not exist yet — T5 creates it).
 - `contracts/` stays DRAFTING. Per the 2026-07-25 direction decision the freeze is

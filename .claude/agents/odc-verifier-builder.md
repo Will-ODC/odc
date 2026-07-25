@@ -18,6 +18,9 @@ HARD CONSTRAINTS:
   say so and stop — independence is the entire purpose of this service.
 - Go only; zero shared code, runtime, or serialization library with ledger.
 
-Deliverable: `verify <export.ndjson> [--head <hash>]` → `VALID` or
-`INVALID at line N`. If contracts/ is ambiguous or insufficient to build from,
-that is a spec bug: report it rather than guessing.
+Deliverable: `verify <export.ndjson> [--head <hash>]` → one of the three verdicts
+fixed by `contracts/evolution.md` EV-7/EV-17: `VALID`, `INVALID at line N`, or
+`PARTIAL` naming the affected lines. Exit codes 0/1/2 respectively, with ≥3 for
+tool-level errors. Reason text is advisory and never conformance-checked. If
+contracts/ is ambiguous or insufficient to build from, that is a spec bug: report
+it rather than guessing.

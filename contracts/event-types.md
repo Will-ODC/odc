@@ -1,7 +1,7 @@
 # Event Types — contracts/event-types.md
 
 **Version:** 2
-**Status:** DRAFTING (Phase 0 · T3). Not frozen.
+**Status:** DRAFTING (Phase 0 · T3, amended T4a). Not frozen.
 **Companion specs:** `event-schema.md` (envelope), `ids.md` (identifiers),
 `hashing.md` (preimage — T4).
 
