@@ -3,8 +3,9 @@
 # contracts-guard (T2). Enforces the contracts/ change discipline on every PR
 # that touches contracts/** (odc-service-boundaries, odc-contracts):
 #
-#   1. Freeze:   once the contracts-v1 tag exists, hashing.md and fixtures/
-#                are immutable — any edit hard-fails.
+#   1. Freeze:   once the contracts-v1 tag exists, hashing.md is immutable and
+#                existing fixtures may not be modified, deleted, or renamed.
+#                ADDING a new fixture stays legal — see the note at the check.
 #   2. Version:  any touched spec file must add/bump a `Version:` line.
 #   3. Changelog: every contracts/ change must add a CONTRACTS-CHANGE.md entry.
 #
@@ -36,13 +37,33 @@ err() {
   fail=1
 }
 
-# 1. Freeze guard — hashing.md and fixtures/ are permanent after contracts-v1.
+# 1. Freeze guard — after contracts-v1, hashing.md is immutable and existing
+# golden fixtures may not be modified, deleted, or renamed.
+#
+# ADDING a new fixture stays legal, deliberately: evolution.md EV-5 and EV-14
+# require every additive change to ship its own golden fixtures before it is
+# published. A blanket "no path under contracts/fixtures/ may appear in the
+# diff" rule would make those two rules impossible to satisfy — no post-freeze
+# event type could ever ship. The intent being enforced is "golden values never
+# regenerate" (odc-testing), which is about changing existing vectors, not
+# about adding new ones alongside them.
+#
+# --no-renames makes a rename surface as D + A rather than R, so the delete
+# half is caught while a genuinely new file passes.
 if git rev-parse -q --verify "refs/tags/contracts-v1" >/dev/null 2>&1; then
-  for f in "${changed[@]}"; do
-    if [[ "$f" == "contracts/hashing.md" || "$f" == contracts/fixtures/* ]]; then
-      err "FROZEN: $f cannot change after the contracts-v1 tag. Hashing rules and golden fixtures are permanent (odc-contracts)."
-    fi
-  done
+  while IFS=$'\t' read -r status path; do
+    [[ -n "${path:-}" ]] || continue
+    case "$path" in
+    contracts/hashing.md)
+      err "FROZEN: $path cannot change after the contracts-v1 tag. Hashing rules are permanent (odc-contracts)."
+      ;;
+    contracts/fixtures/*)
+      if [[ "$status" != "A" ]]; then
+        err "FROZEN: $path cannot be modified, deleted, or renamed after the contracts-v1 tag. Golden values never regenerate (odc-testing) — ship a NEW fixture alongside it instead (evolution.md EV-5)."
+      fi
+      ;;
+    esac
+  done < <(git diff --name-status --no-renames "$BASE...$HEAD" -- 'contracts/')
 fi
 
 # 2. Version bump — checked PER spec file: each touched spec must add a Version

@@ -118,6 +118,48 @@ printf '## fixtures — v2 — 2026-01-01 — X\n- tweak\n' >"$R/contracts/CONTR
 git -C "$R" add -A && git -C "$R" commit -qm change
 assert 1 "$(run_guard "$R")" "frozen fixture edited after contracts-v1 → fail"
 
+# --- Scenario 7c: FREEZE — ADDING a new fixture after contracts-v1 → PASS.
+# evolution.md EV-5/EV-14 require every additive change to ship golden fixtures,
+# so the freeze must not block additions or no post-freeze type could ever ship.
+R="$TMP/s7c"
+new_repo "$R"
+mkdir -p "$R/contracts/fixtures"
+printf '{"seq":1}\n' >"$R/contracts/fixtures/001.json"
+git -C "$R" add -A && git -C "$R" commit -qm "add fixture"
+git -C "$R" tag contracts-v1
+git -C "$R" checkout -q -b work
+printf '{"seq":9}\n' >"$R/contracts/fixtures/042-new-type.json" # untouched: 001.json
+printf '## fixtures — v2 — 2026-01-01 — X\n- new type vector\n' >"$R/contracts/CONTRACTS-CHANGE.md"
+git -C "$R" add -A && git -C "$R" commit -qm change
+assert 0 "$(run_guard "$R")" "NEW fixture added after contracts-v1 → pass"
+
+# --- Scenario 7d: FREEZE — DELETING an existing fixture after the tag → FAIL
+R="$TMP/s7d"
+new_repo "$R"
+mkdir -p "$R/contracts/fixtures"
+printf '{"seq":1}\n' >"$R/contracts/fixtures/001.json"
+git -C "$R" add -A && git -C "$R" commit -qm "add fixture"
+git -C "$R" tag contracts-v1
+git -C "$R" checkout -q -b work
+git -C "$R" rm -q "contracts/fixtures/001.json"
+printf '## fixtures — v2 — 2026-01-01 — X\n- drop vector\n' >"$R/contracts/CONTRACTS-CHANGE.md"
+git -C "$R" add -A && git -C "$R" commit -qm change
+assert 1 "$(run_guard "$R")" "existing fixture deleted after contracts-v1 → fail"
+
+# --- Scenario 7e: FREEZE — RENAMING an existing fixture after the tag → FAIL.
+# Guards against rename detection laundering a delete into an allowed add.
+R="$TMP/s7e"
+new_repo "$R"
+mkdir -p "$R/contracts/fixtures"
+printf '{"seq":1}\n' >"$R/contracts/fixtures/001.json"
+git -C "$R" add -A && git -C "$R" commit -qm "add fixture"
+git -C "$R" tag contracts-v1
+git -C "$R" checkout -q -b work
+git -C "$R" mv "contracts/fixtures/001.json" "contracts/fixtures/001-renamed.json"
+printf '## fixtures — v2 — 2026-01-01 — X\n- rename vector\n' >"$R/contracts/CONTRACTS-CHANGE.md"
+git -C "$R" add -A && git -C "$R" commit -qm change
+assert 1 "$(run_guard "$R")" "existing fixture renamed after contracts-v1 → fail"
+
 # --- Scenario 7b: per-file version check — spec A edited unbumped while spec B
 # is added WITH a Version line must still FAIL (B's bump can't cover A).
 R="$TMP/s7b"
