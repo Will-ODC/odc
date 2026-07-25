@@ -29,13 +29,38 @@ contracts/ passes the genesis rehearsal and is frozen.
   check. Convention introduced: each `contracts/*.md` spec carries a `Version:`
   line — T3/T4 authors must include it. Reviewed APPROVE WITH NITS; both
   [SHOULD]s (per-file version check; guard-tests required) fixed pre-merge.
+- CI fix (2026-07-22, PR #5): `diff-size` now exempts `**/*.md` from the
+  changed-line count (specs/docs are governed by review, not a code budget) —
+  unblocked T3/T4's large spec diffs.
+- **T3 — event-schema.md, ids.md, event-types.md** (2026-07-22, PR #4). Seven-
+  field envelope (`ES-1…ES-33`), strict reject-don't-repair, flat int/string
+  payloads; content-addressed `participant_id`/`issue_id`; v1 type registry
+  (`genesis`, `participant_registered`, `issue_created`, `vote_cast`).
+  Receipt-free ballots (ADR-0004): `vote_cast` registrar-signed, no
+  voter-held key. ADRs 0002–0004 accepted; ADR-0005 (correction/retraction)
+  drafted proposed pending ratification. Reviewed APPROVE WITH NITS (one
+  [SHOULD], ES-5 sign/range contradiction, fixed pre-merge).
+- **T4 — hashing.md, export-format.md, read-api.md, evolution.md** (2026-07-24,
+  PR #6). Byte-exact preimage (DOMAIN + BE ints + length-prefixed strings +
+  generic per-type-agnostic payload rule), SHA-256 lowercase hex; canonical
+  NDJSON line form; `GET /events` pagination; additive-only evolution rule.
+  Real hand-verifiable genesis worked example (seeds fixture 001, T5). Same
+  PR ratifies **ADR-0005** (envelope never carries correction machinery —
+  corrections are additive payload conventions) and accepts **ADR-0006**
+  (two-stage verification + `PARTIAL` verdict for well-formed-but-unregistered
+  types, generic payload preimage) — both pre-freeze gates from
+  `OPEN-QUESTIONS.md` are now closed. `contracts/` stays DRAFTING; freeze
+  still gated on genesis rehearsal (T6–T8) + security audit (T9).
 
 ## Next
 
-**T3 — Draft: event schema, IDs, event types** (`odc-implementer`, Opus;
-fresh-context review), per `docs/plans/phase-0.md`. May run in parallel with
-nothing yet blocking it. Then T4 (hashing/export/read-api/evolution) → T5–T10.
-Each spec file must carry a `Version:` line or contracts-guard fails the PR.
+**T5 — Fixture generator + golden fixtures (TypeScript)** (`odc-implementer`),
+per `docs/plans/phase-0.md`. Nothing blocks it: T4 merged, both pre-freeze
+ADRs (0005, 0006) resolved. `tools/fixtures-gen/` generates one vector per
+numbered normative sentence in T3/T4 specs + the adversarial set; golden
+values never regenerate to make anything pass (`odc-testing`). Then T6
+(rehearsal chain builder) → T7 (Go verifier, fresh-context isolation) → T8
+(rehearsal loop) → T9 (security audit) → T10 (freeze).
 
 Ticket discipline: one ticket = one branch = one PR = one session; fresh-context
 review before merge; squash-merge. **STATE.md update note:** branch protection
@@ -47,7 +72,7 @@ conflict). Required checks to go green: `format / lint / typecheck`,
 
 ## Blockers
 
-- None for T3/T4 authoring. Branch protection is **ON** (2026-07-19, ruleset
+- None for T5. Branch protection is **ON** (2026-07-19, ruleset
   `protect-master`): PR required, four status checks strict, linear history, no
   bypass. Both Phase-0 user actions are complete — T2's documented rules are
   now actually enforced.

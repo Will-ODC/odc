@@ -24,27 +24,19 @@ choice}` at eligibility-check time — trust-by-policy per charter §10 v1,
   (Needed by Phase 1 identity/ledger tickets, not Phase 0.)
 - Anchoring cadence and venue for the chain head in v1 (manual README anchor
   at genesis per phase-0 plan; automation cadence is a Phase 1+ question.)
-- **Correction/retraction model — ADR-0005 `proposed`, needs human
-  ratification BEFORE freeze (T10).** The only pre-freeze bit: the envelope
-  will never carry a `supersedes` field (rejected; corrections arrive as
-  additive payload conventions per the ADR). If ratification overturns this,
-  it must land before T4 drafts `hashing.md`. Also fixes v1 ballot finality
-  (registrar refuses re-votes; no correction may ever touch the ballot plane
-  per ADR-0004).
-- **Verifier scope & forward compatibility — needs an ADR (next free number)
-  BEFORE T4 starts.** Two coupled decisions: (1) ES-9/ES-11/ET-1 as drafted
-  make the verifier reject any unregistered `type`, so every future additive
-  event type would invalidate every deployed frozen verifier — contradicting
-  the evolution rule ("verifiers accept all published versions") and the
-  fork/exit right (§8). Candidate fix: two-stage verification — chain/envelope
-  checks are type-agnostic; registry checks (sigs, payload keys, title,
-  choice range, back-refs) apply to known types; unknown types get a defined
-  non-silent verdict. (2) For that to work, T4 `hashing.md` MUST define the
-  payload preimage generically over any flat int/string payload (not
-  per-type field lists), or unknown-type hashes are uncomputable. Semantic
-  payload checks stay in the verifier for v1 types — ADR-0004's choice-range
-  check is load-bearing for receipt-freeness and cannot move to a tally-side
-  interpreter.
+- ~~Correction/retraction model~~ → DECIDED (ADR-0005, ratified 2026-07-24 in
+  PR #6): the envelope never carries a `supersedes` field; corrections arrive
+  as additive payload conventions (`evolution.md` EV-11–EV-14). Ballot plane
+  permanently excluded from correction (ET-22, ADR-0004).
+- ~~Verifier scope & forward compatibility~~ → DECIDED (ADR-0006, accepted
+  2026-07-24 in PR #6): two-stage verification — chain/envelope checks stay
+  type-agnostic, registry checks apply to known `(type, version)`s, and a
+  well-formed-but-unregistered type gets `PARTIAL` (not structural `INVALID`),
+  per `evolution.md` EV-6–EV-10. `hashing.md` HA-7 defines the payload
+  preimage generically over any flat int/string payload so unknown-type
+  hashes remain computable. Pre-freeze follow-up (T9/T10 gate, not yet done):
+  add inline EV-9 cross-references at the T3 sentences (ES-9/ES-11/ET-1/ET-2)
+  this reinterprets.
 - **Sanction/negative events (Phase 2, deferred — NOT a freeze blocker).**
   Contribution-style derived views only count up until negative events exist;
   charter §7 requires failure/fraud to crater standing and §9 makes
