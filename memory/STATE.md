@@ -54,15 +54,61 @@ use — T5–T9 proceed on schedule; only the tag waits.
   `OPEN-QUESTIONS.md` are now closed. `contracts/` stays DRAFTING; freeze
   still gated on genesis rehearsal (T6–T8) + security audit (T9).
 
+## In flight (2026-07-25 — unmerged, listed in merge order)
+
+- **PR #8** — routing: `odc-architect` moves Fable → **Opus**. Standing default:
+  Opus plans, Opus implements, Sonnet explores (`odc-navigator` only).
+- **PR #9** — CI: the freeze blocked _adding_ a fixture, not just editing one,
+  making `evolution.md` EV-5/EV-14 impossible to satisfy. Now edits, deletes and
+  renames fail; additions pass. 15/15 guard tests.
+- **PR #10 — T4a**, the verdict report surface. `evolution.md`/`export-format.md`
+  → v2, `event-schema.md`/`event-types.md` → v2. EV-15 (exhaustive Stage A/B
+  split), EV-16 (payload-shape failure is INVALID even on an unknown type),
+  EV-17 (verdict precedence, line attribution, advisory reason text), EV-18
+  (`x_` prefix reserved), EX-18–EX-20 (line attribution for empty export,
+  `--head` mismatch, framing). Fresh-context review: REQUEST CHANGES → all
+  findings applied. **No reason-code registry exists or is needed** — conformance
+  is verdict token + line number only; fixtures MUST NOT assert reason text or
+  exit codes.
+- **PR #11 — T4b**, ADR-0007 (stacked on #10). See below.
+
+## Direction decisions (2026-07-25)
+
+**The freeze is deferred and gated on operational experience** (ADR-0007), not on
+T9 approval. `contracts/` now has three states: DRAFTING → **RELEASE CANDIDATE**
+(entered at T9; Phase 1 builds against it; no tag, so specs stay fixable) →
+FROZEN (`contracts-v1` tag; `hashing.md` + `fixtures/` immutable). This resolved
+a deadlock: freezing on real use requires services, and three documents forbade
+service code until frozen. New **T9a** ticket; **T10 deferred**, and it now
+requires a re-audit of any delta accumulated since release candidate.
+
+T5–T9 keep their schedule. Only the tag waits.
+
 ## Next
 
 **T5 — Fixture generator + golden fixtures (TypeScript)** (`odc-implementer`),
-per `docs/plans/phase-0.md`. Nothing blocks it: T4 merged, both pre-freeze
-ADRs (0005, 0006) resolved. `tools/fixtures-gen/` generates one vector per
-numbered normative sentence in T3/T4 specs + the adversarial set; golden
-values never regenerate to make anything pass (`odc-testing`). Then T6
-(rehearsal chain builder) → T7 (Go verifier, fresh-context isolation) → T8
-(rehearsal loop) → T9 (security audit) → T10 (freeze).
+per `docs/plans/phase-0.md`, once #10 and #11 merge. Settled inputs:
+
+- **~40 vectors, not ~116.** "One per normative sentence" over-scopes: many are
+  definitional and exercised by every vector, and hand-review is the real gate —
+  a reviewer checks 40 carefully and skims 116. Cover the four v1 types, the full
+  tamper matrix, the `odc-contracts` adversarial set, and boundary values.
+- **Byte-exact vectors are committed as raw files**, protected by a SHA-256
+  manifest verified in CI plus `contracts/fixtures/** -text` in `.gitattributes`.
+  Detection, not encoding, closes the silent-corruption hole.
+- **Each vector asserts verdict token + line number(s) only** (EV-17). The
+  unregistered-type vector MUST use an `x_` type (EV-18).
+- `contracts/fixtures/README.md` documents the record format — it must live
+  inside `fixtures/` so T7, which may read only `contracts/`, can see it.
+- Golden values never regenerate to make anything pass (`odc-testing`).
+
+Then T6 (rehearsal builder) → T7 (Go verifier, fresh-context isolation) → T8
+(rehearsal loop) → T9 (security audit) → **T9a (release candidate → Phase 1)**.
+T10 (freeze) is deferred past Phase 1.
+
+**Also queued:** the direction ADRs (definitional-vs-provisional constraints, the
+ballot-expressiveness ceiling, the two-plane clarification). Not blocking T5.
+**Before that ADR is written, see the ET-22 warning in `OPEN-QUESTIONS.md`.**
 
 Ticket discipline: one ticket = one branch = one PR = one session; fresh-context
 review before merge; squash-merge. **STATE.md update note:** branch protection
