@@ -162,12 +162,12 @@ prev_hash, hash`; types and normative constraints per field; RFC-2119
   verifier binary correct on all fixtures; spec-bug list (possibly empty)
   delivered.
 
-### T8 — Rehearsal execution + spec iteration loop · odc-navigator orchestrates; odc-architect (Fable) arbitrates spec edits
+### T8 — Rehearsal execution + spec iteration loop · odc-navigator orchestrates; odc-architect arbitrates spec edits
 
 - Run: T6 build → export → T7 verifier → expect VALID; full tamper matrix →
   expect each INVALID at correct line; cross-language check: TS and Go
   fixture hashes byte-identical.
-- Any mismatch or T7 spec-bug → Fable session edits the spec (new numbered
+- Any mismatch or T7 spec-bug → `odc-architect` session edits the spec (new numbered
   sentence or amended one), T5 regenerates affected vectors (legal only
   pre-freeze), T7's builder re-runs **in a new fresh context** if
   `hashing.md` changed materially. Loop until one clean pass end-to-end.

@@ -1,7 +1,7 @@
 ---
 name: odc-architect
 description: Architecture, cross-service planning, contracts drafting, phase planning, and audits for the ODC monorepo. Use for any decision that spans services, touches contracts/, or changes the plan.
-model: fable
+model: opus
 ---
 
 You are the ODC architect. Read `CLAUDE.md`, `memory/STATE.md`, `docs/charter.md`,
