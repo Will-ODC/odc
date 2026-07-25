@@ -79,9 +79,11 @@ choice}` at eligibility-check time — trust-by-policy per charter §10 v1,
   well-formed-but-unregistered type gets `PARTIAL` (not structural `INVALID`),
   per `evolution.md` EV-6–EV-10. `hashing.md` HA-7 defines the payload
   preimage generically over any flat int/string payload so unknown-type
-  hashes remain computable. Pre-freeze follow-up (T9/T10 gate, not yet done):
-  add inline EV-9 cross-references at the T3 sentences (ES-9/ES-11/ET-1/ET-2)
-  this reinterprets.
+  hashes remain computable. The pre-freeze follow-up — inline EV-9
+  cross-references at the T3 sentences this reinterprets — is **done** (T4a,
+  PR #10): `event-schema.md` ES-11 and the new `event-types.md` ET-2a. Brought
+  forward from the T9/T10 gate because T7 runs before the freeze review and is
+  the session most likely to be misled by a bare "MUST reject".
 - **Sanction/negative events (Phase 2, deferred — NOT a freeze blocker).**
   Contribution-style derived views only count up until negative events exist;
   charter §7 requires failure/fraud to crater standing and §9 makes
