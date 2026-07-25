@@ -45,7 +45,7 @@ Additive only. The procedure:
    accept all published versions.
 3. Add/extend golden fixtures for the new version.
 4. NEVER: rename/remove fields, alter hashing, reinterpret existing types.
-   If it feels necessary, stop and escalate to a Fable planning session —
+   If it feels necessary, stop and escalate to an `odc-architect` planning session —
    this is an architecture decision, not an edit.
 
 ## Encapsulation test

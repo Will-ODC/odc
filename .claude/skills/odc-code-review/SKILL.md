@@ -7,7 +7,7 @@ description: Code review procedure and checklist for ODC. Use this skill wheneve
 
 ## Procedure
 
-1. Reviews run in a fresh session (Opus or Fable) that did not implement the
+1. Reviews run in a fresh Opus session that did not implement the
    change. Input: the diff, the PR description, the service's `API.md`, and
    `contracts/`. Not the implementation conversation.
 2. Read the PR description first; if you can't tell what/why/how-tested,

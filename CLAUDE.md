@@ -51,15 +51,21 @@ in `memory/OPEN-QUESTIONS.md`, not in your head.
 
 | Task                                                                       | Model      | Agent                  |
 | -------------------------------------------------------------------------- | ---------- | ---------------------- |
-| Architecture, cross-service planning, contracts drafting                   | **Fable**  | `odc-architect`        |
+| Architecture, cross-service planning, contracts drafting                   | **Opus**   | `odc-architect`        |
 | Implementing a service, feature, or fix                                    | **Opus**   | `odc-implementer`      |
 | Building the verifier (contracts-only context, incl. Phase 0 rehearsal)    | **Opus**   | `odc-verifier-builder` |
 | Pre-merge review (fresh context)                                           | **Opus**   | `odc-reviewer`         |
 | Security audit at phase gates (fresh context, never the designing context) | **Opus**   | `odc-security-auditor` |
 | Navigation, lookups, renames, tests, merge mechanics                       | **Sonnet** | `odc-navigator`        |
 
-Default flow per unit of work: Fable plans → Opus implements on a small branch →
+Default flow per unit of work: Opus plans → Opus implements on a small branch →
 fresh-context review per `.claude/skills/odc-code-review` → merge on green CI.
+
+**Standing default (2026-07-25, until further notice):** Opus architect dispatches
+to Opus implementers; Sonnet is for exploration and mechanical work only
+(`odc-navigator`). Do not route planning or contracts drafting to a non-Opus model.
+The isolation and fresh-context rules above are unaffected by model choice — they
+are about what a context has _seen_, not which model it runs.
 
 ## Workflow
 
