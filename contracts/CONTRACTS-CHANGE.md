@@ -16,6 +16,25 @@ Format (newest first, one entry per merged contracts change):
 
 ---
 
+## README.md — n/a — 2026-07-25 — T4b (ADR-0007)
+
+- **`contracts/` now has three states, not two:** DRAFTING → **RELEASE
+  CANDIDATE** → FROZEN. Release candidate is entered when the T9 audit passes;
+  Phase 1 may build against it; no tag exists, so `contracts-guard`'s freeze
+  branch stays dormant and specs remain fixable. FROZEN still means exactly what
+  it meant: the `contracts-v1` tag exists and `hashing.md` + `fixtures/` are
+  permanently immutable.
+- **The freeze is deferred and gated on operational experience**, not on T9
+  approval alone. T5–T9 keep their schedule; only the tag waits. Rationale in
+  ADR-0007: the irreversibility of the freeze argues for waiting, since the
+  operator currently holds the least information he will ever hold about what
+  events need to carry.
+- **This unblocks a deadlock.** Three documents said no service code until
+  `contracts/` is frozen, while the new freeze condition requires real votes —
+  which require services. `contracts/README.md`, `memory/STATE.md` and
+  `docs/implementation-plan.md` now say "until RELEASE CANDIDATE" instead.
+- No spec file touched; no version bumps. `hashing.md` untouched.
+
 ## evolution.md · export-format.md · event-schema.md · event-types.md — v2 — 2026-07-25 — T4a
 
 - **The verifier report surface, so T7 can be built from `contracts/` alone.**
