@@ -72,8 +72,9 @@ use — T5–T9 proceed on schedule; only the tag waits.
   empty export, `--head` mismatch, framing). Ticket text in `phase-0.md` T5/T7
   and `odc-verifier-builder.md` reconciled to three verdicts + exit codes 0/1/2.
   Fresh-context review: REQUEST CHANGES → all ten findings applied.
-  **No reason-code registry exists or is needed** — conformance is verdict token
-  - line number only; fixtures MUST NOT assert reason text or exit codes.
+  **No reason-code registry exists or is needed** — conformance is judged on the
+  verdict token and line number alone; fixtures MUST NOT assert reason text or
+  exit codes.
 - **T4b — ADR-0007, release candidate** (2026-07-25, PR #12, squash `2a253cf`).
   See Direction decisions below. _Process note:_ this first went out as PR #11
   stacked on #10's branch; #10 squash-merged first, orphaning that base, so #11
