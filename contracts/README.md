@@ -1,7 +1,13 @@
 # contracts/ — Phase 0
 
 **Status: DRAFTING. Not frozen. No service code may be written until the
-genesis rehearsal passes and this directory is frozen.**
+genesis rehearsal passes and this directory reaches RELEASE CANDIDATE.**
+
+`contracts/` moves through three states (ADR-0007): **DRAFTING** → **RELEASE
+CANDIDATE** (entered when the T9 audit passes; Phase 1 may build against it; no
+tag, so changes stay possible) → **FROZEN** (the `contracts-v1` tag exists and
+`hashing.md` + `fixtures/` become permanently immutable). The freeze is gated on
+operational experience, not only on T9 — see ADR-0007 for the readiness signals.
 
 The only shared surface between services. Everything not in here is a private
 detail of some service. Deliverables (implementation-plan §Phase 0):

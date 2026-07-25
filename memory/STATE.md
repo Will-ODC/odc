@@ -6,7 +6,9 @@
 ## Current phase
 
 **Phase 0 — Contracts.** Nothing may be implemented in services/ until
-contracts/ passes the genesis rehearsal and is frozen.
+contracts/ passes the genesis rehearsal and reaches **RELEASE CANDIDATE**
+(ADR-0007). The `contracts-v1` freeze itself is deferred until real operational
+use — T5–T9 proceed on schedule; only the tag waits.
 
 ## Done
 
