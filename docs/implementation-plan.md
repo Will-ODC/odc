@@ -14,7 +14,9 @@ Goal: independent services, buildable in parallel, communicating only through pu
 
 ## Phase 0 — Contracts (write this before any code)
 
-One short directory, `contracts/`, agreed and frozen before Phase 1:
+One short directory, `contracts/`, agreed and at **RELEASE CANDIDATE** before
+Phase 1 (ADR-0007 — the `contracts-v1` freeze itself is deferred until real
+operational use):
 
 1. **Event schema:** `seq, type, version, payload, ts, prev_hash, hash`.
 2. **Canonical hashing rule:** exactly which bytes are hashed and how. One page.

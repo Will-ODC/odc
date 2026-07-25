@@ -20,6 +20,51 @@ choice}` at eligibility-check time — trust-by-policy per charter §10 v1,
   no-receipt discipline — identity and web MUST NOT return or display any
   per-ballot confirmation artifact binding a voter to a specific log line
   (no signed receipts, no "your vote is seq N" attestations).
+- ~~Verifier reason codes~~ → DECIDED (2026-07-25, T4a / EV-17): **no
+  reason-code registry exists or will be defined for v1.** Reason text is
+  advisory and SHOULD name the violated sentence (`ES-7`, `HA-14`) rather than a
+  new vocabulary; conformance is judged on verdict token + line number alone.
+  Rationale: one tampered line usually violates several sentences at once, so
+  exact-match codes would silently require freezing a total precedence order over
+  every check — and splitting a coarse distinction later is additive, while
+  un-freezing a wrongly-named code in a frozen fixture is not.
+- **⚠️ Before writing the "definitional vs provisional constraints" ADR.** A
+  draft of that ADR classifies three things as _provisional_ and therefore fair
+  game for future community governance: the absence of a voter field in
+  `vote_cast`, the no-re-vote rule, and `choice_count`'s ceiling of 64. **Two of
+  those contradict merged normative text.** `event-types.md` ET-22 and
+  `evolution.md` EV-13 each state their bar "survives any future community vote
+  (charter §8)". The correct cut is finer:
+  - **Permanent:** the entire ET-22 bar (no voter-held key, no voter-key
+    signature, no unbounded voter-chosen value); the ballot plane's exclusion
+    from all correction mechanisms (EV-13); _that a bound on `choice_count`
+    exists at all_.
+  - **Provisional:** the registrar's one-ballot-per-human policy, which EV-13
+    itself calls policy; and the specific number **64**.
+    Writing it the draft's way would read as license to revisit receipt-freeness
+    by vote.
+- **`RETIRED.md` valve — deferred, deliberately not foreclosed.** There is no
+  mechanism to withdraw a golden fixture that turns out to be wrong after the
+  freeze; adding a fixture cannot neutralise a bad one, so a wrong vector would
+  break conformance permanently. PR #9 makes post-freeze _additions_ legal, so a
+  `contracts/fixtures/RETIRED.md` could be introduced later if a wrong vector is
+  ever actually found. Not built now: with no concrete case to reason about it is
+  premature, and a withdrawal lever is morally the same act as regenerating a
+  golden hash, which `odc-testing` forbids. Revisit only with a real instance.
+- **Is EV-5's "every additive change MUST ship golden fixtures" too broad?** For a
+  new type or a new `(type, version)` — new bytes, never hashed before — a fixture
+  is load-bearing. For a pure prose clarification that changes no bytes it proves
+  nothing. Narrowing EV-5 to byte-changing changes is worth considering; not
+  urgent, and it does not affect PR #9's guard fix, which is required under even
+  the narrowest reading.
+- **Unregistered `genesis` version — Stage B key extraction.** If a chain's
+  `genesis` carries a `(genesis, version≠1)` a verifier does not register, that
+  verifier has no spec-defined way to extract `operator_pk`/`registrar_pk`, and so
+  cannot run Stage B on _later, registered_ events that depend on them. Genuinely
+  unresolved. Additively resolvable in `evolution.md` post-freeze, so not a freeze
+  blocker — **provided no v1 fixture freezes a verdict for this case.** T5 must
+  therefore not use `genesis` for its unknown-version vector; use
+  `participant_registered` version 2, a leaf type nothing references.
 - Operator key + identity service key management for MVP: file, env, or KMS?
   (Needed by Phase 1 identity/ledger tickets, not Phase 0.)
 - Anchoring cadence and venue for the chain head in v1 (manual README anchor
@@ -34,9 +79,11 @@ choice}` at eligibility-check time — trust-by-policy per charter §10 v1,
   well-formed-but-unregistered type gets `PARTIAL` (not structural `INVALID`),
   per `evolution.md` EV-6–EV-10. `hashing.md` HA-7 defines the payload
   preimage generically over any flat int/string payload so unknown-type
-  hashes remain computable. Pre-freeze follow-up (T9/T10 gate, not yet done):
-  add inline EV-9 cross-references at the T3 sentences (ES-9/ES-11/ET-1/ET-2)
-  this reinterprets.
+  hashes remain computable. The pre-freeze follow-up — inline EV-9
+  cross-references at the T3 sentences this reinterprets — is **done** (T4a,
+  PR #10): `event-schema.md` ES-11 and the new `event-types.md` ET-2a. Brought
+  forward from the T9/T10 gate because T7 runs before the freeze review and is
+  the session most likely to be misled by a bare "MUST reject".
 - **Sanction/negative events (Phase 2, deferred — NOT a freeze blocker).**
   Contribution-style derived views only count up until negative events exist;
   charter §7 requires failure/fraud to crater standing and §9 makes

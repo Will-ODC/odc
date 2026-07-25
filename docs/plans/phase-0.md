@@ -4,9 +4,12 @@
 session's context. This document is self-sufficient: an Opus session holding
 only one ticket below plus the listed reading should be able to complete it.
 
-**Phase 0 exit:** contracts drafted → enforcement live → genesis rehearsal
-passes clean → security audit → freeze (README flip + tag `contracts-v1` +
-contracts-guard active). Only then does Phase 1 begin.
+**Phase 0 exit (amended 2026-07-25, ADR-0007):** contracts drafted → enforcement
+live → genesis rehearsal passes clean → security audit → **RELEASE CANDIDATE**.
+Phase 1 begins there. The **freeze** — README flip to FROZEN, tag `contracts-v1`,
+guard hard-fail active — is a separate, later event gated on real operational use,
+not on T9 alone. See ADR-0007 for the readiness signals and the required
+re-audit.
 
 ---
 
@@ -193,14 +196,34 @@ prev_hash, hash`; types and normative constraints per field; RFC-2119
   the operator equivocate within the spec as written?
 - Acceptance: verdict APPROVE (or findings fixed and re-audited).
 
-### T10 — Freeze · odc-navigator, same day as T9 approval
+### T9a — Release candidate · odc-navigator, same day as T9 approval
 
-- `contracts/README.md` status flip to FROZEN; git tag `contracts-v1`;
-  contracts-guard hard-fail mode confirmed active (test PR proves it);
+**This, not T10, is what immediately follows the audit** (ADR-0007).
+
+- `contracts/README.md` status flip DRAFTING → **RELEASE CANDIDATE**;
   `memory/STATE.md` flipped to Phase 1 with its parallel streams
-  (ledger · verifier · identity); `CONTRACTS-CHANGE.md` initialized.
-- Acceptance: all three freeze mechanics verifiably in place; a test PR
-  touching `hashing.md` goes red.
+  (ledger · verifier · identity). **No tag.** `contracts-guard`'s freeze branch
+  stays dormant, so specs remain fixable while Phase 1 builds on them.
+- Phase 1 services build against the release candidate and MUST tolerate an
+  additive contracts change during this period.
+- Acceptance: status flipped, Phase 1 unblocked, no `contracts-v1` tag exists.
+
+### T10 — Freeze · odc-navigator — **deferred; gated on operational use, not on a date**
+
+Do **not** schedule this after T9. It runs when the ADR-0007 readiness signals
+hold: roughly three binding votes on a live chain, four weeks with no
+event-shape change, two independent verifiers agreeing on a **non-synthetic**
+chain, and a clean T9 re-audit of the exact tree to be tagged.
+
+- Re-run the T9 audit on the delta accumulated since release candidate. A clean
+  re-audit with an empty delta is cheap; skipping it is not an option, because
+  T9's original approval covered a tree that may since have changed.
+- `contracts/README.md` status flip RELEASE CANDIDATE → FROZEN; git tag
+  `contracts-v1`; contracts-guard hard-fail mode confirmed active (test PR
+  proves it).
+- Acceptance: all three freeze mechanics verifiably in place; a test PR touching
+  `hashing.md` goes red; a test PR **adding** a new fixture goes green (the
+  freeze blocks edits, not additions).
 
 ---
 
