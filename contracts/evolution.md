@@ -1,7 +1,7 @@
 # Evolution — contracts/evolution.md
 
-**Version:** 1
-**Status:** DRAFTING (Phase 0 · T4). Not frozen.
+**Version:** 2
+**Status:** DRAFTING (Phase 0 · T4a). Not frozen.
 **Companion specs:** `event-schema.md`, `event-types.md`, `hashing.md`,
 `export-format.md`, `read-api.md`.
 **Governing ADRs:** ADR-0006 (verifier scope & forward compatibility),
@@ -133,6 +133,62 @@ Neither is verifier-enforced beyond referential integrity where noted.
   competing superseders of one target, a dangling `supersedes` target, and scope
   collisions. No correctable type ships on prose alone.
 
+## 4. The report surface (added in v2)
+
+EV-6 names Stage A's checks **by example**; EV-15 makes the split exhaustive,
+because a check placed in the wrong stage is verdict-determining — it turns an
+`INVALID` chain into a `PARTIAL` one. EV-17 pins what a verifier actually
+reports. ADR-0006 left that to the T7 implementation, which is unworkable: that
+session reads `contracts/` and its own ticket alone and cannot see the ADR, so
+the surface has to live here.
+
+- **EV-15.** **Stage A is exactly the set of checks that do not consult the type
+  registry**; EV-6's enumeration is illustrative, not exhaustive. Stage A
+  comprises, in full: every rule of `export-format.md` (EX-1–EX-20 — framing,
+  canonical line form, chain linkage, head); from `event-schema.md` ES-1–ES-8,
+  ES-10, ES-12, ES-15–ES-17, ES-19, ES-20, ES-23–ES-28, and ES-33; and from
+  `hashing.md` HA-6 and HA-14. **Stage B is exactly the remainder** — the checks
+  that require knowing the `(type, version)`: ES-9 and ES-11 (registration),
+  ES-18 (payload key set), ES-30–ES-32 as instantiated per type, and every rule
+  of `event-types.md` (ET-\*).
+- **EV-16.** **A payload-shape failure is `INVALID`, never `PARTIAL`.** An event
+  violating `event-schema.md` ES-15, ES-16, or ES-17 — a non-object `payload`, or
+  a float, boolean, `null`, nested object, or array anywhere in it — MUST be
+  reported `INVALID` at its line **regardless of whether its `(type, version)` is
+  registered**. `hashing.md` HA-7 defines an encoding only for flat integer and
+  string values, so such an event has **no computable preimage**: a verifier
+  cannot confirm its integrity even structurally, and EV-8's rationale for
+  `PARTIAL` (integrity confirmed, semantics unchecked) does not hold.
+- **EV-17.** **Report surface.** A verifier MUST report exactly one chain verdict
+  from the token set `VALID`, `INVALID`, `PARTIAL` (EV-7), subject to:
+  - **Precedence.** `INVALID` outranks `PARTIAL`, which outranks `VALID`. A chain
+    with both an unregistered type and a Stage A failure is `INVALID`.
+  - **Line attribution.** `INVALID` MUST name the **1-based line number** of the
+    first fatal line, scanning the export in file order. Any failed check on a
+    line makes that line the fatal line; the relative order of checks *within* a
+    line is deliberately not pinned, since it cannot change which line is named.
+    Failures with no natural line are attributed by `export-format.md` EX-18–EX-20.
+  - **`PARTIAL` enumeration.** `PARTIAL` MUST enumerate the affected line numbers
+    in ascending order (EV-7).
+  - **Exit codes.** `0` = `VALID`, `1` = `INVALID`, `2` = `PARTIAL`. Codes `3` and
+    above are reserved for tool-level failures (unreadable file, bad usage), which
+    MUST NOT be reported as any chain verdict.
+  - **Reason text is advisory.** A verifier SHOULD accompany `INVALID` with a
+    human-readable reason and SHOULD name the violated normative sentence (`ES-7`,
+    `HA-14`, `EX-10`, …), reusing the identifiers these specs already assign. That
+    text is **not** conformance-checked. **Conformance is judged on the verdict
+    token and the line number(s) alone**, and golden fixtures MUST assert only
+    those — never the reason text, and never the exit code. This keeps the
+    diagnostic vocabulary and the CLI surface revisable while the verdict itself
+    is fixed.
+- **EV-18.** **Reserved type-name prefix.** No contracts version — v1 or any
+  successor — MAY register an event `type` beginning `x_`. The prefix satisfies
+  ES-10 and is set aside permanently for conformance fixtures that must exercise
+  the unregistered-type path (`PARTIAL`, EV-7/EV-8). Without this reservation a
+  frozen `PARTIAL` vector is a time bomb: were its placeholder type later
+  registered for real, a newer verifier would run Stage B on it and contradict a
+  fixture that `contracts-guard` makes uneditable.
+
 ---
 
 ## Degrees of freedom closed (acid-test checklist)
@@ -149,6 +205,11 @@ Neither is verifier-enforced beyond referential integrity where noted.
 | Correction forms (scoped LWW; targeted supersedes)    | EV-11, EV-12   |
 | Ballot-plane exclusion from corrections               | EV-13          |
 | Fixtures required before a correctable type ships     | EV-14          |
+| Which checks are Stage A vs Stage B (exhaustively)    | EV-15          |
+| Malformed payload on an unknown type: INVALID/PARTIAL | EV-16          |
+| Verdict precedence, line attribution, exit codes      | EV-17          |
+| What a fixture asserts (verdict + line only)          | EV-17          |
+| Placeholder type for `PARTIAL` fixtures               | EV-18          |
 
 ## Acid-test walkthrough
 
