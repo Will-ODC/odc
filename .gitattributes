@@ -1,0 +1,10 @@
+# Golden fixtures are byte-exact artifacts. Git must never translate their line
+# endings on checkout or commit: a CRLF rewrite would silently change what a
+# vector tests (contracts/export-format.md EX-3 makes CR non-conforming, and
+# vector 042-crlf deliberately CONTAINS a CR). -text disables all conversion.
+#
+# The SHA-256 manifest in contracts/fixtures/MANIFEST.sha256 is the detection
+# half of this; -text is the prevention half. Both are needed — a manifest alone
+# turns a mangled checkout into a confusing CI failure on every platform, and
+# -text alone would not notice deliberate corruption.
+contracts/fixtures/** -text

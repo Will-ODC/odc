@@ -35,6 +35,11 @@ jobs:
       # Added with the first package that has tests (T5a). Passed trivially
       # before that, exactly as the three above did.
       - run: pnpm run test
+      # Golden vectors are byte-exact artifacts; nothing else in the repo would
+      # notice a corrupted one. Deliberately a step inside this already-required
+      # job rather than a new job, so it takes effect without a
+      # branch-protection change (which needs a repo admin).
+      - run: bash .github/scripts/fixtures-manifest.sh
 
   diff-size:
     name: diff-size

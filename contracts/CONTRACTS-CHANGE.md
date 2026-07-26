@@ -16,6 +16,43 @@ Format (newest first, one entry per merged contracts change):
 
 ---
 
+## fixtures/ — v1 — 2026-07-26 — T5e
+
+- **`contracts/fixtures/` now exists.** The first 7 golden vectors, all `VALID`,
+  plus `index.json`, `derivations.json`, the 607-octet hash preimage of vector
+  001, `MANIFEST.sha256`, and a `README.md` documenting the record format. The
+  README lives inside `fixtures/` deliberately — T7 may read only `contracts/`,
+  so anything T7 needs has to be here. The `PARTIAL` and `INVALID` vectors follow
+  in the next two slices; the record format they use is already fixed.
+- **No spec text changed.** This is an addition under `contracts/`; every spec's
+  `Version:` line is untouched and no existing byte moved.
+- **Vector 001 is the calibration point.** It reproduces the `hashing.md` §6
+  worked example verbatim — the one golden value in the set derived by hand
+  before the generator existed. Its full 607-octet preimage is committed as
+  `preimages/001-genesis-only.hex`, which §6.2 asks for, so an implementer can
+  diff their own preimage against the spec's before ever reaching a digest.
+- **Verdicts are declared, never computed.** The generator contains no verifier.
+  One that computed its own expectations would encode this tool's reading of the
+  spec, and T7 would then be checked against that instead of against the
+  contract.
+- **Vectors assert verdict token + line number(s) only** (EV-17), enforced by a
+  test over `index.json` rather than by convention. `cites` and `note` are
+  advisory and MUST NOT be asserted.
+- **Two constraints will be enforced by test when the vectors that need them
+  land:** unregistered-type vectors must use the `x_` prefix EV-18 reserves, and
+  no vector may carry a `genesis` at a version other than 1 — an unregistered
+  `genesis` version leaves a verifier unable to extract
+  `operator_pk`/`registrar_pk`, an open question a frozen fixture would
+  foreclose.
+- **Protection:** `contracts/fixtures/** -text` in `.gitattributes` stops git
+  rewriting a line ending (vector `042-crlf`, arriving later, deliberately
+  contains a CR), and `.github/scripts/fixtures-manifest.sh` verifies every
+  recorded digest plus the absence of unlisted files. `contracts/fixtures/**` is
+  exempt from `diff-size` for the same reason markdown is: generated artifacts
+  reviewed by hand, not code competing for a line budget.
+- **Not yet reviewed by a fresh context** (`.claude/skills/odc-code-review`).
+  Recorded here rather than left implicit.
+
 ## README.md — n/a — 2026-07-25 — T4b (ADR-0007)
 
 - **`contracts/` now has three states, not two:** DRAFTING → **RELEASE

@@ -1,0 +1,94 @@
+{
+  "vectors": [
+    {
+      "id": "001-genesis-only",
+      "export": "vectors/001-genesis-only.ndjson",
+      "expect": {
+        "verdict": "VALID"
+      },
+      "cites": [
+        "HA-11",
+        "HA-13",
+        "HA-16",
+        "ET-7",
+        "ET-8"
+      ],
+      "note": "The hashing.md §6 worked example, verbatim. The only golden value in this set derived independently of this generator, and therefore the calibration point for every other vector."
+    },
+    {
+      "id": "002-four-types",
+      "export": "vectors/002-four-types.ndjson",
+      "expect": {
+        "verdict": "VALID"
+      },
+      "cites": [
+        "ET-6",
+        "ET-10",
+        "ET-13",
+        "ET-17",
+        "EX-13"
+      ],
+      "note": "One event of each v1 type, correctly linked and signed under the key its own type names."
+    },
+    {
+      "id": "003-head-match",
+      "export": "vectors/003-head-match.ndjson",
+      "head": "951f3493cbbee4e6cf80b041e36405fef1dee489b48a10dabe615cf07003664f",
+      "expect": {
+        "verdict": "VALID"
+      },
+      "cites": [
+        "EX-15"
+      ],
+      "note": "Chain 002 run with its true head, so the EX-15 check passes."
+    },
+    {
+      "id": "004-truncated-without-head",
+      "export": "vectors/004-truncated-without-head.ndjson",
+      "expect": {
+        "verdict": "VALID"
+      },
+      "cites": [
+        "EX-16"
+      ],
+      "note": "End-truncation is NOT detectable from the export alone — a prefix of a valid chain is a valid chain. VALID is the correct verdict here, not a verifier bug; vector 052 is the same bytes with --head, which is what catches it."
+    },
+    {
+      "id": "005-boundaries",
+      "export": "vectors/005-boundaries.ndjson",
+      "expect": {
+        "verdict": "VALID"
+      },
+      "cites": [
+        "ET-14",
+        "ET-14a",
+        "ET-18a"
+      ],
+      "note": "Legal extremes: 1-char and 200-char titles, choice_count 2 and 64, choice 0 and choice_count-1."
+    },
+    {
+      "id": "006-title-multibyte",
+      "export": "vectors/006-title-multibyte.ndjson",
+      "expect": {
+        "verdict": "VALID"
+      },
+      "cites": [
+        "HA-2",
+        "EX-9",
+        "ET-16"
+      ],
+      "note": "A non-ASCII title stored as literal UTF-8 with no escape and no normalization of any form; the hash covers the decoded scalar values."
+    },
+    {
+      "id": "007-title-escapes",
+      "export": "vectors/007-title-escapes.ndjson",
+      "expect": {
+        "verdict": "VALID"
+      },
+      "cites": [
+        "EX-9"
+      ],
+      "note": "Quote and backslash escaped; solidus (/) left literal, which EX-9 requires and many JSON writers escape by default."
+    }
+  ]
+}
