@@ -21,7 +21,7 @@
     }
   ],
   "keys": {
-    "note": "Ed25519 keypairs of hashing.md §6, from 32-octet seeds of one repeated byte. Reproduce these before trusting any signature vector.",
+    "note": "TEST KEYS — never use on a real chain. These are the Ed25519 keypairs of hashing.md §6, from 32-octet seeds of one repeated byte; the seeds are published spec material, so any holder of this repo can forge signatures under them. Reproduce them before trusting any signature vector.",
     "operator": {
       "seed_octet": "0x01",
       "public_key": "8a88e3dd7409f195fd52db2d3cba5d72ca6709bf1d94121bf3748801b40f6f5c"

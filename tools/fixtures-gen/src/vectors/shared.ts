@@ -39,7 +39,8 @@ export const lines = (events: readonly Event[]): string[] =>
 
 /** A wrong-but-well-formed key, for the signature-failure vectors. */
 export const IMPOSTOR = keypairFromSeed(seedOf(0xee));
-export const P3 = keypairFromSeed(seedOf(0x03));
+const P3_SEED = 0x03;
+export const P3 = keypairFromSeed(seedOf(P3_SEED));
 
 /** A chain built by `f`, starting from a genesis identical to hashing.md §6. */
 export function chain(f: (c: ChainBuilder) => void): Event[] {
@@ -66,7 +67,7 @@ export const GENESIS_EVENT: Event = G[0] as Event;
 
 /** One event of each v1 type, in dependency order. */
 export const A = chain((c) => {
-  c.participant(0x03);
+  c.participant(P3_SEED);
   const issue = c.issue("Adopt the charter", 3);
   c.vote(issue.hash, 1);
 });
@@ -83,15 +84,21 @@ export const a3 = at(A, 3);
 
 /** Chain A plus a well-formed event of an unregistered type (EV-18). */
 export const AX = chain((c) => {
-  c.participant(0x03);
+  c.participant(P3_SEED);
   const issue = c.issue("Adopt the charter", 3);
   c.vote(issue.hash, 1);
   c.custom("x_experimental", 1, { n: 7 });
 });
 
-/** Every EX-9 escaping branch in one payload string. */
+/**
+ * Every EX-9 escaping branch in one payload string: all five short escapes, an
+ * escaped quote and backslash, a lowercase \u00xx C0, a literal solidus and a
+ * literal non-ASCII character. \r is here deliberately — EX-9 governs U+000D
+ * INSIDE a string value, orthogonal to EX-3's ban on a raw CR between lines, so
+ * the CRLF framing vector does not cover it.
+ */
 export const ESC = chain((c) =>
-  c.custom("x_esc", 1, { s: 'a\tb\ncd"e\\f/g\u001fé' }),
+  c.custom("x_esc", 1, { s: 'a\tb\ncd"e\\f/g\u001f\b\f\ré' }),
 );
 
 // --- helpers ---------------------------------------------------------------
