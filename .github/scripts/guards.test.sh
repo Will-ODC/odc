@@ -173,7 +173,7 @@ printf '## specs — v1 — 2026-01-01 — T4\n- add b, edit a\n' >"$R/contracts
 git -C "$R" add -A && git -C "$R" commit -qm change
 assert 1 "$(run_guard "$R")" "spec A edited unbumped, spec B added bumped → fail"
 
-# --- Scenario 8: diff-size fails past the hard ceiling (>800 changed lines)
+# --- Scenario 8: diff-size fails past the hard ceiling (>600 changed lines)
 R="$TMP/s8"
 new_repo "$R"
 git -C "$R" checkout -q -b work
@@ -182,7 +182,29 @@ seq 1 900 >"$R/big.txt"
 git -C "$R" add -A && git -C "$R" commit -qm big
 ds=$( (cd "$R" && BASE=base HEAD=HEAD bash "$DIFFSIZE" >/dev/null 2>&1)
   echo $?)
-assert 1 "$ds" "diff-size >800 changed lines → fail"
+assert 1 "$ds" "diff-size >600 changed lines → fail"
+
+# --- Scenario 8a: the ceiling really is 600, not 800. A 700-line diff would have
+# passed under the old FAIL=800, so this is the scenario that pins the change;
+# Scenario 8's 900 lines fail under either value and prove nothing about it.
+R="$TMP/s8a"
+new_repo "$R"
+git -C "$R" checkout -q -b work
+seq 1 700 >"$R/big.txt"
+git -C "$R" add -A && git -C "$R" commit -qm big700
+ds=$( (cd "$R" && BASE=base HEAD=HEAD bash "$DIFFSIZE" >/dev/null 2>&1)
+  echo $?)
+assert 1 "$ds" "diff-size 700 changed lines → fail (ceiling is 600, not 800)"
+
+# --- Scenario 8b: and a diff comfortably under the ceiling still passes.
+R="$TMP/s8b"
+new_repo "$R"
+git -C "$R" checkout -q -b work
+seq 1 500 >"$R/big.txt"
+git -C "$R" add -A && git -C "$R" commit -qm big500
+ds=$( (cd "$R" && BASE=base HEAD=HEAD bash "$DIFFSIZE" >/dev/null 2>&1)
+  echo $?)
+assert 0 "$ds" "diff-size 500 changed lines → pass"
 
 # --- Scenario 9: diff-size ignores exempt lockfile churn
 R="$TMP/s9"
@@ -212,7 +234,7 @@ new_repo "$R"
 git -C "$R" checkout -q -b work
 mkdir -p "$R/contracts" "$R/src"
 seq 1 900 >"$R/contracts/spec.md" # exempt
-seq 1 900 >"$R/src/big.ts"        # counted → over the 800 ceiling
+seq 1 900 >"$R/src/big.ts"        # counted → over the 600 ceiling
 git -C "$R" add -A && git -C "$R" commit -qm mixed
 ds=$( (cd "$R" && BASE=base HEAD=HEAD bash "$DIFFSIZE" >/dev/null 2>&1)
   echo $?)

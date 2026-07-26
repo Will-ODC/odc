@@ -14,8 +14,12 @@ set -euo pipefail
 BASE="${BASE:?BASE (base sha/ref) required}"
 HEAD="${HEAD:?HEAD (head sha/ref) required}"
 
+# 600 is the common industry ceiling for a reviewable diff; review quality is
+# well documented to fall off past a few hundred lines, and 800 was set in T2
+# before any real ticket had been measured against it. Lowered 800 → 600 in T5,
+# which measured 2232 counted lines and split accordingly.
 WARN=400
-FAIL=800
+FAIL=600
 
 # added+deleted lines, excluding lockfiles, generated output, and markdown.
 # Deletions count too (churn is churn) — a large legitimate removal can trip the
