@@ -7,6 +7,7 @@
 
 import { createHash } from "node:crypto";
 import {
+  existsSync,
   mkdirSync,
   readdirSync,
   readFileSync,
@@ -23,8 +24,19 @@ import { GENESIS_EVENT, vectors } from "./vectors/index.js";
 const here = dirname(fileURLToPath(import.meta.url));
 /** dist/src → dist → fixtures-gen → tools → repo root. */
 const repoRoot = resolve(here, "../../../..");
+// repoRoot is positional, so a tsconfig change that flattened the output would
+// resolve one level ABOVE the repo — where the rmSync below would recurse over
+// an unrelated directory, force:true swallowing the ENOENT that should have
+// exposed it. Fail loudly instead.
+if (!existsSync(join(repoRoot, "contracts", "hashing.md"))) {
+  throw new Error(
+    `resolved repo root ${repoRoot} has no contracts/hashing.md — refusing to write or delete anything`,
+  );
+}
+
 const fixturesDir = join(repoRoot, "contracts", "fixtures");
 const vectorsDir = join(fixturesDir, "vectors");
+const preimagesDir = join(fixturesDir, "preimages");
 
 /** The pubkey of ids.md §2's worked shape; ID-4 says T5 pins the digest. */
 const IDS_WORKED_PUBKEY =
@@ -92,7 +104,7 @@ function writeDerivations(): void {
       },
     ],
     keys: {
-      note: "Ed25519 keypairs of hashing.md §6, from 32-octet seeds of one repeated byte. Reproduce these before trusting any signature vector.",
+      note: "TEST KEYS — never use on a real chain. These are the Ed25519 keypairs of hashing.md §6, from 32-octet seeds of one repeated byte; the seeds are published spec material, so any holder of this repo can forge signatures under them. Reproduce them before trusting any signature vector.",
       operator: { seed_octet: "0x01", public_key: OPERATOR.publicKeyHex },
       registrar: { seed_octet: "0x02", public_key: REGISTRAR.publicKeyHex },
       genesis_ts: GENESIS_TS,
@@ -137,9 +149,13 @@ function report(): void {
   );
 }
 
-// Rebuild vectors/ from scratch so a renamed or deleted vector cannot linger.
-rmSync(vectorsDir, { recursive: true, force: true });
-mkdirSync(vectorsDir, { recursive: true });
+// Rebuild both generated directories so a renamed or deleted artifact cannot
+// linger. A stale preimage still passes sha256sum -c, so only the manifest's
+// unlisted-file half would catch it.
+for (const dir of [vectorsDir, preimagesDir]) {
+  rmSync(dir, { recursive: true, force: true });
+  mkdirSync(dir, { recursive: true });
+}
 writeVectors();
 writePreimage();
 writeDerivations();

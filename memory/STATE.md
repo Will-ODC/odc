@@ -82,6 +82,46 @@ use — T5–T9 proceed on schedule; only the tag waits.
   stack PRs in this repo** — squash-merge breaks the stack silently, and the
   child PR reports "merged" while delivering nothing.
 
+- **CI: diff-size ceiling 800 → 600** (2026-07-26, PR #14, squash `c017e2e`).
+  600 is the common industry ceiling; 800 predated any real ticket. T5 was the
+  first measured against it (2232 counted lines) and split rather than raise it.
+  Two scenarios pin the change: 700 must fail (it passed under 800), 500 must
+  pass. 17/17 guard tests.
+- **T5 is being delivered in slices, not one PR.** At 2232 counted lines it was
+  ~4x the ceiling. Merged so far:
+  - **T5a — preimage encoder** (PR #15, `43ec7b8`). `hashing.md`'s byte-exact
+    construction (HA-1–HA-17) plus `ids.md` ID-4/ID-5. **`hashing.md` §6 now
+    reproduces independently**: both public keys from their seeds, `chain_id`,
+    the 459-octet signing preimage and its digest, the Ed25519 signature bit for
+    bit, and the 607-octet hash preimage hashing to `78ed980b…f6409a`. Also adds
+    `tools/*` to `pnpm-workspace.yaml` and the `pnpm run test` CI step — the
+    first time CI ran any test in this repo.
+  - **T5b — canonical line form** (PR #16, `63e7a4a`). `export-format.md` §1–2,
+    hand-written rather than delegating to `JSON.stringify` so EX-9 is traceable
+    sentence by sentence. Solidus literal, non-ASCII literal, lowercase `\u00xx`
+    asserted including the negative case.
+  - **T5c — event builders** (PR #17, `a23439f`). The four v1 types, each signed
+    under the key its own type names. Signature tests assert both directions —
+    right key verifies, wrong key does not — which is what pins ET-9a's
+    separation of operator from registrar. ET-21 held structurally: a ballot's
+    payload keys are exactly `{choice, issue_id, sig}`.
+  - **T5d — adversarial mutations** (PR #18, `0b67938`). The tamper matrix.
+    `editLine` THROWS when its target is absent: a mutation that silently no-ops
+    would emit a valid file claiming an `INVALID` verdict, which reads as a
+    verifier bug rather than a fixture bug.
+  - **T5e — generator + first 7 `VALID` vectors** (PR #19, `85f5f67`).
+    `contracts/fixtures/` exists: `index.json`, `derivations.json`, vector 001's
+    607-octet preimage, `MANIFEST.sha256`, and a `README.md` inside `fixtures/`
+    so T7 (which may read only `contracts/`) can see it. **Verdicts are declared,
+    never computed** — the generator contains no verifier, so T7 is checked
+    against the contract rather than against this tool's reading of it.
+- **T5e was reviewed by a fresh context: APPROVE WITH NITS**, no blocking
+  findings. The reviewer reimplemented the preimage in Python and Ed25519 from
+  RFC 8032 and confirmed vector 001 byte for byte — **the third independent
+  confirmation of `hashing.md`**, after T4's hand derivation and T5a. It found
+  two real holes in the fixture protections; **#19 merged before the fixes were
+  written, so they are in PR #20**, not on master yet.
+
 ## Direction decisions (2026-07-25)
 
 **The freeze is deferred and gated on operational experience** (ADR-0007), not on
@@ -96,49 +136,55 @@ T5–T9 keep their schedule. Only the tag waits.
 
 ## Next
 
-**T5 — Fixture generator + golden fixtures (TypeScript)** (`odc-implementer`),
-per `docs/plans/phase-0.md`. **Nothing blocks it** — every prerequisite is on
-master as of 2026-07-25. Start by reading `contracts/evolution.md` §4 (EV-15–
-EV-18) and `contracts/export-format.md` §5 (EX-18–EX-20); those are the rules
-the vectors encode. Settled inputs, already decided — do not relitigate:
+**Finish T5. Two slices remain**, both written and verified, waiting on merges.
 
-- **~40 vectors, not ~116.** "One per normative sentence" over-scopes: many are
-  definitional and exercised by every vector, and hand-review is the real gate —
-  a reviewer checks 40 carefully and skims 116. Cover the four v1 types, the full
-  tamper matrix, the `odc-contracts` adversarial set, and boundary values.
-- **Byte-exact vectors are committed as raw files**, protected by a SHA-256
-  manifest verified in CI plus `contracts/fixtures/** -text` in `.gitattributes`.
-  Detection, not encoding, closes the silent-corruption hole.
-- **Each vector asserts verdict token + line number(s) only** (EV-17). The
-  unregistered-type vector MUST use an `x_` type (EV-18).
-- `contracts/fixtures/README.md` documents the record format — it must live
-  inside `fixtures/` so T7, which may read only `contracts/`, can see it.
-- Do **not** use `genesis` for the unknown-version vector — see the
-  unregistered-genesis-version item in `OPEN-QUESTIONS.md`. Use
-  `participant_registered` version 2, a leaf type nothing references.
-- Golden values never regenerate to make anything pass (`odc-testing`).
-- Two bits of plumbing T5 must not forget: add `tools/` to
-  `pnpm-workspace.yaml` (it lists only `services/*` today, so a
-  `tools/fixtures-gen` package will not resolve), and confirm `diff-size`
-  tolerates the committed vectors — markdown is exempt, JSON is not.
+1. **Merge PR #20 first** — the T5e review fixes. Two of them close live
+   weaknesses on master: `fixtures-manifest.sh` exempted `*.md` at any depth (so
+   `vectors/anything.md` bypassed the unlisted-file check and `README.md` had no
+   integrity check), and `generate.ts` resolved the repo root positionally before
+   an `rmSync(force: true)`. Neither touches a vector's bytes.
+2. **T5f** — the 4 `PARTIAL` vectors, `conformance.test.ts` (EV-17/EV-18
+   policy), and the 30 envelope `INVALID` vectors. ~467 lines.
+3. **T5g** — framing, `--head`, Stage B and precedence vectors. ~403 lines.
+   Also reconcile `contracts/fixtures/README.md`, which carries slice-transient
+   prose ("currently holds the `VALID` vectors", a worked example keyed on
+   `037-hash-mismatch`) that becomes false at the freeze.
+4. **Carry finding 2 forward:** no committed preimage exercises the **integer**
+   payload tag `0x69` — vector 001's payload is all strings, so a wrong `ENC_INT`
+   or swapped tag (HA-9) surfaces only as a digest mismatch with nothing to diff.
+   Add `preimages/` for the `issue_created` at seq 3. Additive, so legal even
+   post-freeze, which is why it was deferred out of #19.
+
+**`wip/T5fg-material` holds T5f/T5g's modules**, verified as a whole (66/66
+tests, all 69 vectors regenerating byte-identically). It is **not a merge
+candidate** — it sits on T5e's old branch and the no-stacking rule forbids
+merging from it. Re-cut each slice from master and extract.
+
+**Slices cannot be prepared in advance.** Each needs the previous one's
+`shared.ts`/`index.ts` on master to compile, and stacking is forbidden because
+squash-merge orphans the child silently (see the #11 note above).
 
 Then T6 (rehearsal builder) → T7 (Go verifier, fresh-context isolation) → T8
 (rehearsal loop) → T9 (security audit) → **T9a (release candidate → Phase 1)**.
-T10 (freeze) is deferred past Phase 1.
 
-**Also queued, not blocking T5:** the direction ADRs — definitional-vs-provisional
-constraints, the ballot-expressiveness ceiling, and the two-plane clarification.
-**Read the ET-22 warning in `OPEN-QUESTIONS.md` before writing the first of
-them:** a draft classifies receipt-freeness constraints as community-governable,
-which contradicts merged normative text that says they survive any community vote.
+**Also queued, not blocking:** the direction ADRs — definitional-vs-provisional
+constraints, the ballot-expressiveness ceiling, the two-plane clarification.
+**Read the ET-22 warning in `OPEN-QUESTIONS.md` before writing the first.**
 
 Ticket discipline: one ticket = one branch = one PR = one session; fresh-context
-review before merge; squash-merge. **STATE.md update note:** branch protection
-now blocks direct pushes to master, so this file can no longer be committed
-straight to master — update it in a small follow-up PR right after the ticket
-merges (still separate from the feature branch, so parallel agents don't
-conflict). Required checks to go green: `format / lint / typecheck`,
-`diff-size`, `guard-tests`, `guard`.
+review before merge; squash-merge. **Two process lessons from T5:**
+
+- **Check a PR's state before assuming a push updated it.** #19 was merged while
+  its review was still running; the head branch was then auto-deleted, so a
+  force-push silently created a _new_ branch and the review fixes ended up on a
+  branch with no PR. A merged PR cannot carry follow-up work.
+- **`turbo` caches `lint`.** A green `pnpm run lint` right after moving files is
+  not trustworthy — run `npx eslint` directly.
+
+**STATE.md update note:** branch protection blocks direct pushes to master, so
+update this file in a small follow-up PR after the ticket merges (separate from
+the feature branch, so parallel agents do not conflict). Required checks:
+`format / lint / typecheck`, `diff-size`, `guard-tests`, `guard`.
 
 ## Blockers
 
@@ -146,16 +192,29 @@ conflict). Required checks to go green: `format / lint / typecheck`,
   `protect-master`): PR required, four status checks strict, linear history, no
   bypass. Both Phase-0 user actions are complete — T2's documented rules are
   now actually enforced.
-- Not a blocker, but standing: **`hashing.md` has never been independently
-  validated.** No review, audit, or ADR in this repo has checked the byte-level
-  spec. It is settled only by T7's fresh-context Go verifier reproducing the
-  fixtures and by T8's cross-language comparison. Do not let "T4 is merged" read
-  as "the hashing is known correct".
-- Housekeeping, no impact: seven merged/superseded branches remain on the remote
-  (`chore/diff-size-exempt-docs`, `chore/model-routing-opus`,
-  `claude/context-next-steps-fyd7uj`, `claude/hash-chain-schema-identity-7ngj28`,
-  `claude/next-phase-prep-7i36uu`, `claude/t4-continuation-context-av08rn`,
-  `contracts/T3-event-schema`). All content is on master or superseded. The
-  session git proxy returns 403 on ref deletion, so these need deleting from the
-  GitHub UI. Enabling "Automatically delete head branches" in repo settings
-  prevents recurrence.
+- **T5a–T5d merged without a fresh-context review** (`.claude/skills/odc-code-review`).
+  Only T5e was reviewed. T5a is the gap that matters — it is the encoder every
+  golden byte derives from, and the claim that it reproduces `hashing.md` §6 came
+  from the same context that wrote it. Reviewers for T5a/T5b/T5c/T5d failed
+  repeatedly on API 529s and were never re-run.
+- Standing, and now partly addressed: **`hashing.md` had never been independently
+  validated.** T5a reproduced §6 from the spec text, and T5e's fresh-context
+  reviewer reproduced it again in Python with its own Ed25519 — three independent
+  derivations now agree. Still not settled: those are all readings of the same
+  prose by the same family of reader. T7's fresh-context Go verifier and T8's
+  cross-language comparison remain the real gate — do not let "T4 is merged" or
+  "three implementations agree" read as "the hashing is known correct".
+- **CI failure mode to recognize, not debug (seen 2026-07-26 on PR #13).** A
+  required check that is never _created_ blocks merge indefinitely and looks
+  identical to "still running" — there is no red check to click. It happened when
+  `contracts-guard` hit `startup_failure`: the run never started, so the required
+  `guard` check was absent rather than failing, and `mergeable_state` sat at
+  `blocked`. The `repo` run wedged in `queued` for ~15h in the same incident.
+  Nothing in the repo caused it or fixes it. **The fix is cancel-and-rerun:** a
+  run stuck in `queued` refuses to re-run (`403 already running`), so cancel it
+  first. Count the checks against the four required ones before assuming CI is
+  broken.
+- Housekeeping **done** (2026-07-26): the stale remote branches are deleted and
+  "Automatically delete head branches" is enabled. Note the consequence, which
+  bit once: merging a PR deletes its head branch, so a later push to that branch
+  name silently creates a _new_ branch with no PR attached.
