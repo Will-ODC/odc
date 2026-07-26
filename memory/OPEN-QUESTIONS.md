@@ -102,3 +102,44 @@ choice}` at eligibility-check time — trust-by-policy per charter §10 v1,
   later per-type `version` bump, not a null (ES-3/ES-16). Attestation tiers
   may gate _execution_ capabilities and which parallel tallies a ballot
   feeds — never ballot access itself (P4).
+- **Ballot expressiveness vs. receipt-freeness (Phase 2+, decide before any
+  second `vote_cast` version — NOT a freeze blocker).** Charter §5 wants
+  ranked-choice/STV and quadratic tallies; ET-22 permanently forbids an
+  unbounded voter-chosen value in a ballot payload. These collide head-on: a
+  quadratic ballot _is_ a voter-chosen vector of magnitudes, and 100 credits
+  over 5 options admits ~4.6M distinct ballots, so in any realistic community
+  nearly every ballot is unique and therefore self-identifying — a coercer
+  demands an allocation and checks the public log for it. That is precisely
+  the covert marker ET-22 and ADR-0004 closed. The charter's §5 bullet now
+  records the ordering (receipt-freeness wins; it is non-negotiable under §8,
+  expressiveness is not). What is **not** decided, and belongs to whoever
+  drafts the richer ballot:
+  - **Which way through.** (a) A hard bound on the ballot's value space, sized
+    so a ballot cannot single out its caster — the same reasoning that put the
+    ceiling of 64 on `choice_count`, but the number needs an actual argument
+    tied to community size, not a reused constant. (b) Intensity measured in
+    the sentiment stream (§6, and rule 7: ballots and sentiment never share a
+    store or a pipe), where no receipt-freeness is promised and the ballot
+    stays nominal. (c) Accept a permanently nominal canonical tally and let
+    intensity live only in non-canonical public-plane views.
+  - **The bound is not just a size.** Ranking N options is N! orderings —
+    STV is _worse_ than quadratic on this axis, not better, which is
+    counter-intuitive and worth stating wherever the choice gets made.
+  - Note the asymmetry that makes this tractable: `choice` is already a
+    **nominal** label (ET-19), so no v1 view may sum, average, or order it.
+    Nothing in v1 needs changing; the hazard is entirely in what gets added.
+- **`hashing.md` HA-9's rationale example is weaker than the collision it
+  guards (drafting nit, pre-freeze, no byte change).** HA-9 justifies the
+  1-octet type tag by saying it stops integer `1` and string `"1"` from
+  colliding. But `ENC_INT(1)` is 8 octets and `ENC_STR("1")` is 9, so those
+  two never tie on their own — demonstrating a collision from that pair needs
+  a further argument about the bytes that follow. The exact tie is
+  **integer `0` vs. empty string `""`**: `ENC_INT(0)` is eight zero octets,
+  and `ENC_STR("")` is `U64(0)` followed by nothing — the same eight zero
+  octets, byte for byte, unconditionally. The tag is load-bearing, just not
+  for the reason given. **The rule is correct as written and the fixtures are
+  unaffected**; only HA-9's parenthetical example is worth swapping, and any
+  near-miss fixture family should use the `0`/`""` pair rather than the
+  `1`/`"1"` pair, since only the former can actually fail. Cheap to fix while
+  `contracts/` is still DRAFTING; impossible to fix after the tag freezes with
+  a rationale nobody can re-derive.
