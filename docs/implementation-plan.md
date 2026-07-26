@@ -38,16 +38,16 @@ The append-only event log. The single writer of truth.
 
 - API: `POST /events` · `GET /events?since={seq}` · `GET /head` · `GET /export`
 - Inside: hash computed at insert; insert-only enforced at the storage layer; `seq` assigned here (timestamps are advisory).
-- Validation is self-contained: a `vote_cast` is accepted only if signed by a public key found in a prior `participant_registered` event _in its own log_. No calls to other services.
-- Duplicate votes are **recorded, not rejected**; interpretation belongs to tally (latest per participant wins). The log records what happened; views decide what it means.
-- MVP authorization: `issue_created` requires the operator key; `participant_registered` requires the `identity` service's key (identity is the sole gate to personhood); `vote_cast` requires a registered participant's signature.
-- Write path: clients sign locally and `POST /events` directly. `identity` is not in the vote path.
+- Validation is self-contained: a `vote_cast` is accepted only if signed by the chain's `registrar_pk`, declared in its own `genesis` event (`event-types.md` ET-17). No calls to other services.
+- Ballots carry **no voter identity** (ADR-0004), so duplicate votes are neither detectable nor resolvable on-log. They are recorded, never deduplicated and never superseded — the ballot plane is permanently excluded from every correction mechanism (`evolution.md` EV-13). One ballot per human per issue is registrar policy, enforced off-log before the registrar signs (`event-types.md` ET-20). The log records what happened; views decide what it means.
+- MVP authorization: `issue_created` requires the operator key; `participant_registered` is self-signed by the registrant's own key (ET-10) and admitted through `identity`, the sole gate to personhood; `vote_cast` requires the registrar key, held only by `identity`.
+- Write path: `issue_created` and `participant_registered` are signed by their own keys. `vote_cast` is **registrar-signed**, so `identity` **is** in the vote path — the reverse of this plan's original design, changed by ADR-0004. The registrar's ballot-privacy obligations (key custody, no-receipt discipline) are open Phase-1 work in `memory/OPEN-QUESTIONS.md`.
 
 ### 2. `verifier` — Phase 1, independent
 
 Standalone CLI, written **from `contracts/` alone in a fresh context** — an agent that has never seen `ledger` source or discussion. This independence is the test that the spec is real.
 
-- `verify <export.ndjson> [--head <hash>]` → `VALID` or `INVALID at line N`.
+- `verify <export.ndjson> [--head <hash>]` → `VALID`, `PARTIAL`, or `INVALID at line N` (three verdicts per ADR-0006; report surface pinned by `evolution.md` EV-17).
 
 ### 3. `identity` — Phase 1
 
@@ -63,7 +63,9 @@ All derived views. Holds no truth; rebuildable from the export at any time (and 
 
 - Reads `ledger` via `GET /events?since=` polling.
 - API: `GET /issues` · `GET /issues/{id}/tally`
-- v1 = approval counting, latest-vote-per-participant. Parallel methods, reputation, and delegation views arrive later behind the same API shape.
+- v1 = counting recorded ballots per `choice`, over every `vote_cast` for the issue. There is no per-voter resolution and no deduplication, because a ballot names no voter (see §1). `choice` is a **nominal label**, not a quantity — it is never summed, averaged, or ordered (`event-types.md` ET-19).
+- The tally reports counts and denominators; it does not declare a winner or a threshold outcome (charter P3). Which denominator a result is read against is the reader's choice.
+- Parallel methods, reputation, and delegation views arrive later behind the same API shape. Note that ranked and quadratic methods are **not computable from a v1 ballot** and need a future additive `vote_cast` version — bounded by ET-22 (see charter §5).
 
 ### 5. `web` — Phase 2
 
