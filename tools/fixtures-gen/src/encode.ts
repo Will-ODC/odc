@@ -1,0 +1,196 @@
+// Byte-exact preimage construction, implementing contracts/hashing.md.
+//
+// Every function below cites the normative sentence it implements. This file is
+// the TypeScript half of the cross-language gate (odc-contracts): the Go
+// verifier built in T7 must reach identical bytes from the spec text alone. If
+// the two ever disagree, one of them is wrong — never "fix" a golden value to
+// paper over it (odc-testing).
+
+import {
+  createHash,
+  createPrivateKey,
+  createPublicKey,
+  sign,
+} from "node:crypto";
+
+/** A payload value is an integer or a string, and nothing else (ES-16/ES-17). */
+export type PayloadValue = number | string;
+export type Payload = Record<string, PayloadValue>;
+
+/** The six content fields the preimage covers (HA-11); `hash` is excluded. */
+export interface EventContent {
+  seq: number;
+  type: string;
+  version: number;
+  payload: Payload;
+  ts: string;
+  prev_hash: string;
+}
+
+/** A complete seven-field event (ES-1). */
+export interface Event extends EventContent {
+  hash: string;
+}
+
+// --- §1 Primitive encoders -------------------------------------------------
+
+/** HA-1: exactly 8 octets, big-endian, unsigned. */
+export function U64(n: number): Buffer {
+  if (!Number.isInteger(n) || n < 0 || n > Number.MAX_SAFE_INTEGER) {
+    throw new RangeError(
+      `U64 requires an integer in 0 … 2^53-1 (ES-5), got ${n}`,
+    );
+  }
+  const b = Buffer.alloc(8);
+  b.writeBigUInt64BE(BigInt(n));
+  return b;
+}
+
+/**
+ * HA-2: UTF-8 of the *decoded* string value. No BOM, and no Unicode
+ * normalization of any form — the decoded scalar values are encoded exactly as
+ * decoded. Node strings are already decoded scalar values, so this is a plain
+ * UTF-8 encode; the rule matters for whoever parses the stored line.
+ */
+export function UTF8(s: string): Buffer {
+  return Buffer.from(s, "utf8");
+}
+
+/** HA-3: length-prefixed octets, `U64(len) || x`. Never a delimiter. */
+export function LP(x: Buffer): Buffer {
+  return Buffer.concat([U64(x.length), x]);
+}
+
+/** HA-4: an integer field value. */
+export const ENC_INT = (n: number): Buffer => U64(n);
+
+/** HA-5: a string field value. */
+export const ENC_STR = (s: string): Buffer => LP(UTF8(s));
+
+/** HA-10: domain separation, ASCII `ODC1`. */
+export const DOMAIN = Buffer.from([0x4f, 0x44, 0x43, 0x31]);
+
+/** HA-7 type tags: `i` for integer values, `s` for string values (HA-9). */
+const TAG_INT = 0x69;
+const TAG_STR = 0x73;
+
+// --- §2 Payload encoding (generic, per-type-agnostic) ----------------------
+
+/**
+ * HA-8: ascending lexicographic order of the keys' UTF-8 octet sequences,
+ * compared as unsigned bytes. A shorter key that is a prefix of a longer one
+ * sorts first — which is exactly what Buffer.compare does.
+ */
+export function sortPayloadKeys(keys: readonly string[]): string[] {
+  return [...keys].sort((a, b) => Buffer.compare(UTF8(a), UTF8(b)));
+}
+
+/**
+ * HA-7: `U64(k)` then, per key in HA-8 order, `tag || ENC_STR(key) || value`.
+ * Never consults the event's `type` (ADR-0006) — the same code encodes the
+ * payload of an event of any future type. An empty payload encodes as `U64(0)`
+ * and nothing more (HA-8).
+ */
+export function ENC_PAYLOAD(p: Payload): Buffer {
+  const keys = sortPayloadKeys(Object.keys(p));
+  const parts: Buffer[] = [U64(keys.length)];
+  for (const key of keys) {
+    const value = p[key] as PayloadValue;
+    if (typeof value === "number") {
+      parts.push(Buffer.from([TAG_INT]), ENC_STR(key), ENC_INT(value));
+    } else {
+      parts.push(Buffer.from([TAG_STR]), ENC_STR(key), ENC_STR(value));
+    }
+  }
+  return Buffer.concat(parts);
+}
+
+// --- §3 The preimage -------------------------------------------------------
+
+/**
+ * HA-11: DOMAIN then the six content fields in exactly this order. HA-12:
+ * `prev_hash` (and every hex-string payload field) is encoded as its lowercase
+ * hex *text* via ENC_STR, never as decoded bytes.
+ */
+export function preimage(e: EventContent): Buffer {
+  return Buffer.concat([
+    DOMAIN,
+    ENC_INT(e.seq),
+    ENC_STR(e.type),
+    ENC_INT(e.version),
+    ENC_PAYLOAD(e.payload),
+    ENC_STR(e.ts),
+    ENC_STR(e.prev_hash),
+  ]);
+}
+
+/** HA-13: SHA-256 of the preimage as 64 lowercase hex characters. */
+export function eventHash(e: EventContent): string {
+  return createHash("sha256").update(preimage(e)).digest("hex");
+}
+
+// --- §5 The signing preimage ----------------------------------------------
+
+/**
+ * HA-15: PRE(E) computed over the event with the single payload key `sig`
+ * removed — the count `k` is one lower and the `sig` entry absent; every other
+ * field is byte-identical. HA-17: removing `sig` shifts no other key.
+ */
+export function signingPreimage(e: EventContent): Buffer {
+  const payload: Payload = { ...e.payload };
+  delete payload["sig"];
+  return preimage({ ...e, payload });
+}
+
+// --- Ed25519 (D2) ----------------------------------------------------------
+
+const PKCS8_ED25519_PREFIX = Buffer.from(
+  "302e020100300506032b657004220420",
+  "hex",
+);
+
+export interface Keypair {
+  /** 32-byte raw public key as 64 lowercase hex (ID-3). */
+  publicKeyHex: string;
+  privateKey: ReturnType<typeof createPrivateKey>;
+}
+
+/**
+ * Deterministic keypair from a 32-octet RFC 8032 seed, so every fixture is
+ * reproducible from the seed alone. Node has no raw-seed import, so the seed is
+ * wrapped in the fixed Ed25519 PKCS#8 prefix.
+ */
+export function keypairFromSeed(seed: Buffer): Keypair {
+  if (seed.length !== 32)
+    throw new RangeError("Ed25519 seed must be 32 octets");
+  const privateKey = createPrivateKey({
+    key: Buffer.concat([PKCS8_ED25519_PREFIX, seed]),
+    format: "der",
+    type: "pkcs8",
+  });
+  const jwk = createPublicKey(privateKey).export({ format: "jwk" });
+  const publicKeyHex = Buffer.from(String(jwk.x), "base64url").toString("hex");
+  return { publicKeyHex, privateKey };
+}
+
+/** A seed of one repeated octet — how the spec's worked example names keys. */
+export const seedOf = (octet: number): Buffer => Buffer.alloc(32, octet);
+
+/**
+ * HA-16: Ed25519 over the raw signing preimage, encoded as 128 lowercase hex.
+ * The preimage is passed to Ed25519 as the message and is NOT pre-hashed with
+ * SHA-256 — Ed25519 hashes its own input internally.
+ */
+export function signEvent(content: EventContent, key: Keypair): string {
+  return sign(null, signingPreimage(content), key.privateKey).toString("hex");
+}
+
+/** ID-4/ID-5: sha256 of the 32 *decoded* key bytes, not of the hex text. */
+export function participantId(pubkeyHex: string): string {
+  return createHash("sha256")
+    .update(Buffer.from(pubkeyHex, "hex"))
+    .digest("hex");
+}
+
+/** ET-7: chain_id is the same derivation applied to `operator_pk`. */
+export const chainId = participantId;

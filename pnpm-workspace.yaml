@@ -1,4 +1,7 @@
 packages:
+  # Phase-0 build tooling (fixture generator, rehearsal builder). Not shipped —
+  # these produce the byte-exact artifacts in contracts/ and never run in prod.
+  - "tools/*"
   # verifier is Go and deliberately excluded from the JS workspace
   - "services/ledger"
   - "services/identity"
