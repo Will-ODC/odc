@@ -38,7 +38,7 @@ export const validVectors: Vector[] = [
     frame(truncate(Alines, 2)),
     { verdict: "VALID" },
     ["EX-16"],
-    "End-truncation is NOT detectable from the export alone — a prefix of a valid chain is a valid chain. VALID is the correct verdict here, not a verifier bug; vector 052 is the same bytes with --head, which is what catches it.",
+    "End-truncation is NOT detectable from the export alone — a prefix of a valid chain is a valid chain. VALID is the correct verdict here, not a verifier bug; the paired vector that supplies --head over these same bytes is what catches it.",
   ),
   ok(
     "005-boundaries",

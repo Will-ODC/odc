@@ -37,11 +37,14 @@ listed="$(mktemp)"
 present="$(mktemp)"
 trap 'rm -f "$listed" "$present"' EXIT
 
-# Markdown is excluded: README.md documents the record format and is prose
-# governed by review, not a byte-exact artifact (the same stance diff-size takes
-# on *.md). Only generated vectors are manifest-tracked.
+# Only the top-level README.md is excluded: it documents the record format and is
+# prose governed by review, not a byte-exact artifact (the same stance diff-size
+# takes on *.md). The exclusion is by exact PATH, not by extension — a bare
+# `! -name '*.md'` would exempt any .md at any depth, so dropping
+# vectors/009-sneaky.md would slip past the unlisted-file check this half exists
+# to enforce.
 awk '{ $1=""; sub(/^  */, ""); print }' "$manifest" | sort >"$listed"
-(cd "$dir" && find . -type f ! -name 'MANIFEST.sha256' ! -name '*.md' |
+(cd "$dir" && find . -type f ! -name 'MANIFEST.sha256' ! -path './README.md' |
   sed 's|^\./||' | sort) >"$present"
 
 if ! diff -u "$listed" "$present"; then

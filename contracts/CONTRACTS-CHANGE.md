@@ -35,9 +35,10 @@ Format (newest first, one entry per merged contracts change):
   One that computed its own expectations would encode this tool's reading of the
   spec, and T7 would then be checked against that instead of against the
   contract.
-- **Vectors assert verdict token + line number(s) only** (EV-17), enforced by a
-  test over `index.json` rather than by convention. `cites` and `note` are
-  advisory and MUST NOT be asserted.
+- **Vectors assert verdict token + line number(s) only** (EV-17). In this slice
+  the shape is guaranteed at compile time by the `Expect` union, not by a test
+  over the committed `index.json` — that test ships with the conformance slice.
+  `cites` and `note` are advisory and MUST NOT be asserted.
 - **Two constraints will be enforced by test when the vectors that need them
   land:** unregistered-type vectors must use the `x_` prefix EV-18 reserves, and
   no vector may carry a `genesis` at a version other than 1 — an unregistered
@@ -50,8 +51,18 @@ Format (newest first, one entry per merged contracts change):
   recorded digest plus the absence of unlisted files. `contracts/fixtures/**` is
   exempt from `diff-size` for the same reason markdown is: generated artifacts
   reviewed by hand, not code competing for a line budget.
-- **Not yet reviewed by a fresh context** (`.claude/skills/odc-code-review`).
-  Recorded here rather than left implicit.
+- **Deferred to the next slice, from the fresh-context review:** a second pinned
+  preimage exercising the INTEGER payload tag. Vector 001's payload is entirely
+  strings, so every entry in the one committed preimage carries the `s` tag
+  (0x73) — a wrong `ENC_INT` or a swapped tag (HA-9) would surface only as a
+  digest mismatch with no reference bytes to diff against. Deferred only because
+  it pushed this slice past the 600-line ceiling, and it is safe to defer: adding
+  a fixture is legal even post-freeze, unlike the other five findings, which
+  corrected things that would otherwise have frozen wrong.
+- **Reviewed by a fresh context: APPROVE WITH NITS**, no blocking findings. All
+  six `[SHOULD]`s fixed pre-merge except the deferral above; two `[NIT]`s fixed.
+  The reviewer independently reimplemented the preimage construction and Ed25519
+  from the spec text and confirmed vector 001 byte for byte.
 
 ## README.md — n/a — 2026-07-25 — T4b (ADR-0007)
 
