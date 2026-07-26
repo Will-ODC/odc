@@ -1,0 +1,16 @@
+{
+  "name": "@odc/fixtures-gen",
+  "version": "0.0.0",
+  "private": true,
+  "type": "module",
+  "description": "Generates the byte-exact golden vectors in contracts/fixtures/ (Phase 0 T5). Build tooling, never shipped.",
+  "scripts": {
+    "build": "tsc -p tsconfig.json",
+    "test": "node --test dist/test/*.test.js",
+    "lint": "eslint src test",
+    "typecheck": "tsc -p tsconfig.json --noEmit"
+  },
+  "devDependencies": {
+    "@types/node": "^20.14.0"
+  }
+}
