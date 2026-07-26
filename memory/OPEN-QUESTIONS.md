@@ -65,8 +65,35 @@ choice}` at eligibility-check time — trust-by-policy per charter §10 v1,
   blocker — **provided no v1 fixture freezes a verdict for this case.** T5 must
   therefore not use `genesis` for its unknown-version vector; use
   `participant_registered` version 2, a leaf type nothing references.
+- **⚠️ The Ed25519 _verification predicate_ is unpinned — and the T5 fixture
+  work is about to freeze verdicts.** ADR-0002 and ET-4/HA-16 pin the algorithm,
+  the message, the encoding and purity (raw `SIGN_PRE(E)`, not pre-hashed) — but nowhere does
+  `contracts/` say _which signatures verify_. RFC 8032 leaves that
+  underdetermined and libraries deliberately differ: non-canonically encoded `R`
+  or `A` (`y ≥ p`), small-order or mixed-order `A`, small-order `R`,
+  non-canonical `S`, and cofactored vs cofactorless verification. So a signature
+  in one of those classes can verify under Go's `crypto/ed25519` and fail under
+  Node's `node:crypto` — ledger appends, verifier says `INVALID`, or two
+  verifiers disagree on identical bytes. This is the signature-side twin of the
+  canonical-JSON problem ADR-0003 closed, and `hashing.md`'s own promise
+  ("TypeScript and Go built from this text alone MUST produce the identical
+  result") does not currently hold for `sig`. Three things follow:
+  1. **No fixture may assert a verdict that depends on the classes above** — a
+     wrong verdict is unfixable post-freeze (see the `RETIRED.md` entry above).
+     Ordinary valid/invalid signature vectors are unaffected.
+  2. The cross-language gate (T8) must compare **accept and reject** on
+     signature vectors, not only hashes; today it is specified for hashes only.
+  3. Pin the predicate in an ADR + a numbered `event-types.md` sentence before
+     RELEASE CANDIDATE (T9a). Likely shape: name one profile (e.g. reject
+     non-canonical `S`, reject small-order `A`/`R`, cofactorless), state it
+     normatively, and ship vectors for each rejected class. Additive later is
+     _not_ a safe fallback: a fixture that froze the wrong verdict cannot be
+     withdrawn. See `.claude/skills/odc-keys-and-signatures`.
 - Operator key + identity service key management for MVP: file, env, or KMS?
-  (Needed by Phase 1 identity/ledger tickets, not Phase 0.)
+  (Needed by Phase 1 identity/ledger tickets, not Phase 0.) Decide it in an ADR
+  before the first Phase 1 key ships, not inside a service PR — the registrar
+  key's custody is a charter §5 concern, not a config detail
+  (`.claude/skills/odc-keys-and-signatures` §3).
 - Anchoring cadence and venue for the chain head in v1 (manual README anchor
   at genesis per phase-0 plan; automation cadence is a Phase 1+ question.)
 - ~~Correction/retraction model~~ → DECIDED (ADR-0005, ratified 2026-07-24 in

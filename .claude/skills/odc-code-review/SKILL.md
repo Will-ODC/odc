@@ -48,6 +48,9 @@ Then findings, each tagged:
 - Every mutating endpoint authenticates; signatures verified before append.
 - Parameterized queries only; no string-built SQL.
 - Keys and secrets never logged, never in fixtures, never in error output.
+- Anything touching a key, a `sig`, or a `pubkey`: walk
+  `odc-keys-and-signatures` — signed bytes, verify-before-append, key custody,
+  and no per-ballot receipt artifact.
 
 **Quality**
 

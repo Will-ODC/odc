@@ -28,6 +28,10 @@ and where wrong is permanent by the project's own definition. Slow down here.
 - Empty vs null vs absent field: distinguished explicitly, per field.
 - Semantically-equal JSON with different bytes: decide whether it hashes
   differently or is REJECTED as non-canonical — and say which, with a vector.
+- **Signature validity is a serialization pitfall too.** "A valid Ed25519
+  signature" is not one predicate across libraries (non-canonical `R`/`A`/`S`,
+  small-order keys, cofactored vs cofactorless). Apply the acid test to it and
+  see `odc-keys-and-signatures` before writing any signature spec or fixture.
 
 ## Golden fixtures
 

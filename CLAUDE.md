@@ -19,7 +19,8 @@ services/
 docs/            # charter.md, implementation-plan.md, mockups/, decisions/ (ADRs)
 memory/          # STATE.md (phase progress, next steps), OPEN-QUESTIONS.md
 .claude/
-  skills/        # odc-* skills (contracts, storage, review, testing, pipeline, boundaries, ui)
+  skills/        # odc-* skills (contracts, keys-and-signatures, storage, review,
+                 #   testing, pipeline, boundaries, ui)
   agents/        # role definitions with model routing baked in
 ```
 
