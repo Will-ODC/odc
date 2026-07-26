@@ -53,6 +53,28 @@ export function U64(n: number): Buffer {
  * UTF-8 encode; the rule matters for whoever parses the stored line.
  */
 export function UTF8(s: string): Buffer {
+  // HA-2's closing sentence is normative: a string whose decoded value is not
+  // well-formed UTF-8 MUST be rejected. Buffer.from does the opposite — it
+  // replaces an unpaired surrogate with U+FFFD and returns successfully, which
+  // collides two distinct payloads on one preimage and so defeats HA-9's
+  // guarantee outright. It also puts this implementation at odds with a Go
+  // verifier, which will reject rather than repair.
+  for (let i = 0; i < s.length; i += 1) {
+    const c = s.charCodeAt(i);
+    if (c >= 0xd800 && c <= 0xdbff) {
+      const next = i + 1 < s.length ? s.charCodeAt(i + 1) : 0;
+      if (next < 0xdc00 || next > 0xdfff) {
+        throw new RangeError(
+          `ill-formed UTF-8: unpaired high surrogate at ${String(i)} (HA-2)`,
+        );
+      }
+      i += 1;
+    } else if (c >= 0xdc00 && c <= 0xdfff) {
+      throw new RangeError(
+        `ill-formed UTF-8: unpaired low surrogate at ${String(i)} (HA-2)`,
+      );
+    }
+  }
   return Buffer.from(s, "utf8");
 }
 
@@ -86,6 +108,11 @@ export function sortPayloadKeys(keys: readonly string[]): string[] {
 }
 
 /**
+ * HA-6 note: a duplicate payload key is structurally unrepresentable in
+ * `Record<string, PayloadValue>`, so HA-6's "MUST be rejected" cannot be
+ * enforced here. It lands on the line parser / verifier — T7 must not assume
+ * this module covers it.
+ *
  * HA-7: `U64(k)` then, per key in HA-8 order, `tag || ENC_STR(key) || value`.
  * Never consults the event's `type` (ADR-0006) — the same code encodes the
  * payload of an event of any future type. An empty payload encodes as `U64(0)`
@@ -98,8 +125,15 @@ export function ENC_PAYLOAD(p: Payload): Buffer {
     const value = p[key] as PayloadValue;
     if (typeof value === "number") {
       parts.push(Buffer.from([TAG_INT]), ENC_STR(key), ENC_INT(value));
-    } else {
+    } else if (typeof value === "string") {
       parts.push(Buffer.from([TAG_STR]), ENC_STR(key), ENC_STR(value));
+    } else {
+      // ES-16: only integers and strings may appear in a v1 payload. Without
+      // this the string branch is a catch-all, and Buffer.from accepts a byte
+      // array — so {k: [104,105]} would encode identically to {k: "hi"}.
+      throw new TypeError(
+        `payload value for ${key} is neither integer nor string (ES-16)`,
+      );
     }
   }
   return Buffer.concat(parts);
@@ -170,6 +204,11 @@ export function keypairFromSeed(seed: Buffer): Keypair {
   });
   const jwk = createPublicKey(privateKey).export({ format: "jwk" });
   const publicKeyHex = Buffer.from(String(jwk.x), "base64url").toString("hex");
+  if (!/^[0-9a-f]{64}$/.test(publicKeyHex)) {
+    // A missing jwk.x stringifies to "undefined" and base64url-decodes to
+    // garbage rather than throwing. ID-3 requires the 32 raw bytes.
+    throw new Error("Ed25519 public key export did not yield 32 bytes (ID-3)");
+  }
   return { publicKeyHex, privateKey };
 }
 
@@ -185,11 +224,25 @@ export function signEvent(content: EventContent, key: Keypair): string {
   return sign(null, signingPreimage(content), key.privateKey).toString("hex");
 }
 
-/** ID-4/ID-5: sha256 of the 32 *decoded* key bytes, not of the hex text. */
+/**
+ * ID-4/ID-5: sha256 of the 32 *decoded* key bytes, not of the hex text.
+ *
+ * The input is validated because Node's hex decoder truncates at the first
+ * invalid character instead of erroring: participantId("zz") would otherwise
+ * return sha256 of the empty string, and a malformed operator_pk would mint a
+ * bogus but authentic-looking chain_id. Lowercase only — ID-2 says an uppercase
+ * identifier "MUST be rejected; it is never lowercased to conform".
+ */
 export function participantId(pubkeyHex: string): string {
-  return createHash("sha256")
-    .update(Buffer.from(pubkeyHex, "hex"))
-    .digest("hex");
+  if (!/^[0-9a-f]{64}$/.test(pubkeyHex)) {
+    throw new RangeError(
+      `not 64 lowercase hex characters (ID-1, ID-2): ${pubkeyHex}`,
+    );
+  }
+  const bytes = Buffer.from(pubkeyHex, "hex");
+  if (bytes.length !== 32)
+    throw new RangeError("hex did not decode to 32 bytes (ID-5)");
+  return createHash("sha256").update(bytes).digest("hex");
 }
 
 /** ET-7: chain_id is the same derivation applied to `operator_pk`. */
