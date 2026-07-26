@@ -54,23 +54,33 @@ use — T5–T9 proceed on schedule; only the tag waits.
   `OPEN-QUESTIONS.md` are now closed. `contracts/` stays DRAFTING; freeze
   still gated on genesis rehearsal (T6–T8) + security audit (T9).
 
-## In flight (2026-07-25 — unmerged, listed in merge order)
-
-- **PR #8** — routing: `odc-architect` moves Fable → **Opus**. Standing default:
-  Opus plans, Opus implements, Sonnet explores (`odc-navigator` only).
-- **PR #9** — CI: the freeze blocked _adding_ a fixture, not just editing one,
-  making `evolution.md` EV-5/EV-14 impossible to satisfy. Now edits, deletes and
-  renames fail; additions pass. 15/15 guard tests.
-- **PR #10 — T4a**, the verdict report surface. `evolution.md`/`export-format.md`
-  → v2, `event-schema.md`/`event-types.md` → v2. EV-15 (exhaustive Stage A/B
-  split), EV-16 (payload-shape failure is INVALID even on an unknown type),
-  EV-17 (verdict precedence, line attribution, advisory reason text), EV-18
-  (`x_` prefix reserved), EX-18–EX-20 (line attribution for empty export,
-  `--head` mismatch, framing). Fresh-context review: REQUEST CHANGES → all
-  findings applied. **No reason-code registry exists or is needed** — conformance
-  is verdict token + line number only; fixtures MUST NOT assert reason text or
+- **Routing → Opus** (2026-07-25, PR #8, squash `d1a41c6`). `odc-architect` moves
+  Fable → Opus. Standing default until further notice: Opus plans, Opus
+  implements, Sonnet explores (`odc-navigator` only).
+- **CI: freeze blocks fixture edits, not additions** (2026-07-25, PR #9, squash
+  `36627d9`). The guard hard-failed any path under `contracts/fixtures/`
+  including additions, making `evolution.md` EV-5/EV-14 impossible to satisfy —
+  no post-freeze event type could ever ship. Now modifications, deletions and
+  renames fail; additions pass (`--no-renames`, so a rename still trips the
+  delete half). 15/15 guard tests.
+- **T4a — verdict report surface** (2026-07-25, PR #10, squash `587c852`).
+  `evolution.md`/`export-format.md`/`event-schema.md`/`event-types.md` → v2.
+  EV-15 (exhaustive Stage A/B split, EX-11's `sig` clause excluded as Stage B),
+  EV-16 (payload-shape failure is INVALID even on an unknown type), EV-17
+  (verdict precedence, line attribution, advisory reason text), EV-18 (`x_`
+  prefix reserved and fixtures bound to it), EX-18–EX-20 (line attribution for
+  empty export, `--head` mismatch, framing). Ticket text in `phase-0.md` T5/T7
+  and `odc-verifier-builder.md` reconciled to three verdicts + exit codes 0/1/2.
+  Fresh-context review: REQUEST CHANGES → all ten findings applied.
+  **No reason-code registry exists or is needed** — conformance is judged on the
+  verdict token and line number alone; fixtures MUST NOT assert reason text or
   exit codes.
-- **PR #11 — T4b**, ADR-0007 (stacked on #10). See below.
+- **T4b — ADR-0007, release candidate** (2026-07-25, PR #12, squash `2a253cf`).
+  See Direction decisions below. _Process note:_ this first went out as PR #11
+  stacked on #10's branch; #10 squash-merged first, orphaning that base, so #11
+  merged into a dead branch and never reached master. Re-landed as #12. **Do not
+  stack PRs in this repo** — squash-merge breaks the stack silently, and the
+  child PR reports "merged" while delivering nothing.
 
 ## Direction decisions (2026-07-25)
 
@@ -87,7 +97,10 @@ T5–T9 keep their schedule. Only the tag waits.
 ## Next
 
 **T5 — Fixture generator + golden fixtures (TypeScript)** (`odc-implementer`),
-per `docs/plans/phase-0.md`, once #10 and #11 merge. Settled inputs:
+per `docs/plans/phase-0.md`. **Nothing blocks it** — every prerequisite is on
+master as of 2026-07-25. Start by reading `contracts/evolution.md` §4 (EV-15–
+EV-18) and `contracts/export-format.md` §5 (EX-18–EX-20); those are the rules
+the vectors encode. Settled inputs, already decided — do not relitigate:
 
 - **~40 vectors, not ~116.** "One per normative sentence" over-scopes: many are
   definitional and exercised by every vector, and hand-review is the real gate —
@@ -100,15 +113,24 @@ per `docs/plans/phase-0.md`, once #10 and #11 merge. Settled inputs:
   unregistered-type vector MUST use an `x_` type (EV-18).
 - `contracts/fixtures/README.md` documents the record format — it must live
   inside `fixtures/` so T7, which may read only `contracts/`, can see it.
+- Do **not** use `genesis` for the unknown-version vector — see the
+  unregistered-genesis-version item in `OPEN-QUESTIONS.md`. Use
+  `participant_registered` version 2, a leaf type nothing references.
 - Golden values never regenerate to make anything pass (`odc-testing`).
+- Two bits of plumbing T5 must not forget: add `tools/` to
+  `pnpm-workspace.yaml` (it lists only `services/*` today, so a
+  `tools/fixtures-gen` package will not resolve), and confirm `diff-size`
+  tolerates the committed vectors — markdown is exempt, JSON is not.
 
 Then T6 (rehearsal builder) → T7 (Go verifier, fresh-context isolation) → T8
 (rehearsal loop) → T9 (security audit) → **T9a (release candidate → Phase 1)**.
 T10 (freeze) is deferred past Phase 1.
 
-**Also queued:** the direction ADRs (definitional-vs-provisional constraints, the
-ballot-expressiveness ceiling, the two-plane clarification). Not blocking T5.
-**Before that ADR is written, see the ET-22 warning in `OPEN-QUESTIONS.md`.**
+**Also queued, not blocking T5:** the direction ADRs — definitional-vs-provisional
+constraints, the ballot-expressiveness ceiling, and the two-plane clarification.
+**Read the ET-22 warning in `OPEN-QUESTIONS.md` before writing the first of
+them:** a draft classifies receipt-freeness constraints as community-governable,
+which contradicts merged normative text that says they survive any community vote.
 
 Ticket discipline: one ticket = one branch = one PR = one session; fresh-context
 review before merge; squash-merge. **STATE.md update note:** branch protection
@@ -120,7 +142,20 @@ conflict). Required checks to go green: `format / lint / typecheck`,
 
 ## Blockers
 
-- None for T5. Branch protection is **ON** (2026-07-19, ruleset
+- **None for T5.** Branch protection is **ON** (2026-07-19, ruleset
   `protect-master`): PR required, four status checks strict, linear history, no
   bypass. Both Phase-0 user actions are complete — T2's documented rules are
   now actually enforced.
+- Not a blocker, but standing: **`hashing.md` has never been independently
+  validated.** No review, audit, or ADR in this repo has checked the byte-level
+  spec. It is settled only by T7's fresh-context Go verifier reproducing the
+  fixtures and by T8's cross-language comparison. Do not let "T4 is merged" read
+  as "the hashing is known correct".
+- Housekeeping, no impact: seven merged/superseded branches remain on the remote
+  (`chore/diff-size-exempt-docs`, `chore/model-routing-opus`,
+  `claude/context-next-steps-fyd7uj`, `claude/hash-chain-schema-identity-7ngj28`,
+  `claude/next-phase-prep-7i36uu`, `claude/t4-continuation-context-av08rn`,
+  `contracts/T3-event-schema`). All content is on master or superseded. The
+  session git proxy returns 403 on ref deletion, so these need deleting from the
+  GitHub UI. Enabling "Automatically delete head branches" in repo settings
+  prevents recurrence.
