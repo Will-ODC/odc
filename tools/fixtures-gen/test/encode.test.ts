@@ -6,7 +6,7 @@
 // (odc-testing).
 
 import assert from "node:assert/strict";
-import { createHash } from "node:crypto";
+import { createHash, createPublicKey, verify } from "node:crypto";
 import { test } from "node:test";
 
 import {
@@ -20,6 +20,7 @@ import {
   signEvent,
   signingPreimage,
   U64,
+  UTF8,
   type EventContent,
 } from "../src/encode.js";
 
@@ -121,14 +122,73 @@ test('distinguishes the integer 1 from the string "1" (HA-9)', () => {
 test("orders payload keys by UTF-8 octets, shorter prefix first (HA-8)", () => {
   // Object insertion order is deliberately the reverse of the required order.
   const encoded = ENC_PAYLOAD({ ab: "y", a: "x" });
-  const expected = ENC_PAYLOAD({ a: "x", ab: "y" });
-  assert.equal(encoded.toString("hex"), expected.toString("hex"));
-  // "a" must appear before "ab": find their key bytes in order.
+  assert.equal(
+    encoded.toString("hex"),
+    ENC_PAYLOAD({ a: "x", ab: "y" }).toString("hex"),
+  );
   const hex = encoded.toString("hex");
   assert.ok(
     hex.indexOf(Buffer.from("a").toString("hex")) <
       hex.indexOf(Buffer.from("ab").toString("hex")),
   );
+});
+
+test("orders keys by UTF-8 bytes, NOT by UTF-16 code units (HA-8)", () => {
+  // ASCII keys cannot tell the two orders apart — they coincide. These cannot:
+  // U+FFFD is ef bf bd and U+10000 is f0 90 80 80, so UTF-8 puts U+FFFD first,
+  // while UTF-16 puts the surrogate pair d800 dc00 first. A plain keys.sort(),
+  // localeCompare, or `<` comparison sorts by code unit and produces different
+  // bytes here — each of which survives an ASCII-only test.
+  const astral = "\u{10000}";
+  const bmp = "\uFFFD";
+  const encoded = ENC_PAYLOAD({ [astral]: "a", [bmp]: "b" });
+  const bmpAt = encoded.indexOf(Buffer.from(bmp, "utf8"));
+  const astralAt = encoded.indexOf(Buffer.from(astral, "utf8"));
+  assert.ok(bmpAt !== -1 && astralAt !== -1);
+  assert.ok(
+    bmpAt < astralAt,
+    "UTF-8 byte order must put U+FFFD before U+10000",
+  );
+});
+
+test("applies no Unicode normalization of any form (HA-2)", () => {
+  // HA-2's most emphatic prohibition, and the one with the highest chance of
+  // being violated accidentally: macOS input methods routinely produce NFD, so
+  // real French/Vietnamese/Korean titles exercise this path. Inserting a
+  // .normalize() call anywhere in UTF8 must break this.
+  const composed = "\u00e9"; // é
+  const decomposed = "e\u0301"; // e + combining acute
+  assert.equal(composed.normalize("NFC"), decomposed.normalize("NFC"));
+  assert.notEqual(
+    UTF8(composed).toString("hex"),
+    UTF8(decomposed).toString("hex"),
+    "visually equal but differently encoded titles are different events (ET-16)",
+  );
+  assert.notEqual(
+    ENC_PAYLOAD({ t: composed }).toString("hex"),
+    ENC_PAYLOAD({ t: decomposed }).toString("hex"),
+  );
+});
+
+test("rejects ill-formed UTF-8 rather than repairing it (HA-2)", () => {
+  // Buffer.from replaces an unpaired surrogate with U+FFFD and succeeds, which
+  // would collide two distinct payloads on one preimage and defeat HA-9.
+  assert.throws(() => UTF8("\uD800"), /unpaired high surrogate/);
+  assert.throws(() => UTF8("\uDC00"), /unpaired low surrogate/);
+  assert.throws(() => UTF8("a\uD800b"), /unpaired high surrogate/);
+  assert.doesNotThrow(() => UTF8("\u{10000}"), "a valid pair is fine");
+  assert.throws(() => ENC_PAYLOAD({ t: "\uD800" }), /unpaired/);
+});
+
+test("the integer tag is exactly 0x69 and the string tag 0x73 (HA-7)", () => {
+  // notEqual alone lets the tags be any two distinct bytes; HA-7 names them.
+  assert.ok(ENC_PAYLOAD({ k: 1 }).includes(Buffer.from([0x69])));
+  assert.ok(ENC_PAYLOAD({ k: "1" }).includes(Buffer.from([0x73])));
+});
+
+test("rejects a payload value that is neither integer nor string (ES-16)", () => {
+  const bad = [104, 105] as unknown as string;
+  assert.throws(() => ENC_PAYLOAD({ k: bad }), /neither integer nor string/);
 });
 
 test("encodes an empty payload as U64(0) and nothing more (HA-8)", () => {
@@ -160,11 +220,30 @@ test("signing preimage differs from the hash preimage only by the sig entry (HA-
   );
 });
 
-test("removing sig is what the signature covers, so it verifies (ET-4)", () => {
-  assert.equal(
-    signEvent(genesisSigned, OPERATOR),
-    SPEC_SIG,
-    "sig in the payload is ignored when signing",
+test("signEvent ignores an existing sig key in the payload (HA-15)", () => {
+  assert.equal(signEvent(genesisSigned, OPERATOR), SPEC_SIG);
+});
+
+test("the signature actually verifies under operator_pk (ET-4, ET-8)", () => {
+  // Nothing in this suite previously exercised an Ed25519 verify path at all —
+  // every assertion only re-derived the signature with the same code that made
+  // it, which cannot catch a signing-preimage error that is self-consistent.
+  const spki = Buffer.concat([
+    Buffer.from("302a300506032b6570032100", "hex"),
+    Buffer.from(SPEC_OPERATOR_PK, "hex"),
+  ]);
+  const pub = createPublicKey({ key: spki, format: "der", type: "spki" });
+  assert.ok(
+    verify(
+      null,
+      signingPreimage(genesisSigned),
+      pub,
+      Buffer.from(SPEC_SIG, "hex"),
+    ),
+  );
+  // And it must NOT verify over the hash preimage, which includes sig (ES-32).
+  assert.ok(
+    !verify(null, preimage(genesisSigned), pub, Buffer.from(SPEC_SIG, "hex")),
   );
 });
 
@@ -173,6 +252,17 @@ test("derives participant_id from decoded key bytes, not the hex text (ID-4, ID-
     "3b6a27bcceb6a42d62a3a8d02a6f0d73653215771de243a63ac048a18b59da29";
   assert.equal(participantId(pubkey), sha256(Buffer.from(pubkey, "hex")));
   assert.notEqual(participantId(pubkey), sha256(Buffer.from(pubkey, "utf8")));
+});
+
+test("participantId rejects malformed and uppercase hex (ID-1, ID-2, ID-5)", () => {
+  // Node's hex decoder truncates at the first invalid character, so without
+  // validation participantId("zz") returns sha256 of the empty string — a
+  // well-formed-looking id derived from garbage.
+  assert.throws(() => participantId("zz"), RangeError);
+  assert.throws(() => participantId("abc"), RangeError);
+  assert.throws(() => participantId("aabbzzccdd"), RangeError);
+  assert.throws(() => participantId("A".repeat(64)), RangeError);
+  assert.throws(() => participantId("a".repeat(63)), RangeError);
 });
 
 test("the registrar key is not the operator key (ET-9a)", () => {
