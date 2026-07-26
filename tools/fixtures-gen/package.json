@@ -6,6 +6,7 @@
   "description": "Generates the byte-exact golden vectors in contracts/fixtures/ (Phase 0 T5). Build tooling, never shipped.",
   "scripts": {
     "build": "tsc -p tsconfig.json",
+    "generate": "node dist/src/generate.js",
     "test": "node --test dist/test/*.test.js",
     "lint": "eslint src test",
     "typecheck": "tsc -p tsconfig.json --noEmit"

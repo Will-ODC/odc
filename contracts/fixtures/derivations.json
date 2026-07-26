@@ -1,0 +1,35 @@
+{
+  "participant_id": [
+    {
+      "cites": [
+        "ID-4",
+        "ID-5"
+      ],
+      "pubkey": "3b6a27bcceb6a42d62a3a8d02a6f0d73653215771de243a63ac048a18b59da29",
+      "participant_id": "139e3940e64b5491722088d9a0d741628fc826e09475d341a780acde3c4b8070",
+      "note": "The worked shape of ids.md §2, over the 32 decoded key bytes."
+    }
+  ],
+  "chain_id": [
+    {
+      "cites": [
+        "ET-7"
+      ],
+      "operator_pk": "8a88e3dd7409f195fd52db2d3cba5d72ca6709bf1d94121bf3748801b40f6f5c",
+      "chain_id": "34750f98bd59fcfc946da45aaabe933be154a4b5094e1c4abf42866505f3c97e",
+      "note": "The same derivation applied to operator_pk; matches vector 001."
+    }
+  ],
+  "keys": {
+    "note": "Ed25519 keypairs of hashing.md §6, from 32-octet seeds of one repeated byte. Reproduce these before trusting any signature vector.",
+    "operator": {
+      "seed_octet": "0x01",
+      "public_key": "8a88e3dd7409f195fd52db2d3cba5d72ca6709bf1d94121bf3748801b40f6f5c"
+    },
+    "registrar": {
+      "seed_octet": "0x02",
+      "public_key": "8139770ea87d175f56a35466c34c7ecccb8d8a91b4ee37a25df60f5b8fc9b394"
+    },
+    "genesis_ts": "2026-07-21T00:00:00.000Z"
+  }
+}
