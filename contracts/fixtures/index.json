@@ -51,7 +51,7 @@
       "cites": [
         "EX-16"
       ],
-      "note": "End-truncation is NOT detectable from the export alone — a prefix of a valid chain is a valid chain. VALID is the correct verdict here, not a verifier bug; vector 052 is the same bytes with --head, which is what catches it."
+      "note": "End-truncation is NOT detectable from the export alone — a prefix of a valid chain is a valid chain. VALID is the correct verdict here, not a verifier bug; the paired vector that supplies --head over these same bytes is what catches it."
     },
     {
       "id": "005-boundaries",
