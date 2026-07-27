@@ -115,6 +115,26 @@ use — T5–T9 proceed on schedule; only the tag waits.
     so T7 (which may read only `contracts/`) can see it. **Verdicts are declared,
     never computed** — the generator contains no verifier, so T7 is checked
     against the contract rather than against this tool's reading of it.
+  - **T5f — `PARTIAL` vectors, envelope `INVALID` vectors, EV-19** (2026-07-27,
+    PR #28, squash `b67869a`). Vectors go 7 → **42** (VALID 7, PARTIAL 4,
+    INVALID 31), plus `tools/fixtures-gen/test/conformance.test.ts`. 84/84 tests.
+    Vector 001 and its preimage are byte-identical to before, so nothing already
+    shipped moved. Carried **two normative edits to `evolution.md` (v2 → v3)**
+    that were not in the original plan: **EV-19** (no contracts version may ever
+    register a `version` >= 1000000; a fixture exercising the unregistered-
+    _version_ path MUST use **1000000 exactly** — open-ended reservation, single
+    fixture value, so no vector strains a `version` parser near ES-5's 2^53-1),
+    and **EV-18 narrowed** so its `x_` obligation binds the unregistered-_type_
+    path only, pointing at EV-19 for the other.
+- **T5f took two fresh-context reviews, both REQUEST CHANGES, and merged with a
+  third round unreviewed.** Review 1: vector 009 violated EV-18, a rule live
+  since T4a. Review 2: a surviving mutation _inside the fix for review 1_, plus
+  a justification sentence in the new EV-19 text that was false as written. The
+  third commit (`2e775e6`) fixed review 2 and **changed normative spec text
+  again** — narrowing EV-18, tightening EV-19 — and no fresh context ever read
+  it. **If EV-18/EV-19 behave oddly in T7, read that commit first.**
+  **Lesson, now twice over: re-review after a substantive fix**, especially one
+  that touches normative text. Both times, the fix carried the next defect.
 - **T5a was reviewed by a fresh context: REQUEST CHANGES** — one blocking
   finding, fixed in **PR #22** (not merged as of this write). `UTF8` used
   `Buffer.from(s, "utf8")`, which _repairs_ an unpaired surrogate to U+FFFD
@@ -158,40 +178,50 @@ T5–T9 keep their schedule. Only the tag waits.
 
 ## Next
 
-**Everything opened is merged, through #26** — nothing is in flight.
-`contracts/fixtures/` exists on master with 7 `VALID` vectors; the T5e review
-fixes, the T5a HA-2 fix, and all five blocking T5b/T5c/T5d findings are in.
-**Two slices of T5 remain: T5f and T5g**, plus the `[SHOULD]` follow-up PR
-described under Blockers.
+**Everything opened is merged, through #28** — nothing is in flight. Master
+carries 42 vectors and 84/84 tests. **One slice of T5 remains: T5g**, plus the
+`[SHOULD]` follow-up PR described under Blockers.
 
-Both remaining slices are written and verified on `wip/T5fg-material`:
-
-1. **T5f** — the 4 `PARTIAL` vectors, `conformance.test.ts` (EV-17/EV-18
-   policy), and the 30 envelope `INVALID` vectors. ~467 lines.
-2. **T5g** — framing, `--head`, Stage B and precedence vectors. ~403 lines.
+1. **T5g** — framing, `--head`, Stage B and precedence vectors: **28 vectors,
+   ids 043–070**, from `framing.ts` and `semantics.ts`. ~390 counted lines.
    Also reconcile `contracts/fixtures/README.md`, which carries slice-transient
-   prose ("currently holds the `VALID` vectors", a worked example keyed on
-   `037-hash-mismatch`) that becomes false at the freeze.
-3. **Carry finding 2 forward:** no committed preimage exercises the **integer**
+   prose (a worked example keyed on `037-hash-mismatch`) that becomes false at
+   the freeze.
+2. **Carry finding 2 forward:** no committed preimage exercises the **integer**
    payload tag `0x69` — vector 001's payload is all strings, so a wrong `ENC_INT`
    or swapped tag (HA-9) surfaces only as a digest mismatch with nothing to diff.
    Add `preimages/` for the `issue_created` at seq 3. Additive, so legal even
    post-freeze, which is why it was deferred out of #19.
 
-**`wip/T5fg-material` holds T5f/T5g's modules**, verified as a whole (66/66
-tests, all 69 vectors regenerating byte-identically). It is **not a merge
-candidate** — it sits on T5e's old branch and the no-stacking rule forbids
-merging from it. Re-cut each slice from master and extract.
+**The id renumbering trap.** `wip/T5fg-material` numbers these vectors 042–069.
+#28 shipped `042-payload-float-unregistered-type` and **shipped ids are frozen**,
+so every wip id shifts **+1**. An off-by-one here is invisible to a passing
+suite — the vectors regenerate byte-identically under any consistent numbering.
 
-**Extract `src/vectors/*` and the new tests ONLY.** That branch is `bbec6eb`
-(2026-07-26 09:10), which predates both #22 and #26, so its copies of
-`chain.ts`, `encode.ts`, `serialize.ts` and `tamper.ts` are **older than
-master's** — carrying them across would silently revert the HA-2 rejection, the
-shared `assertWellFormed`, the genesis-key signing fix and the mutator bounds
-checks, and the suite would still be green because those modules bring their own
-older tests. Checked and safe: all five mutator call sites in the wip vectors
-(`deleteLine(Alines, 3)`, `swapLines(Alines, 2, 3)`, `insertBlankLine(Alines, 2)`,
-`truncate(Alines, 2)` ×2) are in range under #26's new bounds checks.
+**`wip/T5fg-material` holds T5g's modules** but is **not a merge candidate** — it
+sits on T5e's old branch and the no-stacking rule forbids merging from it. Re-cut
+from master and extract.
+
+**Extract `framing.ts`, `semantics.ts`, and the two-line `index.ts` wiring —
+nothing else.** That branch is `bbec6eb` (2026-07-26 09:10), predating #22, #26
+and #28, so **its `shared.ts`, `envelope.ts`, `unregistered.ts`, `valid.ts` and
+all of its test files are older than master's.** Concretely: wip's `shared.ts`
+drops the `\r` from the `ESC` payload, which master carries deliberately (EX-9
+governs U+000D _inside_ a string value, orthogonal to EX-3's ban on a raw CR
+between lines, so the CRLF framing vector does not cover it); wip's test files
+would delete master's newer assertions in `chain.test.ts`, `encode.test.ts` and
+`conformance.test.ts`. The suite would stay green either way, because those
+modules bring their own older tests. Checked and safe: all five mutator call
+sites in the wip vectors (`deleteLine(Alines, 3)`, `swapLines(Alines, 2, 3)`,
+`insertBlankLine(Alines, 2)`, `truncate(Alines, 2)` ×2) are in range under #26's
+bounds checks.
+
+**Diff-size is not the constraint it was assumed to be.** `.github/scripts/
+diff-size.sh` exempts `contracts/fixtures/**` outright, alongside markdown, so
+`index.json` (+332 lines), `MANIFEST.sha256` (+27) and the 28 `.ndjson` files
+cost nothing. Only generator code counts. T5g fits in one PR; splitting framing
+from semantics is the fallback, not the plan. (T5f's "585 of 600" was a per-PR
+measurement, not a cumulative budget.)
 
 **Slices cannot be prepared in advance.** Each needs the previous one's
 `shared.ts`/`index.ts` on master to compile, and stacking is forbidden because
@@ -225,7 +255,9 @@ the feature branch, so parallel agents do not conflict). Required checks:
   `protect-master`): PR required, four status checks strict, linear history, no
   bypass. Both Phase-0 user actions are complete — T2's documented rules are
   now actually enforced.
-- **Review coverage is complete — five slices reviewed, five with real defects.**
+- **Review coverage: seven slices reviewed, seven with real defects** — every
+  reviewed slice of T5 has come back with something real. Treat a clean review
+  as the surprise, not the expectation.
   T5b and T5c/T5d were re-run on 2026-07-26 after the earlier 529 failures; both
   returned **REQUEST CHANGES**. **All five blocking findings are now fixed on
   master (PR #26, squash `8d96736`)** — 78/78 tests, up from 67. What they were,
