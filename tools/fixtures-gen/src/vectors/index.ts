@@ -5,9 +5,15 @@
 // reviewable diff. Order here is the order in index.json and in the vector ids.
 
 import { validVectors } from "./valid.js";
+import { unregisteredVectors } from "./unregistered.js";
+import { envelopeVectors } from "./envelope.js";
 import type { Vector } from "./shared.js";
 
 export { GENESIS_EVENT } from "./shared.js";
 export type { Expect, Vector } from "./shared.js";
 
-export const vectors: Vector[] = [...validVectors];
+export const vectors: Vector[] = [
+  ...validVectors,
+  ...unregisteredVectors,
+  ...envelopeVectors,
+];

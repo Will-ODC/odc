@@ -16,6 +16,35 @@ Format (newest first, one entry per merged contracts change):
 
 ---
 
+## fixtures/ — v2 — 2026-07-27 — T5f
+
+- **34 vectors added: the 4 `PARTIAL` vectors (008–011) and the 30 envelope
+  `INVALID` vectors (012–041).** Additions only — no existing vector's bytes
+  changed, and vector 001's preimage and digest are untouched.
+- **The `PARTIAL` set is the EV-7/EV-8/EV-9 boundary.** A well-formed event of an
+  unregistered type is `PARTIAL`, not `INVALID`: Stage A confirms its integrity
+  and only its type-specific semantics go unchecked. This is what stops a frozen
+  verifier declaring a chain broken because the community legally grew past it
+  (charter §8). The paired `021-type-malformed` sits on the other side of that
+  line — a malformed type is `INVALID`.
+- **Every unregistered type uses the `x_` prefix EV-18 reserves**, so no future
+  registration can contradict a frozen verdict. `009` deliberately uses
+  `participant_registered` version 2 rather than an unregistered `genesis`
+  version: an unregistered `genesis` leaves a verifier unable to extract
+  `operator_pk`/`registrar_pk` for Stage B at all, which is an open question a
+  frozen fixture must not foreclose (`memory/OPEN-QUESTIONS.md`).
+- **`023`–`028` carry payloads HA-7 cannot encode**, so they have no computable
+  preimage. EV-16 makes them `INVALID` even on an unregistered type: EV-8's
+  "integrity confirmed, semantics unchecked" does not hold when integrity is not
+  confirmable.
+- **The EV-17 assertion rule is now enforced by a test over the committed
+  `index.json`**, not only by the `Expect` union at compile time — the follow-up
+  the T5e entry below promised. `conformance.test.ts` also pins that `PARTIAL`
+  vectors use only `x_` types, that their line lists ascend, and that no vector
+  anywhere freezes a verdict for an unregistered `genesis` version.
+- **README status line corrected** to say what the directory now holds. Prose
+  only; no record-format change, no byte moved.
+
 ## fixtures/ — v1 — 2026-07-26 — T5e
 
 - **`contracts/fixtures/` now exists.** The first 7 golden vectors, all `VALID`,

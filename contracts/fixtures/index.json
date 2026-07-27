@@ -89,6 +89,432 @@
         "EX-9"
       ],
       "note": "Quote and backslash escaped; solidus (/) left literal, which EX-9 requires and many JSON writers escape by default."
+    },
+    {
+      "id": "008-unregistered-type",
+      "export": "vectors/008-unregistered-type.ndjson",
+      "expect": {
+        "verdict": "PARTIAL",
+        "lines": [
+          5
+        ]
+      },
+      "cites": [
+        "EV-7",
+        "EV-8",
+        "EV-18"
+      ],
+      "note": "Stage A passes on every line including the unknown type; only its type-specific semantics go unchecked. Uses the x_ prefix EV-18 reserves, so no future registration can contradict this frozen verdict."
+    },
+    {
+      "id": "009-unregistered-version",
+      "export": "vectors/009-unregistered-version.ndjson",
+      "expect": {
+        "verdict": "PARTIAL",
+        "lines": [
+          3
+        ]
+      },
+      "cites": [
+        "ET-2",
+        "EV-8"
+      ],
+      "note": "A registered type at an unregistered version. Deliberately NOT genesis: an unregistered genesis version would leave a verifier unable to extract operator_pk/registrar_pk for Stage B at all, which is an unresolved question and must not be frozen into a fixture."
+    },
+    {
+      "id": "010-unregistered-type-empty-payload",
+      "export": "vectors/010-unregistered-type-empty-payload.ndjson",
+      "expect": {
+        "verdict": "PARTIAL",
+        "lines": [
+          2
+        ]
+      },
+      "cites": [
+        "HA-8"
+      ],
+      "note": "The k=0 payload encoding: U64(0) and nothing more. No v1 type has an empty payload, so only an x_ type can pin this."
+    },
+    {
+      "id": "011-unregistered-type-escapes",
+      "export": "vectors/011-unregistered-type-escapes.ndjson",
+      "expect": {
+        "verdict": "PARTIAL",
+        "lines": [
+          2
+        ]
+      },
+      "cites": [
+        "EX-9",
+        "HA-2"
+      ],
+      "note": "Every EX-9 branch in one string: all five short escapes (\\t \\n \\b \\f \\r), \\u001f in lowercase hex, escaped quote and backslash, literal solidus, literal non-ASCII. The \\r is inside a string value, which EX-9 governs independently of EX-3's ban on a raw CR between lines. No v1 type may carry a control character, so an x_ type is the only way to pin the control-character branches."
+    },
+    {
+      "id": "012-missing-field",
+      "export": "vectors/012-missing-field.ndjson",
+      "expect": {
+        "verdict": "INVALID",
+        "line": 2
+      },
+      "cites": [
+        "ES-1"
+      ],
+      "note": "The ts field is absent."
+    },
+    {
+      "id": "013-extra-top-level-field",
+      "export": "vectors/013-extra-top-level-field.ndjson",
+      "expect": {
+        "verdict": "INVALID",
+        "line": 2
+      },
+      "cites": [
+        "ES-2"
+      ],
+      "note": "An eighth top-level field."
+    },
+    {
+      "id": "014-null-field",
+      "export": "vectors/014-null-field.ndjson",
+      "expect": {
+        "verdict": "INVALID",
+        "line": 2
+      },
+      "cites": [
+        "ES-3"
+      ],
+      "note": "A field present but null. Absence is never expressed as null."
+    },
+    {
+      "id": "015-seq-first-not-one",
+      "export": "vectors/015-seq-first-not-one.ndjson",
+      "expect": {
+        "verdict": "INVALID",
+        "line": 1
+      },
+      "cites": [
+        "ES-6"
+      ],
+      "note": "The first event does not carry seq 1."
+    },
+    {
+      "id": "016-seq-gap",
+      "export": "vectors/016-seq-gap.ndjson",
+      "expect": {
+        "verdict": "INVALID",
+        "line": 3
+      },
+      "cites": [
+        "ES-7"
+      ],
+      "note": "seq jumps, leaving a gap."
+    },
+    {
+      "id": "017-seq-duplicate",
+      "export": "vectors/017-seq-duplicate.ndjson",
+      "expect": {
+        "verdict": "INVALID",
+        "line": 3
+      },
+      "cites": [
+        "ES-7"
+      ],
+      "note": "Tamper matrix: a line repeated, so seq repeats. The duplicate is line 3."
+    },
+    {
+      "id": "018-seq-fractional",
+      "export": "vectors/018-seq-fractional.ndjson",
+      "expect": {
+        "verdict": "INVALID",
+        "line": 2
+      },
+      "cites": [
+        "ES-5"
+      ],
+      "note": "Non-canonical integer: fractional form."
+    },
+    {
+      "id": "019-seq-leading-zero",
+      "export": "vectors/019-seq-leading-zero.ndjson",
+      "expect": {
+        "verdict": "INVALID",
+        "line": 2
+      },
+      "cites": [
+        "ES-5"
+      ],
+      "note": "Non-canonical integer: leading zero."
+    },
+    {
+      "id": "020-integer-out-of-range",
+      "export": "vectors/020-integer-out-of-range.ndjson",
+      "expect": {
+        "verdict": "INVALID",
+        "line": 3
+      },
+      "cites": [
+        "ES-5"
+      ],
+      "note": "An integer above 2^53-1, which no longer round-trips losslessly."
+    },
+    {
+      "id": "021-type-malformed",
+      "export": "vectors/021-type-malformed.ndjson",
+      "expect": {
+        "verdict": "INVALID",
+        "line": 1
+      },
+      "cites": [
+        "ES-10",
+        "ES-11"
+      ],
+      "note": "A MALFORMED type is INVALID, never PARTIAL. The PARTIAL path exists only for well-formed unregistered types; this is the boundary between them."
+    },
+    {
+      "id": "022-version-zero",
+      "export": "vectors/022-version-zero.ndjson",
+      "expect": {
+        "verdict": "INVALID",
+        "line": 2
+      },
+      "cites": [
+        "ES-12"
+      ],
+      "note": "version below 1."
+    },
+    {
+      "id": "023-payload-not-object",
+      "export": "vectors/023-payload-not-object.ndjson",
+      "expect": {
+        "verdict": "INVALID",
+        "line": 2
+      },
+      "cites": [
+        "ES-15",
+        "EV-16"
+      ],
+      "note": "A non-object payload has no computable preimage (HA-7), so it is INVALID rather than PARTIAL: integrity cannot be confirmed even structurally."
+    },
+    {
+      "id": "024-payload-float",
+      "export": "vectors/024-payload-float.ndjson",
+      "expect": {
+        "verdict": "INVALID",
+        "line": 3
+      },
+      "cites": [
+        "ES-16",
+        "EV-16"
+      ],
+      "note": "A float in the payload. HA-7 defines no encoding for one."
+    },
+    {
+      "id": "025-payload-boolean",
+      "export": "vectors/025-payload-boolean.ndjson",
+      "expect": {
+        "verdict": "INVALID",
+        "line": 3
+      },
+      "cites": [
+        "ES-16"
+      ],
+      "note": "A boolean in the payload."
+    },
+    {
+      "id": "026-payload-null-value",
+      "export": "vectors/026-payload-null-value.ndjson",
+      "expect": {
+        "verdict": "INVALID",
+        "line": 3
+      },
+      "cites": [
+        "ES-16"
+      ],
+      "note": "A null payload value."
+    },
+    {
+      "id": "027-payload-nested-object",
+      "export": "vectors/027-payload-nested-object.ndjson",
+      "expect": {
+        "verdict": "INVALID",
+        "line": 3
+      },
+      "cites": [
+        "ES-17"
+      ],
+      "note": "A nested object breaks flatness."
+    },
+    {
+      "id": "028-payload-array",
+      "export": "vectors/028-payload-array.ndjson",
+      "expect": {
+        "verdict": "INVALID",
+        "line": 3
+      },
+      "cites": [
+        "ES-17"
+      ],
+      "note": "An array breaks flatness."
+    },
+    {
+      "id": "029-payload-duplicate-key",
+      "export": "vectors/029-payload-duplicate-key.ndjson",
+      "expect": {
+        "verdict": "INVALID",
+        "line": 2
+      },
+      "cites": [
+        "HA-6"
+      ],
+      "note": "The same payload key twice: non-canonical, and never de-duplicated to conform."
+    },
+    {
+      "id": "030-ts-bad-format",
+      "export": "vectors/030-ts-bad-format.ndjson",
+      "expect": {
+        "verdict": "INVALID",
+        "line": 2
+      },
+      "cites": [
+        "ES-20"
+      ],
+      "note": "Fails the syntactic gate: a space instead of T, and no milliseconds."
+    },
+    {
+      "id": "031-ts-not-a-real-instant",
+      "export": "vectors/031-ts-not-a-real-instant.ndjson",
+      "expect": {
+        "verdict": "INVALID",
+        "line": 2
+      },
+      "cites": [
+        "ES-20"
+      ],
+      "note": "Passes the regex, fails the calendar gate — February 30 does not exist."
+    },
+    {
+      "id": "032-ts-leap-second",
+      "export": "vectors/032-ts-leap-second.ndjson",
+      "expect": {
+        "verdict": "INVALID",
+        "line": 2
+      },
+      "cites": [
+        "ES-20"
+      ],
+      "note": "A leap second, rejected even though RFC 3339 permits it, so that a regex-only and a calendar-parsing implementation reach the same verdict."
+    },
+    {
+      "id": "033-prev-hash-uppercase",
+      "export": "vectors/033-prev-hash-uppercase.ndjson",
+      "expect": {
+        "verdict": "INVALID",
+        "line": 2
+      },
+      "cites": [
+        "ES-23",
+        "ID-2"
+      ],
+      "note": "Uppercase hex, never lowercased to conform."
+    },
+    {
+      "id": "034-genesis-prev-hash-nonzero",
+      "export": "vectors/034-genesis-prev-hash-nonzero.ndjson",
+      "expect": {
+        "verdict": "INVALID",
+        "line": 1
+      },
+      "cites": [
+        "ES-24"
+      ],
+      "note": "The first event must anchor to 64 zeros."
+    },
+    {
+      "id": "035-prev-hash-link-broken",
+      "export": "vectors/035-prev-hash-link-broken.ndjson",
+      "expect": {
+        "verdict": "INVALID",
+        "line": 3
+      },
+      "cites": [
+        "ES-25"
+      ],
+      "note": "Tamper matrix: prev_hash does not match the predecessor hash."
+    },
+    {
+      "id": "036-hash-uppercase",
+      "export": "vectors/036-hash-uppercase.ndjson",
+      "expect": {
+        "verdict": "INVALID",
+        "line": 2
+      },
+      "cites": [
+        "ES-26"
+      ],
+      "note": "An uppercase digest."
+    },
+    {
+      "id": "037-hash-mismatch",
+      "export": "vectors/037-hash-mismatch.ndjson",
+      "expect": {
+        "verdict": "INVALID",
+        "line": 2
+      },
+      "cites": [
+        "ES-28",
+        "HA-14"
+      ],
+      "note": "Tamper matrix: a byte flipped in the stored hash, so the recomputed digest disagrees."
+    },
+    {
+      "id": "038-genesis-not-at-seq-1",
+      "export": "vectors/038-genesis-not-at-seq-1.ndjson",
+      "expect": {
+        "verdict": "INVALID",
+        "line": 5
+      },
+      "cites": [
+        "ES-33"
+      ],
+      "note": "A second genesis later in the chain. genesis occurs exactly once, at seq 1."
+    },
+    {
+      "id": "039-first-event-not-genesis",
+      "export": "vectors/039-first-event-not-genesis.ndjson",
+      "expect": {
+        "verdict": "INVALID",
+        "line": 1
+      },
+      "cites": [
+        "ES-33",
+        "EX-12"
+      ],
+      "note": "A chain whose first line is well-formed and correctly self-signed but is not a genesis event."
+    },
+    {
+      "id": "040-line-deleted",
+      "export": "vectors/040-line-deleted.ndjson",
+      "expect": {
+        "verdict": "INVALID",
+        "line": 3
+      },
+      "cites": [
+        "ES-7"
+      ],
+      "note": "Tamper matrix: an interior line dropped, breaking seq contiguity at the line that took its place."
+    },
+    {
+      "id": "041-lines-reordered",
+      "export": "vectors/041-lines-reordered.ndjson",
+      "expect": {
+        "verdict": "INVALID",
+        "line": 2
+      },
+      "cites": [
+        "ES-7"
+      ],
+      "note": "Tamper matrix: two interior lines swapped."
     }
   ]
 }
