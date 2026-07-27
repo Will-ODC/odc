@@ -64,7 +64,16 @@ choice}` at eligibility-check time — trust-by-policy per charter §10 v1,
   unresolved. Additively resolvable in `evolution.md` post-freeze, so not a freeze
   blocker — **provided no v1 fixture freezes a verdict for this case.** T5 must
   therefore not use `genesis` for its unknown-version vector; use
-  `participant_registered` version 2, a leaf type nothing references.
+  `participant_registered`, a leaf type nothing references.
+  **Amended 2026-07-27 (T5f, PR #28):** the version to use is
+  **`RESERVED_VERSION` (1000000), not 2.** The original note reasoned only about
+  genesis key extraction and missed EV-18, which requires every `PARTIAL` fixture
+  to use a reserved placeholder — and version 2 is not reserved, so a frozen
+  `PARTIAL` on `participant_registered` version 2 would be contradicted the day
+  EV-1 registers that version for real. **EV-19** now reserves the `version` range
+  `>= 1000000` for exactly this, mirroring EV-18's `x_` type prefix. The genesis
+  question itself is untouched and still open; `conformance.test.ts` enforces that
+  no vector freezes a verdict for it, and EV-19 does not relax that.
 - **Should HA-2's reject-don't-repair be pinned by a fixture, not only a unit
   test?** (Raised by the T5a review, 2026-07-26.) HA-2's closing MUST — reject a
   string whose decoded value is not well-formed UTF-8 — is now covered by a unit

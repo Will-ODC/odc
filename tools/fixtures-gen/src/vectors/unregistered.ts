@@ -4,13 +4,25 @@
 // verifier declaring a chain broken merely because the community legally grew
 // past it (charter §8).
 //
-// Every unregistered TYPE here uses the x_ prefix EV-18 reserves, so no future
-// registration can ever contradict a frozen verdict. 009 deliberately does NOT
-// use genesis for its unregistered version: an unregistered genesis version
-// leaves a verifier unable to extract operator_pk/registrar_pk at all, which is
-// an open question a frozen fixture would foreclose.
+// Both halves of the registry key are covered, and each is protected by its own
+// reservation, because a frozen PARTIAL vector is otherwise a time bomb — were
+// its placeholder later registered for real, a newer verifier would run Stage B
+// on that line and contradict a fixture contracts-guard makes uneditable:
+//
+//   - unregistered TYPE     → the x_ prefix EV-18 reserves (008, 010, 011)
+//   - unregistered VERSION  → the >= 1000000 range EV-19 reserves (009)
+//
+// 009 needs EV-19 and cannot be written under EV-18 alone. The unregistered-
+// version path can only be exercised by a REGISTERED type name, which is exactly
+// what EV-18's x_ obligation forbids. It also deliberately does not use genesis:
+// an unregistered genesis version leaves a verifier unable to extract
+// operator_pk/registrar_pk at all, an open question a frozen fixture would
+// foreclose (memory/OPEN-QUESTIONS.md).
 import { AX, ESC, chain, partial, type Vector } from "./shared.js";
 import { keypairFromSeed, seedOf } from "../encode.js";
+
+/** EV-19: the lowest `version` no contracts version may ever register. */
+export const RESERVED_VERSION = 1000000;
 
 export const unregisteredVectors: Vector[] = [
   partial(
@@ -24,13 +36,13 @@ export const unregisteredVectors: Vector[] = [
     "009-unregistered-version",
     chain((c) => {
       c.participant(0x03);
-      c.custom("participant_registered", 2, {
+      c.custom("participant_registered", RESERVED_VERSION, {
         pubkey: keypairFromSeed(seedOf(0x04)).publicKeyHex,
       });
     }),
     [3],
-    ["ET-2", "EV-8"],
-    "A registered type at an unregistered version. Deliberately NOT genesis: an unregistered genesis version would leave a verifier unable to extract operator_pk/registrar_pk for Stage B at all, which is an unresolved question and must not be frozen into a fixture.",
+    ["ET-2", "ET-2a", "EV-8", "EV-19"],
+    "A registered type at an unregistered version — the half of the registry key EV-18 cannot reach, since only a registered type name can exercise it. The version is in the range EV-19 reserves, so no future contracts version may ever register it and contradict this frozen verdict. Deliberately NOT genesis: an unregistered genesis version would leave a verifier unable to extract operator_pk/registrar_pk for Stage B at all, an unresolved question that must not be frozen into a fixture.",
   ),
   partial(
     "010-unregistered-type-empty-payload",

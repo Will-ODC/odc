@@ -117,9 +117,11 @@
       },
       "cites": [
         "ET-2",
-        "EV-8"
+        "ET-2a",
+        "EV-8",
+        "EV-19"
       ],
-      "note": "A registered type at an unregistered version. Deliberately NOT genesis: an unregistered genesis version would leave a verifier unable to extract operator_pk/registrar_pk for Stage B at all, which is an unresolved question and must not be frozen into a fixture."
+      "note": "A registered type at an unregistered version — the half of the registry key EV-18 cannot reach, since only a registered type name can exercise it. The version is in the range EV-19 reserves, so no future contracts version may ever register it and contradict this frozen verdict. Deliberately NOT genesis: an unregistered genesis version would leave a verifier unable to extract operator_pk/registrar_pk for Stage B at all, an unresolved question that must not be frozen into a fixture."
     },
     {
       "id": "010-unregistered-type-empty-payload",
@@ -317,7 +319,8 @@
         "line": 3
       },
       "cites": [
-        "ES-16"
+        "ES-16",
+        "EV-16"
       ],
       "note": "A boolean in the payload."
     },
@@ -329,7 +332,8 @@
         "line": 3
       },
       "cites": [
-        "ES-16"
+        "ES-16",
+        "EV-16"
       ],
       "note": "A null payload value."
     },
@@ -341,7 +345,8 @@
         "line": 3
       },
       "cites": [
-        "ES-17"
+        "ES-17",
+        "EV-16"
       ],
       "note": "A nested object breaks flatness."
     },
@@ -353,7 +358,8 @@
         "line": 3
       },
       "cites": [
-        "ES-17"
+        "ES-17",
+        "EV-16"
       ],
       "note": "An array breaks flatness."
     },
@@ -515,6 +521,19 @@
         "ES-7"
       ],
       "note": "Tamper matrix: two interior lines swapped."
+    },
+    {
+      "id": "042-payload-float-unregistered-type",
+      "export": "vectors/042-payload-float-unregistered-type.ndjson",
+      "expect": {
+        "verdict": "INVALID",
+        "line": 2
+      },
+      "cites": [
+        "ES-16",
+        "EV-16"
+      ],
+      "note": "EV-16's distinctive clause, which 023-028 do not reach: a payload-shape failure is INVALID *regardless of whether the (type, version) is registered*. Every other vector in this group sits on a registered type, so plain Stage A already condemns it. Here the type is unregistered, which is the case where an implementation might reach for PARTIAL instead — and must not, because HA-7 gives a float no encoding, so there is no computable preimage and EV-8's premise (integrity confirmed, semantics unchecked) fails."
     }
   ]
 }
