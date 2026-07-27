@@ -213,12 +213,38 @@ the feature branch, so parallel agents do not conflict). Required checks:
   `protect-master`): PR required, four status checks strict, linear history, no
   bypass. Both Phase-0 user actions are complete — T2's documented rules are
   now actually enforced.
-- **Fresh-context review coverage is partial.** T5a and T5e are reviewed (both
-  found real defects). **T5b and T5c/T5d are not** — their reviewers failed
-  repeatedly on API 529s and were never re-run. Both are merged. T5b is the
-  canonical line form (EX-7–EX-9), which decides the stored byte form of every
-  vector, so it is the remaining review worth running; T5c/T5d are builders and
-  mutators whose output the T5e review already exercised end to end.
+- **Review coverage is now complete — and every reviewed slice had defects.**
+  T5b and T5c/T5d were re-run on 2026-07-26 after the earlier 529 failures; both
+  returned **REQUEST CHANGES**. Five for five. **Their findings are NOT yet
+  implemented — all are live on master.** Consolidated:
+  - **[BLOCKING] T5b** — `jsonString` repairs ill-formed UTF-16 instead of
+    rejecting (`serialize.ts:16-49`). `"A\ud800B"`, `"A\udfffB"` and `"A�B"`
+    all emit `22 41 efbfbd 42 22`. **This is the same defect PR #22 fixed one
+    module over**; `serialize.ts` never got the treatment.
+  - **[BLOCKING] T5c** — `custom()`'s signer has zero coverage (`chain.ts:164`);
+    replacing it with `undefined` leaves the suite green at 61/61.
+  - **[BLOCKING] T5c** — `issue()`/`vote()` sign with module constants, ignoring
+    the keys the chain's own genesis declares (`chain.ts:131`, `chain.ts:144`,
+    ET-13/ET-17/ET-9a). Yields self-consistent chains that fail under their own
+    `operator_pk`. The whole `opts` surface is untested.
+  - **[BLOCKING] T5d** — `deleteLine` has no bounds check (`tamper.ts:72-79`);
+    `deleteLine(L, 0)` end-truncates and out-of-range silently no-ops.
+  - **[BLOCKING] T5d** — `truncate` likewise (`tamper.ts:110-111`), and
+    `004-truncated-without-head` depends on the truncation actually happening.
+  - **~8 [SHOULD]s**, the sharpest being **M34**: emitting astral code points as
+    `\u` surrogate-pair escapes survives the entire 67-test suite, because no
+    string anywhere in the repo has a character above U+FFFF. Go emits literal
+    4-byte UTF-8. Also: ES-5's upper bound untested, DEL/C1 untested, `head()`
+    (EX-14) untested and unimported, three more mutators that can silently
+    produce a valid file, and builders that enforce none of ET-14/ET-14a/ET-18a.
+  - **Pattern worth naming:** three instances of repair-instead-of-reject —
+    `encode.ts` (fixed, #22), `serialize.ts` (live), and `tsAt`'s
+    `.replace(/\.\d{3}Z$/, ".000Z")` at `chain.ts:39` (live). Systemic, in a
+    codebase whose entire subject is reject-don't-repair.
+    Agreed split when these are landed: the five blocking findings in one PR
+    (they gate T5f/T5g and T7), guardrails and coverage in a second — one PR
+    would risk the 600 ceiling. **Picked up by a separate session as of
+    2026-07-26; check for an open PR before starting any of it.**
 - Standing, and substantially addressed: **`hashing.md` had never been
   independently validated.** Four derivations now agree on §6 — T4 by hand, T5a,
   and both reviewers in Python with their own RFC 8032 Ed25519 (the T5a reviewer
