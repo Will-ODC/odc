@@ -15,6 +15,8 @@ import { dirname, join, resolve } from "node:path";
 import { test } from "node:test";
 import { fileURLToPath } from "node:url";
 
+import { serializeEvent } from "../src/serialize.js";
+import { type Event } from "../src/encode.js";
 import { vectors, type Expect } from "../src/vectors/index.js";
 
 const here = dirname(fileURLToPath(import.meta.url));
@@ -127,10 +129,12 @@ test("derivations.json pins the ids.md worked shape (ID-4)", () => {
  * anomaly is asserted in both directions: each listed vector MUST carry its own,
  * and every unlisted vector MUST carry none.
  *
- * 045-blank-line and 048-052 are absent on purpose. Their malformation is not
- * one of these four properties (a blank interior line, insignificant whitespace,
- * key order, an escape), so their bytes are correctly framed and the strict
- * checks apply to them unchanged.
+ * 045-blank-line and 048-052 are absent because their malformation is not one of
+ * these four properties. That makes them UNCOVERED here, not covered-by-default:
+ * the checks below say only that their framing is correct, which it is, and say
+ * nothing about the defect each one exists to carry. NON_CANONICAL and the blank
+ * -line assertion further down are what pin those six — see the comments there
+ * for the three mutations that survived when this table was the only check.
  */
 const FRAMING_ANOMALY: Record<string, "empty" | "cr" | "no-final-lf" | "bom"> =
   {
@@ -173,4 +177,120 @@ test("the framing anomaly table names only ids that are real vectors", () => {
   for (const id of Object.keys(FRAMING_ANOMALY)) {
     assert.ok(ids.has(id), `${id} is in FRAMING_ANOMALY but is not a vector`);
   }
+});
+
+/**
+ * The vectors whose defect is that a line PARSES fine but is not the canonical
+ * serialization of what it parses to (EX-7 through EX-10). Each is INVALID for
+ * bytes alone: insignificant whitespace, envelope key order, payload key order,
+ * an escape where a literal is required, an uppercase hex escape.
+ *
+ * This is the check the FRAMING_ANOMALY table cannot make. With that table as
+ * the only guard, these mutations all shipped GREEN:
+ *
+ *   - 048's editLine find/replace made an identity ('"seq":2,' → '"seq":2,'),
+ *     so the vector shipped perfectly canonical bytes under a declared verdict
+ *     of INVALID. editLine only throws when `find` is ABSENT, so a replacement
+ *     equal to the original is silent.
+ *   - 045's blank line moved from line 3 to line 4, and to the end of the file,
+ *     while the vector kept declaring line 3.
+ *
+ * Re-serializing the parsed object and requiring it to DIFFER is what catches
+ * all of them, and it needs no verifier — `serializeEvent` is the canonical form
+ * these vectors are defined against.
+ */
+const NON_CANONICAL = new Set([
+  "048-insignificant-whitespace",
+  "049-envelope-keys-reordered",
+  "050-payload-keys-unsorted",
+  "051-escape-where-literal-required",
+  "052-uppercase-hex-escape",
+]);
+
+test("each non-canonical vector's declared line parses but is NOT canonical (EX-7…EX-10)", () => {
+  for (const id of NON_CANONICAL) {
+    const vec = vectors.find((v) => v.id === id);
+    assert.ok(vec !== undefined, `${id} is not a vector`);
+    assert.equal(vec.expect.verdict, "INVALID");
+    assert.ok("line" in vec.expect);
+
+    const fileLines = read(`vectors/${id}.ndjson`)
+      .toString("utf8")
+      .replace(/\n$/, "")
+      .split("\n");
+    const offending = fileLines[vec.expect.line - 1];
+    assert.ok(offending !== undefined, `${id}: no line ${vec.expect.line}`);
+
+    // It must still parse — the whole point is that the object is fine and only
+    // the bytes are wrong. A parse failure here means the vector drifted into
+    // testing something else.
+    const parsed = JSON.parse(offending) as Event;
+    assert.notEqual(
+      offending,
+      serializeEvent(parsed),
+      `${id}: line ${vec.expect.line} IS canonical, so the vector declares INVALID over valid bytes`,
+    );
+  }
+});
+
+/**
+ * The two sets of vectors that are byte-identical ON PURPOSE, each run under a
+ * different `--head`. Their whole value is that the bytes do not distinguish
+ * them: EX-16 makes end-truncation undetectable from the export alone, so
+ * 004/053 is the only thing pinning that rule.
+ *
+ * Asserted here because both directions can break silently. If a generator
+ * change made the bytes differ, the pair would stop testing `--head` and start
+ * testing two unrelated exports, with every other test still green. And a
+ * conformance runner that keys on content hash would collapse each set to one
+ * entry and report success having never exercised the `--head` paths.
+ */
+const SAME_BYTES: string[][] = [
+  ["002-four-types", "003-head-match", "054-head-mismatch-substituted"],
+  ["004-truncated-without-head", "053-head-mismatch-truncated"],
+];
+
+test("the deliberately byte-identical vectors are identical, and differ only in head (EX-15, EX-16)", () => {
+  for (const group of SAME_BYTES) {
+    const [first, ...rest] = group as [string, ...string[]];
+    const want = read(`vectors/${first}.ndjson`);
+    for (const id of rest) {
+      assert.deepEqual(
+        read(`vectors/${id}.ndjson`),
+        want,
+        `${id} is no longer byte-identical to ${first}, so the group stops testing --head`,
+      );
+    }
+
+    // The head values must all differ, or two members are the same test.
+    const heads = group.map(
+      (id) => index.vectors.find((e) => e.id === id)?.head ?? "<absent>",
+    );
+    assert.equal(
+      new Set(heads).size,
+      group.length,
+      `${group.join("/")} share a head value, so they are the same test twice`,
+    );
+  }
+});
+
+test("045-blank-line has an empty line at exactly the line it declares (EX-5)", () => {
+  const vec = vectors.find((v) => v.id === "045-blank-line");
+  assert.ok(vec !== undefined);
+  assert.ok("line" in vec.expect);
+
+  const fileLines = read("vectors/045-blank-line.ndjson")
+    .toString("utf8")
+    .replace(/\n$/, "")
+    .split("\n");
+  assert.equal(
+    fileLines[vec.expect.line - 1],
+    "",
+    `the blank is not at line ${vec.expect.line}`,
+  );
+  assert.equal(
+    fileLines.filter((l) => l === "").length,
+    1,
+    "exactly one blank line, or the declared line is ambiguous",
+  );
 });

@@ -9,13 +9,22 @@
 // The Stage B vectors are each built so that ONLY the cited rule fails: hash and
 // signature are valid over the offending payload, so a verifier that skipped the
 // type-specific check would report VALID. 055-058 rotate the signing key through
-// the wrong-but-valid choices, which is what pins ET-9a's separation of the
-// operator key from the registrar key.
+// the wrong-but-well-formed choices, pinning the four per-type signing rules
+// ET-8, ET-10, ET-13 and ET-17 — one vector each.
+//
+// These do NOT test ET-9a. ET-9a closes with "This separation is policy, not
+// verifier-enforced": the contract imposes no relation between operator_pk and
+// registrar_pk, and a verifier MUST NOT reject a chain where they are equal.
+// Reading 057 as "ET-9a enforced" would push a verifier into rejecting a legal
+// chain, which is why the distinction is spelled out here and in 057's note.
 //
 // 069 pins precedence: a chain with BOTH an unregistered type and a Stage A
 // failure is INVALID, not PARTIAL, and names the first fatal line (EV-17).
-// 070 pins EV-16 from the other side — a malformed payload on an UNREGISTERED
-// type is still INVALID.
+// 070 pins EV-16 on the unregistered-VERSION path — a registered type name at
+// EV-19's reserved version 1000000, carrying a float. 042 already covers the
+// unregistered-TYPE path; the two differ in which half of the (type, version)
+// key is unknown, which is the seam an implementation checking only the type
+// name falls through.
 
 import {
   A,
@@ -104,7 +113,7 @@ export const semanticsVectors: Vector[] = [
     ),
     2,
     ["ET-13"],
-    "An issue signed by the registrar key rather than the operator key — the separation ET-9a describes, enforced.",
+    'An issue signed by the registrar key rather than the operator key. What fails is ET-13 — an issue_created whose sig does not verify under the genesis-declared operator_pk. Deliberately NOT a test of ET-9a: ET-9a closes with "This separation is policy, not verifier-enforced", so a verifier MUST NOT reject a chain merely because operator_pk and registrar_pk coincide. The registrar key is used here only because it is a wrong-but-well-formed key a real deployment has to hand.',
   ),
   bad(
     "058-vote-sig-wrong-key",
@@ -234,15 +243,17 @@ export const semanticsVectors: Vector[] = [
     "A chain with BOTH an unregistered type (line 5) and a Stage A failure (line 3). INVALID outranks PARTIAL, and the line named is the first fatal one.",
   ),
   bad(
-    "070-unregistered-type-bad-payload",
+    "070-unregistered-version-bad-payload",
     editLine(
-      lines(chain((c) => c.custom("x_experimental", 1, { n: 7 }))),
+      lines(
+        chain((c) => c.custom("participant_registered", 1000000, { n: 7 })),
+      ),
       2,
       '"n":7',
       '"n":7.5',
     ),
     2,
-    ["EV-16"],
-    "A malformed payload on an UNREGISTERED type is still INVALID, not PARTIAL: EV-8 grants PARTIAL only when integrity is confirmable, and a float has no preimage.",
+    ["EV-16", "EV-19"],
+    "EV-16 on the unregistered-VERSION path, which 042 does not reach: 042 puts the float on an unregistered TYPE name, so a verifier that keys its registry lookup on the type name alone already treats it as unknown. Here the type name is REGISTERED and only the version is not — the compound-key case, where an implementation checking half the key would resolve this to participant_registered v1, validate the payload against v1's shape, and reject for the wrong reason or accept outright. The verdict is INVALID either way, for the same reason as 042 (HA-7 gives a float no encoding, so integrity is not confirmable and EV-8's premise for PARTIAL fails). Version 1000000 is the exact value EV-19 reserves for this path; EV-18's x_ prefix does not apply here, because exercising an unregistered version requires a registered type name.",
   ),
 ];

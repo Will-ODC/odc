@@ -6,8 +6,8 @@
 //
 // 004 is the counter-intuitive one. A truncated chain is VALID without --head,
 // because a prefix of a valid chain IS a valid chain (EX-16). That is not a
-// verifier bug; the paired INVALID vector with --head arrives with the framing
-// slice.
+// verifier bug; 053 is the same bytes run WITH --head, and is INVALID. The pair
+// is what makes end-truncation detectable at all.
 import { A, Alines, G, chain, ok, v, type Vector } from "./shared.js";
 import { head as headOf } from "../serialize.js";
 import { frame, truncate } from "../tamper.js";

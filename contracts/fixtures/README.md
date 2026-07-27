@@ -1,13 +1,15 @@
 # contracts/fixtures/ — golden vectors
 
-**Version:** 3
+**Version:** 4
 **Status:** DRAFTING (Phase 0 · T5). Not frozen.
 
-**The set is complete: 70 vectors** — 7 `VALID`, 4 `PARTIAL`, 59 `INVALID`,
-covering the envelope and Stage A checks, the export framing and canonical line
-form, `--head`, the Stage B type semantics, and verdict precedence. Vectors are
-numbered in that order and **ids never change once shipped**; a gap or a
-reordering would silently invalidate a conformance run that cites them.
+**The set is complete: 70 vectors** — 7 `VALID`, 4 `PARTIAL`, 59 `INVALID`.
+They are numbered in category order: `VALID` (`001`–`007`), `PARTIAL`
+(`008`–`011`), then `INVALID` — the envelope and Stage A checks (`012`–`042`),
+the export framing and canonical line form (`043`–`052`), `--head`
+(`053`–`054`), the Stage B type semantics (`055`–`068`), and verdict precedence
+(`069`–`070`). **Ids never change once shipped**; a gap or a reordering would
+silently invalidate a conformance run that cites them.
 
 Conformance test data for every implementation that touches events: the Go
 verifier (T7), and later every service's CI. This file documents the record
@@ -49,11 +51,25 @@ One entry of `index.json`:
   final `LF`, a zero-length file); reading them as text will destroy what they
   test.
 - **`head`** — present only when the vector MUST be run with `--head <value>`.
-  Absent means run without `--head`. This distinction is load-bearing: vectors
-  `004` (`VALID`, no `--head`) and `053` (`INVALID`, with `--head`) are the
-  **same bytes**, differing only in whether `--head` is supplied, because
-  `export-format.md` EX-16 makes end-truncation undetectable without it. Running
-  either one without its `head` field, or both with it, tests nothing.
+  Absent means run without `--head`.
+
+  **This distinction is load-bearing, and two sets of vectors are byte-identical
+  on purpose because of it.** A runner that keys vectors by content hash, or that
+  ignores the `head` field, will silently collapse them and report success while
+  testing nothing:
+
+  | Same bytes | `head` | Verdict | What only this combination shows |
+  | --- | --- | --- | --- |
+  | `002` | absent | `VALID` | the four v1 types link, sign and hash |
+  | `003` | true head | `VALID` | a matching `--head` accepts (EX-15) |
+  | `054` | wrong head | `INVALID` line 4 | a `--head` naming another chain rejects |
+  | `004` | absent | `VALID` | a prefix of a valid chain IS a valid chain |
+  | `053` | true head | `INVALID` line 2 | end-truncation, detectable ONLY here |
+
+  The `004`/`053` pair is the sharper of the two: `export-format.md` EX-16 makes
+  end-truncation undetectable from the export alone, so those identical bytes are
+  the *only* thing pinning the rule. Running either vector without its `head`
+  field, or both with it, tests nothing.
 - **`expect`** — the verdict, and nothing else. See below.
 - **`cites`** and **`note`** — **advisory**. For the human reviewing the vector.
 
