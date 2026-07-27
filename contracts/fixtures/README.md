@@ -1,13 +1,13 @@
 # contracts/fixtures/ — golden vectors
 
-**Version:** 2
+**Version:** 3
 **Status:** DRAFTING (Phase 0 · T5). Not frozen.
 
-**This directory is being filled in slices.** It currently holds the `VALID` and
-`PARTIAL` vectors and the envelope `INVALID` vectors — the Stage A checks that
-never consult the type registry. The framing, `--head`, Stage B and precedence
-vectors follow in the last ticket. The record format below is complete and will
-not change as they land.
+**The set is complete: 70 vectors** — 7 `VALID`, 4 `PARTIAL`, 59 `INVALID`,
+covering the envelope and Stage A checks, the export framing and canonical line
+form, `--head`, the Stage B type semantics, and verdict precedence. Vectors are
+numbered in that order and **ids never change once shipped**; a gap or a
+reordering would silently invalidate a conformance run that cites them.
 
 Conformance test data for every implementation that touches events: the Go
 verifier (T7), and later every service's CI. This file documents the record
@@ -50,10 +50,10 @@ One entry of `index.json`:
   test.
 - **`head`** — present only when the vector MUST be run with `--head <value>`.
   Absent means run without `--head`. This distinction is load-bearing: vectors
-  `004` (`VALID`, no `--head`) and its paired `INVALID` vector with `--head` are
-  the **same bytes**, differing only in whether `--head` is supplied, because
-  `export-format.md` EX-16 makes end-truncation undetectable without it. That
-  paired vector arrives with the framing vectors; `004` is here already.
+  `004` (`VALID`, no `--head`) and `053` (`INVALID`, with `--head`) are the
+  **same bytes**, differing only in whether `--head` is supplied, because
+  `export-format.md` EX-16 makes end-truncation undetectable without it. Running
+  either one without its `head` field, or both with it, tests nothing.
 - **`expect`** — the verdict, and nothing else. See below.
 - **`cites`** and **`note`** — **advisory**. For the human reviewing the vector.
 

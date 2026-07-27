@@ -534,6 +534,357 @@
         "EV-16"
       ],
       "note": "EV-16's distinctive clause, which 023-028 do not reach: a payload-shape failure is INVALID *regardless of whether the (type, version) is registered*. Every other vector in this group sits on a registered type, so plain Stage A already condemns it. Here the type is unregistered, which is the case where an implementation might reach for PARTIAL instead — and must not, because HA-7 gives a float no encoding, so there is no computable preimage and EV-8's premise (integrity confirmed, semantics unchecked) fails. The stored hash is the digest of the pre-mutation event, so this line is HA-14-mismatched as well; that is unavoidable — a float has no preimage, so no hash over this line exists to store. Both failures are on line 2, so the verdict and the line are unaffected, but the vector does not isolate EV-16 from HA-14."
+    },
+    {
+      "id": "043-crlf",
+      "export": "vectors/043-crlf.ndjson",
+      "expect": {
+        "verdict": "INVALID",
+        "line": 1
+      },
+      "cites": [
+        "EX-3",
+        "EX-20"
+      ],
+      "note": "CRLF line endings. Attributed to the first line containing a CR."
+    },
+    {
+      "id": "044-no-final-newline",
+      "export": "vectors/044-no-final-newline.ndjson",
+      "expect": {
+        "verdict": "INVALID",
+        "line": 4
+      },
+      "cites": [
+        "EX-4",
+        "EX-20"
+      ],
+      "note": "The required final LF is absent. Attributed to the last line."
+    },
+    {
+      "id": "045-blank-line",
+      "export": "vectors/045-blank-line.ndjson",
+      "expect": {
+        "verdict": "INVALID",
+        "line": 3
+      },
+      "cites": [
+        "EX-5",
+        "EX-20"
+      ],
+      "note": "A blank line, which becomes line 3."
+    },
+    {
+      "id": "046-byte-order-mark",
+      "export": "vectors/046-byte-order-mark.ndjson",
+      "expect": {
+        "verdict": "INVALID",
+        "line": 1
+      },
+      "cites": [
+        "EX-2",
+        "EX-20"
+      ],
+      "note": "A UTF-8 BOM before line 1."
+    },
+    {
+      "id": "047-empty-export",
+      "export": "vectors/047-empty-export.ndjson",
+      "expect": {
+        "verdict": "INVALID",
+        "line": 1
+      },
+      "cites": [
+        "EX-6",
+        "EX-18"
+      ],
+      "note": "The zero-length file is a well-formed export but not a valid chain: it has no genesis. Attributed to line 1, where the required genesis line is absent."
+    },
+    {
+      "id": "048-insignificant-whitespace",
+      "export": "vectors/048-insignificant-whitespace.ndjson",
+      "expect": {
+        "verdict": "INVALID",
+        "line": 2
+      },
+      "cites": [
+        "EX-7",
+        "EX-10"
+      ],
+      "note": "Whitespace between tokens. The hash check would still pass — this is an EX-10 rejection."
+    },
+    {
+      "id": "049-envelope-keys-reordered",
+      "export": "vectors/049-envelope-keys-reordered.ndjson",
+      "expect": {
+        "verdict": "INVALID",
+        "line": 2
+      },
+      "cites": [
+        "EX-7",
+        "EX-10",
+        "EX-11"
+      ],
+      "note": "The tamper matrix \"re-serialized but value-equivalent\" case: the hash check passes and EX-10 rejects it anyway. This is exactly how \"equivalent JSON with different bytes is INVALID\" is enforced."
+    },
+    {
+      "id": "050-payload-keys-unsorted",
+      "export": "vectors/050-payload-keys-unsorted.ndjson",
+      "expect": {
+        "verdict": "INVALID",
+        "line": 3
+      },
+      "cites": [
+        "EX-8",
+        "EX-10"
+      ],
+      "note": "Payload keys not in ascending UTF-8-byte order. The hash is insensitive to line key order, so only EX-8 catches this."
+    },
+    {
+      "id": "051-escape-where-literal-required",
+      "export": "vectors/051-escape-where-literal-required.ndjson",
+      "expect": {
+        "verdict": "INVALID",
+        "line": 2
+      },
+      "cites": [
+        "EX-9"
+      ],
+      "note": "A non-ASCII character written as a \\u escape where EX-9 requires literal UTF-8."
+    },
+    {
+      "id": "052-uppercase-hex-escape",
+      "export": "vectors/052-uppercase-hex-escape.ndjson",
+      "expect": {
+        "verdict": "INVALID",
+        "line": 2
+      },
+      "cites": [
+        "EX-9"
+      ],
+      "note": "A control-character escape with an uppercase hex digit."
+    },
+    {
+      "id": "053-head-mismatch-truncated",
+      "export": "vectors/053-head-mismatch-truncated.ndjson",
+      "head": "951f3493cbbee4e6cf80b041e36405fef1dee489b48a10dabe615cf07003664f",
+      "expect": {
+        "verdict": "INVALID",
+        "line": 2
+      },
+      "cites": [
+        "EX-15",
+        "EX-16",
+        "EX-19"
+      ],
+      "note": "The same bytes as 004, now run with the true head. This pair is what makes end-truncation detectable, and the failure is attributed to the last line present."
+    },
+    {
+      "id": "054-head-mismatch-substituted",
+      "export": "vectors/054-head-mismatch-substituted.ndjson",
+      "head": "fffffffffffffffffffffffffffffffffffffffffffffffffffffffffffffff0",
+      "expect": {
+        "verdict": "INVALID",
+        "line": 4
+      },
+      "cites": [
+        "EX-15",
+        "EX-19"
+      ],
+      "note": "A --head naming a chain this export is not."
+    },
+    {
+      "id": "055-genesis-sig-wrong-key",
+      "export": "vectors/055-genesis-sig-wrong-key.ndjson",
+      "expect": {
+        "verdict": "INVALID",
+        "line": 1
+      },
+      "cites": [
+        "ET-8"
+      ],
+      "note": "A genesis signed by a key other than the operator_pk it declares. Self-signing is the whole point of ET-8."
+    },
+    {
+      "id": "056-participant-sig-wrong-key",
+      "export": "vectors/056-participant-sig-wrong-key.ndjson",
+      "expect": {
+        "verdict": "INVALID",
+        "line": 2
+      },
+      "cites": [
+        "ET-10"
+      ],
+      "note": "Proof-of-possession fails: signed by a key other than the declared pubkey."
+    },
+    {
+      "id": "057-issue-sig-wrong-key",
+      "export": "vectors/057-issue-sig-wrong-key.ndjson",
+      "expect": {
+        "verdict": "INVALID",
+        "line": 2
+      },
+      "cites": [
+        "ET-13"
+      ],
+      "note": "An issue signed by the registrar key rather than the operator key — the separation ET-9a describes, enforced."
+    },
+    {
+      "id": "058-vote-sig-wrong-key",
+      "export": "vectors/058-vote-sig-wrong-key.ndjson",
+      "expect": {
+        "verdict": "INVALID",
+        "line": 3
+      },
+      "cites": [
+        "ET-17"
+      ],
+      "note": "A ballot signed by the operator rather than the registrar."
+    },
+    {
+      "id": "059-chain-id-not-derived",
+      "export": "vectors/059-chain-id-not-derived.ndjson",
+      "expect": {
+        "verdict": "INVALID",
+        "line": 1
+      },
+      "cites": [
+        "ET-7"
+      ],
+      "note": "chain_id is not sha256(operator_pk bytes). Hash and signature are both valid; only the derivation fails."
+    },
+    {
+      "id": "060-title-control-char",
+      "export": "vectors/060-title-control-char.ndjson",
+      "expect": {
+        "verdict": "INVALID",
+        "line": 2
+      },
+      "cites": [
+        "ET-14"
+      ],
+      "note": "A C0 control character in a title. Hash and signature are valid, and the line is canonically escaped — only ET-14 fails."
+    },
+    {
+      "id": "061-title-too-long",
+      "export": "vectors/061-title-too-long.ndjson",
+      "expect": {
+        "verdict": "INVALID",
+        "line": 2
+      },
+      "cites": [
+        "ET-14"
+      ],
+      "note": "201 scalar values, one past the limit."
+    },
+    {
+      "id": "062-title-empty",
+      "export": "vectors/062-title-empty.ndjson",
+      "expect": {
+        "verdict": "INVALID",
+        "line": 2
+      },
+      "cites": [
+        "ET-14"
+      ],
+      "note": "An empty title."
+    },
+    {
+      "id": "063-choice-count-too-small",
+      "export": "vectors/063-choice-count-too-small.ndjson",
+      "expect": {
+        "verdict": "INVALID",
+        "line": 2
+      },
+      "cites": [
+        "ET-14a"
+      ],
+      "note": "choice_count below 2."
+    },
+    {
+      "id": "064-choice-count-too-large",
+      "export": "vectors/064-choice-count-too-large.ndjson",
+      "expect": {
+        "verdict": "INVALID",
+        "line": 2
+      },
+      "cites": [
+        "ET-14a"
+      ],
+      "note": "choice_count above 64. The ceiling exists because an unbounded choice domain re-opens a covert receipt channel."
+    },
+    {
+      "id": "065-choice-out-of-range",
+      "export": "vectors/065-choice-out-of-range.ndjson",
+      "expect": {
+        "verdict": "INVALID",
+        "line": 3
+      },
+      "cites": [
+        "ET-18a"
+      ],
+      "note": "choice equals choice_count, one past the top of [0, choice_count)."
+    },
+    {
+      "id": "066-vote-unknown-issue",
+      "export": "vectors/066-vote-unknown-issue.ndjson",
+      "expect": {
+        "verdict": "INVALID",
+        "line": 2
+      },
+      "cites": [
+        "ET-18",
+        "ID-8"
+      ],
+      "note": "A ballot referencing an issue_id that is not the hash of any prior issue_created."
+    },
+    {
+      "id": "067-payload-missing-key",
+      "export": "vectors/067-payload-missing-key.ndjson",
+      "expect": {
+        "verdict": "INVALID",
+        "line": 2
+      },
+      "cites": [
+        "ES-18"
+      ],
+      "note": "The required sig key is absent from the payload."
+    },
+    {
+      "id": "068-payload-extra-key",
+      "export": "vectors/068-payload-extra-key.ndjson",
+      "expect": {
+        "verdict": "INVALID",
+        "line": 2
+      },
+      "cites": [
+        "ES-18"
+      ],
+      "note": "A key not defined for this (type, version). Hash and signature are valid over it; only ES-18 fails."
+    },
+    {
+      "id": "069-invalid-outranks-partial",
+      "export": "vectors/069-invalid-outranks-partial.ndjson",
+      "expect": {
+        "verdict": "INVALID",
+        "line": 3
+      },
+      "cites": [
+        "EV-17"
+      ],
+      "note": "A chain with BOTH an unregistered type (line 5) and a Stage A failure (line 3). INVALID outranks PARTIAL, and the line named is the first fatal one."
+    },
+    {
+      "id": "070-unregistered-type-bad-payload",
+      "export": "vectors/070-unregistered-type-bad-payload.ndjson",
+      "expect": {
+        "verdict": "INVALID",
+        "line": 2
+      },
+      "cites": [
+        "EV-16"
+      ],
+      "note": "A malformed payload on an UNREGISTERED type is still INVALID, not PARTIAL: EV-8 grants PARTIAL only when integrity is confirmable, and a float has no preimage."
     }
   ]
 }

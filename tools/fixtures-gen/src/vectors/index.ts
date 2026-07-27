@@ -7,6 +7,8 @@
 import { validVectors } from "./valid.js";
 import { unregisteredVectors } from "./unregistered.js";
 import { envelopeVectors } from "./envelope.js";
+import { framingVectors } from "./framing.js";
+import { semanticsVectors } from "./semantics.js";
 import type { Vector } from "./shared.js";
 
 export { GENESIS_EVENT } from "./shared.js";
@@ -16,4 +18,6 @@ export const vectors: Vector[] = [
   ...validVectors,
   ...unregisteredVectors,
   ...envelopeVectors,
+  ...framingVectors,
+  ...semanticsVectors,
 ];

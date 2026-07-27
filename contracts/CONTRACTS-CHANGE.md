@@ -16,6 +16,25 @@ Format (newest first, one entry per merged contracts change):
 
 ---
 
+## fixtures/ — README v3 — 2026-07-27 — T5g (PR #30)
+
+- **The golden vector set is complete: 42 → 70 vectors** (7 `VALID`, 4
+  `PARTIAL`, 59 `INVALID`). This slice adds the framing and canonical-line-form
+  vectors (`043`–`052`), the `--head` pair (`053`–`054`), the Stage B type
+  semantics (`055`–`068`), and verdict precedence (`069`–`070`).
+- **Additive only.** No existing vector, preimage, `index.json` entry or verdict
+  changed; vector `001` and its 607-octet preimage remain byte-identical to
+  `hashing.md` §6. Only `index.json` and `MANIFEST.sha256` gained entries.
+- **`fixtures/README.md` → v3.** Drops the slice-transient prose ("currently
+  holds…", "arrives in a later ticket") now that the set is complete, and names
+  `053` as the `--head` partner of `004` — the pair that makes end-truncation
+  detectable at all (EX-16).
+- **No spec file changed**, so no `Version:` bump beyond the fixtures README:
+  this slice encodes rules that `export-format.md`, `event-types.md` and
+  `evolution.md` already state.
+
+---
+
 ## evolution.md — v3 — 2026-07-26 — T5f (PR #28)
 
 - **EV-19 added: a reserved `version` range.** No contracts version may ever
