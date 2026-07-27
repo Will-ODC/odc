@@ -57,6 +57,27 @@ choice}` at eligibility-check time — trust-by-policy per charter §10 v1,
   nothing. Narrowing EV-5 to byte-changing changes is worth considering; not
   urgent, and it does not affect PR #9's guard fix, which is required under even
   the narrowest reading.
+- **Should HA-2's reject-don't-repair be pinned by a fixture, not only a unit
+  test?** HA-2's closing sentence is a normative MUST to reject a string whose
+  decoded value is not well-formed UTF-8 (e.g. a lone `\ud800` — legal JSON,
+  no valid UTF-8 encoding). T5a hardening (PR #22) fixed the generator, which
+  had silently _repaired_ such input to U+FFFD and so collided two distinct
+  payloads on one preimage, defeating HA-9. But that fix is a unit test over
+  `tools/fixtures-gen`, which is not the conformance surface — the fixture set
+  under `contracts/` is. Nothing frozen currently obliges a verifier to reject
+  rather than repair, and Go's `[]byte(s)` repairs by default, in the language
+  T7 writes. Leaning yes; two things to settle first:
+  - The generator can no longer emit such a vector by its normal path (its
+    encoder now throws), so it must be built as a post-encode `editLine`
+    mutation — the mechanism T5d already established.
+  - **Check EX-9 first.** If canonical framing forbids a lone surrogate escape,
+    the verifier rejects at framing instead and the vector yields the right
+    `INVALID` at the right line while pinning nothing about HA-2. Conformance
+    asserts verdict token + line number only (T4a), so the vector is cheap —
+    but only if it fails for the intended reason.
+    Natural home: **T5f**, with the envelope `INVALID` vectors. Not a freeze
+    blocker (fixture _additions_ stay legal post-freeze, PR #9), but HA-2's
+    wording freezes with the tag.
 - **Unregistered `genesis` version — Stage B key extraction.** If a chain's
   `genesis` carries a `(genesis, version≠1)` a verifier does not register, that
   verifier has no spec-defined way to extract `operator_pk`/`registrar_pk`, and so
