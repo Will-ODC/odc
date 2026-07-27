@@ -140,11 +140,26 @@ export function truncate(lines: readonly string[], count: number): string[] {
   return lines.slice(0, count);
 }
 
-/** Inserts an empty line after the given 1-based line (EX-5). */
+/**
+ * Inserts an empty line after the given 1-based line (EX-5).
+ *
+ * `after` must land the blank INSIDE the file: `0 <= after <= lines.length`.
+ * `splice` fails open at both ends — a too-large `after` appends the blank at
+ * the end instead of where the caller said, so the vector's declared line number
+ * points at a line that is fine, and a negative `after` counts from the end. The
+ * blank is still there and the file is still INVALID, which is why this survives
+ * every byte-level check: the verdict is right and the LINE is wrong, and a
+ * wrong line is a wrong fixture (EV-17).
+ */
 export function insertBlankLine(
   lines: readonly string[],
   after: number,
 ): string[] {
+  if (!Number.isInteger(after) || after < 0 || after > lines.length) {
+    throw new RangeError(
+      `insertBlankLine needs 0 <= after <= ${String(lines.length)}, got ${String(after)}`,
+    );
+  }
   const out = [...lines];
   out.splice(after, 0, "");
   return out;

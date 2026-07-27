@@ -16,6 +16,26 @@ Format (newest first, one entry per merged contracts change):
 
 ---
 
+## fixtures/ — README v4 — 2026-07-27 — T5g review fixes (PR #31)
+
+- **`070` rebuilt, and renamed** `070-unregistered-type-bad-payload` →
+  `070-unregistered-version-bad-payload`. As shipped in #30 it duplicated `042`:
+  same construction, a float payload on an unregistered **type**. It now puts a
+  float on a **registered type name at version 1000000** — EV-19's reserved
+  value — so the set covers both halves of the `(type, version)` key. That is
+  the seam where an implementation checking only the type name resolves the
+  event to `participant_registered` v1 and validates against the wrong shape.
+  **Done now because it is still possible:** `contracts-v1` is not tagged, so
+  fixtures remain editable; after the tag this vector would be permanently
+  frozen as a redundant copy of `042`.
+- **No other vector's bytes changed.** `001` and its 607-octet preimage remain
+  byte-identical to `hashing.md` §6.
+- **README v4** corrects the id ranges: v3 enumerated the categories but omitted
+  `VALID` and `PARTIAL` while claiming vectors are "numbered in that order",
+  which was false from the first id.
+
+---
+
 ## fixtures/ — README v3 — 2026-07-27 — T5g (PR #30)
 
 - **The golden vector set is complete: 42 → 70 vectors** (7 `VALID`, 4

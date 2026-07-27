@@ -1,13 +1,15 @@
 # contracts/fixtures/ — golden vectors
 
-**Version:** 3
+**Version:** 4
 **Status:** DRAFTING (Phase 0 · T5). Not frozen.
 
-**The set is complete: 70 vectors** — 7 `VALID`, 4 `PARTIAL`, 59 `INVALID`,
-covering the envelope and Stage A checks, the export framing and canonical line
-form, `--head`, the Stage B type semantics, and verdict precedence. Vectors are
-numbered in that order and **ids never change once shipped**; a gap or a
-reordering would silently invalidate a conformance run that cites them.
+**The set is complete: 70 vectors** — 7 `VALID`, 4 `PARTIAL`, 59 `INVALID`.
+They are numbered in category order: `VALID` (`001`–`007`), `PARTIAL`
+(`008`–`011`), then `INVALID` — the envelope and Stage A checks (`012`–`042`),
+the export framing and canonical line form (`043`–`052`), `--head`
+(`053`–`054`), the Stage B type semantics (`055`–`068`), and verdict precedence
+(`069`–`070`). **Ids never change once shipped**; a gap or a reordering would
+silently invalidate a conformance run that cites them.
 
 Conformance test data for every implementation that touches events: the Go
 verifier (T7), and later every service's CI. This file documents the record
