@@ -158,9 +158,11 @@ T5–T9 keep their schedule. Only the tag waits.
 
 ## Next
 
-**Everything opened this session is merged** (#14, #19–#22). `contracts/fixtures/`
-exists on master with 7 `VALID` vectors, the T5e review fixes are in, and the
-T5a HA-2 fix is in. **Two slices of T5 remain: T5f and T5g.**
+**Everything opened is merged, through #26** — nothing is in flight.
+`contracts/fixtures/` exists on master with 7 `VALID` vectors; the T5e review
+fixes, the T5a HA-2 fix, and all five blocking T5b/T5c/T5d findings are in.
+**Two slices of T5 remain: T5f and T5g**, plus the `[SHOULD]` follow-up PR
+described under Blockers.
 
 Both remaining slices are written and verified on `wip/T5fg-material`:
 
@@ -180,6 +182,16 @@ Both remaining slices are written and verified on `wip/T5fg-material`:
 tests, all 69 vectors regenerating byte-identically). It is **not a merge
 candidate** — it sits on T5e's old branch and the no-stacking rule forbids
 merging from it. Re-cut each slice from master and extract.
+
+**Extract `src/vectors/*` and the new tests ONLY.** That branch is `bbec6eb`
+(2026-07-26 09:10), which predates both #22 and #26, so its copies of
+`chain.ts`, `encode.ts`, `serialize.ts` and `tamper.ts` are **older than
+master's** — carrying them across would silently revert the HA-2 rejection, the
+shared `assertWellFormed`, the genesis-key signing fix and the mutator bounds
+checks, and the suite would still be green because those modules bring their own
+older tests. Checked and safe: all five mutator call sites in the wip vectors
+(`deleteLine(Alines, 3)`, `swapLines(Alines, 2, 3)`, `insertBlankLine(Alines, 2)`,
+`truncate(Alines, 2)` ×2) are in range under #26's new bounds checks.
 
 **Slices cannot be prepared in advance.** Each needs the previous one's
 `shared.ts`/`index.ts` on master to compile, and stacking is forbidden because
@@ -213,38 +225,41 @@ the feature branch, so parallel agents do not conflict). Required checks:
   `protect-master`): PR required, four status checks strict, linear history, no
   bypass. Both Phase-0 user actions are complete — T2's documented rules are
   now actually enforced.
-- **Review coverage is now complete — and every reviewed slice had defects.**
+- **Review coverage is complete — five slices reviewed, five with real defects.**
   T5b and T5c/T5d were re-run on 2026-07-26 after the earlier 529 failures; both
-  returned **REQUEST CHANGES**. Five for five. **Their findings are NOT yet
-  implemented — all are live on master.** Consolidated:
-  - **[BLOCKING] T5b** — `jsonString` repairs ill-formed UTF-16 instead of
-    rejecting (`serialize.ts:16-49`). `"A\ud800B"`, `"A\udfffB"` and `"A�B"`
-    all emit `22 41 efbfbd 42 22`. **This is the same defect PR #22 fixed one
-    module over**; `serialize.ts` never got the treatment.
-  - **[BLOCKING] T5c** — `custom()`'s signer has zero coverage (`chain.ts:164`);
-    replacing it with `undefined` leaves the suite green at 61/61.
-  - **[BLOCKING] T5c** — `issue()`/`vote()` sign with module constants, ignoring
-    the keys the chain's own genesis declares (`chain.ts:131`, `chain.ts:144`,
-    ET-13/ET-17/ET-9a). Yields self-consistent chains that fail under their own
-    `operator_pk`. The whole `opts` surface is untested.
-  - **[BLOCKING] T5d** — `deleteLine` has no bounds check (`tamper.ts:72-79`);
-    `deleteLine(L, 0)` end-truncates and out-of-range silently no-ops.
-  - **[BLOCKING] T5d** — `truncate` likewise (`tamper.ts:110-111`), and
-    `004-truncated-without-head` depends on the truncation actually happening.
-  - **~8 [SHOULD]s**, the sharpest being **M34**: emitting astral code points as
-    `\u` surrogate-pair escapes survives the entire 67-test suite, because no
-    string anywhere in the repo has a character above U+FFFF. Go emits literal
-    4-byte UTF-8. Also: ES-5's upper bound untested, DEL/C1 untested, `head()`
-    (EX-14) untested and unimported, three more mutators that can silently
-    produce a valid file, and builders that enforce none of ET-14/ET-14a/ET-18a.
-  - **Pattern worth naming:** three instances of repair-instead-of-reject —
-    `encode.ts` (fixed, #22), `serialize.ts` (live), and `tsAt`'s
-    `.replace(/\.\d{3}Z$/, ".000Z")` at `chain.ts:39` (live). Systemic, in a
-    codebase whose entire subject is reject-don't-repair.
-    Agreed split when these are landed: the five blocking findings in one PR
-    (they gate T5f/T5g and T7), guardrails and coverage in a second — one PR
-    would risk the 600 ceiling. **Picked up by a separate session as of
-    2026-07-26; check for an open PR before starting any of it.**
+  returned **REQUEST CHANGES**. **All five blocking findings are now fixed on
+  master (PR #26, squash `8d96736`)** — 78/78 tests, up from 67. What they were,
+  since each is a shape worth recognizing again:
+  - **T5b** — `jsonString` repaired ill-formed UTF-16 instead of rejecting it;
+    `"A\ud800B"`, `"A\udfffB"` and a literal `"A�B"` all emitted the same bytes.
+    Same defect as #22, one module over. The fix makes the surrogate scan **one
+    shared helper** (`assertWellFormed` in `encode.ts`, called by both `UTF8()`
+    and `jsonString()`) rather than a third variant — copy it, don't re-derive it.
+  - **T5c** — `custom()`'s signer had zero coverage; replacing it with
+    `undefined` left the suite green.
+  - **T5c** — `issue()`/`vote()` signed with module constants, ignoring the keys
+    the chain's own genesis declares (ET-13/ET-17/ET-9a). The builder now records
+    the genesis-declared keys and signs from those; the module constants remain
+    the pre-`genesis()` default, which the headless vectors need.
+  - **T5d** — `deleteLine` and `truncate` had no bounds checks, so an
+    `INVALID`-declared vector could be emitted with perfectly valid bytes. Both
+    now throw.
+- **Still open from those reviews: the ~8 `[SHOULD]`/`[NIT]` findings.** #26
+  deferred them deliberately; **no PR covers them yet.**
+  - **M34 is the one that matters for T7.** Emitting astral code points as `\u`
+    surrogate-pair escapes survives the entire suite, because no string anywhere
+    in the repo has a character above U+FFFF. Go emits literal 4-byte UTF-8, so
+    nothing here would notice if the TS side stopped doing so. Fix needs an
+    astral character in the `ESC` vector, not just a unit assertion.
+  - ES-5's upper bound untested; DEL and the C1 range untested; `head()` (EX-14)
+    untested and unimported; `swapLines(L,2,2)` / `editLine` with
+    `find === replace` / unbounded `insertBlankLine` can each silently produce a
+    valid file; the chain builders enforce none of ET-14/ET-14a/ET-18a.
+  - **`tsAt`'s `.replace(/\.\d{3}Z$/, ".000Z")` at `chain.ts:39` is the third
+    instance of repair-instead-of-reject** and is still live — after `encode.ts`
+    (#22) and `serialize.ts` (#26). Three occurrences in a codebase whose entire
+    subject is reject-don't-repair is a pattern, not a coincidence: when adding
+    any normalization step here, ask whether the spec says repair or reject.
 - Standing, and substantially addressed: **`hashing.md` had never been
   independently validated.** Four derivations now agree on §6 — T4 by hand, T5a,
   and both reviewers in Python with their own RFC 8032 Ed25519 (the T5a reviewer
