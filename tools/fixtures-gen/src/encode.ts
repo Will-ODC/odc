@@ -53,29 +53,42 @@ export function U64(n: number): Buffer {
  * UTF-8 encode; the rule matters for whoever parses the stored line.
  */
 export function UTF8(s: string): Buffer {
-  // HA-2's closing sentence is normative: a string whose decoded value is not
-  // well-formed UTF-8 MUST be rejected. Buffer.from does the opposite — it
-  // replaces an unpaired surrogate with U+FFFD and returns successfully, which
-  // collides two distinct payloads on one preimage and so defeats HA-9's
-  // guarantee outright. It also puts this implementation at odds with a Go
-  // verifier, which will reject rather than repair.
+  assertWellFormed(s, "HA-2");
+  return Buffer.from(s, "utf8");
+}
+
+/**
+ * The reject-don't-repair gate, shared by every path that turns a JS string into
+ * octets: the hash preimage (HA-2) and the canonical line (EX-9/EX-10).
+ *
+ * `Buffer.from(s, "utf8")` does the opposite of what both rules require — it
+ * replaces an unpaired surrogate with U+FFFD and returns successfully. That
+ * collides distinct values onto identical octets: `"A\ud800B"`, `"A\udfffB"` and
+ * the literal `"A�B"` all encode to `41 efbfbd 42`, which defeats HA-9's
+ * guarantee on the preimage side and EX-10's "a mismatch is rejected, never
+ * repaired" on the serialization side. It also puts this implementation at odds
+ * with a Go verifier, which will reject rather than repair.
+ *
+ * A well-formed astral character (U+10000 and above) is a surrogate PAIR and
+ * passes; only an unpaired half is rejected.
+ */
+export function assertWellFormed(s: string, rule: string): void {
   for (let i = 0; i < s.length; i += 1) {
     const c = s.charCodeAt(i);
     if (c >= 0xd800 && c <= 0xdbff) {
       const next = i + 1 < s.length ? s.charCodeAt(i + 1) : 0;
       if (next < 0xdc00 || next > 0xdfff) {
         throw new RangeError(
-          `ill-formed UTF-8: unpaired high surrogate at ${String(i)} (HA-2)`,
+          `ill-formed UTF-8: unpaired high surrogate at ${String(i)} (${rule})`,
         );
       }
       i += 1;
     } else if (c >= 0xdc00 && c <= 0xdfff) {
       throw new RangeError(
-        `ill-formed UTF-8: unpaired low surrogate at ${String(i)} (HA-2)`,
+        `ill-formed UTF-8: unpaired low surrogate at ${String(i)} (${rule})`,
       );
     }
   }
-  return Buffer.from(s, "utf8");
 }
 
 /** HA-3: length-prefixed octets, `U64(len) || x`. Never a delimiter. */
