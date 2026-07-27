@@ -9,8 +9,14 @@
 // The Stage B vectors are each built so that ONLY the cited rule fails: hash and
 // signature are valid over the offending payload, so a verifier that skipped the
 // type-specific check would report VALID. 055-058 rotate the signing key through
-// the wrong-but-valid choices, which is what pins ET-9a's separation of the
-// operator key from the registrar key.
+// the wrong-but-well-formed choices, pinning the four per-type signing rules
+// ET-8, ET-10, ET-13 and ET-17 — one vector each.
+//
+// These do NOT test ET-9a. ET-9a closes with "This separation is policy, not
+// verifier-enforced": the contract imposes no relation between operator_pk and
+// registrar_pk, and a verifier MUST NOT reject a chain where they are equal.
+// Reading 057 as "ET-9a enforced" would push a verifier into rejecting a legal
+// chain, which is why the distinction is spelled out here and in 057's note.
 //
 // 069 pins precedence: a chain with BOTH an unregistered type and a Stage A
 // failure is INVALID, not PARTIAL, and names the first fatal line (EV-17).
@@ -107,7 +113,7 @@ export const semanticsVectors: Vector[] = [
     ),
     2,
     ["ET-13"],
-    "An issue signed by the registrar key rather than the operator key — the separation ET-9a describes, enforced.",
+    'An issue signed by the registrar key rather than the operator key. What fails is ET-13 — an issue_created whose sig does not verify under the genesis-declared operator_pk. Deliberately NOT a test of ET-9a: ET-9a closes with "This separation is policy, not verifier-enforced", so a verifier MUST NOT reject a chain merely because operator_pk and registrar_pk coincide. The registrar key is used here only because it is a wrong-but-well-formed key a real deployment has to hand.',
   ),
   bad(
     "058-vote-sig-wrong-key",

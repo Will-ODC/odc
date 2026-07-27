@@ -233,6 +233,47 @@ test("each non-canonical vector's declared line parses but is NOT canonical (EX-
   }
 });
 
+/**
+ * The two sets of vectors that are byte-identical ON PURPOSE, each run under a
+ * different `--head`. Their whole value is that the bytes do not distinguish
+ * them: EX-16 makes end-truncation undetectable from the export alone, so
+ * 004/053 is the only thing pinning that rule.
+ *
+ * Asserted here because both directions can break silently. If a generator
+ * change made the bytes differ, the pair would stop testing `--head` and start
+ * testing two unrelated exports, with every other test still green. And a
+ * conformance runner that keys on content hash would collapse each set to one
+ * entry and report success having never exercised the `--head` paths.
+ */
+const SAME_BYTES: string[][] = [
+  ["002-four-types", "003-head-match", "054-head-mismatch-substituted"],
+  ["004-truncated-without-head", "053-head-mismatch-truncated"],
+];
+
+test("the deliberately byte-identical vectors are identical, and differ only in head (EX-15, EX-16)", () => {
+  for (const group of SAME_BYTES) {
+    const [first, ...rest] = group as [string, ...string[]];
+    const want = read(`vectors/${first}.ndjson`);
+    for (const id of rest) {
+      assert.deepEqual(
+        read(`vectors/${id}.ndjson`),
+        want,
+        `${id} is no longer byte-identical to ${first}, so the group stops testing --head`,
+      );
+    }
+
+    // The head values must all differ, or two members are the same test.
+    const heads = group.map(
+      (id) => index.vectors.find((e) => e.id === id)?.head ?? "<absent>",
+    );
+    assert.equal(
+      new Set(heads).size,
+      group.length,
+      `${group.join("/")} share a head value, so they are the same test twice`,
+    );
+  }
+});
+
 test("045-blank-line has an empty line at exactly the line it declares (EX-5)", () => {
   const vec = vectors.find((v) => v.id === "045-blank-line");
   assert.ok(vec !== undefined);

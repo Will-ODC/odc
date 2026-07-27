@@ -727,7 +727,7 @@
       "cites": [
         "ET-13"
       ],
-      "note": "An issue signed by the registrar key rather than the operator key — the separation ET-9a describes, enforced."
+      "note": "An issue signed by the registrar key rather than the operator key. What fails is ET-13 — an issue_created whose sig does not verify under the genesis-declared operator_pk. Deliberately NOT a test of ET-9a: ET-9a closes with \"This separation is policy, not verifier-enforced\", so a verifier MUST NOT reject a chain merely because operator_pk and registrar_pk coincide. The registrar key is used here only because it is a wrong-but-well-formed key a real deployment has to hand."
     },
     {
       "id": "058-vote-sig-wrong-key",
