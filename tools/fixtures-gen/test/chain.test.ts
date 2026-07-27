@@ -21,6 +21,7 @@ import {
 import {
   eventHash,
   keypairFromSeed,
+  participantId,
   seedOf,
   signingPreimage,
 } from "../src/encode.js";
@@ -174,6 +175,90 @@ test("custom() builds unregistered types, with or without a signature", () => {
     pubkey: OPERATOR.publicKeyHex,
   });
   assert.equal(v2.version, 2, "a registered type at an unregistered version");
+});
+
+test("custom() actually signs with the signer it is given", () => {
+  // Without this, replacing `opts.signer` with `undefined` leaves the whole
+  // suite green — and custom() is the ONLY path to the wrong-key signature
+  // vectors, where an absent sig is an ES-18 missing-key failure rather than
+  // the ET-5 signature failure the vector claims.
+  const c = newChain();
+  const kp = keypairFromSeed(seedOf(0x03));
+  const e = c.custom("x_signed", 1, { n: 7 }, { signer: kp });
+  assert.ok("sig" in e.payload, "a signer must produce a sig key");
+  assert.ok(sigVerifies(e, kp.publicKeyHex), "sig verifies under the signer");
+  assert.ok(
+    !sigVerifies(e, OPERATOR.publicKeyHex),
+    "and under nothing else — this is what pins the wrong-key vectors",
+  );
+});
+
+test("custom() signs with a wrong key on demand, which is the ET-5 vector shape", () => {
+  const c = newChain();
+  const kp = keypairFromSeed(seedOf(0x03));
+  const impostor = keypairFromSeed(seedOf(0xee));
+  const e = c.custom(
+    "participant_registered",
+    1,
+    { pubkey: kp.publicKeyHex },
+    { signer: impostor },
+  );
+  assert.ok("sig" in e.payload, "the key is present, so ES-18 is satisfied");
+  assert.ok(
+    !sigVerifies(e, String(e.payload["pubkey"])),
+    "and fails at the signature check (ET-5), not at the key-set check",
+  );
+  assert.ok(sigVerifies(e, impostor.publicKeyHex));
+});
+
+test("genesis() honours every declared option (ET-6, ET-7, ET-8)", () => {
+  const impostorOp = keypairFromSeed(seedOf(0xee));
+  const altReg = keypairFromSeed(seedOf(0xef));
+  const c = new ChainBuilder();
+  const g = c.genesis({
+    operator: impostorOp,
+    registrar: altReg,
+    contracts: "contracts-v2",
+  });
+  assert.equal(g.payload["operator_pk"], impostorOp.publicKeyHex);
+  assert.equal(g.payload["registrar_pk"], altReg.publicKeyHex);
+  assert.equal(g.payload["contracts"], "contracts-v2");
+  assert.equal(g.payload["chain_id"], participantId(impostorOp.publicKeyHex));
+  assert.ok(sigVerifies(g, impostorOp.publicKeyHex), "self-signed (ET-8)");
+});
+
+test("issue_created verifies under the genesis-DECLARED operator_pk (ET-13)", () => {
+  // Signing from a module constant instead of the declared key yields a chain
+  // that is well-formed and self-consistently hashed but does not verify under
+  // its own operator_pk — a wrong-but-plausible vector, which reads at T7 as a
+  // mysterious verifier bug rather than a fixture bug.
+  const impostorOp = keypairFromSeed(seedOf(0xee));
+  const c = new ChainBuilder();
+  const g = c.genesis({ operator: impostorOp });
+  const i = c.issue("Adopt the charter", 2);
+  assert.notEqual(impostorOp.publicKeyHex, OPERATOR.publicKeyHex);
+  assert.ok(sigVerifies(i, String(g.payload["operator_pk"])));
+  assert.ok(!sigVerifies(i, OPERATOR.publicKeyHex));
+});
+
+test("vote_cast verifies under the genesis-DECLARED registrar_pk (ET-17)", () => {
+  const altReg = keypairFromSeed(seedOf(0xef));
+  const c = new ChainBuilder();
+  const g = c.genesis({ registrar: altReg });
+  const i = c.issue("Adopt the charter", 2);
+  const vote = c.vote(i.hash, 1);
+  assert.notEqual(altReg.publicKeyHex, REGISTRAR.publicKeyHex);
+  assert.ok(sigVerifies(vote, String(g.payload["registrar_pk"])));
+  assert.ok(!sigVerifies(vote, REGISTRAR.publicKeyHex));
+});
+
+test("a headless chain still signs from the module defaults", () => {
+  // No genesis has declared anything, so the §6 keys remain the fallback —
+  // otherwise the headless vectors would lose their signers entirely.
+  const c = new ChainBuilder();
+  const i = c.issue("Adopt the charter", 2);
+  assert.ok(sigVerifies(i, OPERATOR.publicKeyHex));
+  assert.ok(sigVerifies(c.vote(i.hash, 1), REGISTRAR.publicKeyHex));
 });
 
 test("an empty payload is buildable and hashes (HA-8)", () => {

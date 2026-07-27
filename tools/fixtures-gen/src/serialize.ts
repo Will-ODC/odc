@@ -6,15 +6,22 @@
 // behavior. A test pins the two against each other so any divergence surfaces.
 
 import type { Event, Payload, PayloadValue } from "./encode.js";
-import { sortPayloadKeys } from "./encode.js";
+import { assertWellFormed, sortPayloadKeys } from "./encode.js";
 
 /**
  * EX-9: minimal escaping. `\"` and `\\`; the short escapes for U+0008, U+0009,
  * U+000A, U+000C, U+000D; any other C0 control as `\u00xx` with LOWERCASE hex;
  * every other character — including every non-ASCII character and `/` — as its
  * literal UTF-8 bytes, never a `\u` escape.
+ *
+ * EX-10 first: an unpaired surrogate is above U+001F, so it would fall to the
+ * literal branch and be silently repaired to U+FFFD when `serializeExport`
+ * encodes to UTF-8 — three distinct values collapsing onto one canonical line.
+ * EX-10 requires the opposite ("a mismatch is rejected, never repaired"), so the
+ * same scan `UTF8()` applies to the preimage applies here.
  */
 export function jsonString(s: string): string {
+  assertWellFormed(s, "EX-10");
   let out = '"';
   for (const ch of s) {
     const c = ch.codePointAt(0) as number;

@@ -68,11 +68,28 @@ export function flipHashChar(
   return out;
 }
 
-/** Removes the given 1-based line (tamper matrix: line deletion). */
+/**
+ * Removes the given 1-based line (tamper matrix: line deletion).
+ *
+ * Bounds-checked for the same reason `editLine` throws. `splice` is silent in
+ * both directions of failure: an out-of-range index is a NO-OP, which emits an
+ * untampered file under an `INVALID` declaration; and `lineNumber` 0 splices at
+ * -1, which END-truncates — exercising EX-16 while the vector claims mid-chain
+ * deletion (EX-13). Both read as verifier bugs, not fixture bugs.
+ */
 export function deleteLine(
   lines: readonly string[],
   lineNumber: number,
 ): string[] {
+  if (
+    !Number.isInteger(lineNumber) ||
+    lineNumber < 1 ||
+    lineNumber > lines.length
+  ) {
+    throw new RangeError(
+      `no line ${String(lineNumber)} in a ${String(lines.length)}-line file`,
+    );
+  }
   const out = [...lines];
   out.splice(lineNumber - 1, 1);
   return out;
@@ -106,8 +123,20 @@ export function duplicateLine(
   return out;
 }
 
-/** Keeps the first `count` lines (tamper matrix: end-truncation, EX-16). */
+/**
+ * Keeps the first `count` lines (tamper matrix: end-truncation, EX-16).
+ *
+ * `count` must actually truncate: `0 <= count < lines.length`. `slice` fails
+ * silently at both ends — `count >= lines.length` returns the whole file, so the
+ * vector's bytes are the untruncated chain, and a negative `count` drops lines
+ * from the END, making the argument mean the opposite of what it says.
+ */
 export function truncate(lines: readonly string[], count: number): string[] {
+  if (!Number.isInteger(count) || count < 0 || count >= lines.length) {
+    throw new RangeError(
+      `truncate needs 0 <= count < ${String(lines.length)}, got ${String(count)}`,
+    );
+  }
   return lines.slice(0, count);
 }
 

@@ -48,6 +48,18 @@ export class ChainBuilder {
   /** Issue `hash` → `choice_count`, so vote vectors can honour ET-18a. */
   readonly issues = new Map<string, number>();
 
+  /**
+   * The keys this chain's genesis DECLARED (ET-6). `issue()` and `vote()` sign
+   * from these, not from the module constants: a chain whose genesis names one
+   * operator while its `issue_created` is signed by another is well-formed and
+   * self-consistently hashed but does not verify under its own `operator_pk`
+   * (ET-13/ET-17/ET-9a) — a wrong-but-plausible vector, which surfaces at T7 as
+   * a mysterious verifier bug rather than a fixture bug. Until `genesis()` runs
+   * nothing has been declared, so the §6 keys stand in for the headless chains.
+   */
+  private operatorKey: Keypair = OPERATOR;
+  private registrarKey: Keypair = REGISTRAR;
+
   get all(): readonly Event[] {
     return this.events;
   }
@@ -95,6 +107,8 @@ export class ChainBuilder {
   ): Event {
     const operator = opts.operator ?? OPERATOR;
     const registrar = opts.registrar ?? REGISTRAR;
+    this.operatorKey = operator;
+    this.registrarKey = registrar;
     return this.seal(
       "genesis",
       1,
@@ -121,27 +135,27 @@ export class ChainBuilder {
     );
   }
 
-  /** `issue_created`, operator-signed (ET-13). Records choice_count for ET-18a. */
+  /** `issue_created`, signed by the genesis-declared operator (ET-13). Records choice_count for ET-18a. */
   issue(title: string, choiceCount: number, minutes = this.nextSeq): Event {
     const e = this.seal(
       "issue_created",
       1,
       { choice_count: choiceCount, title },
       tsAt(minutes),
-      OPERATOR,
+      this.operatorKey,
     );
     this.issues.set(e.hash, choiceCount);
     return e;
   }
 
-  /** `vote_cast`, registrar-signed (ET-17). The ballot carries no voter field (ET-21). */
+  /** `vote_cast`, signed by the genesis-declared registrar (ET-17). The ballot carries no voter field (ET-21). */
   vote(issueId: string, choice: number, minutes = this.nextSeq): Event {
     return this.seal(
       "vote_cast",
       1,
       { choice, issue_id: issueId },
       tsAt(minutes),
-      REGISTRAR,
+      this.registrarKey,
     );
   }
 

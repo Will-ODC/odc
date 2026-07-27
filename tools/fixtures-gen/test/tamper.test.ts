@@ -99,6 +99,19 @@ test("deleteLine removes exactly one line (tamper matrix)", () => {
   assert.deepEqual(deleteLine(LINES, 3), ["one", "two", "four"]);
 });
 
+test("deleteLine refuses a line number outside the file", () => {
+  // Unguarded, splice(98, 1) is a NO-OP: the vector's bytes stay perfectly
+  // valid while its declared verdict says INVALID.
+  assert.throws(() => deleteLine(LINES, 99), RangeError);
+  assert.throws(() => deleteLine(LINES, LINES.length + 1), RangeError);
+  // And splice(-1, 1) END-TRUNCATES: the vector would exercise EX-16
+  // truncation while claiming mid-chain deletion (EX-13).
+  assert.throws(() => deleteLine(LINES, 0), RangeError);
+  assert.throws(() => deleteLine(LINES, -1), RangeError);
+  assert.throws(() => deleteLine([], 1), RangeError);
+  assert.throws(() => deleteLine(LINES, 1.5), RangeError);
+});
+
 test("swapLines exchanges two lines and keeps the length (tamper matrix)", () => {
   assert.deepEqual(swapLines(LINES, 2, 3), ["one", "three", "two", "four"]);
   assert.throws(() => swapLines(LINES, 1, 99), RangeError);
@@ -117,6 +130,22 @@ test("duplicateLine repeats a line immediately after itself (tamper matrix)", ()
 test("truncate keeps a prefix (tamper matrix: end-truncation, EX-16)", () => {
   assert.deepEqual(truncate(LINES, 2), ["one", "two"]);
   assert.deepEqual(truncate(LINES, 0), []);
+});
+
+test("truncate refuses a count that removes nothing, or removes from the end", () => {
+  // slice(0, 4) and slice(0, 99) both return the WHOLE file — a vector claiming
+  // truncation whose bytes are the untruncated chain. This is load-bearing:
+  // 004-truncated-without-head is built by this function.
+  assert.throws(() => truncate(LINES, LINES.length), RangeError);
+  assert.throws(() => truncate(LINES, 99), RangeError);
+  // slice(0, -1) silently drops the LAST line, so the count means the opposite
+  // of what it says.
+  assert.throws(() => truncate(LINES, -1), RangeError);
+  assert.throws(() => truncate([], 0), RangeError);
+  assert.throws(() => truncate(LINES, 1.5), RangeError);
+  // A clamping implementation, slice(0, Math.min(count, lines.length)), is
+  // observable ONLY here.
+  assert.equal(truncate(LINES, LINES.length - 1).length, LINES.length - 1);
 });
 
 test("insertBlankLine puts the blank at the expected position (EX-5)", () => {

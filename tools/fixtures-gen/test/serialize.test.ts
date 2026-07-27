@@ -83,6 +83,51 @@ test("leaves solidus and non-ASCII literal (EX-9)", () => {
   assert.equal(jsonString("✅"), '"✅"');
 });
 
+test("leaves an astral-plane character literal as its four UTF-8 octets (EX-9)", () => {
+  // Above U+FFFF, so it is a surrogate PAIR in the source string — the branch
+  // that must NOT be confused with the unpaired case below.
+  assert.equal(jsonString("clef 𝄞"), '"clef 𝄞"');
+  assert.equal(jsonString("𝄞"), '"\u{1d11e}"');
+  assert.deepEqual(
+    Buffer.from(jsonString("\u{1d11e}"), "utf8"),
+    Buffer.from([0x22, 0xf0, 0x9d, 0x84, 0x9e, 0x22]),
+    "one character, four octets, no escape",
+  );
+  assert.equal(jsonString("𝄞\t🎼"), '"𝄞\\t🎼"');
+});
+
+test("rejects ill-formed UTF-16 instead of repairing it (EX-10, ES-19, HA-2)", () => {
+  // EX-10: "a mismatch is rejected, never repaired". Encoding to UTF-8 replaces
+  // an unpaired surrogate with U+FFFD, which collapses three DISTINCT string
+  // values onto one canonical line — so the repair must not be reachable.
+  assert.throws(() => jsonString("A\ud800B"), RangeError, "unpaired high");
+  assert.throws(() => jsonString("A\udfffB"), RangeError, "unpaired low");
+  assert.throws(() => jsonString("\ud83d"), RangeError, "lone lead at the end");
+  assert.throws(() => jsonString("\udc00\ud800"), RangeError, "reversed pair");
+  // U+FFFD is itself a perfectly good character and stays literal, which is why
+  // the repair is undetectable downstream: the collision is silent.
+  assert.equal(jsonString("A�B"), '"A�B"');
+});
+
+test("the ill-formed rejection reaches whole lines, not just jsonString", () => {
+  assert.throws(
+    () => serializeEvent({ ...sample, type: "issue\ud800" }),
+    RangeError,
+  );
+  assert.throws(
+    () =>
+      serializeExport([
+        { ...sample, payload: { title: "a\udfffb", choice_count: 3 } },
+      ]),
+    RangeError,
+  );
+  // A payload KEY is serialized by the same function and gets the same gate.
+  assert.throws(
+    () => serializeEvent({ ...sample, payload: { "k\ud800": 1 } }),
+    RangeError,
+  );
+});
+
 test("agrees with JSON.parse on every escaping branch", () => {
   // Round-tripping proves the escaping is *correct* JSON; the assertions above
   // prove it is the *canonical* choice among several correct ones.
@@ -93,6 +138,7 @@ test("agrees with JSON.parse on every escaping branch", () => {
     "\u0001\u001f",
     "a/b",
     "règlement 日本語 ✅",
+    "𝄞 🎼 above U+FFFF",
     "",
   ]) {
     assert.equal(JSON.parse(jsonString(s)), s);
