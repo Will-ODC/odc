@@ -115,6 +115,28 @@ use — T5–T9 proceed on schedule; only the tag waits.
     so T7 (which may read only `contracts/`) can see it. **Verdicts are declared,
     never computed** — the generator contains no verifier, so T7 is checked
     against the contract rather than against this tool's reading of it.
+- **T5a was reviewed by a fresh context: REQUEST CHANGES** — one blocking
+  finding, fixed in **PR #22** (not merged as of this write). `UTF8` used
+  `Buffer.from(s, "utf8")`, which _repairs_ an unpaired surrogate to U+FFFD
+  instead of rejecting it, against HA-2's closing MUST. That collided two
+  distinct payloads on one preimage — `hash(title="\uD800")` equalled
+  `hash(title=U+FFFD)` — defeating HA-9's guarantee, and it was a **live
+  cross-language divergence**: the reviewer's Python raised, and Go will reject
+  rather than replace, so T5 and T7 would have disagreed on attacker-controlled
+  input. Also fixed: `ENC_PAYLOAD`'s string branch was a catch-all (a byte array
+  encoded identically to the equivalent string, ES-16); `participantId("zz")`
+  returned sha256 of the empty string because Node's hex decoder truncates
+  silently, so a malformed `operator_pk` could mint an authentic-looking
+  `chain_id`; uppercase hex was accepted rather than rejected (ID-2).
+- **The T5a review mutation-tested the test suite, and four mutations survived
+  it.** Three were wrong key sorts — the HA-8 ordering test used only ASCII keys,
+  where UTF-8 byte order and UTF-16 code-unit order coincide, so `keys.sort()`
+  would have passed CI and silently corrupted bytes. The fourth: injecting
+  `.normalize("NFC")` survived everything, because the only non-ASCII fixture
+  string is already NFC — HA-2's most emphatic prohibition had **zero coverage
+  anywhere in the repo**. PR #22 closes all four and mutation-verifies the fixes.
+  **Lesson: for a spec rule, ask whether the test can fail, not whether it
+  passes.** A test that asserts what the code already does is not coverage.
 - **T5e was reviewed by a fresh context: APPROVE WITH NITS**, no blocking
   findings. The reviewer reimplemented the preimage in Python and Ed25519 from
   RFC 8032 and confirmed vector 001 byte for byte — **the third independent
@@ -136,20 +158,19 @@ T5–T9 keep their schedule. Only the tag waits.
 
 ## Next
 
-**Finish T5. Two slices remain**, both written and verified, waiting on merges.
+**Everything opened this session is merged** (#14, #19–#22). `contracts/fixtures/`
+exists on master with 7 `VALID` vectors, the T5e review fixes are in, and the
+T5a HA-2 fix is in. **Two slices of T5 remain: T5f and T5g.**
 
-1. **Merge PR #20 first** — the T5e review fixes. Two of them close live
-   weaknesses on master: `fixtures-manifest.sh` exempted `*.md` at any depth (so
-   `vectors/anything.md` bypassed the unlisted-file check and `README.md` had no
-   integrity check), and `generate.ts` resolved the repo root positionally before
-   an `rmSync(force: true)`. Neither touches a vector's bytes.
-2. **T5f** — the 4 `PARTIAL` vectors, `conformance.test.ts` (EV-17/EV-18
+Both remaining slices are written and verified on `wip/T5fg-material`:
+
+1. **T5f** — the 4 `PARTIAL` vectors, `conformance.test.ts` (EV-17/EV-18
    policy), and the 30 envelope `INVALID` vectors. ~467 lines.
-3. **T5g** — framing, `--head`, Stage B and precedence vectors. ~403 lines.
+2. **T5g** — framing, `--head`, Stage B and precedence vectors. ~403 lines.
    Also reconcile `contracts/fixtures/README.md`, which carries slice-transient
    prose ("currently holds the `VALID` vectors", a worked example keyed on
    `037-hash-mismatch`) that becomes false at the freeze.
-4. **Carry finding 2 forward:** no committed preimage exercises the **integer**
+3. **Carry finding 2 forward:** no committed preimage exercises the **integer**
    payload tag `0x69` — vector 001's payload is all strings, so a wrong `ENC_INT`
    or swapped tag (HA-9) surfaces only as a digest mismatch with nothing to diff.
    Add `preimages/` for the `issue_created` at seq 3. Additive, so legal even
@@ -192,15 +213,21 @@ the feature branch, so parallel agents do not conflict). Required checks:
   `protect-master`): PR required, four status checks strict, linear history, no
   bypass. Both Phase-0 user actions are complete — T2's documented rules are
   now actually enforced.
-- **T5a–T5d merged without a fresh-context review** (`.claude/skills/odc-code-review`).
-  Only T5e was reviewed. T5a is the gap that matters — it is the encoder every
-  golden byte derives from, and the claim that it reproduces `hashing.md` §6 came
-  from the same context that wrote it. Reviewers for T5a/T5b/T5c/T5d failed
-  repeatedly on API 529s and were never re-run.
-- Standing, and now partly addressed: **`hashing.md` had never been independently
-  validated.** T5a reproduced §6 from the spec text, and T5e's fresh-context
-  reviewer reproduced it again in Python with its own Ed25519 — three independent
-  derivations now agree. Still not settled: those are all readings of the same
+- **Fresh-context review coverage is partial.** T5a and T5e are reviewed (both
+  found real defects). **T5b and T5c/T5d are not** — their reviewers failed
+  repeatedly on API 529s and were never re-run. Both are merged. T5b is the
+  canonical line form (EX-7–EX-9), which decides the stored byte form of every
+  vector, so it is the remaining review worth running; T5c/T5d are builders and
+  mutators whose output the T5e review already exercised end to end.
+- Standing, and substantially addressed: **`hashing.md` had never been
+  independently validated.** Four derivations now agree on §6 — T4 by hand, T5a,
+  and both reviewers in Python with their own RFC 8032 Ed25519 (the T5a reviewer
+  also agreed on 4000/4000 randomized differential cases covering what §6 misses:
+  `ENC_INT` in a payload, the `0x69` tag, astral keys, prefix keys, `2^53-1`).
+  **The HA-2 collision is the useful counter-example:** four agreeing derivations
+  still missed a normative MUST, because agreement on §6 says nothing about
+  inputs §6 does not exercise. Read that as evidence the cross-language gate is
+  load-bearing, not as evidence hashing is settled. Still not settled: those are all readings of the same
   prose by the same family of reader. T7's fresh-context Go verifier and T8's
   cross-language comparison remain the real gate — do not let "T4 is merged" or
   "three implementations agree" read as "the hashing is known correct".
