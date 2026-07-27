@@ -1,7 +1,7 @@
 # Evolution — contracts/evolution.md
 
-**Version:** 2
-**Status:** DRAFTING (Phase 0 · T4a). Not frozen.
+**Version:** 3
+**Status:** DRAFTING (Phase 0 · T5f). Not frozen.
 **Companion specs:** `event-schema.md`, `event-types.md`, `hashing.md`,
 `export-format.md`, `read-api.md`.
 **Governing ADRs:** ADR-0006 (verifier scope & forward compatibility),
@@ -197,13 +197,33 @@ the surface has to live here.
 
 - **EV-18.** **Reserved type-name prefix.** No contracts version — v1 or any
   successor — MAY register an event `type` beginning `x_`, and a conformance
-  fixture exercising the unregistered-type path (`PARTIAL`, EV-7/EV-8) MUST use a
-  `type` beginning `x_`. The prefix satisfies ES-10. Both halves are needed:
+  fixture exercising the unregistered-**type** path (`PARTIAL`, EV-7/EV-8) MUST
+  use a `type` beginning `x_`. The obligation is on the type path only; the
+  unregistered-**version** path cannot satisfy it and is governed by EV-19
+  instead. The prefix satisfies ES-10. Both halves are needed:
   without the reservation, a frozen `PARTIAL` vector is a time bomb — were its
   placeholder type later registered for real, a newer verifier would run Stage B
   on it and contradict a fixture that `contracts-guard` makes uneditable; without
   the obligation on fixtures, a vector could simply pick a plausible future type
   name and re-arm it.
+- **EV-19.** **Reserved version range.** No contracts version — v1 or any
+  successor — MAY register a `(type, version)` whose `version` is **1000000 or
+  greater**, and a conformance fixture exercising the unregistered-**version**
+  path (a registered `type` at a `version` outside the registry, ET-2/ET-2a) MUST
+  use the value **1000000 exactly**. The reservation is open-ended so that no
+  future registration can ever reach it; the obligation on fixtures names a single
+  value so that a conformance vector can never carry a `version` near ES-5's
+  `2^53-1` ceiling and strain an implementation's `version` parser. 1000000 sits
+  inside a signed 32-bit integer, and versions are per-type and increment from 1
+  (EV-2, ES-13), so it is unreachable by ordinary evolution.
+
+  This is EV-18's reservation applied to the other half of the registry key, and
+  it exists because EV-18 alone cannot cover this case: the unregistered-version
+  path can only be exercised by a **registered** type name, which EV-18's `x_`
+  obligation forbids, so without a reserved version the path is untestable by
+  fixture without arming exactly the time bomb EV-18 defuses. A frozen `PARTIAL`
+  vector on, say, `participant_registered` version 2 would be contradicted the day
+  EV-1 adds that version for real.
 
 ---
 
@@ -226,6 +246,7 @@ the surface has to live here.
 | Verdict precedence, line attribution, exit codes      | EV-17          |
 | What a fixture asserts (verdict + line only)          | EV-17          |
 | Placeholder type for `PARTIAL` fixtures               | EV-18          |
+| Placeholder version for `PARTIAL` fixtures            | EV-19          |
 
 ## Acid-test walkthrough
 

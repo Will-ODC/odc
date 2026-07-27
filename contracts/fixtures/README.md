@@ -1,11 +1,13 @@
 # contracts/fixtures/ — golden vectors
 
-**Version:** 1
+**Version:** 2
 **Status:** DRAFTING (Phase 0 · T5). Not frozen.
 
-**This directory is being filled in slices.** It currently holds the `VALID`
-vectors; the `PARTIAL` and `INVALID` vectors follow in the next two tickets. The
-record format below is complete and will not change as they land.
+**This directory is being filled in slices.** It currently holds the `VALID` and
+`PARTIAL` vectors and the envelope `INVALID` vectors — the Stage A checks that
+never consult the type registry. The framing, `--head`, Stage B and precedence
+vectors follow in the last ticket. The record format below is complete and will
+not change as they land.
 
 Conformance test data for every implementation that touches events: the Go
 verifier (T7), and later every service's CI. This file documents the record

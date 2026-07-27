@@ -16,6 +16,77 @@ Format (newest first, one entry per merged contracts change):
 
 ---
 
+## evolution.md — v3 — 2026-07-26 — T5f (PR #28)
+
+- **EV-19 added: a reserved `version` range.** No contracts version may ever
+  register a `(type, version)` whose `version` is 1000000 or greater, and a
+  fixture exercising the unregistered-**version** path MUST use **1000000
+  exactly**. The two bounds differ on purpose: the reservation is open-ended so
+  nothing future can reach it, while the fixture obligation names a single value
+  so no vector can carry a `version` near ES-5's `2^53-1` ceiling and strain an
+  implementation's `version` parser. **EV-18 was narrowed in the same edit** to
+  say its `x_` obligation binds the unregistered-*type* path only, and to point
+  at EV-19 for the other — otherwise the two MUSTs read as being in tension at
+  exactly this seam.
+- **Why it was needed, found by the fresh-context review of this PR.** EV-18
+  reserves a `type`-name prefix and requires every `PARTIAL` fixture to use it.
+  But the unregistered-version path can only be exercised by a **registered**
+  type name — precisely what EV-18 forbids — so under EV-18 alone that path is
+  untestable by fixture without arming the exact time bomb EV-18 exists to
+  defuse. Vector `009` sat in that gap: a frozen `PARTIAL` on
+  `participant_registered` version 2 would be contradicted the day EV-1 adds
+  that version for real, against a file `contracts-guard` makes uneditable.
+- **Additive and non-retroactive.** EV-19 constrains only what future versions
+  may register; no existing `(type, version)`, byte, or verdict changes. v1
+  registers version 1 only, so nothing in the current registry moves.
+- **Not to be confused with the genesis question**, which stays open: an
+  unregistered `genesis` version leaves a verifier unable to extract
+  `operator_pk`/`registrar_pk` for Stage B at all. EV-19 makes the *version*
+  namespace safe to use; it does not answer that, and `conformance.test.ts`
+  still forbids any vector from freezing a verdict for it.
+
+## fixtures/ — v2 — 2026-07-26 — T5f (PR #28)
+
+- **35 vectors added: the 4 `PARTIAL` vectors (008–011) and 31 envelope
+  `INVALID` vectors (012–042).** Additions only — no existing vector's bytes
+  changed, and vector 001's preimage and digest are untouched.
+- **The `PARTIAL` set is the EV-7/EV-8/EV-9 boundary.** A well-formed event of an
+  unregistered type is `PARTIAL`, not `INVALID`: Stage A confirms its integrity
+  and only its type-specific semantics go unchecked. This is what stops a frozen
+  verifier declaring a chain broken because the community legally grew past it
+  (charter §8). The paired `021-type-malformed` sits on the other side of that
+  line — a malformed type is `INVALID`.
+- **Every unregistered key in a `PARTIAL` vector is reserved**, so no future
+  registration can contradict a frozen verdict. Both halves of the registry key
+  are covered by their own reservation: unregistered **type names** use the `x_`
+  prefix of EV-18 (008, 010, 011), and the one unregistered **version** uses the
+  range EV-19 reserves (009). `009` deliberately does not use `genesis`: an
+  unregistered `genesis` leaves a verifier unable to extract
+  `operator_pk`/`registrar_pk` for Stage B at all, which is an open question a
+  frozen fixture must not foreclose (`memory/OPEN-QUESTIONS.md`).
+- **`023`–`028` carry payloads HA-7 cannot encode**, so they have no computable
+  preimage. All six sit on registered types, so plain Stage A already condemns
+  them; **`042` is the one that pins EV-16's distinctive clause** — the same
+  failure on an *unregistered* type, where an implementation might reach for
+  `PARTIAL` and must not, because EV-8's "integrity confirmed, semantics
+  unchecked" does not hold when integrity is not confirmable.
+- **The EV-17 assertion rule is now enforced by a test over the committed
+  `index.json`**, not only by the `Expect` union at compile time — the follow-up
+  the T5e entry below promised. `conformance.test.ts` also pins that every
+  unregistered `(type, version)` in a `PARTIAL` vector is reserved under EV-18 or
+  EV-19 — checked on the **full registry key**, since keying on the type name
+  alone waves through exactly the `009` shape — that their line lists ascend, and
+  that no vector anywhere freezes a verdict for an unregistered `genesis`
+  version. The line scanner **fails closed**: a line it cannot read is a test
+  failure, not a silent skip, because one EX-7 whitespace violation would
+  otherwise make a line invisible to both checks.
+- **README status line corrected** to say what the directory now holds. Prose
+  only; no record-format change, no byte moved.
+- **Numbering note for T5g.** The T5e entry below predicted a `042-crlf` framing
+  vector. Id `042` is now `042-payload-float-unregistered-type`, so the framing,
+  `--head`, Stage B and precedence vectors start at **043**. Ids are frozen once
+  a vector ships, so the prediction is stale, not the vector.
+
 ## fixtures/ — v1 — 2026-07-26 — T5e
 
 - **`contracts/fixtures/` now exists.** The first 7 golden vectors, all `VALID`,
