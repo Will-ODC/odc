@@ -116,13 +116,61 @@ test("derivations.json pins the ids.md worked shape (ID-4)", () => {
 
 // --- framing of the committed bytes themselves ---------------------------
 
-test("every vector in this slice ends in exactly one LF and contains no CR (EX-3, EX-4)", () => {
-  // Every vector here is well-framed. The deliberately malformed framing vectors
-  // arrive in a later slice and will need explicit exclusions from this check.
+/**
+ * The framing anomaly each vector's committed bytes MUST exhibit. Absent from
+ * this table means well-framed: non-empty, no CR, no BOM, exactly one final LF.
+ *
+ * This is deliberately NOT an exclusion list. A vector whose declared verdict is
+ * INVALID *because of its framing* is worthless if the generator quietly stops
+ * producing the malformation — the file would be valid bytes claiming INVALID,
+ * which surfaces at T7 as a verifier bug rather than a fixture bug. So the
+ * anomaly is asserted in both directions: each listed vector MUST carry its own,
+ * and every unlisted vector MUST carry none.
+ *
+ * 045-blank-line and 048-052 are absent on purpose. Their malformation is not
+ * one of these four properties (a blank interior line, insignificant whitespace,
+ * key order, an escape), so their bytes are correctly framed and the strict
+ * checks apply to them unchanged.
+ */
+const FRAMING_ANOMALY: Record<string, "empty" | "cr" | "no-final-lf" | "bom"> =
+  {
+    "043-crlf": "cr",
+    "044-no-final-newline": "no-final-lf",
+    "046-byte-order-mark": "bom",
+    "047-empty-export": "empty",
+  };
+
+test("each vector's bytes carry exactly the framing anomaly it declares (EX-2, EX-3, EX-4, EX-6)", () => {
   for (const vec of vectors) {
     const bytes = read(`vectors/${vec.id}.ndjson`);
-    assert.ok(bytes.length > 0, `${vec.id} is empty`);
-    assert.equal(bytes[bytes.length - 1], 0x0a, `${vec.id} lacks a final LF`);
-    assert.ok(!bytes.includes(0x0d), `${vec.id} contains a CR`);
+    const want = FRAMING_ANOMALY[vec.id];
+
+    const isEmpty = bytes.length === 0;
+    const hasCR = bytes.includes(0x0d);
+    const hasBOM =
+      bytes.length >= 3 &&
+      bytes[0] === 0xef &&
+      bytes[1] === 0xbb &&
+      bytes[2] === 0xbf;
+
+    assert.equal(isEmpty, want === "empty", `${vec.id}: emptiness`);
+    assert.equal(hasCR, want === "cr", `${vec.id}: CR presence`);
+    assert.equal(hasBOM, want === "bom", `${vec.id}: BOM presence`);
+    if (!isEmpty) {
+      assert.equal(
+        bytes[bytes.length - 1] === 0x0a,
+        want !== "no-final-lf",
+        `${vec.id}: final LF presence`,
+      );
+    }
+  }
+});
+
+test("the framing anomaly table names only ids that are real vectors", () => {
+  // A typo'd or stale id would exempt nothing, and would let the vector it was
+  // meant to describe drift to well-framed unnoticed.
+  const ids = new Set(vectors.map((v) => v.id));
+  for (const id of Object.keys(FRAMING_ANOMALY)) {
+    assert.ok(ids.has(id), `${id} is in FRAMING_ANOMALY but is not a vector`);
   }
 });
