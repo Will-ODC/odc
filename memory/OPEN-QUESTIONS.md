@@ -65,6 +65,20 @@ choice}` at eligibility-check time — trust-by-policy per charter §10 v1,
   blocker — **provided no v1 fixture freezes a verdict for this case.** T5 must
   therefore not use `genesis` for its unknown-version vector; use
   `participant_registered` version 2, a leaf type nothing references.
+- **Should HA-2's reject-don't-repair be pinned by a fixture, not only a unit
+  test?** (Raised by the T5a review, 2026-07-26.) HA-2's closing MUST — reject a
+  string whose decoded value is not well-formed UTF-8 — is now covered by a unit
+  test in `tools/fixtures-gen`, but nothing in `contracts/fixtures/` exercises it,
+  so **T7's Go verifier has no vector telling it to reject rather than repair**.
+  A vector would have to carry genuinely ill-formed bytes (e.g. a bare `0xED
+0xA0 0x80` surrogate sequence inside a JSON string), which is expressible —
+  vectors are read as raw bytes — but interacts with EX-2's UTF-8 requirement and
+  EX-9's escaping rule in ways nobody has worked through: is such a line an
+  `INVALID` at HA-2, at EX-2, or is it unparseable framing under EX-20? Whichever
+  it is, it needs deciding before a vector freezes an answer. Not urgent, and
+  additive later, but it is exactly the class of divergence T8 exists to catch —
+  and the one place a repair-vs-reject disagreement would surface as a mysterious
+  verifier bug rather than a fixture bug.
 - Operator key + identity service key management for MVP: file, env, or KMS?
   (Needed by Phase 1 identity/ledger tickets, not Phase 0.)
 - Anchoring cadence and venue for the chain head in v1 (manual README anchor
