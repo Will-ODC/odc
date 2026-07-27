@@ -16,11 +16,18 @@ Format (newest first, one entry per merged contracts change):
 
 ---
 
-## evolution.md — v3 — 2026-07-27 — T5f (PR #28)
+## evolution.md — v3 — 2026-07-26 — T5f (PR #28)
 
 - **EV-19 added: a reserved `version` range.** No contracts version may ever
   register a `(type, version)` whose `version` is 1000000 or greater, and a
-  fixture exercising the unregistered-**version** path MUST use one.
+  fixture exercising the unregistered-**version** path MUST use **1000000
+  exactly**. The two bounds differ on purpose: the reservation is open-ended so
+  nothing future can reach it, while the fixture obligation names a single value
+  so no vector can carry a `version` near ES-5's `2^53-1` ceiling and strain an
+  implementation's `version` parser. **EV-18 was narrowed in the same edit** to
+  say its `x_` obligation binds the unregistered-*type* path only, and to point
+  at EV-19 for the other — otherwise the two MUSTs read as being in tension at
+  exactly this seam.
 - **Why it was needed, found by the fresh-context review of this PR.** EV-18
   reserves a `type`-name prefix and requires every `PARTIAL` fixture to use it.
   But the unregistered-version path can only be exercised by a **registered**
@@ -30,16 +37,15 @@ Format (newest first, one entry per merged contracts change):
   `participant_registered` version 2 would be contradicted the day EV-1 adds
   that version for real, against a file `contracts-guard` makes uneditable.
 - **Additive and non-retroactive.** EV-19 constrains only what future versions
-  may register; no existing `(type, version)`, byte, or verdict changes. The
-  range is bounded well inside ES-5's `2^53-1` and inside a signed 32-bit
-  integer, so no `version` parser is strained by a conformance vector.
+  may register; no existing `(type, version)`, byte, or verdict changes. v1
+  registers version 1 only, so nothing in the current registry moves.
 - **Not to be confused with the genesis question**, which stays open: an
   unregistered `genesis` version leaves a verifier unable to extract
   `operator_pk`/`registrar_pk` for Stage B at all. EV-19 makes the *version*
   namespace safe to use; it does not answer that, and `conformance.test.ts`
   still forbids any vector from freezing a verdict for it.
 
-## fixtures/ — v2 — 2026-07-27 — T5f (PR #28)
+## fixtures/ — v2 — 2026-07-26 — T5f (PR #28)
 
 - **35 vectors added: the 4 `PARTIAL` vectors (008–011) and 31 envelope
   `INVALID` vectors (012–042).** Additions only — no existing vector's bytes
@@ -76,6 +82,10 @@ Format (newest first, one entry per merged contracts change):
   otherwise make a line invisible to both checks.
 - **README status line corrected** to say what the directory now holds. Prose
   only; no record-format change, no byte moved.
+- **Numbering note for T5g.** The T5e entry below predicted a `042-crlf` framing
+  vector. Id `042` is now `042-payload-float-unregistered-type`, so the framing,
+  `--head`, Stage B and precedence vectors start at **043**. Ids are frozen once
+  a vector ships, so the prediction is stale, not the vector.
 
 ## fixtures/ — v1 — 2026-07-26 — T5e
 

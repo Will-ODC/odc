@@ -533,7 +533,7 @@
         "ES-16",
         "EV-16"
       ],
-      "note": "EV-16's distinctive clause, which 023-028 do not reach: a payload-shape failure is INVALID *regardless of whether the (type, version) is registered*. Every other vector in this group sits on a registered type, so plain Stage A already condemns it. Here the type is unregistered, which is the case where an implementation might reach for PARTIAL instead — and must not, because HA-7 gives a float no encoding, so there is no computable preimage and EV-8's premise (integrity confirmed, semantics unchecked) fails."
+      "note": "EV-16's distinctive clause, which 023-028 do not reach: a payload-shape failure is INVALID *regardless of whether the (type, version) is registered*. Every other vector in this group sits on a registered type, so plain Stage A already condemns it. Here the type is unregistered, which is the case where an implementation might reach for PARTIAL instead — and must not, because HA-7 gives a float no encoding, so there is no computable preimage and EV-8's premise (integrity confirmed, semantics unchecked) fails. The stored hash is the digest of the pre-mutation event, so this line is HA-14-mismatched as well; that is unavoidable — a float has no preimage, so no hash over this line exists to store. Both failures are on line 2, so the verdict and the line are unaffected, but the vector does not isolate EV-16 from HA-14."
     }
   ]
 }

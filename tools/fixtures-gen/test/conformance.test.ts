@@ -34,13 +34,24 @@ const V1_REGISTRY = new Set([
   "vote_cast@1",
 ]);
 
-/** EV-19: no contracts version may ever register a version at or above this. */
+/**
+ * EV-19. The reservation against future registration is open-ended (`>=` this),
+ * but the obligation on a FIXTURE is this exact value — so a vector can never
+ * carry a `version` near ES-5's `2^53-1` ceiling and strain a `version` parser.
+ * The check below asserts the exact value, which is the stricter of the two.
+ */
 const RESERVED_VERSION = 1000000;
 
 interface TypeRef {
+  /** 1-based, matching how every `expect` field numbers lines. */
+  line: number;
   type: string;
   version: number;
 }
+
+/** Is this key outside the v1 registry, and so a candidate for PARTIAL? */
+const isUnregistered = ({ type, version }: TypeRef): boolean =>
+  !V1_REGISTRY.has(`${type}@${String(version)}`);
 
 /**
  * Extracts (type, version) per line by regex rather than JSON.parse: many
@@ -54,19 +65,32 @@ interface TypeRef {
  * regexes tolerate that whitespace for the same reason, so only a line with no
  * recognisable type/version at all is counted — which is a deliberate decision
  * for whoever adds such a vector, not something to wave through.
+ *
+ * Each line is searched only up to its `payload`, so a payload string value
+ * containing the text `"type":"…"` cannot be mistaken for the envelope field.
+ * ES-1/EX-8 fix `seq, type, version` ahead of `payload`, so nothing legitimate
+ * is lost; a line with no `payload` at all is searched whole.
  */
 function typesIn(bytes: Buffer): { refs: TypeRef[]; unparsed: number } {
   const refs: TypeRef[] = [];
   let unparsed = 0;
+  let lineNumber = 0;
   for (const line of bytes.toString("utf8").split("\n")) {
+    lineNumber += 1;
     if (line.trim().length === 0) continue;
-    const type = /"type"\s*:\s*"([^"]*)"/.exec(line);
-    const version = /"version"\s*:\s*(\d+)/.exec(line);
+    const payloadAt = line.indexOf('"payload"');
+    const envelope = payloadAt === -1 ? line : line.slice(0, payloadAt);
+    const type = /"type"\s*:\s*"([^"]*)"/.exec(envelope);
+    const version = /"version"\s*:\s*(\d+)/.exec(envelope);
     if (type === null || version === null) {
       unparsed += 1;
       continue;
     }
-    refs.push({ type: type[1] as string, version: Number(version[1]) });
+    refs.push({
+      line: lineNumber,
+      type: type[1] as string,
+      version: Number(version[1]),
+    });
   }
   return { refs, unparsed };
 }
@@ -133,13 +157,32 @@ test("every unregistered (type, version) in a PARTIAL vector is reserved (EV-18,
   // version at or above RESERVED_VERSION (EV-19).
   for (const vec of vectors) {
     if (vec.expect.verdict !== "PARTIAL") continue;
-    for (const { type, version } of refsOf(vec.id, vec.bytes)) {
-      if (V1_REGISTRY.has(`${type}@${String(version)}`)) continue;
+    for (const ref of refsOf(vec.id, vec.bytes)) {
+      if (!isUnregistered(ref)) continue;
       assert.ok(
-        type.startsWith("x_") || version >= RESERVED_VERSION,
-        `${vec.id} freezes a PARTIAL verdict on unregistered (${type}, ${String(version)}), which is neither an x_ type (EV-18) nor a reserved version (EV-19) and so could be registered later`,
+        ref.type.startsWith("x_") || ref.version === RESERVED_VERSION,
+        `${vec.id} freezes a PARTIAL verdict on unregistered (${ref.type}, ${String(ref.version)}), which is neither an x_ type (EV-18) nor the reserved version ${String(RESERVED_VERSION)} (EV-19), and so could be registered later`,
       );
     }
+  }
+});
+
+test("a PARTIAL vector names exactly the lines that are unregistered (EV-7, EV-17)", () => {
+  // The other half of what EV-17 makes conformance-checkable. A verdict token
+  // with the wrong line numbers is still a wrong fixture: every CORRECT verifier
+  // would fail against it, and after the freeze contracts-guard makes it
+  // uneditable. Nothing else in this file or the suite reads expect.lines, so
+  // without this a typo in the declared list ships silently.
+  for (const vec of vectors) {
+    if (vec.expect.verdict !== "PARTIAL") continue;
+    const unregistered = refsOf(vec.id, vec.bytes)
+      .filter(isUnregistered)
+      .map((ref) => ref.line);
+    assert.deepEqual(
+      vec.expect.lines,
+      unregistered,
+      `${vec.id} declares PARTIAL on lines [${vec.expect.lines.join(", ")}] but the unregistered (type, version) lines are [${unregistered.join(", ")}]`,
+    );
   }
 });
 

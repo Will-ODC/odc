@@ -65,7 +65,7 @@ choice}` at eligibility-check time — trust-by-policy per charter §10 v1,
   blocker — **provided no v1 fixture freezes a verdict for this case.** T5 must
   therefore not use `genesis` for its unknown-version vector; use
   `participant_registered`, a leaf type nothing references.
-  **Amended 2026-07-27 (T5f, PR #28):** the version to use is
+  **Amended 2026-07-26 (T5f, PR #28):** the version to use is
   **`RESERVED_VERSION` (1000000), not 2.** The original note reasoned only about
   genesis key extraction and missed EV-18, which requires every `PARTIAL` fixture
   to use a reserved placeholder — and version 2 is not reserved, so a frozen
