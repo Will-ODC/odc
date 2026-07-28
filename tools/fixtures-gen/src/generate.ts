@@ -19,7 +19,7 @@ import { fileURLToPath } from "node:url";
 
 import { GENESIS_TS, OPERATOR, REGISTRAR } from "./chain.js";
 import { participantId, preimage } from "./encode.js";
-import { GENESIS_EVENT, vectors } from "./vectors/index.js";
+import { GENESIS_EVENT, ISSUE_EVENT, vectors } from "./vectors/index.js";
 
 const here = dirname(fileURLToPath(import.meta.url));
 /** dist/src → dist → fixtures-gen → tools → repo root. */
@@ -73,10 +73,22 @@ function writeVectors(): void {
  * spec's before they ever reach a digest — the fastest way to localize a
  * byte-layout bug, and the reason this file exists separately from the vector.
  */
-function writePreimage(): void {
+function writePreimages(): void {
   write(
     "preimages/001-genesis-only.hex",
     `${preimage(GENESIS_EVENT).toString("hex")}\n`,
+  );
+  // The 001 preimage is all strings, so every payload entry in it carries the
+  // 0x73 tag and ENC_INT appears only in the envelope's seq/version. A wrong
+  // ENC_INT, or a swapped 0x69/0x73 (HA-9), is therefore visible in the shipped
+  // bytes only as a digest that does not match — with nothing to diff. The
+  // issue_created at seq 3 of vector 002 is the smallest artifact that fixes
+  // that: its payload is {choice_count (integer), sig, title}, so it carries the
+  // 0x69 tag, an ENC_INT payload value, and the 0x69/0x73 adjacency in HA-8 key
+  // order, all in one preimage an implementer can diff byte for byte.
+  write(
+    "preimages/002-four-types-seq3.hex",
+    `${preimage(ISSUE_EVENT).toString("hex")}\n`,
   );
 }
 
@@ -157,7 +169,7 @@ for (const dir of [vectorsDir, preimagesDir]) {
   mkdirSync(dir, { recursive: true });
 }
 writeVectors();
-writePreimage();
+writePreimages();
 writeDerivations();
 writeManifest();
 report();

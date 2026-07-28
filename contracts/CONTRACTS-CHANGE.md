@@ -16,6 +16,37 @@ Format (newest first, one entry per merged contracts change):
 
 ---
 
+## fixtures/ — README v5 — 2026-07-27 — T5h, T7 preflight (PR A)
+
+Additive only. **No existing vector, preimage, verdict or `index.json` entry
+changed**; `001` and its 607-octet preimage remain byte-identical to
+`hashing.md` §6. Everything here is test data T7 cannot author for itself — it
+runs under hard isolation and may read only `contracts/`, so material that is
+missing when T7 starts stays missing.
+
+- **`preimages/002-four-types-seq3.hex`** — the hash preimage of the
+  `issue_created` at seq 3 of vector `002`. `001`'s payload is four strings, so
+  no committed preimage exercised the **integer** payload tag. This one carries
+  the `0x69` tag, an `ENC_INT` payload value and the `0x69`/`0x73` adjacency in
+  HA-8 key order (HA-4, HA-7, HA-9). Without it a swapped tag constant or a
+  wrong integer width surfaces only as a digest mismatch with nothing to diff.
+- **`071-title-astral`** (`VALID`) — a title containing U+1D11E. No string
+  anywhere under `contracts/` previously held a code point above U+FFFF, so an
+  implementation escaping astral scalar values as surrogate pairs produced bytes
+  that parse to the same event and hash to the same preimage, and no vector
+  could see it. EX-9 requires the literal four octets; Go emits them, so this
+  was an unguarded cross-language divergence. `006` does not reach it — its
+  non-ASCII characters are all BMP.
+- **`072-title-200-astral`** (`VALID`) and **`073-title-201-astral`**
+  (`INVALID`, line 2) — ET-14's "1–200 Unicode **scalar values**" had no vector
+  distinguishing scalar values from UTF-16 code units (JS `.length`) or bytes
+  (Go `len()`). `061` is 201 ASCII `t`, where all three agree. 200 × U+1D11E is
+  200 scalar values, 400 code units and 800 octets: one reading accepts it, two
+  reject a legal title. `073` pins the ceiling from above in the same multi-byte
+  regime, where an ASCII fast path cannot stand in for counting.
+
+---
+
 ## fixtures/ — README v4 — 2026-07-27 — T5g review fixes (PR #31)
 
 - **`070` rebuilt, and renamed** `070-unregistered-type-bad-payload` →

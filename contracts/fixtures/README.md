@@ -1,15 +1,19 @@
 # contracts/fixtures/ — golden vectors
 
-**Version:** 4
+**Version:** 5
 **Status:** DRAFTING (Phase 0 · T5). Not frozen.
 
-**The set is complete: 70 vectors** — 7 `VALID`, 4 `PARTIAL`, 59 `INVALID`.
-They are numbered in category order: `VALID` (`001`–`007`), `PARTIAL`
-(`008`–`011`), then `INVALID` — the envelope and Stage A checks (`012`–`042`),
-the export framing and canonical line form (`043`–`052`), `--head`
-(`053`–`054`), the Stage B type semantics (`055`–`068`), and verdict precedence
-(`069`–`070`). **Ids never change once shipped**; a gap or a reordering would
-silently invalidate a conformance run that cites them.
+**73 vectors** — 9 `VALID`, 4 `PARTIAL`, 60 `INVALID`. They are numbered in
+category order: `VALID` (`001`–`007`), `PARTIAL` (`008`–`011`), then `INVALID` —
+the envelope and Stage A checks (`012`–`042`), the export framing and canonical
+line form (`043`–`052`), `--head` (`053`–`054`), the Stage B type semantics
+(`055`–`068`), and verdict precedence (`069`–`070`). `071`–`073` are appended
+after that scheme rather than inserted into it, because **ids never change once
+shipped**: renumbering to keep the categories contiguous would silently
+invalidate a conformance run that cites them. They cover scalar values above
+U+FFFF — `071` that a title above the BMP is stored as literal UTF-8, `072`/`073`
+that `event-types.md` ET-14 counts **scalar values**, not UTF-16 code units and
+not bytes.
 
 Conformance test data for every implementation that touches events: the Go
 verifier (T7), and later every service's CI. This file documents the record
@@ -28,9 +32,19 @@ to read `contracts/` and nothing else, so anything T7 needs must be here.
 index.json                        every vector, in order — start here
 vectors/<id>.ndjson               the input bytes of one vector
 preimages/001-genesis-only.hex    the 607-octet hash preimage of vector 001
+preimages/002-four-types-seq3.hex the hash preimage of line 3 of vector 002
 derivations.json                  participant_id / chain_id / keypair anchors
 MANIFEST.sha256                   sha256 of every file above (sha256sum -c)
 ```
+
+Both `preimages/*.hex` files are the exact octets fed to SHA-256 for one event,
+so an implementer can diff their own construction against a golden one before
+they ever reach a digest. They are a matched pair: `001`'s payload is four
+strings, so it shows only the `0x73` tag, while `002`'s line 3 has an integer
+`choice_count` sorting ahead of `sig` and `title` — the `0x69` tag, an `ENC_INT`
+payload value, and the `0x69`/`0x73` adjacency (`hashing.md` HA-4, HA-7, HA-9).
+With `001` alone, a swapped tag constant or a wrong integer width shows up only
+as a digest mismatch, with nothing to compare.
 
 ## What a vector is
 
