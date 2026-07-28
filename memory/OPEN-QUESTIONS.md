@@ -132,9 +132,22 @@ choice}` at eligibility-check time — trust-by-policy per charter §10 v1,
   may gate _execution_ capabilities and which parallel tallies a ballot
   feeds — never ballot access itself (P4).
 - ~~`event-types.md` contradicts itself about the unit ET-14 counts~~ →
-  DECIDED (T5i): the `issue_created` payload table (line 106) said "1–200
-  **UTF-8 characters**" while ET-14's normative sentence said "1–200 Unicode
-  **scalar values**" — readings that differ by a factor of 4 on astral titles,
-  and that `072`/`073` made load-bearing. The sentence is the rule; the table
-  was a summary that drifted. Table corrected to match, `event-types.md` → v3.
-  No normative change: ET-14 is unmoved and no fixture verdict shifts.
+  DECIDED (T5i): the `issue_created` payload table then read "1–200 **UTF-8
+  characters**" while ET-14's normative sentence read "1–200 Unicode **scalar
+  values**" — readings that differ by a factor of 4 on astral titles, and that
+  `072`/`073` made load-bearing. Where a table and a numbered RFC-2119 sentence
+  disagree, the sentence governs; table corrected to match, `event-types.md`
+  → v3. ET-14 is unmoved and no fixture verdict shifts, but the edit does
+  narrow the admissible readings — legal only because `contracts/` is still
+  `DRAFTING` (EV-1 binds post-freeze changes). **T7's start is unblocked.**
+- **`genesis`'s `operator_pk` and `registrar_pk` have no numbered format rule.**
+  Both are pinned to `^[0-9a-f]{64}$` only in the `genesis` payload table; no
+  `ET-n` sentence states it. ET-7 derives `chain_id` from `operator_pk_bytes`
+  and ET-9a describes `registrar_pk`'s role, but neither gives the format, and
+  `ids.md` ID-3 reaches only `participant_registered.pubkey`. Found by the T5i
+  review (2026-07-28) while testing the claim that tables are advisory — they
+  are not, and here the table is the sole source. T7 must enforce a constraint
+  with no numbered home. **Resolution is a new `ET-9b`**; not made in T5i,
+  which is a one-cell correction and would otherwise have carried an
+  unreviewed new normative sentence. Not blocking T7 the way ET-14 was — the
+  constraint is at least _stated_ — but it should land before the freeze.

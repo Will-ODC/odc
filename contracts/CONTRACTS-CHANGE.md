@@ -24,9 +24,19 @@ Format (newest first, one entry per merged contracts change):
   `.length` (UTF-16 code units) — a factor-of-4 disagreement on astral titles,
   which `072-title-200-astral` and `073-title-201-astral` (T5h) made
   load-bearing. Table corrected to match the sentence.
-- **Not a normative change.** ET-14 is untouched and was always the rule; the
-  table is a summary that had drifted. No fixture verdict changes and no
-  regeneration is required. Logged because `contracts/*.md` changed at all.
+- **Which text governs, precisely:** where a payload table and a numbered
+  RFC-2119 sentence disagree, the numbered sentence governs (`event-types.md`
+  states the table's columns at line 13-14 without marking them advisory).
+  **Payload tables are otherwise normative, and in places are the sole source
+  of a constraint** — `genesis`'s `operator_pk` and `registrar_pk` are pinned
+  to `^[0-9a-f]{64}$` only in the table, by no `ET-n` sentence. Do not read
+  this entry as licence to discount tables.
+- **It does narrow the admissible readings.** A verifier that implemented the
+  table's byte reading rejected a 200-astral-scalar title and is non-conforming
+  after this edit. That is legal because `contracts/` is still `DRAFTING`:
+  `evolution.md` EV-1 binds changes made *after* freeze, and no `contracts-v1`
+  tag exists. EV-4 is untouched — `hashing.md`, every preimage and every
+  fixture verdict are unchanged, and no regeneration is required.
 
 ## fixtures/ — README v5 — 2026-07-27 — T5h, T7 preflight (PR A)
 
