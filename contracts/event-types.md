@@ -1,6 +1,6 @@
 # Event Types — contracts/event-types.md
 
-**Version:** 2
+**Version:** 3
 **Status:** DRAFTING (Phase 0 · T3, amended T4a). Not frozen.
 **Companion specs:** `event-schema.md` (envelope), `ids.md` (identifiers),
 `hashing.md` (preimage — T4).
@@ -101,11 +101,11 @@ key for the declared public key.
 
 Opens an issue for voting. Title only — no free-text body (charter §5 MVP; D4).
 
-| key            | type    | constraint                                                       |
-| -------------- | ------- | ---------------------------------------------------------------- |
-| `title`        | string  | 1–200 UTF-8 characters; MUST NOT contain U+0000–U+001F or U+007F  |
-| `choice_count` | integer | `2 ≤ choice_count ≤ 64` — the number of valid ballot choices     |
-| `sig`          | string  | `^[0-9a-f]{128}$` — Ed25519 signature (ET-4)                      |
+| key            | type    | constraint                                                            |
+| -------------- | ------- | --------------------------------------------------------------------- |
+| `title`        | string  | 1–200 Unicode scalar values; MUST NOT contain U+0000–U+001F or U+007F |
+| `choice_count` | integer | `2 ≤ choice_count ≤ 64` — the number of valid ballot choices          |
+| `sig`          | string  | `^[0-9a-f]{128}$` — Ed25519 signature (ET-4)                          |
 
 - **ET-13.** The `issue_created` signing key is the chain's `operator_pk` from
   the `genesis` event. A verifier MUST reject an `issue_created` whose `sig`

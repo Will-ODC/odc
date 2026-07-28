@@ -16,6 +16,18 @@ Format (newest first, one entry per merged contracts change):
 
 ---
 
+## event-types.md — v3 — 2026-07-28 — T5i, ET-14 counting unit
+
+- The `issue_created` payload table said `title` is "1–200 **UTF-8
+  characters**"; ET-14's normative sentence says "1–200 Unicode **scalar
+  values**". A Go implementer reads the table as `len()` (bytes), a JS one as
+  `.length` (UTF-16 code units) — a factor-of-4 disagreement on astral titles,
+  which `072-title-200-astral` and `073-title-201-astral` (T5h) made
+  load-bearing. Table corrected to match the sentence.
+- **Not a normative change.** ET-14 is untouched and was always the rule; the
+  table is a summary that had drifted. No fixture verdict changes and no
+  regeneration is required. Logged because `contracts/*.md` changed at all.
+
 ## fixtures/ — README v5 — 2026-07-27 — T5h, T7 preflight (PR A)
 
 Additive only. **No existing vector, preimage, verdict or `index.json` entry

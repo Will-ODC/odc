@@ -131,25 +131,10 @@ choice}` at eligibility-check time — trust-by-policy per charter §10 v1,
   later per-type `version` bump, not a null (ES-3/ES-16). Attestation tiers
   may gate _execution_ capabilities and which parallel tallies a ballot
   feeds — never ballot access itself (P4).
-- **⚠️ `event-types.md` contradicts itself about the unit ET-14 counts —
-  BLOCKING T7's START, not its finish** (found 2026-07-27 in T5h, PR #34).
-  The normative sentence (line 113) reads "`title` MUST be present and 1–200
-  Unicode **scalar values** in length". The payload table five lines above
-  (line 106) reads "1–200 **UTF-8 characters**", which a Go implementer reads
-  as `len()` — i.e. bytes — and a JS implementer reads as `.length` — i.e.
-  UTF-16 code units. For any title above U+007F the three readings differ; for
-  a title of astral scalar values they differ by a factor of 4.
-  **Fixtures now make the disagreement load-bearing:** `072-title-200-astral`
-  is `VALID` at exactly 200 scalar values (400 code units, 800 octets) and
-  `073-title-201-astral` is `INVALID`. Both are correct under ET-14's sentence
-  and both fail under the table's wording. An implementer who follows line 106
-  is following normative text, will fail `072`, and is entitled to argue the
-  fixture is wrong.
-  **Resolution is a one-line edit to the table plus a `Version:` bump on
-  `event-types.md`** — the sentence is the rule; the table is a summary that
-  drifted. It was deliberately not made in PR #34, which is fixture-additive by
-  design and would otherwise have carried an unreviewed normative change (the
-  T5f lesson: the fix carries the next defect). **Do this before T7 starts:**
-  T7 reads `contracts/*.md` and the fixtures and nothing else, so it cannot see
-  this note, and the contradiction is exactly the kind of thing that costs a
-  fresh-context session a day.
+- ~~`event-types.md` contradicts itself about the unit ET-14 counts~~ →
+  DECIDED (T5i): the `issue_created` payload table (line 106) said "1–200
+  **UTF-8 characters**" while ET-14's normative sentence said "1–200 Unicode
+  **scalar values**" — readings that differ by a factor of 4 on astral titles,
+  and that `072`/`073` made load-bearing. The sentence is the rule; the table
+  was a summary that drifted. Table corrected to match, `event-types.md` → v3.
+  No normative change: ET-14 is unmoved and no fixture verdict shifts.
