@@ -96,6 +96,31 @@ test("leaves an astral-plane character literal as its four UTF-8 octets (EX-9)",
   assert.equal(jsonString("𝄞\t🎼"), '"𝄞\\t🎼"');
 });
 
+test("a whole line keeps an astral title literal, escape-free, and round-tripping (EX-7, EX-9)", () => {
+  // The jsonString-level assertions above pin the function; this pins the LINE,
+  // which is the artifact a verifier actually reads and the level at which a
+  // surrogate-escaping writer would still look correct: it parses back to the
+  // same event and hashes to the same preimage, so only the bytes betray it.
+  const line = serializeEvent({
+    ...sample,
+    payload: { title: `anthem \u{1d11e}`, choice_count: 3 },
+  });
+  assert.ok(!line.includes("\\u"), "no \\u escape anywhere in the line");
+  assert.ok(
+    Buffer.from(line, "utf8").includes(Buffer.from([0xf0, 0x9d, 0x84, 0x9e])),
+    "the four literal UTF-8 octets of U+1D11E",
+  );
+  const parsed = JSON.parse(line) as Event;
+  assert.equal(parsed.payload["title"], "anthem \u{1d11e}");
+  // The escaped form is valid JSON parsing to the same value — which is exactly
+  // why the assertions above are on bytes and not on the parsed object.
+  assert.equal(
+    JSON.parse('"anthem \\ud834\\udd1e"'),
+    parsed.payload["title"],
+    "the surrogate-escaped form is indistinguishable after parsing",
+  );
+});
+
 test("rejects ill-formed UTF-16 instead of repairing it (EX-10, ES-19, HA-2)", () => {
   // EX-10: "a mismatch is rejected, never repaired". Encoding to UTF-8 replaces
   // an unpaired surrogate with U+FFFD, which collapses three DISTINCT string

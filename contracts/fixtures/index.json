@@ -886,6 +886,44 @@
         "EV-19"
       ],
       "note": "EV-16 on the unregistered-VERSION path, which 042 does not reach: 042 puts the float on an unregistered TYPE name, so a verifier that keys its registry lookup on the type name alone already treats it as unknown. Here the type name is REGISTERED and only the version is not — the compound-key case, where an implementation checking half the key would resolve this to participant_registered v1, validate the payload against v1's shape, and reject for the wrong reason or accept outright. The verdict is INVALID either way, for the same reason as 042 (HA-7 gives a float no encoding, so integrity is not confirmable and EV-8's premise for PARTIAL fails). Version 1000000 is the exact value EV-19 reserves for this path; EV-18's x_ prefix does not apply here, because exercising an unregistered version requires a registered type name."
+    },
+    {
+      "id": "071-title-astral",
+      "export": "vectors/071-title-astral.ndjson",
+      "expect": {
+        "verdict": "VALID"
+      },
+      "cites": [
+        "EX-9",
+        "HA-2",
+        "ET-16"
+      ],
+      "note": "A title containing U+1D11E, above the BMP. The canonical line MUST carry the four literal UTF-8 octets f0 9d 84 9e — not the \\ud834\\udd1e surrogate escape pair, which parses back to the same string and hashes to the same preimage, and so is invisible to every other vector. 006 does not reach this: its non-ASCII characters are all BMP, where a UTF-16-shaped writer and a UTF-8 one agree."
+    },
+    {
+      "id": "072-title-200-astral",
+      "export": "vectors/072-title-200-astral.ndjson",
+      "expect": {
+        "verdict": "VALID"
+      },
+      "cites": [
+        "ET-14",
+        "ET-16"
+      ],
+      "note": "Exactly 200 Unicode scalar values, and therefore 400 UTF-16 code units and 800 UTF-8 octets. VALID, because ET-14 counts scalar values. A verifier counting UTF-16 code units (JS `.length`) or bytes (Go `len()`) rejects this legal title; only `utf8.RuneCountInString` semantics accepts it. 005's 200-character title is ASCII, where all three counts coincide, so this is the first vector where the reading is decidable."
+    },
+    {
+      "id": "073-title-201-astral",
+      "export": "vectors/073-title-201-astral.ndjson",
+      "expect": {
+        "verdict": "INVALID",
+        "line": 2
+      },
+      "cites": [
+        "ET-14",
+        "ET-16"
+      ],
+      "note": "201 scalar values: the same one-past-the-limit case as 061, but in the regime where the three counting readings diverge. 072 alone already rules out the byte and code-unit readings, so this vector is not needed to identify the unit — it is here because the over-limit branch is a DIFFERENT code path from the accept branch, and 061 exercises that branch only on ASCII, where an implementation may take a fast path that never counts scalar values at all. The pair 072/073 makes the ceiling bite at 200 in the multi-byte path too."
     }
   ]
 }

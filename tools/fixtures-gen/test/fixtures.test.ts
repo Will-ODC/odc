@@ -18,6 +18,14 @@ import { fileURLToPath } from "node:url";
 import { serializeEvent } from "../src/serialize.js";
 import { type Event } from "../src/encode.js";
 import { vectors, type Expect } from "../src/vectors/index.js";
+import { CLEF } from "../src/vectors/unicode.js";
+
+/** The vectors whose bytes must contain a code point above U+FFFF. */
+const ASTRAL_VECTORS = [
+  "071-title-astral",
+  "072-title-200-astral",
+  "073-title-201-astral",
+];
 
 const here = dirname(fileURLToPath(import.meta.url));
 const fixturesDir = resolve(here, "../../../..", "contracts", "fixtures");
@@ -102,6 +110,51 @@ test("vector 001 is the hashing.md 6 worked example, and its preimage is pinned"
   assert.equal(pre.length, 607, "hashing.md 6.2 states 607 octets");
   assert.equal(pre.subarray(0, 4).toString("ascii"), "ODC1");
   assert.equal(createHash("sha256").update(pre).digest("hex"), event.hash);
+});
+
+/**
+ * The integer half of the payload encoding, which 001 cannot show: its payload is
+ * four strings, so every tag in it is 0x73 and ENC_INT appears only in the
+ * envelope. The expected fragment is spelled out as raw octets rather than built
+ * from `encode.ts`, so this asserts what the committed file says instead of
+ * re-deriving it from the code that wrote it.
+ */
+test("preimage 002-four-types-seq3 carries the 0x69 integer tag and an ENC_INT value (HA-4, HA-7, HA-9)", () => {
+  const pre = Buffer.from(
+    read("preimages/002-four-types-seq3.hex").toString("utf8").trim(),
+    "hex",
+  );
+  const line3 = read("vectors/002-four-types.ndjson")
+    .toString("utf8")
+    .trimEnd()
+    .split("\n")[2] as string;
+  const event = JSON.parse(line3) as Event;
+  assert.equal(event.type, "issue_created");
+  assert.equal(createHash("sha256").update(pre).digest("hex"), event.hash);
+
+  // HA-8 sorts the keys choice_count < sig < title, so the integer entry is
+  // first and is immediately followed by a string entry — the 0x69/0x73
+  // adjacency a swapped tag constant would invert.
+  const intEntry = Buffer.concat([
+    Buffer.from([0x69]), // HA-9: `i`
+    Buffer.from([0, 0, 0, 0, 0, 0, 0, 12]), // U64 length of "choice_count"
+    Buffer.from("choice_count", "ascii"),
+    Buffer.from([0, 0, 0, 0, 0, 0, 0, 3]), // ENC_INT(3), 8 octets big-endian
+  ]);
+  const at = pre.indexOf(intEntry);
+  assert.notEqual(at, -1, "no 0x69 entry for choice_count in the preimage");
+  const sigTag = pre.indexOf(
+    Buffer.concat([
+      Buffer.from([0x73]),
+      Buffer.from([0, 0, 0, 0, 0, 0, 0, 3]),
+      Buffer.from("sig", "ascii"),
+    ]),
+  );
+  assert.equal(
+    sigTag,
+    at + intEntry.length,
+    "the string entry for sig must abut the integer entry for choice_count",
+  );
 });
 
 test("derivations.json pins the ids.md worked shape (ID-4)", () => {
@@ -272,6 +325,83 @@ test("the deliberately byte-identical vectors are identical, and differ only in 
       `${group.join("/")} share a head value, so they are the same test twice`,
     );
   }
+});
+
+// --- above the BMP --------------------------------------------------------
+
+/** The title of the `issue_created` on line 2 of one of the 07x vectors. */
+function titleOnLine2(id: string): string {
+  const line = read(`vectors/${id}.ndjson`).toString("utf8").split("\n")[1];
+  assert.ok(line !== undefined, `${id}: no line 2`);
+  const parsed = JSON.parse(line) as Event;
+  const title = parsed.payload["title"];
+  assert.equal(typeof title, "string", `${id}: line 2 has no string title`);
+  return title as string;
+}
+
+test("the astral vectors carry literal 4-octet UTF-8, never a surrogate escape (EX-9)", () => {
+  // The regression this exists to catch: emitting U+1D11E as the escape pair
+  // \\ud834\\udd1e. It parses back to the same string and hashes to the same
+  // preimage, so the manifest and framing checks stay green — and a Go verifier,
+  // which emits the literal octets, would disagree with these bytes on the
+  // canonical form of a legal title.
+  //
+  // This is NOT the only test that fails on that mutation: serialize.test.ts has
+  // caught it at the jsonString level since PR #26, and the byte-identity check
+  // above catches it until the goldens are regenerated. What was missing is a
+  // check over the COMMITTED bytes that survives regeneration — before these
+  // vectors, no fixture byte under contracts/ was above U+FFFF, so the golden
+  // artifacts were blind to it even though jsonString was not.
+  const CLEF_UTF8 = Buffer.from([0xf0, 0x9d, 0x84, 0x9e]);
+  for (const id of ASTRAL_VECTORS) {
+    const bytes = read(`vectors/${id}.ndjson`);
+    assert.ok(bytes.includes(CLEF_UTF8), `${id}: no literal U+1D11E octets`);
+    assert.ok(
+      !bytes.toString("utf8").includes("\\u"),
+      `${id}: contains a \\u escape, so a scalar value above U+FFFF was escaped`,
+    );
+    assert.ok(titleOnLine2(id).includes(CLEF), `${id}: title lost its clef`);
+  }
+});
+
+test("072/073 straddle ET-14's ceiling in SCALAR VALUES, not code units or bytes", () => {
+  // The three readings of "1-200 Unicode scalar values" that 061's 201 ASCII `t`
+  // cannot tell apart. Asserted here so the vectors' declared verdicts stay
+  // attached to the property that makes them decidable: if a future edit made
+  // these titles ASCII, both vectors would keep their verdicts and quietly stop
+  // discriminating.
+  //
+  // The counts are literals, NOT the generator's TITLE_MAX_SCALARS. 200 is
+  // ET-14's number, not this tool's: importing the constant that built the
+  // titles would let a change to it move both vectors together — leaving a file
+  // named 072-title-200-astral, whose note reads "exactly 200 scalar values",
+  // carrying some other number with the whole suite green.
+  for (const [id, scalars] of [
+    ["072-title-200-astral", 200],
+    ["073-title-201-astral", 201],
+  ] as [string, number][]) {
+    const title = titleOnLine2(id);
+    assert.equal([...title].length, scalars, `${id}: scalar values`);
+    assert.equal(title.length, scalars * 2, `${id}: UTF-16 code units`);
+    assert.equal(
+      Buffer.byteLength(title, "utf8"),
+      scalars * 4,
+      `${id}: UTF-8 octets`,
+    );
+  }
+
+  // Both halves of the boundary, or the vector that argues the over-limit branch
+  // is the point would not be asserting it.
+  assert.deepEqual(
+    vectors.find((v) => v.id === "072-title-200-astral")?.expect,
+    { verdict: "VALID" },
+    "200 scalar values is inside ET-14's range however many octets it takes",
+  );
+  assert.deepEqual(
+    vectors.find((v) => v.id === "073-title-201-astral")?.expect,
+    { verdict: "INVALID", line: 2 },
+    "201 scalar values is outside it however few code units a reader counts",
+  );
 });
 
 test("045-blank-line has an empty line at exactly the line it declares (EX-5)", () => {
