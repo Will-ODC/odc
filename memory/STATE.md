@@ -102,9 +102,13 @@ use — T5–T9 proceed on schedule; only the tag waits.
     asserted including the negative case.
   - **T5c — event builders** (PR #17, `a23439f`). The four v1 types, each signed
     under the key its own type names. Signature tests assert both directions —
-    right key verifies, wrong key does not — which is what pins ET-9a's
-    separation of operator from registrar. ET-21 held structurally: a ballot's
-    payload keys are exactly `{choice, issue_id, sig}`.
+    right key verifies, wrong key does not — pinning ET-13 and ET-17, the two
+    per-type signing rules. (**Corrected 2026-07-27:** this entry used to say the
+    tests pin "ET-9a's separation of operator from registrar". They do not, and
+    cannot: ET-9a ends "This separation is policy, not verifier-enforced". The
+    same false claim had propagated into vector `057`'s note; see the T5g entry.)
+    ET-21 held structurally: a ballot's payload keys are exactly
+    `{choice, issue_id, sig}`.
   - **T5d — adversarial mutations** (PR #18, `0b67938`). The tamper matrix.
     `editLine` THROWS when its target is absent: a mutation that silently no-ops
     would emit a valid file claiming an `INVALID` verdict, which reads as a
@@ -126,6 +130,33 @@ use — T5–T9 proceed on schedule; only the tag waits.
     fixture value, so no vector strains a `version` parser near ES-5's 2^53-1),
     and **EV-18 narrowed** so its `x_` obligation binds the unregistered-_type_
     path only, pointing at EV-19 for the other.
+  - **T5g — framing, `--head`, Stage B and precedence vectors** (2026-07-27,
+    PR #30, squash `fd6626a`), **completing the set at 70 vectors**. Adds
+    `framing.ts` (043–052: the export framing and canonical line form, all
+    invisible at the object level) and `semantics.ts` (053–070: the `--head`
+    pair, the four per-type signing rules, the title/choice bounds, and verdict
+    precedence). Ids shifted +1 from the `wip/T5fg-material` numbering because
+    #28 had taken `042`. **Review fixes merged as #31** (below); `README.md` → v4.
+- **T5g's review found the framing test asserted coverage it did not have.**
+  The `FRAMING_ANOMALY` table pinned 4 of 10 framing vectors while a comment
+  claimed the other six were "covered unchanged" — they were not covered at all.
+  Three mutations shipped green, the worst being `048`'s `editLine` becoming an
+  identity, so that vector emitted **perfectly canonical bytes under an
+  `INVALID` declaration**. `editLine` throws only when `find` is ABSENT, so a
+  replacement equal to the original is silent. Fixed in #31 by asserting each
+  defect positively: `048`–`052` must parse AND differ from `serializeEvent()`
+  of what they parse to; `045`'s blank must sit at its declared line.
+  **`insertBlankLine` now bounds-checks** — the last mutator failing open.
+- **Two claims in shipped fixture prose were false, and both are now fixed.**
+  `070` duplicated `042` (same construction, a float on an unregistered _type_)
+  while its note called it "the other side" of EV-16; it is rebuilt as the
+  unregistered-_version_ path, a registered type name at EV-19's reserved
+  version 1000000. And `057`'s note claimed it showed "the separation ET-9a
+  describes, enforced" when `event-types.md` ET-9a closes with **"This
+  separation is policy, not verifier-enforced"** — a note that would have
+  pushed T7 into rejecting a chain where `operator_pk == registrar_pk`, which
+  the contract permits. **Fixture notes are frozen data T7 reads; a false one is
+  a spec bug with a long fuse.**
 - **T5f took two fresh-context reviews, both REQUEST CHANGES, and merged with a
   third round unreviewed.** Review 1: vector 009 violated EV-18, a rule live
   since T4a. Review 2: a surviving mutation _inside the fix for review 1_, plus
@@ -178,54 +209,47 @@ T5–T9 keep their schedule. Only the tag waits.
 
 ## Next
 
-**Everything opened is merged, through #28** — nothing is in flight. Master
-carries 42 vectors and 84/84 tests. **One slice of T5 remains: T5g**, plus the
-`[SHOULD]` follow-up PR described under Blockers.
+**T5 IS COMPLETE.** T5g merged (#30) and its review fixes merged as **#31**
+(squash `319bf3b`). Master carries **70 vectors** (VALID 7, PARTIAL 4,
+INVALID 59) and 88/88 tests. `wip/T5fg-material` is now spent and can be
+deleted.
 
-1. **T5g** — framing, `--head`, Stage B and precedence vectors: **28 vectors,
-   ids 043–070**, from `framing.ts` and `semantics.ts`. ~390 counted lines.
-   Also reconcile `contracts/fixtures/README.md`, which carries slice-transient
-   prose (a worked example keyed on `037-hash-mismatch`) that becomes false at
-   the freeze.
-2. **Carry finding 2 forward:** no committed preimage exercises the **integer**
-   payload tag `0x69` — vector 001's payload is all strings, so a wrong `ENC_INT`
-   or swapped tag (HA-9) surfaces only as a digest mismatch with nothing to diff.
-   Add `preimages/` for the `issue_created` at seq 3. Additive, so legal even
-   post-freeze, which is why it was deferred out of #19.
+**Next is T6** (rehearsal builder) → **T7** (Go verifier, fresh-context
+isolation) → **T8** (rehearsal loop) → **T9** (security audit) → **T9a**
+(release candidate → Phase 1).
 
-**The id renumbering trap.** `wip/T5fg-material` numbers these vectors 042–069.
-#28 shipped `042-payload-float-unregistered-type` and **shipped ids are frozen**,
-so every wip id shifts **+1**. An off-by-one here is invisible to a passing
-suite — the vectors regenerate byte-identically under any consistent numbering.
+**Still owed, none of it blocking T6:**
 
-**`wip/T5fg-material` holds T5g's modules** but is **not a merge candidate** — it
-sits on T5e's old branch and the no-stacking rule forbids merging from it. Re-cut
-from master and extract.
+1. **The `0x69` integer-tag preimage.** No committed preimage exercises the
+   **integer** payload tag — vector 001's payload is all strings, so a wrong
+   `ENC_INT` or swapped tag (HA-9) surfaces only as a digest mismatch with
+   nothing to diff. Add `preimages/` for the `issue_created` at seq 3. Additive,
+   so legal even post-freeze — which is why it keeps being deferred, and why it
+   will still be there at T7 unless someone does it. **T7 is the ticket that
+   would actually benefit.**
+2. **The ~8 `[SHOULD]`/`[NIT]` findings from T5b/T5c/T5d.** See Blockers. `M34`
+   (astral code points) is the one that matters for T7. `insertBlankLine`'s
+   missing bounds check is **now fixed** in #31; `tsAt`'s repair-instead-of-
+   reject at `chain.ts:39` is still live.
+3. **Two known fixture warts, deliberately not fixed** (found by the T5g
+   duplicate sweep, both in already-merged slices): `016-seq-gap` and
+   `040-line-deleted` both fail at line 3 on an ES-7 gap and overlap heavily;
+   and `016`'s bytes carry `seq [1,2,4,4]`, a duplicate as well as the gap its
+   note advertises. Changing them would re-litigate merged work for no
+   verifier-visible gain. **Recorded so a later reader does not rediscover them
+   as defects** — but if the set is ever renumbered before the freeze, fix them
+   then.
 
-**Extract `framing.ts`, `semantics.ts`, and the two-line `index.ts` wiring —
-nothing else.** That branch is `bbec6eb` (2026-07-26 09:10), predating #22, #26
-and #28, so **its `shared.ts`, `envelope.ts`, `unregistered.ts`, `valid.ts` and
-all of its test files are older than master's.** Concretely: wip's `shared.ts`
-drops the `\r` from the `ESC` payload, which master carries deliberately (EX-9
-governs U+000D _inside_ a string value, orthogonal to EX-3's ban on a raw CR
-between lines, so the CRLF framing vector does not cover it); wip's test files
-would delete master's newer assertions in `chain.test.ts`, `encode.test.ts` and
-`conformance.test.ts`. The suite would stay green either way, because those
-modules bring their own older tests. Checked and safe: all five mutator call
-sites in the wip vectors (`deleteLine(Alines, 3)`, `swapLines(Alines, 2, 3)`,
-`insertBlankLine(Alines, 2)`, `truncate(Alines, 2)` ×2) are in range under #26's
-bounds checks.
-
-**Diff-size is not the constraint it was assumed to be.** `.github/scripts/
-diff-size.sh` exempts `contracts/fixtures/**` outright, alongside markdown, so
-`index.json` (+332 lines), `MANIFEST.sha256` (+27) and the 28 `.ndjson` files
-cost nothing. Only generator code counts. T5g fits in one PR; splitting framing
-from semantics is the fallback, not the plan. (T5f's "585 of 600" was a per-PR
-measurement, not a cumulative budget.)
-
-**Slices cannot be prepared in advance.** Each needs the previous one's
-`shared.ts`/`index.ts` on master to compile, and stacking is forbidden because
-squash-merge orphans the child silently (see the #11 note above).
+**Coverage is thinner than 70 vectors suggests.** A citation sweep found ~60 of
+~125 defined rule ids have no vector citing them. Many are definitional and
+outside the Stage A/B split by EV-15's own terms, but some are real gaps worth
+knowing before T7: `ES-30`–`ES-32` (the `sig` field rules), `ET-3`–`ET-5`,
+`EX-14` (the definition of "head", though EX-15/16/19 are well covered), most of
+`ids.md`, and `EV-11`–`EV-14` (the correction/retraction rules, including
+EV-13's prohibition on ballot-plane correction pointers). **`HA-7` is cited by
+no vector at all**, despite being the rule six vectors' notes invoke by name.
+Treat the fixture set as strong on what it covers and silent elsewhere, not as
+a complete conformance suite.
 
 Then T6 (rehearsal builder) → T7 (Go verifier, fresh-context isolation) → T8
 (rehearsal loop) → T9 (security audit) → **T9a (release candidate → Phase 1)**.
@@ -255,9 +279,14 @@ the feature branch, so parallel agents do not conflict). Required checks:
   `protect-master`): PR required, four status checks strict, linear history, no
   bypass. Both Phase-0 user actions are complete — T2's documented rules are
   now actually enforced.
-- **Review coverage: seven slices reviewed, seven with real defects** — every
+- **Review coverage: eight slices reviewed, eight with real defects** — every
   reviewed slice of T5 has come back with something real. Treat a clean review
   as the surprise, not the expectation.
+- **Two PRs merged while their review was still running** (#29 and #30, both on
+  2026-07-27). It cost nothing this time only because `contracts-v1` is untagged,
+  so `070` was still rebuildable and the framing test still fixable. **After the
+  tag, a fixture defect found post-merge is permanent.** Wait for the review, or
+  accept that the finding becomes a follow-up PR at best.
   T5b and T5c/T5d were re-run on 2026-07-26 after the earlier 529 failures; both
   returned **REQUEST CHANGES**. **All five blocking findings are now fixed on
   master (PR #26, squash `8d96736`)** — 78/78 tests, up from 67. What they were,
