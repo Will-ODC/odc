@@ -1,26 +1,29 @@
 // Vectors that pin how a title is ENCODED above U+FFFF and how it is COUNTED.
 //
-// Both gaps are cross-language divergences that the other 70 vectors cannot see,
-// because until this module no string anywhere under contracts/ carried a code
+// Both gaps are cross-language divergences the other 70 vectors cannot see:
+// until this module, no committed fixture byte under contracts/ carried a code
 // point above U+FFFF.
 //
 // Encoding (071): EX-9 says every non-ASCII character is emitted as its literal
-// UTF-8 bytes, never a \u escape. A TypeScript writer that reached for
-// JSON.stringify semantics on the surrogate PAIR, escaping anything outside the
-// BMP as two \u escapes — would still round-trip through JSON.parse and still
-// hash to the same preimage, so nothing in the existing suite would notice. Go's encoder emits the four octets, so the two
-// languages would disagree on the canonical bytes of a legal title while every
-// digest still matched.
+// UTF-8 bytes, never a \u escape. A writer that escapes a surrogate PAIR as two
+// \u escapes — one of JSON.stringify's legal outputs — still round-trips
+// through JSON.parse and still hashes to the same preimage, so the GOLDEN
+// ARTIFACTS were blind to it: no vector's bytes held an astral scalar value.
+// serialize.test.ts does catch that mutation at the unit level, and has since
+// PR #26; what was missing is the same guarantee over the COMMITTED bytes,
+// which are what a Go verifier actually reads. Go emits the four octets, so the
+// two languages would disagree on the canonical bytes of a legal title while
+// every digest still matched.
 //
 // Counting (072/073): ET-14 says "1–200 Unicode scalar values". `061` is 201
 // ASCII `t`, where JS `.length` (UTF-16 code units), Go `len()` (bytes) and
-// `utf8.RuneCountInString` (scalar values) all return 201 and all three readings
-// agree. A title of U+1D11E repeated is 4 bytes and 2 code units per scalar
-// value, so the three readings diverge by a factor of 4 and only one of them
-// gives the verdicts declared here.
+// `utf8.RuneCountInString` (scalar values) all return 201 and the three
+// readings agree. A title of U+1D11E repeated is 4 bytes and 2 code units
+// per scalar value, so the readings diverge by a factor of 4 and only one of
+// them gives the verdicts declared here.
 import { bad, chain, lines, ok, type Vector } from "./shared.js";
 
-/** U+1D11E MUSICAL SYMBOL G CLEF: 1 scalar value, 2 UTF-16 code units, 4 UTF-8 octets. */
+/** U+1D11E G CLEF: 1 scalar value, 2 UTF-16 code units, 4 UTF-8 octets. */
 export const CLEF = "\u{1d11e}";
 
 /** ET-14's ceiling, in the unit ET-14 actually names. */

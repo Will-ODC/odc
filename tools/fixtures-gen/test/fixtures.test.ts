@@ -18,7 +18,7 @@ import { fileURLToPath } from "node:url";
 import { serializeEvent } from "../src/serialize.js";
 import { type Event } from "../src/encode.js";
 import { vectors, type Expect } from "../src/vectors/index.js";
-import { CLEF, TITLE_MAX_SCALARS } from "../src/vectors/unicode.js";
+import { CLEF } from "../src/vectors/unicode.js";
 
 /** The vectors whose bytes must contain a code point above U+FFFF. */
 const ASTRAL_VECTORS = [
@@ -340,12 +340,18 @@ function titleOnLine2(id: string): string {
 }
 
 test("the astral vectors carry literal 4-octet UTF-8, never a surrogate escape (EX-9)", () => {
-  // The regression this exists to catch: emitting U+1D11E as 𝄞. It
-  // parses back to the same string and hashes to the same preimage, so the
-  // byte-identity, manifest and framing checks all stay green — and a Go
-  // verifier, which emits the literal octets, would disagree with these bytes
-  // on the canonical form of a legal title. Nothing above U+FFFF existed
-  // anywhere under contracts/ before these vectors, so nothing could catch it.
+  // The regression this exists to catch: emitting U+1D11E as the escape pair
+  // \\ud834\\udd1e. It parses back to the same string and hashes to the same
+  // preimage, so the manifest and framing checks stay green — and a Go verifier,
+  // which emits the literal octets, would disagree with these bytes on the
+  // canonical form of a legal title.
+  //
+  // This is NOT the only test that fails on that mutation: serialize.test.ts has
+  // caught it at the jsonString level since PR #26, and the byte-identity check
+  // above catches it until the goldens are regenerated. What was missing is a
+  // check over the COMMITTED bytes that survives regeneration — before these
+  // vectors, no fixture byte under contracts/ was above U+FFFF, so the golden
+  // artifacts were blind to it even though jsonString was not.
   const CLEF_UTF8 = Buffer.from([0xf0, 0x9d, 0x84, 0x9e]);
   for (const id of ASTRAL_VECTORS) {
     const bytes = read(`vectors/${id}.ndjson`);
@@ -364,20 +370,37 @@ test("072/073 straddle ET-14's ceiling in SCALAR VALUES, not code units or bytes
   // attached to the property that makes them decidable: if a future edit made
   // these titles ASCII, both vectors would keep their verdicts and quietly stop
   // discriminating.
-  const at200 = titleOnLine2("072-title-200-astral");
-  const at201 = titleOnLine2("073-title-201-astral");
-  for (const [title, scalars] of [
-    [at200, TITLE_MAX_SCALARS],
-    [at201, TITLE_MAX_SCALARS + 1],
+  //
+  // The counts are literals, NOT the generator's TITLE_MAX_SCALARS. 200 is
+  // ET-14's number, not this tool's: importing the constant that built the
+  // titles would let a change to it move both vectors together — leaving a file
+  // named 072-title-200-astral, whose note reads "exactly 200 scalar values",
+  // carrying some other number with the whole suite green.
+  for (const [id, scalars] of [
+    ["072-title-200-astral", 200],
+    ["073-title-201-astral", 201],
   ] as [string, number][]) {
-    assert.equal([...title].length, scalars, "scalar values");
-    assert.equal(title.length, scalars * 2, "UTF-16 code units");
-    assert.equal(Buffer.byteLength(title, "utf8"), scalars * 4, "UTF-8 octets");
+    const title = titleOnLine2(id);
+    assert.equal([...title].length, scalars, `${id}: scalar values`);
+    assert.equal(title.length, scalars * 2, `${id}: UTF-16 code units`);
+    assert.equal(
+      Buffer.byteLength(title, "utf8"),
+      scalars * 4,
+      `${id}: UTF-8 octets`,
+    );
   }
-  assert.equal(
-    vectors.find((v) => v.id === "072-title-200-astral")?.expect.verdict,
-    "VALID",
+
+  // Both halves of the boundary, or the vector that argues the over-limit branch
+  // is the point would not be asserting it.
+  assert.deepEqual(
+    vectors.find((v) => v.id === "072-title-200-astral")?.expect,
+    { verdict: "VALID" },
     "200 scalar values is inside ET-14's range however many octets it takes",
+  );
+  assert.deepEqual(
+    vectors.find((v) => v.id === "073-title-201-astral")?.expect,
+    { verdict: "INVALID", line: 2 },
+    "201 scalar values is outside it however few code units a reader counts",
   );
 });
 
