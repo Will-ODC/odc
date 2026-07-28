@@ -150,4 +150,15 @@ choice}` at eligibility-check time — trust-by-policy per charter §10 v1,
   with no numbered home. **Resolution is a new `ET-9b`**; not made in T5i,
   which is a one-cell correction and would otherwise have carried an
   unreviewed new normative sentence. Not blocking T7 the way ET-14 was — the
-  constraint is at least _stated_ — but it should land before the freeze.
+  constraint is at least _stated_, and no fixture contradicts it.
+  **It MUST land before the freeze, not merely should.** `evolution.md` EV-1:
+  "An existing frozen `(type, version)` schema MUST NOT be altered." Adding
+  `ET-9b` after the `contracts-v1` tag would alter frozen `genesis`/v1, so
+  deferring past the freeze does not postpone the fix — it makes it unaddable
+  and leaves the constraint table-only permanently. Do not let it slip past T9.
+  **No fixture exercises it.** All 73 vectors checked: none asserts `INVALID`
+  on a malformed `operator_pk`/`registrar_pk`. `055-genesis-sig-wrong-key` is a
+  wrong _signing_ key (ET-8) and the `chain_id` vectors are derivation
+  failures — neither is a bad-format key. A T7 verifier that omits the format
+  check passes 73/73 with no signal, so `ET-9b` needs a vector alongside it
+  under EV-5 ("every additive change MUST ship its own golden fixtures").

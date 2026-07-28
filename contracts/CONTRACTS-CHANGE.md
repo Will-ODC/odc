@@ -25,12 +25,13 @@ Format (newest first, one entry per merged contracts change):
   which `072-title-200-astral` and `073-title-201-astral` (T5h) made
   load-bearing. Table corrected to match the sentence.
 - **Which text governs, precisely:** where a payload table and a numbered
-  RFC-2119 sentence disagree, the numbered sentence governs (`event-types.md`
-  states the table's columns at line 13-14 without marking them advisory).
-  **Payload tables are otherwise normative, and in places are the sole source
-  of a constraint** — `genesis`'s `operator_pk` and `registrar_pk` are pinned
-  to `^[0-9a-f]{64}$` only in the table, by no `ET-n` sentence. Do not read
-  this entry as licence to discount tables.
+  `ET-n` sentence disagree, the numbered sentence governs. **Payload tables are
+  otherwise normative, and in places are the sole source of a constraint** —
+  `genesis`'s `operator_pk` and `registrar_pk` are pinned to `^[0-9a-f]{64}$`
+  only in the table, by no `ET-n` sentence. `event-types.md` names the third
+  table column **constraint**, and the `title` cell itself carries "MUST NOT
+  contain U+0000–U+001F or U+007F": a table containing an RFC-2119 keyword is
+  not a summary. Do not read this entry as licence to discount tables.
 - **It does narrow the admissible readings.** A verifier that implemented the
   table's byte reading rejected a 200-astral-scalar title and is non-conforming
   after this edit. That is legal because `contracts/` is still `DRAFTING`:
