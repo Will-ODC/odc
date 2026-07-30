@@ -36,6 +36,16 @@ importers:
         specifier: ^20.14.0
         version: 20.19.43
 
+  tools/rehearsal:
+    dependencies:
+      '@odc/fixtures-gen':
+        specifier: workspace:*
+        version: link:../fixtures-gen
+    devDependencies:
+      '@types/node':
+        specifier: ^20.14.0
+        version: 20.19.43
+
 packages:
 
   '@eslint-community/eslint-utils@4.9.1':

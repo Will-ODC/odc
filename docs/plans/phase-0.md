@@ -152,9 +152,22 @@ prev_hash, hash`; types and normative constraints per field; RFC-2119
   matrix to a given export by flag.
 - Chain property test per `odc-testing` (multiple seeds) against its own
   export using fixture-derived hashing code.
-- Acceptance: builder round-trips (build → self-verify via TS implementation
-  → all fixtures pass); tamper tool produces each matrix case
-  deterministically by seed.
+- Acceptance: builder round-trips (build → self-verify → the existing fixture
+  suite stays green); tamper tool produces each matrix case deterministically
+  by seed.
+- **T6 does NOT build a TypeScript verifier** (decided 2026-07-28). "Self-verify"
+  means: recompute each event's hash, check the `prev_hash` links and the
+  signatures of the chain this builder just built, and attribute a failure to a
+  line. It does NOT mean emitting the three conformance verdicts or executing
+  the 73 declared fixture verdicts — that is T7's job, and T7 is first.
+  The reason is **independence, not cost**: a TS verifier written by a context
+  that has already read `encode.ts`/`serialize.ts` inherits any misreading those
+  files contain, so it self-verifies green and proves nothing. ADR-0007's freeze
+  signal wants two _independent_ verifiers; building one here spends the
+  independence before it can be collected. Note that T8's "cross-language check"
+  compares fixture **hashes**, not verdicts, and is already satisfiable with
+  `fixtures-gen`. A second, independent TS verifier gets its own ticket — fresh
+  context, contracts-only, the same treatment T7 gets — before the freeze.
 
 ### T7 — Throwaway Go verifier · **odc-verifier-builder — FRESH CONTEXT, HARD ISOLATION**
 

@@ -1,0 +1,19 @@
+{
+  "name": "@odc/rehearsal",
+  "version": "0.0.0",
+  "private": true,
+  "type": "module",
+  "description": "Builds the throwaway genesis-rehearsal chain (Phase 0 T6). Build tooling, never shipped.",
+  "scripts": {
+    "build": "tsc -p tsconfig.json",
+    "test": "node --test dist/test/*.test.js",
+    "lint": "eslint src test",
+    "typecheck": "tsc -p tsconfig.json --noEmit"
+  },
+  "dependencies": {
+    "@odc/fixtures-gen": "workspace:*"
+  },
+  "devDependencies": {
+    "@types/node": "^20.14.0"
+  }
+}
