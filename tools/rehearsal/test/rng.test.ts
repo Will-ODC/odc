@@ -42,6 +42,17 @@ describe("Rng", () => {
     assert.throws(() => new Rng(1.5), TypeError);
   });
 
+  it("accepts the boundary seeds", () => {
+    assert.doesNotThrow(() => new Rng(-0x8000_0000));
+    assert.doesNotThrow(() => new Rng(0xffff_ffff));
+  });
+
+  it("rejects a seed outside [-2^31, 2^32)", () => {
+    assert.throws(() => new Rng(-0x8000_0001), RangeError);
+    assert.throws(() => new Rng(0x1_0000_0000), RangeError);
+    assert.throws(() => new Rng(2 ** 53), RangeError);
+  });
+
   it("draws only within 0 … 2^32-1", () => {
     const rng = new Rng(99);
     for (let i = 0; i < 10_000; i += 1) {
@@ -77,6 +88,36 @@ describe("Rng", () => {
       assert.throws(() => rng.int(-3), RangeError);
       assert.throws(() => rng.int(2.5), RangeError);
     });
+
+    // Pinned literals from a maxExclusive (0xC0000000, ~75% of 2^32) chosen so
+    // rejection sampling actually rejects on this short run — about a quarter
+    // of draws are discarded and re-drawn. A `limit = TWO_32` mutation (plain
+    // biased modulo, no rejection) keeps every other test in this file green
+    // but silently changes which draws get discarded, so it diverges from
+    // these literals by the third value. Confirmed: with the mutation applied,
+    // this sequence's third element is 302948861, not 3011703609.
+    it("rejection-samples rather than using plain biased modulo", () => {
+      const rng = new Rng(1);
+      const maxExclusive = 0xc000_0000;
+      const draws = Array.from({ length: 8 }, () => rng.int(maxExclusive));
+      assert.deepEqual(
+        draws,
+        [
+          1580013426, 350525680, 3011703609, 643872864, 2282937712, 2300340400,
+          2737271936, 2551088109,
+        ],
+      );
+    });
+
+    it("accepts maxExclusive === 2^32", () => {
+      const rng = new Rng(1);
+      assert.doesNotThrow(() => rng.int(2 ** 32));
+    });
+
+    it("rejects maxExclusive > 2^32", () => {
+      const rng = new Rng(1);
+      assert.throws(() => rng.int(2 ** 32 + 1), RangeError);
+    });
   });
 
   describe("intBetween", () => {
@@ -96,6 +137,16 @@ describe("Rng", () => {
       const rng = new Rng(1);
       assert.throws(() => rng.intBetween(5, 4), RangeError);
     });
+
+    it("accepts a span of exactly 2^32", () => {
+      const rng = new Rng(1);
+      assert.doesNotThrow(() => rng.intBetween(0, 2 ** 32 - 1));
+    });
+
+    it("rejects a span over 2^32, inheriting int's guard", () => {
+      const rng = new Rng(1);
+      assert.throws(() => rng.intBetween(0, 2 ** 32), RangeError);
+    });
   });
 
   describe("pick", () => {
@@ -105,6 +156,19 @@ describe("Rng", () => {
       for (let i = 0; i < 200; i += 1) {
         assert.ok(items.includes(rng.pick(items)));
       }
+    });
+
+    // Mirrors int's "reaches every value of a small range": an `items.length -
+    // 1` off-by-one satisfies "returns only elements of the array" above
+    // (every value it returns IS in the array) while never returning the last
+    // element. Only asserting every element is actually reached kills that
+    // mutation.
+    it("reaches every element, including the last", () => {
+      const rng = new Rng(4);
+      const items = ["a", "b", "c"] as const;
+      const seen = new Set<string>();
+      for (let i = 0; i < 200; i += 1) seen.add(rng.pick(items));
+      assert.deepEqual([...seen].sort(), ["a", "b", "c"]);
     });
 
     it("throws on an empty array rather than returning undefined", () => {

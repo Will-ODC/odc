@@ -23,10 +23,23 @@ const TWO_32 = 0x1_0000_0000;
 export class Rng {
   private state: number;
 
-  /** `seed` is truncated to 32 bits, so callers may pass any integer. */
+  /**
+   * `seed` must fit in a signed or unsigned 32-bit range, i.e. `[-2^31, 2^32)`.
+   * A negative seed is reinterpreted as its unsigned 32-bit twin (`-1` and
+   * `0xffffffff` agree), so the sign is handled, not truncated away — but a
+   * seed outside this range is rejected rather than silently wrapped, because
+   * the seed is the reproducibility mechanism a T8 bug report is rebuilt from:
+   * two distinct printed seeds silently producing the same chain is a
+   * foot-gun, not a convenience.
+   */
   constructor(seed: number) {
     if (!Number.isInteger(seed)) {
       throw new TypeError(`seed must be an integer, got ${String(seed)}`);
+    }
+    if (seed < -0x8000_0000 || seed >= TWO_32) {
+      throw new RangeError(
+        `seed must be within [-2^31, 2^32), got ${String(seed)}`,
+      );
     }
     this.state = seed >>> 0;
   }
@@ -55,6 +68,14 @@ export class Rng {
     if (!Number.isInteger(maxExclusive) || maxExclusive < 1) {
       throw new RangeError(
         `maxExclusive must be a positive integer, got ${String(maxExclusive)}`,
+      );
+    }
+    if (maxExclusive > TWO_32) {
+      // TWO_32 % maxExclusive === TWO_32 here, so limit would be 0 and the
+      // rejection loop below would never terminate — every draw is < TWO_32
+      // and thus always >= limit.
+      throw new RangeError(
+        `maxExclusive must be <= 2^32, got ${String(maxExclusive)}`,
       );
     }
     const limit = TWO_32 - (TWO_32 % maxExclusive);

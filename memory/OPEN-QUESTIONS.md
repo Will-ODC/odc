@@ -162,3 +162,15 @@ choice}` at eligibility-check time — trust-by-policy per charter §10 v1,
   failures — neither is a bad-format key. A T7 verifier that omits the format
   check passes 73/73 with no signal, so `ET-9b` needs a vector alongside it
   under EV-5 ("every additive change MUST ship its own golden fixtures").
+- **A second, independent TS verifier has no ticket yet.** `docs/plans/phase-0.md`
+  T6 now commits, in prose, that "a second, independent TS verifier gets its
+  own ticket — fresh context, contracts-only, the same treatment T7 gets —
+  before the freeze." ADR-0007 §5 makes this load-bearing, not aspirational:
+  it names the TypeScript implementation as one of the two independent
+  verifiers the freeze-readiness signal requires (alongside T7's Go verifier)
+  agreeing on a non-synthetic chain. No ticket exists anywhere in the plan for
+  it — not in the T1–T10 stack, not as a T-number placeholder. Found during a
+  fresh-context review of T6a (2026-07-29). It is owed before T10 (the freeze),
+  must be built the way T7 is — fresh context, contracts-only, no prior
+  exposure to `encode.ts`/`serialize.ts`/the Go verifier's source — and needs a
+  ticket number and slot in the stack before it is forgotten.
