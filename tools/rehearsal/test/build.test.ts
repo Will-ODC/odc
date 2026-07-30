@@ -1,3 +1,12 @@
+// This suite is a round-trip/self-verify property test in NAME only. T6's
+// acceptance for self-verify is: recompute each event's hash, check
+// `prev_hash` linkage between EVERY consecutive pair of events, and check
+// signatures — plus line attribution. Nothing below does the first three:
+// only genesis's `prev_hash` is checked (against the 64-zero anchor), no
+// event's `hash` is independently recomputed here, and no signature is
+// verified. That property test is owed to a later slice. "117 tests green"
+// on this file is not evidence T6's self-verify criterion is met.
+
 import assert from "node:assert/strict";
 import { describe, it } from "node:test";
 
@@ -14,7 +23,14 @@ import {
 } from "../src/build.js";
 import type { ChainShape } from "../src/build.js";
 
-const SEEDS = [1, 2, 7, 42, 1337, 99991] as const;
+// The last five seeds are pinned regressions: at `SHAPE` below (equal in
+// shape to `DEFAULT_SHAPE`) they used to produce `firstVote=18, lastIssue=17`
+// — every issue before any ballot, the exact tidy ordering this chain exists
+// to avoid — before the builder held the last issue back until a vote was
+// cast.
+const SEEDS = [
+  1, 2, 7, 42, 1337, 99991, 25109, 30093, 93305, 124336, 293114,
+] as const;
 
 /**
  * An explicit shape with literal counts, deliberately NOT `DEFAULT_SHAPE`.
@@ -60,6 +76,22 @@ describe("TITLE_CHARS", () => {
 
   it("has no duplicate characters", () => {
     assert.equal(new Set(TITLE_CHARS).size, TITLE_CHARS.length);
+  });
+
+  // These two assert the exact pool contents, not just "at least one" —
+  // "at least one astral" survives a mutant that cuts the astral row to a
+  // single character, and nothing previously asserted the BMP row's contents
+  // at all, so deleting that row outright survived too.
+  it("contains all five astral characters, not just one", () => {
+    for (const ch of [..."𝄞𝔘🜁🎯🌍"]) {
+      assert.ok(TITLE_CHARS.includes(ch), `missing astral character ${ch}`);
+    }
+  });
+
+  it("contains the full non-ASCII BMP row", () => {
+    for (const ch of [..."éüñçØ¥→λΩ日本語"]) {
+      assert.ok(TITLE_CHARS.includes(ch), `missing BMP character ${ch}`);
+    }
   });
 });
 
@@ -175,6 +207,42 @@ describe("buildChain", () => {
     assert.equal(chain.events.length, 7);
   });
 
+  it("reports back the seed and shape it was actually asked to build", () => {
+    // Both fields can be replaced by constants (e.g. always echoing
+    // `DEFAULT_SHAPE`, or the seed passed to the PRNG rather than the caller's
+    // seed) with the rest of the suite green, since most tests build with a
+    // single fixed seed/shape pair. A second, distinct pair pins both down.
+    const shape: ChainShape = { participants: 4, issues: 2, votes: 3 };
+    const chain = buildChain(777, shape);
+    assert.equal(chain.seed, 777);
+    assert.deepEqual(chain.shape, shape);
+  });
+
+  it("does not mutate the returned shape when the caller mutates their own", () => {
+    // `build.ts` used to return the caller's own `shape` object, so mutating
+    // it after the call silently mutated the built chain's record too.
+    const shape: ChainShape = { participants: 4, issues: 2, votes: 3 };
+    const chain = buildChain(777, shape);
+    (shape as { participants: number }).participants = 99;
+    assert.equal(chain.shape.participants, 4);
+  });
+
+  it("never gives a participant the same pubkey as the operator or registrar", () => {
+    // Seed octets 0x01/0x02 are reserved for operator/registrar; participants
+    // draw starting at 0x03 specifically so this can never happen. Swapping
+    // `FIRST_PARTICIPANT_OCTET` for `0x01` keeps every other test green.
+    const chain = buildChain(1, DEFAULT_SHAPE);
+    const genesisEvent = chain.events[0];
+    assert.equal(genesisEvent?.type, "genesis");
+    const operatorPk = genesisEvent?.payload["operator_pk"];
+    const registrarPk = genesisEvent?.payload["registrar_pk"];
+    for (const e of chain.events) {
+      if (e.type !== "participant_registered") continue;
+      assert.notEqual(e.payload["pubkey"], operatorPk);
+      assert.notEqual(e.payload["pubkey"], registrarPk);
+    }
+  });
+
   it("builds a chain with no ballots at all", () => {
     const chain = buildChain(1, { participants: 1, issues: 1, votes: 0 });
     assert.equal(countByType(chain.events).get("vote_cast"), undefined);
@@ -196,6 +264,8 @@ describe("buildChain", () => {
       { participants: 1, issues: 0, votes: 0 },
       { participants: 1, issues: 1, votes: -1 },
       { participants: 1.5, issues: 1, votes: 0 },
+      { participants: 1, issues: 1.5, votes: 0 },
+      { participants: 1, issues: 1, votes: 1.5 },
     ];
     for (const shape of bad) {
       assert.throws(
@@ -256,6 +326,23 @@ describe("buildChain", () => {
         );
       });
 
+      it("the max-length title carries an astral scalar and both escape characters (M34, EX-9)", () => {
+        // Forced rather than left to chance: at DEFAULT_SHAPE, seeds 1411993,
+        // 1629297, 1900581 and 4061444 built chains with NO astral scalar in
+        // any title, and seeds 50 / 4 built chains with no `"` / no `\`
+        // respectively.
+        const firstIssue = chain.events.find((e) => e.type === "issue_created");
+        const title = String(firstIssue?.payload["title"]);
+        const scalars = [...title];
+        assert.equal(scalars.length, 200);
+        assert.ok(
+          scalars.some((ch) => (ch.codePointAt(0) as number) > 0xffff),
+          "no astral scalar in the max-length title",
+        );
+        assert.ok(title.includes('"'), 'no " in the max-length title');
+        assert.ok(title.includes("\\"), "no \\ in the max-length title");
+      });
+
       it("keeps every choice_count inside ET-14a's 2…64", () => {
         for (const e of chain.events) {
           if (e.type !== "issue_created") continue;
@@ -301,9 +388,23 @@ describe("buildChain", () => {
       });
 
       it("interleaves ballots with issue creation", () => {
+        // The guarantee this asserts only makes sense, and is only guaranteed
+        // by the builder, when there are at least two issues (so one can be
+        // held back) and at least one vote to hold it back for. `SHAPE` here
+        // is issues: 5, votes: 40, so both hold. At `issues: 1` no
+        // interleaving is possible by definition; at `votes: 0`,
+        // `types.indexOf("vote_cast")` returns -1 and `-1 < lastIssue` passes
+        // vacuously without a vote ever existing, which is why `firstVote` is
+        // checked for -1 explicitly below rather than trusting the ordering
+        // comparison alone.
+        assert.ok(
+          SHAPE.issues >= 2 && SHAPE.votes >= 1,
+          "this assertion is meaningless outside issues >= 2 && votes >= 1",
+        );
         const types = chain.events.map((e) => e.type);
         const lastIssue = types.lastIndexOf("issue_created");
         const firstVote = types.indexOf("vote_cast");
+        assert.notEqual(firstVote, -1, "no vote_cast event exists at all");
         assert.ok(
           firstVote < lastIssue,
           "every issue precedes every ballot — the tidy ordering a verifier might assume",

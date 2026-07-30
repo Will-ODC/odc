@@ -125,11 +125,39 @@ function randomTitle(rng: Rng): string {
   return title;
 }
 
-/** A title of exactly `MAX_TITLE_SCALARS` scalar values — ET-14's upper bound. */
+const ASTRAL_TITLE_CHARS: readonly string[] = TITLE_CHARS.filter(
+  (ch) => (ch.codePointAt(0) as number) > 0xffff,
+);
+
+/**
+ * A title of exactly `MAX_TITLE_SCALARS` scalar values — ET-14's upper bound —
+ * that ALSO guarantees an astral scalar and both escape-triggering characters
+ * (`"` and `\`) rather than leaving their presence to chance.
+ *
+ * Without this, a seed can build a `DEFAULT_SHAPE` chain with no astral scalar
+ * anywhere (seeds 1411993, 1629297, 1900581, 4061444 do exactly that), or with
+ * no `"` (seed 50) or no `\` (seed 4) — silently defeating the reason this pool
+ * exists (see the module comment on `TITLE_CHARS`).
+ *
+ * The three forced scalars plus a pool-drawn fill are shuffled together so the
+ * forced characters do not always land in the same three positions; each array
+ * entry is one Unicode scalar value (built from `TITLE_CHARS`, whose entries
+ * are themselves one scalar value each — an astral entry is a 2-code-unit JS
+ * string but still one array element), so an array of exactly
+ * `MAX_TITLE_SCALARS` entries joins into exactly `MAX_TITLE_SCALARS` scalar
+ * values.
+ */
 function maxLengthTitle(rng: Rng): string {
-  let title = "";
-  while ([...title].length < MAX_TITLE_SCALARS) title += rng.pick(TITLE_CHARS);
-  return title;
+  const scalars: string[] = [rng.pick(ASTRAL_TITLE_CHARS), '"', "\\"];
+  while (scalars.length < MAX_TITLE_SCALARS)
+    scalars.push(rng.pick(TITLE_CHARS));
+  for (let i = scalars.length - 1; i > 0; i -= 1) {
+    const j = rng.int(i + 1);
+    const tmp = scalars[i] as string;
+    scalars[i] = scalars[j] as string;
+    scalars[j] = tmp;
+  }
+  return scalars.join("");
 }
 
 /**
@@ -178,11 +206,24 @@ export function buildChain(
 
   let issuesLeft = shape.issues - 1;
   let votesLeft = shape.votes;
+  // The interleaving below is a weighted draw, which for rare seeds emits every
+  // issue before any vote — exactly the tidy ordering this chain exists to
+  // avoid (confirmed at DEFAULT_SHAPE for seeds 25109, 30093, 93305, 124336,
+  // 293114). So the LAST issue is held back and refused until at least one
+  // vote has been cast, whenever the shape can honour that (issues >= 2 &&
+  // votes >= 1): that final issue's creation is necessarily the last
+  // `issue_created` event, so forcing a vote first guarantees
+  // `firstVote < lastIssue` without touching how the rest of the ordering is
+  // drawn.
+  let voteCast = false;
   while (issuesLeft > 0 || votesLeft > 0) {
+    const isLastIssue = issuesLeft === 1;
+    const mustCastVoteFirst = isLastIssue && votesLeft > 0 && !voteCast;
     // Weighted so issues appear throughout rather than clustering at the front.
     const makeIssue =
-      votesLeft === 0 ||
-      (issuesLeft > 0 && rng.int(issuesLeft + votesLeft) < issuesLeft);
+      !mustCastVoteFirst &&
+      (votesLeft === 0 ||
+        (issuesLeft > 0 && rng.int(issuesLeft + votesLeft) < issuesLeft));
     if (makeIssue) {
       createIssue(randomTitle(rng));
       issuesLeft -= 1;
@@ -190,13 +231,19 @@ export function buildChain(
       const issue = rng.pick(issues);
       chain.vote(issue.id, rng.int(issue.choiceCount));
       votesLeft -= 1;
+      voteCast = true;
     }
   }
 
   const events = chain.all;
   return {
     seed,
-    shape,
+    // Copied rather than returned by reference: `shape` is typed `readonly
+    // ChainShape` on `RehearsalChain`, but that only forbids reassigning the
+    // property, not mutating the object it points to. Returning the caller's
+    // own object would let a caller's later mutation of their `shape` corrupt
+    // an already-built chain's record of what it was built with.
+    shape: { ...shape },
     events,
     ndjson: serializeExport(events),
     head: head(events),
