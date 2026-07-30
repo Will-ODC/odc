@@ -4,6 +4,24 @@
   "private": true,
   "type": "module",
   "description": "Generates the byte-exact golden vectors in contracts/fixtures/ (Phase 0 T5). Build tooling, never shipped.",
+  "exports": {
+    "./encode": {
+      "types": "./dist/src/encode.d.ts",
+      "default": "./dist/src/encode.js"
+    },
+    "./chain": {
+      "types": "./dist/src/chain.d.ts",
+      "default": "./dist/src/chain.js"
+    },
+    "./serialize": {
+      "types": "./dist/src/serialize.d.ts",
+      "default": "./dist/src/serialize.js"
+    },
+    "./tamper": {
+      "types": "./dist/src/tamper.d.ts",
+      "default": "./dist/src/tamper.js"
+    }
+  },
   "scripts": {
     "build": "tsc -p tsconfig.json",
     "generate": "node dist/src/generate.js",
