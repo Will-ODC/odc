@@ -131,25 +131,34 @@ choice}` at eligibility-check time — trust-by-policy per charter §10 v1,
   later per-type `version` bump, not a null (ES-3/ES-16). Attestation tiers
   may gate _execution_ capabilities and which parallel tallies a ballot
   feeds — never ballot access itself (P4).
-- **⚠️ `event-types.md` contradicts itself about the unit ET-14 counts —
-  BLOCKING T7's START, not its finish** (found 2026-07-27 in T5h, PR #34).
-  The normative sentence (line 113) reads "`title` MUST be present and 1–200
-  Unicode **scalar values** in length". The payload table five lines above
-  (line 106) reads "1–200 **UTF-8 characters**", which a Go implementer reads
-  as `len()` — i.e. bytes — and a JS implementer reads as `.length` — i.e.
-  UTF-16 code units. For any title above U+007F the three readings differ; for
-  a title of astral scalar values they differ by a factor of 4.
-  **Fixtures now make the disagreement load-bearing:** `072-title-200-astral`
-  is `VALID` at exactly 200 scalar values (400 code units, 800 octets) and
-  `073-title-201-astral` is `INVALID`. Both are correct under ET-14's sentence
-  and both fail under the table's wording. An implementer who follows line 106
-  is following normative text, will fail `072`, and is entitled to argue the
-  fixture is wrong.
-  **Resolution is a one-line edit to the table plus a `Version:` bump on
-  `event-types.md`** — the sentence is the rule; the table is a summary that
-  drifted. It was deliberately not made in PR #34, which is fixture-additive by
-  design and would otherwise have carried an unreviewed normative change (the
-  T5f lesson: the fix carries the next defect). **Do this before T7 starts:**
-  T7 reads `contracts/*.md` and the fixtures and nothing else, so it cannot see
-  this note, and the contradiction is exactly the kind of thing that costs a
-  fresh-context session a day.
+- ~~`event-types.md` contradicts itself about the unit ET-14 counts~~ →
+  DECIDED (T5i): the `issue_created` payload table then read "1–200 **UTF-8
+  characters**" while ET-14's normative sentence read "1–200 Unicode **scalar
+  values**" — readings that differ by a factor of 4 on astral titles, and that
+  `072`/`073` made load-bearing. Where a table and a numbered RFC-2119 sentence
+  disagree, the sentence governs; table corrected to match, `event-types.md`
+  → v3. ET-14 is unmoved and no fixture verdict shifts, but the edit does
+  narrow the admissible readings — legal only because `contracts/` is still
+  `DRAFTING` (EV-1 binds post-freeze changes). **T7's start is unblocked.**
+- **`genesis`'s `operator_pk` and `registrar_pk` have no numbered format rule.**
+  Both are pinned to `^[0-9a-f]{64}$` only in the `genesis` payload table; no
+  `ET-n` sentence states it. ET-7 derives `chain_id` from `operator_pk_bytes`
+  and ET-9a describes `registrar_pk`'s role, but neither gives the format, and
+  `ids.md` ID-3 reaches only `participant_registered.pubkey`. Found by the T5i
+  review (2026-07-28) while testing the claim that tables are advisory — they
+  are not, and here the table is the sole source. T7 must enforce a constraint
+  with no numbered home. **Resolution is a new `ET-9b`**; not made in T5i,
+  which is a one-cell correction and would otherwise have carried an
+  unreviewed new normative sentence. Not blocking T7 the way ET-14 was — the
+  constraint is at least _stated_, and no fixture contradicts it.
+  **It MUST land before the freeze, not merely should.** `evolution.md` EV-1:
+  "An existing frozen `(type, version)` schema MUST NOT be altered." Adding
+  `ET-9b` after the `contracts-v1` tag would alter frozen `genesis`/v1, so
+  deferring past the freeze does not postpone the fix — it makes it unaddable
+  and leaves the constraint table-only permanently. Do not let it slip past T9.
+  **No fixture exercises it.** All 73 vectors checked: none asserts `INVALID`
+  on a malformed `operator_pk`/`registrar_pk`. `055-genesis-sig-wrong-key` is a
+  wrong _signing_ key (ET-8) and the `chain_id` vectors are derivation
+  failures — neither is a bad-format key. A T7 verifier that omits the format
+  check passes 73/73 with no signal, so `ET-9b` needs a vector alongside it
+  under EV-5 ("every additive change MUST ship its own golden fixtures").

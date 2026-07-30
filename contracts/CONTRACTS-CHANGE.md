@@ -16,6 +16,29 @@ Format (newest first, one entry per merged contracts change):
 
 ---
 
+## event-types.md — v3 — 2026-07-28 — T5i, ET-14 counting unit
+
+- The `issue_created` payload table said `title` is "1–200 **UTF-8
+  characters**"; ET-14's normative sentence says "1–200 Unicode **scalar
+  values**". A Go implementer reads the table as `len()` (bytes), a JS one as
+  `.length` (UTF-16 code units) — a factor-of-4 disagreement on astral titles,
+  which `072-title-200-astral` and `073-title-201-astral` (T5h) made
+  load-bearing. Table corrected to match the sentence.
+- **Which text governs, precisely:** where a payload table and a numbered
+  `ET-n` sentence disagree, the numbered sentence governs. **Payload tables are
+  otherwise normative, and in places are the sole source of a constraint** —
+  `genesis`'s `operator_pk` and `registrar_pk` are pinned to `^[0-9a-f]{64}$`
+  only in the table, by no `ET-n` sentence. `event-types.md` names the third
+  table column **constraint**, and the `title` cell itself carries "MUST NOT
+  contain U+0000–U+001F or U+007F": a table containing an RFC-2119 keyword is
+  not a summary. Do not read this entry as licence to discount tables.
+- **It does narrow the admissible readings.** A verifier that implemented the
+  table's byte reading rejected a 200-astral-scalar title and is non-conforming
+  after this edit. That is legal because `contracts/` is still `DRAFTING`:
+  `evolution.md` EV-1 binds changes made *after* freeze, and no `contracts-v1`
+  tag exists. EV-4 is untouched — `hashing.md`, every preimage and every
+  fixture verdict are unchanged, and no regeneration is required.
+
 ## fixtures/ — README v5 — 2026-07-27 — T5h, T7 preflight (PR A)
 
 Additive only. **No existing vector, preimage, verdict or `index.json` entry
