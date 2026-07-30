@@ -26,11 +26,13 @@ export class Rng {
   /**
    * `seed` must fit in a signed or unsigned 32-bit range, i.e. `[-2^31, 2^32)`.
    * A negative seed is reinterpreted as its unsigned 32-bit twin (`-1` and
-   * `0xffffffff` agree), so the sign is handled, not truncated away — but a
-   * seed outside this range is rejected rather than silently wrapped, because
-   * the seed is the reproducibility mechanism a T8 bug report is rebuilt from:
-   * two distinct printed seeds silently producing the same chain is a
-   * foot-gun, not a convenience.
+   * `0xffffffff` agree) — that conventional signed/unsigned reading is kept
+   * deliberately, not an oversight. What the range check rejects is a seed
+   * that would wrap *unrecognizably*: `2**32 + 7` silently becoming `7`, or
+   * `2**53` becoming `0`. The seed is the reproducibility mechanism a T8 bug
+   * report is rebuilt from, so a printed seed must map to the state its own
+   * digits denote — even though, within the accepted range, that mapping is
+   * intentionally 2-to-1.
    */
   constructor(seed: number) {
     if (!Number.isInteger(seed)) {

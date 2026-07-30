@@ -35,7 +35,7 @@ describe("@odc/fixtures-gen exports map (cross-package boundary)", () => {
     assert.equal(head([]), "0".repeat(64));
   });
 
-  it("./serialize's frame([]) is a zero-length buffer", () => {
+  it("./tamper's frame([]) is a zero-length buffer", () => {
     const framed = frame([]);
     assert.ok(Buffer.isBuffer(framed));
     assert.equal(framed.length, 0);
