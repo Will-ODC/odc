@@ -229,16 +229,43 @@ is spent and can be deleted.
   `tools/rehearsal/` (`@odc/rehearsal`), SplitMix32 seeded generator,
   27 rehearsal tests. Also lands the T6 scope decision in the plan (below) and
   gives `@odc/fixtures-gen` an `exports` map + `declaration: true`.
-- **T6b — randomized chain builder + export/head.** NEXT. Code is written and
-  sitting UNTRACKED in the working tree as `tools/rehearsal/src/build.ts` and
-  `test/build.test.ts` (~426 counted lines) — it was split out of T6a at 681
-  counted lines. It builds a seeded chain (genesis + N participants +
-  interleaved issues/votes), exports canonical NDJSON, reports the head.
-  Titles draw from a pool that deliberately includes **astral** characters,
-  which is the M34 gap. Not yet reviewed by anyone.
-- **T6c — tamper tool.** The 8 `odc-contracts` matrix cases by flag, applied to
-  an export. Determinism-by-seed tests.
+- **T6b — randomized chain builder + export/head** (2026-07-30, PR #38, squash
+  `b527bf6`). Seeded chain (genesis + N participants + interleaved
+  issues/ballots), canonical NDJSON export, head. 120 rehearsal tests.
+  Reuses `fixtures-gen` for all construction, hashing and serialization — it
+  chooses WHAT events exist, never HOW they are encoded.
+  **Two properties are now guaranteed rather than sampled**, both because a
+  review caught them being probabilistic: ballots always precede the final
+  issue (the builder holds one issue back until a vote is cast), and every
+  max-length title carries an astral scalar, a `"` and a `\`. The astral part
+  is the **M34** gap — Go emits literal 4-byte UTF-8 where a TS regression would
+  emit `\u` surrogate escapes, and nothing in `fixtures-gen` sits above U+FFFF.
+- **T6b's second review found the shape to remember.** The fix for round 1's
+  blocking finding (guarantee interleaving) was correct, but **its regression
+  test was inert**: forcing astral characters changed `maxLengthTitle`'s RNG
+  consumption from ~200 draws to ~397, on the first issue of every chain, which
+  shifted the whole downstream stream and silently un-pinned the five seeds
+  pinned to guard it. All four mutations of the new logic survived a green
+  suite. **Pinning a seed pins nothing if anything upstream changes how many
+  draws are consumed** — the replacement is a structural property test (2,000
+  seeds x two shapes) that is immune to stream drift. Expect this again in T6c:
+  the tamper tool will consume draws too.
+- **T6c — tamper tool.** NEXT. The 8 `odc-contracts` matrix cases by flag
+  (byte flip, line deletion, reordering, truncation, duplicated seq, wrong
+  `prev_hash`, re-serialized-but-equivalent line, wrong `--head`), applied to an
+  export. Determinism-by-seed tests. `tools/fixtures-gen/src/tamper.ts` already
+  has most of the mutators and their bounds checks — reuse, do not re-derive.
+  **The diff-size ceiling is the binding constraint on this ticket:** T6b landed
+  at exactly 600 of 600 and had to have its comment prose condensed to fit.
 - **T6d — `just rehearsal-build`**, CLI wiring, README.
+
+**T6's self-verify property test is still OWED.** Nothing merged so far
+recomputes an event hash, checks `prev_hash` linkage beyond genesis, or verifies
+a signature — T6b builds and exports chains, it does not check them. T6's
+acceptance defines self-verify as exactly those three plus attributing a failure
+to a line. A green test count in `tools/rehearsal` is **not** evidence the
+acceptance criterion is met; a comment at the top of `build.test.ts` says so too.
+Land it in T6c or T6d.
 
 **T6 does NOT build a TypeScript verifier** (decided 2026-07-28, now recorded
 in `docs/plans/phase-0.md` T6 rather than only in session memory). "Self-verify"
