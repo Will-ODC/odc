@@ -209,24 +209,78 @@ T5–T9 keep their schedule. Only the tag waits.
 
 ## Next
 
-**T5 IS COMPLETE.** T5g merged (#30) and its review fixes merged as **#31**
-(squash `319bf3b`). Master carries **70 vectors** (VALID 7, PARTIAL 4,
-INVALID 59) and 88/88 tests. `wip/T5fg-material` is now spent and can be
-deleted.
+**T5 IS COMPLETE**, through T5i. Master carries **73 vectors** (VALID 9,
+PARTIAL 4, INVALID 60) and **92/92** `fixtures-gen` tests. `wip/T5fg-material`
+is spent and can be deleted.
 
-**Next is T6** (rehearsal builder) → **T7** (Go verifier, fresh-context
-isolation) → **T8** (rehearsal loop) → **T9** (security audit) → **T9a**
-(release candidate → Phase 1).
+- **T5h — T7 preflight** (2026-07-28, PR #34, squash `4d90d2f`). The `0x69`
+  integer preimage, astral vectors, ET-14's counting unit. Cleared item 1 of
+  the "still owed" list below.
+- **T5i — ET-14 counts scalar values** (2026-07-30, PR #35, squash `f1b4b20`).
+  The `issue_created` payload table said "1–200 UTF-8 **characters**" while
+  ET-14's numbered sentence said "1–200 Unicode **scalar values**" — a factor
+  of 4 apart on astral titles. **Where a table and a numbered RFC-2119 sentence
+  disagree, the sentence governs.** `event-types.md` → v3. Legal only because
+  `contracts/` is still DRAFTING.
+
+**T6 IS IN PROGRESS.** Sliced against the 600-line ceiling, one PR each:
+
+- **T6a — package scaffold + PRNG** (2026-07-30, PR #36, squash `287952d`).
+  `tools/rehearsal/` (`@odc/rehearsal`), SplitMix32 seeded generator,
+  27 rehearsal tests. Also lands the T6 scope decision in the plan (below) and
+  gives `@odc/fixtures-gen` an `exports` map + `declaration: true`.
+- **T6b — randomized chain builder + export/head.** NEXT. Code is written and
+  sitting UNTRACKED in the working tree as `tools/rehearsal/src/build.ts` and
+  `test/build.test.ts` (~426 counted lines) — it was split out of T6a at 681
+  counted lines. It builds a seeded chain (genesis + N participants +
+  interleaved issues/votes), exports canonical NDJSON, reports the head.
+  Titles draw from a pool that deliberately includes **astral** characters,
+  which is the M34 gap. Not yet reviewed by anyone.
+- **T6c — tamper tool.** The 8 `odc-contracts` matrix cases by flag, applied to
+  an export. Determinism-by-seed tests.
+- **T6d — `just rehearsal-build`**, CLI wiring, README.
+
+**T6 does NOT build a TypeScript verifier** (decided 2026-07-28, now recorded
+in `docs/plans/phase-0.md` T6 rather than only in session memory). "Self-verify"
+means recompute hashes, check `prev_hash` links and signatures of the chain the
+builder just built, and attribute a failure to a line. It does NOT mean emitting
+the three conformance verdicts or executing the 73 declared fixture verdicts —
+T7 is the first ticket that emits verdicts. The reason is **independence, not
+cost**: a TS verifier written by a context that has already read
+`encode.ts`/`serialize.ts` inherits any misreading those files contain, so it
+self-verifies green and proves nothing. T8's cross-language check compares
+fixture **hashes**, not verdicts, and is already satisfiable with `fixtures-gen`.
+**A second, independent TS verifier is owed its own ticket before the freeze** —
+fresh context, contracts-only, the same treatment T7 gets. No such ticket exists
+in the T1–T10 stack; it is recorded in `OPEN-QUESTIONS.md` and nowhere else.
+
+**Then T7** (Go verifier, fresh-context isolation) → **T8** (rehearsal loop) →
+**T9** (security audit) → **T9a** (release candidate → Phase 1).
+
+**A CI bug T6a fixed, worth knowing if it recurs.** `turbo.json` declared
+`typecheck` with no `dependsOn`, and CI runs typecheck before the only task that
+triggers `^build`. So on a cold checkout there is no `dist/`, and any
+cross-package import fails `TS2307` — while passing for every developer with a
+warm `dist/`. It is now `"typecheck": { "dependsOn": ["^build"] }`, and
+`tools/rehearsal/test/workspace.test.ts` exists specifically to cross the
+package boundary so the failure can never again be invisible.
 
 **Still owed, none of it blocking T6:**
 
-1. **The `0x69` integer-tag preimage.** No committed preimage exercises the
-   **integer** payload tag — vector 001's payload is all strings, so a wrong
-   `ENC_INT` or swapped tag (HA-9) surfaces only as a digest mismatch with
-   nothing to diff. Add `preimages/` for the `issue_created` at seq 3. Additive,
-   so legal even post-freeze — which is why it keeps being deferred, and why it
-   will still be there at T7 unless someone does it. **T7 is the ticket that
-   would actually benefit.**
+0. **`ET-9b` — the one item here with a HARD DEADLINE.** `genesis`'s
+   `operator_pk` and `registrar_pk` are pinned to `^[0-9a-f]{64}$` **only** in
+   the `genesis` payload table; no numbered `ET-n` sentence states the format.
+   `evolution.md` EV-1 forbids altering a frozen `(type, version)` schema, so
+   adding `ET-9b` after the `contracts-v1` tag would alter frozen `genesis`/v1 —
+   deferring past the freeze does not postpone the fix, it makes it **unaddable**
+   and leaves the constraint table-only permanently. **Must land before T9.**
+   **No fixture exercises it:** all 73 vectors were checked and none asserts
+   `INVALID` on a malformed key, so a T7 verifier that omits the format check
+   passes 73/73 with no signal. It needs a vector alongside it under EV-5. Full
+   write-up in `OPEN-QUESTIONS.md`; recorded here because the context protocol
+   has every session read this file first.
+1. ~~**The `0x69` integer-tag preimage.**~~ **DONE in T5h (#34)**, together with
+   the astral vectors and ET-14's counting unit. T7 inherits both.
 2. **The ~8 `[SHOULD]`/`[NIT]` findings from T5b/T5c/T5d.** See Blockers. `M34`
    (astral code points) is the one that matters for T7. `insertBlankLine`'s
    missing bounds check is **now fixed** in #31; `tsAt`'s repair-instead-of-
