@@ -1,0 +1,1175 @@
+<!doctype html>
+<html lang="en">
+  <head>
+    <meta charset="utf-8" />
+    <meta name="viewport" content="width=device-width, initial-scale=1" />
+    <title>ODC — Civic Glass Governance Mockups</title>
+    <style>
+      :root {
+        color-scheme: light;
+        --canvas: #dfe5ec;
+        --paper: rgba(250, 251, 253, 0.88);
+        --paper-solid: #fafbfd;
+        --glass: rgba(255, 255, 255, 0.68);
+        --glass-strong: rgba(255, 255, 255, 0.86);
+        --ink: #111318;
+        --muted: #626975;
+        --faint: #5c6470;
+        --line: rgba(17, 19, 24, 0.1);
+        --line-strong: rgba(17, 19, 24, 0.18);
+        --blue: #1b4dff;
+        --blue-deep: #1232a8;
+        --blue-wash: rgba(27, 77, 255, 0.1);
+        --green: #087b61;
+        --green-wash: rgba(8, 123, 97, 0.1);
+        --amber: #a85d00;
+        --amber-wash: rgba(207, 120, 11, 0.11);
+        --shadow:
+          0 28px 70px rgba(32, 43, 59, 0.17),
+          0 2px 10px rgba(32, 43, 59, 0.08);
+        --r-screen: 34px;
+        --r-card: 22px;
+        --r-control: 15px;
+        --r-pill: 999px;
+      }
+
+      * {
+        box-sizing: border-box;
+      }
+
+      body {
+        margin: 0;
+        min-width: 320px;
+        background:
+          radial-gradient(circle at 14% 14%, rgba(78, 123, 255, 0.3), transparent 28%),
+          radial-gradient(circle at 82% 8%, rgba(74, 204, 174, 0.2), transparent 25%),
+          linear-gradient(135deg, #e9edf2, #d7dee7);
+        color: var(--ink);
+        font-family:
+          ui-sans-serif, -apple-system, BlinkMacSystemFont, "Segoe UI", sans-serif;
+        -webkit-font-smoothing: antialiased;
+      }
+
+      button {
+        font: inherit;
+      }
+
+      .showcase {
+        width: min(1460px, 100%);
+        margin: auto;
+        padding: 48px 28px 72px;
+      }
+
+      .showcase__intro {
+        max-width: 760px;
+        margin: 0 0 32px;
+      }
+
+      .eyebrow {
+        margin: 0 0 10px;
+        color: var(--blue-deep);
+        font-size: 12px;
+        font-weight: 800;
+        letter-spacing: 0.11em;
+        text-transform: uppercase;
+      }
+
+      .showcase h1 {
+        margin: 0;
+        font-size: clamp(32px, 4vw, 56px);
+        line-height: 1.02;
+        letter-spacing: -0.05em;
+      }
+
+      .showcase__dek {
+        max-width: 650px;
+        margin: 18px 0 0;
+        color: var(--muted);
+        font-size: 16px;
+        line-height: 1.65;
+      }
+
+      .screen-grid {
+        display: grid;
+        grid-template-columns: repeat(3, 390px);
+        gap: 34px;
+        align-items: start;
+      }
+
+      .screen-wrap {
+        min-width: 0;
+      }
+
+      .screen-label {
+        margin: 0 0 10px 6px;
+        color: rgba(17, 19, 24, 0.55);
+        font-size: 11px;
+        font-weight: 800;
+        letter-spacing: 0.11em;
+        text-transform: uppercase;
+      }
+
+      .screen {
+        position: relative;
+        width: 390px;
+        height: 844px;
+        overflow: hidden;
+        border: 1px solid rgba(255, 255, 255, 0.68);
+        border-radius: var(--r-screen);
+        background:
+          linear-gradient(180deg, rgba(255, 255, 255, 0.72), rgba(246, 248, 251, 0.91)),
+          var(--paper-solid);
+        box-shadow: var(--shadow);
+      }
+
+      .screen::before {
+        position: absolute;
+        inset: 0 0 auto;
+        height: 190px;
+        background:
+          radial-gradient(circle at 78% 0%, rgba(77, 118, 255, 0.18), transparent 55%),
+          radial-gradient(circle at 10% 18%, rgba(95, 220, 185, 0.14), transparent 44%);
+        content: "";
+        pointer-events: none;
+      }
+
+      .screen__scroll {
+        position: relative;
+        height: 100%;
+        overflow-y: auto;
+        padding-bottom: 100px;
+        scrollbar-width: none;
+      }
+
+      .screen__scroll::-webkit-scrollbar {
+        display: none;
+      }
+
+      .topbar {
+        position: sticky;
+        z-index: 4;
+        top: 0;
+        display: flex;
+        align-items: center;
+        justify-content: space-between;
+        min-height: 68px;
+        padding: 14px 20px 10px;
+        background: rgba(250, 251, 253, 0.68);
+        border-bottom: 1px solid rgba(255, 255, 255, 0.55);
+        backdrop-filter: blur(22px) saturate(145%);
+      }
+
+      .brand {
+        display: flex;
+        align-items: center;
+        gap: 10px;
+      }
+
+      .brand__mark {
+        display: grid;
+        width: 34px;
+        height: 34px;
+        place-items: center;
+        border-radius: 12px;
+        background: var(--ink);
+        color: white;
+        font-size: 12px;
+        font-weight: 900;
+        letter-spacing: -0.03em;
+      }
+
+      .brand__name,
+      .topbar__title {
+        margin: 0;
+        font-size: 17px;
+        font-weight: 800;
+        letter-spacing: -0.025em;
+      }
+
+      .brand__sub,
+      .topbar__sub {
+        margin: 2px 0 0;
+        color: var(--muted);
+        font-size: 11px;
+        font-weight: 600;
+      }
+
+      .avatar,
+      .icon-button {
+        display: grid;
+        width: 38px;
+        height: 38px;
+        place-items: center;
+        border: 1px solid rgba(255, 255, 255, 0.75);
+        border-radius: var(--r-pill);
+        background: var(--glass-strong);
+        box-shadow: 0 8px 22px rgba(28, 41, 62, 0.1);
+        color: var(--ink);
+        font-size: 13px;
+        font-weight: 800;
+      }
+
+      .icon-button {
+        cursor: pointer;
+        font-size: 18px;
+      }
+
+      .page {
+        padding: 10px 16px 26px;
+      }
+
+      .welcome {
+        padding: 16px 4px 15px;
+      }
+
+      .welcome h2,
+      .detail-title {
+        margin: 0;
+        font-size: 29px;
+        font-weight: 850;
+        line-height: 1.08;
+        letter-spacing: -0.045em;
+      }
+
+      .welcome p {
+        margin: 9px 0 0;
+        color: var(--muted);
+        font-size: 14px;
+        line-height: 1.5;
+      }
+
+      .open-ballots {
+        display: flex;
+        align-items: center;
+        gap: 11px;
+        margin-bottom: 12px;
+        padding: 13px 15px;
+        border: 1px solid rgba(27, 77, 255, 0.18);
+        border-radius: 18px;
+        background: rgba(237, 241, 255, 0.72);
+        backdrop-filter: blur(16px);
+      }
+
+      .open-ballots__count {
+        display: grid;
+        width: 36px;
+        height: 36px;
+        flex: 0 0 auto;
+        place-items: center;
+        border-radius: 12px;
+        background: var(--blue);
+        color: white;
+        font-weight: 850;
+      }
+
+      .open-ballots strong,
+      .open-ballots span {
+        display: block;
+      }
+
+      .open-ballots .open-ballots__count {
+        display: grid;
+        place-items: center;
+        color: white;
+        font-size: 15px;
+        line-height: 1;
+      }
+
+      .open-ballots strong {
+        font-size: 13px;
+      }
+
+      .open-ballots span {
+        margin-top: 2px;
+        color: var(--blue-deep);
+        font-size: 12px;
+      }
+
+      .filter-row {
+        display: flex;
+        gap: 7px;
+        margin: 0 0 12px;
+        overflow-x: auto;
+        scrollbar-width: none;
+      }
+
+      .filter {
+        flex: 0 0 auto;
+        padding: 9px 14px;
+        border: 1px solid var(--line);
+        border-radius: var(--r-pill);
+        background: var(--glass);
+        color: var(--muted);
+        font-size: 12px;
+        font-weight: 750;
+        backdrop-filter: blur(14px);
+      }
+
+      .filter--active {
+        border-color: var(--ink);
+        background: var(--ink);
+        color: white;
+      }
+
+      .stack {
+        display: grid;
+        gap: 12px;
+      }
+
+      .card {
+        position: relative;
+        overflow: hidden;
+        padding: 17px;
+        border: 1px solid rgba(255, 255, 255, 0.76);
+        border-radius: var(--r-card);
+        background: var(--glass);
+        box-shadow:
+          0 12px 28px rgba(30, 42, 62, 0.08),
+          inset 0 0 0 1px rgba(17, 19, 24, 0.035);
+        backdrop-filter: blur(18px) saturate(135%);
+      }
+
+      .card--ballot {
+        border-color: rgba(27, 77, 255, 0.2);
+        background:
+          linear-gradient(145deg, rgba(255, 255, 255, 0.88), rgba(232, 238, 255, 0.76));
+      }
+
+      .card--featured {
+        padding: 20px;
+        border: 0;
+        background:
+          radial-gradient(circle at 90% -20%, rgba(115, 150, 255, 0.8), transparent 48%),
+          linear-gradient(145deg, #1d4eff, #1534b2);
+        color: white;
+        box-shadow: 0 20px 40px rgba(23, 61, 199, 0.28);
+      }
+
+      .card--action {
+        border-color: rgba(8, 123, 97, 0.16);
+        background:
+          linear-gradient(145deg, rgba(255, 255, 255, 0.84), rgba(227, 247, 240, 0.72));
+      }
+
+      .card__top,
+      .meta-row,
+      .result-row,
+      .action-row {
+        display: flex;
+        align-items: center;
+        justify-content: space-between;
+        gap: 10px;
+      }
+
+      .meta-row {
+        justify-content: flex-start;
+        margin-bottom: 11px;
+      }
+
+      .badge {
+        display: inline-flex;
+        align-items: center;
+        gap: 5px;
+        padding: 5px 9px;
+        border-radius: var(--r-pill);
+        background: rgba(17, 19, 24, 0.06);
+        color: var(--muted);
+        font-size: 10px;
+        font-weight: 850;
+        letter-spacing: 0.07em;
+        text-transform: uppercase;
+      }
+
+      .badge--ballot {
+        background: var(--blue-wash);
+        color: var(--blue-deep);
+      }
+
+      .badge--action {
+        background: var(--green-wash);
+        color: var(--green);
+      }
+
+      .card--featured .badge {
+        background: rgba(255, 255, 255, 0.94);
+        color: var(--blue-deep);
+      }
+
+      .meta,
+      .deadline {
+        color: var(--faint);
+        font-size: 11px;
+        font-weight: 650;
+      }
+
+      .card--featured .deadline,
+      .card--featured .card__sub {
+        color: rgba(255, 255, 255, 0.74);
+      }
+
+      .card__title {
+        margin: 0;
+        font-size: 19px;
+        font-weight: 820;
+        line-height: 1.25;
+        letter-spacing: -0.025em;
+      }
+
+      .card--featured .card__title {
+        margin-top: 22px;
+        font-size: 24px;
+        line-height: 1.18;
+      }
+
+      .card__sub {
+        margin: 9px 0 0;
+        color: var(--muted);
+        font-size: 12px;
+        line-height: 1.5;
+      }
+
+      .door,
+      .button {
+        display: flex;
+        min-height: 46px;
+        align-items: center;
+        justify-content: center;
+        gap: 8px;
+        margin-top: 15px;
+        padding: 11px 15px;
+        border: 0;
+        border-radius: var(--r-pill);
+        background: var(--ink);
+        color: white;
+        cursor: pointer;
+        font-size: 13px;
+        font-weight: 800;
+      }
+
+      .card--featured .door {
+        background: white;
+        color: var(--blue-deep);
+      }
+
+      .door--quiet {
+        border: 1px solid var(--line);
+        background: rgba(255, 255, 255, 0.64);
+        color: var(--ink);
+      }
+
+      .fine-print {
+        margin: 9px 0 0;
+        color: var(--faint);
+        font-size: 10px;
+        line-height: 1.45;
+        text-align: center;
+      }
+
+      .bottom-nav {
+        position: absolute;
+        z-index: 5;
+        right: 12px;
+        bottom: 12px;
+        left: 12px;
+        display: grid;
+        grid-template-columns: repeat(3, 1fr);
+        padding: 7px;
+        border: 1px solid rgba(255, 255, 255, 0.78);
+        border-radius: 22px;
+        background: rgba(250, 251, 253, 0.72);
+        box-shadow: 0 16px 38px rgba(29, 42, 62, 0.17);
+        backdrop-filter: blur(24px) saturate(150%);
+      }
+
+      .bottom-nav button {
+        display: grid;
+        min-height: 47px;
+        place-items: center;
+        border: 0;
+        border-radius: 16px;
+        background: transparent;
+        color: var(--faint);
+        font-size: 11px;
+        font-weight: 750;
+      }
+
+      .bottom-nav .is-active {
+        background: var(--ink);
+        color: white;
+      }
+
+      .briefing-card,
+      .principle,
+      .choice-card {
+        padding: 16px;
+        border: 1px solid var(--line);
+        border-radius: 18px;
+        background: rgba(255, 255, 255, 0.56);
+      }
+
+      .detail-title {
+        margin: 12px 0 18px;
+      }
+
+      .section-label {
+        margin: 22px 0 9px;
+        color: var(--faint);
+        font-size: 10px;
+        font-weight: 850;
+        letter-spacing: 0.09em;
+        text-transform: uppercase;
+      }
+
+      .briefing-card p,
+      .principle p,
+      .choice-card p {
+        margin: 0;
+        color: var(--muted);
+        font-size: 13px;
+        line-height: 1.55;
+      }
+
+      .principle {
+        display: grid;
+        grid-template-columns: 30px 1fr;
+        gap: 10px;
+        margin-top: 8px;
+      }
+
+      .principle__number {
+        display: grid;
+        width: 28px;
+        height: 28px;
+        place-items: center;
+        border-radius: 9px;
+        background: var(--blue-wash);
+        color: var(--blue-deep);
+        font-size: 11px;
+        font-weight: 850;
+      }
+
+      .principle strong {
+        display: block;
+        margin-bottom: 3px;
+        color: var(--ink);
+        font-size: 13px;
+      }
+
+      .sticky-vote {
+        position: absolute;
+        z-index: 5;
+        right: 12px;
+        bottom: 12px;
+        left: 12px;
+        padding: 12px;
+        border: 1px solid rgba(255, 255, 255, 0.8);
+        border-radius: 23px;
+        background: rgba(250, 251, 253, 0.78);
+        box-shadow: 0 16px 38px rgba(29, 42, 62, 0.2);
+        backdrop-filter: blur(24px);
+      }
+
+      .vote-buttons {
+        display: grid;
+        grid-template-columns: 1fr 1fr;
+        gap: 9px;
+      }
+
+      .vote-buttons .button {
+        min-height: 50px;
+        margin: 0;
+      }
+
+      .button--secondary {
+        border: 1px solid var(--line-strong);
+        background: rgba(255, 255, 255, 0.7);
+        color: var(--ink);
+      }
+
+      .agenda-header {
+        margin: 12px 4px 18px;
+      }
+
+      .agenda-header h2 {
+        margin: 0;
+        font-size: 28px;
+        letter-spacing: -0.04em;
+      }
+
+      .agenda-header p {
+        margin: 8px 0 0;
+        color: var(--muted);
+        font-size: 13px;
+        line-height: 1.5;
+      }
+
+      .agenda-number {
+        color: var(--blue);
+        font-size: 28px;
+        font-weight: 900;
+        letter-spacing: -0.05em;
+      }
+
+      .agenda-label {
+        color: var(--faint);
+        font-size: 10px;
+        font-weight: 800;
+        letter-spacing: 0.08em;
+        text-transform: uppercase;
+      }
+
+      .card--constitutional {
+        border-color: rgba(168, 93, 0, 0.17);
+        background:
+          linear-gradient(145deg, rgba(255, 255, 255, 0.84), rgba(255, 242, 222, 0.72));
+      }
+
+      .card--constitutional .badge {
+        background: var(--amber-wash);
+        color: var(--amber);
+      }
+
+      .card--featured.card--constitutional {
+        border: 0;
+        background:
+          radial-gradient(circle at 90% -20%, rgba(115, 150, 255, 0.8), transparent 48%),
+          linear-gradient(145deg, #1d4eff, #1534b2);
+      }
+
+      .card--featured.card--constitutional .badge {
+        background: rgba(255, 255, 255, 0.94);
+        color: var(--blue-deep);
+      }
+
+      .status-board {
+        display: grid;
+        grid-template-columns: 1fr 1fr;
+        gap: 9px;
+        margin-bottom: 12px;
+      }
+
+      .status-tile {
+        padding: 14px;
+        border: 1px solid rgba(255, 255, 255, 0.7);
+        border-radius: 17px;
+        background: var(--glass);
+        backdrop-filter: blur(16px);
+      }
+
+      .status-tile strong,
+      .status-tile span {
+        display: block;
+      }
+
+      .status-tile strong {
+        font-size: 20px;
+        letter-spacing: -0.04em;
+      }
+
+      .status-tile span {
+        margin-top: 4px;
+        color: var(--muted);
+        font-size: 10px;
+        line-height: 1.4;
+      }
+
+      .dialog {
+        position: absolute;
+        z-index: 10;
+        inset: 0;
+        display: none;
+        align-items: flex-end;
+        background: rgba(18, 22, 30, 0.48);
+        backdrop-filter: blur(7px);
+      }
+
+      .dialog.is-open {
+        display: flex;
+      }
+
+      .dialog__sheet {
+        width: 100%;
+        padding: 12px 18px 24px;
+        border-radius: 28px 28px 0 0;
+        background: rgba(252, 253, 255, 0.94);
+        box-shadow: 0 -18px 60px rgba(16, 25, 40, 0.2);
+        backdrop-filter: blur(30px);
+      }
+
+      .dialog__grab {
+        width: 42px;
+        height: 4px;
+        margin: 0 auto 18px;
+        border-radius: var(--r-pill);
+        background: var(--line-strong);
+      }
+
+      .dialog h3 {
+        margin: 0;
+        font-size: 23px;
+        letter-spacing: -0.035em;
+      }
+
+      .dialog p {
+        margin: 10px 0 0;
+        color: var(--muted);
+        font-size: 13px;
+        line-height: 1.55;
+      }
+
+      .dialog__choice {
+        margin-top: 16px;
+        padding: 14px;
+        border-radius: 16px;
+        background: var(--blue-wash);
+        color: var(--blue-deep);
+        font-size: 13px;
+        font-weight: 750;
+      }
+
+      .dialog__actions {
+        display: grid;
+        grid-template-columns: 1fr 1.4fr;
+        gap: 9px;
+        margin-top: 16px;
+      }
+
+      .dialog__actions .button {
+        margin: 0;
+      }
+
+      .state-note {
+        margin-top: 34px;
+        padding: 18px 20px;
+        border: 1px solid rgba(255, 255, 255, 0.62);
+        border-radius: 22px;
+        background: rgba(255, 255, 255, 0.48);
+        color: var(--muted);
+        font-size: 13px;
+        line-height: 1.6;
+        backdrop-filter: blur(16px);
+      }
+
+      @media (max-width: 1290px) {
+        .screen-grid {
+          grid-template-columns: repeat(2, 390px);
+        }
+      }
+
+      @media (max-width: 860px) {
+        .showcase {
+          padding-inline: 16px;
+        }
+
+        .screen-grid {
+          grid-template-columns: 1fr;
+        }
+
+        .screen-wrap {
+          width: min(390px, 100%);
+        }
+
+        .screen {
+          width: 100%;
+        }
+      }
+
+      @media (prefers-reduced-motion: no-preference) {
+        .card,
+        .door,
+        .filter,
+        .bottom-nav button {
+          transition:
+            transform 160ms ease,
+            box-shadow 160ms ease,
+            background 160ms ease;
+        }
+
+        .card:hover {
+          transform: translateY(-2px);
+          box-shadow:
+            0 16px 34px rgba(30, 42, 62, 0.12),
+            inset 0 0 0 1px rgba(17, 19, 24, 0.035);
+        }
+      }
+
+      :focus-visible {
+        outline: 3px solid rgba(27, 77, 255, 0.42);
+        outline-offset: 3px;
+      }
+    </style>
+  </head>
+  <body>
+    <main class="showcase">
+      <header class="showcase__intro">
+        <p class="eyebrow">ODC Modern 01 · Civic Glass</p>
+        <h1>Your data should work for you.</h1>
+        <p class="showcase__dek">
+          A clear community decision about privacy: what stays anonymous, what people may
+          choose to share, and how shared data can create value for ODC members instead of
+          being quietly taken from them.
+        </p>
+      </header>
+
+      <div class="screen-grid">
+        <section class="screen-wrap">
+          <p class="screen-label">01 · Community home</p>
+          <div class="screen" id="home-screen">
+            <div class="screen__scroll">
+              <header class="topbar">
+                <div class="brand">
+                  <span class="brand__mark">ODC</span>
+                  <div>
+                    <p class="brand__name">ODC community</p>
+                    <p class="brand__sub">1,240 verified members</p>
+                  </div>
+                </div>
+                <span class="avatar" aria-label="Signed in as j-willow">JW</span>
+              </header>
+
+              <div class="page">
+                <div class="welcome">
+                  <h2>Your data, your rules</h2>
+                  <p>Privacy decisions appear here by deadline, never by popularity.</p>
+                </div>
+
+                <div class="open-ballots">
+                  <span class="open-ballots__count">3</span>
+                  <div>
+                    <strong>Open ballots need your attention</strong>
+                    <span>Anonymous by default closes first · 2 days left</span>
+                  </div>
+                </div>
+
+                <div class="filter-row" aria-label="Feed filters">
+                  <button class="filter filter--active">All</button>
+                  <button class="filter">Ballots</button>
+                  <button class="filter">Positions</button>
+                  <button class="filter">Actions</button>
+                </div>
+
+                <div class="stack" id="home-stack"></div>
+              </div>
+            </div>
+
+            <nav class="bottom-nav" aria-label="Primary navigation">
+              <button class="is-active">Agenda</button>
+              <button>Action</button>
+              <button>Record</button>
+            </nav>
+          </div>
+        </section>
+
+        <section class="screen-wrap">
+          <p class="screen-label">02 · Learn, then vote</p>
+          <div class="screen" id="ballot-screen">
+            <div class="screen__scroll">
+              <header class="topbar">
+                <button class="icon-button" aria-label="Go back">←</button>
+                <div>
+                  <p class="topbar__title">Data policy ballot</p>
+                  <p class="topbar__sub">Briefing completed</p>
+                </div>
+                <span class="avatar">1/3</span>
+              </header>
+
+              <article class="page">
+                <div class="meta-row">
+                  <span class="badge badge--ballot">Binding</span>
+                  <span class="deadline">Closes 1 Aug · 17:00</span>
+                </div>
+                <h2 class="detail-title">
+                  Should ODC keep member data anonymous by default?
+                </h2>
+
+                <section class="briefing-card">
+                  <p>
+                    Most online platforms collect clicks, searches, locations, and interests,
+                    then use them to target ads, train models, or sell access to audiences.
+                    People rarely control those uses or share in the value created.
+                  </p>
+                </section>
+
+                <p class="section-label">What ODC could do differently</p>
+                <div id="principles"></div>
+
+                <p class="section-label">What this vote cannot change</p>
+                <section class="briefing-card">
+                  <p>
+                    Governance ballots always remain secret, unlinkable, and outside
+                    commerce. Public positions remain public. This vote applies only to
+                    optional research, survey, and sentiment data.
+                  </p>
+                </section>
+
+                <p class="section-label">How anonymous data could help members</p>
+                <section class="briefing-card">
+                  <p>
+                    Members could choose to contribute anonymous data to community-approved
+                    research. The findings could improve briefings, show whether projects
+                    work, support better public services, or guide new initiatives. Any
+                    outside license would need a separate vote, clear consent, and revenue
+                    returned to the community treasury.
+                  </p>
+                </section>
+
+                <p class="section-label">Participation</p>
+                <section class="briefing-card">
+                  <div class="result-row">
+                    <strong>738 have voted</strong>
+                    <span class="meta">59.5% turnout</span>
+                  </div>
+                  <p style="margin-top: 8px">
+                    Results stay hidden until voting closes. Your choice cannot be proven to
+                    anyone else.
+                  </p>
+                </section>
+              </article>
+            </div>
+
+            <div class="sticky-vote">
+              <div class="vote-buttons">
+                <button class="button button--secondary" data-vote="No">Vote no</button>
+                <button class="button" data-vote="Yes">Vote yes</button>
+              </div>
+              <p class="fine-print">You’ll confirm before anything is recorded.</p>
+            </div>
+
+            <div class="dialog" id="vote-dialog" role="dialog" aria-modal="true">
+              <div class="dialog__sheet">
+                <div class="dialog__grab"></div>
+                <h3>Confirm your vote</h3>
+                <p>
+                  This is a binding governance decision. The public record will show that a
+                  valid member voted, but not how you voted.
+                </p>
+                <div class="dialog__choice" id="dialog-choice"></div>
+                <div class="dialog__actions">
+                  <button class="button button--secondary" id="cancel-vote">Go back</button>
+                  <button class="button" id="confirm-vote">Confirm vote</button>
+                </div>
+              </div>
+            </div>
+          </div>
+        </section>
+
+        <section class="screen-wrap">
+          <p class="screen-label">03 · Community data rules</p>
+          <div class="screen" id="agenda-screen">
+            <div class="screen__scroll">
+              <header class="topbar">
+                <div>
+                  <p class="topbar__title">Governance</p>
+                  <p class="topbar__sub">Privacy sequence · order fixed</p>
+                </div>
+                <span class="avatar">ODC</span>
+              </header>
+
+              <div class="page">
+                <div class="agenda-header">
+                  <h2>Five decisions put members in control.</h2>
+                  <p>
+                    Privacy first, consent second, collective benefit last. Later decisions
+                    cannot bypass earlier protections.
+                  </p>
+                </div>
+
+                <div class="status-board">
+                  <div class="status-tile">
+                    <strong>3</strong>
+                    <span>Open binding ballots</span>
+                  </div>
+                  <div class="status-tile">
+                    <strong>2</strong>
+                    <span>Awaiting prerequisites</span>
+                  </div>
+                </div>
+
+                <div class="stack" id="agenda-stack"></div>
+              </div>
+            </div>
+
+            <nav class="bottom-nav" aria-label="Primary navigation">
+              <button>Agenda</button>
+              <button>Action</button>
+              <button class="is-active">Governance</button>
+            </nav>
+          </div>
+        </section>
+      </div>
+
+      <aside class="state-note">
+        <strong>Interaction and trust notes:</strong> binding votes never execute from a
+        feed card; they open a briefing and require confirmation. Deadlines determine ballot
+        prominence. Public positions and implementation actions remain visibly separate from
+        secret ballots. The translucent treatment is limited to navigation and neutral
+        surfaces; the binding ballot retains the only saturated emphasis.
+      </aside>
+    </main>
+
+    <script>
+      const governanceItems = [
+        {
+          order: "01",
+          tone: "constitutional",
+          label: "Privacy default",
+          title: "Should ODC keep member data anonymous by default?",
+          summary:
+            "Optional research and sentiment data stays anonymous unless a member clearly chooses otherwise. Secret ballots are always protected.",
+          status: "Open · closes in 2 days",
+        },
+        {
+          order: "02",
+          tone: "constitutional",
+          label: "Individual consent",
+          title: "Should every new data use require clear opt-in consent?",
+          summary:
+            "No bundled permission. Members see what is collected, why it is useful, who can receive it, and how to withdraw.",
+          status: "Open · closes in 6 days",
+        },
+        {
+          order: "03",
+          tone: "ballot",
+          label: "Community consent",
+          title: "Should members vote before community data is shared outside ODC?",
+          summary:
+            "Even opted-in data cannot leave ODC until members approve the recipient, purpose, safeguards, and terms.",
+          status: "Open · closes in 9 days",
+        },
+        {
+          order: "04",
+          tone: "ballot",
+          label: "Shared benefit",
+          title: "Should income from shared data fund member-approved projects?",
+          summary:
+            "All income goes to the public community treasury, where members decide how it is spent.",
+          status: "Waiting on items 01–03",
+        },
+        {
+          order: "05",
+          tone: "constitutional",
+          label: "Independent custody",
+          title: "Should elected custodians protect data before it is shared?",
+          summary:
+            "Independent custodians release protected data only after a valid community vote and record every approved use.",
+          status: "Waiting on legal structure",
+        },
+      ];
+
+      const homeItems = [
+        governanceItems[0],
+        {
+          tone: "position",
+          label: "Public position",
+          title: "Anonymous community data can reveal needs without profiling people",
+          summary:
+            "m-heron argues that useful patterns can guide better services while names, ballots, and individual histories remain protected.",
+          status: "m-heron · 3h · 18 replies",
+        },
+        {
+          tone: "action",
+          label: "Action",
+          title: "Draft a plain-language data-use label",
+          summary:
+            "Show what is collected, how it helps members, who may use it, when it expires, and how consent can be withdrawn.",
+          status: "Unclaimed · proof required",
+        },
+      ];
+
+      const principles = [
+        ["1", "Anonymous by default", "Names and identifying details are removed from optional research data."],
+        ["2", "Sharing is a choice", "Each person decides whether to contribute and may withdraw from future uses."],
+        ["3", "Members approve outside use", "The community votes on the purpose, recipient, safeguards, and terms."],
+        ["4", "Value returns to members", "Findings improve ODC, and any income funds member-approved work."],
+      ];
+
+      function badgeClass(tone) {
+        if (tone === "action") return "badge badge--action";
+        if (tone === "position") return "badge";
+        return "badge badge--ballot";
+      }
+
+      function governanceCard(item, { featured = false, numbered = false } = {}) {
+        const article = document.createElement("article");
+        const toneClass =
+          item.tone === "action"
+            ? " card--action"
+            : item.tone === "constitutional"
+              ? " card--constitutional"
+              : " card--ballot";
+        article.className = `card${toneClass}${featured ? " card--featured" : ""}`;
+
+        article.innerHTML = `
+          <div class="card__top">
+            <span class="${badgeClass(item.tone)}">${item.label}</span>
+            ${numbered ? `<span class="agenda-number">${item.order}</span>` : ""}
+          </div>
+          <p class="meta" style="margin: 10px 0 7px">${item.status}</p>
+          <h3 class="card__title">${item.title}</h3>
+          <p class="card__sub">${item.summary}</p>
+          ${
+            item.tone === "position"
+              ? `<button class="door door--quiet">Read position and discussion →</button>
+                 <p class="fine-print">This is a public position, not a ballot.</p>`
+              : item.tone === "action"
+                ? `<button class="door door--quiet">View action and requirements →</button>`
+                : `<button class="door">Read briefing and vote →</button>
+                   <p class="fine-print">Voting happens on the ballot page.</p>`
+          }
+        `;
+        return article;
+      }
+
+      function render() {
+        const homeStack = document.querySelector("#home-stack");
+        homeItems.forEach((item, index) => {
+          homeStack.append(governanceCard(item, { featured: index === 0 }));
+        });
+
+        const agendaStack = document.querySelector("#agenda-stack");
+        governanceItems.forEach((item) => {
+          agendaStack.append(governanceCard(item, { numbered: true }));
+        });
+
+        const principlesRoot = document.querySelector("#principles");
+        principles.forEach(([number, title, body]) => {
+          const node = document.createElement("section");
+          node.className = "principle";
+          node.innerHTML = `
+            <span class="principle__number">${number}</span>
+            <p><strong>${title}</strong>${body}</p>
+          `;
+          principlesRoot.append(node);
+        });
+      }
+
+      const dialog = document.querySelector("#vote-dialog");
+      const choice = document.querySelector("#dialog-choice");
+
+      document.querySelectorAll("[data-vote]").forEach((button) => {
+        button.addEventListener("click", () => {
+          choice.textContent = `${button.dataset.vote.toUpperCase()} — Keep member data anonymous by default`;
+          dialog.classList.add("is-open");
+        });
+      });
+
+      document.querySelector("#cancel-vote").addEventListener("click", () => {
+        dialog.classList.remove("is-open");
+      });
+
+      document.querySelector("#confirm-vote").addEventListener("click", () => {
+        choice.textContent = "Vote recorded. Your choice remains private.";
+      });
+
+      dialog.addEventListener("click", (event) => {
+        if (event.target === dialog) dialog.classList.remove("is-open");
+      });
+
+      document.addEventListener("keydown", (event) => {
+        if (event.key === "Escape") dialog.classList.remove("is-open");
+      });
+
+      render();
+    </script>
+  </body>
+</html>

@@ -1,0 +1,589 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>ODC — hub feed v3 (app style)</title>
+<style>
+  :root {
+    --paper:#FFFFFF; --surface:#FFFFFF; --sunk:#F4F3EF;
+    --ink:#0D0D0F; --mute:#5A594F; --faint:#6E6C63;
+    --line:#E8E6DF; --line-strong:#D4D1C7;
+    --blue:#1338CE; --blue-deep:#0D2795; --blue-soft:#EDF1FF;
+    --go:#0A6B54; --go-soft:#E4F5EF;
+    --r-lg:20px; --r-md:14px; --r-pill:999px;
+  }
+  * { box-sizing:border-box; }
+  body { margin:0; padding:40px 24px; background:#E9E7E0; font-family:system-ui,-apple-system,"Segoe UI",sans-serif; -webkit-font-smoothing:antialiased; }
+  a { text-decoration:none; }
+  button, a { font-family:inherit; cursor:default; }
+
+  .deck { display:flex; flex-wrap:wrap; gap:40px; justify-content:center; align-items:flex-start; }
+  .slot { display:flex; flex-direction:column; gap:10px; }
+  .slot-label { margin:0; font-size:12px; font-weight:700; color:#87857C; letter-spacing:0.08em; text-transform:uppercase; }
+
+  .screen { width:390px; min-height:844px; display:flex; flex-direction:column; background:var(--paper); border-radius:26px; overflow:hidden; }
+  .screen.dark { --paper:#0A0A0C; --surface:#141418; --sunk:#141418; --ink:#F6F5F1; --mute:#A3A29B; --faint:#7C7B74; --line:#26262B; --line-strong:#33333A; --blue-soft:#141C3D; --go:#4FC2A2; }
+
+  /* ---- header ---- */
+  .nav { display:flex; align-items:center; justify-content:space-between; gap:12px; padding:16px 20px 12px; }
+  .navtitle { margin:0; font-size:22px; font-weight:800; letter-spacing:-0.035em; color:var(--ink); }
+  .avatar { width:34px; height:34px; border-radius:var(--r-pill); background:var(--blue); display:flex; align-items:center; justify-content:center; font-size:13px; font-weight:700; color:#FFFFFF; }
+  .backnav { display:flex; align-items:center; gap:14px; padding:16px 20px 8px; }
+  .iconbtn { display:flex; align-items:center; justify-content:center; width:36px; height:36px; border-radius:var(--r-pill); background:var(--sunk); border:none; }
+  .navlabel { margin:0; font-size:16px; font-weight:700; letter-spacing:-0.02em; color:var(--ink); }
+
+  /* ---- filter pills ---- */
+  .pills { display:flex; gap:8px; padding:4px 20px 14px; }
+  .pill { display:flex; align-items:center; gap:6px; padding:9px 15px; font-size:14px; font-weight:600; color:var(--mute); background:var(--sunk); border:none; border-radius:var(--r-pill); }
+  .pill-on { color:var(--paper); background:var(--ink); }
+
+  /* ---- sort row ---- */
+  .sortrow { display:flex; align-items:center; justify-content:space-between; padding:2px 20px 14px; }
+  .sortlabel { margin:0; font-size:13px; font-weight:500; color:var(--faint); }
+  .sortbtn { display:flex; align-items:center; gap:5px; padding:7px 12px; font-size:13px; font-weight:600; color:var(--mute); background:var(--sunk); border:none; border-radius:var(--r-pill); }
+
+  /* ---- ballot module (the one loud thing) ---- */
+  .ballotmod { display:flex; flex-direction:column; gap:14px; margin:0 16px 20px; padding:20px; background:var(--blue); border-radius:var(--r-lg); }
+  .modtop { display:flex; align-items:center; justify-content:space-between; gap:10px; }
+  .modtag { display:flex; align-items:center; gap:6px; padding:5px 11px; font-size:12px; font-weight:700; letter-spacing:0.04em; text-transform:uppercase; color:var(--blue-deep); background:#FFFFFF; border-radius:var(--r-pill); }
+  .modclock { margin:0; font-size:13px; font-weight:600; color:#C3D2FF; }
+  .modtitle { margin:0; font-size:23px; font-weight:700; line-height:1.22; letter-spacing:-0.03em; color:#FFFFFF; }
+  .modmeta { margin:0; font-size:14px; font-weight:400; color:#C3D2FF; }
+  .modcta { display:flex; align-items:center; justify-content:center; gap:8px; min-height:52px; padding:15px; font-size:16px; font-weight:700; letter-spacing:-0.01em; color:var(--blue-deep); background:#FFFFFF; border:none; border-radius:var(--r-pill); }
+
+  /* ---- feed rows, edge to edge ---- */
+  .feed { display:flex; flex-direction:column; }
+  .row { display:flex; flex-direction:column; gap:9px; padding:18px 20px; border-top:1px solid var(--line); }
+  .rowtop { display:flex; align-items:center; gap:8px; }
+  .lane { margin:0; font-size:12px; font-weight:700; letter-spacing:0.05em; text-transform:uppercase; color:var(--faint); }
+  .lane-go { color:var(--go); }
+  .dot { width:3px; height:3px; border-radius:var(--r-pill); background:var(--line-strong); }
+  .rowmeta { margin:0; font-size:12px; font-weight:500; color:var(--faint); }
+  .rowtitle { margin:0; font-size:17px; font-weight:600; line-height:1.35; letter-spacing:-0.02em; color:var(--ink); }
+  .rowsub { margin:0; font-size:13px; font-weight:400; color:var(--faint); }
+  .rowfine { margin:0; font-size:12px; font-weight:400; color:var(--faint); }
+
+  .reacts { display:flex; gap:8px; padding-top:2px; }
+  .react { display:flex; align-items:center; justify-content:center; gap:7px; min-height:40px; padding:9px 16px; font-size:14px; font-weight:600; color:var(--mute); background:var(--sunk); border:none; border-radius:var(--r-pill); }
+
+  .taskfoot { display:flex; align-items:center; justify-content:space-between; gap:12px; padding-top:2px; }
+  .bounty { margin:0; font-size:18px; font-weight:700; letter-spacing:-0.02em; color:var(--go); }
+  .bountysub { margin:0; font-size:12px; font-weight:400; color:var(--faint); }
+  .ghost { display:flex; align-items:center; gap:6px; padding:11px 18px; font-size:14px; font-weight:600; color:var(--ink); background:var(--sunk); border:none; border-radius:var(--r-pill); }
+
+  /* ---- tab bar ---- */
+  .tabs { display:flex; padding:10px 12px 26px; background:var(--surface); border-top:1px solid var(--line); margin-top:auto; }
+  .tab { display:flex; flex-direction:column; align-items:center; gap:5px; flex:1; padding:6px; font-size:11px; font-weight:600; color:var(--faint); background:none; border:none; }
+  .tab-on { color:var(--ink); }
+
+  /* ---- ballot page ---- */
+  .page { display:flex; flex-direction:column; gap:20px; padding:8px 20px 24px; }
+  .kicker { display:flex; align-items:center; gap:8px; }
+  .kickertag { padding:5px 11px; font-size:12px; font-weight:700; letter-spacing:0.04em; text-transform:uppercase; color:#FFFFFF; background:var(--blue); border-radius:var(--r-pill); }
+  .kickertime { margin:0; font-size:13px; font-weight:600; color:var(--mute); }
+  .h1 { margin:0; font-size:31px; font-weight:800; line-height:1.15; letter-spacing:-0.04em; color:var(--ink); }
+
+  .turnout { display:flex; flex-direction:column; gap:9px; padding:16px; background:var(--sunk); border-radius:var(--r-md); }
+  .turnrow { display:flex; align-items:baseline; justify-content:space-between; }
+  .turnbig { margin:0; font-size:20px; font-weight:700; letter-spacing:-0.02em; color:var(--ink); }
+  .turnsub { margin:0; font-size:13px; font-weight:500; color:var(--faint); }
+  .track { display:flex; height:7px; background:var(--line-strong); border-radius:var(--r-pill); overflow:hidden; }
+  .fill { width:49%; background:var(--blue); border-radius:var(--r-pill); }
+  .turnnote { margin:0; font-size:12px; font-weight:500; color:var(--mute); }
+
+  .sect { display:flex; flex-direction:column; gap:10px; }
+  .secthead { margin:0; font-size:12px; font-weight:700; letter-spacing:0.07em; text-transform:uppercase; color:var(--faint); }
+  .body { margin:0; font-size:16px; line-height:1.6; color:var(--ink); }
+  .textlink { display:flex; align-items:center; gap:7px; font-size:15px; font-weight:700; color:var(--blue); background:none; border:none; padding:2px 0; }
+
+  .seg { display:flex; gap:4px; padding:4px; background:var(--sunk); border-radius:var(--r-pill); }
+  .segbtn { flex:1; padding:10px; font-size:14px; font-weight:600; color:var(--mute); background:none; border:none; border-radius:var(--r-pill); }
+  .segbtn-on { color:var(--ink); background:var(--surface); }
+
+  .pos { display:flex; flex-direction:column; gap:9px; padding:16px; background:var(--surface); border:1px solid var(--line); border-radius:var(--r-md); }
+  .posthead { display:flex; align-items:center; gap:9px; }
+  .posav { width:28px; height:28px; border-radius:var(--r-pill); background:var(--sunk); display:flex; align-items:center; justify-content:center; font-size:11px; font-weight:700; color:var(--mute); }
+  .posname { margin:0; font-size:14px; font-weight:600; color:var(--ink); }
+  .postag { margin-left:auto; padding:4px 10px; font-size:12px; font-weight:600; color:var(--mute); background:var(--sunk); border-radius:var(--r-pill); }
+  .postext { margin:0; font-size:15px; line-height:1.5; color:var(--ink); }
+  .posmeta { margin:0; font-size:13px; font-weight:500; color:var(--faint); }
+
+  /* ---- sticky vote bar ---- */
+  .votebar { display:flex; flex-direction:column; gap:10px; padding:14px 20px 26px; background:var(--surface); border-top:1px solid var(--line); margin-top:auto; }
+  .voterow { display:flex; gap:10px; }
+  .vbtn { flex:1; min-height:56px; padding:16px; font-size:17px; font-weight:700; letter-spacing:-0.02em; color:#FFFFFF; background:var(--blue); border:none; border-radius:var(--r-pill); }
+  .vbtn-no { color:var(--ink); background:var(--sunk); }
+  .vfine { margin:0; font-size:12px; font-weight:500; text-align:center; color:var(--faint); }
+
+  /* ---- sheet ---- */
+  .scrim { flex:1; background:#0D0D0F; }
+  .sheet { display:flex; flex-direction:column; gap:16px; padding:12px 20px 28px; background:var(--surface); border-radius:26px 26px 0 0; margin-top:auto; }
+  .grab { width:38px; height:4px; margin:0 auto 6px; background:var(--line-strong); border-radius:var(--r-pill); }
+  .sh1 { margin:0; font-size:26px; font-weight:800; letter-spacing:-0.035em; line-height:1.2; color:var(--ink); }
+  .choice { display:flex; align-items:center; gap:12px; padding:16px; background:var(--blue-soft); border-radius:var(--r-md); }
+  .choicetag { padding:6px 13px; font-size:15px; font-weight:800; letter-spacing:0.02em; color:#FFFFFF; background:var(--blue); border-radius:var(--r-pill); }
+  .choicetext { margin:0; font-size:14px; font-weight:600; line-height:1.4; color:var(--blue-deep); }
+  .shtext { margin:0; font-size:14px; line-height:1.55; color:var(--mute); }
+
+  /* ---- discussion ---- */
+  .thread { display:flex; flex-direction:column; gap:12px; }
+  .reply { display:flex; flex-direction:column; gap:7px; margin-left:24px; padding:13px 15px; background:var(--sunk); border-radius:var(--r-md); }
+  .composer { display:flex; align-items:center; gap:12px; padding:12px 14px; background:var(--sunk); border-radius:var(--r-pill); }
+  .comptext { margin:0; flex:1; font-size:14px; font-weight:500; color:var(--faint); }
+  .compsend { display:flex; align-items:center; justify-content:center; width:36px; height:36px; background:var(--blue); border:none; border-radius:var(--r-pill); }
+
+  /* ---- loading / empty / error states ---- */
+  .skel { background:var(--sunk); border-radius:8px; }
+  .skel-chip { width:70px; height:20px; }
+  .skel-title { width:100%; height:16px; }
+  .skel-title2 { width:60%; height:16px; }
+  .skel-sub { width:40%; height:12px; }
+  .statecard { display:flex; flex-direction:column; gap:10px; margin:16px 20px; padding:20px 16px; background:var(--surface); border:1px solid var(--line); border-radius:var(--r-md); }
+  .statetitle { margin:0; font-size:15px; font-weight:700; color:var(--ink); }
+  .statetext { margin:0; font-size:13px; line-height:1.5; color:var(--mute); }
+</style>
+</head>
+<body>
+
+<div class="deck">
+
+  <!-- ============ 1 · FEED ============ -->
+  <div class="slot">
+    <p class="slot-label">1 · Feed</p>
+    <section class="screen" id="v3-feed">
+
+      <header class="nav" id="feed-nav">
+        <h1 class="navtitle">Riverside</h1>
+        <div class="avatar">JW</div>
+      </header>
+
+      <div class="pills" id="feed-pills">
+        <button class="pill pill-on">All</button>
+        <button class="pill">Ballots</button>
+        <button class="pill">Opinions</button>
+        <button class="pill">Actions</button>
+      </div>
+
+      <div class="sortrow" id="feed-sort">
+        <p class="sortlabel">Sorted by</p>
+        <button class="sortbtn">Newest first
+          <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="#5A594F" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M6 9l6 6 6-6"/></svg>
+        </button>
+      </div>
+
+      <a class="ballotmod" id="feed-ballotmod" href="#">
+        <span class="modtop">
+          <span class="modtag">
+            <svg width="12" height="12" viewBox="0 0 24 24" fill="none" stroke="#0D2795" stroke-width="2.6" stroke-linecap="round" stroke-linejoin="round"><path d="M20 6L9 17l-5-5"/></svg>
+            Ballot
+          </span>
+          <span class="modclock">Closes in 2d 14h</span>
+        </span>
+        <span class="modtitle">Should we adopt the 0.2% transit levy?</span>
+        <span class="modmeta">4 min briefing · 12 positions published</span>
+        <span class="modcta">Read briefing and vote
+          <svg width="17" height="17" viewBox="0 0 24 24" fill="none" stroke="#0D2795" stroke-width="2.4" stroke-linecap="round" stroke-linejoin="round"><path d="M5 12h13"/><path d="M12 5l7 7-7 7"/></svg>
+        </span>
+      </a>
+
+      <div class="feed" id="feed-rows">
+
+        <article class="row" id="row-opinion">
+          <div class="rowtop">
+            <p class="lane">Opinion</p>
+            <span class="dot"></span>
+            <p class="rowmeta">m-heron · 2h</p>
+          </div>
+          <h2 class="rowtitle">City report: bike lane usage up 40% since 2024</h2>
+          <p class="rowsub">vancouver.ca</p>
+          <div class="reacts">
+            <button class="react">
+              <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="#5A594F" stroke-width="1.9" stroke-linecap="round" stroke-linejoin="round"><path d="M14 9V5a3 3 0 0 0-3-3l-4 9v11h11.3a2 2 0 0 0 2-1.7l1.4-9a2 2 0 0 0-2-2.3z"/><path d="M7 22H4a2 2 0 0 1-2-2v-7a2 2 0 0 1 2-2h3"/></svg>
+              214
+            </button>
+            <button class="react">
+              <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="#5A594F" stroke-width="1.9" stroke-linecap="round" stroke-linejoin="round"><path d="M10 15v4a3 3 0 0 0 3 3l4-9V2H5.7a2 2 0 0 0-2 1.7l-1.4 9a2 2 0 0 0 2 2.3z"/><path d="M17 2h3a2 2 0 0 1 2 2v7a2 2 0 0 1-2 2h-3"/></svg>
+              58
+            </button>
+            <button class="react">
+              <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="#5A594F" stroke-width="1.9" stroke-linecap="round" stroke-linejoin="round"><path d="M21 11.5a8.4 8.4 0 0 1-9 8.4 8.4 8.4 0 0 1-3.8-.9L3 21l2-5.2a8.4 8.4 0 0 1-.9-3.8 8.5 8.5 0 0 1 8.4-8.4 8.5 8.5 0 0 1 8.5 8.4z"/></svg>
+              31
+            </button>
+          </div>
+          <p class="rowfine">Reactions are opinion, not a vote.</p>
+        </article>
+
+        <article class="row" id="row-action">
+          <div class="rowtop">
+            <p class="lane lane-go">Action</p>
+            <span class="dot"></span>
+            <p class="rowmeta">Unclaimed · k-osprey</p>
+          </div>
+          <h2 class="rowtitle">Photograph and log the 6 damaged benches on Commercial Dr</h2>
+          <div class="taskfoot">
+            <div>
+              <p class="bounty">40 credits</p>
+              <p class="bountysub">Proof required</p>
+            </div>
+            <a class="ghost" href="#">View on board
+              <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="#0D0D0F" stroke-width="2.2" stroke-linecap="round" stroke-linejoin="round"><path d="M5 12h13"/><path d="M12 5l7 7-7 7"/></svg>
+            </a>
+          </div>
+        </article>
+
+        <article class="row" id="row-opinion-2">
+          <div class="rowtop">
+            <p class="lane">Opinion</p>
+            <span class="dot"></span>
+            <p class="rowmeta">d-cedar · 6h</p>
+          </div>
+          <h2 class="rowtitle">Bus route 12 timetable consultation opens next month</h2>
+          <p class="rowsub">translink.ca</p>
+          <div class="reacts">
+            <button class="react">
+              <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="#5A594F" stroke-width="1.9" stroke-linecap="round" stroke-linejoin="round"><path d="M14 9V5a3 3 0 0 0-3-3l-4 9v11h11.3a2 2 0 0 0 2-1.7l1.4-9a2 2 0 0 0-2-2.3z"/><path d="M7 22H4a2 2 0 0 1-2-2v-7a2 2 0 0 1 2-2h3"/></svg>
+              46
+            </button>
+            <button class="react">
+              <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="#5A594F" stroke-width="1.9" stroke-linecap="round" stroke-linejoin="round"><path d="M10 15v4a3 3 0 0 0 3 3l4-9V2H5.7a2 2 0 0 0-2 1.7l-1.4 9a2 2 0 0 0 2 2.3z"/><path d="M17 2h3a2 2 0 0 1 2 2v7a2 2 0 0 1-2 2h-3"/></svg>
+              4
+            </button>
+          </div>
+          <p class="rowfine">Reactions are opinion, not a vote.</p>
+        </article>
+
+      </div>
+
+      <nav class="tabs" id="feed-tabs">
+        <button class="tab tab-on">
+          <svg width="23" height="23" viewBox="0 0 24 24" fill="#0D0D0F"><rect x="3" y="5" width="18" height="2.4" rx="1.2"/><rect x="3" y="11" width="18" height="2.4" rx="1.2"/><rect x="3" y="17" width="11" height="2.4" rx="1.2"/></svg>
+          Feed
+        </button>
+        <button class="tab">
+          <svg width="23" height="23" viewBox="0 0 24 24" fill="none" stroke="#8A887E" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M9 11l3 3 8-8"/><path d="M21 12v7a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2V5a2 2 0 0 1 2-2h11"/></svg>
+          Actions
+        </button>
+        <button class="tab">
+          <svg width="23" height="23" viewBox="0 0 24 24" fill="none" stroke="#8A887E" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M6 3h12a1 1 0 0 1 1 1v17l-7-4-7 4V4a1 1 0 0 1 1-1z"/></svg>
+          Record
+        </button>
+      </nav>
+
+    </section>
+  </div>
+
+  <!-- ============ 2 · BALLOT ============ -->
+  <div class="slot">
+    <p class="slot-label">2 · Ballot</p>
+    <section class="screen" id="v3-ballot">
+
+      <header class="backnav" id="ballot-nav">
+        <button class="iconbtn">
+          <svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="#0D0D0F" stroke-width="2.4" stroke-linecap="round" stroke-linejoin="round"><path d="M15 18l-6-6 6-6"/></svg>
+        </button>
+        <p class="navlabel">Ballot</p>
+      </header>
+
+      <div class="page" id="ballot-body">
+
+        <div class="kicker">
+          <span class="kickertag">Binding</span>
+          <p class="kickertime">Closes Fri 3 Aug, 5:00pm</p>
+        </div>
+
+        <h1 class="h1">Should we adopt the 0.2% transit levy?</h1>
+
+        <div class="turnout" id="ballot-turnout">
+          <div class="turnrow">
+            <p class="turnbig">612 voted</p>
+            <p class="turnsub">of 1,240 members</p>
+          </div>
+          <div class="track"><div class="fill"></div></div>
+          <p class="turnnote">Results stay hidden until voting closes.</p>
+        </div>
+
+        <div class="sect" id="ballot-tldr">
+          <p class="secthead">What you're deciding</p>
+          <p class="body">A 0.2% levy on property tax raises about $1.4M a year, ring-fenced for bus frequency on routes 3, 7 and 12. It runs six years, then needs a new vote.</p>
+        </div>
+
+        <div class="sect" id="ballot-brief">
+          <p class="secthead">Briefing · 4 min</p>
+          <p class="body">Council modelled three funding options. The levy was the only one that did not cut service elsewhere. Two independent reviews are attached, including the one disputing the ridership forecast.</p>
+          <button class="textlink">Read the full briefing
+            <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="#1338CE" stroke-width="2.4" stroke-linecap="round" stroke-linejoin="round"><path d="M5 12h13"/><path d="M12 5l7 7-7 7"/></svg>
+          </button>
+        </div>
+
+        <div class="sect" id="ballot-positions">
+          <p class="secthead">12 positions · order filed</p>
+          <div class="seg">
+            <button class="segbtn segbtn-on">All 12</button>
+            <button class="segbtn">In favour 7</button>
+            <button class="segbtn">Against 5</button>
+          </div>
+
+          <article class="pos">
+            <div class="posthead">
+              <span class="posav">TW</span>
+              <p class="posname">t-willow</p>
+              <span class="postag">In favour</span>
+            </div>
+            <p class="postext">Frequency is the only lever that moves ridership. Every year we defer this, the buses get emptier and the case gets harder to make.</p>
+            <p class="posmeta">14 replies</p>
+          </article>
+
+          <article class="pos">
+            <div class="posthead">
+              <span class="posav">RA</span>
+              <p class="posname">r-alder</p>
+              <span class="postag">Against</span>
+            </div>
+            <p class="postext">The ridership forecast assumes 2019 commuting patterns and nobody has updated it. Six years is a long commitment on a stale number.</p>
+            <p class="posmeta">9 replies</p>
+          </article>
+
+          <button class="textlink">See all positions and discussion
+            <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="#1338CE" stroke-width="2.4" stroke-linecap="round" stroke-linejoin="round"><path d="M5 12h13"/><path d="M12 5l7 7-7 7"/></svg>
+          </button>
+        </div>
+
+      </div>
+
+      <div class="votebar" id="ballot-votebar">
+        <div class="voterow">
+          <button class="vbtn vbtn-no">Vote no</button>
+          <button class="vbtn">Vote yes</button>
+        </div>
+        <p class="vfine">You'll confirm before anything is recorded.</p>
+      </div>
+
+    </section>
+  </div>
+
+  <!-- ============ 3 · CONFIRM ============ -->
+  <div class="slot">
+    <p class="slot-label">3 · Confirm</p>
+    <section class="screen" id="v3-confirm">
+      <div class="scrim"></div>
+      <div class="sheet" id="confirm-sheet">
+        <div class="grab"></div>
+        <h2 class="sh1">Confirm your vote</h2>
+        <div class="choice">
+          <span class="choicetag">YES</span>
+          <p class="choicetext">Should we adopt the 0.2% transit levy?</p>
+        </div>
+        <p class="shtext">This is binding and can't be taken back once the ballot closes. The public record will show that a valid member voted, but not how you voted.</p>
+        <button class="vbtn">Confirm vote</button>
+        <button class="vbtn vbtn-no">Go back</button>
+      </div>
+    </section>
+  </div>
+
+  <!-- ============ 4 · DISCUSSION ============ -->
+  <div class="slot">
+    <p class="slot-label">4 · Discussion</p>
+    <section class="screen" id="v3-discussion">
+
+      <header class="backnav" id="disc-nav">
+        <button class="iconbtn">
+          <svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="#0D0D0F" stroke-width="2.4" stroke-linecap="round" stroke-linejoin="round"><path d="M15 18l-6-6 6-6"/></svg>
+        </button>
+        <p class="navlabel">Discussion</p>
+      </header>
+
+      <div class="page" id="disc-body">
+
+        <div class="seg">
+          <button class="segbtn segbtn-on">Positions 12</button>
+          <button class="segbtn">Replies 34</button>
+        </div>
+
+        <div class="thread" id="disc-thread">
+
+          <article class="pos">
+            <div class="posthead">
+              <span class="posav">RA</span>
+              <p class="posname">r-alder</p>
+              <span class="postag">Against</span>
+            </div>
+            <p class="postext">The ridership forecast assumes 2019 commuting patterns. Nobody has updated it.</p>
+            <p class="posmeta">9 replies</p>
+          </article>
+
+          <div class="reply">
+            <p class="posmeta">m-heron</p>
+            <p class="postext">The 2025 origin-destination survey is in appendix C. It's lower, but not by enough to change the ranking.</p>
+          </div>
+
+          <div class="reply">
+            <p class="posmeta">r-alder</p>
+            <p class="postext">Appendix C is a sample of 400. That's the whole point of the objection.</p>
+          </div>
+
+          <article class="pos">
+            <div class="posthead">
+              <span class="posav">TW</span>
+              <p class="posname">t-willow</p>
+              <span class="postag">In favour</span>
+            </div>
+            <p class="postext">Frequency is the only lever that moves ridership. Every year we defer, the case gets harder.</p>
+            <p class="posmeta">14 replies</p>
+          </article>
+
+        </div>
+
+        <div class="composer" id="disc-composer">
+          <p class="comptext">Add your position</p>
+          <button class="compsend">
+            <svg width="17" height="17" viewBox="0 0 24 24" fill="none" stroke="#FFFFFF" stroke-width="2.4" stroke-linecap="round" stroke-linejoin="round"><path d="M5 12h13"/><path d="M12 5l7 7-7 7"/></svg>
+          </button>
+        </div>
+
+      </div>
+    </section>
+  </div>
+
+  <!-- ============ 5 · FEED, DARK ============ -->
+  <div class="slot">
+    <p class="slot-label">5 · Feed — dark</p>
+    <section class="screen dark" id="v3-feed-dark">
+
+      <header class="nav" id="dark-nav">
+        <h1 class="navtitle">Riverside</h1>
+        <div class="avatar">JW</div>
+      </header>
+
+      <div class="pills" id="dark-pills">
+        <button class="pill pill-on">All</button>
+        <button class="pill">Ballots</button>
+        <button class="pill">Opinions</button>
+        <button class="pill">Actions</button>
+      </div>
+
+      <div class="sortrow" id="dark-sort">
+        <p class="sortlabel">Sorted by</p>
+        <button class="sortbtn">Newest first
+          <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="#A3A29B" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M6 9l6 6 6-6"/></svg>
+        </button>
+      </div>
+
+      <a class="ballotmod" id="dark-ballotmod" href="#">
+        <span class="modtop">
+          <span class="modtag">
+            <svg width="12" height="12" viewBox="0 0 24 24" fill="none" stroke="#0D2795" stroke-width="2.6" stroke-linecap="round" stroke-linejoin="round"><path d="M20 6L9 17l-5-5"/></svg>
+            Ballot
+          </span>
+          <span class="modclock">Closes in 2d 14h</span>
+        </span>
+        <span class="modtitle">Should we adopt the 0.2% transit levy?</span>
+        <span class="modmeta">4 min briefing · 12 positions published</span>
+        <span class="modcta">Read briefing and vote
+          <svg width="17" height="17" viewBox="0 0 24 24" fill="none" stroke="#0D2795" stroke-width="2.4" stroke-linecap="round" stroke-linejoin="round"><path d="M5 12h13"/><path d="M12 5l7 7-7 7"/></svg>
+        </span>
+      </a>
+
+      <div class="feed" id="dark-rows">
+
+        <article class="row" id="dark-row-opinion">
+          <div class="rowtop">
+            <p class="lane">Opinion</p>
+            <span class="dot"></span>
+            <p class="rowmeta">m-heron · 2h</p>
+          </div>
+          <h2 class="rowtitle">City report: bike lane usage up 40% since 2024</h2>
+          <p class="rowsub">vancouver.ca</p>
+          <div class="reacts">
+            <button class="react">
+              <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="#A3A29B" stroke-width="1.9" stroke-linecap="round" stroke-linejoin="round"><path d="M14 9V5a3 3 0 0 0-3-3l-4 9v11h11.3a2 2 0 0 0 2-1.7l1.4-9a2 2 0 0 0-2-2.3z"/><path d="M7 22H4a2 2 0 0 1-2-2v-7a2 2 0 0 1 2-2h3"/></svg>
+              214
+            </button>
+            <button class="react">
+              <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="#A3A29B" stroke-width="1.9" stroke-linecap="round" stroke-linejoin="round"><path d="M10 15v4a3 3 0 0 0 3 3l4-9V2H5.7a2 2 0 0 0-2 1.7l-1.4 9a2 2 0 0 0 2 2.3z"/><path d="M17 2h3a2 2 0 0 1 2 2v7a2 2 0 0 1-2 2h-3"/></svg>
+              58
+            </button>
+          </div>
+          <p class="rowfine">Reactions are opinion, not a vote.</p>
+        </article>
+
+        <article class="row" id="dark-row-action">
+          <div class="rowtop">
+            <p class="lane lane-go">Action</p>
+            <span class="dot"></span>
+            <p class="rowmeta">Unclaimed · k-osprey</p>
+          </div>
+          <h2 class="rowtitle">Photograph and log the 6 damaged benches on Commercial Dr</h2>
+          <div class="taskfoot">
+            <div>
+              <p class="bounty">40 credits</p>
+              <p class="bountysub">Proof required</p>
+            </div>
+            <a class="ghost" href="#">View on board
+              <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="#F6F5F1" stroke-width="2.2" stroke-linecap="round" stroke-linejoin="round"><path d="M5 12h13"/><path d="M12 5l7 7-7 7"/></svg>
+            </a>
+          </div>
+        </article>
+
+      </div>
+
+      <nav class="tabs" id="dark-tabs">
+        <button class="tab tab-on">
+          <svg width="23" height="23" viewBox="0 0 24 24" fill="#F6F5F1"><rect x="3" y="5" width="18" height="2.4" rx="1.2"/><rect x="3" y="11" width="18" height="2.4" rx="1.2"/><rect x="3" y="17" width="11" height="2.4" rx="1.2"/></svg>
+          Feed
+        </button>
+        <button class="tab">
+          <svg width="23" height="23" viewBox="0 0 24 24" fill="none" stroke="#7C7B74" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M9 11l3 3 8-8"/><path d="M21 12v7a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2V5a2 2 0 0 1 2-2h11"/></svg>
+          Actions
+        </button>
+        <button class="tab">
+          <svg width="23" height="23" viewBox="0 0 24 24" fill="none" stroke="#7C7B74" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M6 3h12a1 1 0 0 1 1 1v17l-7-4-7 4V4a1 1 0 0 1 1-1z"/></svg>
+          Record
+        </button>
+      </nav>
+
+    </section>
+  </div>
+
+  <!-- ============ 6 · STATES ============ -->
+  <div class="slot">
+    <p class="slot-label">6 · Feed states</p>
+    <section class="screen" id="v3-states">
+
+      <header class="nav" id="states-nav">
+        <h1 class="navtitle">Riverside</h1>
+        <div class="avatar">JW</div>
+      </header>
+
+      <div class="feed" id="states-loading">
+        <div class="row">
+          <div class="skel skel-chip"></div>
+          <div class="skel skel-title"></div>
+          <div class="skel skel-title2"></div>
+          <div class="skel skel-sub"></div>
+        </div>
+      </div>
+
+      <div class="statecard" id="state-empty">
+        <p class="statetitle">Nothing here yet</p>
+        <p class="statetext">No one has shared anything this week. You could be the first.</p>
+        <button class="textlink">Share something
+          <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="#1338CE" stroke-width="2.4" stroke-linecap="round" stroke-linejoin="round"><path d="M5 12h13"/><path d="M12 5l7 7-7 7"/></svg>
+        </button>
+      </div>
+
+      <div class="statecard" id="state-error">
+        <p class="statetitle">We couldn't load the feed</p>
+        <p class="statetext">Your connection dropped. Nothing was lost — try again.</p>
+        <button class="textlink">Try again
+          <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="#1338CE" stroke-width="2.4" stroke-linecap="round" stroke-linejoin="round"><path d="M5 12h13"/><path d="M12 5l7 7-7 7"/></svg>
+        </button>
+      </div>
+
+    </section>
+  </div>
+
+</div>
+
+</body>
+</html>

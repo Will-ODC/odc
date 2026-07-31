@@ -54,3 +54,22 @@ Treat these three light-theme files as the current design baselines and the firs
 
 - Desktop still labels its AI component `Plain-English guide`; mobile now uses `Summary`
 - Candidate status remains pending until the three baselines are explicitly approved
+
+## Other explorations (not primary candidates)
+
+Three additional decks explore alternate visual directions; none of these
+supersede the primary candidates above.
+
+- Governance/privacy flow: `governance-modern-v1.html` — a "Civic Glass"
+  translucent treatment applied to a five-item constitutional/binding ballot
+  agenda, with a community-home and ballot-detail screen.
+- Hub feed, import-ready: `hub-feed-v2.html` — feed, ballot, confirm sheet,
+  discussion, and a dedicated loading/empty/error states screen.
+- Hub feed, app style: `hub-feed-v3.html` — feed, ballot, confirm, discussion,
+  and a dark-mode feed variant.
+
+Both hub-feed decks depict a `discussion` surface with free-text positions and
+threaded replies. That is a **post-MVP surface** — `CLAUDE.md` rule 5 (no
+free-text content in the event log, MVP) and the current implementation plan
+scope this out of Phase 0/1. Treat the discussion screens as forward-looking
+illustration, not a claim about what ships first.
