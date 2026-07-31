@@ -4,20 +4,17 @@
 <meta charset="utf-8">
 <meta name="viewport" content="width=device-width, initial-scale=1">
 <title>ODC — hub feed v3 (app style)</title>
-<link rel="preconnect" href="https://fonts.googleapis.com">
-<link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
-<link href="https://fonts.googleapis.com/css2?family=Inter:wght@400;500;600;700;800&display=swap" rel="stylesheet">
 <style>
   :root {
     --paper:#FFFFFF; --surface:#FFFFFF; --sunk:#F4F3EF;
-    --ink:#0D0D0F; --mute:#5A594F; --faint:#8A887E;
+    --ink:#0D0D0F; --mute:#5A594F; --faint:#6E6C63;
     --line:#E8E6DF; --line-strong:#D4D1C7;
     --blue:#1338CE; --blue-deep:#0D2795; --blue-soft:#EDF1FF;
     --go:#0A6B54; --go-soft:#E4F5EF;
     --r-lg:20px; --r-md:14px; --r-pill:999px;
   }
   * { box-sizing:border-box; }
-  body { margin:0; padding:40px 24px; background:#E9E7E0; font-family:Inter,system-ui,sans-serif; -webkit-font-smoothing:antialiased; }
+  body { margin:0; padding:40px 24px; background:#E9E7E0; font-family:system-ui,-apple-system,"Segoe UI",sans-serif; -webkit-font-smoothing:antialiased; }
   a { text-decoration:none; }
   button, a { font-family:inherit; cursor:default; }
 
@@ -26,7 +23,7 @@
   .slot-label { margin:0; font-size:12px; font-weight:700; color:#87857C; letter-spacing:0.08em; text-transform:uppercase; }
 
   .screen { width:390px; min-height:844px; display:flex; flex-direction:column; background:var(--paper); border-radius:26px; overflow:hidden; }
-  .screen.dark { --paper:#0A0A0C; --surface:#141418; --sunk:#141418; --ink:#F6F5F1; --mute:#A3A29B; --faint:#7C7B74; --line:#26262B; --line-strong:#33333A; --blue-soft:#141C3D; }
+  .screen.dark { --paper:#0A0A0C; --surface:#141418; --sunk:#141418; --ink:#F6F5F1; --mute:#A3A29B; --faint:#7C7B74; --line:#26262B; --line-strong:#33333A; --blue-soft:#141C3D; --go:#4FC2A2; }
 
   /* ---- header ---- */
   .nav { display:flex; align-items:center; justify-content:space-between; gap:12px; padding:16px 20px 12px; }
@@ -40,6 +37,11 @@
   .pills { display:flex; gap:8px; padding:4px 20px 14px; }
   .pill { display:flex; align-items:center; gap:6px; padding:9px 15px; font-size:14px; font-weight:600; color:var(--mute); background:var(--sunk); border:none; border-radius:var(--r-pill); }
   .pill-on { color:var(--paper); background:var(--ink); }
+
+  /* ---- sort row ---- */
+  .sortrow { display:flex; align-items:center; justify-content:space-between; padding:2px 20px 14px; }
+  .sortlabel { margin:0; font-size:13px; font-weight:500; color:var(--faint); }
+  .sortbtn { display:flex; align-items:center; gap:5px; padding:7px 12px; font-size:13px; font-weight:600; color:var(--mute); background:var(--sunk); border:none; border-radius:var(--r-pill); }
 
   /* ---- ballot module (the one loud thing) ---- */
   .ballotmod { display:flex; flex-direction:column; gap:14px; margin:0 16px 20px; padding:20px; background:var(--blue); border-radius:var(--r-lg); }
@@ -130,6 +132,16 @@
   .composer { display:flex; align-items:center; gap:12px; padding:12px 14px; background:var(--sunk); border-radius:var(--r-pill); }
   .comptext { margin:0; flex:1; font-size:14px; font-weight:500; color:var(--faint); }
   .compsend { display:flex; align-items:center; justify-content:center; width:36px; height:36px; background:var(--blue); border:none; border-radius:var(--r-pill); }
+
+  /* ---- loading / empty / error states ---- */
+  .skel { background:var(--sunk); border-radius:8px; }
+  .skel-chip { width:70px; height:20px; }
+  .skel-title { width:100%; height:16px; }
+  .skel-title2 { width:60%; height:16px; }
+  .skel-sub { width:40%; height:12px; }
+  .statecard { display:flex; flex-direction:column; gap:10px; margin:16px 20px; padding:20px 16px; background:var(--surface); border:1px solid var(--line); border-radius:var(--r-md); }
+  .statetitle { margin:0; font-size:15px; font-weight:700; color:var(--ink); }
+  .statetext { margin:0; font-size:13px; line-height:1.5; color:var(--mute); }
 </style>
 </head>
 <body>
@@ -151,6 +163,13 @@
         <button class="pill">Ballots</button>
         <button class="pill">Opinions</button>
         <button class="pill">Actions</button>
+      </div>
+
+      <div class="sortrow" id="feed-sort">
+        <p class="sortlabel">Sorted by</p>
+        <button class="sortbtn">Newest first
+          <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="#5A594F" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M6 9l6 6 6-6"/></svg>
+        </button>
       </div>
 
       <a class="ballotmod" id="feed-ballotmod" href="#">
@@ -355,7 +374,7 @@
           <span class="choicetag">YES</span>
           <p class="choicetext">Should we adopt the 0.2% transit levy?</p>
         </div>
-        <p class="shtext">This is binding. It goes into the public record under your voting name, and it can't be taken back once the ballot closes.</p>
+        <p class="shtext">This is binding and can't be taken back once the ballot closes. The public record will show that a valid member voted, but not how you voted.</p>
         <button class="vbtn">Confirm vote</button>
         <button class="vbtn vbtn-no">Go back</button>
       </div>
@@ -443,6 +462,13 @@
         <button class="pill">Actions</button>
       </div>
 
+      <div class="sortrow" id="dark-sort">
+        <p class="sortlabel">Sorted by</p>
+        <button class="sortbtn">Newest first
+          <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="#A3A29B" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M6 9l6 6 6-6"/></svg>
+        </button>
+      </div>
+
       <a class="ballotmod" id="dark-ballotmod" href="#">
         <span class="modtop">
           <span class="modtag">
@@ -483,17 +509,17 @@
 
         <article class="row" id="dark-row-action">
           <div class="rowtop">
-            <p class="lane lane-go" style="color:#4FC2A2;">Action</p>
+            <p class="lane lane-go">Action</p>
             <span class="dot"></span>
             <p class="rowmeta">Unclaimed · k-osprey</p>
           </div>
           <h2 class="rowtitle">Photograph and log the 6 damaged benches on Commercial Dr</h2>
           <div class="taskfoot">
             <div>
-              <p class="bounty" style="color:#4FC2A2;">40 credits</p>
+              <p class="bounty">40 credits</p>
               <p class="bountysub">Proof required</p>
             </div>
-            <a class="ghost" href="#" style="color:#F6F5F1;">View on board
+            <a class="ghost" href="#">View on board
               <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="#F6F5F1" stroke-width="2.2" stroke-linecap="round" stroke-linejoin="round"><path d="M5 12h13"/><path d="M12 5l7 7-7 7"/></svg>
             </a>
           </div>
@@ -515,6 +541,44 @@
           Record
         </button>
       </nav>
+
+    </section>
+  </div>
+
+  <!-- ============ 6 · STATES ============ -->
+  <div class="slot">
+    <p class="slot-label">6 · Feed states</p>
+    <section class="screen" id="v3-states">
+
+      <header class="nav" id="states-nav">
+        <h1 class="navtitle">Riverside</h1>
+        <div class="avatar">JW</div>
+      </header>
+
+      <div class="feed" id="states-loading">
+        <div class="row">
+          <div class="skel skel-chip"></div>
+          <div class="skel skel-title"></div>
+          <div class="skel skel-title2"></div>
+          <div class="skel skel-sub"></div>
+        </div>
+      </div>
+
+      <div class="statecard" id="state-empty">
+        <p class="statetitle">Nothing here yet</p>
+        <p class="statetext">No one has shared anything this week. You could be the first.</p>
+        <button class="textlink">Share something
+          <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="#1338CE" stroke-width="2.4" stroke-linecap="round" stroke-linejoin="round"><path d="M5 12h13"/><path d="M12 5l7 7-7 7"/></svg>
+        </button>
+      </div>
+
+      <div class="statecard" id="state-error">
+        <p class="statetitle">We couldn't load the feed</p>
+        <p class="statetext">Your connection dropped. Nothing was lost — try again.</p>
+        <button class="textlink">Try again
+          <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="#1338CE" stroke-width="2.4" stroke-linecap="round" stroke-linejoin="round"><path d="M5 12h13"/><path d="M12 5l7 7-7 7"/></svg>
+        </button>
+      </div>
 
     </section>
   </div>

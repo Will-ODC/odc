@@ -4,9 +4,6 @@
 <meta charset="utf-8">
 <meta name="viewport" content="width=device-width, initial-scale=1">
 <title>ODC — hub feed v2 (import-ready)</title>
-<link rel="preconnect" href="https://fonts.googleapis.com">
-<link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
-<link href="https://fonts.googleapis.com/css2?family=Inter:wght@400;500;600;700&display=swap" rel="stylesheet">
 <style>
   :root {
     --paper:#FAF9F5; --surface:#FFFFFF;
@@ -17,7 +14,7 @@
     --r-card:14px; --r-btn:10px; --r-chip:6px;
   }
   * { box-sizing:border-box; }
-  body { margin:0; padding:40px 24px; background:#EFEDE6; font-family:Inter,system-ui,sans-serif; -webkit-font-smoothing:antialiased; }
+  body { margin:0; padding:40px 24px; background:#EFEDE6; font-family:system-ui,-apple-system,"Segoe UI",sans-serif; -webkit-font-smoothing:antialiased; }
   a { text-decoration:none; }
   button, a { font-family:inherit; cursor:default; }
 
@@ -312,7 +309,7 @@
       <div class="sheet" id="confirm-sheet">
         <h2 class="sheettitle">Confirm your vote</h2>
         <p class="sheetquote">You're voting YES on: Should we adopt the 0.2% transit levy?</p>
-        <p class="sheettext">This is binding. It will be added to the public record under your voting name, and it can't be taken back once the ballot closes.</p>
+        <p class="sheettext">This is binding and can't be taken back once the ballot closes. The public record will show that a valid member voted, but not how you voted.</p>
         <button class="votebtn">
           Confirm vote
         </button>
