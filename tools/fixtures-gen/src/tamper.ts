@@ -69,6 +69,34 @@ export function flipHashChar(
 }
 
 /**
+ * Flips the low bit of one hex character inside the given line's `prev_hash`
+ * (tamper matrix: wrong `prev_hash`), breaking the link to the previous event.
+ *
+ * Separate from `flipHashChar` because `prev_hash` sits mid-line, not at the
+ * end, so that function's `\}$`-anchored pattern cannot reach it. The search
+ * text keeps the `"prev_hash":` prefix: a payload field can legitimately hold
+ * the same 64 hex digits (a ballot's `issue_id` equals `prev_hash` whenever the
+ * ballot directly follows its issue) and appears EARLIER in the envelope, so a
+ * bare hash search would silently mutate the payload instead.
+ */
+export function flipPrevHashChar(
+  lines: readonly string[],
+  lineNumber: number,
+): string[] {
+  const out = [...lines];
+  const i = lineNumber - 1;
+  const line = out[i];
+  if (line === undefined) throw new RangeError(`no line ${lineNumber}`);
+  const m = /"prev_hash":"([0-9a-f]{64})"/.exec(line);
+  if (m === null) throw new Error(`line ${lineNumber} has no prev_hash`);
+  const prev = m[1] as string;
+  const first = prev[0] as string;
+  const flipped = (first === "0" ? "1" : "0") + prev.slice(1);
+  out[i] = line.replace(`"prev_hash":"${prev}"`, `"prev_hash":"${flipped}"`);
+  return out;
+}
+
+/**
  * Removes the given 1-based line (tamper matrix: line deletion).
  *
  * Bounds-checked for the same reason `editLine` throws. `splice` is silent in

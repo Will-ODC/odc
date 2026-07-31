@@ -15,6 +15,7 @@ import {
   duplicateLine,
   editLine,
   flipHashChar,
+  flipPrevHashChar,
   frame,
   insertBlankLine,
   swapLines,
@@ -25,6 +26,9 @@ const LINES = ["one", "two", "three", "four"];
 const withHash = (n: number, h: string): string =>
   `{"seq":${String(n)},"hash":"${h}"}`;
 const HASH_A = "a".repeat(64);
+const HASH_B = "b".repeat(64);
+// Uppercase hex is not a hash (ID-2), so the mutators must not recognise it.
+const HASH_UPPER = "A".repeat(64);
 
 // --- framing (EX-2, EX-3, EX-4, EX-6) -------------------------------------
 
@@ -93,6 +97,37 @@ test("flipHashChar changes the stored hash and nothing else", () => {
 
 test("flipHashChar refuses a line with no trailing hash", () => {
   assert.throws(() => flipHashChar(['{"seq":1}'], 1), /no trailing hash/);
+});
+
+test("flipPrevHashChar breaks the link and leaves the payload alone", () => {
+  // The payload carries the SAME 64 hex digits as prev_hash — the real shape of a
+  // ballot cast directly after its own issue. A hash-only search would hit this
+  // first (payload precedes prev_hash in EX-7's order) and mutate an `issue_id`
+  // while the file still linked correctly, i.e. tamper the wrong field silently.
+  const line = `{"seq":2,"payload":{"issue_id":"${HASH_A}"},"prev_hash":"${HASH_A}","hash":"${HASH_B}"}`;
+  const out = flipPrevHashChar([line], 1) as string[];
+  const got = out[0] as string;
+  assert.equal(got.length, line.length);
+  assert.ok(got.includes(`"issue_id":"${HASH_A}"`), "payload was mutated");
+  assert.ok(got.includes(`"hash":"${HASH_B}"}`), "own hash was mutated");
+  const prev = /"prev_hash":"([0-9a-f]{64})"/.exec(got)?.[1] ?? "";
+  assert.match(prev, /^[0-9a-f]{64}$/);
+  assert.notEqual(prev, HASH_A);
+});
+
+test("flipPrevHashChar flips genesis's 64-zero anchor to a real hex string", () => {
+  const zeros = "0".repeat(64);
+  const out = flipPrevHashChar([`{"prev_hash":"${zeros}"}`], 1) as string[];
+  assert.equal(out[0], `{"prev_hash":"1${"0".repeat(63)}"}`);
+});
+
+test("flipPrevHashChar refuses a line with no prev_hash", () => {
+  assert.throws(() => flipPrevHashChar(['{"seq":1}'], 1), /no prev_hash/);
+  assert.throws(
+    () => flipPrevHashChar([`{"prev_hash":"${HASH_UPPER}"}`], 1),
+    /no prev_hash/,
+  );
+  assert.throws(() => flipPrevHashChar(["x"], 2), RangeError);
 });
 
 test("deleteLine removes exactly one line (tamper matrix)", () => {
