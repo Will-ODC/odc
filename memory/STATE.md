@@ -250,22 +250,39 @@ is spent and can be deleted.
   draws are consumed** — the replacement is a structural property test (2,000
   seeds x two shapes) that is immune to stream drift. Expect this again in T6c:
   the tamper tool will consume draws too.
-- **T6c — tamper tool.** NEXT. The 8 `odc-contracts` matrix cases by flag
-  (byte flip, line deletion, reordering, truncation, duplicated seq, wrong
-  `prev_hash`, re-serialized-but-equivalent line, wrong `--head`), applied to an
-  export. Determinism-by-seed tests. `tools/fixtures-gen/src/tamper.ts` already
-  has most of the mutators and their bounds checks — reuse, do not re-derive.
-  **The diff-size ceiling is the binding constraint on this ticket:** T6b landed
-  at exactly 600 of 600 and had to have its comment prose condensed to fit.
-- **T6d — `just rehearsal-build`**, CLI wiring, README.
+- **T6c — tamper tool** (2026-07-31, PR #44, squash `0f9aaab`). The 8
+  `odc-contracts` matrix cases live as `applyTamper(target, case, seed)` in
+  `tools/rehearsal/src/tamper.ts`, reusing `fixtures-gen`'s mutators for the
+  byte-level work and adding two new ones: `flipPrevHashChar` (mid-line, so
+  `flipHashChar`'s end-anchored pattern can't reach it — and it keeps the
+  `"prev_hash":` prefix on purpose, since a ballot's `issue_id` can legitimately
+  equal `prev_hash` and sits earlier in the line) and `swapEnvelopeKeys`
+  (transposes two adjacent EX-7 fields via `editLine`, asserting the
+  reconstruction equals `serializeEvent`'s bytes first so a codec drift throws
+  instead of silently reserializing wrong). `head` is computed per case, not
+  passed through, so each case leaves exactly one defect; `truncation` reports
+  the TRUE head (only it detects the truncation) and `wrong-head` leaves bytes
+  untouched and flips the head. No pinned seeds — determinism and "the seed
+  actually selects the target" are both asserted structurally over 82 seeds x 2
+  chain shapes, per the T6b stream-drift lesson. 12/12 mutation-tested.
+  fixtures-gen 95/95 (was 92), rehearsal 146/146 (was 120).
+  **CLI wiring was cut to stay under the diff-size ceiling** (589 counted
+  lines) — `TAMPER_CASES`/`isTamperCase` ship as data, T6d parses `--case`.
+  Three spec-shaped (non-blocking) findings went into the PR description for a
+  later ticket: the matrix's "byte flip" is narrower than a uniformly-random
+  byte offset would be; "line reordering" has no dedicated rule id (attribution
+  to the earlier line follows EV-17's precedence but isn't stated); `EX-14`'s
+  "head" is defined on events, not on the bytes of a possibly-tampered file.
+- **T6d — `just rehearsal-build`**, CLI wiring (including `--case`), README. NEXT.
 
 **T6's self-verify property test is still OWED.** Nothing merged so far
 recomputes an event hash, checks `prev_hash` linkage beyond genesis, or verifies
-a signature — T6b builds and exports chains, it does not check them. T6's
-acceptance defines self-verify as exactly those three plus attributing a failure
-to a line. A green test count in `tools/rehearsal` is **not** evidence the
-acceptance criterion is met; a comment at the top of `build.test.ts` says so too.
-Land it in T6c or T6d.
+a signature — T6b builds and exports chains and T6c tampers with them, neither
+checks them. T6's acceptance defines self-verify as exactly those three plus
+attributing a failure to a line. A green test count in `tools/rehearsal` is
+**not** evidence the acceptance criterion is met; a comment at the top of
+`build.test.ts` says so too. **T6c did not land it either** (confirmed in its PR
+description) — it is T6d's alone now.
 
 **T6 does NOT build a TypeScript verifier** (decided 2026-07-28, now recorded
 in `docs/plans/phase-0.md` T6 rather than only in session memory). "Self-verify"
