@@ -16,6 +16,12 @@
 # generator that produces them (tools/fixtures-gen) stays fully counted — the
 # exemption covers the output, never the code.
 #
+# docs/mockups/** is exempt for the same reason as markdown: each file is one
+# self-contained, hand-authored HTML deck, reviewed by eye against the design
+# it renders, not against a code line-budget. Splitting a single deck across
+# branches to dodge the ceiling would break the one-file-is-one-idea property
+# that makes it reviewable at all.
+#
 # Run locally:  BASE=origin/master HEAD=HEAD bash .github/scripts/diff-size.sh
 set -euo pipefail
 
@@ -44,9 +50,10 @@ done < <(git diff --numstat "$BASE...$HEAD" -- . \
   ':(exclude,glob)**/dist/**' \
   ':(exclude,glob)**/.turbo/**' \
   ':(exclude,glob)contracts/fixtures/**' \
+  ':(exclude,glob)docs/mockups/**' \
   ':(exclude,glob)**/*.md')
 
-echo "Changed lines (excluding lockfiles/generated/markdown): $total"
+echo "Changed lines (excluding lockfiles/generated/markdown/mockups): $total"
 
 if ((total > FAIL)); then
   echo "::error::Diff is $total changed lines (> $FAIL). Split or stack this branch (odc-pipeline)."

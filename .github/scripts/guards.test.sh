@@ -240,6 +240,29 @@ ds=$( (cd "$R" && BASE=base HEAD=HEAD bash "$DIFFSIZE" >/dev/null 2>&1)
   echo $?)
 assert 1 "$ds" "diff-size still counts code alongside exempt markdown → fail"
 
+# --- Scenario 12: diff-size ignores docs/mockups churn (hand-authored HTML decks)
+R="$TMP/s12"
+new_repo "$R"
+git -C "$R" checkout -q -b work
+mkdir -p "$R/docs/mockups"
+seq 1 1200 >"$R/docs/mockups/deck.html"
+git -C "$R" add -A && git -C "$R" commit -qm mockup
+ds=$( (cd "$R" && BASE=base HEAD=HEAD bash "$DIFFSIZE" >/dev/null 2>&1)
+  echo $?)
+assert 0 "$ds" "diff-size ignores docs/mockups churn (1200 html lines) → pass"
+
+# --- Scenario 13: mockups exemption does not mask non-exempt code churn
+R="$TMP/s13"
+new_repo "$R"
+git -C "$R" checkout -q -b work
+mkdir -p "$R/docs/mockups" "$R/src"
+seq 1 900 >"$R/docs/mockups/deck.html" # exempt
+seq 1 900 >"$R/src/big.ts"             # counted → over the 600 ceiling
+git -C "$R" add -A && git -C "$R" commit -qm mixed
+ds=$( (cd "$R" && BASE=base HEAD=HEAD bash "$DIFFSIZE" >/dev/null 2>&1)
+  echo $?)
+assert 1 "$ds" "diff-size still counts code alongside exempt mockups → fail"
+
 echo
 echo "guards.test.sh: $pass passed, $fail failed"
 [[ "$fail" -eq 0 ]]
