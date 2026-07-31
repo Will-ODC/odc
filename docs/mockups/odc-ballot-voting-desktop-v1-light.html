@@ -1,0 +1,591 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="utf-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1">
+  <title>Online Democratic Community — Desktop ballot light</title>
+  <style>
+    :root {
+      --paper:#fafbfd;
+      --glass:rgba(255,255,255,.66);
+      --glass-strong:rgba(255,255,255,.88);
+      --ink:#111318;
+      --muted:#626975;
+      --faint:#8b929d;
+      --line:rgba(17,19,24,.10);
+      --blue:#1b4dff;
+      --blue-deep:#1232a8;
+      --blue-wash:rgba(27,77,255,.10);
+      --violet:#5746b3;
+      --violet-deep:#3c3489;
+      --violet-wash:rgba(87,70,179,.10);
+      --green:#087b61;
+      --green-wash:rgba(8,123,97,.10);
+      --shadow:0 28px 70px rgba(32,43,59,.16),0 2px 10px rgba(32,43,59,.07);
+      --r-card:22px;
+      --r-control:15px;
+      --r-pill:999px;
+    }
+    * { box-sizing:border-box; }
+    body {
+      margin:0;
+      min-width:980px;
+      min-height:100vh;
+      padding-bottom:104px;
+      background:
+        radial-gradient(circle at 10% 2%,rgba(63,104,255,.27),transparent 29%),
+        radial-gradient(circle at 91% 18%,rgba(73,205,174,.20),transparent 27%),
+        linear-gradient(145deg,#e9edf2,#d5dde7);
+      color:var(--ink);
+      font-family:Inter,-apple-system,BlinkMacSystemFont,"Segoe UI",sans-serif;
+      -webkit-font-smoothing:antialiased;
+    }
+    button,input { font:inherit; }
+    button { cursor:pointer; }
+    .topbar {
+      position:sticky;
+      z-index:30;
+      top:0;
+      display:grid;
+      grid-template-columns:1fr auto 1fr;
+      align-items:center;
+      min-height:72px;
+      padding:10px clamp(28px,4vw,68px);
+      border-bottom:1px solid var(--line);
+      background:var(--paper);
+    }
+    .brand { display:flex; align-items:center; gap:11px; }
+    .brand-mark,.avatar,.back {
+      display:grid;
+      width:40px;
+      height:40px;
+      place-items:center;
+      border-radius:50%;
+      font-size:11px;
+      font-weight:850;
+    }
+    .brand-mark { background:var(--ink); color:white; font-size:10px; letter-spacing:.04em; }
+    .avatar { margin-left:auto; background:var(--blue); color:white; }
+    .back { border:1px solid var(--line); background:#f3f4f6; color:var(--ink); font-size:18px; }
+    .brand-copy strong,.brand-copy small { display:block; }
+    .brand-copy strong { font-size:13px; }
+    .brand-copy small { margin-top:3px; color:var(--muted); font-size:10px; }
+    .step {
+      display:flex;
+      align-items:center;
+      gap:9px;
+      color:var(--muted);
+      font-size:10px;
+      font-weight:750;
+    }
+    .step-track { width:92px; height:5px; overflow:hidden; border-radius:var(--r-pill); background:#e3e5ea; }
+    .step-track span { display:block; width:33%; height:100%; border-radius:inherit; background:var(--blue); }
+    .shell {
+      display:grid;
+      grid-template-columns:minmax(320px,.62fr) minmax(0,1.7fr);
+      gap:18px;
+      width:min(1400px,calc(100% - 48px));
+      margin:0 auto;
+      padding:26px 0 42px;
+      align-items:start;
+    }
+    .column { display:flex; flex-direction:column; gap:16px; min-width:0; }
+    .primary-column { grid-column:2; }
+    .opinions-column { grid-column:1; grid-row:1; }
+    .support-panel {
+      align-self:stretch;
+      padding:12px;
+      border:1px solid rgba(255,255,255,.76);
+      border-radius:26px;
+      background:rgba(255,255,255,.50);
+      box-shadow:0 16px 38px rgba(30,42,62,.10),inset 0 0 0 1px rgba(17,19,24,.025);
+      backdrop-filter:blur(20px) saturate(135%);
+    }
+    .support-panel > .glass-card {
+      border-color:rgba(17,19,24,.07);
+      background:rgba(255,255,255,.62);
+      box-shadow:none;
+    }
+    .glass-card {
+      padding:18px;
+      border:1px solid rgba(255,255,255,.76);
+      border-radius:var(--r-card);
+      background:var(--glass);
+      box-shadow:0 12px 28px rgba(30,42,62,.08),inset 0 0 0 1px rgba(17,19,24,.03);
+      backdrop-filter:blur(18px) saturate(135%);
+    }
+    .question-card { padding:18px 22px; }
+    .question-meta { display:flex; align-items:center; gap:9px; }
+    .ballot-badge {
+      display:inline-flex;
+      align-items:center;
+      gap:6px;
+      padding:6px 10px;
+      border-radius:var(--r-pill);
+      background:var(--blue-wash);
+      color:var(--blue-deep);
+      font-size:9px;
+      font-weight:850;
+      letter-spacing:.07em;
+      text-transform:uppercase;
+    }
+    .deadline { color:var(--muted); font-size:10px; font-weight:700; }
+    h1 { margin:12px 0 7px; overflow:hidden; font-size:clamp(24px,2.15vw,32px); line-height:1.08; letter-spacing:-.045em; text-overflow:ellipsis; white-space:nowrap; }
+    .question-fine { margin:0; color:var(--muted); font-size:11px; }
+    .video {
+      position:relative;
+      min-height:250px;
+      overflow:hidden;
+      border:1px solid rgba(255,255,255,.40);
+      border-radius:var(--r-card);
+      background:
+        linear-gradient(145deg,transparent 48%,rgba(255,255,255,.14) 49%),
+        radial-gradient(circle at 74% 18%,rgba(255,255,255,.70) 0 4%,transparent 4.5%),
+        linear-gradient(145deg,#1534b2,#5377f6 53%,#83c9b5);
+      box-shadow:0 22px 48px rgba(23,61,199,.24);
+    }
+    .video::before,.video::after {
+      position:absolute;
+      border:1px solid rgba(255,255,255,.20);
+      border-radius:50%;
+      content:"";
+    }
+    .video::before { width:300px; height:300px; right:-85px; top:-80px; }
+    .video::after { width:210px; height:210px; left:-75px; bottom:-75px; }
+    .video-top { position:absolute; z-index:2; top:18px; right:20px; left:20px; display:flex; justify-content:space-between; color:#e2e8ff; font-size:10px; font-weight:750; }
+    .play {
+      position:absolute;
+      z-index:3;
+      top:50%;
+      left:50%;
+      display:grid;
+      width:72px;
+      height:72px;
+      place-items:center;
+      padding-left:5px;
+      transform:translate(-50%,-50%);
+      border:0;
+      border-radius:50%;
+      background:rgba(255,255,255,.94);
+      color:var(--blue);
+      font-size:19px;
+      box-shadow:0 16px 38px rgba(18,50,168,.30);
+    }
+    .video-bottom { position:absolute; z-index:2; right:20px; bottom:18px; left:20px; display:flex; align-items:flex-end; justify-content:space-between; color:white; }
+    .video-bottom strong,.video-bottom span { display:block; }
+    .video-bottom strong { font-size:14px; }
+    .video-bottom span { margin-top:4px; color:#e1e7ff; font-size:10px; }
+    .cc { padding:5px 8px; border-radius:8px; background:rgba(11,20,49,.38); font-size:10px; font-weight:800; }
+    .section-head { display:flex; align-items:center; justify-content:space-between; gap:12px; margin-bottom:13px; }
+    .section-title { display:flex; align-items:center; gap:9px; }
+    .section-icon {
+      display:grid;
+      width:30px;
+      height:30px;
+      place-items:center;
+      border-radius:9px;
+      background:var(--blue-wash);
+      color:var(--blue-deep);
+      font-size:10px;
+      font-weight:900;
+    }
+    .section-title strong { font-size:13px; }
+    .neutral-mark {
+      display:inline-flex;
+      align-items:center;
+      gap:6px;
+      color:var(--green);
+      font-size:9px;
+      font-weight:800;
+      letter-spacing:.05em;
+      text-transform:uppercase;
+    }
+    .neutral-mark::before { width:6px; height:6px; border-radius:50%; background:var(--green); content:""; }
+    .plain-summary { margin:0 0 14px; color:var(--muted); font-size:12px; line-height:1.55; }
+    .plain-summary.info-only { margin-bottom:12px; color:var(--ink); font-size:14px; line-height:1.55; }
+    .choice-grid { display:grid; grid-template-columns:1fr 1fr; gap:9px; }
+    .choice-side { padding:13px; border:1px solid var(--line); border-radius:var(--r-control); background:rgba(255,255,255,.58); }
+    .choice-side strong { display:block; color:var(--blue-deep); font-size:10px; text-transform:uppercase; letter-spacing:.06em; }
+    .choice-side.no strong { color:var(--violet-deep); }
+    .choice-side p { margin:7px 0 0; color:var(--ink); font-size:11px; line-height:1.45; }
+    .source-line { display:flex; justify-content:space-between; margin-top:12px; color:var(--faint); font-size:9px; }
+    .ai-card { min-height:300px; display:flex; flex-direction:column; }
+    .quick-row { display:flex; flex-wrap:wrap; gap:7px; }
+    .quick {
+      padding:8px 10px;
+      border:1px solid rgba(27,77,255,.14);
+      border-radius:var(--r-pill);
+      background:rgba(237,241,255,.68);
+      color:var(--blue-deep);
+      font-size:9px;
+      font-weight:750;
+    }
+    .answer {
+      flex:1;
+      min-height:92px;
+      margin-top:12px;
+      padding:13px;
+      border:1px solid rgba(17,19,24,.06);
+      border-radius:var(--r-control);
+      background:rgba(255,255,255,.56);
+      color:var(--muted);
+      font-size:11px;
+      line-height:1.55;
+    }
+    .answer strong { color:var(--ink); }
+    .composer {
+      display:flex;
+      align-items:center;
+      gap:8px;
+      margin-top:10px;
+      padding:5px 5px 5px 13px;
+      border:1px solid var(--line);
+      border-radius:var(--r-pill);
+      background:rgba(255,255,255,.70);
+    }
+    .composer input { flex:1; min-width:0; border:0; outline:0; background:transparent; color:var(--ink); font-size:10px; }
+    .composer input::placeholder { color:var(--faint); }
+    .send { display:grid; width:34px; height:34px; place-items:center; border:0; border-radius:50%; background:var(--blue); color:white; font-size:14px; }
+    .deliberation-grid { display:grid; grid-template-columns:minmax(0,1.12fr) minmax(320px,.88fr); gap:16px; align-items:stretch; }
+    .deliberation-grid > .glass-card { height:100%; }
+    .discussion-card .composer {
+      min-height:56px;
+      margin:0 0 12px;
+      padding-left:18px;
+      border-color:rgba(27,77,255,.22);
+      background:rgba(255,255,255,.88);
+      box-shadow:0 8px 22px rgba(27,77,255,.08);
+    }
+    .discussion-card .composer input { font-size:12px; }
+    .discussion-card .send { width:44px; height:44px; }
+    .comments-card { padding:18px; }
+    .comment-compose { display:flex; align-items:center; gap:9px; margin-bottom:4px; padding:6px 6px 6px 14px; border:1px solid var(--line); border-radius:var(--r-pill); background:rgba(255,255,255,.70); }
+    .comment-compose input { flex:1; min-width:0; border:0; outline:0; background:transparent; color:var(--ink); font-size:11px; }
+    .comment-compose input::placeholder { color:var(--faint); }
+    .comment-post { min-width:64px; height:36px; border:0; border-radius:var(--r-pill); background:var(--violet); color:white; font-size:9px; font-weight:850; }
+    .comment-filters { display:flex; gap:6px; margin:-2px 0 12px; }
+    .comment-filter { padding:7px 10px; border:1px solid rgba(87,70,179,.13); border-radius:var(--r-pill); background:var(--violet-wash); color:var(--violet-deep); font-size:9px; font-weight:750; }
+    .comment-filter.is-active { border-color:var(--violet); background:var(--violet); color:white; }
+    .comment-thread { display:grid; }
+    .comment { display:grid; grid-template-columns:34px 1fr; gap:11px; padding:15px 0; border-bottom:1px solid var(--line); }
+    .comment:last-child { border-bottom:0; padding-bottom:0; }
+    .comment-avatar { display:grid; width:34px; height:34px; place-items:center; border-radius:50%; background:var(--violet-wash); color:var(--violet-deep); font-size:9px; font-weight:900; }
+    .comment-head { display:flex; align-items:center; gap:7px; color:var(--faint); font-size:9px; }
+    .comment-head strong { color:var(--ink); font-size:10px; }
+    .comment-stance { padding:4px 7px; border-radius:var(--r-pill); background:var(--violet-wash); color:var(--violet-deep); font-size:8px; font-weight:800; }
+    .comment-copy { margin:7px 0 8px; font-size:12px; line-height:1.48; }
+    .comment-actions { display:flex; gap:12px; }
+    .comment-actions button { padding:0; border:0; background:transparent; color:var(--muted); font-size:9px; font-weight:750; }
+    .comment-actions button.is-active { color:var(--violet-deep); }
+    .comment-reply { margin-top:12px; padding:10px 12px; border-left:2px solid rgba(87,70,179,.22); border-radius:0 10px 10px 0; background:rgba(87,70,179,.045); }
+    .comment-reply .comment-copy { margin-bottom:0; }
+    .record-card { display:grid; gap:9px; }
+    .record-row { display:flex; align-items:center; justify-content:space-between; padding:10px 12px; border-radius:var(--r-control); background:rgba(255,255,255,.54); font-size:9px; }
+    .record-row strong { font-size:10px; }
+    .record-row span { color:var(--faint); }
+    .ballot-nav { padding:16px; }
+    .ballot-nav-head { display:flex; align-items:center; justify-content:space-between; color:var(--faint); font-size:9px; font-weight:800; letter-spacing:.05em; text-transform:uppercase; }
+    .related-stage {
+      min-height:220px;
+      margin-top:12px;
+      padding:22px;
+      border:1px solid rgba(27,77,255,.13);
+      border-radius:18px;
+      background:linear-gradient(145deg,rgba(237,241,255,.92),rgba(255,255,255,.70));
+    }
+    .related-stage span,.related-stage strong { display:block; }
+    .related-meta { color:var(--blue-deep); font-size:9px; font-weight:850; letter-spacing:.06em; text-transform:uppercase; }
+    .related-title { margin-top:18px; font-size:20px; line-height:1.28; letter-spacing:-.025em; }
+    .related-note { margin-top:16px; color:var(--muted); font-size:10px; line-height:1.45; }
+    .related-controls { display:grid; grid-template-columns:38px 1fr 38px; align-items:center; gap:9px; margin-top:12px; }
+    .related-arrow { display:grid; width:38px; height:38px; place-items:center; border:1px solid rgba(27,77,255,.14); border-radius:50%; background:rgba(255,255,255,.74); color:var(--blue-deep); font-size:16px; }
+    .related-position { color:var(--faint); font-size:9px; font-weight:750; text-align:center; }
+    .related-position strong { display:block; margin-bottom:4px; color:var(--ink); font-size:10px; }
+    .result-nav { padding:16px; }
+    .result-stage {
+      width:100%;
+      min-height:244px;
+      margin-top:12px;
+      padding:22px;
+      border:1px solid rgba(8,123,97,.14);
+      border-radius:18px;
+      background:linear-gradient(145deg,rgba(232,249,244,.94),rgba(255,255,255,.72));
+      color:var(--ink);
+      text-align:left;
+    }
+    .result-stage span,.result-stage strong { display:block; }
+    .result-meta { color:var(--green); font-size:9px; font-weight:850; letter-spacing:.06em; text-transform:uppercase; }
+    .result-title { margin-top:14px; font-size:15px; line-height:1.35; letter-spacing:-.018em; }
+    .result-label { margin-top:22px; color:var(--faint); font-size:8px; font-weight:850; letter-spacing:.07em; text-transform:uppercase; }
+    .result-value { margin-top:5px; color:var(--green); font-size:25px; line-height:1.1; letter-spacing:-.04em; }
+    .result-note { margin-top:9px; color:var(--muted); font-size:10px; line-height:1.45; }
+    .result-controls { display:grid; grid-template-columns:38px 1fr 38px; align-items:center; gap:9px; margin-top:12px; }
+    .result-arrow { display:grid; width:38px; height:38px; place-items:center; border:1px solid rgba(8,123,97,.16); border-radius:50%; background:rgba(255,255,255,.74); color:var(--green); font-size:16px; }
+    .result-position { color:var(--faint); font-size:9px; font-weight:750; text-align:center; }
+    .result-position strong { display:block; margin-bottom:4px; color:var(--ink); font-size:10px; }
+    .vote-bar {
+      position:fixed;
+      z-index:40;
+      right:0;
+      bottom:0;
+      left:0;
+      display:flex;
+      align-items:center;
+      justify-content:center;
+      min-height:86px;
+      padding:12px clamp(28px,5vw,80px);
+      border-top:1px solid var(--line);
+      background:var(--paper);
+      box-shadow:0 -12px 32px rgba(32,43,59,.09);
+    }
+    .vote-buttons { display:flex; gap:10px; }
+    .vote {
+      min-width:144px;
+      min-height:50px;
+      border-radius:var(--r-pill);
+      font-size:13px;
+      font-weight:850;
+    }
+    .vote-no { border:1.5px solid var(--line); background:#f1f2f5; color:var(--ink); }
+    .vote-yes { border:0; background:var(--blue); color:white; box-shadow:0 10px 24px rgba(27,77,255,.22); }
+    .toast {
+      position:fixed;
+      z-index:60;
+      right:32px;
+      bottom:104px;
+      padding:13px 18px;
+      transform:translateY(12px);
+      border-radius:var(--r-pill);
+      background:rgba(17,19,24,.94);
+      color:white;
+      font-size:10px;
+      font-weight:750;
+      opacity:0;
+      pointer-events:none;
+      transition:.2s ease;
+    }
+    .toast.is-visible { transform:translateY(0); opacity:1; }
+    @media (max-width:1180px) {
+      .shell { grid-template-columns:330px minmax(0,1fr); }
+    }
+    @media (prefers-reduced-motion:reduce) {
+      *,*::before,*::after { transition-duration:.01ms !important; }
+    }
+  </style>
+</head>
+<body>
+  <header class="topbar">
+    <div class="brand"><button class="back" aria-label="Back">←</button><span class="brand-mark">ODC</span><span class="brand-copy"><strong>Online Democratic Community</strong><small>1,240 verified humans</small></span></div>
+    <div class="step"><span>Learn</span><div class="step-track"><span></span></div><span>1 of 3</span></div>
+    <span class="avatar">JW</span>
+  </header>
+  <main class="shell">
+    <section class="column primary-column">
+      <article class="glass-card question-card" id="ballot-overview">
+        <div class="question-meta"><span class="ballot-badge">✓ Ballot</span><span class="deadline">Closes Friday · 17:00</span></div>
+        <h1>Should ODC keep member data anonymous by default?</h1>
+        <p class="question-fine">Learn at your own pace. Results stay hidden until voting closes.</p>
+      </article>
+      <section class="video">
+        <div class="video-top"><span>Independent explainer</span><span>2:14</span></div>
+        <button class="play" aria-label="Play explainer video">▶</button>
+        <div class="video-bottom"><div><strong>Privacy in plain English</strong><span>Same briefing for every member</span></div><span class="cc">CC</span></div>
+      </section>
+      <div class="deliberation-grid">
+      <section class="glass-card comments-card">
+        <div class="section-head"><div class="section-title"><span class="section-icon" style="background:var(--violet-wash);color:var(--violet-deep)">O</span><strong>Community discussion</strong></div><span class="meta">12 comments</span></div>
+        <div class="comment-filters">
+          <button class="comment-filter" data-filter="agree">Agree</button>
+          <button class="comment-filter" data-filter="disagree">Disagree</button>
+          <button class="comment-filter is-active" data-filter="popular">Popular</button>
+          <button class="comment-filter" data-filter="random">Random</button>
+        </div>
+        <form class="comment-compose">
+          <input aria-label="Add your opinion" placeholder="Add your opinion…">
+          <button class="comment-post">Post</button>
+        </form>
+        <div class="comment-thread" aria-live="polite">
+          <article class="comment" data-group="agree">
+            <span class="comment-avatar">MH</span>
+            <div>
+              <div class="comment-head"><strong>m-heron</strong><span>3h</span><span class="comment-stance">Agrees</span></div>
+              <p class="comment-copy">Anonymous should be the default. A project can still ask for identity when it has a clear reason.</p>
+              <div class="comment-actions"><button class="helpful">Helpful · 18</button><button>Reply</button></div>
+              <div class="comment-reply">
+                <div class="comment-head"><strong>r-alder</strong><span>2h</span></div>
+                <p class="comment-copy">Agreed, as long as consent is specific to each project rather than permanent.</p>
+              </div>
+            </div>
+          </article>
+          <article class="comment" data-group="disagree">
+            <span class="comment-avatar">KO</span>
+            <div>
+              <div class="comment-head"><strong>k-osprey</strong><span>5h</span><span class="comment-stance">Disagrees</span></div>
+              <p class="comment-copy">One rule may be too broad. Small research groups and safety audits have different needs.</p>
+              <div class="comment-actions"><button class="helpful">Helpful · 11</button><button>Reply</button></div>
+            </div>
+          </article>
+          <article class="comment" data-group="question">
+            <span class="comment-avatar">TW</span>
+            <div>
+              <div class="comment-head"><strong>t-willow</strong><span>Yesterday</span></div>
+              <p class="comment-copy">Can the annual privacy review test whether anonymous records can still be re-identified?</p>
+              <div class="comment-actions"><button class="helpful">Helpful · 7</button><button>Reply</button></div>
+            </div>
+          </article>
+        </div>
+      </section>
+        <article class="glass-card ai-card discussion-card unified-ai">
+          <div class="section-head"><div class="section-title"><span class="section-icon">AI</span><strong>Plain-English guide</strong></div><span class="neutral-mark">Objective</span></div>
+          <p class="plain-summary info-only">This proposal makes anonymous data the default for ODC research. Identity could be requested only with clear consent. Secret ballots and public profile names would not change.</p>
+          <form class="composer"><input aria-label="Discuss this ballot with the objective AI" placeholder="Discuss this ballot with the objective AI…"><button class="send" aria-label="Send question">↑</button></form>
+          <div class="quick-row">
+            <button class="quick">What changes?</button>
+            <button class="quick">Best case for yes</button>
+            <button class="quick">Best case for no</button>
+          </div>
+          <div class="answer" aria-live="polite"><strong>Ask any question.</strong><br>The answer uses only the filed proposal and cited evidence. It will not suggest how to vote.</div>
+        </article>
+      </div>
+    </section>
+    <aside class="column opinions-column support-panel">
+      <section class="glass-card record-card" id="integrity">
+        <div class="section-head"><div class="section-title"><span class="section-icon">✓</span><strong>Ballot integrity</strong></div><span class="neutral-mark">Verified</span></div>
+        <div class="record-row"><strong>Eligibility</strong><span>Verified human</span></div>
+        <div class="record-row"><strong>Ballot privacy</strong><span>Secret and unlinkable</span></div>
+        <div class="record-row"><strong>Public record</strong><span>Proof without your choice</span></div>
+      </section>
+      <section class="glass-card ballot-nav" id="related-ballots">
+        <div class="ballot-nav-head"><span>Next ballot</span><span>Related</span></div>
+        <button class="related-stage" aria-label="Open related ballot">
+          <span class="related-meta">Data access · Closes in 4 days</span>
+          <strong class="related-title">Should approved researchers access anonymous ODC data?</strong>
+          <span class="related-note">A nearby decision in this privacy series.</span>
+        </button>
+        <div class="related-controls">
+          <button class="related-arrow related-prev" aria-label="Previous related ballot">←</button>
+          <span class="related-position"><strong>1 of 5</strong>Use arrows</span>
+          <button class="related-arrow related-next" aria-label="Next related ballot">→</button>
+        </div>
+      </section>
+      <section class="glass-card result-nav" id="past-impact">
+        <div class="ballot-nav-head"><span>Past ballot impact</span><span>Demo results</span></div>
+        <button class="result-stage" aria-label="View illustrative past ballot">
+          <span class="result-meta">Passed · 74% yes · 4 months ago</span>
+          <strong class="result-title">Keep ODC free of paid advertising</strong>
+          <span class="result-label">Tangible result</span>
+          <strong class="result-value">$86k member-funded</strong>
+          <span class="result-note">Zero paid trackers detected since launch.</span>
+        </button>
+        <div class="result-controls">
+          <button class="result-arrow result-prev" aria-label="Previous past-ballot result">←</button>
+          <span class="result-position"><strong>1 of 5</strong>Use arrows</span>
+          <button class="result-arrow result-next" aria-label="Next past-ballot result">→</button>
+        </div>
+      </section>
+    </aside>
+  </main>
+  <footer class="vote-bar">
+    <div class="vote-buttons"><button class="vote vote-no">Vote no</button><button class="vote vote-yes">Vote yes</button></div>
+  </footer>
+  <div class="toast" role="status" aria-live="polite"></div>
+  <script>
+    const toast = document.querySelector(".toast");
+    const answer = document.querySelector(".answer");
+    const answers = {
+      "What changes?":"A yes vote creates one anonymous default across ODC. A no vote leaves privacy rules to each project.",
+      "Best case for yes":"A shared default reduces accidental exposure and makes member expectations consistent.",
+      "Best case for no":"Project-specific rules may preserve flexibility where identity is necessary for useful work."
+    };
+    function flash(message) {
+      toast.textContent = message;
+      toast.classList.add("is-visible");
+      setTimeout(() => toast.classList.remove("is-visible"),2000);
+    }
+    document.querySelectorAll(".quick").forEach((button) => {
+      button.addEventListener("click", () => {
+        answer.innerHTML = `<strong>${button.textContent}</strong><br>${answers[button.textContent]}`;
+      });
+    });
+    document.querySelector(".composer").addEventListener("submit", (event) => {
+      event.preventDefault();
+      const input = event.currentTarget.querySelector("input");
+      if (!input.value.trim()) return;
+      answer.innerHTML = "<strong>Source-bound answer</strong><br>This mockup would answer from the three filed sources and show claim-level citations.";
+      input.value = "";
+    });
+    const comments=[...document.querySelectorAll(".comment-thread > .comment")];
+    document.querySelectorAll(".comment-filter").forEach((button)=>{
+      button.addEventListener("click",()=>{
+        const filter=button.dataset.filter;
+        document.querySelectorAll(".comment-filter").forEach((item)=>item.classList.toggle("is-active",item===button));
+        comments.forEach((comment)=>comment.hidden=false);
+        if(filter==="agree"||filter==="disagree") comments.forEach((comment)=>comment.hidden=comment.dataset.group!==filter);
+        if(filter==="random"){
+          const shown=comments[Math.floor(Math.random()*comments.length)];
+          comments.forEach((comment)=>comment.hidden=comment!==shown);
+        }
+      });
+    });
+    document.querySelector(".comment-compose").addEventListener("submit",(event)=>{
+      event.preventDefault();
+      const input=event.currentTarget.querySelector("input");
+      if(!input.value.trim()) return;
+      flash("Comment added to this mockup");
+      input.value="";
+    });
+    document.querySelectorAll(".helpful").forEach((button)=>button.addEventListener("click",()=>button.classList.toggle("is-active")));
+    const relatedBallots = [
+      ["Data access · Closes in 4 days","Should approved researchers access anonymous ODC data?","A nearby decision in this privacy series."],
+      ["Member control · Closes in 6 days","Should members be able to delete their participation history?","Defines how much of a member record can be removed."],
+      ["Verification · Closes in 8 days","Should identity checks be renewed every twelve months?","Sets the renewal period for verified-human status."],
+      ["Safety · Closes in 10 days","Should moderators see private account-linking risk signals?","Balances coordinated-abuse detection with member privacy."],
+      ["Transparency · Opens Friday","Should every data export require a public purpose statement?","Adds a visible reason before community data can leave ODC."]
+    ];
+    let relatedIndex=0;
+    const relatedStage=document.querySelector(".related-stage");
+    const relatedPosition=document.querySelector(".related-position strong");
+    function renderRelated(){
+      const item=relatedBallots[relatedIndex];
+      relatedStage.querySelector(".related-meta").textContent=item[0];
+      relatedStage.querySelector(".related-title").textContent=item[1];
+      relatedStage.querySelector(".related-note").textContent=item[2];
+      relatedPosition.textContent=`${relatedIndex+1} of ${relatedBallots.length}`;
+    }
+    function moveRelated(direction){
+      relatedIndex=(relatedIndex+direction+relatedBallots.length)%relatedBallots.length;
+      renderRelated();
+    }
+    document.querySelector(".related-prev").addEventListener("click",()=>moveRelated(-1));
+    document.querySelector(".related-next").addEventListener("click",()=>moveRelated(1));
+    relatedStage.addEventListener("click",()=>flash(relatedStage.querySelector(".related-title").textContent));
+    const pastResults = [
+      ["Passed · 74% yes · 4 months ago","Keep ODC free of paid advertising","$86k member-funded","Zero paid trackers detected since launch."],
+      ["Passed · 81% yes · 3 months ago","Require sources on every AI-generated summary","94% claim coverage","38 source corrections accepted after member review."],
+      ["Passed · 67% yes · 9 weeks ago","Let members delete their participation history","4 min median","2,140 deletion requests completed without staff review."],
+      ["Passed · 59% yes · 6 weeks ago","Renew verified-human status every twelve months","1,227 renewals","13 duplicate accounts stopped during the first cycle."],
+      ["Passed · 72% yes · 18 days ago","Require a public purpose for every data export","18 exports logged","Every export now includes an owner, purpose, and expiry date."]
+    ];
+    let resultIndex=0;
+    const resultStage=document.querySelector(".result-stage");
+    const resultPosition=document.querySelector(".result-position strong");
+    function renderResult(){
+      const item=pastResults[resultIndex];
+      resultStage.querySelector(".result-meta").textContent=item[0];
+      resultStage.querySelector(".result-title").textContent=item[1];
+      resultStage.querySelector(".result-value").textContent=item[2];
+      resultStage.querySelector(".result-note").textContent=item[3];
+      resultPosition.textContent=`${resultIndex+1} of ${pastResults.length}`;
+    }
+    function moveResult(direction){
+      resultIndex=(resultIndex+direction+pastResults.length)%pastResults.length;
+      renderResult();
+    }
+    document.querySelector(".result-prev").addEventListener("click",()=>moveResult(-1));
+    document.querySelector(".result-next").addEventListener("click",()=>moveResult(1));
+    resultStage.addEventListener("click",()=>flash(resultStage.querySelector(".result-title").textContent));
+    document.querySelector(".play").addEventListener("click",()=>flash("Video player area"));
+    document.querySelectorAll(".vote").forEach((button)=>button.addEventListener("click",()=>flash(`${button.textContent} selected · review and confirmation comes next`)));
+  </script>
+</body>
+</html>
