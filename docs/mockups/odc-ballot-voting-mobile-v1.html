@@ -1,0 +1,566 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="utf-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1">
+  <title>Online Democratic Community — Ballot voting</title>
+  <style>
+    :root {
+      --canvas:#dfe5ec;
+      --paper:rgba(250,251,253,.86);
+      --glass:rgba(255,255,255,.66);
+      --glass-strong:rgba(255,255,255,.88);
+      --ink:#111318;
+      --muted:#626975;
+      --faint:#8b929d;
+      --line:rgba(17,19,24,.10);
+      --blue:#1b4dff;
+      --blue-deep:#1232a8;
+      --blue-wash:rgba(27,77,255,.10);
+      --violet:#5746b3;
+      --violet-deep:#3c3489;
+      --violet-wash:rgba(87,70,179,.10);
+      --green:#087b61;
+      --green-wash:rgba(8,123,97,.10);
+      --red:#a13b46;
+      --red-wash:rgba(161,59,70,.09);
+      --shadow:0 28px 70px rgba(32,43,59,.18),0 2px 10px rgba(32,43,59,.08);
+      --r-screen:34px;
+      --r-card:22px;
+      --r-control:15px;
+      --r-pill:999px;
+    }
+
+    * { box-sizing:border-box; }
+    html { background:var(--canvas); }
+    body {
+      margin:0;
+      min-width:320px;
+      min-height:100vh;
+      padding:36px 18px 64px;
+      background:
+        radial-gradient(circle at 15% 6%,rgba(63,104,255,.29),transparent 27%),
+        radial-gradient(circle at 88% 22%,rgba(73,205,174,.22),transparent 26%),
+        linear-gradient(145deg,#e9edf2,#d5dde7);
+      color:var(--ink);
+      font-family:Inter,-apple-system,BlinkMacSystemFont,"Segoe UI",sans-serif;
+      -webkit-font-smoothing:antialiased;
+    }
+
+    button,input { font:inherit; }
+    button { cursor:pointer; }
+
+    .showcase { width:min(390px,100%); margin:auto; }
+    .screen-label {
+      margin:0 0 10px 6px;
+      color:rgba(17,19,24,.55);
+      font-size:11px;
+      font-weight:800;
+      letter-spacing:.11em;
+      text-transform:uppercase;
+    }
+    .screen {
+      position:relative;
+      width:100%;
+      height:min(844px,calc(100vh - 86px));
+      min-height:680px;
+      overflow:hidden;
+      border:1px solid rgba(255,255,255,.76);
+      border-radius:var(--r-screen);
+      background:linear-gradient(180deg,rgba(255,255,255,.74),rgba(246,248,251,.91));
+      box-shadow:var(--shadow);
+    }
+    .screen::before {
+      position:absolute;
+      inset:0 0 auto;
+      height:260px;
+      background:
+        radial-gradient(circle at 82% 2%,rgba(73,114,255,.18),transparent 52%),
+        radial-gradient(circle at 8% 30%,rgba(89,213,180,.14),transparent 44%);
+      content:"";
+      pointer-events:none;
+    }
+    .scroll {
+      position:relative;
+      height:100%;
+      overflow-y:auto;
+      padding-bottom:132px;
+      scrollbar-width:none;
+    }
+    .scroll::-webkit-scrollbar { display:none; }
+
+    .topbar {
+      position:sticky;
+      z-index:8;
+      top:0;
+      display:grid;
+      grid-template-columns:38px 1fr 38px;
+      align-items:center;
+      gap:10px;
+      min-height:68px;
+      padding:12px 16px 10px;
+      border-bottom:1px solid rgba(255,255,255,.55);
+      background:rgba(250,251,253,.67);
+      backdrop-filter:blur(22px) saturate(145%);
+    }
+    .icon-button {
+      display:grid;
+      width:38px;
+      height:38px;
+      place-items:center;
+      border:1px solid rgba(255,255,255,.72);
+      border-radius:50%;
+      background:var(--glass);
+      color:var(--ink);
+      font-size:18px;
+    }
+    .topbar-copy { min-width:0; text-align:center; }
+    .topbar-copy strong { display:block; font-size:13px; }
+    .topbar-copy span { display:block; margin-top:3px; color:var(--muted); font-size:10px; }
+    .step {
+      display:grid;
+      width:38px;
+      height:38px;
+      place-items:center;
+      border-radius:50%;
+      background:var(--blue-wash);
+      color:var(--blue-deep);
+      font-size:11px;
+      font-weight:850;
+    }
+
+    .page { display:grid; gap:16px; padding:16px; }
+    .ballot-intro { padding:4px 2px 0; }
+    .meta-row { display:flex; align-items:center; gap:8px; margin-bottom:10px; }
+    .badge {
+      display:inline-flex;
+      align-items:center;
+      gap:6px;
+      padding:6px 10px;
+      border:1px solid rgba(27,77,255,.18);
+      border-radius:var(--r-pill);
+      background:var(--blue-wash);
+      color:var(--blue-deep);
+      font-size:10px;
+      font-weight:850;
+      letter-spacing:.07em;
+      text-transform:uppercase;
+    }
+    .deadline { color:var(--muted); font-size:11px; font-weight:650; }
+    h1 {
+      margin:0;
+      font-size:29px;
+      line-height:1.08;
+      letter-spacing:-.045em;
+    }
+    .decision-note { margin:10px 0 0; color:var(--muted); font-size:12px; line-height:1.55; }
+
+    .video-card {
+      position:relative;
+      min-height:226px;
+      overflow:hidden;
+      border:1px solid rgba(255,255,255,.75);
+      border-radius:var(--r-card);
+      background:
+        linear-gradient(145deg,transparent 48%,rgba(255,255,255,.14) 49%),
+        radial-gradient(circle at 74% 18%,rgba(255,255,255,.70) 0 4%,transparent 4.5%),
+        linear-gradient(145deg,#1534b2,#5377f6 53%,#83c9b5);
+      box-shadow:0 18px 38px rgba(23,61,199,.20);
+    }
+    .video-card::before,.video-card::after {
+      position:absolute;
+      border-radius:45% 55% 58% 42%;
+      background:rgba(255,255,255,.13);
+      content:"";
+    }
+    .video-card::before { width:230px; height:180px; right:-70px; bottom:-80px; transform:rotate(-16deg); }
+    .video-card::after { width:180px; height:150px; left:-60px; top:-60px; transform:rotate(18deg); }
+    .video-top {
+      position:absolute;
+      z-index:2;
+      top:14px;
+      right:14px;
+      left:14px;
+      display:flex;
+      justify-content:space-between;
+      color:rgba(255,255,255,.84);
+      font-size:10px;
+      font-weight:750;
+    }
+    .play {
+      position:absolute;
+      z-index:3;
+      top:50%;
+      left:50%;
+      display:grid;
+      width:64px;
+      height:64px;
+      place-items:center;
+      padding-left:4px;
+      transform:translate(-50%,-50%);
+      border:0;
+      border-radius:50%;
+      background:rgba(255,255,255,.94);
+      color:var(--blue);
+      font-size:18px;
+      box-shadow:0 15px 35px rgba(18,50,168,.28);
+    }
+    .video-caption {
+      position:absolute;
+      z-index:2;
+      right:16px;
+      bottom:15px;
+      left:16px;
+      display:flex;
+      justify-content:space-between;
+      align-items:flex-end;
+      gap:16px;
+      color:white;
+    }
+    .video-caption strong { display:block; font-size:14px; }
+    .video-caption span { font-size:10px; opacity:.82; }
+    .captions { padding:5px 8px; border-radius:8px; background:rgba(11,20,49,.38); font-weight:750; }
+
+    .glass-card {
+      padding:18px;
+      border:1px solid rgba(255,255,255,.76);
+      border-radius:var(--r-card);
+      background:var(--glass);
+      box-shadow:0 12px 28px rgba(30,42,62,.08),inset 0 0 0 1px rgba(17,19,24,.03);
+      backdrop-filter:blur(18px) saturate(135%);
+    }
+    .section-head { display:flex; align-items:center; justify-content:space-between; gap:12px; margin-bottom:12px; }
+    .section-title { display:flex; align-items:center; gap:9px; }
+    .section-title span {
+      display:grid;
+      width:28px;
+      height:28px;
+      place-items:center;
+      border-radius:9px;
+      background:var(--blue-wash);
+      color:var(--blue-deep);
+      font-size:11px;
+      font-weight:850;
+    }
+    .section-title strong { font-size:13px; }
+    .section-head small { color:var(--faint); font-size:9px; font-weight:750; text-transform:uppercase; letter-spacing:.06em; }
+    .summary {
+      margin:0;
+      color:#303640;
+      font-size:13px;
+      line-height:1.55;
+    }
+    .summary strong { color:var(--ink); }
+
+    .chat-card { padding-bottom:14px; }
+    .ai-guide-card .composer {
+      min-height:50px;
+      margin:14px 0 10px;
+      border-color:rgba(27,77,255,.20);
+      background:rgba(255,255,255,.86);
+      box-shadow:0 8px 20px rgba(27,77,255,.07);
+    }
+    .quick-questions { display:flex; gap:7px; overflow-x:auto; padding-bottom:4px; scrollbar-width:none; }
+    .quick-questions::-webkit-scrollbar { display:none; }
+    .quick {
+      flex:0 0 auto;
+      padding:9px 11px;
+      border:1px solid rgba(27,77,255,.15);
+      border-radius:var(--r-pill);
+      background:rgba(237,241,255,.72);
+      color:var(--blue-deep);
+      font-size:10px;
+      font-weight:700;
+    }
+    .chat-response {
+      display:none;
+      margin:12px 0 0;
+      padding:12px;
+      border-radius:14px 14px 14px 4px;
+      background:rgba(255,255,255,.70);
+      color:var(--muted);
+      font-size:11px;
+      line-height:1.55;
+    }
+    .chat-response.is-visible { display:block; }
+    .composer {
+      display:flex;
+      align-items:center;
+      gap:9px;
+      margin-top:12px;
+      padding:5px 5px 5px 13px;
+      border:1px solid rgba(17,19,24,.10);
+      border-radius:var(--r-pill);
+      background:rgba(255,255,255,.72);
+    }
+    .composer input { flex:1; min-width:0; border:0; outline:0; background:transparent; color:var(--ink); font-size:11px; }
+    .composer input::placeholder { color:var(--faint); }
+    .send {
+      display:grid;
+      width:34px;
+      height:34px;
+      place-items:center;
+      border:0;
+      border-radius:50%;
+      background:var(--blue);
+      color:white;
+      font-size:15px;
+    }
+
+    .comments-card { padding:16px; }
+    .comment-filters { display:flex; gap:6px; margin:-1px -2px 11px; overflow-x:auto; padding:1px 2px 3px; scrollbar-width:none; }
+    .comment-filters::-webkit-scrollbar { display:none; }
+    .comment-filter {
+      flex:0 0 auto;
+      padding:8px 11px;
+      border:1px solid rgba(87,70,179,.12);
+      border-radius:var(--r-pill);
+      background:var(--violet-wash);
+      color:var(--violet-deep);
+      font-size:10px;
+      font-weight:750;
+    }
+    .comment-filter.is-active { border-color:var(--violet); background:var(--violet); color:white; }
+    .comment-compose { display:flex; align-items:center; gap:7px; padding:5px 5px 5px 12px; border:1px solid var(--line); border-radius:var(--r-pill); background:rgba(255,255,255,.72); }
+    .comment-compose input { flex:1; min-width:0; border:0; outline:0; background:transparent; color:var(--ink); font-size:11px; }
+    .comment-compose input::placeholder { color:var(--faint); }
+    .comment-post { min-width:58px; height:34px; border:0; border-radius:var(--r-pill); background:var(--violet); color:white; font-size:10px; font-weight:800; }
+    .comment-thread { display:grid; }
+    .comment { display:grid; grid-template-columns:32px 1fr; gap:9px; padding:14px 0; border-bottom:1px solid var(--line); }
+    .comment:last-child { border-bottom:0; padding-bottom:0; }
+    .comment-avatar { display:grid; width:32px; height:32px; place-items:center; border-radius:50%; background:var(--violet-wash); color:var(--violet-deep); font-size:9px; font-weight:900; }
+    .comment-head { display:flex; align-items:center; flex-wrap:wrap; gap:6px; color:var(--faint); font-size:9px; }
+    .comment-head strong { color:var(--ink); font-size:10px; }
+    .comment-stance { padding:4px 7px; border-radius:var(--r-pill); background:var(--violet-wash); color:var(--violet-deep); font-size:8px; font-weight:800; }
+    .comment-copy { margin:7px 0 8px; font-size:12px; line-height:1.5; }
+    .comment-actions { display:flex; gap:14px; }
+    .comment-actions button { padding:4px 0; border:0; background:transparent; color:var(--muted); font-size:10px; font-weight:750; }
+    .comment-actions button.is-active { color:var(--violet-deep); }
+    .comment-reply { margin-top:10px; padding:9px 10px; border-left:2px solid rgba(87,70,179,.22); border-radius:0 10px 10px 0; background:rgba(87,70,179,.045); }
+    .comment-reply .comment-copy { margin-bottom:0; }
+
+    .vote-bar {
+      position:absolute;
+      z-index:12;
+      right:0;
+      bottom:0;
+      left:0;
+      padding:12px 16px 22px;
+      border-top:1px solid rgba(255,255,255,.72);
+      background:rgba(250,251,253,.78);
+      backdrop-filter:blur(24px) saturate(150%);
+    }
+    .vote-buttons { display:grid; grid-template-columns:1fr 1.2fr; gap:9px; }
+    .vote {
+      min-height:48px;
+      border-radius:var(--r-pill);
+      font-size:14px;
+      font-weight:800;
+    }
+    .vote-no { border:1.5px solid rgba(17,19,24,.15); background:rgba(255,255,255,.68); color:var(--ink); }
+    .vote-yes { border:0; background:var(--blue); color:white; box-shadow:0 10px 22px rgba(27,77,255,.22); }
+    .vote-fine { margin:8px 0 0; color:var(--faint); font-size:9px; text-align:center; }
+
+    .toast {
+      position:absolute;
+      z-index:30;
+      right:18px;
+      bottom:112px;
+      left:18px;
+      padding:12px 14px;
+      transform:translateY(10px);
+      border-radius:var(--r-pill);
+      background:rgba(17,19,24,.92);
+      color:white;
+      font-size:10px;
+      font-weight:700;
+      text-align:center;
+      opacity:0;
+      pointer-events:none;
+      transition:.2s ease;
+    }
+    .toast.is-visible { transform:translateY(0); opacity:1; }
+
+    @media (max-height:760px) {
+      body { padding-top:14px; }
+      .screen { height:calc(100vh - 42px); }
+    }
+    @media (prefers-reduced-motion:reduce) {
+      *,*::before,*::after { transition-duration:.01ms !important; }
+    }
+  </style>
+</head>
+<body>
+  <main class="showcase">
+    <p class="screen-label">Mobile · Ballot learning and vote</p>
+    <section class="screen">
+      <div class="scroll">
+        <header class="topbar">
+          <button class="icon-button" aria-label="Go back">←</button>
+          <div class="topbar-copy">
+            <strong>Online Democratic Community</strong>
+            <span>1,240 verified humans</span>
+          </div>
+          <span class="step">1/3</span>
+        </header>
+
+        <div class="page">
+          <section class="ballot-intro">
+            <div class="meta-row">
+              <span class="badge">✓ Ballot</span>
+              <span class="deadline">Closes Friday · 17:00</span>
+            </div>
+            <h1>Should ODC keep member data anonymous by default?</h1>
+            <p class="decision-note">Learn at your own pace. Your vote stays secret and you’ll confirm before it is recorded.</p>
+          </section>
+
+          <section class="video-card" aria-label="Ballot explainer video">
+            <div class="video-top"><span>Explainer video</span><span>2:14</span></div>
+            <button class="play" aria-label="Play explainer video">▶</button>
+            <div class="video-caption">
+              <div><strong>Privacy in plain English</strong><span>Independent briefing</span></div>
+              <span class="captions">CC</span>
+            </div>
+          </section>
+
+          <section class="glass-card chat-card ai-guide-card">
+            <div class="section-head">
+              <div class="section-title"><span>AI</span><strong>Summary</strong></div>
+              <small>Objective</small>
+            </div>
+            <p class="summary">
+              This proposal makes anonymous data the default for ODC research. Identity could be requested only with clear consent. Secret ballots and public profile names would not change.
+            </p>
+            <form class="composer">
+              <input aria-label="Discuss this ballot with the objective AI" placeholder="Discuss with the objective AI…">
+              <button class="send" aria-label="Send question">↑</button>
+            </form>
+            <div class="quick-questions">
+              <button class="quick">What could go wrong?</button>
+              <button class="quick">Who can see my data?</button>
+              <button class="quick">Explain like I’m 12</button>
+            </div>
+            <p class="chat-response" aria-live="polite"></p>
+          </section>
+
+          <section class="glass-card comments-card">
+            <div class="section-head">
+              <div class="section-title"><span style="background:var(--violet-wash);color:var(--violet-deep)">O</span><strong>Community comments</strong></div>
+              <small>12 comments</small>
+            </div>
+            <div class="comment-filters">
+              <button class="comment-filter" data-filter="agree">Agree</button>
+              <button class="comment-filter" data-filter="disagree">Disagree</button>
+              <button class="comment-filter is-active" data-filter="popular">Popular</button>
+              <button class="comment-filter" data-filter="random">Random</button>
+            </div>
+            <form class="comment-compose">
+              <input aria-label="Add your comment" placeholder="Add your comment…">
+              <button class="comment-post">Post</button>
+            </form>
+            <div class="comment-thread" aria-live="polite">
+              <article class="comment" data-group="agree">
+                <span class="comment-avatar">MH</span>
+                <div>
+                  <div class="comment-head"><strong>m-heron</strong><span>3h</span><span class="comment-stance">Agrees</span></div>
+                  <p class="comment-copy">Anonymous should be the default. Projects can still ask when identity is genuinely needed.</p>
+                  <div class="comment-actions"><button class="helpful">Helpful · 18</button><button>Reply</button></div>
+                  <div class="comment-reply">
+                    <div class="comment-head"><strong>r-alder</strong><span>2h</span></div>
+                    <p class="comment-copy">Yes—provided consent is specific to each project.</p>
+                  </div>
+                </div>
+              </article>
+              <article class="comment" data-group="disagree">
+                <span class="comment-avatar">KO</span>
+                <div>
+                  <div class="comment-head"><strong>k-osprey</strong><span>5h</span><span class="comment-stance">Disagrees</span></div>
+                  <p class="comment-copy">One rule may be too broad. Research and safety audits have different needs.</p>
+                  <div class="comment-actions"><button class="helpful">Helpful · 11</button><button>Reply</button></div>
+                </div>
+              </article>
+              <article class="comment" data-group="question">
+                <span class="comment-avatar">TW</span>
+                <div>
+                  <div class="comment-head"><strong>t-willow</strong><span>Yesterday</span></div>
+                  <p class="comment-copy">Will reviews test whether anonymous records can still be re-identified?</p>
+                  <div class="comment-actions"><button class="helpful">Helpful · 7</button><button>Reply</button></div>
+                </div>
+              </article>
+            </div>
+          </section>
+        </div>
+      </div>
+
+      <div class="vote-bar">
+        <div class="vote-buttons">
+          <button class="vote vote-no">Vote no</button>
+          <button class="vote vote-yes">Vote yes</button>
+        </div>
+        <p class="vote-fine">Next: review and confirm · nothing is recorded yet</p>
+      </div>
+      <div class="toast" role="status" aria-live="polite"></div>
+    </section>
+  </main>
+
+  <script>
+    const toast = document.querySelector(".toast");
+    const response = document.querySelector(".chat-response");
+    const comments = [...document.querySelectorAll(".comment-thread > .comment")];
+    document.querySelectorAll(".comment-filter").forEach((button) => {
+      button.addEventListener("click", () => {
+        const filter = button.dataset.filter;
+        document.querySelectorAll(".comment-filter").forEach((item) => item.classList.toggle("is-active", item === button));
+        comments.forEach((comment) => comment.hidden = false);
+        if (filter === "agree" || filter === "disagree") comments.forEach((comment) => comment.hidden = comment.dataset.group !== filter);
+        if (filter === "random") {
+          const shown = comments[Math.floor(Math.random() * comments.length)];
+          comments.forEach((comment) => comment.hidden = comment !== shown);
+        }
+      });
+    });
+    document.querySelector(".comment-compose").addEventListener("submit", (event) => {
+      event.preventDefault();
+      const input = event.currentTarget.querySelector("input");
+      if (!input.value.trim()) return;
+      toast.textContent = "Comment added to this mockup";
+      toast.classList.add("is-visible");
+      setTimeout(() => toast.classList.remove("is-visible"),1800);
+      input.value = "";
+    });
+    document.querySelectorAll(".helpful").forEach((button) => button.addEventListener("click", () => button.classList.toggle("is-active")));
+
+    const answers = {
+      "What could go wrong?":"The main risk is that anonymous data can sometimes be re-identified when combined with other datasets. The proposal requires safeguards, but critics want those tests defined more precisely.",
+      "Who can see my data?":"Only approved custodians can access protected source data. Outside use would still require member consent and a separate community vote.",
+      "Explain like I’m 12":"ODC would hide your name by default when your answers are used for research. If a project wants to show who you are, it must ask clearly first."
+    };
+    document.querySelectorAll(".quick").forEach((button) => {
+      button.addEventListener("click", () => {
+        response.textContent = answers[button.textContent];
+        response.classList.add("is-visible");
+      });
+    });
+    document.querySelector(".composer").addEventListener("submit", (event) => {
+      event.preventDefault();
+      const input = event.currentTarget.querySelector("input");
+      if (!input.value.trim()) return;
+      response.textContent = "This mockup would answer from the ballot briefing and show citations here.";
+      response.classList.add("is-visible");
+      input.value = "";
+    });
+    document.querySelector(".play").addEventListener("click", () => {
+      toast.textContent = "Video player area";
+      toast.classList.add("is-visible");
+      setTimeout(() => toast.classList.remove("is-visible"),1800);
+    });
+    document.querySelectorAll(".vote").forEach((button) => {
+      button.addEventListener("click", () => {
+        toast.textContent = `${button.textContent} selected · review and confirmation comes next`;
+        toast.classList.add("is-visible");
+        setTimeout(() => toast.classList.remove("is-visible"),2200);
+      });
+    });
+  </script>
+</body>
+</html>
