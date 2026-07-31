@@ -1,0 +1,505 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="utf-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1">
+  <title>Online Democratic Community — Mobile feed</title>
+  <style>
+    :root {
+      --canvas:#dfe5ec;
+      --paper:rgba(250,251,253,.86);
+      --glass:rgba(255,255,255,.66);
+      --glass-strong:rgba(255,255,255,.88);
+      --ink:#111318;
+      --muted:#626975;
+      --faint:#8b929d;
+      --line:rgba(17,19,24,.10);
+      --blue:#1b4dff;
+      --blue-deep:#1232a8;
+      --blue-wash:rgba(27,77,255,.10);
+      --violet:#5746b3;
+      --violet-deep:#3c3489;
+      --violet-wash:rgba(87,70,179,.10);
+      --green:#087b61;
+      --green-wash:rgba(8,123,97,.10);
+      --shadow:0 28px 70px rgba(32,43,59,.18),0 2px 10px rgba(32,43,59,.08);
+      --r-screen:34px;
+      --r-card:22px;
+      --r-control:15px;
+      --r-pill:999px;
+    }
+
+    * { box-sizing:border-box; }
+    html { background:var(--canvas); }
+    body {
+      margin:0;
+      min-width:320px;
+      min-height:100vh;
+      padding:36px 18px 64px;
+      background:
+        radial-gradient(circle at 15% 6%,rgba(63,104,255,.29),transparent 27%),
+        radial-gradient(circle at 88% 22%,rgba(73,205,174,.22),transparent 26%),
+        linear-gradient(145deg,#e9edf2,#d5dde7);
+      color:var(--ink);
+      font-family:Inter,-apple-system,BlinkMacSystemFont,"Segoe UI",sans-serif;
+      -webkit-font-smoothing:antialiased;
+    }
+
+    button,a { font:inherit; }
+    button { cursor:pointer; }
+    a { color:inherit; text-decoration:none; }
+
+    .showcase { width:min(390px,100%); margin:auto; }
+    .screen-label {
+      margin:0 0 10px 6px;
+      color:rgba(17,19,24,.55);
+      font-size:11px;
+      font-weight:800;
+      letter-spacing:.11em;
+      text-transform:uppercase;
+    }
+    .screen {
+      position:relative;
+      width:100%;
+      height:min(844px,calc(100vh - 86px));
+      min-height:680px;
+      overflow:hidden;
+      border:1px solid rgba(255,255,255,.76);
+      border-radius:var(--r-screen);
+      background:linear-gradient(180deg,rgba(255,255,255,.74),rgba(246,248,251,.91));
+      box-shadow:var(--shadow);
+    }
+    .screen::before {
+      position:absolute;
+      inset:0 0 auto;
+      height:260px;
+      background:
+        radial-gradient(circle at 82% 2%,rgba(73,114,255,.18),transparent 52%),
+        radial-gradient(circle at 8% 30%,rgba(89,213,180,.14),transparent 44%);
+      content:"";
+      pointer-events:none;
+    }
+    .scroll {
+      position:relative;
+      height:100%;
+      overflow-y:auto;
+      padding-bottom:98px;
+      scrollbar-width:none;
+    }
+    .scroll::-webkit-scrollbar { display:none; }
+
+    .topbar {
+      position:sticky;
+      z-index:10;
+      top:0;
+      display:grid;
+      grid-template-columns:38px 1fr 38px;
+      align-items:center;
+      gap:10px;
+      min-height:68px;
+      padding:12px 16px 10px;
+      border-bottom:1px solid rgba(255,255,255,.55);
+      background:#fafbfd;
+      backdrop-filter:none;
+    }
+    .brand-mark,.avatar {
+      display:grid;
+      width:38px;
+      height:38px;
+      place-items:center;
+      border-radius:50%;
+      font-size:10px;
+      font-weight:850;
+    }
+    .brand-mark { background:var(--ink); color:white; letter-spacing:.03em; }
+    .avatar { background:var(--blue); color:white; }
+    .topbar-copy { min-width:0; text-align:center; }
+    .topbar-copy strong { display:block; font-size:13px; }
+    .topbar-copy span { display:block; margin-top:3px; color:var(--muted); font-size:10px; }
+
+    .filters-wrap {
+      position:sticky;
+      z-index:9;
+      top:68px;
+      padding:10px 16px 11px;
+      border-bottom:1px solid rgba(255,255,255,.55);
+      background:#fafbfd;
+      backdrop-filter:none;
+    }
+    .filters {
+      display:flex;
+      gap:6px;
+      overflow-x:auto;
+      scrollbar-width:none;
+    }
+    .filters::-webkit-scrollbar { display:none; }
+    .filter {
+      flex:0 0 auto;
+      display:inline-flex;
+      align-items:center;
+      gap:6px;
+      padding:8px 10px;
+      border:1px solid rgba(17,19,24,.09);
+      border-radius:var(--r-pill);
+      background:rgba(255,255,255,.56);
+      color:var(--muted);
+      font-size:10px;
+      font-weight:750;
+      box-shadow:0 5px 14px rgba(32,43,59,.04);
+    }
+    .filter::before {
+      width:6px;
+      height:6px;
+      border-radius:50%;
+      background:currentColor;
+      content:"";
+    }
+    .filter-all { color:var(--ink); }
+    .filter-ballot { border-color:rgba(27,77,255,.16); color:var(--blue-deep); background:rgba(237,241,255,.60); }
+    .filter-opinion { border-color:rgba(87,70,179,.16); color:var(--violet-deep); background:rgba(239,237,255,.60); }
+    .filter-action { border-color:rgba(8,123,97,.16); color:var(--green); background:rgba(231,246,241,.60); }
+    .filter.is-active {
+      border-color:rgba(17,19,24,.22);
+      background:rgba(255,255,255,.90);
+      color:var(--ink);
+      box-shadow:0 6px 18px rgba(32,43,59,.09);
+    }
+
+    .page { display:grid; gap:16px; padding:16px; }
+
+    .hero-ballot {
+      position:relative;
+      display:flex;
+      min-height:312px;
+      overflow:hidden;
+      flex-direction:column;
+      justify-content:space-between;
+      padding:20px;
+      border:1px solid rgba(255,255,255,.34);
+      border-radius:var(--r-card);
+      background:
+        radial-gradient(circle at 92% -12%,rgba(125,153,255,.82),transparent 47%),
+        linear-gradient(145deg,#1d4eff,#1534b2);
+      color:white;
+      box-shadow:0 20px 42px rgba(23,61,199,.24);
+    }
+    .hero-ballot::after {
+      position:absolute;
+      right:-65px;
+      bottom:-90px;
+      width:230px;
+      height:210px;
+      border:1px solid rgba(255,255,255,.22);
+      border-radius:50%;
+      content:"";
+    }
+    .hero-top { position:relative; z-index:2; display:flex; align-items:center; justify-content:space-between; gap:10px; }
+    .ballot-badge {
+      display:inline-flex;
+      align-items:center;
+      gap:6px;
+      padding:6px 10px;
+      border-radius:var(--r-pill);
+      background:rgba(255,255,255,.94);
+      color:var(--blue-deep);
+      font-size:10px;
+      font-weight:850;
+      letter-spacing:.07em;
+      text-transform:uppercase;
+    }
+    .hero-time { color:#d4ddff; font-size:10px; font-weight:700; }
+    .hero-copy { position:relative; z-index:2; margin:22px 0 20px; }
+    .hero-copy p { margin:0 0 8px; color:#dbe3ff; font-size:10px; font-weight:750; letter-spacing:.07em; text-transform:uppercase; }
+    .hero-copy h1 { margin:0; font-size:29px; line-height:1.08; letter-spacing:-.045em; }
+    .hero-meta { margin:12px 0 0; color:#d4ddff; font-size:11px; line-height:1.45; }
+    .hero-cta {
+      position:relative;
+      z-index:2;
+      display:flex;
+      min-height:48px;
+      align-items:center;
+      justify-content:space-between;
+      padding:13px 16px;
+      border:0;
+      border-radius:var(--r-pill);
+      background:rgba(255,255,255,.94);
+      color:var(--blue-deep);
+      font-size:13px;
+      font-weight:800;
+      box-shadow:0 12px 26px rgba(18,50,168,.20);
+    }
+
+    .section-row { display:flex; align-items:flex-end; justify-content:space-between; gap:16px; padding:2px 2px 0; }
+    .section-row strong { font-size:13px; }
+    .section-row span { color:var(--faint); font-size:9px; font-weight:700; text-transform:uppercase; letter-spacing:.06em; }
+
+    .glass-card {
+      padding:18px;
+      border:1px solid rgba(255,255,255,.76);
+      border-radius:var(--r-card);
+      background:var(--glass);
+      box-shadow:0 12px 28px rgba(30,42,62,.08),inset 0 0 0 1px rgba(17,19,24,.03);
+      backdrop-filter:blur(18px) saturate(135%);
+    }
+    .card-top { display:flex; align-items:center; justify-content:space-between; gap:12px; }
+    .lane {
+      display:inline-flex;
+      align-items:center;
+      gap:6px;
+      padding:5px 9px;
+      border-radius:var(--r-pill);
+      font-size:9px;
+      font-weight:850;
+      letter-spacing:.07em;
+      text-transform:uppercase;
+    }
+    .lane-ballot { background:var(--blue-wash); color:var(--blue-deep); }
+    .lane-opinion { background:var(--violet-wash); color:var(--violet-deep); }
+    .lane-action { background:var(--green-wash); color:var(--green); }
+    .card-meta { color:var(--faint); font-size:9px; font-weight:650; }
+    .card-title { margin:13px 0 8px; font-size:16px; line-height:1.28; letter-spacing:-.025em; }
+    .card-body { margin:0; color:var(--muted); font-size:11px; line-height:1.55; }
+    .card-action {
+      display:flex;
+      width:100%;
+      align-items:center;
+      justify-content:space-between;
+      margin-top:14px;
+      padding:11px 13px;
+      border:1px solid rgba(17,19,24,.08);
+      border-radius:var(--r-pill);
+      background:rgba(255,255,255,.60);
+      color:var(--ink);
+      font-size:10px;
+      font-weight:750;
+    }
+    .reaction-row { display:flex; gap:7px; margin-top:14px; }
+    .reaction {
+      display:flex;
+      flex:1;
+      min-height:38px;
+      align-items:center;
+      justify-content:center;
+      gap:5px;
+      border:1px solid rgba(17,19,24,.07);
+      border-radius:var(--r-pill);
+      background:rgba(255,255,255,.58);
+      color:var(--muted);
+      font-size:10px;
+      font-weight:700;
+    }
+    .action-summary { display:flex; align-items:flex-end; justify-content:space-between; gap:16px; margin-top:14px; }
+    .credits { color:var(--green); font-size:16px; font-weight:800; }
+    .credits small { display:block; margin-top:3px; color:var(--faint); font-size:9px; font-weight:600; }
+    .action-button {
+      padding:10px 13px;
+      border:1px solid rgba(8,123,97,.15);
+      border-radius:var(--r-pill);
+      background:rgba(231,246,241,.68);
+      color:var(--green);
+      font-size:10px;
+      font-weight:800;
+    }
+
+    .bottom-nav {
+      position:absolute;
+      z-index:12;
+      right:0;
+      bottom:0;
+      left:0;
+      display:grid;
+      grid-template-columns:repeat(3,1fr);
+      padding:10px 12px 22px;
+      border-top:1px solid rgba(255,255,255,.72);
+      background:rgba(250,251,253,.78);
+      backdrop-filter:blur(24px) saturate(150%);
+    }
+    .nav-item {
+      display:flex;
+      flex-direction:column;
+      align-items:center;
+      gap:4px;
+      border:0;
+      background:transparent;
+      color:var(--faint);
+      font-size:9px;
+      font-weight:700;
+    }
+    .nav-icon { display:grid; width:28px; height:24px; place-items:center; border-radius:9px; font-size:15px; }
+    .nav-item.is-active { color:var(--blue-deep); }
+    .nav-item.is-active .nav-icon { background:var(--blue-wash); }
+
+    .toast {
+      position:absolute;
+      z-index:30;
+      right:18px;
+      bottom:86px;
+      left:18px;
+      padding:12px 14px;
+      transform:translateY(10px);
+      border-radius:var(--r-pill);
+      background:rgba(17,19,24,.92);
+      color:white;
+      font-size:10px;
+      font-weight:700;
+      text-align:center;
+      opacity:0;
+      pointer-events:none;
+      transition:.2s ease;
+    }
+    .toast.is-visible { transform:translateY(0); opacity:1; }
+
+    @media (max-height:760px) {
+      body { padding-top:14px; }
+      .screen { height:calc(100vh - 42px); }
+    }
+    @media (prefers-reduced-motion:reduce) {
+      *,*::before,*::after { transition-duration:.01ms !important; }
+    }
+  </style>
+</head>
+<body>
+  <main class="showcase">
+    <p class="screen-label">Mobile · Community feed</p>
+    <section class="screen">
+      <div class="scroll">
+        <header class="topbar">
+          <span class="brand-mark">ODC</span>
+          <div class="topbar-copy">
+            <strong>Online Democratic Community</strong>
+            <span>1,240 verified humans</span>
+          </div>
+          <span class="avatar">JW</span>
+        </header>
+
+        <div class="filters-wrap">
+          <div class="filters" aria-label="Filter community feed">
+            <button class="filter filter-all is-active" data-filter="all">All</button>
+            <button class="filter filter-ballot" data-filter="ballot">Ballots</button>
+            <button class="filter filter-opinion" data-filter="opinion">Opinions</button>
+            <button class="filter filter-action" data-filter="action">Actions</button>
+          </div>
+        </div>
+
+        <div class="page">
+          <article class="hero-ballot" data-hero="ballot">
+            <div class="hero-top">
+              <span class="ballot-badge">✓ Ballot</span>
+              <span class="hero-time">Closes in 2 days</span>
+            </div>
+            <div class="hero-copy">
+              <p>Privacy default</p>
+              <h1>Should ODC keep member data anonymous by default?</h1>
+              <div class="hero-meta">4 min briefing · 12 opinions · 61% turnout</div>
+            </div>
+            <button class="hero-cta">Learn, then vote <span>→</span></button>
+          </article>
+
+          <div class="section-row">
+            <strong>What the community is deciding</strong>
+            <span>Newest first</span>
+          </div>
+
+          <article class="glass-card feed-card" data-lane="ballot">
+            <div class="card-top">
+              <span class="lane lane-ballot">Ballot</span>
+              <span class="card-meta">Closes in 6 days</span>
+            </div>
+            <h2 class="card-title">Should ODC remain completely free of paid advertising?</h2>
+            <p class="card-body">Choose whether member-approved funding must replace every paid or promoted placement.</p>
+            <button class="card-action">Read the plain-English briefing <span>→</span></button>
+          </article>
+
+          <article class="glass-card feed-card" data-lane="opinion">
+            <div class="card-top">
+              <span class="lane lane-opinion">Opinion</span>
+              <span class="card-meta">m-heron · 2h</span>
+            </div>
+            <h2 class="card-title">Human verification should prove uniqueness—not expose identity</h2>
+            <p class="card-body">One real person should equal one account, without creating a public identity database.</p>
+            <div class="reaction-row">
+              <button class="reaction">Agree · 214</button>
+              <button class="reaction">Disagree · 31</button>
+              <button class="reaction">18 replies</button>
+            </div>
+          </article>
+
+          <article class="glass-card feed-card" data-lane="action">
+            <div class="card-top">
+              <span class="lane lane-action">Action</span>
+              <span class="card-meta">Unclaimed · proof required</span>
+            </div>
+            <h2 class="card-title">Audit ODC for trackers and hidden third-party scripts</h2>
+            <p class="card-body">Publish a repeatable privacy check before the community opens to new members.</p>
+            <div class="action-summary">
+              <div class="credits">60 credits<small>Independent evidence required</small></div>
+              <button class="action-button">View action →</button>
+            </div>
+          </article>
+
+          <article class="glass-card feed-card" data-lane="ballot">
+            <div class="card-top">
+              <span class="lane lane-ballot">Ballot</span>
+              <span class="card-meta">Draft · opens next week</span>
+            </div>
+            <h2 class="card-title">Should members approve every outside use of community data?</h2>
+            <p class="card-body">No opted-in dataset could leave ODC without a vote on its purpose, recipient, safeguards, and terms.</p>
+            <button class="card-action">Preview the proposal <span>→</span></button>
+          </article>
+
+          <article class="glass-card feed-card" data-lane="opinion">
+            <div class="card-top">
+              <span class="lane lane-opinion">Opinion</span>
+              <span class="card-meta">k-osprey · yesterday</span>
+            </div>
+            <h2 class="card-title">AI summaries should always show sources and invite correction</h2>
+            <p class="card-body">Neutral language is not enough; members need to inspect where each claim came from.</p>
+            <div class="reaction-row">
+              <button class="reaction">Agree · 188</button>
+              <button class="reaction">Disagree · 12</button>
+              <button class="reaction">24 replies</button>
+            </div>
+          </article>
+        </div>
+      </div>
+
+      <nav class="bottom-nav" aria-label="Primary navigation">
+        <button class="nav-item is-active"><span class="nav-icon">⌂</span>Feed</button>
+        <button class="nav-item"><span class="nav-icon">✓</span>My activity</button>
+        <button class="nav-item"><span class="nav-icon">▤</span>Record</button>
+      </nav>
+      <div class="toast" role="status" aria-live="polite"></div>
+    </section>
+  </main>
+
+  <script>
+    const filters = [...document.querySelectorAll(".filter")];
+    const cards = [...document.querySelectorAll(".feed-card")];
+    const toast = document.querySelector(".toast");
+
+    function flash(message) {
+      toast.textContent = message;
+      toast.classList.add("is-visible");
+      window.setTimeout(() => toast.classList.remove("is-visible"), 1900);
+    }
+
+    filters.forEach((button) => {
+      button.addEventListener("click", () => {
+        const selected = button.dataset.filter;
+        filters.forEach((item) => item.classList.toggle("is-active", item === button));
+        cards.forEach((card) => {
+          card.style.display =
+            selected === "all" || card.dataset.lane === selected ? "" : "none";
+        });
+      });
+    });
+
+    document.querySelector(".hero-cta").addEventListener("click", () => {
+      flash("Opening the privacy briefing before the vote");
+    });
+    document.querySelectorAll(".card-action,.action-button,.reaction,.nav-item").forEach((button) => {
+      button.addEventListener("click", () => flash("This interaction is ready to connect"));
+    });
+  </script>
+</body>
+</html>
