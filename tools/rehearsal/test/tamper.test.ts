@@ -149,7 +149,7 @@ const flipsOnly =
 const CHECKS: Record<TamperCase, Check> = {
   "byte-flip": flipsOnly("hash"),
   "line-deletion": (r, out, base, trueHead) => {
-    assert.ok(r.line >= 1 && r.line < base.length, "last line is truncation");
+    assert.ok(r.line >= 2 && r.line < base.length, "not an interior line");
     assert.deepEqual(out, drop(base, r.line));
     assert.equal(r.head, trueHead);
   },
@@ -159,6 +159,7 @@ const CHECKS: Record<TamperCase, Check> = {
     assert.equal(changed.length, 2);
     assert.equal(changed[0], r.line, "not the earlier of the two lines");
     const [a, b] = changed as [number, number];
+    assert.ok(a >= 2 && b < base.length, "must swap two interior lines");
     assert.equal(at(out, a), at(base, b));
     assert.equal(at(out, b), at(base, a));
     // A permutation: no line's bytes were edited, only their order.
@@ -179,7 +180,14 @@ const CHECKS: Record<TamperCase, Check> = {
     assert.deepEqual(drop(out, r.line), base);
     assert.equal(r.head, trueHead);
   },
-  "wrong-prev-hash": flipsOnly("prev_hash"),
+  "wrong-prev-hash": (r, out, base, trueHead) => {
+    flipsOnly("prev_hash")(r, out, base, trueHead);
+    assert.ok(r.line > 1, "genesis has no predecessor link");
+    assert.notEqual(
+      field(at(out, r.line), "prev_hash"),
+      field(at(out, r.line - 1), "hash"),
+    );
+  },
   "reserialized-line": (r, out, base, trueHead) => {
     assert.equal(out.length, base.length);
     assert.deepEqual(diffLines(base, out), [r.line]);
@@ -241,12 +249,16 @@ describe("refusing to fail open", () => {
     }
   });
 
-  it("tampers a two-line export, whatever the case", () => {
+  it("enforces the interior-line case minimums", () => {
     const two = target(base.slice(0, 2));
-    for (const kase of TAMPER_CASES) {
-      const r = applyTamper(two, kase, 5);
-      assert.ok(r.line >= 1 && r.line <= 3, `${kase} line ${String(r.line)}`);
-    }
+    const three = target(base.slice(0, 3));
+    assert.throws(() => applyTamper(two, "line-deletion", 1), RangeError);
+    assert.throws(() => applyTamper(two, "line-reordering", 1), RangeError);
+    assert.doesNotThrow(() => applyTamper(three, "line-deletion", 1));
+    assert.throws(() => applyTamper(three, "line-reordering", 1), RangeError);
+    assert.doesNotThrow(() =>
+      applyTamper(target(base.slice(0, 4)), "line-reordering", 1),
+    );
   });
 
   it("refuses a head that is not the last line's stored hash", () => {

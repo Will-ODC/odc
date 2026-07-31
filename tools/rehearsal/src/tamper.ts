@@ -49,8 +49,6 @@ export function isTamperCase(s: string): s is TamperCase {
 export const ENVELOPE_KEYS: readonly string[] =
   "seq type version payload ts prev_hash hash".split(" ");
 
-/** Deletion/reordering are undefined on one line, and truncating it to zero is
- * the empty file (EX-6), a different defect. */
 export const MIN_EXPORT_LINES = 2;
 
 /** What the tool tampers with. A `RehearsalChain` satisfies this structurally. */
@@ -173,15 +171,16 @@ function mutate(
       return own(flipHashChar(lines, at), at);
     }
     case "line-deletion": {
-      // Never the last line: dropping that is truncation, which unlike a
-      // mid-chain deletion needs `--head` to be visible at all.
-      const at = rng.intBetween(1, n - 1);
+      // Fixture 040/EX-17 drops an interior line, not a boundary.
+      if (n < 3) throw new RangeError("line-deletion needs 3+ lines");
+      const at = rng.intBetween(2, n - 1);
       return own(deleteLine(lines, at), at);
     }
     case "line-reordering": {
-      // The earlier line is where the chain first stops linking.
-      const a = rng.intBetween(1, n - 1);
-      const b = rng.intBetween(a + 1, n);
+      // Fixture 041/EX-17 swaps two interior lines, not boundaries.
+      if (n < 4) throw new RangeError("line-reordering needs 4+ lines");
+      const a = rng.intBetween(2, n - 2);
+      const b = rng.intBetween(a + 1, n - 1);
       return own(swapLines(lines, a, b), a);
     }
     case "truncation": {
@@ -198,7 +197,7 @@ function mutate(
       return own(duplicateLine(lines, at), at + 1);
     }
     case "wrong-prev-hash": {
-      const at = rng.intBetween(1, n);
+      const at = rng.intBetween(2, n);
       return own(flipPrevHashChar(lines, at), at);
     }
     case "reserialized-line": {
