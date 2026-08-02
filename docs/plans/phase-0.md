@@ -169,6 +169,7 @@ prev_hash, hash`; types and normative constraints per field; RFC-2119
   compares fixture **hashes**, not verdicts, and is already satisfiable with
   `fixtures-gen`. A second, independent TS verifier gets its own ticket — fresh
   context, contracts-only, the same treatment T7 gets — before the freeze.
+  **That ticket is now `T7b` below** (added 2026-08-02).
 
 ### T7 — Throwaway Go verifier · **odc-verifier-builder — FRESH CONTEXT, HARD ISOLATION**
 
@@ -187,6 +188,62 @@ prev_hash, hash`; types and normative constraints per field; RFC-2119
 - Acceptance: `go test ./...` green using only fixtures as test data;
   verifier binary correct on all fixtures; spec-bug list (possibly empty)
   delivered.
+
+### T7b — Second independent verifier (TypeScript) · **odc-implementer — FRESH CONTEXT, HARD ISOLATION**
+
+**Why this ticket exists.** ADR-0007 §5 names two independent verifiers agreeing
+on a non-synthetic chain as a freeze-readiness signal, and T6's scope decision
+closes with "a second, independent TS verifier gets its own ticket — fresh
+context, contracts-only, the same treatment T7 gets — before the freeze." Until
+now that commitment lived only in prose and in `memory/OPEN-QUESTIONS.md`, with
+no ticket number and no slot in the stack. This is that slot. (Found by the
+fresh-context review of T6a, 2026-07-29; ticketed 2026-08-02.)
+
+**Isolation is the entire deliverable.** A TS verifier written by a context that
+has already read `tools/fixtures-gen/src/encode.ts` or `serialize.ts` inherits
+whatever misreading those files contain, self-verifies green, and proves
+nothing. Two implementations that agree because they share an author's
+misreading are one implementation wearing two hats.
+
+- Session may read ONLY: `contracts/*.md`, `contracts/fixtures/`, its own new
+  directory, `docs/charter.md` §4, and this ticket's text. **NOT**
+  `tools/fixtures-gen/` (any file), **NOT** `tools/rehearsal/`, **NOT**
+  `services/verifier/` (T7's Go source), **NOT** this plan's other tickets,
+  **NOT** `memory/STATE.md`, **NOT** any prior review or discussion.
+- The isolation is against `services/verifier/` too: T7b must not be a
+  transliteration of T7. Independence is per-context, not per-language.
+- New directory, outside both existing tool packages — suggested
+  `tools/verifier-ts/`. Do not extend `@odc/fixtures-gen`; sharing a package
+  invites sharing an import.
+- TypeScript, Node stdlib only (`node:crypto` for SHA-256 and Ed25519). No
+  dependency on any workspace package. Same CLI contract as T7:
+  `verify <export.ndjson> [--head <hash>]` → `VALID`, `INVALID at line N`, or
+  `PARTIAL` naming the affected lines (`evolution.md` EV-7/EV-17); exit codes
+  0/1/2, ≥3 for tool-level errors. Reason text is advisory and is NOT
+  conformance-checked — no reason-code registry exists (EV-17).
+- **Two TS-specific traps this ticket exists to catch**, both invisible to a
+  reader who has internalised the JS defaults:
+  - `JSON.parse` silently accepts input the spec rejects (duplicate keys keep
+    the last, `1e2` and `1.0` parse as numbers, key order is lost). The
+    canonical-bytes checks (EX-7/EX-8/EX-10) cannot be delegated to it.
+  - String length in JS is UTF-16 code units, but ET-14 counts Unicode scalar
+    values. Vectors 072/073 decide this; a `.length` implementation fails them.
+- Must pass every fixture from `contracts/fixtures/` alone, on the declared
+  verdict token and line number only.
+- Every ambiguity hit is reported as a numbered spec-bug list in the PR
+  description — a deliverable, not a failure. **Where that list overlaps T7's,
+  the overlap is the signal**: two isolated readers tripping on the same
+  sentence means the sentence is wrong, not the readers.
+- Acceptance: `pnpm test` green using only fixtures as test data; correct on all
+  73 vectors; spec-bug list (possibly empty) delivered; a reviewer can confirm
+  from the diff that no workspace package is imported.
+
+**Ordering.** After T7, before T10. It is NOT a blocker for T8 — T8's
+cross-language check compares fixture **hashes**, not verdicts, and is already
+satisfiable with `fixtures-gen`. It IS owed before the freeze decision, since
+ADR-0007 §5's "two independent verifiers" signal cannot otherwise be evaluated.
+Per ADR-0007 §5 that signal is "a signal for a human judgment call, not an
+automated gate" — so T7b gates the freeze decision, not T9 or T9a.
 
 ### T8 — Rehearsal execution + spec iteration loop · odc-navigator orchestrates; odc-architect arbitrates spec edits
 
@@ -227,7 +284,9 @@ prev_hash, hash`; types and normative constraints per field; RFC-2119
 Do **not** schedule this after T9. It runs when the ADR-0007 readiness signals
 hold: roughly three binding votes on a live chain, four weeks with no
 event-shape change, two independent verifiers agreeing on a **non-synthetic**
-chain, and a clean T9 re-audit of the exact tree to be tagged.
+chain (T7's Go verifier and **T7b**'s TypeScript one — T7b must have landed, or
+this signal cannot be evaluated at all), and a clean T9 re-audit of the exact
+tree to be tagged.
 
 - Re-run the T9 audit on the delta accumulated since release candidate. A clean
   re-audit with an empty delta is cheap; skipping it is not an option, because

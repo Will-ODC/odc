@@ -162,7 +162,13 @@ choice}` at eligibility-check time — trust-by-policy per charter §10 v1,
   failures — neither is a bad-format key. A T7 verifier that omits the format
   check passes 73/73 with no signal, so `ET-9b` needs a vector alongside it
   under EV-5 ("every additive change MUST ship its own golden fixtures").
-- **A second, independent TS verifier has no ticket yet.** `docs/plans/phase-0.md`
+- ~~**A second, independent TS verifier has no ticket yet.**~~ → **TICKETED
+  (2026-08-02): `T7b` in `docs/plans/phase-0.md`**, slotted after T7 and before
+  T8, with the same fresh-context/contracts-only isolation T7 gets — extended to
+  exclude `services/verifier/` as well, so T7b cannot be a transliteration of
+  T7. It gates the **freeze decision** (ADR-0007 §5's two-independent-verifiers
+  signal), not T8, T9 or T9a. Original write-up kept below for the reasoning.
+  `docs/plans/phase-0.md`
   T6 now commits, in prose, that "a second, independent TS verifier gets its
   own ticket — fresh context, contracts-only, the same treatment T7 gets —
   before the freeze." ADR-0007 §5 names the TypeScript implementation as one
