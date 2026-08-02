@@ -43,6 +43,64 @@ choice}` at eligibility-check time — trust-by-policy per charter §10 v1,
     itself calls policy; and the specific number **64**.
     Writing it the draft's way would read as license to revisit receipt-freeness
     by vote.
+- **⚠️ Ed25519 verification is NOT one predicate, and nothing pins ours. Needed
+  before T7.** (Recovered 2026-08-02 from `claude/review-memory-context-skills-383f6i`,
+  a branch whose content never landed.) RFC 8032 leaves several cases
+  underdetermined: non-canonical `R`/`A`/`S` encodings, small-order public keys,
+  and cofactored vs cofactorless verification. Go's `crypto/ed25519` and Node's
+  `node:crypto` can therefore **disagree on identical bytes**, both conformant.
+  Nothing in `contracts/` says which we mean. **T7 (Go) and T7b (TS) will each
+  silently pick their library's default**, which is precisely the cross-language
+  divergence the two-verifier architecture exists to expose — but only if a
+  fixture forces it, and none does. **Immediate constraint regardless of how it
+  is decided: no fixture may assert a verdict that depends on any of those edge
+  cases**, because a wrong frozen verdict is unfixable. Decide before T7 starts;
+  the cost rises once two verifiers exist and disagree.
+- **⚠️ Ballot expressiveness vs receipt-freeness — a live contradiction in
+  merged text.** (Recovered 2026-08-02 from
+  `claude/golden-fixtures-voting-verify-7urqku`, never landed.) `docs/charter.md`
+  §5 promises "multiple aggregation methods in parallel (approval,
+  ranked-choice/STV, quadratic, others) computed from the same ballots", in the
+  present tense and unqualified. `event-types.md` **ET-22** permanently bars any
+  "unbounded voter-chosen value" in a ballot payload, and ADR-0004 ratified that
+  as surviving any future community vote. **A quadratic ballot is definitionally
+  a voter-chosen vector of magnitudes.** So the two cannot both stand as written.
+  Three ways through, none chosen: hard-bound the value space; move intensity
+  into the sentiment stream (which never shares a store or a pipe with ballots);
+  or accept a permanently nominal tally. **Counter-intuitive point worth keeping:
+  ranked-choice is the WORSE covert channel, not the better one** — N! orderings
+  carry more marker capacity than a bounded quadratic budget. The branch also
+  carries a proposed `charter.md` §5 edit resolving this in §8's favour;
+  **that edit is deliberately NOT applied here.** The charter governs everything
+  else and its own author marked the commit "subject to operator ratification" —
+  it needs an operator decision, most likely as the queued
+  "ballot-expressiveness ceiling" direction ADR, not a routine docs merge.
+- **`hashing.md` HA-9's example does not demonstrate what HA-9 claims. Pre-tag
+  fix.** (Recovered 2026-08-02 from the same branch; **verified empirically**.)
+  HA-9 says the 1-octet type tag is load-bearing "because the integer value `1`
+  and the string value `\"1\"` under the same key encode to different bytes".
+  They do — but by LENGTH: `ENC_INT(1)` is 8 octets `0000000000000001` and
+  `ENC_STR("1")` is 9 octets `000000000000000131`. They would differ with no tag
+  at all, so the example proves nothing about the tag. The case that actually
+  proves it is **int `0` vs string `""`**: both encode to 8 zero octets, byte
+  identical, and ONLY the tag separates them. Swapping the example changes no
+  byte, no digest and no fixture — but `hashing.md` is immutable once
+  `contracts-v1` is tagged, so it must land before the tag or the spec keeps a
+  worked example that does not support its own sentence.
+- **A security posture audit exists on a branch and has never landed.**
+  `claude/odc-security-posture-audit-urgrjs` holds `docs/security/posture-audit.md`
+  (406 lines); `docs/security/` does not exist on master. It is explicitly NOT
+  the T9 audit — it inventories the four secrets the system will eventually hold
+  (operator key, registrar key, the private linkage map, and the registrar's
+  `{who, issue, choice}` knowledge — none of which exist yet), ranks ten
+  findings, and proposes a milestone-keyed concealment timeline on the principle
+  "conceal keys and identity linkage; never conceal rules, formats, or logic".
+  **Its top finding is already fixed** (2026-08-02): the ledger docs described
+  the pre-ADR-0004 voter-signed ballot. The rest is unreviewed and its "tree
+  audited" line is 20+ PRs stale. Decide whether `docs/security/` is a directory
+  this project wants before landing it, and re-base it if so. **T9's checklist
+  does not currently include a sweep for stale claims in docs OUTSIDE
+  `contracts/`** — which is how the ledger contradiction survived; worth adding.
 - **`RETIRED.md` valve — deferred, deliberately not foreclosed.** There is no
   mechanism to withdraw a golden fixture that turns out to be wrong after the
   freeze; adding a fixture cannot neutralise a bad one, so a wrong vector would

@@ -38,10 +38,10 @@ The append-only event log. The single writer of truth.
 
 - API: `POST /events` · `GET /events?since={seq}` · `GET /head` · `GET /export`
 - Inside: hash computed at insert; insert-only enforced at the storage layer; `seq` assigned here (timestamps are advisory).
-- Validation is self-contained: a `vote_cast` is accepted only if signed by a public key found in a prior `participant_registered` event _in its own log_. No calls to other services.
-- Duplicate votes are **recorded, not rejected**; interpretation belongs to tally (latest per participant wins). The log records what happened; views decide what it means.
-- MVP authorization: `issue_created` requires the operator key; `participant_registered` requires the `identity` service's key (identity is the sole gate to personhood); `vote_cast` requires a registered participant's signature.
-- Write path: clients sign locally and `POST /events` directly. `identity` is not in the vote path.
+- Validation is self-contained: a `vote_cast` is accepted only if its `sig` verifies under the `registrar_pk` its own `genesis` declares (`event-types.md` ET-17). No calls to other services.
+- Duplicate votes are **recorded, not rejected**, and **cannot be de-duplicated on-log at all**: a ballot carries no voter field (ET-21), so there is nothing to group by and "latest per participant wins" is not computable. One-ballot-per-human is registrar policy, checked off-log before signing (ET-20). The log records what happened; views decide what it means, and `evolution.md` EV-13 permanently excludes the ballot plane from every correction mechanism.
+- MVP authorization: `issue_created` requires the operator key; `participant_registered` requires the `identity` service's key (identity is the sole gate to personhood); `vote_cast` requires the **registrar** key, held by `identity`.
+- Write path: `issue_created` and `participant_registered` are signed by their own keys and `POST`ed directly. **A ballot is not**: `identity` IS in the vote path — it checks eligibility off-log, signs the `vote_cast` as registrar, and submits it. The voter holds no on-log key, because a voter-held key is a demandable receipt (ADR-0004, charter §5/§8).
 
 ### 2. `verifier` — Phase 1, independent
 
