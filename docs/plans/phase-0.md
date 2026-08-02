@@ -46,8 +46,19 @@ Rules of engagement: one ticket = one branch = one PR = one session
 fresh-context reviewed (`odc-code-review`). Diff limits apply to code tickets;
 spec tickets are exempt from line limits but not from review.
 
-Order: T1 → T2 may run in parallel with T3 → T4 → T5 → T6 → T7 → T8 → T9 → T10.
-T4 blocks T5/T6. T6 blocks T7/T8. Nothing after T2 merges without CI green.
+Order: T1 → T2 may run in parallel with T3 → T4 → T5 → T6 → **T5j** → T7 →
+**T7b** → T8 → T9 → **T9a** → T10. T4 blocks T5/T6. T6 blocks T7/T8. Nothing
+after T2 merges without CI green.
+
+Three tickets were added after this line was first written, and each sits where
+it does for a reason, not by number:
+
+- **T5j** runs before T7, not merely before the tag, because its fixtures exist
+  to catch T7's build omitting `ET-9b` — landing them afterwards means T8
+  surfaces it and T7's builder re-runs in a new fresh context.
+- **T7b** runs after T7 and gates the **freeze decision** only, not T8/T9/T9a.
+- **T9a** — release candidate — is what immediately follows T9; **T10 (the
+  freeze) is deferred** and gated on operational use, not on a date (ADR-0007).
 
 ---
 
@@ -70,6 +81,15 @@ prettier and eslint. Reviewed APPROVE WITH NITS; both [SHOULD]s fixed pre-merge.
   on the untouched repo.
 
 ### T2 — CI skeleton: contracts-guard + repo checks · odc-implementer
+
+**✅ DONE 2026-07-19 — PR #2, squash `fff12c4`. The ticket text below is the
+ticket AS WRITTEN and two of its numbers have since moved — read the current
+scripts, not this.** The diff-size ceiling is **600**, not 800 (lowered in PR
+#14 because 800 predated any real ticket). And the freeze is no longer
+"hard-fail any edit to `fixtures/`": ADR-0008 replaced that with four rules, one
+per kind of file, because the blanket version made adding a vector impossible
+after the tag. `.github/scripts/diff-size.sh` and `contracts-guard.sh` are
+authoritative.
 
 - **Prereq (user action): create the public GitHub repo and push `master`.**
   ✅ Done — public at github.com/Will-ODC/odc, remote set, `master` pushed.
