@@ -99,6 +99,25 @@ choice}` at eligibility-check time — trust-by-policy per charter §10 v1,
   else and its own author marked the commit "subject to operator ratification" —
   it needs an operator decision, most likely as the queued
   "ballot-expressiveness ceiling" direction ADR, not a routine docs merge.
+  **PART A DONE 2026-08-02 (operator-ratified).** `charter.md` §5 now marks the
+  aggregation-method list as **roadmap, not a v1 property**, states that a v1
+  ballot is one choice from a small bounded set (plurality only), and fixes the
+  ordering: where expressiveness and receipt-freeness collide, receipt-freeness
+  wins. That much is honesty — §5 had promised in the present tense something
+  the merged contract cannot compute from a single integer.
+  **PART B IS STILL OPEN: where exactly the ceiling sits.** Deliberately NOT
+  settled in the charter edit. The branch's proposed wording went further than
+  ratified text supports — it would have required a richer ballot to "keep its
+  value space small enough that a ballot cannot single out its caster", which is
+  **stricter than ET-22**: a bounded-but-large space (10 options ranked = 3.6M
+  orderings) satisfies ET-22's letter while failing that test. **That stricter
+  criterion is the right starting point for the ADR**, but it is a new
+  constraint, so it needs deciding rather than inheriting. Three options as
+  framed: ballots stay one-choice forever and intensity lives in the sentiment
+  stream; or richer ballots capped by a k-anonymity rule relating the number of
+  distinct legal ballots to expected turnout; or defer until real turnout data
+  exists. Default until someone argues otherwise: **stay one-choice**, the only
+  option needing no assumptions about electorate size.
 - **`hashing.md` HA-9's example does not demonstrate what HA-9 claims. Pre-tag
   fix.** (Recovered 2026-08-02 from the same branch; **verified empirically**.)
   HA-9 says the 1-octet type tag is load-bearing "because the integer value `1`
