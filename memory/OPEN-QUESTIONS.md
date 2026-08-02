@@ -140,10 +140,37 @@ choice}` at eligibility-check time — trust-by-policy per charter §10 v1,
   "conceal keys and identity linkage; never conceal rules, formats, or logic".
   **Its top finding is already fixed** (2026-08-02): the ledger docs described
   the pre-ADR-0004 voter-signed ballot. The rest is unreviewed and its "tree
-  audited" line is 20+ PRs stale. Decide whether `docs/security/` is a directory
-  this project wants before landing it, and re-base it if so. **T9's checklist
-  does not currently include a sweep for stale claims in docs OUTSIDE
-  `contracts/`** — which is how the ledger contradiction survived; worth adding.
+  audited" line is 20+ PRs stale.
+  **DECIDED 2026-08-02 (operator). The audit is INPUT to T9, never merged as-is,
+  and T9 creates `docs/security/` with its OWN output as the first file.** Both
+  now written into the T9 ticket. Merging a stale audit would create a document
+  that reads as authoritative and is not — the same disease this session spent
+  the day curing, and deliberately doing it to a security document would be
+  worse than the accidents. Its raw material is genuinely good and should not be
+  re-derived, so T9 reads it the way a reviewer reads a previous review: useful,
+  dated, not authoritative. The directory's boundary is stated in the same
+  ticket — threat models and posture reviews, never secrets — which is
+  consistent with charter §9.
+  **The doc-drift gap is fixed at its source, not by a sweep.** The obvious
+  reaction was to add "check docs outside `contracts/`" to T9. Rejected: it is
+  unbounded (so it gets skimmed), it is an accuracy job wearing a security
+  ticket's clothes (diluting the audit at the one gate you want sharp), it runs
+  at the LAST possible moment since Phase 1 begins right after T9a, and a sweep
+  is a snapshot rather than a guard. **The failure did not happen at T9 — it
+  happened at ADR-0004**, which changed the ballot model and left two documents
+  stating the old one. So:
+  1. `docs/decisions/0000-template.md` gains a **"Documents reconciled"**
+     subsection: every ADR must list the documents outside `contracts/` that
+     stated what it changes and fix them in the same PR, or say explicitly that
+     none needed changing. Prevention, in the PR where the author still has the
+     context, and the only person who reliably knows the answer.
+  2. **T9a** gains a bounded backstop over the only three things that state
+     normative behaviour outside `contracts/` — `docs/implementation-plan.md`,
+     `docs/charter.md`, `services/*/CLAUDE.md`. A named list, checkable in an
+     hour, at the moment Phase 1 starts building from them.
+     A CI grep for now-false phrases was considered and rejected: it needs updating
+     on every ADR, and a stale denylist gives false confidence, which is the
+     disease rather than the cure.
 - **`RETIRED.md` valve — deferred, deliberately not foreclosed.** There is no
   mechanism to withdraw a golden fixture that turns out to be wrong after the
   freeze; adding a fixture cannot neutralise a bad one, so a wrong vector would
