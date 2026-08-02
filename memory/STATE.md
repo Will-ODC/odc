@@ -437,7 +437,8 @@ the feature branch, so parallel agents do not conflict). Required checks:
 
 ## Blockers
 
-- **None for T5.** Branch protection is **ON** (2026-07-19, ruleset
+- **None for T6.** (T5 is complete; this line tracked T5 until 2026-08-02.)
+  Branch protection is **ON** (2026-07-19, ruleset
   `protect-master`): PR required, four status checks strict, linear history, no
   bypass. Both Phase-0 user actions are complete — T2's documented rules are
   now actually enforced.
@@ -509,7 +510,48 @@ the feature branch, so parallel agents do not conflict). Required checks:
   run stuck in `queued` refuses to re-run (`403 already running`), so cancel it
   first. Count the checks against the four required ones before assuming CI is
   broken.
-- Housekeeping **done** (2026-07-26): the stale remote branches are deleted and
-  "Automatically delete head branches" is enabled. Note the consequence, which
-  bit once: merging a PR deletes its head branch, so a later push to that branch
-  name silently creates a _new_ branch with no PR attached.
+- **Housekeeping, corrected 2026-08-02.** The 2026-07-26 note claimed "the stale
+  remote branches are deleted". That was read as _handled_, and it was not:
+  eleven stale branches were live on 2026-08-02, every one carrying commits not
+  on master. **Auto-delete only reaches branches whose PR MERGES.** Abandoned
+  branches — the ones actually worth cleaning — are exactly the ones it never
+  touches, so they accumulate silently while the note says otherwise.
+  "Automatically delete head branches" IS enabled and works; that half was true,
+  and it fired three times on 2026-08-02.
+  Note the consequence, which has now bitten twice: merging a PR deletes its
+  head branch, so a later push to that name silently creates a _new_ branch with
+  no PR attached. **The push succeeds and nothing warns you** — on 2026-08-02 it
+  was caught only by noticing `[new branch]` in the push output.
+  **AGENT SESSIONS CANNOT DELETE REMOTE BRANCHES.** `git push origin --delete`
+  returns `HTTP 403`. **Diagnosed precisely, because the obvious attribution is
+  wrong:** this is NOT the agent egress proxy. `origin` is the session's local
+  git relay on `127.0.0.1`, which sits inside the proxy's own `noProxy` range,
+  so that traffic never reaches the proxy at all — and the proxy's
+  `recentRelayFailures` is empty, confirming it never saw the request. The relay
+  permits ref creation and updates (every push in this session worked) and
+  refuses ref DELETION. There is no GitHub MCP delete-branch tool either — it
+  has `create_branch` and `list_branches` and nothing that removes a ref. So
+  branch cleanup is a **human action**, and it is a capability limit of the
+  session's git access, not an org policy an admin would change. This is the
+  likeliest reason the 2026-07-26 note claimed a cleanup that had not happened:
+  an agent tried, was refused, and recorded the intent as the outcome.
+  **Seven branches were audited on 2026-08-02 and are CONFIRMED SAFE to delete**
+  — each assessed and then independently re-verified, including a blob-hash
+  cross-branch check for content living only on two doomed branches:
+  `chore/state-ci-startup-failure-note`, `chore/state-post-t5g`,
+  `chore/state-t5-progress`, `agent/odc-candidate-mockups`,
+  `contracts/T5-fixtures`, `contracts/T5e-generator-and-first-vectors`,
+  `wip/T5fg-material`.
+  **Four must NOT be deleted — they hold work that never landed**, now recorded
+  in `OPEN-QUESTIONS.md`: `claude/odc-security-posture-audit-urgrjs` (the posture
+  audit), `claude/review-memory-context-skills-383f6i` (the Ed25519 predicate gap
+  and an `odc-code-review` rewrite), `claude/golden-fixtures-voting-verify-7urqku`
+  (the ballot-expressiveness tension, a proposed charter edit awaiting operator
+  ratification, and the HA-9 nit) and `claude/skills-agents-memory-mr-29f4dt`
+  (dated 2026-08-02, forbids agent-performed merges — likely still live).
+  **The audit paid for itself:** it surfaced that `docs/implementation-plan.md`
+  and `services/ledger/CLAUDE.md` still described the pre-ADR-0004 voter-signed
+  ballot that ET-22 permanently forbids. Fixed 2026-08-02. A Phase 1 implementer
+  reading either would have built the one thing the charter calls
+  non-negotiable — **so stale branches are not only clutter; they were the only
+  place that defect was written down.**
