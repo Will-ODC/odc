@@ -5,9 +5,12 @@ touched **spec** file (`contracts/*.md` other than `README.md` and this file)
 MUST also add or bump its own `Version:` line. The `contracts-guard` CI
 workflow enforces both on every PR.
 
-After the `contracts-v1` tag exists, `hashing.md` and `fixtures/` are frozen:
-CI hard-fails any edit to them. All other post-freeze changes stay
-additive-only, version-bumped, and logged here — never retroactive.
+After the `contracts-v1` tag exists, `hashing.md` is immutable and `fixtures/`
+is frozen under four rules, one per kind of file — golden data is add-only,
+`index.json` may gain lines but never lose one, `MANIFEST.sha256` is regenerable
+but not deletable, and `fixtures/README.md` is exempt (ADR-0008). All other
+post-freeze changes stay additive-only, version-bumped, and logged here — never
+retroactive.
 
 Format (newest first, one entry per merged contracts change):
 
@@ -16,7 +19,7 @@ Format (newest first, one entry per merged contracts change):
 
 ---
 
-## fixtures/ — README v6 — 2026-08-02 — T5 follow-up, ET-14's control-character clause
+## fixtures/ — README v7 — 2026-08-02 — T5 follow-up, ET-14's control-character clause
 
 - **Two vectors added, 73 → 75** (`VALID` 9 → 10, `INVALID` 60 → 61). No
   existing vector's bytes, id or declared verdict changes; `074`/`075` are
@@ -40,6 +43,28 @@ Format (newest first, one entry per merged contracts change):
   string and hashes to the same preimage — invisible to every other check.
 - No spec `.md` changed: this adds fixtures for ET-14 as already written, and
   narrows no reading. `hashing.md` and every existing preimage are untouched.
+
+## fixtures/ — README v6 — 2026-08-02 — freeze rules split by file kind (ADR-0008)
+
+- **No vector, verdict or byte changes.** This edits only the README prose that
+  describes the freeze, because the freeze itself changed shape.
+- **The blanket "nothing under `fixtures/` may be modified" rule made adding a
+  vector impossible** — an addition also rewrites `index.json`,
+  `MANIFEST.sha256` and this README, so `evolution.md` EV-5/EV-14 were
+  unsatisfiable after the tag and no post-freeze event type could ever ship.
+  Second instance of this deadlock; PR #9 fixed the vector-files half and missed
+  the aggregate files. Invisible in CI, because the whole branch is gated on a
+  tag that does not exist yet.
+- **Now four rules, one per kind of file:** golden data add-only; `index.json`
+  may gain lines but never lose one, with ids unique and no object repeating a
+  key; `MANIFEST.sha256` regenerable but not deletable, its correctness checked
+  instead of its diff; this README exempt.
+- **Note prose is frozen with everything else.** `cites`/`note` are advisory
+  under EV-17, but the rule is deliberately a line rule with almost no logic —
+  it is the only thing holding the freeze up, and a cleverer comparator would
+  fail open. **Fix a wrong note before the tag; afterwards it is permanent.**
+- Also freezes `index.json`'s formatting. Safe: `.prettierignore` excludes
+  `contracts/`, so no formatter can reach it.
 
 ## event-types.md — v3 — 2026-07-28 — T5i, ET-14 counting unit
 

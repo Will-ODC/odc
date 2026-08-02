@@ -1,6 +1,6 @@
 # contracts/fixtures/ — golden vectors
 
-**Version:** 6
+**Version:** 7
 **Status:** DRAFTING (Phase 0 · T5). Not frozen.
 
 **75 vectors** — 10 `VALID`, 4 `PARTIAL`, 61 `INVALID`. They are numbered in
@@ -27,11 +27,24 @@ verifier (T7), and later every service's CI. This file documents the record
 format. It lives inside `fixtures/` on purpose — T7 runs in a context permitted
 to read `contracts/` and nothing else, so anything T7 needs must be here.
 
-> **Once `contracts-v1` is tagged, these files are frozen** (`contracts-guard`).
-> Existing vectors may not be modified, deleted, or renamed; new ones may be
-> added alongside. A wrong vector after the freeze is permanent, so hand-review
-> against the cited spec sentences is the gate — not the fact that the generator
-> produced it.
+> **Once `contracts-v1` is tagged, these files are frozen** (`contracts-guard`),
+> under four rules — one per kind of file, because only some of them hold golden
+> values (ADR-0008):
+>
+> - `vectors/`, `preimages/`, `derivations.json` — **additions only.**
+> - `index.json` — **may gain entries, may never lose a line.** Appending is a
+>   pure insertion and passes; editing any existing `expect`, `head`, `export`
+>   **or `note`** rewrites a line and fails. Ids must stay unique, and no object
+>   may repeat a key — a second `"expect"` added after the first is a pure
+>   insertion that every parser resolves to the LAST value. Note prose is frozen
+>   too, so **corrections must land before the tag.**
+> - `MANIFEST.sha256` — regenerable, not deletable; its correctness is checked
+>   on every PR instead of its diff.
+> - this README — exempt; it is prose that states a count.
+>
+> A wrong vector after the freeze is permanent, and the freeze does not make a
+> new vector correct — only review does. Hand-review against the cited spec
+> sentences is the gate, not the fact that the generator produced it.
 
 ## Layout
 
