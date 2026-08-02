@@ -73,6 +73,47 @@ test("editLine throws rather than silently failing to mutate", () => {
   assert.throws(() => editLine(LINES, 99, "two", "x"), /no line 99/);
 });
 
+test("editLine throws on an identity replacement", () => {
+  // `find` is present, so the absent-`find` guard stays quiet — yet the line
+  // does not move, so the vector would ship canonical bytes while declaring
+  // INVALID. This is the failure class PR #31 recorded against vector 048.
+  assert.throws(
+    () => editLine(LINES, 2, "two", "two"),
+    /identity replacement/,
+    "find === replace finds its target and changes nothing",
+  );
+  assert.throws(
+    () => editLine(LINES, 2, "", ""),
+    /identity replacement/,
+    "the empty-string pair is an identity replacement too",
+  );
+});
+
+test("editLine throws when a $-substitution reproduces the match", () => {
+  // The other half of the no-op space, and the reason the guard asserts on the
+  // RESULT rather than on `find === replace`. `replace` is a plain string, so
+  // String.prototype.replace expands `$&` to the matched text: find and replace
+  // differ, the substitution puts the match straight back, and the line is
+  // unchanged. Enumerating input shapes would have missed this entirely.
+  assert.throws(
+    () => editLine(LINES, 2, "two", "$&"),
+    /changed nothing/,
+    "$& expands to the match, so the line is rebuilt identically",
+  );
+  assert.throws(
+    () => editLine(LINES, 2, "wo", "$&"),
+    /changed nothing/,
+    "a partial match reproduced by $& is the same no-op",
+  );
+  // $$ is an escaped literal dollar, so this one genuinely mutates.
+  assert.deepEqual(editLine(LINES, 2, "two", "$$"), [
+    "one",
+    "$",
+    "three",
+    "four",
+  ]);
+});
+
 test("editLine replaces only the first occurrence, on the named line", () => {
   const out = editLine(["aa", "aa"], 1, "a", "b");
   assert.deepEqual(out, ["ba", "aa"]);
@@ -150,6 +191,22 @@ test("deleteLine refuses a line number outside the file", () => {
 test("swapLines exchanges two lines and keeps the length (tamper matrix)", () => {
   assert.deepEqual(swapLines(LINES, 2, 3), ["one", "three", "two", "four"]);
   assert.throws(() => swapLines(LINES, 1, 99), RangeError);
+});
+
+test("swapLines refuses the no-ops that would emit canonical bytes", () => {
+  // Both of these returned the input unchanged before this guard existed. Every
+  // swapLines caller declares INVALID, so an unchanged return ships a valid
+  // export under an INVALID declaration — the failure 048 actually shipped.
+  assert.throws(
+    () => swapLines(LINES, 2, 2),
+    /cannot be swapped with itself/,
+    "swapping a line with itself is a no-op, not a mutation",
+  );
+  assert.throws(
+    () => swapLines(["same", "same"], 1, 2),
+    /byte-identical/,
+    "swapping equal lines changes no bytes",
+  );
 });
 
 test("duplicateLine repeats a line immediately after itself (tamper matrix)", () => {

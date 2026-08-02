@@ -155,35 +155,43 @@ export const semanticsVectors: Vector[] = [
   ),
   bad(
     "060-title-control-char",
-    lines(chain((c) => c.issue("Adopt\u0001the charter", 3))),
+    lines(
+      chain((c) =>
+        c.issue("Adopt\u0001the charter", 3, { violates: ["ET-14"] }),
+      ),
+    ),
     2,
     ["ET-14"],
     "A C0 control character in a title. Hash and signature are valid, and the line is canonically escaped — only ET-14 fails.",
   ),
   bad(
     "061-title-too-long",
-    lines(chain((c) => c.issue("t".repeat(201), 3))),
+    lines(chain((c) => c.issue("t".repeat(201), 3, { violates: ["ET-14"] }))),
     2,
     ["ET-14"],
     "201 scalar values, one past the limit.",
   ),
   bad(
     "062-title-empty",
-    lines(chain((c) => c.issue("", 3))),
+    lines(chain((c) => c.issue("", 3, { violates: ["ET-14"] }))),
     2,
     ["ET-14"],
     "An empty title.",
   ),
   bad(
     "063-choice-count-too-small",
-    lines(chain((c) => c.issue("Adopt the charter", 1))),
+    lines(
+      chain((c) => c.issue("Adopt the charter", 1, { violates: ["ET-14a"] })),
+    ),
     2,
     ["ET-14a"],
     "choice_count below 2.",
   ),
   bad(
     "064-choice-count-too-large",
-    lines(chain((c) => c.issue("Adopt the charter", 65))),
+    lines(
+      chain((c) => c.issue("Adopt the charter", 65, { violates: ["ET-14a"] })),
+    ),
     2,
     ["ET-14a"],
     "choice_count above 64. The ceiling exists because an unbounded choice domain re-opens a covert receipt channel.",
@@ -193,7 +201,7 @@ export const semanticsVectors: Vector[] = [
     lines(
       chain((c) => {
         const issue = c.issue("Adopt the charter", 3);
-        c.vote(issue.hash, 3);
+        c.vote(issue.hash, 3, { violates: ["ET-18a"] });
       }),
     ),
     3,
@@ -202,7 +210,7 @@ export const semanticsVectors: Vector[] = [
   ),
   bad(
     "066-vote-unknown-issue",
-    lines(chain((c) => c.vote("ab".repeat(32), 0))),
+    lines(chain((c) => c.vote("ab".repeat(32), 0, { violates: ["ET-18"] }))),
     2,
     ["ET-18", "ID-8"],
     "A ballot referencing an issue_id that is not the hash of any prior issue_created.",

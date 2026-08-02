@@ -19,6 +19,31 @@ Format (newest first, one entry per merged contracts change):
 
 ---
 
+## fixtures/ — README v7 — 2026-08-02 — T5 follow-up, ET-14's control-character clause
+
+- **Two vectors added, 73 → 75** (`VALID` 9 → 10, `INVALID` 60 → 61). No
+  existing vector's bytes, id or declared verdict changes; `074`/`075` are
+  appended, per the ids-never-change rule in `fixtures/README.md`.
+- **`074-title-del` (`INVALID` at line 2, ET-14).** ET-14 forbids "any C0
+  control character (U+0000–U+001F) **or U+007F**" — two clauses, of which only
+  the first had a vector. `060` is the sole other control-character vector and
+  it carries U+0001, so **a verifier implementing the rule as `c < 0x20` alone
+  passed all 73 preceding vectors with no signal.** Same shape as the `ET-9b`
+  gap recorded in `memory/OPEN-QUESTIONS.md`: a stated constraint that no
+  fixture exercises is a constraint T7 can silently omit.
+- **`075-title-c1` (`VALID`, ET-14/EX-9).** The over-rejection counterpart, and
+  the reason `074` alone is not enough. ET-14 stops after U+007F, so the C1
+  block (U+0080–U+009F) is **legal** — but Go's `unicode.IsControl` reports true
+  across U+007F–U+009F, so the obvious one-call implementation passes `074` and
+  still rejects this conforming title. No earlier vector carries a C1
+  character, so that error was undetectable.
+- **Both are stored as literal UTF-8 octets** (`7f`, and `c2 85`), never as a
+  `\u` escape: EX-9 escapes only U+0000–U+001F. Asserted over the committed
+  bytes in `fixtures.test.ts`, because an escaped form parses back to the same
+  string and hashes to the same preimage — invisible to every other check.
+- No spec `.md` changed: this adds fixtures for ET-14 as already written, and
+  narrows no reading. `hashing.md` and every existing preimage are untouched.
+
 ## fixtures/ — README v6 — 2026-08-02 — freeze rules split by file kind (ADR-0008)
 
 - **No vector, verdict or byte changes.** This edits only the README prose that

@@ -10,6 +10,7 @@ import { createPublicKey, verify } from "node:crypto";
 import { test } from "node:test";
 
 import {
+  assertWholeMinute,
   ChainBuilder,
   GENESIS_PREV_HASH,
   GENESIS_TS,
@@ -146,6 +147,50 @@ test("timestamps satisfy the ts format gate (ES-20)", () => {
   assert.equal(tsAt(2), "2026-07-21T00:02:00.000Z");
 });
 
+test("tsAt rejects a non-whole-minute offset rather than rounding it (D5)", () => {
+  // tsAt used to end `.replace(/\.\d{3}Z$/, ".000Z")`. For every legal offset
+  // that replace is a no-op; its only reachable effect was to launder a
+  // fractional offset into a canonical-looking timestamp, hiding the caller's
+  // bug. Rejecting is the rule this whole codebase is about (D5) — and the
+  // laundered value is not merely cosmetic: it is covered by `hash`, so a
+  // silently-rounded ts produces a chain whose bytes nobody intended.
+  assert.throws(() => tsAt(1.5), /non-negative whole number/);
+  assert.throws(() => tsAt(-1), /non-negative whole number/);
+  assert.throws(() => tsAt(Number.NaN), /non-negative whole number/);
+  assert.throws(
+    () => tsAt(Number.POSITIVE_INFINITY),
+    /non-negative whole number/,
+  );
+
+  // The specific value the old repair silently swallowed: 90 seconds past
+  // genesis is not a whole minute, and used to come back as ...T00:01:30.000Z
+  // — well-formed, hashable, and not what any caller asked for.
+  assert.throws(() => tsAt(1.5), RangeError);
+
+  // Legal offsets are untouched, so no fixture byte moves.
+  assert.equal(tsAt(1), "2026-07-21T00:01:00.000Z");
+  assert.equal(tsAt(1440), "2026-07-22T00:00:00.000Z");
+});
+
+test("assertWholeMinute rejects a non-whole-minute instant instead of trimming it", () => {
+  // The branch the old `.replace` used to hide. It is unreachable through
+  // tsAt(), whose base is the whole-minute GENESIS_TS — which is exactly why
+  // it is a named function: an assertion no test can kill is not coverage.
+  assert.throws(
+    () => assertWholeMinute("2026-07-21T00:00:30.000Z"),
+    /not a whole-minute instant/,
+    "non-zero seconds must be rejected, not trimmed to :00",
+  );
+  assert.throws(
+    () => assertWholeMinute("2026-07-21T00:00:00.500Z"),
+    /not a whole-minute instant/,
+    "a non-zero millisecond field is exactly what the old .replace() rewrote",
+  );
+
+  // It is an assertion, not a transform: a legal instant comes back untouched.
+  assert.equal(assertWholeMinute(GENESIS_TS), GENESIS_TS);
+});
+
 test("a headless builder starts at seq 1 with the genesis anchor", () => {
   // This is what the "first event is not a genesis" vector needs: a well-formed
   // event in position 1 that is not a genesis.
@@ -265,4 +310,135 @@ test("an empty payload is buildable and hashes (HA-8)", () => {
   const e = newChain().custom("x_empty", 1, {});
   assert.deepEqual(Object.keys(e.payload), []);
   assert.equal(eventHash(e), e.hash);
+});
+
+// --- payload legality (ET-14, ET-14a, ET-18, ET-18a) -----------------------
+//
+// The builders used to accept anything, so an accidentally illegal value was
+// indistinguishable from one of the six that are illegal on purpose.
+
+test("the builder rejects an undeclared ET-14 title violation", () => {
+  const legal = (): ChainBuilder => newChain();
+  assert.throws(() => legal().issue("", 3), /violates ET-14/, "empty title");
+  assert.throws(
+    () => legal().issue("t".repeat(201), 3),
+    /violates ET-14/,
+    "201 scalar values",
+  );
+  assert.throws(
+    () => legal().issue("Adopt\u0001the charter", 3),
+    /violates ET-14/,
+    "a C0 control character",
+  );
+  assert.throws(
+    () => legal().issue("Adopt\u007fthe charter", 3),
+    /violates ET-14/,
+    "U+007F is banned by ET-14's own sentence, and is NOT a C0 character",
+  );
+});
+
+test("the builder rejects undeclared ET-14a, ET-18 and ET-18a violations", () => {
+  assert.throws(
+    () => newChain().issue("Adopt the charter", 1),
+    /violates ET-14a/,
+  );
+  assert.throws(
+    () => newChain().issue("Adopt the charter", 65),
+    /violates ET-14a/,
+  );
+  // No prior issue_created has this hash, so ET-18 fails and ET-18a is not
+  // merely unviolated but uncheckable — the error names ET-18 alone.
+  assert.throws(() => newChain().vote("ab".repeat(32), 0), /violates ET-18\b/);
+  const c = newChain();
+  const i = c.issue("Adopt the charter", 3);
+  assert.throws(() => c.vote(i.hash, 3), /violates ET-18a/, "choice === count");
+  assert.throws(() => c.vote(i.hash, -1), /violates ET-18a/);
+});
+
+test("declaring a violation the payload does NOT commit is rejected too", () => {
+  // The direction that matters most: this is the shape where a vector ships
+  // conforming bytes under an INVALID declaration, so every correct verifier
+  // fails it for the right reason on the wrong file.
+  assert.throws(
+    () => newChain().issue("Adopt the charter", 3, { violates: ["ET-14"] }),
+    /the payload is LEGAL/,
+  );
+  const c = newChain();
+  const i = c.issue("Adopt the charter", 3);
+  assert.throws(
+    () => c.vote(i.hash, 1, { violates: ["ET-18a"] }),
+    /the payload is LEGAL/,
+  );
+});
+
+test("a declaration that names the wrong or an incomplete rule is rejected", () => {
+  assert.throws(
+    () => newChain().issue("", 3, { violates: ["ET-14a"] }),
+    /actually violates ET-14/,
+    "wrong rule named",
+  );
+  assert.throws(
+    () => newChain().issue("", 1, { violates: ["ET-14"] }),
+    /actually violates ET-14, ET-14a/,
+    "an empty title AND an out-of-range choice_count breaks both",
+  );
+});
+
+test("a correctly declared violation builds, and legal payloads are untouched", () => {
+  assert.equal(
+    newChain().issue("", 3, { violates: ["ET-14"] }).payload["title"],
+    "",
+  );
+  const c = newChain();
+  const i = c.issue("Adopt the charter", 2);
+  assert.equal(c.vote(i.hash, 0).payload["choice"], 0);
+  assert.equal(c.vote(i.hash, 1).payload["choice"], 1);
+});
+
+test("ET-14 counts scalar values, not UTF-16 code units or bytes", () => {
+  // 200 astral scalars is 400 UTF-16 code units and 800 UTF-8 octets. A
+  // validator using JS `.length` would reject this legal title and take
+  // vector 072 down with it; one using byte length would reject it harder.
+  const clef = "\u{1d11e}";
+  assert.doesNotThrow(() => newChain().issue(clef.repeat(200), 2));
+  assert.throws(
+    () => newChain().issue(clef.repeat(201), 2),
+    /violates ET-14/,
+    "and the ceiling still bites at 201 scalar values",
+  );
+});
+
+test("the ET-14 / ET-14a boundaries are legal on the legal side", () => {
+  // Each assertion here exists because mutating the corresponding comparison
+  // left the suite green: `scalars < 1` -> `< 2`, and `choiceCount > 64` ->
+  // `>= 64` both wrongly reject a LEGAL payload, and nothing noticed. An
+  // over-strict builder is not a harmless bug: it would make a legal vector
+  // unbuildable and quietly shrink what the fixture set can express.
+  assert.doesNotThrow(
+    () => newChain().issue("a", 2),
+    "1 scalar value and choice_count 2 are both the legal minimum (ET-14, ET-14a)",
+  );
+  assert.doesNotThrow(
+    () => newChain().issue("t".repeat(200), 64),
+    "200 scalar values and choice_count 64 are both the legal maximum",
+  );
+  // And one past each end is not.
+  assert.throws(
+    () => newChain().issue("t".repeat(201), 64),
+    /violates ET-14\b/,
+  );
+  assert.throws(() => newChain().issue("a", 65), /violates ET-14a/);
+});
+
+test("U+001F, the top of the C0 block, is forbidden in a title (ET-14)", () => {
+  // `c <= 0x1f` -> `c < 0x1f` survived the suite: U+001F is the last C0
+  // character, and every other test used U+0001. The vectors that DO carry
+  // \u001f (011, ESC) put it in an x_ custom payload, which never reaches
+  // this check.
+  assert.throws(
+    () => newChain().issue("Adopt\u001fthe charter", 3),
+    /violates ET-14/,
+  );
+  // U+0020 is the first legal character above the block.
+  assert.doesNotThrow(() => newChain().issue("Adopt the charter", 3));
 });
