@@ -363,9 +363,16 @@ package boundary so the failure can never again be invisible.
    and leaves the constraint table-only permanently. **Must land before T9.**
    **No fixture exercises it:** all **75** vectors were checked and none asserts
    `INVALID` on a malformed key, so a T7 verifier that omits the format check
-   passes 75/75 with no signal. It needs a vector alongside it under EV-5. Full
-   write-up in `OPEN-QUESTIONS.md`; recorded here because the context protocol
-   has every session read this file first.
+   passes 75/75 with no signal. **Now ticketed as `T5j`** (2026-08-02,
+   `docs/plans/phase-0.md`), slotted after T6d and **before T7** — not merely
+   before the tag, because these fixtures exist to catch T7's build omitting the
+   check, and landing them afterwards obliges T7's builder to re-run in a new
+   fresh context. The vectors use an **uppercase-hex** key: still valid hex
+   decoding to the same 32 bytes, so `chain_id`, the signature and the `hash` all
+   stay correct and the CASE is the only defect. A wrong-length key would break
+   three rules at once and isolate nothing. Full write-up in the ticket and in
+   `OPEN-QUESTIONS.md`; recorded here because the context protocol has every
+   session read this file first.
 1. ~~**The `0x69` integer-tag preimage.**~~ **DONE in T5h (#34)**, together with
    the astral vectors and ET-14's counting unit. T7 inherits both.
 2. ~~**The ~8 `[SHOULD]`/`[NIT]` findings from T5b/T5c/T5d.**~~ **DONE

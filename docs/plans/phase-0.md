@@ -171,6 +171,78 @@ prev_hash, hash`; types and normative constraints per field; RFC-2119
   context, contracts-only, the same treatment T7 gets — before the freeze.
   **That ticket is now `T7b` below** (added 2026-08-02).
 
+### T5j — `ET-9b`: the genesis key format, and the vectors that pin it · odc-implementer
+
+**Why this ticket exists.** `genesis`'s `operator_pk` and `registrar_pk` are
+constrained to `^[0-9a-f]{64}$` **only in the `genesis` payload table**. No
+numbered `ET-n` sentence states it. `ids.md` ID-3 does exactly this job for the
+other public key on the chain — `participant_registered.pubkey` — and nothing
+does it for these two. ID-1/ID-2 do not reach them either: those govern
+_identifiers_ (`participant_id`, `issue_id`, `chain_id`), and a public key is not
+an identifier.
+
+**The constraint is already normative** — `CONTRACTS-CHANGE.md` (T5i) ruled that
+payload tables are normative and named this exact case as one where the table is
+the sole source. So this ticket does not _create_ a rule. It gives an existing
+one a numbered home so a fixture can cite it, and — the part that actually
+protects anything — **ships the fixtures that make omitting it detectable.**
+Today no vector asserts `INVALID` on a malformed genesis key, so a verifier that
+skips the check passes 75/75 with no signal.
+
+**Deadline.** `evolution.md` EV-1 forbids altering a frozen `(type, version)`
+schema, so `ET-9b` cannot be added after the `contracts-v1` tag — deferring past
+the tag does not postpone it, it makes it unaddable and leaves the constraint
+table-only permanently. Note the asymmetry ADR-0008 introduced: post-tag you
+could still add the _vectors_, but not the _sentence_, leaving fixtures citing a
+rule that does not exist.
+
+**Run it before T7, not merely before the tag.** T7 builds the Go verifier from
+`contracts/` alone in hard isolation, and these fixtures exist precisely to catch
+that build omitting the check. Landing them afterwards means T7 was written blind
+to them, T8 surfaces it, and a material spec change obliges T7's builder to
+re-run **in a new fresh context** — spending the isolation twice for something
+avoidable.
+
+- **The sentence.** Add `ET-9b` to `event-types.md`, worded to mirror `ids.md`
+  ID-3 rather than invented fresh: both keys are 32-byte raw Ed25519 keys
+  (RFC 8032) carried as 64-lowercase-hex strings, rejected and never lowercased
+  to conform (D5). `event-types.md` v3 → v4, plus a `CONTRACTS-CHANGE.md` entry.
+  No byte, preimage or existing verdict changes, so nothing regenerates.
+  (`ids.md` is a defensible alternative home, since ID-3 is the precedent; the
+  decision here is to keep the genesis rules together with ET-7/ET-8/ET-9a.)
+- **Two vectors, and the malformation is the design.** Use an **uppercase-hex**
+  key. It is still valid hex decoding to the same 32 bytes, so `chain_id` still
+  derives correctly (ET-7), the genesis self-signature still verifies (ET-8), and
+  the line is canonical with a matching `hash` — **the ONLY thing wrong is the
+  case.** That is the isolation `033-prev-hash-uppercase` and `036-hash-uppercase`
+  already have for their fields. A wrong-LENGTH key does not isolate: it breaks
+  hex decoding, so the derivation and the signature fail too, reproducing `042`'s
+  problem of a vector that cannot separate the rule it names from the ones it
+  trips incidentally.
+- **One vector per key, not one for both.** `registrar_pk` is the one an
+  implementation forgets — it does not enter `chain_id` and is unused until a
+  ballot arrives. Same asymmetry `074`/`075` exist to catch.
+- **The generator wrinkle, which is where the work actually is.** Since PR #22
+  `chainId()`/`participantId()` REJECT uppercase hex, so the builder cannot
+  simply be handed one; and uppercasing after the fact with `editLine` is wrong,
+  because `hash` covers the payload string, so the digest would mismatch and the
+  vector would fail for two reasons. `genesis()` needs an option that writes a
+  differently-cased key string into the payload while signing and deriving from
+  the real decoded key — the same shape as how `059-chain-id-not-derived` builds
+  a deliberately wrong `chain_id`. Reuse that mechanism; do not re-derive it.
+- **The construction above is verified, not assumed** (2026-08-02, while writing
+  this ticket). Building a `genesis` whose payload carries the uppercase key
+  while signing and deriving from the decoded key gives: `hash` recomputes,
+  signature verifies under that key, `chain_id` equals `sha256(decoded bytes)`,
+  and the string fails `^[0-9a-f]{64}$` while matching `^[0-9a-fA-F]{64}$`. And
+  `chainId()` does reject the uppercase string, so the builder option really is
+  needed — it is not an accident of the current code that can be skipped.
+- Acceptance: `ET-9b` merged with `event-types.md` at v4 and a changelog entry;
+  two new vectors whose declared verdict is `INVALID` at line 1; each verified to
+  fail for the format rule ALONE — hash, signature and `chain_id` all valid on
+  the same line; `fixtures-gen` and `fixtures-manifest` green; fresh-context
+  review before merge.
+
 ### T7 — Throwaway Go verifier · **odc-verifier-builder — FRESH CONTEXT, HARD ISOLATION**
 
 - Session may read ONLY: `contracts/*.md`, `contracts/fixtures/`, its own

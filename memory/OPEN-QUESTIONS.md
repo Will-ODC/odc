@@ -158,7 +158,8 @@ choice}` at eligibility-check time — trust-by-policy per charter §10 v1,
   which is a one-cell correction and would otherwise have carried an
   unreviewed new normative sentence. Not blocking T7 the way ET-14 was — the
   constraint is at least _stated_, and no fixture contradicts it.
-  **It MUST land before the freeze, not merely should.** `evolution.md` EV-1:
+  **Ticketed 2026-08-02 as `T5j`** in `docs/plans/phase-0.md`, to run after T6d
+  and before T7. **It MUST land before the freeze, not merely should.** `evolution.md` EV-1:
   "An existing frozen `(type, version)` schema MUST NOT be altered." Adding
   `ET-9b` after the `contracts-v1` tag would alter frozen `genesis`/v1, so
   deferring past the freeze does not postpone the fix — it makes it unaddable
