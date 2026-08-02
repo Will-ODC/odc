@@ -522,3 +522,29 @@ the feature branch, so parallel agents do not conflict). Required checks:
   head branch, so a later push to that name silently creates a _new_ branch with
   no PR attached. **The push succeeds and nothing warns you** — on 2026-08-02 it
   was caught only by noticing `[new branch]` in the push output.
+  **AGENT SESSIONS CANNOT DELETE REMOTE BRANCHES.** `git push origin --delete`
+  returns `HTTP 403` from the egress proxy, which its README classes as an
+  organization policy denial to be reported, never retried or routed around.
+  There is no GitHub MCP delete-branch tool either. So branch cleanup is a
+  **human action** — which is the likeliest reason the 2026-07-26 note claimed a
+  cleanup that had not happened.
+  **Seven branches were audited on 2026-08-02 and are CONFIRMED SAFE to delete**
+  — each assessed and then independently re-verified, including a blob-hash
+  cross-branch check for content living only on two doomed branches:
+  `chore/state-ci-startup-failure-note`, `chore/state-post-t5g`,
+  `chore/state-t5-progress`, `agent/odc-candidate-mockups`,
+  `contracts/T5-fixtures`, `contracts/T5e-generator-and-first-vectors`,
+  `wip/T5fg-material`.
+  **Four must NOT be deleted — they hold work that never landed**, now recorded
+  in `OPEN-QUESTIONS.md`: `claude/odc-security-posture-audit-urgrjs` (the posture
+  audit), `claude/review-memory-context-skills-383f6i` (the Ed25519 predicate gap
+  and an `odc-code-review` rewrite), `claude/golden-fixtures-voting-verify-7urqku`
+  (the ballot-expressiveness tension, a proposed charter edit awaiting operator
+  ratification, and the HA-9 nit) and `claude/skills-agents-memory-mr-29f4dt`
+  (dated 2026-08-02, forbids agent-performed merges — likely still live).
+  **The audit paid for itself:** it surfaced that `docs/implementation-plan.md`
+  and `services/ledger/CLAUDE.md` still described the pre-ADR-0004 voter-signed
+  ballot that ET-22 permanently forbids. Fixed 2026-08-02. A Phase 1 implementer
+  reading either would have built the one thing the charter calls
+  non-negotiable — **so stale branches are not only clutter; they were the only
+  place that defect was written down.**
