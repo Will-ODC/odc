@@ -235,6 +235,60 @@ possible moment to discover it. `guards.test.sh` now tags throwaway repos
 
 ## Next
 
+### ▶ START HERE (handoff, 2026-08-02)
+
+Four decisions were made and recorded but **not executed**. Do them in this
+order — the first three are small and clear the deck; the fourth is the phase
+resuming.
+
+1. **T6d — finish T6.** `just rehearsal-build`, CLI wiring (including
+   `--case`), README. **And the self-verify property test T6 still owes**:
+   nothing merged recomputes an event hash, checks `prev_hash` linkage beyond
+   genesis, or verifies a signature. T6's acceptance names exactly those three
+   plus attributing a failure to a line. T6c did not land it either. **A green
+   test count in `tools/rehearsal` is not evidence this exists.**
+2. **T5j — `ET-9b`, plus the Ed25519 predicate.** Two things in one contracts
+   change, because both open `event-types.md` and one review is cheaper than
+   two. Full write-ups in `OPEN-QUESTIONS.md`; the short form:
+   - `ET-9b` gives the genesis key format a numbered home, with **uppercase-hex**
+     vectors — verified to isolate the format rule alone, since an uppercase key
+     decodes to the same 32 bytes so `chain_id`, the signature and the `hash` all
+     still check out.
+   - **Ed25519: measure first, do not reason from memory.** Go 1.24.7 and Node
+     are both in the container. Preferred shape is to make the divergence
+     unreachable (reject non-canonical encodings and non-prime-order keys before
+     verification) rather than adjudicate a predicate.
+3. **The HA-9 example fix** — one sentence in `hashing.md`, verified, cheap, and
+   **impossible after the tag** since `hashing.md` is immutable then. Can ride
+   along with T5j.
+4. **Then the phase resumes:** T7 → T7b → T8 → T9 → T9a. T10 stays deferred.
+
+**Owed by the operator, not by a session:** the ballot-expressiveness ceiling
+ADR (part B — part A landed 2026-08-02; default until argued otherwise is
+"ballots stay one-choice"), and the other queued direction ADRs.
+
+**The four surviving branches, and what each is still for.** `contracts/` is
+untouched by all of them.
+
+| branch                                        | status                                                                                                                                                                                                    |
+| --------------------------------------------- | --------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- |
+| `claude/odc-security-posture-audit-urgrjs`    | **KEEP until T9** — T9 reads it as input and creates `docs/security/` with its own output                                                                                                                 |
+| `claude/review-memory-context-skills-383f6i`  | **KEEP — still unlanded**: the `odc-keys-and-signatures` skill file and an `odc-code-review` rewrite ("verify, don't read"). Only the Ed25519 _finding_ was mined out; the artifacts are still only there |
+| `claude/skills-agents-memory-mr-29f4dt`       | **KEEP** — forbids agent-performed merges; not on master, may be a live session                                                                                                                           |
+| `claude/golden-fixtures-voting-verify-7urqku` | **FULLY MINED 2026-08-02** — implementation-plan fix applied, charter part A applied, HA-9 and expressiveness recorded. Deletable                                                                         |
+
+**A caution the same day proved twice.** The doc-drift sweep found the ledger
+docs describing pre-ADR-0004 voter-signed ballots — and then a _second_ pass over
+the same file found two more: the verifier section listed only two verdicts
+(missing `PARTIAL`, ADR-0006) and the tally section specified "approval counting,
+latest-vote-per-participant", which is both the wrong method (one `choice` yields
+plurality, not approval) and an uncomputable one (ET-21 leaves nothing to group
+by). **My own first sweep missed them.** That is the argument for T9a's named
+three-document list over an ad-hoc scan, and for the ADR template's new
+"Documents reconciled" section over catching it later.
+
+---
+
 **T5 IS COMPLETE**, through T5i plus the 2026-08-02 follow-up. Master carries
 **75 vectors** (VALID 10, PARTIAL 4, INVALID 61), **109/109** `fixtures-gen`
 tests and **146/146** rehearsal. (`wip/T5fg-material`, the spent holding

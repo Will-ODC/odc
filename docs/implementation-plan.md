@@ -47,7 +47,7 @@ The append-only event log. The single writer of truth.
 
 Standalone CLI, written **from `contracts/` alone in a fresh context** — an agent that has never seen `ledger` source or discussion. This independence is the test that the spec is real.
 
-- `verify <export.ndjson> [--head <hash>]` → `VALID` or `INVALID at line N`.
+- `verify <export.ndjson> [--head <hash>]` → one of **three** verdicts (ADR-0006, `evolution.md` EV-7/EV-17): `VALID`, `INVALID at line N`, or `PARTIAL` naming the affected lines — the last for a well-formed event whose `(type, version)` this verifier does not register, so a frozen verifier does not condemn a chain that has legally grown past it. Exit codes 0/1/2, ≥3 for tool-level errors. Reason text is advisory and is NOT conformance-checked; there is no reason-code registry.
 
 ### 3. `identity` — Phase 1
 
@@ -63,7 +63,7 @@ All derived views. Holds no truth; rebuildable from the export at any time (and 
 
 - Reads `ledger` via `GET /events?since=` polling.
 - API: `GET /issues` · `GET /issues/{id}/tally`
-- v1 = approval counting, latest-vote-per-participant. Parallel methods, reputation, and delegation views arrive later behind the same API shape.
+- v1 = **plurality counting over ballots as recorded**. NOT approval (a v1 ballot carries one `choice`, not a set) and NOT latest-vote-per-participant, which is **not computable**: a ballot carries no voter field (`event-types.md` ET-21), so there is nothing to group or supersede by. One-ballot-per-human is registrar policy enforced off-log before signing (ET-20). Parallel methods, reputation and delegation views arrive later behind the same API shape — see `charter.md` §5, where the richer aggregation methods are marked roadmap and constrained by receipt-freeness.
 
 ### 5. `web` — Phase 2
 
