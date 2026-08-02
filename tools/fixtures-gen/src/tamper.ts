@@ -46,7 +46,28 @@ export function editLine(
       `line ${lineNumber} does not contain ${JSON.stringify(find)}`,
     );
   }
-  out[i] = line.replace(find, replace);
+  const mutated = line.replace(find, replace);
+  // The absent-`find` check above catches only half the no-op space: a call
+  // that FINDS its target and still changes nothing returns canonical bytes
+  // under an `INVALID` declaration — the failure class recorded against vector
+  // 048 in PR #31, which reads as a verifier bug rather than a fixture bug.
+  // (Consult that PR for what 048 actually did; do not reconstruct it from
+  // memory — this comment deliberately does not restate the call, because an
+  // earlier draft of it asserted a literal form the repo never contained.)
+  //
+  // There are two ways in, which is why the guard asserts on the RESULT rather
+  // than enumerating input shapes: an identity replacement (`find === replace`,
+  // including both empty), and a `replace` whose `$` substitution reproduces
+  // the match (`$&`, `` $` ``, `$'`, `$n`, `$$`) — `replace` is a plain string
+  // here, so those patterns are live. Whatever the arguments, the line must move.
+  if (mutated === line) {
+    throw new Error(
+      find === replace
+        ? `editLine(${String(lineNumber)}, …) is an identity replacement: find and replace are both ${JSON.stringify(find)}`
+        : `editLine(${String(lineNumber)}, …) changed nothing`,
+    );
+  }
+  out[i] = mutated;
   return out;
 }
 
@@ -123,7 +144,16 @@ export function deleteLine(
   return out;
 }
 
-/** Swaps two 1-based lines (tamper matrix: line reordering). */
+/**
+ * Swaps two 1-based lines (tamper matrix: line reordering).
+ *
+ * Throws when `a === b`, and when the two lines are byte-identical. Both are
+ * no-ops that return canonical bytes, and every caller is building a vector
+ * that DECLARES a verdict of `INVALID` — so a silent no-op emits a perfectly
+ * valid export under an `INVALID` declaration, which surfaces at T7 as a
+ * mysterious verifier bug rather than a fixture bug. Same failure shape as
+ * `editLine`'s absent `find` and `048`'s identity replacement.
+ */
 export function swapLines(
   lines: readonly string[],
   a: number,
@@ -134,6 +164,19 @@ export function swapLines(
   const lb = out[b - 1];
   if (la === undefined || lb === undefined)
     throw new RangeError("line out of range");
+  // `Error`, not `RangeError`: both indices are individually in range, so this
+  // is a degenerate combination rather than a bounds failure. This file reserves
+  // `RangeError` for out-of-domain indices (see the check above, `deleteLine`,
+  // `truncate`, `insertBlankLine`) and uses `Error` for semantic no-ops
+  // (`editLine`'s absent `find`, `flipHashChar`'s missing hash).
+  if (a === b)
+    throw new Error(
+      `swapLines(${String(a)}, ${String(b)}) is a no-op: a line cannot be swapped with itself`,
+    );
+  if (la === lb)
+    throw new Error(
+      `lines ${String(a)} and ${String(b)} are byte-identical, so swapping them changes nothing`,
+    );
   out[a - 1] = lb;
   out[b - 1] = la;
   return out;

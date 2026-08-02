@@ -31,16 +31,167 @@ export const REGISTRAR = keypairFromSeed(seedOf(0x02));
 /** The genesis timestamp of hashing.md §6. */
 export const GENESIS_TS = "2026-07-21T00:00:00.000Z";
 
-/** Later events advance the clock by whole minutes from genesis, deterministically. */
+/** The canonical shape this clock promises: a whole minute, zero milliseconds. */
+const WHOLE_MINUTE = /T\d{2}:\d{2}:00\.000Z$/;
+
+/**
+ * Whole minutes after genesis. A non-integer or negative offset is REJECTED,
+ * not rounded: this used to end `.replace(/\.\d{3}Z$/, ".000Z")`, a no-op for
+ * every legal offset whose only reachable effect was to launder a fractional
+ * one into a canonical-looking `ts` (which `hash` covers). Repair-instead-of-
+ * reject, forbidden by D5 — the third instance here, after `encode.ts` (#22)
+ * and `serialize.ts` (#26).
+ */
 export function tsAt(minutesAfterGenesis: number): string {
-  const base = Date.parse(GENESIS_TS);
-  return new Date(base + minutesAfterGenesis * 60_000)
-    .toISOString()
-    .replace(/\.\d{3}Z$/, ".000Z");
+  if (!Number.isSafeInteger(minutesAfterGenesis) || minutesAfterGenesis < 0) {
+    throw new RangeError(
+      `tsAt needs a non-negative whole number of minutes, got ${String(minutesAfterGenesis)}`,
+    );
+  }
+  return assertWholeMinute(
+    new Date(
+      Date.parse(GENESIS_TS) + minutesAfterGenesis * 60_000,
+    ).toISOString(),
+  );
+}
+
+/**
+ * Asserts `tsAt`'s promised shape and returns `ts` untouched — a checkpoint,
+ * never a transform. Named rather than inlined so the check is REACHABLE from a
+ * test: behind `tsAt`'s whole-minute base it could never fire, and a check no
+ * test can kill is not coverage (the T5a lesson). It takes the finished string
+ * rather than a base + offset because `package.json` publishes `./chain` as a
+ * whole-module barrel: a pure assertion cannot be misused by a future caller to
+ * mint fixtures off a non-genesis clock.
+ */
+export function assertWholeMinute(ts: string): string {
+  if (!WHOLE_MINUTE.test(ts)) {
+    throw new Error(
+      `${ts} is not a whole-minute instant: its seconds or milliseconds are non-zero`,
+    );
+  }
+  return ts;
 }
 
 /** ET-3: which key signs each type. `undefined` means the type carries no sig. */
 type Signer = Keypair | undefined;
+
+// --- v1 payload rules the builder can check -------------------------------
+//
+// The builders used to accept anything, so a value that was illegal BY ACCIDENT
+// was indistinguishable from the six that are illegal ON PURPOSE — and the
+// accident still ships a declared verdict, so a conforming verifier "fails" the
+// vector for a rule nobody meant to exercise. Legality is now checked and a
+// deliberate breach must be DECLARED, reconciled for set equality in BOTH
+// directions. Declaring a breach the payload does not commit is rejected just
+// as firmly: that is canonical bytes under an INVALID declaration, the same
+// shape `editLine`'s and `swapLines`'s no-op guards exist to stop.
+
+/** The rule ids the builder knows how to check. */
+export type BuilderRule = "ET-14" | "ET-14a" | "ET-18" | "ET-18a";
+
+/** ET-14: the title ceiling, counted in the unit ET-14 names — scalar values. */
+export const TITLE_MAX_SCALARS = 200;
+/** ET-14a: the inclusive bounds on `choice_count`. */
+export const CHOICE_COUNT_MIN = 2;
+export const CHOICE_COUNT_MAX = 64;
+
+/**
+ * ET-14's forbidden characters: the C0 block (U+0000-U+001F) plus U+007F. The
+ * C1 block (U+0080-U+009F) is deliberately NOT included — ET-14 names C0 and
+ * U+007F and stops there, so a C1 title is legal, and Go's `unicode.IsControl`
+ * (true across U+007F-U+009F) over-rejects it; vector `075` catches that.
+ * Scanned by code point, not regex: literal control characters in a character
+ * class trip `no-control-regex`, and this keeps the unit consistent with the
+ * scalar-value count above.
+ */
+function hasForbiddenChar(title: string): boolean {
+  for (const ch of title) {
+    const c = ch.codePointAt(0) as number;
+    if (c <= 0x1f || c === 0x7f) return true;
+  }
+  return false;
+}
+
+/** Which of ET-14 / ET-14a an `issue_created` payload actually breaks. */
+function issueViolations(title: string, choiceCount: number): BuilderRule[] {
+  const out: BuilderRule[] = [];
+  const scalars = [...title].length; // scalar values, not UTF-16 code units
+  if (scalars < 1 || scalars > TITLE_MAX_SCALARS || hasForbiddenChar(title)) {
+    out.push("ET-14");
+  }
+  if (
+    !Number.isInteger(choiceCount) ||
+    choiceCount < CHOICE_COUNT_MIN ||
+    choiceCount > CHOICE_COUNT_MAX
+  ) {
+    out.push("ET-14a");
+  }
+  return out;
+}
+
+/** Which of ET-18 / ET-18a a `vote_cast` payload actually breaks. */
+function voteViolations(
+  issues: ReadonlyMap<string, number>,
+  issueId: string,
+  choice: number,
+): BuilderRule[] {
+  const choiceCount = issues.get(issueId);
+  // ET-18 first: with no referenced issue there is no choice_count, so ET-18a
+  // is not merely unviolated, it is uncheckable. Reporting both would make the
+  // declared set unsatisfiable for 066.
+  if (choiceCount === undefined) return ["ET-18"];
+  return !Number.isInteger(choice) || choice < 0 || choice >= choiceCount
+    ? ["ET-18a"]
+    : [];
+}
+
+const fmt = (rules: readonly BuilderRule[]): string =>
+  rules.length === 0 ? "(none)" : [...rules].sort().join(", ");
+
+/**
+ * Reconciles what a payload actually violates against what the caller declared.
+ * Throws unless the two sets are equal.
+ */
+function reconcile(
+  what: string,
+  actual: readonly BuilderRule[],
+  declared: readonly BuilderRule[] | undefined,
+): void {
+  if (declared === undefined) {
+    if (actual.length > 0) {
+      throw new Error(
+        `${what} violates ${fmt(actual)}. If deliberate, declare it: ` +
+          `{ violates: [${actual.map((r) => `"${r}"`).join(", ")}] }. ` +
+          `An undeclared breach is an accident, and it still ships a declared ` +
+          `verdict — a verifier then fails the vector for a rule nobody meant to test.`,
+      );
+    }
+    return;
+  }
+  if (actual.length === 0) {
+    throw new Error(
+      `${what} declares it violates ${fmt(declared)}, but the payload is LEGAL. ` +
+        `A vector declaring INVALID over conforming bytes is this tool's worst ` +
+        `failure: every correct verifier fails it, for the right reason, on the wrong file.`,
+    );
+  }
+  if (fmt(actual) !== fmt(declared)) {
+    throw new Error(
+      `${what} declares it violates ${fmt(declared)}, but it actually violates ` +
+        `${fmt(actual)}. Declare exactly what breaks — a vector tripping an extra ` +
+        `rule is not testing the rule its note claims.`,
+    );
+  }
+}
+
+/** Per-event options: when the event is timed, and which rules it breaks on purpose. */
+export interface EventOpts {
+  /** Minutes after genesis. Defaults to the event's own `seq`. */
+  minutes?: number;
+  /** Rules this payload breaks DELIBERATELY. Must match exactly what it breaks. */
+  violates?: readonly BuilderRule[];
+}
 
 export class ChainBuilder {
   private readonly events: Event[] = [];
@@ -135,26 +286,44 @@ export class ChainBuilder {
     );
   }
 
-  /** `issue_created`, signed by the genesis-declared operator (ET-13). Records choice_count for ET-18a. */
-  issue(title: string, choiceCount: number, minutes = this.nextSeq): Event {
+  /**
+   * `issue_created`, signed by the genesis-declared operator (ET-13). Records
+   * choice_count for ET-18a. Enforces ET-14/ET-14a unless `opts.violates`
+   * declares the breach.
+   */
+  issue(title: string, choiceCount: number, opts: EventOpts = {}): Event {
+    reconcile(
+      `issue_created(title=${JSON.stringify(title.length > 40 ? `${title.slice(0, 40)}…` : title)}, choice_count=${String(choiceCount)})`,
+      issueViolations(title, choiceCount),
+      opts.violates,
+    );
     const e = this.seal(
       "issue_created",
       1,
       { choice_count: choiceCount, title },
-      tsAt(minutes),
+      tsAt(opts.minutes ?? this.nextSeq),
       this.operatorKey,
     );
     this.issues.set(e.hash, choiceCount);
     return e;
   }
 
-  /** `vote_cast`, signed by the genesis-declared registrar (ET-17). The ballot carries no voter field (ET-21). */
-  vote(issueId: string, choice: number, minutes = this.nextSeq): Event {
+  /**
+   * `vote_cast`, signed by the genesis-declared registrar (ET-17). The ballot
+   * carries no voter field (ET-21). Enforces ET-18/ET-18a unless
+   * `opts.violates` declares the breach.
+   */
+  vote(issueId: string, choice: number, opts: EventOpts = {}): Event {
+    reconcile(
+      `vote_cast(issue_id=${issueId.slice(0, 8)}…, choice=${String(choice)})`,
+      voteViolations(this.issues, issueId, choice),
+      opts.violates,
+    );
     return this.seal(
       "vote_cast",
       1,
       { choice, issue_id: issueId },
-      tsAt(minutes),
+      tsAt(opts.minutes ?? this.nextSeq),
       this.registrarKey,
     );
   }

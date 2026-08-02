@@ -424,3 +424,44 @@ test("045-blank-line has an empty line at exactly the line it declares (EX-5)", 
     "exactly one blank line, or the declared line is ambiguous",
   );
 });
+
+test("074/075 pin ET-14's control-character clause at the BYTE level", () => {
+  // ET-14 forbids the C0 block AND U+007F, and stops there. Both edges are
+  // invisible to every earlier vector: 060 is the only other control-character
+  // vector and it carries U+0001.
+  //
+  // These assertions are over the COMMITTED bytes, not the builder's opinion,
+  // because that is what an independent verifier actually reads. The literal
+  // encodings are the point: EX-9 escapes only U+0000-U+001F, so a generator
+  // that started escaping U+007F or U+0085 as \\u007f / \\u0085 would still
+  // parse back to the same string and hash to the same preimage — invisible
+  // everywhere except here.
+  const del = read("vectors/074-title-del.ndjson");
+  assert.ok(
+    del.includes(Buffer.from([0x7f])),
+    "074: no literal U+007F octet — it must not be escaped",
+  );
+  assert.ok(
+    titleOnLine2("074-title-del").includes("\u007f"),
+    "074: title lost its U+007F, so it no longer violates ET-14",
+  );
+
+  const c1 = read("vectors/075-title-c1.ndjson");
+  assert.ok(
+    c1.includes(Buffer.from([0xc2, 0x85])),
+    "075: no literal U+0085 octets — it must not be escaped",
+  );
+  assert.ok(
+    titleOnLine2("075-title-c1").includes("\u0085"),
+    "075: title lost its C1 character, so it no longer tests over-rejection",
+  );
+  // 075 is VALID: if it ever carried a C0 character or U+007F as well, it would
+  // be an illegal title wearing a VALID declaration.
+  for (const ch of titleOnLine2("075-title-c1")) {
+    const c = ch.codePointAt(0) as number;
+    assert.ok(
+      c > 0x1f && c !== 0x7f,
+      `075: title contains U+${c.toString(16).padStart(4, "0")}, which ET-14 forbids`,
+    );
+  }
+});

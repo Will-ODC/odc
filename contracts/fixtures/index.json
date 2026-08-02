@@ -924,6 +924,30 @@
         "ET-16"
       ],
       "note": "201 scalar values: the same one-past-the-limit case as 061, but in the regime where the three counting readings diverge. 072 alone already rules out the byte and code-unit readings, so this vector is not needed to identify the unit — it is here because the over-limit branch is a DIFFERENT code path from the accept branch, and 061 exercises that branch only on ASCII, where an implementation may take a fast path that never counts scalar values at all. The pair 072/073 makes the ceiling bite at 200 in the multi-byte path too."
+    },
+    {
+      "id": "074-title-del",
+      "export": "vectors/074-title-del.ndjson",
+      "expect": {
+        "verdict": "INVALID",
+        "line": 2
+      },
+      "cites": [
+        "ET-14"
+      ],
+      "note": "U+007F in a title. ET-14 forbids it BY NAME, as a separate clause from the C0 block: \"MUST NOT contain any C0 control character (U+0000-U+001F) or U+007F\". `060` is the only other control-character vector and it carries U+0001, so a verifier implementing the clause as `c < 0x20` alone passes every one of the 73 preceding vectors with no signal at all. The line is canonically formed and both the hash and the signature are valid: EX-9 escapes only U+0000-U+001F, so U+007F is carried as the literal octet 0x7f rather than a \\u007f escape. Only ET-14 fails."
+    },
+    {
+      "id": "075-title-c1",
+      "export": "vectors/075-title-c1.ndjson",
+      "expect": {
+        "verdict": "VALID"
+      },
+      "cites": [
+        "ET-14",
+        "EX-9"
+      ],
+      "note": "U+0085 NEXT LINE, a C1 character, in a title. VALID: ET-14 forbids the C0 block and U+007F and stops there, so a C1 character is permitted. This is the over-rejection counterpart to `074`, and it is aimed at a specific plausible implementation — Go's `unicode.IsControl` reports true across U+007F-U+009F as well as C0, so the obvious one-call check rejects this legal title while still passing `074`. No vector before this one carries a C1 character, so that error was undetectable. As with `074` the character is not escaped: EX-9 escapes only U+0000-U+001F, so this is stored as its literal UTF-8 octets c2 85."
     }
   ]
 }

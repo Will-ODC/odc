@@ -1,19 +1,26 @@
 # contracts/fixtures/ — golden vectors
 
-**Version:** 5
+**Version:** 6
 **Status:** DRAFTING (Phase 0 · T5). Not frozen.
 
-**73 vectors** — 9 `VALID`, 4 `PARTIAL`, 60 `INVALID`. They are numbered in
+**75 vectors** — 10 `VALID`, 4 `PARTIAL`, 61 `INVALID`. They are numbered in
 category order: `VALID` (`001`–`007`), `PARTIAL` (`008`–`011`), then `INVALID` —
 the envelope and Stage A checks (`012`–`042`), the export framing and canonical
 line form (`043`–`052`), `--head` (`053`–`054`), the Stage B type semantics
-(`055`–`068`), and verdict precedence (`069`–`070`). `071`–`073` are appended
+(`055`–`068`), and verdict precedence (`069`–`070`). `071`–`075` are appended
 after that scheme rather than inserted into it, because **ids never change once
 shipped**: renumbering to keep the categories contiguous would silently
-invalidate a conformance run that cites them. They cover scalar values above
-U+FFFF — `071` that a title above the BMP is stored as literal UTF-8, `072`/`073`
-that `event-types.md` ET-14 counts **scalar values**, not UTF-16 code units and
-not bytes.
+invalidate a conformance run that cites them.
+
+`071`–`073` cover scalar values above U+FFFF — `071` that a title above the BMP
+is stored as literal UTF-8, `072`/`073` that `event-types.md` ET-14 counts
+**scalar values**, not UTF-16 code units and not bytes. `074`/`075` pin ET-14's
+control-character clause at both edges: `074` that **U+007F is forbidden**
+(named by ET-14 separately from the C0 block, so an implementation testing
+`c < 0x20` alone misses it), and `075` that the **C1 block U+0080–U+009F is
+legal** (so an implementation reaching for Go's `unicode.IsControl`, true across
+U+007F–U+009F, over-rejects a conforming title). Both characters are stored as
+their literal UTF-8 octets: EX-9 escapes only U+0000–U+001F.
 
 Conformance test data for every implementation that touches events: the Go
 verifier (T7), and later every service's CI. This file documents the record
