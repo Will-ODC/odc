@@ -357,7 +357,24 @@ automated gate" — so T7b gates the freeze decision, not T9 or T9a.
   definition, plus Phase-0-specific: does any spec field leak identity into
   the public log? Is receipt-freeness compromised by any spec artifact? Can
   the operator equivocate within the spec as written?
-- Acceptance: verdict APPROVE (or findings fixed and re-audited).
+- **Read the existing posture audit first — as INPUT, not as a finished
+  document.** `claude/odc-security-posture-audit-urgrjs` holds a 406-line
+  review (`docs/security/posture-audit.md`) that never landed. It is good raw
+  material and should not be re-derived: an inventory of the four secrets the
+  system will eventually hold (operator key, registrar key, the private linkage
+  map, and the registrar's `{who, issue, choice}` knowledge — none of which
+  exist yet), ten ranked findings, and a concealment timeline keyed to
+  milestones rather than dates, built on "conceal keys and identity linkage;
+  never conceal rules, formats, or logic". **Do not merge it.** Its audited-tree
+  line is 20+ PRs stale and its top finding is already fixed (the ledger docs'
+  voter-signed ballot, corrected 2026-08-02). Treat it the way a reviewer treats
+  a previous review: useful, dated, and not authoritative.
+- **`docs/security/` does not exist yet, and this ticket creates it** — with
+  T9's own output as its first file, not the stale draft. State its boundary in
+  the same PR: it holds threat models and posture reviews, never secrets and
+  never anything that must stay private, which is consistent with charter §9.
+- Acceptance: verdict APPROVE (or findings fixed and re-audited); `docs/security/`
+  exists and contains this audit.
 
 ### T9a — Release candidate · odc-navigator, same day as T9 approval
 
@@ -369,7 +386,17 @@ automated gate" — so T7b gates the freeze decision, not T9 or T9a.
   stays dormant, so specs remain fixable while Phase 1 builds on them.
 - Phase 1 services build against the release candidate and MUST tolerate an
   additive contracts change during this period.
-- Acceptance: status flipped, Phase 1 unblocked, no `contracts-v1` tag exists.
+- **Reconcile the three documents that state normative behaviour outside
+  `contracts/`, because this is the moment Phase 1 starts building from them:**
+  `docs/implementation-plan.md`, `docs/charter.md`, and every
+  `services/*/CLAUDE.md`. Confirm each matches the release-candidate contracts
+  and the ratified ADRs. **A named list, deliberately — not "sweep the docs".**
+  An unbounded sweep cannot be declared done and gets skimmed; this one can be
+  checked in an hour. It is a backstop only: prevention lives in the ADR
+  template's "Documents reconciled" section, at the point where the drift is
+  actually created.
+- Acceptance: status flipped, Phase 1 unblocked, no `contracts-v1` tag exists,
+  and the three documents above confirmed consistent with the release candidate.
 
 ### T10 — Freeze · odc-navigator — **deferred; gated on operational use, not on a date**
 

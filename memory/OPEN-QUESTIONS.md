@@ -56,6 +56,30 @@ choice}` at eligibility-check time — trust-by-policy per charter §10 v1,
   is decided: no fixture may assert a verdict that depends on any of those edge
   cases**, because a wrong frozen verdict is unfixable. Decide before T7 starts;
   the cost rises once two verifiers exist and disagree.
+  **DIRECTION SET 2026-08-02 (operator). Do this in the next session, before or
+  inside T5j — that ticket already opens `event-types.md`, so it is one contracts
+  change and one review rather than two.**
+  1. **Measure before specifying.** Go 1.24.7 and Node are both installed in the
+     session container, so this is testable rather than arguable. Feed each case
+     in the table above through BOTH `crypto/ed25519` and `node:crypto` and
+     record where they actually agree and differ. **Do not write the rule from
+     memory or from first principles** — library behaviour here is exactly the
+     kind of claim that sounds authoritative and is wrong. If both already reject
+     everything, the rule is "write down what we already do" and the risk mostly
+     evaporates.
+  2. **Preferred shape: make the ambiguity UNREACHABLE, not adjudicated.** Rather
+     than picking a verification predicate and freezing it, reject the inputs
+     that would expose the divergence — require canonical encodings and a
+     prime-order-subgroup public key — **before** verification is ever called.
+     Neither library then sees anything they could disagree about. This converts
+     a cryptographic question into a format check: far easier to specify, to
+     fixture, and to live with permanently. Same move as ET-14a capping
+     `choice_count` rather than reasoning about what large values would do.
+     Fall back to specifying the predicate explicitly only where step 1 shows
+     that closing the door is not possible.
+  3. Whatever lands needs fixtures under EV-5, and they must be built the way
+     T5j's are — each failing for ONE reason, so the vector isolates the rule it
+     names.
 - **⚠️ Ballot expressiveness vs receipt-freeness — a live contradiction in
   merged text.** (Recovered 2026-08-02 from
   `claude/golden-fixtures-voting-verify-7urqku`, never landed.) `docs/charter.md`
@@ -75,6 +99,25 @@ choice}` at eligibility-check time — trust-by-policy per charter §10 v1,
   else and its own author marked the commit "subject to operator ratification" —
   it needs an operator decision, most likely as the queued
   "ballot-expressiveness ceiling" direction ADR, not a routine docs merge.
+  **PART A DONE 2026-08-02 (operator-ratified).** `charter.md` §5 now marks the
+  aggregation-method list as **roadmap, not a v1 property**, states that a v1
+  ballot is one choice from a small bounded set (plurality only), and fixes the
+  ordering: where expressiveness and receipt-freeness collide, receipt-freeness
+  wins. That much is honesty — §5 had promised in the present tense something
+  the merged contract cannot compute from a single integer.
+  **PART B IS STILL OPEN: where exactly the ceiling sits.** Deliberately NOT
+  settled in the charter edit. The branch's proposed wording went further than
+  ratified text supports — it would have required a richer ballot to "keep its
+  value space small enough that a ballot cannot single out its caster", which is
+  **stricter than ET-22**: a bounded-but-large space (10 options ranked = 3.6M
+  orderings) satisfies ET-22's letter while failing that test. **That stricter
+  criterion is the right starting point for the ADR**, but it is a new
+  constraint, so it needs deciding rather than inheriting. Three options as
+  framed: ballots stay one-choice forever and intensity lives in the sentiment
+  stream; or richer ballots capped by a k-anonymity rule relating the number of
+  distinct legal ballots to expected turnout; or defer until real turnout data
+  exists. Default until someone argues otherwise: **stay one-choice**, the only
+  option needing no assumptions about electorate size.
 - **`hashing.md` HA-9's example does not demonstrate what HA-9 claims. Pre-tag
   fix.** (Recovered 2026-08-02 from the same branch; **verified empirically**.)
   HA-9 says the 1-octet type tag is load-bearing "because the integer value `1`
@@ -97,10 +140,37 @@ choice}` at eligibility-check time — trust-by-policy per charter §10 v1,
   "conceal keys and identity linkage; never conceal rules, formats, or logic".
   **Its top finding is already fixed** (2026-08-02): the ledger docs described
   the pre-ADR-0004 voter-signed ballot. The rest is unreviewed and its "tree
-  audited" line is 20+ PRs stale. Decide whether `docs/security/` is a directory
-  this project wants before landing it, and re-base it if so. **T9's checklist
-  does not currently include a sweep for stale claims in docs OUTSIDE
-  `contracts/`** — which is how the ledger contradiction survived; worth adding.
+  audited" line is 20+ PRs stale.
+  **DECIDED 2026-08-02 (operator). The audit is INPUT to T9, never merged as-is,
+  and T9 creates `docs/security/` with its OWN output as the first file.** Both
+  now written into the T9 ticket. Merging a stale audit would create a document
+  that reads as authoritative and is not — the same disease this session spent
+  the day curing, and deliberately doing it to a security document would be
+  worse than the accidents. Its raw material is genuinely good and should not be
+  re-derived, so T9 reads it the way a reviewer reads a previous review: useful,
+  dated, not authoritative. The directory's boundary is stated in the same
+  ticket — threat models and posture reviews, never secrets — which is
+  consistent with charter §9.
+  **The doc-drift gap is fixed at its source, not by a sweep.** The obvious
+  reaction was to add "check docs outside `contracts/`" to T9. Rejected: it is
+  unbounded (so it gets skimmed), it is an accuracy job wearing a security
+  ticket's clothes (diluting the audit at the one gate you want sharp), it runs
+  at the LAST possible moment since Phase 1 begins right after T9a, and a sweep
+  is a snapshot rather than a guard. **The failure did not happen at T9 — it
+  happened at ADR-0004**, which changed the ballot model and left two documents
+  stating the old one. So:
+  1. `docs/decisions/0000-template.md` gains a **"Documents reconciled"**
+     subsection: every ADR must list the documents outside `contracts/` that
+     stated what it changes and fix them in the same PR, or say explicitly that
+     none needed changing. Prevention, in the PR where the author still has the
+     context, and the only person who reliably knows the answer.
+  2. **T9a** gains a bounded backstop over the only three things that state
+     normative behaviour outside `contracts/` — `docs/implementation-plan.md`,
+     `docs/charter.md`, `services/*/CLAUDE.md`. A named list, checkable in an
+     hour, at the moment Phase 1 starts building from them.
+     A CI grep for now-false phrases was considered and rejected: it needs updating
+     on every ADR, and a stale denylist gives false confidence, which is the
+     disease rather than the cure.
 - **`RETIRED.md` valve — deferred, deliberately not foreclosed.** There is no
   mechanism to withdraw a golden fixture that turns out to be wrong after the
   freeze; adding a fixture cannot neutralise a bad one, so a wrong vector would
