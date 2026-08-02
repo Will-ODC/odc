@@ -207,11 +207,37 @@ requires a re-audit of any delta accumulated since release candidate.
 
 T5–T9 keep their schedule. Only the tag waits.
 
+**What FROZEN actually means, split by file kind** (ADR-0008, 2026-08-02, PR #49,
+squash `a9f99d6`). The blanket "nothing under `contracts/fixtures/` may be
+modified" rule made **adding a vector impossible after the tag**, which
+`evolution.md` EV-5/EV-14 require — so no post-freeze event type could ever have
+shipped. Adding one vector also rewrites `index.json`, `MANIFEST.sha256` and the
+fixtures README. **Second instance of this deadlock: PR #9 fixed the vector-files
+half and missed the aggregate files**, and both instances share a cause — the
+rule was stated over a _directory_ while the property it protects belongs to a
+_kind of file_. Now four rules: golden data add-only; `index.json` may gain lines
+but never lose one, ids unique, no object repeating a key; `MANIFEST.sha256`
+regenerable but not deletable, correctness checked instead of its diff;
+`fixtures/README.md` exempt.
+
+**Two consequences to carry forward.** Fixture `note` prose is now **frozen with
+everything else** — the rule is deliberately a dumb line rule, because it is the
+only thing holding the freeze up and a cleverer comparator fails open, so
+**correct a wrong note BEFORE the tag or it is permanent**. And `index.json`'s
+FORMATTING is frozen too, so the generator's output format for that file is
+fixed at the tag (safe today: `.prettierignore` excludes `contracts/`).
+
+**It was invisible the whole time, and that is the transferable part.** The
+entire freeze branch is gated on a tag that does not exist, so CI was green and
+would have stayed green until the first post-freeze additive change — the worst
+possible moment to discover it. `guards.test.sh` now tags throwaway repos
+`contracts-v1` so the post-tag rules are exercised today; 19 → 30 scenarios.
+
 ## Next
 
-**T5 IS COMPLETE**, through T5i. Master carries **73 vectors** (VALID 9,
-PARTIAL 4, INVALID 60) and **92/92** `fixtures-gen` tests. `wip/T5fg-material`
-is spent and can be deleted.
+**T5 IS COMPLETE**, through T5i plus the 2026-08-02 follow-up. Master carries
+**75 vectors** (VALID 10, PARTIAL 4, INVALID 61), **109/109** `fixtures-gen`
+tests and **146/146** rehearsal. `wip/T5fg-material` is spent and can be deleted.
 
 - **T5h — T7 preflight** (2026-07-28, PR #34, squash `4d90d2f`). The `0x69`
   integer preimage, astral vectors, ET-14's counting unit. Cleared item 1 of
@@ -222,6 +248,19 @@ is spent and can be deleted.
   of 4 apart on astral titles. **Where a table and a numbered RFC-2119 sentence
   disagree, the sentence governs.** `event-types.md` → v3. Legal only because
   `contracts/` is still DRAFTING.
+- **T5 follow-up — the five live review findings, and T7b** (2026-08-02, PR #48,
+  squash `5dbff50`). Closes the `[SHOULD]`/`[NIT]` backlog #26 deferred and never
+  ticketed. Three were one defect — **a mutator that FAILS OPEN**, returning
+  canonical bytes under an `INVALID` declaration: `swapLines(a===b)` and
+  byte-identical lines; `editLine`'s identity replacement; and `tsAt`'s
+  `.replace(/\.\d{3}Z$/, ".000Z")`, the third repair-instead-of-reject after
+  `encode.ts` (#22) and `serialize.ts` (#26). The chain builders now enforce
+  ET-14/ET-14a/ET-18/ET-18a, with deliberate breaches DECLARED via
+  `{ violates: [...] }` and reconciled for set equality **in both directions**.
+  Vectors 73 → **75**: `074-title-del` (`INVALID`) and `075-title-c1` (`VALID`).
+  Also tickets **T7b**, the second independent TS verifier.
+- **ADR-0008 — the fixture freeze needs four rules, not one** (2026-08-02,
+  PR #49, squash `a9f99d6`). See Direction decisions below.
 
 **T6 IS IN PROGRESS.** Sliced against the 600-line ceiling, one PR each:
 
@@ -294,9 +333,13 @@ cost**: a TS verifier written by a context that has already read
 `encode.ts`/`serialize.ts` inherits any misreading those files contain, so it
 self-verifies green and proves nothing. T8's cross-language check compares
 fixture **hashes**, not verdicts, and is already satisfiable with `fixtures-gen`.
-**A second, independent TS verifier is owed its own ticket before the freeze** —
-fresh context, contracts-only, the same treatment T7 gets. No such ticket exists
-in the T1–T10 stack; it is recorded in `OPEN-QUESTIONS.md` and nowhere else.
+**A second, independent TS verifier is owed before the freeze** — fresh context,
+contracts-only, the same treatment T7 gets. It is now **ticket T7b**
+(`docs/plans/phase-0.md`, added 2026-08-02 in #48), sitting after T7 and before
+T8, with `services/verifier/` added to its exclusion list so it cannot be a
+transliteration of T7 — independence is per-context, not per-language. It gates
+the **freeze decision** only, not T8/T9/T9a. Until #48 it lived in prose in two
+documents and in `OPEN-QUESTIONS.md`, with no ticket number anywhere.
 
 **Then T7** (Go verifier, fresh-context isolation) → **T8** (rehearsal loop) →
 **T9** (security audit) → **T9a** (release candidate → Phase 1).
@@ -318,17 +361,21 @@ package boundary so the failure can never again be invisible.
    adding `ET-9b` after the `contracts-v1` tag would alter frozen `genesis`/v1 —
    deferring past the freeze does not postpone the fix, it makes it **unaddable**
    and leaves the constraint table-only permanently. **Must land before T9.**
-   **No fixture exercises it:** all 73 vectors were checked and none asserts
+   **No fixture exercises it:** all **75** vectors were checked and none asserts
    `INVALID` on a malformed key, so a T7 verifier that omits the format check
-   passes 73/73 with no signal. It needs a vector alongside it under EV-5. Full
+   passes 75/75 with no signal. It needs a vector alongside it under EV-5. Full
    write-up in `OPEN-QUESTIONS.md`; recorded here because the context protocol
    has every session read this file first.
 1. ~~**The `0x69` integer-tag preimage.**~~ **DONE in T5h (#34)**, together with
    the astral vectors and ET-14's counting unit. T7 inherits both.
-2. **The ~8 `[SHOULD]`/`[NIT]` findings from T5b/T5c/T5d.** See Blockers. `M34`
-   (astral code points) is the one that matters for T7. `insertBlankLine`'s
-   missing bounds check is **now fixed** in #31; `tsAt`'s repair-instead-of-
-   reject at `chain.ts:39` is still live.
+2. ~~**The ~8 `[SHOULD]`/`[NIT]` findings from T5b/T5c/T5d.**~~ **DONE
+   (2026-08-02, #48).** Three had closed incidentally — `M34` by T5h's astral
+   vectors, ES-5's upper bound, `insertBlankLine` by #31 — which nobody had
+   noticed, because nothing was tracking the list. The five still live are now
+   fixed. **The lesson is the tracking, not the code:** these sat for weeks
+   because `STATE.md` recorded "no PR covers them yet" and no ticket ever
+   existed. A deferred finding with no ticket is a finding you have decided not
+   to fix.
 3. **Two known fixture warts, deliberately not fixed** (found by the T5g
    duplicate sweep, both in already-merged slices): `016-seq-gap` and
    `040-line-deleted` both fail at line 3 on an ES-7 gap and overlap heavily;
@@ -338,7 +385,7 @@ package boundary so the failure can never again be invisible.
    as defects** — but if the set is ever renumbered before the freeze, fix them
    then.
 
-**Coverage is thinner than 70 vectors suggests.** A citation sweep found ~60 of
+**Coverage is thinner than 75 vectors suggests.** A citation sweep found ~60 of
 ~125 defined rule ids have no vector citing them. Many are definitional and
 outside the Stage A/B split by EV-15's own terms, but some are real gaps worth
 knowing before T7: `ES-30`–`ES-32` (the `sig` field rules), `ET-3`–`ET-5`,
@@ -357,7 +404,7 @@ constraints, the ballot-expressiveness ceiling, the two-plane clarification.
 **Read the ET-22 warning in `OPEN-QUESTIONS.md` before writing the first.**
 
 Ticket discipline: one ticket = one branch = one PR = one session; fresh-context
-review before merge; squash-merge. **Two process lessons from T5:**
+review before merge; squash-merge. **Process lessons:**
 
 - **Check a PR's state before assuming a push updated it.** #19 was merged while
   its review was still running; the head branch was then auto-deleted, so a
@@ -365,6 +412,16 @@ review before merge; squash-merge. **Two process lessons from T5:**
   branch with no PR. A merged PR cannot carry follow-up work.
 - **`turbo` caches `lint`.** A green `pnpm run lint` right after moving files is
   not trustworthy — run `npx eslint` directly.
+- **Commit before running a review agent (2026-08-02).** Reviewers that
+  mutation-test have to edit the tree and restore it. One destroyed uncommitted
+  work outright (recovered from the throwaway commit it left behind); another
+  had the guard mutated at the moment of a commit, briefly pushing a disabled
+  check. Neither is the reviewer's fault — reviewing a dirty tree is the bug.
+- **Two tickets on one branch fails `diff-size`, correctly (2026-08-02).** The
+  T5 follow-up (572 counted) and ADR-0008 (339) each passed alone and totalled 911. Split, as T5 did rather than raise the ceiling. **When two PRs both edit
+  `fixtures/README.md`, the second needs a real `Version:` bump in its OWN
+  diff** — inheriting one through a merge leaves the file correct-looking and
+  fails the guard's per-file check.
 
 **STATE.md update note:** branch protection blocks direct pushes to master, so
 update this file in a small follow-up PR after the ticket merges (separate from
@@ -377,7 +434,7 @@ the feature branch, so parallel agents do not conflict). Required checks:
   `protect-master`): PR required, four status checks strict, linear history, no
   bypass. Both Phase-0 user actions are complete — T2's documented rules are
   now actually enforced.
-- **Review coverage: eight slices reviewed, eight with real defects** — every
+- **Review coverage: fourteen slices reviewed, fourteen with real defects** — every
   reviewed slice of T5 has come back with something real. Treat a clean review
   as the surprise, not the expectation.
 - **Two PRs merged while their review was still running** (#29 and #30, both on
@@ -403,22 +460,26 @@ the feature branch, so parallel agents do not conflict). Required checks:
   - **T5d** — `deleteLine` and `truncate` had no bounds checks, so an
     `INVALID`-declared vector could be emitted with perfectly valid bytes. Both
     now throw.
-- **Still open from those reviews: the ~8 `[SHOULD]`/`[NIT]` findings.** #26
-  deferred them deliberately; **no PR covers them yet.**
-  - **M34 is the one that matters for T7.** Emitting astral code points as `\u`
-    surrogate-pair escapes survives the entire suite, because no string anywhere
-    in the repo has a character above U+FFFF. Go emits literal 4-byte UTF-8, so
-    nothing here would notice if the TS side stopped doing so. Fix needs an
-    astral character in the `ESC` vector, not just a unit assertion.
-  - ES-5's upper bound untested; DEL and the C1 range untested; `head()` (EX-14)
-    untested and unimported; `swapLines(L,2,2)` / `editLine` with
-    `find === replace` / unbounded `insertBlankLine` can each silently produce a
-    valid file; the chain builders enforce none of ET-14/ET-14a/ET-18a.
-  - **`tsAt`'s `.replace(/\.\d{3}Z$/, ".000Z")` at `chain.ts:39` is the third
-    instance of repair-instead-of-reject** and is still live — after `encode.ts`
-    (#22) and `serialize.ts` (#26). Three occurrences in a codebase whose entire
-    subject is reject-don't-repair is a pattern, not a coincidence: when adding
-    any normalization step here, ask whether the spec says repair or reject.
+- ~~**Still open from those reviews: the ~8 `[SHOULD]`/`[NIT]` findings.**~~
+  **CLOSED 2026-08-02 (#48).** All three repair-instead-of-reject instances are
+  now fixed (`encode.ts` #22, `serialize.ts` #26, `tsAt` #48). **Three
+  occurrences in a codebase whose entire subject is reject-don't-repair was a
+  pattern, not a coincidence** — when adding any normalization step here, ask
+  whether the spec says repair or reject. The remaining item, `head()`/EX-14
+  being cited by no vector, is part of the wider coverage gap below, not a loose
+  end from these reviews.
+- **Two shapes from #48 worth recognising again, both about tests that cannot
+  fail.**
+  - **An unfalsifiable guard is not coverage.** `tsAt`'s shape check, written
+    inline, could never fire for any input its own base produced — the mutation
+    survived a green suite. It is now a named `assertWholeMinute` a test can
+    kill. The same reasoning deleted an "is python3 installed" arm from
+    `contracts-guard` in #49: no test in an environment that HAS python3 can
+    make it fire, and a missing interpreter already fails into the same branch.
+  - **Assert on the RESULT, not on the input shapes you can imagine.**
+    `editLine` was fixed by requiring the line to actually move, which is
+    exhaustive; enumerating bad arguments would have missed that a `replace`
+    string containing `$&` reproduces the match and changes nothing.
 - Standing, and substantially addressed: **`hashing.md` had never been
   independently validated.** Four derivations now agree on §6 — T4 by hand, T5a,
   and both reviewers in Python with their own RFC 8032 Ed25519 (the T5a reviewer

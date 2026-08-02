@@ -46,17 +46,24 @@ choice}` at eligibility-check time — trust-by-policy per charter §10 v1,
 - **`RETIRED.md` valve — deferred, deliberately not foreclosed.** There is no
   mechanism to withdraw a golden fixture that turns out to be wrong after the
   freeze; adding a fixture cannot neutralise a bad one, so a wrong vector would
-  break conformance permanently. PR #9 makes post-freeze _additions_ legal, so a
-  `contracts/fixtures/RETIRED.md` could be introduced later if a wrong vector is
-  ever actually found. Not built now: with no concrete case to reason about it is
-  premature, and a withdrawal lever is morally the same act as regenerating a
-  golden hash, which `odc-testing` forbids. Revisit only with a real instance.
+  break conformance permanently. Post-freeze _additions_ are legal (PR #9, as
+  corrected by **ADR-0008**), so a `contracts/fixtures/RETIRED.md` could be
+  introduced later if a wrong vector is ever actually found. Not built now: with
+  no concrete case to reason about it is premature, and a withdrawal lever is
+  morally the same act as regenerating a golden hash, which `odc-testing`
+  forbids. Revisit only with a real instance.
+  **Amended 2026-08-02 (ADR-0008): this valve is now MORE load-bearing, not
+  less.** The freeze rules make fixture `note` prose immutable along with the
+  verdicts, so a vector later found wrong can no longer be annotated in place —
+  `RETIRED.md` becomes the only route to flagging it. That was an accepted cost
+  of keeping the freeze rule dumb enough not to fail open, but it removes the
+  cheap intermediate option this entry previously had in reserve.
 - **Is EV-5's "every additive change MUST ship golden fixtures" too broad?** For a
   new type or a new `(type, version)` — new bytes, never hashed before — a fixture
   is load-bearing. For a pure prose clarification that changes no bytes it proves
   nothing. Narrowing EV-5 to byte-changing changes is worth considering; not
-  urgent, and it does not affect PR #9's guard fix, which is required under even
-  the narrowest reading.
+  urgent, and it does not affect the post-freeze addition path (PR #9, corrected
+  by ADR-0008), which is required under even the narrowest reading.
 - **Unregistered `genesis` version — Stage B key extraction.** If a chain's
   `genesis` carries a `(genesis, version≠1)` a verifier does not register, that
   verifier has no spec-defined way to extract `operator_pk`/`registrar_pk`, and so
