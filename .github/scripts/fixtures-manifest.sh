@@ -8,10 +8,12 @@
 # This is the detection half of that problem; `contracts/fixtures/** -text` in
 # .gitattributes is the prevention half.
 #
-# Two checks, because either alone leaves a hole:
+# Three checks, because each alone leaves a hole:
 #   1. every file the manifest lists still hashes to its recorded digest;
 #   2. every file present is listed, so a vector cannot be added without
-#      appearing in the manifest (and therefore in review).
+#      appearing in the manifest (and therefore in review);
+#   3. every file is a REGULAR file, so bytes cannot be smuggled in by symlink
+#      to somewhere the freeze does not reach.
 #
 # Run locally:  bash .github/scripts/fixtures-manifest.sh
 set -euo pipefail
@@ -31,6 +33,19 @@ fi
 
 echo "Verifying recorded digests..."
 (cd "$dir" && sha256sum -c --quiet MANIFEST.sha256)
+
+# Reject anything that is not a regular file BEFORE listing. `find -type f`
+# skips symlinks, so a vector committed as a symlink would never appear in the
+# present-file list, never be digested, and never be pinned — its bytes would
+# live outside contracts/ and stay mutable after the freeze. It also passes the
+# guard's add-only rule, since a new symlink is still status A.
+echo "Checking for non-regular files..."
+irregular="$(find "$dir" ! -type d ! -type f)"
+if [[ -n "$irregular" ]]; then
+  echo "::error::$dir contains non-regular file(s); every fixture must be a real file whose bytes are digested here:"
+  printf '  %s\n' $irregular
+  exit 1
+fi
 
 echo "Checking for unlisted files..."
 listed="$(mktemp)"

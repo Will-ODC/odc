@@ -160,6 +160,175 @@ printf '## fixtures — v2 — 2026-01-01 — X\n- rename vector\n' >"$R/contrac
 git -C "$R" add -A && git -C "$R" commit -qm change
 assert 1 "$(run_guard "$R")" "existing fixture renamed after contracts-v1 → fail"
 
+# --- Scenarios 7f-7l: FREEZE, the aggregate files (ADR-0008).
+#
+# PR #9 made new vector FILES addable but left the files that DESCRIBE the set
+# frozen, so adding a vector was still impossible after the tag — it rewrites
+# index.json, MANIFEST.sha256 and the README. These scenarios pin the four
+# rules that replaced the blanket one. Every repo below is tagged, because the
+# whole freeze branch is dormant until contracts-v1 exists.
+
+# frozen_repo <dir>: a tagged repo holding a one-entry register, a matching
+# manifest, and one vector. The register is formatted like the real one so that
+# appending an entry is a pure insertion with no deleted line.
+frozen_repo() {
+  local d="$1"
+  new_repo "$d"
+  mkdir -p "$d/contracts/fixtures/vectors"
+  printf '{"seq":1}\n' >"$d/contracts/fixtures/vectors/001.ndjson"
+  cat >"$d/contracts/fixtures/index.json" <<'JSON'
+{
+  "vectors": [
+    {
+      "id": "001-first",
+      "export": "vectors/001.ndjson",
+      "expect": {
+        "verdict": "VALID"
+      },
+      "note": "the first one"
+    }
+  ]
+}
+JSON
+  remanifest "$d"
+  git -C "$d" add -A && git -C "$d" commit -qm fixtures
+  git -C "$d" tag -f contracts-v1 >/dev/null 2>&1
+  git -C "$d" checkout -q -b work
+  printf '## fixtures — v2 — 2026-01-01 — X\n- change\n' >"$d/contracts/CONTRACTS-CHANGE.md"
+}
+
+# remanifest <dir>: regenerate the manifest, so each scenario tests one rule.
+remanifest() {
+  (cd "$1/contracts/fixtures" && find . -type f ! -name 'MANIFEST.sha256' ! -path './README.md' |
+    sed 's|^\./||' | sort | xargs sha256sum >MANIFEST.sha256)
+}
+
+# append_entry <dir> <id> <verdict>: append an entry, as a pure insertion.
+append_entry() {
+  awk -v id="$2" -v verdict="$3" '
+    /"note": "the first one"/ {
+      print
+      print "    },"
+      print "    {"
+      print "      \"id\": \"" id "\","
+      print "      \"export\": \"vectors/002.ndjson\","
+      print "      \"expect\": {"
+      print "        \"verdict\": \"" verdict "\""
+      print "      },"
+      print "      \"note\": \"appended\""
+      next
+    }
+    { print }
+  ' "$1/contracts/fixtures/index.json" >"$1/idx.tmp"
+  mv "$1/idx.tmp" "$1/contracts/fixtures/index.json"
+}
+
+# 7f: APPENDING a vector — the case #9 left broken. Touches all three aggregates.
+R="$TMP/s7f"
+frozen_repo "$R"
+printf '{"seq":9}\n' >"$R/contracts/fixtures/vectors/002.ndjson"
+append_entry "$R" "002-second" "VALID"
+remanifest "$R"
+git -C "$R" add -A && git -C "$R" commit -qm append
+assert 0 "$(run_guard "$R")" "FREEZE: appending a vector (register+manifest+file) → pass"
+
+# 7g: editing an existing verdict — the thing the freeze exists to stop.
+R="$TMP/s7g"
+frozen_repo "$R"
+sed -i 's/"verdict": "VALID"/"verdict": "INVALID"/' "$R/contracts/fixtures/index.json"
+remanifest "$R"
+git -C "$R" add -A && git -C "$R" commit -qm flip
+assert 1 "$(run_guard "$R")" "FREEZE: existing verdict edited in the register → fail"
+
+# 7h: editing an existing NOTE. Frozen too — prose is what a verifier author
+# reads and implements from, so corrections must land before the tag.
+R="$TMP/s7h"
+frozen_repo "$R"
+sed -i 's/"note": "the first one"/"note": "reworded"/' "$R/contracts/fixtures/index.json"
+remanifest "$R"
+git -C "$R" add -A && git -C "$R" commit -qm renote
+assert 1 "$(run_guard "$R")" "FREEZE: existing note edited in the register → fail"
+
+# 7i: removing an entry. The vector FILE survives, so rule (d) never fires —
+# only the no-deletion rule catches it. Silently un-runs a frozen vector.
+R="$TMP/s7i"
+frozen_repo "$R"
+printf '{\n  "vectors": [\n  ]\n}\n' >"$R/contracts/fixtures/index.json"
+remanifest "$R"
+git -C "$R" add -A && git -C "$R" commit -qm drop
+assert 1 "$(run_guard "$R")" "FREEZE: register entry removed while its vector stays → fail"
+
+# 7j: a pure ADDITION reusing an existing id — two contradictory assertions over
+# frozen bytes. It passes the no-deletion rule, so it needs its own check.
+R="$TMP/s7j"
+frozen_repo "$R"
+printf '{"seq":9}\n' >"$R/contracts/fixtures/vectors/002.ndjson"
+append_entry "$R" "001-first" "INVALID"
+remanifest "$R"
+git -C "$R" add -A && git -C "$R" commit -qm dupe
+assert 1 "$(run_guard "$R")" "FREEZE: appended entry reusing an existing id → fail"
+
+# 7k: a stale manifest. Rule (c) does not diff the manifest, so its correctness
+# is the only thing pinning vector bytes — the guard must run that check itself
+# rather than trust a different workflow file that nothing freezes.
+R="$TMP/s7k"
+frozen_repo "$R"
+printf '{"seq":9}\n' >"$R/contracts/fixtures/vectors/002.ndjson" # added, NOT manifested
+git -C "$R" add -A && git -C "$R" commit -qm unmanifested
+assert 1 "$(run_guard "$R")" "FREEZE: vector added without a manifest entry → fail"
+
+# 7l: deleting the manifest, which would disable 7k's check entirely.
+R="$TMP/s7l"
+frozen_repo "$R"
+git -C "$R" rm -q "contracts/fixtures/MANIFEST.sha256"
+git -C "$R" add -A && git -C "$R" commit -qm demanifest
+assert 1 "$(run_guard "$R")" "FREEZE: manifest deleted after contracts-v1 → fail"
+
+# --- Scenarios 7m-7o: the duplicate-key exploit against rule (a).
+#
+# Found by fresh-context review of the rule (a) design. Adding a SECOND key to
+# an existing entry is a PURE INSERTION — zero deleted lines — so it passes the
+# no-deletion rule and the id grep, while every JSON parser takes the LAST
+# value and the frozen verdict silently flips. 7n/7o cover the fields a
+# key-by-key fix would have left exploitable.
+
+# dup_key <dir> <after-line-substring> <inserted-json-lines>
+dup_key() {
+  awk -v marker="$2" -v ins="$3" '
+    index($0, marker) && !done { print; printf "%s\n", ins; done = 1; next }
+    { print }
+  ' "$1/contracts/fixtures/index.json" >"$1/idx.tmp"
+  mv "$1/idx.tmp" "$1/contracts/fixtures/index.json"
+}
+
+# 7m: a second "expect", flipping VALID -> INVALID by pure insertion.
+R="$TMP/s7m"
+frozen_repo "$R"
+dup_key "$R" '      },' '      "expect": {\n        "verdict": "INVALID"\n      },'
+remanifest "$R"
+git -C "$R" add -A && git -C "$R" commit -qm dupkey
+# Prove the premise: the diff really does delete nothing, so rule (a) is happy.
+del="$(git -C "$R" diff --numstat base HEAD -- contracts/fixtures/index.json | awk '{print $2}')"
+assert 0 "$del" "FREEZE: the duplicate-key attack really is a pure insertion"
+assert 1 "$(run_guard "$R")" "FREEZE: duplicate expect key flipping a verdict → fail"
+
+# 7n: a second "export", repointing a frozen id at another vector's bytes.
+R="$TMP/s7n"
+frozen_repo "$R"
+dup_key "$R" '"export": "vectors/001.ndjson",' '      "export": "vectors/002.ndjson",'
+remanifest "$R"
+git -C "$R" add -A && git -C "$R" commit -qm dupexport
+assert 1 "$(run_guard "$R")" "FREEZE: duplicate export key repointing a vector → fail"
+
+# 7o: a malformed register. json.load failing must fail the guard, not be
+# swallowed — otherwise the check disappears exactly when the file is worst.
+R="$TMP/s7o"
+frozen_repo "$R"
+printf '{ "vectors": [ {,, ] }\n' >"$R/contracts/fixtures/index.json"
+remanifest "$R"
+git -C "$R" add -A && git -C "$R" commit -qm malformed
+assert 1 "$(run_guard "$R")" "FREEZE: unparseable index.json → fail"
+
 # --- Scenario 7b: per-file version check — spec A edited unbumped while spec B
 # is added WITH a Version line must still FAIL (B's bump can't cover A).
 R="$TMP/s7b"
