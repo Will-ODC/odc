@@ -31,6 +31,10 @@ Plus one repo-wide workflow:
 
 Merges to `master` require: green CI + one review + linear history.
 No direct pushes to `master`, no exceptions, including the operator.
+No agent-performed merges either: no agent may call a merge/squash API or
+CLI (`gh pr merge`, the `merge_pull_request` MCP tool, etc.), regardless of
+how green CI is or how strong the review verdict is. An agent's job ends at
+a PR that is ready to merge; a human clicks merge on GitHub.
 
 ## Local hooks (lefthook)
 
@@ -79,7 +83,11 @@ IS the ticket.
 
 1. CI green, all required stages.
 2. Review verdict recorded (APPROVE or APPROVE WITH NITS, per `odc-code-review`).
-3. Squash-merge; message references the issue.
-4. Update `memory/STATE.md` (done / next / blockers) — this happens HERE, on
+3. Mark the PR ready-to-merge (comment/label) and **stop**. The squash-merge
+   itself is a manual, human action on GitHub — never call a merge/squash
+   API or CLI tool (`gh pr merge`, the `merge_pull_request` MCP tool, etc.)
+   from an agent session, even with green CI and an APPROVE verdict.
+4. Once the human has squash-merged (message references the issue), update
+   `memory/STATE.md` (done / next / blockers) — this happens HERE, on
    master at merge time, never on feature branches (parallel agents would conflict).
 5. Move the board card to Done.
