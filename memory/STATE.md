@@ -237,7 +237,8 @@ possible moment to discover it. `guards.test.sh` now tags throwaway repos
 
 **T5 IS COMPLETE**, through T5i plus the 2026-08-02 follow-up. Master carries
 **75 vectors** (VALID 10, PARTIAL 4, INVALID 61), **109/109** `fixtures-gen`
-tests and **146/146** rehearsal. `wip/T5fg-material` is spent and can be deleted.
+tests and **146/146** rehearsal. (`wip/T5fg-material`, the spent holding
+branch this line used to point at, was deleted 2026-08-02.)
 
 - **T5h — T7 preflight** (2026-07-28, PR #34, squash `4d90d2f`). The `0x69`
   integer preimage, astral vectors, ET-14's counting unit. Cleared item 1 of
@@ -535,14 +536,15 @@ the feature branch, so parallel agents do not conflict). Required checks:
   session's git access, not an org policy an admin would change. This is the
   likeliest reason the 2026-07-26 note claimed a cleanup that had not happened:
   an agent tried, was refused, and recorded the intent as the outcome.
-  **Seven branches were audited on 2026-08-02 and are CONFIRMED SAFE to delete**
-  — each assessed and then independently re-verified, including a blob-hash
-  cross-branch check for content living only on two doomed branches:
+  **Seven branches were audited and DELETED on 2026-08-02** — assessed, then
+  independently re-verified (including a blob-hash cross-branch check for
+  content living only on two doomed branches, of which none was found), then
+  **deleted by the operator**, since the session could not:
   `chore/state-ci-startup-failure-note`, `chore/state-post-t5g`,
   `chore/state-t5-progress`, `agent/odc-candidate-mockups`,
   `contracts/T5-fixtures`, `contracts/T5e-generator-and-first-vectors`,
-  `wip/T5fg-material`.
-  **Four must NOT be deleted — they hold work that never landed**, now recorded
+  `wip/T5fg-material`. **Five refs remain: `master` plus the four below.**
+  **Four are deliberately KEPT — they hold work that never landed**, now recorded
   in `OPEN-QUESTIONS.md`: `claude/odc-security-posture-audit-urgrjs` (the posture
   audit), `claude/review-memory-context-skills-383f6i` (the Ed25519 predicate gap
   and an `odc-code-review` rewrite), `claude/golden-fixtures-voting-verify-7urqku`
