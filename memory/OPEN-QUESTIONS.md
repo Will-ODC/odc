@@ -56,6 +56,30 @@ choice}` at eligibility-check time — trust-by-policy per charter §10 v1,
   is decided: no fixture may assert a verdict that depends on any of those edge
   cases**, because a wrong frozen verdict is unfixable. Decide before T7 starts;
   the cost rises once two verifiers exist and disagree.
+  **DIRECTION SET 2026-08-02 (operator). Do this in the next session, before or
+  inside T5j — that ticket already opens `event-types.md`, so it is one contracts
+  change and one review rather than two.**
+  1. **Measure before specifying.** Go 1.24.7 and Node are both installed in the
+     session container, so this is testable rather than arguable. Feed each case
+     in the table above through BOTH `crypto/ed25519` and `node:crypto` and
+     record where they actually agree and differ. **Do not write the rule from
+     memory or from first principles** — library behaviour here is exactly the
+     kind of claim that sounds authoritative and is wrong. If both already reject
+     everything, the rule is "write down what we already do" and the risk mostly
+     evaporates.
+  2. **Preferred shape: make the ambiguity UNREACHABLE, not adjudicated.** Rather
+     than picking a verification predicate and freezing it, reject the inputs
+     that would expose the divergence — require canonical encodings and a
+     prime-order-subgroup public key — **before** verification is ever called.
+     Neither library then sees anything they could disagree about. This converts
+     a cryptographic question into a format check: far easier to specify, to
+     fixture, and to live with permanently. Same move as ET-14a capping
+     `choice_count` rather than reasoning about what large values would do.
+     Fall back to specifying the predicate explicitly only where step 1 shows
+     that closing the door is not possible.
+  3. Whatever lands needs fixtures under EV-5, and they must be built the way
+     T5j's are — each failing for ONE reason, so the vector isolates the rule it
+     names.
 - **⚠️ Ballot expressiveness vs receipt-freeness — a live contradiction in
   merged text.** (Recovered 2026-08-02 from
   `claude/golden-fixtures-voting-verify-7urqku`, never landed.) `docs/charter.md`
