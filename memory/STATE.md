@@ -437,7 +437,8 @@ the feature branch, so parallel agents do not conflict). Required checks:
 
 ## Blockers
 
-- **None for T5.** Branch protection is **ON** (2026-07-19, ruleset
+- **None for T6.** (T5 is complete; this line tracked T5 until 2026-08-02.)
+  Branch protection is **ON** (2026-07-19, ruleset
   `protect-master`): PR required, four status checks strict, linear history, no
   bypass. Both Phase-0 user actions are complete — T2's documented rules are
   now actually enforced.
@@ -509,7 +510,15 @@ the feature branch, so parallel agents do not conflict). Required checks:
   run stuck in `queued` refuses to re-run (`403 already running`), so cancel it
   first. Count the checks against the four required ones before assuming CI is
   broken.
-- Housekeeping **done** (2026-07-26): the stale remote branches are deleted and
-  "Automatically delete head branches" is enabled. Note the consequence, which
-  bit once: merging a PR deletes its head branch, so a later push to that branch
-  name silently creates a _new_ branch with no PR attached.
+- **Housekeeping, corrected 2026-08-02.** The 2026-07-26 note claimed "the stale
+  remote branches are deleted". That was read as _handled_, and it was not:
+  eleven stale branches were live on 2026-08-02, every one carrying commits not
+  on master. **Auto-delete only reaches branches whose PR MERGES.** Abandoned
+  branches — the ones actually worth cleaning — are exactly the ones it never
+  touches, so they accumulate silently while the note says otherwise.
+  "Automatically delete head branches" IS enabled and works; that half was true,
+  and it fired three times on 2026-08-02.
+  Note the consequence, which has now bitten twice: merging a PR deletes its
+  head branch, so a later push to that name silently creates a _new_ branch with
+  no PR attached. **The push succeeds and nothing warns you** — on 2026-08-02 it
+  was caught only by noticing `[new branch]` in the push output.
