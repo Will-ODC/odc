@@ -523,11 +523,18 @@ the feature branch, so parallel agents do not conflict). Required checks:
   no PR attached. **The push succeeds and nothing warns you** — on 2026-08-02 it
   was caught only by noticing `[new branch]` in the push output.
   **AGENT SESSIONS CANNOT DELETE REMOTE BRANCHES.** `git push origin --delete`
-  returns `HTTP 403` from the egress proxy, which its README classes as an
-  organization policy denial to be reported, never retried or routed around.
-  There is no GitHub MCP delete-branch tool either. So branch cleanup is a
-  **human action** — which is the likeliest reason the 2026-07-26 note claimed a
-  cleanup that had not happened.
+  returns `HTTP 403`. **Diagnosed precisely, because the obvious attribution is
+  wrong:** this is NOT the agent egress proxy. `origin` is the session's local
+  git relay on `127.0.0.1`, which sits inside the proxy's own `noProxy` range,
+  so that traffic never reaches the proxy at all — and the proxy's
+  `recentRelayFailures` is empty, confirming it never saw the request. The relay
+  permits ref creation and updates (every push in this session worked) and
+  refuses ref DELETION. There is no GitHub MCP delete-branch tool either — it
+  has `create_branch` and `list_branches` and nothing that removes a ref. So
+  branch cleanup is a **human action**, and it is a capability limit of the
+  session's git access, not an org policy an admin would change. This is the
+  likeliest reason the 2026-07-26 note claimed a cleanup that had not happened:
+  an agent tried, was refused, and recorded the intent as the outcome.
   **Seven branches were audited on 2026-08-02 and are CONFIRMED SAFE to delete**
   — each assessed and then independently re-verified, including a blob-hash
   cross-branch check for content living only on two doomed branches:
