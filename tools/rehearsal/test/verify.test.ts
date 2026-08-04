@@ -17,14 +17,19 @@
 import assert from "node:assert/strict";
 import { describe, it } from "node:test";
 
-import { ChainBuilder, OPERATOR, REGISTRAR } from "@odc/fixtures-gen/chain";
+import {
+  ChainBuilder,
+  GENESIS_PREV_HASH,
+  OPERATOR,
+  REGISTRAR,
+} from "@odc/fixtures-gen/chain";
 import type { Event, EventContent } from "@odc/fixtures-gen/encode";
 import { eventHash, keypairFromSeed, seedOf } from "@odc/fixtures-gen/encode";
 import { head, serializeExport } from "@odc/fixtures-gen/serialize";
 
 import { buildChain, type ChainShape } from "../src/build.js";
 import { applyTamper, TAMPER_CASES } from "../src/tamper.js";
-import { GENESIS_PREV_HASH, selfVerify } from "../src/verify.js";
+import { selfVerify } from "../src/verify.js";
 
 const SHAPES: ChainShape[] = [
   { participants: 3, issues: 2, votes: 4 },
@@ -265,6 +270,14 @@ describe("selfVerify — a malformed line is named, never thrown", () => {
     [
       "an array payload value (ES-16)",
       (l: string) => l.replace('"payload":{', '"payload":{"x":[1],'),
+    ],
+    [
+      // ES-5's UPPER bound. Without it the value reaches U64/jsonInteger and
+      // the backstop reports `ES-5` instead of `ES-1` — same line, different
+      // path. That is why this asserts the rule: the bound was deletable with
+      // all 176 tests green until this case existed.
+      "an integer past 2^53-1 (ES-5)",
+      (l: string) => l.replace('"seq":2', '"seq":9007199254740992'),
     ],
     [
       "a payload that is itself an array (ES-17)",
