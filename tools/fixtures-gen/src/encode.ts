@@ -11,6 +11,7 @@ import {
   createPrivateKey,
   createPublicKey,
   sign,
+  verify,
 } from "node:crypto";
 
 /** A payload value is an integer or a string, and nothing else (ES-16/ES-17). */
@@ -235,6 +236,70 @@ export const seedOf = (octet: number): Buffer => Buffer.alloc(32, octet);
  */
 export function signEvent(content: EventContent, key: Keypair): string {
   return sign(null, signingPreimage(content), key.privateKey).toString("hex");
+}
+
+const SPKI_ED25519_PREFIX = Buffer.from("302a300506032b6570032100", "hex");
+
+/**
+ * A public KeyObject from 64 lowercase hex (ID-3), for verification. Node has no
+ * raw-key import, so the 32 bytes are wrapped in the fixed Ed25519 SPKI prefix —
+ * the mirror of `keypairFromSeed`'s PKCS#8 wrapping, placed beside it.
+ *
+ * This is the first copy of the SPKI prefix in `src/`, not the only one in the
+ * package: `test/chain.test.ts` and `test/encode.test.ts` each hand-roll the
+ * same DER wrapping. Those are DELIBERATELY left alone — both verify signatures
+ * along a path independent of this file, and rewriting them to call this
+ * function would make them agree with it by construction rather than confirm
+ * it. Do not "deduplicate" them into this helper.
+ *
+ * Case is rejected, not repaired: ID-3 requires lowercase, and Node's hex
+ * decoder would accept uppercase silently (D5).
+ */
+export function publicKeyFromHex(
+  pubkeyHex: string,
+): ReturnType<typeof createPublicKey> {
+  if (!/^[0-9a-f]{64}$/.test(pubkeyHex)) {
+    throw new RangeError(
+      `not 64 lowercase hex characters (ID-3): ${pubkeyHex}`,
+    );
+  }
+  return createPublicKey({
+    key: Buffer.concat([SPKI_ED25519_PREFIX, Buffer.from(pubkeyHex, "hex")]),
+    format: "der",
+    type: "spki",
+  });
+}
+
+/**
+ * The inverse of `signEvent`: true when `sig` is a valid Ed25519 signature by
+ * `pubkeyHex` over this event's signing preimage (HA-15/HA-16). `content` is
+ * passed WITH its `sig` payload key present — `signingPreimage` removes it, so
+ * caller and signer see the same bytes.
+ *
+ * Returns false for a malformed `sig`; throws for a malformed key, since a bad
+ * key is a caller error while a bad signature is the thing being tested.
+ *
+ * The order is part of the contract, not an accident: the `sig` format is
+ * checked FIRST, so a call with both malformed returns false rather than
+ * throwing. Swapping the two checks changes that, which is why a test pins it.
+ *
+ * Note what this does NOT decide: whether a non-canonical `S`, a small-order
+ * key, or the cofactored-vs-strict equation should verify. Node's Ed25519 makes
+ * that choice for us, and whether it matches Go's is an open contracts question
+ * (see `OPEN-QUESTIONS.md`) — do not read agreement here as the answer.
+ */
+export function verifyEvent(
+  content: EventContent,
+  pubkeyHex: string,
+  sigHex: string,
+): boolean {
+  if (!/^[0-9a-f]{128}$/.test(sigHex)) return false;
+  return verify(
+    null,
+    signingPreimage(content),
+    publicKeyFromHex(pubkeyHex),
+    Buffer.from(sigHex, "hex"),
+  );
 }
 
 /**

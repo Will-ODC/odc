@@ -16,10 +16,12 @@ import {
   keypairFromSeed,
   participantId,
   preimage,
+  publicKeyFromHex,
   seedOf,
   signEvent,
   signingPreimage,
   U64,
+  verifyEvent,
   UTF8,
   type EventContent,
 } from "../src/encode.js";
@@ -267,4 +269,57 @@ test("participantId rejects malformed and uppercase hex (ID-1, ID-2, ID-5)", () 
 
 test("the registrar key is not the operator key (ET-9a)", () => {
   assert.notEqual(OPERATOR.publicKeyHex, REGISTRAR.publicKeyHex);
+});
+
+// --- verifyEvent: the inverse of signEvent (T6d) ---------------------------
+
+test("verifyEvent accepts the worked example's signature (HA-16)", () => {
+  // Anchored on hashing.md §6's own hex, not on a signature this run produced,
+  // so a signing-preimage error cannot make both sides agree with each other.
+  assert.equal(verifyEvent(genesisContent, SPEC_OPERATOR_PK, SPEC_SIG), true);
+  // HA-15: the same holds with `sig` already in the payload.
+  assert.equal(verifyEvent(genesisSigned, SPEC_OPERATOR_PK, SPEC_SIG), true);
+});
+
+test("verifyEvent rejects the right signature under the wrong key", () => {
+  assert.equal(
+    verifyEvent(genesisContent, REGISTRAR.publicKeyHex, SPEC_SIG),
+    false,
+  );
+});
+
+test("verifyEvent rejects a signature over different content", () => {
+  const moved: EventContent = { ...genesisContent, seq: 2 };
+  assert.equal(verifyEvent(moved, SPEC_OPERATOR_PK, SPEC_SIG), false);
+});
+
+test("verifyEvent rejects a malformed sig instead of throwing", () => {
+  // A short or non-hex `sig` reaches this from a tampered line, where an
+  // exception would read as a tool crash rather than a failed verification.
+  for (const bad of ["", "abc", `${SPEC_SIG}00`, `${"z".repeat(128)}`]) {
+    assert.equal(verifyEvent(genesisContent, SPEC_OPERATOR_PK, bad), false);
+  }
+  // Uppercase is a malformed sig, not a repairable one (D5).
+  assert.equal(
+    verifyEvent(genesisContent, SPEC_OPERATOR_PK, SPEC_SIG.toUpperCase()),
+    false,
+  );
+});
+
+test("publicKeyFromHex rejects a key it cannot trust (ID-3)", () => {
+  assert.throws(
+    () => publicKeyFromHex(SPEC_OPERATOR_PK.toUpperCase()),
+    RangeError,
+  );
+  assert.throws(() => publicKeyFromHex("a".repeat(63)), RangeError);
+  assert.throws(() => publicKeyFromHex("zz"), RangeError);
+  // A malformed KEY throws while a malformed SIG returns false: a bad key is a
+  // caller error, a bad signature is the thing under test.
+  assert.throws(
+    () => verifyEvent(genesisContent, "a".repeat(63), SPEC_SIG),
+    RangeError,
+  );
+  // Precedence, pinned: the sig format is checked FIRST, so both-malformed
+  // returns false. Swapping the two checks makes this throw.
+  assert.equal(verifyEvent(genesisContent, "a".repeat(63), "nope"), false);
 });
