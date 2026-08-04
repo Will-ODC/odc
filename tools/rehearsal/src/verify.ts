@@ -21,9 +21,6 @@ import { GENESIS_PREV_HASH as ANCHOR } from "@odc/fixtures-gen/chain";
 
 import { exportLines } from "./tamper.js";
 
-// ES-24's 64-zero anchor. Re-exported, not re-declared: `chain.ts` owns it.
-export { GENESIS_PREV_HASH } from "@odc/fixtures-gen/chain";
-
 export interface VerifyFailure {
   readonly ok: false;
   /** 1-based line the failure is attributed to. */
@@ -42,7 +39,9 @@ const fail = (line: number, rule: string, detail: string): VerifyFailure => ({
   detail,
 });
 
-/** The two keys a chain's genesis declares (ET-6). */
+/** The two keys a chain's genesis declares. ET-8, ET-9a, ET-13 and ET-17 each
+ * name them and fix which events they sign; ES-18 governs their presence in the
+ * payload. NOT ET-6, which is genesis's version/seq/prev_hash. */
 interface Keys {
   operator: string;
   registrar: string;
@@ -120,7 +119,7 @@ function ruleOf(message: string): string {
  * sharing `parseLine`'s rule made the paths indistinguishable, so deleting any
  * value guard left the suite green — the defect fell through and came back
  * wearing the same rule. */
-export const UNATTRIBUTED = "UNATTRIBUTED";
+const UNATTRIBUTED = "UNATTRIBUTED";
 
 /**
  * Verifies an export against a claimed head.
@@ -149,14 +148,17 @@ export function selfVerify(target: {
   for (let i = 0; i < lines.length; i += 1) {
     const n = i + 1;
     let step: VerifyResult;
-    // Backstop: the encoders carry their own MUSTs (EX-10 well-formed UTF-8,
-    // ID-3 lowercase key) and signal them by THROWING. A throw would crash on
-    // exactly the input this tool exists to describe, so it becomes a failure
-    // attributed to the line that caused it.
+    // Backstop. It converts ANY throw, not only the encoders' own MUSTs
+    // (EX-10 well-formed UTF-8, ID-3 lowercase key): a throw would otherwise
+    // crash on exactly the input this tool exists to describe. That breadth
+    // means a genuine bug IN THIS TOOL also surfaces as a line failure —
+    // `UNATTRIBUTED` is what distinguishes it, since every reachable encoder
+    // throw carries its own rule id. `UNATTRIBUTED` means the tool, not the
+    // export.
     try {
       step = verifyLine(i, lines[i] as string, events, genesis);
     } catch (err) {
-      const message = (err as Error).message;
+      const message = err instanceof Error ? err.message : String(err);
       return fail(n, ruleOf(message), message);
     }
     if (!step.ok) return step;
@@ -222,8 +224,11 @@ function verifyLine(
     const operator = str(e.payload, "operator_pk");
     const registrar = str(e.payload, "registrar_pk");
     if (operator === null || registrar === null) {
-      // ES-18 governs the payload key set. NOT ET-6 (version/seq/prev_hash),
-      // and no `ET-n` names these two keys — that gap IS ticket T5j.
+      // ES-18 governs the payload key set, and presence/type is all this
+      // branch checks. NOT ET-6, which is version/seq/prev_hash. T5j is a
+      // DIFFERENT gap: no `ET-n` states these keys' `^[0-9a-f]{64}$` FORMAT
+      // (ET-8/ET-9a/ET-13/ET-17 do name the keys themselves). Nothing here
+      // checks format, so T5j adds nothing to this branch.
       return fail(1, "ES-18", "genesis declares no operator_pk/registrar_pk");
     }
     genesis.keys = { operator, registrar };
