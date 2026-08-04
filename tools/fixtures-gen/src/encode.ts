@@ -145,8 +145,11 @@ export function ENC_PAYLOAD(p: Payload): Buffer {
       // ES-16: only integers and strings may appear in a v1 payload. Without
       // this the string branch is a catch-all, and Buffer.from accepts a byte
       // array — so {k: [104,105]} would encode identically to {k: "hi"}.
+      // ES-16 leads the message on purpose: a caught throw is attributed by
+      // scanning for the FIRST rule id, and `key` is caller-controlled, so a
+      // payload key shaped like `AB-12` would otherwise steal the attribution.
       throw new TypeError(
-        `payload value for ${key} is neither integer nor string (ES-16)`,
+        `ES-16: payload value for ${key} is neither integer nor string`,
       );
     }
   }
