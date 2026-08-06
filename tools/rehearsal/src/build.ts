@@ -2,7 +2,7 @@
 // seed, exports it as canonical NDJSON, and reports its head. Event construction, hashing and
 // serialization are all `@odc/fixtures-gen`'s — this module only chooses *what* events a chain
 // contains, never *how* they're encoded, to avoid a second, drifting implementation of
-// hashing.md. For: giving T7's Go verifier a chain larger and less tidy than the 73 hand-built
+// hashing.md. For: giving T7's Go verifier a chain larger and less tidy than the 75 hand-built
 // fixtures, and T8 a cross-language comparison target. Not a conformance suite — see
 // `docs/plans/phase-0.md` T6.
 

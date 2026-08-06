@@ -235,19 +235,13 @@ possible moment to discover it. `guards.test.sh` now tags throwaway repos
 
 ## Next
 
-### ▶ START HERE (handoff, 2026-08-02)
+### ▶ START HERE (handoff, 2026-08-06)
 
-Four decisions were made and recorded but **not executed**. Do them in this
-order — the first three are small and clear the deck; the fourth is the phase
-resuming.
+**T6 IS COMPLETE** (T6a–T6e merged; #58 squash `6b44088`, review fixes #59 squash
+`3d3f63d`). The self-verify debt is closed (T6d, #55). Remaining Phase 0 work, in
+order:
 
-1. **T6d — finish T6.** `just rehearsal-build`, CLI wiring (including
-   `--case`), README. **And the self-verify property test T6 still owes**:
-   nothing merged recomputes an event hash, checks `prev_hash` linkage beyond
-   genesis, or verifies a signature. T6's acceptance names exactly those three
-   plus attributing a failure to a line. T6c did not land it either. **A green
-   test count in `tools/rehearsal` is not evidence this exists.**
-2. **T5j — `ET-9b`, plus the Ed25519 predicate.** Two things in one contracts
+1. **T5j — `ET-9b`, plus the Ed25519 predicate.** Two things in one contracts
    change, because both open `event-types.md` and one review is cheaper than
    two. Full write-ups in `OPEN-QUESTIONS.md`; the short form:
    - `ET-9b` gives the genesis key format a numbered home, with **uppercase-hex**
@@ -258,10 +252,13 @@ resuming.
      are both in the container. Preferred shape is to make the divergence
      unreachable (reject non-canonical encodings and non-prime-order keys before
      verification) rather than adjudicate a predicate.
-3. **The HA-9 example fix** — one sentence in `hashing.md`, verified, cheap, and
+2. **The HA-9 example fix** — one sentence in `hashing.md`, verified, cheap, and
    **impossible after the tag** since `hashing.md` is immutable then. Can ride
    along with T5j.
-4. **Then the phase resumes:** T7 → T7b → T8 → T9 → T9a. T10 stays deferred.
+3. **Then the phase resumes:** T7 → T7b → T8 → T9 → T9a. T10 stays deferred.
+
+(A small `memory/STATE.md` truth-up PR precedes T5j: this handoff rewrite, the
+"73"→"75" vector-count fixes, and the branch-delete correction below.)
 
 **Owed by the operator, not by a session:** the ballot-expressiveness ceiling
 ADR (part B — part A landed 2026-08-02; default until argued otherwise is
@@ -317,7 +314,7 @@ branch this line used to point at, was deleted 2026-08-02.)
 - **ADR-0008 — the fixture freeze needs four rules, not one** (2026-08-02,
   PR #49, squash `a9f99d6`). See Direction decisions below.
 
-**T6 IS IN PROGRESS.** Sliced against the 600-line ceiling, one PR each:
+**T6 IS COMPLETE** (2026-08-06). Sliced against the 600-line ceiling, one PR each:
 
 - **T6a — package scaffold + PRNG** (2026-07-30, PR #36, squash `287952d`).
   `tools/rehearsal/` (`@odc/rehearsal`), SplitMix32 seeded generator,
@@ -367,22 +364,40 @@ branch this line used to point at, was deleted 2026-08-02.)
   byte offset would be; "line reordering" has no dedicated rule id (attribution
   to the earlier line follows EV-17's precedence but isn't stated); `EX-14`'s
   "head" is defined on events, not on the bytes of a possibly-tampered file.
-- **T6d — `just rehearsal-build`**, CLI wiring (including `--case`), README. NEXT.
+- **T6d1 — `verifyEvent`/`publicKeyFromHex` in `fixtures-gen`** (2026-08-04,
+  PR #56, squash `e5a1653`, 120 lines). Split out of T6d to fit the ceiling.
+- **T6d — self-verify** (2026-08-04, PR #55, squash `bcd8f44`). Recomputes each
+  hash, relinks `prev_hash`, re-verifies signatures, and attributes a failure to
+  a line — closing **the self-verify debt** T6a–T6c had left open. `selfVerify`
+  checks line by line, lowest first: canonical bytes (EX-7), `seq` (ES-7),
+  `prev_hash` (ES-25), `hash` (HA-13), signature (HA-16), head (EX-15). Reviewed
+  REQUEST CHANGES (a crash class, four wrong rule citations, deletable guards);
+  all fixed.
+- **T6d review fixes** (2026-08-04, PR #57, squash `e9360b3`, 51 lines).
+  Post-merge re-review of #55's fix delta; corrects the `(ET-6)` miscitation and
+  a mis-scoped T5j sentence, kills the `isEsInt` upper-bound mutant. Post-merge-
+  reviewed 2026-08-05 → APPROVE WITH NITS (citation rewrite confirmed correct).
+- **T6e — CLI, `just rehearsal-build`, README** (2026-08-06, PR #58, squash
+  `6b44088`). CLI (`--seed/--participants/--issues/--votes/--case/--tamper-seed/
+--out`), exit codes 0/2/3, the `just rehearsal-build` recipe (run end-to-end,
+  passes), and the package README. Reviewed APPROVE WITH NITS; fixes (a tampered-
+  report `lines` oracle + dropping the undocumented `-h` alias) landed as
+  **PR #59, squash `3d3f63d`** — a follow-up off master, since Will had already
+  merged #58 when the review returned. **This is where T6 completes.**
 
-**T6's self-verify property test is still OWED.** Nothing merged so far
-recomputes an event hash, checks `prev_hash` linkage beyond genesis, or verifies
-a signature — T6b builds and exports chains and T6c tampers with them, neither
-checks them. T6's acceptance defines self-verify as exactly those three plus
-attributing a failure to a line. A green test count in `tools/rehearsal` is
-**not** evidence the acceptance criterion is met; a comment at the top of
-`build.test.ts` says so too. **T6c did not land it either** (confirmed in its PR
-description) — it is T6d's alone now.
+**T6's self-verify debt is CLOSED** (T6d, #55). Master now recomputes each event
+hash, relinks `prev_hash` beyond genesis, verifies signatures, and attributes a
+failure to a line — the four things T6's acceptance names. **Still owed and not
+in any PR: the structure-aware fuzz as a committed test** (a byte fuzzer misses
+the crash class a value-level fuzz finds instantly), plus #57's six deferred
+envelope-guard survivors in `verify.ts:93-102`, which are the same class — fold
+both together and point them at T7/T8.
 
 **T6 does NOT build a TypeScript verifier** (decided 2026-07-28, now recorded
 in `docs/plans/phase-0.md` T6 rather than only in session memory). "Self-verify"
 means recompute hashes, check `prev_hash` links and signatures of the chain the
 builder just built, and attribute a failure to a line. It does NOT mean emitting
-the three conformance verdicts or executing the 73 declared fixture verdicts —
+the three conformance verdicts or executing the 75 declared fixture verdicts —
 T7 is the first ticket that emits verdicts. The reason is **independence, not
 cost**: a TS verifier written by a context that has already read
 `encode.ts`/`serialize.ts` inherits any misreading those files contain, so it
@@ -577,19 +592,14 @@ the feature branch, so parallel agents do not conflict). Required checks:
   head branch, so a later push to that name silently creates a _new_ branch with
   no PR attached. **The push succeeds and nothing warns you** — on 2026-08-02 it
   was caught only by noticing `[new branch]` in the push output.
-  **AGENT SESSIONS CANNOT DELETE REMOTE BRANCHES.** `git push origin --delete`
-  returns `HTTP 403`. **Diagnosed precisely, because the obvious attribution is
-  wrong:** this is NOT the agent egress proxy. `origin` is the session's local
-  git relay on `127.0.0.1`, which sits inside the proxy's own `noProxy` range,
-  so that traffic never reaches the proxy at all — and the proxy's
-  `recentRelayFailures` is empty, confirming it never saw the request. The relay
-  permits ref creation and updates (every push in this session worked) and
-  refuses ref DELETION. There is no GitHub MCP delete-branch tool either — it
-  has `create_branch` and `list_branches` and nothing that removes a ref. So
-  branch cleanup is a **human action**, and it is a capability limit of the
-  session's git access, not an org policy an admin would change. This is the
-  likeliest reason the 2026-07-26 note claimed a cleanup that had not happened:
-  an agent tried, was refused, and recorded the intent as the outcome.
+  **CORRECTION (2026-08-06): agent sessions CAN delete remote branches — at
+  least sometimes.** `git push origin --delete contracts/T6e-cli` **succeeded**
+  this session (removed a stray re-created branch). The earlier "always returns
+  `HTTP 403`, ref deletion is refused by the local git relay" diagnosis is now
+  falsified as a blanket rule. It may have been condition-specific (a protected
+  or PR-attached ref vs. a plain stray) or the relay's behavior may have changed;
+  not re-diagnosed. **Try the delete; don't assume it will 403.** If it does,
+  then it is a human action.
   **Seven branches were audited and DELETED on 2026-08-02** — assessed, then
   independently re-verified (including a blob-hash cross-branch check for
   content living only on two doomed branches, of which none was found), then
