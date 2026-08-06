@@ -104,6 +104,12 @@ describe("run", () => {
       });
       assert.equal(r.tamper?.case, kase);
       assert.equal(r.tamper?.seed, 11);
+      // `lines` on a tampered report is its own code path (deletion −1,
+      // duplicated-seq +1, …), computed off the tampered bytes rather than
+      // `chain.events.length`. Pin it to an oracle derived a different way —
+      // counting LF bytes in the export — so it cannot silently drift.
+      const nl = r.ndjson.reduce((n, b) => (b === 0x0a ? n + 1 : n), 0);
+      assert.equal(r.lines, nl, kase);
       const v = selfVerify({ ndjson: r.ndjson, head: r.head });
       assert.equal(v.ok, false, kase);
       assert.equal(v.ok === false ? v.line : -1, r.tamper?.line, kase);
