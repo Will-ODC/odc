@@ -188,7 +188,7 @@ export function summary(r: Report): string {
 }
 
 export function main(argv: readonly string[], deps: RunDeps = {}): number {
-  if (argv.includes("--help") || argv.includes("-h")) {
+  if (argv.includes("--help")) {
     process.stdout.write(`${USAGE}\n`);
     return 0;
   }
