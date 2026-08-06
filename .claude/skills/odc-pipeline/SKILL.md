@@ -65,10 +65,15 @@ IS the ticket.
 
 ## Branch rules
 
-- One branch = one reviewable idea. Target diff < 400 lines; hard ceiling 800
-  (generated code and lockfiles exempt). Bigger? Split it or stack it.
-- Stacked branches are encouraged; rebase stacks with `--update-refs`;
-  push with `--force-with-lease` only, never `--force`.
+- One branch = one reviewable idea. Target diff < 400 lines (WARN); hard ceiling
+  600 (FAIL) — the live thresholds are in `.github/scripts/diff-size.sh`, the
+  source of truth; markdown, generated code, and lockfiles are exempt. Bigger?
+  Split it.
+- **Do not stack PRs in this repo.** Squash-merge orphans a stack silently: when
+  the base merges, its commit is replaced, so the child rebases onto a dead
+  commit and the PR reports "merged" while delivering nothing (incident #11).
+  One branch off `master`, merge, then branch the next. Force-push only with
+  `--force-with-lease`, never `--force`.
 - Branch names: `svc/short-description` (e.g. `ledger/insert-only-guard`).
 - Commits: imperative subject ≤ 72 chars; body says WHY, not what.
 - PR description: what changed, how it was tested, which contract version
