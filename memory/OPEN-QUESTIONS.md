@@ -5,12 +5,7 @@ Unresolved design questions. Move each to an ADR when decided; delete when moot.
 - ~~Canonical JSON serialization~~ → DECIDED: fixed-field-order byte
   construction, strict rejection (D3/D5 in docs/plans/phase-0.md; ADR in T3).
 - ~~Signature scheme~~ → DECIDED: Ed25519 (D2; ADR in T3).
-- ~~Ballot unlinkability vs. signed `vote_cast` (charter §5 tension)~~ →
-  DECIDED (ADR-0004): voter-held ballot keys removed entirely — a voter-held
-  key is a demandable receipt (§5, §8). `vote_cast` is registrar-signed
-  (`registrar_pk` declared in `genesis`), payload `{issue_id, choice, sig}`,
-  `choice` bounded by the issue's `choice_count`. No voter-held artifact can
-  prove any ballot; votes are also no longer linkable to one another on-log.
+- **Ballot unlinkability vs. signed `vote_cast`** → DECIDED (ADR-0004): voter-held ballot keys removed entirely; `vote_cast` is registrar-signed, no voter-held artifact can prove any ballot.
 - **Registrar-side ballot privacy (Phase 1 identity design, from ADR-0004).**
   In v1 the registrar (identity service) necessarily sees `{who, issue,
 choice}` at eligibility-check time — trust-by-policy per charter §10 v1,
@@ -20,14 +15,7 @@ choice}` at eligibility-check time — trust-by-policy per charter §10 v1,
   no-receipt discipline — identity and web MUST NOT return or display any
   per-ballot confirmation artifact binding a voter to a specific log line
   (no signed receipts, no "your vote is seq N" attestations).
-- ~~Verifier reason codes~~ → DECIDED (2026-07-25, T4a / EV-17): **no
-  reason-code registry exists or will be defined for v1.** Reason text is
-  advisory and SHOULD name the violated sentence (`ES-7`, `HA-14`) rather than a
-  new vocabulary; conformance is judged on verdict token + line number alone.
-  Rationale: one tampered line usually violates several sentences at once, so
-  exact-match codes would silently require freezing a total precedence order over
-  every check — and splitting a coarse distinction later is additive, while
-  un-freezing a wrongly-named code in a frozen fixture is not.
+- **Verifier reason codes** → DECIDED (T4a / EV-17, 2026-07-25): no reason-code registry for v1; reason text is advisory, conformance judged on verdict token + line number alone.
 - **⚠️ Before writing the "definitional vs provisional constraints" ADR.** A
   draft of that ADR classifies three things as _provisional_ and therefore fair
   game for future community governance: the absence of a voter field in
@@ -233,21 +221,8 @@ choice}` at eligibility-check time — trust-by-policy per charter §10 v1,
   (Needed by Phase 1 identity/ledger tickets, not Phase 0.)
 - Anchoring cadence and venue for the chain head in v1 (manual README anchor
   at genesis per phase-0 plan; automation cadence is a Phase 1+ question.)
-- ~~Correction/retraction model~~ → DECIDED (ADR-0005, ratified 2026-07-24 in
-  PR #6): the envelope never carries a `supersedes` field; corrections arrive
-  as additive payload conventions (`evolution.md` EV-11–EV-14). Ballot plane
-  permanently excluded from correction (ET-22, ADR-0004).
-- ~~Verifier scope & forward compatibility~~ → DECIDED (ADR-0006, accepted
-  2026-07-24 in PR #6): two-stage verification — chain/envelope checks stay
-  type-agnostic, registry checks apply to known `(type, version)`s, and a
-  well-formed-but-unregistered type gets `PARTIAL` (not structural `INVALID`),
-  per `evolution.md` EV-6–EV-10. `hashing.md` HA-7 defines the payload
-  preimage generically over any flat int/string payload so unknown-type
-  hashes remain computable. The pre-freeze follow-up — inline EV-9
-  cross-references at the T3 sentences this reinterprets — is **done** (T4a,
-  PR #10): `event-schema.md` ES-11 and the new `event-types.md` ET-2a. Brought
-  forward from the T9/T10 gate because T7 runs before the freeze review and is
-  the session most likely to be misled by a bare "MUST reject".
+- **Correction/retraction model** → DECIDED (ADR-0005, PR #6): no `supersedes` field; corrections are additive payload conventions (EV-11–EV-14); ballot plane permanently excluded (ET-22, ADR-0004).
+- **Verifier scope & forward compatibility** → DECIDED (ADR-0006, PR #6): two-stage verification — chain/envelope checks type-agnostic, registry checks per `(type, version)`; unregistered types get `PARTIAL` (EV-6–EV-10). Cross-references landed in T4a (PR #10).
 - **Sanction/negative events (Phase 2, deferred — NOT a freeze blocker).**
   Contribution-style derived views only count up until negative events exist;
   charter §7 requires failure/fraud to crater standing and §9 makes
@@ -266,15 +241,7 @@ choice}` at eligibility-check time — trust-by-policy per charter §10 v1,
   later per-type `version` bump, not a null (ES-3/ES-16). Attestation tiers
   may gate _execution_ capabilities and which parallel tallies a ballot
   feeds — never ballot access itself (P4).
-- ~~`event-types.md` contradicts itself about the unit ET-14 counts~~ →
-  DECIDED (T5i): the `issue_created` payload table then read "1–200 **UTF-8
-  characters**" while ET-14's normative sentence read "1–200 Unicode **scalar
-  values**" — readings that differ by a factor of 4 on astral titles, and that
-  `072`/`073` made load-bearing. Where a table and a numbered RFC-2119 sentence
-  disagree, the sentence governs; table corrected to match, `event-types.md`
-  → v3. ET-14 is unmoved and no fixture verdict shifts, but the edit does
-  narrow the admissible readings — legal only because `contracts/` is still
-  `DRAFTING` (EV-1 binds post-freeze changes). **T7's start is unblocked.**
+- **`event-types.md` unit contradiction (ET-14 characters vs. scalar values)** → DECIDED (T5i): normative sentence ("Unicode scalar values") governs over the payload table; table corrected, `event-types.md` → v3. No fixture verdict shifted; T7's start unblocked.
 - **`genesis`'s `operator_pk` and `registrar_pk` have no numbered format rule.**
   Both are pinned to `^[0-9a-f]{64}$` only in the `genesis` payload table; no
   `ET-n` sentence states it. ET-7 derives `chain_id` from `operator_pk_bytes`
@@ -298,24 +265,4 @@ choice}` at eligibility-check time — trust-by-policy per charter §10 v1,
   failures — neither is a bad-format key. A T7 verifier that omits the format
   check passes 73/73 with no signal, so `ET-9b` needs a vector alongside it
   under EV-5 ("every additive change MUST ship its own golden fixtures").
-- ~~**A second, independent TS verifier has no ticket yet.**~~ → **TICKETED
-  (2026-08-02): `T7b` in `docs/plans/phase-0.md`**, slotted after T7 and before
-  T8, with the same fresh-context/contracts-only isolation T7 gets — extended to
-  exclude `services/verifier/` as well, so T7b cannot be a transliteration of
-  T7. It gates the **freeze decision** (ADR-0007 §5's two-independent-verifiers
-  signal), not T8, T9 or T9a. Original write-up kept below for the reasoning.
-  `docs/plans/phase-0.md`
-  T6 now commits, in prose, that "a second, independent TS verifier gets its
-  own ticket — fresh context, contracts-only, the same treatment T7 gets —
-  before the freeze." ADR-0007 §5 names the TypeScript implementation as one
-  of the two independent verifiers (alongside T7's Go verifier) that the tag
-  "SHOULD wait until" agreeing on a non-synthetic chain — one of the
-  freeze-readiness signals §5 itself frames as "signals for a human judgment
-  call, not an automated gate," not a hard requirement. That softer modal
-  doesn't make the gap optional to track: it is still owed before the freeze
-  decision is made, and no ticket exists anywhere in the plan for it — not in
-  the T1–T10 stack, not as a T-number placeholder. Found during a
-  fresh-context review of T6a (2026-07-29). It is owed before T10 (the freeze),
-  must be built the way T7 is — fresh context, contracts-only, no prior
-  exposure to `encode.ts`/`serialize.ts`/the Go verifier's source — and needs a
-  ticket number and slot in the stack before it is forgotten.
+- **A second, independent TS verifier has no ticket** → DECIDED: ticketed as **T7b** in `docs/plans/phase-0.md` (2026-08-02), slotted after T7 and before T8, same fresh-context/contracts-only isolation as T7 (extended to exclude `services/verifier/`). Gates the freeze decision (ADR-0007 §5).
