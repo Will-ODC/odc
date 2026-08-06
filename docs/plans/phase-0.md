@@ -179,7 +179,7 @@ prev_hash, hash`; types and normative constraints per field; RFC-2119
   means: recompute each event's hash, check the `prev_hash` links and the
   signatures of the chain this builder just built, and attribute a failure to a
   line. It does NOT mean emitting the three conformance verdicts or executing
-  the 73 declared fixture verdicts — T7 is the first ticket that emits those
+  the 75 declared fixture verdicts — T7 is the first ticket that emits those
   conformance verdicts (the ticket order itself is unchanged: T6 → T7 → T8).
   The reason is **independence, not cost**: a TS verifier written by a context
   that has already read `encode.ts`/`serialize.ts` inherits any misreading those
@@ -327,7 +327,7 @@ misreading are one implementation wearing two hats.
   the overlap is the signal**: two isolated readers tripping on the same
   sentence means the sentence is wrong, not the readers.
 - Acceptance: `pnpm test` green using only fixtures as test data; correct on all
-  73 vectors; spec-bug list (possibly empty) delivered; a reviewer can confirm
+  75 vectors; spec-bug list (possibly empty) delivered; a reviewer can confirm
   from the diff that no workspace package is imported.
 
 **Ordering.** After T7, before T10. It is NOT a blocker for T8 — T8's
