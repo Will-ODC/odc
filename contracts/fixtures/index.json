@@ -948,6 +948,30 @@
         "EX-9"
       ],
       "note": "U+0085 NEXT LINE, a C1 character, in a title. VALID: ET-14 forbids the C0 block and U+007F and stops there, so a C1 character is permitted. This is the over-rejection counterpart to `074`, and it is aimed at a specific plausible implementation — Go's `unicode.IsControl` reports true across U+007F-U+009F as well as C0, so the obvious one-call check rejects this legal title while still passing `074`. No vector before this one carries a C1 character, so that error was undetectable. As with `074` the character is not escaped: EX-9 escapes only U+0000-U+001F, so this is stored as its literal UTF-8 octets c2 85."
+    },
+    {
+      "id": "076-genesis-operator-pk-uppercase",
+      "export": "vectors/076-genesis-operator-pk-uppercase.ndjson",
+      "expect": {
+        "verdict": "INVALID",
+        "line": 1
+      },
+      "cites": [
+        "ET-9b"
+      ],
+      "note": "operator_pk in UPPERCASE hex. ET-9b requires 64 lowercase hex, rejected and never lowercased to conform (D5). The uppercase string decodes to the same 32 bytes, so chain_id = sha256(those bytes) still matches (ET-7) and the genesis self-signature still verifies under the decoded key (ET-8); the hash is recomputed over the uppercase payload and matches. Only the case is wrong, so a verifier omitting the ET-9b format check reports VALID."
+    },
+    {
+      "id": "077-genesis-registrar-pk-uppercase",
+      "export": "vectors/077-genesis-registrar-pk-uppercase.ndjson",
+      "expect": {
+        "verdict": "INVALID",
+        "line": 1
+      },
+      "cites": [
+        "ET-9b"
+      ],
+      "note": "registrar_pk in UPPERCASE hex. Same defect as 076 on the OTHER key — the one an implementation is likelier to skip, since registrar_pk never enters chain_id (ET-7) and is unused until a vote_cast arrives (ET-17). chain_id derives from operator_pk (lowercase) and matches, and the genesis is operator-self-signed so the signature never consults registrar_pk; the hash covers the uppercase registrar_pk and matches. Only ET-9b fails."
     }
   ]
 }
