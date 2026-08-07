@@ -1,13 +1,13 @@
 # contracts/fixtures/ — golden vectors
 
-**Version:** 7
-**Status:** DRAFTING (Phase 0 · T5). Not frozen.
+**Version:** 8
+**Status:** DRAFTING (Phase 0 · T5, T5j). Not frozen.
 
-**75 vectors** — 10 `VALID`, 4 `PARTIAL`, 61 `INVALID`. They are numbered in
+**77 vectors** — 10 `VALID`, 4 `PARTIAL`, 63 `INVALID`. They are numbered in
 category order: `VALID` (`001`–`007`), `PARTIAL` (`008`–`011`), then `INVALID` —
 the envelope and Stage A checks (`012`–`042`), the export framing and canonical
 line form (`043`–`052`), `--head` (`053`–`054`), the Stage B type semantics
-(`055`–`068`), and verdict precedence (`069`–`070`). `071`–`075` are appended
+(`055`–`068`), and verdict precedence (`069`–`070`). `071`–`077` are appended
 after that scheme rather than inserted into it, because **ids never change once
 shipped**: renumbering to keep the categories contiguous would silently
 invalidate a conformance run that cites them.
@@ -21,6 +21,16 @@ control-character clause at both edges: `074` that **U+007F is forbidden**
 legal** (so an implementation reaching for Go's `unicode.IsControl`, true across
 U+007F–U+009F, over-rejects a conforming title). Both characters are stored as
 their literal UTF-8 octets: EX-9 escapes only U+0000–U+001F.
+
+`076`/`077` pin `event-types.md` ET-9b — the genesis key format. Each is a
+`genesis` whose `operator_pk` (`076`) or `registrar_pk` (`077`) is **uppercase
+hex**, `INVALID` at line 1. The uppercase key decodes to the same 32 bytes, so
+`chain_id` still derives (ET-7), the self-signature still verifies (ET-8) and the
+`hash` still matches — **only the case is wrong**, the same isolation `033` and
+`036` have for `prev_hash`/`hash`. Before these, no vector asserted `INVALID` on a
+malformed genesis key, so a verifier omitting the format check passed every vector
+with no signal. Two vectors, not one, because `registrar_pk` — unused until a
+ballot arrives — is the key an implementation is likelier to skip.
 
 Conformance test data for every implementation that touches events: the Go
 verifier (T7), and later every service's CI. This file documents the record

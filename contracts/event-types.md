@@ -1,7 +1,7 @@
 # Event Types — contracts/event-types.md
 
-**Version:** 3
-**Status:** DRAFTING (Phase 0 · T3, amended T4a, T5i). Not frozen.
+**Version:** 4
+**Status:** DRAFTING (Phase 0 · T3, amended T4a, T5i, T5j). Not frozen.
 **Companion specs:** `event-schema.md` (envelope), `ids.md` (identifiers),
 `hashing.md` (preimage — T4).
 
@@ -76,6 +76,16 @@ declares the operator key that later `issue_created` events are signed with.
   and the identity service MUST NOT hold `operator_pk` (which creates issues) —
   separating "who may vote" from "who sets the questions" (charter §P2, §P3).
   This separation is policy, not verifier-enforced.
+- **ET-9b.** `operator_pk` and `registrar_pk` MUST each be a 32-byte raw Ed25519
+  public key (RFC 8032), carried as a string of exactly 64 lowercase hexadecimal
+  characters matching `^[0-9a-f]{64}$` — the same key format `ids.md` ID-3 fixes
+  for `participant_registered.pubkey`. An uppercase or mixed-case key MUST be
+  rejected; it is never lowercased to conform (D5). This is a **distinct check**
+  from ET-7 and ET-8: an uppercase key hex-decodes to the same 32 bytes, so
+  `chain_id` still derives (ET-7) and the genesis self-signature still verifies
+  (ET-8). A verifier that omits this format check therefore accepts a `genesis`
+  that ET-9b requires it to reject, with nothing else on the line to signal the
+  fault.
 
 ## `participant_registered` (self-signed by the registrant)
 
@@ -195,6 +205,7 @@ off-log eligibility check.
 | Genesis fields, seq/prev_hash, self-signing    | ET-6, ET-7, ET-8  |
 | `chain_id` derivation (operator key only)      | ET-7              |
 | Two genesis keys: operator vs registrar        | ET-9a             |
+| Genesis key format (operator/registrar pk)     | ET-9b             |
 | participant self-signing + id derivation       | ET-10, ET-11      |
 | Title length + forbidden characters            | ET-14             |
 | `choice_count` range                           | ET-14a            |
@@ -210,8 +221,10 @@ off-log eligibility check.
 Given the same four events, two implementations agree on: the legal type set
 (ET-1); that every `sig` is 128 hex and verified under the type's named key —
 `operator_pk` for genesis/issue, own `pubkey` for participant, `registrar_pk`
-for vote (ET-8/10/13/17); that a `title` over 200 scalars or with a control
-character is rejected (ET-14); that an `issue_created` with `choice_count`
+for vote (ET-8/10/13/17); that a `genesis` whose `operator_pk` or `registrar_pk`
+is not 64 lowercase hex is rejected even though an uppercase key's bytes would
+still derive `chain_id` and verify the self-signature (ET-9b); that a `title`
+over 200 scalars or with a control character is rejected (ET-14); that an `issue_created` with `choice_count`
 outside 2–64 is rejected (ET-14a); that a vote for a not-yet-created issue, or
 with `choice` outside `[0, choice_count)`, is rejected (ET-18, ET-18a); and that
 `choice` is otherwise an opaque integer (ET-19). The only undecided bytes are

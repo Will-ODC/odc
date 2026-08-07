@@ -19,6 +19,45 @@ Format (newest first, one entry per merged contracts change):
 
 ---
 
+## event-types.md v4 · hashing.md v2 · fixtures/ README v8 — 2026-08-07 — T5j (ET-9b + HA-9)
+
+- **`ET-9b` added** to `event-types.md` (v3 → v4). `genesis`'s `operator_pk` and
+  `registrar_pk` were pinned to `^[0-9a-f]{64}$` **only in the payload table**,
+  cited by no numbered sentence — the sole-source case `CONTRACTS-CHANGE.md`
+  (T5i) named and `OPEN-QUESTIONS.md` tracked. ET-9b gives that constraint a
+  numbered home, worded to mirror `ids.md` ID-3 (32-byte raw Ed25519 key as 64
+  lowercase hex, rejected and never lowercased to conform, D5). It states the
+  check is **distinct from ET-7/ET-8**: an uppercase key decodes to the same 32
+  bytes, so `chain_id` still derives and the self-signature still verifies — a
+  verifier omitting the format check has no other signal on the line. No byte,
+  preimage or existing verdict changes; nothing regenerates from the sentence.
+  **Deadline:** `evolution.md` EV-1 forbids altering a frozen `(type, version)`
+  schema, so ET-9b is **unaddable after the `contracts-v1` tag** — it had to land
+  pre-freeze, and before T7 so the Go verifier is built against it.
+- **Two vectors, `076`/`077`** (`INVALID` at line 1; `INVALID` 61 → 63, total
+  75 → 77). Each is a `genesis` carrying an uppercase `operator_pk` (`076`) or
+  `registrar_pk` (`077`); every other property is valid, so the case is the only
+  fault. Built with the `custom("genesis", …)` mechanism of `059`: the payload
+  holds the uppercase string (so `hash` covers it and matches) while `chainId()`
+  derives from the decoded lowercase key. `test/genesis-keys.test.ts` asserts, over
+  the committed bytes, that `hash`, signature and `chain_id` all verify — so the
+  vector isolates ET-9b alone. Appended after `075` (ids never change), a pure
+  insertion into `index.json`.
+- **HA-9's worked example corrected** in `hashing.md` (v1 → v2). HA-9 claimed the
+  1-octet type tag is load-bearing "because integer `1` and string `"1"` encode
+  to different bytes" — but those differ by **length** (`ENC_INT(1)` is 8 octets,
+  `ENC_STR("1")` is 9), so they separate with no tag at all and the example proved
+  nothing about the tag. The case that does is **integer `0` vs string `""`**:
+  both are the 8 octets `00…00`, byte-identical, so **only the tag** distinguishes
+  them. Verified empirically. Changes no byte, digest or fixture — but `hashing.md`
+  is immutable once tagged, so it had to land pre-freeze.
+- **Scope note: the Ed25519 verification-predicate decision is deliberately NOT
+  in this PR.** `memory/OPEN-QUESTIONS.md` scoped it "before or inside T5j"; it is
+  kept as its own ticket because it is empirical (measure Go vs Node, then prefer
+  making the divergence unreachable) and permanent, and bundling it would produce
+  an oversized contracts change. The ⚠️ OPEN-QUESTIONS item stays OPEN and still
+  gates T7 — **the pre-T7 Ed25519 gate is not cleared by this merge.**
+
 ## fixtures/ — README v7 — 2026-08-02 — T5 follow-up, ET-14's control-character clause
 
 - **Two vectors added, 73 → 75** (`VALID` 9 → 10, `INVALID` 60 → 61). No
