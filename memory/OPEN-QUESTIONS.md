@@ -31,43 +31,20 @@ choice}` at eligibility-check time — trust-by-policy per charter §10 v1,
     itself calls policy; and the specific number **64**.
     Writing it the draft's way would read as license to revisit receipt-freeness
     by vote.
-- **⚠️ Ed25519 verification is NOT one predicate, and nothing pins ours. Needed
-  before T7.** (Recovered 2026-08-02 from `claude/review-memory-context-skills-383f6i`,
-  a branch whose content never landed.) RFC 8032 leaves several cases
-  underdetermined: non-canonical `R`/`A`/`S` encodings, small-order public keys,
-  and cofactored vs cofactorless verification. Go's `crypto/ed25519` and Node's
-  `node:crypto` can therefore **disagree on identical bytes**, both conformant.
-  Nothing in `contracts/` says which we mean. **T7 (Go) and T7b (TS) will each
-  silently pick their library's default**, which is precisely the cross-language
-  divergence the two-verifier architecture exists to expose — but only if a
-  fixture forces it, and none does. **Immediate constraint regardless of how it
-  is decided: no fixture may assert a verdict that depends on any of those edge
-  cases**, because a wrong frozen verdict is unfixable. Decide before T7 starts;
-  the cost rises once two verifiers exist and disagree.
-  **DIRECTION SET 2026-08-02 (operator). Do this in the next session, before or
-  inside T5j — that ticket already opens `event-types.md`, so it is one contracts
-  change and one review rather than two.**
-  1. **Measure before specifying.** Go 1.24.7 and Node are both installed in the
-     session container, so this is testable rather than arguable. Feed each case
-     in the table above through BOTH `crypto/ed25519` and `node:crypto` and
-     record where they actually agree and differ. **Do not write the rule from
-     memory or from first principles** — library behaviour here is exactly the
-     kind of claim that sounds authoritative and is wrong. If both already reject
-     everything, the rule is "write down what we already do" and the risk mostly
-     evaporates.
-  2. **Preferred shape: make the ambiguity UNREACHABLE, not adjudicated.** Rather
-     than picking a verification predicate and freezing it, reject the inputs
-     that would expose the divergence — require canonical encodings and a
-     prime-order-subgroup public key — **before** verification is ever called.
-     Neither library then sees anything they could disagree about. This converts
-     a cryptographic question into a format check: far easier to specify, to
-     fixture, and to live with permanently. Same move as ET-14a capping
-     `choice_count` rather than reasoning about what large values would do.
-     Fall back to specifying the predicate explicitly only where step 1 shows
-     that closing the door is not possible.
-  3. Whatever lands needs fixtures under EV-5, and they must be built the way
-     T5j's are — each failing for ONE reason, so the vector isolates the rule it
-     names.
+- **Ed25519 verification predicate** → DECIDED (ADR-0009, 2026-08-08): pinned at
+  the encoding level. `event-types.md` **ET-4a** (canonical `sig`: `S < L`; `R`
+  masked `< p`) and **ET-4b** (canonical verification key `A` masked `< p`),
+  checked on the raw decoded bytes before the verify primitive, rejected never
+  repaired (D5). This makes RFC 8032's underdetermination unreachable for the
+  stdlib-only Go (T7) and TS (T7b) verifiers, per the "make it unreachable, not
+  adjudicated" direction. **Measured** (Go 1.24.7 vs Node 22.22.2): the two
+  libraries agree on every ed25519-speccheck vector and every constructed case;
+  both cofactorless; both lenient only on non-canonical `A`. A prime-order
+  subgroup check is **deliberately excluded** — it closes no measured divergence
+  and needs non-stdlib scalar multiplication (rationale in ADR-0009); the T10
+  re-audit re-measures, since the result is version-bound. Fixtures `078`
+  (discriminating, ET-4b), `079`/`080` (verdict-pinning, ET-4a) under EV-5, each
+  isolating one rule.
 - **⚠️ Ballot expressiveness vs receipt-freeness — a live contradiction in
   merged text.** (Recovered 2026-08-02 from
   `claude/golden-fixtures-voting-verify-7urqku`, never landed.) `docs/charter.md`

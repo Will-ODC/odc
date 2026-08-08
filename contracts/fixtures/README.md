@@ -1,13 +1,13 @@
 # contracts/fixtures/ — golden vectors
 
-**Version:** 8
-**Status:** DRAFTING (Phase 0 · T5, T5j). Not frozen.
+**Version:** 9
+**Status:** DRAFTING (Phase 0 · T5, T5j, ADR-0009). Not frozen.
 
-**77 vectors** — 10 `VALID`, 4 `PARTIAL`, 63 `INVALID`. They are numbered in
+**80 vectors** — 10 `VALID`, 4 `PARTIAL`, 66 `INVALID`. They are numbered in
 category order: `VALID` (`001`–`007`), `PARTIAL` (`008`–`011`), then `INVALID` —
 the envelope and Stage A checks (`012`–`042`), the export framing and canonical
 line form (`043`–`052`), `--head` (`053`–`054`), the Stage B type semantics
-(`055`–`068`), and verdict precedence (`069`–`070`). `071`–`077` are appended
+(`055`–`068`), and verdict precedence (`069`–`070`). `071`–`080` are appended
 after that scheme rather than inserted into it, because **ids never change once
 shipped**: renumbering to keep the categories contiguous would silently
 invalidate a conformance run that cites them.
@@ -31,6 +31,26 @@ hex**, `INVALID` at line 1. The uppercase key decodes to the same 32 bytes, so
 malformed genesis key, so a verifier omitting the format check passed every vector
 with no signal. Two vectors, not one, because `registrar_pk` — unused until a
 ballot arrives — is the key an implementation is likelier to skip.
+
+`078`–`080` pin `event-types.md` ET-4a/ET-4b — the Ed25519 canonical-encoding
+predicate (ADR-0009). Each is a chain whose line-2 `participant_registered` is
+`INVALID` for exactly one canonical-encoding rule, hash and chain link
+otherwise intact. **`078-noncanonical-a` is the discriminating one:** its
+`pubkey` is the non-canonical identity-point encoding `y = 1 + p`
+(`ee ff…ff 7f`, still 64 lowercase hex, so ES-31/ID-3 hex-format passes) and its
+`sig` is the degenerate identity self-signature `R = 0100…00`, `S = 0`. Measured
+in **both** Go 1.24.7 and Node 22 / OpenSSL 3, the non-canonical key is accepted
+by the decoder and the degenerate signature **verifies** under it, so ET-10
+passes and only the new canonical-A check (ET-4b) rejects it — a verifier lacking
+that check wrongly reports `VALID`. `079-noncanonical-s` (`S` replaced by
+`S + L`) and `080-noncanonical-r` (`R` replaced by a non-canonical encoding),
+both with the `hash` **recomputed over the mutated `sig`** to isolate the
+encoding fault, are **non-discriminating** on current libraries: both Go and Node
+already reject `S ≥ L` and a non-canonical `R` inside the primitive, so a verifier
+lacking the explicit ET-4a check still returns `INVALID`. They pin the agreed
+verdict and guard against future library drift; only `078` catches a missing
+check today. A full prime-order subgroup check on keys is deliberately **not**
+required in v1 (ADR-0009), so no vector exercises one.
 
 Conformance test data for every implementation that touches events: the Go
 verifier (T7), and later every service's CI. This file documents the record

@@ -19,6 +19,63 @@ Format (newest first, one entry per merged contracts change):
 
 ---
 
+## event-types.md v5 · fixtures/ README v9 — 2026-08-08 — Ed25519 canonical-encoding predicate (ADR-0009)
+
+- **`ET-4a` and `ET-4b` added** to `event-types.md` (v4 → v5), pinning the
+  Ed25519 verification predicate at the **encoding** level, checked on the raw
+  decoded bytes **before** the verify primitive (ET-5) and rejected, never
+  reduced or repaired (D5). Three MUST checks: **(ET-4a)** the `sig`'s trailing
+  32 bytes (`S`) little-endian MUST be `< L` (`L = 2^252 + 27742317777372353535851937790883648493`),
+  and the leading 32 bytes (`R`) with bit 255 masked MUST be `< p`
+  (`p = 2^255 − 19`); **(ET-4b)** every verification key `A` — `operator_pk`,
+  `registrar_pk` (ET-8/ET-13/ET-17), and `participant_registered.pubkey` (ET-10)
+  — with bit 255 masked MUST be `< p`. This makes RFC 8032's underdetermination
+  **unreachable** for both the Go (T7) and TypeScript (T7b) stdlib-only verifiers
+  (same move as ET-14a capping `choice_count`). The new checks are **additional**
+  to the hex-format rules of ES-31/ET-9b/ID-3: a canonical hex string can still
+  decode to a non-canonical point encoding, so hex-format is necessary but not
+  sufficient. An **informative** note records that the assumed predicate is
+  **cofactorless** (`[S]B == R + [k]A`, satisfied by both reference stdlibs) and
+  that a full prime-order subgroup check is **deliberately excluded** in v1.
+- **Measurement basis (empirical, not reasoned).** Go 1.24.7 and Node 22.22.2 /
+  OpenSSL 3, both installed in the session container, were fed the constructed
+  edge cases the fixtures rest on plus the ed25519-speccheck classes. The two
+  libraries returned the **identical accept/reject verdict on every input** across
+  non-canonical `S`, non-canonical `R`, non-canonical `A`, small-order `A`,
+  small-order `R`, and the cofactor discriminator. The one case where both
+  **proceed to verify and accept** is a non-canonical verification key `A` (the
+  identity point `y = 1 + p` with a degenerate self-signature) — the case fixture
+  `078` exercises and the only one where the encoding checks change a verdict on
+  current libraries. `S ≥ L` and non-canonical `R` are already rejected by both
+  primitives, so `079`/`080` are non-discriminating today.
+- **Prime-order exclusion (rationale).** A full prime-order check
+  (`[L]A == 𝒪 ∧ [8]A ≠ 𝒪`) (a) closes **no measured divergence** — the two
+  libraries never disagree on current versions — and (b) requires curve scalar
+  multiplication that is **not** in either language's standard library,
+  conflicting with T7/T7b's stdlib-only constraint. The canonical-encoding checks
+  1–3 are cheap stdlib integer comparisons and are kept as defense-in-depth
+  against future library drift (RFC 8032 is underdetermined and the wider
+  ecosystem does split on these inputs). The result is **version-bound**; the T10
+  re-audit MUST re-measure. A prime-order check stays additively addable
+  pre-freeze if the operator later wants it.
+- **Three vectors, `078`/`079`/`080`** (`INVALID` 63 → 66, total 77 → 80), each
+  isolating one rule (T5j-style). `078-noncanonical-a` (`INVALID` line 2, ET-4b)
+  is the discriminating vector: its degenerate self-sig **verifies** in both
+  libraries, so ET-10 passes and only ET-4b rejects — a verifier lacking ET-4b
+  wrongly accepts. `079-noncanonical-s` (`S + L`) and `080-noncanonical-r`
+  (non-canonical `R`) recompute the `hash` over the mutated `sig` to isolate the
+  encoding fault; both are non-discriminating on current libraries and pin the
+  verdict against drift. Isolation was confirmed by feeding each committed line-2
+  event's signing preimage through **both** Go and Node: `078` verifies in both,
+  `079`/`080` verify in neither, and a from-spec reimplementation of the three
+  checks (in `test/canonical-ed25519.test.ts`) fails exactly one check per vector
+  over the committed bytes. Built via a minimal `custom(...)` + `sigTransform`
+  option on the generator (the `059`/`076` mechanism), not by hand.
+- **Documents reconciled:** `memory/OPEN-QUESTIONS.md`'s live ⚠️ Ed25519 entry is
+  converted to a DECIDED stub pointing at ADR-0009 and ET-4a/ET-4b.
+  `memory/STATE.md` is intentionally **not** touched (it updates post-merge on its
+  own PR). No other document outside `contracts/` stated the predicate.
+
 ## event-types.md v4 · hashing.md v2 · fixtures/ README v8 — 2026-08-07 — T5j (ET-9b + HA-9)
 
 - **`ET-9b` added** to `event-types.md` (v3 → v4). `genesis`'s `operator_pk` and

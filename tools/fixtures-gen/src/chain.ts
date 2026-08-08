@@ -76,6 +76,14 @@ export function assertWholeMinute(ts: string): string {
 /** ET-3: which key signs each type. `undefined` means the type carries no sig. */
 type Signer = Keypair | undefined;
 
+/**
+ * Rewrites a freshly-signed `sig` (128 lowercase hex) before it is inserted into
+ * the payload and covered by `hash`. Used only by the Ed25519 canonical-encoding
+ * vectors, which need a real signature over the correct preimage whose R or S is
+ * then replaced with a non-canonical encoding.
+ */
+type SigTransform = (sigHex: string) => string;
+
 // --- v1 payload rules the builder can check -------------------------------
 //
 // The builders used to accept anything, so a value that was illegal BY ACCIDENT
@@ -235,6 +243,7 @@ export class ChainBuilder {
     payload: Payload,
     ts: string,
     signer: Signer,
+    sigTransform?: SigTransform,
   ): Event {
     const content: EventContent = {
       seq: this.nextSeq,
@@ -244,9 +253,18 @@ export class ChainBuilder {
       ts,
       prev_hash: this.prevHash,
     };
-    const sealed: EventContent = signer
-      ? { ...content, payload: { ...payload, sig: signEvent(content, signer) } }
-      : content;
+    let sealed: EventContent = content;
+    if (signer) {
+      // Sign over the correct signing preimage first (HA-15), THEN mutate the
+      // resulting sig if asked, THEN compute `hash` over the mutated sig — so the
+      // signing preimage and the `hash` are both correct and the ONLY defect is
+      // the sig bytes. The canonical-S / non-canonical-R vectors need exactly
+      // this: a real signature whose S or R is replaced, with the hash relinked
+      // so the vector fails for the encoding alone and not for a stale digest.
+      let sig = signEvent(content, signer);
+      if (sigTransform) sig = sigTransform(sig);
+      sealed = { ...content, payload: { ...payload, sig } };
+    }
     const event: Event = { ...sealed, hash: eventHash(sealed) };
     this.events.push(event);
     return event;
@@ -337,7 +355,11 @@ export class ChainBuilder {
     type: string,
     version: number,
     payload: Payload,
-    opts: { signer?: Signer; minutes?: number } = {},
+    opts: {
+      signer?: Signer;
+      minutes?: number;
+      sigTransform?: SigTransform;
+    } = {},
   ): Event {
     return this.seal(
       type,
@@ -345,6 +367,7 @@ export class ChainBuilder {
       payload,
       tsAt(opts.minutes ?? this.nextSeq),
       opts.signer,
+      opts.sigTransform,
     );
   }
 }

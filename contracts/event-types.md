@@ -1,7 +1,7 @@
 # Event Types — contracts/event-types.md
 
-**Version:** 4
-**Status:** DRAFTING (Phase 0 · T3, amended T4a, T5i, T5j). Not frozen.
+**Version:** 5
+**Status:** DRAFTING (Phase 0 · T3, amended T4a, T5i, T5j, ADR-0009). Not frozen.
 **Companion specs:** `event-schema.md` (envelope), `ids.md` (identifiers),
 `hashing.md` (preimage — T4).
 
@@ -38,8 +38,68 @@ Each payload table column: **key** · **type** · **constraint**.
   **signing key** (named per type below), over the event's **signing preimage** —
   the hash preimage with the `sig` key omitted from `payload`
   (`event-schema.md` ES-32; bytes in `hashing.md`, T4).
+- **ET-4a.** _Canonical `sig` encoding._ RFC 8032 leaves the Ed25519
+  verification predicate underdetermined for non-canonically encoded inputs, and
+  the two v1 verifiers' standard libraries need not agree on such inputs; v1
+  makes that divergence **unreachable** by rejecting the non-canonical encodings
+  **before** the Ed25519 verification primitive (ET-5) is ever called, exactly as
+  ET-14a caps `choice_count` rather than reasoning about large values (ADR-0009).
+  Let `L = 2^252 + 27742317777372353535851937790883648493` (the order of the
+  Ed25519 prime-order subgroup) and `p = 2^255 − 19` (the field prime). Given the
+  64 octets obtained by hex-decoding `sig` (which ES-31 fixes at 128 lowercase
+  hex) as `R = sig[0..32)` followed by `S = sig[32..64)`, a verifier MUST reject
+  the event (`INVALID`) — never reducing, masking-and-accepting, or otherwise
+  repairing the value (D5) — unless **both** of these hold on the raw decoded
+  bytes:
+  - **(i) canonical `S`:** the 32 octets of `S`, interpreted as an unsigned
+    little-endian integer, are strictly `< L`;
+  - **(ii) canonical `R`:** the 32 octets of `R`, with bit 255 (the encoded
+    x-coordinate sign bit — the most-significant bit of octet 31) cleared and the
+    remainder interpreted as an unsigned little-endian integer, are strictly
+    `< p`.
+
+  This is an **additional** check beyond ES-31's hex format and beyond ET-5's
+  verification (`hashing.md` HA-16): a `sig` that is 128 lowercase hex, and would
+  even verify under some predicates, can still decode to a non-canonical `R` or
+  `S`, so the format is necessary but not sufficient.
+- **ET-4b.** _Canonical verification-key encoding._ The same underdetermination
+  affects the verification key. For **every** verification key `A` that a
+  verifier hex-decodes — `operator_pk` (ET-8, ET-13), `registrar_pk` (ET-17), and
+  `participant_registered.pubkey` (ET-10) — a verifier MUST reject the event
+  (`INVALID`), never repairing the value (D5), unless the 32 decoded octets of
+  `A`, with bit 255 (the most-significant bit of octet 31) cleared and the
+  remainder interpreted as an unsigned little-endian integer, are strictly `< p`
+  (`p = 2^255 − 19`). This check runs on the raw decoded key octets **before** the
+  verification primitive (ET-5), and it is **additional** to the lowercase-hex
+  format fixed by ES-31, ET-9b, and `ids.md` ID-3 (keys are hashed as their hex
+  text, `hashing.md` HA-12): a key that is 64 lowercase hex (necessary) can still
+  decode to a non-canonical point encoding (not sufficient). A non-canonical `A`
+  is the one case where both reference standard libraries otherwise proceed to
+  verify — the identity point encoded as `y = 1 + p` accepts a degenerate
+  self-signature, so a verifier that omits ET-4b **accepts** an event it must
+  reject (ADR-0009; fixture `078`).
+
+  > **Note (informative — imposes no new MUST).** The verification predicate v1
+  > assumes is **cofactorless**: `[S]B = R + [k]A` with
+  > `k = SHA-512(R‖A‖M) mod L` (RFC 8032 §5.1.7, without the cofactor-8
+  > multiplication of the permissive batch equation). Both standard libraries the
+  > v1 verifiers are built on — Go `crypto/ed25519` (1.24.7) and Node
+  > `node:crypto` (v22, OpenSSL 3) — satisfy this, so no explicit cofactor rule is
+  > stated. A full **prime-order subgroup** check on `A`
+  > (`[L]A = 𝒪 ∧ [8]A ≠ 𝒪`) is **deliberately NOT required** in v1: empirical
+  > measurement (ADR-0009) found the two libraries return the identical
+  > accept/reject verdict on every ed25519-speccheck vector and every constructed
+  > small-order / cofactor case, so a subgroup check closes no measured
+  > divergence — and it needs curve scalar multiplication that is outside both
+  > languages' standard libraries (the T7/T7b stdlib-only constraint), whereas
+  > ET-4a/ET-4b are cheap integer comparisons worth keeping as defense-in-depth
+  > against future library drift. It stays additively addable before the freeze if
+  > the operator later wants it. This assessment is **version-bound**; the T10
+  > re-audit re-measures.
 - **ET-5.** A verifier MUST reject a signed event whose `sig` does not verify
-  under the signing key named for its type.
+  under the signing key named for its type. The canonical-encoding checks ET-4a
+  and ET-4b run first, on the raw decoded bytes, so a non-canonical `R`, `S`, or
+  `A` is rejected there and never reaches this verification step.
 
 ---
 
@@ -202,6 +262,8 @@ off-log eligibility check.
 | The exact set of v1 types                      | ET-1              |
 | Which version each type is defined at          | ET-2              |
 | How signatures are carried / what they cover   | ET-3, ET-4        |
+| Canonical `sig` encoding (`S < L`, `R < p`)    | ET-4a             |
+| Canonical verification-key encoding (`A < p`)  | ET-4b             |
 | Genesis fields, seq/prev_hash, self-signing    | ET-6, ET-7, ET-8  |
 | `chain_id` derivation (operator key only)      | ET-7              |
 | Two genesis keys: operator vs registrar        | ET-9a             |
@@ -221,7 +283,9 @@ off-log eligibility check.
 Given the same four events, two implementations agree on: the legal type set
 (ET-1); that every `sig` is 128 hex and verified under the type's named key —
 `operator_pk` for genesis/issue, own `pubkey` for participant, `registrar_pk`
-for vote (ET-8/10/13/17); that a `genesis` whose `operator_pk` or `registrar_pk`
+for vote (ET-8/10/13/17); that a `sig` whose decoded `R`/`S`, or a verification
+key whose decoded bytes, are non-canonically encoded is rejected on the raw
+bytes before verification (ET-4a/ET-4b); that a `genesis` whose `operator_pk` or `registrar_pk`
 is not 64 lowercase hex is rejected even though an uppercase key's bytes would
 still derive `chain_id` and verify the self-signature (ET-9b); that a `title`
 over 200 scalars or with a control character is rejected (ET-14); that an `issue_created` with `choice_count`
