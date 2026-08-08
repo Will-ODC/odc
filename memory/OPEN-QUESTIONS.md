@@ -31,20 +31,24 @@ choice}` at eligibility-check time — trust-by-policy per charter §10 v1,
     itself calls policy; and the specific number **64**.
     Writing it the draft's way would read as license to revisit receipt-freeness
     by vote.
-- **Ed25519 verification predicate** → DECIDED (ADR-0009, 2026-08-08): pinned at
-  the encoding level. `event-types.md` **ET-4a** (canonical `sig`: `S < L`; `R`
-  masked `< p`) and **ET-4b** (canonical verification key `A` masked `< p`),
-  checked on the raw decoded bytes before the verify primitive, rejected never
-  repaired (D5). This makes RFC 8032's underdetermination unreachable for the
-  stdlib-only Go (T7) and TS (T7b) verifiers, per the "make it unreachable, not
-  adjudicated" direction. **Measured** (Go 1.24.7 vs Node 22.22.2): the two
-  libraries agree on every ed25519-speccheck vector and every constructed case;
-  both cofactorless; both lenient only on non-canonical `A`. A prime-order
-  subgroup check is **deliberately excluded** — it closes no measured divergence
-  and needs non-stdlib scalar multiplication (rationale in ADR-0009); the T10
-  re-audit re-measures, since the result is version-bound. Fixtures `078`
-  (discriminating, ET-4b), `079`/`080` (verdict-pinning, ET-4a) under EV-5, each
-  isolating one rule.
+- **Ed25519 verification predicate** → DECIDED (ADR-0009 + ADR-0010, 2026-08-08).
+  Pinned at the encoding level: `event-types.md` **ET-4a** (canonical `sig`:
+  `S < L`; `R` masked `< p`) and **ET-4b** (canonical verification key `A` masked
+  `< p`), checked on the raw decoded bytes before the verify primitive, rejected
+  never repaired (D5) — makes RFC 8032's underdetermination unreachable. **AND
+  pinned at the subgroup level: ET-4c requires every verification key to be
+  prime-order — `[L]A == 𝒪 AND A != 𝒪`** (rejects all small-order AND mixed-order
+  keys), so key legitimacy is verifiable from the log, not trusted-by-policy.
+  **ADR-0010 REVERSES ADR-0009's prime-order exclusion** after a measurement
+  resolved its two blockers: the two audited curve libraries
+  (`filippo.io/edwards25519` Go, `@noble/curves` TS) AGREE on the predicate for
+  all 11 points tested, and the stdlib-only rule is relaxed to permit one such
+  library per verifier for the ET-4c check ALONE. Worded `[L]A == 𝒪 AND A != 𝒪`,
+  NOT bare "torsion-free": noble's `isTorsionFree()` returns true for the identity
+  (the `A != 𝒪` clause is load-bearing). Fixtures: `078` (ET-4b, discriminating),
+  `079`/`080` (ET-4a, verdict-pinning), `081` small-order + `082` mixed-order
+  (ET-4c, both discriminating), each isolating one rule under EV-5. Version-bound;
+  the T10 re-audit re-measures.
 - **⚠️ Ballot expressiveness vs receipt-freeness — a live contradiction in
   merged text.** (Recovered 2026-08-02 from
   `claude/golden-fixtures-voting-verify-7urqku`, never landed.) `docs/charter.md`
