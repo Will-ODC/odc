@@ -11,6 +11,7 @@ import { framingVectors } from "./framing.js";
 import { semanticsVectors } from "./semantics.js";
 import { unicodeVectors } from "./unicode.js";
 import { genesisKeysVectors } from "./genesis-keys.js";
+import { canonicalEd25519Vectors } from "./canonical-ed25519.js";
 import type { Vector } from "./shared.js";
 
 export { GENESIS_EVENT, a3 as ISSUE_EVENT } from "./shared.js";
@@ -24,4 +25,5 @@ export const vectors: Vector[] = [
   ...semanticsVectors,
   ...unicodeVectors,
   ...genesisKeysVectors,
+  ...canonicalEd25519Vectors,
 ];

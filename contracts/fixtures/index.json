@@ -972,6 +972,42 @@
         "ET-9b"
       ],
       "note": "registrar_pk in UPPERCASE hex. Same defect as 076 on the OTHER key — the one an implementation is likelier to skip, since registrar_pk never enters chain_id (ET-7) and is unused until a vote_cast arrives (ET-17). chain_id derives from operator_pk (lowercase) and matches, and the genesis is operator-self-signed so the signature never consults registrar_pk; the hash covers the uppercase registrar_pk and matches. Only ET-9b fails."
+    },
+    {
+      "id": "078-noncanonical-a",
+      "export": "vectors/078-noncanonical-a.ndjson",
+      "expect": {
+        "verdict": "INVALID",
+        "line": 2
+      },
+      "cites": [
+        "ET-4b"
+      ],
+      "note": "DISCRIMINATING. A participant_registered whose pubkey is the non-canonical identity-point encoding y = 1 + p (ee ff*30 7f) — 64 lowercase hex, so ES-31/ID-3 hex-format passes — self-signed with the degenerate sig R = canonical identity (0100..00), S = 0. Measured in BOTH Go 1.24.7 and Node 22/OpenSSL 3: the non-canonical key is accepted by the decoder and the degenerate signature VERIFIES under it (identity math makes [S]B = R + [k]A collapse to identity == identity for any message), so ET-10 (self-sig verifies) PASSES, participant_id still derives, and the line hashes and links. The ONLY failing rule is the new canonical-A check ET-4b. A verifier lacking ET-4b proceeds to verify, the degenerate sig passes, and it wrongly reports VALID."
+    },
+    {
+      "id": "079-noncanonical-s",
+      "export": "vectors/079-noncanonical-s.ndjson",
+      "expect": {
+        "verdict": "INVALID",
+        "line": 2
+      },
+      "cites": [
+        "ET-4a"
+      ],
+      "note": "NON-DISCRIMINATING (pins the verdict). A valid self-signed participant_registered whose sig S has been replaced by S + L — still 64 bytes, sign bit clear, and ES-31 128-hex — with the hash RECOMPUTED over the mutated sig so the vector fails for the encoding alone and not for a stale digest (HA-14) or a bad chain link. S >= L violates the canonical-S check ET-4a(i). On current libraries this is non-discriminating: both Go and Node already reject S >= L inside the verify primitive, so a verifier lacking the explicit ET-4a check still returns INVALID via ET-10. The vector pins the agreed verdict and guards against future drift; R and the key A are both canonical, so ET-4a(i) is the sole fault."
+    },
+    {
+      "id": "080-noncanonical-r",
+      "export": "vectors/080-noncanonical-r.ndjson",
+      "expect": {
+        "verdict": "INVALID",
+        "line": 2
+      },
+      "cites": [
+        "ET-4a"
+      ],
+      "note": "NON-DISCRIMINATING (pins the verdict). A valid self-signed participant_registered whose sig R has been replaced by a non-canonical point encoding (y = 1 + p >= p, ee ff*30 7f), S left canonical, with the hash RECOMPUTED over the mutated sig to isolate the fault (not a stale digest, not a broken link). The masked R value >= p violates the canonical-R check ET-4a(ii). Non-discriminating on current libraries: both Go and Node reject a non-canonical R at point decode inside the primitive, so a verifier lacking the explicit ET-4a check still returns INVALID via ET-10. The key A and S are both canonical, so ET-4a(ii) is the sole fault."
     }
   ]
 }
