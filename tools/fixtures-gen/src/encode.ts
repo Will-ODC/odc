@@ -286,10 +286,12 @@ export function publicKeyFromHex(
  * checked FIRST, so a call with both malformed returns false rather than
  * throwing. Swapping the two checks changes that, which is why a test pins it.
  *
- * Note what this does NOT decide: whether a non-canonical `S`, a small-order
- * key, or the cofactored-vs-strict equation should verify. Node's Ed25519 makes
- * that choice for us, and whether it matches Go's is an open contracts question
- * (see `OPEN-QUESTIONS.md`) — do not read agreement here as the answer.
+ * Note the scope: this delegates the raw Ed25519 check to Node and does NOT
+ * itself enforce the encoding or subgroup rules. Those are decided by the
+ * contract and exercised by dedicated fixtures, not by this helper: a
+ * non-canonical `S`/`R` or verification-key encoding is rejected by ET-4a/ET-4b,
+ * and a small-order or mixed-order key by ET-4c. (ADR-0009 measured Go and Node
+ * to agree on the verify edge cases; ADR-0010 added the prime-order key check.)
  */
 export function verifyEvent(
   content: EventContent,
