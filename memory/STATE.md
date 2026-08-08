@@ -38,8 +38,8 @@ T5–T9 proceed on schedule; only the tag waits. `contracts/` is **DRAFTING**.
 - T4b — ADR-0007 release candidate (#12, `2a253cf`).
 
 **T5 — fixtures & encoders (COMPLETE).** Slices T5a–T5i + the #48 follow-up.
-Master carries **75 vectors** (VALID 10, PARTIAL 4, INVALID 61). Load-bearing
-residue:
+T5 landed **75 vectors** (VALID 10, PARTIAL 4, INVALID 61); master now carries
+**77** after T5j — see below. Load-bearing residue:
 
 - `hashing.md` §6 reproduces independently (genesis `hash` `78ed980b…f6409a`),
   confirmed four ways (T4 by hand, T5a, two reviewers' RFC-8032 Python).
@@ -65,6 +65,25 @@ session memory `t6-slicing-and-handoff`; the durable facts:
   `docs/plans/phase-0.md` T6 + session memory `t6-scope-and-second-verifier`.
 - ADR-0008 (#49, `a9f99d6`): the fixture freeze needs four file-kind rules.
 
+**T5j — `ET-9b` genesis key format + HA-9 example fix (COMPLETE, #64 `c577fe7`).**
+
+- `event-types.md` v3 → **v4**: `ET-9b` pins `operator_pk`/`registrar_pk` to
+  `^[0-9a-f]{64}$` (mirrors `ids.md` ID-3), reject-don't-lowercase (D5). A
+  **distinct** check from ET-7/ET-8 — an uppercase key still hex-decodes to the
+  same 32 bytes, so `chain_id` still derives and the genesis self-signature still
+  verifies; a verifier that skips ET-9b accepts a `genesis` it should reject with
+  nothing else on the line to signal the fault.
+- Vectors **076/077** (uppercase `operator_pk` / `registrar_pk`), both INVALID at
+  line 1, isolating ET-9b alone. Master now carries **77 vectors** (VALID 10,
+  PARTIAL 4, INVALID 63). `077` is the one an implementation likelier skips —
+  `registrar_pk` never enters `chain_id` and is unused until a `vote_cast` arrives.
+- HA-9 example fixed: int `0` vs string `""` (byte-identical but for the type tag)
+  replaces the old int `1` / string `"1"` example, which differed by length and so
+  proved nothing about the tag. No byte, digest, or fixture changed.
+- **The Ed25519 canonical-encoding predicate was NOT part of this ticket** — see
+  "Next" #1. ET-9b is hex-string format only; the RFC 8032 divergence question is
+  still open.
+
 ## Direction decisions — see the ADRs; carry-forward consequences below
 
 - **ADR-0007** — freeze deferred to operational use; three states DRAFTING →
@@ -82,22 +101,23 @@ session memory `t6-slicing-and-handoff`; the durable facts:
 
 ## Next
 
-**T6 COMPLETE.** Remaining Phase 0, in order:
+**T5j COMPLETE (#64).** Remaining Phase 0, in order:
 
-1. **T5j — `ET-9b` + the Ed25519 predicate** (one contracts change; both open
-   `event-types.md`). **HARD DEADLINE: before T7, and before the tag.** `genesis`
-   `operator_pk`/`registrar_pk` are pinned to `^[0-9a-f]{64}$` **only** in the
-   payload table — no numbered `ET-n`. EV-1 forbids altering frozen `genesis`/v1,
-   so deferring past the tag makes the fix **unaddable**. No current vector
-   exercises it (all 75 pass with the format check omitted), so the T5j vectors —
-   an **uppercase-hex** key, so only the CASE is wrong while `chain_id`/sig/`hash`
-   stay valid — exist to catch a T7 build that skips it. Ed25519: **measure, do
-   not reason from memory** (Go 1.24.7 + Node are in the container); prefer making
-   divergence unreachable (reject non-canonical / non-prime-order keys) over
-   adjudicating a predicate. Full write-up in `OPEN-QUESTIONS.md`.
-2. **HA-9 example fix** — one sentence in `hashing.md`, cheap, **impossible after
-   the tag**. Rides with T5j.
-3. **Then:** T7 (Go verifier, fresh-context isolation) → T7b (2nd TS verifier) →
+1. **Ed25519 verification predicate — DECIDE BEFORE T7 STARTS.** NOT closed by
+   T5j: `ET-9b` fixed only the genesis keys' hex-string format (case/length). The
+   RFC 8032 divergence is still open — non-canonical `R`/`A`/`S` encodings,
+   small-order / non-prime-order public keys, and cofactored vs cofactorless
+   verification. Go's `crypto/ed25519` and Node's `node:crypto` can disagree on
+   identical bytes, both conformant, and nothing in `contracts/` pins ours; T7 (Go)
+   and T7b (TS) would each silently take their library's default. Direction set
+   (OPEN-QUESTIONS): **measure, do not reason from memory** (Go 1.24.7 + Node in
+   the container); prefer making the divergence **unreachable** (reject
+   non-canonical / non-prime-order keys as a format check, à la ET-14a) over
+   adjudicating a predicate. Any vectors go under EV-5, built T5j-style (each fails
+   for ONE reason). **No v1 fixture may freeze a verdict that depends on these
+   edge cases** — a wrong frozen verdict is unfixable. Full write-up in
+   `OPEN-QUESTIONS.md`.
+2. **Then:** T7 (Go verifier, fresh-context isolation) → T7b (2nd TS verifier) →
    T8 (rehearsal loop) → T9 (security audit) → T9a (RC → Phase 1). T10 deferred.
 
 **Owed with no ticket (how the last backlog rotted):** the **structure-aware fuzz
@@ -106,7 +126,7 @@ crash class a value fuzz finds instantly). Bundle with #57's six deferred
 envelope-guard survivors (`verify.ts:93-102`, same class) and point both at
 T7/T8's briefs.
 
-**Coverage is thinner than 75 vectors suggests.** ~60 of ~125 rule ids have no
+**Coverage is thinner than 77 vectors suggests.** ~60 of ~125 rule ids have no
 citing vector. Real gaps for T7's brief: `ES-30`–`ES-32` (sig field), `ET-3`–
 `ET-5`, `EX-14` (head), most of `ids.md`, `EV-11`–`EV-14` (correction/retraction,
 incl. EV-13's ballot-plane prohibition). **`HA-7` is cited by no vector** despite
