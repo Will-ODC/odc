@@ -309,7 +309,7 @@ off-log eligibility check.
 | How signatures are carried / what they cover   | ET-3, ET-4        |
 | Canonical `sig` encoding (`S < L`, `R < p`)    | ET-4a             |
 | Canonical verification-key encoding (`A < p`)  | ET-4b             |
-| Prime-order verification key (`[L]A=𝒪`, `A≠𝒪`) | ET-4c             |
+| Prime-order verification key (`[L]A==𝒪`, `A!=𝒪`) | ET-4c           |
 | Genesis fields, seq/prev_hash, self-signing    | ET-6, ET-7, ET-8  |
 | `chain_id` derivation (operator key only)      | ET-7              |
 | Two genesis keys: operator vs registrar        | ET-9a             |
