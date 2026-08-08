@@ -1,8 +1,17 @@
 # ADR-0009: Pin the Ed25519 verification predicate by canonical encoding
 
-- **Status:** accepted
+- **Status:** accepted; **superseded in part by ADR-0010**
 - **Date:** 2026-08-08
 - **Phase:** 0
+
+> **Superseded in part by ADR-0010 (2026-08-08).** The canonical-encoding
+> decision of this ADR (ET-4a/ET-4b) **stands** unchanged. Only the
+> **prime-order exclusion** below — the "Why prime-order is excluded" section and
+> the matching lines in Decision/Consequences — is **reversed**: a later
+> measurement resolved both blockers it cited (the two audited libraries agree on
+> the prime-order predicate, and a subgroup check is allowed one audited curve
+> library), so a full prime-order subgroup check is **now required** as ET-4c. The
+> rest of this document is left intact as the record of what was decided when.
 
 ## Context
 

@@ -84,6 +84,16 @@ type Signer = Keypair | undefined;
  */
 type SigTransform = (sigHex: string) => string;
 
+/**
+ * Produces the `sig` (128 lowercase hex) directly from the sealed content, in
+ * place of a `Keypair` sign. Used only by the ET-4c subgroup vectors (082),
+ * whose verification key is a mixed-order point with no `Keypair` discrete log:
+ * the signature has to be crafted over the event's own signing preimage
+ * (HA-15 — `content` still carries the `pubkey` this signs under, `sig` absent),
+ * so the callback is handed the finished `content` rather than a private key.
+ */
+type RawSigner = (content: EventContent) => string;
+
 // --- v1 payload rules the builder can check -------------------------------
 //
 // The builders used to accept anything, so a value that was illegal BY ACCIDENT
@@ -244,6 +254,7 @@ export class ChainBuilder {
     ts: string,
     signer: Signer,
     sigTransform?: SigTransform,
+    signRaw?: RawSigner,
   ): Event {
     const content: EventContent = {
       seq: this.nextSeq,
@@ -254,7 +265,11 @@ export class ChainBuilder {
       prev_hash: this.prevHash,
     };
     let sealed: EventContent = content;
-    if (signer) {
+    if (signRaw) {
+      // A crafted signature over content's own signing preimage (HA-15), for a
+      // key with no Keypair (082's mixed-order A). `hash` still covers the sig.
+      sealed = { ...content, payload: { ...payload, sig: signRaw(content) } };
+    } else if (signer) {
       // Sign over the correct signing preimage first (HA-15), THEN mutate the
       // resulting sig if asked, THEN compute `hash` over the mutated sig — so the
       // signing preimage and the `hash` are both correct and the ONLY defect is
@@ -359,6 +374,7 @@ export class ChainBuilder {
       signer?: Signer;
       minutes?: number;
       sigTransform?: SigTransform;
+      signRaw?: RawSigner;
     } = {},
   ): Event {
     return this.seal(
@@ -368,6 +384,7 @@ export class ChainBuilder {
       tsAt(opts.minutes ?? this.nextSeq),
       opts.signer,
       opts.sigTransform,
+      opts.signRaw,
     );
   }
 }

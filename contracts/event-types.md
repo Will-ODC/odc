@@ -1,7 +1,8 @@
 # Event Types — contracts/event-types.md
 
-**Version:** 5
-**Status:** DRAFTING (Phase 0 · T3, amended T4a, T5i, T5j, ADR-0009). Not frozen.
+**Version:** 6
+**Status:** DRAFTING (Phase 0 · T3, amended T4a, T5i, T5j, ADR-0009, ADR-0010).
+Not frozen.
 **Companion specs:** `event-schema.md` (envelope), `ids.md` (identifiers),
 `hashing.md` (preimage — T4).
 
@@ -85,21 +86,65 @@ Each payload table column: **key** · **type** · **constraint**.
   > multiplication of the permissive batch equation). Both standard libraries the
   > v1 verifiers are built on — Go `crypto/ed25519` (1.24.7) and Node
   > `node:crypto` (v22, OpenSSL 3) — satisfy this, so no explicit cofactor rule is
-  > stated. A full **prime-order subgroup** check on `A`
-  > (`[L]A = 𝒪 ∧ [8]A ≠ 𝒪`) is **deliberately NOT required** in v1: empirical
-  > measurement (ADR-0009) found the two libraries return the identical
-  > accept/reject verdict on every ed25519-speccheck vector and every constructed
-  > small-order / cofactor case, so a subgroup check closes no measured
-  > divergence — and it needs curve scalar multiplication that is outside both
-  > languages' standard libraries (the T7/T7b stdlib-only constraint), whereas
-  > ET-4a/ET-4b are cheap integer comparisons worth keeping as defense-in-depth
-  > against future library drift. It stays additively addable before the freeze if
-  > the operator later wants it. This assessment is **version-bound**; the T10
-  > re-audit re-measures.
+  > stated. A full **prime-order subgroup** check on `A` **is** required in v1 —
+  > see **ET-4c** below. When ET-4a/ET-4b first landed, that check was
+  > deliberately excluded (ADR-0009), for two reasons: measurement found no
+  > divergence it would close, and it needs curve scalar multiplication outside
+  > both standard libraries. **ADR-0010 reverses that exclusion** — a later
+  > measurement resolved both blockers — so the requirement now lives in ET-4c and
+  > the stdlib-only constraint is relaxed to permit one audited curve library for
+  > that check alone. The cofactorless assumption above is unaffected. This
+  > assessment is **version-bound**; the T10 re-audit re-measures.
+- **ET-4c.** _Prime-order verification key._ Let `A` be the point obtained by
+  decoding a verification key's **already-canonical** encoding — i.e. after ET-4b
+  has passed on its raw bytes. For **every** verification key `A` a verifier
+  decodes — `operator_pk` (ET-8, ET-13), `registrar_pk` (ET-17), and
+  `participant_registered.pubkey` (ET-10) — a verifier MUST reject the event
+  (`INVALID`), never repairing the value (D5), **unless `A` lies in the
+  prime-order subgroup**:
+
+  > `[L]A == 𝒪` (the identity point) **AND** `A != 𝒪`
+
+  where `L = 2^252 + 27742317777372353535851937790883648493` is the subgroup
+  order and `𝒪` is the group identity. Equivalently, `[L]A == 𝒪 AND [8]A != 𝒪`.
+  This rejects **all** small-order keys (including the identity, whose canonical
+  encoding is `0100000000000000000000000000000000000000000000000000000000000000`)
+  **and all** mixed-order keys (a point `A = P + T` with `P` in the prime-order
+  subgroup and `T` a non-trivial torsion component).
+
+  ET-4c runs **on the canonical point, after ET-4a/ET-4b**: a key must first
+  decode to a canonical point encoding (ET-4b) before its subgroup membership is
+  even defined. It is an **additional** check beyond ET-4b: a canonically-encoded
+  key can still be small-order or mixed-order — such a key **passes** ET-4b (its
+  `y` is `< p`) and is caught **only here** (fixtures `081`, `082`). It is also
+  additional to ET-5's signature verification: a small-order or mixed-order key
+  can carry a `sig` that **verifies** under it — the degenerate identity
+  self-signature verifies under the identity key, and a mixed-order key
+  `A = P + T` self-signed honestly under `P` with the challenge ground to
+  `k ≡ 0 (mod 8)` verifies under `A` because `[k]T = 𝒪` — so a verifier that
+  omits ET-4c **accepts** an event it must reject (ADR-0010).
+
+  Unlike ET-4a/ET-4b, ET-4c is **exact curve arithmetic**, not an
+  RFC-8032-underdetermined case: the two v1 verifiers agree on it by construction
+  rather than by measured coincidence, so it is more version-stable. But it
+  requires curve scalar multiplication that is in **neither** verifier's standard
+  library, so v1 relaxes the stdlib-only constraint to permit **one audited curve
+  library per verifier, used ONLY for this subgroup check** (`filippo.io/edwards25519`
+  for the Go verifier, `@noble/curves` for the TypeScript verifier; ADR-0010).
+
+  > **Note (informative).** A verifier built on `@noble/curves` satisfies ET-4c
+  > with `A.isTorsionFree() && !A.is0()`; one built on `filippo.io/edwards25519`
+  > with `[L]A == 𝒪 && A != 𝒪` (its `ScalarMultBase`/`ScalarMult` compute `[L]A`).
+  > These compute the **identical** decision on every measured point — but only
+  > with the explicit non-identity clause: `@noble/curves`' `isTorsionFree()`
+  > returns **true** for the identity key, which ET-4c must reject, so
+  > `isTorsionFree()` **alone** is not ET-4c. Do not phrase the check as bare
+  > "torsion-free"; the `A != 𝒪` clause is load-bearing (fixture `081`).
 - **ET-5.** A verifier MUST reject a signed event whose `sig` does not verify
   under the signing key named for its type. The canonical-encoding checks ET-4a
-  and ET-4b run first, on the raw decoded bytes, so a non-canonical `R`, `S`, or
-  `A` is rejected there and never reaches this verification step.
+  and ET-4b, then the prime-order check ET-4c, run first, on the decoded key /
+  signature bytes, so a non-canonical `R`, `S`, or `A`, or a small-order or
+  mixed-order `A`, is rejected there and never reaches this verification step.
 
 ---
 
@@ -264,6 +309,7 @@ off-log eligibility check.
 | How signatures are carried / what they cover   | ET-3, ET-4        |
 | Canonical `sig` encoding (`S < L`, `R < p`)    | ET-4a             |
 | Canonical verification-key encoding (`A < p`)  | ET-4b             |
+| Prime-order verification key (`[L]A=𝒪`, `A≠𝒪`) | ET-4c             |
 | Genesis fields, seq/prev_hash, self-signing    | ET-6, ET-7, ET-8  |
 | `chain_id` derivation (operator key only)      | ET-7              |
 | Two genesis keys: operator vs registrar        | ET-9a             |
@@ -285,7 +331,10 @@ Given the same four events, two implementations agree on: the legal type set
 `operator_pk` for genesis/issue, own `pubkey` for participant, `registrar_pk`
 for vote (ET-8/10/13/17); that a `sig` whose decoded `R`/`S`, or a verification
 key whose decoded bytes, are non-canonically encoded is rejected on the raw
-bytes before verification (ET-4a/ET-4b); that a `genesis` whose `operator_pk` or `registrar_pk`
+bytes before verification (ET-4a/ET-4b), and that a verification key which is
+canonically encoded but small-order or mixed-order — so it passes ET-4b and even
+carries a `sig` that verifies under it — is rejected by the prime-order check
+(ET-4c); that a `genesis` whose `operator_pk` or `registrar_pk`
 is not 64 lowercase hex is rejected even though an uppercase key's bytes would
 still derive `chain_id` and verify the self-signature (ET-9b); that a `title`
 over 200 scalars or with a control character is rejected (ET-14); that an `issue_created` with `choice_count`

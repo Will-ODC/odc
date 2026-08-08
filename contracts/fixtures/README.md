@@ -1,13 +1,13 @@
 # contracts/fixtures/ — golden vectors
 
-**Version:** 9
-**Status:** DRAFTING (Phase 0 · T5, T5j, ADR-0009). Not frozen.
+**Version:** 10
+**Status:** DRAFTING (Phase 0 · T5, T5j, ADR-0009, ADR-0010). Not frozen.
 
-**80 vectors** — 10 `VALID`, 4 `PARTIAL`, 66 `INVALID`. They are numbered in
+**82 vectors** — 10 `VALID`, 4 `PARTIAL`, 68 `INVALID`. They are numbered in
 category order: `VALID` (`001`–`007`), `PARTIAL` (`008`–`011`), then `INVALID` —
 the envelope and Stage A checks (`012`–`042`), the export framing and canonical
 line form (`043`–`052`), `--head` (`053`–`054`), the Stage B type semantics
-(`055`–`068`), and verdict precedence (`069`–`070`). `071`–`080` are appended
+(`055`–`068`), and verdict precedence (`069`–`070`). `071`–`082` are appended
 after that scheme rather than inserted into it, because **ids never change once
 shipped**: renumbering to keep the categories contiguous would silently
 invalidate a conformance run that cites them.
@@ -49,8 +49,27 @@ encoding fault, are **non-discriminating** on current libraries: both Go and Nod
 already reject `S ≥ L` and a non-canonical `R` inside the primitive, so a verifier
 lacking the explicit ET-4a check still returns `INVALID`. They pin the agreed
 verdict and guard against future library drift; only `078` catches a missing
-check today. A full prime-order subgroup check on keys is deliberately **not**
-required in v1 (ADR-0009), so no vector exercises one.
+check today.
+
+`081`–`082` pin `event-types.md` ET-4c — the prime-order subgroup requirement
+(ADR-0010, which reverses ADR-0009's prime-order exclusion). Each is a chain whose
+line-2 `participant_registered` carries a **canonically-encoded** key (so
+ET-4a/ET-4b and ID-3 all pass) that is **not** in the prime-order subgroup, with a
+self-signature that **verifies** in both Go 1.24.7 and Node 22 / OpenSSL 3 (so
+ET-10 passes) — leaving ET-4c as the sole fault. Both are **discriminating**: a
+verifier omitting ET-4c wrongly reports `VALID`. **`081-smallorder-key`** is the
+canonical identity key `0100…00` (a small-order key, order 1) with the degenerate
+identity self-sig `R = 0100…00`, `S = 0`; it is the case where `@noble/curves`'
+`isTorsionFree()` returns **true**, so it pins the load-bearing `A != 𝒪` clause —
+a subgroup check written as `isTorsionFree()` alone wrongly accepts it.
+**`082-mixedorder-key`** is a canonically-encoded **mixed-order** key `A = P + T`
+(`T` an order-8 torsion point), self-signed honestly under `P` with the challenge
+ground to `k ≡ 0 (mod 8)` so `[k]T = 𝒪` and the signature verifies under `A`;
+because `A` is neither prime-order **nor** small-order, `082` distinguishes a full
+prime-order check from a small-order-blocklist-only verifier, which `081` cannot.
+ET-4c is exact curve arithmetic (not RFC-8032-underdetermined), so a verifier may
+use one audited curve library for it alone (`filippo.io/edwards25519` for Go,
+`@noble/curves` for TS; ADR-0010).
 
 Conformance test data for every implementation that touches events: the Go
 verifier (T7), and later every service's CI. This file documents the record

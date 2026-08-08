@@ -179,7 +179,7 @@ prev_hash, hash`; types and normative constraints per field; RFC-2119
   means: recompute each event's hash, check the `prev_hash` links and the
   signatures of the chain this builder just built, and attribute a failure to a
   line. It does NOT mean emitting the three conformance verdicts or executing
-  the 75 declared fixture verdicts — T7 is the first ticket that emits those
+  the 82 declared fixture verdicts — T7 is the first ticket that emits those
   conformance verdicts (the ticket order itself is unchanged: T6 → T7 → T8).
   The reason is **independence, not cost**: a TS verifier written by a context
   that has already read `encode.ts`/`serialize.ts` inherits any misreading those
@@ -268,11 +268,18 @@ avoidable.
 - Session may read ONLY: `contracts/*.md`, `contracts/fixtures/`, its own
   `services/verifier/` dir, `docs/charter.md` §4, and this ticket's text.
   NOT T5/T6 source, NOT this plan's other tickets, NOT any prior discussion.
-- Go, stdlib only. `verify <export.ndjson> [--head <hash>]` → one of the three
-  verdicts in `contracts/evolution.md` EV-7/EV-17: `VALID`, `INVALID at line N`,
-  or `PARTIAL` naming the affected lines. Exit codes 0/1/2 respectively, ≥3 for
-  tool-level errors. Any reason text is advisory and is not conformance-checked
-  — do not invent a reason-code registry; none exists (EV-17).
+- Go, stdlib only — with **one exception**: the ET-4c prime-order subgroup check
+  (`event-types.md`, ADR-0010) needs curve scalar multiplication that is not in
+  the standard library, so this verifier MAY use **`filippo.io/edwards25519`**
+  (the one audited curve library named for the Go verifier), used **ONLY** for the
+  ET-4c check. Everything else — parsing, framing, hashing, the ET-4a/ET-4b
+  integer comparisons, and the Ed25519 verify primitive (ET-5) — stays stdlib
+  (`crypto/ed25519`, `crypto/sha256`, `encoding/*`). `verify <export.ndjson>
+[--head <hash>]` → one of the three verdicts in `contracts/evolution.md`
+  EV-7/EV-17: `VALID`, `INVALID at line N`, or `PARTIAL` naming the affected
+  lines. Exit codes 0/1/2 respectively, ≥3 for tool-level errors. Any reason text
+  is advisory and is not conformance-checked — do not invent a reason-code
+  registry; none exists (EV-17).
 - Must pass every fixture (valid AND adversarial verdicts) from
   `contracts/fixtures/` alone.
 - Every ambiguity the builder hits is reported as a numbered spec-bug list in
@@ -307,8 +314,16 @@ misreading are one implementation wearing two hats.
 - New directory, outside both existing tool packages — suggested
   `tools/verifier-ts/`. Do not extend `@odc/fixtures-gen`; sharing a package
   invites sharing an import.
-- TypeScript, Node stdlib only (`node:crypto` for SHA-256 and Ed25519). No
-  dependency on any workspace package. Same CLI contract as T7:
+- TypeScript, Node stdlib only (`node:crypto` for SHA-256 and Ed25519) — with
+  **one exception**: the ET-4c prime-order subgroup check (`event-types.md`,
+  ADR-0010) needs curve scalar multiplication absent from `node:crypto`, so this
+  verifier MAY use **`@noble/curves`** (the one audited curve library named for
+  the TypeScript verifier), used **ONLY** for the ET-4c check. Everything else,
+  including the ET-4a/ET-4b integer comparisons and the Ed25519 verify primitive
+  (ET-5), stays `node:crypto`. **No dependency on any workspace package** (the
+  isolation rule is unchanged; `@noble/curves` is a third-party audited library,
+  not a workspace package, and its use is confined to ET-4c). Same CLI contract
+  as T7:
   `verify <export.ndjson> [--head <hash>]` → `VALID`, `INVALID at line N`, or
   `PARTIAL` naming the affected lines (`evolution.md` EV-7/EV-17); exit codes
   0/1/2, ≥3 for tool-level errors. Reason text is advisory and is NOT
@@ -327,7 +342,7 @@ misreading are one implementation wearing two hats.
   the overlap is the signal**: two isolated readers tripping on the same
   sentence means the sentence is wrong, not the readers.
 - Acceptance: `pnpm test` green using only fixtures as test data; correct on all
-  75 vectors; spec-bug list (possibly empty) delivered; a reviewer can confirm
+  82 vectors; spec-bug list (possibly empty) delivered; a reviewer can confirm
   from the diff that no workspace package is imported.
 
 **Ordering.** After T7, before T10. It is NOT a blocker for T8 — T8's

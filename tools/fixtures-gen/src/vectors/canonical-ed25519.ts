@@ -1,26 +1,44 @@
 // INVALID vectors for the Ed25519 canonical-encoding predicate (event-types.md
-// ET-4a / ET-4b), decided in ADR-0009.
+// ET-4a / ET-4b, ADR-0009) and the prime-order subgroup requirement (ET-4c,
+// ADR-0010).
 //
 // RFC 8032 leaves the verification predicate underdetermined for non-canonically
 // encoded inputs. Rather than adjudicate a predicate, v1 makes the divergence
 // UNREACHABLE by rejecting non-canonical encodings BEFORE the Ed25519 verify
 // primitive is called (the same move ET-14a makes by capping choice_count):
 //   ET-4a  canonical S (< L) and canonical R (masked, < p) of `sig`;
-//   ET-4b  canonical verification key A (masked, < p).
+//   ET-4b  canonical verification key A (masked, < p);
+//   ET-4c  A lies in the prime-order subgroup: [L]A == 𝒪 AND A != 𝒪.
 //
-// Three vectors, each isolating ONE rule (T5j-style). Only 078 is DISCRIMINATING
-// on today's libraries: it is the case where Go crypto/ed25519 (1.24.7) and Node
-// node:crypto (v22 / OpenSSL 3) both PROCEED to verify a non-canonical key and
-// both ACCEPT a degenerate self-signature, so a verifier lacking ET-4b wrongly
-// reports VALID. 079/080 are NON-DISCRIMINATING: both libraries already reject a
-// non-canonical S (S >= L) and a non-canonical R at the primitive, so a verifier
-// lacking the explicit ET-4a check still returns INVALID — those vectors PIN the
-// agreed verdict and guard against future library drift. All three verdicts were
-// confirmed empirically against both libraries (ADR-0009); the T10 re-audit
-// re-measures, since the result is version-bound.
+// ET-4a/ET-4b (078-080): three vectors, each isolating ONE rule (T5j-style).
+// Only 078 is DISCRIMINATING on today's libraries: it is the case where Go
+// crypto/ed25519 (1.24.7) and Node node:crypto (v22 / OpenSSL 3) both PROCEED to
+// verify a non-canonical key and both ACCEPT a degenerate self-signature, so a
+// verifier lacking ET-4b wrongly reports VALID. 079/080 are NON-DISCRIMINATING:
+// both libraries already reject a non-canonical S (S >= L) and a non-canonical R
+// at the primitive, so a verifier lacking the explicit ET-4a check still returns
+// INVALID — those vectors PIN the agreed verdict and guard against future drift.
+//
+// ET-4c (081-082): both DISCRIMINATING — the key is canonically encoded (ET-4a/
+// ET-4b pass) and the self-signature VERIFIES in both libraries (ET-10 passes),
+// so ONLY the new subgroup check rejects. 081 is a small-order key (the identity),
+// 082 a mixed-order key A = P + T (T order-8 torsion); 082 additionally
+// distinguishes a full prime-order check from a small-order-blocklist-only one,
+// which a small-order key cannot. All verdicts confirmed empirically against both
+// libraries (ADR-0009, ADR-0010); the T10 re-audit re-measures, since the result
+// is version-bound.
+
+import { createHash } from "node:crypto";
+import { ed25519, ED25519_TORSION_SUBGROUP } from "@noble/curves/ed25519.js";
 
 import { bad, chain, lines, type Vector } from "./shared.js";
-import { keypairFromSeed, seedOf, type Keypair } from "../encode.js";
+import {
+  keypairFromSeed,
+  seedOf,
+  signingPreimage,
+  type EventContent,
+  type Keypair,
+} from "../encode.js";
 
 // --- the two canonical bounds (event-types.md ET-4a/ET-4b) -----------------
 
@@ -114,6 +132,104 @@ const participant080 = lines(
   ),
 );
 
+// --- ET-4c: small-order and mixed-order keys (ADR-0010) --------------------
+
+/**
+ * The CANONICAL identity-point encoding (0, 1): y = 1, little-endian, sign bit
+ * clear — `01` `00`x31. Unlike 078's NONCANONICAL_POINT (y = 1 + p), this decodes
+ * to y = 1 < p, so it PASSES ET-4a(ii)/ET-4b and ID-3. It is the order-1 point,
+ * so ET-4c rejects it: [L]A == 𝒪 holds, but the non-identity clause A != 𝒪 fails
+ * (this is exactly the identity case where noble's isTorsionFree() returns true).
+ * Reused with the same DEGENERATE_SIG as 078 — measured to verify in both
+ * libraries under the identity key, so ET-10 passes and ET-4c is the sole fault.
+ */
+const CANONICAL_IDENTITY = `01${"00".repeat(31)}`;
+
+const Point = ed25519.Point;
+/** L = the order of the prime-order subgroup (same value as the constant above). */
+const CURVE_ORDER = Point.CURVE().n;
+
+const sha512 = (...parts: Buffer[]): Buffer =>
+  createHash("sha512").update(Buffer.concat(parts)).digest();
+
+/**
+ * A fixed non-zero secret scalar mod L, from a published seed. Deterministic so a
+ * regenerate is byte-identical (odc-testing: the tree MUST regenerate diff-free).
+ * TEST MATERIAL — the seed is in this file, so anyone can reproduce it.
+ */
+const MIXED_SCALAR =
+  (leToBig(
+    createHash("sha512")
+      .update(Buffer.from("odc-082-s"))
+      .digest()
+      .subarray(0, 32),
+  ) %
+    (CURVE_ORDER - 1n)) +
+  1n;
+
+/**
+ * A = [s]B + T, with T = ED25519_TORSION_SUBGROUP[1] (verified order 8). A is
+ * canonically encoded (ET-4a/ET-4b and ID-3 all pass) but MIXED-order (order 8L):
+ * [L]A = [L]T = [5]T != 𝒪 (because L ≡ 5 (mod 8)) and [8]A = [8]P != 𝒪, so ET-4c
+ * rejects it — and does so for a key that is neither prime-order NOR one of the
+ * eight small-order points, which is what makes it discriminate a full prime-order
+ * check from a small-order blocklist.
+ */
+const MIXED_POINT = Point.BASE.multiply(MIXED_SCALAR).add(
+  Point.fromHex(ED25519_TORSION_SUBGROUP[1] as string),
+);
+const MIXED_KEY = Buffer.from(MIXED_POINT.toBytes());
+const MIXED_KEY_HEX = MIXED_KEY.toString("hex");
+
+/**
+ * Self-signs the mixed-order-key event honestly under its prime-order part
+ * P = [s]B, grinding a DETERMINISTIC nonce until the challenge k ≡ 0 (mod 8).
+ * Then [k]T = 𝒪 (T has order 8), so the honest-under-P verification equation
+ * [S]B = R + [k]P equals R + [k]A and the signature VERIFIES under A. Measured
+ * true in both Go crypto/ed25519 and Node node:crypto, so ET-10 passes and ET-4c
+ * is the sole fault. The nonce comes from a fixed seed + counter, so the grind is
+ * reproducible and the golden bytes are stable across regenerates.
+ */
+const mixedOrderSelfSig = (content: EventContent): string => {
+  const m = signingPreimage(content);
+  const nonceSeed = Buffer.from("odc-082-nonce");
+  for (let counter = 0; counter < 1_000_000; counter += 1) {
+    const r =
+      (leToBig(sha512(nonceSeed, bigToLe32(BigInt(counter)))) %
+        (CURVE_ORDER - 1n)) +
+      1n;
+    const rEnc = Buffer.from(Point.BASE.multiply(r).toBytes());
+    const k = leToBig(sha512(rEnc, MIXED_KEY, m)) % CURVE_ORDER;
+    if (k % 8n === 0n && k !== 0n) {
+      const s = (r + k * MIXED_SCALAR) % CURVE_ORDER;
+      return Buffer.concat([rEnc, bigToLe32(s)]).toString("hex");
+    }
+  }
+  throw new Error("082: no nonce with k ≡ 0 (mod 8) found within bound");
+};
+
+const participant081 = lines(
+  chain((c) =>
+    c.custom(
+      "participant_registered",
+      1,
+      { pubkey: CANONICAL_IDENTITY, sig: DEGENERATE_SIG },
+      {},
+    ),
+  ),
+);
+
+const participant082 = lines(
+  chain((c) =>
+    c.custom(
+      "participant_registered",
+      1,
+      { pubkey: MIXED_KEY_HEX },
+      { signRaw: mixedOrderSelfSig },
+    ),
+  ),
+);
+
 export const canonicalEd25519Vectors: Vector[] = [
   bad(
     "078-noncanonical-a",
@@ -135,5 +251,19 @@ export const canonicalEd25519Vectors: Vector[] = [
     2,
     ["ET-4a"],
     "NON-DISCRIMINATING (pins the verdict). A valid self-signed participant_registered whose sig R has been replaced by a non-canonical point encoding (y = 1 + p >= p, ee ff*30 7f), S left canonical, with the hash RECOMPUTED over the mutated sig to isolate the fault (not a stale digest, not a broken link). The masked R value >= p violates the canonical-R check ET-4a(ii). Non-discriminating on current libraries: both Go and Node reject a non-canonical R at point decode inside the primitive, so a verifier lacking the explicit ET-4a check still returns INVALID via ET-10. The key A and S are both canonical, so ET-4a(ii) is the sole fault.",
+  ),
+  bad(
+    "081-smallorder-key",
+    participant081,
+    2,
+    ["ET-4c"],
+    "DISCRIMINATING. A participant_registered whose pubkey is the CANONICAL identity-point encoding (0100..00, y = 1 < p — so ET-4a(ii)/ET-4b and ID-3 all PASS, unlike 078's non-canonical y = 1 + p) — a small-order key (order 1). Self-signed with the degenerate identity sig R = 0100..00, S = 0, whose S and R are both canonical (ET-4a passes) and which VERIFIES under the identity key in BOTH Go 1.24.7 and Node 22/OpenSSL 3 (identity math collapses [S]B = R + [k]A to identity == identity for any message), so ET-10 passes, participant_id derives, and the line hashes and links. The ONLY failing rule is the new prime-order check ET-4c: [L]A == 𝒪 holds but the non-identity clause A != 𝒪 fails. This is precisely the case where noble's isTorsionFree() returns TRUE, so a subgroup check written as isTorsionFree() alone wrongly ACCEPTS it — the A != 𝒪 clause is load-bearing.",
+  ),
+  bad(
+    "082-mixedorder-key",
+    participant082,
+    2,
+    ["ET-4c"],
+    "DISCRIMINATING, and sharper than 081. A participant_registered whose pubkey is a canonically-encoded MIXED-order key A = P + T, where P = [s]B is prime-order and T is an order-8 torsion point (ED25519_TORSION_SUBGROUP[1]); A has order 8L, is not small-order, and is not one of the eight small-order points. It is self-signed honestly under P with the nonce ground so the challenge k ≡ 0 (mod 8): then [k]T = 𝒪, so [S]B = R + [k]P = R + [k]A and the signature VERIFIES under A — measured true in BOTH Go crypto/ed25519 and Node node:crypto, so ET-10 passes; the key is canonical (ET-4a/ET-4b pass), 64 lowercase hex (ID-3 passes), and the line hashes and links. ET-4c is the sole fault: [L]A = [5]T != 𝒪 (L ≡ 5 mod 8) and [8]A = [8]P != 𝒪. Because A is neither prime-order nor small-order, this vector distinguishes a FULL prime-order check from a small-order-blocklist-only verifier, which 081 cannot.",
   ),
 ];
