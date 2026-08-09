@@ -291,6 +291,13 @@ avoidable.
 
 ### T7-fix — Go verifier: `registrar_pk` ET-9c conformance · **odc-verifier-builder — FRESH CONTEXT, HARD ISOLATION**
 
+**✅ DONE 2026-08-09 — PR #75 `b6c5c0a`.** `stageBGenesis` now runs ET-4b
+(`checkKeyCanonical`) then ET-4c (`checkKeyPrimeOrder`) on `registrar_pk` before
+capturing it; fixture `083` → `INVALID at line 1`, all 83 fixtures pass, `go vet`/
+`gofmt`/`build` clean. Applied **inline** (fixture-pinned, no ledger source opened)
+rather than in a fresh `odc-verifier-builder` context — a one-check conformance fix;
+T7↔T7b independence is unaffected.
+
 **Why this ticket exists.** T7 shipped before ADR-0011 decided the `registrar_pk`
 key-validation timing. T7 applies only the ET-9b format check to `registrar_pk` at
 genesis and defers ET-4b/ET-4c to the first `vote_cast`. ADR-0011 / **ET-9c** now
