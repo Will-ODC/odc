@@ -1,13 +1,14 @@
 # contracts/fixtures/ — golden vectors
 
-**Version:** 10
-**Status:** DRAFTING (Phase 0 · T5, T5j, ADR-0009, ADR-0010). Not frozen.
+**Version:** 11
+**Status:** DRAFTING (Phase 0 · T5, T5j, ADR-0009, ADR-0010, ADR-0011). Not
+frozen.
 
-**82 vectors** — 10 `VALID`, 4 `PARTIAL`, 68 `INVALID`. They are numbered in
+**83 vectors** — 10 `VALID`, 4 `PARTIAL`, 69 `INVALID`. They are numbered in
 category order: `VALID` (`001`–`007`), `PARTIAL` (`008`–`011`), then `INVALID` —
 the envelope and Stage A checks (`012`–`042`), the export framing and canonical
 line form (`043`–`052`), `--head` (`053`–`054`), the Stage B type semantics
-(`055`–`068`), and verdict precedence (`069`–`070`). `071`–`082` are appended
+(`055`–`068`), and verdict precedence (`069`–`070`). `071`–`083` are appended
 after that scheme rather than inserted into it, because **ids never change once
 shipped**: renumbering to keep the categories contiguous would silently
 invalidate a conformance run that cites them.
@@ -70,6 +71,20 @@ prime-order check from a small-order-blocklist-only verifier, which `081` cannot
 ET-4c is exact curve arithmetic (not RFC-8032-underdetermined), so a verifier may
 use one audited curve library for it alone (`filippo.io/edwards25519` for Go,
 `@noble/curves` for TS; ADR-0010).
+
+`083` pins `event-types.md` ET-9c — **when** the ET-4b/ET-4c checks apply to
+`registrar_pk` (ADR-0011). It reuses `081`'s small-order identity key, but on
+`registrar_pk` at **genesis** rather than a participant `pubkey` at line 2. This
+is the one key where declaration and first use differ: genesis is
+operator-self-signed (ET-8), so `registrar_pk` is declared here but not used to
+verify until the first `vote_cast` (ET-17), and `083` carries **no** `vote_cast`.
+The genesis is well-formed in every other respect (operator self-sig verifies,
+`chain_id` derives, the hash matches), so a verifier that defers the `registrar_pk`
+checks to first use reports `VALID`, while ET-9c requires them at the declaration
+line — **`INVALID` at line 1**. `078`–`082` cannot pin this: all place the bad key
+on a self-signed `participant_registered`, where declaration and use coincide. This
+was the single point two independent verifiers could otherwise diverge (found by
+the T7 review); `083` forces both to agree by `contracts/`.
 
 Conformance test data for every implementation that touches events: the Go
 verifier (T7), and later every service's CI. This file documents the record

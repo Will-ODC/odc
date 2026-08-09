@@ -19,6 +19,16 @@ Format (newest first, one entry per merged contracts change):
 
 ---
 
+## fixtures/ README v11 — 2026-08-09 — record fixture 083 (ET-9c) and the new count
+
+- Doc-only: `contracts/fixtures/README.md` v10 → **v11**. Updates the count to
+  **83 vectors (10 VALID, 4 PARTIAL, 69 INVALID)** and the appended range to
+  `071`–`083`, and adds a paragraph for `083-genesis-registrar-pk-smallorder`
+  (ET-9c / ADR-0011 — the `registrar_pk` genesis-timing vector) alongside the
+  081/082 ET-4c description. No vector bytes, `index.json`, or `MANIFEST` change;
+  this is the prose reconciliation the ET-9c change (v7, previous entry) should
+  have carried.
+
 ## event-types.md v7 — 2026-08-09 — registrar_pk key-validation timing at genesis (ADR-0011)
 
 - **`ET-9c` added** to `event-types.md` (v6 → v7): the canonical-encoding check
