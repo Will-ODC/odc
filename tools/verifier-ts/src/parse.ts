@@ -190,7 +190,15 @@ function parseString(r: Reader): { value: string; bytes: Buffer } {
     if (cp > 0x10ffff) throw new ParseFail("UTF-8 out of range");
     cps.push(cp);
   }
-  const value = String.fromCodePoint(...cps);
+  // Build the string in chunks: String.fromCodePoint(...cps) blows the call
+  // stack (`RangeError: Maximum call stack size exceeded`) once cps exceeds
+  // ~130k entries. The spec places no length bound on string values (ET-9
+  // requires `contracts` only non-empty; ES-19 only well-formed UTF-8), so a
+  // long-but-valid payload must still parse.
+  let value = "";
+  for (let i = 0; i < cps.length; i += 8192) {
+    value += String.fromCodePoint(...cps.slice(i, i + 8192));
+  }
   return { value, bytes: Buffer.from(value, "utf8") };
 }
 
@@ -385,8 +393,17 @@ export function parseEventLine(lineBytes: Buffer): ParsedEvent | null {
     return parseEvent(new Reader(lineBytes));
   } catch (e) {
     if (e instanceof ParseFail) return null;
-    // A non-ParseFail (e.g. String.fromCodePoint range) still means the line is
-    // not a conforming event; treat as INVALID rather than crashing the tool.
-    return null;
+    // Any other thrown error is a bug (not a spec-defined rejection) and
+    // should not be silently mapped to INVALID. The previous comment here
+    // claimed String.fromCodePoint could throw a RangeError for an
+    // out-of-range code point, but that path is unreachable: the UTF-8
+    // decoder above already rejects surrogates (line ~189) and code points
+    // > 0x10FFFF (line ~190) before anything is pushed to `cps`. The only
+    // RangeError String.fromCodePoint could realistically throw here — the
+    // call-stack-size error from spreading a huge `cps` array — is fixed at
+    // its source above (chunked concatenation), so it no longer reaches this
+    // catch. Re-throw so a genuine bug surfaces instead of being reported as
+    // a (wrong) INVALID verdict.
+    throw e;
   }
 }

@@ -341,7 +341,14 @@ export function verifyExport(bytes: Buffer, head?: string): Verdict {
   }
 
   if (invalidLines.length > 0) {
-    return { verdict: "INVALID", line: Math.min(...invalidLines) };
+    // Fold instead of Math.min(...invalidLines): invalidLines gets one entry
+    // per framing fault (e.g. every blank line, EX-5), so a large export can
+    // push far more entries than the ~130k argument-spread limit, which would
+    // throw an uncaught RangeError instead of returning a verdict (EV-17).
+    return {
+      verdict: "INVALID",
+      line: invalidLines.reduce((a, b) => Math.min(a, b)),
+    };
   }
   if (partialLines.length > 0) {
     // Ascending by construction (pushed in file order).
