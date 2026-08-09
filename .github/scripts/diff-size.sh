@@ -22,6 +22,18 @@
 # branches to dodge the ceiling would break the one-file-is-one-idea property
 # that makes it reviewable at all.
 #
+# services/verifier/** and tools/verifier-ts/** are exempt (added at T7). Unlike
+# ordinary code, each verifier is a HARD-ISOLATED, single-context, throwaway
+# build: it is written from contracts/ alone in one fresh context (independence is
+# the point — two verifiers must agree by construction), and its fixture suite is
+# green ONLY when the whole verifier is present. Carving it into sub-ceiling
+# stacked PRs produces intermediate branches that neither build nor pass the
+# conformance tests, which breaks the "one PR = one REVIEWABLE idea" property this
+# guard exists to protect — the same reasoning as the fixtures/mockups exemptions
+# above, and it is why phase-0 dispatches each verifier as one ticket. The
+# exemption is dir-scoped: it covers ONLY the two isolated verifier trees. Every
+# other service, and the tools/ generators, stay fully counted.
+#
 # Run locally:  BASE=origin/master HEAD=HEAD bash .github/scripts/diff-size.sh
 set -euo pipefail
 
@@ -51,6 +63,8 @@ done < <(git diff --numstat "$BASE...$HEAD" -- . \
   ':(exclude,glob)**/.turbo/**' \
   ':(exclude,glob)contracts/fixtures/**' \
   ':(exclude,glob)docs/mockups/**' \
+  ':(exclude,glob)services/verifier/**' \
+  ':(exclude,glob)tools/verifier-ts/**' \
   ':(exclude,glob)**/*.md')
 
 echo "Changed lines (excluding lockfiles/generated/markdown/mockups): $total"
