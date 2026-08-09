@@ -47,8 +47,9 @@ fresh-context reviewed (`odc-code-review`). Diff limits apply to code tickets;
 spec tickets are exempt from line limits but not from review.
 
 Order: T1 → T2 may run in parallel with T3 → T4 → T5 → T6 → **T5j** → T7 →
-**T7b** → T8 → T9 → **T9a** → T10. T4 blocks T5/T6. T6 blocks T7/T8. Nothing
-after T2 merges without CI green.
+**T7-fix** → **T7b** → T8 → T9 → **T9a** → T10. T4 blocks T5/T6. T6 blocks T7/T8.
+T7-fix and T7b are independent and both land before T8. Nothing after T2 merges
+without CI green.
 
 Three tickets were added after this line was first written, and each sits where
 it does for a reason, not by number:
@@ -288,6 +289,28 @@ avoidable.
   verifier binary correct on all fixtures; spec-bug list (possibly empty)
   delivered.
 
+### T7-fix — Go verifier: `registrar_pk` ET-9c conformance · **odc-verifier-builder — FRESH CONTEXT, HARD ISOLATION**
+
+**Why this ticket exists.** T7 shipped before ADR-0011 decided the `registrar_pk`
+key-validation timing. T7 applies only the ET-9b format check to `registrar_pk` at
+genesis and defers ET-4b/ET-4c to the first `vote_cast`. ADR-0011 / **ET-9c** now
+requires those checks at the genesis declaration, and fixture `083` (small-order
+`registrar_pk`, no `vote_cast`) expects `INVALID at line 1` — which T7 fails today
+(it reports `VALID`). There is **no Go/verifier CI job**, so nothing flags this
+until the T8 rehearsal; fix it before/with T7b so the rehearsal starts conformant.
+
+**Isolation.** Same rules as T7 — a fresh context built from `contracts/` alone,
+never sees ledger source or this plan's other tickets. It reads only this ticket
+plus `contracts/`; do not hand it ADR-0011 or OPEN-QUESTIONS.
+
+**The change.** Apply ET-4b (canonical encoding) and ET-4c (prime-order) to
+`registrar_pk` at the `genesis` line where it is declared (ET-9a), on the raw
+decoded key octets — not deferred to `vote_cast` (ET-17). See `event-types.md`
+ET-9c. `operator_pk` is unaffected (already checked at genesis via ET-8).
+
+- Acceptance: `go test ./...` green on all **83** fixtures, including `083`
+  (→ `INVALID` at line 1); no other verdict changes; small, scoped diff.
+
 ### T7b — Second independent verifier (TypeScript) · **odc-implementer — FRESH CONTEXT, HARD ISOLATION**
 
 **Why this ticket exists.** ADR-0007 §5 names two independent verifiers agreeing
@@ -341,18 +364,19 @@ misreading are one implementation wearing two hats.
   description — a deliverable, not a failure. **Where that list overlaps T7's,
   the overlap is the signal**: two isolated readers tripping on the same
   sentence means the sentence is wrong, not the readers.
-- **Known divergence point to resolve BEFORE building T7b** (from the T7 review,
-  `memory/OPEN-QUESTIONS.md` — "`registrar_pk` ET-4b/ET-4c timing at genesis"): the
-  spec does not pin whether the canonical/prime-order checks apply to a _declared but
-  unused_ `registrar_pk` at genesis or only at the first `vote_cast`. No fixture
-  disambiguates, so T7 and T7b could silently diverge here — the freeze signal wants
-  them agreeing by construction, not coincidence. Prefer resolving it with a
-  disambiguating fixture (so both verifiers are forced by `contracts/`); T7b is
-  isolated and cannot read OPEN-QUESTIONS, so absent that fixture the required timing
-  MUST be stated in this ticket's text before dispatch.
+- **`registrar_pk` genesis timing — RESOLVED before this ticket (ADR-0011, #72).**
+  The T7 review found the one point two independent verifiers could diverge:
+  whether ET-4b/ET-4c apply to a _declared-but-unused_ `registrar_pk` at genesis or
+  only at first use (`vote_cast`). **ET-9c** now pins them to the genesis
+  declaration, and fixture `083` (small-order `registrar_pk`, no `vote_cast` →
+  INVALID at line 1) enforces it. T7b is isolated and cannot read
+  OPEN-QUESTIONS/ADR-0011, so **this ticket's text MUST state the ET-9c timing
+  explicitly**: apply ET-4b and ET-4c to `registrar_pk` at the genesis line where
+  it is declared, not deferred to `vote_cast`. `083` forces agreement by
+  construction.
 - Acceptance: `pnpm test` green using only fixtures as test data; correct on all
-  82 vectors; spec-bug list (possibly empty) delivered; a reviewer can confirm
-  from the diff that no workspace package is imported.
+  83 vectors (incl. `083`); spec-bug list (possibly empty) delivered; a reviewer
+  can confirm from the diff that no workspace package is imported.
 
 **Ordering.** After T7, before T10. It is NOT a blocker for T8 — T8's
 cross-language check compares fixture **hashes**, not verdicts, and is already
