@@ -132,18 +132,23 @@ reads made impossible, not merely disallowed). Durable facts:
   into non-building pieces. Future verifier PRs won't trip diff-size; every other
   path still counts.
 
-**registrar_pk timing — DECIDED & LANDED (ADR-0011, #72 `d34dbd4`).** The one
-divergence the T7 review found is closed. **`ET-9c`** (`event-types.md` **v6 →
-v7**) pins the ET-4b/ET-4c checks to `registrar_pk`'s **genesis declaration**
-(ET-9a), not its first use at `vote_cast` (ET-17) — Option A (check at
-declaration), chosen over defer/split because ET-4c exists so key legitimacy is
-verifiable from the log, it is the strictest-now/safest-to-loosen-later choice for
-the ballot anchor, and it is the most uniform rule (fewest special cases for two
-verifiers to read differently). Fixture `083-genesis-registrar-pk-smallorder`
-(INVALID line 1) enforces it — master now carries **83 vectors (VALID 10, PARTIAL
-4, INVALID 69).** **Carry-forward: the T7 Go verifier defers today, so it fails
-083** → conformance fix queued (Next). No Go/verifier CI job yet, so master stays
-green and the mismatch surfaces at the T8 rehearsal (the T5j ordering).
+**registrar_pk timing — DECIDED, LANDED & CONFORMED (ADR-0011 #72 `d34dbd4`;
+T7-fix #75 `b6c5c0a`).** The one divergence the T7 review found is fully closed.
+**`ET-9c`** (`event-types.md` **v6 → v7**) pins the ET-4b/ET-4c checks to
+`registrar_pk`'s **genesis declaration** (ET-9a), not its first use at `vote_cast`
+(ET-17) — Option A (check at declaration), chosen over defer/split because ET-4c
+exists so key legitimacy is verifiable from the log, it is the
+strictest-now/safest-to-loosen-later choice for the ballot anchor, and it is the
+most uniform rule (fewest special cases for two verifiers to read differently).
+Fixture `083-genesis-registrar-pk-smallorder` (INVALID line 1) enforces it —
+master carries **83 vectors (VALID 10, PARTIAL 4, INVALID 69)**; `fixtures/README`
+→ v11 (#74). **T7-fix (#75) landed the Go verifier's conformance:** `stageBGenesis`
+now runs ET-4b then ET-4c on `registrar_pk` before capturing it, so `083` → INVALID
+line 1 and all 83 vectors pass. Applied **inline** (fixture-pinned, no ledger source
+opened) rather than in a fresh `odc-verifier-builder` context — acceptable for a
+one-check conformance fix, and T7↔T7b independence is unaffected (T7b is still a
+separate isolated build). **Still no Go/verifier CI job** — the suite runs by hand /
+at the T8 rehearsal; adding one is a queued pipeline follow-up (see Next).
 
 ## Direction decisions — see the ADRs; carry-forward consequences below
 
@@ -162,19 +167,11 @@ green and the mismatch surfaces at the T8 rehearsal (the T5j ordering).
 
 ## Next
 
-**T7 COMPLETE (#69); the `registrar_pk` timing divergence is RESOLVED (ADR-0011,
-#72 — ET-9c + fixture `083`).** Remaining Phase 0, in order (1 and 2 are
-independent and both land before T8):
+**T7 COMPLETE (#69) and ET-9c-CONFORMANT (T7-fix #75); the `registrar_pk` timing
+divergence is fully closed (ADR-0011).** T7b is the sole remaining head ticket
+before T8. Remaining Phase 0, in order:
 
-1. **T7-fix — Go verifier ET-9c conformance** (`odc-verifier-builder`, fresh
-   context — same isolation rules as T7, never sees ledger source). T7 currently
-   defers ET-4b/ET-4c on `registrar_pk` to `vote_cast`, so against new fixture
-   `083` it reports `VALID` where ET-9c requires `INVALID at line 1`. Apply the two
-   checks to `registrar_pk` at the genesis line where it is declared. Small and
-   scoped; there is **no Go/verifier CI job**, so nothing flags it before the T8
-   rehearsal — do it before/with T7b so the rehearsal starts conformant. Its ticket
-   text must carry the ET-9c timing (the isolated context can't read ADR-0011).
-2. **T7b — 2nd independent verifier (TypeScript), fresh-context HARD isolation**
+1. **T7b — 2nd independent verifier (TypeScript), fresh-context HARD isolation**
    (`odc-implementer`; excludes `services/verifier/` too — independence is
    per-context, not per-language, so T7b must not be a transliteration of T7).
    New dir `tools/verifier-ts/`, no workspace-package import; Node stdlib only,
@@ -183,9 +180,15 @@ independent and both land before T8):
    OPEN-QUESTIONS/ADR-0011, so **its ticket text must state the ET-9c timing
    explicitly** (`registrar_pk` validated at its genesis declaration, not deferred);
    fixture `083` enforces it either way, forcing agreement by construction.
-3. **Then:** T8 (rehearsal loop) → T9 (security audit) → T9a (RC → Phase 1). T10
+2. **Then:** T8 (rehearsal loop) → T9 (security audit) → T9a (RC → Phase 1). T10
    re-audit deferred (re-measures the ET-4c library predicate — see the Ed25519
    Done entry).
+
+**Also owed (tooling, no ticket):** a **Go/verifier CI job** running the verifier's
+fixture-driven `go test ./...`. It runs by hand only today — which is why fixture
+`083` didn't turn CI red when it landed ahead of T7-fix. Add one before/at T8 so
+verifier regressions and future fixtures are caught automatically; folds into the
+T8/pipeline work (`odc-pipeline`).
 
 **Owed with no ticket (how the last backlog rotted):** the **structure-aware fuzz
 as a committed test** — value-level, not byte-level (a byte fuzzer misses the
