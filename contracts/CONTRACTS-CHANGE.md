@@ -19,6 +19,71 @@ Format (newest first, one entry per merged contracts change):
 
 ---
 
+## event-types.md v6 · fixtures/ README v10 — 2026-08-08 — Ed25519 prime-order verification keys (ADR-0010)
+
+- **`ET-4c` added** to `event-types.md` (v5 → v6): a verifier MUST reject any
+  verification key not in the Ed25519 **prime-order subgroup** — on the point `A`
+  decoded from the already-canonical encoding (after ET-4a/ET-4b), **`[L]A == 𝒪`
+  (identity) AND `A != 𝒪`** (equivalently `[L]A == 𝒪 AND [8]A != 𝒪`). This rejects
+  all small-order keys (including the identity `0100…00`) and all mixed-order
+  keys, for the same three keys ET-4b covers — `operator_pk`/`registrar_pk`
+  (ET-8/ET-13/ET-17) and `participant_registered.pubkey` (ET-10). ET-4c runs
+  **after** ET-4a/ET-4b (on the canonical point) and is **additional** to ET-4b:
+  a canonically-encoded mixed-order key passes ET-4b and is caught only here. It
+  is also additional to ET-5: a small-order/mixed-order key can carry a `sig` that
+  **verifies** under it, so a verifier omitting ET-4c wrongly accepts. **This
+  REVERSES ADR-0009's prime-order exclusion** (ADR-0009 is now superseded in part;
+  its ET-4a/ET-4b canonical-encoding decision stands). The ET-4b informative note,
+  rule-index and acid-test were updated to match.
+- **Load-bearing caveat (measured).** ET-4c is worded `[L]A == 𝒪 AND A != 𝒪`,
+  **not** bare "torsion-free": `@noble/curves`' `isTorsionFree()` returns **true**
+  for the identity key, which ET-4c must reject. A noble-based verifier satisfies
+  ET-4c with `A.isTorsionFree() && !A.is0()`, a `filippo.io/edwards25519`-based one
+  with `[L]A == 𝒪 && A != 𝒪`; these compute the identical decision on every
+  measured point only with the explicit non-identity clause.
+- **Measurement basis (empirical, GO).** Using the two audited curve libraries
+  the spec now allows one-of per verifier — `filippo.io/edwards25519 v1.2.0` (Go)
+  and `@noble/curves` `ed25519` (TS): the two AGREE on the prime-order predicate
+  for all 11 points tested (normal key → accept; all 8 small-order torsion points
+  → reject; 2 mixed-order points → reject), 5/5 runs; the derived torsion set
+  matched noble's shipped `ED25519_TORSION_SUBGROUP` constant. Both isolating
+  fixtures verify in **both** Go `crypto/ed25519` and Node `node:crypto` (so ET-10
+  passes and they isolate ET-4c alone). ET-4c is exact curve arithmetic (not
+  RFC-8032-underdetermined), so it is more version-stable than ET-4a/ET-4b — but
+  it needs curve scalar multiplication outside both stdlibs, so the T7/T7b
+  **stdlib-only constraint is relaxed to permit one named audited curve library
+  used ONLY for the ET-4c check** (`filippo.io/edwards25519` for Go,
+  `@noble/curves` for TS). The result is version-bound; the T10 re-audit
+  re-measures.
+- **Two vectors, `081`/`082`** (`INVALID` at line 2; `INVALID` 66 → 68, total
+  80 → 82), each isolating ET-4c and each **DISCRIMINATING** today (a verifier
+  omitting ET-4c reports `VALID`). `081-smallorder-key` is a `participant_registered`
+  whose `pubkey` is the canonical identity `0100…00` with the degenerate identity
+  self-sig `R = 0100…00`, `S = 0`; canonical (ET-4a/ET-4b pass), 64 lowercase hex
+  (ID-3), self-sig verifies in both libraries (ET-10). `082-mixedorder-key` carries
+  a canonically-encoded MIXED-order `pubkey` `A = P + T` (T order-8 torsion),
+  self-signed honestly under `P` with the nonce ground so `k ≡ 0 (mod 8)` (then
+  `[k]T = 𝒪`, so the signature verifies under `A`); it additionally distinguishes
+  a full prime-order check from a small-order-blocklist-only verifier, which a
+  small-order fixture cannot. Isolation was confirmed by feeding each committed
+  line-2 signing preimage through **both** Go `crypto/ed25519` and Node
+  `node:crypto` (both verify), and by a from-spec reimplementation of ET-4a/ET-4b
+  plus an ET-4c curve check in `test/canonical-ed25519.test.ts` (each vector fails
+  exactly ET-4c and passes ET-4a/ET-4b/ID-3/ET-10). The `082` construction is
+  **deterministic** (fixed seed for `s` and the nonce grind), verified by
+  regenerating twice with byte-identical output. Built via the existing `custom(…)`
+  mechanism plus a new `signRaw` generator option for the crafted mixed-order
+  signature (the `sigTransform`/`custom` lineage of the ET-4a/ET-4b work); the
+  generator gains `@noble/curves` as a devDependency (build tooling only — never
+  shipped, and not the stdlib-constrained verifier).
+- **Documents reconciled:** `docs/decisions/0009-*` gains a "Superseded in part by
+  ADR-0010" note (its ET-4a/ET-4b decision stands). `docs/plans/phase-0.md` T7/T7b
+  relaxed to permit the one audited curve library for ET-4c only, with the stale
+  "75 vectors"/"75 declared fixture verdicts" counts corrected. `memory/OPEN-QUESTIONS.md`'s
+  DECIDED Ed25519 stub updated from prime-order EXCLUDED to REQUIRED. `memory/STATE.md`
+  is intentionally **not** touched (post-merge protocol). No other document
+  outside `contracts/` stated the exclusion.
+
 ## event-types.md v5 · fixtures/ README v9 — 2026-08-08 — Ed25519 canonical-encoding predicate (ADR-0009)
 
 - **`ET-4a` and `ET-4b` added** to `event-types.md` (v4 → v5), pinning the
