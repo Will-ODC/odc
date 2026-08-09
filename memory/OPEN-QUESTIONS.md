@@ -51,7 +51,7 @@ choice}` at eligibility-check time — trust-by-policy per charter §10 v1,
   the T10 re-audit re-measures.
 - **`registrar_pk` ET-4b/ET-4c timing at genesis — the one place two conforming
   verifiers can diverge.** (Found by the fresh-context Opus review of T7,
-  2026-08-09.) At the `genesis` line, `registrar_pk` is *declared* but is not used
+  2026-08-09.) At the `genesis` line, `registrar_pk` is _declared_ but is not used
   to verify anything — genesis is operator-self-signed (ET-8). It is first used to
   verify at the first `vote_cast` (ET-17). T7's Go verifier therefore applies only
   the **ET-9b format** check to `registrar_pk` at genesis and defers the canonical
@@ -71,7 +71,7 @@ choice}` at eligibility-check time — trust-by-policy per charter §10 v1,
   exists to expose (phase-0 T7b, "the overlap is the signal").
   **Resolution: add a disambiguating fixture before/at T7b** — a `genesis` with a
   format-valid but small-order (or non-canonical) `registrar_pk`, one variant
-  followed by a `vote_cast` and one without — so *both* verifiers are forced to the
+  followed by a `vote_cast` and one without — so _both_ verifiers are forced to the
   same behaviour by `contracts/` rather than each guessing. T7b is hard-isolated and
   will not read this file, so absent such a fixture its ticket text must state the
   required timing explicitly. Additive (EV-5), so not a freeze blocker **provided no

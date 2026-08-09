@@ -343,8 +343,8 @@ misreading are one implementation wearing two hats.
   sentence means the sentence is wrong, not the readers.
 - **Known divergence point to resolve BEFORE building T7b** (from the T7 review,
   `memory/OPEN-QUESTIONS.md` — "`registrar_pk` ET-4b/ET-4c timing at genesis"): the
-  spec does not pin whether the canonical/prime-order checks apply to a *declared but
-  unused* `registrar_pk` at genesis or only at the first `vote_cast`. No fixture
+  spec does not pin whether the canonical/prime-order checks apply to a _declared but
+  unused_ `registrar_pk` at genesis or only at the first `vote_cast`. No fixture
   disambiguates, so T7 and T7b could silently diverge here — the freeze signal wants
   them agreeing by construction, not coincidence. Prefer resolving it with a
   disambiguating fixture (so both verifiers are forced by `contracts/`); T7b is
