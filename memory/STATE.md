@@ -108,6 +108,29 @@ per the "measure, do not reason from memory" direction:
   INVALID 68).** Version-bound; the **T10 re-audit re-measures** both libraries'
   predicate and the cofactorless assumption.
 
+**T7 — Go verifier (COMPLETE, #69 `67c5d6e`).** The first tool that emits the three
+conformance verdicts (`VALID` / `INVALID at line N` / `PARTIAL`), built from
+`contracts/` alone in a hard-isolated fresh context (its worktree was stripped of
+`memory/`, `docs/decisions/`, other services, and the T5/T6 generator — forbidden
+reads made impossible, not merely disallowed). Durable facts:
+
+- **82/82 fixtures pass**, `go test`/`go vet` green. Stdlib-only except
+  `filippo.io/edwards25519`, scoped to the ET-4c prime-order check (ADR-0010).
+  Hand-written byte-exact JSON parser (NOT `encoding/json`, which fails open on
+  EX-7..EX-10). Verdict precedence INVALID > PARTIAL > VALID.
+- **First reviewed slice with no real defect** — fresh-context Opus review APPROVE,
+  no blocker, could not construct a wrong-verdict input. Breaks the
+  fifteen-for-fifteen streak; treat it as earned, not as license to skip review.
+  Sonnet consistency pass clean bar a stale service `CLAUDE.md`, fixed in-branch.
+- **Three spec-bugs delivered** (a ticket deliverable), all in corners no fixture
+  freezes. The load-bearing one is the `registrar_pk` timing divergence — now an
+  OPEN-QUESTIONS entry and a T7b-brief pointer (see Next).
+- **Diff-size exemption (#70 `a0c4d2d`):** `services/verifier/**` and
+  `tools/verifier-ts/**` are now exempt from the 600-line budget in
+  `diff-size.sh` — a verifier is one isolated whole-unit build, splittable only
+  into non-building pieces. Future verifier PRs won't trip diff-size; every other
+  path still counts.
+
 ## Direction decisions — see the ADRs; carry-forward consequences below
 
 - **ADR-0007** — freeze deferred to operational use; three states DRAFTING →
@@ -125,31 +148,34 @@ per the "measure, do not reason from memory" direction:
 
 ## Next
 
-**T5j + the Ed25519 predicate (ADR-0009/0010) COMPLETE.** The two blockers that
-guarded the start of T7 — `ET-9b` genesis key format and the RFC 8032 divergence —
-are both closed. **T7 is unblocked.** Remaining Phase 0, in order:
+**T7 COMPLETE (#69).** T7b is the next ticket. Remaining Phase 0, in order:
 
-1. **T7 — Go verifier, fresh-context isolation** (`odc-verifier-builder`; must
-   never see ledger source or this discussion). First ticket that emits the three
-   verdicts. It MUST implement ET-4a/ET-4b (stdlib integer comparisons) and **ET-4c**
-   (MAY use `filippo.io/edwards25519` for the subgroup check ONLY, per ADR-0010),
-   plus ET-9b. Its brief is in `docs/plans/phase-0.md`; **see the coverage-gap and
-   fuzz notes below** — the 82 vectors are strong on what they cover and silent
-   elsewhere.
-2. **Then:** T7b (2nd independent TS verifier; `services/verifier/` on its exclusion
-   list, `@noble/curves` permitted for ET-4c only) → T8 (rehearsal loop) →
-   T9 (security audit) → T9a (RC → Phase 1). T10 re-audit deferred (re-measures the
-   ET-4c library predicate — see the Ed25519 Done entry).
+1. **T7b — 2nd independent verifier (TypeScript), fresh-context HARD isolation**
+   (`odc-implementer`; excludes `services/verifier/` too — independence is
+   per-context, not per-language, so T7b must not be a transliteration of T7).
+   New dir `tools/verifier-ts/`, no workspace-package import; Node stdlib only,
+   `@noble/curves` permitted for the ET-4c check ONLY. Same CLI/verdict contract as
+   T7. Gates the **freeze decision** (ADR-0007 §5). **Before dispatch, resolve the
+   `registrar_pk` ET-4b/4c-timing divergence** (OPEN-QUESTIONS entry + the T7b
+   ticket pointer): T7 defers those checks on a declared-but-unused genesis
+   `registrar_pk` to the first `vote_cast`, no fixture pins it, so T7b could
+   silently diverge — the freeze signal wants agreement by construction, not
+   coincidence. Prefer a disambiguating fixture (forces both verifiers); T7b is
+   isolated and can't read OPEN-QUESTIONS, so absent that fixture, state the
+   required timing in its ticket text.
+2. **Then:** T8 (rehearsal loop) → T9 (security audit) → T9a (RC → Phase 1). T10
+   re-audit deferred (re-measures the ET-4c library predicate — see the Ed25519
+   Done entry).
 
 **Owed with no ticket (how the last backlog rotted):** the **structure-aware fuzz
 as a committed test** — value-level, not byte-level (a byte fuzzer misses the
 crash class a value fuzz finds instantly). Bundle with #57's six deferred
 envelope-guard survivors (`verify.ts:93-102`, same class) and point both at
-T7/T8's briefs.
+T7b/T8's briefs.
 
 **Coverage is thinner than 82 vectors suggests.** Roughly half of ~130 rule ids
 have no citing vector. `ET-4a`–`ET-4c` are now covered (vectors `078`–`082`);
-remaining real gaps for T7's brief: `ES-30`–`ES-32` (sig field), `ET-3`, `EX-14`
+remaining real gaps for the T7b/T8 briefs: `ES-30`–`ES-32` (sig field), `ET-3`, `EX-14`
 (head), most of `ids.md`, `EV-11`–`EV-14` (correction/retraction, incl. EV-13's
 ballot-plane prohibition). **`HA-7` is cited by no vector** despite six notes
 invoking it. Strong on what it covers, silent elsewhere — not a complete
@@ -180,9 +206,12 @@ one-choice") and the other queued direction ADRs. **Read the ET-22 warning in
   (`format / lint / typecheck`, `diff-size`, `guard-tests`, `guard`), linear
   history, no bypass. **STATE.md updates ride their own follow-up PR** — feature
   branches conflict, so update this file after the ticket merges.
-- **Every reviewed slice has had a real defect — fifteen for fifteen.** Treat a
-  clean review as the surprise. (Defect shapes: session memory
-  `odc-review-lessons`; PR/merge handoff: `pr-handoff`.)
+- **Fifteen of the first sixteen reviewed slices had a real defect; T7 (#69) is
+  the sole clean one — and it was the most-isolated build, reviewed hardest.**
+  Read that as: independence + a fresh hard-hammering review is what a clean pass
+  costs, not that reviews can now be trusted to pass. Treat a clean review as the
+  surprise it still is. (Defect shapes: session memory `odc-review-lessons`;
+  PR/merge handoff: `pr-handoff`.)
 - **Merging deletes the head branch** (auto-delete ON), so a later push to that
   name silently creates a NEW branch with no PR — watch for `[new branch]` in the
   push output. **Agent sessions CAN delete remote branches** (`git push origin
