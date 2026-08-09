@@ -80,9 +80,33 @@ session memory `t6-slicing-and-handoff`; the durable facts:
 - HA-9 example fixed: int `0` vs string `""` (byte-identical but for the type tag)
   replaces the old int `1` / string `"1"` example, which differed by length and so
   proved nothing about the tag. No byte, digest, or fixture changed.
-- **The Ed25519 canonical-encoding predicate was NOT part of this ticket** — see
-  "Next" #1. ET-9b is hex-string format only; the RFC 8032 divergence question is
-  still open.
+- **The Ed25519 canonical-encoding predicate was NOT part of this ticket** — it
+  landed separately as ADR-0009/ADR-0010 (below).
+
+**Ed25519 verification predicate — DECIDED & LANDED (ADR-0009 #66, ADR-0010 #67).**
+The RFC 8032 divergence question flagged through T5j is now closed on the bytes,
+per the "measure, do not reason from memory" direction:
+
+- **ADR-0009 (#66)** pins the predicate at the **encoding** level: `event-types.md`
+  **ET-4a** (canonical `sig` — `S < L`, `R` masked `< p`) and **ET-4b** (canonical
+  verification key `A` masked `< p`), checked on raw decoded bytes before the verify
+  primitive, reject-don't-repair (D5) — making RFC 8032's underdetermination
+  unreachable. Fixtures `078` (ET-4b, discriminating), `079`/`080` (ET-4a,
+  verdict-pinning).
+- **ADR-0010 (#67)** adds the **subgroup** level: **ET-4c** requires every
+  verification key be prime-order — `[L]A == 𝒪 AND A != 𝒪` — rejecting all
+  small-order AND mixed-order keys, so key **legitimacy** is verifiable from the
+  log, not trusted-by-policy. Worded with the non-identity clause deliberately
+  (noble's `isTorsionFree()` returns true for the identity — the `A != 𝒪` clause is
+  load-bearing). Measurement: `filippo.io/edwards25519` (Go) and `@noble/curves`
+  (TS) AGREE on the predicate for all 11 points tested, so the **stdlib-only rule is
+  relaxed to permit one named audited curve library per verifier, for the ET-4c
+  check ALONE** (T7/T7b briefs updated in `docs/plans/phase-0.md`). Fixtures `081`
+  (small-order, discriminating) + `082` (mixed-order, distinguishes a full
+  prime-order check from a small-order blocklist).
+- `event-types.md` → **v6**. Master now carries **82 vectors (VALID 10, PARTIAL 4,
+  INVALID 68).** Version-bound; the **T10 re-audit re-measures** both libraries'
+  predicate and the cofactorless assumption.
 
 ## Direction decisions — see the ADRs; carry-forward consequences below
 
@@ -101,24 +125,21 @@ session memory `t6-slicing-and-handoff`; the durable facts:
 
 ## Next
 
-**T5j COMPLETE (#64).** Remaining Phase 0, in order:
+**T5j + the Ed25519 predicate (ADR-0009/0010) COMPLETE.** The two blockers that
+guarded the start of T7 — `ET-9b` genesis key format and the RFC 8032 divergence —
+are both closed. **T7 is unblocked.** Remaining Phase 0, in order:
 
-1. **Ed25519 verification predicate — DECIDE BEFORE T7 STARTS.** NOT closed by
-   T5j: `ET-9b` fixed only the genesis keys' hex-string format (case/length). The
-   RFC 8032 divergence is still open — non-canonical `R`/`A`/`S` encodings,
-   small-order / non-prime-order public keys, and cofactored vs cofactorless
-   verification. Go's `crypto/ed25519` and Node's `node:crypto` can disagree on
-   identical bytes, both conformant, and nothing in `contracts/` pins ours; T7 (Go)
-   and T7b (TS) would each silently take their library's default. Direction set
-   (OPEN-QUESTIONS): **measure, do not reason from memory** (Go 1.24.7 + Node in
-   the container); prefer making the divergence **unreachable** (reject
-   non-canonical / non-prime-order keys as a format check, à la ET-14a) over
-   adjudicating a predicate. Any vectors go under EV-5, built T5j-style (each fails
-   for ONE reason). **No v1 fixture may freeze a verdict that depends on these
-   edge cases** — a wrong frozen verdict is unfixable. Full write-up in
-   `OPEN-QUESTIONS.md`.
-2. **Then:** T7 (Go verifier, fresh-context isolation) → T7b (2nd TS verifier) →
-   T8 (rehearsal loop) → T9 (security audit) → T9a (RC → Phase 1). T10 deferred.
+1. **T7 — Go verifier, fresh-context isolation** (`odc-verifier-builder`; must
+   never see ledger source or this discussion). First ticket that emits the three
+   verdicts. It MUST implement ET-4a/ET-4b (stdlib integer comparisons) and **ET-4c**
+   (MAY use `filippo.io/edwards25519` for the subgroup check ONLY, per ADR-0010),
+   plus ET-9b. Its brief is in `docs/plans/phase-0.md`; **see the coverage-gap and
+   fuzz notes below** — the 82 vectors are strong on what they cover and silent
+   elsewhere.
+2. **Then:** T7b (2nd independent TS verifier; `services/verifier/` on its exclusion
+   list, `@noble/curves` permitted for ET-4c only) → T8 (rehearsal loop) →
+   T9 (security audit) → T9a (RC → Phase 1). T10 re-audit deferred (re-measures the
+   ET-4c library predicate — see the Ed25519 Done entry).
 
 **Owed with no ticket (how the last backlog rotted):** the **structure-aware fuzz
 as a committed test** — value-level, not byte-level (a byte fuzzer misses the
@@ -126,12 +147,13 @@ crash class a value fuzz finds instantly). Bundle with #57's six deferred
 envelope-guard survivors (`verify.ts:93-102`, same class) and point both at
 T7/T8's briefs.
 
-**Coverage is thinner than 77 vectors suggests.** ~60 of ~125 rule ids have no
-citing vector. Real gaps for T7's brief: `ES-30`–`ES-32` (sig field), `ET-3`–
-`ET-5`, `EX-14` (head), most of `ids.md`, `EV-11`–`EV-14` (correction/retraction,
-incl. EV-13's ballot-plane prohibition). **`HA-7` is cited by no vector** despite
-six notes invoking it. Strong on what it covers, silent elsewhere — not a
-complete conformance suite.
+**Coverage is thinner than 82 vectors suggests.** Roughly half of ~130 rule ids
+have no citing vector. `ET-4a`–`ET-4c` are now covered (vectors `078`–`082`);
+remaining real gaps for T7's brief: `ES-30`–`ES-32` (sig field), `ET-3`, `EX-14`
+(head), most of `ids.md`, `EV-11`–`EV-14` (correction/retraction, incl. EV-13's
+ballot-plane prohibition). **`HA-7` is cited by no vector** despite six notes
+invoking it. Strong on what it covers, silent elsewhere — not a complete
+conformance suite.
 
 **Two known fixture warts, deliberately unfixed** (`016-seq-gap` and
 `040-line-deleted` overlap at line 3; `016`'s bytes carry `seq [1,2,4,4]`).
