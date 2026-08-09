@@ -49,6 +49,33 @@ choice}` at eligibility-check time — trust-by-policy per charter §10 v1,
   `079`/`080` (ET-4a, verdict-pinning), `081` small-order + `082` mixed-order
   (ET-4c, both discriminating), each isolating one rule under EV-5. Version-bound;
   the T10 re-audit re-measures.
+- **`registrar_pk` ET-4b/ET-4c timing at genesis — the one place two conforming
+  verifiers can diverge.** (Found by the fresh-context Opus review of T7,
+  2026-08-09.) At the `genesis` line, `registrar_pk` is *declared* but is not used
+  to verify anything — genesis is operator-self-signed (ET-8). It is first used to
+  verify at the first `vote_cast` (ET-17). T7's Go verifier therefore applies only
+  the **ET-9b format** check to `registrar_pk` at genesis and defers the canonical
+  (ET-4b) and prime-order (ET-4c) checks to that first `vote_cast`. The reading is
+  well-grounded — ET-4b/4c parenthesise `registrar_pk` with **(ET-17)** and site the
+  check "before the ET-5 verify primitive", which for `registrar_pk` is only reached
+  at `vote_cast` — but the spec's word "decodes" does not say whether the bare
+  genesis declaration counts. **No fixture disambiguates:** 076/077 are format-only,
+  and 078–082 are all on `participant_registered.pubkey` at line 2, never on
+  `registrar_pk` at genesis. So a verifier that instead ran ET-4b/4c on
+  `registrar_pk` at genesis is equally conformant today, and the two would diverge
+  on a real input — **verdict** (a no-`vote_cast` chain whose genesis carries a
+  non-canonical or small-order `registrar_pk`: one says `INVALID` at line 1, the
+  other `VALID`) or **line number** (a chain that does vote). ADR-0007 §5 makes "two
+  independent verifiers agree" a freeze-readiness signal; here they would agree only
+  by coincidence of independent readings, not by construction — exactly what T7b
+  exists to expose (phase-0 T7b, "the overlap is the signal").
+  **Resolution: add a disambiguating fixture before/at T7b** — a `genesis` with a
+  format-valid but small-order (or non-canonical) `registrar_pk`, one variant
+  followed by a `vote_cast` and one without — so *both* verifiers are forced to the
+  same behaviour by `contracts/` rather than each guessing. T7b is hard-isolated and
+  will not read this file, so absent such a fixture its ticket text must state the
+  required timing explicitly. Additive (EV-5), so not a freeze blocker **provided no
+  v1 fixture freezes a wrong verdict here first.**
 - **⚠️ Ballot expressiveness vs receipt-freeness — a live contradiction in
   merged text.** (Recovered 2026-08-02 from
   `claude/golden-fixtures-voting-verify-7urqku`, never landed.) `docs/charter.md`

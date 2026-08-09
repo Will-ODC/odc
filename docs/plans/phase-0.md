@@ -341,6 +341,15 @@ misreading are one implementation wearing two hats.
   description — a deliverable, not a failure. **Where that list overlaps T7's,
   the overlap is the signal**: two isolated readers tripping on the same
   sentence means the sentence is wrong, not the readers.
+- **Known divergence point to resolve BEFORE building T7b** (from the T7 review,
+  `memory/OPEN-QUESTIONS.md` — "`registrar_pk` ET-4b/ET-4c timing at genesis"): the
+  spec does not pin whether the canonical/prime-order checks apply to a *declared but
+  unused* `registrar_pk` at genesis or only at the first `vote_cast`. No fixture
+  disambiguates, so T7 and T7b could silently diverge here — the freeze signal wants
+  them agreeing by construction, not coincidence. Prefer resolving it with a
+  disambiguating fixture (so both verifiers are forced by `contracts/`); T7b is
+  isolated and cannot read OPEN-QUESTIONS, so absent that fixture the required timing
+  MUST be stated in this ticket's text before dispatch.
 - Acceptance: `pnpm test` green using only fixtures as test data; correct on all
   82 vectors; spec-bug list (possibly empty) delivered; a reviewer can confirm
   from the diff that no workspace package is imported.
