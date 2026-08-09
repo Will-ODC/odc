@@ -38,6 +38,29 @@ No direct pushes to `master`, no exceptions, including the operator.
 - pre-push: unit tests of changed services
 - Never hook anything slower; slow hooks get bypassed and then trusted falsely.
 
+## Reproduce the guards locally before pushing
+
+The CI guards are plain scripts — run the ones your diff touches **before** you
+push, so a PR lands green on the first try instead of round-tripping through red
+CI. This is the standing loop for every branch:
+
+- `pnpm -s format:check` — prettier. Markdown is checked (docs, memory, skills);
+  `contracts/` is excluded (`.prettierignore`). Fix with `prettier --write` and
+  eyeball the diff (it is usually just `*em*` → `_em_`).
+- `BASE=origin/master HEAD=HEAD bash .github/scripts/diff-size.sh` — the scripts
+  are the source of truth for the ceiling and the exemptions.
+- Touching `contracts/**`: `.github/scripts/contracts-guard.sh` (needs the touched
+  spec's `Version:` bumped **and** a `CONTRACTS-CHANGE.md` entry). If fixtures
+  changed, regenerate them and run `.github/scripts/fixtures-manifest.sh`. Note
+  the guards diff `origin/master...HEAD`, so **commit first**, then run them.
+- The changed unit's own tests (`go test ./...`, `pnpm --filter <pkg> test`, etc.).
+
+**Fresh-clone caveat (Claude Code on the web).** lefthook's hooks are NOT
+installed until `pnpm install` runs, so the pre-commit format/lint hook may not
+fire on the first commits of a new session — run `format:check` by hand rather
+than trusting the hook to catch it. Once `pnpm install` has run, the hooks are
+live for the rest of the session.
+
 ## Why small branches (the point of all of this)
 
 Small branches simulate a ticket/Jira pipeline for AI development: each branch
