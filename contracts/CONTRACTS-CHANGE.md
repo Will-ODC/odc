@@ -19,6 +19,29 @@ Format (newest first, one entry per merged contracts change):
 
 ---
 
+## event-types.md v7 — 2026-08-09 — registrar_pk key-validation timing at genesis (ADR-0011)
+
+- **`ET-9c` added** to `event-types.md` (v6 → v7): the canonical-encoding check
+  ET-4b and the prime-order check ET-4c apply to `operator_pk` and `registrar_pk`
+  **at the `genesis` line where each is declared** (ET-9a), not deferred to a
+  key's first use to verify a signature (`registrar_pk` first used at `vote_cast`,
+  ET-17). A `genesis` whose `registrar_pk` is non-canonical (ET-4b) or small/
+  mixed-order (ET-4c) is `INVALID` at the genesis line on **any** chain, including
+  one with no `vote_cast`. Resolves the one `registrar_pk`-timing divergence the
+  fresh-context T7 review surfaced (`memory/OPEN-QUESTIONS.md`): without this, a
+  verifier could defer the checks and report a different verdict — or the same
+  verdict at a different line — than a conforming peer, the sole point they could
+  diverge by construction.
+- The ET-4b and ET-4c parentheticals for `registrar_pk`, the rule-index, and the
+  acid-test walkthrough were updated to point at ET-9c. Recorded in **ADR-0011**.
+- **Fixture `083-genesis-registrar-pk-smallorder`** (INVALID at line 1) pins it: a
+  well-formed operator-self-signed `genesis` whose `registrar_pk` is the canonical
+  identity encoding (small-order), on a chain with no `vote_cast`. Reuses `081`'s
+  small-order key; 82 → **83 vectors** (VALID 10, PARTIAL 4, INVALID 69). Verdict
+  is DECLARED, per Option A of the divergence analysis; the Go verifier (T7) is
+  brought into conformance separately (it currently defers, so it would report
+  VALID here — a queued follow-up, surfaced at the T8 rehearsal).
+
 ## event-types.md v6 · fixtures/ README v10 — 2026-08-08 — Ed25519 prime-order verification keys (ADR-0010)
 
 - **`ET-4c` added** to `event-types.md` (v5 → v6): a verifier MUST reject any
