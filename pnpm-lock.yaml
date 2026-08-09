@@ -49,6 +49,19 @@ importers:
         specifier: ^20.14.0
         version: 20.19.43
 
+  tools/verifier-ts:
+    dependencies:
+      '@noble/curves':
+        specifier: ^2.3.0
+        version: 2.3.0
+    devDependencies:
+      '@types/node':
+        specifier: ^20.19.43
+        version: 20.19.43
+      typescript:
+        specifier: ^5.9.3
+        version: 5.9.3
+
 packages:
 
   '@eslint-community/eslint-utils@4.9.1':
