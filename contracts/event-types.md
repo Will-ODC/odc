@@ -1,8 +1,8 @@
 # Event Types — contracts/event-types.md
 
-**Version:** 6
-**Status:** DRAFTING (Phase 0 · T3, amended T4a, T5i, T5j, ADR-0009, ADR-0010).
-Not frozen.
+**Version:** 7
+**Status:** DRAFTING (Phase 0 · T3, amended T4a, T5i, T5j, ADR-0009, ADR-0010,
+ADR-0011). Not frozen.
 **Companion specs:** `event-schema.md` (envelope), `ids.md` (identifiers),
 `hashing.md` (preimage — T4).
 
@@ -65,7 +65,8 @@ Each payload table column: **key** · **type** · **constraint**.
   `S`, so the format is necessary but not sufficient.
 - **ET-4b.** _Canonical verification-key encoding._ The same underdetermination
   affects the verification key. For **every** verification key `A` that a
-  verifier hex-decodes — `operator_pk` (ET-8, ET-13), `registrar_pk` (ET-17), and
+  verifier hex-decodes — `operator_pk` (ET-8, ET-13), `registrar_pk` (ET-17, but
+  validated at its genesis declaration per ET-9c), and
   `participant_registered.pubkey` (ET-10) — a verifier MUST reject the event
   (`INVALID`), never repairing the value (D5), unless the 32 decoded octets of
   `A`, with bit 255 (the most-significant bit of octet 31) cleared and the
@@ -98,7 +99,8 @@ Each payload table column: **key** · **type** · **constraint**.
 - **ET-4c.** _Prime-order verification key._ Let `A` be the point obtained by
   decoding a verification key's **already-canonical** encoding — i.e. after ET-4b
   has passed on its raw bytes. For **every** verification key `A` a verifier
-  decodes — `operator_pk` (ET-8, ET-13), `registrar_pk` (ET-17), and
+  decodes — `operator_pk` (ET-8, ET-13), `registrar_pk` (ET-17, but
+  validated at its genesis declaration per ET-9c), and
   `participant_registered.pubkey` (ET-10) — a verifier MUST reject the event
   (`INVALID`), never repairing the value (D5), **unless `A` lies in the
   prime-order subgroup**:
@@ -191,6 +193,27 @@ declares the operator key that later `issue_created` events are signed with.
   (ET-8). A verifier that omits this format check therefore accepts a `genesis`
   that ET-9b requires it to reject, with nothing else on the line to signal the
   fault.
+- **ET-9c.** _Genesis key-validation timing._ The canonical-encoding check ET-4b
+  and the prime-order check ET-4c apply to `operator_pk` and `registrar_pk` **at
+  the `genesis` line where each is declared** (ET-9a), on the raw decoded key
+  octets — **not** deferred to a key's first later use to verify a signature
+  (`operator_pk` at ET-13, `registrar_pk` at ET-17). A `genesis` whose
+  `operator_pk` or `registrar_pk` decodes to a non-canonical point (ET-4b) or to
+  a small-order or mixed-order key (ET-4c) is therefore `INVALID` **at the
+  `genesis` line**, on **any** chain — including one that carries no `vote_cast`
+  and so never exercises `registrar_pk` at ET-17. This is a distinct requirement
+  only for `registrar_pk`: `operator_pk` is already used to verify the genesis
+  self-signature on this same line (ET-8), whereas `registrar_pk` is declared here
+  but first _used_ only at a later `vote_cast`, so without this rule a verifier
+  could defer its ET-4b/ET-4c checks and accept a `genesis` that declares an
+  illegitimate registrar key. ET-4c exists precisely so key legitimacy is
+  verifiable from the log itself (ADR-0010), and ET-9b already checks
+  `registrar_pk`'s _format_ at genesis; ET-9c fixes that the encoding and
+  subgroup checks are applied at the same point. Two conforming verifiers would
+  otherwise diverge here — on the **verdict** (a no-`vote_cast` chain: `INVALID`
+  at line 1 vs `VALID`) or the **line** (a voting chain: line 1 vs the
+  `vote_cast` line) — the one place they could disagree by construction rather
+  than by coincidence (fixture `083`; ADR-0011).
 
 ## `participant_registered` (self-signed by the registrant)
 
@@ -314,6 +337,7 @@ off-log eligibility check.
 | `chain_id` derivation (operator key only)      | ET-7              |
 | Two genesis keys: operator vs registrar        | ET-9a             |
 | Genesis key format (operator/registrar pk)     | ET-9b             |
+| Genesis key validation timing (at declaration) | ET-9c             |
 | participant self-signing + id derivation       | ET-10, ET-11      |
 | Title length + forbidden characters            | ET-14             |
 | `choice_count` range                           | ET-14a            |
@@ -336,7 +360,10 @@ canonically encoded but small-order or mixed-order — so it passes ET-4b and ev
 carries a `sig` that verifies under it — is rejected by the prime-order check
 (ET-4c); that a `genesis` whose `operator_pk` or `registrar_pk`
 is not 64 lowercase hex is rejected even though an uppercase key's bytes would
-still derive `chain_id` and verify the self-signature (ET-9b); that a `title`
+still derive `chain_id` and verify the self-signature (ET-9b); that a `genesis`
+whose `registrar_pk` is canonically encoded but small-order or mixed-order is
+rejected at the `genesis` line where the key is declared, even on a chain with
+no `vote_cast` that never uses it (ET-9c); that a `title`
 over 200 scalars or with a control character is rejected (ET-14); that an `issue_created` with `choice_count`
 outside 2–64 is rejected (ET-14a); that a vote for a not-yet-created issue, or
 with `choice` outside `[0, choice_count)`, is rejected (ET-18, ET-18a); and that

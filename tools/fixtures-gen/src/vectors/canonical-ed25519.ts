@@ -27,18 +27,24 @@
 // which a small-order key cannot. All verdicts confirmed empirically against both
 // libraries (ADR-0009, ADR-0010); the T10 re-audit re-measures, since the result
 // is version-bound.
+//
+// ET-9c (083): reuses 081's small-order key but on registrar_pk at GENESIS, to
+// pin WHEN ET-4b/ET-4c apply to registrar_pk — at declaration, not deferred to
+// first use at vote_cast (ADR-0011). See the block comment above that vector.
 
 import { createHash } from "node:crypto";
 import { ed25519, ED25519_TORSION_SUBGROUP } from "@noble/curves/ed25519.js";
 
-import { bad, chain, lines, type Vector } from "./shared.js";
+import { bad, chain, headless, lines, type Vector } from "./shared.js";
 import {
+  chainId,
   keypairFromSeed,
   seedOf,
   signingPreimage,
   type EventContent,
   type Keypair,
 } from "../encode.js";
+import { OPERATOR } from "../chain.js";
 
 // --- the two canonical bounds (event-types.md ET-4a/ET-4b) -----------------
 
@@ -230,6 +236,35 @@ const participant082 = lines(
   ),
 );
 
+// --- ET-4c/ET-9c: registrar_pk validation TIMING at genesis (ADR-0011) -------
+//
+// 078-082 all place the bad key on participant_registered.pubkey at line 2 —
+// where the key is DECLARED and USED to verify on the same line, because that
+// event is self-signed (ET-10). So they cannot distinguish "check the key at
+// declaration" from "check it at first use". registrar_pk is the one key where
+// the two differ: it is declared at genesis (ET-9a) but not used to verify until
+// the first vote_cast (ET-17), and genesis is operator-self-signed (ET-8), so a
+// chain with no vote_cast never exercises registrar_pk. 083 is that chain — a
+// well-formed genesis whose registrar_pk is the canonical identity encoding
+// (small-order). ET-9c pins the checks to the declaration line, so the verdict
+// is INVALID at line 1; a verifier that deferred ET-4b/ET-4c on registrar_pk to
+// first use would report VALID. This is the sole divergence the T7 review found.
+const genesis083 = lines(
+  headless((c) =>
+    c.custom(
+      "genesis",
+      1,
+      {
+        chain_id: chainId(OPERATOR.publicKeyHex),
+        contracts: "contracts-v1",
+        operator_pk: OPERATOR.publicKeyHex,
+        registrar_pk: CANONICAL_IDENTITY,
+      },
+      { signer: OPERATOR },
+    ),
+  ),
+);
+
 export const canonicalEd25519Vectors: Vector[] = [
   bad(
     "078-noncanonical-a",
@@ -265,5 +300,12 @@ export const canonicalEd25519Vectors: Vector[] = [
     2,
     ["ET-4c"],
     "DISCRIMINATING, and sharper than 081. A participant_registered whose pubkey is a canonically-encoded MIXED-order key A = P + T, where P = [s]B is prime-order and T is an order-8 torsion point (ED25519_TORSION_SUBGROUP[1]); A has order 8L, is not small-order, and is not one of the eight small-order points. It is self-signed honestly under P with the nonce ground so the challenge k ≡ 0 (mod 8): then [k]T = 𝒪, so [S]B = R + [k]P = R + [k]A and the signature VERIFIES under A — measured true in BOTH Go crypto/ed25519 and Node node:crypto, so ET-10 passes; the key is canonical (ET-4a/ET-4b pass), 64 lowercase hex (ID-3 passes), and the line hashes and links. ET-4c is the sole fault: [L]A = [5]T != 𝒪 (L ≡ 5 mod 8) and [8]A = [8]P != 𝒪. Because A is neither prime-order nor small-order, this vector distinguishes a FULL prime-order check from a small-order-blocklist-only verifier, which 081 cannot.",
+  ),
+  bad(
+    "083-genesis-registrar-pk-smallorder",
+    genesis083,
+    1,
+    ["ET-4c", "ET-9c"],
+    "DISCRIMINATING on the registrar_pk validation TIMING (ET-9c, ADR-0011). A genesis whose registrar_pk is the CANONICAL identity-point encoding (0100..00, y = 1 < p) — the same small-order key 081 puts on a participant pubkey, so ET-9b hex-format, ET-4a(ii)/ET-4b and ID-3 all PASS. Genesis is operator-self-signed under the real operator_pk (ET-8), so chain_id derives (ET-7), the self-signature verifies, and the hash covers the small-order registrar_pk and matches: the genesis is well-formed in every respect EXCEPT that registrar_pk is not prime-order (ET-4c). registrar_pk is DECLARED here (ET-9a) but not USED to verify until the first vote_cast (ET-17), and this chain has none — so a verifier that defers ET-4b/ET-4c on registrar_pk to first use reports VALID, while ET-9c requires the checks at the genesis line where the key is declared, giving INVALID at line 1. This is the single point where two otherwise-conforming verifiers diverged (found by the fresh-context T7 review; ADR-0011): 078-082 are all on participant_registered.pubkey at line 2, where declaration and use coincide because that event is self-signed, so none of them pins this timing. As in 081, the ET-4c fault is the non-identity clause A != 𝒪.",
   ),
 ];
