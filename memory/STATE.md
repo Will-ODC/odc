@@ -104,9 +104,10 @@ per the "measure, do not reason from memory" direction:
   check ALONE** (T7/T7b briefs updated in `docs/plans/phase-0.md`). Fixtures `081`
   (small-order, discriminating) + `082` (mixed-order, distinguishes a full
   prime-order check from a small-order blocklist).
-- `event-types.md` → **v6**. Master now carries **82 vectors (VALID 10, PARTIAL 4,
-  INVALID 68).** Version-bound; the **T10 re-audit re-measures** both libraries'
-  predicate and the cofactorless assumption.
+- `event-types.md` → **v6**; this brought the count to **82 vectors (VALID 10,
+  PARTIAL 4, INVALID 68)** — since raised to 83 by ADR-0011 (below). Version-bound;
+  the **T10 re-audit re-measures** both libraries' predicate and the cofactorless
+  assumption.
 
 **T7 — Go verifier (COMPLETE, #69 `67c5d6e`).** The first tool that emits the three
 conformance verdicts (`VALID` / `INVALID at line N` / `PARTIAL`), built from
@@ -123,13 +124,26 @@ reads made impossible, not merely disallowed). Durable facts:
   fifteen-for-fifteen streak; treat it as earned, not as license to skip review.
   Sonnet consistency pass clean bar a stale service `CLAUDE.md`, fixed in-branch.
 - **Three spec-bugs delivered** (a ticket deliverable), all in corners no fixture
-  freezes. The load-bearing one is the `registrar_pk` timing divergence — now an
-  OPEN-QUESTIONS entry and a T7b-brief pointer (see Next).
+  freezes. The load-bearing one — the `registrar_pk` timing divergence — is now
+  **RESOLVED** (ADR-0011 / #72; see the next entry and Next).
 - **Diff-size exemption (#70 `a0c4d2d`):** `services/verifier/**` and
   `tools/verifier-ts/**` are now exempt from the 600-line budget in
   `diff-size.sh` — a verifier is one isolated whole-unit build, splittable only
   into non-building pieces. Future verifier PRs won't trip diff-size; every other
   path still counts.
+
+**registrar_pk timing — DECIDED & LANDED (ADR-0011, #72 `d34dbd4`).** The one
+divergence the T7 review found is closed. **`ET-9c`** (`event-types.md` **v6 →
+v7**) pins the ET-4b/ET-4c checks to `registrar_pk`'s **genesis declaration**
+(ET-9a), not its first use at `vote_cast` (ET-17) — Option A (check at
+declaration), chosen over defer/split because ET-4c exists so key legitimacy is
+verifiable from the log, it is the strictest-now/safest-to-loosen-later choice for
+the ballot anchor, and it is the most uniform rule (fewest special cases for two
+verifiers to read differently). Fixture `083-genesis-registrar-pk-smallorder`
+(INVALID line 1) enforces it — master now carries **83 vectors (VALID 10, PARTIAL
+4, INVALID 69).** **Carry-forward: the T7 Go verifier defers today, so it fails
+083** → conformance fix queued (Next). No Go/verifier CI job yet, so master stays
+green and the mismatch surfaces at the T8 rehearsal (the T5j ordering).
 
 ## Direction decisions — see the ADRs; carry-forward consequences below
 
@@ -148,22 +162,28 @@ reads made impossible, not merely disallowed). Durable facts:
 
 ## Next
 
-**T7 COMPLETE (#69).** T7b is the next ticket. Remaining Phase 0, in order:
+**T7 COMPLETE (#69); the `registrar_pk` timing divergence is RESOLVED (ADR-0011,
+#72 — ET-9c + fixture `083`).** Remaining Phase 0, in order (1 and 2 are
+independent and both land before T8):
 
-1. **T7b — 2nd independent verifier (TypeScript), fresh-context HARD isolation**
+1. **T7-fix — Go verifier ET-9c conformance** (`odc-verifier-builder`, fresh
+   context — same isolation rules as T7, never sees ledger source). T7 currently
+   defers ET-4b/ET-4c on `registrar_pk` to `vote_cast`, so against new fixture
+   `083` it reports `VALID` where ET-9c requires `INVALID at line 1`. Apply the two
+   checks to `registrar_pk` at the genesis line where it is declared. Small and
+   scoped; there is **no Go/verifier CI job**, so nothing flags it before the T8
+   rehearsal — do it before/with T7b so the rehearsal starts conformant. Its ticket
+   text must carry the ET-9c timing (the isolated context can't read ADR-0011).
+2. **T7b — 2nd independent verifier (TypeScript), fresh-context HARD isolation**
    (`odc-implementer`; excludes `services/verifier/` too — independence is
    per-context, not per-language, so T7b must not be a transliteration of T7).
    New dir `tools/verifier-ts/`, no workspace-package import; Node stdlib only,
    `@noble/curves` permitted for the ET-4c check ONLY. Same CLI/verdict contract as
-   T7. Gates the **freeze decision** (ADR-0007 §5). **Before dispatch, resolve the
-   `registrar_pk` ET-4b/4c-timing divergence** (OPEN-QUESTIONS entry + the T7b
-   ticket pointer): T7 defers those checks on a declared-but-unused genesis
-   `registrar_pk` to the first `vote_cast`, no fixture pins it, so T7b could
-   silently diverge — the freeze signal wants agreement by construction, not
-   coincidence. Prefer a disambiguating fixture (forces both verifiers); T7b is
-   isolated and can't read OPEN-QUESTIONS, so absent that fixture, state the
-   required timing in its ticket text.
-2. **Then:** T8 (rehearsal loop) → T9 (security audit) → T9a (RC → Phase 1). T10
+   T7. Gates the **freeze decision** (ADR-0007 §5). T7b is isolated and can't read
+   OPEN-QUESTIONS/ADR-0011, so **its ticket text must state the ET-9c timing
+   explicitly** (`registrar_pk` validated at its genesis declaration, not deferred);
+   fixture `083` enforces it either way, forcing agreement by construction.
+3. **Then:** T8 (rehearsal loop) → T9 (security audit) → T9a (RC → Phase 1). T10
    re-audit deferred (re-measures the ET-4c library predicate — see the Ed25519
    Done entry).
 

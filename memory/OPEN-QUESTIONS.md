@@ -50,8 +50,11 @@ choice}` at eligibility-check time — trust-by-policy per charter §10 v1,
   (ET-4c, both discriminating), each isolating one rule under EV-5. Version-bound;
   the T10 re-audit re-measures.
 - **`registrar_pk` ET-4b/ET-4c timing at genesis — the one place two conforming
-  verifiers can diverge.** (Found by the fresh-context Opus review of T7,
-  2026-08-09.) At the `genesis` line, `registrar_pk` is _declared_ but is not used
+  verifiers can diverge.** → **DECIDED (ADR-0011, 2026-08-09): check at
+  declaration (Option A).** `ET-9c` added to `event-types.md` (v6 → v7); fixture
+  `083` (small-order `registrar_pk`, no `vote_cast`) pins `INVALID` at line 1.
+  Context and carry-forward retained below. (Found by the fresh-context Opus
+  review of T7, 2026-08-09.) At the `genesis` line, `registrar_pk` is _declared_ but is not used
   to verify anything — genesis is operator-self-signed (ET-8). It is first used to
   verify at the first `vote_cast` (ET-17). T7's Go verifier therefore applies only
   the **ET-9b format** check to `registrar_pk` at genesis and defers the canonical
@@ -69,13 +72,16 @@ choice}` at eligibility-check time — trust-by-policy per charter §10 v1,
   independent verifiers agree" a freeze-readiness signal; here they would agree only
   by coincidence of independent readings, not by construction — exactly what T7b
   exists to expose (phase-0 T7b, "the overlap is the signal").
-  **Resolution: add a disambiguating fixture before/at T7b** — a `genesis` with a
-  format-valid but small-order (or non-canonical) `registrar_pk`, one variant
-  followed by a `vote_cast` and one without — so _both_ verifiers are forced to the
-  same behaviour by `contracts/` rather than each guessing. T7b is hard-isolated and
-  will not read this file, so absent such a fixture its ticket text must state the
-  required timing explicitly. Additive (EV-5), so not a freeze blocker **provided no
-  v1 fixture freezes a wrong verdict here first.**
+  **Resolved (ADR-0011): check at declaration.** `ET-9c` fixes the timing, and
+  fixture `083` is the recommended disambiguating vector's no-`vote_cast`
+  small-order variant (INVALID at line 1) — added additively under EV-5 with no
+  earlier verdict frozen wrong, so the "provided no v1 fixture freezes a wrong
+  verdict first" caveat held. **Carry-forward:** the T7 Go verifier currently
+  defers ET-4b/ET-4c on `registrar_pk` to `vote_cast`, so against `083` it reports
+  `VALID` — a queued conformance fix (its own isolated `odc-verifier-builder`
+  ticket; no Go/verifier CI job yet, so it surfaces at the T8 rehearsal — the T5j
+  ordering, fixtures first). T7b is hard-isolated and cannot read this file, so its
+  ticket text (phase-0 T7b) states the ET-9c timing explicitly.
 - **⚠️ Ballot expressiveness vs receipt-freeness — a live contradiction in
   merged text.** (Recovered 2026-08-02 from
   `claude/golden-fixtures-voting-verify-7urqku`, never landed.) `docs/charter.md`
