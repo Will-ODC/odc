@@ -199,11 +199,26 @@ func stageBGenesis(st *vstate, e *event) (string, bool) {
 	}
 
 	opBytes := hexToBytes(operatorPK)
+	regBytes := hexToBytes(registrarPK)
 
 	// ET-7: chain_id == sha256(operator_pk bytes).
 	sum := sha256.Sum256(opBytes)
 	if chainID != hex.EncodeToString(sum[:]) {
 		return "chain_id not sha256(operator_pk) (ET-7)", false
+	}
+
+	// ET-9c: the ET-4b canonical-encoding and ET-4c prime-order checks apply to
+	// registrar_pk HERE, at its genesis declaration — not deferred to its first
+	// use at vote_cast (ET-17). operator_pk gets the same gates via the ET-8
+	// self-sig verify below, but registrar_pk signs nothing at genesis, so a
+	// declared-but-unused non-canonical or small/mixed-order registrar_pk must be
+	// rejected here or a no-vote_cast chain would wrongly verify. ET-4c requires an
+	// already-ET-4b-canonical key, so ET-4b runs first.
+	if !checkKeyCanonical(regBytes) { // ET-4b
+		return "registrar_pk non-canonical encoding (ET-4b/ET-9c)", false
+	}
+	if !checkKeyPrimeOrder(regBytes) { // ET-4c
+		return "registrar_pk not prime-order (ET-4c/ET-9c)", false
 	}
 
 	// ET-8: self-signed by operator_pk, with ET-4a/ET-4b/ET-4c gates.
@@ -212,7 +227,7 @@ func stageBGenesis(st *vstate, e *event) (string, bool) {
 	}
 
 	st.opPK = opBytes
-	st.regPK = hexToBytes(registrarPK)
+	st.regPK = regBytes
 	st.haveKey = true
 	return "", true
 }
