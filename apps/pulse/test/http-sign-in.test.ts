@@ -20,7 +20,8 @@ async function setup(
   overrides: Partial<ServerDeps> = {},
   omitSecureFlag = false,
 ) {
-  const clock = () => START;
+  let now = START;
+  const clock = () => now;
   const mailer = new ConsoleMailer(() => {});
   const voters = new InMemoryVoterStore();
   const signer = new SessionSigner(SECRET, { ttlSeconds: 3600, clock });
@@ -55,6 +56,9 @@ async function setup(
     mailer,
     voters,
     signer,
+    after(seconds: number) {
+      now = new Date(now.getTime() + seconds * 1000);
+    },
     tokenFor(email: string): string {
       const link = mailer.lastTo(email)?.body as string;
       return new URL(link).searchParams.get("token") as string;
@@ -142,6 +146,43 @@ test("a_link_can_only_be_clicked_once", async () => {
     url: `/api/sign-in/redeem?token=${token}`,
   });
   assert.equal(looked.statusCode, 410);
+});
+
+test("an_expired_link_reads_the_same_way_from_both_verbs", async () => {
+  // The two must never disagree. Without the expiry check in inspect(), GET
+  // answers "ready" for a link POST refuses — a live-looking page whose button
+  // fails. Every other test here uses a frozen clock, so nothing else expires
+  // a link at the route layer.
+  const h = await setup();
+  await h.app.inject({
+    method: "POST",
+    url: "/api/sign-in",
+    payload: { email: "ada@student.ubc.ca" },
+  });
+  const token = h.tokenFor("ada@student.ubc.ca");
+
+  h.after(14 * 60);
+  assert.equal(
+    (await h.app.inject({ url: `/api/sign-in/redeem?token=${token}` })).json()
+      .status,
+    "ready",
+  );
+
+  h.after(2 * 60);
+  const looked = await h.app.inject({
+    url: `/api/sign-in/redeem?token=${token}`,
+  });
+  assert.equal(looked.statusCode, 410);
+  assert.equal(looked.json().error, "expired");
+
+  const clicked = await h.app.inject({
+    method: "POST",
+    url: "/api/sign-in/redeem",
+    payload: { token },
+  });
+  assert.equal(clicked.statusCode, 410);
+  assert.equal(clicked.json().error, "expired");
+  assert.equal(clicked.cookies.length, 0);
 });
 
 test("an_invented_or_missing_token_signs_nobody_in", async () => {
