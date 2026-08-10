@@ -1,0 +1,16 @@
+{
+  "name": "@odc/pulse",
+  "version": "0.0.0",
+  "private": true,
+  "type": "module",
+  "description": "Pulse — charter-exempt epic: email-claim voting with a one-screen story UI.",
+  "scripts": {
+    "build": "tsc -p tsconfig.json",
+    "test": "node --test dist/test/*.test.js",
+    "lint": "eslint src test",
+    "typecheck": "tsc -p tsconfig.json --noEmit"
+  },
+  "devDependencies": {
+    "@types/node": "^20.14.0"
+  }
+}

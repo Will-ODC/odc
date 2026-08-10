@@ -1,4 +1,7 @@
 packages:
+  # Pulse — a separate, charter-exempt epic (apps/pulse/CLAUDE.md). Lives beside
+  # services/ rather than inside services/web, which is charter-governed.
+  - "apps/*"
   # Phase-0 build tooling (fixture generator, rehearsal builder). Not shipped —
   # these produce the byte-exact artifacts in contracts/ and never run in prod.
   - "tools/*"
