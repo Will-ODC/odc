@@ -76,6 +76,24 @@ export function assertWholeMinute(ts: string): string {
 /** ET-3: which key signs each type. `undefined` means the type carries no sig. */
 type Signer = Keypair | undefined;
 
+/**
+ * Rewrites a freshly-signed `sig` (128 lowercase hex) before it is inserted into
+ * the payload and covered by `hash`. Used only by the Ed25519 canonical-encoding
+ * vectors, which need a real signature over the correct preimage whose R or S is
+ * then replaced with a non-canonical encoding.
+ */
+type SigTransform = (sigHex: string) => string;
+
+/**
+ * Produces the `sig` (128 lowercase hex) directly from the sealed content, in
+ * place of a `Keypair` sign. Used only by the ET-4c subgroup vectors (082),
+ * whose verification key is a mixed-order point with no `Keypair` discrete log:
+ * the signature has to be crafted over the event's own signing preimage
+ * (HA-15 — `content` still carries the `pubkey` this signs under, `sig` absent),
+ * so the callback is handed the finished `content` rather than a private key.
+ */
+type RawSigner = (content: EventContent) => string;
+
 // --- v1 payload rules the builder can check -------------------------------
 //
 // The builders used to accept anything, so a value that was illegal BY ACCIDENT
@@ -235,6 +253,8 @@ export class ChainBuilder {
     payload: Payload,
     ts: string,
     signer: Signer,
+    sigTransform?: SigTransform,
+    signRaw?: RawSigner,
   ): Event {
     const content: EventContent = {
       seq: this.nextSeq,
@@ -244,9 +264,22 @@ export class ChainBuilder {
       ts,
       prev_hash: this.prevHash,
     };
-    const sealed: EventContent = signer
-      ? { ...content, payload: { ...payload, sig: signEvent(content, signer) } }
-      : content;
+    let sealed: EventContent = content;
+    if (signRaw) {
+      // A crafted signature over content's own signing preimage (HA-15), for a
+      // key with no Keypair (082's mixed-order A). `hash` still covers the sig.
+      sealed = { ...content, payload: { ...payload, sig: signRaw(content) } };
+    } else if (signer) {
+      // Sign over the correct signing preimage first (HA-15), THEN mutate the
+      // resulting sig if asked, THEN compute `hash` over the mutated sig — so the
+      // signing preimage and the `hash` are both correct and the ONLY defect is
+      // the sig bytes. The canonical-S / non-canonical-R vectors need exactly
+      // this: a real signature whose S or R is replaced, with the hash relinked
+      // so the vector fails for the encoding alone and not for a stale digest.
+      let sig = signEvent(content, signer);
+      if (sigTransform) sig = sigTransform(sig);
+      sealed = { ...content, payload: { ...payload, sig } };
+    }
     const event: Event = { ...sealed, hash: eventHash(sealed) };
     this.events.push(event);
     return event;
@@ -337,7 +370,12 @@ export class ChainBuilder {
     type: string,
     version: number,
     payload: Payload,
-    opts: { signer?: Signer; minutes?: number } = {},
+    opts: {
+      signer?: Signer;
+      minutes?: number;
+      sigTransform?: SigTransform;
+      signRaw?: RawSigner;
+    } = {},
   ): Event {
     return this.seal(
       type,
@@ -345,6 +383,8 @@ export class ChainBuilder {
       payload,
       tsAt(opts.minutes ?? this.nextSeq),
       opts.signer,
+      opts.sigTransform,
+      opts.signRaw,
     );
   }
 }

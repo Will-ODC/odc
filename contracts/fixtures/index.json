@@ -948,6 +948,103 @@
         "EX-9"
       ],
       "note": "U+0085 NEXT LINE, a C1 character, in a title. VALID: ET-14 forbids the C0 block and U+007F and stops there, so a C1 character is permitted. This is the over-rejection counterpart to `074`, and it is aimed at a specific plausible implementation — Go's `unicode.IsControl` reports true across U+007F-U+009F as well as C0, so the obvious one-call check rejects this legal title while still passing `074`. No vector before this one carries a C1 character, so that error was undetectable. As with `074` the character is not escaped: EX-9 escapes only U+0000-U+001F, so this is stored as its literal UTF-8 octets c2 85."
+    },
+    {
+      "id": "076-genesis-operator-pk-uppercase",
+      "export": "vectors/076-genesis-operator-pk-uppercase.ndjson",
+      "expect": {
+        "verdict": "INVALID",
+        "line": 1
+      },
+      "cites": [
+        "ET-9b"
+      ],
+      "note": "operator_pk in UPPERCASE hex. ET-9b requires 64 lowercase hex, rejected and never lowercased to conform (D5). The uppercase string decodes to the same 32 bytes, so chain_id = sha256(those bytes) still matches (ET-7) and the genesis self-signature still verifies under the decoded key (ET-8); the hash is recomputed over the uppercase payload and matches. Only the case is wrong, so a verifier omitting the ET-9b format check reports VALID."
+    },
+    {
+      "id": "077-genesis-registrar-pk-uppercase",
+      "export": "vectors/077-genesis-registrar-pk-uppercase.ndjson",
+      "expect": {
+        "verdict": "INVALID",
+        "line": 1
+      },
+      "cites": [
+        "ET-9b"
+      ],
+      "note": "registrar_pk in UPPERCASE hex. Same defect as 076 on the OTHER key — the one an implementation is likelier to skip, since registrar_pk never enters chain_id (ET-7) and is unused until a vote_cast arrives (ET-17). chain_id derives from operator_pk (lowercase) and matches, and the genesis is operator-self-signed so the signature never consults registrar_pk; the hash covers the uppercase registrar_pk and matches. Only ET-9b fails."
+    },
+    {
+      "id": "078-noncanonical-a",
+      "export": "vectors/078-noncanonical-a.ndjson",
+      "expect": {
+        "verdict": "INVALID",
+        "line": 2
+      },
+      "cites": [
+        "ET-4b"
+      ],
+      "note": "DISCRIMINATING. A participant_registered whose pubkey is the non-canonical identity-point encoding y = 1 + p (ee ff*30 7f) — 64 lowercase hex, so ES-31/ID-3 hex-format passes — self-signed with the degenerate sig R = canonical identity (0100..00), S = 0. Measured in BOTH Go 1.24.7 and Node 22/OpenSSL 3: the non-canonical key is accepted by the decoder and the degenerate signature VERIFIES under it (identity math makes [S]B = R + [k]A collapse to identity == identity for any message), so ET-10 (self-sig verifies) PASSES, participant_id still derives, and the line hashes and links. The ONLY failing rule is the new canonical-A check ET-4b. A verifier lacking ET-4b proceeds to verify, the degenerate sig passes, and it wrongly reports VALID."
+    },
+    {
+      "id": "079-noncanonical-s",
+      "export": "vectors/079-noncanonical-s.ndjson",
+      "expect": {
+        "verdict": "INVALID",
+        "line": 2
+      },
+      "cites": [
+        "ET-4a"
+      ],
+      "note": "NON-DISCRIMINATING (pins the verdict). A valid self-signed participant_registered whose sig S has been replaced by S + L — still 64 bytes, sign bit clear, and ES-31 128-hex — with the hash RECOMPUTED over the mutated sig so the vector fails for the encoding alone and not for a stale digest (HA-14) or a bad chain link. S >= L violates the canonical-S check ET-4a(i). On current libraries this is non-discriminating: both Go and Node already reject S >= L inside the verify primitive, so a verifier lacking the explicit ET-4a check still returns INVALID via ET-10. The vector pins the agreed verdict and guards against future drift; R and the key A are both canonical, so ET-4a(i) is the sole fault."
+    },
+    {
+      "id": "080-noncanonical-r",
+      "export": "vectors/080-noncanonical-r.ndjson",
+      "expect": {
+        "verdict": "INVALID",
+        "line": 2
+      },
+      "cites": [
+        "ET-4a"
+      ],
+      "note": "NON-DISCRIMINATING (pins the verdict). A valid self-signed participant_registered whose sig R has been replaced by a non-canonical point encoding (y = 1 + p >= p, ee ff*30 7f), S left canonical, with the hash RECOMPUTED over the mutated sig to isolate the fault (not a stale digest, not a broken link). The masked R value >= p violates the canonical-R check ET-4a(ii). Non-discriminating on current libraries: both Go and Node reject a non-canonical R at point decode inside the primitive, so a verifier lacking the explicit ET-4a check still returns INVALID via ET-10. The key A and S are both canonical, so ET-4a(ii) is the sole fault."
+    },
+    {
+      "id": "081-smallorder-key",
+      "export": "vectors/081-smallorder-key.ndjson",
+      "expect": {
+        "verdict": "INVALID",
+        "line": 2
+      },
+      "cites": [
+        "ET-4c"
+      ],
+      "note": "DISCRIMINATING. A participant_registered whose pubkey is the CANONICAL identity-point encoding (0100..00, y = 1 < p — so ET-4a(ii)/ET-4b and ID-3 all PASS, unlike 078's non-canonical y = 1 + p) — a small-order key (order 1). Self-signed with the degenerate identity sig R = 0100..00, S = 0, whose S and R are both canonical (ET-4a passes) and which VERIFIES under the identity key in BOTH Go 1.24.7 and Node 22/OpenSSL 3 (identity math collapses [S]B = R + [k]A to identity == identity for any message), so ET-10 passes, participant_id derives, and the line hashes and links. The ONLY failing rule is the new prime-order check ET-4c: [L]A == 𝒪 holds but the non-identity clause A != 𝒪 fails. This is precisely the case where noble's isTorsionFree() returns TRUE, so a subgroup check written as isTorsionFree() alone wrongly ACCEPTS it — the A != 𝒪 clause is load-bearing."
+    },
+    {
+      "id": "082-mixedorder-key",
+      "export": "vectors/082-mixedorder-key.ndjson",
+      "expect": {
+        "verdict": "INVALID",
+        "line": 2
+      },
+      "cites": [
+        "ET-4c"
+      ],
+      "note": "DISCRIMINATING, and sharper than 081. A participant_registered whose pubkey is a canonically-encoded MIXED-order key A = P + T, where P = [s]B is prime-order and T is an order-8 torsion point (ED25519_TORSION_SUBGROUP[1]); A has order 8L, is not small-order, and is not one of the eight small-order points. It is self-signed honestly under P with the nonce ground so the challenge k ≡ 0 (mod 8): then [k]T = 𝒪, so [S]B = R + [k]P = R + [k]A and the signature VERIFIES under A — measured true in BOTH Go crypto/ed25519 and Node node:crypto, so ET-10 passes; the key is canonical (ET-4a/ET-4b pass), 64 lowercase hex (ID-3 passes), and the line hashes and links. ET-4c is the sole fault: [L]A = [5]T != 𝒪 (L ≡ 5 mod 8) and [8]A = [8]P != 𝒪. Because A is neither prime-order nor small-order, this vector distinguishes a FULL prime-order check from a small-order-blocklist-only verifier, which 081 cannot."
+    },
+    {
+      "id": "083-genesis-registrar-pk-smallorder",
+      "export": "vectors/083-genesis-registrar-pk-smallorder.ndjson",
+      "expect": {
+        "verdict": "INVALID",
+        "line": 1
+      },
+      "cites": [
+        "ET-4c",
+        "ET-9c"
+      ],
+      "note": "DISCRIMINATING on the registrar_pk validation TIMING (ET-9c, ADR-0011). A genesis whose registrar_pk is the CANONICAL identity-point encoding (0100..00, y = 1 < p) — the same small-order key 081 puts on a participant pubkey, so ET-9b hex-format, ET-4a(ii)/ET-4b and ID-3 all PASS. Genesis is operator-self-signed under the real operator_pk (ET-8), so chain_id derives (ET-7), the self-signature verifies, and the hash covers the small-order registrar_pk and matches: the genesis is well-formed in every respect EXCEPT that registrar_pk is not prime-order (ET-4c). registrar_pk is DECLARED here (ET-9a) but not USED to verify until the first vote_cast (ET-17), and this chain has none — so a verifier that defers ET-4b/ET-4c on registrar_pk to first use reports VALID, while ET-9c requires the checks at the genesis line where the key is declared, giving INVALID at line 1. This is the single point where two otherwise-conforming verifiers diverged (found by the fresh-context T7 review; ADR-0011): 078-082 are all on participant_registered.pubkey at line 2, where declaration and use coincide because that event is self-signed, so none of them pins this timing. As in 081, the ET-4c fault is the non-identity clause A != 𝒪."
     }
   ]
 }

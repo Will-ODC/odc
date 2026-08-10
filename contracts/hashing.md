@@ -1,7 +1,7 @@
 # Hashing — contracts/hashing.md
 
-**Version:** 1
-**Status:** DRAFTING (Phase 0 · T4). Not frozen.
+**Version:** 2
+**Status:** DRAFTING (Phase 0 · T4, amended T5j). Not frozen.
 **Companion specs:** `event-schema.md` (envelope), `event-types.md` (payloads),
 `ids.md` (identifiers), `export-format.md` (NDJSON framing), `evolution.md`
 (versioning + cross-version verifier behavior).
@@ -75,9 +75,15 @@ no reference to the event's `type` (ADR-0006).
   first when it is a prefix of the longer). This ordering is a property of the
   bytes, not of any locale or collation. An empty payload (`k = 0`) encodes as
   `U64(0)` and nothing more.
-- **HA-9.** The 1-octet type tag (HA-7) is load-bearing: it makes the integer
-  value `1` and the string value `"1"` under the same key encode to different
-  bytes, so no two distinct payloads can collide on a preimage.
+- **HA-9.** The 1-octet type tag (HA-7) is load-bearing: without it the integer
+  value `0` and the string value `""` under the same key would collide. `ENC_INT(0)`
+  is the 8 octets `00 00 00 00 00 00 00 00` (HA-4); `ENC_STR("")` is `U64(0)`
+  followed by zero string octets (HA-3/HA-5) — the *same* 8 octets `00 00 00 00
+  00 00 00 00`. Their encodings are byte-identical, so only the preceding tag
+  (`0x69` for the integer, `0x73` for the string) separates them, and with it no
+  two distinct payloads can collide on a preimage. (A length difference such as
+  integer `1` vs string `"1"` would distinguish those two values without the tag;
+  the tag exists for the equal-length collisions a length prefix cannot catch.)
 
 ## 3. The preimage
 
@@ -230,7 +236,7 @@ stored six content fields, and an Ed25519 check of `sig` over §6.1's bytes unde
 | Framing: length-prefix vs delimiter                 | HA-3            |
 | Duplicate payload keys                              | HA-6            |
 | Payload key ordering                                | HA-8            |
-| int `1` vs string `"1"` collision                   | HA-9            |
+| int `0` vs string `""` collision (equal-length)     | HA-9            |
 | Per-type field list vs generic payload rule         | HA-7 (generic)  |
 | Field order in the preimage                         | HA-11           |
 | Domain separation                                   | HA-10           |

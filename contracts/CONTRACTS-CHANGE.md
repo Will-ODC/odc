@@ -19,6 +19,200 @@ Format (newest first, one entry per merged contracts change):
 
 ---
 
+## fixtures/ README v11 — 2026-08-09 — record fixture 083 (ET-9c) and the new count
+
+- Doc-only: `contracts/fixtures/README.md` v10 → **v11**. Updates the count to
+  **83 vectors (10 VALID, 4 PARTIAL, 69 INVALID)** and the appended range to
+  `071`–`083`, and adds a paragraph for `083-genesis-registrar-pk-smallorder`
+  (ET-9c / ADR-0011 — the `registrar_pk` genesis-timing vector) alongside the
+  081/082 ET-4c description. No vector bytes, `index.json`, or `MANIFEST` change;
+  this is the prose reconciliation the ET-9c change (v7, previous entry) should
+  have carried.
+
+## event-types.md v7 — 2026-08-09 — registrar_pk key-validation timing at genesis (ADR-0011)
+
+- **`ET-9c` added** to `event-types.md` (v6 → v7): the canonical-encoding check
+  ET-4b and the prime-order check ET-4c apply to `operator_pk` and `registrar_pk`
+  **at the `genesis` line where each is declared** (ET-9a), not deferred to a
+  key's first use to verify a signature (`registrar_pk` first used at `vote_cast`,
+  ET-17). A `genesis` whose `registrar_pk` is non-canonical (ET-4b) or small/
+  mixed-order (ET-4c) is `INVALID` at the genesis line on **any** chain, including
+  one with no `vote_cast`. Resolves the one `registrar_pk`-timing divergence the
+  fresh-context T7 review surfaced (`memory/OPEN-QUESTIONS.md`): without this, a
+  verifier could defer the checks and report a different verdict — or the same
+  verdict at a different line — than a conforming peer, the sole point they could
+  diverge by construction.
+- The ET-4b and ET-4c parentheticals for `registrar_pk`, the rule-index, and the
+  acid-test walkthrough were updated to point at ET-9c. Recorded in **ADR-0011**.
+- **Fixture `083-genesis-registrar-pk-smallorder`** (INVALID at line 1) pins it: a
+  well-formed operator-self-signed `genesis` whose `registrar_pk` is the canonical
+  identity encoding (small-order), on a chain with no `vote_cast`. Reuses `081`'s
+  small-order key; 82 → **83 vectors** (VALID 10, PARTIAL 4, INVALID 69). Verdict
+  is DECLARED, per Option A of the divergence analysis; the Go verifier (T7) is
+  brought into conformance separately (it currently defers, so it would report
+  VALID here — a queued follow-up, surfaced at the T8 rehearsal).
+
+## event-types.md v6 · fixtures/ README v10 — 2026-08-08 — Ed25519 prime-order verification keys (ADR-0010)
+
+- **`ET-4c` added** to `event-types.md` (v5 → v6): a verifier MUST reject any
+  verification key not in the Ed25519 **prime-order subgroup** — on the point `A`
+  decoded from the already-canonical encoding (after ET-4a/ET-4b), **`[L]A == 𝒪`
+  (identity) AND `A != 𝒪`** (equivalently `[L]A == 𝒪 AND [8]A != 𝒪`). This rejects
+  all small-order keys (including the identity `0100…00`) and all mixed-order
+  keys, for the same three keys ET-4b covers — `operator_pk`/`registrar_pk`
+  (ET-8/ET-13/ET-17) and `participant_registered.pubkey` (ET-10). ET-4c runs
+  **after** ET-4a/ET-4b (on the canonical point) and is **additional** to ET-4b:
+  a canonically-encoded mixed-order key passes ET-4b and is caught only here. It
+  is also additional to ET-5: a small-order/mixed-order key can carry a `sig` that
+  **verifies** under it, so a verifier omitting ET-4c wrongly accepts. **This
+  REVERSES ADR-0009's prime-order exclusion** (ADR-0009 is now superseded in part;
+  its ET-4a/ET-4b canonical-encoding decision stands). The ET-4b informative note,
+  rule-index and acid-test were updated to match.
+- **Load-bearing caveat (measured).** ET-4c is worded `[L]A == 𝒪 AND A != 𝒪`,
+  **not** bare "torsion-free": `@noble/curves`' `isTorsionFree()` returns **true**
+  for the identity key, which ET-4c must reject. A noble-based verifier satisfies
+  ET-4c with `A.isTorsionFree() && !A.is0()`, a `filippo.io/edwards25519`-based one
+  with `[L]A == 𝒪 && A != 𝒪`; these compute the identical decision on every
+  measured point only with the explicit non-identity clause.
+- **Measurement basis (empirical, GO).** Using the two audited curve libraries
+  the spec now allows one-of per verifier — `filippo.io/edwards25519 v1.2.0` (Go)
+  and `@noble/curves` `ed25519` (TS): the two AGREE on the prime-order predicate
+  for all 11 points tested (normal key → accept; all 8 small-order torsion points
+  → reject; 2 mixed-order points → reject), 5/5 runs; the derived torsion set
+  matched noble's shipped `ED25519_TORSION_SUBGROUP` constant. Both isolating
+  fixtures verify in **both** Go `crypto/ed25519` and Node `node:crypto` (so ET-10
+  passes and they isolate ET-4c alone). ET-4c is exact curve arithmetic (not
+  RFC-8032-underdetermined), so it is more version-stable than ET-4a/ET-4b — but
+  it needs curve scalar multiplication outside both stdlibs, so the T7/T7b
+  **stdlib-only constraint is relaxed to permit one named audited curve library
+  used ONLY for the ET-4c check** (`filippo.io/edwards25519` for Go,
+  `@noble/curves` for TS). The result is version-bound; the T10 re-audit
+  re-measures.
+- **Two vectors, `081`/`082`** (`INVALID` at line 2; `INVALID` 66 → 68, total
+  80 → 82), each isolating ET-4c and each **DISCRIMINATING** today (a verifier
+  omitting ET-4c reports `VALID`). `081-smallorder-key` is a `participant_registered`
+  whose `pubkey` is the canonical identity `0100…00` with the degenerate identity
+  self-sig `R = 0100…00`, `S = 0`; canonical (ET-4a/ET-4b pass), 64 lowercase hex
+  (ID-3), self-sig verifies in both libraries (ET-10). `082-mixedorder-key` carries
+  a canonically-encoded MIXED-order `pubkey` `A = P + T` (T order-8 torsion),
+  self-signed honestly under `P` with the nonce ground so `k ≡ 0 (mod 8)` (then
+  `[k]T = 𝒪`, so the signature verifies under `A`); it additionally distinguishes
+  a full prime-order check from a small-order-blocklist-only verifier, which a
+  small-order fixture cannot. Isolation was confirmed by feeding each committed
+  line-2 signing preimage through **both** Go `crypto/ed25519` and Node
+  `node:crypto` (both verify), and by a from-spec reimplementation of ET-4a/ET-4b
+  plus an ET-4c curve check in `test/canonical-ed25519.test.ts` (each vector fails
+  exactly ET-4c and passes ET-4a/ET-4b/ID-3/ET-10). The `082` construction is
+  **deterministic** (fixed seed for `s` and the nonce grind), verified by
+  regenerating twice with byte-identical output. Built via the existing `custom(…)`
+  mechanism plus a new `signRaw` generator option for the crafted mixed-order
+  signature (the `sigTransform`/`custom` lineage of the ET-4a/ET-4b work); the
+  generator gains `@noble/curves` as a devDependency (build tooling only — never
+  shipped, and not the stdlib-constrained verifier).
+- **Documents reconciled:** `docs/decisions/0009-*` gains a "Superseded in part by
+  ADR-0010" note (its ET-4a/ET-4b decision stands). `docs/plans/phase-0.md` T7/T7b
+  relaxed to permit the one audited curve library for ET-4c only, with the stale
+  "75 vectors"/"75 declared fixture verdicts" counts corrected. `memory/OPEN-QUESTIONS.md`'s
+  DECIDED Ed25519 stub updated from prime-order EXCLUDED to REQUIRED. `memory/STATE.md`
+  is intentionally **not** touched (post-merge protocol). No other document
+  outside `contracts/` stated the exclusion.
+
+## event-types.md v5 · fixtures/ README v9 — 2026-08-08 — Ed25519 canonical-encoding predicate (ADR-0009)
+
+- **`ET-4a` and `ET-4b` added** to `event-types.md` (v4 → v5), pinning the
+  Ed25519 verification predicate at the **encoding** level, checked on the raw
+  decoded bytes **before** the verify primitive (ET-5) and rejected, never
+  reduced or repaired (D5). Three MUST checks: **(ET-4a)** the `sig`'s trailing
+  32 bytes (`S`) little-endian MUST be `< L` (`L = 2^252 + 27742317777372353535851937790883648493`),
+  and the leading 32 bytes (`R`) with bit 255 masked MUST be `< p`
+  (`p = 2^255 − 19`); **(ET-4b)** every verification key `A` — `operator_pk`,
+  `registrar_pk` (ET-8/ET-13/ET-17), and `participant_registered.pubkey` (ET-10)
+  — with bit 255 masked MUST be `< p`. This makes RFC 8032's underdetermination
+  **unreachable** for both the Go (T7) and TypeScript (T7b) stdlib-only verifiers
+  (same move as ET-14a capping `choice_count`). The new checks are **additional**
+  to the hex-format rules of ES-31/ET-9b/ID-3: a canonical hex string can still
+  decode to a non-canonical point encoding, so hex-format is necessary but not
+  sufficient. An **informative** note records that the assumed predicate is
+  **cofactorless** (`[S]B == R + [k]A`, satisfied by both reference stdlibs) and
+  that a full prime-order subgroup check is **deliberately excluded** in v1.
+- **Measurement basis (empirical, not reasoned).** Go 1.24.7 and Node 22.22.2 /
+  OpenSSL 3, both installed in the session container, were fed the constructed
+  edge cases the fixtures rest on plus the ed25519-speccheck classes. The two
+  libraries returned the **identical accept/reject verdict on every input** across
+  non-canonical `S`, non-canonical `R`, non-canonical `A`, small-order `A`,
+  small-order `R`, and the cofactor discriminator. The one case where both
+  **proceed to verify and accept** is a non-canonical verification key `A` (the
+  identity point `y = 1 + p` with a degenerate self-signature) — the case fixture
+  `078` exercises and the only one where the encoding checks change a verdict on
+  current libraries. `S ≥ L` and non-canonical `R` are already rejected by both
+  primitives, so `079`/`080` are non-discriminating today.
+- **Prime-order exclusion (rationale).** A full prime-order check
+  (`[L]A == 𝒪 ∧ [8]A ≠ 𝒪`) (a) closes **no measured divergence** — the two
+  libraries never disagree on current versions — and (b) requires curve scalar
+  multiplication that is **not** in either language's standard library,
+  conflicting with T7/T7b's stdlib-only constraint. The canonical-encoding checks
+  1–3 are cheap stdlib integer comparisons and are kept as defense-in-depth
+  against future library drift (RFC 8032 is underdetermined and the wider
+  ecosystem does split on these inputs). The result is **version-bound**; the T10
+  re-audit MUST re-measure. A prime-order check stays additively addable
+  pre-freeze if the operator later wants it.
+- **Three vectors, `078`/`079`/`080`** (`INVALID` 63 → 66, total 77 → 80), each
+  isolating one rule (T5j-style). `078-noncanonical-a` (`INVALID` line 2, ET-4b)
+  is the discriminating vector: its degenerate self-sig **verifies** in both
+  libraries, so ET-10 passes and only ET-4b rejects — a verifier lacking ET-4b
+  wrongly accepts. `079-noncanonical-s` (`S + L`) and `080-noncanonical-r`
+  (non-canonical `R`) recompute the `hash` over the mutated `sig` to isolate the
+  encoding fault; both are non-discriminating on current libraries and pin the
+  verdict against drift. Isolation was confirmed by feeding each committed line-2
+  event's signing preimage through **both** Go and Node: `078` verifies in both,
+  `079`/`080` verify in neither, and a from-spec reimplementation of the three
+  checks (in `test/canonical-ed25519.test.ts`) fails exactly one check per vector
+  over the committed bytes. Built via a minimal `custom(...)` + `sigTransform`
+  option on the generator (the `059`/`076` mechanism), not by hand.
+- **Documents reconciled:** `memory/OPEN-QUESTIONS.md`'s live ⚠️ Ed25519 entry is
+  converted to a DECIDED stub pointing at ADR-0009 and ET-4a/ET-4b.
+  `memory/STATE.md` is intentionally **not** touched (it updates post-merge on its
+  own PR). No other document outside `contracts/` stated the predicate.
+
+## event-types.md v4 · hashing.md v2 · fixtures/ README v8 — 2026-08-07 — T5j (ET-9b + HA-9)
+
+- **`ET-9b` added** to `event-types.md` (v3 → v4). `genesis`'s `operator_pk` and
+  `registrar_pk` were pinned to `^[0-9a-f]{64}$` **only in the payload table**,
+  cited by no numbered sentence — the sole-source case `CONTRACTS-CHANGE.md`
+  (T5i) named and `OPEN-QUESTIONS.md` tracked. ET-9b gives that constraint a
+  numbered home, worded to mirror `ids.md` ID-3 (32-byte raw Ed25519 key as 64
+  lowercase hex, rejected and never lowercased to conform, D5). It states the
+  check is **distinct from ET-7/ET-8**: an uppercase key decodes to the same 32
+  bytes, so `chain_id` still derives and the self-signature still verifies — a
+  verifier omitting the format check has no other signal on the line. No byte,
+  preimage or existing verdict changes; nothing regenerates from the sentence.
+  **Deadline:** `evolution.md` EV-1 forbids altering a frozen `(type, version)`
+  schema, so ET-9b is **unaddable after the `contracts-v1` tag** — it had to land
+  pre-freeze, and before T7 so the Go verifier is built against it.
+- **Two vectors, `076`/`077`** (`INVALID` at line 1; `INVALID` 61 → 63, total
+  75 → 77). Each is a `genesis` carrying an uppercase `operator_pk` (`076`) or
+  `registrar_pk` (`077`); every other property is valid, so the case is the only
+  fault. Built with the `custom("genesis", …)` mechanism of `059`: the payload
+  holds the uppercase string (so `hash` covers it and matches) while `chainId()`
+  derives from the decoded lowercase key. `test/genesis-keys.test.ts` asserts, over
+  the committed bytes, that `hash`, signature and `chain_id` all verify — so the
+  vector isolates ET-9b alone. Appended after `075` (ids never change), a pure
+  insertion into `index.json`.
+- **HA-9's worked example corrected** in `hashing.md` (v1 → v2). HA-9 claimed the
+  1-octet type tag is load-bearing "because integer `1` and string `"1"` encode
+  to different bytes" — but those differ by **length** (`ENC_INT(1)` is 8 octets,
+  `ENC_STR("1")` is 9), so they separate with no tag at all and the example proved
+  nothing about the tag. The case that does is **integer `0` vs string `""`**:
+  both are the 8 octets `00…00`, byte-identical, so **only the tag** distinguishes
+  them. Verified empirically. Changes no byte, digest or fixture — but `hashing.md`
+  is immutable once tagged, so it had to land pre-freeze.
+- **Scope note: the Ed25519 verification-predicate decision is deliberately NOT
+  in this PR.** `memory/OPEN-QUESTIONS.md` scoped it "before or inside T5j"; it is
+  kept as its own ticket because it is empirical (measure Go vs Node, then prefer
+  making the divergence unreachable) and permanent, and bundling it would produce
+  an oversized contracts change. The ⚠️ OPEN-QUESTIONS item stays OPEN and still
+  gates T7 — **the pre-T7 Ed25519 gate is not cleared by this merge.**
+
 ## fixtures/ — README v7 — 2026-08-02 — T5 follow-up, ET-14's control-character clause
 
 - **Two vectors added, 73 → 75** (`VALID` 9 → 10, `INVALID` 60 → 61). No

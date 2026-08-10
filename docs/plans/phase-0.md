@@ -47,8 +47,9 @@ fresh-context reviewed (`odc-code-review`). Diff limits apply to code tickets;
 spec tickets are exempt from line limits but not from review.
 
 Order: T1 → T2 may run in parallel with T3 → T4 → T5 → T6 → **T5j** → T7 →
-**T7b** → T8 → T9 → **T9a** → T10. T4 blocks T5/T6. T6 blocks T7/T8. Nothing
-after T2 merges without CI green.
+**T7-fix** → **T7b** → T8 → T9 → **T9a** → T10. T4 blocks T5/T6. T6 blocks T7/T8.
+T7-fix and T7b are independent and both land before T8. Nothing after T2 merges
+without CI green.
 
 Three tickets were added after this line was first written, and each sits where
 it does for a reason, not by number:
@@ -179,7 +180,7 @@ prev_hash, hash`; types and normative constraints per field; RFC-2119
   means: recompute each event's hash, check the `prev_hash` links and the
   signatures of the chain this builder just built, and attribute a failure to a
   line. It does NOT mean emitting the three conformance verdicts or executing
-  the 75 declared fixture verdicts — T7 is the first ticket that emits those
+  the 82 declared fixture verdicts — T7 is the first ticket that emits those
   conformance verdicts (the ticket order itself is unchanged: T6 → T7 → T8).
   The reason is **independence, not cost**: a TS verifier written by a context
   that has already read `encode.ts`/`serialize.ts` inherits any misreading those
@@ -268,11 +269,18 @@ avoidable.
 - Session may read ONLY: `contracts/*.md`, `contracts/fixtures/`, its own
   `services/verifier/` dir, `docs/charter.md` §4, and this ticket's text.
   NOT T5/T6 source, NOT this plan's other tickets, NOT any prior discussion.
-- Go, stdlib only. `verify <export.ndjson> [--head <hash>]` → one of the three
-  verdicts in `contracts/evolution.md` EV-7/EV-17: `VALID`, `INVALID at line N`,
-  or `PARTIAL` naming the affected lines. Exit codes 0/1/2 respectively, ≥3 for
-  tool-level errors. Any reason text is advisory and is not conformance-checked
-  — do not invent a reason-code registry; none exists (EV-17).
+- Go, stdlib only — with **one exception**: the ET-4c prime-order subgroup check
+  (`event-types.md`, ADR-0010) needs curve scalar multiplication that is not in
+  the standard library, so this verifier MAY use **`filippo.io/edwards25519`**
+  (the one audited curve library named for the Go verifier), used **ONLY** for the
+  ET-4c check. Everything else — parsing, framing, hashing, the ET-4a/ET-4b
+  integer comparisons, and the Ed25519 verify primitive (ET-5) — stays stdlib
+  (`crypto/ed25519`, `crypto/sha256`, `encoding/*`). `verify <export.ndjson>
+[--head <hash>]` → one of the three verdicts in `contracts/evolution.md`
+  EV-7/EV-17: `VALID`, `INVALID at line N`, or `PARTIAL` naming the affected
+  lines. Exit codes 0/1/2 respectively, ≥3 for tool-level errors. Any reason text
+  is advisory and is not conformance-checked — do not invent a reason-code
+  registry; none exists (EV-17).
 - Must pass every fixture (valid AND adversarial verdicts) from
   `contracts/fixtures/` alone.
 - Every ambiguity the builder hits is reported as a numbered spec-bug list in
@@ -280,6 +288,35 @@ avoidable.
 - Acceptance: `go test ./...` green using only fixtures as test data;
   verifier binary correct on all fixtures; spec-bug list (possibly empty)
   delivered.
+
+### T7-fix — Go verifier: `registrar_pk` ET-9c conformance · **odc-verifier-builder — FRESH CONTEXT, HARD ISOLATION**
+
+**✅ DONE 2026-08-09 — PR #75 `b6c5c0a`.** `stageBGenesis` now runs ET-4b
+(`checkKeyCanonical`) then ET-4c (`checkKeyPrimeOrder`) on `registrar_pk` before
+capturing it; fixture `083` → `INVALID at line 1`, all 83 fixtures pass, `go vet`/
+`gofmt`/`build` clean. Applied **inline** (fixture-pinned, no ledger source opened)
+rather than in a fresh `odc-verifier-builder` context — a one-check conformance fix;
+T7↔T7b independence is unaffected.
+
+**Why this ticket exists.** T7 shipped before ADR-0011 decided the `registrar_pk`
+key-validation timing. T7 applies only the ET-9b format check to `registrar_pk` at
+genesis and defers ET-4b/ET-4c to the first `vote_cast`. ADR-0011 / **ET-9c** now
+requires those checks at the genesis declaration, and fixture `083` (small-order
+`registrar_pk`, no `vote_cast`) expects `INVALID at line 1` — which T7 fails today
+(it reports `VALID`). There is **no Go/verifier CI job**, so nothing flags this
+until the T8 rehearsal; fix it before/with T7b so the rehearsal starts conformant.
+
+**Isolation.** Same rules as T7 — a fresh context built from `contracts/` alone,
+never sees ledger source or this plan's other tickets. It reads only this ticket
+plus `contracts/`; do not hand it ADR-0011 or OPEN-QUESTIONS.
+
+**The change.** Apply ET-4b (canonical encoding) and ET-4c (prime-order) to
+`registrar_pk` at the `genesis` line where it is declared (ET-9a), on the raw
+decoded key octets — not deferred to `vote_cast` (ET-17). See `event-types.md`
+ET-9c. `operator_pk` is unaffected (already checked at genesis via ET-8).
+
+- Acceptance: `go test ./...` green on all **83** fixtures, including `083`
+  (→ `INVALID` at line 1); no other verdict changes; small, scoped diff.
 
 ### T7b — Second independent verifier (TypeScript) · **odc-implementer — FRESH CONTEXT, HARD ISOLATION**
 
@@ -307,8 +344,16 @@ misreading are one implementation wearing two hats.
 - New directory, outside both existing tool packages — suggested
   `tools/verifier-ts/`. Do not extend `@odc/fixtures-gen`; sharing a package
   invites sharing an import.
-- TypeScript, Node stdlib only (`node:crypto` for SHA-256 and Ed25519). No
-  dependency on any workspace package. Same CLI contract as T7:
+- TypeScript, Node stdlib only (`node:crypto` for SHA-256 and Ed25519) — with
+  **one exception**: the ET-4c prime-order subgroup check (`event-types.md`,
+  ADR-0010) needs curve scalar multiplication absent from `node:crypto`, so this
+  verifier MAY use **`@noble/curves`** (the one audited curve library named for
+  the TypeScript verifier), used **ONLY** for the ET-4c check. Everything else,
+  including the ET-4a/ET-4b integer comparisons and the Ed25519 verify primitive
+  (ET-5), stays `node:crypto`. **No dependency on any workspace package** (the
+  isolation rule is unchanged; `@noble/curves` is a third-party audited library,
+  not a workspace package, and its use is confined to ET-4c). Same CLI contract
+  as T7:
   `verify <export.ndjson> [--head <hash>]` → `VALID`, `INVALID at line N`, or
   `PARTIAL` naming the affected lines (`evolution.md` EV-7/EV-17); exit codes
   0/1/2, ≥3 for tool-level errors. Reason text is advisory and is NOT
@@ -326,9 +371,19 @@ misreading are one implementation wearing two hats.
   description — a deliverable, not a failure. **Where that list overlaps T7's,
   the overlap is the signal**: two isolated readers tripping on the same
   sentence means the sentence is wrong, not the readers.
+- **`registrar_pk` genesis timing — RESOLVED before this ticket (ADR-0011, #72).**
+  The T7 review found the one point two independent verifiers could diverge:
+  whether ET-4b/ET-4c apply to a _declared-but-unused_ `registrar_pk` at genesis or
+  only at first use (`vote_cast`). **ET-9c** now pins them to the genesis
+  declaration, and fixture `083` (small-order `registrar_pk`, no `vote_cast` →
+  INVALID at line 1) enforces it. T7b is isolated and cannot read
+  OPEN-QUESTIONS/ADR-0011, so **this ticket's text MUST state the ET-9c timing
+  explicitly**: apply ET-4b and ET-4c to `registrar_pk` at the genesis line where
+  it is declared, not deferred to `vote_cast`. `083` forces agreement by
+  construction.
 - Acceptance: `pnpm test` green using only fixtures as test data; correct on all
-  75 vectors; spec-bug list (possibly empty) delivered; a reviewer can confirm
-  from the diff that no workspace package is imported.
+  83 vectors (incl. `083`); spec-bug list (possibly empty) delivered; a reviewer
+  can confirm from the diff that no workspace package is imported.
 
 **Ordering.** After T7, before T10. It is NOT a blocker for T8 — T8's
 cross-language check compares fixture **hashes**, not verdicts, and is already

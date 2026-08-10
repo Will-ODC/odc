@@ -37,7 +37,7 @@ Fixtures are consumed by every service's CI (`golden-fixtures` stage) and by
 the verifier. **Cross-language gate:** identical fixture hashes must be
 independently reproduced in TypeScript and Go before freeze.
 
-## Genesis rehearsal (the exit gate — a checklist, not a vibe)
+## Genesis rehearsal (the gate to RELEASE CANDIDATE — a checklist, not a vibe)
 
 1. Build a throwaway chain against the draft contracts (one context).
 2. Export it. Verify it with a throwaway Go verifier built by
@@ -47,7 +47,14 @@ independently reproduced in TypeScript and Go before freeze.
    wrong prev_hash · re-serialized-but-equivalent line · wrong `--head`.
 4. Every ambiguity either implementation hit becomes a spec edit; then the
    rehearsal RERUNS from step 1.
-5. Freeze = status flip in `contracts/README.md` + git tag `contracts-v1` +
-   `contracts-guard` CI live. All three, same day, or it isn't frozen.
+5. Passing the rehearsal (and the T9 audit) exits `contracts/` to **RELEASE
+   CANDIDATE — NOT to a freeze.** ADR-0007 deferred the `contracts-v1` tag until
+   real operational use, so Phase 1 builds against the RC while specs stay
+   fixable. Three states: DRAFTING → RELEASE CANDIDATE → FROZEN. The freeze, when
+   it comes, is a status flip in `contracts/README.md` + the `contracts-v1` tag +
+   `contracts-guard` enforcing it; what the tag makes immutable is defined by
+   **ADR-0008's four file-kind rules** (golden data add-only; `index.json`
+   append-only; `MANIFEST.sha256` regenerable-not-deletable; `fixtures/README.md`
+   exempt), not the blanket "nothing under `fixtures/`" rule that predated it.
 
 Keep the rehearsal scripts: they seed `just smoke` and the nightly chain-smoke.

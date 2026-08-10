@@ -1,13 +1,14 @@
 # contracts/fixtures/ — golden vectors
 
-**Version:** 7
-**Status:** DRAFTING (Phase 0 · T5). Not frozen.
+**Version:** 11
+**Status:** DRAFTING (Phase 0 · T5, T5j, ADR-0009, ADR-0010, ADR-0011). Not
+frozen.
 
-**75 vectors** — 10 `VALID`, 4 `PARTIAL`, 61 `INVALID`. They are numbered in
+**83 vectors** — 10 `VALID`, 4 `PARTIAL`, 69 `INVALID`. They are numbered in
 category order: `VALID` (`001`–`007`), `PARTIAL` (`008`–`011`), then `INVALID` —
 the envelope and Stage A checks (`012`–`042`), the export framing and canonical
 line form (`043`–`052`), `--head` (`053`–`054`), the Stage B type semantics
-(`055`–`068`), and verdict precedence (`069`–`070`). `071`–`075` are appended
+(`055`–`068`), and verdict precedence (`069`–`070`). `071`–`083` are appended
 after that scheme rather than inserted into it, because **ids never change once
 shipped**: renumbering to keep the categories contiguous would silently
 invalidate a conformance run that cites them.
@@ -21,6 +22,69 @@ control-character clause at both edges: `074` that **U+007F is forbidden**
 legal** (so an implementation reaching for Go's `unicode.IsControl`, true across
 U+007F–U+009F, over-rejects a conforming title). Both characters are stored as
 their literal UTF-8 octets: EX-9 escapes only U+0000–U+001F.
+
+`076`/`077` pin `event-types.md` ET-9b — the genesis key format. Each is a
+`genesis` whose `operator_pk` (`076`) or `registrar_pk` (`077`) is **uppercase
+hex**, `INVALID` at line 1. The uppercase key decodes to the same 32 bytes, so
+`chain_id` still derives (ET-7), the self-signature still verifies (ET-8) and the
+`hash` still matches — **only the case is wrong**, the same isolation `033` and
+`036` have for `prev_hash`/`hash`. Before these, no vector asserted `INVALID` on a
+malformed genesis key, so a verifier omitting the format check passed every vector
+with no signal. Two vectors, not one, because `registrar_pk` — unused until a
+ballot arrives — is the key an implementation is likelier to skip.
+
+`078`–`080` pin `event-types.md` ET-4a/ET-4b — the Ed25519 canonical-encoding
+predicate (ADR-0009). Each is a chain whose line-2 `participant_registered` is
+`INVALID` for exactly one canonical-encoding rule, hash and chain link
+otherwise intact. **`078-noncanonical-a` is the discriminating one:** its
+`pubkey` is the non-canonical identity-point encoding `y = 1 + p`
+(`ee ff…ff 7f`, still 64 lowercase hex, so ES-31/ID-3 hex-format passes) and its
+`sig` is the degenerate identity self-signature `R = 0100…00`, `S = 0`. Measured
+in **both** Go 1.24.7 and Node 22 / OpenSSL 3, the non-canonical key is accepted
+by the decoder and the degenerate signature **verifies** under it, so ET-10
+passes and only the new canonical-A check (ET-4b) rejects it — a verifier lacking
+that check wrongly reports `VALID`. `079-noncanonical-s` (`S` replaced by
+`S + L`) and `080-noncanonical-r` (`R` replaced by a non-canonical encoding),
+both with the `hash` **recomputed over the mutated `sig`** to isolate the
+encoding fault, are **non-discriminating** on current libraries: both Go and Node
+already reject `S ≥ L` and a non-canonical `R` inside the primitive, so a verifier
+lacking the explicit ET-4a check still returns `INVALID`. They pin the agreed
+verdict and guard against future library drift; only `078` catches a missing
+check today.
+
+`081`–`082` pin `event-types.md` ET-4c — the prime-order subgroup requirement
+(ADR-0010, which reverses ADR-0009's prime-order exclusion). Each is a chain whose
+line-2 `participant_registered` carries a **canonically-encoded** key (so
+ET-4a/ET-4b and ID-3 all pass) that is **not** in the prime-order subgroup, with a
+self-signature that **verifies** in both Go 1.24.7 and Node 22 / OpenSSL 3 (so
+ET-10 passes) — leaving ET-4c as the sole fault. Both are **discriminating**: a
+verifier omitting ET-4c wrongly reports `VALID`. **`081-smallorder-key`** is the
+canonical identity key `0100…00` (a small-order key, order 1) with the degenerate
+identity self-sig `R = 0100…00`, `S = 0`; it is the case where `@noble/curves`'
+`isTorsionFree()` returns **true**, so it pins the load-bearing `A != 𝒪` clause —
+a subgroup check written as `isTorsionFree()` alone wrongly accepts it.
+**`082-mixedorder-key`** is a canonically-encoded **mixed-order** key `A = P + T`
+(`T` an order-8 torsion point), self-signed honestly under `P` with the challenge
+ground to `k ≡ 0 (mod 8)` so `[k]T = 𝒪` and the signature verifies under `A`;
+because `A` is neither prime-order **nor** small-order, `082` distinguishes a full
+prime-order check from a small-order-blocklist-only verifier, which `081` cannot.
+ET-4c is exact curve arithmetic (not RFC-8032-underdetermined), so a verifier may
+use one audited curve library for it alone (`filippo.io/edwards25519` for Go,
+`@noble/curves` for TS; ADR-0010).
+
+`083` pins `event-types.md` ET-9c — **when** the ET-4b/ET-4c checks apply to
+`registrar_pk` (ADR-0011). It reuses `081`'s small-order identity key, but on
+`registrar_pk` at **genesis** rather than a participant `pubkey` at line 2. This
+is the one key where declaration and first use differ: genesis is
+operator-self-signed (ET-8), so `registrar_pk` is declared here but not used to
+verify until the first `vote_cast` (ET-17), and `083` carries **no** `vote_cast`.
+The genesis is well-formed in every other respect (operator self-sig verifies,
+`chain_id` derives, the hash matches), so a verifier that defers the `registrar_pk`
+checks to first use reports `VALID`, while ET-9c requires them at the declaration
+line — **`INVALID` at line 1**. `078`–`082` cannot pin this: all place the bad key
+on a self-signed `participant_registered`, where declaration and use coincide. This
+was the single point two independent verifiers could otherwise diverge (found by
+the T7 review); `083` forces both to agree by `contracts/`.
 
 Conformance test data for every implementation that touches events: the Go
 verifier (T7), and later every service's CI. This file documents the record
