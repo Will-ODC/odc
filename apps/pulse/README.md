@@ -13,9 +13,28 @@ here.
 
 ## Status
 
-Early. This package currently holds the voting core: polls, one vote per voter,
-and results as counts. Identity (magic link), the story UI, and the path to
-action are not built yet.
+Early, and backend-only so far. Built: the voting core (polls, one vote per
+voter, results as counts), membership by email domain, the magic-link claim,
+and the HTTP API below. Not built: the story UI, real storage (everything is
+in memory), a real email provider, and the path to action.
+
+## API
+
+| Route                            | What it does                                            |
+| -------------------------------- | ------------------------------------------------------- |
+| `POST /api/sign-in`              | `{ email, wantsProofEmails? }` → emails a sign-in link  |
+| `GET /api/sign-in/redeem?token=` | Redeems the link and sets the session cookie            |
+| `POST /api/sign-out`             | Clears the session cookie on this device                |
+| `GET /api/me`                    | The signed-in voter, or 401                             |
+| `GET /api/polls/:id`             | The poll, plus your own choice if you have voted        |
+| `GET /api/polls/:id/results`     | Counts and shares per choice                            |
+| `POST /api/polls/:id/vote`       | `{ choice }` → counts your vote and returns the results |
+
+Errors are `{ error, message }`, where `message` is a plain sentence safe to
+show a person as-is.
+
+Sending email is a `Mailer`; development uses `ConsoleMailer`, which prints the
+link instead of sending it, so the whole flow works with no provider account.
 
 ## Development
 
