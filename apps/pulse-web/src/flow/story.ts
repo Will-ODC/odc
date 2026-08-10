@@ -57,10 +57,15 @@ export function nextStep(story: Story, current: Step): Step | undefined {
 export function previousStep(story: Story, current: Step): Step | undefined {
   const all = steps(story);
   const at = all.findIndex((s) => sameStep(s, current));
+  if (at === -1) return undefined;
   // Never walk back into the sign-in panes from inside the story: the person is
   // already signed in by then, and "back" should feel like the story, not a form.
-  if (at <= 2) return undefined;
-  return all[at - 1];
+  // Derived rather than a literal so inserting a step cannot silently move the
+  // boundary.
+  const firstAfterSignIn = all.findIndex(
+    (s) => s.name !== "claim" && s.name !== "sent",
+  );
+  return at <= firstAfterSignIn ? undefined : all[at - 1];
 }
 
 export function sameStep(a: Step, b: Step): boolean {
@@ -95,18 +100,41 @@ export function toggleChoice(
     : [...ballot, choice].sort((a, b) => a - b);
 }
 
+/**
+ * Every entry names a choice this poll actually has, once. Checked here rather
+ * than trusted, so a stale screen or a bad index can never be sent to the
+ * server as if it were a vote.
+ */
+export function isValidBallot(poll: Poll, ballot: Ballot): boolean {
+  if (new Set(ballot).size !== ballot.length) return false;
+  if (poll.method === "single" && ballot.length > 1) return false;
+  return ballot.every(
+    (choice) =>
+      Number.isInteger(choice) && choice >= 0 && choice < poll.choices.length,
+  );
+}
+
 export function isCastable(
   poll: Poll,
   ballot: Ballot,
   existing: Ballot | null,
 ): boolean {
   if (!poll.open || ballot.length === 0) return false;
+  if (!isValidBallot(poll, ballot)) return false;
   // Re-casting the same ballot is a no-op; the button should say so by being off.
   return existing === null || !sameBallot(ballot, existing);
 }
 
+/**
+ * Order-insensitive on purpose. A ballot is a set of choices, and nothing in
+ * the API contract promises the server returns them sorted — comparing
+ * element-wise would call `[2,0]` and `[0,2]` different votes.
+ */
 export function sameBallot(a: Ballot, b: Ballot): boolean {
-  return a.length === b.length && a.every((v, i) => v === b[i]);
+  if (a.length !== b.length) return false;
+  const left = [...a].sort((x, y) => x - y);
+  const right = [...b].sort((x, y) => x - y);
+  return left.every((v, i) => v === right[i]);
 }
 
 /** The button's label, which is also the clearest statement of what will happen. */
