@@ -12,5 +12,9 @@
   },
   "devDependencies": {
     "@types/node": "^20.14.0"
+  },
+  "dependencies": {
+    "@fastify/cookie": "^11.1.2",
+    "fastify": "^5.11.3"
   }
 }
