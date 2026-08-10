@@ -11,6 +11,13 @@ export type RequestResult =
   | { status: "not_a_member"; domain: string }
   | { status: "too_many_requests" };
 
+/** What a link is worth, without spending it. */
+export type InspectResult =
+  | { status: "live"; email: string; expiresAt: Date }
+  | { status: "expired" }
+  | { status: "already_used" }
+  | { status: "unknown_link" };
+
 /** What came of clicking one. */
 export type RedeemResult =
   | { status: "signed_in"; voter: Voter; firstTime: boolean }
@@ -105,6 +112,21 @@ export class ClaimService {
     await this.#mailer.sendClaimLink(email.value, this.#linkFor(token));
 
     return { status: "sent", expiresAt: claim.expiresAt };
+  }
+
+  /**
+   * Report whether a link is still good, without spending it.
+   *
+   * Mail scanners and prefetchers follow every URL in an email. If merely
+   * fetching a link consumed it, the person would arrive to find it already
+   * used — so the page that opens asks this, and only the click redeems.
+   */
+  async inspect(token: string): Promise<InspectResult> {
+    const claim = await this.#claims.byTokenHash(hashToken(token));
+    if (!claim) return { status: "unknown_link" };
+    if (claim.usedAt !== undefined) return { status: "already_used" };
+    if (claim.expiresAt <= this.#clock()) return { status: "expired" };
+    return { status: "live", email: claim.email, expiresAt: claim.expiresAt };
   }
 
   /**

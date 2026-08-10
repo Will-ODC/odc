@@ -12,8 +12,11 @@ export {
 } from "./identity/email.js";
 export type { EmailAddress } from "./identity/email.js";
 export { ClaimService, hashToken } from "./identity/claim.js";
+export { createServer } from "./http/server.js";
+export type { ServerDeps } from "./http/server.js";
 export type {
   ClaimOptions,
+  InspectResult,
   RedeemResult,
   RequestResult,
 } from "./identity/claim.js";
