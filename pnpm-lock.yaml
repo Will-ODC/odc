@@ -30,6 +30,12 @@ importers:
         specifier: ^8
         version: 8.64.0(eslint@9.39.5)(typescript@5.9.3)
 
+  apps/pulse:
+    devDependencies:
+      '@types/node':
+        specifier: ^20.14.0
+        version: 20.19.43
+
   tools/fixtures-gen:
     devDependencies:
       '@noble/curves':
