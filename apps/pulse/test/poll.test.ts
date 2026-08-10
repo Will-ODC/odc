@@ -1,6 +1,6 @@
 import assert from "node:assert/strict";
 import { test } from "node:test";
-import { createPoll, isOpen } from "../src/voting/poll.js";
+import { MAX_CHOICES, createPoll, isOpen } from "../src/voting/poll.js";
 
 const AT = new Date("2026-08-09T12:00:00.000Z");
 
@@ -30,16 +30,22 @@ test("rejects_empty_id_question_or_choice", () => {
   );
 });
 
-test("rejects_fewer_than_two_or_more_than_ten_choices", () => {
+test("rejects_fewer_than_min_or_more_than_max_choices", () => {
   assert.throws(
     () => createPoll({ id: "p", question: "Q", choices: ["only"] }, AT),
     TypeError,
   );
-  const eleven = Array.from({ length: 11 }, (_, i) => `c${i}`);
+  const tooMany = Array.from({ length: MAX_CHOICES + 1 }, (_, i) => `c${i}`);
   assert.throws(
-    () => createPoll({ id: "p", question: "Q", choices: eleven }, AT),
+    () => createPoll({ id: "p", question: "Q", choices: tooMany }, AT),
     TypeError,
   );
+});
+
+test("accepts_a_poll_with_the_maximum_number_of_choices", () => {
+  const many = Array.from({ length: MAX_CHOICES }, (_, i) => `c${i}`);
+  const poll = createPoll({ id: "p", question: "Q", choices: many }, AT);
+  assert.equal(poll.choices.length, MAX_CHOICES);
 });
 
 test("rejects_duplicate_choices_including_after_trimming", () => {

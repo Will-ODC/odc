@@ -17,7 +17,12 @@ export interface NewPoll {
 }
 
 export const MIN_CHOICES = 2;
-export const MAX_CHOICES = 10;
+/**
+ * Generous on purpose — a poll can list every option a community actually
+ * proposed. The limit is only here to keep one screen scrollable and to stop
+ * an accidental thousand-row paste; raise it if a real poll needs more.
+ */
+export const MAX_CHOICES = 25;
 
 /**
  * Build a poll, rejecting shapes the UI could not render or a voter could not
