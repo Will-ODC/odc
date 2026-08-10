@@ -1,6 +1,10 @@
 import cookie from "@fastify/cookie";
 import rateLimit from "@fastify/rate-limit";
-import Fastify, { type FastifyInstance, type FastifyReply } from "fastify";
+import Fastify, {
+  type FastifyInstance,
+  type FastifyReply,
+  type FastifyRequest,
+} from "fastify";
 import type { ClaimService } from "../identity/claim.js";
 import type { Voter, VoterStore } from "../identity/store.js";
 import { SESSION_COOKIE, SessionSigner } from "./session.js";
@@ -25,6 +29,7 @@ export interface ServerDeps {
  */
 export async function createServer(deps: ServerDeps): Promise<FastifyInstance> {
   const app = Fastify({ logger: false });
+  const now = deps.clock ?? (() => new Date());
 
   // Awaited, not fire-and-forget: a plugin's onRoute hook only sees routes
   // registered after it has loaded, so registering these lazily would leave the
@@ -64,6 +69,42 @@ export async function createServer(deps: ServerDeps): Promise<FastifyInstance> {
       .code(404)
       .send({ error: "not_found", message: "There is nothing here." }),
   );
+
+  /** The signed-in voter, or undefined. Used where signing in is optional. */
+  const currentVoter = async (
+    request: FastifyRequest,
+  ): Promise<Voter | undefined> => {
+    const claims = deps.signer.verify(request.cookies[SESSION_COOKIE]);
+    if (!claims) return undefined;
+
+    const voter = await deps.voters.byId(claims.voterId);
+    if (!voter) return undefined;
+    // Sessions issued before the voter last signed out are dead, wherever the
+    // cookie is held. This is what makes signing out more than a request to
+    // the browser that clicked it.
+    if (voter.sessionsValidFrom && claims.issuedAt < voter.sessionsValidFrom) {
+      return undefined;
+    }
+    return voter;
+  };
+
+  /** The signed-in voter, or undefined once a 401 has been sent. */
+  const requireVoter = async (
+    request: FastifyRequest,
+    reply: FastifyReply,
+  ): Promise<Voter | undefined> => {
+    const voter = await currentVoter(request);
+    if (!voter) {
+      // A cookie that expired, was signed under a rotated secret, was issued
+      // before a sign-out, or names a voter who no longer exists is not an
+      // error to explain — it just means signed out.
+      await reply
+        .code(401)
+        .send({ error: "signed_out", message: "Sign in to do that." });
+      return undefined;
+    }
+    return voter;
+  };
 
   app.post(
     "/api/sign-in",
@@ -171,8 +212,24 @@ export async function createServer(deps: ServerDeps): Promise<FastifyInstance> {
     });
   });
 
-  // Signing out, /api/me, and the voting routes are added in the branches
-  // stacked on this one.
+  /**
+   * Sign out everywhere, not only here: the voter's sessions-valid-from moves
+   * to now, so a copy of the cookie someone else kept stops working too.
+   */
+  app.post("/api/sign-out", async (request, reply) => {
+    const voter = await currentVoter(request);
+    if (voter) await deps.voters.invalidateSessionsBefore(voter.id, now());
+    reply.clearCookie(SESSION_COOKIE, { path: "/" });
+    return reply.send({ status: "signed_out" });
+  });
+
+  app.get("/api/me", async (request, reply) => {
+    const voter = await requireVoter(request, reply);
+    if (!voter) return reply;
+    return reply.send({ voter: publicVoter(voter) });
+  });
+
+  // Reading a poll and voting on it are added in the next branch.
 
   return app;
 }
