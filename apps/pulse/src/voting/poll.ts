@@ -1,9 +1,20 @@
+/**
+ * How a poll is answered. Mirrors `PollMethod` in the client
+ * (`apps/pulse-web/src/api/types.ts`); the two must stay in step. `single` is
+ * one choice; `approval` is any number of them. A ballot is an array either
+ * way — the method decides how many entries are allowed, not the shape.
+ */
+export type PollMethod = "single" | "approval";
+
+const METHODS: readonly PollMethod[] = ["single", "approval"];
+
 /** A question with a fixed set of choices. Choices are ordered and stable. */
 export interface Poll {
   id: string;
   question: string;
   /** Display order is array order; a vote records the index, never the text. */
   choices: readonly string[];
+  method: PollMethod;
   createdAt: Date;
   /** When set and in the past, the poll no longer accepts votes. */
   closesAt?: Date;
@@ -13,6 +24,7 @@ export interface NewPoll {
   id: string;
   question: string;
   choices: readonly string[];
+  method: PollMethod;
   closesAt?: Date;
 }
 
@@ -34,6 +46,12 @@ export function createPoll(input: NewPoll, now: Date = new Date()): Poll {
   if (input.id.trim() === "") throw new TypeError("poll id must not be empty");
   if (question === "") throw new TypeError("poll question must not be empty");
 
+  // Required, no default: a poll that does not say how it is answered is a
+  // programming mistake, not a shape to guess a fallback for.
+  if (!METHODS.includes(input.method)) {
+    throw new TypeError(`poll method must be one of: ${METHODS.join(", ")}`);
+  }
+
   if (input.choices.length < MIN_CHOICES) {
     throw new TypeError(`a poll needs at least ${MIN_CHOICES} choices`);
   }
@@ -52,6 +70,7 @@ export function createPoll(input: NewPoll, now: Date = new Date()): Poll {
     id: input.id,
     question,
     choices,
+    method: input.method,
     createdAt: now,
   };
   return input.closesAt ? { ...poll, closesAt: input.closesAt } : poll;

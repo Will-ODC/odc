@@ -7,11 +7,18 @@ import Fastify, {
 } from "fastify";
 import type { ClaimService } from "../identity/claim.js";
 import type { Voter, VoterStore } from "../identity/store.js";
+import { isOpen, type Poll } from "../voting/poll.js";
+import {
+  BallotError,
+  UnknownPollError,
+  type VotingStore,
+} from "../voting/store.js";
 import { SESSION_COOKIE, SessionSigner } from "./session.js";
 
 export interface ServerDeps {
   claims: ClaimService;
   voters: VoterStore;
+  votes: VotingStore;
   signer: SessionSigner;
   /** Cookies go out secure everywhere except local development. */
   secureCookies?: boolean;
@@ -229,9 +236,97 @@ export async function createServer(deps: ServerDeps): Promise<FastifyInstance> {
     return reply.send({ voter: publicVoter(voter) });
   });
 
-  // Reading a poll and voting on it are added in the next branch.
+  // Reading a poll or its results needs no session: a signed-in story viewer
+  // reads both while moving through the story, and neither reveals anything
+  // about a person. Only the two routes that are *about* the signed-in voter —
+  // their own ballot, and casting one — require a session.
+  app.get("/api/polls/:id", async (request, reply) => {
+    const poll = await deps.votes.getPoll(pollId(request));
+    if (!poll) return notFoundPoll(reply);
+    return reply.send(pollBody(poll, now()));
+  });
+
+  app.get("/api/polls/:id/results", async (request, reply) => {
+    const poll = await deps.votes.getPoll(pollId(request));
+    if (!poll) return notFoundPoll(reply);
+    return reply.send(await deps.votes.results(poll.id));
+  });
+
+  app.get("/api/polls/:id/ballot", async (request, reply) => {
+    const voter = await requireVoter(request, reply);
+    if (!voter) return reply;
+    const poll = await deps.votes.getPoll(pollId(request));
+    if (!poll) return notFoundPoll(reply);
+    const vote = await deps.votes.voteOf(poll.id, voter.id);
+    return reply.send({ ballot: vote ? vote.choices : null });
+  });
+
+  app.post("/api/polls/:id/votes", async (request, reply) => {
+    const voter = await requireVoter(request, reply);
+    if (!voter) return reply;
+
+    const ballot = (request.body as { ballot?: unknown } | undefined)?.ballot;
+    // Shape first: the body must carry a list of whole numbers. Whether those
+    // numbers are a *valid* answer to this poll is the store's call, below.
+    if (!Array.isArray(ballot) || !ballot.every((n) => Number.isInteger(n))) {
+      return reply.code(400).send({
+        error: "bad_request",
+        message: "A ballot is a list of the choices you picked.",
+      });
+    }
+
+    try {
+      const outcome = await deps.votes.castVote(
+        pollId(request),
+        voter.id,
+        ballot as number[],
+      );
+      if (outcome.status === "closed") {
+        return reply.send({ status: "closed" });
+      }
+      // counted | changed — hand back the stored ballot and the fresh tally so
+      // the client can show the result without a second round trip.
+      const results = await deps.votes.results(pollId(request));
+      return reply.send({
+        status: outcome.status,
+        ballot: outcome.vote.choices,
+        results,
+      });
+    } catch (error) {
+      if (error instanceof UnknownPollError) return notFoundPoll(reply);
+      if (error instanceof BallotError) {
+        return reply
+          .code(400)
+          .send({ error: "bad_ballot", message: error.message });
+      }
+      throw error;
+    }
+  });
 
   return app;
+}
+
+/** The `:id` path parameter, decoded by Fastify already. */
+function pollId(request: FastifyRequest): string {
+  return (request.params as { id: string }).id;
+}
+
+function notFoundPoll(reply: FastifyReply) {
+  return reply
+    .code(404)
+    .send({ error: "not_found", message: "There is no such poll." });
+}
+
+/** A poll in the client's wire shape: dates as ISO strings, openness resolved. */
+function pollBody(poll: Poll, now: Date) {
+  return {
+    id: poll.id,
+    question: poll.question,
+    choices: [...poll.choices],
+    method: poll.method,
+    closesAt: poll.closesAt ? poll.closesAt.toISOString() : null,
+    open: isOpen(poll, now),
+  };
 }
 
 /** What a voter is allowed to see about themselves. Never anyone else's. */
