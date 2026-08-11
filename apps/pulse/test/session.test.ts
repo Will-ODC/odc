@@ -1,4 +1,5 @@
 import assert from "node:assert/strict";
+import { createHmac } from "node:crypto";
 import { test } from "node:test";
 import { SessionSigner } from "../src/http/session.js";
 
@@ -81,15 +82,29 @@ test("a_voter_id_containing_dots_survives_the_round_trip", () => {
   }
 });
 
-test("non_numeric_timestamps_do_not_verify_even_when_signed", () => {
-  // A correctly signed cookie must still be rejected if its timestamps are not
-  // timestamps — otherwise NaN comparisons decide whether someone is signed in.
+test("a_genuinely_signed_cookie_with_unusable_fields_still_does_not_verify", () => {
+  // The MAC is computed over the malformed payload itself, so verification
+  // reaches the field checks instead of stopping at the signature. The earlier
+  // version of this test signed one payload and presented another, which meant
+  // the guards below were held in place by nothing.
   const { signer } = signerAt();
-  const forged = new SessionSigner(SECRET, { clock: () => START });
-  const payload = "voter-1.not-a-number.also-not";
-  const signed = forged.sign("voter-1");
-  const mac = signed.slice(signed.lastIndexOf(".") + 1);
-  assert.equal(signer.verify(`${payload}.${mac}`), undefined);
+  const sign = (payload: string) =>
+    `${payload}.${createHmac("sha256", SECRET).update(payload, "utf8").digest("base64url")}`;
+
+  for (const payload of [
+    "voter-1.not-a-number.also-not",
+    "voter-1.1754740800.not-a-number",
+    "voter-1..1754744400",
+    ".1754740800.1754744400", // no voter id
+    "voter-1.1.5.1754744400", // fractional
+    `voter-1.1754740800.${Number.MAX_SAFE_INTEGER + 2}`, // beyond safe integers
+  ]) {
+    assert.equal(
+      signer.verify(sign(payload)),
+      undefined,
+      `accepted a signed but unusable cookie: ${payload}`,
+    );
+  }
 });
 
 test("the_issue_time_keeps_its_milliseconds", () => {
@@ -113,6 +128,16 @@ test("two_cookies_issued_in_the_same_second_are_ordered", () => {
     first.issuedAt.getTime() < second.issuedAt.getTime(),
     "the two issue times collapsed onto the same instant",
   );
+});
+
+test("a_signed_cookie_with_no_timestamps_at_all_does_not_verify", () => {
+  // Pins the structural parse: without it these reach Number() and NaN decides.
+  const { signer } = signerAt();
+  const sign = (payload: string) =>
+    `${payload}.${createHmac("sha256", SECRET).update(payload, "utf8").digest("base64url")}`;
+
+  assert.equal(signer.verify(sign("voter-1")), undefined);
+  assert.equal(signer.verify(sign("")), undefined);
 });
 
 test("a_short_secret_is_refused_outright", () => {

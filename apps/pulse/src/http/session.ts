@@ -67,13 +67,17 @@ export class SessionSigner {
     // Split from the right: the signature and the two timestamps are the last
     // three fields, so a voter id containing dots stays intact.
     const lastDot = cookie.lastIndexOf(".");
-    if (lastDot <= 0) return undefined;
     const payload = cookie.slice(0, lastDot);
     if (!this.#macMatches(payload, cookie.slice(lastDot + 1))) return undefined;
 
+    // No shape check on the split itself. A cookie whose payload is missing a
+    // field cannot carry a matching MAC unless it came from here, and the field
+    // checks below reject whatever such a split produces — an absent field
+    // reads back as an empty voter id or a non-integer timestamp. A shape guard
+    // here would be a branch no input could reach, which is a branch no test
+    // could hold in place.
     const expDot = payload.lastIndexOf(".");
     const iatDot = payload.lastIndexOf(".", expDot - 1);
-    if (expDot <= 0 || iatDot <= 0) return undefined;
 
     const voterId = payload.slice(0, iatDot);
     const iat = Number(payload.slice(iatDot + 1, expDot));
