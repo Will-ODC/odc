@@ -43,9 +43,11 @@ HEAD="${HEAD:?HEAD (head sha/ref) required}"
 # 600 is the common industry ceiling for a reviewable diff; review quality is
 # well documented to fall off past a few hundred lines, and 800 was set in T2
 # before any real ticket had been measured against it. Lowered 800 → 600 in T5,
-# which measured 2232 counted lines and split accordingly.
+# which measured 2232 counted lines and split accordingly. Raised 600 → 1000
+# after pulse work kept getting forced into artificially small branches that
+# pushed review-relevant changes out of the PR they belonged to.
 WARN=400
-FAIL=600
+FAIL=1000
 
 # added+deleted lines, excluding lockfiles, generated output, and markdown.
 # Deletions count too (churn is churn) — a large legitimate removal can trip the
