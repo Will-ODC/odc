@@ -89,7 +89,7 @@ IS the ticket.
 ## Branch rules
 
 - One branch = one reviewable idea. Target diff < 400 lines (WARN); hard ceiling
-  600 (FAIL) — the live thresholds are in `.github/scripts/diff-size.sh`, the
+  1000 (FAIL) — the live thresholds are in `.github/scripts/diff-size.sh`, the
   source of truth; markdown, generated code, and lockfiles are exempt. Bigger?
   Split it.
 - **Do not stack PRs in this repo.** Squash-merge orphans a stack silently: when
