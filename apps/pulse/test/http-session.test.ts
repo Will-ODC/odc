@@ -58,6 +58,9 @@ async function setup(
     after(seconds: number) {
       now = new Date(now.getTime() + seconds * 1000);
     },
+    afterMs(ms: number) {
+      now = new Date(now.getTime() + ms);
+    },
     /** The Set-Cookie the redeem sets, with its attributes intact. */
     async signOutOfBandCookie(email: string) {
       await app.inject({
@@ -165,6 +168,31 @@ test("signing_in_again_after_signing_out_works", async () => {
     (await h.app.inject({ url: "/api/me", headers: { cookie: fresh } }))
       .statusCode,
     200,
+  );
+});
+
+test("signing_back_in_within_the_same_second_works", async () => {
+  // The case the test above cannot see: it advances a whole second, so a cookie
+  // stamped only to the second still lands after the sign-out. Someone who
+  // signs out and immediately clicks a fresh link stays inside one second, and
+  // used to be handed a cookie their own sign-out had already invalidated.
+  const h = await setup();
+  const cookie = await h.signIn("ada@student.ubc.ca");
+
+  h.afterMs(400);
+  await h.app.inject({
+    method: "POST",
+    url: "/api/sign-out",
+    headers: { cookie },
+  });
+
+  h.afterMs(200);
+  const fresh = await h.signIn("ada@student.ubc.ca");
+  assert.equal(
+    (await h.app.inject({ url: "/api/me", headers: { cookie: fresh } }))
+      .statusCode,
+    200,
+    "the cookie issued after signing out was refused",
   );
 });
 
