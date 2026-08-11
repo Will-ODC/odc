@@ -342,28 +342,29 @@ printf '## specs — v1 — 2026-01-01 — T4\n- add b, edit a\n' >"$R/contracts
 git -C "$R" add -A && git -C "$R" commit -qm change
 assert 1 "$(run_guard "$R")" "spec A edited unbumped, spec B added bumped → fail"
 
-# --- Scenario 8: diff-size fails past the hard ceiling (>600 changed lines)
+# --- Scenario 8: diff-size fails past the hard ceiling (>1000 changed lines)
 R="$TMP/s8"
 new_repo "$R"
 git -C "$R" checkout -q -b work
-# 900 lines added in a non-exempt file.
-seq 1 900 >"$R/big.txt"
+# 1100 lines added in a non-exempt file.
+seq 1 1100 >"$R/big.txt"
 git -C "$R" add -A && git -C "$R" commit -qm big
 ds=$( (cd "$R" && BASE=base HEAD=HEAD bash "$DIFFSIZE" >/dev/null 2>&1)
   echo $?)
-assert 1 "$ds" "diff-size >600 changed lines → fail"
+assert 1 "$ds" "diff-size >1000 changed lines → fail"
 
-# --- Scenario 8a: the ceiling really is 600, not 800. A 700-line diff would have
-# passed under the old FAIL=800, so this is the scenario that pins the change;
-# Scenario 8's 900 lines fail under either value and prove nothing about it.
+# --- Scenario 8a: the ceiling really is 1000, not 600. An 800-line diff would
+# have failed under the old FAIL=600, so this is the scenario that pins the
+# change; Scenario 8's 1100 lines fail under either value and prove nothing
+# about it.
 R="$TMP/s8a"
 new_repo "$R"
 git -C "$R" checkout -q -b work
-seq 1 700 >"$R/big.txt"
-git -C "$R" add -A && git -C "$R" commit -qm big700
+seq 1 800 >"$R/big.txt"
+git -C "$R" add -A && git -C "$R" commit -qm big800
 ds=$( (cd "$R" && BASE=base HEAD=HEAD bash "$DIFFSIZE" >/dev/null 2>&1)
   echo $?)
-assert 1 "$ds" "diff-size 700 changed lines → fail (ceiling is 600, not 800)"
+assert 0 "$ds" "diff-size 800 changed lines → pass (ceiling is 1000, not 600)"
 
 # --- Scenario 8b: and a diff comfortably under the ceiling still passes.
 R="$TMP/s8b"
@@ -403,7 +404,7 @@ new_repo "$R"
 git -C "$R" checkout -q -b work
 mkdir -p "$R/contracts" "$R/src"
 seq 1 900 >"$R/contracts/spec.md" # exempt
-seq 1 900 >"$R/src/big.ts"        # counted → over the 600 ceiling
+seq 1 1100 >"$R/src/big.ts"       # counted → over the 1000 ceiling
 git -C "$R" add -A && git -C "$R" commit -qm mixed
 ds=$( (cd "$R" && BASE=base HEAD=HEAD bash "$DIFFSIZE" >/dev/null 2>&1)
   echo $?)
@@ -426,7 +427,7 @@ new_repo "$R"
 git -C "$R" checkout -q -b work
 mkdir -p "$R/docs/mockups" "$R/src"
 seq 1 900 >"$R/docs/mockups/deck.html" # exempt
-seq 1 900 >"$R/src/big.ts"             # counted → over the 600 ceiling
+seq 1 1100 >"$R/src/big.ts"            # counted → over the 1000 ceiling
 git -C "$R" add -A && git -C "$R" commit -qm mixed
 ds=$( (cd "$R" && BASE=base HEAD=HEAD bash "$DIFFSIZE" >/dev/null 2>&1)
   echo $?)

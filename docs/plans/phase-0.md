@@ -85,8 +85,10 @@ prettier and eslint. Reviewed APPROVE WITH NITS; both [SHOULD]s fixed pre-merge.
 
 **✅ DONE 2026-07-19 — PR #2, squash `fff12c4`. The ticket text below is the
 ticket AS WRITTEN and two of its numbers have since moved — read the current
-scripts, not this.** The diff-size ceiling is **600**, not 800 (lowered in PR
-#14 because 800 predated any real ticket). And the freeze is no longer
+scripts, not this.** The diff-size ceiling is **1000**, not 800 (lowered to
+600 in PR #14 because 800 predated any real ticket, then raised back to 1000
+after pulse work kept getting forced into artificially small branches). And
+the freeze is no longer
 "hard-fail any edit to `fixtures/`": ADR-0008 replaced that with four rules, one
 per kind of file, because the blanket version made adding a vector impossible
 after the tag. `.github/scripts/diff-size.sh` and `contracts-guard.sh` are
