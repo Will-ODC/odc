@@ -12,6 +12,7 @@ import {
 } from "../src/identity/store.js";
 import { createServer, type ServerDeps } from "../src/http/server.js";
 import { SESSION_COOKIE, SessionSigner } from "../src/http/session.js";
+import { InMemoryVotingStore } from "../src/voting/store.js";
 
 const SECRET = "test-secret-that-is-long-enough";
 const START = new Date("2026-08-09T12:00:00.000Z");
@@ -44,6 +45,7 @@ async function setup(
   const app = await createServer({
     claims,
     voters,
+    votes: new InMemoryVotingStore(clock),
     signer,
     clock,
     // Omitted in the one test that pins the safe default.

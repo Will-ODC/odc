@@ -2,12 +2,6 @@
 
 What the server speaks today. Anything not listed here does not exist yet.
 
-> **This does not currently match `apps/pulse-web/src/api/types.ts`.** The client was
-> written from the UI's needs and the server from the domain's, and they disagree on
-> paths, on whether a vote can be changed, and on whether a ballot is one choice or
-> several. The differences are listed at the bottom; they are product decisions, not
-> merge noise, and they need settling before the two halves are wired together.
-
 Every error is `{ "error": "<slug>", "message": "<one plain sentence>" }`. The
 `message` is safe to show a person as-is. No response explains how anything is
 counted.
@@ -80,19 +74,133 @@ three. Expiry is checked on the server, not left to the browser. Signing out mov
 voter's sessions-valid-from to now, so every cookie issued earlier stops working — on
 every device, not only the one that clicked.
 
-## Not built yet
+## Polls, ballots, and results
 
-`GET /api/me` and `POST /api/sign-out` are in PR #87; the poll and vote routes are on
-`pulse/4d-voting-routes`, which has no PR yet. Both get documented here as they land.
+A poll is a question with a fixed, ordered set of choices and a `method` that says
+how it is answered: `single` is one choice, `approval` is any number of them. A
+ballot is an **array of choice indices** in both cases — the method decides how many
+entries are allowed, not the shape. A choice is referenced by its position in
+`choices`, never by its text.
 
-## Where the client and server disagree
+A vote is **changeable until the poll closes.** Casting again before close replaces
+the voter's ballot; there is no "already voted" refusal. This is a plain, mutable
+record — pulse is charter-exempt, so nothing here is append-only or hash-chained.
 
-| Thing           | Server (here)           | Client (`apps/pulse-web`)               |
-| --------------- | ----------------------- | --------------------------------------- |
-| Paths           | `/api/sign-in/redeem`   | `/claims/redeem`                        |
-| Vote path       | `/api/polls/:id/vote`   | `/polls/:id/votes`, `/polls/:id/ballot` |
-| A ballot        | one choice index        | an array — `single` and `approval`      |
-| Changing a vote | first vote stands (409) | replaceable until close (`changed`)     |
-| Unknown domain  | 403 naming the domain   | never reveals whether an address exists |
-| Result count    | `total`                 | `voters`                                |
-| Poll shape      | no `method`, no `open`  | both                                    |
+### `GET /api/polls/:id`
+
+The poll, in the shape the client reads. No session required — a story viewer reads
+this while moving through the story, and it reveals nothing about a person.
+
+```json
+{
+  "id": "p1",
+  "question": "Where next?",
+  "choices": ["Park", "Library", "Rink"],
+  "method": "approval",
+  "closesAt": "2026-08-10T12:00:00.000Z",
+  "open": true
+}
+```
+
+`closesAt` is an ISO timestamp, or `null` when the poll has no closing time. `open`
+is the server's own reading of whether votes are still accepted, not a copy of a
+clock the client would have to re-check.
+
+| Status | Body                 | When         |
+| ------ | -------------------- | ------------ |
+| 200    | the poll             | it exists    |
+| 404    | `error: "not_found"` | no such poll |
+
+### `GET /api/polls/:id/results`
+
+The tally. No session required.
+
+```json
+{
+  "pollId": "p1",
+  "question": "Where next?",
+  "method": "approval",
+  "voters": 2,
+  "choices": [
+    { "index": 0, "label": "Park", "count": 2, "share": 100 },
+    { "index": 1, "label": "Library", "count": 1, "share": 50 },
+    { "index": 2, "label": "Rink", "count": 1, "share": 50 }
+  ]
+}
+```
+
+`voters` is the number of **distinct people** who voted, not the number of
+selections. `share` is `count / voters * 100`, rounded to one decimal, `0` when
+nobody has voted. For an `approval` poll a voter picks several choices, so shares
+legitimately **sum to more than 100** — that is correct and is not normalised away.
+
+| Status | Body                 | When            |
+| ------ | -------------------- | --------------- |
+| 200    | the results          | the poll exists |
+| 404    | `error: "not_found"` | no such poll    |
+
+### `GET /api/polls/:id/ballot`
+
+The signed-in voter's own current ballot, so the UI can show what they picked.
+Requires a session.
+
+```json
+{ "ballot": [0, 2] }
+```
+
+`ballot` is `null` when this voter has not voted on this poll.
+
+| Status | Body                  | When             |
+| ------ | --------------------- | ---------------- |
+| 200    | `{ ballot }`          | signed in        |
+| 401    | `error: "signed_out"` | no valid session |
+| 404    | `error: "not_found"`  | no such poll     |
+
+### `POST /api/polls/:id/votes`
+
+Cast or change a ballot. Requires a session.
+
+```json
+{ "ballot": [1, 2] }
+```
+
+The ballot is validated the same way the client validates it before sending: every
+entry is a whole number naming a choice this poll has, entries are distinct, and a
+`single` poll takes at most one. An **empty ballot is refused**, not read as a
+retraction — the client never sends one, so an empty ballot is a bug, not someone
+withdrawing their vote.
+
+On a `counted` (first ballot) or `changed` (replacing a prior one) outcome, the
+response carries the stored ballot and the fresh results, so the client need not ask
+again:
+
+```json
+{
+  "status": "changed",
+  "ballot": [1, 2],
+  "results": { "pollId": "p1", "…": "…" }
+}
+```
+
+When the poll has closed, the body is just `{ "status": "closed" }`.
+
+| Status | Body                                                | When                                          |
+| ------ | --------------------------------------------------- | --------------------------------------------- |
+| 200    | `status: "counted" \| "changed"` + ballot + results | the ballot was recorded                       |
+| 200    | `status: "closed"`                                  | the poll is past its closing time             |
+| 400    | `error: "bad_request"`                              | body has no ballot array of whole numbers     |
+| 400    | `error: "bad_ballot"`                               | the ballot is not a valid answer to this poll |
+| 401    | `error: "signed_out"`                               | no valid session                              |
+| 404    | `error: "not_found"`                                | no such poll                                  |
+
+## Where the client and server still disagree
+
+The poll and vote paths, the ballot shape, changing a vote, `method`, `open`, and
+the `voters` count are now settled — those routes speak what
+`apps/pulse-web/src/api/types.ts` expects. What remains are decisions on the sign-in
+half, out of scope here:
+
+| Thing          | Server (here)         | Client (`apps/pulse-web`)               |
+| -------------- | --------------------- | --------------------------------------- |
+| Sign-in paths  | `/api/sign-in/redeem` | `/claims`, `/claims/redeem`             |
+| Unknown domain | 403 naming the domain | never reveals whether an address exists |

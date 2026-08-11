@@ -8,3 +8,8 @@
 # turns a mangled checkout into a confusing CI failure on every platform, and
 # -text alone would not notice deliberate corruption.
 contracts/fixtures/** -text
+
+# Pulse TS sources are text. store.ts once held a NUL byte in its vote key,
+# which made git flag it binary and hid its diffs; force textual diff so the
+# fix (and any future change) stays reviewable.
+apps/pulse/**/*.ts text diff
