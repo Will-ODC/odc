@@ -92,6 +92,29 @@ test("non_numeric_timestamps_do_not_verify_even_when_signed", () => {
   assert.equal(signer.verify(`${payload}.${mac}`), undefined);
 });
 
+test("the_issue_time_keeps_its_milliseconds", () => {
+  // Rounding iat down to its second puts a freshly issued cookie *behind* a
+  // sign-out that happened earlier in the same second, which locks the voter
+  // out of the session they just created.
+  const start = new Date("2026-08-09T12:00:00.600Z");
+  const { signer } = signerAt(start);
+  const claims = signer.verify(signer.sign("voter-1"));
+  assert.equal(claims?.issuedAt.getTime(), start.getTime());
+});
+
+test("two_cookies_issued_in_the_same_second_are_ordered", () => {
+  const h = signerAt(new Date("2026-08-09T12:00:00.100Z"));
+  const first = h.signer.verify(h.signer.sign("voter-1"));
+  h.after(0.3);
+  const second = h.signer.verify(h.signer.sign("voter-1"));
+
+  assert.ok(first && second);
+  assert.ok(
+    first.issuedAt.getTime() < second.issuedAt.getTime(),
+    "the two issue times collapsed onto the same instant",
+  );
+});
+
 test("a_short_secret_is_refused_outright", () => {
   assert.throws(() => new SessionSigner("too-short"), /at least 16/);
 });
