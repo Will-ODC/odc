@@ -6,7 +6,8 @@
   "description": "Builds the throwaway genesis-rehearsal chain (Phase 0 T6). Build tooling, never shipped.",
   "scripts": {
     "build": "tsc -p tsconfig.json",
-    "test": "node --test dist/test/*.test.js",
+    "test": "tsc -p tsconfig.json && node --test dist/test/*.test.js",
+    "rehearse": "node dist/src/rehearse.js",
     "lint": "eslint src test",
     "typecheck": "tsc -p tsconfig.json --noEmit"
   },

@@ -25,6 +25,10 @@ jobs:
         with:
           node-version: 20
           cache: pnpm
+      - uses: actions/setup-go@v5
+        with:
+          go-version-file: services/verifier/go.mod
+          cache-dependency-path: services/verifier/go.sum
       - run: pnpm install --frozen-lockfile
       # These pass trivially while the workspace has no packages yet (turbo runs
       # nothing, prettier checks the tracked files) and grow real teeth as
@@ -35,6 +39,14 @@ jobs:
       # Added with the first package that has tests (T5a). Passed trivially
       # before that, exactly as the three above did.
       - run: pnpm run test
+      # The Go verifier judges the same immutable fixtures independently. Keep
+      # this in the already-required repo job so a new fixture cannot land while
+      # the verifier disagrees, even without a branch-protection update.
+      - run: go test ./...
+        working-directory: services/verifier
+      # T8's complete gate: one clean chain and all eight contract tamper cases,
+      # each checked by both independent verifiers.
+      - run: pnpm --filter @odc/rehearsal rehearse
       # Golden vectors are byte-exact artifacts; nothing else in the repo would
       # notice a corrupted one. Deliberately a step inside this already-required
       # job rather than a new job, so it takes effect without a

@@ -30,8 +30,16 @@ second TypeScript one is ticketed separately as **T7b**.
 just rehearsal-build              # seed 1, default shape, export to stdout
 just rehearsal-build 7            # seed 7
 just rehearsal-build 7 "--case byte-flip --out tampered.ndjson"
+just rehearsal                    # both verifiers, clean + all eight tampers
+just rehearsal 7                  # reproduce the complete loop with seed 7
 node tools/rehearsal/dist/src/cli.js --help
 ```
+
+`just rehearsal` is the T8 gate. It builds the Go verifier and the standalone
+TypeScript verifier, then invokes both as external processes over the clean
+export and every tamper case. It compares only EV-17's verdict token and line
+attribution; advisory reason text is deliberately ignored. No verifier source
+or workspace implementation is imported into the other.
 
 The export goes to stdout (or `--out FILE`); the summary goes to stderr, so
 piping the export stays byte-clean.
