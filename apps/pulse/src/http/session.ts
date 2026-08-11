@@ -14,6 +14,13 @@ import { createHmac, timingSafeEqual } from "node:crypto";
  * - `iat` is what makes signing out real. A voter carries a `sessionsValidFrom`
  *   timestamp; sign-out moves it to now, and every cookie issued before that
  *   moment stops verifying — on every device, not just the one that clicked.
+ *
+ * Both timestamps are **milliseconds**, matching `sessionsValidFrom`. Seconds
+ * would round `iat` down to the start of its second, so someone who signed out
+ * at .400 and signed back in at .600 would be handed a cookie stamped .000 —
+ * earlier than their own sign-out, and refused on the next request. Flooring
+ * `sessionsValidFrom` instead only moves the hole to the other side, where
+ * cookies from earlier in the same second survive a sign-out.
  */
 export const SESSION_COOKIE = "pulse_session";
 
@@ -47,8 +54,8 @@ export class SessionSigner {
 
   /** `<voterId>.<iat>.<exp>.<signature>` — the cookie's whole value. */
   sign(voterId: string): string {
-    const iat = Math.floor(this.#clock().getTime() / 1000);
-    const exp = iat + this.#ttlSeconds;
+    const iat = this.#clock().getTime();
+    const exp = iat + this.#ttlSeconds * 1000;
     const payload = `${voterId}.${iat}.${exp}`;
     return `${payload}.${this.#mac(payload)}`;
   }
@@ -79,13 +86,13 @@ export class SessionSigner {
       return undefined;
     }
 
-    const now = Math.floor(this.#clock().getTime() / 1000);
+    const now = this.#clock().getTime();
     if (exp <= now) return undefined;
 
     return {
       voterId,
-      issuedAt: new Date(iat * 1000),
-      expiresAt: new Date(exp * 1000),
+      issuedAt: new Date(iat),
+      expiresAt: new Date(exp),
     };
   }
 
