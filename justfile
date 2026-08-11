@@ -23,11 +23,12 @@ rehearsal-build seed="1" flags="":
     @pnpm turbo run build --filter=@odc/rehearsal >/dev/null
     @node tools/rehearsal/dist/src/cli.js --seed {{ seed }} {{ flags }}
 
-# Phase 0 genesis rehearsal: throwaway chain → export → fresh verifier → tamper matrix
-# The chain and tamper halves are `rehearsal-build`; the loop that feeds them to
-# the Go verifier and reconciles the verdicts is T8.
-rehearsal:
-    @echo "TODO(T8): drive rehearsal-build through services/verifier — see .claude/skills/odc-contracts"
+# Phase 0 genesis rehearsal: clean chain + eight tamper cases, each judged by
+# the independent Go and TypeScript verifiers. An optional seed makes any
+# disagreement exactly reproducible.
+rehearsal seed="1":
+    @pnpm turbo run build --filter=@odc/rehearsal --filter=@odc/verifier-ts >/dev/null
+    @pnpm --filter @odc/rehearsal rehearse --seed {{ seed }}
 
 # End-to-end smoke: register → issue → vote → tally → export → verify
 # (seeded by the rehearsal scripts once Phase 1 lands)

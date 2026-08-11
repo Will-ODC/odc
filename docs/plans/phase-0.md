@@ -396,16 +396,16 @@ automated gate" — so T7b gates the freeze decision, not T9 or T9a.
 
 ### T8 — Rehearsal execution + spec iteration loop · odc-navigator orchestrates; odc-architect arbitrates spec edits
 
-- Run: T6 build → export → T7 verifier → expect VALID; full tamper matrix →
-  expect each INVALID at correct line; cross-language check: TS and Go
-  fixture hashes byte-identical.
+- Run: T6 build → export → T7 and T7b verifiers → expect VALID; full tamper
+  matrix → expect each INVALID at the correct line from both; cross-language
+  check: both independent fixture suites reproduce the committed hashes.
 - Any mismatch or T7 spec-bug → `odc-architect` session edits the spec (new numbered
   sentence or amended one), T5 regenerates affected vectors (legal only
   pre-freeze), T7's builder re-runs **in a new fresh context** if
   `hashing.md` changed materially. Loop until one clean pass end-to-end.
 - Wire `just rehearsal` to run the whole loop; keep scripts (they seed
   `just smoke` and nightly chain-smoke).
-- Acceptance: one fully clean pass, logged as `docs/decisions/0004-genesis-rehearsal.md`
+- Acceptance: one fully clean pass, logged as `docs/decisions/0012-genesis-rehearsal.md`
   (what iterations were needed — the record of what the prose got wrong).
 
 ### T9 — Security audit gate · odc-security-auditor — fresh context
