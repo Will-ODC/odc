@@ -7,10 +7,11 @@
 
 ## Current phase
 
-**Phase 0 — Contracts.** Nothing may be implemented in services/ until
-contracts/ passes the genesis rehearsal and reaches **RELEASE CANDIDATE**
-(ADR-0007). The `contracts-v1` freeze is deferred until real operational use —
-T5–T9 proceed on schedule; only the tag waits. `contracts/` is **DRAFTING**.
+**Phase 0 — Contracts.** The two-verifier genesis rehearsal passed (T8,
+ADR-0012). Nothing may be implemented in services/ until the T9 security audit
+passes and T9a advances `contracts/` to **RELEASE CANDIDATE** (ADR-0007). The
+`contracts-v1` freeze is deferred until real operational use; `contracts/`
+remains **DRAFTING** until T9a.
 
 ## Done (ledger — detail is in the cited squash commit)
 
@@ -147,13 +148,27 @@ now runs ET-4b then ET-4c on `registrar_pk` before capturing it, so `083` → IN
 line 1 and all 83 vectors pass. Applied **inline** (fixture-pinned, no ledger source
 opened) rather than in a fresh `odc-verifier-builder` context — acceptable for a
 one-check conformance fix, and T7↔T7b independence is unaffected (T7b is still a
-separate isolated build). **Still no Go/verifier CI job** — the suite runs by hand /
-at the T8 rehearsal; adding one is a queued pipeline follow-up (see Next).
+separate isolated build). The Go fixture suite and two-verifier rehearsal now run
+in required CI (T8, #95).
+
+**T7b — independent TypeScript verifier (COMPLETE, #78 `b0bbd70`).** Built in a
+hard-isolated context from `contracts/` alone, with no workspace imports and
+`@noble/curves` confined to ET-4c. It independently enforces raw-byte canonical
+JSON, hashing, signatures, payload rules, and ET-9c timing; all **83 fixtures**
+pass (**86 tests**). Fresh-context review found and fixed two unbounded
+argument-spread crashes before merge.
+
+**T8 — two-verifier genesis rehearsal (COMPLETE, #95 `982bf37`; ADR-0012).**
+`just rehearsal 1` built a 58-event seeded chain; the independent Go and
+TypeScript CLIs both returned VALID, then agreed on EV-17 verdict tokens and line
+numbers for all eight tamper cases. No contract, fixture, or golden hash changed.
+Required repository CI now runs the Go fixture suite and the complete rehearsal.
+Contracts remain **DRAFTING**; T9 is the next gate.
 
 ## Direction decisions — see the ADRs; carry-forward consequences below
 
 - **ADR-0007** — freeze deferred to operational use; three states DRAFTING →
-  RELEASE CANDIDATE (entered at T9; Phase 1 builds against it, no tag, specs stay
+  RELEASE CANDIDATE (entered at T9a; Phase 1 builds against it, no tag, specs stay
   fixable) → FROZEN. Added T9a; deferred T10 (which now re-audits any post-RC
   delta).
 - **ADR-0008** — FROZEN split by file kind: golden data add-only; `index.json`
@@ -167,38 +182,30 @@ at the T8 rehearsal; adding one is a queued pipeline follow-up (see Next).
 
 ## Next
 
-**T7 COMPLETE (#69) and ET-9c-CONFORMANT (T7-fix #75); the `registrar_pk` timing
-divergence is fully closed (ADR-0011).** T7b is the sole remaining head ticket
-before T8. Remaining Phase 0, in order:
+**T7b (#78) and T8 (#95) are complete; the genesis rehearsal passed without a
+contract ambiguity (ADR-0012).** Remaining Phase 0, in order:
 
-1. **T7b — 2nd independent verifier (TypeScript), fresh-context HARD isolation**
-   (`odc-implementer`; excludes `services/verifier/` too — independence is
-   per-context, not per-language, so T7b must not be a transliteration of T7).
-   New dir `tools/verifier-ts/`, no workspace-package import; Node stdlib only,
-   `@noble/curves` permitted for the ET-4c check ONLY. Same CLI/verdict contract as
-   T7. Gates the **freeze decision** (ADR-0007 §5). T7b is isolated and can't read
-   OPEN-QUESTIONS/ADR-0011, so **its ticket text must state the ET-9c timing
-   explicitly** (`registrar_pk` validated at its genesis declaration, not deferred);
-   fixture `083` enforces it either way, forcing agreement by construction.
-2. **Then:** T8 (rehearsal loop) → T9 (security audit) → T9a (RC → Phase 1). T10
-   re-audit deferred (re-measures the ET-4c library predicate — see the Ed25519
-   Done entry).
-
-**Also owed (tooling, no ticket):** a **Go/verifier CI job** running the verifier's
-fixture-driven `go test ./...`. It runs by hand only today — which is why fixture
-`083` didn't turn CI red when it landed ahead of T7-fix. Add one before/at T8 so
-verifier regressions and future fixtures are caught automatically; folds into the
-T8/pipeline work (`odc-pipeline`).
+1. **T9 — fresh-context phase-gate security audit** (`odc-security-auditor`).
+   Audit `contracts/`, fixtures, and the rehearsal result for identity leakage,
+   receipt-freeness failures, and operator equivocation. Use the stale unlanded
+   posture-audit branch only as input; create the authoritative audit under
+   `docs/security/`. Acceptance is APPROVE, or fixes followed by fresh re-audit.
+2. **T9a — release candidate**, immediately after T9 approval. Flip
+   `contracts/README.md` from DRAFTING to RELEASE CANDIDATE, reconcile the named
+   implementation/charter/service guidance, and move `memory/STATE.md` to Phase 1
+   (ledger · verifier · identity). **Do not create a `contracts-v1` tag.** T10
+   freeze and re-audit remain deferred until real operational use.
 
 **Owed with no ticket (how the last backlog rotted):** the **structure-aware fuzz
 as a committed test** — value-level, not byte-level (a byte fuzzer misses the
 crash class a value fuzz finds instantly). Bundle with #57's six deferred
-envelope-guard survivors (`verify.ts:93-102`, same class) and point both at
-T7b/T8's briefs.
+envelope-guard survivors (`verify.ts:93-102`, same class) and point both at the
+verifier/rehearsal surfaces.
 
-**Coverage is thinner than 82 vectors suggests.** Roughly half of ~130 rule ids
+**Coverage is thinner than 83 vectors suggests.** Roughly half of ~130 rule ids
 have no citing vector. `ET-4a`–`ET-4c` are now covered (vectors `078`–`082`);
-remaining real gaps for the T7b/T8 briefs: `ES-30`–`ES-32` (sig field), `ET-3`, `EX-14`
+remaining real gaps for T9 and later conformance work: `ES-30`–`ES-32` (sig field),
+`ET-3`, `EX-14`
 (head), most of `ids.md`, `EV-11`–`EV-14` (correction/retraction, incl. EV-13's
 ballot-plane prohibition). **`HA-7` is cited by no vector** despite six notes
 invoking it. Strong on what it covers, silent elsewhere — not a complete
