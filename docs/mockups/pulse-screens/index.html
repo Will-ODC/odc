@@ -1,0 +1,137 @@
+<!doctype html>
+<html lang="en">
+  <head>
+    <meta charset="utf-8" />
+    <meta name="viewport" content="width=device-width,initial-scale=1" />
+    <title>pulse — story screens (split)</title>
+    <link rel="stylesheet" href="_screens.css" />
+    <style>
+      .gallery {
+        width: min(560px, 100%);
+        margin: auto;
+      }
+      .gallery h1 {
+        margin: 0 0 4px;
+        font-size: 24px;
+        letter-spacing: -0.03em;
+      }
+      .gallery .lede {
+        margin: 0 0 20px;
+        color: var(--muted);
+        font-size: 14px;
+        line-height: 1.5;
+      }
+      .cards {
+        display: flex;
+        flex-direction: column;
+        gap: 10px;
+      }
+      .card {
+        display: flex;
+        align-items: center;
+        gap: 14px;
+        padding: 15px 16px;
+        border-radius: var(--r-control);
+        border: 1px solid var(--line);
+        background: var(--glass-strong);
+        backdrop-filter: blur(18px) saturate(135%);
+        text-decoration: none;
+        color: var(--ink);
+      }
+      .card:hover {
+        border-color: var(--blue);
+        box-shadow: 0 0 0 3px var(--blue-wash);
+      }
+      .card .num {
+        width: 34px;
+        height: 34px;
+        border-radius: 10px;
+        display: grid;
+        place-items: center;
+        flex: 0 0 auto;
+        background: var(--blue-wash);
+        color: var(--blue-deep);
+        font-weight: 800;
+        font-size: 15px;
+      }
+      .card b {
+        display: block;
+        font-size: 15px;
+        letter-spacing: -0.01em;
+      }
+      .card span {
+        font-size: 12.5px;
+        color: var(--muted);
+      }
+    </style>
+  </head>
+  <body>
+    <div class="gallery">
+      <p class="screen-label">pulse · story screens · split from v1</p>
+      <h1>The seven screens, one file each</h1>
+      <p class="lede">
+        Split from <b>pulse-story-mobile-v1.html</b> so each screen opens on its
+        own — for side-by-side "mockup vs. build" iteration. Controls still walk
+        to the next screen; all seven share <b>_screens.css</b>, so editing a
+        token there updates every screen at once.
+      </p>
+      <div class="cards">
+        <a class="card" href="01-claim.html">
+          <i class="num">1</i>
+          <span>
+            <b>Claim</b>
+            <span>“Your campus is deciding something this week.” — email + opt-in</span>
+          </span>
+        </a>
+        <a class="card" href="02-sent.html">
+          <i class="num">2</i>
+          <span>
+            <b>Link sent</b>
+            <span>“Check your email.” — dev console link, use a different email</span>
+          </span>
+        </a>
+        <a class="card" href="03-bite-1.html">
+          <i class="num">3</i>
+          <span>
+            <b>Story bite 1</b>
+            <span>“Getting to campus is the worst part of the day.”</span>
+          </span>
+        </a>
+        <a class="card" href="04-bite-2.html">
+          <i class="num">4</i>
+          <span>
+            <b>Story bite 2</b>
+            <span>“There is enough for one of them, not all four.” — stats pair</span>
+          </span>
+        </a>
+        <a class="card" href="05-vote.html">
+          <i class="num">5</i>
+          <span>
+            <b>Vote</b>
+            <span>“Which one should the money go to?” — pick + cast (live)</span>
+          </span>
+        </a>
+        <a class="card" href="06-results.html">
+          <i class="num">6</i>
+          <span>
+            <b>Results</b>
+            <span>“Here's where it stands.” — bars, your pick, 1,204 so far</span>
+          </span>
+        </a>
+        <a class="card" href="07-action.html">
+          <i class="num">7</i>
+          <span>
+            <b>Action</b>
+            <span>“This goes to transport services on Friday.” — promise + 3 ways to help</span>
+          </span>
+        </a>
+      </div>
+      <p class="notes">
+        The <b>six vote states</b> (nothing picked · one picked · confirming ·
+        many options · already voted · closed) are a separate reference:
+        <b>../pulse-vote-states-v1.html</b>. This split covers the story flow
+        only.
+      </p>
+    </div>
+  </body>
+</html>

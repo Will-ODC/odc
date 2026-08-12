@@ -1,0 +1,367 @@
+<!doctype html>
+<html lang="en">
+  <head>
+    <meta charset="utf-8" />
+    <meta name="viewport" content="width=device-width,initial-scale=1" />
+    <title>pulse — 1 · vote (dark split)</title>
+    <link rel="stylesheet" href="_screens.css" />
+    <style>
+      @import url("https://fonts.googleapis.com/css2?family=Inter:wght@400;500;600;700;800&display=swap");
+
+      /* Screen 1 opens on a DARK page so the phone matches the design. The shared
+         Civic Glass page (_screens.css) is light — that is for screens 2–7, which
+         are still the original mockups until they get the same redesign. */
+      html,
+      body {
+        background: #0c0f16;
+      }
+      .screen-label {
+        color: rgba(255, 255, 255, 0.5);
+      }
+      .screennav a {
+        background: rgba(255, 255, 255, 0.06);
+        border-color: rgba(255, 255, 255, 0.12);
+        color: rgba(255, 255, 255, 0.6);
+      }
+      .screennav a.index {
+        color: #9db4ff;
+      }
+
+      /* Screen 1: cardless, black base. The QUESTION is the hero — it fills the black
+         top third (pulse + incognito + question), with the No (red) | Yes (green)
+         side layers fading UP into that black so it reads as their background. The
+         vote sits in the lower two-thirds: two words balanced with their NEXT-vote
+         preview, on the chevron line. Muted edge chevrons hint the swipe. pulse is a
+         graph of linked votes, not one poll. Overrides the light Civic Glass shell. */
+      .screen.dark {
+        border-color: rgba(255, 255, 255, 0.1);
+        background: #0a0b0e;
+        box-shadow: 0 22px 55px rgba(0, 0, 0, 0.5);
+      }
+
+      /* the two colour layers, fading up into the black top third */
+      .tint {
+        position: absolute;
+        inset: 0;
+        display: flex;
+        z-index: 0;
+      }
+      .tint .t {
+        flex: 1;
+        transition: background 0.12s;
+        -webkit-mask-image: linear-gradient(to bottom, transparent 40%, #000 66%);
+        mask-image: linear-gradient(to bottom, transparent 40%, #000 66%);
+      }
+      .tint .t.no {
+        background: rgba(235, 110, 110, 0.09);
+      }
+      .tint .t.yes {
+        background: rgba(73, 205, 174, 0.09);
+      }
+
+      .content {
+        position: relative;
+        z-index: 1;
+        flex: 1;
+        display: flex;
+        flex-direction: column;
+        padding-top: 24px;
+      }
+
+      /* the question hero — black top third */
+      .head {
+        min-height: 34%;
+        padding: 0 24px;
+        display: flex;
+        flex-direction: column;
+        align-items: center;
+        gap: 14px;
+      }
+      .dark .brand {
+        color: #eef2f8;
+      }
+      .dark .dot {
+        background: rgba(255, 255, 255, 0.85);
+        box-shadow: none;
+      }
+      .head .chip {
+        background: rgba(255, 255, 255, 0.09);
+        color: rgba(255, 255, 255, 0.65);
+        border: 0;
+        font-weight: 600;
+      }
+      .head h1 {
+        margin: 4px 0 0;
+        font-size: 23px;
+        font-weight: 600;
+        line-height: 1.35;
+        letter-spacing: normal;
+        color: #f3f6fb;
+        text-align: center;
+      }
+
+      /* the vote — lower two-thirds, colour comes from .tint below */
+      .split {
+        flex: 1;
+        position: relative;
+        display: flex;
+        touch-action: pan-y;
+        cursor: pointer;
+      }
+      .half {
+        flex: 1;
+        display: flex;
+        flex-direction: column;
+        align-items: center;
+        justify-content: center;
+        gap: 14px;
+        padding: 0 12px;
+      }
+      .half .word {
+        font-size: 28px;
+        font-weight: 500;
+        color: rgba(255, 255, 255, 0.82);
+        transition:
+          color 0.12s,
+          transform 0.12s;
+      }
+      /* the next-vote preview this choice opens */
+      .next {
+        display: flex;
+        flex-direction: column;
+        align-items: center;
+        gap: 4px;
+        text-align: center;
+      }
+      .next .eyebrow {
+        font-size: 9px;
+        font-weight: 700;
+        letter-spacing: 0.16em;
+        color: rgba(255, 255, 255, 0.32);
+      }
+      .next .q {
+        font-size: 13px;
+        line-height: 1.35;
+        color: rgba(255, 255, 255, 0.55);
+        /* reserve two lines AND a fixed width so both sides match exactly:
+           same word level, same text block width */
+        min-height: 2.7em;
+        max-width: 118px;
+        margin: 0 auto;
+        display: flex;
+        align-items: center;
+        justify-content: center;
+      }
+      .chev {
+        position: absolute;
+        top: 50%;
+        transform: translateY(-50%);
+        z-index: 1;
+      }
+      .chev.l {
+        left: 8px;
+      }
+      .chev.r {
+        right: 8px;
+      }
+
+      .done {
+        position: absolute;
+        inset: 0;
+        z-index: 2;
+        display: none;
+        flex-direction: column;
+        align-items: center;
+        justify-content: center;
+        gap: 10px;
+        text-align: center;
+        padding: 0 30px;
+      }
+      .done .mark {
+        width: 54px;
+        height: 54px;
+        border-radius: 50%;
+        background: rgba(255, 255, 255, 0.12);
+        color: #fff;
+        display: grid;
+        place-items: center;
+        font-size: 25px;
+      }
+      .done b {
+        font-size: 18px;
+        font-weight: 600;
+        line-height: 1.4;
+        color: #f3f6fb;
+      }
+      .done span {
+        font-size: 13px;
+        line-height: 1.5;
+        color: rgba(255, 255, 255, 0.5);
+      }
+    </style>
+  </head>
+  <body>
+    <div class="showcase">
+      <p class="screen-label">pulse · 1 · vote (dark split)</p>
+      <div class="screen dark">
+        <section class="pane" data-pane="vote" data-active="true" style="padding: 0">
+          <div class="tint">
+            <div class="t no" data-tint-no></div>
+            <div class="t yes" data-tint-yes></div>
+          </div>
+
+          <div class="content" data-content>
+            <div class="head">
+              <div class="brand"><i class="dot"></i> pulse</div>
+              <svg width="92" height="83" viewBox="0 0 132 120" fill="none" aria-hidden="true">
+                <path d="M44 62 C44 34 55 26 66 26 C77 26 88 34 88 62 Z" fill="rgba(255,255,255,.92)" />
+                <ellipse cx="66" cy="63" rx="46" ry="8.5" fill="rgba(255,255,255,.92)" />
+                <path d="M30 80 h10" stroke="rgba(255,255,255,.8)" stroke-width="2.5" stroke-linecap="round" />
+                <path d="M92 80 h10" stroke="rgba(255,255,255,.8)" stroke-width="2.5" stroke-linecap="round" />
+                <rect x="38" y="74" width="26" height="18" rx="9" fill="rgba(255,255,255,.12)" stroke="rgba(255,255,255,.85)" stroke-width="2.5" />
+                <rect x="68" y="74" width="26" height="18" rx="9" fill="rgba(255,255,255,.12)" stroke="rgba(255,255,255,.85)" stroke-width="2.5" />
+                <path d="M64 81 h4" stroke="rgba(255,255,255,.85)" stroke-width="2.5" stroke-linecap="round" />
+              </svg>
+              <span class="chip">Official Ballot · Closes Friday</span>
+              <h1>Should the ODC stay free of paid ads?</h1>
+            </div>
+
+            <div class="split" data-split>
+              <svg class="chev l" width="15" height="40" viewBox="0 0 15 40" fill="none" aria-hidden="true">
+                <path data-ch-no d="M11 6 L5 20 L11 34" stroke="rgba(255,255,255,.22)" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" />
+              </svg>
+              <svg class="chev r" width="15" height="40" viewBox="0 0 15 40" fill="none" aria-hidden="true">
+                <path data-ch-yes d="M4 6 L10 20 L4 34" stroke="rgba(255,255,255,.22)" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" />
+              </svg>
+
+              <div class="half no">
+                <span class="word" data-w-no>No</span>
+                <div class="next">
+                  <span class="eyebrow">NEXT</span>
+                  <span class="q">Which ads are allowed?</span>
+                </div>
+              </div>
+              <div class="half yes">
+                <span class="word" data-w-yes>Yes</span>
+                <div class="next">
+                  <span class="eyebrow">NEXT</span>
+                  <span class="q">How do we pay for it?</span>
+                </div>
+              </div>
+            </div>
+          </div>
+
+          <div class="done" data-done>
+            <div class="mark">✓</div>
+            <b data-donelabel></b>
+            <span data-donenext></span>
+          </div>
+        </section>
+      </div>
+    </div>
+
+    <nav class="screennav">
+      <a class="disabled">← prev</a>
+      <a class="index" href="index.html">all screens</a>
+      <a href="02-sent.html">next: the case →</a>
+    </nav>
+
+    <script>
+      // The question fills the black top third; the two colour layers (.tint) fade up
+      // into it. The vote is the lower band: a swipe/tap records the vote AND opens
+      // the next linked vote — pulse is a graph, not one poll. Counts on commit; the
+      // email step verifies it later and never gates it.
+      const split = document.querySelector("[data-split]");
+      const content = document.querySelector("[data-content]");
+      const tno = document.querySelector("[data-tint-no]");
+      const tyes = document.querySelector("[data-tint-yes]");
+      const wno = document.querySelector("[data-w-no]");
+      const wyes = document.querySelector("[data-w-yes]");
+      const chno = document.querySelector("[data-ch-no]");
+      const chyes = document.querySelector("[data-ch-yes]");
+      const done = document.querySelector("[data-done]");
+      const label = document.querySelector("[data-donelabel]");
+      const next = document.querySelector("[data-donenext]");
+      const TH = 70;
+      let x = 0,
+        startX = 0,
+        drag = false,
+        moved = false,
+        settled = false;
+
+      const reset = () => {
+        tno.style.background = "rgba(235,110,110,.09)";
+        tyes.style.background = "rgba(73,205,174,.09)";
+        wno.style.color = "rgba(255,255,255,.82)";
+        wyes.style.color = "rgba(255,255,255,.82)";
+        wno.style.transform = "none";
+        wyes.style.transform = "none";
+        chno.setAttribute("stroke", "rgba(255,255,255,.22)");
+        chyes.setAttribute("stroke", "rgba(255,255,255,.22)");
+      };
+      const lean = (v) => {
+        x = v;
+        const r = Math.min(1, Math.abs(v) / TH);
+        reset();
+        if (v < 0) {
+          tno.style.background = `rgba(235,110,110,${0.09 + r * 0.14})`;
+          wno.style.color = `rgba(240,150,150,${0.82 + r * 0.18})`;
+          wno.style.transform = `scale(${1 + r * 0.08})`;
+          chno.setAttribute("stroke", `rgba(240,150,150,${0.22 + r * 0.5})`);
+        } else if (v > 0) {
+          tyes.style.background = `rgba(73,205,174,${0.09 + r * 0.14})`;
+          wyes.style.color = `rgba(120,235,205,${0.82 + r * 0.18})`;
+          wyes.style.transform = `scale(${1 + r * 0.08})`;
+          chyes.setAttribute("stroke", `rgba(120,235,205,${0.3 + r * 0.5})`);
+        }
+      };
+      const commit = (dir) => {
+        if (settled) return;
+        settled = true;
+        const win = dir > 0 ? tyes : tno;
+        win.style.transition = "background .3s ease";
+        win.style.background =
+          dir > 0 ? "rgba(73,205,174,.26)" : "rgba(235,110,110,.26)";
+        label.textContent =
+          dir > 0 ? "Yes — keep it ad-free" : "No — allow some";
+        next.textContent =
+          dir > 0
+            ? "Counted. Next: How do we pay for it?"
+            : "Counted. Next: Which ads are allowed?";
+        setTimeout(() => {
+          content.style.display = "none";
+          done.style.display = "flex";
+        }, 220);
+      };
+
+      split.addEventListener("pointerdown", (e) => {
+        if (settled) return;
+        drag = true;
+        moved = false;
+        startX = e.clientX;
+        split.setPointerCapture(e.pointerId);
+      });
+      split.addEventListener("pointermove", (e) => {
+        if (!drag) return;
+        const d = e.clientX - startX;
+        if (Math.abs(d) > 4) moved = true;
+        lean(d);
+      });
+      split.addEventListener("pointerup", (e) => {
+        if (!drag) return;
+        drag = false;
+        if (x > TH) return commit(1);
+        if (x < -TH) return commit(-1);
+        if (!moved) {
+          const rect = split.getBoundingClientRect();
+          return commit(e.clientX - rect.left > rect.width / 2 ? 1 : -1);
+        }
+        lean(0);
+      });
+      document.addEventListener("keydown", (e) => {
+        if (e.key === "ArrowRight") commit(1);
+        if (e.key === "ArrowLeft") commit(-1);
+      });
+    </script>
+  </body>
+</html>

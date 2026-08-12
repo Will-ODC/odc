@@ -1,0 +1,66 @@
+<!doctype html>
+<html lang="en">
+  <head>
+    <meta charset="utf-8" />
+    <meta name="viewport" content="width=device-width,initial-scale=1" />
+    <title>pulse — 6 · results</title>
+    <link rel="stylesheet" href="_screens.css" />
+  </head>
+  <body>
+    <div class="showcase">
+      <p class="screen-label">pulse · 6 · results</p>
+      <div class="screen">
+        <section class="pane" data-pane="results" data-active="true">
+          <div class="topline">
+            <span class="chip green">Counted</span>
+            <span>1,204 students so far</span>
+          </div>
+          <div class="body">
+            <h2 class="bite">Here's where it stands.</h2>
+            <p class="yours" data-yours>You picked “More 8am buses on the 99”.</p>
+            <div data-results></div>
+          </div>
+          <div class="foot">
+            <button class="btn" data-go="action">What happens now</button>
+          </div>
+        </section>
+      </div>
+    </div>
+
+    <nav class="screennav">
+      <a href="05-vote.html">← prev: vote</a>
+      <a class="index" href="index.html">all screens</a>
+      <a href="07-action.html">next: action →</a>
+    </nav>
+
+    <script src="_nav.js"></script>
+    <script>
+      // Renders the standings for the "picked option 1" state, same numbers and
+      // animation as the story mockup (BASE + your one vote, total 1,204).
+      const CHOICES = [
+        "More 8am buses on the 99",
+        "Covered, heated waiting areas",
+        "A protected bike lane on University Blvd",
+        "Late-night safe rides, 7 days a week",
+      ];
+      const BASE = [381, 212, 344, 266];
+      const picked = 0;
+      const counts = BASE.map((n, i) => n + (i === picked ? 1 : 0));
+      const total = counts.reduce((a, b) => a + b, 0);
+      const wrap = document.querySelector("[data-results]");
+      counts.forEach((n, i) => {
+        const share = ((n / total) * 100).toFixed(1);
+        const row = document.createElement("div");
+        row.className = "result";
+        if (i === picked) row.dataset.mine = "true";
+        row.innerHTML =
+          `<div class="row"><span>${CHOICES[i]}</span><span>${n} · ${share}%</span></div>` +
+          `<div class="track"><b></b></div>`;
+        wrap.appendChild(row);
+        requestAnimationFrame(() => {
+          row.querySelector("b").style.width = share + "%";
+        });
+      });
+    </script>
+  </body>
+</html>
