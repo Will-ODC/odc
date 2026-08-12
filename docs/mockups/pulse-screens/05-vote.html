@@ -1,0 +1,77 @@
+<!doctype html>
+<html lang="en">
+  <head>
+    <meta charset="utf-8" />
+    <meta name="viewport" content="width=device-width,initial-scale=1" />
+    <title>pulse — 5 · vote</title>
+    <link rel="stylesheet" href="_screens.css" />
+  </head>
+  <body>
+    <div class="showcase">
+      <p class="screen-label">pulse · 5 · vote</p>
+      <div class="screen">
+        <section class="pane" data-pane="vote" data-active="true">
+          <div class="bars">
+            <i data-done="true"><b></b></i>
+            <i data-done="true"><b></b></i>
+            <i data-done="true"><b></b></i>
+          </div>
+          <div class="topline">
+            <span class="chip blue">Your vote</span>
+            <span>3 of 3</span>
+          </div>
+          <div class="body">
+            <h2 class="bite">Which one should the money go to?</h2>
+            <p class="bite">Pick one. You can't change it afterwards.</p>
+            <div class="choices">
+              <button class="choice" aria-pressed="false">
+                <i class="tick">✓</i> More 8am buses on the 99
+              </button>
+              <button class="choice" aria-pressed="false">
+                <i class="tick">✓</i> Covered, heated waiting areas
+              </button>
+              <button class="choice" aria-pressed="false">
+                <i class="tick">✓</i> A protected bike lane on University Blvd
+              </button>
+              <button class="choice" aria-pressed="false">
+                <i class="tick">✓</i> Late-night safe rides, 7 days a week
+              </button>
+            </div>
+          </div>
+          <div class="foot">
+            <button class="btn" data-vote-submit disabled>Choose an option</button>
+          </div>
+        </section>
+      </div>
+    </div>
+
+    <nav class="screennav">
+      <a href="04-bite-2.html">← prev: bite 2</a>
+      <a class="index" href="index.html">all screens</a>
+      <a href="06-results.html">next: results →</a>
+    </nav>
+
+    <script src="_nav.js"></script>
+    <script>
+      // Single-screen pick interaction, lifted from the story mockup.
+      // Casting jumps to the results screen (06), matching the real flow.
+      let picked = null;
+      const buttons = [...document.querySelectorAll(".choice")];
+      const submit = document.querySelector("[data-vote-submit]");
+      buttons.forEach((b, i) =>
+        b.addEventListener("click", () => {
+          picked = i;
+          buttons.forEach((o, j) =>
+            o.setAttribute("aria-pressed", String(i === j)),
+          );
+          submit.disabled = false;
+          submit.textContent = "Cast my vote";
+        }),
+      );
+      submit.addEventListener("click", () => {
+        if (picked === null) return;
+        location.href = "06-results.html";
+      });
+    </script>
+  </body>
+</html>
