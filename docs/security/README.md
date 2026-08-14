@@ -37,6 +37,23 @@ the design, not a reason for a private directory.
 ## Status of documents in this directory
 
 Audits are **dated and scoped to the tree they examined**. An audit does not
-stay true as the tree moves; read the scope section before relying on one.
+stay true as the tree moves.
+
+So every audit filed here **MUST** carry, near the top:
+
+- the date and the commit or tree it examined;
+- what was read and what was not, and why — an unexamined area named is worth
+  more than a clean verdict that quietly did not cover it;
+- for each question the audit set out to answer, an explicit result even where
+  that result is "checked, no issue found", so a later reader can tell
+  **"checked and clean"** apart from **"not examined"**. These look identical in
+  a document that reports only findings, and confusing them is how a gap
+  survives an audit.
+
+An audit that makes a claim about what it demonstrated **MUST** leave behind
+what a re-auditor needs to re-run it, or say plainly that it did not. Evidence
+described but not retained is not evidence, and the fixes-then-re-audit path
+depends on the next auditor being able to reproduce the last one.
+
 A superseded audit is kept, not deleted — the record of what was checked and
 when is itself the point.

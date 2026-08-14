@@ -4,11 +4,15 @@ Unresolved design questions. Move each to an ADR when decided; delete when moot.
 
 ## Blocking the T9 gate (raised 2026-08-14, `docs/security/audit-phase-0.md`)
 
-The T9 audit returned **REQUEST CHANGES**. These five are new — the auditor ran
-without access to this file, the ADRs, or `STATE.md`, so nothing below is an echo
-of something already filed. Each must be decided before `contracts/` advances to
-RELEASE CANDIDATE. Full reasoning and reproducible attack artifacts are in the
-audit; only the question is restated here.
+The T9 audit returned **REQUEST CHANGES**. Each of these must be decided before
+`contracts/` advances to RELEASE CANDIDATE. Full reasoning is in the audit; only
+the question is restated here.
+
+These five are new — established by checking each against the entries already in
+this file, not by the auditor's isolation. The isolation is why the read was
+_independent_; it is not evidence of novelty, and the four "independently
+rediscovered" amendments further down are the proof, since those are cases where
+a cold auditor landed on something already filed.
 
 - **Q-A — What is a chain's identity, and what does an anchor publish?** (from
   F1, S3.) `chain_id` is `sha256(operator_pk)` with, in ET-7's own words, "no
@@ -205,8 +209,17 @@ choice}` at eligibility-check time — trust-by-policy per charter §10 v1,
   `contracts-v1` is tagged, so it must land before the tag or the spec keeps a
   worked example that does not support its own sentence.
 - **A security posture audit exists on a branch and has never landed.**
+  **Largely RESOLVED 2026-08-14 by T9** — `docs/security/` now exists, created by
+  the T9 branch with `audit-phase-0.md` as its first report and `README.md` as its
+  boundary, exactly as this entry and the T9 ticket specified. The posture audit
+  was mined as input and **not** merged; T9 records where it disagrees with it
+  (notably S2, where T9 argues the prior audit was wrong to call admission-time
+  knowledge the only human-to-ballot artifact). What remains open is only whether
+  the branch is now deletable — it has been mined twice, and nothing on it is
+  referenced except as a dated citation. The rest of this entry is kept for the
+  reasoning, which still governs how `docs/security/` is used.
   `claude/odc-security-posture-audit-urgrjs` holds `docs/security/posture-audit.md`
-  (406 lines); `docs/security/` does not exist on master. It is explicitly NOT
+  (406 lines). It is explicitly NOT
   the T9 audit — it inventories the four secrets the system will eventually hold
   (operator key, registrar key, the private linkage map, and the registrar's
   `{who, issue, choice}` knowledge — none of which exist yet), ranks ten
@@ -337,7 +350,7 @@ choice}` at eligibility-check time — trust-by-policy per charter §10 v1,
   and dangerous the moment any deployment reuses them.
 - Anchoring cadence and venue for the chain head in v1 (manual README anchor
   at genesis per phase-0 plan; automation cadence is a Phase 1+ question.)
-  **Upgraded 2026-08-14 by the T9 audit (S3) and folded into Q-A below.** This
+  **Upgraded 2026-08-14 by the T9 audit (S3) and folded into Q-A above.** This
   was filed as a scheduling question; T9 shows it is a correctness one. An anchor
   publishes a **head**, which names a position, not a chain — so anchoring cannot
   deliver charter §4's non-equivocation while F1 stands and there is no chain
