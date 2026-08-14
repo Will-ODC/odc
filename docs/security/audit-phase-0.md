@@ -11,22 +11,23 @@ running open-questions list, or any implementation discussion.
 
 # REQUEST CHANGES
 
-Five blocking findings. None is a defect in what the spec _says_; all five are
+Six blocking findings. None is a defect in what the spec _says_; all six are
 things the spec does not say, in places where silence is load-bearing and where
 the freeze makes the silence permanent. The specification itself is, on the axes
 it addresses, the most disciplined I have audited — see "What is sound" below,
 which is a result, not a courtesy.
 
-The blockers cluster into three fixable decisions and two missing normative
+The blockers cluster into four fixable decisions and two missing normative
 sentences:
 
-| #   | Finding                                                         | Why it gates RC rather than freeze                                               |
-| --- | --------------------------------------------------------------- | -------------------------------------------------------------------------------- |
-| F1  | `chain_id` does not identify a chain                            | Shapes `genesis`, which Phase 1 builds first; unfixable after freeze             |
-| F2  | Ballot timing and ordering are an unmitigated linkage channel   | Shapes the ledger write path, the first Phase 1 deliverable                      |
-| F3  | An unregistered `genesis` version yields an undefined verdict   | Shapes `evolution.md` and the verifier conformance suite                         |
-| F4  | Charter §8's fork/exit right is not expressible in the contract | Charter violation; genesis is pinned at `version` 1, so it cannot be added later |
-| F5  | Nothing bars a sentiment/monetizable event type from this chain | `evolution.md` is the rulebook that decides this, once                           |
+| #   | Finding                                                         | Why it gates RC rather than freeze                                                            |
+| --- | --------------------------------------------------------------- | --------------------------------------------------------------------------------------------- |
+| F1  | `chain_id` does not identify a chain                            | Shapes `genesis`, which Phase 1 builds first; unfixable after freeze                          |
+| F2  | Ballot timing and ordering are an unmitigated linkage channel   | Shapes the ledger write path, the first Phase 1 deliverable                                   |
+| F3  | An unregistered `genesis` version yields an undefined verdict   | Shapes `evolution.md` and the verifier conformance suite                                      |
+| F4  | Charter §8's fork/exit right is not expressible in the contract | Charter violation; genesis is pinned at `version` 1, so it cannot be added later              |
+| F5  | Nothing bars a sentiment/monetizable event type from this chain | `evolution.md` is the rulebook that decides this, once                                        |
+| F6  | The contract permits `registrar_pk == operator_pk`              | Adding the constraint later would retroactively invalidate conforming chains, which EV-1 bars |
 
 ---
 
@@ -52,9 +53,16 @@ sentences:
    all `INVALID` line numbers and `PARTIAL` line enumerations match. Built the
    TypeScript verifier and cross-checked it on every adversarial case I
    constructed. The stated factual context holds up.
-3. Constructed four adversarial exports the fixture set does not cover and ran
-   both verifiers on each (F1, F3, S4 below). Artifacts and generator are
-   reproducible from the snippets in this document.
+3. Constructed six adversarial exports the fixture set does not cover and ran
+   both verifiers on each (F1, F3, S4 below). The generator is committed at
+   `docs/security/attacks/generate-phase-0-attacks.mjs` and the six artifacts
+   it emits are retained alongside it, so a re-auditor can re-run every
+   demonstration this document makes rather than take its word for them. The
+   generator asserts on each run that its encoder reproduces the `hashing.md` §6
+   worked-example digest; if that self-check fails, none of the artifacts are
+   evidence. See `docs/security/attacks/README.md` — these are adversarial
+   inputs kept for re-audit, **not** conformance fixtures, and they are
+   deliberately outside `contracts/fixtures/`.
 
 **What I could not see, and why.** `memory/STATE.md`, `memory/OPEN-QUESTIONS.md`,
 `docs/decisions/` (all ADRs), and `docs/plans/` are absent from the sandbox by
@@ -64,11 +72,16 @@ reached. Consequences to keep in mind when reading: where a finding below says
 and the specs, which are the artifact a stranger gets, do not say. I read the
 ADRs only through the citations `contracts/` and `CONTRACTS-CHANGE.md` carry.
 
-**Prior work.** `_input/posture-audit-STALE-INPUT.md` (2026-07-26, `3bad0bc`)
-was mined, not inherited. Its S1 (stale voter-signed-ballot text in
+**Prior work.** The earlier, unmerged posture review — `docs/security/posture-audit.md`
+on branch `claude/odc-security-posture-audit-urgrjs` (2026-07-26, tree `3bad0bc`),
+supplied to me as a sandbox copy — was mined, not inherited. Its findings are
+cited below by its own ids (S1–S10, A-1/A-2), which are **its** numbering and are
+unrelated to the `S`-tagged findings of this document. Its S1 (stale
+voter-signed-ballot text in
 `implementation-plan.md` and `services/ledger/CLAUDE.md`) is **fixed** in this
 tree — plan §41–44 and `services/ledger/CLAUDE.md:6` now state the ADR-0004
-registrar model correctly. Where I disagree with it is marked inline (S2, S3).
+registrar model correctly. Where I disagree with it is marked inline, in my own
+findings S2 and S3.
 
 ---
 
@@ -262,8 +275,9 @@ but "may report success".
 Charter §8, "Exit is a right": _"the community can fork — the export, the
 software, the rules, and keys-as-identity mean a community can **re-declare
 genesis anchored to the old chain's head** and continue elsewhere without
-anyone's permission."_ Charter §12 and §8 mark exit as the discipline on the
-operator, i.e. load-bearing whether or not it is ever used.
+anyone's permission."_ The same section makes exit the discipline on the
+operator — _"Credible exit disciplines the operator even if never used"_ — i.e.
+load-bearing whether or not it is ever exercised.
 
 The contract makes the anchored re-declaration impossible:
 
@@ -330,7 +344,14 @@ permanent, in the ET-22/EV-13 register.
 
 ---
 
-### [SHOULD] S1 — The contract permits `registrar_pk == operator_pk`, collapsing "who sets the questions" and "who may vote" into one key, undetectably
+### [BLOCKING] F6 — The contract permits `registrar_pk == operator_pk`, collapsing "who sets the questions" and "who may vote" into one key, undetectably
+
+> _Promoted from `[SHOULD] S1` during review. I had rated it SHOULD on the
+> strength of the check being necessary-not-sufficient. That is an argument about
+> how much the fix buys, not about when it can be made, and the timing argument
+> is the one I used to make F1, F4 and F5 blocking — so rating this SHOULD was
+> inconsistent with my own reasoning. The severity below is corrected; the
+> substance is unchanged. There is no `S1` in this document as a result._
 
 `event-types.md:179–184` (ET-9a): _"The contract imposes no relation between
 `registrar_pk` and `operator_pk`. Operationally they SHOULD be distinct keys …
@@ -348,6 +369,20 @@ from the export, and free before freeze. It is necessary-not-sufficient — one
 party can still hold both distinct keys — but this spec has repeatedly adopted
 necessary-not-sufficient checks (ET-9b, ET-4b) on exactly that reasoning, and the
 sufficient version is undecidable from the log. Charter P2/P3 are the stakes.
+
+**Why this is blocking and not a nice-to-have.** The fix is available now and
+**only** now, for the same reason F1, F4 and F5 are blocking. Adding
+`registrar_pk != operator_pk` as a MUST after the freeze would make previously
+conforming chains retroactively `INVALID` at line 1 — a chain that legitimately
+declared one key under `contracts-v1` would be condemned by a later verifier.
+EV-1 bars exactly that: _"An existing frozen `(type, version)` schema MUST NOT be
+altered"_, and EV-4 forbids retroactive change on the same principle. So the
+constraint is not merely cheaper before freeze, it is **unavailable** after it —
+the identical timing argument I applied to F1 and F4, which I should have applied
+here in the first place. The stakes are also not small: a single key holding both
+roles lets one holder mint the questions and forge every answer, which is charter
+P2's _"two planes"_ and P3's _"never selects"_ collapsing into one party, with the
+verifier reporting `VALID`.
 
 ### [SHOULD] S2 — The registrar's signature is a 64-byte, registrar-chosen, permanent public field on every ballot: a subliminal channel that can carry the voter's identity forever
 
@@ -562,7 +597,7 @@ What I checked on each of the sub-cases the question names:
   branches (I built `fork1`/`fork2`, same genesis and same first ballot, opposite
   second ballot: both `VALID`). Nothing in the contract detects a sibling.
 - _Re-signing._ An operator holding both keys can rebuild any suffix of the chain
-  from any point. S1 notes the contract does not even require the two keys to be
+  from any point. F6 notes the contract does not even require the two keys to be
   distinct.
 - _What a verifier must check about chain identity and head continuity:_ **nothing
   and nothing.** There is no chain-identity input at all; `--head` is optional
@@ -645,7 +680,7 @@ consequence:
 ## What is sound
 
 Stated plainly, because a clean result at a gate is a deliverable and because
-four of the five blockers above are omissions rather than errors.
+five of the six blockers above are omissions rather than errors.
 
 - **The hashing construction is right and it is reproducible from the prose
   alone.** Explicit byte-string construction over length-prefixed fields with a
@@ -683,23 +718,56 @@ four of the five blockers above are omissions rather than errors.
   consider, not errors in what it does consider.
 - **RA-8** correctly refuses to let the API's own `head` masquerade as the
   anchor — a discipline that is easy to get wrong and consequential.
-- **The 83 fixtures** are well-chosen, cite their rules, and both verifiers pass
-  all of them on verdict and line. I verified this independently of the project's
-  own harness.
+- **The 83 fixtures** are well-chosen where they exist, cite the rules they
+  exercise, and both verifiers pass all of them on verdict and line — I verified
+  that independently of the project's own harness. **Their coverage is another
+  matter, and I should not have implied otherwise.** I measured it: the seven
+  specs define **143 normative rule ids**; `index.json` cites **70**, leaving
+  **73 uncited**. Per family: `EX` 17/20, `ES` 20/33, `ET` 18/31, `HA` 7/17,
+  `EV` 6/19, `ID` 2/10, and **`RA` 0/13 — the whole of `read-api.md` is cited by
+  no vector at all**, which is consistent with there being no fixture _form_ for
+  an HTTP surface, but means RA-1–RA-13 are pinned by nothing. (Every id cited
+  does resolve to a real rule; there are no dangling citations.)
+
+  And citation is an upper bound on coverage, not a measure of it — my own S4 is
+  the proof: `HA-2` is cited by vectors 006 and 011, yet its closing MUST
+  ("reject a string whose decoded value is not well-formed UTF-8") is exercised
+  by none of them. Uncited is not the same as untested, since one vector's
+  failure path often traverses several rules, and several uncited rules are
+  definitional rather than checkable (ES-13, ES-14, ES-21, ES-22, ES-29 — EV-15
+  says as much). But nobody has measured which. A rule-to-vector coverage report,
+  with a deliberate written justification for each rule left unpinned, is worth
+  producing **before** the tag makes `fixtures/` add-only.
 
 ---
 
 ## Reproducing the constructed attacks
 
-All four exports were produced by a ~60-line Node implementation of `hashing.md`
-and `export-format.md` written from the specs, and verified with both CLIs:
+Every demonstration in this document is re-runnable. The generator is committed:
 
-| Artifact                          | Demonstrates                                             | Go                | TS                |
-| --------------------------------- | -------------------------------------------------------- | ----------------- | ----------------- |
-| `chainA.ndjson` / `chainB.ndjson` | F1 — two chains, one `chain_id`, opposite outcomes       | `VALID` / `VALID` | `VALID` / `VALID` |
-| `fork1.ndjson` / `fork2.ndjson`   | F1 — common-prefix fork, undetectable                    | `VALID` / `VALID` | `VALID` / `VALID` |
-| `downgrade.ndjson`                | F3 — unregistered genesis version, nothing authenticated | `INVALID` line 2  | `INVALID` line 2  |
-| `illutf8.ndjson`                  | S4 — raw ill-formed UTF-8 in a title                     | `INVALID` line 2  | `INVALID` line 2  |
+```
+node docs/security/attacks/generate-phase-0-attacks.mjs
+```
 
-The generator uses only the published test seeds `0x01…01`, `0x02…02`,
-`0x03…03`, `0xee…ee` from `hashing.md` §6 and `fixtures/derivations.json`.
+It is a ~200-line implementation of `hashing.md` (HA-1–HA-17) and the canonical
+line form of `export-format.md` (EX-7–EX-9), written from the spec prose alone
+without reading either verifier's encoder, plus the code that emits the six
+artifacts below. It asserts on every run that its genesis reproduces the
+`hashing.md` §6 worked-example digest `78ed980b…f6409a`; if that self-check
+fails, the encoder has drifted and none of the artifacts are evidence. Key
+material is exclusively the published test seeds `0x01…01`, `0x02…02` from
+`hashing.md` §6 and `0xee…ee` from `fixtures/derivations.json`.
+
+Output and both verifiers' verdicts, re-confirmed after regeneration:
+
+| Artifact                                  | Demonstrates                                             | Go                | TS                |
+| ----------------------------------------- | -------------------------------------------------------- | ----------------- | ----------------- |
+| `attacks/chainA.ndjson` / `chainB.ndjson` | F1 — two chains, one `chain_id`, opposite outcomes       | `VALID` / `VALID` | `VALID` / `VALID` |
+| `attacks/fork1.ndjson` / `fork2.ndjson`   | F1 — common-prefix fork, undetectable                    | `VALID` / `VALID` | `VALID` / `VALID` |
+| `attacks/downgrade.ndjson`                | F3 — unregistered genesis version, nothing authenticated | `INVALID` line 2  | `INVALID` line 2  |
+| `attacks/illutf8.ndjson`                  | S4 — raw ill-formed UTF-8 in a title                     | `INVALID` line 2  | `INVALID` line 2  |
+
+`docs/security/attacks/README.md` describes each artifact and states plainly
+that these are adversarial inputs retained for re-audit — **not** conformance
+fixtures, not covered by any freeze rule, and not to be confused with or promoted
+into `contracts/fixtures/`.

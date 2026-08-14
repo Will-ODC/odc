@@ -26,4 +26,23 @@ export default tseslint.config(
   },
   js.configs.recommended,
   ...tseslint.configs.recommended,
+  {
+    // Plain .mjs files are Node scripts run directly by `node`, not bundled and
+    // not TypeScript. `js.configs.recommended` turns on `no-undef`, which knows
+    // no environment unless one is declared — so without this every `Buffer` and
+    // `console` in a working script is an error. tseslint disables `no-undef`
+    // for .ts files (the compiler already checks it), which is why this only
+    // bites here.
+    files: ["**/*.mjs"],
+    languageOptions: {
+      globals: {
+        Buffer: "readonly",
+        console: "readonly",
+        process: "readonly",
+        TextDecoder: "readonly",
+        TextEncoder: "readonly",
+        URL: "readonly",
+      },
+    },
+  },
 );
