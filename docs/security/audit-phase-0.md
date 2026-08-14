@@ -756,7 +756,9 @@ artifacts below. It asserts on every run that its genesis reproduces the
 `hashing.md` §6 worked-example digest `78ed980b…f6409a`; if that self-check
 fails, the encoder has drifted and none of the artifacts are evidence. Key
 material is exclusively the published test seeds `0x01…01`, `0x02…02` from
-`hashing.md` §6 and `0xee…ee` from `fixtures/derivations.json`.
+`hashing.md` §6 and `fixtures/derivations.json`, and `0xee…ee` from
+`tools/fixtures-gen/src/vectors/shared.ts:41` (`IMPOSTOR`) — `derivations.json`
+publishes only the first two.
 
 Output and both verifiers' verdicts, re-confirmed after regeneration:
 

@@ -8,11 +8,17 @@ The T9 audit returned **REQUEST CHANGES**. Each of these must be decided before
 `contracts/` advances to RELEASE CANDIDATE. Full reasoning is in the audit; only
 the question is restated here.
 
-These five are new — established by checking each against the entries already in
+These six are new — established by checking each against the entries already in
 this file, not by the auditor's isolation. The isolation is why the read was
 _independent_; it is not evidence of novelty, and the four "independently
 rediscovered" amendments further down are the proof, since those are cases where
 a cold auditor landed on something already filed.
+
+The audit carries **six blocking findings, F1–F6**. Five map to the questions
+below (F1→Q-A, F2→Q-B, F4→Q-D, F5→Q-E, F6→Q-H); F3 is blocking but amends the
+existing unregistered-`genesis`-version entry further down rather than opening a
+new one. Q-F and Q-G come from findings the audit rates SHOULD (S2, S5) and are
+listed here because they need design work, not because they gate the RC.
 
 - **Q-A — What is a chain's identity, and what does an anchor publish?** (from
   F1, S3.) `chain_id` is `sha256(operator_pk)` with, in ET-7's own words, "no
@@ -62,6 +68,18 @@ a cold auditor landed on something already filed.
   attested builds, threshold/split registrar signing, published nonce derivation.
   Also asks whether this moves blind-signature credentials off charter §11's
   deferred list.
+- **Q-H — Must `registrar_pk` differ from `operator_pk`?** (from F6, promoted
+  from SHOULD to blocking during review.) Nothing in `contracts/` requires the
+  two genesis keys to be distinct, so an operator may declare `registrar_pk ==
+operator_pk` and collapse "who sets the questions" into "who may admit voters",
+  undetectably — every signature still verifies, every rule still passes. The
+  promotion argument is the one F1, F4 and F5 rest on: adding a
+  `registrar_pk != operator_pk` MUST after the freeze would retroactively
+  invalidate chains that were conforming when written, which EV-1 and EV-4 bar.
+  So this is decidable cheaply now and not at all later. Note it is a
+  one-sentence constraint plus a fixture if the answer is yes, which is why it
+  was first filed as a SHOULD — the severity comes from the timing, not the
+  difficulty.
 
 **Added by the T9 orchestration, not by the auditor** (mechanical inventory,
 same date): **the entire read-api surface has zero conformance coverage.** An

@@ -26,15 +26,20 @@ Regenerates all six files deterministically. The generator implements
 worked-example digest `78ed980b…f6409a`. If that self-check fails, the encoder
 has drifted from the spec and nothing else in the directory is evidence.
 
-Key material is exclusively the published test seeds — `0x01…01` (operator),
-`0x02…02` (registrar) from `hashing.md` §6, and `0xee…ee` (wrong key) from
-`contracts/fixtures/derivations.json`. **TEST KEYS — never use on a real chain**
-(see finding S5).
+Key material is exclusively the published test seeds — `0x01…01` (operator) and
+`0x02…02` (registrar) from `hashing.md` §6 and `contracts/fixtures/derivations.json`,
+and `0xee…ee` (wrong key) from `tools/fixtures-gen/src/vectors/shared.ts:41`
+(`IMPOSTOR`). Note that `derivations.json` publishes only the `0x01`/`0x02`
+seeds; the `0xee` one is in the generator source, not in `contracts/`.
+**TEST KEYS — never use on a real chain** (see finding S5).
 
 ## Verifying
 
+`services/verifier` is its own Go module and there is no root `go.mod`, so the
+build must run from inside it:
+
 ```
-go build -o /tmp/odcverify ./services/verifier
+(cd services/verifier && go build -o /tmp/odcverify .)
 /tmp/odcverify docs/security/attacks/chainA.ndjson
 
 pnpm --filter @odc/verifier-ts build

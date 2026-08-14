@@ -15,7 +15,10 @@
 // script asserts that on every run.
 //
 // Key material is ONLY the published test seeds of hashing.md §6 and
-// contracts/fixtures/derivations.json. TEST KEYS — never use on a real chain.
+// contracts/fixtures/derivations.json, plus the 0xee wrong-key seed from
+// tools/fixtures-gen/src/vectors/shared.ts:41 (IMPOSTOR) — that one is NOT in
+// derivations.json, which publishes only 0x01 and 0x02.
+// TEST KEYS — never use on a real chain.
 
 import crypto from "node:crypto";
 import fs from "node:fs";
@@ -151,7 +154,7 @@ const ndjson = (events) => events.map(line).join("\n") + "\n";
 
 const OP = keyFromSeed("01".repeat(32)); // hashing.md §6 operator seed
 const REG = keyFromSeed("02".repeat(32)); // hashing.md §6 registrar seed
-const EVIL = keyFromSeed("ee".repeat(32)); // fixtures/derivations.json wrong-key seed
+const EVIL = keyFromSeed("ee".repeat(32)); // IMPOSTOR, fixtures-gen shared.ts:41
 const ZERO = "0".repeat(64); // ES-24 genesis anchor
 const CHAIN_ID = sha256hex(Buffer.from(OP.pubHex, "hex")); // ET-7
 
