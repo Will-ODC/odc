@@ -205,6 +205,31 @@ EV-5, and both verifiers are untouched by design.
   live instance of the open question about narrowing EV-5 to byte-changing
   changes.)
 
+### F6 — `registrar_pk` MUST differ from `operator_pk` (ADR-0018)
+
+- **`ET-9d` added and `ET-9a` amended** (`event-types.md`). ET-9a said "the
+  contract imposes no relation between `registrar_pk` and `operator_pk` … this
+  separation is policy, not verifier-enforced"; that sentence is gone. A `genesis`
+  declaring the same key twice is now `INVALID` at the genesis line — one string
+  comparison on the two 64-hex values after ET-9b, no decoding, no curve
+  arithmetic. A chain declaring one key twice hands one holder the power to mint
+  issues **and** forge every ballot on them, with `VALID` reported and nothing on
+  the line to signal it.
+- **Necessary, not sufficient, and ET-9d says so.** Two distinct keys can still be
+  held by one party and the log cannot tell; ET-9d blocks only the blatant,
+  declared collapse. Custody stays policy (ET-9a; charter §10 v1). This spec
+  adopts necessary-not-sufficient checks on exactly this reasoning elsewhere
+  (ET-9b, ET-4b).
+- **Timing is the whole reason it is blocking.** Adding this MUST after the tag
+  would retroactively condemn chains that were conforming when written, which EV-1
+  and EV-4 bar. It is not merely cheaper now — it is unavailable later.
+- **Owed fixture:** a `genesis` declaring one key in both roles, otherwise
+  entirely well-formed and correctly self-signed under it, with no `vote_cast` on
+  the chain, pinning `INVALID` at line 1. It must be clean in every other respect
+  or it pins ET-9b or ET-8 instead. **No existing vector changes verdict** — all
+  83 were checked, none declares the two keys equal (the corpus uses the
+  `hashing.md` §6 seeds `0x01…`/`0x02…`).
+
 ## fixtures/ README v11 — 2026-08-09 — record fixture 083 (ET-9c) and the new count
 
 - Doc-only: `contracts/fixtures/README.md` v10 → **v11**. Updates the count to

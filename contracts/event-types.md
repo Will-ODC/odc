@@ -163,7 +163,7 @@ declares the operator key that later `issue_created` events are signed with.
 | `chain_id`     | string | `^[0-9a-f]{64}$` — a restatement of `operator_pk`, NOT the chain's identity (ET-7, ET-7a) |
 | `contracts`    | string | the frozen contracts version this chain runs, e.g. `"contracts-v1"` |
 | `operator_pk`  | string | `^[0-9a-f]{64}$` — operator Ed25519 public key (32 bytes, hex)       |
-| `registrar_pk` | string | `^[0-9a-f]{64}$` — registrar Ed25519 public key (32 bytes, hex)      |
+| `registrar_pk` | string | `^[0-9a-f]{64}$` — registrar Ed25519 public key; MUST differ from `operator_pk` (ET-9d) |
 | `ancestor_head` | string | **OPTIONAL** (ES-34) — `^[0-9a-f]{64}$`, never the 64-zero anchor; the head of the chain this one forked from (ET-9e) |
 | `sig`          | string | `^[0-9a-f]{128}$` — Ed25519 signature (ET-4)                         |
 
@@ -197,12 +197,12 @@ declares the operator key that later `issue_created` events are signed with.
   and is covered by `hash` but places no further constraint on verification in
   v1.
 - **ET-9a.** `registrar_pk` declares the key under which `vote_cast` events on
-  this chain are signed (ET-17). The contract imposes no relation between
-  `registrar_pk` and `operator_pk`. Operationally they SHOULD be distinct keys:
-  the registrar key is held only by the identity service (which admits ballots),
-  and the identity service MUST NOT hold `operator_pk` (which creates issues) —
+  this chain are signed (ET-17). It MUST differ from `operator_pk` (ET-9d). The
+  registrar key is held only by the identity service (which admits ballots), and
+  the identity service MUST NOT hold `operator_pk` (which creates issues) —
   separating "who may vote" from "who sets the questions" (charter §P2, §P3).
-  This separation is policy, not verifier-enforced.
+  **Custody** of the two keys remains policy; their **distinctness** is
+  verifier-enforced (ET-9d).
 - **ET-9b.** `operator_pk` and `registrar_pk` MUST each be a 32-byte raw Ed25519
   public key (RFC 8032), carried as a string of exactly 64 lowercase hexadecimal
   characters matching `^[0-9a-f]{64}$` — the same key format `ids.md` ID-3 fixes
@@ -235,6 +235,30 @@ declares the operator key that later `issue_created` events are signed with.
   `vote_cast` line) — the one place they could disagree by construction rather
   than by coincidence (fixture `083`; ADR-0011).
 
+- **ET-9d.** _The two genesis keys MUST be distinct._ A `genesis` whose
+  `registrar_pk` is byte-identical to its `operator_pk` MUST be rejected —
+  `INVALID` at the `genesis` line. The comparison is on the two 64-character
+  lowercase-hex strings after ET-9b has passed on both, so it is one string
+  equality and needs no key material, no decoding and no curve arithmetic.
+
+  A chain declaring one key twice hands a single holder the power to mint issues
+  **and** forge every ballot on them, and today's verifier reports `VALID` with
+  nothing on the line to signal it — the argument ET-9b makes for the
+  lowercase-hex check, applied to a far larger fault. Charter P2's "two planes"
+  and P3's "never selects" collapse into one party.
+
+  **This check is necessary, not sufficient, and must not be read as more.** Two
+  distinct keys can still be held by one party, and the log cannot tell: nothing
+  in an export distinguishes a genuinely separated registrar from an operator
+  holding both keypairs. ET-9d blocks only the blatant collapse — the declaration
+  that is visible in the log — and the sufficient version is undecidable from the
+  log. This spec adopts necessary-not-sufficient checks on exactly this reasoning
+  elsewhere (ET-9b, ET-4b), and custody remains policy (ET-9a; charter §10 v1
+  trust-by-policy, hardened in identity v2).
+
+  The rule lands before the freeze because it cannot land after: adding it later
+  would make previously conforming chains retroactively `INVALID` at line 1, which
+  EV-1 and EV-4 both bar (ADR-0018).
 - **ET-9e.** _`ancestor_head` (OPTIONAL) — recorded fork ancestry._ A `genesis`
   payload MAY carry `ancestor_head`: the **head** of the chain this one was forked
   from — that chain's last event `hash` at the moment of the fork
@@ -503,6 +527,7 @@ Two of the three are verifiable from the export; the third is not, and says so.
 | What identifies a chain (the genesis hash)     | ET-7a             |
 | Two genesis keys: operator vs registrar        | ET-9a             |
 | Genesis key format (operator/registrar pk)     | ET-9b             |
+| Genesis keys MUST be distinct                  | ET-9d             |
 | Genesis key validation timing (at declaration) | ET-9c             |
 | Fork ancestry: optional, claim not link        | ET-9e             |
 | participant self-signing + id derivation       | ET-10, ET-11      |
@@ -536,7 +561,10 @@ is not 64 lowercase hex is rejected even though an uppercase key's bytes would
 still derive `chain_id` and verify the self-signature (ET-9b); that a `genesis`
 whose `registrar_pk` is canonically encoded but small-order or mixed-order is
 rejected at the `genesis` line where the key is declared, even on a chain with
-no `vote_cast` that never uses it (ET-9c); that a `genesis` carrying
+no `vote_cast` that never uses it (ET-9c); that a `genesis` declaring the same
+key as both `operator_pk` and `registrar_pk` is rejected on a string comparison,
+while two distinct keys held by one party remain undetectable to both (ET-9d);
+that a `genesis` carrying
 `ancestor_head` is checked for format and **not** for resolvability, so a fork
 verifies identically whether or not the reader holds its ancestor (ET-9e); that a `title`
 over 200 scalars or with a control character is rejected (ET-14); that an `issue_created` with `choice_count`
