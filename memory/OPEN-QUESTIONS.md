@@ -89,6 +89,36 @@ permanent, the number is provisional.
   of the same issue. Without that pin two verifiers agree a chain is bad and
   disagree where, which is the T7/ET-9c divergence shape all over again.
 
+### Delivered as three stacked PRs, 2026-08-15
+
+The work was cut into three reviewable units and opened as a stack. **Merge in
+order** — each is based on the one before, so merging out of order will show a
+reviewer the wrong diff.
+
+| PR   | Branch                     | Base                  | Contents                                        |
+| ---- | -------------------------- | --------------------- | ----------------------------------------------- |
+| #99  | `claude/t9-audit`          | `master`              | The audit, `docs/security/**`, attack generator |
+| #100 | `claude/t9-decisions`      | `claude/t9-audit`     | Independent F1 assessment + the six decisions   |
+| #101 | `claude/t9-adrs-contracts` | `claude/t9-decisions` | ADR-0013…0018 and the `contracts/` edits        |
+
+The seam is deliberate: #99 asks "is the audit sound", #100 asks "do we agree
+with these decisions", #101 asks "is the spec text correct". Three different
+review questions, and a single 2,500-line PR would have forced one reviewer to
+answer all three at once. `claude/context-memory-review-zjojus` is kept in sync
+with the stack tip as the everything-branch.
+
+**CI was checked, not assumed.** The concern that the combined branch would fail
+CI does not hold — every required check passes locally against the stack tip,
+run uncached: `format:check`; `npx eslint .` **run directly, because `turbo`
+caches `lint` and a green cached run right after moving files is not
+trustworthy**; `typecheck`; `turbo run test --force` 10/10; `go test -count=1`;
+the rehearsal at 9 scenarios × 2 verifiers; `fixtures-manifest` 87 files;
+`diff-size` at 382 counted lines against a 1000 ceiling (markdown is exempt,
+which is why 2,500 changed lines score 382); `contracts-guard`; and
+`guards.test.sh` 30/30. The split is for reviewability, which `odc-pipeline`
+requires anyway — one branch, one reviewable idea — not to rescue a failing
+build.
+
 ### ⚠️ Charter §4 edit — NOT RATIFIED
 
 The anchoring bullet now says a chain's **identity** (its genesis hash) and its
