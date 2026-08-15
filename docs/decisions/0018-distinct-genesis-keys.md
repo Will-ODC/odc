@@ -83,6 +83,19 @@ a MUST now and **nothing, permanently**.
   be well-formed in every other respect, or it pins ET-9b or ET-8 instead of
   ET-9d. A chain with no `vote_cast` is the right shape, so that nothing else can
   be blamed.
+- **One existing fixture `note` is now false and must be corrected in the same
+  fixture pass.** `contracts/fixtures/index.json`, vector
+  `057-issue-sig-wrong-key`, says: _"Deliberately NOT a test of ET-9a: ET-9a
+  closes with 'This separation is policy, not verifier-enforced', so a verifier
+  MUST NOT reject a chain merely because `operator_pk` and `registrar_pk`
+  coincide."_ ET-9d reverses that sentence. The vector's **verdict is unaffected**
+  — it fails ET-13, an `issue_created` signed by the wrong key, and its genesis
+  declares two distinct keys — so only the prose is wrong. It is urgent anyway:
+  ADR-0008 makes fixture `note` prose immutable at the tag, after which
+  `RETIRED.md` would be the only route to flagging it. Not edited here, because
+  this pass writes no fixtures; **named so the fixture pass cannot miss it.** It
+  is also a small proof of the finding's shape — a rule changed, and prose
+  elsewhere kept asserting the old one.
 - **Owed verifier work (both verifiers, isolated passes):** one string comparison
   at the genesis line, alongside the ET-9b/ET-9c checks already sited there.
 - **Operational consequence for Phase 1.** `identity` holds `registrar_pk`'s

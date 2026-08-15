@@ -229,6 +229,12 @@ EV-5, and both verifiers are untouched by design.
   or it pins ET-9b or ET-8 instead. **No existing vector changes verdict** — all
   83 were checked, none declares the two keys equal (the corpus uses the
   `hashing.md` §6 seeds `0x01…`/`0x02…`).
+- **One existing fixture `note` is now false.** `index.json` vector
+  `057-issue-sig-wrong-key` states that ET-9a means "a verifier MUST NOT reject a
+  chain merely because `operator_pk` and `registrar_pk` coincide". ET-9d reverses
+  that. The vector's **verdict is unaffected** (it fails ET-13, and its genesis
+  declares distinct keys) — only the prose is wrong, and it must be corrected in
+  the fixture pass, before the tag makes `note` prose immutable (ADR-0008).
 
 ## fixtures/ README v11 — 2026-08-09 — record fixture 083 (ET-9c) and the new count
 
