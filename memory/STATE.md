@@ -18,6 +18,10 @@ implemented in services/ until then, and T9a advances `contracts/` to **RELEASE
 CANDIDATE** (ADR-0007) only after that. The `contracts-v1` freeze stays deferred
 until real operational use; `contracts/` remains **DRAFTING**.
 
+**Conformance work is 1 of 4 phases done** (#104, #105). Phase 2 is next; the
+phase list, and why fixtures and verifiers must land together in each one, are
+under Next.
+
 ## Done (ledger — detail is in the cited squash commit)
 
 **Setup & CI**
@@ -187,26 +191,53 @@ Contracts remain **DRAFTING**; T9 is the next gate.
 
 ## Next
 
-**T9 ran and its six findings are answered in the specs (#98).** What remains
-before the gate reopens, in order — full detail in `OPEN-QUESTIONS.md`:
+**T9 ran and its six findings are answered in the specs (#98).** The conformance
+work runs in four phases, each landing **fixtures and both verifiers together**.
+That coupling is forced, not chosen: both verifiers enforce an **exact** payload
+key set, so a regenerated corpus and an un-updated verifier can never both be
+green. There is no ordering that avoids it, and branch protection will not accept
+a red intermediate.
 
-1. **Fixtures.** The batch parameters are **required** on `issue_created`
-   (optional would let a chain omit them and run unbatched), so **54 of 83 vectors
-   carry an `issue_created` and must be regenerated** — **verdicts surviving
-   unchanged**, a seq-gap vector still testing a seq gap. New vectors owed for F1,
-   F2, F3, F4, F6; F5 gets none by construction. Two traps live in this pass, both
-   listed under Blockers below.
-2. **Both verifiers, in separate isolated contexts** — independence is why there
-   are two. `--chain <genesis-hash>`, print the computed genesis hash and head
-   (EX-24, tool output not verdict, so no collision with EV-17), plus the F3
-   verdict, F6 key check, and F2 quantization/batch-size checks.
-3. **Fresh re-audit** by a context that did **not** write `audit-phase-0.md`.
-   This is the step that actually clears T9. Acceptance is APPROVE.
-4. **T9a — release candidate**, only after that APPROVE. Flip
-   `contracts/README.md` from DRAFTING to RELEASE CANDIDATE, reconcile the named
-   implementation/charter/service guidance, and move this file to Phase 1
-   (ledger · verifier · identity). **Do not create a `contracts-v1` tag.** T10
-   freeze and re-audit remain deferred until real operational use.
+**Phase 1 — DONE (#104, review fixes #105).** ET-14b regeneration.
+
+- All **83 vectors regenerated**; **verdicts and line numbers unchanged**,
+  verified by diffing every `id / verdict / line / lines` against the previous
+  corpus. Bytes, hashes and the two `head` inputs (`003`, `053`) moved.
+- Defaults are the floors, `60000` / `3`, **forced not chosen**: ballots are minted
+  on whole-minute boundaries, so a coarser interval would leave them non-quantized
+  under ET-23 and flip VALID vectors to INVALID.
+- **`005-boundaries` needed a real fix.** Its two ballots sat on one issue at
+  different minutes — two batches of one under ET-24, the earlier under-size and
+  not last, making a declared-VALID vector INVALID. They now share a batch instant.
+  **Verdict preserved by making the bytes conform, never by editing the
+  expectation**; it cites ET-24 so nobody tidies them apart later.
+- `057`'s stale ET-9a note corrected — the last cheap moment, since notes freeze
+  at the tag (ADR-0008).
+- Both verifiers brought to ET-14b in **separate isolated sandboxes**. The
+  phase-1 review then built both CLIs and ran **25 differential cases** across the
+  floor boundary: identical verdict **and** line every time.
+
+**Phase 2 — NEXT.** F3 (unregistered `genesis` → INVALID line 1) + F6 (distinct
+genesis keys) + F4 (`ancestor_head`) vectors, the matching verifier checks, and
+**inverting `conformance.test.ts:189`** — which must happen _with_ the F3 vector,
+never before, since inverted alone it asserts a vector that does not exist.
+
+**Phase 3.** F2 batching vectors — ET-23 quantization, ET-24 batch size, and the
+below-floor vectors that finally discriminate the ET-14b floors. **Reshaping
+`tools/rehearsal` belongs here** (see Blockers).
+
+**Phase 4.** F1 — `--chain <genesis-hash>` and printing the computed genesis hash
+and head (EX-24, scoped as tool output not verdict, so no collision with EV-17).
+The fixture index already carries per-vector inputs (`003`/`053` use `head`), so
+`--chain` needs no new fixture mechanism.
+
+**Then: fresh re-audit** by a context that did **not** write
+`audit-phase-0.md` — the step that actually clears T9; acceptance is APPROVE.
+**Then T9a — release candidate**: flip `contracts/README.md` DRAFTING →
+RELEASE CANDIDATE, reconcile the named implementation/charter/service guidance,
+and move this file to Phase 1 (ledger · verifier · identity). **Do not create a
+`contracts-v1` tag.** T10 freeze and re-audit stay deferred until real
+operational use.
 
 **Operator decisions already settled, do not re-litigate.** The six findings
 (ADR-0013…0018) were worked through one at a time. The F2 batch floors —

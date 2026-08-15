@@ -115,23 +115,22 @@ GitHub comment is a trap nobody reads at the moment it fires.
   of the same issue. Without that pin two verifiers agree a chain is bad and
   disagree where, which is the T7/ET-9c divergence shape all over again.
 
-### Delivered as three stacked PRs, 2026-08-15
+### Landed as #98, 2026-08-15 — the PR stack was closed, not merged
 
-The work was cut into three reviewable units and opened as a stack. **Merge in
-order** — each is based on the one before, so merging out of order will show a
-reviewer the wrong diff.
+The work was originally cut into three reviewable units and opened as a stack
+(#99 `claude/t9-audit` → #100 `claude/t9-decisions` → #101
+`claude/t9-adrs-contracts`, each based on the one before). The seam was
+deliberate: #99 asks "is the audit sound", #100 asks "do we agree with these
+decisions", #101 asks "is the spec text correct" — three different review
+questions a single 2,500-line PR would have forced one reviewer to answer at
+once.
 
-| PR   | Branch                     | Base                  | Contents                                        |
-| ---- | -------------------------- | --------------------- | ----------------------------------------------- |
-| #99  | `claude/t9-audit`          | `master`              | The audit, `docs/security/**`, attack generator |
-| #100 | `claude/t9-decisions`      | `claude/t9-audit`     | Independent F1 assessment + the six decisions   |
-| #101 | `claude/t9-adrs-contracts` | `claude/t9-decisions` | ADR-0013…0018 and the `contracts/` edits        |
-
-The seam is deliberate: #99 asks "is the audit sound", #100 asks "do we agree
-with these decisions", #101 asks "is the spec text correct". Three different
-review questions, and a single 2,500-line PR would have forced one reviewer to
-answer all three at once. `claude/context-memory-review-zjojus` is kept in sync
-with the stack tip as the everything-branch.
+**That is not what happened.** `#98` merged the whole combined branch
+(`claude/context-memory-review-zjojus`, the everything-branch the stack was
+kept in sync with) directly to `master` before the stack finished review, so
+`#99`/`#100`/`#101` became redundant — their content already existed on
+`master` through `#98` — and were **closed unmerged**. ADR-0013…0018 and the
+`contracts/` edits landed via #98.
 
 **CI was checked, not assumed.** The concern that the combined branch would fail
 CI does not hold — every required check passes locally against the stack tip,
@@ -145,17 +144,17 @@ which is why 2,500 changed lines score 382); `contracts-guard`; and
 requires anyway — one branch, one reviewable idea — not to rescue a failing
 build.
 
-### ⚠️ Charter §4 edit — NOT RATIFIED
+### Charter §4 edit — RATIFIED 2026-08-15
 
-The anchoring bullet now says a chain's **identity** (its genesis hash) and its
-**head** must be published **together**, because a head names a position on _some_
-chain, so publishing it alone lets an operator run two chains and anchor one. The
-content follows from the ratified F1 decision and from the independent assessment.
-**But the operator has not ratified the charter wording**, and this project's
-standing rule is that charter edits are an operator decision, not a routine docs
-merge (see the ballot-expressiveness entry, where part A was explicitly marked
-operator-ratified). It is committed on the branch. **Ratify or revise before
-merge.**
+The anchoring bullet says a chain's **identity** (its genesis hash) and its
+**head** must be published **together**, because a head names a position on
+_some_ chain, so publishing it alone lets an operator run two chains and anchor
+one. The content follows from the ratified F1 decision (ADR-0013) and the
+independent assessment below Q-A. **The operator ratified the wording on
+2026-08-15**, per this project's standing rule that charter edits are an
+operator decision, not a routine docs merge (see the ballot-expressiveness
+entry, where part A was likewise explicitly marked operator-ratified).
+`memory/STATE.md` records the ratification. Landed via #98.
 
 | #   | Decision                                                                                                                                                                          |
 | --- | --------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- |
@@ -201,19 +200,23 @@ merge.**
   keys can still be held by one party and the log cannot tell. It blocks the
   blatant collapse only.
 
-- **Q-A — What is a chain's identity, and what does an anchor publish?** (from
-  F1, S3.) `chain_id` is `sha256(operator_pk)` with, in ET-7's own words, "no
-  free parameter" — so it is **identical across every chain that operator ever
-  starts**. The audit built two complete chains differing only in a 1 ms genesis
-  `ts`, reaching opposite outcomes on the same question, carrying the _same_
-  `chain_id`, both `VALID` under both verifiers. Nothing requires a chain to be
-  unique per `chain_id`, and no verifier input names a chain. Charter §4 rests
-  non-equivocation on anchoring, and anchoring needs something to anchor to.
-  Options given: add a `genesis_nonce` key; or (cheaper) declare normatively that
-  **a chain's identity is its `genesis` event hash**, demote `chain_id`, and add a
-  `--chain <genesis-hash>` verifier input. **Unfixable after freeze** — ES-18
+- **Q-A — DECIDED → ADR-0013.** _What is a chain's identity, and what does an
+  anchor publish?_ (F1, S3.) `chain_id` is `sha256(operator_pk)` with, in
+  ET-7's own words, "no free parameter" — so it is **identical across every
+  chain that operator ever starts**. The audit built two complete chains
+  differing only in a 1 ms genesis `ts`, reaching opposite outcomes on the same
+  question, carrying the _same_ `chain_id`, both `VALID` under both verifiers.
+  **Answer: a chain's identity is the `hash` of its `genesis` event**, not
+  `chain_id`, which is demoted to a mere restatement of `operator_pk`. ET-7a
+  states identity normatively; `--chain <genesis-hash>` is a new verifier input
+  (`INVALID` at line 1 on mismatch, EX-21–EX-23); every verifier run MUST now
+  print the genesis hash and head it computed (EX-24) — a tool that only says
+  `VALID` was answering "is _some_ chain valid". No new `genesis` field: the
+  genesis hash already commits to `operator_pk`, `registrar_pk`, `contracts`
+  and `ts`, so the cheaper option (declare identity, don't add a nonce) won,
+  and it was the only option available after the freeze in any case (ES-18
   closes the genesis key set, ET-6 pins `genesis.version` to 1, EV-1 forbids
-  altering a frozen `(type, version)`.
+  altering a frozen `(type, version)`).
 
   **INDEPENDENT ASSESSMENT, 2026-08-15.** The operator challenged both the
   severity and the fix, so the question went to a separate model with no stake in
@@ -261,59 +264,62 @@ merge.**
     SHOULD, and folded into this entry) outranks the naming problem, and the two
     should be decided together.
 
-  **Recommended resolution**, superseding the audit's two-option framing:
+  **Recommended resolution, superseding the audit's two-option framing — items
+  1–3 are what ADR-0013 implemented:** identity = the `genesis` event hash
+  (unique per chain, no schema change, matches RFC 9162's direction of
+  decoupling log ID from key); ET-7's "stable identifier" language fixed
+  rather than left frozen wrong; the verifier now prints the genesis hash and
+  head it computed rather than only `VALID`.
 
-  1. **Identity = the `genesis` event hash** (option b). It already commits to
-     operator key, `ts` and contracts version, is unique per chain, and changes no
-     schema. Matches the field's direction (RFC 9162 decoupling ID from key; C2SP
-     `origin`).
-  2. **Also fix ET-7's description before the freeze** — either drop the "stable
-     identifier" language or take option (a)'s nonce. Leaving a frozen sentence
-     that names `chain_id` as the chain's identity is the part that does not
-     cleanly survive.
-  3. **The verifier MUST print the genesis hash and head it computed**, not merely
-     accept them as inputs. A tool that answers only `VALID` is answering "is
-     _some_ chain valid", which is the wrong question. Neither the audit nor the
-     orchestrator proposed this; it is cheap and independent of the freeze.
-  4. **Anchor contents:** `(genesis_hash, seq, head_hash, timestamp, operator
-signature)` — a signed checkpoint, ideally in C2SP signed-note format so
-     witness tooling can be inherited later. With a fixed cadence and **a normative
-     rule that a gap or regression in `seq` is itself an alarm**, without which a
-     missing anchor is undetectable. This is the charter's real omission.
+  **Item 4, anchor contents, is NOT decided by ADR-0013 and remains open —
+  the anchoring layer itself is a new artifact, not an event schema, and is
+  safely addable post-freeze.** Recorded proposal: `(genesis_hash, seq,
+head_hash, timestamp, operator signature)` as a signed checkpoint, ideally
+  in C2SP signed-note format so witness tooling can be inherited later, with a
+  fixed cadence and **a normative rule that a gap or regression in `seq` is
+  itself an alarm** — without which a missing anchor is undetectable. This is
+  the charter's real remaining omission on anchoring.
 
-  **Timing, corrected.** Genuinely irreversible at the freeze: the `genesis` key
-  set, so **option (a) dies then** — a nonce is now or never. Also risky to defer:
-  `chain_id`'s frozen normative description, since redefining semantics later is
-  not clearly additive and implementations will key on it meanwhile. Safely
-  post-freeze: verifier flags and output, the anchor spec (a new artifact, not an
-  event schema), and documentation. So settle **identity** before the freeze; build
-  **anchoring** immediately after.
-
-- **Q-B — What publication discipline makes ballots receipt-free against an
-  observer who knows when a voter voted?** (from F2.) ET-21 proves the _voter_
-  retains no artifact; it does not address a **coercer assembling one**. With
-  ES-20 millisecond timestamps, monotonic `seq`, and an unauthenticated tail read
-  (RA-12/RA-13 exist to make that cheap), someone who watches you vote reads your
-  `choice` in the clear. Needs a batch interval, timestamp quantization, and
-  minimum batch size _k_ — and an accepted liveness cost for the delay between
-  casting and appearing. This shapes the ledger write path, the first Phase 1
-  deliverable, which is why it cannot wait.
-- **Q-D — How does a forked community record its ancestor head?** (from F4.)
-  Charter §8 states as a **right** that a community "can re-declare genesis
-  anchored to the old chain's head and continue elsewhere without anyone's
-  permission." There is no slot to hold that head: `prev_hash` at seq 1 is fixed
-  at 64 zeros, the genesis key set is closed (ES-18), and genesis cannot take a
-  version 2 (ET-6). The contract cannot express a capability the charter grants —
-  a charter violation, and unaddable after freeze. Either an optional
-  `ancestor_head` key lands before the freeze, or the charter is amended.
-- **Q-E — May a sentiment or monetizable event type ever share the governance
-  chain?** (from F5.) Non-negotiable rule 7 and charter §8's "monetizable data is
-  a separate, labeled stream" both say no, but `evolution.md` — the rulebook that
-  actually decides what may be added — contains no bar. ET-22 and EV-13 show the
-  project knows how to write a permanent prohibition; the mirror for the sentiment
-  plane is simply absent. Needs a permanent `evolution.md` rule that survives a
-  future community vote, as charter §8 requires of the ballots-outside-commerce
-  guarantee.
+- **Q-B — DECIDED → ADR-0014.** _What publication discipline makes ballots
+  receipt-free against an observer who knows when a voter voted?_ (F2.) ET-21
+  proves the _voter_ retains no artifact; it does not address a **coercer
+  assembling one** — with ES-20 millisecond `ts`, monotonic `seq`, and a cheap
+  unauthenticated tail read (RA-12/RA-13), someone who watches you vote reads
+  your `choice` in the clear. **Answer: mechanism fixed permanently
+  (ET-23–ET-25 — quantized `ts`, minimum batch size, non-arrival internal
+  order), parameters governable per-issue on `issue_created`, floors permanent**
+  (see the operator-confirmed floors above: interval ≥ 60000 ms, min ≥ 3).
+  **Quorum (a minimum-turnout publication threshold) is explicitly deferred,
+  not solved by this mechanism** — small-turnout exposure is arithmetic on the
+  tally (5 votes at 3–2 with four known reveals the fifth; 5–0 reveals
+  everyone), not timing, so no interval/batch/shuffle addresses it. Accepted
+  trade: a pre-casting warning shown to voters that early low-turnout votes may
+  be identifiable, owed to Phase 1 identity/web work — the irreversible part is
+  the published data, not the rule, so keep early votes low-stakes.
+- **Q-D — DECIDED → ADR-0016.** _How does a forked community record its
+  ancestor head?_ (F4.) Charter §8 grants forking as a **right** — re-declare
+  genesis anchored to the old chain's head — but the contract had no slot for
+  it (`prev_hash` fixed at 64 zeros, genesis key set closed, genesis version
+  pinned to 1): a charter violation, unaddable after freeze. **Answer: optional
+  `ancestor_head` key added to `genesis` (ET-9e)**, format-checked only — a
+  recorded claim, not a verified link, since the verifier cannot fetch the
+  ancestor chain to confirm it — with the 64-zero anchor explicitly barred as a
+  value (one meaning, one representation, not two byte-forms of "no ancestor").
+  **This is the only key `genesis` will ever gain again**; ES-18/ET-6/EV-1
+  close the door permanently after this one use.
+- **Q-E — DECIDED → ADR-0017.** _May a sentiment or monetizable event type
+  ever share the governance chain?_ (F5.) Non-negotiable rule 7 and charter
+  §6/§8 all said no, but `evolution.md` — the rulebook that actually decides
+  what may be added — carried no bar, so a future additive type could legally
+  reach it. **Answer: permanent `evolution.md` EV-22,** barring any future
+  type whose payload carries a response (sentiment/survey/rating/etc.), worded
+  to still permit what the sentiment service needs — an aggregate,
+  never-per-respondent commitment hash with no respondent identifier (a
+  per-response hash is a response in disguise, since a small answer space is
+  invertible by enumeration). The bar is directional: a sentiment-shaped
+  question run **as a ballot** is wasteful and clutters the chain but is not a
+  security fault, and the contract deliberately does not try to judge a
+  title's meaning — that is moderation's job (charter §9), not the verifier's.
 - **Q-F — What mitigates the registrar's signature as a subliminal channel?**
   (from S2.) Every ballot carries 64 registrar-chosen, published, permanent
   signature bytes, into which the registrar can encode the voter's identity
@@ -324,18 +330,18 @@ signature)` — a signed checkpoint, ideally in C2SP signed-note format so
   attested builds, threshold/split registrar signing, published nonce derivation.
   Also asks whether this moves blind-signature credentials off charter §11's
   deferred list.
-- **Q-H — Must `registrar_pk` differ from `operator_pk`?** (from F6, promoted
-  from SHOULD to blocking during review.) Nothing in `contracts/` requires the
-  two genesis keys to be distinct, so an operator may declare `registrar_pk ==
-operator_pk` and collapse "who sets the questions" into "who may admit voters",
-  undetectably — every signature still verifies, every rule still passes. The
-  promotion argument is the one F1, F4 and F5 rest on: adding a
-  `registrar_pk != operator_pk` MUST after the freeze would retroactively
-  invalidate chains that were conforming when written, which EV-1 and EV-4 bar.
-  So this is decidable cheaply now and not at all later. Note it is a
-  one-sentence constraint plus a fixture if the answer is yes, which is why it
-  was first filed as a SHOULD — the severity comes from the timing, not the
-  difficulty.
+- **Q-H — DECIDED → ADR-0018.** _Must `registrar_pk` differ from
+  `operator_pk`?_ (F6, promoted from SHOULD to blocking during review — the
+  timing argument that a new MUST here, added after the freeze, would
+  retroactively invalidate previously-conforming chains, barred by EV-1/EV-4,
+  is the same argument that carried F1/F4/F5.) **Answer: yes — ET-9d**, a
+  `genesis` with `registrar_pk == operator_pk` is `INVALID` at line 1 (plain
+  string comparison, after ET-9b format checks pass). **Necessary, not
+  sufficient, and said so deliberately**: two distinct keys can still be held
+  by one party and the log cannot tell — ET-9d blocks only the blatant,
+  declared collapse. Custody of the two keys remains policy (charter §10 v1
+  trust posture, hardened in identity v2); see the still-open key-custody
+  entry below.
 
 **Added by the T9 orchestration, not by the auditor** (mechanical inventory,
 same date): **the entire read-api surface has zero conformance coverage.** An
@@ -582,7 +588,21 @@ choice}` at eligibility-check time — trust-by-policy per charter §10 v1,
   rule, which is precisely the failure mode ADR-0011 was written to eliminate.
   T9 rates this **blocking for the RELEASE CANDIDATE gate**; the earlier "not a
   freeze blocker" judgement above is about the freeze and is not contradicted —
-  additive resolution is still available. Still needs a fixture.
+  additive resolution is still available.
+
+  **DECIDED 2026-08-15 → ADR-0015.** `evolution.md` **EV-20**: a `genesis` at
+  an unregistered `(type, version)` is `INVALID` at line 1 — the single
+  exception to EV-8, a Stage A promotion for `genesis` alone, because it is
+  the one event whose payload every other check depends on. Not `PARTIAL`:
+  that token claims "integrity confirmed, semantics unchecked" over a chain
+  where no signature was ever checked, which is the wrong reassurance.
+  **EV-21** adds advisory (non-conformance) guidance that reason text
+  distinguish "verifier out of date" from "chain corrupt". Both verifiers
+  currently reach `INVALID` at line **2** by convergent reasoning with no rule
+  behind it — a conformance fix, not just a new fixture. **Fixture still
+  owed** (tracked in "Owed before the T9 gate can reopen" above: genesis at
+  version 1000000).
+
 - **Should HA-2's reject-don't-repair be pinned by a fixture, not only a unit
   test?** (Raised by the T5a review, 2026-07-26.) HA-2's closing MUST — reject a
   string whose decoded value is not well-formed UTF-8 — is now covered by a unit
