@@ -19,6 +19,223 @@ Format (newest first, one entry per merged contracts change):
 
 ---
 
+## event-types.md v8 · evolution.md v4 · export-format.md v3 · event-schema.md v3 — 2026-08-15 — T9a: the six blocking T9 findings (ADR-0013–ADR-0018)
+
+The operator's decisions on **F1–F6** of `docs/security/audit-phase-0.md`, one
+ADR per finding. All six are pre-freeze tightenings: each is either unavailable
+after the tag (ES-18/ET-6 close the `genesis` key set; EV-1/EV-4 bar retroactive
+constraints) or shapes the ledger write path that Phase 1 builds first. **No
+fixtures are written in this pass** — each subsection lists what it owes under
+EV-5, and both verifiers are untouched by design.
+
+### F1 — chain identity is the `genesis` hash (ADR-0013)
+
+- **`ET-7` rewritten and `ET-7a` added** (`event-types.md` v7 → v8). ET-7 claimed
+  `chain_id` "binds the chain's identity to its operator key with no free
+  parameter"; that was **false as written** — it binds the _operator's_ identity,
+  and every chain one operator starts carries the same `chain_id`. The audit built
+  two chains with opposite outcomes, identical `chain_id`, both `VALID` under both
+  verifiers. ET-7a states the identity: **the `hash` of the `genesis` event**. The
+  payload table's "the chain's stable identifier" is corrected the same way. The
+  derivation itself is unchanged — no byte, hash or existing verdict moves.
+- **`EX-21`–`EX-24` added** (`export-format.md` v2 → v3, new §6): the genesis hash
+  as defined on an export (EX-21); the optional `--chain <genesis-hash>` input,
+  independent of `--head` (EX-22); its mismatch is `INVALID` at **line 1**,
+  mirroring EX-19 (EX-23); and a verifier **MUST report the genesis hash and the
+  head it computed on every run** (EX-24) — output only, deliberately not
+  fixture-asserted per EV-17, because a tool that answers only `VALID` answers
+  "is _some_ chain valid".
+- **No new `genesis` field.** The `genesis_nonce` option was rejected: the genesis
+  hash is already unique per chain and costs no schema change, and the one genesis
+  change available before the freeze is spent on `ancestor_head` (ADR-0016).
+- **Owed fixtures:** a `--chain` match (`VALID`) and mismatch (`INVALID` line 1)
+  vector; and the two-chain pair under one operator key differing only in
+  `genesis.ts` — both `VALID` unflagged, each `INVALID` under the other's
+  `--chain`. **Owed verifier work (both verifiers, isolated passes):** the
+  `--chain` flag, the line-1 mismatch verdict, and EX-24 reporting.
+
+### F2 — ballot batching, with governable parameters (ADR-0014)
+
+- **`ET-23`, `ET-24`, `ET-25` added** (`event-types.md`, new "Ballot publication
+  discipline" subsection). A ballot's `ts` MUST be an exact multiple of its
+  issue's declared batch interval (ET-23, epoch-ms on the proleptic Gregorian
+  calendar, no leap seconds); a **batch** — the ballots sharing one `issue_id` and
+  one `ts` — MUST hold at least the issue's declared minimum, except the batch
+  holding that issue's highest-`seq` ballot (ET-24); and a batch's internal order
+  MUST NOT be arrival order (ET-25). ET-24 pins the **blamed line**: an under-size
+  batch is a violation only at the first later ballot of the same issue, which is
+  where a verifier reports it. Without that sentence two verifiers agree the chain
+  is bad and disagree about where.
+- **`ET-14b` added and the `issue_created` table gains two required keys** —
+  `ballot_batch_interval_ms` and `ballot_batch_min` — so the parameters live **on
+  the log** and are votable per issue. The contract floors them permanently at
+  **60000 ms** and **3**; without a floor an operator declares `1` and `1` and the
+  mechanism is decorative while staying conformant. Permanent: the mechanism and
+  *that a floor exists*. Provisional: the numbers, and the per-issue values above
+  them — the same cut ET-14a draws for `choice_count`. Reasoning for both floor
+  values is in ADR-0014. Adding keys to `issue_created` is legal now because only
+  `genesis` is version-pinned (ET-6); after the freeze this would need an
+  `issue_created` **v2**.
+- **`ET-21`'s residuals rewritten.** ET-21 is correct about what it claims (the
+  voter retains no artifact) and was incomplete about what receipt-freeness
+  requires (the *coercer* must be unable to check). Timing correlation is now
+  named as the residual ET-23–ET-25 address, and two residuals they do **not**
+  close are named too: the registrar's 64 chosen signature bytes, and
+  public-plane/ballot adjacency in `seq`.
+- **`ES-21` amended** (`event-schema.md` v2 → v3): `ts` still MUST NOT order or
+  select anything, but ET-23 constrains its **value**, which ES-21's old blanket
+  wording forbade. **`EV-15` amended** (`evolution.md` v3 → v4): ET-25 is a
+  producer obligation no verifier can check, so it belongs to neither stage; the
+  boundary statements ET-20–ET-22 are placed outside the split for the same
+  reason, correcting an exhaustiveness claim that swept them into Stage B.
+- **Quorum is explicitly NOT this change.** A minimum turnout is an
+  `issue_created` v2 concern; small-turnout exposure is arithmetic on the tally,
+  not timing, and no batching rule touches it. ET-14b carries an informative note
+  saying so, so a reader of `contracts/` alone cannot mistake one for the other.
+- **Owed fixtures — the largest cost in this pass.** Two new required keys change
+  `issue_created`'s bytes, hence its `hash`, hence every `prev_hash` after it:
+  **54 of 83 vectors carry an `issue_created`** and must be regenerated together
+  with `index.json`, `MANIFEST.sha256` and the `002-four-types-seq3.hex` preimage.
+  No verdict should move, and the regeneration must assert that. `hashing.md` is
+  untouched (its §6 worked example is a `genesis`). New vectors owed:
+  non-quantized ballot `ts`; an under-size batch proven by a later ballot (pins
+  ET-24's line attribution, so it needs a legal batch first); a legal under-size
+  **final** batch; a below-floor interval and a below-floor minimum, one each; and
+  a multi-batch `VALID` chain. **ET-25 gets no fixture, by construction.**
+
+### F3 — an unregistered `genesis` version is `INVALID` at line 1 (ADR-0015)
+
+- **`EV-20` added** (`evolution.md` v3 → v4, new §5). A chain's `genesis` MUST
+  carry a `(type, version)` the verifier registers; a chain whose first line does
+  not is **`INVALID` at line 1**. This is the **sole exception to EV-8** and a
+  **Stage A promotion for `genesis` alone**, justified because `genesis` is the
+  only event whose payload a verifier must read to check any other event — its
+  payload holds `operator_pk`/`registrar_pk` (ET-9a) and reading it is itself
+  Stage B. Without EV-20 a verifier could walk such a chain to `PARTIAL`
+  ("integrity confirmed, some semantics unchecked") over a chain on which
+  **nothing was ever authenticated**. Both current verifiers reach `INVALID` at
+  line **2** by convergent reasoning that no sentence assigns — the divergence
+  class ADR-0011 exists to eliminate.
+- **`EV-21` added.** Guidance, not conformance (reason text is advisory per
+  T4a/EV-17): a verifier SHOULD distinguish "this verifier may be out of date for
+  this chain" from "this chain's genesis is corrupt", state that from the log
+  alone the two are indistinguishable, and name the version it met and the
+  versions it registers. Same verdict, honest explanation. Writing it as a MUST
+  would have created by accident the reason-code registry EV-17 refused.
+- **`EV-8`, `EV-15` and `ET-2a` reconciled** with the new exception: EV-8 gains
+  the carve-out clause, EV-15's exhaustive stage split records that ES-9/ES-11 are
+  Stage A at line 1, and ET-2a points a reader arriving from the type registry at
+  EV-20 (the treatment EV-9 got in T4a).
+- **Owed fixture:** a `genesis` at version **1000000** (EV-19's reserved value —
+  EV-18's `x_` prefix cannot express this case, the type name must stay
+  `genesis`), followed by a registered-version event, pinning `INVALID` at line 1.
+  **And an owed guard inversion:** `tools/fixtures-gen/test/conformance.test.ts`
+  currently asserts that *no* vector freezes a verdict here — written while the
+  question was open, and now the thing that would block the fixture answering it.
+  It must be replaced by its inverse, not deleted.
+
+### F4 — an optional `ancestor_head` on `genesis` (ADR-0016)
+
+- **`ET-9e` added and the `genesis` payload table gains `ancestor_head`**
+  (OPTIONAL). It carries the head of the chain this one forked from, so charter
+  §8's fork-and-exit **right** — "re-declare genesis anchored to the old chain's
+  head" — is expressible in the contract, which it was not. That was the audit's
+  one outright charter violation, and it was unaddable after the tag: ES-24 fixes
+  `prev_hash` at seq 1, ES-18 closes the key set, ET-6 pins `genesis.version` at 1
+  and EV-1 bars altering a frozen schema.
+- **Format decisions.** 64 lowercase hex, or **absent**. The 64-zero anchor is
+  **barred** as a value: two ways to say "no ancestor" would be two byte forms of
+  one meaning (D5), and it would give the 64-zero string a second meaning
+  alongside `prev_hash`'s anchor. A fork's own `seq` is still 1 and its
+  `prev_hash` still 64 zeros — a fork is a **new chain with a new identity**
+  (ET-7a), not a continuation.
+- **A recorded claim, not a verified link.** A verifier checks format and nothing
+  else, and ET-9e states as a MUST NOT that it reject or flag a value it cannot
+  resolve: the ancestor is a different export the verifier does not hold, so
+  otherwise the same chain would verify differently in two readers' hands. A
+  reader holding both exports settles it in one comparison — a reader's act,
+  outside this contract.
+- **`ES-34` added** (`event-schema.md`, new §11): v1 had no notion of an optional
+  payload key. Present with a legal value, or entirely absent; never `null`
+  (ES-3), never a placeholder for absence. `hashing.md` is untouched — HA-7
+  already encodes exactly the keys present, leading with `U64(k)` — and ES-18
+  gains the cross-reference. Stating "optional" only in a payload table would have
+  repeated the mistake that produced ET-9b.
+- **This is the only key ever added to `genesis`; the door does not reopen.**
+  ADR-0013 deliberately solved chain identity without spending it.
+- **Owed fixtures:** a `genesis` **with** a well-formed `ancestor_head` (`VALID`
+  — also the first six-key genesis payload, exercising HA-7's count and HA-8's
+  ordering, since `ancestor_head` sorts first); `ancestor_head` = 64 zeros
+  (`INVALID` line 1); a malformed `ancestor_head` (`INVALID` line 1); and one
+  naming a chain **absent from the fixture set** (`VALID` — pinning that
+  unresolvability is not a defect, which is the vector that stops a future
+  verifier trying to resolve it). No existing vector's bytes or verdict move.
+
+### F5 — the sentiment plane is permanently barred from this chain (ADR-0017)
+
+- **`EV-22` added** (`evolution.md`, new §6), in the permanent register of ET-22
+  and EV-13 and surviving any future community vote (charter §8). No contracts
+  version may register here an event type whose payload carries a **response** —
+  sentiment, survey, poll, rating, or any opt-in monetizable answer, or any value
+  from which one can be recovered with material held outside this log. Four
+  documents said the planes are separate; `evolution.md`, the rulebook that
+  decides what may be added, did not, so a future `sentiment_response` was legal
+  and would have shared the store, the export, the endpoint and the seq space with
+  ballots through conforming additive evolution.
+- **What stays permitted, stated in the same rule**, because the sentiment
+  service "commits only anonymous hashes to `ledger`" by design: a value is
+  admissible when it is (1) a **commitment** — a one-way digest over material held
+  in the sentiment store; (2) **aggregate, never per-respondent** — one per
+  instrument, batch or snapshot; and (3) free of any respondent identifier. Clause
+  (2) is load-bearing: a digest of a single answer over a small answer space is
+  invertible by enumeration, so a per-response commitment is a response in
+  disguise. Values describing the commitment (instrument, time, count, licence
+  event) are permitted — facts about the instrument, not answers.
+- **Directional by design.** It blocks sentiment content reaching the ballot
+  plane, the direction in which protection is lost. It does not try to stop a
+  sentiment-shaped question run *as a ballot*, which gains ballot protection
+  rather than losing it; the contract cannot tell "should we fund Y?" from "do you
+  like Y?" and should not try (charter §9 makes that moderation, and a rule
+  attempting it would collide with P3).
+- **Owed fixtures: effectively none, deliberately.** EV-22 binds the authors of
+  future contracts versions, not any v1 verifier — a barred type would be
+  unregistered and reach `PARTIAL` on its own merits, which has nothing to do with
+  this rule. The fixture pass should instead record EV-22 as **deliberately
+  unpinned, with the reason**, in the rule-to-vector coverage report. (This is a
+  live instance of the open question about narrowing EV-5 to byte-changing
+  changes.)
+
+### F6 — `registrar_pk` MUST differ from `operator_pk` (ADR-0018)
+
+- **`ET-9d` added and `ET-9a` amended** (`event-types.md`). ET-9a said "the
+  contract imposes no relation between `registrar_pk` and `operator_pk` … this
+  separation is policy, not verifier-enforced"; that sentence is gone. A `genesis`
+  declaring the same key twice is now `INVALID` at the genesis line — one string
+  comparison on the two 64-hex values after ET-9b, no decoding, no curve
+  arithmetic. A chain declaring one key twice hands one holder the power to mint
+  issues **and** forge every ballot on them, with `VALID` reported and nothing on
+  the line to signal it.
+- **Necessary, not sufficient, and ET-9d says so.** Two distinct keys can still be
+  held by one party and the log cannot tell; ET-9d blocks only the blatant,
+  declared collapse. Custody stays policy (ET-9a; charter §10 v1). This spec
+  adopts necessary-not-sufficient checks on exactly this reasoning elsewhere
+  (ET-9b, ET-4b).
+- **Timing is the whole reason it is blocking.** Adding this MUST after the tag
+  would retroactively condemn chains that were conforming when written, which EV-1
+  and EV-4 bar. It is not merely cheaper now — it is unavailable later.
+- **Owed fixture:** a `genesis` declaring one key in both roles, otherwise
+  entirely well-formed and correctly self-signed under it, with no `vote_cast` on
+  the chain, pinning `INVALID` at line 1. It must be clean in every other respect
+  or it pins ET-9b or ET-8 instead. **No existing vector changes verdict** — all
+  83 were checked, none declares the two keys equal (the corpus uses the
+  `hashing.md` §6 seeds `0x01…`/`0x02…`).
+- **One existing fixture `note` is now false.** `index.json` vector
+  `057-issue-sig-wrong-key` states that ET-9a means "a verifier MUST NOT reject a
+  chain merely because `operator_pk` and `registrar_pk` coincide". ET-9d reverses
+  that. The vector's **verdict is unaffected** (it fails ET-13, and its genesis
+  declares distinct keys) — only the prose is wrong, and it must be corrected in
+  the fixture pass, before the tag makes `note` prose immutable (ADR-0008).
+
 ## fixtures/ README v11 — 2026-08-09 — record fixture 083 (ET-9c) and the new count
 
 - Doc-only: `contracts/fixtures/README.md` v10 → **v11**. Updates the count to

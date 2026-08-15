@@ -1,8 +1,8 @@
 # Event Types — contracts/event-types.md
 
-**Version:** 7
+**Version:** 8
 **Status:** DRAFTING (Phase 0 · T3, amended T4a, T5i, T5j, ADR-0009, ADR-0010,
-ADR-0011). Not frozen.
+ADR-0011, and T9a/ADR-0013, ADR-0014, ADR-0016, ADR-0018). Not frozen.
 **Companion specs:** `event-schema.md` (envelope), `ids.md` (identifiers),
 `hashing.md` (preimage — T4).
 
@@ -27,7 +27,10 @@ Each payload table column: **key** · **type** · **constraint**.
   go unchecked. A frozen verifier therefore does **not** condemn a chain that has
   legally grown past it (charter §8, P1). Only a malformed `type` or a Stage A
   failure is structurally `INVALID`; a malformed payload is `INVALID` even on an
-  unregistered type (EV-16).
+  unregistered type (EV-16). **One position is exempt from all of this: an
+  unregistered `(genesis, version)` at line 1 is `INVALID`** (`evolution.md`
+  EV-20), because `genesis` is the only event whose payload a verifier must read
+  in order to check any other event.
 
 ---
 
@@ -157,19 +160,36 @@ declares the operator key that later `issue_created` events are signed with.
 
 | key            | type   | constraint                                                          |
 | -------------- | ------ | ------------------------------------------------------------------- |
-| `chain_id`     | string | `^[0-9a-f]{64}$` — the chain's stable identifier (see ET-7)          |
+| `chain_id`     | string | `^[0-9a-f]{64}$` — a restatement of `operator_pk`, NOT the chain's identity (ET-7, ET-7a) |
 | `contracts`    | string | the frozen contracts version this chain runs, e.g. `"contracts-v1"` |
 | `operator_pk`  | string | `^[0-9a-f]{64}$` — operator Ed25519 public key (32 bytes, hex)       |
-| `registrar_pk` | string | `^[0-9a-f]{64}$` — registrar Ed25519 public key (32 bytes, hex)      |
+| `registrar_pk` | string | `^[0-9a-f]{64}$` — registrar Ed25519 public key; MUST differ from `operator_pk` (ET-9d) |
+| `ancestor_head` | string | **OPTIONAL** (ES-34) — `^[0-9a-f]{64}$`, never the 64-zero anchor; the head of the chain this one forked from (ET-9e) |
 | `sig`          | string | `^[0-9a-f]{128}$` — Ed25519 signature (ET-4)                         |
 
 - **ET-6.** `genesis.version` MUST be `1`, `seq` MUST be `1`, and `prev_hash`
   MUST be the 64-zero anchor (`event-schema.md` ES-24, ES-33).
 - **ET-7.** `chain_id` MUST equal the `participant_id`-style derivation
   `sha256(operator_pk_bytes)` in lowercase hex (same construction as `ids.md`
-  ID-4/ID-5 applied to `operator_pk`). This binds the chain's identity to its
-  operator key with no free parameter. `chain_id` derives from `operator_pk`
-  alone; `registrar_pk` does not enter it.
+  ID-4/ID-5 applied to `operator_pk`). It **restates the operator key**; it does
+  not identify the chain. The derivation has no free parameter, so every chain a
+  given operator ever starts carries the **same** `chain_id`, and two different
+  chains under one operator key are indistinguishable by it. What identifies a
+  chain is **ET-7a**. `chain_id` derives from `operator_pk` alone; `registrar_pk`
+  does not enter it.
+- **ET-7a.** _Chain identity._ A chain's identity is the `hash` of its `genesis`
+  event (`event-schema.md` ES-27) — the **genesis hash** of `export-format.md`
+  EX-21. Two exports are exports of the same chain exactly when their genesis
+  hashes are equal. Wherever a chain must be named — an anchor or witness record
+  (charter §4), a verifier invocation (EX-22), a fork's `ancestor_head` (ET-9e) —
+  the genesis hash is the name, and `chain_id` MUST NOT be used as one (ET-7).
+  The genesis hash covers every content field of the genesis event, including
+  `ts`, so two chains an operator starts one millisecond apart have different
+  identities even though their `chain_id`, `operator_pk` and `registrar_pk` are
+  identical. A `head` does **not** identify a chain either: it names a position,
+  and a position is a position **on** some chain (EX-14, EX-21) — which is why
+  anchoring the head alone cannot deliver charter §4's non-equivocation
+  (ADR-0013).
 - **ET-8.** The `genesis` signing key is `operator_pk` (the event is
   self-signed by the key it declares). A verifier MUST reject a `genesis` whose
   `sig` does not verify under its own `operator_pk`.
@@ -177,12 +197,12 @@ declares the operator key that later `issue_created` events are signed with.
   and is covered by `hash` but places no further constraint on verification in
   v1.
 - **ET-9a.** `registrar_pk` declares the key under which `vote_cast` events on
-  this chain are signed (ET-17). The contract imposes no relation between
-  `registrar_pk` and `operator_pk`. Operationally they SHOULD be distinct keys:
-  the registrar key is held only by the identity service (which admits ballots),
-  and the identity service MUST NOT hold `operator_pk` (which creates issues) —
+  this chain are signed (ET-17). It MUST differ from `operator_pk` (ET-9d). The
+  registrar key is held only by the identity service (which admits ballots), and
+  the identity service MUST NOT hold `operator_pk` (which creates issues) —
   separating "who may vote" from "who sets the questions" (charter §P2, §P3).
-  This separation is policy, not verifier-enforced.
+  **Custody** of the two keys remains policy; their **distinctness** is
+  verifier-enforced (ET-9d).
 - **ET-9b.** `operator_pk` and `registrar_pk` MUST each be a 32-byte raw Ed25519
   public key (RFC 8032), carried as a string of exactly 64 lowercase hexadecimal
   characters matching `^[0-9a-f]{64}$` — the same key format `ids.md` ID-3 fixes
@@ -215,6 +235,65 @@ declares the operator key that later `issue_created` events are signed with.
   `vote_cast` line) — the one place they could disagree by construction rather
   than by coincidence (fixture `083`; ADR-0011).
 
+- **ET-9d.** _The two genesis keys MUST be distinct._ A `genesis` whose
+  `registrar_pk` is byte-identical to its `operator_pk` MUST be rejected —
+  `INVALID` at the `genesis` line. The comparison is on the two 64-character
+  lowercase-hex strings after ET-9b has passed on both, so it is one string
+  equality and needs no key material, no decoding and no curve arithmetic.
+
+  A chain declaring one key twice hands a single holder the power to mint issues
+  **and** forge every ballot on them, and today's verifier reports `VALID` with
+  nothing on the line to signal it — the argument ET-9b makes for the
+  lowercase-hex check, applied to a far larger fault. Charter P2's "two planes"
+  and P3's "never selects" collapse into one party.
+
+  **This check is necessary, not sufficient, and must not be read as more.** Two
+  distinct keys can still be held by one party, and the log cannot tell: nothing
+  in an export distinguishes a genuinely separated registrar from an operator
+  holding both keypairs. ET-9d blocks only the blatant collapse — the declaration
+  that is visible in the log — and the sufficient version is undecidable from the
+  log. This spec adopts necessary-not-sufficient checks on exactly this reasoning
+  elsewhere (ET-9b, ET-4b), and custody remains policy (ET-9a; charter §10 v1
+  trust-by-policy, hardened in identity v2).
+
+  The rule lands before the freeze because it cannot land after: adding it later
+  would make previously conforming chains retroactively `INVALID` at line 1, which
+  EV-1 and EV-4 both bar (ADR-0018).
+- **ET-9e.** _`ancestor_head` (OPTIONAL) — recorded fork ancestry._ A `genesis`
+  payload MAY carry `ancestor_head`: the **head** of the chain this one was forked
+  from — that chain's last event `hash` at the moment of the fork
+  (`export-format.md` EX-14). When present it MUST match `^[0-9a-f]{64}$` and MUST
+  NOT be the 64-zero anchor; a chain with no ancestor **omits the key** (ES-34),
+  so there is exactly one way to say "no ancestor" and the 64-zero string keeps
+  its single meaning as `prev_hash`'s anchor (ES-24). Absence is not a claim that
+  no ancestor exists — only that none is recorded.
+
+  A fork's own structure is unchanged by it: `seq` is still `1` and `prev_hash` is
+  still the 64-zero anchor (ET-6, ES-24), exactly as on an original chain. A fork
+  is a **new chain with a new identity** (ET-7a), not a continuation of the old
+  one; `ancestor_head` records where it came from, and nothing more.
+
+  **What a verifier checks, and what it must not.** It checks the format above and
+  nothing else. `ancestor_head` is a **recorded claim, not a verified link**: the
+  ancestor is a different export, which the verifier does not hold and cannot
+  demand, so it cannot confirm that the value is any chain's head, that the value
+  is *that* community's chain, or that the ancestor exists at all. A verifier MUST
+  NOT report `INVALID` because it cannot resolve `ancestor_head`, and MUST NOT
+  treat an unresolvable value as a defect. A reader who holds **both** exports can
+  settle the claim in a single comparison — which is why recording it is worth
+  anything — but that comparison is the reader's act, outside this contract.
+
+  Why the key exists: charter §8 states as a **right** that a community "can
+  re-declare genesis anchored to the old chain's head and continue elsewhere
+  without anyone's permission", and until now the contract had nowhere to put that
+  head — `prev_hash` at `seq` 1 is fixed (ES-24), the genesis key set is closed
+  (ES-18), and `genesis` cannot take a version 2 (ET-6). A contract that cannot
+  express a capability its charter grants is a charter violation, and it was
+  unaddable after the freeze. **This is the only key ever added to the `genesis`
+  payload, and the door does not reopen:** ET-6 pins `genesis.version` at `1` and
+  `evolution.md` EV-1 bars altering a frozen `(type, version)`, so no further
+  genesis key is addable by any mechanism once the tag exists (ADR-0016).
+
 ## `participant_registered` (self-signed by the registrant)
 
 Adds a public-plane participant. Self-signed to prove possession of the private
@@ -239,11 +318,13 @@ key for the declared public key.
 
 Opens an issue for voting. Title only — no free-text body (charter §5 MVP; D4).
 
-| key            | type    | constraint                                                            |
-| -------------- | ------- | --------------------------------------------------------------------- |
-| `title`        | string  | 1–200 Unicode scalar values; MUST NOT contain U+0000–U+001F or U+007F |
-| `choice_count` | integer | `2 ≤ choice_count ≤ 64` — the number of valid ballot choices          |
-| `sig`          | string  | `^[0-9a-f]{128}$` — Ed25519 signature (ET-4)                          |
+| key                        | type    | constraint                                                            |
+| -------------------------- | ------- | --------------------------------------------------------------------- |
+| `title`                    | string  | 1–200 Unicode scalar values; MUST NOT contain U+0000–U+001F or U+007F |
+| `choice_count`             | integer | `2 ≤ choice_count ≤ 64` — the number of valid ballot choices          |
+| `ballot_batch_interval_ms` | integer | `≥ 60000` — this issue's ballot batch interval, in ms (ET-14b, ET-23) |
+| `ballot_batch_min`         | integer | `≥ 3` — this issue's minimum ballot batch size (ET-14b, ET-24)        |
+| `sig`                      | string  | `^[0-9a-f]{128}$` — Ed25519 signature (ET-4)                          |
 
 - **ET-13.** The `issue_created` signing key is the chain's `operator_pk` from
   the `genesis` event. A verifier MUST reject an `issue_created` whose `sig`
@@ -258,6 +339,42 @@ Opens an issue for voting. Title only — no free-text body (charter §5 MVP; D4
   re-open a covert receipt channel — a coercer could demand a unique large
   integer as a per-voter marker (charter §5; ADR-0004). A verifier MUST reject
   an `issue_created` whose `choice_count` is out of range.
+- **ET-14b.** _Ballot batching parameters._ An `issue_created` payload MUST carry
+  both `ballot_batch_interval_ms` and `ballot_batch_min`, each a JSON integer in
+  the canonical form of `event-schema.md` ES-5. They declare **on the log** the two
+  values this issue's ballot publication discipline (ET-23–ET-25) is checked
+  against, so that a reader checks a ledger's ballot timing against numbers the
+  ledger published in advance rather than against numbers a verifier hard-codes,
+  and so that a community can change them by the mechanism it changes everything
+  else — a vote. A verifier MUST reject an `issue_created` whose values fall below
+  the permanent floors:
+  - `ballot_batch_interval_ms` MUST be **≥ 60000** (one minute);
+  - `ballot_batch_min` MUST be **≥ 3**.
+
+  **What is permanent and what is votable.** The batching mechanism (ET-23–ET-25)
+  and the *existence* of a floor on each parameter are **permanent**, in the
+  register of ET-22 and `evolution.md` EV-13: no future contracts version and no
+  community vote may remove them. Without a floor "governable" would mean an
+  operator declaring `1` and `1`, which satisfies every sentence of this spec while
+  publishing each ballot alone, in arrival order, at millisecond resolution — the
+  mechanism made decorative by configuration. The **values above the floor are
+  per-issue and votable**, which is why they live in the payload and not in this
+  spec. This is exactly the cut ET-14a already draws for `choice_count`: *that a
+  bound exists at all* is permanent, *the number* is a drafting decision. The two
+  floor numbers are drafting decisions recorded in ADR-0014; a later
+  `issue_created` version may raise them, and may never lower them to where the
+  rule stops binding.
+
+  > **Note (informative — imposes no requirement).** A **quorum** — a minimum
+  > turnout below which an issue publishes no ballots at all — is deliberately
+  > **not** a v1 parameter, and these two do not provide one. Batching addresses
+  > *timing* correlation (ET-23–ET-25). Small-turnout exposure is *arithmetic* on
+  > the tally — five ballots at 3–2 with four choices known reveals the fifth, a
+  > unanimous batch reveals everyone — and no interval, batch size or shuffle
+  > touches it. A `min_turnout` key is a Phase 1 `issue_created` **version 2**
+  > concern, which `evolution.md` EV-1/EV-2 keep additive at any time because only
+  > `genesis` is version-pinned (ET-6). Recorded here so that batching is never
+  > later mistaken for having solved turnout exposure.
 - **ET-15.** The issue's `issue_id` is this event's `hash` (`ids.md` ID-7); it
   is not stored in the payload.
 - **ET-16.** `title` string bytes are hashed as-is (UTF-8, no normalization);
@@ -314,12 +431,84 @@ off-log eligibility check.
   deliberately **no voter-provable inclusion** proof, since any identity-bound
   inclusion proof would itself be a receipt. Phase-1 identity obligations are in
   `memory/OPEN-QUESTIONS.md`.
+
+  **Residual addressed by ET-23–ET-25: timing correlation.** ET-21 is correct
+  about what it claims — the voter retains no artifact — and was incomplete about
+  what receipt-freeness requires, because coercion does not need the voter to
+  retain anything; it needs the **coercer** to be able to check. With `ts` at
+  mandatory millisecond precision (ES-20), `seq` in arrival order (ES-8), `choice`
+  in the clear, and an unauthenticated tail-pollable read surface (`read-api.md`
+  RA-12/RA-13), an observer who knows *when* a person voted reads *what* they
+  voted, holding the proof themselves. The ballot publication discipline below is
+  the rule that addresses that residual (ADR-0014).
+
+  **Residuals it does not close.** Two remain, and neither is a timing problem:
+  the registrar chooses 64 published, permanent signature bytes per ballot and can
+  encode a voter identifier in them undetectably (`memory/OPEN-QUESTIONS.md` Q-F);
+  and a `participant_registered` line adjacent in `seq` to a ballot still
+  correlates the two planes by position, even once the ballot's `ts` no longer
+  confirms the minute.
 - **ET-22.** _Permanent evolution constraint (binds `evolution.md`, T4)._ No
   future version of `vote_cast` MAY introduce a voter-held public key, a
   signature produced by a voter-held key, or an unbounded voter-chosen value
   into the ballot payload. Each of these re-creates a demandable receipt and
   would violate charter §5/§8, which are non-negotiable and survive any future
   community vote (§8).
+
+### Ballot publication discipline (per ADR-0014)
+
+Three producer rules, checked against the parameters the issue itself declared
+(ET-14b). They constrain the **value** of a ballot's `ts` and the **grouping** of
+ballot appends; they change no wire format, no payload key, and no hashing rule.
+Two of the three are verifiable from the export; the third is not, and says so.
+
+- **ET-23.** _Quantized ballot `ts`._ A `vote_cast` event's `ts` MUST be an exact
+  multiple of its issue's `ballot_batch_interval_ms` (ET-14b), measured in
+  milliseconds since `1970-01-01T00:00:00.000Z`. That offset is computed on the
+  proleptic Gregorian calendar with exactly `86400000` milliseconds in every day
+  and **no** leap seconds — ES-20 already rejects a `60` in the seconds field, so
+  the conversion is a pure calendar computation that both target languages perform
+  identically. A ballot's quantized `ts` is its **batch instant**. A verifier MUST
+  reject a `vote_cast` whose `ts` is not so quantized; the issue's interval is
+  read from the `issue_created` event named by `issue_id` (ET-18), which a
+  verifier already tracks. This is the one rule that constrains the value of `ts`;
+  `ts` remains barred from ordering or selecting anything (`event-schema.md`
+  ES-21).
+- **ET-24.** _Minimum batch size._ A **batch** is the set of all `vote_cast`
+  events on a chain sharing both an `issue_id` and a `ts` — the ballots of one
+  issue at one batch instant (ET-23). Every batch MUST contain at least that
+  issue's `ballot_batch_min` ballots (ET-14b), **except** the batch containing the
+  issue's highest-`seq` ballot, which MAY be smaller: an issue that closes before
+  its final batch fills must still publish the ballots it has. A verifier MUST
+  reject a chain in which any other batch of an issue is under-size. At most one
+  under-size batch per issue is therefore legal, and only as that issue's last.
+  Membership and lastness are decided by `seq` (ES-8), never by comparing `ts`
+  values.
+
+  _Line attribution (`evolution.md` EV-17)._ An under-size batch is not a
+  violation where it appears — it becomes one only when a later ballot of the same
+  issue proves it was not the last. The fatal line is therefore the **first
+  `vote_cast` of that issue appended after the under-size batch**, which is the
+  line at which the chain first violates this rule and the line a verifier
+  scanning in file order reaches first. Two consequences are worth stating rather
+  than discovering: a ledger that publishes an under-size batch and then keeps
+  appending ballots for that issue has broken this rule and the export shows it
+  (detection working, not a past line's legality changing); and end-truncation can
+  hide a violation by making a mid-chain under-size batch the last one for its
+  issue — the same residual EX-16 already documents for everything at the end of a
+  chain, with the same remedy, `--head`.
+- **ET-25.** _Order within a batch._ The order in which a batch's ballots are
+  appended MUST be independent of the order in which they arrived; a producer MUST
+  NOT append a batch in arrival order. Any order that does not derive from arrival
+  — a shuffle, or an order computed from ballot content — satisfies this.
+  **This rule is not verifiable from the log.** A shuffled batch and an
+  arrival-ordered batch are indistinguishable to every reader, so no verifier can
+  report a violation and no fixture can pin one: ET-25 is an obligation on the
+  ledger implementation and on nothing else, and it belongs to neither
+  verification stage (`evolution.md` EV-15). It is stated normatively anyway,
+  because a rule the log cannot enforce is still a rule the implementation owes,
+  and because without it a conforming ledger could publish batches in `seq` order
+  and hand a coercer back exactly the arrival ordering ET-23 removed from `ts`.
 
 ---
 
@@ -335,25 +524,34 @@ off-log eligibility check.
 | Prime-order verification key (`[L]A==𝒪`, `A!=𝒪`) | ET-4c           |
 | Genesis fields, seq/prev_hash, self-signing    | ET-6, ET-7, ET-8  |
 | `chain_id` derivation (operator key only)      | ET-7              |
+| What identifies a chain (the genesis hash)     | ET-7a             |
 | Two genesis keys: operator vs registrar        | ET-9a             |
 | Genesis key format (operator/registrar pk)     | ET-9b             |
+| Genesis keys MUST be distinct                  | ET-9d             |
 | Genesis key validation timing (at declaration) | ET-9c             |
+| Fork ancestry: optional, claim not link        | ET-9e             |
 | participant self-signing + id derivation       | ET-10, ET-11      |
 | Title length + forbidden characters            | ET-14             |
 | `choice_count` range                           | ET-14a            |
+| Ballot batch parameters + their floors         | ET-14b            |
 | Title normalization (none)                     | ET-16             |
 | Issue id source                                | ET-15             |
 | Vote signing key (registrar) + issue direction | ET-17, ET-18      |
 | `choice` type, range, and who interprets it    | ET-18a, ET-19     |
 | What the log does/does not enforce for ballots | ET-20, ET-21      |
 | What future `vote_cast` versions may not do    | ET-22             |
+| Ballot `ts` quantization (the batch instant)   | ET-23             |
+| What a batch is; minimum size; blamed line     | ET-24             |
+| Order within a batch (producer-only, uncheckable) | ET-25          |
 
 ## Acid-test walkthrough
 
 Given the same four events, two implementations agree on: the legal type set
 (ET-1); that every `sig` is 128 hex and verified under the type's named key —
 `operator_pk` for genesis/issue, own `pubkey` for participant, `registrar_pk`
-for vote (ET-8/10/13/17); that a `sig` whose decoded `R`/`S`, or a verification
+for vote (ET-8/10/13/17); that the chain they just verified is named by its
+`genesis` hash and **not** by `chain_id`, so two chains under one operator key
+are two chains (ET-7/ET-7a); that a `sig` whose decoded `R`/`S`, or a verification
 key whose decoded bytes, are non-canonically encoded is rejected on the raw
 bytes before verification (ET-4a/ET-4b), and that a verification key which is
 canonically encoded but small-order or mixed-order — so it passes ET-4b and even
@@ -363,11 +561,23 @@ is not 64 lowercase hex is rejected even though an uppercase key's bytes would
 still derive `chain_id` and verify the self-signature (ET-9b); that a `genesis`
 whose `registrar_pk` is canonically encoded but small-order or mixed-order is
 rejected at the `genesis` line where the key is declared, even on a chain with
-no `vote_cast` that never uses it (ET-9c); that a `title`
+no `vote_cast` that never uses it (ET-9c); that a `genesis` declaring the same
+key as both `operator_pk` and `registrar_pk` is rejected on a string comparison,
+while two distinct keys held by one party remain undetectable to both (ET-9d);
+that a `genesis` carrying
+`ancestor_head` is checked for format and **not** for resolvability, so a fork
+verifies identically whether or not the reader holds its ancestor (ET-9e); that a `title`
 over 200 scalars or with a control character is rejected (ET-14); that an `issue_created` with `choice_count`
-outside 2–64 is rejected (ET-14a); that a vote for a not-yet-created issue, or
-with `choice` outside `[0, choice_count)`, is rejected (ET-18, ET-18a); and that
-`choice` is otherwise an opaque integer (ET-19). The only undecided bytes are
+outside 2–64 is rejected (ET-14a); that an `issue_created` declaring a batch
+interval under 60000 ms or a batch minimum under 3 is rejected (ET-14b); that a
+vote for a not-yet-created issue, or
+with `choice` outside `[0, choice_count)`, is rejected (ET-18, ET-18a); that a
+ballot whose `ts` is not a multiple of its issue's declared interval is rejected
+(ET-23), and that an under-size batch is rejected at the first later ballot of
+the same issue, never at the batch itself (ET-24); and that
+`choice` is otherwise an opaque integer (ET-19). They also agree that ET-25's
+shuffle cannot be checked by either of them, which is why it is stated as a
+producer obligation rather than a verifier check. The only undecided bytes are
 the signing/hash preimage layout — deferred to `hashing.md` (T4). No type-level
 ambiguity remains
 in this spec's scope.
