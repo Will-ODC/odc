@@ -134,6 +134,43 @@ EV-5, and both verifiers are untouched by design.
   question was open, and now the thing that would block the fixture answering it.
   It must be replaced by its inverse, not deleted.
 
+### F4 — an optional `ancestor_head` on `genesis` (ADR-0016)
+
+- **`ET-9e` added and the `genesis` payload table gains `ancestor_head`**
+  (OPTIONAL). It carries the head of the chain this one forked from, so charter
+  §8's fork-and-exit **right** — "re-declare genesis anchored to the old chain's
+  head" — is expressible in the contract, which it was not. That was the audit's
+  one outright charter violation, and it was unaddable after the tag: ES-24 fixes
+  `prev_hash` at seq 1, ES-18 closes the key set, ET-6 pins `genesis.version` at 1
+  and EV-1 bars altering a frozen schema.
+- **Format decisions.** 64 lowercase hex, or **absent**. The 64-zero anchor is
+  **barred** as a value: two ways to say "no ancestor" would be two byte forms of
+  one meaning (D5), and it would give the 64-zero string a second meaning
+  alongside `prev_hash`'s anchor. A fork's own `seq` is still 1 and its
+  `prev_hash` still 64 zeros — a fork is a **new chain with a new identity**
+  (ET-7a), not a continuation.
+- **A recorded claim, not a verified link.** A verifier checks format and nothing
+  else, and ET-9e states as a MUST NOT that it reject or flag a value it cannot
+  resolve: the ancestor is a different export the verifier does not hold, so
+  otherwise the same chain would verify differently in two readers' hands. A
+  reader holding both exports settles it in one comparison — a reader's act,
+  outside this contract.
+- **`ES-34` added** (`event-schema.md`, new §11): v1 had no notion of an optional
+  payload key. Present with a legal value, or entirely absent; never `null`
+  (ES-3), never a placeholder for absence. `hashing.md` is untouched — HA-7
+  already encodes exactly the keys present, leading with `U64(k)` — and ES-18
+  gains the cross-reference. Stating "optional" only in a payload table would have
+  repeated the mistake that produced ET-9b.
+- **This is the only key ever added to `genesis`; the door does not reopen.**
+  ADR-0013 deliberately solved chain identity without spending it.
+- **Owed fixtures:** a `genesis` **with** a well-formed `ancestor_head` (`VALID`
+  — also the first six-key genesis payload, exercising HA-7's count and HA-8's
+  ordering, since `ancestor_head` sorts first); `ancestor_head` = 64 zeros
+  (`INVALID` line 1); a malformed `ancestor_head` (`INVALID` line 1); and one
+  naming a chain **absent from the fixture set** (`VALID` — pinning that
+  unresolvability is not a defect, which is the vector that stops a future
+  verifier trying to resolve it). No existing vector's bytes or verdict move.
+
 ## fixtures/ README v11 — 2026-08-09 — record fixture 083 (ET-9c) and the new count
 
 - Doc-only: `contracts/fixtures/README.md` v10 → **v11**. Updates the count to

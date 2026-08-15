@@ -164,6 +164,7 @@ declares the operator key that later `issue_created` events are signed with.
 | `contracts`    | string | the frozen contracts version this chain runs, e.g. `"contracts-v1"` |
 | `operator_pk`  | string | `^[0-9a-f]{64}$` — operator Ed25519 public key (32 bytes, hex)       |
 | `registrar_pk` | string | `^[0-9a-f]{64}$` — registrar Ed25519 public key (32 bytes, hex)      |
+| `ancestor_head` | string | **OPTIONAL** (ES-34) — `^[0-9a-f]{64}$`, never the 64-zero anchor; the head of the chain this one forked from (ET-9e) |
 | `sig`          | string | `^[0-9a-f]{128}$` — Ed25519 signature (ET-4)                         |
 
 - **ET-6.** `genesis.version` MUST be `1`, `seq` MUST be `1`, and `prev_hash`
@@ -233,6 +234,41 @@ declares the operator key that later `issue_created` events are signed with.
   at line 1 vs `VALID`) or the **line** (a voting chain: line 1 vs the
   `vote_cast` line) — the one place they could disagree by construction rather
   than by coincidence (fixture `083`; ADR-0011).
+
+- **ET-9e.** _`ancestor_head` (OPTIONAL) — recorded fork ancestry._ A `genesis`
+  payload MAY carry `ancestor_head`: the **head** of the chain this one was forked
+  from — that chain's last event `hash` at the moment of the fork
+  (`export-format.md` EX-14). When present it MUST match `^[0-9a-f]{64}$` and MUST
+  NOT be the 64-zero anchor; a chain with no ancestor **omits the key** (ES-34),
+  so there is exactly one way to say "no ancestor" and the 64-zero string keeps
+  its single meaning as `prev_hash`'s anchor (ES-24). Absence is not a claim that
+  no ancestor exists — only that none is recorded.
+
+  A fork's own structure is unchanged by it: `seq` is still `1` and `prev_hash` is
+  still the 64-zero anchor (ET-6, ES-24), exactly as on an original chain. A fork
+  is a **new chain with a new identity** (ET-7a), not a continuation of the old
+  one; `ancestor_head` records where it came from, and nothing more.
+
+  **What a verifier checks, and what it must not.** It checks the format above and
+  nothing else. `ancestor_head` is a **recorded claim, not a verified link**: the
+  ancestor is a different export, which the verifier does not hold and cannot
+  demand, so it cannot confirm that the value is any chain's head, that the value
+  is *that* community's chain, or that the ancestor exists at all. A verifier MUST
+  NOT report `INVALID` because it cannot resolve `ancestor_head`, and MUST NOT
+  treat an unresolvable value as a defect. A reader who holds **both** exports can
+  settle the claim in a single comparison — which is why recording it is worth
+  anything — but that comparison is the reader's act, outside this contract.
+
+  Why the key exists: charter §8 states as a **right** that a community "can
+  re-declare genesis anchored to the old chain's head and continue elsewhere
+  without anyone's permission", and until now the contract had nowhere to put that
+  head — `prev_hash` at `seq` 1 is fixed (ES-24), the genesis key set is closed
+  (ES-18), and `genesis` cannot take a version 2 (ET-6). A contract that cannot
+  express a capability its charter grants is a charter violation, and it was
+  unaddable after the freeze. **This is the only key ever added to the `genesis`
+  payload, and the door does not reopen:** ET-6 pins `genesis.version` at `1` and
+  `evolution.md` EV-1 bars altering a frozen `(type, version)`, so no further
+  genesis key is addable by any mechanism once the tag exists (ADR-0016).
 
 ## `participant_registered` (self-signed by the registrant)
 
@@ -468,6 +504,7 @@ Two of the three are verifiable from the export; the third is not, and says so.
 | Two genesis keys: operator vs registrar        | ET-9a             |
 | Genesis key format (operator/registrar pk)     | ET-9b             |
 | Genesis key validation timing (at declaration) | ET-9c             |
+| Fork ancestry: optional, claim not link        | ET-9e             |
 | participant self-signing + id derivation       | ET-10, ET-11      |
 | Title length + forbidden characters            | ET-14             |
 | `choice_count` range                           | ET-14a            |
@@ -499,7 +536,9 @@ is not 64 lowercase hex is rejected even though an uppercase key's bytes would
 still derive `chain_id` and verify the self-signature (ET-9b); that a `genesis`
 whose `registrar_pk` is canonically encoded but small-order or mixed-order is
 rejected at the `genesis` line where the key is declared, even on a chain with
-no `vote_cast` that never uses it (ET-9c); that a `title`
+no `vote_cast` that never uses it (ET-9c); that a `genesis` carrying
+`ancestor_head` is checked for format and **not** for resolvability, so a fork
+verifies identically whether or not the reader holds its ancestor (ET-9e); that a `title`
 over 200 scalars or with a control character is rejected (ET-14); that an `issue_created` with `choice_count`
 outside 2–64 is rejected (ET-14a); that an `issue_created` declaring a batch
 interval under 60000 ms or a batch minimum under 3 is rejected (ET-14b); that a

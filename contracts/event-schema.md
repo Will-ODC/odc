@@ -105,7 +105,8 @@ fewer:
 - **ES-18.** The set of keys a payload MUST carry, and their value types, is
   fixed per `(type, version)` in `event-types.md`. A verifier MUST reject a
   payload that is missing a required key or carries a key not defined for that
-  `(type, version)`.
+  `(type, version)`. A key that type's table marks **OPTIONAL** may be absent
+  without being missing (ES-34).
 - **ES-19.** Integer payload values are bounded and formatted per ES-5; string
   payload values MUST be valid UTF-8 (the byte-exact string encoding, including
   normalization stance, is fixed in `hashing.md`, T4).
@@ -184,6 +185,28 @@ Some event types are **signed**; which ones, and the exact signing rule, are in
   exactly once, at `seq` = 1, and the `seq` = 1 event is always `genesis`. A
   verifier MUST reject a chain that violates this.
 
+## 11. Optional payload keys (added in v3)
+
+- **ES-34.** A `(type, version)`'s key set (ES-18) MAY declare a key **OPTIONAL**,
+  marked as such in that type's payload table in `event-types.md`. An optional key
+  is either **present with a legal value** or **entirely absent**. It is never
+  `null` (ES-3), never present with a placeholder value standing for "no value",
+  and a type MUST NOT define such a placeholder where absence already carries that
+  meaning — one meaning, one representation (D5). ES-18 is otherwise unchanged:
+  OPTIONAL means "this defined key may be absent", never "an undefined key may
+  appear", and a verifier still rejects any key not defined for the
+  `(type, version)`.
+
+  Presence and absence produce **different events**: `hashing.md` HA-7 encodes
+  exactly the keys the payload carries, and its leading key count `U64(k)` differs,
+  so the two forms have different preimages and different `hash` values. No hashing
+  rule changes to accommodate optional keys — this sentence records that the
+  generic payload rule already handles them. A producer therefore MUST NOT emit an
+  optional key it does not mean.
+
+  v1 defines exactly one optional key: `genesis.ancestor_head`
+  (`event-types.md` ET-9e).
+
 ---
 
 ## Degrees of freedom closed (acid-test checklist)
@@ -202,6 +225,7 @@ bytes?* Each envelope-level degree of freedom and where it is closed:
 | Payload value types (floats/bools/nulls)  | ES-16                |
 | Payload nesting                           | ES-17                |
 | Payload key set                           | ES-18                |
+| Optional key: absent vs null vs placeholder | ES-34              |
 | `ts` textual form + role                  | ES-20, ES-21         |
 | `prev_hash` case, length, genesis value   | ES-23, ES-24         |
 | Digest algorithm, coverage, case          | ES-27 (+ hashing.md) |
