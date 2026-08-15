@@ -54,6 +54,55 @@ EV-5, and both verifiers are untouched by design.
   `--chain`. **Owed verifier work (both verifiers, isolated passes):** the
   `--chain` flag, the line-1 mismatch verdict, and EX-24 reporting.
 
+### F2 — ballot batching, with governable parameters (ADR-0014)
+
+- **`ET-23`, `ET-24`, `ET-25` added** (`event-types.md`, new "Ballot publication
+  discipline" subsection). A ballot's `ts` MUST be an exact multiple of its
+  issue's declared batch interval (ET-23, epoch-ms on the proleptic Gregorian
+  calendar, no leap seconds); a **batch** — the ballots sharing one `issue_id` and
+  one `ts` — MUST hold at least the issue's declared minimum, except the batch
+  holding that issue's highest-`seq` ballot (ET-24); and a batch's internal order
+  MUST NOT be arrival order (ET-25). ET-24 pins the **blamed line**: an under-size
+  batch is a violation only at the first later ballot of the same issue, which is
+  where a verifier reports it. Without that sentence two verifiers agree the chain
+  is bad and disagree about where.
+- **`ET-14b` added and the `issue_created` table gains two required keys** —
+  `ballot_batch_interval_ms` and `ballot_batch_min` — so the parameters live **on
+  the log** and are votable per issue. The contract floors them permanently at
+  **60000 ms** and **3**; without a floor an operator declares `1` and `1` and the
+  mechanism is decorative while staying conformant. Permanent: the mechanism and
+  *that a floor exists*. Provisional: the numbers, and the per-issue values above
+  them — the same cut ET-14a draws for `choice_count`. Reasoning for both floor
+  values is in ADR-0014. Adding keys to `issue_created` is legal now because only
+  `genesis` is version-pinned (ET-6); after the freeze this would need an
+  `issue_created` **v2**.
+- **`ET-21`'s residuals rewritten.** ET-21 is correct about what it claims (the
+  voter retains no artifact) and was incomplete about what receipt-freeness
+  requires (the *coercer* must be unable to check). Timing correlation is now
+  named as the residual ET-23–ET-25 address, and two residuals they do **not**
+  close are named too: the registrar's 64 chosen signature bytes, and
+  public-plane/ballot adjacency in `seq`.
+- **`ES-21` amended** (`event-schema.md` v2 → v3): `ts` still MUST NOT order or
+  select anything, but ET-23 constrains its **value**, which ES-21's old blanket
+  wording forbade. **`EV-15` amended** (`evolution.md` v3 → v4): ET-25 is a
+  producer obligation no verifier can check, so it belongs to neither stage; the
+  boundary statements ET-20–ET-22 are placed outside the split for the same
+  reason, correcting an exhaustiveness claim that swept them into Stage B.
+- **Quorum is explicitly NOT this change.** A minimum turnout is an
+  `issue_created` v2 concern; small-turnout exposure is arithmetic on the tally,
+  not timing, and no batching rule touches it. ET-14b carries an informative note
+  saying so, so a reader of `contracts/` alone cannot mistake one for the other.
+- **Owed fixtures — the largest cost in this pass.** Two new required keys change
+  `issue_created`'s bytes, hence its `hash`, hence every `prev_hash` after it:
+  **54 of 83 vectors carry an `issue_created`** and must be regenerated together
+  with `index.json`, `MANIFEST.sha256` and the `002-four-types-seq3.hex` preimage.
+  No verdict should move, and the regeneration must assert that. `hashing.md` is
+  untouched (its §6 worked example is a `genesis`). New vectors owed:
+  non-quantized ballot `ts`; an under-size batch proven by a later ballot (pins
+  ET-24's line attribution, so it needs a legal batch first); a legal under-size
+  **final** batch; a below-floor interval and a below-floor minimum, one each; and
+  a multi-batch `VALID` chain. **ET-25 gets no fixture, by construction.**
+
 ## fixtures/ README v11 — 2026-08-09 — record fixture 083 (ET-9c) and the new count
 
 - Doc-only: `contracts/fixtures/README.md` v10 → **v11**. Updates the count to

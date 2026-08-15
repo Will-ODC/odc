@@ -1,7 +1,8 @@
 # Event Schema — contracts/event-schema.md
 
-**Version:** 2
-**Status:** DRAFTING (Phase 0 · T3, amended T4a). Not frozen.
+**Version:** 3
+**Status:** DRAFTING (Phase 0 · T3, amended T4a, and T9a/ADR-0014,
+ADR-0016). Not frozen.
 **Companion specs:** `event-types.md` (payloads), `ids.md` (identifiers),
 `hashing.md` (byte-exact preimage — T4), `export-format.md` (NDJSON — T4).
 
@@ -122,9 +123,12 @@ fewer:
      `time.Parse`) reach the SAME verdict. A value that passes the regex but is
      not a real instant (e.g. `2026-13-40T25:61:61.999Z`) MUST be rejected.
   A verifier MUST reject any `ts` failing either gate.
-- **ES-21.** `ts` is advisory metadata only. It MUST NOT be used to order,
-  select, or validate events beyond the format check in ES-20. `seq` orders
-  (ES-8).
+- **ES-21.** `ts` is advisory metadata only. It MUST NOT be used to order or
+  select events, and MUST NOT be used to validate them beyond the format check in
+  ES-20 and the one type-specific constraint on its **value** that
+  `event-types.md` ET-23 places on `vote_cast` — a ballot's `ts` is quantized to
+  its issue's declared batch interval, so a verifier checks that value, and still
+  never orders or selects by it. `seq` orders (ES-8), always and only.
 - **ES-22.** `ts` is nonetheless covered by `hash` (Section 8): once written it
   is immutable, even though it is not authoritative.
 

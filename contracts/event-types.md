@@ -255,11 +255,13 @@ key for the declared public key.
 
 Opens an issue for voting. Title only — no free-text body (charter §5 MVP; D4).
 
-| key            | type    | constraint                                                            |
-| -------------- | ------- | --------------------------------------------------------------------- |
-| `title`        | string  | 1–200 Unicode scalar values; MUST NOT contain U+0000–U+001F or U+007F |
-| `choice_count` | integer | `2 ≤ choice_count ≤ 64` — the number of valid ballot choices          |
-| `sig`          | string  | `^[0-9a-f]{128}$` — Ed25519 signature (ET-4)                          |
+| key                        | type    | constraint                                                            |
+| -------------------------- | ------- | --------------------------------------------------------------------- |
+| `title`                    | string  | 1–200 Unicode scalar values; MUST NOT contain U+0000–U+001F or U+007F |
+| `choice_count`             | integer | `2 ≤ choice_count ≤ 64` — the number of valid ballot choices          |
+| `ballot_batch_interval_ms` | integer | `≥ 60000` — this issue's ballot batch interval, in ms (ET-14b, ET-23) |
+| `ballot_batch_min`         | integer | `≥ 3` — this issue's minimum ballot batch size (ET-14b, ET-24)        |
+| `sig`                      | string  | `^[0-9a-f]{128}$` — Ed25519 signature (ET-4)                          |
 
 - **ET-13.** The `issue_created` signing key is the chain's `operator_pk` from
   the `genesis` event. A verifier MUST reject an `issue_created` whose `sig`
@@ -274,6 +276,42 @@ Opens an issue for voting. Title only — no free-text body (charter §5 MVP; D4
   re-open a covert receipt channel — a coercer could demand a unique large
   integer as a per-voter marker (charter §5; ADR-0004). A verifier MUST reject
   an `issue_created` whose `choice_count` is out of range.
+- **ET-14b.** _Ballot batching parameters._ An `issue_created` payload MUST carry
+  both `ballot_batch_interval_ms` and `ballot_batch_min`, each a JSON integer in
+  the canonical form of `event-schema.md` ES-5. They declare **on the log** the two
+  values this issue's ballot publication discipline (ET-23–ET-25) is checked
+  against, so that a reader checks a ledger's ballot timing against numbers the
+  ledger published in advance rather than against numbers a verifier hard-codes,
+  and so that a community can change them by the mechanism it changes everything
+  else — a vote. A verifier MUST reject an `issue_created` whose values fall below
+  the permanent floors:
+  - `ballot_batch_interval_ms` MUST be **≥ 60000** (one minute);
+  - `ballot_batch_min` MUST be **≥ 3**.
+
+  **What is permanent and what is votable.** The batching mechanism (ET-23–ET-25)
+  and the *existence* of a floor on each parameter are **permanent**, in the
+  register of ET-22 and `evolution.md` EV-13: no future contracts version and no
+  community vote may remove them. Without a floor "governable" would mean an
+  operator declaring `1` and `1`, which satisfies every sentence of this spec while
+  publishing each ballot alone, in arrival order, at millisecond resolution — the
+  mechanism made decorative by configuration. The **values above the floor are
+  per-issue and votable**, which is why they live in the payload and not in this
+  spec. This is exactly the cut ET-14a already draws for `choice_count`: *that a
+  bound exists at all* is permanent, *the number* is a drafting decision. The two
+  floor numbers are drafting decisions recorded in ADR-0014; a later
+  `issue_created` version may raise them, and may never lower them to where the
+  rule stops binding.
+
+  > **Note (informative — imposes no requirement).** A **quorum** — a minimum
+  > turnout below which an issue publishes no ballots at all — is deliberately
+  > **not** a v1 parameter, and these two do not provide one. Batching addresses
+  > *timing* correlation (ET-23–ET-25). Small-turnout exposure is *arithmetic* on
+  > the tally — five ballots at 3–2 with four choices known reveals the fifth, a
+  > unanimous batch reveals everyone — and no interval, batch size or shuffle
+  > touches it. A `min_turnout` key is a Phase 1 `issue_created` **version 2**
+  > concern, which `evolution.md` EV-1/EV-2 keep additive at any time because only
+  > `genesis` is version-pinned (ET-6). Recorded here so that batching is never
+  > later mistaken for having solved turnout exposure.
 - **ET-15.** The issue's `issue_id` is this event's `hash` (`ids.md` ID-7); it
   is not stored in the payload.
 - **ET-16.** `title` string bytes are hashed as-is (UTF-8, no normalization);
@@ -330,12 +368,84 @@ off-log eligibility check.
   deliberately **no voter-provable inclusion** proof, since any identity-bound
   inclusion proof would itself be a receipt. Phase-1 identity obligations are in
   `memory/OPEN-QUESTIONS.md`.
+
+  **Residual addressed by ET-23–ET-25: timing correlation.** ET-21 is correct
+  about what it claims — the voter retains no artifact — and was incomplete about
+  what receipt-freeness requires, because coercion does not need the voter to
+  retain anything; it needs the **coercer** to be able to check. With `ts` at
+  mandatory millisecond precision (ES-20), `seq` in arrival order (ES-8), `choice`
+  in the clear, and an unauthenticated tail-pollable read surface (`read-api.md`
+  RA-12/RA-13), an observer who knows *when* a person voted reads *what* they
+  voted, holding the proof themselves. The ballot publication discipline below is
+  the rule that addresses that residual (ADR-0014).
+
+  **Residuals it does not close.** Two remain, and neither is a timing problem:
+  the registrar chooses 64 published, permanent signature bytes per ballot and can
+  encode a voter identifier in them undetectably (`memory/OPEN-QUESTIONS.md` Q-F);
+  and a `participant_registered` line adjacent in `seq` to a ballot still
+  correlates the two planes by position, even once the ballot's `ts` no longer
+  confirms the minute.
 - **ET-22.** _Permanent evolution constraint (binds `evolution.md`, T4)._ No
   future version of `vote_cast` MAY introduce a voter-held public key, a
   signature produced by a voter-held key, or an unbounded voter-chosen value
   into the ballot payload. Each of these re-creates a demandable receipt and
   would violate charter §5/§8, which are non-negotiable and survive any future
   community vote (§8).
+
+### Ballot publication discipline (per ADR-0014)
+
+Three producer rules, checked against the parameters the issue itself declared
+(ET-14b). They constrain the **value** of a ballot's `ts` and the **grouping** of
+ballot appends; they change no wire format, no payload key, and no hashing rule.
+Two of the three are verifiable from the export; the third is not, and says so.
+
+- **ET-23.** _Quantized ballot `ts`._ A `vote_cast` event's `ts` MUST be an exact
+  multiple of its issue's `ballot_batch_interval_ms` (ET-14b), measured in
+  milliseconds since `1970-01-01T00:00:00.000Z`. That offset is computed on the
+  proleptic Gregorian calendar with exactly `86400000` milliseconds in every day
+  and **no** leap seconds — ES-20 already rejects a `60` in the seconds field, so
+  the conversion is a pure calendar computation that both target languages perform
+  identically. A ballot's quantized `ts` is its **batch instant**. A verifier MUST
+  reject a `vote_cast` whose `ts` is not so quantized; the issue's interval is
+  read from the `issue_created` event named by `issue_id` (ET-18), which a
+  verifier already tracks. This is the one rule that constrains the value of `ts`;
+  `ts` remains barred from ordering or selecting anything (`event-schema.md`
+  ES-21).
+- **ET-24.** _Minimum batch size._ A **batch** is the set of all `vote_cast`
+  events on a chain sharing both an `issue_id` and a `ts` — the ballots of one
+  issue at one batch instant (ET-23). Every batch MUST contain at least that
+  issue's `ballot_batch_min` ballots (ET-14b), **except** the batch containing the
+  issue's highest-`seq` ballot, which MAY be smaller: an issue that closes before
+  its final batch fills must still publish the ballots it has. A verifier MUST
+  reject a chain in which any other batch of an issue is under-size. At most one
+  under-size batch per issue is therefore legal, and only as that issue's last.
+  Membership and lastness are decided by `seq` (ES-8), never by comparing `ts`
+  values.
+
+  _Line attribution (`evolution.md` EV-17)._ An under-size batch is not a
+  violation where it appears — it becomes one only when a later ballot of the same
+  issue proves it was not the last. The fatal line is therefore the **first
+  `vote_cast` of that issue appended after the under-size batch**, which is the
+  line at which the chain first violates this rule and the line a verifier
+  scanning in file order reaches first. Two consequences are worth stating rather
+  than discovering: a ledger that publishes an under-size batch and then keeps
+  appending ballots for that issue has broken this rule and the export shows it
+  (detection working, not a past line's legality changing); and end-truncation can
+  hide a violation by making a mid-chain under-size batch the last one for its
+  issue — the same residual EX-16 already documents for everything at the end of a
+  chain, with the same remedy, `--head`.
+- **ET-25.** _Order within a batch._ The order in which a batch's ballots are
+  appended MUST be independent of the order in which they arrived; a producer MUST
+  NOT append a batch in arrival order. Any order that does not derive from arrival
+  — a shuffle, or an order computed from ballot content — satisfies this.
+  **This rule is not verifiable from the log.** A shuffled batch and an
+  arrival-ordered batch are indistinguishable to every reader, so no verifier can
+  report a violation and no fixture can pin one: ET-25 is an obligation on the
+  ledger implementation and on nothing else, and it belongs to neither
+  verification stage (`evolution.md` EV-15). It is stated normatively anyway,
+  because a rule the log cannot enforce is still a rule the implementation owes,
+  and because without it a conforming ledger could publish batches in `seq` order
+  and hand a coercer back exactly the arrival ordering ET-23 removed from `ts`.
 
 ---
 
@@ -358,12 +468,16 @@ off-log eligibility check.
 | participant self-signing + id derivation       | ET-10, ET-11      |
 | Title length + forbidden characters            | ET-14             |
 | `choice_count` range                           | ET-14a            |
+| Ballot batch parameters + their floors         | ET-14b            |
 | Title normalization (none)                     | ET-16             |
 | Issue id source                                | ET-15             |
 | Vote signing key (registrar) + issue direction | ET-17, ET-18      |
 | `choice` type, range, and who interprets it    | ET-18a, ET-19     |
 | What the log does/does not enforce for ballots | ET-20, ET-21      |
 | What future `vote_cast` versions may not do    | ET-22             |
+| Ballot `ts` quantization (the batch instant)   | ET-23             |
+| What a batch is; minimum size; blamed line     | ET-24             |
+| Order within a batch (producer-only, uncheckable) | ET-25          |
 
 ## Acid-test walkthrough
 
@@ -384,9 +498,16 @@ whose `registrar_pk` is canonically encoded but small-order or mixed-order is
 rejected at the `genesis` line where the key is declared, even on a chain with
 no `vote_cast` that never uses it (ET-9c); that a `title`
 over 200 scalars or with a control character is rejected (ET-14); that an `issue_created` with `choice_count`
-outside 2–64 is rejected (ET-14a); that a vote for a not-yet-created issue, or
-with `choice` outside `[0, choice_count)`, is rejected (ET-18, ET-18a); and that
-`choice` is otherwise an opaque integer (ET-19). The only undecided bytes are
+outside 2–64 is rejected (ET-14a); that an `issue_created` declaring a batch
+interval under 60000 ms or a batch minimum under 3 is rejected (ET-14b); that a
+vote for a not-yet-created issue, or
+with `choice` outside `[0, choice_count)`, is rejected (ET-18, ET-18a); that a
+ballot whose `ts` is not a multiple of its issue's declared interval is rejected
+(ET-23), and that an under-size batch is rejected at the first later ballot of
+the same issue, never at the batch itself (ET-24); and that
+`choice` is otherwise an opaque integer (ET-19). They also agree that ET-25's
+shuffle cannot be checked by either of them, which is why it is stated as a
+producer obligation rather than a verifier check. The only undecided bytes are
 the signing/hash preimage layout — deferred to `hashing.md` (T4). No type-level
 ambiguity remains
 in this spec's scope.

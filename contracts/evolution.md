@@ -1,7 +1,8 @@
 # Evolution — contracts/evolution.md
 
-**Version:** 3
-**Status:** DRAFTING (Phase 0 · T5f). Not frozen.
+**Version:** 4
+**Status:** DRAFTING (Phase 0 · T5f, amended T9a/ADR-0014, ADR-0015,
+ADR-0017). Not frozen.
 **Companion specs:** `event-schema.md`, `event-types.md`, `hashing.md`,
 `export-format.md`, `read-api.md`.
 **Governing ADRs:** ADR-0006 (verifier scope & forward compatibility),
@@ -159,7 +160,12 @@ the surface has to live here.
   and `ids.md` ID-1/ID-2/ID-8, which a verifier reaches only through ET-18.
   `event-schema.md` ES-13, ES-14, ES-21, ES-22 and ES-29 state definitions, or
   constraints on the verifier itself, rather than per-event checks; they are
-  outside this split and belong to neither stage.
+  outside this split and belong to neither stage. So are, in `event-types.md`,
+  the boundary statements ET-20 and ET-21 and the evolution constraint ET-22
+  (which describe what the log does not enforce, and what a future version may
+  not do), and **ET-25**, which is a producer obligation no reader can check —
+  a shuffled batch and an arrival-ordered one are indistinguishable, so no
+  verifier can report it and no stage contains it (ADR-0014).
 - **EV-16.** **A payload-shape failure is `INVALID`, never `PARTIAL`.** An event
   violating `event-schema.md` ES-15, ES-16, or ES-17 — a non-object `payload`, or
   a float, boolean, `null`, nested object, or array anywhere in it — MUST be
