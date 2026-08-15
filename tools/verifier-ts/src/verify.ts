@@ -153,13 +153,29 @@ function stageB(ev: ParsedEvent, state: ChainState): boolean {
     }
 
     case "issue_created": {
-      if (!keysExactly(ev, ["choice_count", "sig", "title"])) return false; // ES-18
+      if (
+        !keysExactly(ev, [
+          "ballot_batch_interval_ms",
+          "ballot_batch_min",
+          "choice_count",
+          "sig",
+          "title",
+        ])
+      )
+        return false; // ES-18
       const title = strField(ev, "title");
       const choiceCount = intField(ev, "choice_count");
+      const batchIntervalMs = intField(ev, "ballot_batch_interval_ms");
+      const batchMin = intField(ev, "ballot_batch_min");
       const sigHex = strField(ev, "sig");
       if (title === null || !titleOk(title)) return false; // ET-14
       if (choiceCount === null || choiceCount < 2 || choiceCount > 64)
         return false; // ET-14a
+      // ET-14b: both keys MUST be integers (ES-5 canonical form, enforced by the
+      // parser) at or above their permanent floors. intField yields null for a
+      // string-valued key, which is itself a rejection.
+      if (batchIntervalMs === null || batchIntervalMs < 60000) return false; // ET-14b
+      if (batchMin === null || batchMin < 3) return false; // ET-14b
       if (sigHex === null || !HEX128.test(sigHex)) return false;
       const sig = Buffer.from(sigHex, "hex");
       const op = state.operatorPk;

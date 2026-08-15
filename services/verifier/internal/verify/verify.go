@@ -58,6 +58,14 @@ func registered(typ string, version int64) bool {
 	return false
 }
 
+// Permanent floors on the issue_created ballot batching parameters (ET-14b).
+// The values above the floors are per-issue and votable; that a floor exists is
+// permanent (register of ET-22 / EV-13).
+const (
+	minBallotBatchIntervalMS int64 = 60000
+	minBallotBatchMin        int64 = 3
+)
+
 // vstate carries chain-wide facts gathered during Stage B.
 type vstate struct {
 	opPK    []byte           // genesis operator_pk, decoded (ET-8/ET-13)
@@ -255,11 +263,13 @@ func stageBIssue(st *vstate, e *event) (string, bool) {
 	if !st.haveKey {
 		return "issue_created before usable genesis keys", false
 	}
-	if !payloadKeySetEquals(e.payload, []string{"choice_count", "sig", "title"}) {
+	if !payloadKeySetEquals(e.payload, []string{"ballot_batch_interval_ms", "ballot_batch_min", "choice_count", "sig", "title"}) {
 		return "issue payload key set (ES-18)", false
 	}
 	titleV, _ := payloadGet(e.payload, "title")
 	ccV, _ := payloadGet(e.payload, "choice_count")
+	intervalV, _ := payloadGet(e.payload, "ballot_batch_interval_ms")
+	minV, _ := payloadGet(e.payload, "ballot_batch_min")
 	sig := mustStr(e.payload, "sig")
 
 	if titleV.kind != kString {
@@ -277,6 +287,22 @@ func stageBIssue(st *vstate, e *event) (string, bool) {
 	}
 	if ccV.ival < 2 || ccV.ival > 64 {
 		return "choice_count out of 2..64 (ET-14a)", false
+	}
+	// ET-14b: the two ballot batching parameters are declared on the log, each a
+	// canonical ES-5 integer at or above its permanent floor. The floors are what
+	// stop "governable" meaning 1 and 1, which would satisfy every other sentence
+	// while making the ET-23..ET-25 discipline decorative.
+	if intervalV.kind != kInt {
+		return "ballot_batch_interval_ms must be an integer (ET-14b)", false
+	}
+	if intervalV.ival < minBallotBatchIntervalMS {
+		return "ballot_batch_interval_ms below the 60000 floor (ET-14b)", false
+	}
+	if minV.kind != kInt {
+		return "ballot_batch_min must be an integer (ET-14b)", false
+	}
+	if minV.ival < minBallotBatchMin {
+		return "ballot_batch_min below the 3 floor (ET-14b)", false
 	}
 	if !isHex128(sig) {
 		return "sig not 128 lowercase hex (ES-31)", false

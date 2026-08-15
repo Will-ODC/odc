@@ -19,6 +19,44 @@ Format (newest first, one entry per merged contracts change):
 
 ---
 
+## fixtures/ — 2026-08-15 — T9 fixture phase 1: ET-14b regeneration
+
+**No spec text changed; no `Version:` line moves.** This is the golden corpus
+catching up to `event-types.md` v8. ET-14b made
+`ballot_batch_interval_ms` and `ballot_batch_min` required on `issue_created`, so
+the **54 vectors carrying one** were no longer conforming. All 83 were
+regenerated, keeping the set internally consistent.
+
+- **Verdicts and line numbers are unchanged across all 83** — verified by diffing
+  every `id / verdict / line / lines` against the previous corpus. Bytes, hashes
+  and the two `head` inputs (`003`, `053`) moved; **nothing about what a vector
+  asserts moved.** A regeneration that shifted a verdict would be silently
+  rewriting what the suite tests, so this is the property the phase rests on.
+- Defaults are the ET-14b floors, `60000` / `3`, and both were forced rather than
+  convenient: ballots are minted on whole-minute boundaries, so any coarser
+  interval would leave existing ballots non-quantized under ET-23 and flip VALID
+  vectors to INVALID.
+- **`005-boundaries` needed a real change, not a re-stamp.** Its two ballots sat
+  on one issue at different minutes — under ET-24 that is two batches of one, the
+  earlier under-size and not last, making a vector declared VALID actually
+  INVALID. Both ballots now share a batch instant, so the issue has a single
+  batch and ET-24's last-batch exemption applies. **The verdict was preserved by
+  making the bytes conform, never by adjusting the expectation.**
+- **`057-issue-sig-wrong-key`'s note is corrected.** It asserted the old ET-9a
+  "separation is policy, not verifier-enforced" claim, which ADR-0018 reversed.
+  Verdict untouched, prose was false, and fixture notes are immutable once tagged
+  (ADR-0008) — so this was the last cheap moment. The same stale claim in the
+  generator's module header went with it.
+- Both verifiers were brought to ET-14b conformance in **separate isolated
+  contexts**, neither able to read the other. `MANIFEST.sha256` regenerated.
+
+**Owed and deliberately still open:** every one of the 55 `issue_created`
+payloads declares exactly the floor values, so **no vector discriminates the
+floor check** — a verifier that accepted the keys and skipped the floors passes
+all 83 today. Both isolated verifier builds reported this independently, which is
+the arrangement working as intended. The below-floor vectors listed under the
+ADR-0014 subsection below close it.
+
 ## event-types.md v8 · evolution.md v4 · export-format.md v3 · event-schema.md v3 — 2026-08-15 — T9a: the six blocking T9 findings (ADR-0013–ADR-0018)
 
 The operator's decisions on **F1–F6** of `docs/security/audit-phase-0.md`, one
