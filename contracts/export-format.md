@@ -1,7 +1,7 @@
 # Export Format — contracts/export-format.md
 
-**Version:** 2
-**Status:** DRAFTING (Phase 0 · T4a). Not frozen.
+**Version:** 3
+**Status:** DRAFTING (Phase 0 · T4a, amended T9a/ADR-0013). Not frozen.
 **Companion specs:** `event-schema.md` (envelope), `hashing.md` (preimage +
 `hash`), `read-api.md` (the online read interface), `evolution.md` (versioning).
 
@@ -147,6 +147,41 @@ tamper matrix ("`INVALID` at the right line") would score as a failure.
   boundaries themselves ambiguous, the verifier MUST attribute to the lowest line
   number consistent with the bytes it could parse — never to a later line.
 
+## 6. Chain identity and what a verifier reports (added in v3)
+
+`--head` (§4) names a **position**. It does not name a **chain**: a head is a
+valid head of whatever chain contains it, and the `genesis` payload's `chain_id`
+is a restatement of the operator key (`event-types.md` ET-7), identical across
+every chain one operator starts. A verifier given neither a chain identity nor
+an obligation to report one answers "is _some_ chain valid", which is the wrong
+question (ADR-0013).
+
+- **EX-21.** The **genesis hash** of a non-empty export is the `hash` field of
+  its **first** line — which EX-12 requires to be the `genesis` event. It is the
+  chain's identity (`event-types.md` ET-7a). An empty export has no genesis hash;
+  it is not a valid chain in any case (EX-18).
+- **EX-22.** A verifier MAY be given an expected chain identity via
+  `--chain <genesis-hash>` (64 lowercase hex). When given, the verifier MUST
+  confirm the first line's `hash` equals `<genesis-hash>` and MUST report
+  `INVALID` if it does not, even when every link check passes. `--chain` and
+  `--head` (EX-15) are independent and may be given together: `--chain` fixes
+  **which chain**, `--head` fixes **how much of it**. Neither is required for a
+  verdict on the file's own integrity; both exist because integrity alone does
+  not answer "is this the chain I was promised, in full".
+- **EX-23.** A `--chain` mismatch (EX-22) is `INVALID`, attributed to **line 1**
+  — the line whose `hash` is the identity that failed to match. This mirrors
+  EX-19, which attributes a `--head` mismatch to the last line for the same
+  reason: the blamed line is the one whose `hash` was compared.
+- **EX-24.** On every run over a non-empty export, a verifier MUST report both
+  the **genesis hash** (EX-21) and the **head** (EX-14) it computed, whatever the
+  verdict. A verifier that emits only a verdict token leaves a reader with
+  nothing to compare against an anchor, to publish, or to forward, so a chain
+  substituted wholesale verifies silently; reporting both makes every run a
+  potential witness (charter §4). This constrains the **tool's output**, not the
+  chain verdict: per `evolution.md` EV-17 conformance is judged on the verdict
+  token and line number(s) alone, so no golden fixture asserts these two values
+  and their presentation — labels, order, formatting — is deliberately left free.
+
 ---
 
 ## Degrees of freedom closed (acid-test checklist)
@@ -171,6 +206,10 @@ tamper matrix ("`INVALID` at the right line") would score as a failure.
 | Verdict + line for an empty export            | EX-18            |
 | Line blamed for a `--head` mismatch           | EX-19            |
 | Line blamed for framing violations            | EX-20            |
+| What identifies a chain (vs a position)       | EX-21            |
+| `--chain` semantics                           | EX-22            |
+| Line blamed for a `--chain` mismatch          | EX-23            |
+| What a verifier MUST report on every run      | EX-24            |
 
 ## Acid-test walkthrough
 
@@ -183,5 +222,9 @@ check `seq`+1 and `prev_hash` linkage (EX-13). Given a line with its envelope
 keys reordered, both reject it at EX-10 (not at the hash check, which would pass)
 — so "equivalent JSON, different bytes" is `INVALID` (D5, EX-11). Given the file
 with its last two lines removed, both report `VALID` without `--head` and
-`INVALID` with the true `--head` (EX-16). No framing or serialization ambiguity
+`INVALID` with the true `--head` (EX-16). Given two exports of two different
+chains started under one operator key, both report different genesis hashes
+(EX-21/EX-24) and both reject the wrong one when run with `--chain` (EX-22,
+`INVALID` at line 1 per EX-23) — where `chain_id` alone would have declared them
+the same chain (`event-types.md` ET-7). No framing or serialization ambiguity
 remains; byte-exact content integrity lives in `hashing.md`.

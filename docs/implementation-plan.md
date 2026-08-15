@@ -47,7 +47,7 @@ The append-only event log. The single writer of truth.
 
 Standalone CLI, written **from `contracts/` alone in a fresh context** — an agent that has never seen `ledger` source or discussion. This independence is the test that the spec is real.
 
-- `verify <export.ndjson> [--head <hash>]` → one of **three** verdicts (ADR-0006, `evolution.md` EV-7/EV-17): `VALID`, `INVALID at line N`, or `PARTIAL` naming the affected lines — the last for a well-formed event whose `(type, version)` this verifier does not register, so a frozen verifier does not condemn a chain that has legally grown past it. Exit codes 0/1/2, ≥3 for tool-level errors. Reason text is advisory and is NOT conformance-checked; there is no reason-code registry.
+- `verify <export.ndjson> [--head <hash>] [--chain <genesis-hash>]` → one of **three** verdicts (ADR-0006, `evolution.md` EV-7/EV-17): `VALID`, `INVALID at line N`, or `PARTIAL` naming the affected lines — the last for a well-formed event whose `(type, version)` this verifier does not register, so a frozen verifier does not condemn a chain that has legally grown past it. Exit codes 0/1/2, ≥3 for tool-level errors. Reason text is advisory and is NOT conformance-checked; there is no reason-code registry. `--chain` names **which chain** (the genesis hash — a chain's identity, ET-7a/EX-22) as `--head` names **how much of it**; on every run the verifier MUST print the genesis hash and the head it computed, so a reader has something to compare against an anchor (EX-24, ADR-0013).
 
 ### 3. `identity` — Phase 1
 

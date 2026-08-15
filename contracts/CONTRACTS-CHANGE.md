@@ -19,6 +19,41 @@ Format (newest first, one entry per merged contracts change):
 
 ---
 
+## event-types.md v8 · evolution.md v4 · export-format.md v3 · event-schema.md v3 — 2026-08-15 — T9a: the six blocking T9 findings (ADR-0013–ADR-0018)
+
+The operator's decisions on **F1–F6** of `docs/security/audit-phase-0.md`, one
+ADR per finding. All six are pre-freeze tightenings: each is either unavailable
+after the tag (ES-18/ET-6 close the `genesis` key set; EV-1/EV-4 bar retroactive
+constraints) or shapes the ledger write path that Phase 1 builds first. **No
+fixtures are written in this pass** — each subsection lists what it owes under
+EV-5, and both verifiers are untouched by design.
+
+### F1 — chain identity is the `genesis` hash (ADR-0013)
+
+- **`ET-7` rewritten and `ET-7a` added** (`event-types.md` v7 → v8). ET-7 claimed
+  `chain_id` "binds the chain's identity to its operator key with no free
+  parameter"; that was **false as written** — it binds the _operator's_ identity,
+  and every chain one operator starts carries the same `chain_id`. The audit built
+  two chains with opposite outcomes, identical `chain_id`, both `VALID` under both
+  verifiers. ET-7a states the identity: **the `hash` of the `genesis` event**. The
+  payload table's "the chain's stable identifier" is corrected the same way. The
+  derivation itself is unchanged — no byte, hash or existing verdict moves.
+- **`EX-21`–`EX-24` added** (`export-format.md` v2 → v3, new §6): the genesis hash
+  as defined on an export (EX-21); the optional `--chain <genesis-hash>` input,
+  independent of `--head` (EX-22); its mismatch is `INVALID` at **line 1**,
+  mirroring EX-19 (EX-23); and a verifier **MUST report the genesis hash and the
+  head it computed on every run** (EX-24) — output only, deliberately not
+  fixture-asserted per EV-17, because a tool that answers only `VALID` answers
+  "is _some_ chain valid".
+- **No new `genesis` field.** The `genesis_nonce` option was rejected: the genesis
+  hash is already unique per chain and costs no schema change, and the one genesis
+  change available before the freeze is spent on `ancestor_head` (ADR-0016).
+- **Owed fixtures:** a `--chain` match (`VALID`) and mismatch (`INVALID` line 1)
+  vector; and the two-chain pair under one operator key differing only in
+  `genesis.ts` — both `VALID` unflagged, each `INVALID` under the other's
+  `--chain`. **Owed verifier work (both verifiers, isolated passes):** the
+  `--chain` flag, the line-1 mismatch verdict, and EX-24 reporting.
+
 ## fixtures/ README v11 — 2026-08-09 — record fixture 083 (ET-9c) and the new count
 
 - Doc-only: `contracts/fixtures/README.md` v10 → **v11**. Updates the count to

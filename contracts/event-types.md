@@ -1,8 +1,8 @@
 # Event Types — contracts/event-types.md
 
-**Version:** 7
+**Version:** 8
 **Status:** DRAFTING (Phase 0 · T3, amended T4a, T5i, T5j, ADR-0009, ADR-0010,
-ADR-0011). Not frozen.
+ADR-0011, and T9a/ADR-0013, ADR-0014, ADR-0016, ADR-0018). Not frozen.
 **Companion specs:** `event-schema.md` (envelope), `ids.md` (identifiers),
 `hashing.md` (preimage — T4).
 
@@ -157,7 +157,7 @@ declares the operator key that later `issue_created` events are signed with.
 
 | key            | type   | constraint                                                          |
 | -------------- | ------ | ------------------------------------------------------------------- |
-| `chain_id`     | string | `^[0-9a-f]{64}$` — the chain's stable identifier (see ET-7)          |
+| `chain_id`     | string | `^[0-9a-f]{64}$` — a restatement of `operator_pk`, NOT the chain's identity (ET-7, ET-7a) |
 | `contracts`    | string | the frozen contracts version this chain runs, e.g. `"contracts-v1"` |
 | `operator_pk`  | string | `^[0-9a-f]{64}$` — operator Ed25519 public key (32 bytes, hex)       |
 | `registrar_pk` | string | `^[0-9a-f]{64}$` — registrar Ed25519 public key (32 bytes, hex)      |
@@ -167,9 +167,25 @@ declares the operator key that later `issue_created` events are signed with.
   MUST be the 64-zero anchor (`event-schema.md` ES-24, ES-33).
 - **ET-7.** `chain_id` MUST equal the `participant_id`-style derivation
   `sha256(operator_pk_bytes)` in lowercase hex (same construction as `ids.md`
-  ID-4/ID-5 applied to `operator_pk`). This binds the chain's identity to its
-  operator key with no free parameter. `chain_id` derives from `operator_pk`
-  alone; `registrar_pk` does not enter it.
+  ID-4/ID-5 applied to `operator_pk`). It **restates the operator key**; it does
+  not identify the chain. The derivation has no free parameter, so every chain a
+  given operator ever starts carries the **same** `chain_id`, and two different
+  chains under one operator key are indistinguishable by it. What identifies a
+  chain is **ET-7a**. `chain_id` derives from `operator_pk` alone; `registrar_pk`
+  does not enter it.
+- **ET-7a.** _Chain identity._ A chain's identity is the `hash` of its `genesis`
+  event (`event-schema.md` ES-27) — the **genesis hash** of `export-format.md`
+  EX-21. Two exports are exports of the same chain exactly when their genesis
+  hashes are equal. Wherever a chain must be named — an anchor or witness record
+  (charter §4), a verifier invocation (EX-22), a fork's `ancestor_head` (ET-9e) —
+  the genesis hash is the name, and `chain_id` MUST NOT be used as one (ET-7).
+  The genesis hash covers every content field of the genesis event, including
+  `ts`, so two chains an operator starts one millisecond apart have different
+  identities even though their `chain_id`, `operator_pk` and `registrar_pk` are
+  identical. A `head` does **not** identify a chain either: it names a position,
+  and a position is a position **on** some chain (EX-14, EX-21) — which is why
+  anchoring the head alone cannot deliver charter §4's non-equivocation
+  (ADR-0013).
 - **ET-8.** The `genesis` signing key is `operator_pk` (the event is
   self-signed by the key it declares). A verifier MUST reject a `genesis` whose
   `sig` does not verify under its own `operator_pk`.
@@ -335,6 +351,7 @@ off-log eligibility check.
 | Prime-order verification key (`[L]A==𝒪`, `A!=𝒪`) | ET-4c           |
 | Genesis fields, seq/prev_hash, self-signing    | ET-6, ET-7, ET-8  |
 | `chain_id` derivation (operator key only)      | ET-7              |
+| What identifies a chain (the genesis hash)     | ET-7a             |
 | Two genesis keys: operator vs registrar        | ET-9a             |
 | Genesis key format (operator/registrar pk)     | ET-9b             |
 | Genesis key validation timing (at declaration) | ET-9c             |
@@ -353,7 +370,9 @@ off-log eligibility check.
 Given the same four events, two implementations agree on: the legal type set
 (ET-1); that every `sig` is 128 hex and verified under the type's named key —
 `operator_pk` for genesis/issue, own `pubkey` for participant, `registrar_pk`
-for vote (ET-8/10/13/17); that a `sig` whose decoded `R`/`S`, or a verification
+for vote (ET-8/10/13/17); that the chain they just verified is named by its
+`genesis` hash and **not** by `chain_id`, so two chains under one operator key
+are two chains (ET-7/ET-7a); that a `sig` whose decoded `R`/`S`, or a verification
 key whose decoded bytes, are non-canonically encoded is rejected on the raw
 bytes before verification (ET-4a/ET-4b), and that a verification key which is
 canonically encoded but small-order or mixed-order — so it passes ET-4b and even
