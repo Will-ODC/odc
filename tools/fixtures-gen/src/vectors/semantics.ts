@@ -12,11 +12,11 @@
 // the wrong-but-well-formed choices, pinning the four per-type signing rules
 // ET-8, ET-10, ET-13 and ET-17 — one vector each.
 //
-// These do NOT test ET-9a. ET-9a closes with "This separation is policy, not
-// verifier-enforced": the contract imposes no relation between operator_pk and
-// registrar_pk, and a verifier MUST NOT reject a chain where they are equal.
-// Reading 057 as "ET-9a enforced" would push a verifier into rejecting a legal
-// chain, which is why the distinction is spelled out here and in 057's note.
+// These do NOT test ET-9d, the rule that operator_pk and registrar_pk MUST
+// differ (ADR-0018, which replaced ET-9a's "policy, not verifier-enforced"
+// sentence). Every genesis in this file declares two distinct keys, so ET-9d is
+// satisfied throughout and 057's wrong-key signature is the only fault on its
+// line. The vector ET-9d itself is owed belongs to the later fixture pass.
 //
 // 069 pins precedence: a chain with BOTH an unregistered type and a Stage A
 // failure is INVALID, not PARTIAL, and names the first fatal line (EV-17).
@@ -39,7 +39,12 @@ import {
   v,
   type Vector,
 } from "./shared.js";
-import { OPERATOR, REGISTRAR } from "../chain.js";
+import {
+  DEFAULT_BALLOT_BATCH_INTERVAL_MS,
+  DEFAULT_BALLOT_BATCH_MIN,
+  OPERATOR,
+  REGISTRAR,
+} from "../chain.js";
 import { chainId } from "../encode.js";
 import { head as headOf } from "../serialize.js";
 import { editLine, flipHashChar, frame, truncate } from "../tamper.js";
@@ -106,14 +111,22 @@ export const semanticsVectors: Vector[] = [
         c.custom(
           "issue_created",
           1,
-          { choice_count: 3, title: "Adopt the charter" },
+          {
+            // Hand-built rather than via `issue()`, so ET-14b's two required
+            // keys have to be spelled out here too: without them the line would
+            // break ET-14b as well as ET-13 and stop isolating the signature.
+            ballot_batch_interval_ms: DEFAULT_BALLOT_BATCH_INTERVAL_MS,
+            ballot_batch_min: DEFAULT_BALLOT_BATCH_MIN,
+            choice_count: 3,
+            title: "Adopt the charter",
+          },
           { signer: REGISTRAR },
         ),
       ),
     ),
     2,
     ["ET-13"],
-    'An issue signed by the registrar key rather than the operator key. What fails is ET-13 — an issue_created whose sig does not verify under the genesis-declared operator_pk. Deliberately NOT a test of ET-9a: ET-9a closes with "This separation is policy, not verifier-enforced", so a verifier MUST NOT reject a chain merely because operator_pk and registrar_pk coincide. The registrar key is used here only because it is a wrong-but-well-formed key a real deployment has to hand.',
+    "An issue signed by the registrar key rather than the operator key. What fails is ET-13 — an issue_created whose sig does not verify under the genesis-declared operator_pk. Deliberately NOT a test of ET-9d: the genesis on line 1 declares two distinct keys, so the key-distinctness rule is satisfied and nothing here turns on it. The registrar key is used only because it is a wrong-but-well-formed key a real deployment has to hand.",
   ),
   bad(
     "058-vote-sig-wrong-key",

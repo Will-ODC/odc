@@ -11,6 +11,8 @@ import { test } from "node:test";
 
 import {
   assertWholeMinute,
+  BALLOT_BATCH_INTERVAL_MS_FLOOR,
+  BALLOT_BATCH_MIN_FLOOR,
   ChainBuilder,
   GENESIS_PREV_HASH,
   GENESIS_TS,
@@ -101,6 +103,35 @@ test("a ballot carries no voter field at all (ET-21)", () => {
     "issue_id",
     "sig",
   ]);
+});
+
+test("issue_created carries exactly the five ET-14/ET-14a/ET-14b payload keys", () => {
+  const i = newChain().issue("Adopt the charter", 3);
+  assert.deepEqual(Object.keys(i.payload).sort(), [
+    "ballot_batch_interval_ms",
+    "ballot_batch_min",
+    "choice_count",
+    "sig",
+    "title",
+  ]);
+});
+
+test("the default batch parameters sit at the ET-14b floors, never below", () => {
+  const i = newChain().issue("Adopt the charter", 3);
+  // Asserted against the floors rather than against the defaults, so lowering a
+  // default below a floor fails here instead of quietly agreeing with itself.
+  const interval = i.payload["ballot_batch_interval_ms"] as number;
+  const min = i.payload["ballot_batch_min"] as number;
+  assert.ok(Number.isInteger(interval) && Number.isInteger(min));
+  assert.ok(interval >= BALLOT_BATCH_INTERVAL_MS_FLOOR);
+  assert.ok(min >= BALLOT_BATCH_MIN_FLOOR);
+});
+
+test("a ballot's default ts is an exact multiple of the default batch interval (ET-23)", () => {
+  const c = newChain();
+  const i = c.issue("Adopt the charter", 3);
+  const v = c.vote(i.hash, 1);
+  assert.equal(Date.parse(v.ts) % BALLOT_BATCH_INTERVAL_MS_FLOOR, 0);
 });
 
 test("issue_id is the issue_created event's own hash (ID-7, ET-15)", () => {

@@ -45,8 +45,16 @@ export const validVectors: Vector[] = [
     chain((c) => {
       const short = c.issue("a", 2);
       const long = c.issue("t".repeat(200), 64);
-      c.vote(short.hash, 0);
-      c.vote(short.hash, 1);
+      // Both ballots on `short` share one batch instant (ET-23), so `short` has
+      // exactly one batch and it is the batch holding that issue's highest-seq
+      // ballot — which ET-24 exempts from the minimum size. Left at their own
+      // seq minutes they would be two batches of one ballot each, the earlier of
+      // them under-size and not last, making this vector INVALID at line 5 for
+      // batching. Its point is the legal extremes of title and choice, so the
+      // batching rule is kept satisfied rather than exercised here.
+      const batch = 4;
+      c.vote(short.hash, 0, { minutes: batch });
+      c.vote(short.hash, 1, { minutes: batch });
       c.vote(long.hash, 63);
     }),
     ["ET-14", "ET-14a", "ET-18a"],
