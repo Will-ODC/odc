@@ -33,6 +33,81 @@ listed here because they need design work, not because they gate the RC.
   `--chain <genesis-hash>` verifier input. **Unfixable after freeze** — ES-18
   closes the genesis key set, ET-6 pins `genesis.version` to 1, EV-1 forbids
   altering a frozen `(type, version)`.
+
+  **INDEPENDENT ASSESSMENT, 2026-08-15.** The operator challenged both the
+  severity and the fix, so the question went to a separate model with no stake in
+  the audit, given both positions unattributed and told a conclusion contradicting
+  both would be a good outcome. It contradicted both. Findings, with the sources
+  it cited:
+
+  - **Key-derived log identity is conventional — under an invariant we lack.**
+    CT v1 (RFC 6962) defines LogID as SHA-256 of the log's SubjectPublicKeyInfo,
+    exactly our construction. But CT v2 (RFC 9162) states a log **MUST NOT** use
+    the same keypair as any other log, and moved identity off the key to per-log
+    OIDs. C2SP's checkpoint format (Sigstore, Go sumdb, Sigsum) gives every
+    checkpoint an `origin` line — a per-log identifier separate from the key — and
+    witnesses key their state on it. Chrome treats cross-log key reuse as an
+    incident. So the rule everywhere is **one key, one log**; we permit one key to
+    start many chains, which is the actual defect. ET-7's claim that `chain_id`
+    "binds the chain's identity to its operator key" is false as written — it binds
+    the _operator's_ identity.
+  - **The "a diligent observer catches this today" argument is wrong**, and it was
+    the orchestrator's, not the audit's. Three reasons: no anchor exists, so there
+    is no shared reference point; the verifier prints only `VALID` and never emits
+    the genesis or head hash it computed, so diligence has nothing to act on; and
+    checking that successive heads stay consistent does **not** catch it, because
+    alternating anchors from two chains sharing a `chain_id` look like one chain
+    advancing unless the checker replays whole exports — and with a bare hash chain
+    and no Merkle tree there are no succinct consistency proofs, so that check is
+    linear-cost and no rule requires it. Recorded because the argument is
+    superficially attractive and will recur.
+  - **Prevention is not achievable; detection is the ceiling.** SUNDR (OSDI '04)
+    establishes fork consistency: an untrusted server can always fork clients, so
+    the goal is making forks detectable and permanent. Ranked by what actually
+    carries weight in deployment: signed heads plus consistency checking between
+    successive heads; **witness cosigning** (CoSi, Sigsum, the transparency.dev
+    witness network), which is where the field converged; and **gossip, which
+    failed** — `draft-ietf-trans-gossip` expired undeployed and CT ran a decade
+    with essentially none. The lesson it drew for us: do not rely on observers
+    spontaneously comparing notes, build explicit witnessing.
+  - **Verdict: a genuine design defect, not a naming one** — because the
+    identifier's one future job is to key the anchoring and witnessing layer, and
+    as specified it cannot. The threat model is dishonest-operator equivocation,
+    which for a governance log is the primary threat, not an edge case.
+  - **Severity is worse than either position stated, but the weight moves.** Its
+    closing point: _until an anchor exists, every audience is trivially forkable
+    regardless of what the identifier is_. So the anchoring gap (filed as S3, a
+    SHOULD, and folded into this entry) outranks the naming problem, and the two
+    should be decided together.
+
+  **Recommended resolution**, superseding the audit's two-option framing:
+
+  1. **Identity = the `genesis` event hash** (option b). It already commits to
+     operator key, `ts` and contracts version, is unique per chain, and changes no
+     schema. Matches the field's direction (RFC 9162 decoupling ID from key; C2SP
+     `origin`).
+  2. **Also fix ET-7's description before the freeze** — either drop the "stable
+     identifier" language or take option (a)'s nonce. Leaving a frozen sentence
+     that names `chain_id` as the chain's identity is the part that does not
+     cleanly survive.
+  3. **The verifier MUST print the genesis hash and head it computed**, not merely
+     accept them as inputs. A tool that answers only `VALID` is answering "is
+     _some_ chain valid", which is the wrong question. Neither the audit nor the
+     orchestrator proposed this; it is cheap and independent of the freeze.
+  4. **Anchor contents:** `(genesis_hash, seq, head_hash, timestamp, operator
+signature)` — a signed checkpoint, ideally in C2SP signed-note format so
+     witness tooling can be inherited later. With a fixed cadence and **a normative
+     rule that a gap or regression in `seq` is itself an alarm**, without which a
+     missing anchor is undetectable. This is the charter's real omission.
+
+  **Timing, corrected.** Genuinely irreversible at the freeze: the `genesis` key
+  set, so **option (a) dies then** — a nonce is now or never. Also risky to defer:
+  `chain_id`'s frozen normative description, since redefining semantics later is
+  not clearly additive and implementations will key on it meanwhile. Safely
+  post-freeze: verifier flags and output, the anchor spec (a new artifact, not an
+  event schema), and documentation. So settle **identity** before the freeze; build
+  **anchoring** immediately after.
+
 - **Q-B — What publication discipline makes ballots receipt-free against an
   observer who knows when a voter voted?** (from F2.) ET-21 proves the _voter_
   retains no artifact; it does not address a **coercer assembling one**. With
