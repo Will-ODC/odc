@@ -7,11 +7,16 @@
 
 ## Current phase
 
-**Phase 0 — Contracts.** The two-verifier genesis rehearsal passed (T8,
-ADR-0012). Nothing may be implemented in services/ until the T9 security audit
-passes and T9a advances `contracts/` to **RELEASE CANDIDATE** (ADR-0007). The
-`contracts-v1` freeze is deferred until real operational use; `contracts/`
-remains **DRAFTING** until T9a.
+**Phase 0 — Contracts.** The T9 audit has **run** and returned **REQUEST
+CHANGES** (six blocking findings, `docs/security/audit-phase-0.md`). All six were
+decided and answered in the specs as **ADR-0013…0018** (#98); `event-types.md` is
+at **v8**, `evolution.md` v4, `export-format.md` v3, `event-schema.md` v3.
+
+**The gate is still closed.** Spec changes alone do not clear T9 — it reopens only
+after fixtures, both verifiers, and a **fresh re-audit** (see Next). Nothing may be
+implemented in services/ until then, and T9a advances `contracts/` to **RELEASE
+CANDIDATE** (ADR-0007) only after that. The `contracts-v1` freeze stays deferred
+until real operational use; `contracts/` remains **DRAFTING**.
 
 ## Done (ledger — detail is in the cited squash commit)
 
@@ -182,19 +187,42 @@ Contracts remain **DRAFTING**; T9 is the next gate.
 
 ## Next
 
-**T7b (#78) and T8 (#95) are complete; the genesis rehearsal passed without a
-contract ambiguity (ADR-0012).** Remaining Phase 0, in order:
+**T9 ran and its six findings are answered in the specs (#98).** What remains
+before the gate reopens, in order — full detail in `OPEN-QUESTIONS.md`:
 
-1. **T9 — fresh-context phase-gate security audit** (`odc-security-auditor`).
-   Audit `contracts/`, fixtures, and the rehearsal result for identity leakage,
-   receipt-freeness failures, and operator equivocation. Use the stale unlanded
-   posture-audit branch only as input; create the authoritative audit under
-   `docs/security/`. Acceptance is APPROVE, or fixes followed by fresh re-audit.
-2. **T9a — release candidate**, immediately after T9 approval. Flip
+1. **Fixtures.** The batch parameters are **required** on `issue_created`
+   (optional would let a chain omit them and run unbatched), so **54 of 83 vectors
+   carry an `issue_created` and must be regenerated** — **verdicts surviving
+   unchanged**, a seq-gap vector still testing a seq gap. New vectors owed for F1,
+   F2, F3, F4, F6; F5 gets none by construction. Two traps live in this pass, both
+   listed under Blockers below.
+2. **Both verifiers, in separate isolated contexts** — independence is why there
+   are two. `--chain <genesis-hash>`, print the computed genesis hash and head
+   (EX-24, tool output not verdict, so no collision with EV-17), plus the F3
+   verdict, F6 key check, and F2 quantization/batch-size checks.
+3. **Fresh re-audit** by a context that did **not** write `audit-phase-0.md`.
+   This is the step that actually clears T9. Acceptance is APPROVE.
+4. **T9a — release candidate**, only after that APPROVE. Flip
    `contracts/README.md` from DRAFTING to RELEASE CANDIDATE, reconcile the named
-   implementation/charter/service guidance, and move `memory/STATE.md` to Phase 1
+   implementation/charter/service guidance, and move this file to Phase 1
    (ledger · verifier · identity). **Do not create a `contracts-v1` tag.** T10
    freeze and re-audit remain deferred until real operational use.
+
+**Operator decisions already settled, do not re-litigate.** The six findings
+(ADR-0013…0018) were worked through one at a time. The F2 batch floors —
+`ballot_batch_interval_ms` **≥ 60000** and `ballot_batch_min` **≥ 3** — are
+**confirmed by the operator (2026-08-15): both stay as they are.** The values
+above the floors are per-issue and votable, which was the explicit instruction:
+batch size must be open to community vote, like almost everything here. The floors
+exist only so "governable" cannot mean an operator sets 1 ms / 1 and makes the
+rule decorative. Note which parameter does which job — **`ballot_batch_min` is the
+anonymity parameter** (how many you are hidden among) and the interval is the
+timestamp-coarseness one; publication waits on the count, so turnout drives the
+delay, not the clock.
+
+**Still owed by the operator:** the charter §4 anchoring edit landed via #98
+**unratified** — it now says a chain's identity and head must be published
+together. Ratify or revise; it is live on master either way.
 
 **Owed with no ticket (how the last backlog rotted):** the **structure-aware fuzz
 as a committed test** — value-level, not byte-level (a byte fuzzer misses the
@@ -202,14 +230,19 @@ crash class a value fuzz finds instantly). Bundle with #57's six deferred
 envelope-guard survivors (`verify.ts:93-102`, same class) and point both at the
 verifier/rehearsal surfaces.
 
-**Coverage is thinner than 83 vectors suggests.** Roughly half of ~130 rule ids
-have no citing vector. `ET-4a`–`ET-4c` are now covered (vectors `078`–`082`);
-remaining real gaps for T9 and later conformance work: `ES-30`–`ES-32` (sig field),
-`ET-3`, `EX-14`
-(head), most of `ids.md`, `EV-11`–`EV-14` (correction/retraction, incl. EV-13's
-ballot-plane prohibition). **`HA-7` is cited by no vector** despite six notes
-invoking it. Strong on what it covers, silent elsewhere — not a complete
-conformance suite.
+**Coverage is thinner than 83 vectors suggests, and the real number is worse than
+"~130" said.** Counted exactly during T9: **143 rule ids, 70 cited by at least one
+vector, 73 cited by none.** `ET-4a`–`ET-4c` are covered (vectors `078`–`082`).
+The uncovered half includes **`RA-1`–`RA-13`, the whole of `read-api.md`** — the
+public read surface, which is exactly where identity leakage would show, and which
+no earlier gap list mentioned at all. Other real gaps: `ES-30`–`ES-32` (sig field),
+`ET-3`, `EX-14` (head), most of `ids.md`, `EV-11`–`EV-14` (correction/retraction,
+incl. EV-13's ballot-plane prohibition). **`HA-7` is cited by no vector** despite
+six notes invoking it. Note the honest limit: vectors are NDJSON exports, so
+covering `RA-*` may need a different instrument — likely why it went unnoticed.
+And **citation is an upper bound on coverage, not coverage**: `HA-2` is cited by a
+vector while its closing MUST is unfixtured. Strong on what it covers, silent
+elsewhere — not a complete conformance suite.
 
 **Two known fixture warts, deliberately unfixed** (`016-seq-gap` and
 `040-line-deleted` overlap at line 3; `016`'s bytes carry `seq [1,2,4,4]`).
@@ -232,6 +265,29 @@ one-choice") and the other queued direction ADRs. **Read the ET-22 warning in
 
 ## Blockers & live cautions
 
+- **Two traps the ADR-0013…0018 pass left in the fixture work.** Both are the kind
+  that read as noise later and cost a day to rediscover.
+  **(a)** `tools/fixtures-gen/test/conformance.test.ts:189` asserts _no vector may
+  freeze a verdict for an unregistered genesis version_, because that was an open
+  question. **ADR-0015 answered it**, so the guard now forbids exactly the fixture
+  F3 requires. **Invert it, do not delete it** — deleting drops a live protection
+  along with the stale assertion. It must be inverted _with_ the fixture, not
+  before: inverted alone it asserts a vector that does not yet exist.
+  **(b)** Fixture `057-issue-sig-wrong-key`'s `note` asserts the superseded ET-9a
+  rule. Verdict unaffected, prose false. Fixture notes are immutable at the tag
+  (ADR-0008), so **fix before the tag or it is permanent** — cheapest to do inside
+  the regeneration pass, which rewrites `index.json` anyway.
+- **`apps/pulse/` and `apps/pulse-web/` are an active workstream this file has
+  never mentioned** (#88–#97: demo client, array ballots, changeable votes, swipe
+  mockups; the diff-size ceiling was raised 600→1000 in #93 for it). They live in
+  `apps/`, not `services/`, so they do not violate the "nothing in services/ until
+  T9" rule — but a reader trusting this file as the single source of
+  session-to-session truth would not know they exist.
+- **A squash merge leaves granular history only on the branch.** #98 squashed the
+  whole T9 branch into one commit, so the per-change commit messages survive only
+  on `claude/t9-audit`, `claude/t9-decisions`, `claude/t9-adrs-contracts` (PRs
+  closed, content fully on master). Kept deliberately for that reason; deleting
+  them is lossy, not free.
 - **Branch protection ON** (`protect-master`): PR required, four strict checks
   (`format / lint / typecheck`, `diff-size`, `guard-tests`, `guard`), linear
   history, no bypass. **STATE.md updates ride their own follow-up PR** — feature
