@@ -33,7 +33,7 @@
     {
       "id": "003-head-match",
       "export": "vectors/003-head-match.ndjson",
-      "head": "951f3493cbbee4e6cf80b041e36405fef1dee489b48a10dabe615cf07003664f",
+      "head": "6554b798885009b6d0bcdce61235df2419351bdb72ed5dea298216c70965b600",
       "expect": {
         "verdict": "VALID"
       },
@@ -667,7 +667,7 @@
     {
       "id": "053-head-mismatch-truncated",
       "export": "vectors/053-head-mismatch-truncated.ndjson",
-      "head": "951f3493cbbee4e6cf80b041e36405fef1dee489b48a10dabe615cf07003664f",
+      "head": "6554b798885009b6d0bcdce61235df2419351bdb72ed5dea298216c70965b600",
       "expect": {
         "verdict": "INVALID",
         "line": 2
@@ -727,7 +727,7 @@
       "cites": [
         "ET-13"
       ],
-      "note": "An issue signed by the registrar key rather than the operator key. What fails is ET-13 — an issue_created whose sig does not verify under the genesis-declared operator_pk. Deliberately NOT a test of ET-9a: ET-9a closes with \"This separation is policy, not verifier-enforced\", so a verifier MUST NOT reject a chain merely because operator_pk and registrar_pk coincide. The registrar key is used here only because it is a wrong-but-well-formed key a real deployment has to hand."
+      "note": "An issue signed by the registrar key rather than the operator key. What fails is ET-13 — an issue_created whose sig does not verify under the genesis-declared operator_pk. Deliberately NOT a test of ET-9d: the genesis on line 1 declares two distinct keys, so the key-distinctness rule is satisfied and nothing here turns on it. The registrar key is used only because it is a wrong-but-well-formed key a real deployment has to hand."
     },
     {
       "id": "058-vote-sig-wrong-key",
