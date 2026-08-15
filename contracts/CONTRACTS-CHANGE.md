@@ -103,6 +103,37 @@ EV-5, and both verifiers are untouched by design.
   **final** batch; a below-floor interval and a below-floor minimum, one each; and
   a multi-batch `VALID` chain. **ET-25 gets no fixture, by construction.**
 
+### F3 — an unregistered `genesis` version is `INVALID` at line 1 (ADR-0015)
+
+- **`EV-20` added** (`evolution.md` v3 → v4, new §5). A chain's `genesis` MUST
+  carry a `(type, version)` the verifier registers; a chain whose first line does
+  not is **`INVALID` at line 1**. This is the **sole exception to EV-8** and a
+  **Stage A promotion for `genesis` alone**, justified because `genesis` is the
+  only event whose payload a verifier must read to check any other event — its
+  payload holds `operator_pk`/`registrar_pk` (ET-9a) and reading it is itself
+  Stage B. Without EV-20 a verifier could walk such a chain to `PARTIAL`
+  ("integrity confirmed, some semantics unchecked") over a chain on which
+  **nothing was ever authenticated**. Both current verifiers reach `INVALID` at
+  line **2** by convergent reasoning that no sentence assigns — the divergence
+  class ADR-0011 exists to eliminate.
+- **`EV-21` added.** Guidance, not conformance (reason text is advisory per
+  T4a/EV-17): a verifier SHOULD distinguish "this verifier may be out of date for
+  this chain" from "this chain's genesis is corrupt", state that from the log
+  alone the two are indistinguishable, and name the version it met and the
+  versions it registers. Same verdict, honest explanation. Writing it as a MUST
+  would have created by accident the reason-code registry EV-17 refused.
+- **`EV-8`, `EV-15` and `ET-2a` reconciled** with the new exception: EV-8 gains
+  the carve-out clause, EV-15's exhaustive stage split records that ES-9/ES-11 are
+  Stage A at line 1, and ET-2a points a reader arriving from the type registry at
+  EV-20 (the treatment EV-9 got in T4a).
+- **Owed fixture:** a `genesis` at version **1000000** (EV-19's reserved value —
+  EV-18's `x_` prefix cannot express this case, the type name must stay
+  `genesis`), followed by a registered-version event, pinning `INVALID` at line 1.
+  **And an owed guard inversion:** `tools/fixtures-gen/test/conformance.test.ts`
+  currently asserts that *no* vector freezes a verdict here — written while the
+  question was open, and now the thing that would block the fixture answering it.
+  It must be replaced by its inverse, not deleted.
+
 ## fixtures/ README v11 — 2026-08-09 — record fixture 083 (ET-9c) and the new count
 
 - Doc-only: `contracts/fixtures/README.md` v10 → **v11**. Updates the count to

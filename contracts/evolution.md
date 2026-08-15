@@ -81,7 +81,8 @@ chain, or a fork that added types, charter §8).
     or `(type, version)` the verifier does not register, so Stage B could not run
     for them. The verifier MUST enumerate the affected line numbers.
 - **EV-8.** A verifier MUST NOT report `INVALID` **solely** because a well-formed
-  event has an unregistered `(type, version)`. Such an event is hash-checkable
+  event has an unregistered `(type, version)` — **with the single exception of
+  `genesis`, EV-20.** Such an event is hash-checkable
   under Stage A (EV-3/HA-7); its integrity and chain position are confirmed, and
   only its type-specific semantics are left unchecked (`PARTIAL`, EV-7). This is
   the property the fork/exit right and P1 require: an old verifier confirms the
@@ -157,7 +158,10 @@ the surface has to live here.
   per-event checks** — those requiring knowledge of the `(type, version)`: ES-9
   and ES-11 (registration), ES-18 (payload key set), ES-30–ES-32 as instantiated
   per type, the EX-11 `sig` clause above, every rule of `event-types.md` (ET-\*),
-  and `ids.md` ID-1/ID-2/ID-8, which a verifier reaches only through ET-18.
+  and `ids.md` ID-1/ID-2/ID-8, which a verifier reaches only through ET-18. **One
+  event escapes that assignment: at line 1, ES-9/ES-11 registration is Stage A,
+  because a `genesis` the verifier does not register leaves it no keys to run
+  Stage B with anywhere on the chain (EV-20).**
   `event-schema.md` ES-13, ES-14, ES-21, ES-22 and ES-29 state definitions, or
   constraints on the verifier itself, rather than per-event checks; they are
   outside this split and belong to neither stage. So are, in `event-types.md`,
@@ -231,6 +235,47 @@ the surface has to live here.
   vector on, say, `participant_registered` version 2 would be contradicted the day
   EV-1 adds that version for real.
 
+## 5. The one type that must be registered (added in v4)
+
+- **EV-20.** **A chain's `genesis` event MUST carry a `(type, version)` the
+  verifier registers.** A chain whose first line does not is **`INVALID` at line
+  1**, and the verifier MUST NOT proceed to a chain-level `VALID` or `PARTIAL`
+  verdict. This is the **sole exception to EV-8**, and it is a **Stage A
+  promotion for `genesis` alone**: the registration check (`event-schema.md`
+  ES-9/ES-11), which EV-15 assigns to Stage B everywhere else, is Stage A at line
+  1.
+
+  The justification is structural rather than stylistic. `genesis` is the only
+  event whose **payload a verifier must read in order to check any other event**:
+  `operator_pk` and `registrar_pk` live there (`event-types.md` ET-9a), and
+  reading them is itself Stage B (EV-15). With an unregistered `genesis` those
+  keys cannot be extracted at all, so **every** later signature becomes
+  uncheckable — and without this rule a verifier could walk such a chain to
+  `PARTIAL`, which means "integrity confirmed, some semantics unchecked", over a
+  chain on which **nothing was ever authenticated**. That is the one place the
+  forward-compatibility posture of EV-8 would announce success about a chain it
+  could not check at all, so `genesis` is carved out of it. The general rule is
+  unaffected: an old verifier still confirms the integrity of a newer chain that
+  has grown past it (EV-8), because a chain that has legally grown past a verifier
+  still starts at a `genesis` that verifier registers.
+- **EV-21.** **What a verifier should say when it rejects under EV-20.** Reason
+  text is advisory (EV-17), so this is **guidance, not a conformance
+  requirement**: conformance for EV-20 is the token `INVALID` and the line number
+  `1`, and nothing else is asserted by any fixture. A verifier SHOULD nonetheless
+  distinguish, in its reason text, the two situations that produce that one
+  verdict, because they ask opposite things of the reader:
+
+  - **"this verifier does not register `(genesis, <version>)` — it may be out of
+    date for this chain"**, and
+  - **"this chain's genesis is corrupt or hostile"**.
+
+  From the log alone the two are **indistinguishable**, and an honest message says
+  so rather than picking one: naming the version encountered and the `genesis`
+  versions the verifier does register lets the reader go and settle it. A verifier
+  that reports the bare token here sends someone hunting for tampering when the
+  remedy may be to fetch a newer verifier — and, worse, teaches readers to treat a
+  legitimate newer chain as an attack.
+
 ---
 
 ## Degrees of freedom closed (acid-test checklist)
@@ -253,6 +298,8 @@ the surface has to live here.
 | What a fixture asserts (verdict + line only)          | EV-17          |
 | Placeholder type for `PARTIAL` fixtures               | EV-18          |
 | Placeholder version for `PARTIAL` fixtures            | EV-19          |
+| Unregistered `genesis` version: the verdict           | EV-20          |
+| What that rejection should tell the reader            | EV-21          |
 
 ## Acid-test walkthrough
 
@@ -260,7 +307,11 @@ Two verifiers built for `contracts-v1`, run on a chain that contains a
 hypothetical v2 `delegation_created` event, both: pass Stage A on every line
 (including the v2 event, hash-recomputed by the generic rule, HA-7), find the v2
 `(type, version)` outside their registry, skip Stage B for it, and report
-`PARTIAL` naming that line — never `INVALID` (EV-7/EV-8/EV-9). Run on a pure-v1
+`PARTIAL` naming that line — never `INVALID` (EV-7/EV-8/EV-9). Run on a chain
+whose **`genesis`** is at a version neither registers, both report `INVALID` at
+line 1 rather than walking a chain they cannot authenticate to `PARTIAL`
+(EV-20), and both say which of "my registry is old" and "this genesis is
+hostile" they cannot tell apart (EV-21). Run on a pure-v1
 chain, both report `VALID | INVALID` identically (EV-10). Given the same future
 `delegation` fixtures with a `supersedes` chain, two interpreters resolve the
 same surviving events by `max(seq)` transitivity (EV-12). No cross-version or

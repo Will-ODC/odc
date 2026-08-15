@@ -27,7 +27,10 @@ Each payload table column: **key** · **type** · **constraint**.
   go unchecked. A frozen verifier therefore does **not** condemn a chain that has
   legally grown past it (charter §8, P1). Only a malformed `type` or a Stage A
   failure is structurally `INVALID`; a malformed payload is `INVALID` even on an
-  unregistered type (EV-16).
+  unregistered type (EV-16). **One position is exempt from all of this: an
+  unregistered `(genesis, version)` at line 1 is `INVALID`** (`evolution.md`
+  EV-20), because `genesis` is the only event whose payload a verifier must read
+  in order to check any other event.
 
 ---
 
