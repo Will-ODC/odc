@@ -115,6 +115,40 @@ export const CHOICE_COUNT_MIN = 2;
 export const CHOICE_COUNT_MAX = 64;
 
 /**
+ * ET-14b: the permanent floors on the two ballot-batching parameters every
+ * `issue_created` must declare (ADR-0014).
+ */
+export const BALLOT_BATCH_INTERVAL_MS_FLOOR = 60_000;
+export const BALLOT_BATCH_MIN_FLOOR = 3;
+
+/**
+ * What an ordinary vector's `issue_created` declares. Both sit exactly ON the
+ * ET-14b floors, and that is a decision, not laziness:
+ *
+ * - `ballot_batch_interval_ms = 60000` is the only value that leaves the
+ *   existing corpus's verdicts intact. ET-23 requires every ballot's `ts` to be
+ *   an exact multiple of its issue's interval in milliseconds since the epoch;
+ *   `tsAt` mints only whole minutes measured from a midnight-UTC genesis, so
+ *   every ballot already sits on a 60000 ms boundary and nothing has to move.
+ *   Any coarser interval (3600000, say) would make minute-offset ballots
+ *   non-quantized and turn VALID vectors INVALID for a rule they were never
+ *   written to exercise.
+ * - `ballot_batch_min = 3` is the floor because ET-24's floor is what an
+ *   ordinary vector should show. Every vector here carries at most two ballots
+ *   per issue, so a higher value would only widen the gap between the declared
+ *   minimum and what the vector actually publishes, with nothing gained: ET-24
+ *   exempts the batch holding an issue's highest-`seq` ballot at any value of
+ *   this parameter (see `valid.ts` 005 for the one vector where that matters).
+ *
+ * The floor values also read as the least remarkable thing on the line, which is
+ * what a vector about titles, `choice_count` or seq gaps needs them to be. A
+ * vector that means to exercise ET-14b or ET-23–ET-25 must state its own values
+ * rather than inherit these — that work is the later F2 pass, not this one.
+ */
+export const DEFAULT_BALLOT_BATCH_INTERVAL_MS = BALLOT_BATCH_INTERVAL_MS_FLOOR;
+export const DEFAULT_BALLOT_BATCH_MIN = BALLOT_BATCH_MIN_FLOOR;
+
+/**
  * ET-14's forbidden characters: the C0 block (U+0000-U+001F) plus U+007F. The
  * C1 block (U+0080-U+009F) is deliberately NOT included — ET-14 names C0 and
  * U+007F and stops there, so a C1 title is legal, and Go's `unicode.IsControl`
@@ -323,6 +357,10 @@ export class ChainBuilder {
    * `issue_created`, signed by the genesis-declared operator (ET-13). Records
    * choice_count for ET-18a. Enforces ET-14/ET-14a unless `opts.violates`
    * declares the breach.
+   *
+   * The two ET-14b batching parameters are required payload keys, so they are
+   * emitted unconditionally at the defaults above; no vector in this set means
+   * to exercise them, and none may omit them.
    */
   issue(title: string, choiceCount: number, opts: EventOpts = {}): Event {
     reconcile(
@@ -333,7 +371,12 @@ export class ChainBuilder {
     const e = this.seal(
       "issue_created",
       1,
-      { choice_count: choiceCount, title },
+      {
+        ballot_batch_interval_ms: DEFAULT_BALLOT_BATCH_INTERVAL_MS,
+        ballot_batch_min: DEFAULT_BALLOT_BATCH_MIN,
+        choice_count: choiceCount,
+        title,
+      },
       tsAt(opts.minutes ?? this.nextSeq),
       this.operatorKey,
     );
@@ -345,6 +388,14 @@ export class ChainBuilder {
    * `vote_cast`, signed by the genesis-declared registrar (ET-17). The ballot
    * carries no voter field (ET-21). Enforces ET-18/ET-18a unless
    * `opts.violates` declares the breach.
+   *
+   * `ts` defaults to the ballot's own `seq` in whole minutes, which is already a
+   * multiple of the default batch interval, so ET-23 holds without thought. What
+   * does NOT hold without thought is ET-24: two ballots on the SAME issue at
+   * different minutes are two batches of one, and only the batch holding that
+   * issue's highest-`seq` ballot may be under-size. A vector with several
+   * ballots on one issue must therefore pass them a shared `minutes` — one batch
+   * instant — or declare a `ballot_batch_min` it can actually fill.
    */
   vote(issueId: string, choice: number, opts: EventOpts = {}): Event {
     reconcile(

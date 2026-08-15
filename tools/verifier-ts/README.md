@@ -46,7 +46,8 @@ Two stages, per `evolution.md` EV-6/EV-15:
 - **Stage B (per registered `(type, version)`):** payload key-set, Ed25519
   signatures under the type's named key (with the ET-4a/ET-4b canonical-encoding
   and ET-4c prime-order checks run on the raw bytes _before_ the verify
-  primitive), title/`choice_count`/`choice` bounds, and `issue_id`
+  primitive), title/`choice_count`/`choice` bounds, the `ballot_batch_interval_ms`
+  and `ballot_batch_min` floors an `issue_created` declares (ET-14b), and `issue_id`
   back-references. A well-formed but unregistered `(type, version)` yields
   `PARTIAL` for that line, never `INVALID` (EV-8).
 

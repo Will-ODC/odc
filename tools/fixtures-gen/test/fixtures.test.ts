@@ -132,9 +132,11 @@ test("preimage 002-four-types-seq3 carries the 0x69 integer tag and an ENC_INT v
   assert.equal(event.type, "issue_created");
   assert.equal(createHash("sha256").update(pre).digest("hex"), event.hash);
 
-  // HA-8 sorts the keys choice_count < sig < title, so the integer entry is
-  // first and is immediately followed by a string entry — the 0x69/0x73
-  // adjacency a swapped tag constant would invert.
+  // HA-8 sorts the keys ballot_batch_interval_ms < ballot_batch_min <
+  // choice_count < sig < title, so choice_count is the LAST integer entry and is
+  // immediately followed by a string entry — the 0x69/0x73 adjacency a swapped
+  // tag constant would invert. (Before ET-14b it was also the first entry;
+  // adjacency, not position, is what this asserts and what matters.)
   const intEntry = Buffer.concat([
     Buffer.from([0x69]), // HA-9: `i`
     Buffer.from([0, 0, 0, 0, 0, 0, 0, 12]), // U64 length of "choice_count"
@@ -155,6 +157,42 @@ test("preimage 002-four-types-seq3 carries the 0x69 integer tag and an ENC_INT v
     at + intEntry.length,
     "the string entry for sig must abut the integer entry for choice_count",
   );
+});
+
+/**
+ * ET-14b makes both batching parameters REQUIRED on every `issue_created`, so an
+ * issue line missing one is not a vector with an extra fault — it is a vector
+ * that has stopped testing what its note claims, because every conforming
+ * verifier now rejects it on ET-14b first. The scan is by regex over the
+ * committed bytes, not JSON.parse: several vectors are deliberately
+ * non-parseable, and a check that skipped them would fail open on exactly the
+ * hand-built payloads (057) most likely to forget a key.
+ */
+test("every issue_created in the corpus declares both batch parameters at or above their floors (ET-14b)", () => {
+  const INTERVAL_FLOOR = 60000;
+  const MIN_FLOOR = 3;
+  let seen = 0;
+  for (const vec of vectors) {
+    for (const line of read(`vectors/${vec.id}.ndjson`)
+      .toString("utf8")
+      .split("\n")) {
+      if (!/"type"\s*:\s*"issue_created"/.test(line)) continue;
+      seen += 1;
+      const interval = /"ballot_batch_interval_ms"\s*:\s*(\d+)/.exec(line);
+      const min = /"ballot_batch_min"\s*:\s*(\d+)/.exec(line);
+      assert.ok(interval !== null, `${vec.id}: no ballot_batch_interval_ms`);
+      assert.ok(min !== null, `${vec.id}: no ballot_batch_min`);
+      assert.ok(
+        Number(interval[1]) >= INTERVAL_FLOOR,
+        `${vec.id}: ballot_batch_interval_ms below the ET-14b floor`,
+      );
+      assert.ok(
+        Number(min[1]) >= MIN_FLOOR,
+        `${vec.id}: ballot_batch_min below the ET-14b floor`,
+      );
+    }
+  }
+  assert.ok(seen > 0, "no issue_created line found in any vector");
 });
 
 test("derivations.json pins the ids.md worked shape (ID-4)", () => {

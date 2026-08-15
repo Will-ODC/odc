@@ -83,9 +83,10 @@ function writePreimages(): void {
   // ENC_INT, or a swapped 0x69/0x73 (HA-9), is therefore visible in the shipped
   // bytes only as a digest that does not match — with nothing to diff. The
   // issue_created at seq 3 of vector 002 is the smallest artifact that fixes
-  // that: its payload is {choice_count (integer), sig, title}, so it carries the
-  // 0x69 tag, an ENC_INT payload value, and the 0x69/0x73 adjacency in HA-8 key
-  // order, all in one preimage an implementer can diff byte for byte.
+  // that: its payload is {ballot_batch_interval_ms, ballot_batch_min,
+  // choice_count (all integers), sig, title}, so it carries the 0x69 tag, three
+  // ENC_INT payload values, and the 0x69/0x73 adjacency in HA-8 key order, all
+  // in one preimage an implementer can diff byte for byte.
   write(
     "preimages/002-four-types-seq3.hex",
     `${preimage(ISSUE_EVENT).toString("hex")}\n`,

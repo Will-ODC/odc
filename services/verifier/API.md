@@ -61,7 +61,8 @@ Two stages (EV-6):
   their Ed25519 canonical/prime-order gates (ET-3..ET-5, ET-4a/ET-4b/ET-4c),
   payload key sets (ES-18), key formats (ET-9b, ID-3), `chain_id` derivation
   (ET-7), title bounds and forbidden characters (ET-14), `choice_count` range
-  (ET-14a), `issue_id` back-reference (ET-18/ID-8), and `choice` range (ET-18a).
+  (ET-14a), the ballot batching parameters and their floors (ET-14b),
+  `issue_id` back-reference (ET-18/ID-8), and `choice` range (ET-18a).
 
 The v1 registry is the four types `genesis`, `participant_registered`,
 `issue_created`, `vote_cast`, each at `version` 1 (ET-1/ET-2). A well-formed but
