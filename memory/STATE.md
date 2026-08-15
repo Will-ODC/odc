@@ -220,15 +220,57 @@ anonymity parameter** (how many you are hidden among) and the interval is the
 timestamp-coarseness one; publication waits on the count, so turnout drives the
 delay, not the clock.
 
-**Still owed by the operator:** the charter §4 anchoring edit landed via #98
-**unratified** — it now says a chain's identity and head must be published
-together. Ratify or revise; it is live on master either way.
+**Charter §4 anchoring edit — RATIFIED by the operator (2026-08-15).** It now
+says a chain's **identity** (its genesis hash) and its **head** are published
+**together**, because a head names a position on _some_ chain, so publishing it
+alone lets an operator run two chains and anchor only one. Landed via #98,
+reviewed before/after in session, confirmed settled. No operator decision is
+outstanding on Phase 0.
 
-**Owed with no ticket (how the last backlog rotted):** the **structure-aware fuzz
-as a committed test** — value-level, not byte-level (a byte fuzzer misses the
-crash class a value fuzz finds instantly). Bundle with #57's six deferred
-envelope-guard survivors (`verify.ts:93-102`, same class) and point both at the
-verifier/rehearsal surfaces.
+**Do not confuse the three minimums — they solve different failures.**
+
+- **`ballot_batch_interval_ms` (≥ 60000)** — how wide a batch window is. Sets how
+  coarse a published `ts` is. **Implemented** (ET-23).
+- **`ballot_batch_min` (≥ 3)** — how many ballots publish together in one batch.
+  **The anonymity parameter**: it hides your individual vote in the stream.
+  **Implemented** (ET-24).
+- **`min_turnout` / quorum** — how many ballots an _issue_ needs before its result
+  publishes at all. **NOT implemented, deliberately deferred.** It protects against
+  the **tally arithmetic** exposing voters: five votes at 3–2 with four known
+  reveals the fifth, and batching has done its job perfectly by then. Batch minimum
+  solves the timing failure; quorum solves the small-numbers failure. Cheap to add
+  whenever wanted — only `genesis` is version-locked (ET-6), so `issue_created`
+  can take a v2. Accepted interim trade: warn users before casting that a
+  low-turnout vote may be identifiable.
+
+**Owed with no ticket — restated concretely 2026-08-15, because the previous
+wording was too vague to action and that is why it never got done.**
+
+**The defect class:** `f(...array)` in JS throws `RangeError: Maximum call stack
+size exceeded` once the array passes ~130k elements. Two real instances were found
+and fixed in the T7b review, both pinned now by
+`tools/verifier-ts/test/robustness.test.ts`:
+
+- `Math.min(...invalidLines)` — 200k blank lines produce 200k faults, and the
+  verifier **crashed instead of returning a verdict**, violating EV-17's "exactly
+  one of three verdicts".
+- `String.fromCodePoint(...cps)` — a 200k-character string value crashed the
+  parser, and the catch-all **swallowed it as `INVALID`**: a wrong verdict,
+  silently, on a line that parses fine.
+
+**Why value-level and not byte-level:** a byte fuzzer flips bytes in a valid file
+and will essentially never build a 200k-element array, because flipping bytes does
+not grow the input. A value-level fuzzer generates **structurally valid** exports
+carrying **extreme values** — huge line counts, huge strings, boundary integers —
+and hits this class immediately.
+
+**The task:** generate structurally valid exports with extreme values, run both
+verifiers, and assert **only** that neither throws and each returns exactly one of
+the three verdicts. Do **not** assert which verdict — fixtures remain the sole
+oracle for that, and inventing expectations here would be inventing conformance.
+Commit as a test. The note also claimed six more sites of the same shape were
+found and deferred around `verify.ts:93-102`; locating them is part of the job.
+A day's work, not a research project.
 
 **Coverage is thinner than 83 vectors suggests, and the real number is worse than
 "~130" said.** Counted exactly during T9: **143 rule ids, 70 cited by at least one
