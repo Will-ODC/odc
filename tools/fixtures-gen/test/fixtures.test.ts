@@ -167,6 +167,14 @@ test("preimage 002-four-types-seq3 carries the 0x69 integer tag and an ENC_INT v
  * committed bytes, not JSON.parse: several vectors are deliberately
  * non-parseable, and a check that skipped them would fail open on exactly the
  * hand-built payloads (057) most likely to forget a key.
+ *
+ * NOTE FOR THE NEXT AUTHOR: this asserts presence AND floor compliance, so it
+ * will reject the below-floor vectors ADR-0014 owes — a vector whose whole point
+ * is an interval under 60000 or a minimum under 3. That is correct today (no such
+ * vector exists) and wrong the moment one is written. When adding them, exempt
+ * vectors whose declared fault IS the floor; do not relax the check for
+ * everything else, because its value is catching a payload that quietly stopped
+ * testing what its note claims.
  */
 test("every issue_created in the corpus declares both batch parameters at or above their floors (ET-14b)", () => {
   const INTERVAL_FLOOR = 60000;
