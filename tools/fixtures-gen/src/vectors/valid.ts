@@ -57,8 +57,8 @@ export const validVectors: Vector[] = [
       c.vote(short.hash, 1, { minutes: batch });
       c.vote(long.hash, 63);
     }),
-    ["ET-14", "ET-14a", "ET-18a"],
-    "Legal extremes: 1-char and 200-char titles, choice_count 2 and 64, choice 0 and choice_count-1.",
+    ["ET-14", "ET-14a", "ET-18a", "ET-24"],
+    "Legal extremes: 1-char and 200-char titles, choice_count 2 and 64, choice 0 and choice_count-1. Its two ballots on the short issue deliberately share one batch instant so that issue forms a single batch, exempt under ET-24's last-batch clause; splitting them apart would make this VALID vector INVALID at line 5.",
   ),
   ok(
     "006-title-multibyte",

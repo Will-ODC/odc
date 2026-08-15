@@ -72,6 +72,32 @@ permanent, the number is provisional.
 3. **Fresh re-audit** by an isolated auditor that is not the context which wrote
    `audit-phase-0.md`. This is what actually clears T9.
 
+### Traps left by fixture phase 1 (#104) — two more of the same shape
+
+Recorded here rather than in the PR body, because a trap that lives only in a
+GitHub comment is a trap nobody reads at the moment it fires.
+
+- **`tools/fixtures-gen/test/fixtures.test.ts` will reject the below-floor vectors
+  ADR-0014 owes.** Its corpus-wide ET-14b scan asserts presence **and** floor
+  compliance, so a vector whose entire point is an interval under 60000 or a
+  minimum under 3 fails the generator's own test suite. Correct today, wrong the
+  moment phase 3 writes one. **Exempt vectors whose declared fault IS the floor;
+  do not relax the check for everything else** — its value is catching a payload
+  that quietly stopped testing what its note claims. A note to this effect is now
+  in the test's docstring too.
+- **`tools/rehearsal` will violate ET-24 once that rule is enforced.** It builds
+  40 ballots across 5 issues at distinct seq minutes, which under ET-24 is a run of
+  one-ballot batches, each under-size and not last. The rehearsal is green today
+  only because no verifier enforces ET-24 yet. This is a **chain-shaping decision**
+  for phase 3, not a bug to patch under time pressure — the rehearsal's ballots
+  need to share batch instants the way `005-boundaries` now does.
+- **No vector discriminates the ET-14b floor check.** All 55 `issue_created`
+  payloads declare exactly `60000`/`3`, so a verifier that accepted the keys and
+  skipped the floors passes all 83. Both isolated verifier builds reported this
+  independently, and the phase-1 reviewer confirmed by differential testing that
+  both implementations really do enforce it — so the check is spec-driven and
+  proven, just not fixture-confirmed. The below-floor vectors close it in phase 3.
+
 ### Traps left by this change — do not lose these
 
 - **`tools/fixtures-gen/test/conformance.test.ts:189` now blocks its own fixture.**

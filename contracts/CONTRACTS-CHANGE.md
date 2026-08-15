@@ -19,6 +19,19 @@ Format (newest first, one entry per merged contracts change):
 
 ---
 
+## fixtures/ — 2026-08-15 — phase 1 review follow-up: `005-boundaries` cites ET-24
+
+**Metadata only. No vector's bytes, verdict or line changed** — re-verified
+against the previous corpus across all 83.
+
+`005-boundaries` now cites **ET-24** alongside ET-14/ET-14a/ET-18a, and its note
+records why: its two ballots on the short issue deliberately share one batch
+instant, so that issue forms a single batch and is exempt under ET-24's
+last-batch clause. Without that written down, the shared instant reads like an
+accident, and a later author "tidying" the two ballots back onto separate minutes
+would turn a VALID vector INVALID at line 5 — for a batching rule the vector was
+never meant to be about. Raised by the phase-1 review.
+
 ## fixtures/ — 2026-08-15 — T9 fixture phase 1: ET-14b regeneration
 
 **No spec text changed; no `Version:` line moves.** This is the golden corpus
