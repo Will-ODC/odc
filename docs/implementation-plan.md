@@ -79,7 +79,7 @@ Thin protocol wrapper. Resources = `tally` and `ledger` reads; tools = vote cast
 
 ### Deferred services (reserve event types in `contracts/` now; build later)
 
-- `sentiment` — private encrypted response store; commits only anonymous hashes to `ledger`. Its separation from ballots is a Phase 0 schema decision even though the service comes much later. Roadmap within the service: encrypt on ingest from day one; canary entries per license/snapshot; threshold custody (k-of-n key shares, decryption gated on a recorded license-vote event) when real data accumulates — expert-tier, external review required.
+- `sentiment` — private encrypted response store; commits only anonymous hashes to `ledger`. Its separation from ballots is a Phase 0 schema decision even though the service comes much later, and that decision is now written down: `evolution.md` **EV-22** permanently bars registering any response-carrying type on the governance chain, and states exactly which anonymous commitments remain permitted — aggregate, never per-respondent, carrying no respondent identifier (ADR-0017). Roadmap within the service: encrypt on ingest from day one; canary entries per license/snapshot; threshold custody (k-of-n key shares, decryption gated on a recorded license-vote event) when real data accumulates — expert-tier, external review required.
 - `treasury`, `reputation`, `briefing` — extensions of the derived-view and initiative patterns.
 
 ## Build order

@@ -171,6 +171,40 @@ EV-5, and both verifiers are untouched by design.
   unresolvability is not a defect, which is the vector that stops a future
   verifier trying to resolve it). No existing vector's bytes or verdict move.
 
+### F5 — the sentiment plane is permanently barred from this chain (ADR-0017)
+
+- **`EV-22` added** (`evolution.md`, new §6), in the permanent register of ET-22
+  and EV-13 and surviving any future community vote (charter §8). No contracts
+  version may register here an event type whose payload carries a **response** —
+  sentiment, survey, poll, rating, or any opt-in monetizable answer, or any value
+  from which one can be recovered with material held outside this log. Four
+  documents said the planes are separate; `evolution.md`, the rulebook that
+  decides what may be added, did not, so a future `sentiment_response` was legal
+  and would have shared the store, the export, the endpoint and the seq space with
+  ballots through conforming additive evolution.
+- **What stays permitted, stated in the same rule**, because the sentiment
+  service "commits only anonymous hashes to `ledger`" by design: a value is
+  admissible when it is (1) a **commitment** — a one-way digest over material held
+  in the sentiment store; (2) **aggregate, never per-respondent** — one per
+  instrument, batch or snapshot; and (3) free of any respondent identifier. Clause
+  (2) is load-bearing: a digest of a single answer over a small answer space is
+  invertible by enumeration, so a per-response commitment is a response in
+  disguise. Values describing the commitment (instrument, time, count, licence
+  event) are permitted — facts about the instrument, not answers.
+- **Directional by design.** It blocks sentiment content reaching the ballot
+  plane, the direction in which protection is lost. It does not try to stop a
+  sentiment-shaped question run *as a ballot*, which gains ballot protection
+  rather than losing it; the contract cannot tell "should we fund Y?" from "do you
+  like Y?" and should not try (charter §9 makes that moderation, and a rule
+  attempting it would collide with P3).
+- **Owed fixtures: effectively none, deliberately.** EV-22 binds the authors of
+  future contracts versions, not any v1 verifier — a barred type would be
+  unregistered and reach `PARTIAL` on its own merits, which has nothing to do with
+  this rule. The fixture pass should instead record EV-22 as **deliberately
+  unpinned, with the reason**, in the rule-to-vector coverage report. (This is a
+  live instance of the open question about narrowing EV-5 to byte-changing
+  changes.)
+
 ## fixtures/ README v11 — 2026-08-09 — record fixture 083 (ET-9c) and the new count
 
 - Doc-only: `contracts/fixtures/README.md` v10 → **v11**. Updates the count to

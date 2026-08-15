@@ -276,6 +276,55 @@ the surface has to live here.
   remedy may be to fetch a newer verifier — and, worse, teaches readers to treat a
   legitimate newer chain as an attack.
 
+## 6. What may never be registered on this chain (added in v4)
+
+EV-1 permits **any** new event type additively. Two things are permanently
+excluded from that permission: the ballot-plane changes ET-22 and EV-13 already
+bar, and the sentiment plane, whose bar was missing.
+
+- **EV-22.** **The sentiment and monetizable-response plane is permanently barred
+  from the governance chain.** No contracts version — v1 or any successor — MAY
+  register on this chain an event `type` whose payload carries a **response**: a
+  sentiment, survey, poll, rating, or other opt-in monetizable answer given by a
+  person, or any value from which such an answer can be recovered by a party
+  holding material outside this log. Registering one would put sentiment events in
+  the same store, the same export, the same `GET /events` and the same `seq` space
+  as ballots, reached entirely through conforming additive evolution. This bar
+  makes concrete, in the rulebook that decides what may be added, charter §6
+  ("votes and sentiment stay separate primitives … never conflated"), charter §8
+  ("monetizable data is a separate, labeled stream"; "ballots are outside
+  commerce, by construction and forever"), and the implementation plan's
+  non-negotiable rule 7 ("ballot events and sentiment events never share a store
+  or a pipe"). Like ET-22 and EV-13, **it survives any future community vote**
+  (charter §8).
+
+  **What it does not bar, and must not.** The sentiment service commits
+  **anonymous hashes** to this chain by design (`implementation-plan.md`,
+  deferred services: "private encrypted response store; commits only anonymous
+  hashes to `ledger`"), and a future contracts version MAY register a type for
+  exactly that. Such a value is permitted when it is all three of:
+  1. a **commitment** — a fixed-width one-way digest over material held in the
+     sentiment store, from which no response is recoverable without that material;
+  2. **aggregate, never per-respondent** — one commitment per instrument, batch or
+     snapshot, and never one per respondent or one per response. A digest of a
+     single answer drawn from a small answer space is invertible by enumeration,
+     so a per-response commitment is a response in disguise and fails clause (1)
+     as well;
+  3. free of any **respondent identifier** and of any value derived from one.
+
+  Alongside such a commitment a payload MAY carry values that describe the
+  commitment itself — which instrument it covers, at what time, how many responses
+  it binds, which licence event authorized it — because those are facts about the
+  instrument, not answers given by anyone.
+
+  **The bar is directional, deliberately.** It blocks sentiment content from
+  reaching the ballot plane, which is the direction in which protection is lost.
+  It does **not** attempt to stop a sentiment-shaped question being run *as a
+  ballot*: such a question gains ballot protections rather than losing them, and
+  the contract cannot distinguish "should we fund Y?" from "do you like Y?" and
+  should not try. That is a governance and moderation matter, which the charter
+  already makes a public event (§9).
+
 ---
 
 ## Degrees of freedom closed (acid-test checklist)
@@ -300,6 +349,8 @@ the surface has to live here.
 | Placeholder version for `PARTIAL` fixtures            | EV-19          |
 | Unregistered `genesis` version: the verdict           | EV-20          |
 | What that rejection should tell the reader            | EV-21          |
+| Sentiment/monetizable types: permanently barred       | EV-22          |
+| Which sentiment commitments remain permitted          | EV-22          |
 
 ## Acid-test walkthrough
 
@@ -314,5 +365,8 @@ line 1 rather than walking a chain they cannot authenticate to `PARTIAL`
 hostile" they cannot tell apart (EV-21). Run on a pure-v1
 chain, both report `VALID | INVALID` identically (EV-10). Given the same future
 `delegation` fixtures with a `supersedes` chain, two interpreters resolve the
-same surviving events by `max(seq)` transitivity (EV-12). No cross-version or
-correction ambiguity remains.
+same surviving events by `max(seq)` transitivity (EV-12). Given a proposed future
+type, both reach the same answer on whether it may be registered here: a
+`sentiment_response` carrying an answer, never (EV-22); a
+`sentiment_batch_committed` carrying one aggregate digest and the instrument it
+covers, yes. No cross-version or correction ambiguity remains.
