@@ -20,6 +20,55 @@ existing unregistered-`genesis`-version entry further down rather than opening a
 new one. Q-F and Q-G come from findings the audit rates SHOULD (S2, S5) and are
 listed here because they need design work, not because they gate the RC.
 
+## DECIDED by the operator, 2026-08-15 — all six
+
+Worked through one at a time in session. **Not yet implemented**; `contracts/` is
+untouched. Each needs an ADR, the spec edit, and fixtures, in one batched pass.
+
+| #   | Decision                                                                                                                                                                          |
+| --- | --------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- |
+| F1  | Chain identity is the **`genesis` event hash**. Demote `chain_id`, fix ET-7's "stable identifier" wording, add `--chain <hash>` to both verifiers. **No genesis field needed.**   |
+| F2  | **Batching before the freeze:** ballot `ts` quantized to a published interval, batch order independent of arrival, minimum batch size. **Quorum deferred** (see below).           |
+| F3  | An unregistered `genesis` `(type, version)` is **`INVALID` at line 1**, with a message distinguishing "verifier out of date" from "chain corrupt". Needs a fixture — none exists. |
+| F4  | **Add an optional `ancestor_head` key to `genesis`.** This is the one genesis change; the door does not reopen.                                                                   |
+| F5  | Permanent `evolution.md` bar on registering any sentiment / survey / monetizable-response type on the governance chain, in the ET-22/EV-13 register.                              |
+| F6  | Require **`registrar_pk != operator_pk`**.                                                                                                                                        |
+
+**Carried decisions and reasoning worth keeping:**
+
+- **F2 splits in two, and only half is urgent.** Batching must precede the freeze
+  because it tightens an existing rule, which EV-1 bars post-freeze. **Quorum —
+  a minimum turnout below which a vote publishes nothing — is deferred**, because
+  only `genesis` is version-pinned (ET-6); `issue_created` can take a v2 with a
+  `min_turnout` key at any time, and a new `(type, version)` is additive. Accepted
+  trade: warn users that early low-turnout votes may be identifiable, **shown
+  before casting**. The irreversible part is not the rule but the data — ballots
+  published under low turnout stay public forever, so keep early votes low-stakes.
+- **Small-turnout secrecy is arithmetic, not timing.** 5 votes at 3–2 with four
+  known reveals the fifth; 5–0 reveals everyone. No batching, shuffling or
+  quantization touches this. Recorded so it is not "solved" by the F2 mechanism
+  later. The charter already carries the principle (§8, k-anonymity floors).
+- **F2 is enforced in the ledger, which does not exist yet** (`services/ledger/`
+  holds only README/CLAUDE). So this is a requirement landing _before_ the code,
+  not a retrofit. Three of the four rules are verifier-checkable from the log
+  (quantized `ts`, batch size, turnout vs. a declared threshold); **the shuffle is
+  not checkable** and remains implementation trust. Know which is which.
+- **The hash chain enforces no content rule.** It gives tamper-evidence only.
+  Rules are followed by the ledger and _detected_ by the verifier; with one writer
+  and no consensus, enforcement is public detection, never prevention.
+- **F5 blocks the direction that hurts, and only that one.** Sentiment content
+  reaching the ballot plane loses protection — barred. A sentiment-shaped question
+  run _as_ a ballot gains ballot protection and is harmless: wasteful of
+  one-human-one-vote capacity and cluttering, but not a security fault. The
+  contract cannot distinguish "should we fund Y?" from "do you like Y?" and should
+  not try; that is a governance/moderation matter, and the charter already makes
+  moderation a public event. **Word the bar to block sentiment content while still
+  permitting the anonymous commitment hashes the sentiment service is meant to
+  commit here** (`implementation-plan.md:81`).
+- **F6 is necessary, not sufficient**, and was approved on that basis: two distinct
+  keys can still be held by one party and the log cannot tell. It blocks the
+  blatant collapse only.
+
 - **Q-A — What is a chain's identity, and what does an anchor publish?** (from
   F1, S3.) `chain_id` is `sha256(operator_pk)` with, in ET-7's own words, "no
   free parameter" — so it is **identical across every chain that operator ever
