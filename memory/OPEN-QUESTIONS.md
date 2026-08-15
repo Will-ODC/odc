@@ -22,8 +22,84 @@ listed here because they need design work, not because they gate the RC.
 
 ## DECIDED by the operator, 2026-08-15 — all six
 
-Worked through one at a time in session. **Not yet implemented**; `contracts/` is
-untouched. Each needs an ADR, the spec edit, and fixtures, in one batched pass.
+Worked through one at a time in session.
+
+**IMPLEMENTED 2026-08-15 as ADR-0013…0018** (branch
+`claude/context-memory-review-zjojus`, commits `9f9a81f`…`47001f3`). Specs bumped:
+`event-types.md` v7→**8**, `evolution.md` v3→**4**, `export-format.md` v2→**3**,
+`event-schema.md` v2→**3**; one `CONTRACTS-CHANGE.md` entry with six subsections.
+Both verifier suites still pass — they and the fixtures are internally consistent
+and now **behind** the spec, which is expected until the two passes below land.
+
+| #   | ADR                                         |
+| --- | ------------------------------------------- |
+| F1  | ADR-0013 chain identity is the genesis hash |
+| F2  | ADR-0014 ballot batching                    |
+| F3  | ADR-0015 unregistered genesis version       |
+| F4  | ADR-0016 genesis `ancestor_head`            |
+| F5  | ADR-0017 sentiment plane bar                |
+| F6  | ADR-0018 distinct genesis keys              |
+
+**F2's parameters are governable, per the operator's instruction that batch size
+be votable "like almost everything about this project".** `issue_created` carries
+`ballot_batch_interval_ms` and `ballot_batch_min`, so the values live in the log
+and change per issue by vote; the contract fixes only the mechanism. Permanent
+floors — interval **≥ 60000 ms**, minimum **≥ 3** — because without one,
+"governable" means the operator sets 1 ms / 1 and the rule becomes decorative.
+Floors are deliberately low: they are floors, not defaults, and a community votes
+upward. This is the ET-22 / `choice_count` split reused — _that a bound exists_ is
+permanent, the number is provisional.
+
+### Owed before the T9 gate can reopen
+
+1. **Fixtures.** The batch parameters are **required** on `issue_created` (optional
+   would let a chain omit them and run unbatched, defeating F2), so **54 of 83
+   vectors carry an `issue_created` and need regeneration**. Legal — nothing is
+   frozen, no `contracts-v1` tag — and precisely why ADR-0007 deferred the freeze.
+   **Verdicts must survive regeneration unchanged**: a vector testing a seq gap
+   must still test a seq gap. New vectors owed: `--chain` match/mismatch and the
+   two-chain pair (F1); non-quantized `ts`, undersize batch proven by a later
+   ballot, legal undersize _final_ batch, below-floor interval, below-floor minimum,
+   multi-batch VALID (F2); genesis at version 1000000 (F3); `ancestor_head`
+   valid/64-zero/malformed/unresolvable (F4); same-key genesis (F6). F5 gets none
+   by construction — a coverage-report note instead; ET-25 likewise.
+2. **Both verifiers, in separate isolated contexts** — independence is the whole
+   point of having two. `--chain <genesis-hash>`, print the computed genesis hash
+   and head (EX-24, scoped as tool output not verdict, so it does not collide with
+   EV-17), plus the F3 verdict, F6 key check, and F2 quantization/batch checks.
+   `services/verifier/CLAUDE.md` and `tools/verifier-ts/` still state the old CLI
+   surface; ADR-0013 names them so the ticket carries it.
+3. **Fresh re-audit** by an isolated auditor that is not the context which wrote
+   `audit-phase-0.md`. This is what actually clears T9.
+
+### Traps left by this change — do not lose these
+
+- **`tools/fixtures-gen/test/conformance.test.ts:189` now blocks its own fixture.**
+  It asserts _no vector may freeze a verdict for an unregistered genesis version_,
+  because that was open. ADR-0015 answers it, so the guard forbids exactly the
+  vector F3 requires. **Invert it, do not delete it** — deleting drops a real
+  protection along with the stale assertion.
+- **Fixture `057-issue-sig-wrong-key`'s `note` asserts the old ET-9a rule.** The
+  verdict is unaffected; the prose is now false. Fixture notes become immutable at
+  the tag (ADR-0008), so **fix it before the tag or it is permanent**.
+- **ES-21 forbade validating on `ts` at all**, which ET-23 now does. Amended so it
+  still never _orders_ or _selects_ on time — check the amendment holds if `ts`
+  semantics are touched again.
+- **ET-24 pins the blamed line** for an undersize batch at the first later ballot
+  of the same issue. Without that pin two verifiers agree a chain is bad and
+  disagree where, which is the T7/ET-9c divergence shape all over again.
+
+### ⚠️ Charter §4 edit — NOT RATIFIED
+
+The anchoring bullet now says a chain's **identity** (its genesis hash) and its
+**head** must be published **together**, because a head names a position on _some_
+chain, so publishing it alone lets an operator run two chains and anchor one. The
+content follows from the ratified F1 decision and from the independent assessment.
+**But the operator has not ratified the charter wording**, and this project's
+standing rule is that charter edits are an operator decision, not a routine docs
+merge (see the ballot-expressiveness entry, where part A was explicitly marked
+operator-ratified). It is committed on the branch. **Ratify or revise before
+merge.**
 
 | #   | Decision                                                                                                                                                                          |
 | --- | --------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- |
