@@ -51,10 +51,31 @@ Two stages, per `evolution.md` EV-6/EV-15:
   back-references. A well-formed but unregistered `(type, version)` yields
   `PARTIAL` for that line, never `INVALID` (EV-8).
 
+One event escapes that split. At **line 1** the registration check is Stage A
+(EV-15/EV-20): a `genesis` whose `(type, version)` this verifier does not
+register is `INVALID` at line 1, never `PARTIAL`, because `operator_pk` and
+`registrar_pk` are declared in a genesis payload the verifier could not read, so
+nothing on the chain could be authenticated. That rejection carries an advisory
+reason (EV-21) naming the version encountered and the `genesis` versions this
+verifier registers, and saying plainly that "my registry is old" and "this
+genesis is hostile" are indistinguishable from the log alone. Reason text is
+never conformance-checked (EV-17).
+
+The `genesis` payload key set is **not** an exact set: `ancestor_head` is
+OPTIONAL (ES-34, ET-9e) — absent, or present as 64 lowercase hex that is not the
+64-zero anchor — and is a recorded claim the verifier checks the format of and
+nothing else. A key outside required ∪ optional is still rejected (ES-18). The
+two genesis keys must also be distinct (ET-9d): one string equality on the
+lowercase hex, no key material involved.
+
 ## Tests
 
 `test/fixtures.test.ts` drives every vector in `contracts/fixtures/index.json`
-and asserts the declared verdict token and line number(s) only.
+and asserts the declared verdict token and line number(s) only. It is the sole
+conformance oracle: `test/robustness.test.ts` and `test/rules.test.ts` invent no
+`VALID` verdict and sign nothing. `test/rules.test.ts` records this
+implementation's reading of EV-20 / ET-9d / ET-9e until the vectors for those
+land, and labels each case as discriminating or not.
 
 ```sh
 pnpm --filter @odc/verifier-ts test

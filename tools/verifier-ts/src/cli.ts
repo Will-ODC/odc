@@ -63,6 +63,13 @@ function main(argv: string[]): number {
       return 0;
     case "INVALID":
       process.stdout.write(`INVALID at line ${result.line}\n`);
+      // Advisory (EV-17: reason text is never conformance-checked), printed on
+      // its own line so the verdict line stays exactly the token and the line
+      // number. Present only for EV-20, where EV-21 says the bare token sends
+      // a reader hunting for tampering when the remedy may be a newer verifier.
+      if (result.reason !== undefined) {
+        process.stdout.write(`  ${result.reason}\n`);
+      }
       return 1;
     case "PARTIAL":
       process.stdout.write(

@@ -20,7 +20,10 @@ import {
 
 export type Verdict =
   | { verdict: "VALID" }
-  | { verdict: "INVALID"; line: number }
+  // `reason` is advisory only (EV-17: conformance is the verdict token and the
+  // line number alone, and no fixture asserts reason text). It is populated for
+  // the one rejection EV-21 says a bare token actively misleads a reader about.
+  | { verdict: "INVALID"; line: number; reason?: string }
   | { verdict: "PARTIAL"; lines: number[] };
 
 const GENESIS_PREV = "0".repeat(64);
@@ -41,6 +44,38 @@ function isRegistered(type: string, version: number): boolean {
   return REGISTERED.get(type) === version;
 }
 
+/**
+ * EV-21 — the advisory reason for an EV-20 rejection.
+ *
+ * Guidance, not conformance: "conformance for EV-20 is the token INVALID and
+ * the line number 1, and nothing else is asserted by any fixture." It is
+ * written out here anyway because EV-21 says the bare token actively misleads:
+ * the two situations that produce this one verdict — "this verifier is out of
+ * date for this chain" and "this chain's genesis is corrupt or hostile" — are
+ * *indistinguishable from the log alone*, "and an honest message says so rather
+ * than picking one", naming the version encountered and the `genesis` versions
+ * this verifier does register so the reader can go and settle it.
+ *
+ * This is not a reason-code registry (none exists, EV-17) and nothing keys off
+ * this string.
+ */
+function unregisteredGenesisReason(type: string, version: number): string {
+  const known = REGISTERED.get(type);
+  const registered =
+    known === undefined
+      ? `no ${type} version at all`
+      : `${type} version ${known}`;
+  return (
+    `EV-20: this chain's genesis is (${type}, version ${version}), which this ` +
+    `verifier does not register — it registers ${registered}. From the log ` +
+    `alone this verifier cannot tell whether it is out of date for this chain ` +
+    `or this chain's genesis is corrupt or hostile; a reader holding a newer ` +
+    `verifier, or the chain's publisher, can settle which. Nothing on this ` +
+    `chain could be authenticated, because operator_pk and registrar_pk are ` +
+    `declared in a genesis payload this verifier cannot read.`
+  );
+}
+
 // Chain state accumulated across lines for Stage B reference checks.
 interface ChainState {
   operatorPk: Buffer | null; // raw 32 bytes, validated at genesis
@@ -53,12 +88,58 @@ function field(ev: ParsedEvent, key: string): PayloadEntry | undefined {
   return ev.payload.find((e) => e.key === key);
 }
 
-// Exact key-set match for ES-18 (payload key set fixed per (type, version)).
-function keysExactly(ev: ParsedEvent, expected: string[]): boolean {
-  if (ev.payload.length !== expected.length) return false;
-  const have = new Set(ev.payload.map((e) => e.key));
-  return expected.every((k) => have.has(k));
+/**
+ * ES-18 payload key set, with ES-34 optional keys.
+ *
+ * Every key in `required` MUST be present; a key that is in neither `required`
+ * nor `optional` is rejected. ES-34: "OPTIONAL means 'this defined key may be
+ * absent', never 'an undefined key may appear', and a verifier still rejects
+ * any key not defined for the (type, version)." So widening a key set for an
+ * optional key must not turn it into an open set.
+ *
+ * `have` may be assumed duplicate-free: the line parser rejects a repeated
+ * payload key outright (HA-6), so it never reaches here.
+ *
+ * Exported because it is the one part of this change that can be pinned
+ * discriminatingly without inventing a signed chain (see test/rules.test.ts).
+ */
+export function payloadKeysConform(
+  have: readonly string[],
+  required: readonly string[],
+  optional: readonly string[] = [],
+): boolean {
+  const present = new Set(have);
+  for (const k of required) if (!present.has(k)) return false;
+  const defined = new Set<string>();
+  for (const k of required) defined.add(k);
+  for (const k of optional) defined.add(k);
+  for (const k of present) if (!defined.has(k)) return false;
+  return true;
 }
+
+function keysConform(
+  ev: ParsedEvent,
+  required: readonly string[],
+  optional: readonly string[] = [],
+): boolean {
+  return payloadKeysConform(
+    ev.payload.map((e) => e.key),
+    required,
+    optional,
+  );
+}
+
+// `genesis` v1 payload key set (event-types.md genesis table; ES-18 + ES-34).
+// `ancestor_head` is the one OPTIONAL key v1 defines (ET-9e, ES-34) — and,
+// per ET-9e, the only key that will ever be added to this payload.
+const GENESIS_REQUIRED_KEYS = [
+  "chain_id",
+  "contracts",
+  "operator_pk",
+  "registrar_pk",
+  "sig",
+] as const;
+const GENESIS_OPTIONAL_KEYS = ["ancestor_head"] as const;
 
 function strField(ev: ParsedEvent, key: string): string | null {
   const f = field(ev, key);
@@ -93,16 +174,11 @@ function titleOk(title: string): boolean {
 function stageB(ev: ParsedEvent, state: ChainState): boolean {
   switch (ev.type) {
     case "genesis": {
-      if (
-        !keysExactly(ev, [
-          "chain_id",
-          "contracts",
-          "operator_pk",
-          "registrar_pk",
-          "sig",
-        ])
-      )
-        return false; // ES-18
+      // ES-18 + ES-34: the five required keys, plus the OPTIONAL `ancestor_head`
+      // (ET-9e). Not an exact set any more — but still a closed one: an
+      // undefined key is rejected exactly as before.
+      if (!keysConform(ev, GENESIS_REQUIRED_KEYS, GENESIS_OPTIONAL_KEYS))
+        return false;
       const chainId = strField(ev, "chain_id");
       const contracts = strField(ev, "contracts");
       const opHex = strField(ev, "operator_pk");
@@ -113,6 +189,28 @@ function stageB(ev: ParsedEvent, state: ChainState): boolean {
       if (opHex === null || !HEX64.test(opHex)) return false; // ET-9b
       if (regHex === null || !HEX64.test(regHex)) return false; // ET-9b
       if (sigHex === null || !HEX128.test(sigHex)) return false;
+
+      // ET-9d: the two genesis keys MUST be distinct. "The comparison is on the
+      // two 64-character lowercase-hex strings after ET-9b has passed on both,
+      // so it is one string equality and needs no key material, no decoding and
+      // no curve arithmetic." A chain declaring one key twice hands one holder
+      // both the power to mint issues and to forge every ballot on them.
+      if (opHex === regHex) return false; // ET-9d
+
+      // ET-9e: `ancestor_head` is OPTIONAL (ES-34) — either absent, or present
+      // with a legal value. When present it MUST match ^[0-9a-f]{64}$ and MUST
+      // NOT be the 64-zero anchor, "so there is exactly one way to say 'no
+      // ancestor'". `field` (not `strField`) so an absent key and a present
+      // non-string value stay distinguishable: absence is legal, a non-string
+      // is not. The value is a recorded claim, not a verified link — a verifier
+      // "checks the format above and nothing else" and MUST NOT report INVALID
+      // because it cannot resolve the value.
+      const ancestor = field(ev, "ancestor_head");
+      if (ancestor !== undefined) {
+        if (ancestor.val.kind !== "str") return false; // ET-9e (string-typed)
+        if (!HEX64.test(ancestor.val.value)) return false; // ET-9e
+        if (ancestor.val.value === GENESIS_PREV) return false; // ET-9e
+      }
 
       const opRaw = Buffer.from(opHex, "hex");
       const regRaw = Buffer.from(regHex, "hex");
@@ -139,7 +237,7 @@ function stageB(ev: ParsedEvent, state: ChainState): boolean {
     }
 
     case "participant_registered": {
-      if (!keysExactly(ev, ["pubkey", "sig"])) return false; // ES-18
+      if (!keysConform(ev, ["pubkey", "sig"])) return false; // ES-18
       const pubHex = strField(ev, "pubkey");
       const sigHex = strField(ev, "sig");
       if (pubHex === null || !HEX64.test(pubHex)) return false; // ID-3
@@ -154,7 +252,7 @@ function stageB(ev: ParsedEvent, state: ChainState): boolean {
 
     case "issue_created": {
       if (
-        !keysExactly(ev, [
+        !keysConform(ev, [
           "ballot_batch_interval_ms",
           "ballot_batch_min",
           "choice_count",
@@ -188,7 +286,7 @@ function stageB(ev: ParsedEvent, state: ChainState): boolean {
     }
 
     case "vote_cast": {
-      if (!keysExactly(ev, ["choice", "issue_id", "sig"])) return false; // ES-18
+      if (!keysConform(ev, ["choice", "issue_id", "sig"])) return false; // ES-18
       const issueId = strField(ev, "issue_id");
       const choice = intField(ev, "choice");
       const sigHex = strField(ev, "sig");
@@ -290,6 +388,9 @@ export function verifyExport(bytes: Buffer, head?: string): Verdict {
   let expectedSeq = 1;
   let lastHash: string | null = null;
   let contentInvalid: number | null = null;
+  // Advisory only (EV-17). Surfaced solely when the fatal line reported below
+  // is the very line this reason was recorded for.
+  let contentInvalidReason: string | null = null;
 
   for (let i = 0; i < lines.length; i++) {
     const lineNo = i + 1;
@@ -312,6 +413,22 @@ export function verifyExport(bytes: Buffer, head?: string): Verdict {
     }
     if (!isFirst && ev.type === "genesis") {
       contentInvalid = lineNo;
+      break;
+    }
+    // EV-20: a chain's `genesis` MUST carry a (type, version) this verifier
+    // registers; if it does not, the chain is INVALID at line 1 and MUST NOT
+    // reach a chain-level VALID or PARTIAL. This is the sole exception to EV-8,
+    // and a Stage A promotion for `genesis` alone: EV-15 assigns the ES-9/ES-11
+    // registration check to Stage B everywhere else, but "at line 1, ES-9/ES-11
+    // registration is Stage A, because a `genesis` the verifier does not
+    // register leaves it no keys to run Stage B with anywhere on the chain".
+    // Without it, `operator_pk`/`registrar_pk` are never extracted and every
+    // later signature goes unchecked, yet the chain would still walk to
+    // PARTIAL — announcing "integrity confirmed, some semantics unchecked"
+    // over a chain on which nothing was ever authenticated.
+    if (isFirst && !isRegistered(ev.type, ev.version)) {
+      contentInvalid = lineNo;
+      contentInvalidReason = unregisteredGenesisReason(ev.type, ev.version);
       break;
     }
     if (isFirst) {
@@ -361,10 +478,10 @@ export function verifyExport(bytes: Buffer, head?: string): Verdict {
     // per framing fault (e.g. every blank line, EX-5), so a large export can
     // push far more entries than the ~130k argument-spread limit, which would
     // throw an uncaught RangeError instead of returning a verdict (EV-17).
-    return {
-      verdict: "INVALID",
-      line: invalidLines.reduce((a, b) => Math.min(a, b)),
-    };
+    const line = invalidLines.reduce((a, b) => Math.min(a, b));
+    return contentInvalidReason !== null && line === contentInvalid
+      ? { verdict: "INVALID", line, reason: contentInvalidReason }
+      : { verdict: "INVALID", line };
   }
   if (partialLines.length > 0) {
     // Ascending by construction (pushed in file order).
