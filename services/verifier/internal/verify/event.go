@@ -241,21 +241,39 @@ func payloadGet(obj *jobject, key string) (jvalue, bool) {
 }
 
 // payloadKeySetEquals reports whether obj's keys are exactly want (order-free;
-// stored order is already validated as sorted).
+// stored order is already validated as sorted). For a type with no OPTIONAL
+// keys, ES-18's key set is exact.
 func payloadKeySetEquals(obj *jobject, want []string) bool {
-	if len(obj.keys) != len(want) {
-		return false
+	return payloadKeySetMatches(obj, want, nil)
+}
+
+// payloadKeySetMatches enforces ES-18 as amended by ES-34: obj MUST carry every
+// key in required, MAY carry any subset of optional, and MUST NOT carry any
+// other key. OPTIONAL widens the key set; it does not open it — an undefined key
+// is still rejected, so this is not a hole. Duplicate keys cannot reach here
+// (payloadFlatAndSorted has already rejected them, HA-6), which is what lets the
+// required-key tally below be a plain count.
+func payloadKeySetMatches(obj *jobject, required, optional []string) bool {
+	req := make(map[string]bool, len(required))
+	for _, k := range required {
+		req[k] = true
 	}
-	set := make(map[string]bool, len(want))
-	for _, w := range want {
-		set[w] = true
+	opt := make(map[string]bool, len(optional))
+	for _, k := range optional {
+		opt[k] = true
 	}
+	seen := 0
 	for _, k := range obj.keys {
-		if !set[k] {
-			return false
+		switch {
+		case req[k]:
+			seen++
+		case opt[k]:
+			// present with a legal value, or absent — both conform (ES-34).
+		default:
+			return false // key not defined for this (type, version) (ES-18)
 		}
 	}
-	return true
+	return seen == len(req) // every required key present
 }
 
 // countScalars returns the number of Unicode scalar values in s (runes).

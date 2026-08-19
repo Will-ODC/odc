@@ -8,6 +8,8 @@ package verify
 import (
 	"crypto/sha256"
 	"encoding/hex"
+	"strconv"
+	"strings"
 )
 
 // Verdict is the chain verdict token (EV-7/EV-17).
@@ -56,6 +58,42 @@ func registered(typ string, version int64) bool {
 		return true
 	}
 	return false
+}
+
+// registeredGenesisVersions lists the genesis versions this verifier registers,
+// for the EV-21 reason text below.
+var registeredGenesisVersions = []int64{1}
+
+// unregisteredGenesisReason builds the advisory reason for an EV-20 rejection.
+// EV-21 is SHOULD-level guidance and never conformance-checked (EV-17): the
+// conformance surface here is the token INVALID and the line number 1. It asks
+// only that the message not pick one of the two indistinguishable stories — "my
+// registry is out of date for this chain" and "this genesis is corrupt or
+// hostile" — since the log alone cannot separate them, and that it name the
+// version encountered and the genesis versions registered so a reader can go
+// and settle it.
+func unregisteredGenesisReason(e *event) string {
+	var b strings.Builder
+	b.WriteString("unregistered genesis (EV-20): this export's line 1 is (")
+	b.WriteString(e.typ)
+	b.WriteString(", version ")
+	b.WriteString(strconv.FormatInt(e.version, 10))
+	b.WriteString("); this verifier registers genesis at version")
+	if len(registeredGenesisVersions) != 1 {
+		b.WriteString("s")
+	}
+	for i, v := range registeredGenesisVersions {
+		if i > 0 {
+			b.WriteString(",")
+		}
+		b.WriteString(" ")
+		b.WriteString(strconv.FormatInt(v, 10))
+	}
+	b.WriteString(". From the log alone this verifier cannot tell whether it is " +
+		"out of date for this chain or whether this genesis is corrupt or hostile; " +
+		"compare the version above against the chain's published contracts version " +
+		"to settle it (EV-21).")
+	return b.String()
 }
 
 // Permanent floors on the issue_created ballot batching parameters (ET-14b).
@@ -116,6 +154,17 @@ func Verify(data []byte, head *string) Result {
 			}
 			if e.typ != "genesis" {
 				return invalid(ln, "first event must be genesis (ES-33/EX-12)")
+			}
+			// EV-20: a chain's genesis MUST carry a (type, version) this
+			// verifier registers. At line 1 the ES-9/ES-11 registration check
+			// is promoted into Stage A (EV-15) — the sole exception to EV-8 —
+			// because an unregistered genesis yields no operator_pk and no
+			// registrar_pk (ET-9a), so Stage B could not run anywhere on the
+			// chain and a PARTIAL here would announce "integrity confirmed"
+			// over a chain on which nothing was ever authenticated. The chain
+			// therefore never reaches VALID or PARTIAL.
+			if !registered(e.typ, e.version) {
+				return invalid(ln, unregisteredGenesisReason(e))
 			}
 		} else {
 			if e.seq != prev.seq+1 {
@@ -179,9 +228,14 @@ func stageB(st *vstate, e *event) (string, bool) {
 }
 
 func stageBGenesis(st *vstate, e *event) (string, bool) {
-	// ES-18 payload key set.
-	if !payloadKeySetEquals(e.payload, []string{"chain_id", "contracts", "operator_pk", "registrar_pk", "sig"}) {
-		return "genesis payload key set (ES-18)", false
+	// ES-18 payload key set, with the one OPTIONAL key v1 defines (ES-34):
+	// ancestor_head (ET-9e). OPTIONAL means "this defined key may be absent",
+	// never "an undefined key may appear" — a key outside required ∪ optional is
+	// still rejected.
+	if !payloadKeySetMatches(e.payload,
+		[]string{"chain_id", "contracts", "operator_pk", "registrar_pk", "sig"},
+		[]string{"ancestor_head"}) {
+		return "genesis payload key set (ES-18/ES-34)", false
 	}
 	chainID := mustStr(e.payload, "chain_id")
 	contracts := mustStr(e.payload, "contracts")
@@ -196,11 +250,37 @@ func stageBGenesis(st *vstate, e *event) (string, bool) {
 	if !isHex64(registrarPK) {
 		return "registrar_pk not 64 lowercase hex (ET-9b)", false
 	}
+	// ET-9d: the two declared keys MUST be distinct. One string equality on the
+	// two lowercase-hex strings, after ET-9b has passed on both — no decoding
+	// and no curve arithmetic. A chain declaring one key twice hands a single
+	// holder both the power to mint issues and the power to forge every ballot
+	// on them; the check is necessary, not sufficient (two distinct keys can
+	// still be held by one party, and the log cannot tell).
+	if registrarPK == operatorPK {
+		return "registrar_pk is byte-identical to operator_pk (ET-9d)", false
+	}
 	if !isHex64(chainID) {
 		return "chain_id not 64 lowercase hex (ET-6)", false
 	}
 	if contracts == "" {
 		return "contracts must be non-empty (ET-9)", false
+	}
+	// ET-9e: ancestor_head, when present, is 64 lowercase hex and never the
+	// 64-zero anchor (which keeps its single meaning as prev_hash's anchor,
+	// ES-24; a chain with no ancestor omits the key entirely, ES-34). It is a
+	// recorded claim, not a verified link: the ancestor is a different export
+	// this verifier does not hold, so nothing beyond the format is checked and
+	// an unresolvable value is never a defect.
+	if v, present := payloadGet(e.payload, "ancestor_head"); present {
+		if v.kind != kString {
+			return "ancestor_head must be a string (ET-9e)", false
+		}
+		if !isHex64(v.str) {
+			return "ancestor_head not 64 lowercase hex (ET-9e)", false
+		}
+		if v.str == zeros64 {
+			return "ancestor_head must not be the 64-zero anchor (ET-9e/ES-24)", false
+		}
 	}
 	if !isHex128(sig) {
 		return "sig not 128 lowercase hex (ES-31)", false

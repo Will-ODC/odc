@@ -20,6 +20,11 @@ EV-7/EV-17:
   event failed Stage B, but one or more events carry a well-formed but
   unregistered `(type, version)` whose semantics could not be checked. Exit `2`.
 
+One case is carved out of that forward compatibility: a chain whose **`genesis`**
+carries a `(type, version)` this verifier does not register is `INVALID` at line
+1, never `PARTIAL` (EV-20). Such a genesis yields no operator or registrar key,
+so nothing on the chain could be authenticated at all.
+
 Tool-level failures (bad usage, unreadable file) exit `3` and are never a chain
 verdict. The reason text after a verdict is **advisory only** and is not part of
 conformance (EV-17); conformance is the verdict token and line number(s) alone.
@@ -39,6 +44,7 @@ internal/verify/
   crypto.go                 Ed25519 canonical + prime-order key checks (ET-4a/b/c)
   verify.go                 two-stage driver, verdict + precedence
   verify_test.go            fixture-driven conformance tests
+  rules_test.go             synthetic chains for rules no fixture pins yet
 ```
 
 ## Dependencies
