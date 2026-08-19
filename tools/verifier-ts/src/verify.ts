@@ -415,22 +415,6 @@ export function verifyExport(bytes: Buffer, head?: string): Verdict {
       contentInvalid = lineNo;
       break;
     }
-    // EV-20: a chain's `genesis` MUST carry a (type, version) this verifier
-    // registers; if it does not, the chain is INVALID at line 1 and MUST NOT
-    // reach a chain-level VALID or PARTIAL. This is the sole exception to EV-8,
-    // and a Stage A promotion for `genesis` alone: EV-15 assigns the ES-9/ES-11
-    // registration check to Stage B everywhere else, but "at line 1, ES-9/ES-11
-    // registration is Stage A, because a `genesis` the verifier does not
-    // register leaves it no keys to run Stage B with anywhere on the chain".
-    // Without it, `operator_pk`/`registrar_pk` are never extracted and every
-    // later signature goes unchecked, yet the chain would still walk to
-    // PARTIAL — announcing "integrity confirmed, some semantics unchecked"
-    // over a chain on which nothing was ever authenticated.
-    if (isFirst && !isRegistered(ev.type, ev.version)) {
-      contentInvalid = lineNo;
-      contentInvalidReason = unregisteredGenesisReason(ev.type, ev.version);
-      break;
-    }
     if (isFirst) {
       if (ev.prevHash !== GENESIS_PREV) {
         contentInvalid = lineNo; // ES-24
@@ -442,6 +426,32 @@ export function verifyExport(bytes: Buffer, head?: string): Verdict {
     }
     if (computeHash(ev) !== ev.hash) {
       contentInvalid = lineNo; // HA-14
+      break;
+    }
+
+    // EV-20: a chain's `genesis` MUST carry a (type, version) this verifier
+    // registers; if it does not, the chain is INVALID at line 1 and MUST NOT
+    // reach a chain-level VALID or PARTIAL. This is the sole exception to EV-8,
+    // and a Stage A promotion for `genesis` alone: EV-15 assigns the ES-9/ES-11
+    // registration check to Stage B everywhere else, but "at line 1, ES-9/ES-11
+    // registration is Stage A, because a `genesis` the verifier does not
+    // register leaves it no keys to run Stage B with anywhere on the chain".
+    // Without it, `operator_pk`/`registrar_pk` are never extracted and every
+    // later signature goes unchecked, yet the chain would still walk to
+    // PARTIAL — announcing "integrity confirmed, some semantics unchecked"
+    // over a chain on which nothing was ever authenticated.
+    //
+    // Placed after the rest of Stage A deliberately. EV-17 leaves the relative
+    // order of checks within a line unpinned ("it cannot change which line is
+    // named"), and a line 1 that also fails framing, linkage or HA-14 is
+    // INVALID at line 1 either way — but then its genesis is demonstrably
+    // damaged, and EV-21's "this verifier may be out of date" reading would be
+    // actively misleading. Running EV-20 last means the advisory reason is
+    // emitted only for a genesis that is otherwise intact, which is the one
+    // case where the two readings really are indistinguishable.
+    if (isFirst && !isRegistered(ev.type, ev.version)) {
+      contentInvalid = lineNo;
+      contentInvalidReason = unregisteredGenesisReason(ev.type, ev.version);
       break;
     }
 
