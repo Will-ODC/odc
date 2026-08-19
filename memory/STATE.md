@@ -323,9 +323,18 @@ Recorded so a reader does not re-flag them; fix only if the set is renumbered
 before freeze.
 
 **Owed by the operator, not a session:** the ballot-expressiveness ceiling ADR
-part B (part A landed; default until argued otherwise is "ballots stay
-one-choice") and the other queued direction ADRs. **Read the ET-22 warning in
-`OPEN-QUESTIONS.md` before writing the first.**
+part B (part A landed) and the other queued direction ADRs. **Read the ET-22
+warning in `OPEN-QUESTIONS.md` before writing the first.**
+
+**Part B's old default is withdrawn (operator, 2026-08-19).** It used to read
+"ballots stay one-choice until argued otherwise". The operator's stated intention
+is a **wide variety of voting options**, with the ceiling **deliberately left
+open to decide later** — so silence is no longer a vote for one-choice, and no
+session should treat it as one. **v1 is unaffected**: a ballot is still one
+choice from a small bounded set (charter §5, ET-14a), and no contract text is
+loosened by this. The substance still to decide, and an unresolved question about
+whether it must be settled before the freeze, are in `OPEN-QUESTIONS.md` under
+the ballot-expressiveness entry.
 
 **Four unlanded branches deliberately KEPT** (`contracts/` untouched by all):
 
