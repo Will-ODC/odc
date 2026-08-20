@@ -1,8 +1,9 @@
 # Event Types — contracts/event-types.md
 
-**Version:** 8
+**Version:** 9
 **Status:** DRAFTING (Phase 0 · T3, amended T4a, T5i, T5j, ADR-0009, ADR-0010,
-ADR-0011, and T9a/ADR-0013, ADR-0014, ADR-0016, ADR-0018). Not frozen.
+ADR-0011, T9a/ADR-0013, ADR-0014, ADR-0016, ADR-0018, and ADR-0019). Not
+frozen.
 **Companion specs:** `event-schema.md` (envelope), `ids.md` (identifiers),
 `hashing.md` (preimage — T4).
 
@@ -164,7 +165,8 @@ declares the operator key that later `issue_created` events are signed with.
 | `contracts`    | string | the frozen contracts version this chain runs, e.g. `"contracts-v1"` |
 | `operator_pk`  | string | `^[0-9a-f]{64}$` — operator Ed25519 public key (32 bytes, hex)       |
 | `registrar_pk` | string | `^[0-9a-f]{64}$` — registrar Ed25519 public key; MUST differ from `operator_pk` (ET-9d) |
-| `ancestor_head` | string | **OPTIONAL** (ES-34) — `^[0-9a-f]{64}$`, never the 64-zero anchor; the head of the chain this one forked from (ET-9e) |
+| `ancestor_chain` | string | **OPTIONAL** (ES-34) — `^[0-9a-f]{64}$`, never the 64-zero anchor; the **genesis hash** of the chain this one was forked from — that chain's identity, the key that names it (ET-7a, ET-9e) |
+| `ancestor_head` | string | **OPTIONAL** (ES-34) — `^[0-9a-f]{64}$`, never the 64-zero anchor; the **head at the fork** of the chain this one was forked from (EX-14) — a position *on* the chain `ancestor_chain` names. MUST NOT appear without `ancestor_chain` (ET-9e, ET-9f) |
 | `sig`          | string | `^[0-9a-f]{128}$` — Ed25519 signature (ET-4)                         |
 
 - **ET-6.** `genesis.version` MUST be `1`, `seq` MUST be `1`, and `prev_hash`
@@ -181,15 +183,22 @@ declares the operator key that later `issue_created` events are signed with.
   event (`event-schema.md` ES-27) — the **genesis hash** of `export-format.md`
   EX-21. Two exports are exports of the same chain exactly when their genesis
   hashes are equal. Wherever a chain must be named — an anchor or witness record
-  (charter §4), a verifier invocation (EX-22), a fork's `ancestor_head` (ET-9e) —
-  the genesis hash is the name, and `chain_id` MUST NOT be used as one (ET-7).
+  (charter §4), a verifier invocation (EX-22), a fork's declaration of the chain
+  it was forked from (`ancestor_chain`, ET-9e) — the genesis hash is the name,
+  and `chain_id` MUST NOT be used as one (ET-7). Where a **position** on a named
+  chain must also be given, it is carried **alongside** the name and never
+  instead of it: the pair a charter §4 anchor publishes (identity and head
+  together) is the same pair a fork records (`ancestor_chain` with
+  `ancestor_head`, ET-9e/ET-9f).
   The genesis hash covers every content field of the genesis event, including
   `ts`, so two chains an operator starts one millisecond apart have different
   identities even though their `chain_id`, `operator_pk` and `registrar_pk` are
   identical. A `head` does **not** identify a chain either: it names a position,
   and a position is a position **on** some chain (EX-14, EX-21) — which is why
   anchoring the head alone cannot deliver charter §4's non-equivocation
-  (ADR-0013).
+  (ADR-0013). The same holds inside a `genesis` payload: an `ancestor_head`
+  carried without an `ancestor_chain` would name a position on an unnamed chain
+  — the head-alone form charter §4 rejects — which is why ET-9f bars it.
 - **ET-8.** The `genesis` signing key is `operator_pk` (the event is
   self-signed by the key it declares). A verifier MUST reject a `genesis` whose
   `sig` does not verify under its own `operator_pk`.
@@ -259,40 +268,91 @@ declares the operator key that later `issue_created` events are signed with.
   The rule lands before the freeze because it cannot land after: adding it later
   would make previously conforming chains retroactively `INVALID` at line 1, which
   EV-1 and EV-4 both bar (ADR-0018).
-- **ET-9e.** _`ancestor_head` (OPTIONAL) — recorded fork ancestry._ A `genesis`
-  payload MAY carry `ancestor_head`: the **head** of the chain this one was forked
-  from — that chain's last event `hash` at the moment of the fork
-  (`export-format.md` EX-14). When present it MUST match `^[0-9a-f]{64}$` and MUST
-  NOT be the 64-zero anchor; a chain with no ancestor **omits the key** (ES-34),
-  so there is exactly one way to say "no ancestor" and the 64-zero string keeps
-  its single meaning as `prev_hash`'s anchor (ES-24). Absence is not a claim that
-  no ancestor exists — only that none is recorded.
+- **ET-9e.** _`ancestor_chain` and `ancestor_head` (both OPTIONAL) — recorded
+  fork ancestry._ A `genesis` payload MAY record the chain it was forked from,
+  with two keys: a **name** and a **position**.
 
-  A fork's own structure is unchanged by it: `seq` is still `1` and `prev_hash` is
-  still the 64-zero anchor (ET-6, ES-24), exactly as on an original chain. A fork
-  is a **new chain with a new identity** (ET-7a), not a continuation of the old
-  one; `ancestor_head` records where it came from, and nothing more.
+  - **`ancestor_chain`** — the **genesis hash** of the chain this one was forked
+    from, which is that chain's identity (ET-7a). This is the key that **names**
+    the parent chain; per ET-7a it is the only value that can.
+  - **`ancestor_head`** — that chain's **head at the moment of the fork**: its
+    last event `hash` at that point (`export-format.md` EX-14). It names a
+    **position on** the chain `ancestor_chain` names, and it carries what a
+    genesis hash cannot — a fork taken at `seq` 50 and a fork taken at `seq` 5000
+    are different claims about the same chain.
 
-  **What a verifier checks, and what it must not.** It checks the format above and
-  nothing else. `ancestor_head` is a **recorded claim, not a verified link**: the
-  ancestor is a different export, which the verifier does not hold and cannot
-  demand, so it cannot confirm that the value is any chain's head, that the value
-  is *that* community's chain, or that the ancestor exists at all. A verifier MUST
-  NOT report `INVALID` because it cannot resolve `ancestor_head`, and MUST NOT
-  treat an unresolvable value as a defect. A reader who holds **both** exports can
-  settle the claim in a single comparison — which is why recording it is worth
-  anything — but that comparison is the reader's act, outside this contract.
+  Each key, when present, MUST match `^[0-9a-f]{64}$` and MUST NOT be the 64-zero
+  anchor. A chain with no recorded ancestor **omits both** (ES-34), so there is
+  exactly one way to say "no ancestor" and the 64-zero string keeps its single
+  meaning as `prev_hash`'s anchor (ES-24). Absence is not a claim that no ancestor
+  exists — only that none is recorded. `ancestor_head` MUST NOT appear without
+  `ancestor_chain` (ET-9f).
 
-  Why the key exists: charter §8 states as a **right** that a community "can
+  **Why a name and a position, rather than either alone.** Charter §8 grants the
+  fork right in the words "re-declare genesis **anchored** to the old chain's
+  head", and charter §4 fixes what an anchoring record is: a chain's **identity**
+  and its **head**, published **together**, because "both halves are
+  load-bearing" — a head alone names a position on *some* chain, which is what
+  lets an operator run two chains and anchor only one. A fork's `genesis` **is**
+  an anchoring record for its parent: it publishes a fact about that chain,
+  hash-committed, at `seq` 1, where the parent's operator cannot rewrite it. So it
+  carries what §4 requires an anchor to carry — both halves, the identity being
+  the half without which the other names nothing.
+
+  A fork's own structure is unchanged by either key: `seq` is still `1` and
+  `prev_hash` is still the 64-zero anchor (ET-6, ES-24), exactly as on an original
+  chain. A fork is a **new chain with a new identity** (ET-7a), not a continuation
+  of the old one; these keys record where it came from, and nothing more.
+
+  **What a verifier checks, and what it must not.** It checks the format of each
+  key that is present, the 64-zero bar, and the presence rule ET-9f — and nothing
+  else. Both values are a **recorded claim, not a verified link**: the ancestor is
+  a different export, which the verifier does not hold and cannot demand, so it
+  cannot confirm that `ancestor_chain` is any chain's genesis hash, that
+  `ancestor_head` is that chain's head or any chain's head, that either names
+  *that* community's chain, or that the ancestor exists at all. A verifier MUST
+  NOT report `INVALID` because it cannot resolve either value, and MUST NOT treat
+  an unresolvable value as a defect. A reader who holds **both** exports settles
+  the claim in two comparisons — the ancestor export's first-line `hash` against
+  `ancestor_chain` (EX-21), and some line's `hash` on that same export against
+  `ancestor_head` — which is why recording the pair is worth anything, and why the
+  pair is what makes the claim checkable at all: with the head alone the reader
+  would not know which export to open. That comparison is the reader's act,
+  outside this contract.
+
+  Why the keys exist: charter §8 states as a **right** that a community "can
   re-declare genesis anchored to the old chain's head and continue elsewhere
   without anyone's permission", and until now the contract had nowhere to put that
-  head — `prev_hash` at `seq` 1 is fixed (ES-24), the genesis key set is closed
+  anchor — `prev_hash` at `seq` 1 is fixed (ES-24), the genesis key set is closed
   (ES-18), and `genesis` cannot take a version 2 (ET-6). A contract that cannot
   express a capability its charter grants is a charter violation, and it was
-  unaddable after the freeze. **This is the only key ever added to the `genesis`
-  payload, and the door does not reopen:** ET-6 pins `genesis.version` at `1` and
-  `evolution.md` EV-1 bars altering a frozen `(type, version)`, so no further
-  genesis key is addable by any mechanism once the tag exists (ADR-0016).
+  unaddable after the freeze. **Nothing may be added to the `genesis` payload
+  after the tag, and the door does not reopen:** ET-6 pins `genesis.version` at
+  `1` and `evolution.md` EV-1 bars altering a frozen `(type, version)`, so no
+  further genesis key is addable by any mechanism once the tag exists (ADR-0016,
+  amended in part by ADR-0019).
+
+- **ET-9f.** _`ancestor_head` requires `ancestor_chain`._ A `genesis` payload that
+  carries `ancestor_head` MUST also carry `ancestor_chain`. A `genesis` carrying
+  `ancestor_head` alone MUST be rejected — `INVALID` at the `genesis` line. This
+  is a single **key-presence** test over the payload the parser already holds: no
+  key material, no decoding, no hashing, no curve arithmetic.
+
+  **The converse is deliberately not required — `ancestor_chain` MAY appear
+  alone**, and this asymmetry is the rule rather than an oversight; it MUST NOT be
+  "tidied" into a both-or-neither pair. `ancestor_chain` alone is the weaker but
+  coherent claim *"this chain was forked from chain X, fork point unrecorded"*: a
+  named chain, no position. `ancestor_head` alone is the defective form ET-7a
+  describes: a position on an **unnamed** chain, which is exactly the head-alone
+  anchoring charter §4 rejects, and which no reader can check because nothing in
+  the payload says which export to open. ET-9f bars that one form and permits the
+  other.
+
+  A `genesis` may of course break ET-9f and another genesis rule at the same time
+  — a malformed `ancestor_head` carried alone, say. **No precedence between them
+  is needed or defined:** both faults sit on the same line, and conformance is the
+  verdict token and the line number only (`evolution.md` EV-17), so two conforming
+  verifiers report the same thing whichever fault they notice first.
 
 ## `participant_registered` (self-signed by the registrant)
 
@@ -529,7 +589,8 @@ Two of the three are verifiable from the export; the third is not, and says so.
 | Genesis key format (operator/registrar pk)     | ET-9b             |
 | Genesis keys MUST be distinct                  | ET-9d             |
 | Genesis key validation timing (at declaration) | ET-9c             |
-| Fork ancestry: optional, claim not link        | ET-9e             |
+| Fork ancestry: a name and a position, claim not link | ET-9e       |
+| `ancestor_head` requires `ancestor_chain`      | ET-9f             |
 | participant self-signing + id derivation       | ET-10, ET-11      |
 | Title length + forbidden characters            | ET-14             |
 | `choice_count` range                           | ET-14a            |
@@ -564,9 +625,13 @@ rejected at the `genesis` line where the key is declared, even on a chain with
 no `vote_cast` that never uses it (ET-9c); that a `genesis` declaring the same
 key as both `operator_pk` and `registrar_pk` is rejected on a string comparison,
 while two distinct keys held by one party remain undetectable to both (ET-9d);
-that a `genesis` carrying
-`ancestor_head` is checked for format and **not** for resolvability, so a fork
-verifies identically whether or not the reader holds its ancestor (ET-9e); that a `title`
+that a `genesis`
+recording its ancestry carries a **name** and a **position** — `ancestor_chain`,
+the parent's genesis hash, and `ancestor_head`, that chain's head at the fork —
+each checked for format and **not** for resolvability, so a fork verifies
+identically whether or not the reader holds its ancestor (ET-9e), and that a
+`genesis` carrying `ancestor_head` with no `ancestor_chain` is rejected at line 1
+while `ancestor_chain` alone is accepted (ET-9f); that a `title`
 over 200 scalars or with a control character is rejected (ET-14); that an `issue_created` with `choice_count`
 outside 2–64 is rejected (ET-14a); that an `issue_created` declaring a batch
 interval under 60000 ms or a batch minimum under 3 is rejected (ET-14b); that a

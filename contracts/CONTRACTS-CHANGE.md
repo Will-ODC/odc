@@ -19,6 +19,88 @@ Format (newest first, one entry per merged contracts change):
 
 ---
 
+## event-types.md v9 · event-schema.md v4 — 2026-08-20 — fork ancestry names a chain and a position (ADR-0019)
+
+**A direct contradiction between two rules that both landed in #98.** ET-9e made
+the optional `ancestor_head` carry "the **head** of the chain this one was forked
+from", while ET-7a — seven lines apart in the same file — listed "a fork's
+`ancestor_head`" among the places where **a chain must be named**, held that the
+genesis hash is the name, and then held that a `head` does **not** name a chain
+at all, because it names a position *on* one. Both readings are 64 lowercase hex
+under a format-only check, so no verdict differs today and nothing failed; the
+contradiction would simply have frozen. Found by the isolated TypeScript phase-2
+verifier build, which had to decide what the value meant in order to implement it.
+
+- **`ancestor_chain` added to the `genesis` payload (OPTIONAL, ET-9e)** — the
+  parent chain's **genesis hash**, i.e. its identity under ET-7a. This is the key
+  that **names** the parent; per ET-7a it is the only value that can.
+- **`ancestor_head` retained (OPTIONAL, ET-9e)**, restated as what it actually is
+  — the parent's **head at the fork** (EX-14), a **position on** the chain
+  `ancestor_chain` names. It carries what the genesis hash cannot: a fork at
+  `seq` 50 and a fork at `seq` 5000 are different claims about the same chain.
+  Both keys keep the old format rule — `^[0-9a-f]{64}$`, the 64-zero anchor
+  barred — and omitting **both** remains the one way to say "no ancestor".
+- **`ET-9f` added: `ancestor_head` MUST NOT appear without `ancestor_chain`**;
+  that form is `INVALID` at the `genesis` line. One key-presence test — no key
+  material, no decoding, no hashing. **`ancestor_chain` MAY appear alone**, and
+  that asymmetry is deliberate and stated in the rule so nobody later tidies it
+  into both-or-neither: chain-alone is the weaker but coherent "forked from chain
+  X, fork point unrecorded", while head-alone is a position on an unnamed chain —
+  precisely the head-alone anchoring charter §4 rejects. Two faults on one line
+  need no precedence: conformance is the verdict token and the line number only
+  (EV-17).
+- **The derivation is carried in the spec text, not only here.** Charter §8 grants
+  the fork right as "re-declare genesis **anchored** to the old chain's head", and
+  charter §4 defines an anchoring record as a chain's identity and its head
+  published **together** — "both halves are load-bearing", because a head alone
+  lets an operator run two chains and anchor only one. A fork's `genesis` **is**
+  an anchoring record for its parent: a hash-committed fact about that chain at
+  `seq` 1, where the parent's operator cannot rewrite it. The isolated verifier
+  contexts are stripped of `docs/decisions/`, so ET-9e/ET-9f must be
+  self-sufficient from `contracts/` alone; the ADR citations are provenance only.
+- **Why two keys rather than one composite value.** A 128-hex concatenation is
+  shape-identical to `sig` (ET-4) and tells a reader nothing about where one half
+  ends. A delimited form would be the contract's **only** structured payload
+  string, and would need its own normative text for the separator, the ordering,
+  the empty-half case and case-folding — an unspecified field inside a field,
+  which is the exact workaround ADR-0016 itself rejected when it declined to
+  smuggle the head into the `contracts` string. Two keys reuse machinery that
+  already exists: ES-18's key set, ES-34's optionality, HA-7's key count and
+  HA-8's ordering.
+- **`ES-34` extended** (`event-schema.md` v3 → v4). Its closing paragraph said v1
+  defines exactly one optional key. It now defines two, both on `genesis`, and
+  their presence is **not independent**. ES-34 now records the general shape: a
+  type's payload table fixes **which** keys are optional, and that type's own
+  numbered rules MAY further constrain **when** an optional key may appear — and
+  such a conditional-presence rule MUST be a numbered RFC-2119 sentence in
+  `event-types.md`, never a table row alone (the mistake that produced ET-9b).
+- **The permanent claim is restated, not weakened.** "The only key `genesis` will
+  ever gain" was a count; the real bar is the **tag**: ET-6 pins
+  `genesis.version` at `1` and EV-1 bars altering a frozen `(type, version)`, so
+  **nothing may be added to `genesis` after the tag**. No tag exists —
+  `contracts/` is still DRAFTING (ADR-0007) — which is why this correction is
+  addable at all, and it is the last kind of correction that will be.
+- **No existing bytes move.** Neither key appears in any current vector, so every
+  vector's payload, `hash`, verdict and line number is unchanged; confirmed by
+  running the fixture suite. No hashing rule changes: HA-7 already encodes exactly
+  the keys present and leads with the key count `U64(k)`, and HA-8 orders them by
+  UTF-8 bytes, under which `ancestor_chain` sorts first and `ancestor_head`
+  second, ahead of `chain_id`. `hashing.md`, `evolution.md`, `export-format.md`,
+  `ids.md`, `read-api.md` and `contracts/README.md` need no change; ES-18 already
+  delegates optionality to ES-34 and needs none either.
+- **Owed fixtures (EV-5), not written in this pass** — these supersede ADR-0016's
+  owed list for F4: a `genesis` with **both** keys well-formed (`VALID` — the
+  first seven-key genesis payload, exercising HA-7's count and HA-8's ordering);
+  `ancestor_chain` **alone** (`VALID` — the vector that pins the deliberate
+  asymmetry against a future both-or-neither "tidy"); `ancestor_head` **alone**
+  (`INVALID` line 1, ET-9f); either key = the 64-zero anchor (`INVALID` line 1);
+  either key malformed — uppercase hex or wrong length (`INVALID` line 1); and a
+  well-formed pair naming a chain **absent from the fixture set** (`VALID` —
+  pinning that unresolvability is not a defect, the vector that stops a future
+  verifier trying to resolve it).
+- **Owed verifier work (both verifiers, isolated passes):** accept both optional
+  keys, check each one's format, enforce ET-9f's presence rule, resolve nothing.
+
 ## fixtures/ — 2026-08-15 — phase 1 review follow-up: `005-boundaries` cites ET-24
 
 **Metadata only. No vector's bytes, verdict or line changed** — re-verified

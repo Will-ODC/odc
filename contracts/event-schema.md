@@ -1,8 +1,8 @@
 # Event Schema — contracts/event-schema.md
 
-**Version:** 3
-**Status:** DRAFTING (Phase 0 · T3, amended T4a, and T9a/ADR-0014,
-ADR-0016). Not frozen.
+**Version:** 4
+**Status:** DRAFTING (Phase 0 · T3, amended T4a, T9a/ADR-0014, ADR-0016, and
+ADR-0019). Not frozen.
 **Companion specs:** `event-types.md` (payloads), `ids.md` (identifiers),
 `hashing.md` (byte-exact preimage — T4), `export-format.md` (NDJSON — T4).
 
@@ -204,8 +204,20 @@ Some event types are **signed**; which ones, and the exact signing rule, are in
   generic payload rule already handles them. A producer therefore MUST NOT emit an
   optional key it does not mean.
 
-  v1 defines exactly one optional key: `genesis.ancestor_head`
-  (`event-types.md` ET-9e).
+  v1 defines **two** optional keys, both on `genesis`: `ancestor_chain` and
+  `ancestor_head` (`event-types.md` ET-9e). Their presence is **not
+  independent** — `ancestor_head` MUST NOT appear without `ancestor_chain`
+  (ET-9f).
+
+  That is the general shape, not a special case for one type. A type's payload
+  table in `event-types.md` fixes **which** of its keys are optional; that type's
+  own numbered rules MAY further constrain **when** an optional key may appear,
+  including by making one key's presence depend on another's. Such a
+  conditional-presence rule MUST be stated as a numbered RFC-2119 sentence in
+  `event-types.md`; a payload-table row MUST NOT be the only statement of it (the
+  mistake that produced ET-9b). A verifier MUST enforce a conditional-presence
+  rule exactly as it enforces the key set of ES-18: a payload that breaks it is
+  rejected at the line carrying it.
 
 ---
 
@@ -226,6 +238,7 @@ bytes?* Each envelope-level degree of freedom and where it is closed:
 | Payload nesting                           | ES-17                |
 | Payload key set                           | ES-18                |
 | Optional key: absent vs null vs placeholder | ES-34              |
+| Conditional presence of an optional key   | ES-34 (+ its type's rule) |
 | `ts` textual form + role                  | ES-20, ES-21         |
 | `prev_hash` case, length, genesis value   | ES-23, ES-24         |
 | Digest algorithm, coverage, case          | ES-27 (+ hashing.md) |

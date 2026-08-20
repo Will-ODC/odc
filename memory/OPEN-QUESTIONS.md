@@ -31,14 +31,14 @@ Worked through one at a time in session.
 Both verifier suites still pass — they and the fixtures are internally consistent
 and now **behind** the spec, which is expected until the two passes below land.
 
-| #   | ADR                                         |
-| --- | ------------------------------------------- |
-| F1  | ADR-0013 chain identity is the genesis hash |
-| F2  | ADR-0014 ballot batching                    |
-| F3  | ADR-0015 unregistered genesis version       |
-| F4  | ADR-0016 genesis `ancestor_head`            |
-| F5  | ADR-0017 sentiment plane bar                |
-| F6  | ADR-0018 distinct genesis keys              |
+| #   | ADR                                                                                               |
+| --- | ------------------------------------------------------------------------------------------------- |
+| F1  | ADR-0013 chain identity is the genesis hash                                                       |
+| F2  | ADR-0014 ballot batching                                                                          |
+| F3  | ADR-0015 unregistered genesis version                                                             |
+| F4  | ADR-0016 genesis `ancestor_head`, **amended in part by ADR-0019** (`ancestor_chain` added; ET-9f) |
+| F5  | ADR-0017 sentiment plane bar                                                                      |
+| F6  | ADR-0018 distinct genesis keys                                                                    |
 
 **F2's parameters are governable, per the operator's instruction that batch size
 be votable "like almost everything about this project".** `issue_created` carries
@@ -60,9 +60,12 @@ permanent, the number is provisional.
    must still test a seq gap. New vectors owed: `--chain` match/mismatch and the
    two-chain pair (F1); non-quantized `ts`, undersize batch proven by a later
    ballot, legal undersize _final_ batch, below-floor interval, below-floor minimum,
-   multi-batch VALID (F2); genesis at version 1000000 (F3); `ancestor_head`
-   valid/64-zero/malformed/unresolvable (F4); same-key genesis (F6). F5 gets none
-   by construction — a coverage-report note instead; ET-25 likewise.
+   multi-batch VALID (F2); genesis at version 1000000 (F3); fork ancestry —
+   **both keys** well-formed, `ancestor_chain` alone (VALID, pinning the
+   deliberate asymmetry), `ancestor_head` alone (INVALID line 1, ET-9f), either
+   key 64-zero, either key malformed, and a well-formed pair naming an
+   unresolvable chain (F4, as amended by ADR-0019); same-key genesis (F6).
+   F5 gets none by construction — a coverage-report note instead; ET-25 likewise.
 2. **Both verifiers, in separate isolated contexts** — independence is the whole
    point of having two. `--chain <genesis-hash>`, print the computed genesis hash
    and head (EX-24, scoped as tool output not verdict, so it does not collide with
@@ -156,14 +159,14 @@ operator decision, not a routine docs merge (see the ballot-expressiveness
 entry, where part A was likewise explicitly marked operator-ratified).
 `memory/STATE.md` records the ratification. Landed via #98.
 
-| #   | Decision                                                                                                                                                                          |
-| --- | --------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- |
-| F1  | Chain identity is the **`genesis` event hash**. Demote `chain_id`, fix ET-7's "stable identifier" wording, add `--chain <hash>` to both verifiers. **No genesis field needed.**   |
-| F2  | **Batching before the freeze:** ballot `ts` quantized to a published interval, batch order independent of arrival, minimum batch size. **Quorum deferred** (see below).           |
-| F3  | An unregistered `genesis` `(type, version)` is **`INVALID` at line 1**, with a message distinguishing "verifier out of date" from "chain corrupt". Needs a fixture — none exists. |
-| F4  | **Add an optional `ancestor_head` key to `genesis`.** This is the one genesis change; the door does not reopen.                                                                   |
-| F5  | Permanent `evolution.md` bar on registering any sentiment / survey / monetizable-response type on the governance chain, in the ET-22/EV-13 register.                              |
-| F6  | Require **`registrar_pk != operator_pk`**.                                                                                                                                        |
+| #   | Decision                                                                                                                                                                                                                                                               |
+| --- | ---------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- |
+| F1  | Chain identity is the **`genesis` event hash**. Demote `chain_id`, fix ET-7's "stable identifier" wording, add `--chain <hash>` to both verifiers. **No genesis field needed.**                                                                                        |
+| F2  | **Batching before the freeze:** ballot `ts` quantized to a published interval, batch order independent of arrival, minimum batch size. **Quorum deferred** (see below).                                                                                                |
+| F3  | An unregistered `genesis` `(type, version)` is **`INVALID` at line 1**, with a message distinguishing "verifier out of date" from "chain corrupt". Needs a fixture — none exists.                                                                                      |
+| F4  | **Add optional fork-ancestry keys to `genesis`:** `ancestor_chain` (the parent's genesis hash — the name) and `ancestor_head` (the parent's head at the fork — the position), head requiring chain (ET-9f, ADR-0019). Nothing may be added to `genesis` after the tag. |
+| F5  | Permanent `evolution.md` bar on registering any sentiment / survey / monetizable-response type on the governance chain, in the ET-22/EV-13 register.                                                                                                                   |
+| F6  | Require **`registrar_pk != operator_pk`**.                                                                                                                                                                                                                             |
 
 **Carried decisions and reasoning worth keeping:**
 
@@ -295,17 +298,30 @@ head_hash, timestamp, operator signature)` as a signed checkpoint, ideally
   trade: a pre-casting warning shown to voters that early low-turnout votes may
   be identifiable, owed to Phase 1 identity/web work — the irreversible part is
   the published data, not the rule, so keep early votes low-stakes.
-- **Q-D — DECIDED → ADR-0016.** _How does a forked community record its
-  ancestor head?_ (F4.) Charter §8 grants forking as a **right** — re-declare
-  genesis anchored to the old chain's head — but the contract had no slot for
+- **Q-D — DECIDED → ADR-0016, amended by ADR-0019.** _How does a forked
+  community record its ancestor head?_ (F4.) Charter §8 grants forking as a
+  **right** — re-declare genesis anchored to the old chain's head — but the
+  contract had no slot for
   it (`prev_hash` fixed at 64 zeros, genesis key set closed, genesis version
-  pinned to 1): a charter violation, unaddable after freeze. **Answer: optional
-  `ancestor_head` key added to `genesis` (ET-9e)**, format-checked only — a
+  pinned to 1): a charter violation, unaddable after freeze. **Answer: two
+  optional fork-ancestry keys added to `genesis` (ET-9e)** — `ancestor_chain`, the
+  parent's **genesis hash**, which is the only value that can name a chain
+  (ET-7a); and `ancestor_head`, the parent's **head at the fork** (EX-14), a
+  position _on_ the chain `ancestor_chain` names. Both format-checked only — a
   recorded claim, not a verified link, since the verifier cannot fetch the
   ancestor chain to confirm it — with the 64-zero anchor explicitly barred as a
-  value (one meaning, one representation, not two byte-forms of "no ancestor").
-  **This is the only key `genesis` will ever gain again**; ES-18/ET-6/EV-1
-  close the door permanently after this one use.
+  value (one meaning, one representation, not two byte-forms of "no ancestor"),
+  and **`ancestor_head` MUST NOT appear without `ancestor_chain`** (ET-9f):
+  a position on an unnamed chain is the head-alone anchoring charter §4 rejects.
+  `ancestor_chain` **may** appear alone — that asymmetry is deliberate, and is
+  stated in the rule text so it is not later tidied into both-or-neither.
+  **ADR-0016 originally added `ancestor_head` alone and called it "the only key
+  `genesis` will ever gain again"; ADR-0019 corrected both** — the key set, and
+  the claim. The permanent bar is the **tag**, not a count of keys: ET-6 pins
+  `genesis.version` at `1` and EV-1 bars altering a frozen `(type, version)`, so
+  **nothing may be added to `genesis` once `contracts-v1` exists**. No tag exists
+  yet (`contracts/` is DRAFTING, ADR-0007), which is the only reason this
+  correction was addable at all.
 - **Q-E — DECIDED → ADR-0017.** _May a sentiment or monetizable event type
   ever share the governance chain?_ (F5.) Non-negotiable rule 7 and charter
   §6/§8 all said no, but `evolution.md` — the rulebook that actually decides
