@@ -238,7 +238,7 @@ bytes?* Each envelope-level degree of freedom and where it is closed:
 | Payload nesting                           | ES-17                |
 | Payload key set                           | ES-18                |
 | Optional key: absent vs null vs placeholder | ES-34              |
-| Conditional presence of an optional key   | ES-34 (+ its type's rule) |
+| Conditional presence of an optional key   | ES-34, ET-9f         |
 | `ts` textual form + role                  | ES-20, ES-21         |
 | `prev_hash` case, length, genesis value   | ES-23, ES-24         |
 | Digest algorithm, coverage, case          | ES-27 (+ hashing.md) |

@@ -159,15 +159,15 @@ Each payload table column: **key** · **type** · **constraint**.
 The mandatory first event (`event-schema.md` ES-33). It anchors the chain and
 declares the operator key that later `issue_created` events are signed with.
 
-| key            | type   | constraint                                                          |
-| -------------- | ------ | ------------------------------------------------------------------- |
-| `chain_id`     | string | `^[0-9a-f]{64}$` — a restatement of `operator_pk`, NOT the chain's identity (ET-7, ET-7a) |
-| `contracts`    | string | the frozen contracts version this chain runs, e.g. `"contracts-v1"` |
-| `operator_pk`  | string | `^[0-9a-f]{64}$` — operator Ed25519 public key (32 bytes, hex)       |
-| `registrar_pk` | string | `^[0-9a-f]{64}$` — registrar Ed25519 public key; MUST differ from `operator_pk` (ET-9d) |
+| key              | type   | constraint                                                          |
+| ---------------- | ------ | ------------------------------------------------------------------- |
+| `chain_id`       | string | `^[0-9a-f]{64}$` — a restatement of `operator_pk`, NOT the chain's identity (ET-7, ET-7a) |
+| `contracts`      | string | the frozen contracts version this chain runs, e.g. `"contracts-v1"` |
+| `operator_pk`    | string | `^[0-9a-f]{64}$` — operator Ed25519 public key (32 bytes, hex)       |
+| `registrar_pk`   | string | `^[0-9a-f]{64}$` — registrar Ed25519 public key; MUST differ from `operator_pk` (ET-9d) |
 | `ancestor_chain` | string | **OPTIONAL** (ES-34) — `^[0-9a-f]{64}$`, never the 64-zero anchor; the **genesis hash** of the chain this one was forked from — that chain's identity, the key that names it (ET-7a, ET-9e) |
-| `ancestor_head` | string | **OPTIONAL** (ES-34) — `^[0-9a-f]{64}$`, never the 64-zero anchor; the **head at the fork** of the chain this one was forked from (EX-14) — a position *on* the chain `ancestor_chain` names. MUST NOT appear without `ancestor_chain` (ET-9e, ET-9f) |
-| `sig`          | string | `^[0-9a-f]{128}$` — Ed25519 signature (ET-4)                         |
+| `ancestor_head`  | string | **OPTIONAL** (ES-34) — `^[0-9a-f]{64}$`, never the 64-zero anchor; the **head at the fork** of the chain this one was forked from (EX-14) — a position *on* the chain `ancestor_chain` names. MUST NOT appear without `ancestor_chain` (ET-9e, ET-9f) |
+| `sig`            | string | `^[0-9a-f]{128}$` — Ed25519 signature (ET-4)                         |
 
 - **ET-6.** `genesis.version` MUST be `1`, `seq` MUST be `1`, and `prev_hash`
   MUST be the 64-zero anchor (`event-schema.md` ES-24, ES-33).
@@ -193,8 +193,9 @@ declares the operator key that later `issue_created` events are signed with.
   The genesis hash covers every content field of the genesis event, including
   `ts`, so two chains an operator starts one millisecond apart have different
   identities even though their `chain_id`, `operator_pk` and `registrar_pk` are
-  identical. A `head` does **not** identify a chain either: it names a position,
-  and a position is a position **on** some chain (EX-14, EX-21) — which is why
+  identical. A `head` does **not** _name_ a chain either: what it commits to is
+  the chain's content, not the chain's identity — it names a position, and a
+  position is a position **on** some chain (EX-14, EX-21) — which is why
   anchoring the head alone cannot deliver charter §4's non-equivocation
   (ADR-0013). The same holds inside a `genesis` payload: an `ancestor_head`
   carried without an `ancestor_chain` would name a position on an unnamed chain
@@ -296,8 +297,11 @@ declares the operator key that later `issue_created` events are signed with.
   lets an operator run two chains and anchor only one. A fork's `genesis` **is**
   an anchoring record for its parent: it publishes a fact about that chain,
   hash-committed, at `seq` 1, where the parent's operator cannot rewrite it. So it
-  carries what §4 requires an anchor to carry — both halves, the identity being
-  the half without which the other names nothing.
+  carries §4's pair — a name and a position. Read what the pairing settles and
+  what it does not: it makes the **identity** the half that may never be omitted,
+  because without it the other names nothing; it does not by itself make the
+  **position** mandatory. That is exactly the asymmetry **ET-9f** fixes — a head
+  without a chain is barred, a chain without a head is not.
 
   A fork's own structure is unchanged by either key: `seq` is still `1` and
   `prev_hash` is still the 64-zero anchor (ET-6, ES-24), exactly as on an original
@@ -589,7 +593,7 @@ Two of the three are verifiable from the export; the third is not, and says so.
 | Genesis key format (operator/registrar pk)     | ET-9b             |
 | Genesis keys MUST be distinct                  | ET-9d             |
 | Genesis key validation timing (at declaration) | ET-9c             |
-| Fork ancestry: a name and a position, claim not link | ET-9e       |
+| Fork ancestry: name + position, claim not link | ET-9e             |
 | `ancestor_head` requires `ancestor_chain`      | ET-9f             |
 | participant self-signing + id derivation       | ET-10, ET-11      |
 | Title length + forbidden characters            | ET-14             |

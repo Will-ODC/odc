@@ -63,8 +63,14 @@ permanent, the number is provisional.
    multi-batch VALID (F2); genesis at version 1000000 (F3); fork ancestry —
    **both keys** well-formed, `ancestor_chain` alone (VALID, pinning the
    deliberate asymmetry), `ancestor_head` alone (INVALID line 1, ET-9f), either
-   key 64-zero, either key malformed, and a well-formed pair naming an
-   unresolvable chain (F4, as amended by ADR-0019); same-key genesis (F6).
+   key 64-zero, either key malformed, a well-formed pair naming an
+   unresolvable chain, and **`ancestor_chain` == `ancestor_head` (VALID)** — the
+   legal case a fork from a parent holding only its `genesis` produces, where the
+   parent's head _is_ its genesis hash (EX-14/EX-21), and the one a naive
+   implementer rejects as a duplicate (F4, as amended by ADR-0019); same-key
+   genesis (F6). **Write `ancestor_head` alone first:** it is the only owed vector
+   that fails against a verifier still implementing the merged ET-9e, so it is the
+   single fixture proving the ADR-0019 change landed.
    F5 gets none by construction — a coverage-report note instead; ET-25 likewise.
 2. **Both verifiers, in separate isolated contexts** — independence is the whole
    point of having two. `--chain <genesis-hash>`, print the computed genesis hash

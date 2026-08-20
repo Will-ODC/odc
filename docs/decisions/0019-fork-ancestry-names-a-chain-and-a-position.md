@@ -114,8 +114,11 @@ by adding a second key while the door is still open. The real bar is the **tag**
 ET-6 pins `genesis.version` at `1` and EV-1 bars altering a frozen
 `(type, version)`, so **nothing may be added to the `genesis` payload after the
 `contracts-v1` tag exists**. No tag exists — `contracts/` is still DRAFTING
-(ADR-0007) — which is why this correction is addable at all, and it is the last
-kind of correction that will be.
+(ADR-0007) — which is why this correction is addable at all, and ADR-0007 keeps
+`contracts/` fixable through RELEASE CANDIDATE and Phase 1, so a correction of
+this kind stays available until the tag is cut. What the tag ends permanently is
+the ability to add anything at all to the `genesis` payload
+(`contracts/event-types.md` ET-9e).
 
 ## Consequences
 
@@ -127,7 +130,16 @@ kind of correction that will be.
   presence is **not independent**, and the general rule that a payload table fixes
   _which_ keys are optional while a type's numbered rules may constrain _when_ one
   may appear — such a rule being a numbered sentence in `event-types.md`, never a
-  table row alone.
+  table row alone. `export-format.md` (v3 → **v4**): **EX-14** now distinguishes
+  the two senses of "identify" it had run together — a head **commits to** the
+  chain's whole content up to that point (EX-14's original, true claim, kept), but
+  it does not **name** the chain, which is the genesis hash's job (EX-21, ET-7a).
+  That conflation predates this PR and is ET-9f's load-bearing premise: read the
+  old EX-14 as "a head names the chain" and `ancestor_head` alone stops looking
+  defective, which is the wall the isolated TypeScript build hit. ET-7a's own
+  sentence is reworded from "does not **identify** a chain" to "does not **name**
+  a chain", so its `(EX-14, EX-21)` citation now points at a rule that says what
+  it is cited for.
 - **No existing bytes move.** Neither key appears in any current vector, so all 83
   vectors' payloads, hashes, verdicts and line numbers are unchanged; confirmed by
   running the fixture suite.
@@ -136,16 +148,25 @@ kind of correction that will be.
   under which `ancestor_chain` sorts first and `ancestor_head` second, ahead of
   `chain_id`; §6's worked example is a genesis carrying neither key. `ES-18` needs
   none — "a key that type's table marks OPTIONAL may be absent without being
-  missing (ES-34)" already delegates correctly. `evolution.md`,
-  `export-format.md`, `ids.md`, `read-api.md` and `contracts/README.md` never
-  mention either key.
+  missing (ES-34)" already delegates correctly. `evolution.md`, `ids.md`,
+  `read-api.md` and `contracts/README.md` never mention either key. Nor does
+  `export-format.md` — its EX-14 edit above is about the **head**, not the keys.
 - **Owed fixtures (EV-5), not written in this pass** — these **supersede**
   ADR-0016's F4 list: both keys well-formed (`VALID`, and the first seven-key
   genesis payload); `ancestor_chain` alone (`VALID` — the vector that pins the
   deliberate asymmetry); `ancestor_head` alone (`INVALID` line 1, ET-9f); either
   key = the 64-zero anchor (`INVALID` line 1); either key malformed (`INVALID`
   line 1); a well-formed pair naming a chain absent from the fixture set
-  (`VALID` — unresolvability is not a defect).
+  (`VALID` — unresolvability is not a defect); and **`ancestor_chain` equal to
+  `ancestor_head`** (`VALID`) — the legal case a fork from a parent holding only
+  its `genesis` produces, where the parent's head **is** its genesis hash
+  (EX-14/EX-21). Nothing bars it and nothing should; it is listed because it is
+  the vector a naive implementer rejects as a duplicated value.
+- **`ancestor_head` alone goes first in the phase-2 fixture queue.** It is the
+  only owed vector that fails against a verifier still implementing the merged
+  ET-9e — every other one passes a head-only reading just as well — so it is the
+  single fixture that proves this change landed rather than merely being written
+  down.
 - **Owed verifier work (both verifiers, isolated passes):** accept both optional
   keys, check each format, enforce ET-9f, resolve nothing.
 
@@ -183,6 +204,22 @@ made three times, and each instance is a shape worth recognising again.
   deliberately left untouched.** An ADR is a record of what was decided and why;
   erasing the head-alone decision would erase the reasoning a future reader needs
   before they consider trimming `ancestor_chain` back out.
+- **`docs/decisions/0013-chain-identity-is-the-genesis-hash.md`** — **status line
+  amended in this PR**, the same one-line treatment ADR-0016 got, and for the same
+  reason: its body states that a `genesis_nonce` "would spend the one genesis
+  change this project gets, which ADR-0016 spends on `ancestor_head` instead". That
+  is the count this ADR replaces with the bar on the tag. **The body is
+  deliberately left untouched** — the reasoning for rejecting the nonce is
+  unaffected and still worth reading.
+- **`contracts/CONTRACTS-CHANGE.md`** — **edited in this PR** (this change's own
+  entry, plus the `export-format.md` v4 bump it now covers). Two earlier entries
+  state the superseded position and are deliberately **not** edited in place: the
+  **F4** subsection's owed-fixture list, which this PR's entry explicitly
+  supersedes, and the **F1** subsection's "the one genesis change available before
+  the freeze is spent on `ancestor_head` (ADR-0016)", which is the same count
+  ADR-0013's body carries. The changelog is chronological and append-per-PR — an
+  entry records what was true when it was written, and rewriting one would make the
+  log lie about its own history. This section is the pointer that reaches both.
 - **`memory/OPEN-QUESTIONS.md`** — **updated in this PR.** Three places stated the
   single-key outcome: Q-D's answer, the F4 decision row, and the phase-2 fixture
   list. All three now state two keys, ET-9f, and the restated permanent claim

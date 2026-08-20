@@ -79,25 +79,47 @@ verifier build, which had to decide what the value meant in order to implement i
   `genesis.version` at `1` and EV-1 bars altering a frozen `(type, version)`, so
   **nothing may be added to `genesis` after the tag**. No tag exists —
   `contracts/` is still DRAFTING (ADR-0007) — which is why this correction is
-  addable at all, and it is the last kind of correction that will be.
+  addable at all, and ADR-0007 keeps `contracts/` fixable through RELEASE
+  CANDIDATE and Phase 1, so corrections stay available until the tag is cut.
+  What the tag ends permanently is additions to the `genesis` payload.
+- **`EX-14` clarified** (`export-format.md` v3 → v4). EX-14 said "the head
+  identifies the whole chain", while ET-7a says a head "does **not** identify a
+  chain" and cites EX-14 in support — two senses of *identify* run together in one
+  word. EX-14 now separates them: a head **commits to** the chain's entire content
+  up to that point (EX-14's original claim, true in its own sense and kept), and it
+  does **not name** the chain, which is the genesis hash's job (EX-21, ET-7a).
+  ET-7a's own sentence is reworded from "does not identify" to "does not *name*",
+  so its `(EX-14, EX-21)` citation now points at a rule that says what it is cited
+  for. The conflation predates this change and is **ET-9f's load-bearing premise**:
+  under "a head identifies the whole chain", `ancestor_head` alone is not obviously
+  defective — which is the wall the isolated TypeScript verifier build hit.
 - **No existing bytes move.** Neither key appears in any current vector, so every
   vector's payload, `hash`, verdict and line number is unchanged; confirmed by
-  running the fixture suite. No hashing rule changes: HA-7 already encodes exactly
-  the keys present and leads with the key count `U64(k)`, and HA-8 orders them by
-  UTF-8 bytes, under which `ancestor_chain` sorts first and `ancestor_head`
-  second, ahead of `chain_id`. `hashing.md`, `evolution.md`, `export-format.md`,
-  `ids.md`, `read-api.md` and `contracts/README.md` need no change; ES-18 already
-  delegates optionality to ES-34 and needs none either.
+  running the fixture suite. The EX-14 edit above is prose and constrains no byte.
+  No hashing rule changes: HA-7 already encodes exactly the keys present and leads
+  with the key count `U64(k)`, and HA-8 orders them by UTF-8 bytes, under which
+  `ancestor_chain` sorts first and `ancestor_head` second, ahead of `chain_id`.
+  `hashing.md`, `evolution.md`, `ids.md`, `read-api.md` and `contracts/README.md`
+  need no change; ES-18 already delegates optionality to ES-34 and needs none
+  either.
 - **Owed fixtures (EV-5), not written in this pass** — these supersede ADR-0016's
   owed list for F4: a `genesis` with **both** keys well-formed (`VALID` — the
   first seven-key genesis payload, exercising HA-7's count and HA-8's ordering);
   `ancestor_chain` **alone** (`VALID` — the vector that pins the deliberate
   asymmetry against a future both-or-neither "tidy"); `ancestor_head` **alone**
   (`INVALID` line 1, ET-9f); either key = the 64-zero anchor (`INVALID` line 1);
-  either key malformed — uppercase hex or wrong length (`INVALID` line 1); and a
+  either key malformed — uppercase hex or wrong length (`INVALID` line 1); a
   well-formed pair naming a chain **absent from the fixture set** (`VALID` —
   pinning that unresolvability is not a defect, the vector that stops a future
-  verifier trying to resolve it).
+  verifier trying to resolve it); and **`ancestor_chain` equal to `ancestor_head`**
+  (`VALID`) — the legal case a fork from a parent holding **only its `genesis`**
+  produces, where that parent's head **is** its genesis hash (EX-14/EX-21). Nothing
+  bars it and nothing should; it is listed because it is the vector a naive
+  implementer rejects as a duplicated value.
+- **`ancestor_head` alone goes first in the phase-2 fixture queue.** It is the only
+  owed vector that fails against a verifier still implementing the merged ET-9e —
+  every other one passes a head-only reading just as well — so it is the single
+  fixture that proves this change landed.
 - **Owed verifier work (both verifiers, isolated passes):** accept both optional
   keys, check each one's format, enforce ET-9f's presence rule, resolve nothing.
 
