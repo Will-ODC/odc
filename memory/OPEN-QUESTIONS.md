@@ -223,7 +223,6 @@ entry, where part A was likewise explicitly marked operator-ratified).
   the audit, given both positions unattributed and told a conclusion contradicting
   both would be a good outcome. It contradicted both. Findings, with the sources
   it cited:
-
   - **Key-derived log identity is conventional — under an invariant we lack.**
     CT v1 (RFC 6962) defines LogID as SHA-256 of the log's SubjectPublicKeyInfo,
     exactly our construction. But CT v2 (RFC 9162) states a log **MUST NOT** use
@@ -474,8 +473,36 @@ choice}` at eligibility-check time — trust-by-policy per charter §10 v1,
   framed: ballots stay one-choice forever and intensity lives in the sentiment
   stream; or richer ballots capped by a k-anonymity rule relating the number of
   distinct legal ballots to expected turnout; or defer until real turnout data
-  exists. Default until someone argues otherwise: **stay one-choice**, the only
-  option needing no assumptions about electorate size.
+  exists.
+  **OPERATOR INTENT STATED 2026-08-19 — the old default is withdrawn.** This
+  entry previously read "default until someone argues otherwise: stay
+  one-choice". Someone argued otherwise: the operator's stated intention is to
+  introduce a **wide variety of voting options**, and the ceiling question is
+  **deliberately kept open, to be decided later** rather than settled by
+  inaction. So option 1 (one-choice forever) is no longer the resting position,
+  and a session MUST NOT read silence here as a decision for it. What is decided
+  is only the direction of travel; nothing about v1 changes — a v1 ballot is
+  still one choice from a small bounded set (charter §5, ET-14a), because the
+  richer ballots are a later additive change and no contract text is being
+  loosened now.
+  **The unresolved substance is unchanged, and it is arithmetic, not permission.**
+  ET-22 does **not** bar ranked-choice or approval: it bars an _unbounded_
+  voter-chosen value, and 10 options ranked (3.6M orderings) is bounded. What
+  such a ballot fails is the stricter k-anonymity criterion above — with 3.6M
+  legal ballots and a few hundred voters, essentially every ballot is unique, and
+  a unique ballot is a demandable receipt. Note the counter-intuitive ordering
+  recorded earlier in this entry: **ranked-choice is the worse covert channel,
+  not the better one.** So the live question is whether to adopt a rule capping
+  the number of distinct legal ballots relative to expected turnout.
+  **Open timing question, worth settling inside the ADR rather than assuming
+  either way.** A new MUST added after the freeze can retroactively invalidate
+  previously conforming chains (EV-1/EV-4) — the argument that promoted F4/F6 to
+  blocking. It is **not established** that it bites here: richer ballots need a
+  new `vote_cast` `(type, version)` anyway, which is additive, so the cap could
+  ride with that version at the time it is registered. Whether the constraint
+  must be a permanent evolution rule stated up front (like ET-22) or can be
+  attached per-version later is itself part of what the ADR must decide. Do not
+  treat this entry as evidence for either answer.
 - **`hashing.md` HA-9's example does not demonstrate what HA-9 claims. Pre-tag
   fix.** (Recovered 2026-08-02 from the same branch; **verified empirically**.)
   HA-9 says the 1-octet type tag is load-bearing "because the integer value `1`
