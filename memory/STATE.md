@@ -383,9 +383,22 @@ and hits this class immediately.
 verifiers, and assert **only** that neither throws and each returns exactly one of
 the three verdicts. Do **not** assert which verdict — fixtures remain the sole
 oracle for that, and inventing expectations here would be inventing conformance.
-Commit as a test. The note also claimed six more sites of the same shape were
-found and deferred around `verify.ts:93-102`; locating them is part of the job.
-A day's work, not a research project.
+Commit as a test. A day's work, not a research project.
+
+**HALF DONE 2026-08-22** (branch `claude/future-focused-session-p0cjqd`, unmerged).
+`tools/verifier-ts/test/extreme-values.test.ts` does the above for the **TS
+verifier only**; the **Go verifier is still owed** and is not a port. Full detail,
+including the two Go-specific hazards (one ruled out by inspection, one open), is
+in `OPEN-QUESTIONS.md` under the unbounded-value entry. The fuzzer found **no new
+defects** — it is a regression guard, not a discovery.
+
+**The "six more sites near `verify.ts:93-102`" this entry used to claim were
+deferred DO NOT EXIST — do not re-search for them.** A repo-wide grep for
+spread-into-call across all non-vendored TypeScript returns only the two
+already-fixed sites (`parse.ts:200`, chunked; `verify.ts:360`, folded) and their
+comments. `verify.ts:281`'s `[...faultLines]` spreads into an **array literal**,
+which uses the iteration protocol and has no argument limit — safe at any length,
+and the likeliest source of the miscount.
 
 **Coverage is thinner than 83 vectors suggests, and the real number is worse than
 "~130" said.** Counted exactly during T9: **143 rule ids, 70 cited by at least one

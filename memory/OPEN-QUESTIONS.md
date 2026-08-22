@@ -652,6 +652,50 @@ choice}` at eligibility-check time — trust-by-policy per charter §10 v1,
   owed** (tracked in "Owed before the T9 gate can reopen" above: genesis at
   version 1000000).
 
+- **The unbounded-value defect class — HALF DISCHARGED 2026-08-22, and one
+  claim about it in `STATE.md` is FALSE.** (Branch
+  `claude/future-focused-session-p0cjqd`, unmerged at the time of writing.)
+  **The false claim first, because it costs a day:** `STATE.md`'s "owed with no
+  ticket" entry says six more sites of the `f(...array)` shape "were found and
+  deferred around `verify.ts:93-102`" and that locating them is part of the job.
+  **They do not exist.** A repo-wide grep for spread-into-call across all
+  non-vendored TypeScript returns only the two already-fixed sites —
+  `parse.ts:200` (chunked at 8192) and `verify.ts:360` (folded instead of
+  `Math.min`) — plus their own explanatory comments. The one other construct that
+  matches on sight, `verify.ts:281`'s `[...faultLines]`, is an array spread into
+  an **array literal**, which uses the iteration protocol and has **no** argument
+  limit; it is safe at any length and is the likeliest source of the "six".
+  Retire the note; do not re-search for them.
+  **What landed:** `tools/verifier-ts/test/extreme-values.test.ts` — the
+  value-level fuzzer the entry asks for. Structurally valid exports carrying
+  extreme values (huge strings where byte length, code point count and UTF-16
+  length all diverge; integers straddling 2^53; extreme line counts of both
+  well-formed and faulting lines; deep nesting; many-key payloads), asserting
+  **only** no-throw plus exactly one well-formed verdict of the three (EV-17).
+  No verdict value is asserted — `contracts/fixtures/` stays the sole oracle, per
+  the entry's own instruction. Deterministic (fixed-seed LCG), so a failure
+  reproduces from the printed case index. It found **no new defects**: it is a
+  guard against regression, not a discovery, and should not be reported as
+  having hardened anything that was not already correct.
+  **What is still owed: the Go verifier.** The entry says "run **both**
+  verifiers" and only one was done. This is **not a port** — Go has no
+  argument-spread limit, so the defect this fuzzer pins cannot occur there, and
+  the corpus must be driven through the CLI over generated files rather than
+  called in-process.
+  **Two Go-specific hazards, one ruled out by inspection and one still open.**
+  The obvious suspect is `bufio.Scanner`, which silently stops at 64 KiB per
+  token unless `Buffer` is called — a **truncation** hazard rather than a crash,
+  i.e. the same wrong-verdict shape in a different language. **It does not
+  apply:** `main.go:74` reads the whole export with `os.ReadFile` and there is no
+  `bufio` import anywhere under `services/verifier/`. Checked 2026-08-22; recheck
+  only if the reader is ever changed to stream. What remains genuinely untested is
+  **stack growth on deep nesting** — Go grows goroutine stacks dynamically up to
+  `runtime/debug.SetMaxStack` (1 GB default on 64-bit) and then **fatal-errors
+  rather than panicking**, so a recursive-descent payload parser cannot recover
+  it with `recover()`: it exits the process with no verdict, violating EV-17
+  exactly as the JS `RangeError` did. The `deep-nesting` cases in the TS fuzzer
+  are the ones to port first.
+
 - **Should HA-2's reject-don't-repair be pinned by a fixture, not only a unit
   test?** (Raised by the T5a review, 2026-07-26.) HA-2's closing MUST — reject a
   string whose decoded value is not well-formed UTF-8 — is now covered by a unit
