@@ -5,9 +5,10 @@
 > its own entry in `memory/pulse.md`. Start at `memory/INDEX.md`.
 >
 > Update last, keep short. History belongs in git and ADRs, not here — per-ticket
-> detail is in the cited squash commits, normative decisions in
-> `docs/decisions/`, and recurring review-defect shapes in session memory
-> (`odc-review-lessons`).
+> detail is in the cited squash commits and normative decisions in
+> `docs/decisions/`. (Recurring review-defect shapes were kept in a session-memory
+> note, `odc-review-lessons`, which is **not in this repo** — do not go looking for
+> a file. The shapes that still matter are in Blockers below.)
 
 ## Where to jump
 
@@ -555,7 +556,7 @@ in `memory/pulse.md`.
   the sole clean one — and it was the most-isolated build, reviewed hardest.**
   Read that as: independence + a fresh hard-hammering review is what a clean pass
   costs, not that reviews can now be trusted to pass. Treat a clean review as the
-  surprise it still is. (Defect shapes: session memory `odc-review-lessons`;
+  surprise it still is. (Defect shapes: see the header note;
   PR/merge handoff: `pr-handoff`.)
 - **Merging deletes the head branch** (auto-delete ON), so a later push to that
   name silently creates a NEW branch with no PR — watch for `[new branch]` in the

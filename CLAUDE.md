@@ -82,9 +82,6 @@ full decision table, how to write a subagent brief, how to run parallel agents
 in one working tree, and when not to spawn at all. Read it before delegating.
 When in doubt between Opus and Sonnet, route Opus.
 
-This supersedes nothing in the standing default of 2026-07-25 — it states it more
-precisely. Planning and contracts drafting still never go to a non-Opus model.
-
 Default flow per unit of work: Opus plans → Opus implements on a small branch →
 fresh-context review per `.claude/skills/odc-code-review` → merge on green CI.
 

@@ -18,6 +18,11 @@ Do not apply charter rules to `apps/**`, and do not relax them anywhere else.
 
 ## Where things stand right now (one line each — detail behind the link)
 
+> These two lines duplicate the status sections they link to, which is the one
+> place this file repeats itself. **If a line here disagrees with the workstream
+> entry, the entry wins — and fix the line.** You read this file first and it is
+> smaller, so on a divergence you would otherwise trust the wrong one.
+
 - **ODC core:** Phase 0, ticket T9. The security-audit gate is **closed**; the
   fixture/verifier conformance work runs in four phases. **Phase 1 done. Phase 2
   in flight: its contracts half (ADR-0019) has landed, both verifiers and the
@@ -42,7 +47,7 @@ reference, not a briefing; open the entry you need.
 | Why the project exists; what it may never do    | `docs/charter.md`                                      |
 | Which service does what, and in which phase     | `docs/implementation-plan.md`                          |
 | The current Phase 0 ticket text and acceptance  | `docs/plans/phase-0.md` (your ticket only)             |
-| A settled decision and its reasoning            | `docs/decisions/` — ADR-0001…0018                      |
+| A settled decision and its reasoning            | `docs/decisions/` — one ADR per decision; `ls` it      |
 | An **un**settled design question                | `memory/OPEN-QUESTIONS.md` (its index, then one entry) |
 | Event schema, hashing, export, IDs, fixtures    | `contracts/` + `.claude/skills/odc-contracts`          |
 | Adding an endpoint or consuming another service | `.claude/skills/odc-service-boundaries`                |
