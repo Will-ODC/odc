@@ -234,7 +234,7 @@ it deadlocks; the cost of assuming is a needless mega-PR.
   phase-1 review then built both CLIs and ran **25 differential cases** across the
   floor boundary: identical verdict **and** line every time.
 
-**Phase 2 — IN FLIGHT, and it grew.** F3 (unregistered `genesis` → INVALID line 1)
+**Phase 2 — IN FLIGHT. Its contracts half is LANDED; verifiers and fixtures are owed.** F3 (unregistered `genesis` → INVALID line 1)
 
 - F6 (distinct genesis keys) + F4 (fork ancestry) vectors, the matching verifier
   checks, and **inverting `conformance.test.ts:189`** — which must happen _with_ the
@@ -244,7 +244,8 @@ it deadlocks; the cost of assuming is a needless mega-PR.
   PARTIAL vector freeze a verdict EV-20 forbids.
 
 **Phase 2 found two contradictions in merged normative text and stopped to fix
-them (ADR-0019, PR #112).** Neither had any verdict impact, which is exactly why
+them — LANDED 2026-08-20 as ADR-0019 (#112, `decc152`); `event-types.md` is at
+**v9**, `event-schema.md` **v4**, `export-format.md` **v4**.** Neither had any verdict impact, which is exactly why
 both survived review and would have frozen wrong.
 
 - **`ancestor_head` was specified two ways.** ET-9e made it carry a **head**;
@@ -292,6 +293,18 @@ the rest. Two that must not be lost:
   vector; this closes it. **Compute its two hash values from `002-four-types`'s
   built chain in the generator — never hard-code them**, or they rot silently at
   the next regeneration and the vector asserts nothing.
+
+**What phase 2 still owes, in order.**
+
+1. **Both verifiers, rebuilt in fresh isolated passes** — `ancestor_chain` plus
+   `ancestor_head`, format-check each, enforce ET-9f, resolve nothing. **PRs #109
+   and #110 are open and MUST NOT be merged as they stand.** They predate
+   ADR-0019 and know one optional key. **The trap: they would go GREEN, not
+   red** — no committed vector carries either key, so CI cannot see that they are
+   behind the spec. Merging them buys a silent regression. Their four review
+   findings are in Blockers below and must ride into the rework.
+2. **The eleven vectors**, `ancestor_head`-without-`ancestor_chain` first.
+3. **Fresh-context review of each**, then the phase-2 STATE.md entry.
 
 **Phase 3.** F2 batching vectors — ET-23 quantization, ET-24 batch size, and the
 below-floor vectors that finally discriminate the ET-14b floors. **Reshaping
