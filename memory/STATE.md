@@ -204,6 +204,36 @@ numbers for all eight tamper cases. No contract, fixture, or golden hash changed
 Required repository CI now runs the Go fixture suite and the complete rehearsal.
 Contracts remain **DRAFTING**; T9 is the next gate.
 
+**Memory and agent infrastructure (#117, 2026-08-22).** Not a contracts ticket,
+recorded here because it changed how every session starts.
+
+- `memory/INDEX.md` is the entry point now — a ~6 KB router that holds nothing
+  normative. `CLAUDE.md` points at it. Read it before this file.
+- `memory/pulse.md` exists: the charter-exempt workstream had run **nineteen PRs
+  (#79–#97) with no memory entry at all**, which this file admitted in its own
+  blockers and never fixed.
+- **The `memory-index` CI check enforces it** and is required on master. A
+  top-level directory holding committed work, with no row in `INDEX.md`, fails
+  the build. It checks only that the directory is _named_ — whether the entry is
+  any good is review's job. What it removes is the **silent** omission.
+- **It shipped with a defect worth remembering, fixed in #121.** The directory
+  list was hardcoded (`apps contracts services tools docs`), which cannot catch
+  the failure the guard is named after: a hardcoded list only catches a directory
+  someone already thought to list, and the case that needs catching is a
+  workstream nobody was thinking about. A new `packages/` sailed past it. It also
+  made "would have fired on `apps/` at PR #79" true only because `apps` is in
+  today's list — a guard written before `apps/` existed would have missed `apps/`.
+  #121 discovers the list with `git ls-tree` instead, so untracked and gitignored
+  directories drop out for free and a new directory is caught the moment it is
+  committed. **The general shape: a guard whose scope is a list someone maintains
+  is blind exactly where you need it.**
+- `OPEN-QUESTIONS.md` split: settled entries moved to
+  `OPEN-QUESTIONS-archive.md`, live file 63 KB → 31 KB. Nothing was cut.
+- `.claude/skills/odc-orchestration` holds the model-routing rule; seven other
+  skills were corrected where they contradicted the code they govern — most
+  seriously `odc-code-review`, whose charter red flags were unconditional and
+  would have made a reviewer block pulse's deliberately mutable votes.
+
 ## Direction decisions — see the ADRs; carry-forward consequences below
 
 - **ADR-0007** — freeze deferred to operational use; three states DRAFTING →
@@ -563,9 +593,11 @@ in `memory/pulse.md`.
   on `claude/t9-audit`, `claude/t9-decisions`, `claude/t9-adrs-contracts` (PRs
   closed, content fully on master). Kept deliberately for that reason; deleting
   them is lossy, not free.
-- **Branch protection ON** (`protect-master`): PR required, four strict checks
-  (`format / lint / typecheck`, `diff-size`, `guard-tests`, `guard`), linear
-  history, no bypass. **STATE.md updates ride their own follow-up PR** — feature
+- **Branch protection ON** — it is a **Ruleset** (`protect-master`), not a classic
+  branch rule; edit it under Settings → Rules → Rulesets. PR required, **five**
+  strict checks (`format / lint / typecheck`, `diff-size`, `guard-tests`,
+  `memory-index`, `guard`), linear history, no bypass. `memory-index` was added
+  2026-08-22 with the memory index it enforces. **STATE.md updates ride their own follow-up PR** — feature
   branches conflict, so update this file after the ticket merges.
 - **Fifteen of the first sixteen reviewed slices had a real defect; T7 (#69) is
   the sole clean one — and it was the most-isolated build, reviewed hardest.**
