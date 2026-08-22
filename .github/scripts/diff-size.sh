@@ -34,6 +34,24 @@
 # exemption is dir-scoped: it covers ONLY the two isolated verifier trees. Every
 # other service, and the tools/ generators, stay fully counted.
 #
+# apps/pulse/** and apps/pulse-web/** are exempt (added 2026-08-22, operator
+# decision). Pulse is the charter-exempt product epic: it ships no consensus
+# machinery, so a pulse branch is ordinary product code whose size is governed by
+# review, not by the ceiling this guard exists to enforce on the charter-governed
+# services. This is the SECOND time the ceiling bent for pulse — it was raised
+# 600 → 1000 for exactly this reason (see below) and pulse hit it again, which is
+# the evidence that a line-budget is the wrong instrument here rather than the
+# wrong number. The forcing case: deleting an unused 280-line module pushed a
+# 900-line branch over the ceiling, so the guard demanded a split to make the
+# codebase SMALLER. A rule that penalises removing code is not protecting review
+# quality. The WARN at 400 still fires for pulse and is the honest signal; only
+# the hard failure is lifted.
+#
+# The exemption is deliberately dir-scoped to the two pulse packages. Everything
+# under services/ and contracts/ stays fully counted: those changes carry
+# consensus and privacy consequences that a large diff genuinely does hide, which
+# is the whole reason this guard exists.
+#
 # Run locally:  BASE=origin/master HEAD=HEAD bash .github/scripts/diff-size.sh
 set -euo pipefail
 
@@ -67,9 +85,11 @@ done < <(git diff --numstat "$BASE...$HEAD" -- . \
   ':(exclude,glob)docs/mockups/**' \
   ':(exclude,glob)services/verifier/**' \
   ':(exclude,glob)tools/verifier-ts/**' \
+  ':(exclude,glob)apps/pulse/**' \
+  ':(exclude,glob)apps/pulse-web/**' \
   ':(exclude,glob)**/*.md')
 
-echo "Changed lines (excluding lockfiles/generated/markdown/mockups): $total"
+echo "Changed lines (excluding lockfiles/generated/markdown/mockups/verifiers/pulse): $total"
 
 if ((total > FAIL)); then
   echo "::error::Diff is $total changed lines (> $FAIL). Split or stack this branch (odc-pipeline)."
