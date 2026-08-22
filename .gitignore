@@ -8,3 +8,4 @@ dist/
 coverage/
 services/verifier/verifier
 .claude/worktrees/
+/wt-*/
