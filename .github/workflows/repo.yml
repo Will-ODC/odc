@@ -66,6 +66,16 @@ jobs:
           HEAD: ${{ github.event.pull_request.head.sha }}
         run: bash .github/scripts/diff-size.sh
 
+  memory-index:
+    name: memory-index
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+      # Fails when a top-level workstream directory has no row in
+      # memory/INDEX.md. apps/pulse ran nineteen PRs unrecorded; this is the
+      # enforcement point that makes the omission loud instead of silent.
+      - run: bash .github/scripts/memory-index.sh
+
   guard-tests:
     name: guard-tests
     runs-on: ubuntu-latest

@@ -10,6 +10,12 @@ that rule survives contact with real tooling. Agents default to ORM
 auto-migrations with full DDL/DML rights — which silently violates the rule
 while all tests pass. Never do that.
 
+## Out of scope: `apps/**`
+
+Pulse is charter-exempt and has no event tables: its votes are a plain, mutable
+record by design (`apps/pulse/CLAUDE.md`). **Nothing in this skill applies there**, and
+nothing here is a reason to "fix" it.
+
 ## Two-role pattern (every service with a DB)
 
 - **Migration role**: owns DDL, runs migrations, then is not used at runtime.

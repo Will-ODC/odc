@@ -4,6 +4,13 @@
 
 Goal: independent services, buildable in parallel, communicating only through public APIs. MVP is the smallest thing that demonstrates the core loop: **register → create issue → vote → tally → export → verify**.
 
+**Scope.** This plan covers the charter-governed core only: `contracts/`,
+`services/`, and the `tools/` that support them. `apps/pulse` and
+`apps/pulse-web` are a separate, deliberately **charter-exempt** product
+workstream and appear nowhere below — see `memory/pulse.md` and
+`apps/pulse/CLAUDE.md`. Nothing in `apps/**` may read or write into `services/**`
+or `contracts/**`.
+
 ## Rules for every service
 
 1. Owns its own storage. No shared databases, ever.

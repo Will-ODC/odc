@@ -5,8 +5,13 @@ record of deliberation, votes, and action. Not an app — apps are clients of it
 
 - **Why / what:** `docs/charter.md`
 - **How / when:** `docs/implementation-plan.md`
-- **Where we are:** `memory/STATE.md`
+- **Where we are:** `memory/INDEX.md` — start here; it routes to
+  `memory/STATE.md` (core) or `memory/pulse.md` (pulse)
 - **Working with agents:** `CLAUDE.md`
+
+Two workstreams live here: the charter-governed core (`contracts/`, `services/`)
+and **pulse** (`apps/pulse`, `apps/pulse-web`), a community-vote product that is
+deliberately exempt from the charter.
 
 ## Quickstart
 

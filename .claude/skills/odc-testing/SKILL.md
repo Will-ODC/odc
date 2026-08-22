@@ -1,11 +1,16 @@
 ---
 name: odc-testing
-description: Testing requirements for all ODC services. Use this skill whenever writing, modifying, or reviewing any code in the ODC monorepo — new endpoints, event handling, tally logic, bug fixes, or refactors — even if the user doesn't mention tests. No change merges without the tests this skill requires.
+description: Testing requirements for all ODC code — services/, tools/, and apps/ alike. Use this skill whenever writing, modifying, or reviewing any code in the ODC monorepo — new endpoints, event handling, tally logic, bug fixes, or refactors — even if the user doesn't mention tests. No change merges without the tests this skill requires.
 ---
 
 # ODC Testing Requirements
 
-## The pyramid, per service
+Applies to everything in the repo, `apps/pulse` and `apps/pulse-web`
+included — the charter exemption covers what pulse must guarantee, never how we
+work. The "ODC-specific required tests" below are charter-side and apply to
+`services/` only; the pyramid and the rules apply everywhere.
+
+## The pyramid, per service or app
 
 1. **Unit tests** — every pure function: hashing, signature checks, tally math,
    consent-set logic. No network, no DB. Fast enough to run on every save.

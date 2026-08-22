@@ -1,9 +1,24 @@
-# ODC Build State
+# ODC Core Build State
 
-> Single source of session-to-session truth. Read first, update last, keep short.
-> History belongs in git and ADRs, not here — per-ticket detail is in the cited
-> squash commits, normative decisions in `docs/decisions/`, and recurring
-> review-defect shapes in session memory (`odc-review-lessons`).
+> Session-to-session truth for the **charter-governed core** — `contracts/`,
+> `services/`, `tools/`. It does **not** cover `apps/pulse`; that workstream has
+> its own entry in `memory/pulse.md`. Start at `memory/INDEX.md`.
+>
+> Update last, keep short. History belongs in git and ADRs, not here — per-ticket
+> detail is in the cited squash commits and normative decisions in
+> `docs/decisions/`. (Recurring review-defect shapes were kept in a session-memory
+> note, `odc-review-lessons`, which is **not in this repo** — do not go looking for
+> a file. The shapes that still matter are in Blockers below.)
+
+## Where to jump
+
+| You need                                          | Section                                                                                    |
+| ------------------------------------------------- | ------------------------------------------------------------------------------------------ |
+| What phase we are in and whether the gate is open | [Current phase](#current-phase)                                                            |
+| Whether ticket T*n* landed, and in which PR       | [Done](#done-ledger--detail-is-in-the-cited-squash-commit)                                 |
+| Standing consequences of past decisions           | [Direction decisions](#direction-decisions--see-the-adrs-carry-forward-consequences-below) |
+| What happens next, and what is owed               | [Next](#next)                                                                              |
+| Traps, in-flight work, and things that bite       | [Blockers & live cautions](#blockers--live-cautions)                                       |
 
 ## Current phase
 
@@ -21,6 +36,21 @@ until real operational use; `contracts/` remains **DRAFTING**.
 **Conformance work is 1 of 4 phases done** (#104, #105). Phase 2 is next; the
 phase list, and why fixtures and verifiers must land together in each one, are
 under Next.
+
+### Owed right now — must ride into the next PR that touches each
+
+Hoisted here because the full entries live at the end of a 37 KB file, past
+where anyone reliably reads. Each line links to its entry; **do not act from
+this list alone.**
+
+1. **Rebuild #109/#110, do not merge them** — they predate ADR-0019 and would go
+   **green while behind the spec**, because no committed vector carries either
+   optional key. → § Next, "What phase 2 still owes"
+2. **Four review findings must ride into that rebuild or they are lost** — the
+   `conformanceVerdict` regex with no `m` flag (a second output line makes the
+   shared judge _throw_), a swap test that never swapped, self-consistent
+   synthetic chains that cannot detect a preimage bug, and no assertion that a
+   _legal_ optional key is accepted. → § Blockers, first entry
 
 ## Done (ledger — detail is in the cited squash commit)
 
@@ -389,7 +419,7 @@ Commit as a test. A day's work, not a research project.
 `tools/verifier-ts/test/extreme-values.test.ts` does the above for the **TS
 verifier only**; the **Go verifier is still owed** and is not a port. Full detail,
 including the two Go-specific hazards (one ruled out by inspection, one open), is
-in `OPEN-QUESTIONS.md` under the unbounded-value entry. The fuzzer found **no new
+in `memory/OPEN-QUESTIONS-archive.md` under the unbounded-value entry. The fuzzer found **no new
 defects** — it is a regression guard, not a discovery.
 
 **The "six more sites near `verify.ts:93-102`" this entry used to claim were
@@ -421,7 +451,7 @@ before freeze.
 
 **Owed by the operator, not a session:** the ballot-expressiveness ceiling ADR
 part B (part A landed) and the other queued direction ADRs. **Read the ET-22
-warning in `OPEN-QUESTIONS.md` before writing the first.**
+warning in `memory/OPEN-QUESTIONS-archive.md` before writing the first.**
 
 **Part B's old default is withdrawn (operator, 2026-08-19).** It used to read
 "ballots stay one-choice until argued otherwise". The operator's stated intention
@@ -430,10 +460,11 @@ open to decide later** — so silence is no longer a vote for one-choice, and no
 session should treat it as one. **v1 is unaffected**: a ballot is still one
 choice from a small bounded set (charter §5, ET-14a), and no contract text is
 loosened by this. The substance still to decide, and an unresolved question about
-whether it must be settled before the freeze, are in `OPEN-QUESTIONS.md` under
+whether it must be settled before the freeze, are in `memory/OPEN-QUESTIONS-archive.md` under
 the ballot-expressiveness entry.
 
-**Four unlanded branches deliberately KEPT** (`contracts/` untouched by all):
+**Four unlanded branches deliberately KEPT** (`contracts/` untouched by all).
+All four **verified present on the remote, 2026-08-22**:
 
 | branch                                        | for                                                                         |
 | --------------------------------------------- | --------------------------------------------------------------------------- |
@@ -441,6 +472,14 @@ the ballot-expressiveness entry.
 | `claude/review-memory-context-skills-383f6i`  | `odc-keys-and-signatures` skill + `odc-code-review` rewrite, still unlanded |
 | `claude/skills-agents-memory-mr-29f4dt`       | forbids agent-performed merges; may be a live session                       |
 | `claude/golden-fixtures-voting-verify-7urqku` | fully mined 2026-08-02 — **deletable**                                      |
+
+Also still on the remote and **not** in that list: the three squashed T9 branches
+below (`claude/t9-audit`, `claude/t9-decisions`, `claude/t9-adrs-contracts`),
+`claude/t9-fixtures-phase1`, the two phase-2 verifier branches whose PRs are
+still open and ON HOLD (`claude/t9-phase2-verifier-go` #109,
+`claude/t9-phase2-verifier-ts` #110 — see Blockers), and
+`pulse/4b-sign-in-routes` — an unlanded pulse branch with no open PR, recorded
+in `memory/pulse.md`.
 
 ## Blockers & live cautions
 
@@ -512,12 +551,13 @@ the ballot-expressiveness entry.
   rule. Verdict unaffected, prose false. Fixture notes are immutable at the tag
   (ADR-0008), so **fix before the tag or it is permanent** — cheapest to do inside
   the regeneration pass, which rewrites `index.json` anyway.
-- **`apps/pulse/` and `apps/pulse-web/` are an active workstream this file has
-  never mentioned** (#88–#97: demo client, array ballots, changeable votes, swipe
-  mockups; the diff-size ceiling was raised 600→1000 in #93 for it). They live in
-  `apps/`, not `services/`, so they do not violate the "nothing in services/ until
-  T9" rule — but a reader trusting this file as the single source of
-  session-to-session truth would not know they exist.
+- **`apps/pulse/` and `apps/pulse-web/` are a separate, active, charter-EXEMPT
+  workstream** — nineteen PRs, **#79–#97**, that this file went the whole way
+  without mentioning. It now has its own memory entry: **`memory/pulse.md`**, and
+  `memory/INDEX.md` routes to it. They live in `apps/`, not `services/`, so they
+  do not violate the "nothing in services/ until T9" rule. The diff-size ceiling
+  was raised 600→1000 in #93 for that work, so the **live ceiling is 1000**, not
+  the 600 recorded in the T5-era Done entry above.
 - **A squash merge leaves granular history only on the branch.** #98 squashed the
   whole T9 branch into one commit, so the per-change commit messages survive only
   on `claude/t9-audit`, `claude/t9-decisions`, `claude/t9-adrs-contracts` (PRs
@@ -531,7 +571,7 @@ the ballot-expressiveness entry.
   the sole clean one — and it was the most-isolated build, reviewed hardest.**
   Read that as: independence + a fresh hard-hammering review is what a clean pass
   costs, not that reviews can now be trusted to pass. Treat a clean review as the
-  surprise it still is. (Defect shapes: session memory `odc-review-lessons`;
+  surprise it still is. (Defect shapes: see the header note;
   PR/merge handoff: `pr-handoff`.)
 - **Merging deletes the head branch** (auto-delete ON), so a later push to that
   name silently creates a NEW branch with no PR — watch for `[new branch]` in the

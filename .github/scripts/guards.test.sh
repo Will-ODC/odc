@@ -8,6 +8,7 @@ set -uo pipefail
 HERE="$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)"
 GUARD="$HERE/contracts-guard.sh"
 DIFFSIZE="$HERE/diff-size.sh"
+MEMINDEX="$HERE/memory-index.sh"
 
 pass=0
 fail=0
@@ -467,6 +468,29 @@ git -C "$R" add -A && git -C "$R" commit -qm other
 ds=$( (cd "$R" && BASE=base HEAD=HEAD bash "$DIFFSIZE" >/dev/null 2>&1)
   echo $?)
 assert 1 "$ds" "diff-size counts a non-pulse app under apps/ → fail"
+
+# --- Scenario 17: memory-index fails when a workstream dir is unlisted
+R="$TMP/s17"
+mkdir -p "$R/memory" "$R/services" "$R/apps"
+printf '| Core | `services/` | `memory/STATE.md` |\n' >"$R/memory/INDEX.md"
+mi=$( (ROOT="$R" bash "$MEMINDEX" >/dev/null 2>&1)
+  echo $?)
+assert 1 "$mi" "memory-index fails on an unlisted workstream dir (apps/) → fail"
+
+# --- Scenario 18: memory-index passes once every dir is named
+R="$TMP/s18"
+mkdir -p "$R/memory" "$R/services" "$R/apps"
+printf '| Core | `services/` | x |\n| Pulse | `apps/pulse/` | y |\n' >"$R/memory/INDEX.md"
+mi=$( (ROOT="$R" bash "$MEMINDEX" >/dev/null 2>&1)
+  echo $?)
+assert 0 "$mi" "memory-index passes when every workstream dir is named → pass"
+
+# --- Scenario 19: memory-index fails loudly when the index itself is missing
+R="$TMP/s19"
+mkdir -p "$R/services"
+mi=$( (ROOT="$R" bash "$MEMINDEX" >/dev/null 2>&1)
+  echo $?)
+assert 1 "$mi" "memory-index fails when memory/INDEX.md is absent → fail"
 
 echo
 echo "guards.test.sh: $pass passed, $fail failed"
