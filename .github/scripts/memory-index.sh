@@ -17,26 +17,37 @@
 # What it can do is make the omission loud instead of silent, which is the
 # failure mode that actually happened.
 #
+# The directory list is DISCOVERED, never hardcoded, and that is the whole point.
+# A hardcoded list can only catch a directory someone already thought to list,
+# which is precisely the case that does not need catching — the failure is a
+# workstream nobody was thinking about. `git ls-tree` is the right source: it
+# names exactly the directories that hold committed work, so an untracked or
+# gitignored directory (node_modules) never trips it, and a brand-new `packages/`
+# trips it the moment it is committed. Dot-directories (.github, .claude) are
+# tooling, not workstreams, and are skipped.
+#
 # Run locally:  bash .github/scripts/memory-index.sh
 set -euo pipefail
 
 INDEX="${INDEX:-memory/INDEX.md}"
 ROOT="${ROOT:-.}"
 
-# Directories that hold work an agent commits to. Everything else at top level
-# (node_modules, .git, .github, dot-dirs) is tooling, not a workstream.
-WORKSTREAM_DIRS=(apps contracts services tools docs)
+cd "$ROOT"
 
-if [[ ! -f "$ROOT/$INDEX" ]]; then
+if [[ ! -f "$INDEX" ]]; then
   echo "::error::$INDEX not found — the memory index is required."
   exit 1
 fi
 
+# Every top-level directory holding committed work, discovered not assumed.
+mapfile -t tracked < <(git ls-tree -d --name-only HEAD)
+
 missing=()
-for dir in "${WORKSTREAM_DIRS[@]}"; do
-  [[ -d "$ROOT/$dir" ]] || continue
+for dir in "${tracked[@]}"; do
+  # Dot-directories are tooling (.github, .claude), not workstreams.
+  [[ "$dir" == .* ]] && continue
   # A row mentioning the directory, in a table or a bullet, counts.
-  if ! grep -q "\`$dir/" "$ROOT/$INDEX"; then
+  if ! grep -q "\`$dir/" "$INDEX"; then
     missing+=("$dir")
   fi
 done
