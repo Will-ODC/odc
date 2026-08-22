@@ -96,3 +96,32 @@ export interface PulseApi {
  */
 export type RequestLinkResult =
   { status: "sent" } | { status: "not_eligible"; message: string };
+
+/**
+ * How every implementation of `PulseApi` reports a refusal.
+ *
+ * It lives here, beside the shapes, because it is part of what the client
+ * expects the API to speak: a screen writes one
+ * `catch (err) { if (err instanceof ApiError) … }` and it must hold whether it
+ * is talking to the server or to the in-browser demo. `status` mirrors the
+ * HTTP status the server would send; `message` is the plain sentence to show.
+ */
+export class ApiError extends Error {
+  readonly status: number;
+  /**
+   * The server's machine-readable `error` slug, when it sent one.
+   *
+   * Kept deliberately narrow: callers show `message`, never this. It exists so
+   * the one refusal the UI has to *treat differently* — `not_a_member`, which
+   * is an answer to "can I take part?" rather than a fault — can be told apart
+   * from every other 403 without matching on a sentence.
+   */
+  readonly code: string | undefined;
+
+  constructor(status: number, message: string, code?: string) {
+    super(message);
+    this.name = "ApiError";
+    this.status = status;
+    this.code = code;
+  }
+}

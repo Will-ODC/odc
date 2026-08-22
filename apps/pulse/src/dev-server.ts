@@ -25,6 +25,18 @@ import { InMemoryVotingStore } from "./voting/store.js";
 /** 8080, because `apps/pulse-web/vite.config.ts` proxies `/api` there. */
 export const DEFAULT_PORT = 8080;
 
+/**
+ * The only environments this entry point will start in.
+ *
+ * It is a development server in every part — in-memory stores that lose every
+ * vote on restart, a mailer that prints to a terminal, and a session cookie
+ * sent without `Secure` because local development is plain http. Refusing to
+ * start anywhere else is what keeps that last one from becoming a stealable
+ * session on a real network: there is no configuration that turns this into a
+ * production server, so there is none to get wrong.
+ */
+const DEV_ENVIRONMENTS: readonly string[] = ["development", "test"];
+
 export interface DevConfig {
   port: number;
   secret: string;
@@ -49,15 +61,17 @@ export interface DevConfig {
  * one poll.
  */
 export function devConfig(env: NodeJS.ProcessEnv): DevConfig {
-  const secretFromEnv = env.PULSE_SESSION_SECRET;
-  // Never a hardcoded fallback: a default secret is a secret everyone has. In
-  // development an ephemeral one is fine (it only means sessions end with the
-  // process); anywhere else, refuse to start rather than pretend.
-  if (secretFromEnv === undefined && env.NODE_ENV === "production") {
+  // One condition, covering the secret and the cookie together. A guard that
+  // only asked for a secret would still hand out cookies without `Secure`, and
+  // one that only named `production` would wave `staging` through.
+  if (env.NODE_ENV !== undefined && !DEV_ENVIRONMENTS.includes(env.NODE_ENV)) {
     throw new Error(
-      "PULSE_SESSION_SECRET must be set when NODE_ENV=production; refusing to invent one.",
+      `the pulse dev server runs only in development (NODE_ENV=${env.NODE_ENV}): ` +
+        "it keeps nothing, mails nothing, and sends its session cookie without Secure.",
     );
   }
+
+  const secretFromEnv = env.PULSE_SESSION_SECRET;
 
   const choices = (env.PULSE_POLL_CHOICES ?? "Park,Library,Rink")
     .split(",")
@@ -65,7 +79,7 @@ export function devConfig(env: NodeJS.ProcessEnv): DevConfig {
     .filter((c) => c !== "");
 
   return {
-    port: Number(env.PULSE_PORT ?? DEFAULT_PORT),
+    port: port(env.PULSE_PORT),
     secret: secretFromEnv ?? randomBytes(32).toString("base64url"),
     secretSource: secretFromEnv === undefined ? "generated" : "env",
     community: env.PULSE_COMMUNITY ?? "demo-community",
@@ -78,6 +92,22 @@ export function devConfig(env: NodeJS.ProcessEnv): DevConfig {
       method: env.PULSE_POLL_METHOD === "approval" ? "approval" : "single",
     },
   };
+}
+
+/**
+ * A port number, or the default. Refused rather than coerced: `Number("")` is
+ * 0, which quietly binds a random port the dev proxy will never find, and
+ * `Number("abc")` is NaN, which surfaces much later as `ERR_SOCKET_BAD_PORT`.
+ */
+function port(raw: string | undefined): number {
+  if (raw === undefined || raw === "") return DEFAULT_PORT;
+  const value = Number(raw);
+  if (!Number.isInteger(value) || value < 1 || value > 65535) {
+    throw new Error(
+      `PULSE_PORT must be a port number between 1 and 65535, not "${raw}"`,
+    );
+  }
+  return value;
 }
 
 /** Wire the server up from a configuration. Does not listen. */
@@ -108,7 +138,12 @@ export async function buildDevServer(
     votes,
     signer: new SessionSigner(config.secret),
     // Local development is http://, and a Secure cookie would never be stored.
+    // Safe only because `devConfig` refuses to build a config outside
+    // development at all — see DEV_ENVIRONMENTS.
     secureCookies: false,
+    // Generous, because the person hitting this limit is a developer clicking
+    // through the flow for the tenth time, not someone mining addresses.
+    signInRateLimit: { max: 100, timeWindow: "1 minute" },
   });
   return { app, mailer };
 }
@@ -118,9 +153,16 @@ async function main(): Promise<void> {
   const { app } = await buildDevServer(config);
   await app.listen({ port: config.port, host: "127.0.0.1" });
 
+  // The bound port, not the requested one: they differ whenever port 0 was
+  // asked for, and a banner naming a port nothing is listening on is worse
+  // than no banner.
+  const address = app.server.address();
+  const bound =
+    typeof address === "object" && address ? address.port : config.port;
+
   console.log(
     [
-      `pulse dev server on http://127.0.0.1:${config.port}`,
+      `pulse dev server on http://127.0.0.1:${bound}`,
       config.secretSource === "generated"
         ? "  session secret: generated for this run — everyone is signed out when it stops"
         : "  session secret: from PULSE_SESSION_SECRET",

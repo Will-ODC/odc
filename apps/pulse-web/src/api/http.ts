@@ -1,3 +1,4 @@
+import { ApiError } from "./types.js";
 import type {
   Ballot,
   CastOutcome,
@@ -7,6 +8,11 @@ import type {
   RequestLinkResult,
   Results,
 } from "./types.js";
+
+// Re-exported because this module is where callers meet it: the client's own
+// error type is defined beside the shapes in ./types.ts so the demo can throw
+// the same one.
+export { ApiError };
 
 /**
  * Talks to the pulse API over the same origin, so the session cookie travels
@@ -131,26 +137,6 @@ export class HttpPulseApi implements PulseApi {
       );
     }
     return parsed as T;
-  }
-}
-
-export class ApiError extends Error {
-  readonly status: number;
-  /**
-   * The server's machine-readable `error` slug, when it sent one.
-   *
-   * Kept deliberately narrow: callers show `message`, never this. It exists so
-   * the one refusal the UI has to *treat differently* — `not_a_member`, which
-   * is an answer to "can I take part?" rather than a fault — can be told apart
-   * from every other 403 without matching on a sentence.
-   */
-  readonly code: string | undefined;
-
-  constructor(status: number, message: string, code?: string) {
-    super(message);
-    this.name = "ApiError";
-    this.status = status;
-    this.code = code;
   }
 }
 

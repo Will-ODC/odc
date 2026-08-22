@@ -15,6 +15,7 @@ import {
   createServer,
 } from "../../pulse/src/index.js";
 import { HttpPulseApi } from "../src/api/http.js";
+import { ApiError } from "../src/api/types.js";
 
 /**
  * Fastify's own type, reached through `createServer` rather than by importing
@@ -37,14 +38,25 @@ const ALLOWED = "student.ubc.ca";
 const COMMUNITY = "ubc-students";
 const POLL_ID = "p1";
 
-/** A cookie jar around global fetch, which is the one thing Node lacks. */
-function installCookieJar(): () => void {
+/**
+ * A cookie jar around global fetch, which is the one thing Node lacks.
+ *
+ * It honours `credentials` the way a browser does. Without that the proof is
+ * unfalsifiable: undici sends whatever `cookie` header it is handed regardless
+ * of the mode, so a client that asked for `omit` — and would lose its session
+ * in a real browser the moment it signed in — would still pass every test here.
+ * `seen` records the modes the client actually asked for, so a test can say so.
+ */
+function installCookieJar(): { restore: () => void; seen: string[] } {
   const jar = new Map<string, string>();
+  const seen: string[] = [];
   const real = globalThis.fetch;
 
   globalThis.fetch = async (input: RequestInfo | URL, init?: RequestInit) => {
+    const credentials = init?.credentials ?? "same-origin";
+    seen.push(credentials);
     const headers = new Headers(init?.headers);
-    if (jar.size > 0) {
+    if (jar.size > 0 && credentials !== "omit") {
       headers.set(
         "cookie",
         [...jar].map(([name, value]) => `${name}=${value}`).join("; "),
@@ -64,8 +76,11 @@ function installCookieJar(): () => void {
     return response;
   };
 
-  return () => {
-    globalThis.fetch = real;
+  return {
+    restore: () => {
+      globalThis.fetch = real;
+    },
+    seen,
   };
 }
 
@@ -80,9 +95,12 @@ describe("the client against the real server", () => {
   let app: PulseServer;
   let mailer: ConsoleMailer;
   let api: HttpPulseApi;
-  let restoreFetch: () => void;
+  let jar: { restore: () => void; seen: string[] };
 
   beforeEach(async () => {
+    // Installed first, so a failure anywhere below still leaves `afterEach` a
+    // real restorer to call instead of an undefined one masking the cause.
+    jar = installCookieJar();
     mailer = new ConsoleMailer(() => {});
     const voters = new InMemoryVoterStore();
     const votes = new InMemoryVotingStore();
@@ -115,12 +133,11 @@ describe("the client against the real server", () => {
     const address = app.server.address();
     const port = typeof address === "object" && address ? address.port : 0;
 
-    restoreFetch = installCookieJar();
     api = new HttpPulseApi(`http://127.0.0.1:${port}/api`);
   });
 
   afterEach(async () => {
-    restoreFetch();
+    jar.restore();
     await app.close();
   });
 
@@ -152,8 +169,21 @@ describe("the client against the real server", () => {
     await api.signOut();
     expect(await api.me()).toBeNull();
 
+    // The two routes that are about the signed-in person now refuse. This is
+    // the authorization case, and the only assertion that would notice a
+    // sign-out that cleared a cookie without ending the session.
+    await expect(api.myBallot(POLL_ID)).rejects.toThrow(ApiError);
+    await expect(api.cast(POLL_ID, [0])).rejects.toThrow(ApiError);
+    const refusal = await api.cast(POLL_ID, [0]).catch((e: unknown) => e);
+    expect((refusal as ApiError).status).toBe(401);
+
     // Signed out, but the vote stays counted.
     expect((await api.results(POLL_ID)).choices[1]?.count).toBe(1);
+
+    // Every call above asked for credentials. A client that stopped doing so
+    // would keep passing here but lose its session in a browser.
+    expect(jar.seen).not.toContain("omit");
+    expect(jar.seen).toContain("same-origin");
   });
 
   it("changes a vote rather than refusing the second one", async () => {
@@ -173,6 +203,13 @@ describe("the client against the real server", () => {
       "gmail.com",
     );
     expect(mailer.sent).toHaveLength(0);
+  });
+
+  it("refuses a ballot from nobody, before any sign-in has happened", async () => {
+    const error = await api.myBallot(POLL_ID).catch((e: unknown) => e);
+    expect(error).toBeInstanceOf(ApiError);
+    expect((error as ApiError).status).toBe(401);
+    await expect(api.cast(POLL_ID, [0])).rejects.toThrow(ApiError);
   });
 
   it("reads a poll without anyone being signed in", async () => {
