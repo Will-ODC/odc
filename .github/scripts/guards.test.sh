@@ -469,28 +469,72 @@ ds=$( (cd "$R" && BASE=base HEAD=HEAD bash "$DIFFSIZE" >/dev/null 2>&1)
   echo $?)
 assert 1 "$ds" "diff-size counts a non-pulse app under apps/ → fail"
 
-# --- Scenario 17: memory-index fails when a workstream dir is unlisted
+# memory-index scenarios need a real repo: the guard discovers directories with
+# `git ls-tree`, which is the point — an untracked dir is not committed work.
+mem_repo() {
+  local r="$1"; shift
+  mkdir -p "$r/memory"
+  git -C "$r" init -q
+  git -C "$r" config user.email t@t; git -C "$r" config user.name t
+  for d in "$@"; do mkdir -p "$r/$d" && echo x >"$r/$d/f.txt"; done
+}
+
+# --- Scenario 17: fails when a committed workstream dir is unlisted
 R="$TMP/s17"
-mkdir -p "$R/memory" "$R/services" "$R/apps"
+mem_repo "$R" services apps
 printf '| Core | `services/` | `memory/STATE.md` |\n' >"$R/memory/INDEX.md"
+git -C "$R" add -A && git -C "$R" commit -qm init
 mi=$( (ROOT="$R" bash "$MEMINDEX" >/dev/null 2>&1)
   echo $?)
 assert 1 "$mi" "memory-index fails on an unlisted workstream dir (apps/) → fail"
 
-# --- Scenario 18: memory-index passes once every dir is named
+# --- Scenario 18: passes once every committed dir is named
 R="$TMP/s18"
-mkdir -p "$R/memory" "$R/services" "$R/apps"
-printf '| Core | `services/` | x |\n| Pulse | `apps/pulse/` | y |\n' >"$R/memory/INDEX.md"
+mem_repo "$R" services apps
+printf '| Core | `services/` | x |\n| Pulse | `apps/` | y |\n| Mem | `memory/` | z |\n' >"$R/memory/INDEX.md"
+git -C "$R" add -A && git -C "$R" commit -qm init
 mi=$( (ROOT="$R" bash "$MEMINDEX" >/dev/null 2>&1)
   echo $?)
 assert 0 "$mi" "memory-index passes when every workstream dir is named → pass"
 
-# --- Scenario 19: memory-index fails loudly when the index itself is missing
+# --- Scenario 19: fails loudly when the index itself is missing
 R="$TMP/s19"
-mkdir -p "$R/services"
+mem_repo "$R" services
+git -C "$R" add -A && git -C "$R" commit -qm init
+rm -f "$R/memory/INDEX.md"
 mi=$( (ROOT="$R" bash "$MEMINDEX" >/dev/null 2>&1)
   echo $?)
 assert 1 "$mi" "memory-index fails when memory/INDEX.md is absent → fail"
+
+# --- Scenario 20: catches a BRAND-NEW directory nobody thought to list.
+# This is the case a hardcoded directory list could never catch, and it is the
+# case that actually happened (apps/pulse, nineteen PRs unrecorded).
+R="$TMP/s20"
+mem_repo "$R" services packages
+printf '| Core | `services/` | x |\n| Mem | `memory/` | z |\n' >"$R/memory/INDEX.md"
+git -C "$R" add -A && git -C "$R" commit -qm init
+mi=$( (ROOT="$R" bash "$MEMINDEX" >/dev/null 2>&1)
+  echo $?)
+assert 1 "$mi" "memory-index catches a brand-new top-level dir (packages/) → fail"
+
+# --- Scenario 21: dot-directories are tooling, not workstreams
+R="$TMP/s21"
+mem_repo "$R" services .github .claude
+printf '| Core | `services/` | x |\n| Mem | `memory/` | z |\n' >"$R/memory/INDEX.md"
+git -C "$R" add -A && git -C "$R" commit -qm init
+mi=$( (ROOT="$R" bash "$MEMINDEX" >/dev/null 2>&1)
+  echo $?)
+assert 0 "$mi" "memory-index ignores dot-dirs (.github, .claude) → pass"
+
+# --- Scenario 22: an untracked directory is not committed work, so it is ignored
+R="$TMP/s22"
+mem_repo "$R" services
+printf '| Core | `services/` | x |\n| Mem | `memory/` | z |\n' >"$R/memory/INDEX.md"
+git -C "$R" add -A && git -C "$R" commit -qm init
+mkdir -p "$R/node_modules/pkg" && echo x >"$R/node_modules/pkg/f.txt"
+mi=$( (ROOT="$R" bash "$MEMINDEX" >/dev/null 2>&1)
+  echo $?)
+assert 0 "$mi" "memory-index ignores an untracked dir (node_modules) → pass"
 
 echo
 echo "guards.test.sh: $pass passed, $fail failed"
