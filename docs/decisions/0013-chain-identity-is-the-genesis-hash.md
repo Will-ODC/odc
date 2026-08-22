@@ -1,6 +1,7 @@
 # ADR-0013: A chain's identity is its `genesis` event hash
 
-- **Status:** accepted
+- **Status:** accepted — amended in part by ADR-0019 (the "one genesis change
+  this project gets" restated as a bar on the tag, not a count of keys)
 - **Date:** 2026-08-15
 - **Phase:** 0
 
