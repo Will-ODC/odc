@@ -1,5 +1,6 @@
 import { beforeEach, describe, expect, it } from "vitest";
 import { DemoPulseApi, type DemoOptions } from "../src/api/demo.js";
+import { ApiError } from "../src/api/types.js";
 
 const base: DemoOptions = {
   poll: {
@@ -17,9 +18,22 @@ const api = (over: Partial<DemoOptions> = {}) =>
   new DemoPulseApi({ ...base, ...over });
 
 describe("asking for a link", () => {
-  it("turns away an address outside the community", async () => {
+  it("turns away an address outside the community, naming the domain that was typed", async () => {
     const result = await api().requestLink("someone@gmail.com", true);
     expect(result.status).toBe("not_eligible");
+    expect(result.status === "not_eligible" && result.message).toContain(
+      "gmail.com",
+    );
+  });
+
+  it("throws on an address the server could not parse, rather than calling it ineligible", async () => {
+    // The server 400s `invalid_email` and the client throws; answering
+    // `not_eligible` here would have the two disagree about the same typo.
+    const error = await api()
+      .requestLink("nope", true)
+      .catch((e: unknown) => e);
+    expect(error).toBeInstanceOf(ApiError);
+    expect((error as ApiError).status).toBe(400);
   });
 
   it("accepts the allowed domain whatever case it is typed in", async () => {
@@ -50,7 +64,15 @@ describe("asking for a link", () => {
   it("refuses an empty token, the way a redeem page with no token in the URL would", async () => {
     const demo = api();
     await demo.requestLink("jo@student.ubc.ca", true);
-    await expect(demo.redeem("")).rejects.toThrow();
+    await expect(demo.redeem("")).rejects.toThrow(ApiError);
+  });
+
+  it("refuses in the same shape the server does, so one catch handles both", async () => {
+    const error = await api()
+      .redeem("demo-token")
+      .catch((e: unknown) => e);
+    expect(error).toBeInstanceOf(ApiError);
+    expect((error as ApiError).status).toBe(410);
   });
 
   it("reports the link as sent and nothing more — there is no link to hand back", async () => {
@@ -71,6 +93,25 @@ describe("signing out", () => {
 
     expect(await demo.me()).toBeNull();
     expect((await demo.results()).choices[0]?.count).toBe(4);
+  });
+
+  it("stops answering the two things that are about the signed-in person", async () => {
+    // The server 401s both once signed out. A demo that kept answering them
+    // would let a screen be built that works here and breaks there.
+    const demo = api();
+    await demo.requestLink("jo@student.ubc.ca", true);
+    await demo.redeem("demo-token");
+    await demo.cast("p1", [0]);
+    await demo.signOut();
+
+    await expect(demo.myBallot()).rejects.toThrow(ApiError);
+    await expect(demo.cast("p1", [1])).rejects.toThrow(ApiError);
+    const error = await demo.myBallot().catch((e: unknown) => e);
+    expect((error as ApiError).status).toBe(401);
+  });
+
+  it("refuses a vote from someone who never signed in", async () => {
+    await expect(api().cast("p1", [0])).rejects.toThrow(ApiError);
   });
 });
 

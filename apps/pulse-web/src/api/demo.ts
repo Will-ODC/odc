@@ -1,3 +1,4 @@
+import { ApiError } from "./types.js";
 import type {
   Ballot,
   CastOutcome,
@@ -78,10 +79,22 @@ export class DemoPulseApi implements PulseApi {
             .slice(at + 1)
             .trim()
             .toLowerCase();
+    // An address the server could not parse is a refusal there, not an answer:
+    // it 400s and the client throws. Answering `not_eligible` here would have
+    // the demo and the server disagree about the same typo.
+    if (!looksLikeAnAddress(email, domain)) {
+      throw new ApiError(
+        400,
+        "That does not look like an email address.",
+        "invalid_email",
+      );
+    }
     if (domain !== this.#allowedDomain) {
+      // The server's own sentence, naming the domain that was typed — not the
+      // one that would have worked.
       return {
         status: "not_eligible",
-        message: `This story is open to people with a ${this.#allowedDomain} address.`,
+        message: `${domain} is not part of a community on pulse yet.`,
       };
     }
     // Held, not signed in: the link still has to be redeemed, same as the server.
@@ -96,8 +109,16 @@ export class DemoPulseApi implements PulseApi {
    * redeem page with no token in the URL.
    */
   async redeem(token: string): Promise<Me> {
-    if (token.trim() === "") throw new Error("that link is incomplete");
-    if (!this.#pending) throw new Error("ask for a link first");
+    if (token.trim() === "") {
+      throw new ApiError(400, "That link is incomplete.", "bad_request");
+    }
+    if (!this.#pending) {
+      throw new ApiError(
+        410,
+        "That link is not one of ours. Ask for a new one.",
+        "unknown_link",
+      );
+    }
     this.#me = {
       id: "demo-voter",
       community: this.#community,
@@ -110,10 +131,22 @@ export class DemoPulseApi implements PulseApi {
     return this.#me;
   }
 
-  /** Signed out, but the vote stays cast — same as the server. */
+  /**
+   * Signed out. The vote stays counted, exactly as it does on the server — but
+   * the two routes that are *about* the signed-in person stop answering, which
+   * is what the server does with a 401. A demo that kept answering them would
+   * let a screen be built that works here and breaks there.
+   */
   async signOut(): Promise<void> {
     this.#me = null;
     this.#pending = null;
+  }
+
+  /** The server's 401, in the same shape, for the two routes that need one. */
+  #requireSignedIn(): void {
+    if (!this.#me) {
+      throw new ApiError(401, "Sign in to do that.", "signed_out");
+    }
   }
 
   async poll(): Promise<Poll> {
@@ -121,6 +154,7 @@ export class DemoPulseApi implements PulseApi {
   }
 
   async myBallot(): Promise<Ballot | null> {
+    this.#requireSignedIn();
     return this.#ballot;
   }
 
@@ -148,6 +182,7 @@ export class DemoPulseApi implements PulseApi {
   }
 
   async cast(_pollId: string, ballot: Ballot): Promise<CastOutcome> {
+    this.#requireSignedIn();
     if (!this.#poll.open) return { status: "closed" };
     const changed = this.#ballot !== null;
     this.#ballot = [...ballot].sort((a, b) => a - b);
@@ -157,4 +192,21 @@ export class DemoPulseApi implements PulseApi {
       results: await this.results(),
     };
   }
+}
+
+/**
+ * A rough stand-in for the server's address parsing — enough to tell a typo
+ * from an address, which is the only distinction a screen can act on. The
+ * server's `parseEmail` is the real rule.
+ */
+function looksLikeAnAddress(email: string, domain: string): boolean {
+  const at = email.lastIndexOf("@");
+  const local = at === -1 ? "" : email.slice(0, at).trim();
+  return (
+    local !== "" &&
+    domain.includes(".") &&
+    !domain.startsWith(".") &&
+    !domain.endsWith(".") &&
+    !/\s/.test(email.trim())
+  );
 }

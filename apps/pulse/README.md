@@ -29,19 +29,24 @@ pnpm --filter @odc/pulse dev     # http://127.0.0.1:8080, where the client's dev
 `dev` keeps everything in memory and dies with the process. It seeds one
 community, one allowed email domain, and one poll, and prints sign-in links to
 the terminal instead of mailing them — paste one into the browser and the flow
-is the real one. Every part is overridable by environment variable:
+is the real one.
 
-| Variable               | Default                                                                   |
-| ---------------------- | ------------------------------------------------------------------------- |
-| `PULSE_PORT`           | `8080`                                                                    |
-| `PULSE_SESSION_SECRET` | generated per run (development only; required when `NODE_ENV=production`) |
-| `PULSE_COMMUNITY`      | `demo-community`                                                          |
-| `PULSE_DOMAIN`         | `example.test`                                                            |
-| `PULSE_WEB_ORIGIN`     | `http://localhost:5173`                                                   |
-| `PULSE_POLL_ID`        | `p1`                                                                      |
-| `PULSE_POLL_QUESTION`  | `Where should the next one be?`                                           |
-| `PULSE_POLL_CHOICES`   | `Park,Library,Rink`                                                       |
-| `PULSE_POLL_METHOD`    | `single`                                                                  |
+**It is development-only and enforces that**: it refuses to start unless
+`NODE_ENV` is unset, `development`, or `test`, because it sends its session
+cookie without `Secure` and keeps nothing it is given. There is no environment
+variable that makes it a production server. Every other part is overridable:
+
+| Variable               | Default                                                |
+| ---------------------- | ------------------------------------------------------ |
+| `PULSE_PORT`           | `8080`                                                 |
+| `PULSE_SESSION_SECRET` | generated per run — sessions end when the process does |
+| `PULSE_COMMUNITY`      | `demo-community`                                       |
+| `PULSE_DOMAIN`         | `example.test`                                         |
+| `PULSE_WEB_ORIGIN`     | `http://localhost:5173`                                |
+| `PULSE_POLL_ID`        | `p1`                                                   |
+| `PULSE_POLL_QUESTION`  | `Where should the next one be?`                        |
+| `PULSE_POLL_CHOICES`   | `Park,Library,Rink`                                    |
+| `PULSE_POLL_METHOD`    | `single`                                               |
 
 Lint, typecheck, and tests also run on every PR through the repo-wide CI in
 `.github/workflows/repo.yml`, the same checks the rest of the monorepo uses.

@@ -23,14 +23,19 @@ rather than read as `false`, because it is the opt-in for hearing what came of a
 
 | Status | Body                         | When                                             |
 | ------ | ---------------------------- | ------------------------------------------------ |
-| 200    | `status: "sent"`             | a link is on its way                             |
+| 200    | `status: "sent"` + `message` | a link is on its way                             |
 | 400    | `error: "invalid_email"`     | not a usable address                             |
 | 400    | `error: "bad_request"`       | no `email`, or a non-boolean opt-in              |
 | 403    | `error: "not_a_member"`      | the domain belongs to no community               |
 | 429    | `error: "too_many_requests"` | too many links outstanding, or too many attempts |
 
+The 200 body is `{ "status": "sent", "message": "Check your email for a link to sign
+in." }` — a sentence safe to show as-is, for a client that would rather not write its
+own.
+
 Rate limited per client (10/hour by default), separately from the per-address cap on
-outstanding links.
+outstanding links. The 429 sentence names no interval, because the window is
+configurable.
 
 ### `GET /api/sign-in/redeem?token=…`
 
@@ -70,6 +75,25 @@ No body. Always answers `200 { "status": "signed_out" }`, whether or not anyone 
 signed in — asking to be signed out is not something to refuse. It clears the cookie
 **and** moves the voter's sessions-valid-from to now, so a copy of the cookie kept
 elsewhere stops working too.
+
+### `GET /api/me`
+
+Who is signed in, according to the cookie.
+
+```json
+{ "voter": { "id": "…", "email": "…", "community": "…" } }
+```
+
+The voter is **wrapped**, the same way it is in the redeem response, so a later field
+about the session itself can be added beside it without changing what `voter` means.
+
+| Status | Body                  | When                                                                      |
+| ------ | --------------------- | ------------------------------------------------------------------------- |
+| 200    | `{ voter }`           | signed in                                                                 |
+| 401    | `error: "signed_out"` | no cookie, an expired one, one issued before a sign-out, or no such voter |
+
+A 401 here is an ordinary answer — "nobody is signed in" — not a fault. The client
+reads it as `null`.
 
 ## The session cookie
 
