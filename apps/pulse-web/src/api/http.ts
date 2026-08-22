@@ -22,23 +22,48 @@ export class HttpPulseApi implements PulseApi {
 
   async requestLink(
     email: string,
-    wantsUpdates: boolean,
+    wantsProofEmails: boolean,
   ): Promise<RequestLinkResult> {
-    return this.#send("POST", "/claims", { email, wantsUpdates });
+    try {
+      await this.#send("POST", "/sign-in", { email, wantsProofEmails });
+      return { status: "sent" };
+    } catch (err) {
+      // A domain no community has claimed yet is an answer, not a failure: the
+      // server says so plainly, naming the domain, and that sentence is exactly
+      // what the person should read. Everything else still throws.
+      if (
+        err instanceof ApiError &&
+        err.status === 403 &&
+        err.code === "not_a_member"
+      ) {
+        return { status: "not_eligible", message: err.message };
+      }
+      throw err;
+    }
   }
 
   async redeem(token: string): Promise<Me> {
-    return this.#send("POST", "/claims/redeem", { token });
+    // The server also reports `firstTime`; nothing in the client's types asks
+    // for it yet, so it is read and dropped here rather than half-carried.
+    const body = await this.#send<{ voter: Me }>("POST", "/sign-in/redeem", {
+      token,
+    });
+    return body.voter;
   }
 
   async me(): Promise<Me | null> {
     try {
-      return await this.#send<Me>("GET", "/me");
+      const body = await this.#send<{ voter: Me }>("GET", "/me");
+      return body.voter;
     } catch (err) {
       // Not signed in is an ordinary answer here, not a failure to report.
       if (err instanceof ApiError && err.status === 401) return null;
       throw err;
     }
+  }
+
+  async signOut(): Promise<void> {
+    await this.#send("POST", "/sign-out");
   }
 
   async poll(pollId: string): Promise<Poll> {
@@ -93,6 +118,7 @@ export class HttpPulseApi implements PulseApi {
       throw new ApiError(
         response.status,
         messageFrom(parsed) ?? `Request failed (${response.status})`,
+        stringField(parsed, "error"),
       );
     }
     // A 2xx carrying something that isn't JSON — a proxy's HTML error page, say —
@@ -110,11 +136,21 @@ export class HttpPulseApi implements PulseApi {
 
 export class ApiError extends Error {
   readonly status: number;
+  /**
+   * The server's machine-readable `error` slug, when it sent one.
+   *
+   * Kept deliberately narrow: callers show `message`, never this. It exists so
+   * the one refusal the UI has to *treat differently* — `not_a_member`, which
+   * is an answer to "can I take part?" rather than a fault — can be told apart
+   * from every other 403 without matching on a sentence.
+   */
+  readonly code: string | undefined;
 
-  constructor(status: number, message: string) {
+  constructor(status: number, message: string, code?: string) {
     super(message);
     this.name = "ApiError";
     this.status = status;
+    this.code = code;
   }
 }
 
@@ -128,9 +164,14 @@ function safeJson(text: string): unknown {
 
 /** Server errors carry a plain sentence in `message`; show that, never the status. */
 function messageFrom(parsed: unknown): string | undefined {
-  if (parsed && typeof parsed === "object" && "message" in parsed) {
-    const message = (parsed as { message: unknown }).message;
-    if (typeof message === "string" && message.trim() !== "") return message;
+  return stringField(parsed, "message");
+}
+
+/** A non-empty string property of a parsed body, or undefined. */
+function stringField(parsed: unknown, key: string): string | undefined {
+  if (parsed && typeof parsed === "object" && key in parsed) {
+    const value = (parsed as Record<string, unknown>)[key];
+    if (typeof value === "string" && value.trim() !== "") return value;
   }
   return undefined;
 }

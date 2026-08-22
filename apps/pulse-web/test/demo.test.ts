@@ -39,12 +39,38 @@ describe("asking for a link", () => {
     const demo = api();
     await demo.requestLink("jo@student.ubc.ca", true);
     expect(await demo.me()).toBeNull();
-    await demo.redeem();
+    await demo.redeem("demo-token");
     expect((await demo.me())?.email).toBe("jo@student.ubc.ca");
   });
 
   it("refuses to redeem a link that was never asked for", async () => {
-    await expect(api().redeem()).rejects.toThrow();
+    await expect(api().redeem("demo-token")).rejects.toThrow();
+  });
+
+  it("refuses an empty token, the way a redeem page with no token in the URL would", async () => {
+    const demo = api();
+    await demo.requestLink("jo@student.ubc.ca", true);
+    await expect(demo.redeem("")).rejects.toThrow();
+  });
+
+  it("reports the link as sent and nothing more — there is no link to hand back", async () => {
+    expect(await api().requestLink("jo@student.ubc.ca", true)).toEqual({
+      status: "sent",
+    });
+  });
+});
+
+describe("signing out", () => {
+  it("forgets who is signed in but keeps the vote counted", async () => {
+    const demo = api();
+    await demo.requestLink("jo@student.ubc.ca", true);
+    await demo.redeem("demo-token");
+    await demo.cast("p1", [0]);
+
+    await demo.signOut();
+
+    expect(await demo.me()).toBeNull();
+    expect((await demo.results()).choices[0]?.count).toBe(4);
   });
 });
 
@@ -53,7 +79,7 @@ describe("voting", () => {
   beforeEach(async () => {
     demo = api();
     await demo.requestLink("jo@student.ubc.ca", true);
-    await demo.redeem();
+    await demo.redeem("demo-token");
   });
 
   it("counts the first vote and changes the second", async () => {
@@ -77,7 +103,7 @@ describe("voting", () => {
   it("keeps a stored ballot sorted", async () => {
     const approval = api({ poll: { ...base.poll, method: "approval" } });
     await approval.requestLink("jo@student.ubc.ca", true);
-    await approval.redeem();
+    await approval.redeem("demo-token");
     await approval.cast("p1", [2, 0]);
     expect(await approval.myBallot()).toEqual([0, 2]);
   });
@@ -120,7 +146,7 @@ describe("a closed poll", () => {
   it("refuses a vote and leaves the results alone", async () => {
     const closed = api({ poll: { ...base.poll, open: false } });
     await closed.requestLink("jo@student.ubc.ca", true);
-    await closed.redeem();
+    await closed.redeem("demo-token");
 
     expect((await closed.cast("p1", [0])).status).toBe("closed");
     expect(await closed.myBallot()).toBeNull();

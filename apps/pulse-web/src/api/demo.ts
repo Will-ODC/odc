@@ -46,7 +46,7 @@ export class DemoPulseApi implements PulseApi {
   readonly #community: string;
   readonly #others: number[];
   readonly #otherVoters: number;
-  #pending: { email: string; wantsUpdates: boolean } | null = null;
+  #pending: { email: string; wantsProofEmails: boolean } | null = null;
   #me: Me | null = null;
   #ballot: Ballot | null = null;
 
@@ -68,7 +68,7 @@ export class DemoPulseApi implements PulseApi {
 
   async requestLink(
     email: string,
-    wantsUpdates: boolean,
+    wantsProofEmails: boolean,
   ): Promise<RequestLinkResult> {
     const at = email.lastIndexOf("@");
     const domain =
@@ -85,14 +85,21 @@ export class DemoPulseApi implements PulseApi {
       };
     }
     // Held, not signed in: the link still has to be redeemed, same as the server.
-    this.#pending = { email, wantsUpdates };
-    return { status: "sent", devLink: "#demo-link" };
+    this.#pending = { email, wantsProofEmails };
+    return { status: "sent" };
   }
 
-  async redeem(): Promise<Me> {
+  /**
+   * There is no mailbox here, so any non-empty token stands for "the link in
+   * the email was clicked". An empty one is refused exactly as the server
+   * refuses it — that is the case a screen can actually hit, by opening the
+   * redeem page with no token in the URL.
+   */
+  async redeem(token: string): Promise<Me> {
+    if (token.trim() === "") throw new Error("that link is incomplete");
     if (!this.#pending) throw new Error("ask for a link first");
     this.#me = {
-      voterId: "demo-voter",
+      id: "demo-voter",
       community: this.#community,
       email: this.#pending.email,
     };
@@ -101,6 +108,12 @@ export class DemoPulseApi implements PulseApi {
 
   async me(): Promise<Me | null> {
     return this.#me;
+  }
+
+  /** Signed out, but the vote stays cast — same as the server. */
+  async signOut(): Promise<void> {
+    this.#me = null;
+    this.#pending = null;
   }
 
   async poll(): Promise<Poll> {
