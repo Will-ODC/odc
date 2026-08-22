@@ -1,5 +1,6 @@
 import { afterEach, describe, expect, it, vi } from "vitest";
-import { ApiError, HttpPulseApi } from "../src/api/http.js";
+import { HttpPulseApi } from "../src/api/http.js";
+import { ApiError } from "../src/api/types.js";
 
 /** Replaces fetch with one canned response, and records what was requested. */
 function stubFetch(
@@ -52,9 +53,18 @@ describe("asking for a sign-in link", () => {
 
     expect(calls[0]?.url).toBe("/api/sign-in");
     expect(calls[0]?.init.body).toBe(
-      JSON.stringify({ email: "jo@x.test", wantsProofEmails: true }),
+      JSON.stringify({ email: "jo@x.test", proofEmailsOptIn: true }),
     );
-    expect(result).toEqual({ status: "sent" });
+    // The server's own sentence is carried, not dropped: the screen that
+    // follows should not have to invent copy the API already documents.
+    expect(result).toEqual({ status: "sent", message: "Check your email." });
+  });
+
+  it("reports it as sent even when the server sends no sentence", async () => {
+    stubFetch({ body: JSON.stringify({ status: "sent" }) });
+    expect(await new HttpPulseApi().requestLink("jo@x.test", false)).toEqual({
+      status: "sent",
+    });
   });
 
   it("turns the 403 for an unclaimed domain into an answer, showing the server's sentence", async () => {

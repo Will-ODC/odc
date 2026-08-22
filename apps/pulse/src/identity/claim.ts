@@ -79,7 +79,7 @@ export class ClaimService {
 
   async requestLink(
     rawEmail: string,
-    opts: { wantsProofEmails?: boolean } = {},
+    opts: { proofEmailsOptIn?: boolean } = {},
   ): Promise<RequestResult> {
     let email;
     try {
@@ -104,7 +104,7 @@ export class ClaimService {
       tokenHash: hashToken(token),
       email: email.value,
       community: membership.community,
-      wantsProofEmails: opts.wantsProofEmails ?? false,
+      proofEmailsOptIn: opts.proofEmailsOptIn ?? false,
       createdAt: now,
       expiresAt: new Date(now.getTime() + this.#ttlMs),
     };
@@ -151,7 +151,7 @@ export class ClaimService {
       // An opt-in given on a later request is honoured; it is never silently
       // turned back off by someone signing in again.
       const voter =
-        claim.wantsProofEmails && !existing.wantsProofEmails
+        claim.proofEmailsOptIn && !existing.proofEmailsOptIn
           ? ((await this.#voters.setProofEmails(existing.id, true)) ?? existing)
           : existing;
       return { status: "signed_in", voter, firstTime: false };
@@ -164,7 +164,7 @@ export class ClaimService {
       // an existing member does not lose the community they joined.
       community: claim.community,
       claimedAt: now,
-      wantsProofEmails: claim.wantsProofEmails,
+      proofEmailsOptIn: claim.proofEmailsOptIn,
     });
     return { status: "signed_in", voter, firstTime: true };
   }

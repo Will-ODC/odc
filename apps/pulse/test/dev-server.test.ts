@@ -45,9 +45,7 @@ test("refuses to start anywhere but development, secret or no secret", () => {
 });
 
 test("sends its session cookie without Secure, which is why it is development-only", async () => {
-  const { app, mailer } = await buildDevServer(
-    devConfig({ PULSE_DOMAIN: "example.test" }),
-  );
+  const { app, mailer } = await buildDevServer(devConfig({}));
   await app.inject({
     method: "POST",
     url: "/api/sign-in",
@@ -74,32 +72,45 @@ test("uses the secret it was given rather than one of its own", () => {
   assert.equal(config.secretSource, "env");
 });
 
-test("seeds the community, domain and poll from the environment", async () => {
-  const config = devConfig({
-    PULSE_COMMUNITY: "ubc-students",
-    PULSE_DOMAIN: "Student.UBC.ca",
-    PULSE_POLL_ID: "p9",
-    PULSE_POLL_QUESTION: "Which one?",
-    PULSE_POLL_CHOICES: "a, b , c",
-    PULSE_POLL_METHOD: "approval",
-  });
-  assert.equal(config.domain, "student.ubc.ca");
-  assert.deepEqual(config.poll.choices, ["a", "b", "c"]);
-  assert.equal(config.poll.method, "approval");
+test("refuses to build the insecure server outside development too", async () => {
+  // The guard has to sit on this function as well: it is exported, it takes any
+  // config, and it is the one that sets `secureCookies: false`.
+  await assert.rejects(
+    () => buildDevServer(devConfig({}), { NODE_ENV: "production" }),
+    /only in development/,
+  );
+});
 
-  // The seeded poll is really there, and the seeded domain really admits people.
-  const { app, mailer } = await buildDevServer(config);
-  const poll = await app.inject({ method: "GET", url: "/api/polls/p9" });
+test("seeds one poll and one domain, so the flow works the moment it starts", async () => {
+  const { app, mailer } = await buildDevServer(devConfig({}));
+
+  const poll = await app.inject({ method: "GET", url: "/api/polls/p1" });
   assert.equal(poll.statusCode, 200);
-  assert.equal(poll.json().question, "Which one?");
+  assert.equal(poll.json().choices.length, 3);
 
   const signIn = await app.inject({
     method: "POST",
     url: "/api/sign-in",
-    payload: { email: "jo@student.ubc.ca" },
+    payload: { email: "jo@example.test" },
   });
   assert.equal(signIn.statusCode, 200);
   assert.equal(mailer.sent.length, 1);
   assert.match(mailer.sent[0]?.body ?? "", /sign-in\?token=/);
+  await app.close();
+});
+
+test("sends the link to the client origin it was told about", async () => {
+  const { app, mailer } = await buildDevServer(
+    devConfig({ PULSE_WEB_ORIGIN: "http://localhost:4321" }),
+  );
+  await app.inject({
+    method: "POST",
+    url: "/api/sign-in",
+    payload: { email: "jo@example.test" },
+  });
+  assert.match(
+    mailer.sent[0]?.body ?? "",
+    /^http:\/\/localhost:4321\/sign-in\?token=/,
+  );
   await app.close();
 });

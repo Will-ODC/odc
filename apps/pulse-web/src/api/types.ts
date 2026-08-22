@@ -63,13 +63,13 @@ export interface Me {
 
 export interface PulseApi {
   /**
-   * Ask for a sign-in link. `wantsProofEmails` is the opt-in for hearing what
+   * Ask for a sign-in link. `proofEmailsOptIn` is the opt-in for hearing what
    * came of the vote — the server's own name for it, and a real boolean either
    * way, because it refuses anything else rather than reading it as false.
    */
   requestLink(
     email: string,
-    wantsProofEmails: boolean,
+    proofEmailsOptIn: boolean,
   ): Promise<RequestLinkResult>;
   /** Redeem the token from the emailed link. */
   redeem(token: string): Promise<Me>;
@@ -95,16 +95,19 @@ export interface PulseApi {
  * domain. It is shown as-is.
  */
 export type RequestLinkResult =
-  { status: "sent" } | { status: "not_eligible"; message: string };
+  /** `message` is the server's own "check your email" sentence, when it sent one. */
+  | { status: "sent"; message?: string }
+  | { status: "not_eligible"; message: string };
 
 /**
  * How every implementation of `PulseApi` reports a refusal.
  *
  * It lives here, beside the shapes, because it is part of what the client
- * expects the API to speak: a screen writes one
- * `catch (err) { if (err instanceof ApiError) … }` and it must hold whether it
- * is talking to the server or to the in-browser demo. `status` mirrors the
- * HTTP status the server would send; `message` is the plain sentence to show.
+ * expects the API to speak, not a detail of how one implementation talks: a
+ * screen writes one `catch (err) { if (err instanceof ApiError) … }`, and a
+ * test double that refuses something has to refuse in this shape too.
+ * `status` mirrors the HTTP status the server sent; `message` is the plain
+ * sentence to show.
  */
 export class ApiError extends Error {
   readonly status: number;

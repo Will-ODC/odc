@@ -126,7 +126,7 @@ export async function createServer(deps: ServerDeps): Promise<FastifyInstance> {
     async (request, reply) => {
       const body = (request.body ?? {}) as {
         email?: unknown;
-        wantsProofEmails?: unknown;
+        proofEmailsOptIn?: unknown;
       };
       if (typeof body.email !== "string") {
         return reply
@@ -137,8 +137,8 @@ export async function createServer(deps: ServerDeps): Promise<FastifyInstance> {
       // the opt-in for proof-of-action email, and getting it wrong silently
       // would be invisible to both sides.
       if (
-        body.wantsProofEmails !== undefined &&
-        typeof body.wantsProofEmails !== "boolean"
+        body.proofEmailsOptIn !== undefined &&
+        typeof body.proofEmailsOptIn !== "boolean"
       ) {
         return reply.code(400).send({
           error: "bad_request",
@@ -147,7 +147,7 @@ export async function createServer(deps: ServerDeps): Promise<FastifyInstance> {
       }
 
       const result = await deps.claims.requestLink(body.email, {
-        wantsProofEmails: body.wantsProofEmails === true,
+        proofEmailsOptIn: body.proofEmailsOptIn === true,
       });
 
       switch (result.status) {

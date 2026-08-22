@@ -9,11 +9,6 @@ import type {
   Results,
 } from "./types.js";
 
-// Re-exported because this module is where callers meet it: the client's own
-// error type is defined beside the shapes in ./types.ts so the demo can throw
-// the same one.
-export { ApiError };
-
 /**
  * Talks to the pulse API over the same origin, so the session cookie travels
  * without CORS or SameSite special-casing. In dev, vite proxies /api to the
@@ -21,18 +16,37 @@ export { ApiError };
  */
 export class HttpPulseApi implements PulseApi {
   readonly #base: string;
+  readonly #fetch: typeof fetch;
 
-  constructor(base = "/api") {
+  /**
+   * `doFetch` is the seam. It defaults to the browser's own `fetch` — read at
+   * call time, so stubbing the global still works — and lets a caller pass one
+   * in instead: a cookie jar in a Node test today, a retry or timeout wrapper
+   * later, without either becoming this class's business.
+   */
+  constructor(
+    base = "/api",
+    doFetch: typeof fetch = (...args) => globalThis.fetch(...args),
+  ) {
     this.#base = base.replace(/\/$/, "");
+    this.#fetch = doFetch;
   }
 
   async requestLink(
     email: string,
-    wantsProofEmails: boolean,
+    proofEmailsOptIn: boolean,
   ): Promise<RequestLinkResult> {
     try {
-      await this.#send("POST", "/sign-in", { email, wantsProofEmails });
-      return { status: "sent" };
+      const body = await this.#send<{ message?: unknown }>("POST", "/sign-in", {
+        email,
+        proofEmailsOptIn,
+      });
+      // The server's own "check your email" sentence, carried rather than
+      // dropped: the screen that follows should not have to invent copy the
+      // API already documents as safe to show.
+      return typeof body.message === "string" && body.message !== ""
+        ? { status: "sent", message: body.message }
+        : { status: "sent" };
     } catch (err) {
       // A domain no community has claimed yet is an answer, not a failure: the
       // server says so plainly, naming the domain, and that sentence is exactly
@@ -97,7 +111,7 @@ export class HttpPulseApi implements PulseApi {
   async #send<T>(method: string, path: string, body?: unknown): Promise<T> {
     let response: Response;
     try {
-      response = await fetch(this.#base + path, {
+      response = await this.#fetch(this.#base + path, {
         method,
         credentials: "same-origin",
         ...(body === undefined

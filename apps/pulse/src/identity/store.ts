@@ -11,7 +11,7 @@ export interface Voter {
   community: string;
   claimedAt: Date;
   /** Opt-in, asked at registration. Nothing is sent when false. */
-  wantsProofEmails: boolean;
+  proofEmailsOptIn: boolean;
   /**
    * Sessions issued before this moment no longer count. Signing out moves it to
    * now, which is what makes signing out mean something on every device rather
@@ -31,7 +31,7 @@ export interface PendingClaim {
   tokenHash: string;
   email: string;
   community: string;
-  wantsProofEmails: boolean;
+  proofEmailsOptIn: boolean;
   createdAt: Date;
   expiresAt: Date;
   /** Set the moment it is redeemed. A link works exactly once. */
@@ -43,7 +43,7 @@ export interface VoterStore {
   byId(id: string): Promise<Voter | undefined>;
   create(voter: Voter): Promise<Voter>;
   /** Change the opt-in. The one field about a voter that is theirs to change. */
-  setProofEmails(id: string, wants: boolean): Promise<Voter | undefined>;
+  setProofEmails(id: string, optIn: boolean): Promise<Voter | undefined>;
   /** Sign out everywhere: every session issued before `at` stops working. */
   invalidateSessionsBefore(id: string, at: Date): Promise<Voter | undefined>;
 }
@@ -78,10 +78,10 @@ export class InMemoryVoterStore implements VoterStore {
     return voter;
   }
 
-  async setProofEmails(id: string, wants: boolean): Promise<Voter | undefined> {
+  async setProofEmails(id: string, optIn: boolean): Promise<Voter | undefined> {
     const voter = this.#byId.get(id);
     if (!voter) return undefined;
-    const updated: Voter = { ...voter, wantsProofEmails: wants };
+    const updated: Voter = { ...voter, proofEmailsOptIn: optIn };
     this.#byId.set(id, updated);
     return updated;
   }

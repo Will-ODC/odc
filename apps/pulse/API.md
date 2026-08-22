@@ -15,10 +15,10 @@ table — adding one is an insert, not a deploy.
 ### `POST /api/sign-in`
 
 ```json
-{ "email": "ada@student.ubc.ca", "wantsProofEmails": false }
+{ "email": "ada@student.ubc.ca", "proofEmailsOptIn": false }
 ```
 
-`wantsProofEmails` is optional and must be a real boolean; anything else is refused
+`proofEmailsOptIn` is optional and must be a real boolean; anything else is refused
 rather than read as `false`, because it is the opt-in for hearing what came of a vote.
 
 | Status | Body                         | When                                             |
@@ -227,7 +227,7 @@ When the poll has closed, the body is just `{ "status": "closed" }`.
 ## The client
 
 `apps/pulse-web/src/api/http.ts` speaks exactly this: the paths above, the
-`wantsProofEmails` opt-in, the wrapped `{ voter }` bodies, and `id` as the voter's
+`proofEmailsOptIn` opt-in, the wrapped `{ voter }` bodies, and `id` as the voter's
 field name. There is no remaining disagreement to record here; `apps/pulse-web/test/end-to-end.test.ts`
 holds it that way by driving this server over a real socket.
 

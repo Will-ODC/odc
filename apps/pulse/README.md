@@ -34,19 +34,19 @@ is the real one.
 **It is development-only and enforces that**: it refuses to start unless
 `NODE_ENV` is unset, `development`, or `test`, because it sends its session
 cookie without `Secure` and keeps nothing it is given. There is no environment
-variable that makes it a production server. Every other part is overridable:
+variable that makes it a production server.
+
+The seed — the community `demo-community`, the domain `example.test`, and one
+poll — is a literal in `src/dev-server.ts`, not configuration: this process
+keeps nothing, so a knob for the poll's wording would only be a way to hand it
+a shape it refuses. Edit the file for a different demo. Three things a machine
+genuinely decides are variables:
 
 | Variable               | Default                                                |
 | ---------------------- | ------------------------------------------------------ |
 | `PULSE_PORT`           | `8080`                                                 |
 | `PULSE_SESSION_SECRET` | generated per run — sessions end when the process does |
-| `PULSE_COMMUNITY`      | `demo-community`                                       |
-| `PULSE_DOMAIN`         | `example.test`                                         |
 | `PULSE_WEB_ORIGIN`     | `http://localhost:5173`                                |
-| `PULSE_POLL_ID`        | `p1`                                                   |
-| `PULSE_POLL_QUESTION`  | `Where should the next one be?`                        |
-| `PULSE_POLL_CHOICES`   | `Park,Library,Rink`                                    |
-| `PULSE_POLL_METHOD`    | `single`                                               |
 
 Lint, typecheck, and tests also run on every PR through the repo-wide CI in
 `.github/workflows/repo.yml`, the same checks the rest of the monorepo uses.
