@@ -15,22 +15,27 @@ table — adding one is an insert, not a deploy.
 ### `POST /api/sign-in`
 
 ```json
-{ "email": "ada@student.ubc.ca", "wantsProofEmails": false }
+{ "email": "ada@student.ubc.ca", "proofEmailsOptIn": false }
 ```
 
-`wantsProofEmails` is optional and must be a real boolean; anything else is refused
+`proofEmailsOptIn` is optional and must be a real boolean; anything else is refused
 rather than read as `false`, because it is the opt-in for hearing what came of a vote.
 
 | Status | Body                         | When                                             |
 | ------ | ---------------------------- | ------------------------------------------------ |
-| 200    | `status: "sent"`             | a link is on its way                             |
+| 200    | `status: "sent"` + `message` | a link is on its way                             |
 | 400    | `error: "invalid_email"`     | not a usable address                             |
 | 400    | `error: "bad_request"`       | no `email`, or a non-boolean opt-in              |
 | 403    | `error: "not_a_member"`      | the domain belongs to no community               |
 | 429    | `error: "too_many_requests"` | too many links outstanding, or too many attempts |
 
+The 200 body is `{ "status": "sent", "message": "Check your email for a link to sign
+in." }` — a sentence safe to show as-is, for a client that would rather not write its
+own.
+
 Rate limited per client (10/hour by default), separately from the per-address cap on
-outstanding links.
+outstanding links. The 429 sentence names no interval, because the window is
+configurable.
 
 ### `GET /api/sign-in/redeem?token=…`
 
@@ -63,6 +68,32 @@ GET. On success:
 
 One door: this creates the identity the first time and signs the same person back in
 every time after. There is no separate sign-up.
+
+### `POST /api/sign-out`
+
+No body. Always answers `200 { "status": "signed_out" }`, whether or not anyone was
+signed in — asking to be signed out is not something to refuse. It clears the cookie
+**and** moves the voter's sessions-valid-from to now, so a copy of the cookie kept
+elsewhere stops working too.
+
+### `GET /api/me`
+
+Who is signed in, according to the cookie.
+
+```json
+{ "voter": { "id": "…", "email": "…", "community": "…" } }
+```
+
+The voter is **wrapped**, the same way it is in the redeem response, so a later field
+about the session itself can be added beside it without changing what `voter` means.
+
+| Status | Body                  | When                                                                      |
+| ------ | --------------------- | ------------------------------------------------------------------------- |
+| 200    | `{ voter }`           | signed in                                                                 |
+| 401    | `error: "signed_out"` | no cookie, an expired one, one issued before a sign-out, or no such voter |
+
+A 401 here is an ordinary answer — "nobody is signed in" — not a fault. The client
+reads it as `null`.
 
 ## The session cookie
 
@@ -193,14 +224,13 @@ When the poll has closed, the body is just `{ "status": "closed" }`.
 | 401    | `error: "signed_out"`                               | no valid session                              |
 | 404    | `error: "not_found"`                                | no such poll                                  |
 
-## Where the client and server still disagree
+## The client
 
-The poll and vote paths, the ballot shape, changing a vote, `method`, `open`, and
-the `voters` count are now settled — those routes speak what
-`apps/pulse-web/src/api/types.ts` expects. What remains are decisions on the sign-in
-half, out of scope here:
+`apps/pulse-web/src/api/http.ts` speaks exactly this: the paths above, the
+`proofEmailsOptIn` opt-in, the wrapped `{ voter }` bodies, and `id` as the voter's
+field name. There is no remaining disagreement to record here; `apps/pulse-web/test/end-to-end.test.ts`
+holds it that way by driving this server over a real socket.
 
-| Thing          | Server (here)         | Client (`apps/pulse-web`)               |
-| -------------- | --------------------- | --------------------------------------- |
-| Sign-in paths  | `/api/sign-in/redeem` | `/claims`, `/claims/redeem`             |
-| Unknown domain | 403 naming the domain | never reveals whether an address exists |
+The one refusal the client treats as an _answer_ rather than a failure is the 403
+`not_a_member`: it becomes `{ status: "not_eligible", message }` and shows the
+server's sentence, which names the domain, as-is.

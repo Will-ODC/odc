@@ -10,7 +10,7 @@ function voter(overrides: Partial<Voter> = {}): Voter {
     email: "ada@student.ubc.ca",
     community: "ubc-students",
     claimedAt: AT,
-    wantsProofEmails: false,
+    proofEmailsOptIn: false,
     ...overrides,
   };
 }
@@ -59,11 +59,11 @@ test("the_opt_in_can_be_turned_on_and_off_again", async () => {
   const store = new InMemoryVoterStore();
   await store.create(voter());
   assert.equal(
-    (await store.setProofEmails("voter-1", true))?.wantsProofEmails,
+    (await store.setProofEmails("voter-1", true))?.proofEmailsOptIn,
     true,
   );
   assert.equal(
-    (await store.setProofEmails("voter-1", false))?.wantsProofEmails,
+    (await store.setProofEmails("voter-1", false))?.proofEmailsOptIn,
     false,
   );
   assert.equal(await store.setProofEmails("nobody", true), undefined);

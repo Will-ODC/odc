@@ -1,5 +1,6 @@
 import { afterEach, describe, expect, it, vi } from "vitest";
-import { ApiError, HttpPulseApi } from "../src/api/http.js";
+import { HttpPulseApi } from "../src/api/http.js";
+import { ApiError } from "../src/api/types.js";
 
 /** Replaces fetch with one canned response, and records what was requested. */
 function stubFetch(
@@ -43,7 +44,109 @@ describe("reading a poll", () => {
   });
 });
 
+describe("asking for a sign-in link", () => {
+  it("posts to the path the server serves, with the server's own opt-in name", async () => {
+    const calls = stubFetch({
+      body: JSON.stringify({ status: "sent", message: "Check your email." }),
+    });
+    const result = await new HttpPulseApi().requestLink("jo@x.test", true);
+
+    expect(calls[0]?.url).toBe("/api/sign-in");
+    expect(calls[0]?.init.body).toBe(
+      JSON.stringify({ email: "jo@x.test", proofEmailsOptIn: true }),
+    );
+    // The server's own sentence is carried, not dropped: the screen that
+    // follows should not have to invent copy the API already documents.
+    expect(result).toEqual({ status: "sent", message: "Check your email." });
+  });
+
+  it("reports it as sent even when the server sends no sentence", async () => {
+    stubFetch({ body: JSON.stringify({ status: "sent" }) });
+    expect(await new HttpPulseApi().requestLink("jo@x.test", false)).toEqual({
+      status: "sent",
+    });
+  });
+
+  it("turns the 403 for an unclaimed domain into an answer, showing the server's sentence", async () => {
+    stubFetch({
+      status: 403,
+      body: JSON.stringify({
+        error: "not_a_member",
+        message: "gmail.com is not part of a community on pulse yet.",
+      }),
+    });
+    expect(await new HttpPulseApi().requestLink("jo@gmail.com", false)).toEqual(
+      {
+        status: "not_eligible",
+        message: "gmail.com is not part of a community on pulse yet.",
+      },
+    );
+  });
+
+  it("still throws on a 403 that is not about membership", async () => {
+    stubFetch({
+      status: 403,
+      body: JSON.stringify({ error: "forbidden", message: "No." }),
+    });
+    await expect(
+      new HttpPulseApi().requestLink("jo@x.test", false),
+    ).rejects.toThrow(ApiError);
+  });
+
+  it("reports a refused address as a failure, not as a sent link", async () => {
+    stubFetch({
+      status: 400,
+      body: JSON.stringify({
+        error: "invalid_email",
+        message: "That does not look like an email address.",
+      }),
+    });
+    await expect(new HttpPulseApi().requestLink("nope", false)).rejects.toThrow(
+      "That does not look like an email address.",
+    );
+  });
+});
+
+describe("redeeming a link", () => {
+  it("posts the token to the redeem path and unwraps the voter", async () => {
+    const calls = stubFetch({
+      body: JSON.stringify({
+        status: "signed_in",
+        voter: { id: "v1", email: "jo@x.test", community: "c" },
+        firstTime: true,
+      }),
+    });
+    const me = await new HttpPulseApi().redeem("t0k3n");
+
+    expect(calls[0]?.url).toBe("/api/sign-in/redeem");
+    expect(calls[0]?.init.body).toBe(JSON.stringify({ token: "t0k3n" }));
+    expect(me).toEqual({ id: "v1", email: "jo@x.test", community: "c" });
+  });
+});
+
+describe("signing out", () => {
+  it("posts to the sign-out path", async () => {
+    const calls = stubFetch({ body: JSON.stringify({ status: "signed_out" }) });
+    await new HttpPulseApi().signOut();
+    expect(calls[0]?.url).toBe("/api/sign-out");
+    expect(calls[0]?.init.method).toBe("POST");
+  });
+});
+
 describe("who am I", () => {
+  it("unwraps the voter envelope", async () => {
+    stubFetch({
+      body: JSON.stringify({
+        voter: { id: "v1", email: "jo@x.test", community: "c" },
+      }),
+    });
+    expect(await new HttpPulseApi().me()).toEqual({
+      id: "v1",
+      email: "jo@x.test",
+      community: "c",
+    });
+  });
+
   it("treats 401 as not signed in, not as a failure", async () => {
     stubFetch({ status: 401, body: JSON.stringify({ message: "no session" }) });
     expect(await new HttpPulseApi().me()).toBeNull();

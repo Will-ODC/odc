@@ -277,16 +277,16 @@ test("sign_in_needs_an_email_and_a_real_answer_about_updates", async () => {
 
   // "true" or 1 must not be read as "no". This is the proof-of-action opt-in,
   // and a wrong answer here is invisible to everyone.
-  for (const wantsProofEmails of ["true", 1, null]) {
+  for (const proofEmailsOptIn of ["true", 1, null]) {
     const reply = await h.app.inject({
       method: "POST",
       url: "/api/sign-in",
-      payload: { email: "ada@student.ubc.ca", wantsProofEmails },
+      payload: { email: "ada@student.ubc.ca", proofEmailsOptIn },
     });
     assert.equal(
       reply.statusCode,
       400,
-      `accepted wantsProofEmails: ${String(wantsProofEmails)}`,
+      `accepted proofEmailsOptIn: ${String(proofEmailsOptIn)}`,
     );
   }
   assert.equal(h.mailer.sent.length, 0);
@@ -297,7 +297,7 @@ test("the_opt_in_is_carried_through_to_the_voter", async () => {
   await h.app.inject({
     method: "POST",
     url: "/api/sign-in",
-    payload: { email: "ada@student.ubc.ca", wantsProofEmails: true },
+    payload: { email: "ada@student.ubc.ca", proofEmailsOptIn: true },
   });
   await h.app.inject({
     method: "POST",
@@ -306,7 +306,7 @@ test("the_opt_in_is_carried_through_to_the_voter", async () => {
   });
 
   const voter = await h.voters.byEmail("ada@student.ubc.ca");
-  assert.equal(voter?.wantsProofEmails, true);
+  assert.equal(voter?.proofEmailsOptIn, true);
 });
 
 test("sign_in_is_rate_limited_per_client", async () => {

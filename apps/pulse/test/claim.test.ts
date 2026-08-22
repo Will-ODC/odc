@@ -205,17 +205,17 @@ test("proof_emails_are_off_unless_asked_for", async () => {
   await h.service.requestLink("ada@student.ubc.ca");
   const result = await h.service.redeem(h.lastToken("ada@student.ubc.ca"));
   assert.equal(
-    result.status === "signed_in" ? result.voter.wantsProofEmails : true,
+    result.status === "signed_in" ? result.voter.proofEmailsOptIn : true,
     false,
   );
 });
 
 test("opting_in_later_is_honoured_and_signing_in_never_turns_it_off", async () => {
   const h = setup();
-  await h.service.requestLink("ada@student.ubc.ca", { wantsProofEmails: true });
+  await h.service.requestLink("ada@student.ubc.ca", { proofEmailsOptIn: true });
   const first = await h.service.redeem(h.lastToken("ada@student.ubc.ca"));
   assert.equal(
-    first.status === "signed_in" ? first.voter.wantsProofEmails : false,
+    first.status === "signed_in" ? first.voter.proofEmailsOptIn : false,
     true,
   );
 
@@ -224,7 +224,7 @@ test("opting_in_later_is_honoured_and_signing_in_never_turns_it_off", async () =
   await h.service.requestLink("ada@student.ubc.ca");
   const second = await h.service.redeem(h.lastToken("ada@student.ubc.ca"));
   assert.equal(
-    second.status === "signed_in" ? second.voter.wantsProofEmails : false,
+    second.status === "signed_in" ? second.voter.proofEmailsOptIn : false,
     true,
   );
 });

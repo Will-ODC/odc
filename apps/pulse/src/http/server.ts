@@ -55,7 +55,10 @@ export async function createServer(deps: ServerDeps): Promise<FastifyInstance> {
     if (status === 429) {
       return reply.code(429).send({
         error: "too_many_requests",
-        message: "Too many tries just now. Wait a minute and try again.",
+        // No number in the sentence: the window is configurable (an hour by
+        // default for sign-in), so naming a minute would be wrong sixty times
+        // over for the limit it most often guards.
+        message: "Too many tries just now. Try again a little later.",
       });
     }
     if (status >= 400 && status < 500) {
@@ -123,7 +126,7 @@ export async function createServer(deps: ServerDeps): Promise<FastifyInstance> {
     async (request, reply) => {
       const body = (request.body ?? {}) as {
         email?: unknown;
-        wantsProofEmails?: unknown;
+        proofEmailsOptIn?: unknown;
       };
       if (typeof body.email !== "string") {
         return reply
@@ -134,8 +137,8 @@ export async function createServer(deps: ServerDeps): Promise<FastifyInstance> {
       // the opt-in for proof-of-action email, and getting it wrong silently
       // would be invisible to both sides.
       if (
-        body.wantsProofEmails !== undefined &&
-        typeof body.wantsProofEmails !== "boolean"
+        body.proofEmailsOptIn !== undefined &&
+        typeof body.proofEmailsOptIn !== "boolean"
       ) {
         return reply.code(400).send({
           error: "bad_request",
@@ -144,7 +147,7 @@ export async function createServer(deps: ServerDeps): Promise<FastifyInstance> {
       }
 
       const result = await deps.claims.requestLink(body.email, {
-        wantsProofEmails: body.wantsProofEmails === true,
+        proofEmailsOptIn: body.proofEmailsOptIn === true,
       });
 
       switch (result.status) {

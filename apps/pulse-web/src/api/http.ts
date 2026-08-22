@@ -1,3 +1,4 @@
+import { ApiError } from "./types.js";
 import type {
   Ballot,
   CastOutcome,
@@ -15,30 +16,74 @@ import type {
  */
 export class HttpPulseApi implements PulseApi {
   readonly #base: string;
+  readonly #fetch: typeof fetch;
 
-  constructor(base = "/api") {
+  /**
+   * `doFetch` is the seam. It defaults to the browser's own `fetch` — read at
+   * call time, so stubbing the global still works — and lets a caller pass one
+   * in instead: a cookie jar in a Node test today, a retry or timeout wrapper
+   * later, without either becoming this class's business.
+   */
+  constructor(
+    base = "/api",
+    doFetch: typeof fetch = (...args) => globalThis.fetch(...args),
+  ) {
     this.#base = base.replace(/\/$/, "");
+    this.#fetch = doFetch;
   }
 
   async requestLink(
     email: string,
-    wantsUpdates: boolean,
+    proofEmailsOptIn: boolean,
   ): Promise<RequestLinkResult> {
-    return this.#send("POST", "/claims", { email, wantsUpdates });
+    try {
+      const body = await this.#send<{ message?: unknown }>("POST", "/sign-in", {
+        email,
+        proofEmailsOptIn,
+      });
+      // The server's own "check your email" sentence, carried rather than
+      // dropped: the screen that follows should not have to invent copy the
+      // API already documents as safe to show.
+      return typeof body.message === "string" && body.message !== ""
+        ? { status: "sent", message: body.message }
+        : { status: "sent" };
+    } catch (err) {
+      // A domain no community has claimed yet is an answer, not a failure: the
+      // server says so plainly, naming the domain, and that sentence is exactly
+      // what the person should read. Everything else still throws.
+      if (
+        err instanceof ApiError &&
+        err.status === 403 &&
+        err.code === "not_a_member"
+      ) {
+        return { status: "not_eligible", message: err.message };
+      }
+      throw err;
+    }
   }
 
   async redeem(token: string): Promise<Me> {
-    return this.#send("POST", "/claims/redeem", { token });
+    // The server also reports `firstTime`; nothing in the client's types asks
+    // for it yet, so it is read and dropped here rather than half-carried.
+    const body = await this.#send<{ voter: Me }>("POST", "/sign-in/redeem", {
+      token,
+    });
+    return body.voter;
   }
 
   async me(): Promise<Me | null> {
     try {
-      return await this.#send<Me>("GET", "/me");
+      const body = await this.#send<{ voter: Me }>("GET", "/me");
+      return body.voter;
     } catch (err) {
       // Not signed in is an ordinary answer here, not a failure to report.
       if (err instanceof ApiError && err.status === 401) return null;
       throw err;
     }
+  }
+
+  async signOut(): Promise<void> {
+    await this.#send("POST", "/sign-out");
   }
 
   async poll(pollId: string): Promise<Poll> {
@@ -66,7 +111,7 @@ export class HttpPulseApi implements PulseApi {
   async #send<T>(method: string, path: string, body?: unknown): Promise<T> {
     let response: Response;
     try {
-      response = await fetch(this.#base + path, {
+      response = await this.#fetch(this.#base + path, {
         method,
         credentials: "same-origin",
         ...(body === undefined
@@ -93,6 +138,7 @@ export class HttpPulseApi implements PulseApi {
       throw new ApiError(
         response.status,
         messageFrom(parsed) ?? `Request failed (${response.status})`,
+        stringField(parsed, "error"),
       );
     }
     // A 2xx carrying something that isn't JSON — a proxy's HTML error page, say —
@@ -108,16 +154,6 @@ export class HttpPulseApi implements PulseApi {
   }
 }
 
-export class ApiError extends Error {
-  readonly status: number;
-
-  constructor(status: number, message: string) {
-    super(message);
-    this.name = "ApiError";
-    this.status = status;
-  }
-}
-
 function safeJson(text: string): unknown {
   try {
     return JSON.parse(text);
@@ -128,9 +164,14 @@ function safeJson(text: string): unknown {
 
 /** Server errors carry a plain sentence in `message`; show that, never the status. */
 function messageFrom(parsed: unknown): string | undefined {
-  if (parsed && typeof parsed === "object" && "message" in parsed) {
-    const message = (parsed as { message: unknown }).message;
-    if (typeof message === "string" && message.trim() !== "") return message;
+  return stringField(parsed, "message");
+}
+
+/** A non-empty string property of a parsed body, or undefined. */
+function stringField(parsed: unknown, key: string): string | undefined {
+  if (parsed && typeof parsed === "object" && key in parsed) {
+    const value = (parsed as Record<string, unknown>)[key];
+    if (typeof value === "string" && value.trim() !== "") return value;
   }
   return undefined;
 }
