@@ -78,9 +78,15 @@ destination for every kind of fact.
 | A rule about how we work                      | The matching `.claude/skills/odc-*` skill — **one place only** |
 | A **new workstream**                          | A new `memory/<name>.md` **and a row in the two tables above** |
 
-**The rule that keeps this file honest:** a directory that agents commit to and
-that has no row in the workstream table above is a bug in this file. Fix it in
-the same PR that creates the directory.
+**The rule that keeps this file honest, and the CI job that enforces it:** a
+directory that agents commit to and that has no row in the workstream table above
+is a bug in this file. Fix it in the same PR that creates the directory —
+`.github/scripts/memory-index.sh` fails the build if you do not, and it would have
+fired on `apps/` at PR #79.
+
+That guard checks only that the directory is **named** here. It cannot tell
+whether the entry is any good; that is review's job. What it removes is the
+silent failure — a workstream existing that this file has never heard of.
 
 Memory entries are updated **on master at merge time**, never on feature
 branches — parallel agents conflict there. The merge checklist in
