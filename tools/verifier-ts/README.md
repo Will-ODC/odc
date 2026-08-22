@@ -53,9 +53,40 @@ Two stages, per `evolution.md` EV-6/EV-15:
 
 ## Tests
 
-`test/fixtures.test.ts` drives every vector in `contracts/fixtures/index.json`
-and asserts the declared verdict token and line number(s) only.
-
 ```sh
 pnpm --filter @odc/verifier-ts test
 ```
+
+Three files, and the split between them is deliberate — **`contracts/fixtures/`
+is the sole oracle for what a given input verifies to.** Only the first file
+below asserts a verdict value; the other two assert that a verdict of the right
+_shape_ came back at all. Anything that froze an expected verdict outside the
+fixture corpus would be inventing conformance in a file no reviewer treats as
+normative.
+
+- **`test/fixtures.test.ts`** — drives every vector in
+  `contracts/fixtures/index.json` and asserts the declared verdict token and
+  line number(s) only. This is the conformance suite.
+- **`test/robustness.test.ts`** — regression pins for the two unbounded
+  `f(...array)` defects found in the T7b review (`Math.min(...invalidLines)` and
+  `String.fromCodePoint(...cps)`). Node throws `RangeError` once a spread array
+  passes ~130k elements.
+- **`test/extreme-values.test.ts`** — value-level fuzzing for that same class.
+  Generates structurally valid exports carrying extreme values (huge strings
+  where byte length, code point count and UTF-16 length diverge; integers
+  straddling 2^53; extreme line counts; deep nesting; many-key payloads) and
+  asserts only that the verifier does not throw and returns exactly one
+  well-formed verdict of the three (EV-17). Generation is a fixed-seed LCG, so a
+  failure reproduces from the case index in the assertion message.
+
+**Why the last two exist as a category.** Both known defects of this class were
+**wrong-verdict** bugs, not crashes-only: one returned no verdict at all, and
+the other was swallowed by a catch-all as a silent `INVALID` on a line that
+parses fine. A byte-level fuzzer cannot find them — flipping bytes in a valid
+export does not grow the input, so it never reaches the limit. If you add a call
+that spreads an array whose length comes from the input, add a case here.
+
+**Not yet covered: the Go verifier.** `extreme-values.test.ts` fuzzes this
+implementation only. The equivalent for `services/verifier/` is owed and is not a
+port — Go has no argument-spread limit, so the analogous risks are stack growth
+on deep nesting and `bufio.Scanner`'s token limit on long lines.
