@@ -433,6 +433,41 @@ ds=$( (cd "$R" && BASE=base HEAD=HEAD bash "$DIFFSIZE" >/dev/null 2>&1)
   echo $?)
 assert 1 "$ds" "diff-size still counts code alongside exempt mockups → fail"
 
+# --- Scenario 14: diff-size ignores pulse churn (charter-exempt product epic)
+R="$TMP/s14"
+new_repo "$R"
+git -C "$R" checkout -q -b work
+mkdir -p "$R/apps/pulse/src" "$R/apps/pulse-web/src"
+seq 1 900 >"$R/apps/pulse/src/big.ts"      # exempt
+seq 1 900 >"$R/apps/pulse-web/src/big.ts"  # exempt
+git -C "$R" add -A && git -C "$R" commit -qm pulse
+ds=$( (cd "$R" && BASE=base HEAD=HEAD bash "$DIFFSIZE" >/dev/null 2>&1)
+  echo $?)
+assert 0 "$ds" "diff-size ignores pulse churn (1800 ts lines) → pass"
+
+# --- Scenario 15: the pulse exemption is dir-scoped, not an apps/ blanket
+R="$TMP/s15"
+new_repo "$R"
+git -C "$R" checkout -q -b work
+mkdir -p "$R/apps/pulse/src" "$R/services/ledger"
+seq 1 900 >"$R/apps/pulse/src/big.ts"       # exempt
+seq 1 1100 >"$R/services/ledger/big.ts"     # counted → over the 1000 ceiling
+git -C "$R" add -A && git -C "$R" commit -qm mixed
+ds=$( (cd "$R" && BASE=base HEAD=HEAD bash "$DIFFSIZE" >/dev/null 2>&1)
+  echo $?)
+assert 1 "$ds" "diff-size still counts services/ alongside exempt pulse → fail"
+
+# --- Scenario 16: a sibling app is NOT exempt; only the two pulse packages are
+R="$TMP/s16"
+new_repo "$R"
+git -C "$R" checkout -q -b work
+mkdir -p "$R/apps/other/src"
+seq 1 1100 >"$R/apps/other/src/big.ts" # counted → over the ceiling
+git -C "$R" add -A && git -C "$R" commit -qm other
+ds=$( (cd "$R" && BASE=base HEAD=HEAD bash "$DIFFSIZE" >/dev/null 2>&1)
+  echo $?)
+assert 1 "$ds" "diff-size counts a non-pulse app under apps/ → fail"
+
 echo
 echo "guards.test.sh: $pass passed, $fail failed"
 [[ "$fail" -eq 0 ]]
