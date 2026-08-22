@@ -28,7 +28,7 @@ apps/            # charter-EXEMPT product workstream
 tools/           # fixtures-gen, rehearsal, verifier-ts (second verifier)
 docs/            # charter.md, implementation-plan.md, plans/, mockups/,
                  # decisions/ (ADRs), security/
-memory/          # INDEX.md (read first), STATE.md, pulse.md, OPEN-QUESTIONS.md
+memory/          # INDEX.md (read first), STATE.md, pulse.md, OPEN-QUESTIONS(-archive).md
 .claude/
   skills/        # odc-* skills (contracts, storage, review, testing, pipeline,
                  # boundaries, ui, orchestration)

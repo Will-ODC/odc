@@ -10,6 +10,12 @@ that rule survives contact with real tooling. Agents default to ORM
 auto-migrations with full DDL/DML rights — which silently violates the rule
 while all tests pass. Never do that.
 
+## Out of scope: `apps/**`
+
+Pulse is charter-exempt and has no event tables: its votes are a plain, mutable
+record by design (`apps/pulse/CLAUDE.md`). **Nothing in this skill applies there**, and
+nothing here is a reason to "fix" it.
+
 ## Two-role pattern (every service with a DB)
 
 - **Migration role**: owns DDL, runs migrations, then is not used at runtime.
@@ -30,12 +36,6 @@ while all tests pass. Never do that.
   reviewed SQL files.
 - Every migration PR re-runs the insert-only guard test from `odc-testing`
   (attempt UPDATE and DELETE as the runtime role; both must fail).
-
-## Out of scope: `apps/**`
-
-Pulse is charter-exempt and has no event tables: its votes are a plain, mutable
-record by design (`apps/pulse/CLAUDE.md`). None of the above applies there, and
-nothing here is a reason to "fix" it.
 
 ## Non-event tables
 

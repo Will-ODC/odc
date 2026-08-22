@@ -77,9 +77,13 @@ screen 1 redesigned as a swipe ballot), plus `pulse-story-mobile-v1.html` and
 `pulse-vote-states-v1.html` (#82, restored in #89 after #84 deleted them).
 Style is translucent "Civic Glass"; **`hub-feed-v*.html` is NOT the reference.**
 
-**CI.** The diff-size ceiling was raised **600 → 1000** in #93 because pulse work
-kept getting split into branches that pushed review-relevant changes out of the
-PR they belonged to. `.github/scripts/diff-size.sh` is the source of truth.
+**CI.** Pulse is **exempt from the diff-size hard ceiling** (#119). The ceiling
+was first raised 600 → 1000 for pulse in #93, and pulse hit the new number
+anyway — the case that settled it was a branch that went _over_ by deleting an
+unused module, so the guard was demanding a split in order to make the codebase
+smaller. The WARN at 400 still fires and is the honest signal.
+`.github/scripts/diff-size.sh` is the source of truth, and the exemption is
+dir-scoped: `services/**` and `contracts/**` are still fully counted.
 
 ## Not built
 
@@ -87,10 +91,14 @@ PR they belonged to. `.github/scripts/diff-size.sh` is the source of truth.
   `apps/pulse-web/src` holds only `api/` and `flow/story.ts`: no `index.html`,
   no entry point, no component for any of the six steps `steps()` enumerates.
   `vite.config.ts` proxies `/api` to a page that does not exist. The mockups in
-  `docs/mockups/pulse-screens/` are the design, not the app. A future ticket also
-  has to decide which `PulseApi` a build uses (demo vs http), and whether the
-  non-consuming `GET /api/sign-in/redeem` check belongs on `PulseApi` — it is
-  served today with no client method, because only a redeem screen would call it.
+  `docs/mockups/pulse-screens/` are the design, not the app. Two questions are
+  owed to that ticket: whether the non-consuming `GET /api/sign-in/redeem` check
+  belongs on `PulseApi` (served today with no client method, because only a
+  redeem screen would call it), and whether `PulseApi` itself survives — since
+  #118 deleted the demo client, `HttpPulseApi` is its only implementation, and it
+  is kept only because private fields make it nominally typed, so a screen typed
+  to the interface can be stubbed with a plain object. If the screen tests end up
+  using the real class with a fake `fetch` instead, the interface has no user.
 - **Pillar 3, the path to action** in any form: soliciting ideas, volunteer time
   or donations, and the proof-of-what-happened email. `wantsProofEmails` is
   collected at sign-in and currently leads nowhere.

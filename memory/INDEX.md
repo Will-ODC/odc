@@ -38,7 +38,9 @@ Do not apply charter rules to `apps/**`, and do not relax them anywhere else.
 3. Only then the deeper document your task actually needs, from the table below.
 
 Do not read `memory/OPEN-QUESTIONS.md` end to end. It is a topic-indexed
-reference, not a briefing; open the entry you need.
+reference, not a briefing; open the entry you need. Settled questions live in
+`memory/OPEN-QUESTIONS-archive.md` — open that only when you need the reasoning
+behind a decision, or one of the few deferred entries its index names.
 
 ## Topic → document
 

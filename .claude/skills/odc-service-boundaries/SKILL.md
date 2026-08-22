@@ -5,6 +5,15 @@ description: Rules for creating services, adding endpoints, consuming other serv
 
 # ODC Service Boundaries
 
+## The `apps/**` boundary
+
+`apps/pulse` and `apps/pulse-web` are a separate, charter-exempt workstream.
+**Nothing in `apps/**` may read or write into `services/**` or `contracts/**`** —
+no imports, no shared types, no shared storage. Pulse owns its storage and stands
+alone. If it ever publishes to the ledger it does so through the ledger's public
+HTTP API like any other outside client. This runs in both directions: nothing in
+`services/**` may depend on `apps/**` either.
+
 ## Every service ships
 
 ```
@@ -47,15 +56,6 @@ Additive only. The procedure:
 4. NEVER: rename/remove fields, alter hashing, reinterpret existing types.
    If it feels necessary, stop and escalate to an `odc-architect` planning session —
    this is an architecture decision, not an edit.
-
-## The `apps/**` boundary
-
-`apps/pulse` and `apps/pulse-web` are a separate, charter-exempt workstream.
-**Nothing in `apps/**` may read or write into `services/**` or `contracts/**`** —
-no imports, no shared types, no shared storage. Pulse owns its storage and stands
-alone. If it ever publishes to the ledger it does so through the ledger's public
-HTTP API like any other outside client. This runs in both directions: nothing in
-`services/**` may depend on `apps/**` either.
 
 ## Encapsulation test
 

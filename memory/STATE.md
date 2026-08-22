@@ -37,6 +37,22 @@ until real operational use; `contracts/` remains **DRAFTING**.
 phase list, and why fixtures and verifiers must land together in each one, are
 under Next.
 
+### Owed right now — must ride into the next PR that touches each
+
+Hoisted here because the full entries live at the end of a 37 KB file, past
+where anyone reliably reads. Each line links to its entry; **do not act from
+this list alone.**
+
+1. **Rebuild #109/#110, do not merge them** — they predate ADR-0019 and would go
+   **green while behind the spec**, because no committed vector carries either
+   optional key. → § Next, "What phase 2 still owes"
+2. **Four review findings must ride into that rebuild or they are lost** — the
+   `conformanceVerdict` regex with no `m` flag (a second output line makes the
+   shared judge _throw_), a swap test that never swapped, self-consistent
+   synthetic chains that cannot detect a preimage bug, and no assertion that a
+   _legal_ optional key is accepted. → § Blockers, first entry
+3. **`pulse.md` is owed an update when #116 lands.** → `memory/pulse.md`
+
 ## Done (ledger — detail is in the cited squash commit)
 
 **Setup & CI**
@@ -404,7 +420,7 @@ Commit as a test. A day's work, not a research project.
 `tools/verifier-ts/test/extreme-values.test.ts` does the above for the **TS
 verifier only**; the **Go verifier is still owed** and is not a port. Full detail,
 including the two Go-specific hazards (one ruled out by inspection, one open), is
-in `OPEN-QUESTIONS.md` under the unbounded-value entry. The fuzzer found **no new
+in `memory/OPEN-QUESTIONS-archive.md` under the unbounded-value entry. The fuzzer found **no new
 defects** — it is a regression guard, not a discovery.
 
 **The "six more sites near `verify.ts:93-102`" this entry used to claim were
@@ -436,7 +452,7 @@ before freeze.
 
 **Owed by the operator, not a session:** the ballot-expressiveness ceiling ADR
 part B (part A landed) and the other queued direction ADRs. **Read the ET-22
-warning in `OPEN-QUESTIONS.md` before writing the first.**
+warning in `memory/OPEN-QUESTIONS-archive.md` before writing the first.**
 
 **Part B's old default is withdrawn (operator, 2026-08-19).** It used to read
 "ballots stay one-choice until argued otherwise". The operator's stated intention
@@ -445,7 +461,7 @@ open to decide later** — so silence is no longer a vote for one-choice, and no
 session should treat it as one. **v1 is unaffected**: a ballot is still one
 choice from a small bounded set (charter §5, ET-14a), and no contract text is
 loosened by this. The substance still to decide, and an unresolved question about
-whether it must be settled before the freeze, are in `OPEN-QUESTIONS.md` under
+whether it must be settled before the freeze, are in `memory/OPEN-QUESTIONS-archive.md` under
 the ballot-expressiveness entry.
 
 **Four unlanded branches deliberately KEPT** (`contracts/` untouched by all).
