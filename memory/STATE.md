@@ -192,11 +192,28 @@ Contracts remain **DRAFTING**; T9 is the next gate.
 ## Next
 
 **T9 ran and its six findings are answered in the specs (#98).** The conformance
-work runs in four phases, each landing **fixtures and both verifiers together**.
-That coupling is forced, not chosen: both verifiers enforce an **exact** payload
-key set, so a regenerated corpus and an un-updated verifier can never both be
-green. There is no ordering that avoids it, and branch protection will not accept
-a red intermediate.
+work runs in four phases.
+
+**The coupling rule this file used to state absolutely is WRONG as stated —
+corrected 2026-08-20, and the correction is what let phase 2 be sequenced.** It
+read: fixtures and both verifiers must land together, "there is no ordering that
+avoids it." That is true of **phase 1** and does not generalise. Phase 1 made two
+keys **required** on `issue_created`, which deadlocks symmetrically: an old
+verifier rejects the new corpus (extra keys) **and** a new verifier rejects the old
+corpus (missing required keys). Phase 2 is **purely additive at the fixture
+level**, so the deadlock is one-directional:
+
+- **fixtures first → red** (verifiers reject the new keys, nothing implements the
+  new rules);
+- **verifiers first → green**, because every new check is a no-op on the current
+  corpus. Verified before relying on it, not assumed: no current vector has an
+  unregistered genesis version (`conformance.test.ts:189` guaranteed it), none
+  declares equal genesis keys, and a widened key set strictly widens.
+
+**So the real rule is: fixtures may never precede verifiers. Verifiers may land
+alone whenever their new checks are no-ops on the committed corpus** — which is
+exactly when the change is additive. Check which shape a phase has before assuming
+it deadlocks; the cost of assuming is a needless mega-PR.
 
 **Phase 1 — DONE (#104, review fixes #105).** ET-14b regeneration.
 
@@ -217,10 +234,77 @@ a red intermediate.
   phase-1 review then built both CLIs and ran **25 differential cases** across the
   floor boundary: identical verdict **and** line every time.
 
-**Phase 2 — NEXT.** F3 (unregistered `genesis` → INVALID line 1) + F6 (distinct
-genesis keys) + F4 (`ancestor_head`) vectors, the matching verifier checks, and
-**inverting `conformance.test.ts:189`** — which must happen _with_ the F3 vector,
-never before, since inverted alone it asserts a vector that does not exist.
+**Phase 2 — IN FLIGHT. Its contracts half is LANDED; verifiers and fixtures are owed.** F3 (unregistered `genesis` → INVALID line 1)
+
+- F6 (distinct genesis keys) + F4 (fork ancestry) vectors, the matching verifier
+  checks, and **inverting `conformance.test.ts:189`** — which must happen _with_ the
+  F3 vector, never before, since inverted alone it asserts a vector that does not
+  exist. **Invert it, do not delete it, and scope the exception to the F3 vector's
+  id** — a blanket "any reserved version passes" relaxation would let a future
+  PARTIAL vector freeze a verdict EV-20 forbids.
+
+**Phase 2 found two contradictions in merged normative text and stopped to fix
+them — LANDED 2026-08-20 as ADR-0019 (#112, `decc152`); `event-types.md` is at
+**v9**, `event-schema.md` **v4**, `export-format.md` **v4**.** Neither had any verdict impact, which is exactly why
+both survived review and would have frozen wrong.
+
+- **`ancestor_head` was specified two ways.** ET-9e made it carry a **head**;
+  ET-7a listed that same key among the places "a chain must be named", held the
+  genesis hash is the name, and held seven lines later that a head cannot name a
+  chain. **Resolved: two optional keys** — `ancestor_chain` (the parent's genesis
+  hash, the name) and `ancestor_head` (the parent's head at the fork, the
+  position) — plus **ET-9f**: `ancestor_head` MUST NOT appear without
+  `ancestor_chain`; `ancestor_chain` MAY appear alone, and **that asymmetry is
+  deliberate and defended in the rule text** so nobody tidies it into
+  both-or-neither.
+- **EX-14 vs ET-7a, pre-existing:** EX-14 says "the head identifies the whole
+  chain"; ET-7a says a head does **not** identify a chain — and cites EX-14 in
+  support. Two senses of "identifies" (commits-to vs names) never distinguished,
+  and it is the load-bearing premise for ET-9f. Fixed in the same PR.
+- **ADR-0016's "the only key `genesis` will ever gain" is amended, not
+  overturned** — operator-approved 2026-08-20. Its own reasoning binds on the
+  **tag** (ET-6 + EV-1), not on a count of one, and no tag exists. **The permanent
+  claim is: nothing may be added to `genesis` after the tag.** ADR-0016 and
+  ADR-0013 keep their bodies and take status-line amendments only; an ADR is a
+  record, and erasing the head-alone decision erases the reasoning a later reader
+  needs before trimming `ancestor_chain` back out.
+
+**Phase 2's vector count went 6 → 11**, ids `084`+. F3 one, F6 one, fork ancestry
+the rest. Two that must not be lost:
+
+- **`ancestor_head`-without-`ancestor_chain` (INVALID line 1) goes FIRST.** It is
+  the only owed vector that fails against a verifier still implementing the merged
+  ET-9e — the single fixture proving ADR-0019 landed.
+- **`ancestor_chain == ancestor_head` is LEGAL and needs a VALID vector.** It is
+  what a fork from a parent holding only its `genesis` produces (head = genesis
+  hash, EX-14/EX-21). Nothing bars it and nothing should; it is what a naive
+  implementer rejects as a duplicate.
+
+**Two fixture-construction traps, both confirmed by review:**
+
+- **The F6 and fork-ancestry value vectors MUST be chains signed under the faulty
+  payload.** Any payload mutation also breaks the genesis self-signature (ET-8),
+  so a vector that merely mutates and re-derives `hash` is satisfied by a verifier
+  that checks only the signature — it freezes a verdict while catching nothing.
+  `076`/`077` show `fixtures-gen` already re-signs, so this is producible.
+- **The both-keys VALID vector is the corpus's first SEVEN-key genesis payload**
+  and the first real exercise of HA-7's key count and HA-8's ordering (both new
+  keys sort ahead of `chain_id`). `STATE.md` has long recorded HA-7 as cited by no
+  vector; this closes it. **Compute its two hash values from `002-four-types`'s
+  built chain in the generator — never hard-code them**, or they rot silently at
+  the next regeneration and the vector asserts nothing.
+
+**What phase 2 still owes, in order.**
+
+1. **Both verifiers, rebuilt in fresh isolated passes** — `ancestor_chain` plus
+   `ancestor_head`, format-check each, enforce ET-9f, resolve nothing. **PRs #109
+   and #110 are open and MUST NOT be merged as they stand.** They predate
+   ADR-0019 and know one optional key. **The trap: they would go GREEN, not
+   red** — no committed vector carries either key, so CI cannot see that they are
+   behind the spec. Merging them buys a silent regression. Their four review
+   findings are in Blockers below and must ride into the rework.
+2. **The eleven vectors**, `ancestor_head`-without-`ancestor_chain` first.
+3. **Fresh-context review of each**, then the phase-2 STATE.md entry.
 
 **Phase 3.** F2 batching vectors — ET-23 quantization, ET-24 batch size, and the
 below-floor vectors that finally discriminate the ET-14b floors. **Reshaping
@@ -359,6 +443,62 @@ the ballot-expressiveness entry.
 | `claude/golden-fixtures-voting-verify-7urqku` | fully mined 2026-08-02 — **deletable**                                      |
 
 ## Blockers & live cautions
+
+- **Both phase-2 verifier PRs are ON HOLD and must be rebuilt, not patched
+  (#109 Go, #110 TS).** Both predate ADR-0019 and enforce a genesis key set with
+  one optional key, so both now reject `ancestor_chain` as undefined. Their
+  format-checking code is correct and transfers unchanged; they need the second
+  key, ET-9f, and a fresh isolated pass each. **Four review findings must ride
+  into that rework or they are lost:**
+  - **[TS, BLOCKING] The CLI printed the EV-21 reason on a SECOND line.** The
+    contract is **one** verdict line with the reason after a colon
+    (`services/verifier/API.md`). `tools/rehearsal`'s `conformanceVerdict` regex
+    has no `m` flag and `[^\n]*`, so a second line makes the shared two-verifier
+    judge **throw** rather than mismatch. Nothing is red today only because no
+    current tamper case produces an unregistered genesis version — **it goes live
+    the moment a phase-2 EV-20 vector reaches the rehearsal.** Any verifier change
+    that touches stdout must be checked against that regex.
+  - **[Go] The test named for the swap failure mode did not perform the swap** —
+    it substituted the legitimate optional key, not an unknown one. The reviewer
+    replaced the key-set check with a count-based regression and **the entire
+    suite passed**. Shipped code was correct; the guard guarded nothing.
+  - **[both] Synthetic in-verifier test chains are self-consistent by
+    construction** — they sign and hash with the same functions under test, so a
+    VALID assertion there can never detect a preimage bug. Fine as a harness
+    check, but it inverts the standing rule that verdicts are DECLARED, never
+    computed. **A green verifier unit test must never be recorded as having
+    pinned a fixture-owed shape.**
+  - **[TS] Nothing asserted that a LEGAL optional key is accepted.** Every new
+    test asserted INVALID; had the key been dropped on the floor, all of them
+    still passed. Cover the positive case.
+- **Isolation by deletion works, and two runs leaked through git plumbing.**
+  Stripping the worktree (T7's precedent) held for reads. But `git stash pop` and
+  a `git diff --stat` fallback each **printed deleted paths**, disclosing
+  filenames, changed-line counts and three ADR filenames. No content, and there is
+  affirmative evidence against contamination — the two builds diverged on output
+  shape, which they would not had one seen the other. **Add to future isolation
+  tickets: no git command that can enumerate paths outside your own tree, plumbing
+  included.** Both agents self-reported; that is the behaviour to keep.
+- **Agents create worktrees in the repository root unless told otherwise** —
+  a review session left `wt-base/` (191M) and `wt-review/` (11M) there. Now
+  ignored (#111, after #108 did the same for `.claude/worktrees/`), but the
+  ignore is a backstop: **tell every dispatched agent to use the session
+  scratchpad.** One of two concurrent reviewers did so unprompted and left
+  nothing behind.
+- **When ONE PR lands TWO ADRs touching the SAME spec, diff their normative
+  sentences against each other — not just each against the spec.** #98 landed
+  ADR-0013 and ADR-0016 into `event-types.md` v8; each was correct alone, they
+  cross-referenced each other by number, and they still contradicted each other
+  seven lines apart. Neither the PR review nor T9's audit caught it. It took an
+  isolated verifier build that had to decide what the value _meant_ in order to
+  implement it. **This is the cheapest available addition to the merge
+  checklist**; raised here rather than edited into `odc-pipeline`, since it is a
+  claim about the process the operator owns.
+- **A contradiction with no verdict impact is the dangerous kind.** Both ADR-0019
+  contradictions were invisible to every fixture and both verifiers, because the
+  competing readings are the same 64 lowercase hex under a format-only check.
+  Nothing automated could have found either. Only reading rules against each
+  other does.
 
 - **Two traps the ADR-0013…0018 pass left in the fixture work.** Both are the kind
   that read as noise later and cost a day to rediscover.

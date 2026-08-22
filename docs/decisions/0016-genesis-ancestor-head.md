@@ -1,6 +1,7 @@
 # ADR-0016: An optional `ancestor_head` on `genesis` — the fork right, made expressible
 
-- **Status:** accepted
+- **Status:** accepted — amended in part by ADR-0019 (`ancestor_chain` added; the
+  "only key" statement restated as a bar on the tag, not a count of keys)
 - **Date:** 2026-08-15
 - **Phase:** 0
 
