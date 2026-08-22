@@ -1,6 +1,40 @@
 # Open Questions
 
-Unresolved design questions. Move each to an ADR when decided; delete when moot.
+Unresolved design questions for the **ODC core**. Move each to an ADR when
+decided; delete when moot. (Pulse's open decisions are in `memory/pulse.md`.)
+
+> **Do not read this file end to end.** It is ~50 KB and mostly settled
+> reasoning kept on purpose. Use the index below, then read the one entry you
+> need. Entries are addressed by their **bold title**, which is stable — grep
+> for it rather than trusting a line number.
+
+## Index
+
+**Still open — these are the actual open questions:**
+
+| Question                                                                                             | Where                                                        |
+| ---------------------------------------------------------------------------------------------------- | ------------------------------------------------------------ |
+| **Q-F** — the registrar's signature as a subliminal channel                                          | "Q-F — What mitigates the registrar's signature…"            |
+| **⚠️ Ballot expressiveness vs receipt-freeness** — a live contradiction between charter §5 and ET-22 | Archive; **read this before writing the ceiling ADR part B** |
+| Does `read-api.md` (RA-1…RA-13, **zero** conformance coverage) need vectors before Phase 1?          | "Added by the T9 orchestration, not by the auditor"          |
+| Registrar key custody and the no-receipt discipline in Phase 1 identity                              | Archive: "Registrar-side ballot privacy"                     |
+| `RETIRED.md` valve; EV-5's fixture breadth; an HA-2 fixture                                          | Archive, three adjacent bullets                              |
+| Sanction/negative events; money/attestation/capability events (Phase 2+)                             | Archive, deferred — **not** freeze blockers                  |
+
+**Settled, kept for the reasoning:**
+
+| Topic                                             | Where                                                        |
+| ------------------------------------------------- | ------------------------------------------------------------ |
+| The six T9 blocking findings F1–F6                | "Blocking the T9 gate" → "DECIDED by the operator" → Q-A…Q-H |
+| What each became                                  | ADR-0013…0018 in `docs/decisions/`                           |
+| Traps left by the ADR pass and by fixture phase 1 | The two "Traps left by…" sections                            |
+| The charter §4 anchoring edit                     | "Charter §4 edit — RATIFIED 2026-08-15"                      |
+| Everything decided before T9                      | "Archive — questions settled earlier"                        |
+
+**Where a new question goes:** a new bullet under the archive heading with a
+**bold title** and a date, or its own `##` section if it needs one. If you
+settle one, replace its body with the ADR number and keep the title — the title
+is what other documents cite.
 
 ## Blocking the T9 gate (raised 2026-08-14, `docs/security/audit-phase-0.md`)
 
@@ -209,6 +243,8 @@ entry, where part A was likewise explicitly marked operator-ratified).
   keys can still be held by one party and the log cannot tell. It blocks the
   blatant collapse only.
 
+### The six findings, one entry each (Q-A … Q-H)
+
 - **Q-A — DECIDED → ADR-0013.** _What is a chain's identity, and what does an
   anchor publish?_ (F1, S3.) `chain_id` is `sha256(operator_pk)` with, in
   ET-7's own words, "no free parameter" — so it is **identical across every
@@ -379,6 +415,12 @@ Note the honest limit of a fixture suite here — vectors are NDJSON exports, so
 covering RA rules may need a different instrument, which is likely why it was
 never noticed.
 
+## Archive — questions settled earlier, kept for their reasoning
+
+Everything below is DECIDED unless its bullet says otherwise. It is kept
+because the reasoning still governs; four entries here are **still open** and
+are named in the index at the top of this file.
+
 - ~~Canonical JSON serialization~~ → DECIDED: fixed-field-order byte
   construction, strict rejection (D3/D5 in docs/plans/phase-0.md; ADR in T3).
 - ~~Signature scheme~~ → DECIDED: Ed25519 (D2; ADR in T3).
@@ -453,11 +495,13 @@ choice}` at eligibility-check time — trust-by-policy per charter §10 v1,
   fixture `083` is the recommended disambiguating vector's no-`vote_cast`
   small-order variant (INVALID at line 1) — added additively under EV-5 with no
   earlier verdict frozen wrong, so the "provided no v1 fixture freezes a wrong
-  verdict first" caveat held. **Carry-forward:** the T7 Go verifier currently
-  defers ET-4b/ET-4c on `registrar_pk` to `vote_cast`, so against `083` it reports
-  `VALID` — a queued conformance fix (its own isolated `odc-verifier-builder`
-  ticket; no Go/verifier CI job yet, so it surfaces at the T8 rehearsal — the T5j
-  ordering, fixtures first). T7b is hard-isolated and cannot read this file, so its
+  verdict first" caveat held. **Carry-forward — now CLOSED (2026-08-22 check).**
+  The T7 Go verifier used to defer ET-4b/ET-4c on `registrar_pk` to `vote_cast`
+  and reported `VALID` against `083`; **T7-fix (#75, `b6c5c0a`) landed the
+  conformance** — `stageBGenesis` runs ET-4b then ET-4c before capturing the key —
+  and **T8 (#95) put the Go fixture suite and the two-verifier rehearsal into
+  required CI**, so the "no Go/verifier CI job yet" caveat no longer holds either.
+  T7b is hard-isolated and cannot read this file, so its
   ticket text (phase-0 T7b) states the ET-9c timing explicitly.
 - **⚠️ Ballot expressiveness vs receipt-freeness — a live contradiction in
   merged text.** (Recovered 2026-08-02 from

@@ -15,8 +15,9 @@ re-audit.
 
 ## Required reading, per session
 
-Every ticket session reads, in order: `CLAUDE.md` → `memory/STATE.md` → this
-plan (its own ticket at minimum) → `.claude/skills/odc-contracts/SKILL.md`.
+Every ticket session reads, in order: `CLAUDE.md` → `memory/INDEX.md` →
+`memory/STATE.md` → this plan (its own ticket at minimum) →
+`.claude/skills/odc-contracts/SKILL.md`.
 Tickets touching CI/hooks also read `.claude/skills/odc-pipeline/SKILL.md`.
 Tickets touching fixtures or the rehearsal also read
 `.claude/skills/odc-testing/SKILL.md`. T7 (verifier) reads ONLY what its

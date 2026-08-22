@@ -1,6 +1,6 @@
 ---
 name: odc-ui
-description: UI conventions and plain-language rules for the ODC web client. Use this skill whenever building or modifying any user-facing page, component, form, or text in services/web — including error messages, empty states, and button labels — even for small tweaks.
+description: UI conventions and plain-language rules for every ODC user-facing surface — the pulse story client (apps/pulse-web), the charter-governed web client (services/web), and the HTML mockups in docs/mockups. Use this skill whenever building or modifying any page, screen, component, form, or user-visible string — including error messages, empty states, and button labels — even for small tweaks.
 ---
 
 # ODC UI Conventions
@@ -9,7 +9,27 @@ Audience: an average citizen, not a developer. The implementation plan
 demands that complexity stays inside while the API speaks plain nouns and
 verbs; the UI is where that promise is kept or broken.
 
-## Plain-language dictionary (enforced)
+## Scope — two clients, one set of manners
+
+| Surface          | What it is                                      | Status                                 |
+| ---------------- | ----------------------------------------------- | -------------------------------------- |
+| `apps/pulse-web` | Pulse's one-screen story client, charter-EXEMPT | **Live** — where UI work happens today |
+| `services/web`   | The charter-governed human client               | Phase 2, not started                   |
+| `docs/mockups/`  | Hand-authored HTML design decks                 | The design of record                   |
+
+Everything in this skill applies to both clients **except** the plain-language
+dictionary and the trust affordances, which are charter-side and belong to
+`services/web`. **Pulse goes further, not less far:** its rule is that the
+counting is never the subject at all, so it does not translate "hash chain"
+into "tamper-proof record" — it never raises the topic. Do not port the trust
+affordances or the "check the record yourself" link into pulse; there is no
+verifier there and saying so would be a lie. See `apps/pulse/CLAUDE.md`.
+
+Pulse's visual language is translucent **"Civic Glass"** —
+`docs/mockups/pulse-screens/` and `pulse-story-mobile-v1.html` are the
+reference. **`hub-feed-v*.html` is NOT.**
+
+## Plain-language dictionary (enforced in `services/web`)
 
 | Never show                     | Show instead                 |
 | ------------------------------ | ---------------------------- |
