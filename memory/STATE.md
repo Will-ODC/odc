@@ -1,9 +1,23 @@
-# ODC Build State
+# ODC Core Build State
 
-> Single source of session-to-session truth. Read first, update last, keep short.
-> History belongs in git and ADRs, not here — per-ticket detail is in the cited
-> squash commits, normative decisions in `docs/decisions/`, and recurring
-> review-defect shapes in session memory (`odc-review-lessons`).
+> Session-to-session truth for the **charter-governed core** — `contracts/`,
+> `services/`, `tools/`. It does **not** cover `apps/pulse`; that workstream has
+> its own entry in `memory/pulse.md`. Start at `memory/INDEX.md`.
+>
+> Update last, keep short. History belongs in git and ADRs, not here — per-ticket
+> detail is in the cited squash commits, normative decisions in
+> `docs/decisions/`, and recurring review-defect shapes in session memory
+> (`odc-review-lessons`).
+
+## Where to jump
+
+| You need                                          | Section                                                                                    |
+| ------------------------------------------------- | ------------------------------------------------------------------------------------------ |
+| What phase we are in and whether the gate is open | [Current phase](#current-phase)                                                            |
+| Whether ticket T*n* landed, and in which PR       | [Done](#done-ledger--detail-is-in-the-cited-squash-commit)                                 |
+| Standing consequences of past decisions           | [Direction decisions](#direction-decisions--see-the-adrs-carry-forward-consequences-below) |
+| What happens next, and what is owed               | [Next](#next)                                                                              |
+| Traps, in-flight work, and things that bite       | [Blockers & live cautions](#blockers--live-cautions)                                       |
 
 ## Current phase
 
@@ -336,7 +350,8 @@ loosened by this. The substance still to decide, and an unresolved question abou
 whether it must be settled before the freeze, are in `OPEN-QUESTIONS.md` under
 the ballot-expressiveness entry.
 
-**Four unlanded branches deliberately KEPT** (`contracts/` untouched by all):
+**Four unlanded branches deliberately KEPT** (`contracts/` untouched by all).
+All four **verified present on the remote, 2026-08-22**:
 
 | branch                                        | for                                                                         |
 | --------------------------------------------- | --------------------------------------------------------------------------- |
@@ -345,7 +360,23 @@ the ballot-expressiveness entry.
 | `claude/skills-agents-memory-mr-29f4dt`       | forbids agent-performed merges; may be a live session                       |
 | `claude/golden-fixtures-voting-verify-7urqku` | fully mined 2026-08-02 — **deletable**                                      |
 
+Also still on the remote and **not** in that list: the three squashed T9 branches
+below (`claude/t9-audit`, `claude/t9-decisions`, `claude/t9-adrs-contracts`),
+`claude/t9-fixtures-phase1`, the four phase-2 branches with open PRs (see
+Blockers), and `pulse/4b-sign-in-routes` — an unlanded pulse branch with no open
+PR, recorded in `memory/pulse.md`.
+
 ## Blockers & live cautions
+
+- **Conformance phase 2 is IN FLIGHT on four open PRs, not merged** (observed on
+  the remote 2026-08-22; this file describes master, which does not have them):
+  **#109** `claude/t9-phase2-verifier-go` and **#110** `claude/t9-phase2-verifier-ts`
+  (EV-20, ET-9d, ET-9e/ES-34), **#112** `claude/t9-adr0019-fork-ancestry`
+  (**ADR-0019**, not yet in `docs/decisions/`), and **#113**
+  `claude/t9-phase2-memory` — which rewrites **this file**. **Anything that edits
+  `memory/STATE.md` will conflict with #113;** land or close it first, or rebase.
+  Read "Phase 2 — NEXT" below as "phase 2 as planned on master", not as untouched
+  work.
 
 - **Two traps the ADR-0013…0018 pass left in the fixture work.** Both are the kind
   that read as noise later and cost a day to rediscover.
@@ -359,12 +390,13 @@ the ballot-expressiveness entry.
   rule. Verdict unaffected, prose false. Fixture notes are immutable at the tag
   (ADR-0008), so **fix before the tag or it is permanent** — cheapest to do inside
   the regeneration pass, which rewrites `index.json` anyway.
-- **`apps/pulse/` and `apps/pulse-web/` are an active workstream this file has
-  never mentioned** (#88–#97: demo client, array ballots, changeable votes, swipe
-  mockups; the diff-size ceiling was raised 600→1000 in #93 for it). They live in
-  `apps/`, not `services/`, so they do not violate the "nothing in services/ until
-  T9" rule — but a reader trusting this file as the single source of
-  session-to-session truth would not know they exist.
+- **`apps/pulse/` and `apps/pulse-web/` are a separate, active, charter-EXEMPT
+  workstream** — nineteen PRs, **#79–#97**, that this file went the whole way
+  without mentioning. It now has its own memory entry: **`memory/pulse.md`**, and
+  `memory/INDEX.md` routes to it. They live in `apps/`, not `services/`, so they
+  do not violate the "nothing in services/ until T9" rule. The diff-size ceiling
+  was raised 600→1000 in #93 for that work, so the **live ceiling is 1000**, not
+  the 600 recorded in the T5-era Done entry above.
 - **A squash merge leaves granular history only on the branch.** #98 squashed the
   whole T9 branch into one commit, so the per-change commit messages survive only
   on `claude/t9-audit`, `claude/t9-decisions`, `claude/t9-adrs-contracts` (PRs

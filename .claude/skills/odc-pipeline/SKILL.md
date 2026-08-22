@@ -97,7 +97,8 @@ IS the ticket.
   commit and the PR reports "merged" while delivering nothing (incident #11).
   One branch off `master`, merge, then branch the next. Force-push only with
   `--force-with-lease`, never `--force`.
-- Branch names: `svc/short-description` (e.g. `ledger/insert-only-guard`).
+- Branch names: `svc/short-description` (e.g. `ledger/insert-only-guard`);
+  pulse uses `pulse/<n>-<short-description>`.
 - Commits: imperative subject ≤ 72 chars; body says WHY, not what.
 - PR description: what changed, how it was tested, which contract version
   it targets. A reviewer should need nothing else to start. (The PR template
@@ -108,6 +109,9 @@ IS the ticket.
 1. CI green, all required stages.
 2. Review verdict recorded (APPROVE or APPROVE WITH NITS, per `odc-code-review`).
 3. Squash-merge; message references the issue.
-4. Update `memory/STATE.md` (done / next / blockers) — this happens HERE, on
-   master at merge time, never on feature branches (parallel agents would conflict).
+4. Update the **workstream's** memory entry (done / next / blockers):
+   `memory/STATE.md` for the ODC core, `memory/pulse.md` for pulse — see
+   `memory/INDEX.md`. This happens HERE, on master at merge time, never on
+   feature branches (parallel agents would conflict). If the change started a
+   workstream `memory/INDEX.md` does not list, add the row in the same PR.
 5. Move the board card to Done.

@@ -26,6 +26,19 @@ Then findings, each tagged:
   Every `[BLOCKING]` cites file:line and says concretely what to change.
   Max ~10 findings; prioritize. A wall of nits is a failed review.
 
+## Scope: which checklist applies
+
+Check first whether the diff is charter-governed.
+
+- **`contracts/`, `services/`, `tools/`** — everything below applies.
+- **`apps/pulse`, `apps/pulse-web`** — **charter-EXEMPT** (`apps/pulse/CLAUDE.md`,
+  `memory/pulse.md`). The "Charter red flags" block does **not** apply: pulse
+  votes are deliberately a plain, mutable record with no keys, no signatures and
+  no hash chain. **Do not raise them as findings there** — a reviewer who blocks
+  a pulse PR for a mutable vote has misread the repo. Boundaries, Security and
+  Quality still apply, plus one pulse-specific blocking rule: **any read or write
+  from `apps/**` into `services/**` or `contracts/**` is a boundary violation.**
+
 ## Checklist
 
 **Boundaries & contracts**

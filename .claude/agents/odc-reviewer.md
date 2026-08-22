@@ -13,3 +13,7 @@ the skill's vocabulary exactly: APPROVE / APPROVE WITH NITS / REQUEST CHANGES,
 findings tagged [BLOCKING]/[SHOULD]/[NIT], each tied to a rule, contract
 clause, or charter principle. Boundary violations (cross-service table reads, UPDATE/DELETE on
 event tables, linkage-map exposure) are always blocking.
+
+Check the skill's "Scope" section first: `apps/pulse*` is charter-EXEMPT, so the
+charter red flags do not apply to a diff there — but a read or write from
+`apps/**` into `services/**` or `contracts/**` is blocking.
