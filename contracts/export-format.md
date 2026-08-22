@@ -1,7 +1,8 @@
 # Export Format — contracts/export-format.md
 
-**Version:** 3
-**Status:** DRAFTING (Phase 0 · T4a, amended T9a/ADR-0013). Not frozen.
+**Version:** 4
+**Status:** DRAFTING (Phase 0 · T4a, amended T9a/ADR-0013 and ADR-0019). Not
+frozen.
 **Companion specs:** `event-schema.md` (envelope), `hashing.md` (preimage +
 `hash`), `read-api.md` (the online read interface), `evolution.md` (versioning).
 
@@ -93,8 +94,14 @@ a portable content fingerprint (the `hash`) and a unique on-disk form (this §2)
   MUST equal the previous line's `hash` (ES-25). A verifier reads the file in
   order and checks these link-by-link.
 - **EX-14.** The **head** of an export is the `hash` field of its **last** line
-  (or, for an empty export, the 64-zero anchor). The head identifies the whole
-  chain: any two valid exports with the same head are identical up to that point.
+  (or, for an empty export, the 64-zero anchor). The head **commits to** the
+  whole chain: any two valid exports with the same head are identical up to that
+  point. That is a commitment to the chain's **content**; it is not a **name**
+  for the chain. Naming is the genesis hash's job (EX-21, `event-types.md`
+  ET-7a): a head is a position, so a head given without the identity leaves open
+  which chain it is a position on. The two senses of "identify" are distinct and
+  neither implies the other — a value can determine everything a chain contains
+  up to a point without serving as the chain's durable label.
 
 ## 4. `--head` and what truncation the export can and cannot self-detect
 
