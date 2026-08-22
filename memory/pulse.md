@@ -52,10 +52,8 @@ and the same repo-wide CI as everything else.
   refused**, never read as a retraction.
 - `API.md` written down, including where it disagrees with the client (#92) —
   **that disagreement is now closed** (see below), and the table is gone.
-- **Sign-in contract closed and wired end to end** — on branch
-  `pulse/sign-in-contract`, **not yet merged**; record the squash commit here
-  when it lands.
-  The client moved to the server's `/api/sign-in*` shape; `wantsProofEmails`
+- **Sign-in contract closed and wired end to end** (#116, `8efdff7`).
+  The client moved to the server's `/api/sign-in*` shape; `proofEmailsOptIn`
   is the wire name on both sides; `Me.id` matches the server's field; the
   `devLink` variant no implementation could produce is gone. `src/dev-server.ts`
   is the first thing in pulse that actually **listens** (port 8080, matching
@@ -67,10 +65,19 @@ and the same repo-wide CI as everything else.
   growing a row in a table.
 
 **`apps/pulse-web` — the client.** Package, API contract and the story flow
-rules (#84, review fixes #90), HTTP client and demo API (#88). It is
-**deliberately ahead of the server** in two places the product has decided:
-`method` on a poll, and vote-changing. `Ballot = number[]` exists so `ranked`
-can be added later without changing any shape.
+rules (#84, review fixes #90), HTTP client and a demo API (#88; the demo was
+deleted in #118). It was **deliberately ahead of the server** in two places the
+product had decided — `method` on a poll, and vote-changing — and the server
+caught up in #94, with the sign-in half closed in #116. Client and server now
+speak one contract, held there by `test/end-to-end.test.ts` rather than by
+prose. `Ballot = number[]` exists so `ranked` can be added later without
+changing any shape.
+
+- **The demo client is gone** (#118). `HttpPulseApi` is the only implementation
+  of `PulseApi` now; the interface survives only because private fields make it
+  nominally typed, so a screen typed to it can be stubbed with a plain object.
+  See the open question under "Not built" — if screen tests use the real class
+  with a fake `fetch` instead, the interface has no user and should go.
 
 **Mockups.** `docs/mockups/pulse-screens/` (seven per-screen files, #97 —
 screen 1 redesigned as a swipe ballot), plus `pulse-story-mobile-v1.html` and
@@ -100,7 +107,7 @@ dir-scoped: `services/**` and `contracts/**` are still fully counted.
   to the interface can be stubbed with a plain object. If the screen tests end up
   using the real class with a fake `fetch` instead, the interface has no user.
 - **Pillar 3, the path to action** in any form: soliciting ideas, volunteer time
-  or donations, and the proof-of-what-happened email. `wantsProofEmails` is
+  or donations, and the proof-of-what-happened email. `proofEmailsOptIn` is
   collected at sign-in and currently leads nowhere.
 - **Real mail delivery and real persistence.** `src/identity/mailer.ts` and the
   stores are what the tests run against; nothing is durable.

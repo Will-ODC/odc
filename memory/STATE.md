@@ -51,7 +51,6 @@ this list alone.**
    shared judge _throw_), a swap test that never swapped, self-consistent
    synthetic chains that cannot detect a preimage bug, and no assertion that a
    _legal_ optional key is accepted. → § Blockers, first entry
-3. **`pulse.md` is owed an update when #116 lands.** → `memory/pulse.md`
 
 ## Done (ledger — detail is in the cited squash commit)
 
