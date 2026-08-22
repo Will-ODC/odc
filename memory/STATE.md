@@ -204,6 +204,25 @@ numbers for all eight tamper cases. No contract, fixture, or golden hash changed
 Required repository CI now runs the Go fixture suite and the complete rehearsal.
 Contracts remain **DRAFTING**; T9 is the next gate.
 
+**Memory and agent infrastructure (#117, 2026-08-22).** Not a contracts ticket,
+recorded here because it changed how every session starts.
+
+- `memory/INDEX.md` is the entry point now — a ~6 KB router that holds nothing
+  normative. `CLAUDE.md` points at it. Read it before this file.
+- `memory/pulse.md` exists: the charter-exempt workstream had run **nineteen PRs
+  (#79–#97) with no memory entry at all**, which this file admitted in its own
+  blockers and never fixed.
+- **The `memory-index` CI check enforces it** and is required on master. A
+  top-level workstream directory with no row in `INDEX.md` fails the build. It
+  would have fired on `apps/` at PR #79. It checks only that the directory is
+  _named_ — whether the entry is any good is review's job.
+- `OPEN-QUESTIONS.md` split: settled entries moved to
+  `OPEN-QUESTIONS-archive.md`, live file 63 KB → 31 KB. Nothing was cut.
+- `.claude/skills/odc-orchestration` holds the model-routing rule; seven other
+  skills were corrected where they contradicted the code they govern — most
+  seriously `odc-code-review`, whose charter red flags were unconditional and
+  would have made a reviewer block pulse's deliberately mutable votes.
+
 ## Direction decisions — see the ADRs; carry-forward consequences below
 
 - **ADR-0007** — freeze deferred to operational use; three states DRAFTING →
