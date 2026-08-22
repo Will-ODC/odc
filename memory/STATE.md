@@ -563,9 +563,11 @@ in `memory/pulse.md`.
   on `claude/t9-audit`, `claude/t9-decisions`, `claude/t9-adrs-contracts` (PRs
   closed, content fully on master). Kept deliberately for that reason; deleting
   them is lossy, not free.
-- **Branch protection ON** (`protect-master`): PR required, four strict checks
-  (`format / lint / typecheck`, `diff-size`, `guard-tests`, `guard`), linear
-  history, no bypass. **STATE.md updates ride their own follow-up PR** — feature
+- **Branch protection ON** — it is a **Ruleset** (`protect-master`), not a classic
+  branch rule; edit it under Settings → Rules → Rulesets. PR required, **five**
+  strict checks (`format / lint / typecheck`, `diff-size`, `guard-tests`,
+  `memory-index`, `guard`), linear history, no bypass. `memory-index` was added
+  2026-08-22 with the memory index it enforces. **STATE.md updates ride their own follow-up PR** — feature
   branches conflict, so update this file after the ticket merges.
 - **Fifteen of the first sixteen reviewed slices had a real defect; T7 (#69) is
   the sole clean one — and it was the most-isolated build, reviewed hardest.**
