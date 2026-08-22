@@ -64,6 +64,13 @@ GET. On success:
 One door: this creates the identity the first time and signs the same person back in
 every time after. There is no separate sign-up.
 
+### `POST /api/sign-out`
+
+No body. Always answers `200 { "status": "signed_out" }`, whether or not anyone was
+signed in — asking to be signed out is not something to refuse. It clears the cookie
+**and** moves the voter's sessions-valid-from to now, so a copy of the cookie kept
+elsewhere stops working too.
+
 ## The session cookie
 
 `pulse_session`, `HttpOnly`, `SameSite=Lax`, `Secure` (off only in local development),
@@ -193,14 +200,13 @@ When the poll has closed, the body is just `{ "status": "closed" }`.
 | 401    | `error: "signed_out"`                               | no valid session                              |
 | 404    | `error: "not_found"`                                | no such poll                                  |
 
-## Where the client and server still disagree
+## The client
 
-The poll and vote paths, the ballot shape, changing a vote, `method`, `open`, and
-the `voters` count are now settled — those routes speak what
-`apps/pulse-web/src/api/types.ts` expects. What remains are decisions on the sign-in
-half, out of scope here:
+`apps/pulse-web/src/api/http.ts` speaks exactly this: the paths above, the
+`wantsProofEmails` opt-in, the wrapped `{ voter }` bodies, and `id` as the voter's
+field name. There is no remaining disagreement to record here; `apps/pulse-web/test/end-to-end.test.ts`
+holds it that way by driving this server over a real socket.
 
-| Thing          | Server (here)         | Client (`apps/pulse-web`)               |
-| -------------- | --------------------- | --------------------------------------- |
-| Sign-in paths  | `/api/sign-in/redeem` | `/claims`, `/claims/redeem`             |
-| Unknown domain | 403 naming the domain | never reveals whether an address exists |
+The one refusal the client treats as an _answer_ rather than a failure is the 403
+`not_a_member`: it becomes `{ status: "not_eligible", message }` and shows the
+server's sentence, which names the domain, as-is.

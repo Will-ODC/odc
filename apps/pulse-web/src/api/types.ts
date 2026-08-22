@@ -49,27 +49,50 @@ export type CastOutcome =
   | { status: "changed"; ballot: Ballot; results: Results }
   | { status: "closed" };
 
+/**
+ * The signed-in person, in the server's own field names (`GET /api/me` →
+ * `{ voter: { id, email, community } }`). `id`, not `voterId`: one name for one
+ * thing, so nothing has to be renamed on the way in or out.
+ */
 export interface Me {
-  voterId: string;
+  id: string;
   community: string;
   /** The address the link was sent to, shown back so a typo is obvious. */
   email: string;
 }
 
 export interface PulseApi {
-  /** Ask for a sign-in link. Resolves once sent; never says whether the address exists. */
-  requestLink(email: string, wantsUpdates: boolean): Promise<RequestLinkResult>;
+  /**
+   * Ask for a sign-in link. `wantsProofEmails` is the opt-in for hearing what
+   * came of the vote — the server's own name for it, and a real boolean either
+   * way, because it refuses anything else rather than reading it as false.
+   */
+  requestLink(
+    email: string,
+    wantsProofEmails: boolean,
+  ): Promise<RequestLinkResult>;
   /** Redeem the token from the emailed link. */
   redeem(token: string): Promise<Me>;
   me(): Promise<Me | null>;
+  /**
+   * Sign out everywhere, not only in this browser: every session issued before
+   * now stops working. Resolves once the server has done it.
+   */
+  signOut(): Promise<void>;
   poll(pollId: string): Promise<Poll>;
   myBallot(pollId: string): Promise<Ballot | null>;
   results(pollId: string): Promise<Results>;
   cast(pollId: string, ballot: Ballot): Promise<CastOutcome>;
 }
 
+/**
+ * Two answers, because the server gives two: the link is on its way, or the
+ * address's domain belongs to no community yet. There is no `devLink`
+ * variant — no implementation can produce one (the server never returns a link
+ * in a response body), and a variant nothing can produce is a lie in the type.
+ *
+ * `message` on `not_eligible` is the server's own sentence, which names the
+ * domain. It is shown as-is.
+ */
 export type RequestLinkResult =
-  | { status: "sent" }
-  /** Dev only: no mail is sent, so the link comes straight back. */
-  | { status: "sent"; devLink: string }
-  | { status: "not_eligible"; message: string };
+  { status: "sent" } | { status: "not_eligible"; message: string };

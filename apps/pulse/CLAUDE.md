@@ -41,6 +41,9 @@ Three MVP pillars, in build order:
 ## Layout
 
 ```
-src/voting/   polls, votes, results — the core domain, storage-agnostic
-test/         node:test, run against dist/ after `pnpm build`
+src/voting/     polls, votes, results — the core domain, storage-agnostic
+src/identity/   email, domain allowlist, magic-link claims, voter store
+src/http/       the Fastify surface and the signed session cookie
+src/dev-server  the runnable dev entry: seeds a community and a poll, listens
+test/           node:test, run against dist/ after `pnpm build`
 ```
