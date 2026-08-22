@@ -213,9 +213,20 @@ recorded here because it changed how every session starts.
   (#79–#97) with no memory entry at all**, which this file admitted in its own
   blockers and never fixed.
 - **The `memory-index` CI check enforces it** and is required on master. A
-  top-level workstream directory with no row in `INDEX.md` fails the build. It
-  would have fired on `apps/` at PR #79. It checks only that the directory is
-  _named_ — whether the entry is any good is review's job.
+  top-level directory holding committed work, with no row in `INDEX.md`, fails
+  the build. It checks only that the directory is _named_ — whether the entry is
+  any good is review's job. What it removes is the **silent** omission.
+- **It shipped with a defect worth remembering, fixed in #121.** The directory
+  list was hardcoded (`apps contracts services tools docs`), which cannot catch
+  the failure the guard is named after: a hardcoded list only catches a directory
+  someone already thought to list, and the case that needs catching is a
+  workstream nobody was thinking about. A new `packages/` sailed past it. It also
+  made "would have fired on `apps/` at PR #79" true only because `apps` is in
+  today's list — a guard written before `apps/` existed would have missed `apps/`.
+  #121 discovers the list with `git ls-tree` instead, so untracked and gitignored
+  directories drop out for free and a new directory is caught the moment it is
+  committed. **The general shape: a guard whose scope is a list someone maintains
+  is blind exactly where you need it.**
 - `OPEN-QUESTIONS.md` split: settled entries moved to
   `OPEN-QUESTIONS-archive.md`, live file 63 KB → 31 KB. Nothing was cut.
 - `.claude/skills/odc-orchestration` holds the model-routing rule; seven other
