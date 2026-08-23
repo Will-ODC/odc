@@ -28,10 +28,11 @@
 import { test } from "node:test";
 import assert from "node:assert/strict";
 import { verifyExport } from "../src/verify.js";
-import { parseEventLine } from "../src/parse.js";
+import { parseEventLine, type ParsedEvent } from "../src/parse.js";
+import { computeHash } from "../src/hashing.js";
+import { verdictLine } from "../src/report.js";
 
 const ZERO64 = "0".repeat(64);
-const HEX64 = "1".repeat(64);
 
 /**
  * A canonical event line whose payload carries `n` distinct keys in ascending
@@ -39,15 +40,25 @@ const HEX64 = "1".repeat(64);
  * numeric order agree: unpadded `k10` sorts before `k2`, which the parser
  * rejects at the second key — a generator that forgets this never reaches many
  * keys at all and silently tests nothing.
+ *
+ * The `hash` is the REAL one, recomputed over the finished line. An earlier
+ * version of this generator hard-coded a placeholder, and verification then
+ * stopped at the HA-14 mismatch — Stage B was never entered at all, so the
+ * budget below measured strictly less than its name claimed.
  */
 function manyKeyLine(n: number): Buffer {
   const parts: string[] = [];
   for (let i = 0; i < n; i++) parts.push(`"k${String(i).padStart(9, "0")}":1`);
-  return Buffer.from(
+  const withHash = (hash: string): string =>
     `{"seq":1,"type":"genesis","version":1,"payload":{${parts.join(",")}},` +
-      `"ts":"2026-01-01T00:00:00.000Z","prev_hash":"${ZERO64}","hash":"${HEX64}"}`,
-    "utf8",
+    `"ts":"2026-01-01T00:00:00.000Z","prev_hash":"${ZERO64}","hash":"${hash}"}`;
+  const draft = parseEventLine(Buffer.from(withHash(ZERO64), "utf8"));
+  assert.notEqual(
+    draft,
+    null,
+    "the many-key generator built an unparsable line",
   );
+  return Buffer.from(withHash(computeHash(draft as ParsedEvent)), "utf8");
 }
 
 const KEY_COUNT = 128_000;
@@ -75,9 +86,18 @@ test(`parses a ${KEY_COUNT}-key payload well inside ${BUDGET_MS}ms (sub-quadrati
 });
 
 test(`verifies a ${KEY_COUNT}-key export well inside ${BUDGET_MS}ms (nothing downstream is quadratic either)`, () => {
-  // Covers the HA-7 preimage build and the Stage A/Stage B path as well as the
-  // parser: a per-key linear scan added anywhere downstream (a `find` over the
-  // payload inside a per-key loop, say) shows up here and not above.
+  // Covers the parser, the HA-7 preimage build (a pass over every key) and all
+  // of Stage A — seq, ts, the prev_hash anchor and the HA-14 hash comparison —
+  // through to the entry of Stage B. A per-key linear scan added anywhere in
+  // that stretch (a `find` over the payload inside a per-key loop, say) shows
+  // up here and not in the parser-only budget above.
+  //
+  // WHAT IT DOES NOT COVER: Stage B's own per-key work. The hash is correct, so
+  // Stage B IS entered — but `(genesis, 1)` defines seven payload keys, so the
+  // ES-18/ES-34 key-set check rejects `k000000000` on sight and nothing further
+  // runs. No 128k-key payload can do better for a registered type: every key
+  // past the defined set is rejected at the first comparison, by construction.
+  // Stage B's key handling is bounded by the key set, not by the input.
   const bytes = Buffer.concat([manyKeyLine(KEY_COUNT), Buffer.from("\n")]);
   const t0 = process.hrtime.bigint();
   const verdict = verifyExport(bytes);
@@ -85,6 +105,17 @@ test(`verifies a ${KEY_COUNT}-key export well inside ${BUDGET_MS}ms (nothing dow
   assert.ok(
     ["VALID", "INVALID", "PARTIAL"].includes(verdict.verdict),
     "EV-17: exactly one of the three verdicts",
+  );
+  // A COVERAGE PROBE, not an oracle: advisory reason text is never
+  // conformance-checked (EV-17), and `contracts/fixtures/` remains the only
+  // authority on what an input verifies to. It is asserted here because it is
+  // the one signal that this timing spans what the comment above says it does
+  // — a stale or placeholder `hash` would report HA-14 instead, and the budget
+  // would quietly stop measuring most of the path.
+  assert.match(
+    verdictLine(verdict),
+    /Stage B/,
+    `expected verification to reach Stage B, got: ${verdictLine(verdict)}`,
   );
   assert.ok(
     ms < BUDGET_MS,

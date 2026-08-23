@@ -113,7 +113,11 @@ inventing conformance in a file no reviewer treats as normative.
   minutes on a few megabytes of input without changing any verdict. Measured on
   the 128k-key payload the test uses: ~115 ms as written, ~634 s (10.5 minutes)
   with the quadratic shape — the budget sits between them with ~30x headroom
-  over the former.
+  over the former. Its reach is the parser, the HA-7 preimage and all of Stage
+  A, through to the entry of Stage B — **not** Stage B's own per-key work,
+  which no such payload can reach: `(genesis, 1)` defines seven payload keys,
+  so the ES-18/ES-34 key-set check rejects the first undefined one on sight.
+  Stage B's key handling is bounded by the key set, not by the input.
 - **`test/extreme-values.test.ts`** — value-level fuzzing for that same class.
   Generates structurally valid exports carrying extreme values (huge strings
   where byte length, code point count and UTF-16 length diverge; integers
