@@ -24,8 +24,12 @@
 
 **Phase 0 — Contracts.** The T9 audit has **run** and returned **REQUEST
 CHANGES** (six blocking findings, `docs/security/audit-phase-0.md`). All six were
-decided and answered in the specs as **ADR-0013…0018** (#98); `event-types.md` is
-at **v8**, `evolution.md` v4, `export-format.md` v3, `event-schema.md` v3.
+decided and answered in the specs as **ADR-0013…0018** (#98). Versions, checked
+against the files 2026-08-23: `event-types.md` **v9**, `event-schema.md` **v4**,
+`export-format.md` **v4**, `evolution.md` **v4**, `hashing.md` **v2**,
+`read-api.md` v1, `ids.md` v1. (This line read v8/v3/v3 until 2026-08-23 — ADR-0019
+bumped three of them in #112 and updated only the Next section. Re-read the
+`**Version:**` lines rather than trusting any prose, this line included.)
 
 **The gate is still closed.** Spec changes alone do not clear T9 — it reopens only
 after fixtures, both verifiers, and a **fresh re-audit** (see Next). Nothing may be
@@ -33,9 +37,13 @@ implemented in services/ until then, and T9a advances `contracts/` to **RELEASE
 CANDIDATE** (ADR-0007) only after that. The `contracts-v1` freeze stays deferred
 until real operational use; `contracts/` remains **DRAFTING**.
 
-**Conformance work is 1 of 4 phases done** (#104, #105). Phase 2 is next; the
-phase list, and why fixtures and verifiers must land together in each one, are
-under Next.
+**Conformance work: phase 1 done (#104, #105); phase 2's contracts half (ADR-0019,
+#112) and verifier half (#123, #124, awaiting merge) done; phase 2's twelve
+vectors are the live work.** Phases 3 and 4 not started. The phase list is under
+Next — **and note the coupling rule there is NOT "fixtures and verifiers must land
+together"**, which is true only of phase 1. The real rule: **fixtures may never
+precede verifiers; verifiers may land alone whenever their new checks are no-ops
+on the committed corpus.** Assuming the stronger rule costs a needless mega-PR.
 
 ### Owed right now — must ride into the next PR that touches each
 
@@ -43,14 +51,19 @@ Hoisted here because the full entries live at the end of a 37 KB file, past
 where anyone reliably reads. Each line links to its entry; **do not act from
 this list alone.**
 
-1. **Rebuild #109/#110, do not merge them** — they predate ADR-0019 and would go
-   **green while behind the spec**, because no committed vector carries either
-   optional key. → § Next, "What phase 2 still owes"
-2. **Four review findings must ride into that rebuild or they are lost** — the
-   `conformanceVerdict` regex with no `m` flag (a second output line makes the
-   shared judge _throw_), a swap test that never swapped, self-consistent
-   synthetic chains that cannot detect a preimage bug, and no assertion that a
-   _legal_ optional key is accepted. → § Blockers, first entry
+1. **Merge #122, #123, #124, then write the phase-2 entry here.** All three are
+   reviewed, all findings applied, 5/5 required checks green (2026-08-23). Nothing
+   in this file describes them as landed until they are. → § Next
+2. **Then the twelve vectors — the critical path.** Five rules (ET-9d, ET-9e,
+   ET-9f, ES-34, EV-20) are enforced by both verifiers and covered by **no
+   vector**, so what merges is two implementers agreeing, not verification.
+   ET-9d and its fixture both have a before-the-freeze deadline. → § Blockers,
+   fixture-coverage entry
+3. **Five `contracts/` contradictions need an operator decision** — EV-9 vs EV-20
+   first, the only one where a third implementer would get a different **verdict**.
+   → § Blockers, first entry
+4. **ET-23/ET-24 are implemented by neither verifier** and are the anonymity
+   rules. Phase 3 covers them on paper; confirm that is real. → § Blockers
 
 ## Done (ledger — detail is in the cited squash commit)
 
