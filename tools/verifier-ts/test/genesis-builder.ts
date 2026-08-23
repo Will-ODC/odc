@@ -38,12 +38,15 @@ export function keypair(): KeyPair {
   return { priv: privateKey, rawPub, hex: rawPub.toString("hex") };
 }
 
-/** Two distinct keypairs — ET-9d requires operator_pk !== registrar_pk. */
-export function operatorAndRegistrar(): { op: KeyPair; reg: KeyPair } {
-  const op = keypair();
-  let reg = keypair();
-  while (reg.hex === op.hex) reg = keypair();
-  return { op, reg };
+/**
+ * A keypair that is not `otherHex` — ET-9d requires operator_pk !== registrar_pk.
+ * Generated on demand: a caller that supplies its own `registrar_pk` never pays
+ * for a keypair it then discards.
+ */
+export function distinctKeypair(otherHex: string): KeyPair {
+  let k = keypair();
+  while (k.hex === otherHex) k = keypair();
+  return k;
 }
 
 /** Parse a harness-built line, failing loudly if the harness itself is broken. */
@@ -61,16 +64,26 @@ function jsonString(s: string): string {
  * Serialize a payload in the canonical line form: compact, keys in ascending
  * UTF-8 byte order (EX-8). Every key used here is lowercase ASCII, so the
  * plain byte sort is the code-unit sort.
+ *
+ * `entries` values are strings and are quoted. `rawEntries` values are RAW
+ * JSON tokens, written through as they stand — the only way to build a
+ * well-formed payload whose value is a number, `true` or `false`, which the
+ * schema's own type rules must then reject. Without it a whole class of
+ * well-formed-but-wrong payload is unreachable from the suite.
  */
-function payloadJson(entries: Record<string, string>): string {
-  const keys = Object.keys(entries).sort((a, b) =>
+function payloadJson(
+  entries: Record<string, string>,
+  rawEntries: Record<string, string> = {},
+): string {
+  const rendered: Record<string, string> = {};
+  for (const [k, v] of Object.entries(entries)) rendered[k] = jsonString(v);
+  for (const [k, v] of Object.entries(rawEntries)) rendered[k] = v;
+  const keys = Object.keys(rendered).sort((a, b) =>
     Buffer.compare(Buffer.from(a, "utf8"), Buffer.from(b, "utf8")),
   );
   return (
     "{" +
-    keys
-      .map((k) => `${jsonString(k)}:${jsonString(entries[k] as string)}`)
-      .join(",") +
+    keys.map((k) => `${jsonString(k)}:${rendered[k] as string}`).join(",") +
     "}"
   );
 }
@@ -94,6 +107,11 @@ function eventLine(
  * Build a one-event export whose `genesis` carries `extra` alongside the five
  * required keys. Signed by `operator_pk` (ET-8) and hashed by `hashing.ts`.
  * `sign: false` skips signing (used where Stage B never runs, e.g. EV-20).
+ *
+ * `rawExtra` adds keys whose values are RAW JSON tokens rather than strings —
+ * `{ ancestor_chain: "1" }` writes `"ancestor_chain":1`. Everything else about
+ * the line stays correct (order, hash, signature), so a rejection can only come
+ * from the value's TYPE.
  */
 export function genesisExport(
   extra: Record<string, string>,
@@ -101,23 +119,28 @@ export function genesisExport(
     version?: number;
     sign?: boolean;
     registrarPk?: (operatorHex: string) => string;
+    rawExtra?: Record<string, string>;
   } = {},
 ): Buffer {
   const version = opts.version ?? 1;
   const doSign = opts.sign ?? true;
-  const { op, reg } = operatorAndRegistrar();
+  const rawExtra = opts.rawExtra ?? {};
+  const op = keypair();
   const base: Record<string, string> = {
     chain_id: createHash("sha256").update(op.rawPub).digest("hex"),
     contracts: "contracts-v1",
     operator_pk: op.hex,
-    // `registrarPk` overrides the freshly generated (and therefore distinct)
-    // registrar key. It is a FUNCTION OF the operator hex, not a bare string,
+    // `registrarPk` replaces the otherwise freshly generated (and therefore
+    // distinct) registrar key, which is generated only when it is not supplied.
+    // It is a FUNCTION OF the operator hex, not a bare string,
     // because the operator key is generated in here: a caller wanting the
     // ET-9d collapse must be able to say "whatever operator_pk turned out to
     // be", which a bare string cannot express — it would silently produce two
     // distinct keys and a test that passes for the wrong reason. Only ET-9d's
     // suite passes this; every other caller gets two distinct keys.
-    registrar_pk: opts.registrarPk ? opts.registrarPk(op.hex) : reg.hex,
+    registrar_pk: opts.registrarPk
+      ? opts.registrarPk(op.hex)
+      : distinctKeypair(op.hex).hex,
     ...extra,
   };
 
@@ -127,7 +150,7 @@ export function genesisExport(
     1,
     "genesis",
     version,
-    payloadJson({ ...base, sig: PLACEHOLDER_SIG }),
+    payloadJson({ ...base, sig: PLACEHOLDER_SIG }, rawExtra),
     ZERO64,
     ZERO64,
   );
@@ -137,7 +160,7 @@ export function genesisExport(
     : PLACEHOLDER_SIG;
 
   // Pass 2: real sig, then the hash over the completed payload (HA-13).
-  const withSig = payloadJson({ ...base, sig: sigHex });
+  const withSig = payloadJson({ ...base, sig: sigHex }, rawExtra);
   const hash = computeHash(
     mustParse(eventLine(1, "genesis", version, withSig, ZERO64, ZERO64)),
   );

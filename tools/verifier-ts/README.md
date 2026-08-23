@@ -93,7 +93,10 @@ inventing conformance in a file no reviewer treats as normative.
   notice. Same synthetic-chain caveat as the file below.
 - **`test/genesis-builder.ts`** — not a suite: the shared synthetic-`genesis`
   builder those two files use, kept in one place so two signing harnesses
-  cannot drift apart.
+  cannot drift apart. Its `rawExtra` option writes a payload value as a raw
+  JSON token rather than a string, which is the only way to build a well-formed
+  payload whose value has the wrong TYPE (`{"ancestor_chain":1}`) — correct
+  order, hash and signature, so only the schema's own type rule can reject it.
 - **`test/genesis-ancestry.test.ts`** — ET-9e/ET-9f (the two optional `genesis`
   ancestry keys) and EV-20. The fixture corpus carries **no** vector for these
   rules yet, so this file builds its own chains; they are synthetic and

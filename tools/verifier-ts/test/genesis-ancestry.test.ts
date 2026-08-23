@@ -118,6 +118,39 @@ test("rejects a malformed ancestor_head carried without ancestor_chain (two faul
   assert.equal(tokenAndLine(out), "INVALID at line 1");
 });
 
+// --- ET-9e: the value must be a STRING, not merely present -------------------
+//
+// `{"ancestor_chain":1}` is a well-formed payload: the parser accepts an
+// integer value, and every other thing about the line — key order, hash,
+// signature — is correct, because the same harness builds it. So the ONLY
+// thing that can reject it is ET-9e's type-and-format gate. Today that rests
+// entirely on `strField` returning null for a non-string; a change to it, or
+// to the ancestry check that consumes it, would otherwise go unnoticed.
+
+test("rejects an integer ancestor_chain — ET-9e's value is a hex STRING", () => {
+  const out = verifyExport(
+    genesisExport({}, { rawExtra: { ancestor_chain: "1" } }),
+  );
+  assert.equal(tokenAndLine(out), "INVALID at line 1");
+});
+
+test("rejects an integer ancestor_head carried with a legal ancestor_chain", () => {
+  // ET-9f's presence rule is satisfied (both keys present), so this reaches the
+  // format gate on `ancestor_head` and nothing else can be reporting.
+  //
+  // An INTEGER, not `true`: ES-3 leaves the parser rejecting a boolean payload
+  // value outright, so a boolean never reaches Stage B and would pin the
+  // parser rather than ET-9e. An integer is the one non-string value the
+  // parser accepts, and therefore the only one that tests this gate.
+  const out = verifyExport(
+    genesisExport(
+      { ancestor_chain: A_CHAIN },
+      { rawExtra: { ancestor_head: "7" } },
+    ),
+  );
+  assert.equal(tokenAndLine(out), "INVALID at line 1");
+});
+
 // --- ES-34: OPTIONAL widens absence, never the key set -----------------------
 
 test("still rejects a genesis payload key that is not defined for (genesis, 1) (ES-18/ES-34)", () => {
