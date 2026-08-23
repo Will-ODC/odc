@@ -51,7 +51,8 @@ Two stages, per `evolution.md` EV-6/EV-15:
   key order.
 - **Stage B (per registered `(type, version)`):** payload key-set (including
   `genesis`'s two OPTIONAL ancestry keys `ancestor_chain` / `ancestor_head` and
-  the ET-9f presence rule between them — format-checked, never resolved), Ed25519
+  the ET-9f presence rule between them — format-checked, never resolved), the
+  ET-9d distinctness of the two `genesis` keys, Ed25519
   signatures under the type's named key (with the ET-4a/ET-4b canonical-encoding
   and ET-4c prime-order checks run on the raw bytes _before_ the verify
   primitive), title/`choice_count`/`choice` bounds, the `ballot_batch_interval_ms`
@@ -68,7 +69,7 @@ Two stages, per `evolution.md` EV-6/EV-15:
 pnpm --filter @odc/verifier-ts test
 ```
 
-Six files, and the split between them is deliberate — **`contracts/fixtures/`
+Seven files (six suites and one shared builder), and the split between them is deliberate — **`contracts/fixtures/`
 is the sole oracle for what a given input verifies to.** `fixtures.test.ts` is
 the conformance suite; `robustness.test.ts`, `extreme-values.test.ts` and
 `report-shape.test.ts` assert only that a verdict of the right _shape_ came back
@@ -85,6 +86,14 @@ inventing conformance in a file no reviewer treats as normative.
   `f(...array)` defects found in the T7b review (`Math.min(...invalidLines)` and
   `String.fromCodePoint(...cps)`). Node throws `RangeError` once a spread array
   passes ~130k elements.
+- **`test/genesis-key-distinctness.test.ts`** — ET-9d: a `genesis` declaring the
+  same key as both `operator_pk` and `registrar_pk` is `INVALID at line 1`. Pins
+  the accept side too (two distinct keys still verify), since a check written
+  over-broadly would reject every genesis and a negative-only suite would not
+  notice. Same synthetic-chain caveat as the file below.
+- **`test/genesis-builder.ts`** — not a suite: the shared synthetic-`genesis`
+  builder those two files use, kept in one place so two signing harnesses
+  cannot drift apart.
 - **`test/genesis-ancestry.test.ts`** — ET-9e/ET-9f (the two optional `genesis`
   ancestry keys) and EV-20. The fixture corpus carries **no** vector for these
   rules yet, so this file builds its own chains; they are synthetic and

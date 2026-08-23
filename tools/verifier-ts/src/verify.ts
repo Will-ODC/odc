@@ -181,6 +181,24 @@ function stageB(ev: ParsedEvent, state: ChainState): boolean {
       if (contracts === null || contracts.length === 0) return false; // ET-9
       if (opHex === null || !HEX64.test(opHex)) return false; // ET-9b
       if (regHex === null || !HEX64.test(regHex)) return false; // ET-9b
+
+      // ET-9d: the two genesis keys MUST be distinct. A genesis whose
+      // registrar_pk is byte-identical to its operator_pk is INVALID at the
+      // genesis line — one holder would otherwise be able to mint issues AND
+      // forge every ballot on them, collapsing charter P2's two planes into one
+      // party, with nothing else on the line to signal it.
+      //
+      // The rule fixes both the operand and the position: the comparison is on
+      // the two 64-character lowercase-hex strings AFTER ET-9b has passed on
+      // both, so it sits here rather than after Buffer.from(..., "hex") below.
+      // One string equality — no key material, no decoding, no curve
+      // arithmetic.
+      //
+      // Necessary, not sufficient, and deliberately not read as more: two
+      // distinct keys can still be held by one party and the log cannot tell.
+      // ET-9d blocks only the blatant collapse that is visible in the log, so
+      // no further distinctness check belongs here.
+      if (opHex === regHex) return false; // ET-9d
       if (sigHex === null || !HEX128.test(sigHex)) return false;
 
       const opRaw = Buffer.from(opHex, "hex");
