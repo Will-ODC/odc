@@ -31,6 +31,7 @@ model this verifier enforces.
 
 ```
 main.go                     CLI: argument parsing, I/O, exit codes
+cli_extremes_test.go        extreme-value cases, driven as a subprocess
 internal/verify/
   parse.go                  strict byte-exact JSON parser (canonical line form)
   framing.go                NDJSON framing (EX-1..EX-6, EX-20)
@@ -56,6 +57,27 @@ primitive (ET-5, via `crypto/ed25519`) — is stdlib.
 go test ./...
 ```
 
-Test data is the golden vectors in `contracts/fixtures/` and nothing else. Each
-vector asserts only its verdict token and line number(s). The suite also pins
-the byte-exact preimage construction against `contracts/fixtures/preimages/`.
+Conformance test data is the golden vectors in `contracts/fixtures/` and nothing
+else. Each vector asserts only its verdict token and line number(s). The suite
+also pins the byte-exact preimage construction against
+`contracts/fixtures/preimages/`.
+
+Two other suites sit alongside them and assert deliberately less:
+
+- **`internal/verify/genesis_ancestry_test.go`** covers the two OPTIONAL
+  `genesis` fork-ancestry keys (ET-9e/ET-9f) and the unregistered-`genesis` rule
+  (EV-20), for which `contracts/fixtures/` ships no vector. Its chains are built
+  by the same hashing and signing code they are checked against, so they are
+  self-consistent by construction and pin no preimage shape. What each case
+  demonstrates is differential: one edit to an otherwise identical chain moves
+  the verdict in the direction the rule names.
+- **`cli_extremes_test.go`** drives the CLI as a subprocess over structurally
+  valid exports carrying extreme values — deep nesting, integers straddling
+  2^63, huge and escape-heavy strings, very wide payloads, very large line
+  counts. It asserts only that the process returns, prints exactly one
+  well-formed verdict line, and exits with a status agreeing with that line. It
+  never asserts *which* verdict: `contracts/fixtures/` is the sole oracle for
+  that. A subprocess is required because a Go stack overflow is a runtime fatal
+  error rather than a panic — `recover()` cannot turn it back into a verdict —
+  and because its exit status is 2, which collides with `PARTIAL`; the suite
+  judges stdout first for exactly that reason.

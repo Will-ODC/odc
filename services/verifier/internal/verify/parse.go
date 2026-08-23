@@ -36,10 +36,33 @@ type jobject struct {
 }
 
 type parser struct {
-	b   []byte
-	pos int
-	err bool
+	b     []byte
+	pos   int
+	err   bool
+	depth int // current nesting depth; guarded by maxParseDepth
 }
+
+// maxParseDepth bounds the nesting this recursive-descent parser will descend
+// into. Beyond it the line is rejected as non-canonical.
+//
+// This is verdict-preserving, and that is the only reason it may exist. The
+// deepest structure any conforming export line can hold is TWO levels: the
+// line object itself, and its `payload` object. Payload values are flat
+// integers and strings only (ES-16/ES-17), so a third level of nesting is
+// already INVALID at that line under EV-16 — and INVALID regardless of whether
+// the (type, version) is registered, since HA-7 defines no encoding for it and
+// the event therefore has no computable preimage. Refusing to descend past 64
+// levels reports the same verdict at the same line as walking the whole
+// structure and rejecting it for flatness; 64 is 32x the deepest legal line.
+//
+// Without the bound the parser is unbounded recursion over attacker-controlled
+// input, and Go does not merely panic there: a stack overflow is a runtime
+// FATAL error, so recover() cannot turn it back into a verdict. The process
+// dies printing nothing to stdout and exits with status 2 — which is this
+// CLI's PARTIAL code. A consumer reading exit status alone would read a crash
+// as "chain verified, some semantics unchecked". Measured on the pre-fix
+// binary, a single line nesting objects 1.5M deep (a 7.5 MB export) was enough.
+const maxParseDepth = 64
 
 // parseObjectLine parses exactly one JSON object occupying the whole input,
 // with no leading, trailing, or interior whitespace. It returns ok=false for
@@ -63,10 +86,20 @@ func (p *parser) parseValue() jvalue {
 	}
 	c := p.b[p.pos]
 	switch {
-	case c == '{':
-		return p.parseObject()
-	case c == '[':
-		return p.parseArray()
+	case c == '{', c == '[':
+		if p.depth >= maxParseDepth {
+			p.err = true
+			return jvalue{}
+		}
+		p.depth++
+		var v jvalue
+		if c == '{' {
+			v = p.parseObject()
+		} else {
+			v = p.parseArray()
+		}
+		p.depth--
+		return v
 	case c == '"':
 		s, ok := p.parseString()
 		if !ok {
