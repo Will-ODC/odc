@@ -24,10 +24,11 @@ Do not apply charter rules to `apps/**`, and do not relax them anywhere else.
 > smaller, so on a divergence you would otherwise trust the wrong one.
 
 - **ODC core:** Phase 0, ticket T9. The security-audit gate is **closed**; the
-  fixture/verifier conformance work runs in four phases. **Phase 1 done. Phase 2
-  in flight: its contracts half (ADR-0019) has landed, both verifiers and the
-  eleven vectors are still owed** — and PRs #109/#110 must be rebuilt, not
-  merged. → `memory/STATE.md`
+  fixture/verifier conformance work runs in four phases. **Phase 1 done. Phase 2:
+  both verifiers are rebuilt, reviewed and green in PRs #123/#124 (#109/#110
+  closed, superseded); the twelve vectors are the remaining owed work and are the
+  critical path.** Five `contracts/` contradictions are open for an operator
+  decision. → `memory/STATE.md`
 - **Pulse:** MVP pillar 1 (magic-link identity) and the voting core are built and
   served over HTTP; the story UI and the path to action are not. → `memory/pulse.md`
 

@@ -24,8 +24,12 @@
 
 **Phase 0 — Contracts.** The T9 audit has **run** and returned **REQUEST
 CHANGES** (six blocking findings, `docs/security/audit-phase-0.md`). All six were
-decided and answered in the specs as **ADR-0013…0018** (#98); `event-types.md` is
-at **v8**, `evolution.md` v4, `export-format.md` v3, `event-schema.md` v3.
+decided and answered in the specs as **ADR-0013…0018** (#98). Versions, checked
+against the files 2026-08-23: `event-types.md` **v9**, `event-schema.md` **v4**,
+`export-format.md` **v4**, `evolution.md` **v4**, `hashing.md` **v2**,
+`read-api.md` v1, `ids.md` v1. (This line read v8/v3/v3 until 2026-08-23 — ADR-0019
+bumped three of them in #112 and updated only the Next section. Re-read the
+`**Version:**` lines rather than trusting any prose, this line included.)
 
 **The gate is still closed.** Spec changes alone do not clear T9 — it reopens only
 after fixtures, both verifiers, and a **fresh re-audit** (see Next). Nothing may be
@@ -33,9 +37,13 @@ implemented in services/ until then, and T9a advances `contracts/` to **RELEASE
 CANDIDATE** (ADR-0007) only after that. The `contracts-v1` freeze stays deferred
 until real operational use; `contracts/` remains **DRAFTING**.
 
-**Conformance work is 1 of 4 phases done** (#104, #105). Phase 2 is next; the
-phase list, and why fixtures and verifiers must land together in each one, are
-under Next.
+**Conformance work: phase 1 done (#104, #105); phase 2's contracts half (ADR-0019,
+#112) and verifier half (#123, #124, awaiting merge) done; phase 2's twelve
+vectors are the live work.** Phases 3 and 4 not started. The phase list is under
+Next — **and note the coupling rule there is NOT "fixtures and verifiers must land
+together"**, which is true only of phase 1. The real rule: **fixtures may never
+precede verifiers; verifiers may land alone whenever their new checks are no-ops
+on the committed corpus.** Assuming the stronger rule costs a needless mega-PR.
 
 ### Owed right now — must ride into the next PR that touches each
 
@@ -43,14 +51,19 @@ Hoisted here because the full entries live at the end of a 37 KB file, past
 where anyone reliably reads. Each line links to its entry; **do not act from
 this list alone.**
 
-1. **Rebuild #109/#110, do not merge them** — they predate ADR-0019 and would go
-   **green while behind the spec**, because no committed vector carries either
-   optional key. → § Next, "What phase 2 still owes"
-2. **Four review findings must ride into that rebuild or they are lost** — the
-   `conformanceVerdict` regex with no `m` flag (a second output line makes the
-   shared judge _throw_), a swap test that never swapped, self-consistent
-   synthetic chains that cannot detect a preimage bug, and no assertion that a
-   _legal_ optional key is accepted. → § Blockers, first entry
+1. **Merge #122, #123, #124, then write the phase-2 entry here.** All three are
+   reviewed, all findings applied, 5/5 required checks green (2026-08-23). Nothing
+   in this file describes them as landed until they are. → § Next
+2. **Then the twelve vectors — the critical path.** Five rules (ET-9d, ET-9e,
+   ET-9f, ES-34, EV-20) are enforced by both verifiers and covered by **no
+   vector**, so what merges is two implementers agreeing, not verification.
+   ET-9d and its fixture both have a before-the-freeze deadline. → § Blockers,
+   fixture-coverage entry
+3. **Five `contracts/` contradictions need an operator decision** — EV-9 vs EV-20
+   first, the only one where a third implementer would get a different **verdict**.
+   → § Blockers, first entry
+4. **ET-23/ET-24 are implemented by neither verifier** and are the anonymity
+   rules. Phase 3 covers them on paper; confirm that is real. → § Blockers
 
 ## Done (ledger — detail is in the cited squash commit)
 
@@ -356,15 +369,66 @@ the rest. Two that must not be lost:
 
 **What phase 2 still owes, in order.**
 
-1. **Both verifiers, rebuilt in fresh isolated passes** — `ancestor_chain` plus
-   `ancestor_head`, format-check each, enforce ET-9f, resolve nothing. **PRs #109
-   and #110 are open and MUST NOT be merged as they stand.** They predate
-   ADR-0019 and know one optional key. **The trap: they would go GREEN, not
-   red** — no committed vector carries either key, so CI cannot see that they are
-   behind the spec. Merging them buys a silent regression. Their four review
-   findings are in Blockers below and must ride into the rework.
-2. **The eleven vectors**, `ancestor_head`-without-`ancestor_chain` first.
-3. **Fresh-context review of each**, then the phase-2 STATE.md entry.
+1. ~~Both verifiers, rebuilt in fresh isolated passes.~~ **DONE 2026-08-23, in
+   review, awaiting merge: PR #123 (Go) and #124 (TS).** Both were rebuilt by
+   agents that had never seen the other's source, each briefed from `contracts/`
+   alone. **#109 and #110 are CLOSED**, superseded — not merged and not updated,
+   because the trap held exactly as predicted: they would have gone **green**
+   while behind the spec, since no committed vector carries either ancestry key.
+   All six of their review findings rode into the rebuilds.
+2. **The twelve vectors — the critical path, and the only thing that turns "both
+   verifiers agree" into "both verifiers are verified".** Eleven for fork
+   ancestry and EV-20 (`ancestor_head`-without-`ancestor_chain` first), plus one
+   for ET-9d. See the coverage entry in Blockers for why this is now urgent
+   rather than tidy.
+3. ~~Fresh-context review of each.~~ **DONE** — three independent reviewers, one
+   per branch, none of them the author, and **no two of them allowed to see both
+   verifiers**. All returned APPROVE WITH NITS; every finding was applied,
+   verified and pushed. Also merged-and-owed: the phase-2 STATE.md entry, at
+   merge time.
+
+**What the phase-2 rebuild actually found — the reason this took four rounds and
+not one.** Recorded because every item is the same shape: _a check that passes
+while reaching nothing_.
+
+- **A real crash, not a regression guard.** The Go parser was recursive-descent
+  with **no depth limit**. A single line nesting ~1.5M deep exhausted the
+  goroutine stack, and Go answers that with a runtime **fatal error**, not a
+  panic — so `recover()` cannot turn it back into a verdict. The process printed
+  **nothing** to stdout and exited **2**, which is that CLI's PARTIAL code: a
+  consumer reading exit status alone reads a crashed verifier as "chain
+  verified". An EV-17 violation reached without breaking any stated rule. Fixed
+  with a depth bound of 64, verdict-preserving from ES-16/ES-17. **The
+  orchestrator's own draft fuzzer tested to depth 500k and passed** — the defect
+  needed a cold builder going to 3M to surface. That is the isolation rule
+  earning its cost, concretely.
+- **A quadratic in the Go parser.** Duplicate-key detection scanned every prior
+  key per key: 200k keys took 73s, now 0.19s. Verdicts were always correct, so
+  nothing failed — but "a stranger can verify the log in an afternoon" is a
+  charter property, and a hostile export of modest size could wedge any public
+  verifier. **The TS parser does not have it** (adjacency suffices, because EX-8
+  mandates ascending order), which is itself worth knowing: the two verifiers
+  had genuinely different performance characteristics and only one differed.
+- **Tests that passed while reaching nothing, four separate instances.** The TS
+  fuzzer's many-key cases numbered keys unpadded, so `k10` sorted before `k2` and
+  the parser rejected at key two — those cases had **never** exercised a wide
+  payload. The Go fuzzer's cases named for ET-14's scalar bound died in Stage A
+  on a hash mismatch and never called `countScalars`. Deleting the Go required-key
+  loop entirely left the **whole suite green**. And nothing anywhere asserted the
+  TS CLI's **exit status** — changing INVALID from 1 to 0 passed all 116 tests.
+  **Every one was found by mutation, none by reading.** Mutate before believing a
+  suite.
+- **One claim was unreachable in principle, not merely wrong.** The TS
+  key-scaling test claimed to cover Stage B's per-key work. `(genesis, 1)` defines
+  seven payload keys, so the key-set check rejects a 128k-key payload on sight:
+  **no such payload can ever reach Stage B for a registered type.** Repairing the
+  hash was not enough; the claim had to be narrowed. A distinct failure mode from
+  the others — coverage asserted for something that cannot exist.
+- **ET-9d was specified and implemented by neither verifier.** A chain declaring
+  `registrar_pk` identical to `operator_pk` verified **VALID** in both. Both
+  reviewers found it independently. Now implemented in both, symmetrically and in
+  the same round, because an asymmetric landing means the two verifiers disagree
+  on a real verdict — worse than being wrong together.
 
 **Phase 3.** F2 batching vectors — ET-23 quantization, ET-24 batch size, and the
 below-floor vectors that finally discriminate the ET-14b floors. **Reshaping
@@ -460,6 +524,21 @@ comments. `verify.ts:281`'s `[...faultLines]` spreads into an **array literal**,
 which uses the iteration protocol and has no argument limit — safe at any length,
 and the likeliest source of the miscount.
 
+**FIVE rules are now implemented by both verifiers and covered by NO vector:
+ET-9d, ET-9e, ET-9f, ES-34, EV-20** (counts verified 2026-08-23 against
+`index.json`; ET-9b has 2, ET-9c has 1, these have 0). EV-17 makes fixtures the
+sole conformance oracle and EV-5 wants goldens shipped with an additive change,
+so **this is a live EV-5 gap, not a to-do**: two independent verifiers can
+diverge silently on every one of these rules and the whole corpus still passes
+both. Both PRs say so in a "what this does not close" note rather than reading
+as fixture-backed. Two deadlines make it urgent: **ET-9d's own text says it must
+land before the freeze** (EV-1/EV-4 bar adding it after, since conforming chains
+would become retroactively invalid) — **and the same argument bars adding its
+fixture afterwards**. A differential probe built with `fixtures-gen` (collapsed
+genesis keys, properly signed and hashed) shows both verifiers already agree on
+ET-9d, INVALID line 1, with the legal control VALID in both — so **the vectors
+are producible with the generator that already exists**, in a few lines.
+
 **Coverage is thinner than 83 vectors suggests, and the real number is worse than
 "~130" said.** Counted exactly during T9: **143 rule ids, 70 cited by at least one
 vector, 73 cited by none.** `ET-4a`–`ET-4c` are covered (vectors `078`–`082`).
@@ -505,20 +584,96 @@ All four **verified present on the remote, 2026-08-22**:
 
 Also still on the remote and **not** in that list: the three squashed T9 branches
 below (`claude/t9-audit`, `claude/t9-decisions`, `claude/t9-adrs-contracts`),
-`claude/t9-fixtures-phase1`, the two phase-2 verifier branches whose PRs are
-still open and ON HOLD (`claude/t9-phase2-verifier-go` #109,
-`claude/t9-phase2-verifier-ts` #110 — see Blockers), and
-`pulse/4b-sign-in-routes` — an unlanded pulse branch with no open PR, recorded
-in `memory/pulse.md`.
+`claude/t9-fixtures-phase1`, and `pulse/4b-sign-in-routes` — an unlanded pulse
+branch with no open PR, recorded in `memory/pulse.md`.
+
+`claude/t9-phase2-verifier-go` and `claude/t9-phase2-verifier-ts` are **kept but
+superseded**: their PRs (#109, #110) are **closed**, with a comment on each
+recording why they were closed rather than updated. Do not reopen or rebase them.
+
+**Three phase-2 branches are OPEN and awaiting merge, all reviewed and green
+(5/5 required checks each), 2026-08-23:**
+
+| branch                                 | PR   | contents                                                            |
+| -------------------------------------- | ---- | ------------------------------------------------------------------- |
+| `claude/hash-chain-context-3uaob2`     | #122 | rehearsal judge: stop aborting on verdicts it should compare        |
+| `claude/t9-phase2-verifier-go-rebuild` | #123 | Go: ancestry, EV-20, ET-9d, quadratic fix, the stack-overflow crash |
+| `claude/t9-phase2-verifier-ts-rebuild` | #124 | TS: ancestry, EV-20, ET-9d, one-line verdict, exit status           |
 
 ## Blockers & live cautions
 
-- **Both phase-2 verifier PRs are ON HOLD and must be rebuilt, not patched
-  (#109 Go, #110 TS).** Both predate ADR-0019 and enforce a genesis key set with
-  one optional key, so both now reject `ancestor_chain` as undefined. Their
-  format-checking code is correct and transfers unchanged; they need the second
-  key, ET-9f, and a fresh isolated pass each. **Four review findings must ride
-  into that rework or they are lost:**
+- **FIVE `contracts/` contradictions are open and need an operator decision.**
+  All were found by implementers or reviewers who had to _decide_ what a rule
+  meant; none has any verdict impact on the committed corpus, which is precisely
+  why nothing automated can find them and why they would otherwise freeze wrong.
+  In priority order:
+  1. **EV-9 contradicts EV-20, and EV-9 claims authority — the only one with
+     real divergence potential.** EV-8 carries "with the single exception of
+     `genesis`, EV-20"; **EV-9 does not**, and says a well-formed unregistered
+     pair gets "the per-event `PARTIAL` treatment … **not** a structural
+     `INVALID`", then calls itself "the authoritative reconciliation". So for a
+     well-formed `(genesis, 2)` at line 1, EV-20 says INVALID and EV-9 says
+     PARTIAL. A third implementer reading EV-9 builds a verifier that disagrees
+     with both of ours on a **verdict**. Both of ours agree only because the
+     briefs named EV-20 — the instruction masked the divergence rather than
+     testing for it. Needs an additive amendment to EV-9's last sentence. This
+     is the ADR-0019 shape again: an exception applied to one sentence and not
+     its neighbour.
+  2. **`contracts/` bounds nothing and says nothing about exceeding limits.** No
+     sentence anywhere bounds nesting depth, line length, or key count, nor says
+     what a verifier must do when input exceeds what it can process. That
+     silence is what let the stack overflow above exist. The Go verifier now
+     ships a depth-64 bound its builder _reasoned into existence_, with no spec
+     backing — so a third implementer has no way to know what is permitted.
+     Proposed sentence for `evolution.md`: a verifier MAY impose implementation
+     limits provided they cannot change a verdict, and MUST report a verdict or
+     a tool-level error (exit ≥ 3) rather than terminating abnormally.
+  3. **EV-21's advice is unreachable.** ET-6 pins `genesis.version` at 1
+     permanently, so "your verifier may be out of date" can never be true for
+     genesis — yet EV-21 requires presenting both readings as indistinguishable,
+     and the TS verifier now faithfully tells users to "fetch a newer verifier",
+     which will always be wrong advice.
+  4. **ET-7a reads as both-or-neither** ("the same pair a fork records"), which
+     is exactly the tidy ET-9f forbids. ET-9e's prose resolves it, but ET-7a is
+     the sentence someone would cite to break the rule.
+  5. **ET-9f's stated justification does not select its own rule.** It bars
+     head-alone as uncheckable — but chain-alone is equally uncheckable. The real
+     criterion is **naming**: a name without a position is a weaker but coherent
+     claim; a position without a name refers to nothing. Rule right, reason wrong.
+
+- **ET-23 and ET-24 are implemented by NEITHER verifier, and ET-23 is cited by
+  no vector.** Both are stated as verifier MUSTs — ET-23 ballot `ts`
+  quantization, ET-24 minimum batch size — and these are the **anonymity** rules:
+  ET-24's batch minimum is what hides an individual vote in the stream. The Go
+  verifier enforces only the ET-14b _parameter floors_ on `issue_created`, which
+  is a different thing; the TS verifier has no mention at all. Phase 3 covers
+  them on paper. **Confirm that is still real rather than assumed** — a rule with
+  neither implementation nor vector is the "green because nothing reaches it"
+  shape one phase up.
+
+- **The shared rehearsal judge ABORTS where it should compare — four instances,
+  one family.** `conformanceVerdict` throws on any output it fails to match, and
+  a throw kills the run instead of reporting agreement or disagreement, which is
+  strictly worse because it hides whether the verifiers agreed. Found so far: a
+  reason printed on a second line (EV-21); a single-line `PARTIAL` spelled
+  "line" not "lines"; and a reason attached to `PARTIAL` at all. All fixed in
+  #122. **The generalisation worth keeping: whenever a verifier's stdout changes,
+  check it against that regex** — and prefer widening the judge over coupling the
+  two verifiers on a shared output string, since EV-17 makes printed wording
+  non-normative _on purpose_, to keep the CLI surface revisable.
+  Still unfixed and out of scope there: the judge does not check EV-17's
+  **ascending** line order for a multi-line PARTIAL, so it would report a
+  disagreement without saying which verifier broke the ordering rule.
+
+- **`odc-verifier-builder`'s role definition says Go, but it was used for the TS
+  verifier too.** The isolation property held — no context opened both
+  verifiers — but the brief and `.claude/agents/` disagree, and the agent itself
+  flagged it. Fix the definition: either a separate TS builder role, or scope the
+  existing one to "either verifier, never both".
+
+- **Superseded, kept for the reasoning: the four review findings from the closed
+  #109/#110.** All six rode into #123/#124 and are fixed there; recorded because
+  the _shapes_ recur:
   - **[TS, BLOCKING] The CLI printed the EV-21 reason on a SECOND line.** The
     contract is **one** verdict line with the reason after a colon
     (`services/verifier/API.md`). `tools/rehearsal`'s `conformanceVerdict` regex
