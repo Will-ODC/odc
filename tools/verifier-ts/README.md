@@ -19,7 +19,8 @@ node dist/src/cli.js verify <export.ndjson> [--head <64-lowercase-hex>]
 
 Output and process exit codes (the exit code is **not** conformance-checked —
 `evolution.md` EV-17 pins conformance on the verdict token and line number(s)
-alone — but the CLI note fixes this scheme so the two verifiers agree):
+alone — but the CLI note fixes this scheme so the two verifiers agree, and
+`test/report-shape.test.ts` asserts every row of it):
 
 | Verdict                | stdout                          | exit |
 | ---------------------- | ------------------------------- | ---- |
@@ -31,7 +32,10 @@ alone — but the CLI note fixes this scheme so the two verifiers agree):
 **The verdict is exactly ONE line**, and any advisory reason (EV-17, EV-21) sits
 after a colon on that same line — never on a second line. Consumers parse the
 verdict with a single-line regex, so a wrapped reason makes them throw rather
-than mismatch. `src/report.ts` is the single place that renders it and strips any
+than mismatch. Length is the other half of that shape: `type` (ES-10) and
+payload strings (EX-9) are unbounded, so a value interpolated into a reason goes
+through `excerpt` (64 code points) and every rendered reason is capped as a
+backstop. `src/report.ts` is the single place that renders it and strips any
 line terminator a reason could carry; `test/report-shape.test.ts` pins the shape.
 
 `--head` supplies the out-of-band anchored head. It is the ONLY way to detect
@@ -104,10 +108,15 @@ inventing conformance in a file no reviewer treats as normative.
   file's header states plainly. They are a harness, not an oracle: a fixture
   for these rules supersedes them the day one exists.
 - **`test/report-shape.test.ts`** — the CLI output contract: exactly one verdict
-  line, advisory reason after a colon on that same line. A reason on a second
-  line makes a single-line consumer regex **throw** rather than mismatch, and no
-  valid input would surface that, so it is pinned directly — at the renderer and
-  through a real child process.
+  line, advisory reason after a colon on that same line, of bounded length. A
+  reason on a second line makes a single-line consumer regex **throw** rather
+  than mismatch, and no valid input would surface that, so it is pinned
+  directly — at the renderer and through a real child process. It also asserts
+  the process **exit status** (0/1/2, and ≥ 3 for a tool-level error): nothing
+  else in the suite reads `$?`, so without these the whole scheme could be
+  inverted with every other test still green. The VALID and PARTIAL inputs are
+  read out of `contracts/fixtures/index.json` by declared verdict, so no verdict
+  value is invented here.
 - **`test/key-scaling.test.ts`** — a wall-clock budget pinning that payload key
   handling stays sub-quadratic in key count. The parser compares each key
   against the immediately preceding key only, which EX-8's ascending-order
