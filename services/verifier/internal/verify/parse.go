@@ -88,6 +88,16 @@ func (p *parser) parseValue() jvalue {
 	}
 }
 
+// dupSetThreshold is the key count at which duplicate detection switches from
+// a linear scan of the keys already seen to a set. Below it the scan is
+// cheaper than allocating a map, and real ODC events are far below it — the
+// widest v1 payload has five keys. Above it the scan is what made a wide
+// payload quadratic in key count, so a hostile export of very modest size
+// could wedge the verifier: 200k keys took over a minute of pure key
+// comparison. "A stranger can write a verifier and check the log in an
+// afternoon" (charter §4) does not survive that, so the set takes over.
+const dupSetThreshold = 32
+
 func (p *parser) parseObject() jvalue {
 	p.pos++ // consume '{'
 	obj := &jobject{}
@@ -95,6 +105,9 @@ func (p *parser) parseObject() jvalue {
 		p.pos++
 		return jvalue{kind: kObject, obj: obj}
 	}
+	// seen is nil until the key count crosses dupSetThreshold, at which point
+	// it is populated from the keys already stored and used from then on.
+	var seen map[string]struct{}
 	for {
 		if p.pos >= len(p.b) || p.b[p.pos] != '"' {
 			p.err = true
@@ -114,9 +127,37 @@ func (p *parser) parseObject() jvalue {
 		if p.err {
 			return jvalue{}
 		}
-		for _, k := range obj.keys {
-			if k == key {
-				obj.dupKey = true
+		// HA-6 duplicate-key detection. Once dupKey is set the answer cannot
+		// change, so we stop looking entirely: dupKey is a single boolean the
+		// caller reads, not a list of offending keys, and continuing to search
+		// after the first hit buys nothing. This is both the early exit the
+		// previous scan lacked and, with the set below, what makes the whole
+		// thing sub-quadratic. Parsing itself continues either way, because a
+		// duplicate key is not a parse error — it is a Stage A rejection the
+		// caller makes after the line is fully parsed, and stopping here would
+		// change which check fires (though not, per EV-17, which line).
+		if !obj.dupKey {
+			switch {
+			case seen != nil:
+				if _, dup := seen[key]; dup {
+					obj.dupKey = true
+				} else {
+					seen[key] = struct{}{}
+				}
+			default:
+				for _, k := range obj.keys {
+					if k == key {
+						obj.dupKey = true
+						break
+					}
+				}
+				if !obj.dupKey && len(obj.keys)+1 >= dupSetThreshold {
+					seen = make(map[string]struct{}, len(obj.keys)+1)
+					for _, k := range obj.keys {
+						seen[k] = struct{}{}
+					}
+					seen[key] = struct{}{}
+				}
 			}
 		}
 		obj.keys = append(obj.keys, key)
