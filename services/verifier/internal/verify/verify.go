@@ -47,10 +47,29 @@ func invalid(line int, reason string) Result {
 	return Result{Verdict: INVALID, Line: line, Reason: reason}
 }
 
-// registeredGenesisVersions lists the `genesis` versions this verifier knows,
-// named in the EV-20 rejection reason so the reader can settle what the log
-// alone cannot (EV-21).
-var registeredGenesisVersions = []int64{1}
+// registry is the contracts-v1 (type, version) registry (ET-1/ET-2): the four
+// v1 types, each registered only at version 1.
+//
+// It is the SINGLE source of truth, and deliberately so. Both the accept/reject
+// decision (registered) and the EV-21 advisory text (unregisteredGenesisReason)
+// read this one table, so the versions a reader is TOLD this verifier registers
+// cannot drift from the versions it actually does. A second hand-maintained list
+// would go stale exactly when it matters most — the moment a new genesis version
+// is registered — and EV-21's whole purpose is that the list is what lets the
+// reader go and settle the question.
+var registry = map[string][]int64{
+	"genesis":                {1},
+	"participant_registered": {1},
+	"issue_created":          {1},
+	"vote_cast":              {1},
+}
+
+// registeredVersions returns the versions registered for typ, ascending, or nil
+// for an unregistered type. The returned slice is the registry's own and MUST
+// NOT be mutated by callers.
+func registeredVersions(typ string) []int64 {
+	return registry[typ]
+}
 
 // unregisteredGenesisReason builds the advisory reason text for an EV-20
 // rejection. Reason text is never conformance-checked (EV-17) — conformance
@@ -68,7 +87,7 @@ var registeredGenesisVersions = []int64{1}
 // we do register, which is what lets the reader go and settle it.
 func unregisteredGenesisReason(version int64) string {
 	var have strings.Builder
-	for i, v := range registeredGenesisVersions {
+	for i, v := range registeredVersions("genesis") {
 		if i > 0 {
 			have.WriteString(", ")
 		}
@@ -82,14 +101,12 @@ func unregisteredGenesisReason(version int64) string {
 }
 
 // registered reports whether (typ, version) is in the contracts-v1 registry
-// (ET-1/ET-2): the four v1 types, each only at version 1.
+// (ET-1/ET-2), answered from `registry` and from nothing else.
 func registered(typ string, version int64) bool {
-	if version != 1 {
-		return false
-	}
-	switch typ {
-	case "genesis", "participant_registered", "issue_created", "vote_cast":
-		return true
+	for _, v := range registry[typ] {
+		if v == version {
+			return true
+		}
 	}
 	return false
 }

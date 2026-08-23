@@ -13,6 +13,7 @@ import (
 	"strings"
 	"testing"
 	"time"
+	"unicode/utf8"
 )
 
 // Value-level fuzz over the unbounded-value defect class.
@@ -342,31 +343,73 @@ func TestExtremeBoundaryIntegersElsewhere(t *testing.T) {
 	}
 }
 
-// Huge strings, chosen so BYTE LENGTH and RUNE COUNT diverge. HA-2/HA-3 length
-// -prefix by bytes while ET-14 bounds by scalar values, so a value that is
-// large in one measure and small in the other is where the two can be
-// confused.
-func TestExtremeHugeStrings(t *testing.T) {
-	cases := map[string]string{
-		// 8 MiB, bytes == runes.
-		"ascii_8mib": strings.Repeat("a", 8<<20),
+// Huge strings, chosen so BYTE LENGTH and RUNE COUNT diverge — 2, 3 and 4
+// bytes per scalar against ASCII's 1.
+//
+// WHAT THESE REACH, stated exactly, because the two are easy to confuse. Every
+// case here is rejected in STAGE A, at the hash recomputation: `line` seals each
+// one with a placeholder 64-zero hash, so the multi-megabyte payload is framed,
+// scanned, UTF-8-decoded and copied in full before the verdict is decided. That
+// is the whole point of them — the parser and the string scanner must survive
+// input the verifier is about to throw away, at a size where a byte/rune mix-up
+// in the SCANNER walks off the end of a buffer.
+//
+// WHAT THEY DO NOT REACH: ET-14's 1–200 SCALAR bound. countScalars is never
+// called on any input in this file, and cannot be: the title checks sit in
+// Stage B, behind a correct hash and a usable genesis, and sealing a chain here
+// would mean re-implementing the preimage inside a test. The byte-versus-scalar
+// divergence ET-14 turns on is pinned where it is genuinely reachable — over a
+// real two-line chain, in internal/verify/issue_title_test.go
+// (TestIssueTitleLengthIsCountedInScalars).
+
+type hugeStringCase struct {
+	name           string
+	s              string
+	bytesPerScalar int
+}
+
+func hugeStringCases() []hugeStringCase {
+	return []hugeStringCase{
+		// bytes == runes.
+		{"ascii_8mib", strings.Repeat("a", 8<<20), 1},
 		// 2M runes, 4M bytes.
-		"two_byte_runes_2m": strings.Repeat("é", 2_000_000),
+		{"two_byte_runes_2m", strings.Repeat("\u00e9", 2_000_000), 2},
 		// 1M runes, 3M bytes.
-		"three_byte_runes_1m": strings.Repeat("あ", 1_000_000),
+		{"three_byte_runes_1m", strings.Repeat("\u3042", 1_000_000), 3},
 		// 1M runes, 4M bytes — astral, where a UTF-16 implementation would
 		// also count 2M code units. Three different "lengths" for one value.
-		"astral_runes_1m": strings.Repeat("𝄞", 1_000_000),
-		// A single astral rune repeated to just over ET-14's 200-scalar bound.
-		"astral_201": strings.Repeat("𝄞", 201),
+		{"astral_runes_1m", strings.Repeat("\U0001d11e", 1_000_000), 4},
 	}
-	for name, s := range cases {
-		name, s := name, s
-		t.Run(name, func(t *testing.T) {
+}
+
+func TestExtremeHugeStrings(t *testing.T) {
+	for _, c := range hugeStringCases() {
+		c := c
+		t.Run(c.name, func(t *testing.T) {
 			t.Parallel()
-			payload := `{"title":"` + s + `"}`
-			checkCLI(t, writeExport(t, name, line("1", "1", payload)+"\n"))
+			payload := `{"title":"` + c.s + `"}`
+			checkCLI(t, writeExport(t, c.name, line("1", "1", payload)+"\n"))
 		})
+	}
+}
+
+// A guard on the generator, not on the verifier — the same pattern as
+// TestWidePayloadReachesItsKeyCount. If a case's string stopped being
+// multi-byte it would still "pass" above while exercising plain ASCII, and the
+// divergence these cases exist for would be gone with nothing to say so.
+func TestHugeStringCasesDivergeInBytesAndScalars(t *testing.T) {
+	for _, c := range hugeStringCases() {
+		scalars := utf8.RuneCountInString(c.s)
+		if scalars == 0 {
+			t.Fatalf("%s: empty case string", c.name)
+		}
+		if got := len(c.s) / scalars; got != c.bytesPerScalar {
+			t.Errorf("%s: %d bytes per scalar, want %d", c.name, got, c.bytesPerScalar)
+		}
+		if (len(c.s) == scalars) != (c.bytesPerScalar == 1) {
+			t.Errorf("%s: byte length %d and scalar count %d do not diverge as intended",
+				c.name, len(c.s), scalars)
+		}
 	}
 }
 

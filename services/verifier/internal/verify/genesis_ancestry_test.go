@@ -5,9 +5,11 @@ import (
 	"crypto/sha256"
 	"encoding/hex"
 	"fmt"
+	"math"
 	"sort"
 	"strings"
 	"testing"
+	"unicode/utf8"
 )
 
 // Tests for the two OPTIONAL genesis fork-ancestry keys (event-types.md
@@ -51,11 +53,23 @@ func bytes32(fill byte) []byte {
 // deliberately narrow: it panics on any string needing an escape, so a test
 // input that would exercise the escaping rules cannot silently be miswritten
 // here instead of being expressed as a fixture.
+//
+// Non-ASCII is NOT such an input. EX-9 fixes minimal escaping: `"` and `\`
+// escaped, every C0 control as `\u00xx`, and "every other character … literal
+// UTF-8 bytes, never a `\u` escape". A multi-byte scalar is therefore rendered
+// by writing its UTF-8 bytes, which is what the harness does — and what lets a
+// test express a title whose byte length and scalar count diverge (ET-14).
+// U+007F stays refused: it is literal under EX-9 but barred from titles by
+// ET-14, so a case wanting it is testing something this harness should not
+// quietly produce.
 func jsonScalar(v any) string {
 	switch t := v.(type) {
 	case string:
+		if !utf8.ValidString(t) {
+			panic("test harness: string is not valid UTF-8 and has no canonical rendering")
+		}
 		for i := 0; i < len(t); i++ {
-			if t[i] < 0x20 || t[i] == '"' || t[i] == '\\' || t[i] >= 0x7f {
+			if t[i] < 0x20 || t[i] == '"' || t[i] == '\\' || t[i] == 0x7f {
 				panic("test harness: string needs escaping: " + t)
 			}
 		}
@@ -108,7 +122,17 @@ func parseLineOrFail(t *testing.T, line []byte) *event {
 	return e
 }
 
-// signAndSeal fills in `sig` (over SIGN_PRE, HA-15) and `hash` (over PRE,
+// seal fills in `hash` (over PRE, HA-11/HA-13) for one event whose payload is
+// already final, returning the finished line. It does not sign — a payload with
+// no `sig` key at all goes through here.
+func seal(t *testing.T, seq int64, typ string, version int64, payload map[string]any, ts, prevHash string) []byte {
+	t.Helper()
+	draft := renderLine(seq, typ, version, payload, ts, prevHash, strings.Repeat("0", 64))
+	h := hashHex(preimage(parseLineOrFail(t, draft), ""))
+	return renderLine(seq, typ, version, payload, ts, prevHash, h)
+}
+
+// signAndSeal fills in `sig` (over SIGN_PRE, HA-15) and then `hash` (over PRE,
 // HA-11/HA-13) for one event, returning the finished line.
 func signAndSeal(t *testing.T, priv ed25519.PrivateKey, seq int64, typ string, version int64, payload map[string]any, ts, prevHash string) []byte {
 	t.Helper()
@@ -122,10 +146,7 @@ func signAndSeal(t *testing.T, priv ed25519.PrivateKey, seq int64, typ string, v
 	sig := ed25519.Sign(priv, preimage(parseLineOrFail(t, draft), "sig"))
 	withSig["sig"] = hex.EncodeToString(sig)
 
-	sealed := renderLine(seq, typ, version, withSig, ts, prevHash, strings.Repeat("0", 64))
-	h := hashHex(preimage(parseLineOrFail(t, sealed), ""))
-
-	return renderLine(seq, typ, version, withSig, ts, prevHash, h)
+	return seal(t, seq, typ, version, withSig, ts, prevHash)
 }
 
 // genesisExport builds a one-line export whose genesis carries the required
@@ -161,11 +182,19 @@ const (
 
 // --- ET-9e / ET-9f -----------------------------------------------------
 
+// Every rejection case below asserts the advisory REASON as well as the
+// verdict and line. Reason text is never conformance (EV-17) and this suite is
+// not normative, so the assertion costs nothing — but "INVALID at line 1" is
+// satisfied by ANY genesis fault, so without it a case rejected for a reason
+// that has nothing to do with the rule it is named for still passes and is
+// counted as coverage of that rule. The reason substring is what pins that the
+// case reaches the check it claims to exercise.
 func TestGenesisAncestryPresenceCombinations(t *testing.T) {
 	cases := []struct {
-		name    string
-		extra   map[string]any
-		verdict Verdict
+		name       string
+		extra      map[string]any
+		verdict    Verdict
+		wantReason string // asserted for INVALID cases only
 	}{
 		{
 			// The control: the ordinary no-recorded-ancestor form. Both keys
@@ -194,9 +223,10 @@ func TestGenesisAncestryPresenceCombinations(t *testing.T) {
 		},
 		{
 			// The one form ET-9f bars: a position on an UNNAMED chain.
-			name:    "ancestor_head_alone_is_rejected",
-			extra:   map[string]any{"ancestor_head": otherHash},
-			verdict: INVALID,
+			name:       "ancestor_head_alone_is_rejected",
+			extra:      map[string]any{"ancestor_head": otherHash},
+			verdict:    INVALID,
+			wantReason: "ET-9f",
 		},
 	}
 	for _, c := range cases {
@@ -205,10 +235,28 @@ func TestGenesisAncestryPresenceCombinations(t *testing.T) {
 			if res.Verdict != c.verdict {
 				t.Fatalf("verdict = %s, want %s (reason: %s)", res.Verdict, c.verdict, res.Reason)
 			}
-			if c.verdict == INVALID && res.Line != 1 {
-				t.Fatalf("INVALID line = %d, want 1", res.Line)
+			if c.verdict == INVALID {
+				if res.Line != 1 {
+					t.Fatalf("INVALID line = %d, want 1", res.Line)
+				}
+				assertReason(t, res, c.wantReason)
 			}
 		})
+	}
+}
+
+// assertReason pins that a rejection reached the rule the case is named for.
+// It is not a conformance assertion (EV-17) and is written as an Errorf, not a
+// Fatalf, so a reason-text edit reports as "the case no longer reaches its
+// rule" without masking the verdict assertions around it.
+func assertReason(t *testing.T, res Result, want string) {
+	t.Helper()
+	if want == "" {
+		t.Fatal("test bug: an INVALID case with no expected reason asserts only that SOMETHING was rejected")
+	}
+	if !strings.Contains(res.Reason, want) {
+		t.Errorf("reason does not mention %q, so this case is not reaching the rule it is named for; reason was: %s",
+			want, res.Reason)
 	}
 }
 
@@ -230,23 +278,34 @@ func TestGenesisAncestryAcceptsIdenticalChainAndHead(t *testing.T) {
 // Format checks apply to each key that is present, independently (ET-9e).
 func TestGenesisAncestryValueFormats(t *testing.T) {
 	upper := "AAAA111111111111111111111111111111111111111111111111111111111111"
+	// The expected reason distinguishes WHICH key was faulted and WHICH of the
+	// two ET-9e clauses fired — a format rejection or the 64-zero anchor. A
+	// bare "INVALID at line 1" would not: an `ancestor_head` case that was in
+	// fact rejected on `ancestor_chain` would pass identically.
+	const (
+		chainFormat = "ancestor_chain not 64 lowercase hex (ET-9e)"
+		chainAnchor = "ancestor_chain is the 64-zero anchor (ET-9e)"
+		headFormat  = "ancestor_head not 64 lowercase hex (ET-9e)"
+		headAnchor  = "ancestor_head is the 64-zero anchor (ET-9e)"
+	)
 	cases := []struct {
-		name  string
-		extra map[string]any
+		name       string
+		extra      map[string]any
+		wantReason string
 	}{
-		{"ancestor_chain_uppercase_hex", map[string]any{"ancestor_chain": upper}},
-		{"ancestor_chain_too_short", map[string]any{"ancestor_chain": someHash[:63]}},
-		{"ancestor_chain_too_long", map[string]any{"ancestor_chain": someHash + "a"}},
-		{"ancestor_chain_non_hex", map[string]any{"ancestor_chain": strings.Repeat("z", 64)}},
-		{"ancestor_chain_integer_value", map[string]any{"ancestor_chain": int64(1)}},
-		{"ancestor_chain_zero_anchor", map[string]any{"ancestor_chain": zeros64}},
+		{"ancestor_chain_uppercase_hex", map[string]any{"ancestor_chain": upper}, chainFormat},
+		{"ancestor_chain_too_short", map[string]any{"ancestor_chain": someHash[:63]}, chainFormat},
+		{"ancestor_chain_too_long", map[string]any{"ancestor_chain": someHash + "a"}, chainFormat},
+		{"ancestor_chain_non_hex", map[string]any{"ancestor_chain": strings.Repeat("z", 64)}, chainFormat},
+		{"ancestor_chain_integer_value", map[string]any{"ancestor_chain": int64(1)}, chainFormat},
+		{"ancestor_chain_zero_anchor", map[string]any{"ancestor_chain": zeros64}, chainAnchor},
 
-		{"ancestor_head_uppercase_hex", map[string]any{"ancestor_chain": someHash, "ancestor_head": upper}},
-		{"ancestor_head_too_short", map[string]any{"ancestor_chain": someHash, "ancestor_head": otherHash[:63]}},
-		{"ancestor_head_too_long", map[string]any{"ancestor_chain": someHash, "ancestor_head": otherHash + "a"}},
-		{"ancestor_head_non_hex", map[string]any{"ancestor_chain": someHash, "ancestor_head": strings.Repeat("z", 64)}},
-		{"ancestor_head_integer_value", map[string]any{"ancestor_chain": someHash, "ancestor_head": int64(1)}},
-		{"ancestor_head_zero_anchor", map[string]any{"ancestor_chain": someHash, "ancestor_head": zeros64}},
+		{"ancestor_head_uppercase_hex", map[string]any{"ancestor_chain": someHash, "ancestor_head": upper}, headFormat},
+		{"ancestor_head_too_short", map[string]any{"ancestor_chain": someHash, "ancestor_head": otherHash[:63]}, headFormat},
+		{"ancestor_head_too_long", map[string]any{"ancestor_chain": someHash, "ancestor_head": otherHash + "a"}, headFormat},
+		{"ancestor_head_non_hex", map[string]any{"ancestor_chain": someHash, "ancestor_head": strings.Repeat("z", 64)}, headFormat},
+		{"ancestor_head_integer_value", map[string]any{"ancestor_chain": someHash, "ancestor_head": int64(1)}, headFormat},
+		{"ancestor_head_zero_anchor", map[string]any{"ancestor_chain": someHash, "ancestor_head": zeros64}, headAnchor},
 	}
 	for _, c := range cases {
 		t.Run(c.name, func(t *testing.T) {
@@ -257,6 +316,7 @@ func TestGenesisAncestryValueFormats(t *testing.T) {
 			if res.Line != 1 {
 				t.Fatalf("INVALID line = %d, want 1", res.Line)
 			}
+			assertReason(t, res, c.wantReason)
 		})
 	}
 }
@@ -267,6 +327,99 @@ func TestGenesisRejectsUndefinedPayloadKey(t *testing.T) {
 	res := Verify(genesisExport(t, 1, map[string]any{"ancestor_tree": someHash}), nil)
 	if res.Verdict != INVALID || res.Line != 1 {
 		t.Fatalf("verdict = %s line %d, want INVALID line 1 (reason: %s)", res.Verdict, res.Line, res.Reason)
+	}
+	assertReason(t, res, "ES-18")
+}
+
+// --- ES-18/ES-34: the REQUIRED half of the key set -----------------------
+//
+// ES-34 splits the genesis key set into five REQUIRED keys and two OPTIONAL
+// ones, and payloadKeySetAllows enforces three separate things: a key count
+// inside 5..7, no key outside required ∪ optional, and every required key
+// PRESENT. The third of those is the one nothing else can stand in for, and it
+// is only reachable by a payload that satisfies the first two — a genesis where
+// an OPTIONAL key substitutes for a missing REQUIRED one. Without such a case
+// the required-key loop can be deleted outright and every other test in this
+// repository still passes: the count stays in range, every key is allowed, and
+// the verdict survives only by luck downstream, where a missing string reads
+// back as "" and fails a format check that is named for a different rule.
+//
+// Hence the reason assertion below. Asserting INVALID at line 1 is exactly the
+// assertion that luck already satisfies; asserting the ES-18 key-set reason is
+// what makes the loop load-bearing.
+
+// genesisExportOmitting builds a one-line genesis with `omit` (a required key)
+// dropped, and the OPTIONAL `ancestor_chain` added to hold the key COUNT inside
+// the 5..7 the length guard permits. omit == "" builds the unmangled control.
+// Everything else — hash, signature, key formats — is correct, so the key set
+// is the only thing wrong with the result.
+func genesisExportOmitting(t *testing.T, omit string) []byte {
+	t.Helper()
+	opPriv := ed25519.NewKeyFromSeed(testOperatorSeed)
+	opPub := []byte(opPriv.Public().(ed25519.PublicKey))
+	regPub := []byte(ed25519.NewKeyFromSeed(testRegistrarSeed).Public().(ed25519.PublicKey))
+	chainID := sha256.Sum256(opPub)
+
+	payload := map[string]any{
+		"chain_id":       hex.EncodeToString(chainID[:]),
+		"contracts":      "contracts-v1",
+		"operator_pk":    hex.EncodeToString(opPub),
+		"registrar_pk":   hex.EncodeToString(regPub),
+		"ancestor_chain": someHash,
+	}
+	const ts = "2026-01-01T00:00:00.000Z"
+
+	if omit == "sig" {
+		// signAndSeal would put `sig` straight back, so this one is sealed
+		// without it: no `sig` key in the payload at all, and the hash computed
+		// over the payload exactly as rendered.
+		return append(seal(t, 1, "genesis", 1, payload, ts, zeros64), '\n')
+	}
+	delete(payload, omit) // omit == "" deletes nothing
+	return append(signAndSeal(t, opPriv, 1, "genesis", 1, payload, ts, zeros64), '\n')
+}
+
+func TestGenesisMissingRequiredPayloadKey(t *testing.T) {
+	required := []string{"chain_id", "contracts", "operator_pk", "registrar_pk", "sig"}
+
+	// The control: the same builder with nothing omitted. Six keys, all legal,
+	// and VALID — so a failure in the cases below is the missing key and not
+	// the builder.
+	t.Run("control_nothing_omitted", func(t *testing.T) {
+		res := Verify(genesisExportOmitting(t, ""), nil)
+		if res.Verdict != VALID {
+			t.Fatalf("verdict = %s, want VALID (reason: %s)", res.Verdict, res.Reason)
+		}
+	})
+
+	for _, key := range required {
+		t.Run("missing_"+key, func(t *testing.T) {
+			export := genesisExportOmitting(t, key)
+
+			// Reachability guard on the case itself. If the payload fell
+			// outside 5..7 keys the length guard would reject it and the
+			// required-key loop would never run — the case would pass while
+			// exercising nothing.
+			e := parseLineOrFail(t, trimLF(export))
+			if _, present := payloadGet(e.payload, key); present {
+				t.Fatalf("harness did not drop %s; the case proves nothing", key)
+			}
+			if n := len(e.payload.keys); n < 5 || n > 7 {
+				t.Fatalf("payload has %d keys, outside the 5..7 the length guard permits; "+
+					"this case would be caught by the count and never reach the required-key check", n)
+			}
+
+			res := Verify(export, nil)
+			if res.Verdict != INVALID {
+				t.Fatalf("verdict = %s, want INVALID (reason: %s)", res.Verdict, res.Reason)
+			}
+			if res.Line != 1 {
+				t.Fatalf("INVALID line = %d, want 1", res.Line)
+			}
+			// The load-bearing assertion: rejected ON THE KEY SET, not by a
+			// downstream format check reading back an empty string.
+			assertReason(t, res, "ES-18")
+		})
 	}
 }
 
@@ -307,7 +460,53 @@ func TestUnregisteredGenesisVersionIsInvalidAtLineOne(t *testing.T) {
 			if res.Line != 1 {
 				t.Fatalf("INVALID line = %d, want 1", res.Line)
 			}
+			assertReason(t, res, "EV-20")
 		})
+	}
+}
+
+// The EV-21 message names the genesis versions this verifier registers, and
+// that list is the whole point of the message: it is what lets a reader decide
+// between "my verifier is out of date" and "this chain is corrupt". A list
+// maintained separately from the registry that decides the verdict would go
+// stale exactly when a new version is registered — the moment the message
+// matters — and would then send readers to settle the question against a
+// falsehood. These assertions pin the two directions of that agreement.
+func TestEV21VersionListAgreesWithTheRegistry(t *testing.T) {
+	list := registeredVersions("genesis")
+	if len(list) == 0 {
+		t.Fatal("no registered genesis versions; the EV-21 message would name none")
+	}
+
+	// Direction 1: everything the message names is genuinely registered.
+	named := map[int64]bool{}
+	for _, v := range list {
+		if !registered("genesis", v) {
+			t.Errorf("EV-21 names genesis version %d, which registered() rejects", v)
+		}
+		named[v] = true
+	}
+
+	// Direction 2: nothing registered is missing from the message. Probed
+	// rather than proved — the version space is int64 — over the range a
+	// registration would plausibly land in, plus the values the specs single
+	// out (EV-19's reserved 1000000, ES-5's 2^53-1 ceiling) and the edges.
+	probes := []int64{-1, 0, math.MinInt64, math.MaxInt64, 1 << 53, (1 << 53) - 1, 1_000_000}
+	for v := int64(1); v <= 2000; v++ {
+		probes = append(probes, v)
+	}
+	for _, v := range probes {
+		if registered("genesis", v) && !named[v] {
+			t.Errorf("genesis version %d is registered but the EV-21 message does not name it", v)
+		}
+	}
+
+	// And the message actually renders every one of them.
+	reason := unregisteredGenesisReason(1_000_000)
+	for _, v := range list {
+		if !strings.Contains(reason, fmt.Sprintf("%d", v)) {
+			t.Errorf("EV-21 message omits registered genesis version %d: %s", v, reason)
+		}
 	}
 }
 
