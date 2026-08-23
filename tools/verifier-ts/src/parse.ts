@@ -287,6 +287,17 @@ function parsePayload(r: Reader): PayloadEntry[] {
     const key = parseString(r);
     r.expect(0x3a); // :
     // Ordering + duplicate check on the raw decoded key bytes (HA-8 / EX-8).
+    //
+    // ONE comparison per key, against the immediately preceding key only —
+    // deliberately NOT a scan of the keys seen so far, and not a Set. Because
+    // EX-8 requires ascending order, a duplicate can only ever be ADJACENT: any
+    // repeat separated by another key is already a descending step and is
+    // caught as mis-ordering. So this single comparison decides both rules, in
+    // O(1) per key. Replacing it with a seen-keys rescan is O(n^2) and lets a
+    // hostile export of a few megabytes wedge the verifier for minutes without
+    // changing any verdict — measured on the same 128k-key payload the guard
+    // test uses: 634s (10.5 minutes) with the rescan, 115ms as written.
+    // `test/key-scaling.test.ts` is the regression guard for this.
     if (prevKeyBytes !== null) {
       const cmp = Buffer.compare(prevKeyBytes, key.bytes);
       if (cmp === 0) throw new ParseFail("duplicate payload key"); // HA-6
