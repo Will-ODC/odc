@@ -16,7 +16,7 @@
 import { test } from "node:test";
 import assert from "node:assert/strict";
 import { execFileSync } from "node:child_process";
-import { mkdtempSync, writeFileSync } from "node:fs";
+import { mkdtempSync, readFileSync, writeFileSync } from "node:fs";
 import { tmpdir } from "node:os";
 import { fileURLToPath } from "node:url";
 import { dirname, join, resolve } from "node:path";
@@ -28,6 +28,33 @@ import { computeHash } from "../src/hashing.js";
 const here = dirname(fileURLToPath(import.meta.url));
 // dist/test/ -> dist/src/cli.js
 const cliPath = resolve(here, "../src/cli.js");
+// dist/test/ -> repo root is four levels up (test, dist, verifier-ts, tools).
+const fixturesDir = resolve(here, "../../../../contracts/fixtures");
+
+interface Vector {
+  id: string;
+  export: string;
+  head?: string;
+  expect: { verdict: "VALID" | "INVALID" | "PARTIAL" };
+}
+
+const fixtureIndex = JSON.parse(
+  readFileSync(resolve(fixturesDir, "index.json"), "utf8"),
+) as { vectors: Vector[] };
+
+/**
+ * The first fixture vector declared to verify to `verdict` WITHOUT an
+ * out-of-band `--head` (which `runCli` does not pass). The expectation comes
+ * from `contracts/fixtures/index.json`, so the exit-code assertions below still
+ * take their verdicts from the oracle rather than inventing one here.
+ */
+function headlessVectorFor(verdict: Vector["expect"]["verdict"]): Vector {
+  const v = fixtureIndex.vectors.find(
+    (x) => x.expect.verdict === verdict && x.head === undefined,
+  );
+  assert.ok(v, `no head-free ${verdict} vector in the fixture index`);
+  return v;
+}
 
 /** Every verdict shape the renderer can be handed, including hostile reasons. */
 const CASES: Verdict[] = [
@@ -130,8 +157,9 @@ test("the CLI writes exactly one stdout line, terminated by a single LF", () => 
   );
   assert.notEqual(draft, null);
   const line = withoutHash(computeHash(draft as ParsedEvent));
-  const { stdout } = runCli(Buffer.from(line + "\n", "utf8"));
+  const { stdout, status } = runCli(Buffer.from(line + "\n", "utf8"));
   assert.match(stdout, /EV-20/, "expected the EV-20 reason path");
+  assert.equal(status, 1, `INVALID must exit 1, got ${status}`);
 
   assert.equal(stdout.endsWith("\n"), true, JSON.stringify(stdout));
   assert.equal(
@@ -146,9 +174,57 @@ test("the CLI writes exactly one stdout line for an empty export too", () => {
   // Any input at all: the invariant is about stdout, not about the verdict.
   // (An empty export is INVALID, not VALID — the earlier title claimed
   // otherwise and this test never asserted a verdict either way.)
-  const { stdout } = runCli(Buffer.from("", "utf8"));
+  const { stdout, status } = runCli(Buffer.from("", "utf8"));
   assert.equal(stdout.split("\n").length, 2, JSON.stringify(stdout));
   assert.match(stdout.trimEnd(), VERDICT_RE, JSON.stringify(stdout));
+  assert.equal(status, 1, `INVALID must exit 1, got ${status}`);
+});
+
+// --- the process EXIT CODE, which nothing else in the suite reads ------------
+//
+// EV-17 pins conformance on the verdict token and line number(s) alone, so the
+// exit code is not conformance — but its non-normative CLI note fixes 0/1/2 so
+// that the two independent verifiers agree, and a caller who branches on `$?`
+// instead of parsing stdout gets a silently wrong answer if this drifts. The
+// inputs come from `contracts/fixtures/index.json`, which is also where their
+// verdicts come from; nothing here decides what an input verifies TO.
+
+test("the CLI exits 0 on a VALID export (EV-17 CLI note)", () => {
+  const vec = headlessVectorFor("VALID");
+  const { stdout, status } = runCli(
+    readFileSync(resolve(fixturesDir, vec.export)),
+  );
+  assert.equal(stdout, "VALID\n", `vector ${vec.id}`);
+  assert.equal(status, 0, `vector ${vec.id}: VALID must exit 0, got ${status}`);
+});
+
+test("the CLI exits 2 on a PARTIAL export (EV-17 CLI note)", () => {
+  const vec = headlessVectorFor("PARTIAL");
+  const { stdout, status } = runCli(
+    readFileSync(resolve(fixturesDir, vec.export)),
+  );
+  assert.match(stdout.trimEnd(), /^PARTIAL at lines? /, `vector ${vec.id}`);
+  assert.equal(
+    status,
+    2,
+    `vector ${vec.id}: PARTIAL must exit 2, got ${status}`,
+  );
+});
+
+test("the CLI exits 3 on a tool-level error (unreadable file), not 0/1/2", () => {
+  // >= 3 is reserved for "the verifier could not answer", which must never be
+  // confusable with a verdict about a chain.
+  let status = 0;
+  try {
+    execFileSync(
+      process.execPath,
+      [cliPath, "verify", resolve(fixturesDir, "no-such-export.ndjson")],
+      { encoding: "utf8", stdio: "pipe" },
+    );
+  } catch (e) {
+    status = (e as { status?: number }).status ?? -1;
+  }
+  assert.ok(status >= 3, `a tool-level error must exit >= 3, got ${status}`);
 });
 
 // --- the reason is bounded as well as single-line ----------------------------
