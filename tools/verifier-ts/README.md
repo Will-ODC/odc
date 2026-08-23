@@ -68,7 +68,7 @@ Two stages, per `evolution.md` EV-6/EV-15:
 pnpm --filter @odc/verifier-ts test
 ```
 
-Five files, and the split between them is deliberate — **`contracts/fixtures/`
+Six files, and the split between them is deliberate — **`contracts/fixtures/`
 is the sole oracle for what a given input verifies to.** `fixtures.test.ts` is
 the conformance suite; `robustness.test.ts`, `extreme-values.test.ts` and
 `report-shape.test.ts` assert only that a verdict of the right _shape_ came back
@@ -96,6 +96,15 @@ inventing conformance in a file no reviewer treats as normative.
   line makes a single-line consumer regex **throw** rather than mismatch, and no
   valid input would surface that, so it is pinned directly — at the renderer and
   through a real child process.
+- **`test/key-scaling.test.ts`** — a wall-clock budget pinning that payload key
+  handling stays sub-quadratic in key count. The parser compares each key
+  against the immediately preceding key only, which EX-8's ascending-order
+  requirement makes sufficient for both the duplicate rule (HA-6) and the order
+  rule; a seen-keys rescan would be O(n²) and could wedge the verifier for
+  minutes on a few megabytes of input without changing any verdict. Measured on
+  the 128k-key payload the test uses: ~115 ms as written, ~634 s (10.5 minutes)
+  with the quadratic shape — the budget sits between them with ~30x headroom
+  over the former.
 - **`test/extreme-values.test.ts`** — value-level fuzzing for that same class.
   Generates structurally valid exports carrying extreme values (huge strings
   where byte length, code point count and UTF-16 length diverge; integers
