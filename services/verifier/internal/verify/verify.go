@@ -8,6 +8,8 @@ package verify
 import (
 	"crypto/sha256"
 	"encoding/hex"
+	"fmt"
+	"strings"
 )
 
 // Verdict is the chain verdict token (EV-7/EV-17).
@@ -43,6 +45,40 @@ type Result struct {
 
 func invalid(line int, reason string) Result {
 	return Result{Verdict: INVALID, Line: line, Reason: reason}
+}
+
+// registeredGenesisVersions lists the `genesis` versions this verifier knows,
+// named in the EV-20 rejection reason so the reader can settle what the log
+// alone cannot (EV-21).
+var registeredGenesisVersions = []int64{1}
+
+// unregisteredGenesisReason builds the advisory reason text for an EV-20
+// rejection. Reason text is never conformance-checked (EV-17) — conformance
+// here is the token INVALID and the line number 1, and nothing else. EV-21 is
+// guidance, and its point is honesty: the log alone CANNOT distinguish
+//
+//	(a) "this verifier does not register (genesis, N) — it may be out of date
+//	    for this chain", from
+//	(b) "this chain's genesis is corrupt or hostile",
+//
+// and the two ask opposite things of the reader. A verifier that picks one
+// sends someone hunting for tampering when the remedy may be to fetch a newer
+// verifier, and teaches readers to treat a legitimate newer chain as an attack.
+// So we name both, name the version encountered, and name the genesis versions
+// we do register, which is what lets the reader go and settle it.
+func unregisteredGenesisReason(version int64) string {
+	var have strings.Builder
+	for i, v := range registeredGenesisVersions {
+		if i > 0 {
+			have.WriteString(", ")
+		}
+		fmt.Fprintf(&have, "%d", v)
+	}
+	return fmt.Sprintf(
+		"genesis at unregistered version %d (EV-20); this verifier registers genesis version %s. "+
+			"From the log alone these are indistinguishable: this verifier may be out of date for "+
+			"this chain, or this chain's genesis may be corrupt or hostile (EV-21)",
+		version, have.String())
 }
 
 // registered reports whether (typ, version) is in the contracts-v1 registry
@@ -135,8 +171,21 @@ func Verify(data []byte, head *string) Result {
 		}
 
 		// Registry check (EV-6/EV-9): unregistered well-formed types defer
-		// Stage B and mark the line PARTIAL.
+		// Stage B and mark the line PARTIAL — with the single exception of
+		// `genesis` (EV-20).
 		if !registered(e.typ, e.version) {
+			if i == 0 {
+				// EV-20: a chain's genesis MUST carry a (type, version) the
+				// verifier registers; if it does not, the chain is INVALID at
+				// line 1 and no VALID or PARTIAL verdict may follow. This is
+				// the sole exception to EV-8 and a Stage A promotion for
+				// genesis alone: with an unregistered genesis, operator_pk and
+				// registrar_pk cannot be extracted at all, so EVERY later
+				// signature is uncheckable and PARTIAL ("integrity confirmed,
+				// some semantics unchecked") would announce success over a
+				// chain on which nothing was ever authenticated.
+				return invalid(1, unregisteredGenesisReason(e.version))
+			}
 			partial = append(partial, ln)
 			prev = e
 			continue
@@ -179,9 +228,14 @@ func stageB(st *vstate, e *event) (string, bool) {
 }
 
 func stageBGenesis(st *vstate, e *event) (string, bool) {
-	// ES-18 payload key set.
-	if !payloadKeySetEquals(e.payload, []string{"chain_id", "contracts", "operator_pk", "registrar_pk", "sig"}) {
-		return "genesis payload key set (ES-18)", false
+	// ES-18 payload key set, as refined by ES-34: five required keys plus the
+	// two OPTIONAL fork-ancestry keys, each either present with a legal value or
+	// entirely absent. ES-18 is otherwise unchanged — any key outside this union
+	// is still rejected.
+	if !payloadKeySetAllows(e.payload,
+		[]string{"chain_id", "contracts", "operator_pk", "registrar_pk", "sig"},
+		[]string{"ancestor_chain", "ancestor_head"}) {
+		return "genesis payload key set (ES-18/ES-34)", false
 	}
 	chainID := mustStr(e.payload, "chain_id")
 	contracts := mustStr(e.payload, "contracts")
@@ -205,6 +259,61 @@ func stageBGenesis(st *vstate, e *event) (string, bool) {
 	if !isHex128(sig) {
 		return "sig not 128 lowercase hex (ES-31)", false
 	}
+
+	// ET-9e / ET-9f — recorded fork ancestry. A genesis MAY record the chain it
+	// was forked from with two OPTIONAL keys (ES-34): a NAME, `ancestor_chain`
+	// (the parent's genesis hash, which per ET-7a is the only value that can name
+	// a chain), and a POSITION on the chain that name identifies, `ancestor_head`
+	// (the parent's head at the moment of the fork, EX-14).
+	//
+	// ET-9f is a pure key-PRESENCE test over the payload already parsed: no key
+	// material, no decoding, no hashing, no curve arithmetic.
+	ancChain, haveChain := payloadGet(e.payload, "ancestor_chain")
+	ancHead, haveHead := payloadGet(e.payload, "ancestor_head")
+
+	// The asymmetry below is the rule, not an oversight, and MUST NOT be
+	// "tidied" into a both-or-neither pair (ET-9f):
+	//   - `ancestor_head` alone is barred. It names a position on an UNNAMED
+	//     chain — the head-alone anchoring charter §4 rejects (ET-7a) — and no
+	//     reader can check it, because nothing in the payload says which export
+	//     to open.
+	//   - `ancestor_chain` alone is ACCEPTED. It is the weaker but coherent
+	//     claim "forked from chain X, fork point unrecorded": a named chain, no
+	//     position. Nothing below rejects it.
+	//   - Both absent is the ordinary no-recorded-ancestor form (ES-34).
+	if haveHead && !haveChain {
+		return "ancestor_head present without ancestor_chain (ET-9f)", false
+	}
+	if haveChain {
+		if ancChain.kind != kString || !isHex64(ancChain.str) {
+			return "ancestor_chain not 64 lowercase hex (ET-9e)", false
+		}
+		if ancChain.str == zeros64 {
+			return "ancestor_chain is the 64-zero anchor (ET-9e)", false
+		}
+	}
+	if haveHead {
+		if ancHead.kind != kString || !isHex64(ancHead.str) {
+			return "ancestor_head not 64 lowercase hex (ET-9e)", false
+		}
+		if ancHead.str == zeros64 {
+			return "ancestor_head is the 64-zero anchor (ET-9e)", false
+		}
+	}
+	// Two checks are deliberately ABSENT here, and their absence is normative.
+	//
+	// 1. No comparison BETWEEN the two values. `ancestor_chain ==
+	//    ancestor_head` is legal: on a parent chain holding only its genesis
+	//    event, the head IS the genesis hash, so a fork taken at that instant
+	//    records the same 64 hex characters twice. It is not a duplicate to
+	//    reject, and ET-9e imposes no distinctness requirement.
+	// 2. No resolution of either value. Both are a recorded CLAIM, not a
+	//    verified link (ET-9e): the ancestor is a different export the verifier
+	//    does not hold and cannot demand. It therefore cannot confirm that
+	//    `ancestor_chain` is any chain's genesis hash, nor that `ancestor_head`
+	//    is any chain's head, and it MUST NOT report INVALID because it cannot
+	//    resolve either, nor treat an unresolvable value as a defect. Settling
+	//    the claim is the reader's act, with both exports in hand.
 
 	opBytes := hexToBytes(operatorPK)
 	regBytes := hexToBytes(registrarPK)
