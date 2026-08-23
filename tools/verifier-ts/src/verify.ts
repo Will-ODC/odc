@@ -11,6 +11,7 @@ import {
   type PayloadEntry,
 } from "./parse.js";
 import { computeHash, signingPreimage } from "./hashing.js";
+import { excerpt } from "./report.js";
 import {
   ed25519Verify,
   isCanonicalKeyEncoding,
@@ -306,7 +307,9 @@ function computeSha256Hex(bytes: Buffer): string {
 
 // A fatal line, with the advisory reason EV-17 SHOULD accompany INVALID with.
 // The reason is NEVER conformance-checked (EV-17); only the token and the line
-// number are. It is single-line by construction — see `oneLine` in cli.ts.
+// number are. It is rendered single-line and length-bounded by `oneLine` in
+// report.ts; values read out of the export go through `excerpt` before they are
+// interpolated here.
 interface Fault {
   line: number;
   reason: string;
@@ -424,7 +427,9 @@ export function verifyExport(bytes: Buffer, head?: string): Verdict {
     if (isFirst && ev.type !== "genesis") {
       contentFault = {
         line: lineNo,
-        reason: `ES-33: first event is "${ev.type}", not "genesis"`,
+        // `excerpt`: ES-10 constrains the charset of `type` but NOT its
+        // length, so this value is attacker-controlled and unbounded.
+        reason: `ES-33: first event is "${excerpt(ev.type)}", not "genesis"`,
       };
       break;
     }
@@ -463,7 +468,10 @@ export function verifyExport(bytes: Buffer, head?: string): Verdict {
       if (!stageB(ev, state)) {
         contentFault = {
           line: lineNo,
-          reason: `Stage B: ${ev.type} v${ev.version} fails a type-specific check (event-types.md)`,
+          // `ev.type` is one of the four registered names on this branch, so
+          // `excerpt` cannot bite here; it is applied anyway so that no
+          // interpolation of a value read out of the export goes unclipped.
+          reason: `Stage B: ${excerpt(ev.type)} v${ev.version} fails a type-specific check (event-types.md)`,
         };
         break;
       }
@@ -532,6 +540,10 @@ export function verifyExport(bytes: Buffer, head?: string): Verdict {
  */
 function unregisteredGenesisReason(ev: ParsedEvent): string {
   const known = registeredVersionsOf("genesis");
+  // The empty branch is UNREACHABLE while `genesis` sits in REGISTERED, which
+  // ES-33 requires of every chain. It is kept as a total case rather than a
+  // non-null assertion: a registry edit that dropped `genesis` would otherwise
+  // render "it registers genesis v" here.
   const knownText =
     known.length === 0
       ? "no genesis version at all"

@@ -20,8 +20,8 @@ import { mkdtempSync, writeFileSync } from "node:fs";
 import { tmpdir } from "node:os";
 import { fileURLToPath } from "node:url";
 import { dirname, join, resolve } from "node:path";
-import { oneLine, verdictLine } from "../src/report.js";
-import type { Verdict } from "../src/verify.js";
+import { excerpt, oneLine, verdictLine } from "../src/report.js";
+import { verifyExport, type Verdict } from "../src/verify.js";
 import { parseEventLine, type ParsedEvent } from "../src/parse.js";
 import { computeHash } from "../src/hashing.js";
 
@@ -142,9 +142,79 @@ test("the CLI writes exactly one stdout line, terminated by a single LF", () => 
   assert.match(stdout.trimEnd(), VERDICT_RE, JSON.stringify(stdout));
 });
 
-test("the CLI writes exactly one stdout line for a VALID-shaped run too", () => {
+test("the CLI writes exactly one stdout line for an empty export too", () => {
   // Any input at all: the invariant is about stdout, not about the verdict.
+  // (An empty export is INVALID, not VALID — the earlier title claimed
+  // otherwise and this test never asserted a verdict either way.)
   const { stdout } = runCli(Buffer.from("", "utf8"));
   assert.equal(stdout.split("\n").length, 2, JSON.stringify(stdout));
   assert.match(stdout.trimEnd(), VERDICT_RE, JSON.stringify(stdout));
+});
+
+// --- the reason is bounded as well as single-line ----------------------------
+
+test("oneLine collapses U+0085 (NEL), a line terminator some readers break on", () => {
+  // EX-9 permits NEL inside payload strings, so the first reason to interpolate
+  // a payload string value would carry it straight into stdout.
+  assert.equal(oneLine("a\u0085b"), "a b");
+  // NEL next to the terminators already handled collapses to one space.
+  assert.equal(oneLine("a\r\n\u0085b"), "a b");
+  assert.equal(
+    oneLine("\u0085leading and trailing\u0085"),
+    "leading and trailing",
+  );
+});
+
+test("excerpt bounds interpolated text to 64 code points and keeps it single-line", () => {
+  const out = excerpt("a".repeat(1000));
+  assert.ok(
+    [...out].length <= 64,
+    `excerpt returned ${[...out].length} code points: ${JSON.stringify(out.slice(0, 80))}`,
+  );
+  assert.equal(out.includes("\n"), false);
+  assert.equal(excerpt("short"), "short");
+});
+
+test("excerpt never splits an astral character into a lone surrogate", () => {
+  // Truncation counts code points, not UTF-16 units: cutting at a unit
+  // boundary would emit an unpaired surrogate into stdout.
+  const out = excerpt("\u{1f600}".repeat(200));
+  assert.ok([...out].length <= 64, `${[...out].length} code points`);
+  assert.match(out, /^\u{1f600}+…?$/u, JSON.stringify(out));
+});
+
+test("verdictLine bounds the whole reason, however long the reason it is handed", () => {
+  // The backstop: a call site that interpolates untrusted text and forgets
+  // `excerpt` still cannot emit a multi-megabyte stdout line.
+  const rendered = verdictLine({
+    verdict: "INVALID",
+    line: 3,
+    reason: "x".repeat(5_000_000),
+  });
+  assert.ok(
+    rendered.length < 1000,
+    `verdictLine emitted a ${rendered.length}-character line`,
+  );
+  assert.match(rendered, VERDICT_RE, rendered.slice(0, 80));
+});
+
+test("a multi-megabyte event type does not become a multi-megabyte stdout line", () => {
+  // ES-10 constrains the charset of `type` but NOT its length, and the ES-33
+  // reason interpolates it. That check runs before the hash check, so the
+  // bogus hash below never gets a say. Only the line's SIZE is asserted here;
+  // the verdict VALUE for any input is `contracts/fixtures/`'s business.
+  const type = "a".repeat(2_000_000);
+  const line =
+    `{"seq":1,"type":"${type}","version":1,"payload":{},` +
+    `"ts":"2026-01-01T00:00:00.000Z","prev_hash":"${"0".repeat(64)}",` +
+    `"hash":"${"1".repeat(64)}"}\n`;
+  const rendered = verdictLine(verifyExport(Buffer.from(line, "utf8")));
+  // Tighter than the 512-code-point backstop on purpose: this pins the
+  // `excerpt` AT the ES-33 call site, not merely `oneLine`'s catch-all. Drop
+  // the `excerpt` there and the line lands at the backstop, failing here.
+  assert.ok(
+    rendered.length < 200,
+    `stdout line was ${rendered.length} characters long`,
+  );
+  assert.match(rendered, VERDICT_RE, rendered.slice(0, 120));
 });
