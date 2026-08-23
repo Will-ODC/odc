@@ -21,12 +21,18 @@ Output and process exit codes (the exit code is **not** conformance-checked —
 `evolution.md` EV-17 pins conformance on the verdict token and line number(s)
 alone — but the CLI note fixes this scheme so the two verifiers agree):
 
-| Verdict                | stdout                  | exit |
-| ---------------------- | ----------------------- | ---- |
-| VALID                  | `VALID`                 | 0    |
-| INVALID (line N)       | `INVALID at line N`     | 1    |
-| PARTIAL (lines …)      | `PARTIAL at lines a, b` | 2    |
-| tool error (bad args…) | message on stderr       | ≥ 3  |
+| Verdict                | stdout                          | exit |
+| ---------------------- | ------------------------------- | ---- |
+| VALID                  | `VALID`                         | 0    |
+| INVALID (line N)       | `INVALID at line N[: <reason>]` | 1    |
+| PARTIAL (lines …)      | `PARTIAL at lines a, b`         | 2    |
+| tool error (bad args…) | message on stderr               | ≥ 3  |
+
+**The verdict is exactly ONE line**, and any advisory reason (EV-17, EV-21) sits
+after a colon on that same line — never on a second line. Consumers parse the
+verdict with a single-line regex, so a wrapped reason makes them throw rather
+than mismatch. `src/report.ts` is the single place that renders it and strips any
+line terminator a reason could carry; `test/report-shape.test.ts` pins the shape.
 
 `--head` supplies the out-of-band anchored head. It is the ONLY way to detect
 clean end-truncation, which is invisible from the export alone
@@ -43,13 +49,18 @@ Two stages, per `evolution.md` EV-6/EV-15:
   preimage (`hashing.md`). Parsing is done on the raw bytes, **not** via
   `JSON.parse`, which would silently accept duplicate keys, `1e2`/`1.0`, and lose
   key order.
-- **Stage B (per registered `(type, version)`):** payload key-set, Ed25519
+- **Stage B (per registered `(type, version)`):** payload key-set (including
+  `genesis`'s two OPTIONAL ancestry keys `ancestor_chain` / `ancestor_head` and
+  the ET-9f presence rule between them — format-checked, never resolved), Ed25519
   signatures under the type's named key (with the ET-4a/ET-4b canonical-encoding
   and ET-4c prime-order checks run on the raw bytes _before_ the verify
   primitive), title/`choice_count`/`choice` bounds, the `ballot_batch_interval_ms`
   and `ballot_batch_min` floors an `issue_created` declares (ET-14b), and `issue_id`
   back-references. A well-formed but unregistered `(type, version)` yields
-  `PARTIAL` for that line, never `INVALID` (EV-8).
+  `PARTIAL` for that line, never `INVALID` (EV-8) — **except at line 1**, where
+  an unregistered `genesis` is `INVALID at line 1` (EV-20, the sole exception),
+  because an unreadable `genesis` payload leaves every later signature
+  uncheckable.
 
 ## Tests
 
@@ -57,12 +68,15 @@ Two stages, per `evolution.md` EV-6/EV-15:
 pnpm --filter @odc/verifier-ts test
 ```
 
-Three files, and the split between them is deliberate — **`contracts/fixtures/`
-is the sole oracle for what a given input verifies to.** Only the first file
-below asserts a verdict value; the other two assert that a verdict of the right
-_shape_ came back at all. Anything that froze an expected verdict outside the
-fixture corpus would be inventing conformance in a file no reviewer treats as
-normative.
+Five files, and the split between them is deliberate — **`contracts/fixtures/`
+is the sole oracle for what a given input verifies to.** `fixtures.test.ts` is
+the conformance suite; `robustness.test.ts`, `extreme-values.test.ts` and
+`report-shape.test.ts` assert only that a verdict of the right _shape_ came back
+at all. `genesis-ancestry.test.ts` is the one exception and says so in its own
+header: it asserts verdict values for rules the fixture corpus does not yet
+cover, from synthetic chains, and is superseded by a fixture the day one lands.
+Anything else that froze an expected verdict outside the fixture corpus would be
+inventing conformance in a file no reviewer treats as normative.
 
 - **`test/fixtures.test.ts`** — drives every vector in
   `contracts/fixtures/index.json` and asserts the declared verdict token and
@@ -71,6 +85,17 @@ normative.
   `f(...array)` defects found in the T7b review (`Math.min(...invalidLines)` and
   `String.fromCodePoint(...cps)`). Node throws `RangeError` once a spread array
   passes ~130k elements.
+- **`test/genesis-ancestry.test.ts`** — ET-9e/ET-9f (the two optional `genesis`
+  ancestry keys) and EV-20. The fixture corpus carries **no** vector for these
+  rules yet, so this file builds its own chains; they are synthetic and
+  self-consistent (hashed and signed by the functions under test), which the
+  file's header states plainly. They are a harness, not an oracle: a fixture
+  for these rules supersedes them the day one exists.
+- **`test/report-shape.test.ts`** — the CLI output contract: exactly one verdict
+  line, advisory reason after a colon on that same line. A reason on a second
+  line makes a single-line consumer regex **throw** rather than mismatch, and no
+  valid input would surface that, so it is pinned directly — at the renderer and
+  through a real child process.
 - **`test/extreme-values.test.ts`** — value-level fuzzing for that same class.
   Generates structurally valid exports carrying extreme values (huge strings
   where byte length, code point count and UTF-16 length diverge; integers
@@ -79,7 +104,7 @@ normative.
   well-formed verdict of the three (EV-17). Generation is a fixed-seed LCG, so a
   failure reproduces from the case index in the assertion message.
 
-**Why the last two exist as a category.** Both known defects of this class were
+**Why `robustness.test.ts` and `extreme-values.test.ts` exist as a category.** Both known defects of this class were
 **wrong-verdict** bugs, not crashes-only: one returned no verdict at all, and
 the other was swallowed by a catch-all as a silent `INVALID` on a line that
 parses fine. A byte-level fuzzer cannot find them — flipping bytes in a valid

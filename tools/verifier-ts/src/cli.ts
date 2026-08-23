@@ -9,6 +9,7 @@
 
 import { readFileSync } from "node:fs";
 import { verifyExport } from "./verify.js";
+import { verdictLine } from "./report.js";
 
 const HEX64 = /^[0-9a-f]{64}$/;
 
@@ -57,17 +58,13 @@ function main(argv: string[]): number {
   }
 
   const result = verifyExport(bytes, head);
+  process.stdout.write(verdictLine(result) + "\n");
   switch (result.verdict) {
     case "VALID":
-      process.stdout.write("VALID\n");
       return 0;
     case "INVALID":
-      process.stdout.write(`INVALID at line ${result.line}\n`);
       return 1;
     case "PARTIAL":
-      process.stdout.write(
-        `PARTIAL at line${result.lines.length > 1 ? "s" : ""} ${result.lines.join(", ")}\n`,
-      );
       return 2;
   }
 }
