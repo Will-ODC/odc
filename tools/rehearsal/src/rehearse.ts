@@ -57,18 +57,19 @@ export function conformanceVerdict(stdout: string): string {
   if (line === "VALID") return line;
   const invalid = /^(INVALID at line [1-9][0-9]*)(?::[^\n]*)?$/.exec(line);
   if (invalid !== null) return invalid[1] as string;
-  // "line" and "lines" are both accepted, and both normalize to the plural.
-  // EV-17's conformance surface is the verdict token plus the line numbers;
-  // whether a verifier pluralizes for a single line is advisory presentation,
-  // and the two independent verifiers do in fact differ on it. Matching only
-  // the plural made a single-line PARTIAL fall through to the throw below —
-  // so the shared judge would ABORT rather than report a mismatch, which is
-  // strictly worse: an abort hides whether the verifiers actually agreed.
-  // Dormant only because expected() never asks for a PARTIAL today; it goes
-  // live the moment a PARTIAL vector reaches the rehearsal.
-  const partial = /^PARTIAL at lines? ([1-9][0-9]*(?:, [1-9][0-9]*)*)$/.exec(
-    line,
-  );
+  // "line" and "lines" both accepted, both normalized to the plural, and an
+  // advisory suffix tolerated exactly as on INVALID above. EV-17 fixes the
+  // conformance surface as the verdict token plus the line numbers alone —
+  // unscoped, so it governs PARTIAL no less than INVALID — and it keeps "the
+  // CLI surface revisable" on purpose. Anything this branch fails to match
+  // reaches the throw below, and a throw ABORTS the judge instead of
+  // reporting a mismatch, which is strictly worse: it hides whether the two
+  // verifiers agreed. So the two spellings and the reason suffix are matched
+  // here rather than left to become that abort.
+  const partial =
+    /^PARTIAL at lines? ([1-9][0-9]*(?:, [1-9][0-9]*)*)(?::[^\n]*)?$/.exec(
+      line,
+    );
   if (partial !== null) return `PARTIAL at lines ${partial[1] as string}`;
   throw new Error(`not an EV-17 verdict: ${JSON.stringify(line)}`);
 }
