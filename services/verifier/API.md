@@ -62,6 +62,7 @@ Two stages (EV-6):
   their Ed25519 canonical/prime-order gates (ET-3..ET-5, ET-4a/ET-4b/ET-4c),
   payload key sets (ES-18) including the two OPTIONAL `genesis` fork-ancestry
   keys and their presence rule (ES-34, ET-9e/ET-9f), key formats (ET-9b, ID-3),
+  the distinctness of the two `genesis` keys (ET-9d),
   `chain_id` derivation
   (ET-7), title bounds and forbidden characters (ET-14), `choice_count` range
   (ET-14a), the ballot batching parameters and their floors (ET-14b),

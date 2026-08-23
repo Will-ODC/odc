@@ -250,6 +250,30 @@ func stageBGenesis(st *vstate, e *event) (string, bool) {
 	if !isHex64(registrarPK) {
 		return "registrar_pk not 64 lowercase hex (ET-9b)", false
 	}
+
+	// ET-9d — the two genesis keys MUST be distinct. A genesis whose
+	// `registrar_pk` is byte-identical to its `operator_pk` is INVALID at the
+	// genesis line. The rule fixes the comparison precisely: it is on the two
+	// 64-character lowercase-hex STRINGS, "after ET-9b has passed on both", so
+	// it sits here, immediately after the two checks above and before any
+	// decoding — one string equality, no key material, no decoding, no curve
+	// arithmetic.
+	//
+	// The fault it blocks: one holder with the power to mint issues AND forge
+	// every ballot on them, collapsing charter P2's two planes and P3's "never
+	// selects" into one party — declared in the open, on line 1, where until
+	// now the verifier answered VALID with nothing to signal it.
+	//
+	// NECESSARY, NOT SUFFICIENT, and it must not be read as more. Two distinct
+	// keys can still be held by one party and no export can tell: nothing
+	// distinguishes a genuinely separated registrar from an operator holding
+	// both keypairs. This blocks only the blatant collapse — the declaration
+	// visible in the log — and the sufficient version is undecidable from the
+	// log. Custody stays policy (ET-9a). So nothing adjacent is checked here:
+	// no other key pair, and no inference beyond this one equality.
+	if registrarPK == operatorPK {
+		return "registrar_pk is identical to operator_pk (ET-9d)", false
+	}
 	if !isHex64(chainID) {
 		return "chain_id not 64 lowercase hex (ET-6)", false
 	}
