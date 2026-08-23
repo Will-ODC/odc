@@ -40,6 +40,33 @@ describe("conformanceVerdict", () => {
     );
   });
 
+  it("normalizes a single-line PARTIAL written either way", () => {
+    // The two independent verifiers disagree on pluralization here: one
+    // always writes "lines", the other writes "line" for a single line.
+    // Both must reduce to the same conformance surface, or the judge reports
+    // a divergence that does not exist.
+    assert.equal(
+      conformanceVerdict("PARTIAL at line 5\n"),
+      "PARTIAL at lines 5",
+    );
+    assert.equal(
+      conformanceVerdict("PARTIAL at lines 5\n"),
+      "PARTIAL at lines 5",
+    );
+    assert.equal(
+      conformanceVerdict("PARTIAL at line 5\n"),
+      conformanceVerdict("PARTIAL at lines 5\n"),
+    );
+  });
+
+  it("throws rather than guessing at output that is not a verdict", () => {
+    // The throw is correct for genuine non-verdicts; the bug it masked was
+    // reaching it for a well-formed one.
+    assert.throws(() => conformanceVerdict("PARTIAL at lines\n"));
+    assert.throws(() => conformanceVerdict("PARTIAL at lines 0\n"));
+    assert.throws(() => conformanceVerdict("INVALID at line 3\nreason\n"));
+  });
+
   it("rejects malformed or multi-line output", () => {
     assert.throws(() => conformanceVerdict("INVALID\n"), /EV-17/);
     assert.throws(() => conformanceVerdict("VALID\nVALID\n"), /EV-17/);
