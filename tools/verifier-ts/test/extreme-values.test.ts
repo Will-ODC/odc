@@ -156,9 +156,16 @@ function* cases(rng: () => number): Generator<{ name: string; bytes: Buffer }> {
     };
   }
 
-  // 6. Many keys in one payload object.
+  // 6. Many keys in one payload object. The index is ZERO-PADDED so the keys
+  //    are in ascending UTF-8-byte order (EX-8) and the parser actually walks
+  //    all n of them: with an unpadded index `k10` sorts before `k2`, so the
+  //    line was rejected at the SECOND key and this case never reached a many-
+  //    key payload at all.
   for (const n of [50_000, 150_000]) {
-    const keys = Array.from({ length: n }, (_, i) => `"k${i}":1`).join(",");
+    const keys = Array.from(
+      { length: n },
+      (_, i) => `"k${String(i).padStart(9, "0")}":1`,
+    ).join(",");
     yield {
       name: `many-payload-keys(${n})`,
       bytes: Buffer.from(

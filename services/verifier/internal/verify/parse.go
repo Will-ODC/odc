@@ -36,10 +36,33 @@ type jobject struct {
 }
 
 type parser struct {
-	b   []byte
-	pos int
-	err bool
+	b     []byte
+	pos   int
+	err   bool
+	depth int // current nesting depth; guarded by maxParseDepth
 }
+
+// maxParseDepth bounds the nesting this recursive-descent parser will descend
+// into. Beyond it the line is rejected as non-canonical.
+//
+// This is verdict-preserving, and that is the only reason it may exist. The
+// deepest structure any conforming export line can hold is TWO levels: the
+// line object itself, and its `payload` object. Payload values are flat
+// integers and strings only (ES-16/ES-17), so a third level of nesting is
+// already INVALID at that line under EV-16 — and INVALID regardless of whether
+// the (type, version) is registered, since HA-7 defines no encoding for it and
+// the event therefore has no computable preimage. Refusing to descend past 64
+// levels reports the same verdict at the same line as walking the whole
+// structure and rejecting it for flatness; 64 is 32x the deepest legal line.
+//
+// Without the bound the parser is unbounded recursion over attacker-controlled
+// input, and Go does not merely panic there: a stack overflow is a runtime
+// FATAL error, so recover() cannot turn it back into a verdict. The process
+// dies printing nothing to stdout and exits with status 2 — which is this
+// CLI's PARTIAL code. A consumer reading exit status alone would read a crash
+// as "chain verified, some semantics unchecked". Measured on the pre-fix
+// binary, a single line nesting objects 1.5M deep (a 7.5 MB export) was enough.
+const maxParseDepth = 64
 
 // parseObjectLine parses exactly one JSON object occupying the whole input,
 // with no leading, trailing, or interior whitespace. It returns ok=false for
@@ -63,10 +86,20 @@ func (p *parser) parseValue() jvalue {
 	}
 	c := p.b[p.pos]
 	switch {
-	case c == '{':
-		return p.parseObject()
-	case c == '[':
-		return p.parseArray()
+	case c == '{', c == '[':
+		if p.depth >= maxParseDepth {
+			p.err = true
+			return jvalue{}
+		}
+		p.depth++
+		var v jvalue
+		if c == '{' {
+			v = p.parseObject()
+		} else {
+			v = p.parseArray()
+		}
+		p.depth--
+		return v
 	case c == '"':
 		s, ok := p.parseString()
 		if !ok {
@@ -88,6 +121,16 @@ func (p *parser) parseValue() jvalue {
 	}
 }
 
+// dupSetThreshold is the key count at which duplicate detection switches from
+// a linear scan of the keys already seen to a set. Below it the scan is
+// cheaper than allocating a map, and real ODC events are far below it — the
+// widest v1 payload has five keys. Above it the scan is what made a wide
+// payload quadratic in key count, so a hostile export of very modest size
+// could wedge the verifier: 200k keys took over a minute of pure key
+// comparison. "A stranger can write a verifier and check the log in an
+// afternoon" (charter §4) does not survive that, so the set takes over.
+const dupSetThreshold = 32
+
 func (p *parser) parseObject() jvalue {
 	p.pos++ // consume '{'
 	obj := &jobject{}
@@ -95,6 +138,9 @@ func (p *parser) parseObject() jvalue {
 		p.pos++
 		return jvalue{kind: kObject, obj: obj}
 	}
+	// seen is nil until the key count crosses dupSetThreshold, at which point
+	// it is populated from the keys already stored and used from then on.
+	var seen map[string]struct{}
 	for {
 		if p.pos >= len(p.b) || p.b[p.pos] != '"' {
 			p.err = true
@@ -114,9 +160,37 @@ func (p *parser) parseObject() jvalue {
 		if p.err {
 			return jvalue{}
 		}
-		for _, k := range obj.keys {
-			if k == key {
-				obj.dupKey = true
+		// HA-6 duplicate-key detection. Once dupKey is set the answer cannot
+		// change, so we stop looking entirely: dupKey is a single boolean the
+		// caller reads, not a list of offending keys, and continuing to search
+		// after the first hit buys nothing. This is both the early exit the
+		// previous scan lacked and, with the set below, what makes the whole
+		// thing sub-quadratic. Parsing itself continues either way, because a
+		// duplicate key is not a parse error — it is a Stage A rejection the
+		// caller makes after the line is fully parsed, and stopping here would
+		// change which check fires (though not, per EV-17, which line).
+		if !obj.dupKey {
+			switch {
+			case seen != nil:
+				if _, dup := seen[key]; dup {
+					obj.dupKey = true
+				} else {
+					seen[key] = struct{}{}
+				}
+			default:
+				for _, k := range obj.keys {
+					if k == key {
+						obj.dupKey = true
+						break
+					}
+				}
+				if !obj.dupKey && len(obj.keys)+1 >= dupSetThreshold {
+					seen = make(map[string]struct{}, len(obj.keys)+1)
+					for _, k := range obj.keys {
+						seen[k] = struct{}{}
+					}
+					seen[key] = struct{}{}
+				}
 			}
 		}
 		obj.keys = append(obj.keys, key)

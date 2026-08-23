@@ -20,7 +20,10 @@ test("verifyExport on ~200000 blank lines returns INVALID at line 1 and does not
   // verifier must return exactly one of the three verdicts).
   const bytes = Buffer.from("\n".repeat(200_000), "utf8");
   const result = verifyExport(bytes);
-  assert.deepEqual(result, { verdict: "INVALID", line: 1 });
+  // Token and line only. The advisory `reason` is deliberately not asserted:
+  // EV-17 makes reason text non-conformance-checked and revisable.
+  assert.equal(result.verdict, "INVALID");
+  assert.equal(result.verdict === "INVALID" ? result.line : null, 1);
 });
 
 test("the canonical line parser accepts a syntactically valid line with a ~200000-char payload string", () => {

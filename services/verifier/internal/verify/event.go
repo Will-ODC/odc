@@ -258,6 +258,37 @@ func payloadKeySetEquals(obj *jobject, want []string) bool {
 	return true
 }
 
+// payloadKeySetAllows reports whether obj's keys are exactly `required` plus
+// any subset of `optional` — ES-18's closed key set as refined by ES-34. Every
+// required key must be present; no key outside required ∪ optional may appear;
+// an optional key is either present (with a legal value, checked by the caller)
+// or entirely absent, never null and never a placeholder.
+func payloadKeySetAllows(obj *jobject, required, optional []string) bool {
+	if len(obj.keys) < len(required) || len(obj.keys) > len(required)+len(optional) {
+		return false
+	}
+	allowed := make(map[string]bool, len(required)+len(optional))
+	for _, k := range required {
+		allowed[k] = true
+	}
+	for _, k := range optional {
+		allowed[k] = true
+	}
+	present := make(map[string]bool, len(obj.keys))
+	for _, k := range obj.keys {
+		if !allowed[k] {
+			return false // undefined key: ES-18 is unchanged by ES-34
+		}
+		present[k] = true
+	}
+	for _, k := range required {
+		if !present[k] {
+			return false
+		}
+	}
+	return true
+}
+
 // countScalars returns the number of Unicode scalar values in s (runes).
 func countScalars(s string) int {
 	n := 0
