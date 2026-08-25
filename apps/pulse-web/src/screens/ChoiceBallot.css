@@ -1,0 +1,164 @@
+/*
+ * A question with more answers than a swipe can hold. Same dark ground and the
+ * same opening as the swipe ballot, so moving between them does not feel like
+ * moving between products - only the answering changes.
+ */
+.ballot--list .ballot__head {
+  min-height: 0;
+  padding-bottom: var(--step);
+}
+
+.choices {
+  flex: 1;
+  display: flex;
+  flex-direction: column;
+  gap: var(--step);
+  padding: var(--step) var(--gutter) var(--gutter);
+  overflow-y: auto;
+}
+
+.choices__list {
+  list-style: none;
+  margin: 0;
+  padding: 0;
+  display: flex;
+  flex-direction: column;
+  gap: var(--step);
+}
+
+.choices__one {
+  width: 100%;
+  display: flex;
+  flex-direction: column;
+  align-items: flex-start;
+  gap: 2px;
+  padding: 14px 16px;
+  border-radius: var(--r-control);
+  border: 1px solid var(--ballot-line);
+  background: rgba(255, 255, 255, 0.04);
+  color: var(--ballot-ink);
+  font: inherit;
+  font-size: var(--t-body);
+  text-align: left;
+  cursor: pointer;
+  transition:
+    background 0.12s,
+    border-color 0.12s;
+}
+
+.choices__one:hover {
+  background: rgba(255, 255, 255, 0.08);
+}
+
+.choices__one:focus-visible {
+  outline: 2px solid rgba(255, 255, 255, 0.7);
+  outline-offset: 2px;
+}
+
+.choices__next {
+  font-size: var(--t-small);
+  color: var(--ballot-ink-faint);
+}
+
+/* ---- saying something the poll did not offer ---- */
+.own {
+  margin-top: var(--step);
+  padding-top: var(--gutter);
+  border-top: 1px solid var(--ballot-line);
+  display: flex;
+  flex-direction: column;
+  gap: var(--step);
+}
+
+.own__label {
+  font-size: var(--t-small);
+  color: var(--ballot-ink-muted);
+}
+
+.own__form {
+  display: flex;
+  flex-direction: column;
+  gap: 6px;
+}
+
+.own__row {
+  display: flex;
+  gap: 6px;
+}
+
+.own__input {
+  flex: 1;
+  min-width: 0;
+  padding: 12px 14px;
+  border-radius: var(--r-control);
+  border: 1px solid var(--ballot-line);
+  background: rgba(255, 255, 255, 0.04);
+  color: var(--ballot-ink);
+  font: inherit;
+  font-size: var(--t-body);
+}
+
+.own__input::placeholder {
+  color: var(--ballot-ink-faint);
+}
+
+.own__input:focus-visible {
+  outline: 2px solid rgba(255, 255, 255, 0.7);
+  outline-offset: 1px;
+}
+
+.own__add {
+  padding: 0 18px;
+  border-radius: var(--r-control);
+  border: 1px solid var(--ballot-line);
+  background: rgba(255, 255, 255, 0.1);
+  color: var(--ballot-ink);
+  font: inherit;
+  font-size: var(--t-small);
+  font-weight: 600;
+  cursor: pointer;
+}
+
+.own__add:disabled {
+  opacity: 0.4;
+  cursor: default;
+}
+
+/* Quiet on purpose: being told that others already said your idea should read
+   as being counted, not as being corrected. */
+.own__said {
+  margin: 0;
+  font-size: var(--t-small);
+  line-height: 1.5;
+  color: var(--ballot-ink-muted);
+}
+
+.own__said--wrong {
+  color: rgb(var(--side-a));
+}
+
+.own__near {
+  color: var(--ballot-ink-faint);
+}
+
+.own__all ul {
+  list-style: none;
+  margin: 6px 0 0;
+  padding: 0;
+  display: flex;
+  flex-direction: column;
+  gap: 4px;
+}
+
+.own__all li {
+  display: flex;
+  justify-content: space-between;
+  gap: var(--step);
+  font-size: var(--t-small);
+  color: var(--ballot-ink-muted);
+}
+
+.own__all b {
+  color: var(--ballot-ink-faint);
+  font-weight: 600;
+}

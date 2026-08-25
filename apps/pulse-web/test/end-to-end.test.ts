@@ -267,10 +267,28 @@ describe("the client against the real server", () => {
     expect((await api.results(POLL_ID)).voters).toBe(2);
   });
 
+  it("adds an option nobody offered, and seconds one somebody had", async () => {
+    const first = await api.suggest(SUGGESTS_ID, "Charge the members");
+    expect(first.status).toBe("added");
+    expect(first.suggestion.count).toBe(1);
+
+    const again = await api.suggest(SUGGESTS_ID, "we could charge members");
+    expect(again.status).toBe("seconded");
+    expect(again.suggestion.text).toBe("Charge the members");
+    expect(again.suggestion.count).toBe(2);
+
+    expect((await api.suggestions(SUGGESTS_ID)).map((one) => one.text)).toEqual(
+      ["Charge the members"],
+    );
+  });
+
   it("reads a poll without anyone being signed in", async () => {
     const poll = await api.poll(POLL_ID);
     expect(poll.choices).toEqual(["Park", "Library", "Rink"]);
     expect(poll.open).toBe(true);
     expect(poll.closesAt).toBeNull();
+    // The graph edge, so the client knows where answering takes someone.
+    expect(poll.next).toEqual([SUGGESTS_ID, null, null]);
+    expect(poll.acceptsSuggestions).toBe(false);
   });
 });
