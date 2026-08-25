@@ -1,0 +1,68 @@
+/*
+ * The one token file. Components reference var(--…) and never a literal, so
+ * changing a colour or a radius is an edit here rather than a hunt through JSX.
+ *
+ * Seeded from the :root block of docs/mockups/pulse-screens/_screens.css (the
+ * light "Civic Glass" set, screens 2–7) plus the dark ballot set that screen 1
+ * introduced in 01-claim.html.
+ *
+ * Screen 1 is dark and screens 2–7 are light. That is the mockups as they
+ * stand, not a decision that the whole deck stays split — it is an open
+ * question for the operator, so both sets live here rather than one being
+ * quietly dropped.
+ */
+:root {
+  /* Civic Glass — screens 2–7 */
+  --canvas: #dfe5ec;
+  --paper: rgba(250, 251, 253, 0.86);
+  --glass: rgba(255, 255, 255, 0.66);
+  --glass-strong: rgba(255, 255, 255, 0.88);
+  --ink: #111318;
+  --muted: #626975;
+  --faint: #8b929d;
+  --line: rgba(17, 19, 24, 0.1);
+  --blue: #1b4dff;
+  --blue-deep: #1232a8;
+  --blue-wash: rgba(27, 77, 255, 0.1);
+  --violet: #5746b3;
+  --violet-deep: #3c3489;
+  --violet-wash: rgba(87, 70, 179, 0.1);
+  --green: #087b61;
+  --green-wash: rgba(8, 123, 97, 0.1);
+
+  /* The dark ballot — screen 1 */
+  --ballot-page: #0c0f16;
+  --ballot-bg: #0a0b0e;
+  --ballot-ink: #f3f6fb;
+  --ballot-ink-soft: rgba(255, 255, 255, 0.82);
+  --ballot-ink-muted: rgba(255, 255, 255, 0.55);
+  --ballot-ink-faint: rgba(255, 255, 255, 0.32);
+  --ballot-line: rgba(255, 255, 255, 0.1);
+  --ballot-chip: rgba(255, 255, 255, 0.09);
+
+  /* The two sides. `-lean` is the strongest tint a drag reaches before it
+     commits; `-won` is where the committed side settles. */
+  --side-a: 235, 110, 110;
+  --side-b: 73, 205, 174;
+  --side-rest: 0.09;
+  --side-lean: 0.14;
+  --side-won: 0.26;
+
+  --shadow:
+    0 28px 70px rgba(32, 43, 59, 0.18), 0 2px 10px rgba(32, 43, 59, 0.08);
+  --shadow-ballot: 0 22px 55px rgba(0, 0, 0, 0.5);
+
+  --r-screen: 34px;
+  --r-card: 22px;
+  --r-control: 15px;
+  --r-pill: 999px;
+
+  --t-hero: 23px;
+  --t-word: 28px;
+  --t-body: 15px;
+  --t-small: 13px;
+  --t-eyebrow: 9px;
+
+  --step: 8px;
+  --gutter: 24px;
+}
