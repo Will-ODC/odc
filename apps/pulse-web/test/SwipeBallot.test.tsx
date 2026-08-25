@@ -241,7 +241,11 @@ describe("casting", () => {
     await screen.findByText(POLL.question);
     fireEvent.keyDown(screen.getByText("Yes"), { key: "ArrowRight" });
 
-    expect(await screen.findByRole("alert")).toBeTruthy();
+    expect(
+      await screen.findByText(
+        "We could not count that yet — this ballot needs you signed in first.",
+      ),
+    ).toBeTruthy();
     expect(screen.queryByText(/Counted\./)).toBeNull();
   });
 });
