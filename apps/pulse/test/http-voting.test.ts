@@ -1,5 +1,6 @@
 import assert from "node:assert/strict";
 import { test } from "node:test";
+import type { InjectOptions } from "fastify";
 import {
   DomainAllowlist,
   StaticDomainSource,
@@ -83,22 +84,23 @@ async function setup(pollCloses?: Date) {
    * Votes are filed under the ballot cookie, so a test that forgets to carry it
    * is a test with a new person on every request.
    */
-  function browser(initial = "") {
+  function browser() {
     const jar = new Map<string, string>();
-    if (initial) {
-      const [name, ...rest] = initial.split("=");
-      jar.set(name as string, rest.join("="));
-    }
-    return async (options: Parameters<typeof app.inject>[0]) => {
-      const opts = options as Record<string, unknown>;
-      const cookie = [...jar].map(([k, v]) => `${k}=${v}`).join("; ");
+    return async (options: InjectOptions) => {
+      // Joined, not overridden: a test that presents a session cookie of its
+      // own must keep it, or it would silently be testing the jar alone.
+      const presented = (options.headers as Record<string, string> | undefined)
+        ?.cookie;
+      const cookie = [presented, ...[...jar].map(([k, v]) => `${k}=${v}`)]
+        .filter((one) => one !== undefined && one !== "")
+        .join("; ");
       const reply = await app.inject({
-        ...(opts as object),
+        ...options,
         headers: {
-          ...((opts.headers as object) ?? {}),
-          ...(cookie ? { cookie } : {}),
+          ...options.headers,
+          ...(cookie === "" ? {} : { cookie }),
         },
-      } as Parameters<typeof app.inject>[0]);
+      });
       for (const set of reply.cookies) jar.set(set.name, set.value);
       return reply;
     };
