@@ -1,0 +1,39 @@
+.viewstate {
+  flex: 1;
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  justify-content: center;
+  gap: var(--step);
+  padding: 0 calc(var(--gutter) + var(--step));
+  text-align: center;
+}
+
+.viewstate p {
+  margin: 0;
+  font-size: var(--t-body);
+  line-height: 1.5;
+}
+
+/* The one moving part, and it holds still for anyone who asked it to. */
+.viewstate__pulse {
+  width: 34px;
+  height: 34px;
+  border-radius: var(--r-pill);
+  border: 2px solid currentColor;
+  border-top-color: transparent;
+  opacity: 0.5;
+  animation: viewstate-spin 0.9s linear infinite;
+}
+
+@keyframes viewstate-spin {
+  to {
+    transform: rotate(360deg);
+  }
+}
+
+@media (prefers-reduced-motion: reduce) {
+  .viewstate__pulse {
+    animation: none;
+  }
+}
