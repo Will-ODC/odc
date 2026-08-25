@@ -86,7 +86,14 @@ test("seeds one poll and one domain, so the flow works the moment it starts", as
 
   const poll = await app.inject({ method: "GET", url: "/api/polls/p1" });
   assert.equal(poll.statusCode, 200);
-  assert.equal(poll.json().choices.length, 3);
+  // The shape the client's first screen can actually ask: one answer, two
+  // sides. A third choice would leave that screen with nowhere to put it.
+  assert.equal(poll.json().method, "single");
+  assert.deepEqual(poll.json().choices, ["No", "Yes"]);
+  // Open when it starts, whenever that is — a seed that had gone stale would
+  // open the demo on a poll nobody can answer.
+  assert.equal(poll.json().open, true);
+  assert.ok(new Date(poll.json().closesAt).getTime() > Date.now());
 
   const signIn = await app.inject({
     method: "POST",

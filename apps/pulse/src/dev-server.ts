@@ -26,6 +26,8 @@ import { InMemoryVotingStore } from "./voting/store.js";
 /** 8080, because `apps/pulse-web/vite.config.ts` proxies `/api` there. */
 export const DEFAULT_PORT = 8080;
 
+const THREE_DAYS_MS = 3 * 24 * 60 * 60 * 1000;
+
 /**
  * The seed: one community, one domain that proves membership of it, one poll.
  *
@@ -40,9 +42,15 @@ const SEED = {
   domain: "example.test",
   poll: {
     id: "p1",
-    question: "Where should the next one be?",
-    choices: ["Park", "Library", "Rink"],
+    question: "Should the ODC stay free of paid ads?",
+    // Two choices, in the order the ballot shows them: the client's first
+    // screen is a left/right swipe, and a third choice has no side to land on.
+    choices: ["No", "Yes"],
     method: "single",
+    // The one value here that is not a literal. A fixed date would be in the
+    // past by the time anyone ran this, and a poll that has already closed is
+    // a poor thing to open a demo on.
+    closesAt: new Date(Date.now() + THREE_DAYS_MS),
   } satisfies NewPoll,
 };
 
