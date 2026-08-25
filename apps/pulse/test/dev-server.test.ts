@@ -81,14 +81,21 @@ test("refuses to build the insecure server outside development too", async () =>
   );
 });
 
-test("seeds one poll and one domain, so the flow works the moment it starts", async () => {
+test("seeds a run of polls and one domain, so the flow works the moment it starts", async () => {
   const { app, mailer } = await buildDevServer(devConfig({}));
 
-  const poll = await app.inject({ method: "GET", url: "/api/polls/p1" });
+  const poll = await app.inject({ method: "GET", url: "/api/polls/ads-free" });
   assert.equal(poll.statusCode, 200);
   // The shape the client's first screen can actually ask: one answer, two
   // sides. A third choice would leave that screen with nowhere to put it.
   assert.equal(poll.json().method, "single");
+  // The graph, not a lone poll: each answer names the question it opens.
+  assert.deepEqual(poll.json().next, ["ads-allowed", "pay-for-it"]);
+  for (const id of poll.json().next) {
+    const onward = await app.inject({ method: "GET", url: `/api/polls/${id}` });
+    assert.equal(onward.statusCode, 200, `${id} should exist`);
+    assert.equal(onward.json().acceptsSuggestions, true);
+  }
   assert.deepEqual(poll.json().choices, ["No", "Yes"]);
   // Open when it starts, whenever that is — a seed that had gone stale would
   // open the demo on a poll nobody can answer.

@@ -15,9 +15,21 @@ export interface Poll {
   /** Display order is array order; a vote records the index, never the text. */
   choices: readonly string[];
   method: PollMethod;
+  /**
+   * The poll each choice opens next, position for position with `choices`, and
+   * `null` where that choice ends the run.
+   *
+   * This is what makes pulse a graph rather than a list: answering is also
+   * navigating, and where you go next is a property of the answer you gave.
+   * Always the same length as `choices`, so a choice can never silently lose
+   * its onward link when one is added.
+   */
+  next: readonly (string | null)[];
   createdAt: Date;
   /** When set and in the past, the poll no longer accepts votes. */
   closesAt?: Date;
+  /** Whether people may add options of their own. */
+  acceptsSuggestions: boolean;
 }
 
 export interface NewPoll {
@@ -25,7 +37,11 @@ export interface NewPoll {
   question: string;
   choices: readonly string[];
   method: PollMethod;
+  /** Defaults to no onward link from any choice. */
+  next?: readonly (string | null)[];
   closesAt?: Date;
+  /** Defaults to false: a poll takes suggestions only if it says so. */
+  acceptsSuggestions?: boolean;
 }
 
 export const MIN_CHOICES = 2;
@@ -66,12 +82,21 @@ export function createPoll(input: NewPoll, now: Date = new Date()): Poll {
     throw new TypeError("choices must be distinct");
   }
 
+  const next = input.next ?? choices.map(() => null);
+  if (next.length !== choices.length) {
+    throw new TypeError(
+      "next must name one onward poll per choice, or be left out entirely",
+    );
+  }
+
   const poll: Poll = {
     id: input.id,
     question,
     choices,
     method: input.method,
+    next: [...next],
     createdAt: now,
+    acceptsSuggestions: input.acceptsSuggestions ?? false,
   };
   return input.closesAt ? { ...poll, closesAt: input.closesAt } : poll;
 }

@@ -8,6 +8,7 @@ import { ClaimService } from "./identity/claim.js";
 import { ConsoleMailer } from "./identity/mailer.js";
 import { InMemoryClaimStore, InMemoryVoterStore } from "./identity/store.js";
 import type { NewPoll } from "./voting/poll.js";
+import { InMemorySuggestionStore } from "./voting/suggestions.js";
 import { InMemoryVotingStore } from "./voting/store.js";
 
 /**
@@ -40,19 +41,56 @@ const THREE_DAYS_MS = 3 * 24 * 60 * 60 * 1000;
 const SEED = {
   community: "demo-community",
   domain: "example.test",
-  poll: {
-    id: "p1",
-    question: "Should the ODC stay free of paid ads?",
-    // Two choices, in the order the ballot shows them: the client's first
-    // screen is a left/right swipe, and a third choice has no side to land on.
-    choices: ["No", "Yes"],
-    method: "single",
-    // The one value here that is not a literal. A fixed date would be in the
-    // past by the time anyone ran this, and a poll that has already closed is
-    // a poor thing to open a demo on.
-    closesAt: new Date(Date.now() + THREE_DAYS_MS),
-  } satisfies NewPoll,
+  /**
+   * Three polls, wired as a graph: answering the first opens whichever of the
+   * other two follows from the answer. That is the shape the product is about —
+   * a run of quick questions where the answer decides what you are asked next —
+   * and a single poll cannot demonstrate it.
+   */
+  polls: [
+    {
+      id: "ads-free",
+      question: "Should the ODC stay free of paid ads?",
+      // Two choices, in the order the ballot shows them: the opening screen is
+      // a left/right swipe, and a third choice would have no side to land on.
+      choices: ["No", "Yes"],
+      method: "single",
+      next: ["ads-allowed", "pay-for-it"],
+      closesAt: new Date(Date.now() + THREE_DAYS_MS),
+    },
+    {
+      id: "pay-for-it",
+      question: "How do we pay for it?",
+      choices: [
+        "Members chip in",
+        "One-off donations",
+        "Grants",
+        "A cut of what moves through it",
+      ],
+      method: "single",
+      next: [null, null, null, null],
+      acceptsSuggestions: true,
+      closesAt: new Date(Date.now() + THREE_DAYS_MS),
+    },
+    {
+      id: "ads-allowed",
+      question: "Which ads are allowed?",
+      choices: [
+        "All of them",
+        "Only ones members vote through",
+        "Research and non-profits only",
+        "Local organisations only",
+      ],
+      method: "single",
+      next: [null, null, null, null],
+      acceptsSuggestions: true,
+      closesAt: new Date(Date.now() + THREE_DAYS_MS),
+    },
+  ] satisfies NewPoll[],
 };
+
+/** Where a run starts. The client opens this one when it is given no other. */
+export const FIRST_POLL_ID = "ads-free";
 
 /**
  * The only environments this entry point will start in.
@@ -141,7 +179,8 @@ export async function buildDevServer(
   const mailer = new ConsoleMailer();
   const voters = new InMemoryVoterStore();
   const votes = new InMemoryVotingStore();
-  await votes.createPoll(SEED.poll);
+  for (const poll of SEED.polls) await votes.createPoll(poll);
+  const suggestions = new InMemorySuggestionStore();
 
   const claims = new ClaimService({
     membership: new DomainAllowlist(
@@ -160,6 +199,7 @@ export async function buildDevServer(
     claims,
     voters,
     votes,
+    suggestions,
     signer: new SessionSigner(config.secret),
     // Local development is http://, and a Secure cookie would never be stored.
     // Safe only because of the guard above — see DEV_ENVIRONMENTS.
@@ -190,7 +230,7 @@ async function main(): Promise<void> {
         ? "  session secret: generated for this run — everyone is signed out when it stops"
         : "  session secret: from PULSE_SESSION_SECRET",
       `  community "${SEED.community}" admits @${SEED.domain} addresses`,
-      `  poll "${SEED.poll.id}": ${SEED.poll.question}`,
+      ...SEED.polls.map((poll) => `  poll "${poll.id}": ${poll.question}`),
       "  sign-in links are printed here; paste one into the browser",
     ].join("\n"),
   );
