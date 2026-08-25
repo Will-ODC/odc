@@ -18,9 +18,10 @@ Three MVP pillars, in build order:
    domain is the membership proof. Domain allowlists are **rows in a table**,
    never code: adding a community's domain is an insert, not a deploy.
 2. **One-screen story UI** — one screen, guided, media-and-information bites
-   with the vote embedded. Translucent "Civic Glass" style from
-   `docs/mockups/` (see the pulse UI notes; `hub-feed-v*.html` is NOT the
-   reference).
+   with the vote embedded. The design of record is `docs/mockups/pulse-screens/`
+   — translucent "Civic Glass" for screens 2–7, dark swipe ballot for screen 1,
+   and `hub-feed-v*.html` is NOT the reference. See
+   `.claude/skills/odc-design`; build it per `.claude/skills/odc-ui`.
 3. **Path to action** — every story solicits ideas, volunteer time, or
    donations, and emails proof of what happened unless the person opted out.
 

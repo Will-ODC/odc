@@ -31,7 +31,7 @@ docs/            # charter.md, implementation-plan.md, plans/, mockups/,
 memory/          # INDEX.md (read first), STATE.md, pulse.md, OPEN-QUESTIONS(-archive).md
 .claude/
   skills/        # odc-* skills (contracts, storage, review, testing, pipeline,
-                 # boundaries, ui, orchestration)
+                 # boundaries, ui, design, orchestration)
   agents/        # role definitions with model routing baked in
 ```
 
