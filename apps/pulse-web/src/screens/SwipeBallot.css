@@ -187,7 +187,16 @@
   padding: 0 30px;
 }
 
-.ballot__mark {
+.outcome {
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  justify-content: center;
+  gap: 10px;
+  text-align: center;
+}
+
+.outcome__mark {
   width: 54px;
   height: 54px;
   border-radius: var(--r-pill);
@@ -198,17 +207,38 @@
   font-size: 25px;
 }
 
-.ballot__done b {
+.outcome b {
   font-size: 18px;
   font-weight: 600;
   line-height: 1.4;
   color: var(--ballot-ink);
 }
 
-.ballot__done span {
+.outcome > span {
   font-size: var(--t-small);
   line-height: 1.5;
   color: rgba(255, 255, 255, 0.5);
+}
+
+.outcome__next {
+  margin-top: var(--step);
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  gap: 2px;
+  padding: 12px 20px;
+  border-radius: var(--r-pill);
+  border: 1px solid var(--ballot-line);
+  background: rgba(255, 255, 255, 0.08);
+  color: var(--ballot-ink);
+  font: inherit;
+  font-size: var(--t-body);
+  cursor: pointer;
+}
+
+.outcome__next:focus-visible {
+  outline: 2px solid rgba(255, 255, 255, 0.7);
+  outline-offset: 2px;
 }
 
 @media (prefers-reduced-motion: reduce) {
@@ -288,4 +318,16 @@
     var(--ballot-ink-faint),
     rgb(var(--side-b)) calc(var(--lean-right) * 100%)
   );
+}
+
+/* A refusal sits with the question it belongs to, not over it. */
+.refusal {
+  margin: 0 var(--gutter);
+  padding: 10px 14px;
+  border-radius: var(--r-control);
+  background: rgba(var(--side-a), 0.18);
+  color: var(--ballot-ink);
+  font-size: var(--t-small);
+  line-height: 1.45;
+  text-align: center;
 }
