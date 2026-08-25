@@ -24,37 +24,34 @@ export interface CastVote {
   cast: (side: Side) => void;
 }
 
+/**
+ * Refusing a second press is the screen's job, not this hook's: the screen is
+ * what knows the swipe is over and stops offering the sides. A guard here as
+ * well was a second copy of that rule that no test could reach — deleting
+ * either one left the suite green, which is the shape this codebase has
+ * already had to remove once (PR #91).
+ */
 export function useCastVote(api: PulseApi, pollId: string): CastVote {
   const [state, setState] = useState<CastState>({ status: "idle" });
 
   const cast = useCallback(
     (side: Side) => {
-      // One swipe is one vote. A second press while the first is in flight, or
-      // after it has landed, is the same person pressing twice — not a change
-      // of mind — so it is ignored rather than sent.
-      setState((current) => {
-        if (current.status !== "idle" && current.status !== "failed") {
-          return current;
-        }
+      setState({ status: "casting", side });
 
-        api.cast(pollId, ballotFor(side)).then(
-          (outcome) => {
-            if (outcome.status === "closed") {
-              setState({ status: "closed" });
-              return;
-            }
-            setState({
-              status: "counted",
-              side,
-              changed: outcome.status === "changed",
-            });
-          },
-          (err: unknown) =>
-            setState({ status: "failed", message: reason(err) }),
-        );
-
-        return { status: "casting", side };
-      });
+      api.cast(pollId, ballotFor(side)).then(
+        (outcome) => {
+          if (outcome.status === "closed") {
+            setState({ status: "closed" });
+            return;
+          }
+          setState({
+            status: "counted",
+            side,
+            changed: outcome.status === "changed",
+          });
+        },
+        (err: unknown) => setState({ status: "failed", message: reason(err) }),
+      );
     },
     [api, pollId],
   );
@@ -62,6 +59,7 @@ export function useCastVote(api: PulseApi, pollId: string): CastVote {
   return { state, cast };
 }
 
+/** The sentence to show for a refusal. */
 function reason(err: unknown): string {
   // 401 is the one refusal that is not a fault: the server takes a vote only
   // from someone it knows, and nothing has signed this person in yet.
