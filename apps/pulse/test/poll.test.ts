@@ -135,3 +135,30 @@ test("a_poll_with_no_closing_time_stays_open", () => {
   );
   assert.equal(isOpen(poll, new Date("2099-01-01T00:00:00.000Z")), true);
 });
+
+test("next names one onward poll per choice, or is left out entirely", () => {
+  assert.throws(
+    () =>
+      createPoll({
+        id: "p",
+        question: "Which way?",
+        choices: ["Left", "Right"],
+        method: "single",
+        next: ["only-one"],
+      }),
+    /one onward poll per choice/,
+  );
+});
+
+test("a poll with no onward links has one null per choice, not an empty list", () => {
+  // Same length always, so a choice cannot silently lose its link when one is
+  // added and the arrays drift apart.
+  const poll = createPoll({
+    id: "p",
+    question: "Which way?",
+    choices: ["Left", "Right"],
+    method: "single",
+  });
+  assert.deepEqual(poll.next, [null, null]);
+  assert.equal(poll.acceptsSuggestions, false);
+});
