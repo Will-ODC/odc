@@ -198,6 +198,14 @@ because pulse has nowhere to put one (see open decision 4).
   testing a press, fire the whole sequence** — every test in the suite fired
   either a click or pointer events, never both, which is precisely why this
   shipped.
+- **The way on must follow the poll graph, not the preview of it.** The NEXT
+  button was drawn only when the next question's _preview_ had loaded, so one
+  failed fetch left someone counted with a run still ahead of them and nothing
+  to press. `poll.next[choice]` already says whether an answer opens another
+  question and needs no network to say it; the preview is a label, nothing
+  more. Fixed in `e7d9c68`. The general rule the codebase keeps half-learning:
+  a preview that will not load is no reason to refuse someone the vote in front
+  of them — and no reason to strand them after it either.
 - **`hidden={settled}` hid nothing.** `[hidden] { display: none }` is a
   user-agent rule; `.ballot__content { display: flex }` is an author rule and
   beats it. The answered ballot stayed drawn, focusable and pressable under the
