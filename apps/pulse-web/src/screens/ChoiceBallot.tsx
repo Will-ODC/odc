@@ -15,6 +15,8 @@ export interface ChoiceBallotProps {
   /** More than two choices. `App` picks this screen for those. */
   poll: Poll;
   onAnswered: (next: string | null) => void;
+  /** Absent on the first question of a run - see `BallotChrome`. */
+  onBack?: (() => void) | undefined;
 }
 
 /**
@@ -28,7 +30,12 @@ export interface ChoiceBallotProps {
  * Below the answers, where the poll allows it, is the way to say something the
  * poll did not think of.
  */
-export function ChoiceBallot({ api, poll, onAnswered }: ChoiceBallotProps) {
+export function ChoiceBallot({
+  api,
+  poll,
+  onAnswered,
+  onBack,
+}: ChoiceBallotProps) {
   const { state, cast } = useCastVote(api, poll.id);
   const nextQuestions = useNextQuestions(api, edgesOf(poll.next));
 
@@ -44,7 +51,7 @@ export function ChoiceBallot({ api, poll, onAnswered }: ChoiceBallotProps) {
   return (
     <section className="ballot ballot--list">
       <div className="ballot__content">
-        <BallotChrome poll={poll} />
+        <BallotChrome poll={poll} {...(onBack ? { onBack } : {})} />
         {state.status === "failed" ? <Refusal message={state.message} /> : null}
 
         {settled ? (

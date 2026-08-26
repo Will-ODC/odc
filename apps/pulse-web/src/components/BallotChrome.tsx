@@ -1,13 +1,29 @@
 import type { Poll } from "../api/types.js";
 
 /**
- * The top of every ballot: the mark, what kind of thing this is, and the
- * question. Shared because both ballots open the same way, and a person moving
- * from one to the next should not feel the screen change under them.
+ * The top of every ballot: the way back, the mark, what kind of thing this is,
+ * and the question. Shared because both ballots open the same way, and a
+ * person moving from one to the next should not feel the screen change under
+ * them - which is also why back is here rather than on each screen.
+ *
+ * `onBack` is absent on the question the run opened on. The control is then
+ * not rendered at all rather than disabled: there is nothing behind the first
+ * question, and a dead button is a worse answer than no button.
  */
-export function BallotChrome({ poll }: { poll: Poll }) {
+export function BallotChrome({
+  poll,
+  onBack,
+}: {
+  poll: Poll;
+  onBack?: (() => void) | undefined;
+}) {
   return (
     <header className="ballot__head">
+      {onBack ? (
+        <button type="button" className="ballot__back" onClick={onBack}>
+          <span aria-hidden="true">{"\u2039"}</span> Back
+        </button>
+      ) : null}
       <div className="ballot__brand">
         <i aria-hidden="true" /> pulse
       </div>
