@@ -15,11 +15,11 @@ import {
   InMemoryClaimStore,
   InMemoryVoterStore,
 } from "../../pulse/src/identity/store.js";
+import { InMemorySuggestionStore } from "../../pulse/src/voting/suggestions.js";
 import { InMemoryVotingStore } from "../../pulse/src/voting/store.js";
 import { createServer } from "../../pulse/src/http/server.js";
 import { SessionSigner } from "../../pulse/src/http/session.js";
 import { HttpPulseApi } from "../src/api/http.js";
-import { ApiError } from "../src/api/types.js";
 
 /**
  * Fastify's own type, reached through `createServer` rather than by importing
@@ -41,6 +41,8 @@ type PulseServer = Awaited<ReturnType<typeof createServer>>;
 const ALLOWED = "student.ubc.ca";
 const COMMUNITY = "ubc-students";
 const POLL_ID = "p1";
+/** The poll `p1`'s first choice opens, and the one that takes options of its own. */
+const SUGGESTS_ID = "p2";
 
 /**
  * A cookie jar wrapped around `fetch`, which is the one thing Node lacks.
@@ -105,6 +107,14 @@ describe("the client against the real server", () => {
       question: "Where should the next one be?",
       choices: ["Park", "Library", "Rink"],
       method: "single",
+      next: [SUGGESTS_ID, null, null],
+    });
+    await votes.createPoll({
+      id: SUGGESTS_ID,
+      question: "What should be there?",
+      choices: ["Benches", "Trees"],
+      method: "single",
+      acceptsSuggestions: true,
     });
 
     app = await createServer({
@@ -120,6 +130,7 @@ describe("the client against the real server", () => {
       }),
       voters,
       votes,
+      suggestions: new InMemorySuggestionStore(),
       signer: new SessionSigner("a-test-secret-long-enough"),
       secureCookies: false,
     });
@@ -172,23 +183,18 @@ describe("the client against the real server", () => {
     await api.signOut();
     expect(await api.me()).toBeNull();
 
-    // The two routes that are about the signed-in person now refuse.
-    await expect(api.myBallot(POLL_ID)).rejects.toThrow(ApiError);
-    await expect(api.cast(POLL_ID, [0])).rejects.toThrow(ApiError);
-    const refusal = await api.cast(POLL_ID, [0]).catch((e: unknown) => e);
-    expect((refusal as ApiError).status).toBe(401);
-
     // Signing out ended the session, not just this browser's copy of it: the
     // cookie replayed here is the one that worked a moment ago, and it is
-    // refused. Nothing above would notice the difference, because the jar
+    // refused. `me` above would not notice the difference, because the jar
     // drops a cleared cookie and the client then sends none at all.
-    const replayed = await globalThis.fetch(
-      `${baseUrl}/polls/${POLL_ID}/ballot`,
-      { headers: { cookie: cookieBeforeSignOut ?? "" } },
-    );
+    const replayed = await globalThis.fetch(`${baseUrl}/me`, {
+      headers: { cookie: cookieBeforeSignOut ?? "" },
+    });
     expect(replayed.status).toBe(401);
 
-    // Signed out, but the vote stays counted.
+    // The vote is not part of the session and does not go with it: it is filed
+    // under the ballot cookie, which signing out does not touch.
+    expect(await api.myBallot(POLL_ID)).toEqual([1]);
     expect((await api.results(POLL_ID)).choices[1]?.count).toBe(1);
   });
 
@@ -211,11 +217,27 @@ describe("the client against the real server", () => {
     expect(mailer.sent).toHaveLength(0);
   });
 
-  it("refuses a ballot from nobody, before any sign-in has happened", async () => {
-    const error = await api.myBallot(POLL_ID).catch((e: unknown) => e);
-    expect(error).toBeInstanceOf(ApiError);
-    expect((error as ApiError).status).toBe(401);
-    await expect(api.cast(POLL_ID, [0])).rejects.toThrow(ApiError);
+  it("counts a vote from someone who has never signed in", async () => {
+    // The whole point of the opening screen: the vote counts first, and the
+    // address someone gives later verifies them rather than letting them vote.
+    expect(await api.me()).toBeNull();
+    expect(await api.myBallot(POLL_ID)).toBeNull();
+
+    const outcome = await api.cast(POLL_ID, [1]);
+    expect(outcome.status).toBe("counted");
+    expect(await api.myBallot(POLL_ID)).toEqual([1]);
+    expect((await api.results(POLL_ID)).voters).toBe(1);
+    expect(await api.me()).toBeNull();
+  });
+
+  it("keeps two browsers apart without either of them signing in", async () => {
+    const other = new HttpPulseApi(baseUrl, cookieJar().fetch);
+    await api.cast(POLL_ID, [0]);
+    await other.cast(POLL_ID, [2]);
+
+    expect(await api.myBallot(POLL_ID)).toEqual([0]);
+    expect(await other.myBallot(POLL_ID)).toEqual([2]);
+    expect((await api.results(POLL_ID)).voters).toBe(2);
   });
 
   it("reads a poll without anyone being signed in", async () => {
