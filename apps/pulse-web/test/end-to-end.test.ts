@@ -192,10 +192,37 @@ describe("the client against the real server", () => {
     });
     expect(replayed.status).toBe(401);
 
-    // The vote is not part of the session and does not go with it: it is filed
-    // under the ballot cookie, which signing out does not touch.
-    expect(await api.myBallot(POLL_ID)).toEqual([1]);
+    // The ballot identity is released too, so this browser can no longer read
+    // the vote it cast. That is what stops the next person on a shared machine
+    // being handed the previous person's ballot to read and to overwrite.
+    expect(await api.myBallot(POLL_ID)).toBeNull();
+
+    // The vote is not withdrawn, only disowned by this browser: it stays
+    // counted under the identity that cast it.
     expect((await api.results(POLL_ID)).choices[1]?.count).toBe(1);
+  });
+
+  it("does not hand the next person on this browser the last one's ballot", async () => {
+    // The whole point of releasing the ballot cookie. Ada votes and signs out;
+    // Bo sits down at the same browser.
+    await api.requestLink("ada@student.ubc.ca", false);
+    await api.redeem(tokenFromLink(mailer.sent[0]?.body ?? ""));
+    await api.cast(POLL_ID, [1]);
+    await api.signOut();
+
+    await api.requestLink("bo@student.ubc.ca", false);
+    await api.redeem(tokenFromLink(mailer.sent[1]?.body ?? ""));
+
+    // Bo is not shown Ada's answer, and Bo's vote is counted rather than
+    // silently replacing it. Two voters, one each.
+    expect(await api.myBallot(POLL_ID)).toBeNull();
+    const outcome = await api.cast(POLL_ID, [0]);
+    expect(outcome.status).toBe("counted");
+
+    const results = await api.results(POLL_ID);
+    expect(results.voters).toBe(2);
+    expect(results.choices[1]?.count).toBe(1);
+    expect(results.choices[0]?.count).toBe(1);
   });
 
   it("changes a vote rather than refusing the second one", async () => {

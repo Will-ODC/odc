@@ -72,9 +72,13 @@ every time after. There is no separate sign-up.
 ### `POST /api/sign-out`
 
 No body. Always answers `200 { "status": "signed_out" }`, whether or not anyone was
-signed in — asking to be signed out is not something to refuse. It clears the cookie
-**and** moves the voter's sessions-valid-from to now, so a copy of the cookie kept
-elsewhere stops working too.
+signed in — asking to be signed out is not something to refuse. It clears the session
+cookie **and** moves the voter's sessions-valid-from to now, so a copy of the cookie
+kept elsewhere stops working too.
+
+It also clears **`pulse_ballot`** — see "The ballot cookie" below. Signing out ends
+this browser's ability to read or change the vote it cast. The vote itself is not
+withdrawn; it stays counted under the identity that cast it.
 
 ### `GET /api/me`
 
@@ -139,6 +143,18 @@ one names the same person it already named.
 
 Deduplication is therefore per browser, which is weak on its own. That is the accepted
 trade for counting a vote before anyone has been asked for anything.
+
+**`POST /api/sign-out` clears this cookie too.** It has to. The cookie lasts thirty
+days and is the only thing a ballot is filed under, so a browser that kept it across a
+sign-out would hand the next person the previous person's ballot — to read, and to
+overwrite, since a second cast under the same identity _replaces_ rather than adds. On
+a shared or public machine that is the one way pulse can leak how somebody voted, and
+it is wider than the per-browser weakness above.
+
+The cost is accepted and worth stating plainly: signing in again mints a **new** ballot
+identity, so one person who votes, signs out, signs back in and votes again is counted
+**twice**. Pulse is counted-not-verified and already deduplicates only per browser;
+being double-counted is a smaller harm than being read.
 
 ### `GET /api/polls/:id`
 

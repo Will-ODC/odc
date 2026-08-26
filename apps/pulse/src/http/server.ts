@@ -277,11 +277,28 @@ export async function createServer(deps: ServerDeps): Promise<FastifyInstance> {
   /**
    * Sign out everywhere, not only here: the voter's sessions-valid-from moves
    * to now, so a copy of the cookie someone else kept stops working too.
+   *
+   * The ballot identity goes with it. It has to: `pulse_ballot` lasts thirty
+   * days and is what a ballot is filed under, so a browser that kept it after
+   * a sign-out would hand the next person the previous person's ballot to read
+   * and to overwrite. On a shared or public machine that is the one way pulse
+   * can leak how somebody voted, and it is a wider hole than the per-browser
+   * deduplication weakness `API.md` already owns up to.
+   *
+   * The vote itself is not withdrawn — it stays counted under the identity
+   * that cast it. What ends is this browser's ability to see or change it,
+   * which is the same thing signing out means for everything else.
+   *
+   * The cost is real and accepted: signing in again mints a new ballot
+   * identity, so the same person voting again after a sign-out is counted
+   * twice. Pulse is counted-not-verified and already says deduplication is per
+   * browser; being double-counted is a smaller harm than being read.
    */
   app.post("/api/sign-out", async (request, reply) => {
     const voter = await currentVoter(request);
     if (voter) await deps.voters.invalidateSessionsBefore(voter.id, now());
     reply.clearCookie(SESSION_COOKIE, { path: "/" });
+    reply.clearCookie(BALLOT_COOKIE, { path: "/" });
     return reply.send({ status: "signed_out" });
   });
 
