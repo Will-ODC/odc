@@ -13,12 +13,24 @@ import type { CastState } from "../hooks/use-cast-vote.js";
 export function Outcome({
   state,
   label,
+  hasNext,
   nextQuestion,
   onNext,
 }: {
   state: CastState;
   /** The choice, in the poll's own words. */
   label: string;
+  /**
+   * Whether the chosen answer opens another question — read from the poll's
+   * own graph, not from whether its preview loaded.
+   *
+   * These are two different facts and the way on must follow this one. The
+   * preview is a nicety fetched over the network; the edge is already in the
+   * poll. Gating the button on the preview meant one failed request left
+   * someone on the outcome with a run still ahead of them and nothing to press.
+   */
+  hasNext: boolean;
+  /** The next question's wording, when the preview loaded. Label only. */
   nextQuestion?: string | undefined;
   onNext: () => void;
 }) {
@@ -46,10 +58,11 @@ export function Outcome({
             ? "That replaces your earlier answer."
             : "Counted."}
       </span>
-      {state.status === "counted" && nextQuestion ? (
+      {state.status === "counted" && hasNext ? (
         <button type="button" className="outcome__next" onClick={onNext}>
           <span className="ballot__eyebrow">NEXT</span>
-          <span>{nextQuestion}</span>
+          {/* Named when we know it, and still pressable when we do not. */}
+          <span>{nextQuestion ?? "The next question"}</span>
         </button>
       ) : null}
     </div>

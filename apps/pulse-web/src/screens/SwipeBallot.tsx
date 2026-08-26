@@ -181,6 +181,7 @@ export function SwipeBallot({ api, poll, onAnswered }: SwipeBallotProps) {
           <Outcome
             state={state}
             label={chosen ? (poll.choices[choiceFor(chosen)] ?? "") : ""}
+            hasNext={chosen ? poll.next[choiceFor(chosen)] !== null : false}
             nextQuestion={chosen ? nextQuestions[choiceFor(chosen)] : undefined}
             onNext={() =>
               onAnswered(chosen ? (poll.next[choiceFor(chosen)] ?? null) : null)
