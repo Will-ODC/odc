@@ -5,9 +5,11 @@ import { ApiError } from "../api/types.js";
 /**
  * Options people have added, and adding one.
  *
- * Adding is never refused for being a near-duplicate: the answer says whether
- * anyone had already said it, and the screen tells the person quietly. Refusing
- * would only teach people to phrase around the check.
+ * Adding is never refused for being a near-duplicate of another suggestion:
+ * the answer says whether anyone had already said it, and the screen tells the
+ * person quietly. Refusing would only teach people to phrase around the check.
+ * Repeating one of the poll's own choices is the one case that adds nothing —
+ * the answer names that choice so the screen can send the person to it.
  */
 export type AddState =
   | { status: "idle" }
@@ -54,7 +56,11 @@ export function useSuggestions(api: PulseApi, pollId: string): Suggestions {
           setAdd({ status: "done", result });
           // The server has just told us what the list now holds for this entry,
           // so the list is updated from the answer rather than fetched again.
-          setAll((current) => merge(current, result.suggestion));
+          // Nothing was added when the poll already offers it, so the list is
+          // left exactly as it was.
+          if (result.status !== "on_ballot") {
+            setAll((current) => merge(current, result.suggestion));
+          }
         },
         (err: unknown) => setAdd({ status: "failed", message: reason(err) }),
       );

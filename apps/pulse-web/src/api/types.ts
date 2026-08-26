@@ -45,17 +45,28 @@ export interface Suggestion {
   count: number;
 }
 
+/** A choice the poll already lists. Mirrors the server's `BallotChoice`. */
+export interface BallotChoice {
+  /** Position in `Poll.choices` — what a vote records. */
+  index: number;
+  label: string;
+}
+
 /**
  * What came of adding one. Near-duplicates are folded together and never
  * refused — `seconded` means someone had already said it and their wording
- * keeps the floor. `related` is what came close without folding in, shown so a
- * person can see they are near an existing idea.
+ * keeps the floor. `on_ballot` means the poll already offers it, so nothing
+ * was added and the person is pointed at the choice they can vote for.
+ * `related` is what came close without folding in, shown so a person can see
+ * they are near an existing idea.
  */
-export interface SuggestResult {
-  status: "added" | "seconded";
-  suggestion: Suggestion;
-  related: Suggestion[];
-}
+export type SuggestResult =
+  | {
+      status: "added" | "seconded";
+      suggestion: Suggestion;
+      related: Suggestion[];
+    }
+  | { status: "on_ballot"; choice: BallotChoice; related: Suggestion[] };
 
 /** One person's answer. Always an array — one entry for `single`. */
 export type Ballot = number[];

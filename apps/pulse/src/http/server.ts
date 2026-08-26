@@ -387,11 +387,16 @@ export async function createServer(deps: ServerDeps): Promise<FastifyInstance> {
   /**
    * Add an option of your own.
    *
-   * The answer says whether anyone had already said it, and what else came
-   * close. That is the whole of the duplicate handling: the person is told, and
-   * nothing is refused for being similar. Refusing would make people phrase
-   * around the check, which is how a list of options turns into a list of
-   * synonyms.
+   * The answer says whether anyone had already said it and what else came
+   * close. That is the whole of the duplicate handling between suggestions:
+   * the person is told, and nothing is refused for being similar. Refusing
+   * would make people phrase around the check, which is how a list of options
+   * turns into a list of synonyms.
+   *
+   * Repeating one of the poll's own choices is the exception, and answers
+   * `on_ballot`. Nothing is added there because a suggestion can never become
+   * a choice on this poll, so leaving one would put an unvotable copy of an
+   * option under the option itself.
    */
   app.post(
     "/api/polls/:id/suggestions",
@@ -425,11 +430,21 @@ export async function createServer(deps: ServerDeps): Promise<FastifyInstance> {
       }
 
       try {
-        const result = await deps.suggestions.submit(poll.id, text);
+        const result = await deps.suggestions.submit(poll, text);
+        const related = result.related.map(publicSuggestion);
+        if (result.status === "on_ballot") {
+          // Not an error: the person said something the poll already offers,
+          // and the answer names the choice so the screen can point at it.
+          return reply.send({
+            status: result.status,
+            choice: result.choice,
+            related,
+          });
+        }
         return reply.send({
           status: result.status,
           suggestion: publicSuggestion(result.suggestion),
-          related: result.related.map(publicSuggestion),
+          related,
         });
       } catch (error) {
         if (error instanceof SuggestionError) {

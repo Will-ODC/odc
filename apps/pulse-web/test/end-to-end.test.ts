@@ -269,17 +269,24 @@ describe("the client against the real server", () => {
 
   it("adds an option nobody offered, and seconds one somebody had", async () => {
     const first = await api.suggest(SUGGESTS_ID, "Charge the members");
-    expect(first.status).toBe("added");
+    if (first.status !== "added") throw new Error(first.status);
     expect(first.suggestion.count).toBe(1);
 
     const again = await api.suggest(SUGGESTS_ID, "we could charge members");
-    expect(again.status).toBe("seconded");
+    if (again.status !== "seconded") throw new Error(again.status);
     expect(again.suggestion.text).toBe("Charge the members");
     expect(again.suggestion.count).toBe(2);
 
     expect((await api.suggestions(SUGGESTS_ID)).map((one) => one.text)).toEqual(
       ["Charge the members"],
     );
+  });
+
+  it("points at the poll's own answer instead of adding it twice", async () => {
+    const said = await api.suggest(SUGGESTS_ID, "some trees");
+    if (said.status !== "on_ballot") throw new Error(said.status);
+    expect(said.choice).toEqual({ index: 1, label: "Trees" });
+    expect(await api.suggestions(SUGGESTS_ID)).toEqual([]);
   });
 
   it("reads a poll without anyone being signed in", async () => {
