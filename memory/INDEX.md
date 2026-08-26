@@ -61,7 +61,7 @@ behind a decision, or one of the few deferred entries its index names.
 | User-facing screens or copy                     | `.claude/skills/odc-ui`                                |
 | Which model to dispatch, and how to brief it    | `.claude/skills/odc-orchestration`                     |
 | Threat models and phase-gate audits             | `docs/security/README.md`, then the dated audit        |
-| What the UI is supposed to look like            | `docs/mockups/` (+ `CANDIDATE_CONTEXT.md`)             |
+| What the UI is supposed to look like            | `.claude/skills/odc-design`, then `docs/mockups/`      |
 
 ## Where new information goes — decide this before you write it down
 

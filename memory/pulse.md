@@ -112,6 +112,27 @@ dir-scoped: `services/**` and `contracts/**` are still fully counted.
 - **Real mail delivery and real persistence.** `src/identity/mailer.ts` and the
   stores are what the tests run against; nothing is durable.
 
+### Asked for by the operator, 2026-08-25 — not started
+
+These came out of demoing the run. None is designed yet; none has a ticket,
+because pulse has nowhere to put one (see open decision 4).
+
+- **Back on the vote-submitted screen.** The Back control added in #132 sits in
+  `BallotChrome`, so it is on a question while it is being asked. Once a vote
+  settles, the outcome replaces the answering region and there is no way back
+  from that screen — only the way on. The trail in `App` already supports the
+  step; what is missing is the control in the settled state.
+- **A way to see the result.** Some "view results" affordance from a question,
+  showing the counts as a graph or other visualisation. `GET /polls/:id/results`
+  already returns them and `HttpPulseApi.results` already fetches them; nothing
+  in the client renders them. Note the standing constraint before designing it:
+  **the counting is never the subject** — a result may show what people chose,
+  never how a tally is computed or verified.
+- **A subject browser.** A way to look through the subjects/questions available
+  rather than only walking the run you were given. Undesigned and unscoped —
+  it is not yet decided whether this is a list, a feed, or a search, nor how it
+  relates to the graph a run walks.
+
 ## Open decisions
 
 **Settled 2026-08-22 by the operator — do not re-litigate.**
@@ -133,6 +154,36 @@ dir-scoped: `services/**` and `contracts/**` are still fully counted.
 3. **Where pulse's data actually lives.** Storage is in-memory and
    storage-agnostic by design; no database has been chosen. Everything a
    `pnpm dev` session does dies with the process — voters, sessions, votes.
+4. **Where a feature request goes** (raised 2026-08-25 by the operator, who
+   asked that this be solidified). `memory/INDEX.md` has a destination for a
+   landed ticket, a decision, an unsettled question and a trap — and none for
+   "a thing we want to build that nobody has started". The ODC core has
+   `docs/plans/phase-0.md`; pulse has no equivalent, so the three requests
+   above are recorded in this file for lack of anywhere better, which does not
+   scale. The options are a `docs/plans/pulse.md`, GitHub issues, or a
+   `memory/BACKLOG.md`; each has a different answer to "who prunes it". Decide
+   before the list grows past what one section can hold.
+5. **Does signing out release the ballot identity?** (raised 2026-08-26 by the
+   #128 review.) The `pulse_ballot` cookie is 30-day and is not cleared on
+   sign-out, so on a shared browser the next person is handed the previous
+   person's ballot and their vote replaces it rather than adding to it. This is
+   the one place pulse can leak how somebody voted, and it is wider than the
+   per-browser deduplication weakness `API.md` already admits to. It is
+   currently pinned as intended by an assertion in
+   `apps/pulse-web/test/end-to-end.test.ts`. Either clear the cookie on
+   sign-out, or argue the trade explicitly here and in `API.md` — but it should
+   not stay true only because a test says so.
+6. **One press is one vote, against `odc-ui`'s explicit rule.** (Raised
+   2026-08-26 by the #130 review.) `odc-ui` says, absolutely: "Always confirm a
+   destructive or binding action… Picking and casting are separate presses" and
+   "never let a double-tap cast twice". Pulse deliberately does neither — a run
+   is meant to move at the speed of an opinion, and what makes it safe is that
+   an answer can be changed until the question closes. That reasoning currently
+   lives only in a PR body, which stops being readable after the squash. It
+   needs an ADR or a line here; a rule this load-bearing should not be
+   overridden by prose in a commit. Note the review's observation that the
+   second half of the rule was doing real work: the same PR shipped a genuine
+   double-cast on tap.
 
 ## Live cautions
 
@@ -141,6 +192,18 @@ dir-scoped: `services/**` and `contracts/**` are still fully counted.
 - **`pulse/4b-sign-in-routes` is an unlanded remote branch with no open PR**
   (head `861b983`). Nobody has said whether it is abandoned or owed. Check
   before starting sign-in work — do not assume either way.
+- **Two agents in one worktree will eat each other's work.** On 2026-08-25 a
+  spawned task and the session that spawned it both edited
+  `/Users/williamchu/Desktop/odc-pulse-ui`. The task committed to its own branch
+  and then discarded the shared working tree, taking an uncommitted edit from
+  the other session with it. Spawn with `isolation: "worktree"`, per
+  `.claude/skills/odc-orchestration`, and commit before you hand any part of a
+  tree to somebody else.
+- **A pulse branch is not automatically based on current master.** The story-UI
+  stack was cut from a master that predated #126, so its diff showed
+  `.claude/skills/odc-design/SKILL.md` as _deleted_. Run
+  `git diff --name-status origin/master..HEAD` before every push and look for
+  files you never touched; rebase rather than explaining it in the PR body.
 - Pulse's own docs and this file are the only record of the workstream. The ODC
   core plan (`docs/implementation-plan.md`) does not cover pulse and will not
   tell you it exists.
