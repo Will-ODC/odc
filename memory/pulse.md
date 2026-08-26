@@ -187,6 +187,23 @@ because pulse has nowhere to put one (see open decision 4).
    second half of the rule was doing real work: the same PR shipped a genuine
    double-cast on tap.
 
+### Two bugs the 2026-08-26 review round found, now fixed — do not reintroduce
+
+- **A browser tap is three events**, `pointerdown → pointerup → click`, and a
+  real tap cast the ballot **twice** because the pointer handlers and the
+  half's own `onClick` both answered it. The second cast returns `changed`, so
+  a first-time voter was told their answer replaced an earlier one. Fixed in
+  `d2d2994`: the halves are real buttons and own the tap; the pointer handlers
+  answer only the gesture and hand off through a consume-once flag. **When
+  testing a press, fire the whole sequence** — every test in the suite fired
+  either a click or pointer events, never both, which is precisely why this
+  shipped.
+- **`hidden={settled}` hid nothing.** `[hidden] { display: none }` is a
+  user-agent rule; `.ballot__content { display: flex }` is an author rule and
+  beats it. The answered ballot stayed drawn, focusable and pressable under the
+  outcome. jsdom cannot see this — it applies its own UA sheet but not the
+  imported stylesheet — so no test could have caught it either way.
+
 ## Live cautions
 
 - **`pnpm dev` generates an ephemeral session secret** and announces it; every
