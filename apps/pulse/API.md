@@ -317,10 +317,36 @@ phrase around the check, which turns a list of options into a list of synonyms.
 is what came close without being close enough to fold in — shown so a person can see
 they are near an existing idea, not used to refuse them.
 
+There is a third answer. When the text matches one of the poll's **own choices**,
+nothing is added and the choice is named back instead:
+
+```json
+{
+  "status": "on_ballot",
+  "choice": { "index": 2, "label": "Grants" },
+  "related": [{ "id": "…", "text": "Grant funding from the city", "count": 1 }]
+}
+```
+
+`choice.index` is the position to cast for it — the same index a ballot carries — and
+`label` is the poll's own wording. Note there is **no `suggestion` field** on this
+answer, because none was created.
+
+Nothing is added on purpose, and the distinction is the whole reason suggestions exist
+separately: a choice is **votable** and a suggestion is not. Adding a second copy of an
+option the ballot already offers would split the very agreement it was meant to
+gather — some people voting for it and others seconding a suggestion of it — while
+`Poll.choices` stays fixed, because a vote records a choice's _position_ and appending
+to that list would silently change what earlier ballots meant.
+
+Ties go to the ballot: when the text matches both a choice and an existing suggestion
+closely enough, the choice wins, because the choice is the one that can be voted for.
+
 | Status | Body                         | When                                      |
 | ------ | ---------------------------- | ----------------------------------------- |
 | 200    | `status: "added"`            | nobody had said it                        |
 | 200    | `status: "seconded"`         | someone had; the count rose               |
+| 200    | `status: "on_ballot"`        | the poll already offers it; nothing added |
 | 400    | `error: "bad_request"`       | no `text` string in the body              |
 | 400    | `error: "bad_suggestion"`    | empty, all filler, or over 120 characters |
 | 409    | `error: "no_suggestions"`    | this poll has a fixed set of answers      |
