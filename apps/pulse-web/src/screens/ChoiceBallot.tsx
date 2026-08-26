@@ -52,6 +52,7 @@ export function ChoiceBallot({ api, poll, onAnswered }: ChoiceBallotProps) {
             <Outcome
               state={state}
               label={chosen === null ? "" : (poll.choices[chosen] ?? "")}
+              hasNext={chosen !== null && (poll.next[chosen] ?? null) !== null}
               nextQuestion={chosen === null ? undefined : nextQuestions[chosen]}
               onNext={() =>
                 onAnswered(chosen === null ? null : (poll.next[chosen] ?? null))

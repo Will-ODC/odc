@@ -35,17 +35,6 @@
   -webkit-mask-image: linear-gradient(to bottom, transparent 40%, #000 66%);
 }
 
-/*
- * `hidden` needs saying out loud here. `[hidden] { display: none }` lives in
- * the user-agent stylesheet, and the `display: flex` below is an author rule,
- * which beats it outright — so `hidden={settled}` on this element did nothing
- * at all and the answered ballot stayed drawn, focusable, and pressable
- * underneath the outcome.
- */
-.ballot__content[hidden] {
-  display: none;
-}
-
 .ballot__content {
   position: relative;
   z-index: 1;
@@ -299,14 +288,30 @@
   );
 }
 
-.ballot[data-won="left"] .ballot__tint-left {
-  background: rgba(var(--side-a), var(--side-won));
+/*
+ * Settled: both halves take the winning colour, at a fraction of the leaning
+ * strength.
+ *
+ * They used to take different ones - the winner jumped to a strong tint and
+ * the loser stayed sitting in the other colour at rest - which left a hard
+ * vertical seam down the middle of the screen and two different grounds under
+ * the outcome. The words being read after a vote are the outcome's, not the
+ * ballot's, so what is behind them has to be one flat colour rather than a
+ * picture of the vote that just happened.
+ *
+ * Applied to both spans rather than to `.ballot__tint`, because the mask that
+ * fades the colour up into the black question third lives on the spans.
+ */
+.ballot[data-won] .ballot__tint span {
   transition: background 0.3s ease;
 }
 
-.ballot[data-won="right"] .ballot__tint-right {
-  background: rgba(var(--side-b), var(--side-won));
-  transition: background 0.3s ease;
+.ballot[data-won="left"] .ballot__tint span {
+  background: rgba(var(--side-a), var(--side-settled));
+}
+
+.ballot[data-won="right"] .ballot__tint span {
+  background: rgba(var(--side-b), var(--side-settled));
 }
 
 .ballot__half--left .ballot__word {

@@ -41,12 +41,15 @@
   --ballot-chip: rgba(255, 255, 255, 0.09);
 
   /* The two sides. `-lean` is the strongest tint a drag reaches before it
-     commits; `-won` is where the committed side settles. */
+     commits; `-settled` is the flat ground the WHOLE screen takes once a side
+     has won - both halves, one colour. It is much lighter than the lean
+     because by then the screen is being read rather than answered, and the
+     outcome sits on it. */
   --side-a: 235, 110, 110;
   --side-b: 73, 205, 174;
   --side-rest: 0.09;
   --side-lean: 0.14;
-  --side-won: 0.26;
+  --side-settled: 0.1;
 
   --shadow:
     0 28px 70px rgba(32, 43, 59, 0.18), 0 2px 10px rgba(32, 43, 59, 0.08);
