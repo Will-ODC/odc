@@ -1,6 +1,6 @@
 // @vitest-environment jsdom
 import { cleanup, render, screen, fireEvent } from "@testing-library/react";
-import { afterEach, beforeAll, describe, expect, it } from "vitest";
+import { afterEach, beforeAll, describe, expect, it, vi } from "vitest";
 import { ApiError } from "../src/api/types.js";
 import { App } from "../src/App.js";
 import { graph, installPointerEvents, poll, stubApi } from "./stub-api.js";
@@ -119,6 +119,54 @@ describe("going back", () => {
     showRun();
     await walkOn();
     expect(screen.getByRole("button", { name: /Back/ })).toBeTruthy();
+  });
+
+  it("does not cast a vote when an arrow key is pressed on Back", async () => {
+    // The run has to reach a SWIPE screen with Back on it: only the swipe
+    // ballot answers arrow keys, so a list screen would pass this test without
+    // ever exercising the thing it is about.
+    const opener = poll({
+      id: "ads-free",
+      choices: ["No", "Yes"],
+      next: ["ads-allowed", "second-swipe"],
+    });
+    const secondSwipe = poll({
+      id: "second-swipe",
+      question: "Should members set the budget?",
+      choices: ["No", "Yes"],
+      next: [null, null],
+    });
+    const cast = vi.fn(stubApi().cast);
+    render(
+      <App
+        api={stubApi({ poll: graph([opener, secondSwipe, ads]), cast })}
+        pollId="ads-free"
+      />,
+    );
+
+    await screen.findByText(opener.question);
+    fireEvent.keyDown(screen.getByText("Yes"), { key: "ArrowRight" });
+    fireEvent.click(
+      await screen.findByRole("button", {
+        name: /Should members set the budget\?/,
+      }),
+    );
+    await screen.findByText(secondSwipe.question);
+    cast.mockClear();
+
+    // Back is inside the section that answers arrow keys, and its own glyph is
+    // a left chevron — so left arrow is the key someone is most likely to try
+    // here, and it must not be read as answering the question.
+    const back = screen.getByRole("button", { name: /Back/ });
+    back.focus();
+    fireEvent.keyDown(back, { key: "ArrowLeft" });
+    fireEvent.keyDown(back, { key: "ArrowRight" });
+
+    expect(cast).not.toHaveBeenCalled();
+    // Still on the question, not moved on by a phantom vote.
+    expect((await screen.findByRole("heading")).textContent).toBe(
+      secondSwipe.question,
+    );
   });
 
   it("returns to the question that was asked before", async () => {
