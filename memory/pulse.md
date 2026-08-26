@@ -206,6 +206,16 @@ because pulse has nowhere to put one (see open decision 4).
   more. Fixed in `e7d9c68`. The general rule the codebase keeps half-learning:
   a preview that will not load is no reason to refuse someone the vote in front
   of them — and no reason to strand them after it either.
+- **An arrow key pressed on the Back button cast a vote.** The swipe ballot
+  answers arrow keys with a handler on the whole `<section>`, and Back was
+  added inside it, so the keydown bubbled. The control is drawn as a left
+  chevron, which makes the left arrow the most guessable key on the screen.
+  Fixed in `8ae4714`. **The general shape, which will recur:** adding any
+  focusable control that is not part of answering, inside a section that reads
+  keys as answers, breaks the section's assumption. The first version of the
+  test for it passed without the fix, because the run it walked landed on a
+  _list_ screen and only the swipe ballot reads arrow keys — when testing a
+  key, check you are on the screen that listens.
 - **`hidden={settled}` hid nothing.** `[hidden] { display: none }` is a
   user-agent rule; `.ballot__content { display: flex }` is an author rule and
   beats it. The answered ballot stayed drawn, focusable and pressable under the
