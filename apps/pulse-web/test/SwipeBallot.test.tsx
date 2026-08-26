@@ -147,6 +147,101 @@ describe("casting", () => {
     await waitFor(() => expect(cast).toHaveBeenCalledWith("p1", [0]));
   });
 
+  /**
+   * A browser tap is three events, not one: `pointerdown`, `pointerup`, then
+   * `click`. Every other test in this file fires one or the other, which is
+   * exactly why one press casting two votes survived to be found in review.
+   */
+  function tap(half: HTMLElement, at = { down: 200, up: 200 }) {
+    fireEvent.pointerDown(ballot(), { clientX: at.down, pointerId: 1 });
+    fireEvent.pointerUp(ballot(), { clientX: at.up, pointerId: 1 });
+    fireEvent.click(half);
+  }
+
+  it("casts once for a real tap, not once per event the browser sends", async () => {
+    const cast = vi.fn(stubApi().cast);
+    render(<SwipeBallot api={stubApi({ cast })} pollId="p1" />);
+    await screen.findByText(POLL.question);
+
+    tap(screen.getByRole("button", { name: /^Yes —/ }));
+
+    await waitFor(() => expect(cast).toHaveBeenCalledWith("p1", [1]));
+    expect(cast).toHaveBeenCalledTimes(1);
+  });
+
+  it("casts once for a drag, and not again for the click that follows it", async () => {
+    const cast = vi.fn(stubApi().cast);
+    render(<SwipeBallot api={stubApi({ cast })} pollId="p1" />);
+    await screen.findByText(POLL.question);
+
+    // Held before the drag: committing sets `hidden` on the ballot, and jsdom
+    // does apply the user-agent `[hidden]` rule, so the halves drop out of the
+    // accessibility tree and cannot be looked up by role afterwards. The click
+    // still reaches the element, which is the case being tested.
+    const no = screen.getByRole("button", { name: /^No —/ });
+
+    // Past the threshold, leftward, then the click the browser sends anyway.
+    fireEvent.pointerDown(ballot(), { clientX: 200, pointerId: 1 });
+    fireEvent.pointerMove(ballot(), { clientX: 100, pointerId: 1 });
+    fireEvent.pointerUp(ballot(), { clientX: 100, pointerId: 1 });
+    fireEvent.click(no);
+
+    await waitFor(() => expect(cast).toHaveBeenCalledWith("p1", [0]));
+    expect(cast).toHaveBeenCalledTimes(1);
+  });
+
+  it("does not vote when a drag springs back, click included", async () => {
+    const cast = vi.fn(stubApi().cast);
+    render(<SwipeBallot api={stubApi({ cast })} pollId="p1" />);
+    await screen.findByText(POLL.question);
+
+    // Travelled, but not far enough to commit. The click that follows must not
+    // turn a cancelled gesture into a vote.
+    fireEvent.pointerDown(ballot(), { clientX: 200, pointerId: 1 });
+    fireEvent.pointerMove(ballot(), { clientX: 180, pointerId: 1 });
+    fireEvent.pointerUp(ballot(), { clientX: 180, pointerId: 1 });
+    fireEvent.click(screen.getByRole("button", { name: /^Yes —/ }));
+
+    expect(cast).not.toHaveBeenCalled();
+  });
+
+  it("still answers the very next press after a cancelled gesture", async () => {
+    const cast = vi.fn(stubApi().cast);
+    render(<SwipeBallot api={stubApi({ cast })} pollId="p1" />);
+    await screen.findByText(POLL.question);
+
+    // The stand-down flag must be consumed, not left set — otherwise it eats
+    // the next real vote.
+    fireEvent.pointerDown(ballot(), { clientX: 200, pointerId: 1 });
+    fireEvent.pointerMove(ballot(), { clientX: 180, pointerId: 1 });
+    fireEvent.pointerUp(ballot(), { clientX: 180, pointerId: 1 });
+    fireEvent.click(screen.getByRole("button", { name: /^Yes —/ }));
+
+    tap(screen.getByRole("button", { name: /^Yes —/ }));
+
+    await waitFor(() => expect(cast).toHaveBeenCalledTimes(1));
+    expect(cast).toHaveBeenCalledWith("p1", [1]);
+  });
+
+  it("refuses a second vote pressed after the ballot has settled", async () => {
+    const cast = vi.fn(stubApi().cast);
+    render(<SwipeBallot api={stubApi({ cast })} pollId="p1" />);
+    await screen.findByText(POLL.question);
+
+    // Held before the vote, for the same reason as above.
+    const no = screen.getByRole("button", { name: /^No —/ });
+
+    tap(screen.getByRole("button", { name: /^Yes —/ }));
+    await screen.findByText("Counted.");
+
+    // `hidden` keeps this out of a real person's reach; `pick` refusing once
+    // settled is what holds it if anything ever presses it anyway. Deleting
+    // that check turns this red.
+    fireEvent.click(no);
+
+    expect(cast).toHaveBeenCalledTimes(1);
+  });
+
   it("votes for the half that was tapped", async () => {
     const cast = vi.fn(stubApi().cast);
     render(<SwipeBallot api={stubApi({ cast })} pollId="p1" />);

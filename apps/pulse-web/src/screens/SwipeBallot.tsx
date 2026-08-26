@@ -8,7 +8,6 @@ import {
   leanOf,
   releaseOf,
   sideOfKey,
-  sideOfPoint,
 } from "../flow/swipe.js";
 import { usePoll } from "../hooks/use-poll.js";
 import { useCastVote } from "../hooks/use-cast-vote.js";
@@ -40,6 +39,16 @@ export function SwipeBallot({ api, pollId, nextQuestions }: SwipeBallotProps) {
   const { state, cast } = useCastVote(api, pollId);
   const [lean, setLean] = useState<Lean>(AT_REST);
   const drag = useRef<{ from: number; moved: boolean } | null>(null);
+  /**
+   * Set when a gesture has already decided this press, so the `click` the
+   * browser fires afterwards does not decide it a second time.
+   *
+   * A tap on a half is `pointerdown → pointerup → click`. The pointer handlers
+   * and the half's own `onClick` are two answers to one press, and without
+   * this the vote is cast twice — the second cast comes back `changed`, so a
+   * first-time voter is told their answer replaced an earlier one.
+   */
+  const gestureDecided = useRef(false);
 
   // A poll this screen cannot ask is not a fault and not a blank — it is a
   // sentence saying so, which is what `empty` is for.
@@ -65,8 +74,27 @@ export function SwipeBallot({ api, pollId, nextQuestions }: SwipeBallotProps) {
     cast(side);
   }
 
+  /**
+   * A half was pressed — by pointer, by Enter, or by Space.
+   *
+   * Two things stop this being a second vote. A gesture that already answered
+   * the press says so through `gestureDecided`, and it is consumed here rather
+   * than left set, so it can never swallow a later press. And once the ballot
+   * has settled nothing casts, which is the same stop the keyboard path and
+   * `onPointerDown` already have; this was the one entry point without it.
+   */
+  function pick(side: Side) {
+    if (gestureDecided.current) {
+      gestureDecided.current = false;
+      return;
+    }
+    if (settled) return;
+    commit(side);
+  }
+
   function onPointerDown(event: ReactPointerEvent<HTMLDivElement>) {
     if (settled) return;
+    gestureDecided.current = false;
     drag.current = { from: event.clientX, moved: false };
     // Not implemented in jsdom, and not required for the gesture to work.
     event.currentTarget.setPointerCapture?.(event.pointerId);
@@ -86,15 +114,21 @@ export function SwipeBallot({ api, pollId, nextQuestions }: SwipeBallotProps) {
     drag.current = null;
 
     const dx = event.clientX - held.from;
-    const released = releaseOf(dx);
-    if (released) return commit(released);
 
-    // A press that never travelled is a tap, and a tap picks the half it landed
-    // on. Anything else springs back.
-    if (!held.moved) {
-      const box = event.currentTarget.getBoundingClientRect();
-      return commit(sideOfPoint(event.clientX - box.left, box.width));
+    // Any press that travelled is a gesture, and this is where it is answered
+    // — whether it committed or sprang back. The click that follows must not
+    // answer it again.
+    gestureDecided.current = held.moved;
+
+    const released = releaseOf(dx);
+    if (released) {
+      gestureDecided.current = true;
+      return commit(released);
     }
+
+    // A press that never travelled is a tap. The tap is NOT handled here: each
+    // half is a real button and its `onClick` casts it — see `Half`. Casting
+    // here as well is what made one press two votes.
     setLean(AT_REST);
   }
 
@@ -153,18 +187,14 @@ export function SwipeBallot({ api, pollId, nextQuestions }: SwipeBallotProps) {
                   label={poll.choices[0] ?? ""}
                   question={poll.question}
                   {...(nextQuestions ? { next: nextQuestions[0] } : {})}
-                  onPick={() => {
-                    if (!drag.current?.moved) commit("left");
-                  }}
+                  onPick={() => pick("left")}
                 />
                 <Half
                   side="right"
                   label={poll.choices[1] ?? ""}
                   question={poll.question}
                   {...(nextQuestions ? { next: nextQuestions[1] } : {})}
-                  onPick={() => {
-                    if (!drag.current?.moved) commit("right");
-                  }}
+                  onPick={() => pick("right")}
                 />
               </div>
             </div>

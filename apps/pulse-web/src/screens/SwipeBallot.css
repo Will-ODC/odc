@@ -35,6 +35,17 @@
   -webkit-mask-image: linear-gradient(to bottom, transparent 40%, #000 66%);
 }
 
+/*
+ * `hidden` needs saying out loud here. `[hidden] { display: none }` lives in
+ * the user-agent stylesheet, and the `display: flex` below is an author rule,
+ * which beats it outright — so `hidden={settled}` on this element did nothing
+ * at all and the answered ballot stayed drawn, focusable, and pressable
+ * underneath the outcome.
+ */
+.ballot__content[hidden] {
+  display: none;
+}
+
 .ballot__content {
   position: relative;
   z-index: 1;
