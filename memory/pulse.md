@@ -133,6 +133,66 @@ because pulse has nowhere to put one (see open decision 4).
   it is not yet decided whether this is a list, a feed, or a search, nor how it
   relates to the graph a run walks.
 
+- **Infrastructure, and a Docker dev environment that resembles production.**
+  Asked for on 2026-08-25 after establishing that everything durable in pulse is
+  a `Map`. The ask is not only "swap the stores": it is that a developer should
+  be able to bring up the same shape of thing that will run in production, with
+  one command, repeatably.
+
+  **We do not have this, and the appearance that we do is the trap.** `justfile`
+  defines `up: docker compose up --build -d`, and `docs/implementation-plan.md`
+  and ADR-0001 both lock "root justfile over root docker-compose" as the dev
+  entry point — so every document says the story is settled. But
+  `docker-compose.yml` is literally `services: {}` with a comment saying
+  "Populated as services land in Phase 1+", and **there is no Dockerfile
+  anywhere in the repository, on any branch, in the entire history.** `just up`
+  today starts nothing and exits 0. Do not cite the justfile or the ADR as
+  evidence that infra exists; check for a Dockerfile.
+
+  Pulse is also not covered by the convention even on paper. The root compose
+  comment and `.claude/skills/odc-service-boundaries` describe per-service
+  `docker-compose.yml` files, each with its **own** postgres container (core
+  rule 1: no shared databases). Both were written for `services/`. Nothing says
+  whether `apps/pulse` gets the same treatment, and the charter exemption does
+  not answer it — the one-DB-per-service rule is an architecture convention, not
+  a legitimacy rule, so exemption is not automatically a reason to skip it. That
+  is the first thing to decide, before any YAML gets written.
+
+  What a production-resembling environment has to cover, from reading the code
+  rather than guessing — the dev-server's own comment ("the database-backed
+  stores replace the three in-memory ones here and nothing else changes") is
+  **wrong**, and is four swaps short:
+  1. Four stores, not three: `InMemoryVotingStore`, `InMemoryVoterStore`,
+     `InMemoryClaimStore`, `InMemorySuggestionStore`. All are behind interfaces
+     already, so this part is genuinely the easy half. Note the vote schema is
+     constrained: one row per `(pollId, voterId)`, and re-casting **replaces**,
+     so it is an upsert on a unique key — the thing `services/ledger` forbids
+     and pulse is exempt from.
+  2. `ConsoleMailer` → a real `Mailer`. The interface exists; no provider
+     implementation does anywhere. Without it nobody outside a terminal can
+     sign in, so a staging environment is unusable without solving it.
+  3. `StaticDomainSource` → a DB-backed `AllowedDomainSource`. `CLAUDE.md`
+     promises allowlists are rows and adding a domain is an insert; today it is
+     a literal in `dev-server.ts`, so it is a deploy.
+  4. `PULSE_SESSION_SECRET` as a managed secret, and `secureCookies: true`.
+  5. **A production entry point that is not `dev-server.ts`.** That file refuses
+     to start outside development, guarded twice (`assertDevelopment`), on
+     purpose — so this is a sibling `main`, never an edit to it. Anything that
+     "makes dev-server production-capable" is undoing a deliberate safety
+     property.
+  6. **Poll creation, which has no home at all.** There is no `POST /api/polls`
+     in `src/http/server.ts`; polls and their `next` graph are the `SEED`
+     literal in `dev-server.ts`. A deployed pulse has nothing to vote on until
+     authoring exists — an admin route, a seed job, or a migration. This is the
+     gap most likely to be discovered late, because in dev it is invisible.
+  7. Origin: dev relies on Vite's `/api` → `:8080` proxy so the session cookie
+     is same-origin with no CORS or `SameSite` special-casing. Serving
+     `pulse-web`'s `vite build` output from the same origin in production keeps
+     that assumption true; splitting the origins means revisiting cookie code
+     that was written assuming it never had to be.
+  8. `@fastify/rate-limit` defaults to an in-memory store — correct for one
+     process, useless across several. Multi-instance needs a shared store.
+
 ## Open decisions
 
 **Settled 2026-08-22 by the operator — do not re-litigate.**
@@ -175,6 +235,13 @@ because pulse has nowhere to put one (see open decision 4).
    and already deduplicates only per browser; being double-counted is a smaller
    harm than being read. Tying a ballot to a voter on sign-in would fix the
    double count and is a larger design change nobody has scoped.
+   6a. **A suggestion that matches a poll's own choice answers `on_ballot`**
+   (#127). Nothing is added; the choice is named back with the index to cast
+   for it. The reason is the distinction suggestions exist for — a choice is
+   **votable** and a suggestion is not — and `Poll.choices` can never grow to
+   absorb one, because a vote records a choice's _position_. Ties go to the
+   ballot. Written into `API.md` in `82c5685`; it had shipped without being in
+   the contract at all.
 6. **One press is one vote, against `odc-ui`'s explicit rule.** (Raised
    2026-08-26 by the #130 review.) `odc-ui` says, absolutely: "Always confirm a
    destructive or binding action… Picking and casting are separate presses" and
