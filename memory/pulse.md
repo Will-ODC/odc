@@ -163,16 +163,18 @@ because pulse has nowhere to put one (see open decision 4).
    scale. The options are a `docs/plans/pulse.md`, GitHub issues, or a
    `memory/BACKLOG.md`; each has a different answer to "who prunes it". Decide
    before the list grows past what one section can hold.
-5. **Does signing out release the ballot identity?** (raised 2026-08-26 by the
-   #128 review.) The `pulse_ballot` cookie is 30-day and is not cleared on
-   sign-out, so on a shared browser the next person is handed the previous
-   person's ballot and their vote replaces it rather than adding to it. This is
-   the one place pulse can leak how somebody voted, and it is wider than the
-   per-browser deduplication weakness `API.md` already admits to. It is
-   currently pinned as intended by an assertion in
-   `apps/pulse-web/test/end-to-end.test.ts`. Either clear the cookie on
-   sign-out, or argue the trade explicitly here and in `API.md` — but it should
-   not stay true only because a test says so.
+5. ~~Does signing out release the ballot identity?~~ **SETTLED 2026-08-26 —
+   yes, it is cleared** (`ae11dc8`, in #128). Raised by the #128 review: the
+   30-day `pulse_ballot` cookie survived sign-out, so on a shared browser the
+   next person was handed the previous person's ballot to read and to
+   overwrite — and an end-to-end assertion was holding the hole open by
+   asserting it as intended. `POST /api/sign-out` now clears it, and `API.md`
+   says so. **The accepted cost, do not rediscover it as a bug:** signing in
+   again mints a new ballot identity, so one person who votes, signs out, signs
+   back in and votes again is counted **twice**. Pulse is counted-not-verified
+   and already deduplicates only per browser; being double-counted is a smaller
+   harm than being read. Tying a ballot to a voter on sign-in would fix the
+   double count and is a larger design change nobody has scoped.
 6. **One press is one vote, against `odc-ui`'s explicit rule.** (Raised
    2026-08-26 by the #130 review.) `odc-ui` says, absolutely: "Always confirm a
    destructive or binding action… Picking and casting are separate presses" and
