@@ -261,6 +261,28 @@ describe("casting", () => {
     expect(cast).toHaveBeenCalledTimes(1);
   });
 
+  it("takes the sides away rather than drawing the outcome over them", async () => {
+    show();
+    fireEvent.keyDown(screen.getByText("Yes"), { key: "ArrowRight" });
+    await screen.findByText("Counted.");
+
+    // Not "is hidden" - gone. The outcome used to be an overlay with no
+    // background over a ballot that was still drawn, so both were on screen at
+    // once and neither could be read.
+    expect(split()).toBeNull();
+    expect(screen.queryByText("No")).toBeNull();
+  });
+
+  it("keeps the question, because the choice alone does not say what was agreed", async () => {
+    show();
+    fireEvent.keyDown(screen.getByText("Yes"), { key: "ArrowRight" });
+    await screen.findByText("Counted.");
+
+    const question = screen.getByText(POLL.question);
+    expect(question).toBeTruthy();
+    expect(question.closest("[hidden]")).toBeNull();
+  });
+
   it("names the choice back rather than only ticking it", async () => {
     show();
     fireEvent.keyDown(screen.getByText("Yes"), { key: "ArrowRight" });

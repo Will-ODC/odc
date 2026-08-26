@@ -43,51 +43,50 @@ export function ChoiceBallot({ api, poll, onAnswered }: ChoiceBallotProps) {
 
   return (
     <section className="ballot ballot--list">
-      <div className="ballot__content" hidden={settled}>
+      <div className="ballot__content">
         <BallotChrome poll={poll} />
         {state.status === "failed" ? <Refusal message={state.message} /> : null}
 
-        <div className="choices">
-          <ul className="choices__list">
-            {poll.choices.map((label, index) => (
-              <li key={label}>
-                <button
-                  type="button"
-                  className="choices__one"
-                  onClick={() => {
-                    if (!settled) cast(index);
-                  }}
-                >
-                  <span>{label}</span>
-                  {nextQuestions[index] ? (
-                    <span className="choices__next">
-                      opens: {nextQuestions[index]}
-                    </span>
-                  ) : null}
-                </button>
-              </li>
-            ))}
-          </ul>
+        {settled ? (
+          <div className="ballot__done">
+            <Outcome
+              state={state}
+              label={chosen === null ? "" : (poll.choices[chosen] ?? "")}
+              nextQuestion={chosen === null ? undefined : nextQuestions[chosen]}
+              onNext={() =>
+                onAnswered(chosen === null ? null : (poll.next[chosen] ?? null))
+              }
+            />
+          </div>
+        ) : (
+          <div className="choices">
+            <ul className="choices__list">
+              {poll.choices.map((label, index) => (
+                <li key={label}>
+                  <button
+                    type="button"
+                    className="choices__one"
+                    onClick={() => {
+                      if (!settled) cast(index);
+                    }}
+                  >
+                    <span>{label}</span>
+                    {nextQuestions[index] ? (
+                      <span className="choices__next">
+                        opens: {nextQuestions[index]}
+                      </span>
+                    ) : null}
+                  </button>
+                </li>
+              ))}
+            </ul>
 
-          {poll.acceptsSuggestions ? (
-            <AddYourOwn api={api} pollId={poll.id} />
-          ) : null}
-        </div>
+            {poll.acceptsSuggestions ? (
+              <AddYourOwn api={api} pollId={poll.id} />
+            ) : null}
+          </div>
+        )}
       </div>
-
-      {settled ? (
-        <div className="ballot__done">
-          <Outcome
-            state={state}
-            label={chosen === null ? "" : (poll.choices[chosen] ?? "")}
-            hasNext={chosen !== null && (poll.next[chosen] ?? null) !== null}
-            nextQuestion={chosen === null ? undefined : nextQuestions[chosen]}
-            onNext={() =>
-              onAnswered(chosen === null ? null : (poll.next[chosen] ?? null))
-            }
-          />
-        </div>
-      ) : null}
     </section>
   );
 }

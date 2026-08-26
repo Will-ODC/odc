@@ -184,18 +184,31 @@
   right: var(--step);
 }
 
-/* ---- after the swipe ---- */
+/* ---- after the answer ---- */
+/*
+ * This is not an overlay. It takes the place of the answering region instead
+ * of covering it, so nothing is drawn over anything and the outcome needs no
+ * scrim, blur or opacity to be read. It used to be `position: absolute` over a
+ * ballot that `hidden={settled}` was supposed to remove - and did not, because
+ * `.ballot__content` sets `display: flex`, which beats the `[hidden]` rule in
+ * the user-agent stylesheet. The result was the outcome text sitting on top of
+ * two live 28px words.
+ *
+ * The question above it deliberately stays: "Yes" on its own does not say what
+ * was agreed to. What is left of the ballot is the tint behind - the side that
+ * won - which is context rather than something to read through.
+ */
 .ballot__done {
-  position: absolute;
-  inset: 0;
-  z-index: 2;
+  position: relative;
+  z-index: 1;
+  flex: 1;
   display: flex;
   flex-direction: column;
   align-items: center;
   justify-content: center;
   gap: 10px;
   text-align: center;
-  padding: 0 30px;
+  padding: 0 30px var(--gutter);
 }
 
 .outcome {
@@ -211,7 +224,7 @@
   width: 54px;
   height: 54px;
   border-radius: var(--r-pill);
-  background: rgba(255, 255, 255, 0.12);
+  background: rgba(255, 255, 255, 0.16);
   color: #fff;
   display: grid;
   place-items: center;
@@ -228,7 +241,10 @@
 .outcome > span {
   font-size: var(--t-small);
   line-height: 1.5;
-  color: rgba(255, 255, 255, 0.5);
+  /* Secondary, not faint. This line carries "That replaces your earlier
+     answer." - the one sentence that tells someone their second vote was not
+     a mistake - so it has to survive being read once, quickly. */
+  color: var(--ballot-ink-soft);
 }
 
 .outcome__next {
@@ -239,8 +255,8 @@
   gap: 2px;
   padding: 12px 20px;
   border-radius: var(--r-pill);
-  border: 1px solid var(--ballot-line);
-  background: rgba(255, 255, 255, 0.08);
+  border: 1px solid rgba(255, 255, 255, 0.22);
+  background: rgba(255, 255, 255, 0.14);
   color: var(--ballot-ink);
   font: inherit;
   font-size: var(--t-body);

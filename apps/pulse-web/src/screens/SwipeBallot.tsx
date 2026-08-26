@@ -147,48 +147,52 @@ export function SwipeBallot({ api, poll, onAnswered }: SwipeBallotProps) {
         <span className="ballot__tint-right" />
       </div>
 
-      <div className="ballot__content" hidden={settled}>
+      <div className="ballot__content">
         <BallotChrome poll={poll} />
         {state.status === "failed" ? <Refusal message={state.message} /> : null}
 
-        <div
-          className="ballot__split"
-          onPointerDown={onPointerDown}
-          onPointerMove={onPointerMove}
-          onPointerUp={onPointerUp}
-          onPointerCancel={() => {
-            drag.current = null;
-            setLean(AT_REST);
-          }}
-        >
-          <Chevron side="left" />
-          <Chevron side="right" />
-          {(["left", "right"] as const).map((side) => (
-            <Half
-              key={side}
-              side={side}
-              label={poll.choices[choiceFor(side)] ?? ""}
-              question={poll.question}
-              next={nextQuestions[choiceFor(side)]}
-              onPick={() => pick(side)}
+        {settled ? (
+          <div className="ballot__done">
+            <Outcome
+              state={state}
+              label={chosen ? (poll.choices[choiceFor(chosen)] ?? "") : ""}
+              hasNext={chosen ? poll.next[choiceFor(chosen)] !== null : false}
+              nextQuestion={
+                chosen ? nextQuestions[choiceFor(chosen)] : undefined
+              }
+              onNext={() =>
+                onAnswered(
+                  chosen ? (poll.next[choiceFor(chosen)] ?? null) : null,
+                )
+              }
             />
-          ))}
-        </div>
+          </div>
+        ) : (
+          <div
+            className="ballot__split"
+            onPointerDown={onPointerDown}
+            onPointerMove={onPointerMove}
+            onPointerUp={onPointerUp}
+            onPointerCancel={() => {
+              drag.current = null;
+              setLean(AT_REST);
+            }}
+          >
+            <Chevron side="left" />
+            <Chevron side="right" />
+            {(["left", "right"] as const).map((side) => (
+              <Half
+                key={side}
+                side={side}
+                label={poll.choices[choiceFor(side)] ?? ""}
+                question={poll.question}
+                next={nextQuestions[choiceFor(side)]}
+                onPick={() => pick(side)}
+              />
+            ))}
+          </div>
+        )}
       </div>
-
-      {settled ? (
-        <div className="ballot__done">
-          <Outcome
-            state={state}
-            label={chosen ? (poll.choices[choiceFor(chosen)] ?? "") : ""}
-            hasNext={chosen ? poll.next[choiceFor(chosen)] !== null : false}
-            nextQuestion={chosen ? nextQuestions[choiceFor(chosen)] : undefined}
-            onNext={() =>
-              onAnswered(chosen ? (poll.next[choiceFor(chosen)] ?? null) : null)
-            }
-          />
-        </div>
-      ) : null}
     </section>
   );
 }
