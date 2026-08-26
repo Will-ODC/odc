@@ -20,7 +20,24 @@ export function BallotChrome({
   return (
     <header className="ballot__head">
       {onBack ? (
-        <button type="button" className="ballot__back" onClick={onBack}>
+        <button
+          type="button"
+          className="ballot__back"
+          onClick={onBack}
+          /*
+           * The swipe ballot answers arrow keys on the whole section, and this
+           * button sits inside it, so a keydown here would bubble up and be
+           * read as a vote. Someone who tabs to Back and presses the left
+           * arrow — the most guessable key on a screen whose control is drawn
+           * as a left chevron — would cast a ballot for the left choice
+           * instead of going back.
+           *
+           * Stopped here rather than filtered there, so the screen keeps one
+           * plain rule (an arrow answers the question) and the control that is
+           * not part of answering opts itself out.
+           */
+          onKeyDown={(event) => event.stopPropagation()}
+        >
           <span aria-hidden="true">{"\u2039"}</span> Back
         </button>
       ) : null}
