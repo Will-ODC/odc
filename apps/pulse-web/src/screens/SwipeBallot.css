@@ -1,0 +1,399 @@
+/*
+ * Screen 1 — the dark swipe ballot. Cardless, black base. The question is the
+ * hero in the black top third; the two colour layers fade UP into it so they
+ * read as its background rather than as two panels. The vote lives in the
+ * lower two-thirds.
+ *
+ * Follows docs/mockups/pulse-screens/01-claim.html.
+ */
+.ballot {
+  position: relative;
+  display: flex;
+  flex-direction: column;
+  overflow: hidden;
+  background: var(--ballot-bg);
+  color: var(--ballot-ink);
+  border: 1px solid var(--ballot-line);
+  border-radius: var(--r-screen);
+  box-shadow: var(--shadow-ballot);
+  width: min(390px, 100vw);
+  height: min(844px, 100dvh);
+}
+
+/* the two colour layers, fading up into the black top third */
+.ballot__tint {
+  position: absolute;
+  inset: 0;
+  display: flex;
+  z-index: 0;
+}
+
+.ballot__tint span {
+  flex: 1;
+  transition: background 0.12s;
+  mask-image: linear-gradient(to bottom, transparent 40%, #000 66%);
+  -webkit-mask-image: linear-gradient(to bottom, transparent 40%, #000 66%);
+}
+
+.ballot__content {
+  position: relative;
+  z-index: 1;
+  flex: 1;
+  display: flex;
+  flex-direction: column;
+  padding-top: var(--gutter);
+}
+
+/* ---- the question hero ---- */
+.ballot__head {
+  position: relative;
+  min-height: 34%;
+  padding: 0 var(--gutter);
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  gap: 14px;
+}
+
+/*
+ * The way back, on the brand line rather than above it, so it costs the
+ * question no height. Out of the centred column on purpose: the head is what
+ * the eye lands on and the question should stay the middle of it.
+ */
+.ballot__back {
+  position: absolute;
+  top: -2px;
+  left: var(--gutter);
+  z-index: 2;
+  display: flex;
+  align-items: center;
+  gap: 4px;
+  padding: 6px 12px 6px 9px;
+  border-radius: var(--r-pill);
+  border: 1px solid var(--ballot-line);
+  background: var(--ballot-chip);
+  color: var(--ballot-ink-soft);
+  font: inherit;
+  font-size: var(--t-small);
+  font-weight: 600;
+  cursor: pointer;
+}
+
+.ballot__back:hover {
+  background: rgba(255, 255, 255, 0.16);
+}
+
+.ballot__back:focus-visible {
+  outline: 2px solid rgba(255, 255, 255, 0.7);
+  outline-offset: 2px;
+}
+
+.ballot__brand {
+  display: flex;
+  align-items: center;
+  gap: var(--step);
+  font-size: var(--t-small);
+  font-weight: 600;
+  letter-spacing: 0.02em;
+  color: #eef2f8;
+}
+
+.ballot__brand i {
+  width: var(--step);
+  height: var(--step);
+  border-radius: var(--r-pill);
+  background: rgba(255, 255, 255, 0.85);
+}
+
+.ballot__chip {
+  padding: 6px 12px;
+  border-radius: var(--r-pill);
+  background: var(--ballot-chip);
+  color: rgba(255, 255, 255, 0.65);
+  font-size: 11px;
+  font-weight: 600;
+}
+
+.ballot__question {
+  margin: 4px 0 0;
+  font-size: var(--t-hero);
+  font-weight: 600;
+  line-height: 1.35;
+  color: var(--ballot-ink);
+  text-align: center;
+}
+
+/* ---- the vote ---- */
+.ballot__split {
+  flex: 1;
+  position: relative;
+  display: flex;
+  touch-action: pan-y;
+}
+
+.ballot__half {
+  flex: 1;
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  justify-content: center;
+  gap: 14px;
+  padding: 0 12px;
+  /* a button, undressed back to a surface */
+  appearance: none;
+  background: none;
+  border: 0;
+  font: inherit;
+  color: inherit;
+  cursor: pointer;
+}
+
+.ballot__half:focus-visible {
+  outline: 2px solid rgba(255, 255, 255, 0.7);
+  outline-offset: -6px;
+  border-radius: var(--r-card);
+}
+
+.ballot__word {
+  font-size: var(--t-word);
+  font-weight: 500;
+  color: var(--ballot-ink-soft);
+  transition:
+    color 0.12s,
+    transform 0.12s;
+}
+
+.ballot__next {
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  gap: 4px;
+  text-align: center;
+}
+
+.ballot__eyebrow {
+  font-size: var(--t-eyebrow);
+  font-weight: 700;
+  letter-spacing: 0.16em;
+  color: var(--ballot-ink-faint);
+}
+
+/* Both sides reserve two lines at one width, so the two words sit on exactly
+   the same line and neither block is wider than the other. */
+.ballot__nextq {
+  font-size: var(--t-small);
+  line-height: 1.35;
+  color: var(--ballot-ink-muted);
+  min-height: 2.7em;
+  max-width: 118px;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+}
+
+.ballot__chev {
+  position: absolute;
+  top: 50%;
+  transform: translateY(-50%);
+  z-index: 1;
+  pointer-events: none;
+}
+
+.ballot__chev--left {
+  left: var(--step);
+}
+
+.ballot__chev--right {
+  right: var(--step);
+}
+
+/* ---- after the answer ---- */
+/*
+ * This is not an overlay. It takes the place of the answering region instead
+ * of covering it, so nothing is drawn over anything and the outcome needs no
+ * scrim, blur or opacity to be read. It used to be `position: absolute` over a
+ * ballot that `hidden={settled}` was supposed to remove - and did not, because
+ * `.ballot__content` sets `display: flex`, which beats the `[hidden]` rule in
+ * the user-agent stylesheet. The result was the outcome text sitting on top of
+ * two live 28px words.
+ *
+ * The question above it deliberately stays: "Yes" on its own does not say what
+ * was agreed to. What is left of the ballot is the tint behind - the side that
+ * won - which is context rather than something to read through.
+ */
+.ballot__done {
+  position: relative;
+  z-index: 1;
+  flex: 1;
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  justify-content: center;
+  gap: 10px;
+  text-align: center;
+  padding: 0 30px var(--gutter);
+}
+
+.outcome {
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  justify-content: center;
+  gap: 10px;
+  text-align: center;
+}
+
+.outcome__mark {
+  width: 54px;
+  height: 54px;
+  border-radius: var(--r-pill);
+  background: rgba(255, 255, 255, 0.16);
+  color: #fff;
+  display: grid;
+  place-items: center;
+  font-size: 25px;
+}
+
+.outcome b {
+  font-size: 18px;
+  font-weight: 600;
+  line-height: 1.4;
+  color: var(--ballot-ink);
+}
+
+.outcome > span {
+  font-size: var(--t-small);
+  line-height: 1.5;
+  /* Secondary, not faint. This line carries "That replaces your earlier
+     answer." - the one sentence that tells someone their second vote was not
+     a mistake - so it has to survive being read once, quickly. */
+  color: var(--ballot-ink-soft);
+}
+
+.outcome__next {
+  margin-top: var(--step);
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  gap: 2px;
+  padding: 12px 20px;
+  border-radius: var(--r-pill);
+  border: 1px solid rgba(255, 255, 255, 0.22);
+  background: rgba(255, 255, 255, 0.14);
+  color: var(--ballot-ink);
+  font: inherit;
+  font-size: var(--t-body);
+  cursor: pointer;
+}
+
+.outcome__next:focus-visible {
+  outline: 2px solid rgba(255, 255, 255, 0.7);
+  outline-offset: 2px;
+}
+
+@media (prefers-reduced-motion: reduce) {
+  .ballot__tint span,
+  .ballot__word {
+    transition: none;
+  }
+}
+
+/* ---- leaning ----
+   The screen sets two numbers, --lean-left and --lean-right, each 0 at rest and
+   1 once a drag has gone far enough to commit. Everything the lean does to the
+   picture is derived from them here, so the component sets numbers and never a
+   colour. */
+.ballot {
+  --lean-left: 0;
+  --lean-right: 0;
+}
+
+.ballot__tint .ballot__tint-left {
+  background: rgba(
+    var(--side-a),
+    calc(var(--side-rest) + var(--lean-left) * var(--side-lean))
+  );
+}
+
+.ballot__tint .ballot__tint-right {
+  background: rgba(
+    var(--side-b),
+    calc(var(--side-rest) + var(--lean-right) * var(--side-lean))
+  );
+}
+
+/*
+ * Settled: both halves take the winning colour, at a fraction of the leaning
+ * strength.
+ *
+ * They used to take different ones - the winner jumped to a strong tint and
+ * the loser stayed sitting in the other colour at rest - which left a hard
+ * vertical seam down the middle of the screen and two different grounds under
+ * the outcome. The words being read after a vote are the outcome's, not the
+ * ballot's, so what is behind them has to be one flat colour rather than a
+ * picture of the vote that just happened.
+ *
+ * Applied to both spans rather than to `.ballot__tint`, because the mask that
+ * fades the colour up into the black question third lives on the spans.
+ */
+.ballot[data-won] .ballot__tint span {
+  transition: background 0.3s ease;
+}
+
+.ballot[data-won="left"] .ballot__tint span {
+  background: rgba(var(--side-a), var(--side-settled));
+}
+
+.ballot[data-won="right"] .ballot__tint span {
+  background: rgba(var(--side-b), var(--side-settled));
+}
+
+.ballot__half--left .ballot__word {
+  color: color-mix(
+    in srgb,
+    var(--ballot-ink-soft),
+    rgb(var(--side-a)) calc(var(--lean-left) * 100%)
+  );
+  transform: scale(calc(1 + var(--lean-left) * 0.08));
+}
+
+.ballot__half--right .ballot__word {
+  color: color-mix(
+    in srgb,
+    var(--ballot-ink-soft),
+    rgb(var(--side-b)) calc(var(--lean-right) * 100%)
+  );
+  transform: scale(calc(1 + var(--lean-right) * 0.08));
+}
+
+.ballot__chev path {
+  transition: stroke 0.12s;
+}
+
+.ballot__chev--left path {
+  stroke: color-mix(
+    in srgb,
+    var(--ballot-ink-faint),
+    rgb(var(--side-a)) calc(var(--lean-left) * 100%)
+  );
+}
+
+.ballot__chev--right path {
+  stroke: color-mix(
+    in srgb,
+    var(--ballot-ink-faint),
+    rgb(var(--side-b)) calc(var(--lean-right) * 100%)
+  );
+}
+
+/* A refusal sits with the question it belongs to, not over it. */
+.refusal {
+  margin: 0 var(--gutter);
+  padding: 10px 14px;
+  border-radius: var(--r-control);
+  background: rgba(var(--side-a), 0.18);
+  color: var(--ballot-ink);
+  font-size: var(--t-small);
+  line-height: 1.45;
+  text-align: center;
+}

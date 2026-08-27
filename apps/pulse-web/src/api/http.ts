@@ -7,6 +7,8 @@ import type {
   PulseApi,
   RequestLinkResult,
   Results,
+  SuggestResult,
+  Suggestion,
 } from "./types.js";
 
 /**
@@ -96,6 +98,22 @@ export class HttpPulseApi implements PulseApi {
       `/polls/${encodeURIComponent(pollId)}/ballot`,
     );
     return body.ballot;
+  }
+
+  async suggestions(pollId: string): Promise<Suggestion[]> {
+    const body = await this.#send<{ suggestions: Suggestion[] }>(
+      "GET",
+      `/polls/${encodeURIComponent(pollId)}/suggestions`,
+    );
+    return body.suggestions;
+  }
+
+  async suggest(pollId: string, text: string): Promise<SuggestResult> {
+    return this.#send(
+      "POST",
+      `/polls/${encodeURIComponent(pollId)}/suggestions`,
+      { text },
+    );
   }
 
   async results(pollId: string): Promise<Results> {

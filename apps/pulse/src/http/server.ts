@@ -1,3 +1,4 @@
+import { randomUUID } from "node:crypto";
 import cookie from "@fastify/cookie";
 import rateLimit from "@fastify/rate-limit";
 import Fastify, {
@@ -13,17 +14,45 @@ import {
   UnknownPollError,
   type VotingStore,
 } from "../voting/store.js";
+import {
+  SuggestionError,
+  type Suggestion,
+  type SuggestionStore,
+} from "../voting/suggestions.js";
 import { SESSION_COOKIE, SessionSigner } from "./session.js";
+
+/**
+ * Who cast a ballot, as far as the ballot is concerned.
+ *
+ * Deliberately not the signed-in voter. Votes are keyed by this and by nothing
+ * else, whether or not the person has ever given an address, which is what lets
+ * a vote count the moment it is cast and what keeps the record from holding a
+ * connection between an address and an answer. Signing in verifies a person; it
+ * is not how their vote is found.
+ *
+ * Signed by the session signer, which is safe in both directions: this cookie
+ * presented as a session names a voter the store does not have, and a session
+ * cookie presented as this one names the same person it already named.
+ */
+const BALLOT_COOKIE = "pulse_ballot";
+
+/** Marks a ballot identity so it can never be mistaken for a voter id. */
+const BALLOT_PREFIX = "b:";
 
 export interface ServerDeps {
   claims: ClaimService;
   voters: VoterStore;
   votes: VotingStore;
+  suggestions: SuggestionStore;
   signer: SessionSigner;
   /** Cookies go out secure everywhere except local development. */
   secureCookies?: boolean;
   /** Sign-in attempts allowed per client per window. */
   signInRateLimit?: { max: number; timeWindow: string };
+  /** Suggestions allowed per client per window. */
+  suggestRateLimit?: { max: number; timeWindow: string };
+  /** Overridable so tests get a ballot identity they can predict. */
+  newBallotId?: () => string;
   clock?: () => Date;
 }
 
@@ -114,6 +143,29 @@ export async function createServer(deps: ServerDeps): Promise<FastifyInstance> {
       return undefined;
     }
     return voter;
+  };
+
+  /**
+   * The identity this ballot is filed under, minting one if this browser has
+   * not voted before. Called only by the two routes that read or write a
+   * ballot, so nothing else in the product hands out this cookie.
+   */
+  const ballotIdentity = (
+    request: FastifyRequest,
+    reply: FastifyReply,
+  ): string => {
+    const held = deps.signer.verify(request.cookies[BALLOT_COOKIE]);
+    if (held) return held.voterId;
+
+    const minted = `${BALLOT_PREFIX}${(deps.newBallotId ?? randomUUID)()}`;
+    reply.setCookie(BALLOT_COOKIE, deps.signer.sign(minted), {
+      httpOnly: true,
+      sameSite: "lax",
+      secure: deps.secureCookies ?? true,
+      path: "/",
+      maxAge: deps.signer.ttlSeconds,
+    });
+    return minted;
   };
 
   app.post(
@@ -225,11 +277,28 @@ export async function createServer(deps: ServerDeps): Promise<FastifyInstance> {
   /**
    * Sign out everywhere, not only here: the voter's sessions-valid-from moves
    * to now, so a copy of the cookie someone else kept stops working too.
+   *
+   * The ballot identity goes with it. It has to: `pulse_ballot` lasts thirty
+   * days and is what a ballot is filed under, so a browser that kept it after
+   * a sign-out would hand the next person the previous person's ballot to read
+   * and to overwrite. On a shared or public machine that is the one way pulse
+   * can leak how somebody voted, and it is a wider hole than the per-browser
+   * deduplication weakness `API.md` already owns up to.
+   *
+   * The vote itself is not withdrawn — it stays counted under the identity
+   * that cast it. What ends is this browser's ability to see or change it,
+   * which is the same thing signing out means for everything else.
+   *
+   * The cost is real and accepted: signing in again mints a new ballot
+   * identity, so the same person voting again after a sign-out is counted
+   * twice. Pulse is counted-not-verified and already says deduplication is per
+   * browser; being double-counted is a smaller harm than being read.
    */
   app.post("/api/sign-out", async (request, reply) => {
     const voter = await currentVoter(request);
     if (voter) await deps.voters.invalidateSessionsBefore(voter.id, now());
     reply.clearCookie(SESSION_COOKIE, { path: "/" });
+    reply.clearCookie(BALLOT_COOKIE, { path: "/" });
     return reply.send({ status: "signed_out" });
   });
 
@@ -256,18 +325,20 @@ export async function createServer(deps: ServerDeps): Promise<FastifyInstance> {
   });
 
   app.get("/api/polls/:id/ballot", async (request, reply) => {
-    const voter = await requireVoter(request, reply);
-    if (!voter) return reply;
     const poll = await deps.votes.getPoll(pollId(request));
     if (!poll) return notFoundPoll(reply);
-    const vote = await deps.votes.voteOf(poll.id, voter.id);
+    const vote = await deps.votes.voteOf(
+      poll.id,
+      ballotIdentity(request, reply),
+    );
     return reply.send({ ballot: vote ? vote.choices : null });
   });
 
+  /**
+   * Casting needs no session, on purpose. A vote counts the moment it is made;
+   * the address someone gives later verifies that vote, and never gates it.
+   */
   app.post("/api/polls/:id/votes", async (request, reply) => {
-    const voter = await requireVoter(request, reply);
-    if (!voter) return reply;
-
     const ballot = (request.body as { ballot?: unknown } | undefined)?.ballot;
     // Shape first: the body must carry a list of whole numbers. Whether those
     // numbers are a *valid* answer to this poll is the store's call, below.
@@ -281,7 +352,7 @@ export async function createServer(deps: ServerDeps): Promise<FastifyInstance> {
     try {
       const outcome = await deps.votes.castVote(
         pollId(request),
-        voter.id,
+        ballotIdentity(request, reply),
         ballot as number[],
       );
       if (outcome.status === "closed") {
@@ -306,7 +377,96 @@ export async function createServer(deps: ServerDeps): Promise<FastifyInstance> {
     }
   });
 
+  app.get("/api/polls/:id/suggestions", async (request, reply) => {
+    const poll = await deps.votes.getPoll(pollId(request));
+    if (!poll) return notFoundPoll(reply);
+    const suggestions = await deps.suggestions.list(poll.id);
+    return reply.send({ suggestions: suggestions.map(publicSuggestion) });
+  });
+
+  /**
+   * Add an option of your own.
+   *
+   * The answer says whether anyone had already said it and what else came
+   * close. That is the whole of the duplicate handling between suggestions:
+   * the person is told, and nothing is refused for being similar. Refusing
+   * would make people phrase around the check, which is how a list of options
+   * turns into a list of synonyms.
+   *
+   * Repeating one of the poll's own choices is the exception, and answers
+   * `on_ballot`. Nothing is added there because a suggestion can never become
+   * a choice on this poll, so leaving one would put an unvotable copy of an
+   * option under the option itself.
+   */
+  app.post(
+    "/api/polls/:id/suggestions",
+    {
+      config: {
+        rateLimit: deps.suggestRateLimit ?? { max: 20, timeWindow: "1 hour" },
+      },
+    },
+    async (request, reply) => {
+      const poll = await deps.votes.getPoll(pollId(request));
+      if (!poll) return notFoundPoll(reply);
+      if (!poll.acceptsSuggestions) {
+        return reply.code(409).send({
+          error: "no_suggestions",
+          message: "This question has a fixed set of answers.",
+        });
+      }
+      if (!isOpen(poll, now())) {
+        return reply.code(409).send({
+          error: "closed",
+          message: "This one has closed.",
+        });
+      }
+
+      const text = (request.body as { text?: unknown } | undefined)?.text;
+      if (typeof text !== "string") {
+        return reply.code(400).send({
+          error: "bad_request",
+          message: "Write what you would rather see.",
+        });
+      }
+
+      try {
+        const result = await deps.suggestions.submit(poll, text);
+        const related = result.related.map(publicSuggestion);
+        if (result.status === "on_ballot") {
+          // Not an error: the person said something the poll already offers,
+          // and the answer names the choice so the screen can point at it.
+          return reply.send({
+            status: result.status,
+            choice: result.choice,
+            related,
+          });
+        }
+        return reply.send({
+          status: result.status,
+          suggestion: publicSuggestion(result.suggestion),
+          related,
+        });
+      } catch (error) {
+        if (error instanceof SuggestionError) {
+          return reply
+            .code(400)
+            .send({ error: "bad_suggestion", message: error.message });
+        }
+        throw error;
+      }
+    },
+  );
+
   return app;
+}
+
+/** A suggestion as anyone may see it. Who said it is not recorded at all. */
+function publicSuggestion(suggestion: Suggestion) {
+  return {
+    id: suggestion.id,
+    text: suggestion.text,
+    count: suggestion.count,
+  };
 }
 
 /** The `:id` path parameter, decoded by Fastify already. */
@@ -327,6 +487,8 @@ function pollBody(poll: Poll, now: Date) {
     question: poll.question,
     choices: [...poll.choices],
     method: poll.method,
+    next: [...poll.next],
+    acceptsSuggestions: poll.acceptsSuggestions,
     closesAt: poll.closesAt ? poll.closesAt.toISOString() : null,
     open: isOpen(poll, now),
   };

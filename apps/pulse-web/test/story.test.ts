@@ -31,6 +31,8 @@ const poll = (over: Partial<Poll> = {}): Poll => ({
   question: "Which one?",
   choices: ["a", "b", "c"],
   method: "single",
+  next: [null, null, null],
+  acceptsSuggestions: false,
   closesAt: null,
   open: true,
   ...over,

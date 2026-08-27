@@ -622,6 +622,19 @@ was reused for the vector work on 2026-08-26 and carries nothing of its own.
 
 ## Blockers & live cautions
 
+- **`just up` starts nothing, and every document implies otherwise.**
+  `justfile` runs `docker compose up --build -d`, and both
+  `docs/implementation-plan.md` and ADR-0001 lock that as the dev entry point —
+  but `docker-compose.yml` is `services: {}`, and **no Dockerfile exists in this
+  repository on any branch or anywhere in its history.** The per-service compose
+  files described by `.claude/skills/odc-service-boundaries` (one postgres
+  container each, per rule 1) do not exist either. This is expected — the
+  services are unbuilt — but it means the infra scaffolding is a stub, not a
+  starting point, and the first service to land owns writing the first
+  Dockerfile the project has ever had. See `memory/pulse.md` for the operator's
+  2026-08-25 ask for a production-resembling Docker dev environment, which will
+  likely force this decision before Phase 1 does.
+
 - **FIVE `contracts/` contradictions are open and need an operator decision.**
   All were found by implementers or reviewers who had to _decide_ what a rule
   meant; none has any verdict impact on the committed corpus, which is precisely
