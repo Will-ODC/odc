@@ -975,6 +975,18 @@
       "note": "registrar_pk in UPPERCASE hex. Same defect as 076 on the OTHER key — the one an implementation is likelier to skip, since registrar_pk never enters chain_id (ET-7) and is unused until a vote_cast arrives (ET-17). chain_id derives from operator_pk (lowercase) and matches, and the genesis is operator-self-signed so the signature never consults registrar_pk; the hash covers the uppercase registrar_pk and matches. Only ET-9b fails."
     },
     {
+      "id": "094-genesis-keys-equal",
+      "export": "vectors/094-genesis-keys-equal.ndjson",
+      "expect": {
+        "verdict": "INVALID",
+        "line": 1
+      },
+      "cites": [
+        "ET-9d"
+      ],
+      "note": "registrar_pk byte-identical to operator_pk — ET-9d, and the largest fault in this module. A chain declaring one key twice hands a single holder the power to mint issues AND forge every ballot on them; charter P2's two planes and P3's never-selects collapse into one party. Nothing else is wrong: the key is legal lowercase hex so ET-9b passes on both, chain_id still derives from operator_pk (ET-7), the genesis is operator-self-signed so the signature verifies (ET-8), and the hash covers the payload and matches. A verifier omitting the one string equality reports VALID with nothing on the line to signal it — which is what both verifiers did until the phase-2 rebuild. Read the check as necessary, not sufficient: two DISTINCT keys held by one party are undetectable from any export, so this catches only the blatant declared collapse."
+    },
+    {
       "id": "078-noncanonical-a",
       "export": "vectors/078-noncanonical-a.ndjson",
       "expect": {
@@ -1046,6 +1058,147 @@
         "ET-9c"
       ],
       "note": "DISCRIMINATING on the registrar_pk validation TIMING (ET-9c, ADR-0011). A genesis whose registrar_pk is the CANONICAL identity-point encoding (0100..00, y = 1 < p) — the same small-order key 081 puts on a participant pubkey, so ET-9b hex-format, ET-4a(ii)/ET-4b and ID-3 all PASS. Genesis is operator-self-signed under the real operator_pk (ET-8), so chain_id derives (ET-7), the self-signature verifies, and the hash covers the small-order registrar_pk and matches: the genesis is well-formed in every respect EXCEPT that registrar_pk is not prime-order (ET-4c). registrar_pk is DECLARED here (ET-9a) but not USED to verify until the first vote_cast (ET-17), and this chain has none — so a verifier that defers ET-4b/ET-4c on registrar_pk to first use reports VALID, while ET-9c requires the checks at the genesis line where the key is declared, giving INVALID at line 1. This is the single point where two otherwise-conforming verifiers diverged (found by the fresh-context T7 review; ADR-0011): 078-082 are all on participant_registered.pubkey at line 2, where declaration and use coincide because that event is self-signed, so none of them pins this timing. As in 081, the ET-4c fault is the non-identity clause A != 𝒪."
+    },
+    {
+      "id": "084-ancestor-head-without-chain",
+      "export": "vectors/084-ancestor-head-without-chain.ndjson",
+      "expect": {
+        "verdict": "INVALID",
+        "line": 1
+      },
+      "cites": [
+        "ET-9f",
+        "ET-9e",
+        "ES-34",
+        "ET-7a"
+      ],
+      "note": "A genesis carrying ancestor_head with no ancestor_chain — the one presence combination ET-9f bars, and the head-alone anchoring charter §4 rejects: a position on an UNNAMED chain, which no reader can check because nothing in the payload says which export to open. The value itself is legal (it is 002's true head) and every other rule holds — chain_id derives, the self-signature verifies, the hash covers the payload and matches — so the only fault is the missing companion key. This vector goes first in the ancestry set on purpose: it is the ONLY one that fails against a verifier still implementing the pre-ADR-0019 ET-9e, where ancestor_head stood alone and carried the head. It is the single fixture proving ADR-0019 landed."
+    },
+    {
+      "id": "085-ancestor-chain-and-head",
+      "export": "vectors/085-ancestor-chain-and-head.ndjson",
+      "expect": {
+        "verdict": "VALID"
+      },
+      "cites": [
+        "ET-9e",
+        "ES-34",
+        "HA-7",
+        "HA-8",
+        "EX-8",
+        "EX-14",
+        "EX-21"
+      ],
+      "note": "The complete ancestry record: a name and a position, the pair charter §4 requires of an anchoring record. Both values are computed from the chain 002-four-types ships — ancestor_chain is its genesis hash (its identity, ET-7a/EX-21), ancestor_head its last event hash (EX-14). This is the corpus's FIRST seven-key genesis payload, so it is also the first real exercise of HA-7's leading key count U64(7) and of HA-8's ordering: both new keys sort ahead of chain_id, so a payload encoder that emits keys in declaration order rather than byte order produces a different preimage and a hash that does not match."
+    },
+    {
+      "id": "086-ancestor-chain-alone",
+      "export": "vectors/086-ancestor-chain-alone.ndjson",
+      "expect": {
+        "verdict": "VALID"
+      },
+      "cites": [
+        "ET-9f",
+        "ET-9e",
+        "ES-34"
+      ],
+      "note": "ancestor_chain with no ancestor_head — LEGAL, and the asymmetry is the rule rather than an oversight. It is the weaker but coherent claim 'forked from chain X, fork point unrecorded': a named chain, no position. The pair 084/086 is what pins the asymmetry in both directions, and a verifier that 'tidied' ET-9f into a both-or-neither pair passes 084 and fails here."
+    },
+    {
+      "id": "087-ancestor-chain-equals-head",
+      "export": "vectors/087-ancestor-chain-equals-head.ndjson",
+      "expect": {
+        "verdict": "VALID"
+      },
+      "cites": [
+        "ET-9e",
+        "EX-14",
+        "EX-21"
+      ],
+      "note": "ancestor_chain and ancestor_head carrying the SAME value — legal, and what a fork from a parent holding only its genesis actually produces: that parent's head IS its genesis hash (EX-14/EX-21), so the name and the position coincide. Both values here are read off 001-genesis-only's chain, not written twice. Nothing in ET-9e bars the equality and nothing should; this is the vector a naive implementer fails by rejecting the two keys as a duplicate, which would make forking a young chain impossible."
+    },
+    {
+      "id": "088-ancestor-chain-zero",
+      "export": "vectors/088-ancestor-chain-zero.ndjson",
+      "expect": {
+        "verdict": "INVALID",
+        "line": 1
+      },
+      "cites": [
+        "ET-9e",
+        "ES-24",
+        "ES-34"
+      ],
+      "note": "ancestor_chain as the 64-zero anchor, which ET-9e bars explicitly. A chain with no recorded ancestor omits both keys (ES-34), so there is exactly one way to say 'no ancestor' and the 64-zero string keeps its single meaning as prev_hash's anchor (ES-24). This vector is the one that catches the plausible wrong reading — that 64 zeros is how a fork says it has no parent — which would give that string two meanings and make absence and the placeholder indistinguishable."
+    },
+    {
+      "id": "089-ancestor-head-zero",
+      "export": "vectors/089-ancestor-head-zero.ndjson",
+      "expect": {
+        "verdict": "INVALID",
+        "line": 1
+      },
+      "cites": [
+        "ET-9e",
+        "ES-24",
+        "ES-34"
+      ],
+      "note": "The same 64-zero bar on the OTHER ancestry key, with a legal ancestor_chain alongside it so ET-9f is satisfied and the zero value is the only fault. One vector per key rather than one for both, for the reason 076/077 exist: ancestor_head is the key an implementation is likelier to check less carefully, since ET-9f already forces it to think about ancestor_chain's presence and nothing forces the same attention here."
+    },
+    {
+      "id": "090-ancestor-chain-uppercase",
+      "export": "vectors/090-ancestor-chain-uppercase.ndjson",
+      "expect": {
+        "verdict": "INVALID",
+        "line": 1
+      },
+      "cites": [
+        "ET-9e",
+        "ID-2",
+        "ES-34"
+      ],
+      "note": "ancestor_chain in UPPERCASE hex. ET-9e requires ^[0-9a-f]{64}$, and the isolation is the same one 033/036/076 have for their fields: the uppercase string names the same 32 bytes, so a verifier that lowercases before comparing would resolve it to the very chain 002 ships and see nothing wrong. Rejected, never lowercased to conform (D5)."
+    },
+    {
+      "id": "091-ancestor-head-truncated",
+      "export": "vectors/091-ancestor-head-truncated.ndjson",
+      "expect": {
+        "verdict": "INVALID",
+        "line": 1
+      },
+      "cites": [
+        "ET-9e",
+        "ES-34"
+      ],
+      "note": "ancestor_head 63 characters long: the legal alphabet, the wrong length. Pairs with 090 to pin both halves of ^[0-9a-f]{64}$ — alphabet and length — on the two different keys, so neither is checked by a regex that got one half right. ancestor_chain is present and legal, so ET-9f holds and the length is the only fault."
+    },
+    {
+      "id": "092-ancestor-unresolvable",
+      "export": "vectors/092-ancestor-unresolvable.ndjson",
+      "expect": {
+        "verdict": "VALID"
+      },
+      "cites": [
+        "ET-9e",
+        "ES-34"
+      ],
+      "note": "A well-formed ancestry pair naming a chain that exists nowhere in this corpus — VALID, and this is the vector most likely to be argued with. Both values are a RECORDED CLAIM, not a verified link: the ancestor is a different export, which the verifier does not hold and cannot demand, so it cannot confirm that ancestor_chain is any chain's genesis hash, that ancestor_head is any chain's head, or that the ancestor exists at all. ET-9e says a verifier MUST NOT report INVALID because it cannot resolve either value and MUST NOT treat an unresolvable value as a defect. A verifier that tries to resolve them — against its own corpus, a registry, anything — fails here, and that failure is the point. The two values are deliberately DIFFERENT: with one value repeated this vector would also die to a verifier that rejects ancestor_chain == ancestor_head, which is 087's job, and the two failures would be indistinguishable."
+    },
+    {
+      "id": "093-fork-continues",
+      "export": "vectors/093-fork-continues.ndjson",
+      "expect": {
+        "verdict": "VALID"
+      },
+      "cites": [
+        "ET-9e",
+        "ET-6",
+        "ES-24",
+        "ES-33",
+        "ET-13",
+        "ET-17"
+      ],
+      "note": "A fork that goes on to have a life: the same ancestry-bearing genesis as 085, followed by one event of each remaining v1 type. It pins the sentence in ET-9e that says a fork's own structure is unchanged by either key — seq is still 1 and prev_hash is still the 64-zero anchor at the genesis (ET-6, ES-24, ES-33), exactly as on an original chain, and every later event links and verifies normally under the keys this genesis declares. The failure it catches is a verifier that treats a recorded ancestor as a reason to expect continuation — a non-zero prev_hash at line 1, or a seq continuing the parent's — which would make every real fork INVALID."
     }
   ]
 }

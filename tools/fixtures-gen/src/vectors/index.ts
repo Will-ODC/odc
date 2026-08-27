@@ -12,6 +12,7 @@ import { semanticsVectors } from "./semantics.js";
 import { unicodeVectors } from "./unicode.js";
 import { genesisKeysVectors } from "./genesis-keys.js";
 import { canonicalEd25519Vectors } from "./canonical-ed25519.js";
+import { forkAncestryVectors } from "./fork-ancestry.js";
 import type { Vector } from "./shared.js";
 
 export { GENESIS_EVENT, a3 as ISSUE_EVENT } from "./shared.js";
@@ -26,4 +27,5 @@ export const vectors: Vector[] = [
   ...unicodeVectors,
   ...genesisKeysVectors,
   ...canonicalEd25519Vectors,
+  ...forkAncestryVectors,
 ];
