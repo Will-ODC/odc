@@ -1,6 +1,6 @@
 # Evolution — contracts/evolution.md
 
-**Version:** 4
+**Version:** 5
 **Status:** DRAFTING (Phase 0 · T5f, amended T9a/ADR-0014, ADR-0015,
 ADR-0017). Not frozen.
 **Companion specs:** `event-schema.md`, `event-types.md`, `hashing.md`,
@@ -92,11 +92,28 @@ chain, or a fork that added types, charter §8).
   to *reject* an event of an unregistered `type` or `(type, version)`, that
   rejection means: the event does not receive a `VALID` **semantic** verdict. For
   a **well-formed** unregistered pair (ES-10 satisfied) the outcome is the
-  per-event `PARTIAL` treatment of EV-7/EV-8, **not** a structural `INVALID`.
-  Only a malformed `type` (ES-10) or a Stage A failure is `INVALID`. This
-  sentence is the authoritative reconciliation of those T3 sentences with the
-  evolution rule; a future revision of `event-schema.md`/`event-types.md` SHOULD
-  add a cross-reference to it.
+  per-event `PARTIAL` treatment of EV-7/EV-8 — **with the single exception of a
+  chain's `genesis` at line 1, which is `INVALID` (EV-20)** — and **not** a
+  structural `INVALID`. Only a malformed `type` (ES-10) or a Stage A failure is
+  `INVALID`; **at line 1 the registration check is itself Stage A** (EV-15,
+  EV-20), which is why the genesis exception is not a further carve-out but the
+  same clause reaching a case EV-15 already assigns to Stage A. This sentence is
+  the authoritative reconciliation of those T3 sentences with the evolution rule
+  and **does not override EV-20**; a future revision of
+  `event-schema.md`/`event-types.md` SHOULD add a cross-reference to it.
+
+  **Why the exception is stated here and not left implicit.** Both halves of this
+  rule were already reconcilable — EV-15 ends by assigning line-1 registration to
+  Stage A, and the sentence above makes a Stage A failure `INVALID` — so a reader
+  who follows that chain reaches EV-20's answer unaided. But the `PARTIAL`
+  sentence carried no exception while its neighbour EV-8 did, and this rule calls
+  itself authoritative, which invites a reader to stop here. A reader who stops
+  builds a verifier that reports `PARTIAL` where EV-20 requires `INVALID`: not a
+  line-number difference but a different **verdict**, and the one verdict
+  difference that matters, since `PARTIAL` announces "integrity confirmed" over a
+  chain on which no signature was ever checked. An exception applied to one
+  sentence and not its neighbour is the defect ADR-0019 was written about; this
+  is the same defect, found in the same file.
 - **EV-10.** On a chain that uses only `(type, version)` pairs in the verifier's
   registry, `PARTIAL` never arises, and EV-6/EV-7 reduce to the plain
   `VALID | INVALID` behavior of a single-version verifier. A `contracts-v1`

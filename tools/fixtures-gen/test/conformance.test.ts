@@ -13,6 +13,7 @@ import { test } from "node:test";
 import { fileURLToPath } from "node:url";
 
 import { vectors, type Expect } from "../src/vectors/index.js";
+import { UNREGISTERED_GENESIS_VECTOR } from "../src/vectors/genesis-registration.js";
 
 const here = dirname(fileURLToPath(import.meta.url));
 const fixturesDir = resolve(here, "../../../..", "contracts", "fixtures");
@@ -186,21 +187,41 @@ test("a PARTIAL vector names exactly the lines that are unregistered (EV-7, EV-1
   }
 });
 
-test("no vector freezes a verdict for an unregistered genesis version", () => {
-  // An unregistered genesis version leaves a verifier unable to extract
-  // operator_pk/registrar_pk, so Stage B on later events is undefined. That is
-  // an open question; freezing any verdict for it here would foreclose it —
-  // including via the EV-19 reserved range, which is why this check admits
-  // version 1 alone and is not relaxed by the reservation above.
-  for (const vec of vectors) {
-    for (const { type, version } of refsOf(vec.id, vec.bytes)) {
-      if (type === "genesis") {
-        assert.equal(
-          version,
-          1,
-          `${vec.id} carries a genesis at version ${String(version)}`,
-        );
-      }
-    }
-  }
+test("exactly one vector carries an unregistered genesis version (EV-20)", () => {
+  // INVERTED, not deleted. This check used to admit version 1 alone, because an
+  // unregistered genesis version was an OPEN question — EV-9's PARTIAL sentence
+  // and EV-20 gave different verdicts for it — and any fixture would have frozen
+  // one of the two readings before it was chosen. That is closed: ADR-0015
+  // decided INVALID at line 1, EV-20 specified it, and evolution.md v5 conformed
+  // EV-9's sentence to it.
+  //
+  // What stays is the reason the guard existed. EV-20 is the SOLE exception to
+  // EV-8, so exactly one vector may exercise it and every other vector must
+  // still carry a version-1 genesis. Deleting the check would let a future
+  // PARTIAL vector freeze a verdict EV-20 forbids; relaxing it to "any version
+  // in the EV-19 reserved range" would allow the same thing while looking
+  // principled. Scoping it to one id is what keeps it a guard.
+  const carriers = vectors
+    .filter((vec) =>
+      refsOf(vec.id, vec.bytes).some(
+        ({ type, version }) => type === "genesis" && version !== 1,
+      ),
+    )
+    .map((vec) => vec.id);
+
+  assert.deepEqual(
+    carriers,
+    [UNREGISTERED_GENESIS_VECTOR],
+    `only ${UNREGISTERED_GENESIS_VECTOR} may carry a genesis at a version other than 1 (EV-20); found [${carriers.join(", ")}]`,
+  );
+});
+
+test(`${UNREGISTERED_GENESIS_VECTOR} declares INVALID at line 1 (EV-20)`, () => {
+  // The other half of the pair above. Without this, the scoped exception admits
+  // the vector by id while saying nothing about what it asserts — so a later
+  // edit could turn the one permitted unregistered-genesis vector into a PARTIAL
+  // and the guard would still pass, which is the exact outcome it exists to stop.
+  const vec = vectors.find((v) => v.id === UNREGISTERED_GENESIS_VECTOR);
+  assert.ok(vec, `${UNREGISTERED_GENESIS_VECTOR} is missing from the table`);
+  assert.deepEqual(vec.expect, { verdict: "INVALID", line: 1 });
 });

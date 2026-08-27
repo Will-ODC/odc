@@ -122,7 +122,7 @@
         "EV-8",
         "EV-19"
       ],
-      "note": "A registered type at an unregistered version — the half of the registry key EV-18 cannot reach, since only a registered type name can exercise it. The version is in the range EV-19 reserves, so no future contracts version may ever register it and contradict this frozen verdict. Deliberately NOT genesis: an unregistered genesis version would leave a verifier unable to extract operator_pk/registrar_pk for Stage B at all, an unresolved question that must not be frozen into a fixture."
+      "note": "A registered type at an unregistered version — the half of the registry key EV-18 cannot reach, since only a registered type name can exercise it. The version is in the range EV-19 reserves, so no future contracts version may ever register it and contradict this frozen verdict. Deliberately NOT genesis, and the pairing is the point: an unregistered version on an ordinary type is PARTIAL under EV-8, while the same fault on genesis is INVALID at line 1 under EV-20, because genesis is the one event whose payload every later signature check depends on. 095 is that vector, and 009 is the control that shows EV-20 is a carve-out for genesis rather than a general rule about unregistered versions."
     },
     {
       "id": "010-unregistered-type-empty-payload",
@@ -1199,6 +1199,23 @@
         "ET-17"
       ],
       "note": "A fork that goes on to have a life: the same ancestry-bearing genesis as 085, followed by one event of each remaining v1 type. It pins the sentence in ET-9e that says a fork's own structure is unchanged by either key — seq is still 1 and prev_hash is still the 64-zero anchor at the genesis (ET-6, ES-24, ES-33), exactly as on an original chain, and every later event links and verifies normally under the keys this genesis declares. The failure it catches is a verifier that treats a recorded ancestor as a reason to expect continuation — a non-zero prev_hash at line 1, or a seq continuing the parent's — which would make every real fork INVALID."
+    },
+    {
+      "id": "095-genesis-unregistered-version",
+      "export": "vectors/095-genesis-unregistered-version.ndjson",
+      "expect": {
+        "verdict": "INVALID",
+        "line": 1
+      },
+      "cites": [
+        "EV-20",
+        "EV-9",
+        "EV-15",
+        "EV-19",
+        "ES-9",
+        "ES-11"
+      ],
+      "note": "A well-formed genesis at the version EV-19 reserves. Every Stage A check passes — the line is canonical, seq is 1, prev_hash is the 64-zero anchor, and the hash covers the payload and matches — and the payload satisfies ES-10 and ES-15-ES-17, so nothing structural is wrong with it. The ONLY fault is that (genesis, 1000000) is not a pair this verifier registers, which under EV-20 is INVALID at line 1 rather than the PARTIAL that EV-8's forward-compatibility posture would otherwise give it. The version is EV-19's reserved value exactly, so no future contracts version can ever register it and contradict this frozen verdict; the payload is the ordinary four-key genesis so that the unregistered version is the only thing a reader has to weigh. Note what this vector does NOT assert: EV-21's reason text distinguishing 'this verifier is out of date' from 'this genesis is corrupt' is advisory and deliberately fixture-free (EV-17), so conformance here is the token and the line number alone."
     }
   ]
 }

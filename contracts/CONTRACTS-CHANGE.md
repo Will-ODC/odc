@@ -19,6 +19,59 @@ Format (newest first, one entry per merged contracts change):
 
 ---
 
+## evolution.md v5 · fixtures/ vector 095 — 2026-08-26 — EV-9 stops contradicting EV-20
+
+**No decision is made here.** ADR-0015 decided this on 2026-08-15 — a `genesis`
+at an unregistered `(type, version)` is `INVALID` at line 1 — and EV-20/EV-21
+specified it. What never happened is conforming **EV-9** to that decision, so a
+normative sentence went on saying the opposite for as long as EV-20 has existed.
+
+**The defect.** When EV-20 landed, **EV-8 gained an inline carve-out and EV-9 did
+not.** EV-9's `PARTIAL` sentence still read, without exception, that a well-formed
+unregistered pair gets "the per-event `PARTIAL` treatment … **not** a structural
+`INVALID`" — and the rule calls itself "the authoritative reconciliation", which
+invites a reader to stop there. For a well-formed `(genesis, 1000000)` at line 1,
+EV-20 says `INVALID` and that sentence said `PARTIAL`: a **verdict** difference,
+not a line-number one. This is the ADR-0019 shape exactly — an exception applied
+to one sentence and not its neighbour — found a second time in the same file.
+
+**Both halves were already reconcilable, which is why it survived review.** EV-15
+ends by assigning line-1 registration to Stage A by name, and EV-9's own next
+sentence makes a Stage A failure `INVALID`. A reader who follows that chain
+reaches EV-20 unaided; a reader who stops at the `PARTIAL` sentence does not. The
+amendment states the exception rather than leaving it derivable.
+
+- **EV-9's `PARTIAL` sentence takes EV-8's carve-out verbatim** — "with the
+  single exception of a chain's `genesis` at line 1, which is `INVALID` (EV-20)".
+- **Its Stage A sentence now names why** the exception is not a further carve-out:
+  at line 1 the registration check is itself Stage A (EV-15, EV-20), so the
+  existing clause already reaches the case.
+- **Its authority claim is scoped** — "does not override EV-20". EV-9 only ever
+  claimed to reconcile the T3 sentences (ES-9/ES-11, ET-1/ET-2); it read broader
+  than it was.
+- **No verdict changes on any committed vector.** Both verifiers already report
+  `INVALID` at line 1 citing EV-20, on a bare unregistered genesis and on the
+  audit's multi-line `downgrade` shape. The `INVALID`-at-line-**2** convergence
+  ADR-0015 recorded — reached by both with no rule behind it — is gone.
+
+**Vector `095-genesis-unregistered-version`** (INVALID line 1) is the golden data
+EV-5 requires, at EV-19's reserved version exactly. It could not be written
+before now: `fixtures-gen`'s conformance suite carried a guard asserting that no
+vector anywhere holds a genesis above version 1, precisely so no fixture could
+freeze one reading while the two sentences disagreed. **That guard is inverted,
+not deleted, and scoped to this vector's id** — plus a second assertion that this
+vector declares `INVALID` line 1, since an id-scoped exception otherwise says
+nothing about what the admitted vector asserts. Deleting the guard would let a
+future `PARTIAL` vector freeze a verdict EV-20 forbids; relaxing it to "any
+reserved version" would do the same while looking principled.
+
+**One `note` in `index.json` is corrected, and this is the last moment it can
+be.** Vector `009`'s note claimed an unregistered genesis version was "an
+unresolved question that must not be frozen into a fixture". It is resolved, and
+`contracts-guard` freezes note prose at the tag (ADR-0008). `009` is now
+described as what it has become: the **control** showing EV-20 is a carve-out for
+`genesis` rather than a general rule about unregistered versions.
+
 ## fixtures/ — vectors 084–094 — 2026-08-26 — fork ancestry, ES-34 and ET-9d get golden data
 
 **No spec text changed. This is fixture data only, and it is purely additive** —
