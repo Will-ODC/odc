@@ -26,6 +26,8 @@ export interface SwipeBallotProps {
   /** Always a two-choice, one-answer poll. `App` picks this screen for those. */
   poll: Poll;
   onAnswered: (next: string | null) => void;
+  /** Absent on the first question of a run - see `BallotChrome`. */
+  onBack?: (() => void) | undefined;
 }
 
 /**
@@ -34,7 +36,12 @@ export interface SwipeBallotProps {
  * Each side previews the question it opens, because answering here is also
  * choosing where the run goes next.
  */
-export function SwipeBallot({ api, poll, onAnswered }: SwipeBallotProps) {
+export function SwipeBallot({
+  api,
+  poll,
+  onAnswered,
+  onBack,
+}: SwipeBallotProps) {
   const { state, cast } = useCastVote(api, poll.id);
   const [lean, setLean] = useState<Lean>(AT_REST);
   const drag = useRef<{ from: number; moved: boolean } | null>(null);
@@ -148,7 +155,7 @@ export function SwipeBallot({ api, poll, onAnswered }: SwipeBallotProps) {
       </div>
 
       <div className="ballot__content">
-        <BallotChrome poll={poll} />
+        <BallotChrome poll={poll} {...(onBack ? { onBack } : {})} />
         {state.status === "failed" ? <Refusal message={state.message} /> : null}
 
         {settled ? (
