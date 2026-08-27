@@ -14,10 +14,12 @@
 //
 // 009 needs EV-19 and cannot be written under EV-18 alone. The unregistered-
 // version path can only be exercised by a REGISTERED type name, which is exactly
-// what EV-18's x_ obligation forbids. It also deliberately does not use genesis:
-// an unregistered genesis version leaves a verifier unable to extract
-// operator_pk/registrar_pk at all, an open question a frozen fixture would
-// foreclose (memory/OPEN-QUESTIONS.md).
+// what EV-18's x_ obligation forbids. It also deliberately does not use genesis
+// — but the reason has CHANGED, and the old reason must not be repeated: an
+// unregistered genesis was once an open question no fixture could foreclose, and
+// it is now settled the other way (ADR-0015, EV-20, evolution.md v5). Genesis
+// stays out of THIS module because its verdict is INVALID, not PARTIAL; it has
+// its own vector in `genesis-registration.ts`.
 import { AX, ESC, chain, partial, type Vector } from "./shared.js";
 import { keypairFromSeed, seedOf } from "../encode.js";
 
@@ -42,7 +44,7 @@ export const unregisteredVectors: Vector[] = [
     }),
     [3],
     ["ET-2", "ET-2a", "EV-8", "EV-19"],
-    "A registered type at an unregistered version — the half of the registry key EV-18 cannot reach, since only a registered type name can exercise it. The version is in the range EV-19 reserves, so no future contracts version may ever register it and contradict this frozen verdict. Deliberately NOT genesis: an unregistered genesis version would leave a verifier unable to extract operator_pk/registrar_pk for Stage B at all, an unresolved question that must not be frozen into a fixture.",
+    "A registered type at an unregistered version — the half of the registry key EV-18 cannot reach, since only a registered type name can exercise it. The version is in the range EV-19 reserves, so no future contracts version may ever register it and contradict this frozen verdict. Deliberately NOT genesis, and the pairing is the point: an unregistered version on an ordinary type is PARTIAL under EV-8, while the same fault on genesis is INVALID at line 1 under EV-20, because genesis is the one event whose payload every later signature check depends on. 095 is that vector, and 009 is the control that shows EV-20 is a carve-out for genesis rather than a general rule about unregistered versions.",
   ),
   partial(
     "010-unregistered-type-empty-payload",

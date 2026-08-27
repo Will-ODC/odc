@@ -190,9 +190,26 @@ function genesisViolations(
   // both faults sit on the same line, and conformance is the verdict token and
   // the line number only (EV-17), so a per-key breakdown would be a distinction
   // no vector can assert.
+  //
+  // But `reconcile` is not only a conformance device — it is what stops a
+  // vector's NOTE from lying, and notes freeze at the tag (ADR-0008). Every
+  // ancestry note leans on isolation ("the zero value is the ONLY fault"), and
+  // a payload with two illegal ancestry values would satisfy a declared
+  // ["ET-9e"] while shipping a note that isolates one. So the count is checked
+  // even though the rule id cannot express it: one ET-9e is reported, and more
+  // than one illegal value is refused outright.
   const illegal = (value: string | undefined): boolean =>
     value !== undefined && (!HEX64.test(value) || value === GENESIS_PREV_HASH);
-  if (illegal(ancestorChain) || illegal(ancestorHead)) out.push("ET-9e");
+  const illegalCount = [ancestorChain, ancestorHead].filter(illegal).length;
+  if (illegalCount > 1) {
+    throw new Error(
+      `genesis(...) carries ${String(illegalCount)} illegal ancestry values. ET-9e is reported ` +
+        `once for the whole payload (EV-17: the verdict and line are identical either way), so a ` +
+        `two-fault payload would pass reconcile while its note claims to isolate one rule. Build ` +
+        `one fault per vector, or add a rule id that can express the combination.`,
+    );
+  }
+  if (illegalCount > 0) out.push("ET-9e");
   if (ancestorHead !== undefined && ancestorChain === undefined) {
     out.push("ET-9f");
   }

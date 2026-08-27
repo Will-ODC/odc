@@ -10,9 +10,12 @@ import (
 
 // ET-9d — the two genesis keys MUST be distinct.
 //
-// contracts/fixtures/ ships no vector for this rule (all 82 genesis payloads
-// across the 83 vectors declare distinct keys), so these tests are synthetic
-// and carry the same harness caveat stated in genesis_ancestry_test.go: the
+// contracts/fixtures/ NOW ships a vector for this rule — 094-genesis-keys-equal,
+// INVALID at line 1 — which it did not when these tests were written, and which
+// is the real conformance oracle (EV-17). These stay because they are
+// differential rather than golden: they vary one field across otherwise
+// identical chains, which a single frozen vector cannot do. They carry the same
+// harness caveat stated in genesis_ancestry_test.go: the
 // chains are built by the same hashing and signing code they are checked
 // against, so a VALID verdict here pins nothing about the preimage. What each
 // case shows is differential — one edit to an otherwise identical chain.

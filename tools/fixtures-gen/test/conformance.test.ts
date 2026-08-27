@@ -13,6 +13,7 @@ import { test } from "node:test";
 import { fileURLToPath } from "node:url";
 
 import { vectors, type Expect } from "../src/vectors/index.js";
+import { UNREGISTERED_GENESIS_VECTORS } from "../src/vectors/genesis-registration.js";
 
 const here = dirname(fileURLToPath(import.meta.url));
 const fixturesDir = resolve(here, "../../../..", "contracts", "fixtures");
@@ -186,21 +187,65 @@ test("a PARTIAL vector names exactly the lines that are unregistered (EV-7, EV-1
   }
 });
 
-test("no vector freezes a verdict for an unregistered genesis version", () => {
-  // An unregistered genesis version leaves a verifier unable to extract
-  // operator_pk/registrar_pk, so Stage B on later events is undefined. That is
-  // an open question; freezing any verdict for it here would foreclose it —
-  // including via the EV-19 reserved range, which is why this check admits
-  // version 1 alone and is not relaxed by the reservation above.
-  for (const vec of vectors) {
-    for (const { type, version } of refsOf(vec.id, vec.bytes)) {
-      if (type === "genesis") {
-        assert.equal(
-          version,
-          1,
-          `${vec.id} carries a genesis at version ${String(version)}`,
-        );
-      }
-    }
+test("only the named vectors carry an unregistered genesis version (EV-20)", () => {
+  // INVERTED, not deleted. This check used to admit version 1 alone, because an
+  // unregistered genesis version was an OPEN question — EV-9's PARTIAL sentence
+  // and EV-20 gave different verdicts for it — and any fixture would have frozen
+  // one of the two readings before it was chosen. That is closed: ADR-0015
+  // decided INVALID at line 1, EV-20 specified it, and evolution.md v5 conformed
+  // EV-9's sentence to it.
+  //
+  // What stays is the reason the guard existed. EV-20 is the SOLE exception to
+  // EV-8, so exactly one vector may exercise it and every other vector must
+  // still carry a version-1 genesis. Deleting the check would let a future
+  // PARTIAL vector freeze a verdict EV-20 forbids; relaxing it to "any version
+  // in the EV-19 reserved range" would allow the same thing while looking
+  // principled. Scoping it to one id is what keeps it a guard.
+  const carriers = vectors
+    .filter((vec) =>
+      refsOf(vec.id, vec.bytes).some(
+        ({ type, version }) => type === "genesis" && version !== 1,
+      ),
+    )
+    .map((vec) => vec.id);
+
+  // A literal list, deliberately, rather than a predicate over ids or a count.
+  // A predicate is what lets the exception widen by accident; adding an id here
+  // is a decision someone has to write down.
+  assert.deepEqual(
+    carriers,
+    [...UNREGISTERED_GENESIS_VECTORS],
+    `only [${UNREGISTERED_GENESIS_VECTORS.join(", ")}] may carry a genesis at a version other than 1 (EV-20); found [${carriers.join(", ")}]`,
+  );
+});
+
+test("every permitted unregistered-genesis vector declares INVALID at line 1 (EV-20)", () => {
+  // The other half of the pair above. Without this, the scoped exception admits
+  // vectors by id while saying nothing about what they assert — so a later edit
+  // could turn a permitted unregistered-genesis vector into a PARTIAL and the
+  // guard would still pass, which is the exact outcome it exists to stop.
+  for (const id of UNREGISTERED_GENESIS_VECTORS) {
+    const vec = vectors.find((v) => v.id === id);
+    assert.ok(vec, `${id} is missing from the table`);
+    assert.deepEqual(vec.expect, { verdict: "INVALID", line: 1 }, id);
   }
+});
+
+test("an unregistered genesis is fixtured both alone and with a line after it", () => {
+  // ADR-0015 asks for a chain whose genesis is unregistered AND is "followed by
+  // at least one later event at a registered version", because the defect it
+  // records is a LINE ATTRIBUTION one: both verifiers once reported INVALID at
+  // line 2, blaming the first signature they could not check rather than the
+  // genesis that made it uncheckable. A one-line export has no line 2 to blame,
+  // so it cannot tell the two behaviours apart. Pinned here so the multi-line
+  // vector cannot be dropped as a duplicate of the single-line one.
+  const lineCounts = UNREGISTERED_GENESIS_VECTORS.map(
+    (id) =>
+      refsOf(id, vectors.find((v) => v.id === id)?.bytes ?? Buffer.alloc(0))
+        .length,
+  );
+  assert.ok(
+    lineCounts.includes(1) && lineCounts.some((n) => n > 1),
+    `the unregistered-genesis vectors must cover both a bare genesis and a genesis with a later event (ADR-0015); line counts are [${lineCounts.join(", ")}]`,
+  );
 });
