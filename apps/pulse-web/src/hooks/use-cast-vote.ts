@@ -1,44 +1,44 @@
 import { useCallback, useState } from "react";
 import type { PulseApi } from "../api/types.js";
 import { ApiError } from "../api/types.js";
-import type { Side } from "../flow/swipe.js";
-import { ballotFor } from "../flow/swipe.js";
 
 /**
- * Casting one swipe.
+ * Casting one answer.
  *
- * The side is carried through `casting` and into `counted` so the screen can
- * keep showing which way the person swiped while the request is in flight,
- * rather than snapping back and then forward again.
+ * By choice position, not by side: a swipe and a list are two ways of picking
+ * the same thing, and only the swipe has sides. The chosen position is carried
+ * through `casting` and into `counted` so a screen can keep showing what was
+ * picked while the request is in flight, rather than snapping back and then
+ * forward again.
  */
 export type CastState =
   | { status: "idle" }
-  | { status: "casting"; side: Side }
+  | { status: "casting"; choice: number }
   /** `changed` when this replaced an earlier answer to the same poll. */
-  | { status: "counted"; side: Side; changed: boolean }
+  | { status: "counted"; choice: number; changed: boolean }
   | { status: "closed" }
   | { status: "failed"; message: string };
 
 export interface CastVote {
   state: CastState;
-  cast: (side: Side) => void;
+  cast: (choice: number) => void;
 }
 
 /**
  * Refusing a second press is the screen's job, not this hook's: the screen is
- * what knows the swipe is over and stops offering the sides. A guard here as
- * well was a second copy of that rule that no test could reach — deleting
- * either one left the suite green, which is the shape this codebase has
- * already had to remove once (PR #91).
+ * what knows the answer is given and stops offering the choices. A guard here
+ * as well was a second copy of that rule that no test could reach - deleting
+ * either one left the suite green, which is the shape this codebase has already
+ * had to remove once (PR #91).
  */
 export function useCastVote(api: PulseApi, pollId: string): CastVote {
   const [state, setState] = useState<CastState>({ status: "idle" });
 
   const cast = useCallback(
-    (side: Side) => {
-      setState({ status: "casting", side });
+    (choice: number) => {
+      setState({ status: "casting", choice });
 
-      api.cast(pollId, ballotFor(side)).then(
+      api.cast(pollId, [choice]).then(
         (outcome) => {
           if (outcome.status === "closed") {
             setState({ status: "closed" });
@@ -46,7 +46,7 @@ export function useCastVote(api: PulseApi, pollId: string): CastVote {
           }
           setState({
             status: "counted",
-            side,
+            choice,
             changed: outcome.status === "changed",
           });
         },
@@ -59,13 +59,11 @@ export function useCastVote(api: PulseApi, pollId: string): CastVote {
   return { state, cast };
 }
 
-/** The sentence to show for a refusal. */
+/**
+ * The sentence to show for a refusal. The server's own sentence where it sent
+ * one - every refusal from this API is already written to be shown as-is.
+ */
 function reason(err: unknown): string {
-  // 401 is the one refusal that is not a fault: the server takes a vote only
-  // from someone it knows, and nothing has signed this person in yet.
-  if (err instanceof ApiError && err.status === 401) {
-    return "We could not count that yet — this ballot needs you signed in first.";
-  }
   if (err instanceof ApiError) return err.message;
   return "We could not reach the ballot. Check your connection and try again.";
 }

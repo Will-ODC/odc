@@ -19,9 +19,42 @@ export interface Poll {
   /** Ordered; a ballot references positions in this array, never the text. */
   choices: string[];
   method: PollMethod;
+  /**
+   * The poll each choice opens next, position for position with `choices`, and
+   * `null` where that choice ends the run. Answering is also navigating.
+   */
+  next: (string | null)[];
+  /** Whether people may add options of their own to this poll. */
+  acceptsSuggestions: boolean;
   /** ISO timestamp, or null when the poll has no closing time. */
   closesAt: string | null;
   open: boolean;
+}
+
+/**
+ * An option someone added themselves.
+ *
+ * Not a choice on the ballot: choices are answered by position, so adding one
+ * mid-poll would change what earlier ballots meant. Suggestions are counted on
+ * their own, and nothing records who made one.
+ */
+export interface Suggestion {
+  id: string;
+  text: string;
+  /** How many people have said something like it. */
+  count: number;
+}
+
+/**
+ * What came of adding one. Near-duplicates are folded together and never
+ * refused — `seconded` means someone had already said it and their wording
+ * keeps the floor. `related` is what came close without folding in, shown so a
+ * person can see they are near an existing idea.
+ */
+export interface SuggestResult {
+  status: "added" | "seconded";
+  suggestion: Suggestion;
+  related: Suggestion[];
 }
 
 /** One person's answer. Always an array — one entry for `single`. */
@@ -80,6 +113,8 @@ export interface PulseApi {
    */
   signOut(): Promise<void>;
   poll(pollId: string): Promise<Poll>;
+  suggestions(pollId: string): Promise<Suggestion[]>;
+  suggest(pollId: string, text: string): Promise<SuggestResult>;
   myBallot(pollId: string): Promise<Ballot | null>;
   results(pollId: string): Promise<Results>;
   cast(pollId: string, ballot: Ballot): Promise<CastOutcome>;

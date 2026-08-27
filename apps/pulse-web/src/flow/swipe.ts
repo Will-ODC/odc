@@ -30,6 +30,13 @@ export function ballotFor(side: Side): Ballot {
   return [choiceFor(side)];
 }
 
+/** The side a choice sits on, or undefined for a poll no swipe can answer. */
+export function sideOfChoice(choice: number): Side | undefined {
+  if (choice === 0) return "left";
+  if (choice === 1) return "right";
+  return undefined;
+}
+
 export interface Lean {
   /** Which way the drag is going, or null while it is still at rest. */
   side: Side | null;

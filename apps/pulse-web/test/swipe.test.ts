@@ -16,6 +16,8 @@ const poll = (over: Partial<Poll> = {}): Poll => ({
   question: "Should the ODC stay free of paid ads?",
   choices: ["No", "Yes"],
   method: "single",
+  next: [null, null],
+  acceptsSuggestions: false,
   closesAt: null,
   open: true,
   ...over,

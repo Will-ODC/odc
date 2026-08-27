@@ -11,9 +11,9 @@ import { App } from "./App.js";
 const root = document.getElementById("root");
 if (!root) throw new Error("index.html is missing #root");
 
-// `?poll=` so a second seeded poll can be opened without a rebuild. The dev
-// server seeds `p1`.
-const pollId = new URLSearchParams(location.search).get("poll") ?? "p1";
+// `?poll=` so a run can be started anywhere in the graph without a rebuild.
+// `ads-free` is where the dev server's run begins.
+const pollId = new URLSearchParams(location.search).get("poll") ?? "ads-free";
 
 createRoot(root).render(
   <StrictMode>

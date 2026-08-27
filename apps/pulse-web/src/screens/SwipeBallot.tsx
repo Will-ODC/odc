@@ -3,40 +3,39 @@ import type { CSSProperties, PointerEvent as ReactPointerEvent } from "react";
 import type { Poll, PulseApi } from "../api/types.js";
 import type { Lean, Side } from "../flow/swipe.js";
 import {
-  COMMIT_DISTANCE,
-  isSwipeable,
+  choiceFor,
   leanOf,
   releaseOf,
+  sideOfChoice,
   sideOfKey,
 } from "../flow/swipe.js";
-import { usePoll } from "../hooks/use-poll.js";
 import { useCastVote } from "../hooks/use-cast-vote.js";
-import type { ViewData } from "../hooks/view-data.js";
-import { ViewState } from "../components/ViewState.js";
+import { edgesOf, useNextQuestions } from "../hooks/use-next-questions.js";
+import { BallotChrome } from "../components/BallotChrome.js";
+import { Outcome } from "../components/Outcome.js";
+import { Refusal } from "../components/Refusal.js";
 import "./SwipeBallot.css";
 
 const AT_REST: Lean = { side: null, strength: 0 };
 
-/** A drag shorter than this is a tap that wobbled, not a drag. */
+/** A press that travelled less than this is a tap that wobbled, not a drag. */
 const DRAG_SLOP = 4;
 
 export interface SwipeBallotProps {
   api: PulseApi;
-  pollId: string;
-  /**
-   * The question each side opens next, left first.
-   *
-   * Pulse is meant to be a graph of linked votes rather than one poll, but
-   * nothing on the server models that link yet. Passing the two questions in
-   * keeps the screen able to show the graph without inventing a field the API
-   * does not have.
-   */
-  nextQuestions?: readonly [string, string];
+  /** Always a two-choice, one-answer poll. `App` picks this screen for those. */
+  poll: Poll;
+  onAnswered: (next: string | null) => void;
 }
 
-export function SwipeBallot({ api, pollId, nextQuestions }: SwipeBallotProps) {
-  const loaded = usePoll(api, pollId);
-  const { state, cast } = useCastVote(api, pollId);
+/**
+ * The opening ballot: one question, two sides, answered by swiping.
+ *
+ * Each side previews the question it opens, because answering here is also
+ * choosing where the run goes next.
+ */
+export function SwipeBallot({ api, poll, onAnswered }: SwipeBallotProps) {
+  const { state, cast } = useCastVote(api, poll.id);
   const [lean, setLean] = useState<Lean>(AT_REST);
   const drag = useRef<{ from: number; moved: boolean } | null>(null);
   /**
@@ -49,16 +48,7 @@ export function SwipeBallot({ api, pollId, nextQuestions }: SwipeBallotProps) {
    * first-time voter is told their answer replaced an earlier one.
    */
   const gestureDecided = useRef(false);
-
-  // A poll this screen cannot ask is not a fault and not a blank — it is a
-  // sentence saying so, which is what `empty` is for.
-  const data: ViewData<Poll> =
-    loaded.status === "ready" && !isSwipeable(loaded.value)
-      ? {
-          status: "empty",
-          message: "This question takes more than a yes or a no.",
-        }
-      : loaded;
+  const nextQuestions = useNextQuestions(api, edgesOf(poll.next));
 
   const settled =
     state.status === "casting" ||
@@ -66,12 +56,12 @@ export function SwipeBallot({ api, pollId, nextQuestions }: SwipeBallotProps) {
     state.status === "closed";
   const chosen =
     state.status === "casting" || state.status === "counted"
-      ? state.side
+      ? (sideOfChoice(state.choice) ?? null)
       : null;
 
   function commit(side: Side) {
     setLean({ side, strength: 1 });
-    cast(side);
+    cast(choiceFor(side));
   }
 
   /**
@@ -157,106 +147,49 @@ export function SwipeBallot({ api, pollId, nextQuestions }: SwipeBallotProps) {
         <span className="ballot__tint-right" />
       </div>
 
-      <ViewState data={data}>
-        {(poll) => (
-          <>
-            <div className="ballot__content" hidden={settled}>
-              <header className="ballot__head">
-                <div className="ballot__brand">
-                  <i aria-hidden="true" /> pulse
-                </div>
-                <PrivacyMark />
-                <span className="ballot__chip">{chipFor(poll)}</span>
-                <h1 className="ballot__question">{poll.question}</h1>
-              </header>
+      <div className="ballot__content" hidden={settled}>
+        <BallotChrome poll={poll} />
+        {state.status === "failed" ? <Refusal message={state.message} /> : null}
 
-              <div
-                className="ballot__split"
-                onPointerDown={onPointerDown}
-                onPointerMove={onPointerMove}
-                onPointerUp={onPointerUp}
-                onPointerCancel={() => {
-                  drag.current = null;
-                  setLean(AT_REST);
-                }}
-              >
-                <Chevron side="left" />
-                <Chevron side="right" />
-                <Half
-                  side="left"
-                  label={poll.choices[0] ?? ""}
-                  question={poll.question}
-                  {...(nextQuestions ? { next: nextQuestions[0] } : {})}
-                  onPick={() => pick("left")}
-                />
-                <Half
-                  side="right"
-                  label={poll.choices[1] ?? ""}
-                  question={poll.question}
-                  {...(nextQuestions ? { next: nextQuestions[1] } : {})}
-                  onPick={() => pick("right")}
-                />
-              </div>
-            </div>
+        <div
+          className="ballot__split"
+          onPointerDown={onPointerDown}
+          onPointerMove={onPointerMove}
+          onPointerUp={onPointerUp}
+          onPointerCancel={() => {
+            drag.current = null;
+            setLean(AT_REST);
+          }}
+        >
+          <Chevron side="left" />
+          <Chevron side="right" />
+          {(["left", "right"] as const).map((side) => (
+            <Half
+              key={side}
+              side={side}
+              label={poll.choices[choiceFor(side)] ?? ""}
+              question={poll.question}
+              next={nextQuestions[choiceFor(side)]}
+              onPick={() => pick(side)}
+            />
+          ))}
+        </div>
+      </div>
 
-            {settled ? (
-              <div className="ballot__done" role="status" aria-live="polite">
-                <Outcome
-                  poll={poll}
-                  state={state}
-                  {...(nextQuestions ? { nextQuestions } : {})}
-                />
-              </div>
-            ) : null}
-          </>
-        )}
-      </ViewState>
-
-      {state.status === "failed" ? (
-        <div className="ballot__done" role="alert">
-          <b>{state.message}</b>
+      {settled ? (
+        <div className="ballot__done">
+          <Outcome
+            state={state}
+            label={chosen ? (poll.choices[choiceFor(chosen)] ?? "") : ""}
+            hasNext={chosen ? poll.next[choiceFor(chosen)] !== null : false}
+            nextQuestion={chosen ? nextQuestions[choiceFor(chosen)] : undefined}
+            onNext={() =>
+              onAnswered(chosen ? (poll.next[choiceFor(chosen)] ?? null) : null)
+            }
+          />
         </div>
       ) : null}
     </section>
-  );
-}
-
-function Outcome({
-  poll,
-  state,
-  nextQuestions,
-}: {
-  poll: Poll;
-  state: ReturnType<typeof useCastVote>["state"];
-  nextQuestions?: readonly [string, string];
-}) {
-  if (state.status === "closed") {
-    return (
-      <>
-        <b>This one has closed.</b>
-        <span>You can still see where it landed.</span>
-      </>
-    );
-  }
-  if (state.status !== "casting" && state.status !== "counted") return null;
-
-  const label = poll.choices[state.side === "left" ? 0 : 1] ?? "";
-  const next = nextQuestions?.[state.side === "left" ? 0 : 1];
-
-  return (
-    <>
-      <div className="ballot__mark" aria-hidden="true">
-        ✓
-      </div>
-      <b>{label}</b>
-      <span>
-        {state.status === "casting"
-          ? "Sending…"
-          : state.changed
-            ? `That replaces your earlier answer.${next ? ` Next: ${next}` : ""}`
-            : `Counted.${next ? ` Next: ${next}` : ""}`}
-      </span>
-    </>
   );
 }
 
@@ -270,14 +203,14 @@ function Half({
   side: Side;
   label: string;
   question: string;
-  next?: string;
+  next: string | undefined;
   onPick: () => void;
 }) {
   return (
     <button
       type="button"
       className={`ballot__half ballot__half--${side}`}
-      aria-label={`${label} — ${question}`}
+      aria-label={`${label} - ${question}`}
       onClick={onPick}
     >
       <span className="ballot__word">{label}</span>
@@ -310,71 +243,3 @@ function Chevron({ side }: { side: Side }) {
     </svg>
   );
 }
-
-/** The incognito motif: this vote is yours, and stays that way. */
-function PrivacyMark() {
-  return (
-    <svg
-      width="92"
-      height="83"
-      viewBox="0 0 132 120"
-      fill="none"
-      aria-hidden="true"
-    >
-      <path
-        d="M44 62 C44 34 55 26 66 26 C77 26 88 34 88 62 Z"
-        fill="rgba(255,255,255,.92)"
-      />
-      <ellipse cx="66" cy="63" rx="46" ry="8.5" fill="rgba(255,255,255,.92)" />
-      <path
-        d="M30 80 h10"
-        stroke="rgba(255,255,255,.8)"
-        strokeWidth="2.5"
-        strokeLinecap="round"
-      />
-      <path
-        d="M92 80 h10"
-        stroke="rgba(255,255,255,.8)"
-        strokeWidth="2.5"
-        strokeLinecap="round"
-      />
-      <rect
-        x="38"
-        y="74"
-        width="26"
-        height="18"
-        rx="9"
-        fill="rgba(255,255,255,.12)"
-        stroke="rgba(255,255,255,.85)"
-        strokeWidth="2.5"
-      />
-      <rect
-        x="68"
-        y="74"
-        width="26"
-        height="18"
-        rx="9"
-        fill="rgba(255,255,255,.12)"
-        stroke="rgba(255,255,255,.85)"
-        strokeWidth="2.5"
-      />
-      <path
-        d="M64 81 h4"
-        stroke="rgba(255,255,255,.85)"
-        strokeWidth="2.5"
-        strokeLinecap="round"
-      />
-    </svg>
-  );
-}
-
-/** "Official Ballot", and when it closes if the poll says. */
-function chipFor(poll: Poll): string {
-  if (!poll.closesAt) return "Official Ballot";
-  const closes = new Date(poll.closesAt);
-  if (Number.isNaN(closes.getTime())) return "Official Ballot";
-  const day = closes.toLocaleDateString(undefined, { weekday: "long" });
-  return `Official Ballot · Closes ${day}`;
-}
-
-export { COMMIT_DISTANCE };
