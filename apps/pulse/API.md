@@ -72,9 +72,13 @@ every time after. There is no separate sign-up.
 ### `POST /api/sign-out`
 
 No body. Always answers `200 { "status": "signed_out" }`, whether or not anyone was
-signed in — asking to be signed out is not something to refuse. It clears the cookie
-**and** moves the voter's sessions-valid-from to now, so a copy of the cookie kept
-elsewhere stops working too.
+signed in — asking to be signed out is not something to refuse. It clears the session
+cookie **and** moves the voter's sessions-valid-from to now, so a copy of the cookie
+kept elsewhere stops working too.
+
+It also clears **`pulse_ballot`** — see "The ballot cookie" below. Signing out ends
+this browser's ability to read or change the vote it cast. The vote itself is not
+withdrawn; it stays counted under the identity that cast it.
 
 ### `GET /api/me`
 
@@ -114,8 +118,43 @@ entries are allowed, not the shape. A choice is referenced by its position in
 `choices`, never by its text.
 
 A vote is **changeable until the poll closes.** Casting again before close replaces
-the voter's ballot; there is no "already voted" refusal. This is a plain, mutable
+the ballot; there is no "already voted" refusal. This is a plain, mutable
 record — pulse is charter-exempt, so nothing here is append-only or hash-chained.
+
+Polls are a **graph**: `next` names, for each choice, the poll that answering that way
+opens. Answering is also navigating.
+
+### The ballot cookie, and why voting needs no session
+
+`pulse_ballot`, `HttpOnly`, `SameSite=Lax`, `Secure` (off only in local development),
+path `/`, 30 days. It is minted the first time this browser reads or casts a ballot.
+
+**A vote is filed under this cookie and under nothing else**, whether or not the
+person has ever given an address. Two consequences, both deliberate:
+
+- A vote counts the moment it is cast. Signing in afterwards **verifies** a person; it
+  is never how their vote is found, and it never gates the vote.
+- No stored record connects an address to an answer, because the vote was never
+  written down beside one.
+
+It is signed by the session signer, which is safe both ways round: presented as a
+session it names a voter that does not exist, and a session cookie presented as this
+one names the same person it already named.
+
+Deduplication is therefore per browser, which is weak on its own. That is the accepted
+trade for counting a vote before anyone has been asked for anything.
+
+**`POST /api/sign-out` clears this cookie too.** It has to. The cookie lasts thirty
+days and is the only thing a ballot is filed under, so a browser that kept it across a
+sign-out would hand the next person the previous person's ballot — to read, and to
+overwrite, since a second cast under the same identity _replaces_ rather than adds. On
+a shared or public machine that is the one way pulse can leak how somebody voted, and
+it is wider than the per-browser weakness above.
+
+The cost is accepted and worth stating plainly: signing in again mints a **new** ballot
+identity, so one person who votes, signs out, signs back in and votes again is counted
+**twice**. Pulse is counted-not-verified and already deduplicates only per browser;
+being double-counted is a smaller harm than being read.
 
 ### `GET /api/polls/:id`
 
@@ -124,14 +163,21 @@ this while moving through the story, and it reveals nothing about a person.
 
 ```json
 {
-  "id": "p1",
-  "question": "Where next?",
-  "choices": ["Park", "Library", "Rink"],
-  "method": "approval",
-  "closesAt": "2026-08-10T12:00:00.000Z",
+  "id": "ads-free",
+  "question": "Should the ODC stay free of paid ads?",
+  "choices": ["No", "Yes"],
+  "method": "single",
+  "next": ["ads-allowed", "pay-for-it"],
+  "acceptsSuggestions": false,
+  "closesAt": "2026-08-28T12:00:00.000Z",
   "open": true
 }
 ```
+
+`next` has one entry per choice, position for position, and `null` where that choice
+ends the run. Always the same length as `choices`.
+
+`acceptsSuggestions` says whether people may add options of their own — see below.
 
 `closesAt` is an ISO timestamp, or `null` when the poll has no closing time. `open`
 is the server's own reading of whether votes are still accepted, not a copy of a
@@ -172,24 +218,25 @@ legitimately **sum to more than 100** — that is correct and is not normalised 
 
 ### `GET /api/polls/:id/ballot`
 
-The signed-in voter's own current ballot, so the UI can show what they picked.
-Requires a session.
+This browser's own current ballot, so the UI can show what was picked. **No session
+required** — the ballot cookie is the identity, and one is minted if this browser has
+none yet.
 
 ```json
 { "ballot": [0, 2] }
 ```
 
-`ballot` is `null` when this voter has not voted on this poll.
+`ballot` is `null` when this browser has not voted on this poll.
 
-| Status | Body                  | When             |
-| ------ | --------------------- | ---------------- |
-| 200    | `{ ballot }`          | signed in        |
-| 401    | `error: "signed_out"` | no valid session |
-| 404    | `error: "not_found"`  | no such poll     |
+| Status | Body                 | When         |
+| ------ | -------------------- | ------------ |
+| 200    | `{ ballot }`         | always       |
+| 404    | `error: "not_found"` | no such poll |
 
 ### `POST /api/polls/:id/votes`
 
-Cast or change a ballot. Requires a session.
+Cast or change a ballot. **No session required**, on purpose — see the ballot cookie
+above.
 
 ```json
 { "ballot": [1, 2] }
@@ -221,8 +268,65 @@ When the poll has closed, the body is just `{ "status": "closed" }`.
 | 200    | `status: "closed"`                                  | the poll is past its closing time             |
 | 400    | `error: "bad_request"`                              | body has no ballot array of whole numbers     |
 | 400    | `error: "bad_ballot"`                               | the ballot is not a valid answer to this poll |
-| 401    | `error: "signed_out"`                               | no valid session                              |
 | 404    | `error: "not_found"`                                | no such poll                                  |
+
+## Options people add themselves
+
+Only on a poll whose `acceptsSuggestions` is true.
+
+A suggestion is **not** a choice on the ballot. Choices are addressed by position and a
+vote records that position, so adding one mid-poll would change what earlier ballots
+meant. Suggestions sit beside the poll, are counted on their own, and become choices
+only when someone opens a new poll on them.
+
+Nothing records who made one.
+
+### `GET /api/polls/:id/suggestions`
+
+Most-said first.
+
+```json
+{
+  "suggestions": [
+    { "id": "…", "text": "Charge the members", "count": 12 },
+    { "id": "…", "text": "Apply for grants", "count": 3 }
+  ]
+}
+```
+
+### `POST /api/polls/:id/suggestions`
+
+```json
+{ "text": "we could charge members" }
+```
+
+Near-duplicates are **folded together, never refused**. Two phrasings are the same
+idea when the words that carry meaning overlap enough; the first wording submitted
+keeps the floor and the count rises. Refusing a duplicate would only teach people to
+phrase around the check, which turns a list of options into a list of synonyms.
+
+```json
+{
+  "status": "seconded",
+  "suggestion": { "id": "…", "text": "Charge the members", "count": 2 },
+  "related": [{ "id": "…", "text": "Charge members once a year", "count": 1 }]
+}
+```
+
+`status` is `added` when nobody had said it and `seconded` when someone had. `related`
+is what came close without being close enough to fold in — shown so a person can see
+they are near an existing idea, not used to refuse them.
+
+| Status | Body                         | When                                      |
+| ------ | ---------------------------- | ----------------------------------------- |
+| 200    | `status: "added"`            | nobody had said it                        |
+| 200    | `status: "seconded"`         | someone had; the count rose               |
+| 400    | `error: "bad_request"`       | no `text` string in the body              |
+| 400    | `error: "bad_suggestion"`    | empty, all filler, or over 120 characters |
+| 409    | `error: "no_suggestions"`    | this poll has a fixed set of answers      |
+| 409    | `error: "closed"`            | the poll is past its closing time         |
+| 429    | `error: "too_many_requests"` | too many additions from one client        |
+| 404    | `error: "not_found"`         | no such poll                              |
 
 ## The client
 
