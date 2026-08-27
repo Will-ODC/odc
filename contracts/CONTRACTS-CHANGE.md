@@ -19,7 +19,7 @@ Format (newest first, one entry per merged contracts change):
 
 ---
 
-## evolution.md v5 · fixtures/ vector 095 — 2026-08-26 — EV-9 stops contradicting EV-20
+## evolution.md v5 · fixtures/ README v12 · vectors 095–098 — 2026-08-26 — EV-9 stops contradicting EV-20
 
 **No decision is made here.** ADR-0015 decided this on 2026-08-15 — a `genesis`
 at an unregistered `(type, version)` is `INVALID` at line 1 — and EV-20/EV-21
@@ -65,6 +65,28 @@ nothing about what the admitted vector asserts. Deleting the guard would let a
 future `PARTIAL` vector freeze a verdict EV-20 forbids; relaxing it to "any
 reserved version" would do the same while looking principled.
 
+**Three further vectors, all found by fresh-context review of this change.**
+
+- **`096-genesis-unregistered-version-continues`** (INVALID line 1) is the vector
+  ADR-0015 actually asks for: an unregistered `genesis` **followed by a later
+  event at a registered version**. `095` alone cannot do that job. The defect
+  ADR-0015 records is a **line-attribution** one — both verifiers once reported
+  `INVALID` at line **2**, blaming the first signature they could not check
+  rather than the `genesis` that made it uncheckable — and a one-line export has
+  no line 2 to blame. Confirmed by mutation: a verifier that blames line 2 when a
+  line follows passes `095` and fails `096`.
+- **`097-genesis-undefined-key`** and **`098-genesis-missing-registrar-pk`**
+  (INVALID line 1) close ES-18 on the `genesis` key set, which no vector touched:
+  `067`/`068` are both at line 2 on `participant_registered`. This is the PR
+  where that matters, because ES-34 is explicit that OPTIONAL means "this defined
+  key may be absent", never "an undefined key may appear" — and this change is
+  what made two `genesis` keys optional. `097`'s undefined key is named
+  `ancestor_seq` on purpose: it is what a fork's `genesis` plausibly wants and
+  what ET-9e deliberately did not provide.
+
+**`contracts/fixtures/README.md` v11 → v12** — the vector count and appended
+range, which `contracts-guard` names as that file's standing obligation.
+
 **One `note` in `index.json` is corrected, and this is the last moment it can
 be.** Vector `009`'s note claimed an unregistered genesis version was "an
 unresolved question that must not be frozen into a fixture". It is resolved, and
@@ -103,7 +125,7 @@ afterwards.
   NOT report `INVALID` because it cannot resolve either value. Its two values are
   deliberately different, so it isolates "unresolvable" from "the two values are
   equal", which is `087`'s job.
-- **`EV-20` is deliberately unfixtured.** Its vector turns on the open
+- **`EV-20` is deliberately unfixtured** — _superseded by the entry above, which fixtures it as `095`/`096` once EV-9 was amended._ Its vector turns on the open
   EV-9/EV-20 contradiction — EV-9 says `PARTIAL` for a well-formed unregistered
   `genesis`, EV-20 says `INVALID`, and EV-9 calls itself the authoritative
   reconciliation. Freezing either verdict before that is settled would foreclose

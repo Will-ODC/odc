@@ -1,14 +1,14 @@
 # contracts/fixtures/ — golden vectors
 
-**Version:** 11
+**Version:** 12
 **Status:** DRAFTING (Phase 0 · T5, T5j, ADR-0009, ADR-0010, ADR-0011). Not
 frozen.
 
-**83 vectors** — 10 `VALID`, 4 `PARTIAL`, 69 `INVALID`. They are numbered in
+**98 vectors** — 15 `VALID`, 4 `PARTIAL`, 79 `INVALID`. They are numbered in
 category order: `VALID` (`001`–`007`), `PARTIAL` (`008`–`011`), then `INVALID` —
 the envelope and Stage A checks (`012`–`042`), the export framing and canonical
 line form (`043`–`052`), `--head` (`053`–`054`), the Stage B type semantics
-(`055`–`068`), and verdict precedence (`069`–`070`). `071`–`083` are appended
+(`055`–`068`), and verdict precedence (`069`–`070`). `071`–`098` are appended
 after that scheme rather than inserted into it, because **ids never change once
 shipped**: renumbering to keep the categories contiguous would silently
 invalidate a conformance run that cites them.

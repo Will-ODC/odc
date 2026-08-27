@@ -13,7 +13,7 @@ import { test } from "node:test";
 import { fileURLToPath } from "node:url";
 
 import { vectors, type Expect } from "../src/vectors/index.js";
-import { UNREGISTERED_GENESIS_VECTOR } from "../src/vectors/genesis-registration.js";
+import { UNREGISTERED_GENESIS_VECTORS } from "../src/vectors/genesis-registration.js";
 
 const here = dirname(fileURLToPath(import.meta.url));
 const fixturesDir = resolve(here, "../../../..", "contracts", "fixtures");
@@ -187,7 +187,7 @@ test("a PARTIAL vector names exactly the lines that are unregistered (EV-7, EV-1
   }
 });
 
-test("exactly one vector carries an unregistered genesis version (EV-20)", () => {
+test("only the named vectors carry an unregistered genesis version (EV-20)", () => {
   // INVERTED, not deleted. This check used to admit version 1 alone, because an
   // unregistered genesis version was an OPEN question — EV-9's PARTIAL sentence
   // and EV-20 gave different verdicts for it — and any fixture would have frozen
@@ -209,19 +209,43 @@ test("exactly one vector carries an unregistered genesis version (EV-20)", () =>
     )
     .map((vec) => vec.id);
 
+  // A literal list, deliberately, rather than a predicate over ids or a count.
+  // A predicate is what lets the exception widen by accident; adding an id here
+  // is a decision someone has to write down.
   assert.deepEqual(
     carriers,
-    [UNREGISTERED_GENESIS_VECTOR],
-    `only ${UNREGISTERED_GENESIS_VECTOR} may carry a genesis at a version other than 1 (EV-20); found [${carriers.join(", ")}]`,
+    [...UNREGISTERED_GENESIS_VECTORS],
+    `only [${UNREGISTERED_GENESIS_VECTORS.join(", ")}] may carry a genesis at a version other than 1 (EV-20); found [${carriers.join(", ")}]`,
   );
 });
 
-test(`${UNREGISTERED_GENESIS_VECTOR} declares INVALID at line 1 (EV-20)`, () => {
+test("every permitted unregistered-genesis vector declares INVALID at line 1 (EV-20)", () => {
   // The other half of the pair above. Without this, the scoped exception admits
-  // the vector by id while saying nothing about what it asserts — so a later
-  // edit could turn the one permitted unregistered-genesis vector into a PARTIAL
-  // and the guard would still pass, which is the exact outcome it exists to stop.
-  const vec = vectors.find((v) => v.id === UNREGISTERED_GENESIS_VECTOR);
-  assert.ok(vec, `${UNREGISTERED_GENESIS_VECTOR} is missing from the table`);
-  assert.deepEqual(vec.expect, { verdict: "INVALID", line: 1 });
+  // vectors by id while saying nothing about what they assert — so a later edit
+  // could turn a permitted unregistered-genesis vector into a PARTIAL and the
+  // guard would still pass, which is the exact outcome it exists to stop.
+  for (const id of UNREGISTERED_GENESIS_VECTORS) {
+    const vec = vectors.find((v) => v.id === id);
+    assert.ok(vec, `${id} is missing from the table`);
+    assert.deepEqual(vec.expect, { verdict: "INVALID", line: 1 }, id);
+  }
+});
+
+test("an unregistered genesis is fixtured both alone and with a line after it", () => {
+  // ADR-0015 asks for a chain whose genesis is unregistered AND is "followed by
+  // at least one later event at a registered version", because the defect it
+  // records is a LINE ATTRIBUTION one: both verifiers once reported INVALID at
+  // line 2, blaming the first signature they could not check rather than the
+  // genesis that made it uncheckable. A one-line export has no line 2 to blame,
+  // so it cannot tell the two behaviours apart. Pinned here so the multi-line
+  // vector cannot be dropped as a duplicate of the single-line one.
+  const lineCounts = UNREGISTERED_GENESIS_VECTORS.map(
+    (id) =>
+      refsOf(id, vectors.find((v) => v.id === id)?.bytes ?? Buffer.alloc(0))
+        .length,
+  );
+  assert.ok(
+    lineCounts.includes(1) && lineCounts.some((n) => n > 1),
+    `the unregistered-genesis vectors must cover both a bare genesis and a genesis with a later event (ADR-0015); line counts are [${lineCounts.join(", ")}]`,
+  );
 });
