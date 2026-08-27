@@ -38,8 +38,8 @@ CANDIDATE** (ADR-0007) only after that. The `contracts-v1` freeze stays deferred
 until real operational use; `contracts/` remains **DRAFTING**.
 
 **Conformance work: phase 1 done (#104, #105); phase 2's contracts half (ADR-0019,
-#112) and verifier half (#123, #124, awaiting merge) done; phase 2's twelve
-vectors are the live work.** Phases 3 and 4 not started. The phase list is under
+#112) and verifier half (#122, #123, #124, all merged 2026-08-23) done; phase 2's
+twelve vectors are the live work — and now the ONLY owed part of phase 2.** Phases 3 and 4 not started. The phase list is under
 Next — **and note the coupling rule there is NOT "fixtures and verifiers must land
 together"**, which is true only of phase 1. The real rule: **fixtures may never
 precede verifiers; verifiers may land alone whenever their new checks are no-ops
@@ -51,10 +51,9 @@ Hoisted here because the full entries live at the end of a 37 KB file, past
 where anyone reliably reads. Each line links to its entry; **do not act from
 this list alone.**
 
-1. **Merge #122, #123, #124, then write the phase-2 entry here.** All three are
-   reviewed, all findings applied, 5/5 required checks green (2026-08-23). Nothing
-   in this file describes them as landed until they are. → § Next
-2. **Then the twelve vectors — the critical path.** Five rules (ET-9d, ET-9e,
+1. ~~Merge #122, #123, #124, then write the phase-2 entry here.~~ **DONE — all
+   three merged 2026-08-23; the phase-2 entry is in the Done ledger below.**
+2. **The twelve vectors — the critical path, and all that phase 2 still owes.** Five rules (ET-9d, ET-9e,
    ET-9f, ES-34, EV-20) are enforced by both verifiers and covered by **no
    vector**, so what merges is two implementers agreeing, not verification.
    ET-9d and its fixture both have a before-the-freeze deadline. → § Blockers,
@@ -247,6 +246,21 @@ recorded here because it changed how every session starts.
   seriously `odc-code-review`, whose charter red flags were unconditional and
   would have made a reviewer block pulse's deliberately mutable votes.
 
+**T9 conformance phase 1 (COMPLETE, #104 `+` review fixes #105) and phase 2
+(COMPLETE apart from its vectors, 2026-08-23).** Phase 2 landed in four commits:
+`decc152` (#112, ADR-0019 — the contracts half), then `d7eb2ef` (#122),
+`6a9ce4a` (#123) and `a57f41b` (#124) on one day. Both verifiers were rebuilt
+from `contracts/` alone by agents that had never seen the other's source, each
+reviewed by a third context that was allowed to see only one of them. #109/#110
+were **closed, not merged** — they would have gone green while behind the spec,
+because no committed vector carries either ancestry key.
+
+What the rebuild found is recorded under Next, not repeated here; every item was
+the same shape — a check that passes while reaching nothing. The one durable
+consequence for this ledger: **phase 2 is not done.** Its twelve vectors are
+unwritten, the corpus is still 83 vectors ending at `083`, and until they exist
+"both verifiers agree" is two implementers agreeing, not verification.
+
 ## Direction decisions — see the ADRs; carry-forward consequences below
 
 - **ADR-0007** — freeze deferred to operational use; three states DRAFTING →
@@ -369,8 +383,8 @@ the rest. Two that must not be lost:
 
 **What phase 2 still owes, in order.**
 
-1. ~~Both verifiers, rebuilt in fresh isolated passes.~~ **DONE 2026-08-23, in
-   review, awaiting merge: PR #123 (Go) and #124 (TS).** Both were rebuilt by
+1. ~~Both verifiers, rebuilt in fresh isolated passes.~~ **DONE and MERGED
+   2026-08-23: PR #123 (Go) and #124 (TS), with #122 (rehearsal judge).** Both were rebuilt by
    agents that had never seen the other's source, each briefed from `contracts/`
    alone. **#109 and #110 are CLOSED**, superseded — not merged and not updated,
    because the trap held exactly as predicted: they would have gone **green**
@@ -591,14 +605,20 @@ branch with no open PR, recorded in `memory/pulse.md`.
 superseded**: their PRs (#109, #110) are **closed**, with a comment on each
 recording why they were closed rather than updated. Do not reopen or rebase them.
 
-**Three phase-2 branches are OPEN and awaiting merge, all reviewed and green
-(5/5 required checks each), 2026-08-23:**
+**The three phase-2 branches all MERGED 2026-08-23** (`d7eb2ef`, `6a9ce4a`,
+`a57f41b`), each reviewed by a fresh context and green on 5/5 required checks.
+Kept here as the branch → PR → squash map; **no phase-2 branch is open.**
 
-| branch                                 | PR   | contents                                                            |
-| -------------------------------------- | ---- | ------------------------------------------------------------------- |
-| `claude/hash-chain-context-3uaob2`     | #122 | rehearsal judge: stop aborting on verdicts it should compare        |
-| `claude/t9-phase2-verifier-go-rebuild` | #123 | Go: ancestry, EV-20, ET-9d, quadratic fix, the stack-overflow crash |
-| `claude/t9-phase2-verifier-ts-rebuild` | #124 | TS: ancestry, EV-20, ET-9d, one-line verdict, exit status           |
+| branch                                 | PR   | squash    | contents                                                            |
+| -------------------------------------- | ---- | --------- | ------------------------------------------------------------------- |
+| `claude/hash-chain-context-3uaob2`     | #122 | `d7eb2ef` | rehearsal judge: stop aborting on verdicts it should compare        |
+| `claude/t9-phase2-verifier-go-rebuild` | #123 | `6a9ce4a` | Go: ancestry, EV-20, ET-9d, quadratic fix, the stack-overflow crash |
+| `claude/t9-phase2-verifier-ts-rebuild` | #124 | `a57f41b` | TS: ancestry, EV-20, ET-9d, one-line verdict, exit status           |
+
+**Do not go looking for an open hash-chain PR.** `claude/hash-chain-context-3uaob2`
+is the only branch that ever carried "hash chain" in its name and it is merged;
+a stale `codex/odc-hash-chain` worktree branch, 33 commits behind and 0 ahead,
+was reused for the vector work on 2026-08-26 and carries nothing of its own.
 
 ## Blockers & live cautions
 
