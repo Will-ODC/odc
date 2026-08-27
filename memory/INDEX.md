@@ -29,8 +29,11 @@ Do not apply charter rules to `apps/**`, and do not relax them anywhere else.
   closed, superseded); the twelve vectors are the remaining owed work and are the
   critical path.** Five `contracts/` contradictions are open for an operator
   decision. → `memory/STATE.md`
-- **Pulse:** MVP pillar 1 (magic-link identity) and the voting core are built and
-  served over HTTP; the story UI and the path to action are not. → `memory/pulse.md`
+- **Pulse:** pillars 1 and 2 are on master — magic-link identity, the voting
+  core, and a story UI you can walk end to end (#128-#131, #135, #127, merged
+  2026-08-26). What is missing: every screen except the ballot (so nothing in
+  the client signs anyone in), pillar 3's path to action, and any durable
+  storage. → `memory/pulse.md`
 
 ## Load order
 

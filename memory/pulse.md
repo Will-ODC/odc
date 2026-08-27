@@ -33,7 +33,7 @@ Repo-level working discipline still applies: tests ship with the change
 (`odc-testing`), one small branch per change (`pulse/<n>-<short-description>`),
 and the same repo-wide CI as everything else.
 
-## Built (PRs #79–#97 on master; detail in the squash commits)
+## Built (PRs #79–#135 on master; detail in the squash commits)
 
 **`apps/pulse` — the server.**
 
@@ -92,36 +92,62 @@ smaller. The WARN at 400 still fires and is the honest signal.
 `.github/scripts/diff-size.sh` is the source of truth, and the exemption is
 dir-scoped: `services/**` and `contracts/**` are still fully counted.
 
+### The story UI — LANDED 2026-08-26 (PRs #128-#131, #135, #127)
+
+Pillar 2 is on master. A person can open the app, be asked a question, answer it
+by swipe/tap/arrow key, see the outcome, walk on to the next question the answer
+opens, add an answer of their own, and step back through the run.
+
+| Squash    | PR   | What                                                             |
+| --------- | ---- | ---------------------------------------------------------------- |
+| `e587a5b` | #128 | server: a vote counts before anyone signs in; polls form a graph |
+| `e4dac87` | #129 | the runnable shell, and screen 1 as a swipe ballot               |
+| `d17cfe0` | #130 | walking a run of questions, and suggestions                      |
+| `111b8f5` | #131 | the outcome replaces the ballot instead of covering it           |
+| `202a2f4` | #135 | a way back through the run                                       |
+| `08bff67` | #127 | a suggestion matching a choice answers `on_ballot`               |
+
+**#135 is the PR #132 should have been.** #132 was auto-closed by GitHub when its
+base branch was deleted on merging #131, and could not be reopened because the
+head had been force-pushed after closing. Same commits, same content. **#132 still
+holds the review discussion** — go there for it, not to #135.
+
+**Two questions that section owed are now answered by the code:**
+
+- **`PulseApi` survives, and is structural, not nominal.** The earlier note that
+  private fields made it nominally typed is **stale** — there are no private
+  fields in `types.ts`. Every screen and hook takes `api: PulseApi` as a prop and
+  `test/stub-api.tsx` stubs it with a plain object, so the interface has real
+  users and `HttpPulseApi` being the only class implementing it is fine.
+- The non-consuming `GET /api/sign-in/redeem` check is **still not on `PulseApi`**.
+  No redeem screen exists yet, so nothing has needed it.
+
 ## Not built
 
-- **The story UI itself — now the single blocking gap for a usable product.**
-  `apps/pulse-web/src` holds only `api/` and `flow/story.ts`: no `index.html`,
-  no entry point, no component for any of the six steps `steps()` enumerates.
-  `vite.config.ts` proxies `/api` to a page that does not exist. The mockups in
-  `docs/mockups/pulse-screens/` are the design, not the app. Two questions are
-  owed to that ticket: whether the non-consuming `GET /api/sign-in/redeem` check
-  belongs on `PulseApi` (served today with no client method, because only a
-  redeem screen would call it), and whether `PulseApi` itself survives — since
-  #118 deleted the demo client, `HttpPulseApi` is its only implementation, and it
-  is kept only because private fields make it nominally typed, so a screen typed
-  to the interface can be stubbed with a plain object. If the screen tests end up
-  using the real class with a fake `fetch` instead, the interface has no user.
+- **Screens 2-7 of the story.** Only the ballot exists. There is no CLAIM or SENT
+  screen, no bite/case screens, no results screen and no action screen — so the
+  magic-link identity built in pillar 1 has **no UI at all**: nothing in the
+  client signs anyone in. `flow/story.ts` still enumerates six steps the app does
+  not render. The mockups in `docs/mockups/pulse-screens/` are the design.
 - **Pillar 3, the path to action** in any form: soliciting ideas, volunteer time
   or donations, and the proof-of-what-happened email. `proofEmailsOptIn` is
   collected at sign-in and currently leads nowhere.
 - **Real mail delivery and real persistence.** `src/identity/mailer.ts` and the
   stores are what the tests run against; nothing is durable.
 
-### Asked for by the operator, 2026-08-25 — not started
+### Asked for by the operator, 2026-08-25
 
-These came out of demoing the run. None is designed yet; none has a ticket,
-because pulse has nowhere to put one (see open decision 4).
+These came out of demoing the run. The first is now satisfied; the rest are
+undesigned and have no ticket, because pulse has nowhere to put one (see open
+decision 4).
 
-- **Back on the vote-submitted screen.** The Back control added in #132 sits in
-  `BallotChrome`, so it is on a question while it is being asked. Once a vote
-  settles, the outcome replaces the answering region and there is no way back
-  from that screen — only the way on. The trail in `App` already supports the
-  step; what is missing is the control in the settled state.
+- ~~**Back on the vote-submitted screen.**~~ **SATISFIED 2026-08-26 — verify
+  before re-doing it.** #131 made the outcome replace the ballot _inside_ the
+  chrome rather than covering the screen, so `BallotChrome` — and its Back —
+  now renders on both sides of the `settled` branch in `SwipeBallot.tsx`. The
+  control is there. **But no test asserts it**, so it can regress silently the
+  next time that render is reorganised; a test that settles a vote and looks for
+  Back is a one-line job and is the real remaining work here.
 - **A way to see the result.** Some "view results" affordance from a question,
   showing the counts as a graph or other visualisation. `GET /polls/:id/results`
   already returns them and `HttpPulseApi.results` already fetches them; nothing
@@ -291,6 +317,23 @@ because pulse has nowhere to put one (see open decision 4).
 
 ## Live cautions
 
+- **Never `--delete-branch` a stacked PR while a child PR still targets it.**
+  On 2026-08-26 merging #131 with `gh pr merge --squash --delete-branch` deleted
+  `pulse/8-outcome-readability`, and GitHub **auto-closed #132**, which was based
+  on it, instead of retargeting. It could not be reopened: the head branch had
+  been force-pushed during an earlier rebase, and GitHub refuses
+  (`state cannot be changed. The <branch> branch was force-pushed or recreated`).
+  Restoring the deleted base branch does not unblock the reopen. The work had to
+  be re-raised as #135. **Merge a stacked PR without `--delete-branch`, let the
+  child retarget to master, then delete the branch by hand.**
+- **A squash merge makes the branch above it conflict, every time.** The child
+  still carries the parent's original commits while master has one squashed
+  commit of them, so git sees the same changes twice. It is not a real conflict
+  and must not be merged away — rebase the child, replaying only its own work:
+  `git rebase --onto origin/master <old-parent-sha> <child-branch>`. Grab the
+  old parent SHA **before** merging; `--delete-branch` takes the local branch
+  too and with it the easy way to name it. This happened at every single step of
+  the #128-#135 stack.
 - **`pnpm dev` generates an ephemeral session secret** and announces it; every
   restart invalidates every cookie. That is deliberate, not a bug to fix.
 - **`pulse/4b-sign-in-routes` is an unlanded remote branch with no open PR**
