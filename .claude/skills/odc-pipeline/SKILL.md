@@ -97,6 +97,22 @@ IS the ticket.
   commit and the PR reports "merged" while delivering nothing (incident #11).
   One branch off `master`, merge, then branch the next. Force-push only with
   `--force-with-lease`, never `--force`.
+- **If a stack already exists, recover it this way — do not merge the conflict
+  away.** After the base is squash-merged the child still carries the base's
+  original commits while `master` has one squashed commit of them, so git sees
+  the same changes twice and the PR goes CONFLICTING. That is not a real
+  conflict. Replay only the child's own work:
+  `git rebase --onto origin/master <old-base-tip-sha> <child-branch>`.
+  **Capture `<old-base-tip-sha>` before merging** — the merge deletes the base
+  branch and the sha with it. Then verify before pushing:
+  `git diff --name-status origin/master..HEAD` must list the child's files and
+  nothing else. Resolving it as a normal conflict instead re-applies the base's
+  changes on top of themselves.
+- **Never merge with `--delete-branch` while a child PR still targets that
+  branch.** GitHub **auto-closes** the child rather than retargeting it, and it
+  cannot be reopened if its head was ever force-pushed (`state cannot be changed.
+The <branch> branch was force-pushed or recreated`). Retarget every child to
+  `master` first, then merge.
 - Branch names: `svc/short-description` (e.g. `ledger/insert-only-guard`);
   pulse uses `pulse/<n>-<short-description>`.
 - Commits: imperative subject ≤ 72 chars; body says WHY, not what.
