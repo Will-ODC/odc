@@ -395,6 +395,30 @@ test("saying_what_someone_already_said_is_seconded_not_refused", async () => {
   assert.equal(again.json().suggestion.text, "Charge the members");
 });
 
+test("saying_what_the_poll_already_offers_points_at_that_answer", async () => {
+  const { app, browser, votes } = await setup();
+  await votes.createPoll({
+    id: "funding",
+    question: "How do we pay for it?",
+    choices: ["Members chip in", "One-off donations", "Grants"],
+    method: "single",
+    acceptsSuggestions: true,
+  });
+
+  const reply = await browser()({
+    method: "POST",
+    url: "/api/polls/funding/suggestions",
+    payload: { text: "Grants" },
+  });
+  assert.equal(reply.statusCode, 200);
+  assert.equal(reply.json().status, "on_ballot");
+  assert.deepEqual(reply.json().choice, { index: 2, label: "Grants" });
+
+  // Nothing was added: the answer is already there to be voted for.
+  const listed = await app.inject({ url: "/api/polls/funding/suggestions" });
+  assert.deepEqual(listed.json().suggestions, []);
+});
+
 test("a_suggestion_never_says_who_made_it", async () => {
   const { app, browser } = await setup();
   await browser()({

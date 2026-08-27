@@ -1,6 +1,11 @@
 import { useState } from "react";
 import type { FormEvent } from "react";
-import type { Poll, PulseApi, Suggestion } from "../api/types.js";
+import type {
+  Poll,
+  PulseApi,
+  SuggestResult,
+  Suggestion,
+} from "../api/types.js";
 import { useCastVote } from "../hooks/use-cast-vote.js";
 import { edgesOf, useNextQuestions } from "../hooks/use-next-questions.js";
 import { useSuggestions } from "../hooks/use-suggestions.js";
@@ -153,9 +158,7 @@ function AddYourOwn({ api, pollId }: { api: PulseApi; pollId: string }) {
 
       {add.status === "done" ? (
         <p className="own__said" role="status">
-          {add.result.status === "seconded"
-            ? `${add.result.suggestion.count} people have said that. Yours is with them.`
-            : "Added. Nobody had said that yet."}
+          {said(add.result)}
           {add.result.related.length > 0 ? (
             <span className="own__near">
               {" "}
@@ -168,6 +171,24 @@ function AddYourOwn({ api, pollId }: { api: PulseApi; pollId: string }) {
       {all.length > 0 ? <Added all={all} /> : null}
     </div>
   );
+}
+
+/**
+ * What to tell someone about what they just added.
+ *
+ * The one that is not about the list of added options is `on_ballot`: what
+ * they wrote is already an answer to this question, so the useful thing is to
+ * send them back up to it rather than to congratulate them for adding it.
+ */
+function said(result: SuggestResult): string {
+  switch (result.status) {
+    case "on_ballot":
+      return `“${result.choice.label}” is already one of the answers above. Pick it to vote for it.`;
+    case "seconded":
+      return `${result.suggestion.count} people have said that. Yours is with them.`;
+    default:
+      return "Added. Nobody had said that yet.";
+  }
 }
 
 function Added({ all }: { all: Suggestion[] }) {

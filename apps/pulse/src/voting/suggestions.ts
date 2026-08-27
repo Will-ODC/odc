@@ -1,4 +1,5 @@
 import { randomUUID } from "node:crypto";
+import type { Poll } from "./poll.js";
 
 /**
  * Options people add themselves.
@@ -10,7 +11,10 @@ import { randomUUID } from "node:crypto";
  * become choices only when someone decides to open a new poll on them.
  *
  * The one thing this module has to get right is that two people saying the
- * same thing in different words are counted as agreeing, and told so.
+ * same thing in different words are counted as agreeing, and told so — and
+ * that includes agreeing with the poll: a suggestion that repeats one of the
+ * poll's own choices is turned away with a pointer to that choice, because the
+ * choice can be voted for and a suggestion cannot.
  */
 export interface Suggestion {
   id: string;
@@ -126,14 +130,33 @@ export class SuggestionError extends Error {
   }
 }
 
+/** A choice the poll already lists, named so a person can go and pick it. */
+export interface BallotChoice {
+  /** Position in `Poll.choices`. What a vote records. */
+  index: number;
+  /** The choice as the poll words it. */
+  label: string;
+}
+
 export type SubmitResult =
   /** Nobody had said this. It is now on the list. */
   | { status: "added"; suggestion: Suggestion; related: Suggestion[] }
   /** Someone had already said it; their wording keeps the floor. */
-  | { status: "seconded"; suggestion: Suggestion; related: Suggestion[] };
+  | { status: "seconded"; suggestion: Suggestion; related: Suggestion[] }
+  /**
+   * The poll already offers this, so nothing was added. The person is pointed
+   * at the choice instead: it is votable, and a suggestion saying the same
+   * thing would not be.
+   */
+  | { status: "on_ballot"; choice: BallotChoice; related: Suggestion[] };
 
 export interface SuggestionStore {
-  submit(pollId: string, text: string): Promise<SubmitResult>;
+  /**
+   * Takes the whole poll, not just its id, because a suggestion that repeats
+   * one of the poll's own choices is the commonest duplicate of all — the
+   * choices are on the screen directly above the field.
+   */
+  submit(poll: Poll, text: string): Promise<SubmitResult>;
   /** Most-said first. */
   list(pollId: string): Promise<Suggestion[]>;
 }
@@ -148,7 +171,7 @@ export class InMemorySuggestionStore implements SuggestionStore {
     this.#newId = options.newId ?? (() => randomUUID());
   }
 
-  async submit(pollId: string, text: string): Promise<SubmitResult> {
+  async submit(poll: Poll, text: string): Promise<SubmitResult> {
     const trimmed = text.trim().replace(/\s+/g, " ");
     if (trimmed === "") {
       throw new SuggestionError("Write what you would rather see.");
@@ -162,13 +185,30 @@ export class InMemorySuggestionStore implements SuggestionStore {
       throw new SuggestionError("Say a little more about what you mean.");
     }
 
-    const existing = this.#byPoll.get(pollId) ?? [];
+    const existing = this.#byPoll.get(poll.id) ?? [];
     const scored = existing
       .map((suggestion) => ({
         suggestion,
         score: overlap(trimmed, suggestion.text),
       }))
       .sort((a, b) => b.score - a.score);
+
+    // The poll's own choices come first. Saying what the ballot already offers
+    // is not a new idea to be counted beside the poll; it is a vote the person
+    // has not cast yet, and the only useful answer is to say so. Suggestions
+    // are never appended to `Poll.choices` — see the note at the top of this
+    // file — so a duplicate left standing would be an option nobody can vote
+    // for, sitting under one they can.
+    const onBallot = poll.choices
+      .map((label, index) => ({ index, label, score: overlap(trimmed, label) }))
+      .sort((a, b) => b.score - a.score)[0];
+    if (onBallot && onBallot.score >= SAME_IDEA) {
+      return {
+        status: "on_ballot",
+        choice: { index: onBallot.index, label: onBallot.label },
+        related: nearby(scored),
+      };
+    }
 
     const best = scored[0];
     if (best && best.score >= SAME_IDEA) {
@@ -182,12 +222,12 @@ export class InMemorySuggestionStore implements SuggestionStore {
 
     const suggestion: Suggestion = {
       id: this.#newId(),
-      pollId,
+      pollId: poll.id,
       text: trimmed,
       count: 1,
       addedAt: this.#clock(),
     };
-    this.#byPoll.set(pollId, [...existing, suggestion]);
+    this.#byPoll.set(poll.id, [...existing, suggestion]);
     return { status: "added", suggestion, related: nearby(scored) };
   }
 

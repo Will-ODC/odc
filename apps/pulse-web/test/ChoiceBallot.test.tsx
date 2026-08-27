@@ -102,6 +102,27 @@ describe("saying something the poll did not offer", () => {
     expect(screen.queryByRole("alert")).toBeNull();
   });
 
+  it("sends someone back to the answer the poll already offers", async () => {
+    const suggest = () =>
+      Promise.resolve({
+        status: "on_ballot",
+        choice: { index: 2, label: "Grants" },
+        related: [],
+      } satisfies SuggestResult);
+    show({ suggest });
+
+    fireEvent.change(field(), { target: { value: "Grants" } });
+    fireEvent.click(add());
+
+    const said = await screen.findByRole("status");
+    expect(said.textContent).toContain("already one of the answers above");
+    expect(said.textContent).toContain("Grants");
+    // It reads as a pointer, not a telling-off.
+    expect(screen.queryByRole("alert")).toBeNull();
+    // And nothing was added to the list of what people said.
+    expect(screen.queryByText("ALSO SAID")).toBeNull();
+  });
+
   it("mentions what came close without refusing the new one", async () => {
     const suggest = () =>
       Promise.resolve({
