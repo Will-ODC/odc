@@ -19,6 +19,45 @@ Format (newest first, one entry per merged contracts change):
 
 ---
 
+## fixtures/ — vectors 084–094 — 2026-08-26 — fork ancestry, ES-34 and ET-9d get golden data
+
+**No spec text changed. This is fixture data only, and it is purely additive** —
+no existing vector's bytes, verdict or line moved, and `index.json` gains 153
+lines and loses none. Corpus 83 → 94.
+
+**Why it had to happen before the freeze.** `ET-9d`, `ET-9e`, `ET-9f`, `ES-34`
+and `EV-20` were implemented by **both** verifiers and cited by **no vector**.
+EV-17 makes fixtures the sole conformance oracle and EV-5 wants goldens shipped
+with an additive change, so this was a live EV-5 gap rather than a to-do: two
+independent verifiers could diverge on every one of these rules and the whole
+corpus would still pass both. ET-9d's own text says it must land before the
+freeze — EV-1 and EV-4 bar adding it after, since conforming chains would become
+retroactively `INVALID` — and the same argument bars adding its fixture
+afterwards.
+
+- **`084-ancestor-head-without-chain`** (INVALID line 1) is listed first because
+  it is the only vector that fails against a verifier still implementing the
+  **pre-ADR-0019** `ET-9e`, where `ancestor_head` stood alone and carried the
+  head. It is the single fixture proving ADR-0019 landed.
+- **Both directions of ET-9f's asymmetry are pinned**, `084` against `086`, so a
+  verifier that tidies the rule into both-or-neither fails one of them.
+- **`085` is the corpus's first seven-key `genesis` payload**, and therefore the
+  first real exercise of `HA-7`'s leading key count and `HA-8`'s ordering — both
+  new keys sort ahead of `chain_id`. It closes the long-standing gap where HA-7
+  was invoked by six notes and cited by no vector.
+- **`092` pins claim-not-link**: a well-formed ancestry pair naming a chain that
+  exists nowhere in this corpus is **VALID**, because ET-9e says a verifier MUST
+  NOT report `INVALID` because it cannot resolve either value. Its two values are
+  deliberately different, so it isolates "unresolvable" from "the two values are
+  equal", which is `087`'s job.
+- **`EV-20` is deliberately unfixtured.** Its vector turns on the open
+  EV-9/EV-20 contradiction — EV-9 says `PARTIAL` for a well-formed unregistered
+  `genesis`, EV-20 says `INVALID`, and EV-9 calls itself the authoritative
+  reconciliation. Freezing either verdict before that is settled would foreclose
+  the decision, which is exactly what `fixtures-gen`'s own
+  unregistered-genesis-version guard exists to prevent. It lands with the
+  operator's amendment to EV-9, together with inverting that guard.
+
 ## event-types.md v9 · event-schema.md v4 — 2026-08-20 — fork ancestry names a chain and a position (ADR-0019)
 
 **A direct contradiction between two rules that both landed in #98.** ET-9e made
