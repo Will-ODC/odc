@@ -28,7 +28,7 @@
 // leave `hash` — which covers the payload string — mismatched, failing the vector
 // for two reasons instead of one.
 
-import { bad, headless, lines, type Vector } from "./shared.js";
+import { bad, forked, headless, lines, type Vector } from "./shared.js";
 import { OPERATOR, REGISTRAR } from "../chain.js";
 import { chainId } from "../encode.js";
 
@@ -74,5 +74,12 @@ export const genesisKeysVectors: Vector[] = [
     1,
     ["ET-9b"],
     "registrar_pk in UPPERCASE hex. Same defect as 076 on the OTHER key — the one an implementation is likelier to skip, since registrar_pk never enters chain_id (ET-7) and is unused until a vote_cast arrives (ET-17). chain_id derives from operator_pk (lowercase) and matches, and the genesis is operator-self-signed so the signature never consults registrar_pk; the hash covers the uppercase registrar_pk and matches. Only ET-9b fails.",
+  ),
+  bad(
+    "094-genesis-keys-equal",
+    lines(forked({ registrar: OPERATOR, violates: ["ET-9d"] })),
+    1,
+    ["ET-9d"],
+    "registrar_pk byte-identical to operator_pk — ET-9d, and the largest fault in this module. A chain declaring one key twice hands a single holder the power to mint issues AND forge every ballot on them; charter P2's two planes and P3's never-selects collapse into one party. Nothing else is wrong: the key is legal lowercase hex so ET-9b passes on both, chain_id still derives from operator_pk (ET-7), the genesis is operator-self-signed so the signature verifies (ET-8), and the hash covers the payload and matches. A verifier omitting the one string equality reports VALID with nothing on the line to signal it — which is what both verifiers did until the phase-2 rebuild. Read the check as necessary, not sufficient: two DISTINCT keys held by one party are undetectable from any export, so this catches only the blatant declared collapse.",
   ),
 ];

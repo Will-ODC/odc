@@ -106,7 +106,8 @@ type RawSigner = (content: EventContent) => string;
 // shape `editLine`'s and `swapLines`'s no-op guards exist to stop.
 
 /** The rule ids the builder knows how to check. */
-export type BuilderRule = "ET-14" | "ET-14a" | "ET-18" | "ET-18a";
+export type BuilderRule =
+  "ET-9d" | "ET-9e" | "ET-9f" | "ET-14" | "ET-14a" | "ET-18" | "ET-18a";
 
 /** ET-14: the title ceiling, counted in the unit ET-14 names — scalar values. */
 export const TITLE_MAX_SCALARS = 200;
@@ -163,6 +164,39 @@ function hasForbiddenChar(title: string): boolean {
     if (c <= 0x1f || c === 0x7f) return true;
   }
   return false;
+}
+
+/** ET-9b/ET-9e: 64 lowercase hex. The one shape every key-ish genesis value takes. */
+const HEX64 = /^[0-9a-f]{64}$/;
+
+/**
+ * Which of ET-9d / ET-9e / ET-9f a `genesis` payload actually breaks.
+ *
+ * The ancestry keys are OPTIONAL (ES-34), so absence is never a fault here —
+ * only a present value with an illegal shape, and the one presence combination
+ * ET-9f bars. ET-9d is a string equality on the two declared keys, which is all
+ * the rule asks for: the comparison is on the 64-character lowercase-hex
+ * strings, no decoding and no curve arithmetic.
+ */
+function genesisViolations(
+  operatorPk: string,
+  registrarPk: string,
+  ancestorChain: string | undefined,
+  ancestorHead: string | undefined,
+): BuilderRule[] {
+  const out: BuilderRule[] = [];
+  if (operatorPk === registrarPk) out.push("ET-9d");
+  // One ET-9e for the whole payload however many ancestry values are malformed:
+  // both faults sit on the same line, and conformance is the verdict token and
+  // the line number only (EV-17), so a per-key breakdown would be a distinction
+  // no vector can assert.
+  const illegal = (value: string | undefined): boolean =>
+    value !== undefined && (!HEX64.test(value) || value === GENESIS_PREV_HASH);
+  if (illegal(ancestorChain) || illegal(ancestorHead)) out.push("ET-9e");
+  if (ancestorHead !== undefined && ancestorChain === undefined) {
+    out.push("ET-9f");
+  }
+  return out;
 }
 
 /** Which of ET-14 / ET-14a an `issue_created` payload actually breaks. */
@@ -319,26 +353,63 @@ export class ChainBuilder {
     return event;
   }
 
-  /** `genesis`, self-signed by the operator key it declares (ET-6/ET-7/ET-8). */
+  /**
+   * `genesis`, self-signed by the operator key it declares (ET-6/ET-7/ET-8).
+   *
+   * `ancestorChain` / `ancestorHead` are the two OPTIONAL fork-ancestry keys
+   * (ET-9e, ES-34). Omitted, they do not appear in the payload at all — which
+   * is the ONLY way to say "no recorded ancestor", and is why they are absent
+   * from the signature rather than present and empty: presence and absence
+   * produce different preimages, because HA-7 leads with the key count.
+   *
+   * Enforces ET-9d / ET-9e / ET-9f unless `opts.violates` declares the breach,
+   * the same reconcile discipline `issue()` and `vote()` use. The point is that
+   * a genesis illegal BY ACCIDENT cannot ship a declared verdict: the ancestry
+   * values are 64-character hex strings that no reader eyeballs, so a typo in
+   * one is exactly the mistake that would otherwise pass review.
+   *
+   * A deliberate breach is still built the whole way — signed over the faulty
+   * payload and hashed over the signature — because a vector that merely mutates
+   * a value and re-derives `hash` is satisfied by a verifier that checks only
+   * the genesis self-signature: it would freeze a verdict while catching nothing.
+   */
   genesis(
-    opts: { operator?: Keypair; registrar?: Keypair; contracts?: string } = {},
+    opts: {
+      operator?: Keypair;
+      registrar?: Keypair;
+      contracts?: string;
+      ancestorChain?: string;
+      ancestorHead?: string;
+      violates?: readonly BuilderRule[];
+    } = {},
   ): Event {
     const operator = opts.operator ?? OPERATOR;
     const registrar = opts.registrar ?? REGISTRAR;
+    reconcile(
+      "genesis(...)",
+      genesisViolations(
+        operator.publicKeyHex,
+        registrar.publicKeyHex,
+        opts.ancestorChain,
+        opts.ancestorHead,
+      ),
+      opts.violates,
+    );
     this.operatorKey = operator;
     this.registrarKey = registrar;
-    return this.seal(
-      "genesis",
-      1,
-      {
-        chain_id: chainId(operator.publicKeyHex),
-        contracts: opts.contracts ?? "contracts-v1",
-        operator_pk: operator.publicKeyHex,
-        registrar_pk: registrar.publicKeyHex,
-      },
-      GENESIS_TS,
-      operator,
-    );
+    const payload: Payload = {
+      chain_id: chainId(operator.publicKeyHex),
+      contracts: opts.contracts ?? "contracts-v1",
+      operator_pk: operator.publicKeyHex,
+      registrar_pk: registrar.publicKeyHex,
+    };
+    if (opts.ancestorChain !== undefined) {
+      payload.ancestor_chain = opts.ancestorChain;
+    }
+    if (opts.ancestorHead !== undefined) {
+      payload.ancestor_head = opts.ancestorHead;
+    }
+    return this.seal("genesis", 1, payload, GENESIS_TS, operator);
   }
 
   /** `participant_registered`, self-signed by its own `pubkey` (ET-10). */

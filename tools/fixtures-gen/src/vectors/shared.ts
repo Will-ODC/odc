@@ -49,6 +49,23 @@ export function chain(f: (c: ChainBuilder) => void): Event[] {
   return [...c.all];
 }
 
+/**
+ * A chain whose genesis is built with `opts` — the fork-ancestry vectors' entry
+ * point. Distinct from `chain()`, which always mints the hashing.md §6 genesis,
+ * and from `headless()`, which mints none: a fork's first line IS a genesis and
+ * must stay one, since a fork is a new chain with a new identity (ET-9e), not a
+ * continuation, so `seq` is still 1 and `prev_hash` is still the 64-zero anchor.
+ */
+export function forked(
+  opts: Parameters<ChainBuilder["genesis"]>[0],
+  f: (c: ChainBuilder) => void = () => undefined,
+): Event[] {
+  const c = new ChainBuilder();
+  c.genesis(opts);
+  f(c);
+  return [...c.all];
+}
+
 /** A chain with NO genesis, for the vectors that need a bad first line. */
 export function headless(f: (c: ChainBuilder) => void): Event[] {
   const c = new ChainBuilder();
