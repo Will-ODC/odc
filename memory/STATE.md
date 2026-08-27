@@ -37,9 +37,11 @@ implemented in services/ until then, and T9a advances `contracts/` to **RELEASE
 CANDIDATE** (ADR-0007) only after that. The `contracts-v1` freeze stays deferred
 until real operational use; `contracts/` remains **DRAFTING**.
 
-**Conformance work: phase 1 done (#104, #105); phase 2's contracts half (ADR-0019,
-#112) and verifier half (#122, #123, #124, all merged 2026-08-23) done; phase 2's
-twelve vectors are the live work — and now the ONLY owed part of phase 2.** Phases 3 and 4 not started. The phase list is under
+**Conformance work: phases 1 and 2 are COMPLETE.** Phase 1 #104/#105; phase 2's
+contracts half (ADR-0019, #112), verifier half (#122, #123, #124, merged
+2026-08-23) and **fixture half (#136, #137, merged 2026-08-26)**. The corpus is
+**98 vectors** (VALID 15, PARTIAL 4, INVALID 79). **Phase 3 is the live work**;
+phase 4 not started. The phase list is under
 Next — **and note the coupling rule there is NOT "fixtures and verifiers must land
 together"**, which is true only of phase 1. The real rule: **fixtures may never
 precede verifiers; verifiers may land alone whenever their new checks are no-ops
@@ -53,13 +55,16 @@ this list alone.**
 
 1. ~~Merge #122, #123, #124, then write the phase-2 entry here.~~ **DONE — all
    three merged 2026-08-23; the phase-2 entry is in the Done ledger below.**
-2. **The twelve vectors — the critical path, and all that phase 2 still owes.** Five rules (ET-9d, ET-9e,
-   ET-9f, ES-34, EV-20) are enforced by both verifiers and covered by **no
-   vector**, so what merges is two implementers agreeing, not verification.
-   ET-9d and its fixture both have a before-the-freeze deadline. → § Blockers,
-   fixture-coverage entry
-3. **Five `contracts/` contradictions need an operator decision** — EV-9 vs EV-20
-   first, the only one where a third implementer would get a different **verdict**.
+2. ~~The twelve vectors.~~ **DONE 2026-08-26 (#136, #137) — fifteen, not twelve.**
+   All five uncovered rules (ET-9d, ET-9e, ET-9f, ES-34, EV-20) now have vectors,
+   and review added three more the plan did not foresee. → § Done ledger
+3. **FOUR `contracts/` contradictions need an operator decision** — EV-9 vs EV-20
+   is **closed** (#137). The one that matters most now is that `contracts/`
+   **bounds nothing**: no sentence anywhere fixes nesting depth, line length or
+   key count, or says what a verifier does when input exceeds what it can
+   process. That silence is what let the Go stack overflow exist, and the
+   depth-64 bound the Go verifier ships has **no spec behind it**, so a third
+   implementer cannot know what is permitted.
    → § Blockers, first entry
 4. **ET-23/ET-24 are implemented by neither verifier** and are the anonymity
    rules. Phase 3 covers them on paper; confirm that is real. → § Blockers
@@ -256,10 +261,45 @@ were **closed, not merged** — they would have gone green while behind the spec
 because no committed vector carries either ancestry key.
 
 What the rebuild found is recorded under Next, not repeated here; every item was
-the same shape — a check that passes while reaching nothing. The one durable
-consequence for this ledger: **phase 2 is not done.** Its twelve vectors are
-unwritten, the corpus is still 83 vectors ending at `083`, and until they exist
-"both verifiers agree" is two implementers agreeing, not verification.
+the same shape — a check that passes while reaching nothing.
+
+**Phase 2's fixture half — COMPLETE 2026-08-26, #136 (`384d8c3`) and #137
+(`c01fd23`). Corpus 83 → 98.** Fifteen vectors, not the twelve planned.
+
+- **`084`–`094`** — fork ancestry, ES-34 and ET-9d. `084`
+  (`ancestor_head` without `ancestor_chain`) is first by design: the only vector
+  that fails against a verifier still on the pre-ADR-0019 ET-9e, and so the
+  single fixture proving ADR-0019 landed. `085` is the corpus's **first
+  seven-key `genesis` payload**, closing the long-standing "HA-7 cited by no
+  vector" gap.
+- **`095`–`098`** — EV-20 and ES-18 on the `genesis` key set, with
+  **`evolution.md` v4 → v5**. EV-9's `PARTIAL` sentence had contradicted EV-20
+  since EV-20 existed: EV-8 gained the inline carve-out in that pass and EV-9 did
+  not. **No decision was made** — ADR-0015 settled the substance on 2026-08-15;
+  this only conformed the text.
+- **`contracts/fixtures/README.md` v11 → v12.** It had said 83 vectors. Nothing
+  tests that number, so CI was green over a false statement in `contracts/`.
+
+**Three findings worth carrying forward, all from the fresh-context review of a
+change that was already green everywhere:**
+
+1. **A fixture can pin the right verdict and still not pin the right line.** `095`
+   was built as a one-line chain and passed both verifiers. ADR-0015 specifies
+   the owed fixture as an unregistered `genesis` _"followed by at least one later
+   event"_, because the defect it records is **line attribution** — both
+   verifiers once blamed line 2, the first signature they could not check. A
+   one-line export has no line 2 to blame. `096` is that chain, and a mutant that
+   blames line 2 when a line follows **passes `095` and fails `096`**.
+2. **ES-18 on the `genesis` key set was covered by nothing** — `067`/`068` are
+   both at line 2 on `participant_registered`. `097`/`098` close it. This change
+   owed it, since making two genesis keys optional is the edit that touches the
+   required-key list.
+3. **One equivalent mutant, recorded so it is not re-litigated.** Loosening
+   `registrar_pk` to OPTIONAL in the Go verifier leaves the whole corpus green
+   including `098`. Not a gap: the verifier has two independent barriers and
+   rejects at ET-9b instead of ES-18 — same verdict, same line — and EV-17 makes
+   the token and line the whole of conformance, so no fixture can distinguish
+   them.
 
 ## Direction decisions — see the ADRs; carry-forward consequences below
 
@@ -356,8 +396,9 @@ both survived review and would have frozen wrong.
   record, and erasing the head-alone decision erases the reasoning a later reader
   needs before trimming `ancestor_chain` back out.
 
-**Phase 2's vector count went 6 → 11**, ids `084`+. F3 one, F6 one, fork ancestry
-the rest. Two that must not be lost:
+**~~Phase 2's vector count went 6 → 11~~ — SHIPPED as fifteen, ids `084`–`098`
+(#136, #137, 2026-08-26).** The plan below is kept because its two traps proved
+real and both are load-bearing for anyone writing the phase 3 vectors:
 
 - **`ancestor_head`-without-`ancestor_chain` (INVALID line 1) goes FIRST.** It is
   the only owed vector that fails against a verifier still implementing the merged
@@ -381,7 +422,7 @@ the rest. Two that must not be lost:
   built chain in the generator — never hard-code them**, or they rot silently at
   the next regeneration and the vector asserts nothing.
 
-**What phase 2 still owes, in order.**
+**What phase 2 owed, in order — ALL THREE NOW DONE (phase 2 complete 2026-08-26).**
 
 1. ~~Both verifiers, rebuilt in fresh isolated passes.~~ **DONE and MERGED
    2026-08-23: PR #123 (Go) and #124 (TS), with #122 (rehearsal judge).** Both were rebuilt by
@@ -390,16 +431,18 @@ the rest. Two that must not be lost:
    because the trap held exactly as predicted: they would have gone **green**
    while behind the spec, since no committed vector carries either ancestry key.
    All six of their review findings rode into the rebuilds.
-2. **The twelve vectors — the critical path, and the only thing that turns "both
-   verifiers agree" into "both verifiers are verified".** Eleven for fork
-   ancestry and EV-20 (`ancestor_head`-without-`ancestor_chain` first), plus one
-   for ET-9d. See the coverage entry in Blockers for why this is now urgent
-   rather than tidy.
-3. ~~Fresh-context review of each.~~ **DONE** — three independent reviewers, one
-   per branch, none of them the author, and **no two of them allowed to see both
-   verifiers**. All returned APPROVE WITH NITS; every finding was applied,
-   verified and pushed. Also merged-and-owed: the phase-2 STATE.md entry, at
-   merge time.
+2. ~~The twelve vectors — the only thing that turns "both verifiers agree" into
+   "both verifiers are verified".~~ **DONE 2026-08-26, as fifteen: #136
+   (`084`–`094`) and #137 (`095`–`098` + `evolution.md` v5).** Detail in the Done
+   ledger. Phase 2 is complete.
+3. ~~Fresh-context review of each.~~ **DONE** — three independent reviewers on
+   the verifiers, one per branch, none of them the author, and **no two of them
+   allowed to see both verifiers**; all APPROVE WITH NITS. The fixture pass took
+   a fourth, which returned **REQUEST CHANGES with a blocking finding** on work
+   already green on both verifiers, both suites, the rehearsal and eight of the
+   author's own mutants. **Green everywhere is not evidence a review will be
+   clean** — see the Done ledger for the three findings.
+4. ~~The phase-2 STATE.md entry, at merge time.~~ **This is it.**
 
 **What the phase-2 rebuild actually found — the reason this took four rounds and
 not one.** Recorded because every item is the same shape: _a check that passes
@@ -538,30 +581,31 @@ comments. `verify.ts:281`'s `[...faultLines]` spreads into an **array literal**,
 which uses the iteration protocol and has no argument limit — safe at any length,
 and the likeliest source of the miscount.
 
-**FIVE rules are now implemented by both verifiers and covered by NO vector:
-ET-9d, ET-9e, ET-9f, ES-34, EV-20** (counts verified 2026-08-23 against
-`index.json`; ET-9b has 2, ET-9c has 1, these have 0). EV-17 makes fixtures the
-sole conformance oracle and EV-5 wants goldens shipped with an additive change,
-so **this is a live EV-5 gap, not a to-do**: two independent verifiers can
-diverge silently on every one of these rules and the whole corpus still passes
-both. Both PRs say so in a "what this does not close" note rather than reading
-as fixture-backed. Two deadlines make it urgent: **ET-9d's own text says it must
-land before the freeze** (EV-1/EV-4 bar adding it after, since conforming chains
-would become retroactively invalid) — **and the same argument bars adding its
-fixture afterwards**. A differential probe built with `fixtures-gen` (collapsed
-genesis keys, properly signed and hashed) shows both verifiers already agree on
-ET-9d, INVALID line 1, with the legal control VALID in both — so **the vectors
-are producible with the generator that already exists**, in a few lines.
+**~~FIVE rules implemented by both verifiers and covered by NO vector~~ —
+CLOSED 2026-08-26 (#136, #137).** ET-9d, ET-9e, ET-9f, ES-34 and EV-20 all have
+vectors now; the corpus is 98. Kept as a **shape**, because it is the one this
+file is worst at noticing: a rule can be implemented by every verifier and cited
+by no vector, and **nothing will tell you** — every suite is green, and the
+corpus simply could not catch a divergence. EV-17 makes fixtures the sole oracle
+and EV-5 wants goldens shipped with the change, so the gap is a live EV-5
+violation rather than a to-do, and it re-opens silently every time a rule lands
+without its fixture. **Count citations against the rule index periodically; it
+is implied by no test passing.**
 
-**Coverage is thinner than 83 vectors suggests, and the real number is worse than
-"~130" said.** Counted exactly during T9: **143 rule ids, 70 cited by at least one
-vector, 73 cited by none.** `ET-4a`–`ET-4c` are covered (vectors `078`–`082`).
-The uncovered half includes **`RA-1`–`RA-13`, the whole of `read-api.md`** — the
+**Coverage is thinner than 98 vectors suggests, and the real number is worse than
+"~130" said.** Counted exactly during T9, when the corpus was 83: **143 rule ids,
+70 cited by at least one vector, 73 cited by none.** Phase 2 moved that by
+**five** — ET-9d, ET-9e, ET-9f, ES-34 and EV-20 went from 0 citations to covered
+(#136, #137) — and **`HA-7` is now cited**, by `085`, the corpus's first
+seven-key `genesis` payload; the note below that said otherwise is superseded.
+**Everything else in this entry stands, and the count has not been re-run since
+T9 — treat 73-uncovered as the last measured figure, not the current one.**
+`ET-4a`–`ET-4c` are covered (vectors `078`–`082`). The uncovered half includes **`RA-1`–`RA-13`, the whole of `read-api.md`** — the
 public read surface, which is exactly where identity leakage would show, and which
 no earlier gap list mentioned at all. Other real gaps: `ES-30`–`ES-32` (sig field),
 `ET-3`, `EX-14` (head), most of `ids.md`, `EV-11`–`EV-14` (correction/retraction,
-incl. EV-13's ballot-plane prohibition). **`HA-7` is cited by no vector** despite
-six notes invoking it. Note the honest limit: vectors are NDJSON exports, so
+incl. EV-13's ballot-plane prohibition). ~~**`HA-7` is cited by no vector**
+despite six notes invoking it.~~ **Closed by `085` (#136).** Note the honest limit: vectors are NDJSON exports, so
 covering `RA-*` may need a different instrument — likely why it went unnoticed.
 And **citation is an upper bound on coverage, not coverage**: `HA-2` is cited by a
 vector while its closing MUST is unfixtured. Strong on what it covers, silent
