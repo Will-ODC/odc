@@ -25,8 +25,8 @@ Do not apply charter rules to `apps/**`, and do not relax them anywhere else.
 
 - **ODC core:** Phase 0, ticket T9. The security-audit gate is **closed**; the
   fixture/verifier conformance work runs in four phases. **Phase 1 done. Phase 2:
-  both verifiers are rebuilt, reviewed and green in PRs #123/#124 (#109/#110
-  closed, superseded); the twelve vectors are the remaining owed work and are the
+  both verifiers are rebuilt and LANDED (#123/#124, merged 2026-08-23; #109/#110
+  closed, superseded); the twelve vectors are the only owed work left and are the
   critical path.** Five `contracts/` contradictions are open for an operator
   decision. → `memory/STATE.md`
 - **Pulse:** MVP pillar 1 (magic-link identity) and the voting core are built and
