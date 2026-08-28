@@ -24,11 +24,12 @@ Do not apply charter rules to `apps/**`, and do not relax them anywhere else.
 > smaller, so on a divergence you would otherwise trust the wrong one.
 
 - **ODC core:** Phase 0, ticket T9. The security-audit gate is **closed**; the
-  fixture/verifier conformance work runs in four phases. **Phase 1 done. Phase 2:
-  both verifiers are rebuilt and LANDED (#123/#124, merged 2026-08-23; #109/#110
-  closed, superseded); the twelve vectors are the only owed work left and are the
-  critical path.** Five `contracts/` contradictions are open for an operator
-  decision. → `memory/STATE.md`
+  fixture/verifier conformance work runs in four phases. **Phases 1 and 2 are
+  COMPLETE** — phase 2's fixture half landed 2026-08-26 (#136, #137), taking the
+  corpus to **98 vectors** and closing the five rules that both verifiers
+  enforced and no vector cited. **Phase 3 (F2 batching) is the live work.** Four
+  `contracts/` contradictions remain open for an operator decision; EV-9 vs
+  EV-20 is closed. → `memory/STATE.md`
 - **Pulse:** pillars 1 and 2 are on master — magic-link identity, the voting
   core, and a story UI you can walk end to end (#128-#131, #135, #127, merged
   2026-08-26). What is missing: every screen except the ballot (so nothing in
