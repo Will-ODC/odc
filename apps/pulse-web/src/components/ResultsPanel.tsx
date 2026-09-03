@@ -1,4 +1,4 @@
-import type { CSSProperties } from "react";
+import type { CSSProperties, RefObject } from "react";
 import type { Results } from "../api/types.js";
 import "./ResultsPanel.css";
 
@@ -17,11 +17,20 @@ export function ResultsPanel({
   results,
   yourChoice,
   onClose,
+  panelRef,
 }: {
   results: Results;
   /** Position in the poll's choices that this person picked. */
   yourChoice: number;
   onClose: () => void;
+  /**
+   * Focus lands here when the panel opens. The control that was pressed is
+   * unmounted by the same render, so without this focus falls to the document
+   * body: nothing is announced, and the arrow keys the ballot listens for stop
+   * reaching it. Focusing a labelled group announces the label and its
+   * contents, which is what a live region would have been standing in for.
+   */
+  panelRef?: RefObject<HTMLDivElement | null> | undefined;
 }) {
   const yours = results.choices[yourChoice];
   /**
@@ -36,7 +45,13 @@ export function ResultsPanel({
   );
 
   return (
-    <div className="results" role="group" aria-label="How people answered">
+    <div
+      className="results"
+      role="group"
+      aria-label="How people answered"
+      ref={panelRef}
+      tabIndex={-1}
+    >
       <p className="ballot__eyebrow">WHERE IT STANDS</p>
       <p className="results__count">{peopleSoFar(results.voters)}</p>
 
@@ -80,8 +95,13 @@ export function ResultsPanel({
         </p>
       ) : null}
 
+      {/*
+        Not "Back": the chrome's own back control is on screen at the same time
+        and abandons the question entirely. Two controls both starting with the
+        same word, doing opposite things, is how someone loses their place.
+      */}
       <button type="button" className="results__close" onClick={onClose}>
-        Back to the question
+        Close
       </button>
     </div>
   );

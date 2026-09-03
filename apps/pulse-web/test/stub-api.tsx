@@ -67,6 +67,24 @@ export function results(over: Partial<Results> = {}): Results {
 export const EMPTY_RESULTS: Results = results();
 
 /**
+ * What the server really returns to the person who just voted: at least one
+ * voter, because their own vote is in it. `EMPTY_RESULTS` is a shape no cast
+ * can answer with - handing it back from `cast` made every voting test render
+ * "0 people so far", which is a state the panel's own comment calls impossible.
+ */
+export const CAST_RESULTS: Results = results({
+  voters: 1,
+  choices: results().choices.map((choice) =>
+    choice.index === 1 ? { ...choice, count: 1, share: 100 } : choice,
+  ),
+});
+
+/** A cast the server would really answer with: this choice, these counts. */
+export function counted(choice: number, of: Results) {
+  return { status: "counted" as const, ballot: [choice], results: of };
+}
+
+/**
  * A plain object is enough: `PulseApi` is structural, so a stub does not have
  * to extend anything. Anything a test has not said the screen may call rejects
  * loudly rather than quietly answering.
@@ -80,7 +98,7 @@ export function stubApi(over: Partial<PulseApi> = {}): PulseApi {
       Promise.resolve({
         status: "counted" as const,
         ballot: [1],
-        results: EMPTY_RESULTS,
+        results: CAST_RESULTS,
       }),
     suggestions: () => Promise.resolve([] as Suggestion[]),
     suggest: () =>

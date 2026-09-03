@@ -82,7 +82,7 @@
   position: relative;
   height: 8px;
   border-radius: var(--r-pill);
-  background: rgba(255, 255, 255, 0.09);
+  background: var(--ballot-chip);
   overflow: hidden;
 }
 
@@ -110,7 +110,12 @@
   margin: var(--step) 0 0;
   font-size: var(--t-small);
   line-height: 1.45;
-  color: var(--ballot-ink-faint);
+  /*
+   * `--ballot-ink-muted`, not `--ballot-ink-faint`: faint measures about 2.8:1
+   * on this ground, under the 4.5:1 floor, and this is the one line standing
+   * between an approval reader and "these numbers are broken".
+   */
+  color: var(--ballot-ink-muted);
 }
 
 .results__close {

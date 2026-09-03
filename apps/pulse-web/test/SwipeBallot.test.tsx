@@ -419,9 +419,7 @@ describe("seeing where the question stands", () => {
   it("goes back to the outcome, which still offers the numbers again", async () => {
     vote();
     fireEvent.click(await screen.findByRole("button", { name: "See results" }));
-    fireEvent.click(
-      screen.getByRole("button", { name: "Back to the question" }),
-    );
+    fireEvent.click(screen.getByRole("button", { name: "Close" }));
     expect(
       await screen.findByRole("button", { name: "See results" }),
     ).toBeTruthy();
@@ -444,10 +442,9 @@ describe("seeing where the question stands", () => {
     show({ cast });
     fireEvent.keyDown(screen.getByText("Yes"), { key: "ArrowRight" });
     fireEvent.click(await screen.findByRole("button", { name: "See results" }));
-    fireEvent.keyDown(
-      screen.getByRole("button", { name: "Back to the question" }),
-      { key: "ArrowLeft" },
-    );
+    fireEvent.keyDown(screen.getByRole("button", { name: "Close" }), {
+      key: "ArrowLeft",
+    });
     expect(cast).toHaveBeenCalledTimes(1);
   });
 });

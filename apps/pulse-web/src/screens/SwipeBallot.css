@@ -228,7 +228,18 @@
   display: flex;
   flex-direction: column;
   align-items: center;
+  /*
+   * Centred while it fits, top-aligned the moment it does not. `.ballot` is a
+   * fixed box with `overflow: hidden`, and this branch now holds one row per
+   * choice - so a long question could overrun it. Plain `center` clips a
+   * column flex overflow at BOTH ends, which would put the last control (the
+   * way out of the results panel) out of reach with no way to scroll to it.
+   * `safe` falls back to `center` on browsers that do not know it, which is
+   * why the plain declaration stays above.
+   */
   justify-content: center;
+  justify-content: safe center;
+  overflow-y: auto;
   gap: 10px;
   text-align: center;
   padding: 0 30px var(--gutter);
@@ -405,7 +416,13 @@
  */
 .outcome__results {
   margin-top: 2px;
-  padding: 6px 4px;
+  /*
+   * Roomy enough for a thumb (44px tall) without looking heavier: the padding
+   * is hit area, not weight. A miss low used to hit nothing; a miss high hits
+   * NEXT, and one press is one action here - it would advance the run past
+   * the question.
+   */
+  padding: 13px 16px;
   border: 0;
   background: none;
   color: var(--ballot-ink-muted);

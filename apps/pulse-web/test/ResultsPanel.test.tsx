@@ -1,5 +1,6 @@
 // @vitest-environment jsdom
 import { cleanup, render, screen, fireEvent } from "@testing-library/react";
+import { createRef } from "react";
 import { afterEach, describe, expect, it, vi } from "vitest";
 import { ResultsPanel } from "../src/components/ResultsPanel.js";
 import { results } from "./stub-api.js";
@@ -118,27 +119,42 @@ describe("showing where a question stands", () => {
     expect(bar.style.getPropertyValue("--fill")).toBe("0%");
   });
 
-  it("gives a way back to the question", () => {
+  it("gives a way out that is not called Back", () => {
     const { onClose } = show();
-    fireEvent.click(
-      screen.getByRole("button", { name: "Back to the question" }),
-    );
+    fireEvent.click(screen.getByRole("button", { name: "Close" }));
     expect(onClose).toHaveBeenCalledTimes(1);
   });
 
-  /** The counting is never the subject - see apps/pulse/CLAUDE.md. */
-  it("never mentions how the counting works", () => {
-    show();
-    const text = document.body.textContent ?? "";
-    for (const word of [
-      "hash",
-      "chain",
-      "verif",
-      "tally",
-      "ledger",
-      "tamper",
-    ]) {
-      expect(text.toLowerCase()).not.toContain(word);
-    }
+  /**
+   * The counting is never the subject - see apps/pulse/CLAUDE.md.
+   *
+   * Both methods, because they draw different copy: only `approval` renders
+   * the note explaining shares that pass a hundred, so a `single`-only scan
+   * would let anything written there through.
+   */
+  it.each(["single", "approval"] as const)(
+    "never mentions how the counting works (%s)",
+    (method) => {
+      show({ results: results({ ...COUNTED, method }) });
+      const text = document.body.textContent ?? "";
+      for (const word of [
+        "hash",
+        "chain",
+        "verif",
+        "tally",
+        "ledger",
+        "tamper",
+      ]) {
+        expect(text.toLowerCase()).not.toContain(word);
+      }
+    },
+  );
+
+  it("takes focus when it is handed a ref, so it can be read and typed at", () => {
+    const panelRef = createRef<HTMLDivElement>();
+    show({ panelRef });
+    panelRef.current?.focus();
+    expect(document.activeElement).toBe(panelRef.current);
+    expect(panelRef.current?.getAttribute("tabindex")).toBe("-1");
   });
 });

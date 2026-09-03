@@ -1,4 +1,4 @@
-import { useState } from "react";
+import { useEffect, useRef, useState } from "react";
 import type { CastState } from "../hooks/use-cast-vote.js";
 import { Outcome } from "./Outcome.js";
 import { ResultsPanel } from "./ResultsPanel.js";
@@ -31,6 +31,24 @@ export function AfterVote({
   onNext: () => void;
 }) {
   const [showing, setShowing] = useState(false);
+  const panelRef = useRef<HTMLDivElement>(null);
+  const triggerRef = useRef<HTMLButtonElement>(null);
+  /**
+   * Only send focus back to the trigger when this component closed the panel -
+   * never on first render, where nothing was opened and the person is reading
+   * the outcome for the first time.
+   */
+  const opened = useRef(false);
+
+  useEffect(() => {
+    if (showing) {
+      opened.current = true;
+      panelRef.current?.focus();
+    } else if (opened.current) {
+      opened.current = false;
+      triggerRef.current?.focus();
+    }
+  }, [showing]);
 
   if (showing && state.status === "counted") {
     return (
@@ -38,6 +56,7 @@ export function AfterVote({
         results={state.results}
         yourChoice={state.choice}
         onClose={() => setShowing(false)}
+        panelRef={panelRef}
       />
     );
   }
@@ -52,7 +71,7 @@ export function AfterVote({
       // Only a counted vote has counts to show. `casting` has not been
       // answered yet and `closed` came back without them.
       {...(state.status === "counted"
-        ? { onSeeResults: () => setShowing(true) }
+        ? { onSeeResults: () => setShowing(true), seeResultsRef: triggerRef }
         : {})}
     />
   );

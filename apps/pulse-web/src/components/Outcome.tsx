@@ -1,3 +1,4 @@
+import type { RefObject } from "react";
 import type { CastState } from "../hooks/use-cast-vote.js";
 
 /**
@@ -17,6 +18,7 @@ export function Outcome({
   nextQuestion,
   onNext,
   onSeeResults,
+  seeResultsRef,
 }: {
   state: CastState;
   /** The choice, in the poll's own words. */
@@ -43,6 +45,11 @@ export function Outcome({
    * there for whoever wants them, and are never the thing being offered first.
    */
   onSeeResults?: (() => void) | undefined;
+  /**
+   * The control focus returns to when the panel closes. Closing unmounts the
+   * panel, so without somewhere to send it focus drops to the document body.
+   */
+  seeResultsRef?: RefObject<HTMLButtonElement | null> | undefined;
 }) {
   if (state.status === "closed") {
     return (
@@ -80,6 +87,7 @@ export function Outcome({
           type="button"
           className="outcome__results"
           onClick={onSeeResults}
+          ref={seeResultsRef}
         >
           See results
         </button>

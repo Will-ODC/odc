@@ -5,12 +5,13 @@ import {
   screen,
   fireEvent,
   waitFor,
+  within,
 } from "@testing-library/react";
 import { afterEach, describe, expect, it, vi } from "vitest";
 import type { PulseApi, SuggestResult } from "../src/api/types.js";
 import { ApiError } from "../src/api/types.js";
 import { ChoiceBallot } from "../src/screens/ChoiceBallot.js";
-import { poll, stubApi } from "./stub-api.js";
+import { counted, poll, results, stubApi } from "./stub-api.js";
 
 afterEach(cleanup);
 
@@ -201,5 +202,56 @@ describe("the copy", () => {
     ]) {
       expect(shown).not.toContain(word);
     }
+  });
+});
+
+describe("seeing where a many-answer question stands", () => {
+  const MANY = results({
+    pollId: PAY.id,
+    question: PAY.question,
+    voters: 9,
+    choices: PAY.choices.map((label, index) => ({
+      index,
+      label,
+      count: index === 2 ? 5 : 2,
+      share: index === 2 ? 56 : 22,
+    })),
+  });
+
+  const vote = async () => {
+    show({ cast: () => Promise.resolve(counted(2, MANY)) });
+    fireEvent.click(screen.getByRole("button", { name: "Grants" }));
+    await screen.findByText("Counted.");
+    fireEvent.click(screen.getByRole("button", { name: "See results" }));
+  };
+
+  /**
+   * The reuse this PR claims is only proven on one of the two ballots unless
+   * this exists - and this is the screen where the choice list has no fixed
+   * length, so it is the one that can outgrow the box it is drawn in.
+   */
+  it("names every answer, not only the two a swipe ballot has", async () => {
+    await vote();
+    // Scoped to the list: the chosen answer is also named in "You picked X".
+    const rows = within(screen.getByRole("group", { name: /how people/i }));
+    for (const choice of PAY.choices) {
+      expect(rows.getAllByText(choice).length).toBeGreaterThan(0);
+    }
+  });
+
+  it("leaves the way out reachable, whatever the answer count", async () => {
+    await vote();
+    expect(screen.getByRole("button", { name: "Close" })).toBeTruthy();
+  });
+
+  it("marks the answer this person gave", async () => {
+    await vote();
+    expect(screen.getByText("yours")).toBeTruthy();
+  });
+
+  it("puts the outcome back when the panel is closed", async () => {
+    await vote();
+    fireEvent.click(screen.getByRole("button", { name: "Close" }));
+    expect(screen.getByRole("button", { name: "See results" })).toBeTruthy();
   });
 });
