@@ -1,5 +1,5 @@
 import { useCallback, useState } from "react";
-import type { PulseApi } from "../api/types.js";
+import type { PulseApi, Results } from "../api/types.js";
 import { ApiError } from "../api/types.js";
 
 /**
@@ -14,8 +14,20 @@ import { ApiError } from "../api/types.js";
 export type CastState =
   | { status: "idle" }
   | { status: "casting"; choice: number }
-  /** `changed` when this replaced an earlier answer to the same poll. */
-  | { status: "counted"; choice: number; changed: boolean }
+  /**
+   * `changed` when this replaced an earlier answer to the same poll.
+   *
+   * `results` are the counts the server returned with the cast itself, kept
+   * rather than discarded: they are the standing of the poll the moment this
+   * vote joined it, so showing them costs no second request and cannot
+   * disagree with the answer just given.
+   */
+  | {
+      status: "counted";
+      choice: number;
+      changed: boolean;
+      results: Results;
+    }
   | { status: "closed" }
   | { status: "failed"; message: string };
 
@@ -48,6 +60,7 @@ export function useCastVote(api: PulseApi, pollId: string): CastVote {
             status: "counted",
             choice,
             changed: outcome.status === "changed",
+            results: outcome.results,
           });
         },
         (err: unknown) => setState({ status: "failed", message: reason(err) }),

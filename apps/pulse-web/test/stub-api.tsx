@@ -38,7 +38,33 @@ export function poll(over: Partial<Poll> = {}): Poll {
   };
 }
 
-export const EMPTY_RESULTS = {} as Results;
+/**
+ * A real `Results`, not `{} as Results`.
+ *
+ * It used to be the empty cast, which typechecked and was a lie: nothing read
+ * it, so nothing noticed. The moment a screen actually rendered the counts it
+ * would have thrown on `results.choices`. A stub that cannot be rendered is a
+ * test that is not testing the thing.
+ */
+export function results(over: Partial<Results> = {}): Results {
+  const base = poll();
+  return {
+    pollId: base.id,
+    question: base.question,
+    method: base.method,
+    voters: 0,
+    choices: base.choices.map((label, index) => ({
+      index,
+      label,
+      count: 0,
+      share: 0,
+    })),
+    ...over,
+  };
+}
+
+/** Nobody has voted yet, in the shape the server would really send. */
+export const EMPTY_RESULTS: Results = results();
 
 /**
  * A plain object is enough: `PulseApi` is structural, so a stub does not have

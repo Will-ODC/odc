@@ -397,3 +397,31 @@
   line-height: 1.45;
   text-align: center;
 }
+
+/*
+ * The quiet way to the numbers. Underlined text rather than a filled control,
+ * so it reads as secondary to NEXT without depending on colour alone to say
+ * so - the run is for answering, and this is for whoever wants more.
+ */
+.outcome__results {
+  margin-top: 2px;
+  padding: 6px 4px;
+  border: 0;
+  background: none;
+  color: var(--ballot-ink-muted);
+  font: inherit;
+  font-size: var(--t-small);
+  text-decoration: underline;
+  text-underline-offset: 3px;
+  cursor: pointer;
+}
+
+.outcome__results:hover {
+  color: var(--ballot-ink);
+}
+
+.outcome__results:focus-visible {
+  outline: 2px solid rgba(255, 255, 255, 0.7);
+  outline-offset: 2px;
+  border-radius: var(--r-control);
+}
