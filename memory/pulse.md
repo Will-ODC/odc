@@ -106,6 +106,7 @@ opens, add an answer of their own, and step back through the run.
 | `111b8f5` | #131 | the outcome replaces the ballot instead of covering it           |
 | `202a2f4` | #135 | a way back through the run                                       |
 | `08bff67` | #127 | a suggestion matching a choice answers `on_ballot`               |
+| `af55032` | #140 | where a question stands, once someone has answered               |
 
 **#135 is the PR #132 should have been.** #132 was auto-closed by GitHub when its
 base branch was deleted on merging #131, and could not be reopened because the
@@ -124,10 +125,10 @@ holds the review discussion** — go there for it, not to #135.
 
 ## Not built
 
-- **Screens 2-7 of the story.** Only the ballot exists. There is no CLAIM or SENT
-  screen, no bite/case screens, no results screen and no action screen — so the
-  magic-link identity built in pillar 1 has **no UI at all**: nothing in the
-  client signs anyone in. `flow/story.ts` still enumerates six steps the app does
+- **Screens 2-7 of the story.** The ballot exists, and since #140 so does a
+  results panel reachable from it. There is still no CLAIM or SENT screen, no
+  bite/case screens and no action screen — so the magic-link identity built in
+  pillar 1 has **no UI at all**: nothing in the client signs anyone in. `flow/story.ts` still enumerates six steps the app does
   not render. The mockups in `docs/mockups/pulse-screens/` are the design.
 - **Pillar 3, the path to action** in any form: soliciting ideas, volunteer time
   or donations, and the proof-of-what-happened email. `proofEmailsOptIn` is
@@ -145,15 +146,23 @@ decision 4).
   before re-doing it.** #131 made the outcome replace the ballot _inside_ the
   chrome rather than covering the screen, so `BallotChrome` — and its Back —
   now renders on both sides of the `settled` branch in `SwipeBallot.tsx`. The
-  control is there. **But no test asserts it**, so it can regress silently the
-  next time that render is reorganised; a test that settles a vote and looks for
-  Back is a one-line job and is the real remaining work here.
-- **A way to see the result.** Some "view results" affordance from a question,
-  showing the counts as a graph or other visualisation. `GET /polls/:id/results`
-  already returns them and `HttpPulseApi.results` already fetches them; nothing
-  in the client renders them. Note the standing constraint before designing it:
-  **the counting is never the subject** — a result may show what people chose,
-  never how a tally is computed or verified.
+  control is there. **The test it owed now exists** (#140) — a mutation removing
+  Back from the settled chrome makes it, and only it, go red. This item is fully
+  closed.
+- ~~**A way to see the result.**~~ **BUILT 2026-09-03 — #140, squash `af55032`.**
+  A quiet "See results" under the outcome opens a panel in place of it: how many
+  have answered, your pick named back, and a bar per choice with its count and
+  share. Three things about it worth not rediscovering:
+  - **The counts ride in on the cast response**, not a fetch of their own. The
+    server already returned them with the vote and the client was discarding
+    them, so there is no second request, no loading state, no failure state, and
+    no window in which the numbers can disagree with the answer just given.
+  - **`PulseApi.results` is therefore dead client-side.** Nothing calls it. That
+    answers the question of whether the interface earns its keep on that method.
+  - **Bars scale to the widest share, not to 100** — an approval poll can push
+    one share past most of a fixed scale and a single-choice poll can leave every
+    bar short. The standing constraint held: the panel says what people chose,
+    never how a tally is computed, and a test asserts it over both poll methods.
 - **A subject browser.** A way to look through the subjects/questions available
   rather than only walking the run you were given. Undesigned and unscoped —
   it is not yet decided whether this is a list, a feed, or a search, nor how it
@@ -280,6 +289,18 @@ decision 4).
    second half of the rule was doing real work: the same PR shipped a genuine
    double-cast on tap.
 
+7. **Does NEXT stay on screen while the results panel is open?** (Raised
+   2026-09-03 by the two #140 reviews, which split on it.) Today it does not:
+   opening the panel replaces the whole outcome, so getting on with the run
+   costs "Close" then NEXT. One reviewer called the two-press cost fine and
+   said the real defect was the label collision (now fixed — the control is
+   "Close", not a second "Back"). The other called it wrong: a run is meant to
+   move at the speed of an opinion, and making a glance cost two presses to undo
+   teaches people not to glance. It also removes the only way forward from the
+   screen, which is what turned the panel's overflow bug into a trap before that
+   was fixed. **Left as-is deliberately** — the operator approved the six named
+   review fixes and this was not one of them.
+
 ### Two bugs the 2026-08-26 review round found, now fixed — do not reintroduce
 
 - **A browser tap is three events**, `pointerdown → pointerup → click`, and a
@@ -317,23 +338,17 @@ decision 4).
 
 ## Live cautions
 
-- **Never `--delete-branch` a stacked PR while a child PR still targets it.**
-  On 2026-08-26 merging #131 with `gh pr merge --squash --delete-branch` deleted
-  `pulse/8-outcome-readability`, and GitHub **auto-closed #132**, which was based
-  on it, instead of retargeting. It could not be reopened: the head branch had
-  been force-pushed during an earlier rebase, and GitHub refuses
-  (`state cannot be changed. The <branch> branch was force-pushed or recreated`).
-  Restoring the deleted base branch does not unblock the reopen. The work had to
-  be re-raised as #135. **Merge a stacked PR without `--delete-branch`, let the
-  child retarget to master, then delete the branch by hand.**
-- **A squash merge makes the branch above it conflict, every time.** The child
-  still carries the parent's original commits while master has one squashed
-  commit of them, so git sees the same changes twice. It is not a real conflict
-  and must not be merged away — rebase the child, replaying only its own work:
-  `git rebase --onto origin/master <old-parent-sha> <child-branch>`. Grab the
-  old parent SHA **before** merging; `--delete-branch` takes the local branch
-  too and with it the easy way to name it. This happened at every single step of
-  the #128-#135 stack.
+- **Stacked-PR discipline now lives in `.claude/skills/odc-pipeline`, not here**
+  (#139, 2026-09-03). It absorbed the two traps this file used to spell out —
+  never `--delete-branch` while a child PR still targets the branch (GitHub
+  auto-closes the child and it cannot be reopened if its head was ever
+  force-pushed; that is how #132 was lost and had to be re-raised as #135), and
+  a squash merge makes the branch above it conflict every time, which is not a
+  real conflict and must be rebased with `--onto`, never merged away. Both were
+  learned on the #128-#135 stack, at every single step of it. **Read the skill;
+  do not re-copy the rules back here** — one place only, per `memory/INDEX.md`.
+  The same PR replaced the old blanket "do not stack PRs" ban, which no operator
+  ever asked for, with a shallow-stack discipline. Do not re-derive the ban.
 - **`pnpm dev` generates an ephemeral session secret** and announces it; every
   restart invalidates every cookie. That is deliberate, not a bug to fix.
 - **`pulse/4b-sign-in-routes` is an unlanded remote branch with no open PR**
