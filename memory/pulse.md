@@ -106,7 +106,37 @@ opens, add an answer of their own, and step back through the run.
 | `111b8f5` | #131 | the outcome replaces the ballot instead of covering it           |
 | `202a2f4` | #135 | a way back through the run                                       |
 | `08bff67` | #127 | a suggestion matching a choice answers `on_ballot`               |
-| `af55032` | #140 | where a question stands, once someone has answered               |
+
+### Landed 2026-09-02/03 — the run-up to storage
+
+| Squash    | PR   | What                                                         |
+| --------- | ---- | ------------------------------------------------------------ |
+| `ea03e5d` | #142 | `.claude/launch.json` — one command brings the demo up       |
+| `7282510` | #143 | a Postgres service in CI, and the harness the stores land on |
+| `b2ca72b` | #144 | ADR-0020 (Postgres) and ADR-0021 (the vote model)            |
+
+**#142:** `preview_start` reads `.claude/launch.json`, so `pulse-api` then
+`pulse-web` brings both processes up. Paths are relative on purpose — the first
+version pointed at a worktree by absolute path and was aiming at an orphaned
+checkout within the hour.
+
+**#143:** `postgres:17` as a service on `repo.yml`'s **existing `checks` job**,
+not a new `pulse.yml`, because a new job is not a _required_ check until an
+admin edits the `protect-master` ruleset — the trade `repo.yml` already records
+for its fixtures-manifest and Go verifier steps. The accepted cost: **every PR
+in the repo now starts a container.** Also adds `pg` (devDependencies — only
+`test/` imports it until the stores land) and `apps/pulse/test/database.test.ts`.
+
+**Environment variables are pulse-owned: `PULSE_DATABASE_URL` and
+`PULSE_REQUIRE_DATABASE`, never `DATABASE_URL` or `CI`.** Both obvious names
+were tried and both were wrong — see the cautions below.
+
+**#144:** the two ADRs. **ADR-0021 is the one to read before touching the
+schema:** every vote method is stored as `(choice, value)` pairs, `method` is
+plain `text` so adding a vote type is **never a migration**, and
+`poll_choice.id` is a stable identity with `position` demoted to display order.
+
+| `af55032` | #140 | where a question stands, once someone has answered |
 
 **#135 is the PR #132 should have been.** #132 was auto-closed by GitHub when its
 base branch was deleted on merging #131, and could not be reopened because the
@@ -134,7 +164,13 @@ holds the review discussion** — go there for it, not to #135.
   or donations, and the proof-of-what-happened email. `proofEmailsOptIn` is
   collected at sign-in and currently leads nowhere.
 - **Real mail delivery and real persistence.** `src/identity/mailer.ts` and the
-  stores are what the tests run against; nothing is durable.
+  stores are what the tests run against; nothing is durable. **Persistence is now
+  decided but not built** — Postgres, per ADR-0020, with the schema in ADR-0021,
+  and CI has a database to run against as of #143. What is still owed is the work
+  itself: the migration runner, the four store implementations, and the shared
+  conformance suite that must run the same tests against both the in-memory and
+  Postgres versions. No `Mailer` implementation exists anywhere, so nobody
+  outside a terminal can sign in — that half is undecided as well as unbuilt.
 
 ### Asked for by the operator, 2026-08-25
 
@@ -191,7 +227,22 @@ decision 4).
   whether `apps/pulse` gets the same treatment, and the charter exemption does
   not answer it — the one-DB-per-service rule is an architecture convention, not
   a legitimacy rule, so exemption is not automatically a reason to skip it. That
-  is the first thing to decide, before any YAML gets written.
+  is the first thing to decide, before any YAML gets written. **ANSWERED
+  2026-09-02 by ADR-0020: pulse follows the convention** — its own
+  `docker-compose.yml` with its own container. The rule protects nothing with a
+  single service, but deviating buys nothing either, and it keeps the root
+  compose able to bring the whole stack up as `just up` promises.
+
+  Two more of the eight items below are now decided rather than open. **Item 1
+  (the four stores)** has its schema in ADR-0021 — and note the ADR adds two
+  things the list does not: timestamps come from the application with no
+  `DEFAULT now()` anywhere, because a clock is injected in five places and a
+  database default silently bypasses all of them while most tests keep passing;
+  and **the dev seed must become idempotent before any of this lands**, because
+  `createPoll` throws on a duplicate id and `dev-server.ts` loops the `SEED`
+  polls through it on every boot — fine against a fresh `Map`, a startup crash
+  on the first restart once storage persists. **Item 6 (poll creation)** is
+  unchanged and still the gap most likely to be found late.
 
   What a production-resembling environment has to cover, from reading the code
   rather than guessing — the dev-server's own comment ("the database-backed
@@ -246,9 +297,21 @@ decision 4).
 
 **Still open.**
 
-3. **Where pulse's data actually lives.** Storage is in-memory and
-   storage-agnostic by design; no database has been chosen. Everything a
-   `pnpm dev` session does dies with the process — voters, sessions, votes.
+3. ~~Where pulse's data actually lives.~~ **SETTLED 2026-09-02 — Postgres**
+   (`docs/decisions/0020-pulse-storage-is-postgres.md`), with the poll and vote
+   schema in ADR-0021. The decision is made; the stores are not written, so
+   everything a `pnpm dev` session does still dies with the process.
+
+   **Read ADR-0020 before reopening this.** The argument is closer than the
+   locked stack makes it look — ADR-0001's stated reasons ("multi-service access
+   and enforceable append-only grants") reach neither a workstream forbidden
+   from cross-service reads nor one with no event tables, and `odc-storage`
+   already scopes itself out of `apps/**`. SQLite was a real option and every
+   technical argument favoured it. **What ruled it out is the operator's goal of
+   high or highly dynamic traffic** — many processes, which SQLite's single
+   writer forecloses. Do not re-derive the technical case and conclude the
+   decision was a mistake.
+
 4. **Where a feature request goes** (raised 2026-08-25 by the operator, who
    asked that this be solidified). `memory/INDEX.md` has a destination for a
    landed ticket, a decision, an unsettled question and a trap — and none for
@@ -337,6 +400,41 @@ decision 4).
   imported stylesheet — so no test could have caught it either way.
 
 ## Live cautions
+
+- **`pnpm run test` is `turbo run test`, and turbo 2 strips undeclared
+  environment variables.** A variable set on a CI job does **not** reach the
+  task unless `turbo.json` declares it. On 2026-09-02 this made PR #143 go green
+  while proving nothing: `DATABASE_URL` was set on the job, a workflow step
+  asserted it was set, turbo removed it anyway, and the database test took its
+  skip branch — `# SKIP DATABASE_URL is unset`, 150 passed, 1 skipped, all
+  checks green. Declare the variable under the task's **`env`** (not
+  `passThroughEnv` — `env` is part of the cache key, and for anything that can
+  change a result a cached pass would be a lie), and put the "this must not
+  skip" guard **inside the test**. A workflow step can only see the shell, not
+  the task. **A green tick is not evidence a test ran:**
+  `gh run view <id> --log | grep -c '# SKIP'`.
+- **Never key a test off `DATABASE_URL` or `CI`.** Both were tried in #143 and
+  both were wrong. `DATABASE_URL` is among the most widely exported variables
+  there is, so the suite aimed itself at whatever unrelated database the
+  developer already had configured — harmless while the only statement is
+  `select 1`, destructive once the store tests run migrations. And `CI` was read
+  as "any non-empty value", so `CI=false` — a convention developers really do
+  carry — meant "on CI" and turned a skip into a failure telling them the
+  opposite. Hence `PULSE_DATABASE_URL` and `PULSE_REQUIRE_DATABASE`.
+- **Do not map host port 5432 when pulse gets its compose file.** A developer
+  machine with a Postgres already listening there silently wins the loopback
+  race against the container, and the error it produces (`role "pulse" does not
+exist`) looks like a credentials bug rather than a port collision. This cost
+  real time on 2026-09-02 on the operator's own machine, which has one running.
+- **A `D` in `git diff --name-status origin/master..HEAD` is not proof you
+  deleted anything.** Two dots compares against master's _current tip_, so any
+  file master gained after you branched reads as a deletion. On 2026-09-02
+  `pulse/10-ci-database` appeared to delete `.claude/launch.json`, which #142 had
+  added after the branch was cut. Use **three dots** — `origin/master...HEAD` —
+  to see what the branch actually changes, and treat a two-dot-only `D` as a
+  signal to rebase. Both forms are worth running: three dots answers "what do I
+  change", two dots answers "am I stale". The caution below about a branch not
+  being based on current master is the same symptom.
 
 - **Stacked-PR discipline now lives in `.claude/skills/odc-pipeline`, not here**
   (#139, 2026-09-03). It absorbed the two traps this file used to spell out —
