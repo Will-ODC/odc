@@ -33,9 +33,11 @@ Do not apply charter rules to `apps/**`, and do not relax them anywhere else.
 - **Pulse:** pillars 1 and 2 are on master — magic-link identity, the voting
   core, and a story UI you can walk end to end (#128-#131, #135, #127, merged
   2026-08-26), plus a results panel you can open after answering (#140, merged
-  2026-09-03). What is missing: every screen except the ballot and that panel
-  (so nothing in the client signs anyone in), pillar 3's path to action, and any
-  durable storage. → `memory/pulse.md`
+  2026-09-03). Storage is **decided and not built**: Postgres per ADR-0020, the
+  poll/vote schema per ADR-0021, and CI has a database as of #143 — no store is
+  written yet. What is missing: every screen except the ballot and that panel
+  (so nothing in the client signs anyone in), pillar 3's path to action, any
+  durable storage, and any `Mailer` implementation. → `memory/pulse.md`
 
 ## Load order
 
