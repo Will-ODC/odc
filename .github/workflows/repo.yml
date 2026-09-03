@@ -16,6 +16,28 @@ jobs:
   checks:
     name: format / lint / typecheck
     runs-on: ubuntu-latest
+    # apps/pulse's stores are moving off in-memory Maps and onto Postgres, so
+    # its tests need a real database. Deliberately a service on this
+    # already-required job rather than a new path-filtered workflow: a new job
+    # is not a required check until branch protection is updated, which needs a
+    # repo admin. Same reasoning as the fixtures-manifest step below. Split it
+    # out later if the container start ever costs more than it is worth.
+    services:
+      postgres:
+        image: postgres:17
+        env:
+          POSTGRES_USER: pulse
+          POSTGRES_PASSWORD: pulse
+          POSTGRES_DB: pulse_test
+        ports:
+          - 5432:5432
+        options: >-
+          --health-cmd "pg_isready -U pulse -d pulse_test"
+          --health-interval 10s
+          --health-timeout 5s
+          --health-retries 5
+    env:
+      DATABASE_URL: postgres://pulse:pulse@localhost:5432/pulse_test
     steps:
       - uses: actions/checkout@v4
       # No `version:` here on purpose — action-setup reads the pnpm version from
@@ -36,6 +58,11 @@ jobs:
       - run: pnpm run format:check
       - run: pnpm run lint
       - run: pnpm run typecheck
+      # A database test that skips when DATABASE_URL is unset passes while
+      # proving nothing — the deletable-green shape every review of this repo
+      # has found. Fail here instead, so that skip branch is unreachable in CI.
+      - name: Assert the database is configured
+        run: test -n "$DATABASE_URL"
       # Added with the first package that has tests (T5a). Passed trivially
       # before that, exactly as the three above did.
       - run: pnpm run test
