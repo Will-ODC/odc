@@ -2,7 +2,10 @@
   "$schema": "https://turbo.build/schema.json",
   "tasks": {
     "build": { "dependsOn": ["^build"], "outputs": ["dist/**"] },
-    "test": { "dependsOn": ["build"] },
+    "test": {
+      "dependsOn": ["build"],
+      "env": ["PULSE_DATABASE_URL", "PULSE_REQUIRE_DATABASE"]
+    },
     "lint": {},
     "typecheck": { "dependsOn": ["^build"] }
   }

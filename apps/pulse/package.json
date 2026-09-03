@@ -12,7 +12,9 @@
     "typecheck": "tsc -p tsconfig.json --noEmit"
   },
   "devDependencies": {
-    "@types/node": "^20.14.0"
+    "@types/node": "^20.14.0",
+    "@types/pg": "^8.11.0",
+    "pg": "^8.13.0"
   },
   "dependencies": {
     "@fastify/cookie": "^11.1.2",

@@ -16,6 +16,35 @@ jobs:
   checks:
     name: format / lint / typecheck
     runs-on: ubuntu-latest
+    # apps/pulse's stores are moving off in-memory Maps and onto Postgres, so
+    # its tests need a real database. Deliberately a service on this
+    # already-required job rather than a new path-filtered workflow: a new job
+    # is not a required check until branch protection is updated, which needs a
+    # repo admin. Same reasoning as the fixtures-manifest step below. Split it
+    # out later if the container start ever costs more than it is worth.
+    services:
+      postgres:
+        image: postgres:17
+        env:
+          POSTGRES_USER: pulse
+          POSTGRES_PASSWORD: pulse
+          POSTGRES_DB: pulse_test
+        ports:
+          - 5432:5432
+        options: >-
+          --health-cmd "pg_isready -U pulse -d pulse_test"
+          --health-interval 10s
+          --health-timeout 5s
+          --health-retries 5
+    env:
+      # Pulse-owned names on purpose. A bare DATABASE_URL is one of the most
+      # widely exported variables there is, so keying off it would point the
+      # suite at whatever unrelated database a developer already has set —
+      # harmless for `select 1`, not harmless once these tests run migrations.
+      # PULSE_REQUIRE_DATABASE says a missing database is an error rather than
+      # a reason to skip; it is set here and nowhere else.
+      PULSE_DATABASE_URL: postgres://pulse:pulse@localhost:5432/pulse_test
+      PULSE_REQUIRE_DATABASE: "1"
     steps:
       - uses: actions/checkout@v4
       # No `version:` here on purpose — action-setup reads the pnpm version from
