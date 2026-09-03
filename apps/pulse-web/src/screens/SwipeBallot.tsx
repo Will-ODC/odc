@@ -12,7 +12,7 @@ import {
 import { useCastVote } from "../hooks/use-cast-vote.js";
 import { edgesOf, useNextQuestions } from "../hooks/use-next-questions.js";
 import { BallotChrome } from "../components/BallotChrome.js";
-import { Outcome } from "../components/Outcome.js";
+import { AfterVote } from "../components/AfterVote.js";
 import { Refusal } from "../components/Refusal.js";
 import "./SwipeBallot.css";
 
@@ -160,7 +160,7 @@ export function SwipeBallot({
 
         {settled ? (
           <div className="ballot__done">
-            <Outcome
+            <AfterVote
               state={state}
               label={chosen ? (poll.choices[choiceFor(chosen)] ?? "") : ""}
               hasNext={chosen ? poll.next[choiceFor(chosen)] !== null : false}

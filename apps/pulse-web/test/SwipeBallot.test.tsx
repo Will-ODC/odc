@@ -7,7 +7,6 @@ import {
   waitFor,
 } from "@testing-library/react";
 import { afterEach, beforeAll, describe, expect, it, vi } from "vitest";
-import type { Results } from "../src/api/types.js";
 import { ApiError } from "../src/api/types.js";
 import { SwipeBallot } from "../src/screens/SwipeBallot.js";
 import {
@@ -296,7 +295,7 @@ describe("casting", () => {
         Promise.resolve({
           status: "changed" as const,
           ballot: [1],
-          results: EMPTY_RESULTS as Results,
+          results: EMPTY_RESULTS,
         }),
     });
     fireEvent.keyDown(screen.getByText("Yes"), { key: "ArrowRight" });
@@ -374,5 +373,103 @@ describe("the copy", () => {
     ]) {
       expect(shown).not.toContain(word);
     }
+  });
+});
+
+describe("seeing where the question stands", () => {
+  const COUNTS = {
+    status: "counted" as const,
+    ballot: [1],
+    results: {
+      pollId: POLL.id,
+      question: POLL.question,
+      method: "single" as const,
+      voters: 12,
+      choices: [
+        { index: 0, label: "No", count: 4, share: 33.3 },
+        { index: 1, label: "Yes", count: 8, share: 66.7 },
+      ],
+    },
+  };
+
+  function vote(over: Parameters<typeof stubApi>[0] = {}) {
+    show({ cast: () => Promise.resolve(COUNTS), ...over });
+    fireEvent.keyDown(screen.getByText("Yes"), { key: "ArrowRight" });
+  }
+
+  it("offers the numbers only once a vote is in", async () => {
+    show({ cast: () => Promise.resolve(COUNTS) });
+    // Before answering there is nothing to stand on.
+    expect(screen.queryByRole("button", { name: "See results" })).toBeNull();
+    fireEvent.keyDown(screen.getByText("Yes"), { key: "ArrowRight" });
+    expect(
+      await screen.findByRole("button", { name: "See results" }),
+    ).toBeTruthy();
+  });
+
+  it("shows the counts when asked, in place of the outcome", async () => {
+    vote();
+    fireEvent.click(await screen.findByRole("button", { name: "See results" }));
+    expect(screen.getByText("8 · 66.7%")).toBeTruthy();
+    expect(screen.getByText("12 people so far")).toBeTruthy();
+    // Replaced, not covered - the same rule the outcome itself follows.
+    expect(screen.queryByRole("button", { name: "See results" })).toBeNull();
+  });
+
+  it("goes back to the outcome, which still offers the numbers again", async () => {
+    vote();
+    fireEvent.click(await screen.findByRole("button", { name: "See results" }));
+    fireEvent.click(screen.getByRole("button", { name: "Close" }));
+    expect(
+      await screen.findByRole("button", { name: "See results" }),
+    ).toBeTruthy();
+  });
+
+  it("offers nothing to see when the poll closed before the vote landed", async () => {
+    show({ cast: () => Promise.resolve({ status: "closed" as const }) });
+    fireEvent.keyDown(screen.getByText("Yes"), { key: "ArrowRight" });
+    await screen.findByText("This one has closed.");
+    expect(screen.queryByRole("button", { name: "See results" })).toBeNull();
+  });
+
+  /**
+   * The results sit inside the section that reads arrow keys as answers - the
+   * same shape that let a keypress on Back cast a vote (8ae4714). Settling
+   * already stops the cast, and this is what keeps it stopped.
+   */
+  it("does not cast when an arrow is pressed with the results open", async () => {
+    const cast = vi.fn(() => Promise.resolve(COUNTS));
+    show({ cast });
+    fireEvent.keyDown(screen.getByText("Yes"), { key: "ArrowRight" });
+    fireEvent.click(await screen.findByRole("button", { name: "See results" }));
+    fireEvent.keyDown(screen.getByRole("button", { name: "Close" }), {
+      key: "ArrowLeft",
+    });
+    expect(cast).toHaveBeenCalledTimes(1);
+  });
+});
+
+/**
+ * Asked for by the operator on 2026-08-25 and satisfied by #131, which moved
+ * the outcome inside the chrome so `BallotChrome` renders on both sides of the
+ * settled branch. Nothing asserted it, so a later reorganisation of that render
+ * could take it away silently. This is that assertion.
+ */
+describe("the way back, after answering", () => {
+  it("keeps Back on the screen once the vote is counted", async () => {
+    const onBack = vi.fn();
+    render(
+      <SwipeBallot
+        api={stubApi()}
+        poll={POLL}
+        onAnswered={() => {}}
+        onBack={onBack}
+      />,
+    );
+    fireEvent.keyDown(screen.getByText("Yes"), { key: "ArrowRight" });
+    await screen.findByRole("status");
+    const back = screen.getByRole("button", { name: /Back/ });
+    fireEvent.click(back);
+    expect(onBack).toHaveBeenCalledTimes(1);
   });
 });

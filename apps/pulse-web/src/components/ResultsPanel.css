@@ -1,0 +1,137 @@
+/*
+ * Sits where the outcome sits - inside the ballot chrome, on the dark ground,
+ * taking the place of what it replaces rather than covering it (the rule
+ * `.ballot__done` records). So it borrows the dark ballot tokens and adds no
+ * page chrome of its own.
+ */
+.results {
+  display: flex;
+  flex-direction: column;
+  align-items: stretch;
+  gap: 6px;
+  width: 100%;
+  text-align: left;
+}
+
+.results__count {
+  margin: 0;
+  font-size: var(--t-body);
+  font-weight: 600;
+  color: var(--ballot-ink);
+}
+
+.results__yours {
+  margin: 0 0 var(--step);
+  font-size: var(--t-small);
+  line-height: 1.5;
+  color: var(--ballot-ink-soft);
+}
+
+.results__list {
+  list-style: none;
+  margin: 0;
+  padding: 0;
+  display: flex;
+  flex-direction: column;
+  gap: 10px;
+}
+
+/*
+ * Label above, bar and figure below it. The bar is decoration: the count and
+ * the percentage beside it are the content, so a bar that fails to paint
+ * costs nobody the number.
+ */
+.results__row {
+  display: grid;
+  grid-template-columns: 1fr auto;
+  grid-template-areas:
+    "label label"
+    "bar figure";
+  align-items: center;
+  gap: 4px 10px;
+}
+
+.results__label {
+  grid-area: label;
+  display: flex;
+  align-items: center;
+  gap: 6px;
+  font-size: var(--t-small);
+  line-height: 1.35;
+  color: var(--ballot-ink-soft);
+}
+
+.results__row[data-yours="true"] .results__label {
+  color: var(--ballot-ink);
+  font-weight: 600;
+}
+
+.results__badge {
+  padding: 1px 7px;
+  border-radius: var(--r-pill);
+  background: var(--ballot-chip);
+  font-size: var(--t-eyebrow);
+  font-weight: 700;
+  letter-spacing: 0.12em;
+  text-transform: uppercase;
+  color: var(--ballot-ink-muted);
+}
+
+.results__bar {
+  grid-area: bar;
+  position: relative;
+  height: 8px;
+  border-radius: var(--r-pill);
+  background: var(--ballot-chip);
+  overflow: hidden;
+}
+
+.results__bar::after {
+  content: "";
+  position: absolute;
+  inset: 0 auto 0 0;
+  width: var(--fill);
+  border-radius: inherit;
+  background: rgba(255, 255, 255, 0.34);
+}
+
+.results__row[data-yours="true"] .results__bar::after {
+  background: rgba(var(--side-b), 0.85);
+}
+
+.results__figure {
+  grid-area: figure;
+  font-size: var(--t-small);
+  font-variant-numeric: tabular-nums;
+  color: var(--ballot-ink-muted);
+}
+
+.results__fine {
+  margin: var(--step) 0 0;
+  font-size: var(--t-small);
+  line-height: 1.45;
+  /*
+   * `--ballot-ink-muted`, not `--ballot-ink-faint`: faint measures about 2.8:1
+   * on this ground, under the 4.5:1 floor, and this is the one line standing
+   * between an approval reader and "these numbers are broken".
+   */
+  color: var(--ballot-ink-muted);
+}
+
+.results__close {
+  margin-top: var(--step);
+  align-self: center;
+  padding: 11px 20px;
+  border-radius: var(--r-pill);
+  border: 1px solid rgba(255, 255, 255, 0.22);
+  background: rgba(255, 255, 255, 0.14);
+  color: var(--ballot-ink);
+  font: inherit;
+  font-size: var(--t-body);
+  cursor: pointer;
+}
+
+.results__close:focus-visible {
+  outline: 2px solid rgba(255, 255, 255, 0.7);
+  outline-offset: 2px;
+}

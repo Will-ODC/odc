@@ -1,3 +1,4 @@
+import type { RefObject } from "react";
 import type { CastState } from "../hooks/use-cast-vote.js";
 
 /**
@@ -16,6 +17,8 @@ export function Outcome({
   hasNext,
   nextQuestion,
   onNext,
+  onSeeResults,
+  seeResultsRef,
 }: {
   state: CastState;
   /** The choice, in the poll's own words. */
@@ -33,6 +36,20 @@ export function Outcome({
   /** The next question's wording, when the preview loaded. Label only. */
   nextQuestion?: string | undefined;
   onNext: () => void;
+  /**
+   * Open the standing of this question. Absent when there is nothing to open -
+   * a poll that closed returns no counts, so the control is not drawn rather
+   * than drawn dead.
+   *
+   * Quieter than NEXT on purpose. The run is for answering; the numbers are
+   * there for whoever wants them, and are never the thing being offered first.
+   */
+  onSeeResults?: (() => void) | undefined;
+  /**
+   * The control focus returns to when the panel closes. Closing unmounts the
+   * panel, so without somewhere to send it focus drops to the document body.
+   */
+  seeResultsRef?: RefObject<HTMLButtonElement | null> | undefined;
 }) {
   if (state.status === "closed") {
     return (
@@ -63,6 +80,16 @@ export function Outcome({
           <span className="ballot__eyebrow">NEXT</span>
           {/* Named when we know it, and still pressable when we do not. */}
           <span>{nextQuestion ?? "The next question"}</span>
+        </button>
+      ) : null}
+      {state.status === "counted" && onSeeResults ? (
+        <button
+          type="button"
+          className="outcome__results"
+          onClick={onSeeResults}
+          ref={seeResultsRef}
+        >
+          See results
         </button>
       ) : null}
     </div>

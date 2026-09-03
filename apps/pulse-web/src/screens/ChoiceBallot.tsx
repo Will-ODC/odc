@@ -10,7 +10,7 @@ import { useCastVote } from "../hooks/use-cast-vote.js";
 import { edgesOf, useNextQuestions } from "../hooks/use-next-questions.js";
 import { useSuggestions } from "../hooks/use-suggestions.js";
 import { BallotChrome } from "../components/BallotChrome.js";
-import { Outcome } from "../components/Outcome.js";
+import { AfterVote } from "../components/AfterVote.js";
 import { Refusal } from "../components/Refusal.js";
 import "./SwipeBallot.css";
 import "./ChoiceBallot.css";
@@ -61,7 +61,7 @@ export function ChoiceBallot({
 
         {settled ? (
           <div className="ballot__done">
-            <Outcome
+            <AfterVote
               state={state}
               label={chosen === null ? "" : (poll.choices[chosen] ?? "")}
               hasNext={chosen !== null && (poll.next[chosen] ?? null) !== null}
