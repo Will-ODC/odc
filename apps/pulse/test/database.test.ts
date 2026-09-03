@@ -11,20 +11,27 @@ import pg from "pg";
  * implementations land on, checked in first and on its own so a failure here
  * is a CI problem and never a schema problem.
  *
- * The skip below is the risk worth naming: a test that quietly does nothing
- * passes while proving nothing, which is the shape every review of this
- * codebase has found. It exists so `pnpm test` still works on a laptop with no
- * Postgres running. CI closes the hole from the other side — `repo.yml`
- * asserts DATABASE_URL is set before it runs the suite, so this branch is
- * unreachable there.
+ * Off CI the test skips, so `pnpm test` still works on a laptop with no
+ * Postgres running. On CI it must never skip: a missing DATABASE_URL there is
+ * a broken pipeline, and a skip would report success while proving nothing —
+ * the deletable-green shape every review of this codebase has found. The first
+ * version of this test did exactly that for a full green run, because turbo's
+ * strict environment stripped DATABASE_URL before the task saw it and the
+ * skip swallowed the evidence. Hence the guard lives here, in the thing that
+ * actually runs, rather than in a workflow step that can only see the shell.
  */
 const url = process.env["DATABASE_URL"];
+const onCI = (process.env["CI"] ?? "") !== "";
 
 test(
   "connects_to_the_configured_database_and_runs_a_statement",
-  { skip: url === undefined ? "DATABASE_URL is unset" : false },
+  { skip: url === undefined && !onCI ? "DATABASE_URL is unset" : false },
   async () => {
-    assert.ok(url, "DATABASE_URL is unset");
+    assert.ok(
+      url,
+      "DATABASE_URL is unset on CI — the job must provide a database, and " +
+        "turbo.json must declare the variable or the task never receives it",
+    );
 
     const client = new pg.Client({ connectionString: url });
     await client.connect();

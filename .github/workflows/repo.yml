@@ -58,11 +58,6 @@ jobs:
       - run: pnpm run format:check
       - run: pnpm run lint
       - run: pnpm run typecheck
-      # A database test that skips when DATABASE_URL is unset passes while
-      # proving nothing — the deletable-green shape every review of this repo
-      # has found. Fail here instead, so that skip branch is unreachable in CI.
-      - name: Assert the database is configured
-        run: test -n "$DATABASE_URL"
       # Added with the first package that has tests (T5a). Passed trivially
       # before that, exactly as the three above did.
       - run: pnpm run test
