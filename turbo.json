@@ -4,7 +4,7 @@
     "build": { "dependsOn": ["^build"], "outputs": ["dist/**"] },
     "test": {
       "dependsOn": ["build"],
-      "env": ["CI", "DATABASE_URL"]
+      "env": ["PULSE_DATABASE_URL", "PULSE_REQUIRE_DATABASE"]
     },
     "lint": {},
     "typecheck": { "dependsOn": ["^build"] }

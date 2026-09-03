@@ -37,7 +37,14 @@ jobs:
           --health-timeout 5s
           --health-retries 5
     env:
-      DATABASE_URL: postgres://pulse:pulse@localhost:5432/pulse_test
+      # Pulse-owned names on purpose. A bare DATABASE_URL is one of the most
+      # widely exported variables there is, so keying off it would point the
+      # suite at whatever unrelated database a developer already has set —
+      # harmless for `select 1`, not harmless once these tests run migrations.
+      # PULSE_REQUIRE_DATABASE says a missing database is an error rather than
+      # a reason to skip; it is set here and nowhere else.
+      PULSE_DATABASE_URL: postgres://pulse:pulse@localhost:5432/pulse_test
+      PULSE_REQUIRE_DATABASE: "1"
     steps:
       - uses: actions/checkout@v4
       # No `version:` here on purpose — action-setup reads the pnpm version from

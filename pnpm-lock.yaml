@@ -41,9 +41,6 @@ importers:
       fastify:
         specifier: ^5.11.3
         version: 5.11.3
-      pg:
-        specifier: ^8.13.0
-        version: 8.23.0
     devDependencies:
       '@types/node':
         specifier: ^20.14.0
@@ -51,6 +48,9 @@ importers:
       '@types/pg':
         specifier: ^8.11.0
         version: 8.23.1
+      pg:
+        specifier: ^8.13.0
+        version: 8.23.0
 
   apps/pulse-web:
     dependencies:
