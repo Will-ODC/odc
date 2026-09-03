@@ -92,11 +92,45 @@ IS the ticket.
   1000 (FAIL) — the live thresholds are in `.github/scripts/diff-size.sh`, the
   source of truth; markdown, generated code, and lockfiles are exempt. Bigger?
   Split it.
-- **Do not stack PRs in this repo.** Squash-merge orphans a stack silently: when
-  the base merges, its commit is replaced, so the child rebases onto a dead
-  commit and the PR reports "merged" while delivering nothing (incident #11).
-  One branch off `master`, merge, then branch the next. Force-push only with
-  `--force-with-lease`, never `--force`.
+- **Prefer one branch off `master` at a time.** Merge, then branch the next.
+  Independent work has no reason to stack, and every stacked level costs a
+  rebase once the level below it merges.
+- **Stack only when the work genuinely depends on work that is not merged yet,
+  and keep it shallow — two or three deep.** The real cost is review, not the
+  merge: until the base lands, the child's diff carries the base's changes too,
+  and `odc-code-review`'s fresh-context rule gets harder to honour the deeper
+  you go. Five deep (the `#128`-`#135` pulse stack) was too deep.
+- **Capture the base's tip sha before you merge it** — `git rev-parse <base>`.
+  The merge takes the branch and the sha with it, and the sha is exactly what
+  the rebase below needs.
+- **Never merge with `--delete-branch` while a child PR still targets that
+  branch.** GitHub is meant to retarget the child onto the base's own base, and
+  usually does — but deleting the branch races that and **auto-closes** the
+  child instead. It cannot then be reopened if its head was ever force-pushed:
+  GitHub answers `state cannot be changed`, saying the branch was force-pushed
+  or recreated. Let every child retarget to `master` first, confirm it, then
+  delete the branch by hand.
+- **After the base merges, rebase the child — do not merge the conflict away.**
+  Retargeting moves the child's base pointer; it does not move its commits. The
+  child still carries the base's original commits while `master` has one
+  squashed commit of the same changes, so git sees them twice and the PR goes
+  CONFLICTING. That is not a real conflict. Replay only the child's own work:
+  `git rebase --onto origin/master <old-base-tip-sha> <child-branch>`.
+  Then verify before pushing: `git diff --name-status origin/master..HEAD` must
+  list the child's files and nothing else. Resolving it as a normal conflict
+  re-applies the base's changes on top of themselves.
+- Force-push only with `--force-with-lease`, never `--force`.
+
+  > **Why this is a discipline and not a ban.** These rules replace a blanket
+  > "do not stack PRs in this repo", which was generalized from a single
+  > 2026-07-25 incident: PR #11 was stacked on #10, #10 squash-merged first, and
+  > #11 was then merged into its dead base — reporting "merged" while delivering
+  > nothing. That failure was merging a child into a base nobody re-checked,
+  > which the rules above catch directly. The ban was then contradicted in
+  > practice twice in two days (the pulse story-UI stack, and `#136`/`#137`),
+  > because dependent work has to wait on review latency otherwise. Do not
+  > re-derive the ban from that incident.
+
 - Branch names: `svc/short-description` (e.g. `ledger/insert-only-guard`);
   pulse uses `pulse/<n>-<short-description>`.
 - Commits: imperative subject ≤ 72 chars; body says WHY, not what.
