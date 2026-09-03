@@ -1,0 +1,17 @@
+{
+  "version": "0.0.1",
+  "configurations": [
+    {
+      "name": "pulse-api",
+      "runtimeExecutable": "bash",
+      "runtimeArgs": ["-c", "cd apps/pulse && pnpm dev"],
+      "port": 8080
+    },
+    {
+      "name": "pulse-web",
+      "runtimeExecutable": "bash",
+      "runtimeArgs": ["-c", "cd apps/pulse-web && pnpm dev"],
+      "port": 5173
+    }
+  ]
+}
