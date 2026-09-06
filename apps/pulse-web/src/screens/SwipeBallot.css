@@ -284,14 +284,26 @@
 /*
  * The second half of the one-press bargain: pulse casts without a confirming
  * press, and this is the sentence that makes that safe to read. Quieter than
- * "Counted." because it is a standing fact rather than what just happened -
- * muted, never faint, which measures under the 4.5:1 floor on this ground.
+ * "Counted." because it is a standing fact rather than what just happened.
+ *
+ * `--ballot-ink-muted`, not `--ballot-ink-faint`: faint measures about 2.8:1 on
+ * this ground, under the 4.5:1 floor, and this sentence is what stands in for
+ * a confirming press.
+ *
+ * Selected as a child of `.outcome` because `.outcome > span` above is 0-1-1
+ * and a lone class is 0-1-0 - specificity beats source order, so the plain
+ * class rule this replaces never applied and the sentence painted identically
+ * to "Counted." above it.
  */
-.outcome__changeable {
+.outcome > span.outcome__changeable {
   color: var(--ballot-ink-muted);
 }
 
-.outcome__next {
+/*
+ * Named for what it is rather than where it sat: it moved out of `.outcome`
+ * so it could stand beside the results panel too (`<NextButton>`).
+ */
+.way-on {
   margin-top: var(--step);
   display: flex;
   flex-direction: column;
@@ -307,7 +319,7 @@
   cursor: pointer;
 }
 
-.outcome__next:focus-visible {
+.way-on:focus-visible {
   outline: 2px solid rgba(255, 255, 255, 0.7);
   outline-offset: 2px;
 }
@@ -428,9 +440,10 @@
   margin-top: 2px;
   /*
    * Roomy enough for a thumb (44px tall) without looking heavier: the padding
-   * is hit area, not weight. A miss low used to hit nothing; a miss high hits
-   * NEXT, and one press is one action here - it would advance the run past
-   * the question.
+   * is hit area, not weight. A miss low used to hit nothing; it now hits NEXT,
+   * which sits below this since it moved out of `.outcome` to stand beside the
+   * results panel too - and one press is one action here, so that press would
+   * advance the run past the question.
    */
   padding: 13px 16px;
   border: 0;
@@ -450,8 +463,9 @@
 /*
  * The way to answer again. Quiet like the way to the numbers - both are for
  * whoever wants them, and neither competes with NEXT, which is what the run is
- * actually offering. Same 44px hit area for the same reason: a miss high hits
- * NEXT, and one press is one action here.
+ * actually offering. Same 44px hit area, because every neighbour here is a
+ * different action and one press is one action: a miss low hits "See results",
+ * and below that sits NEXT, which advances the run past this question.
  */
 .outcome__change {
   padding: 13px 16px;

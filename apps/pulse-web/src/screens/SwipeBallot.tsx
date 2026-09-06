@@ -102,6 +102,18 @@ export function SwipeBallot({
    */
   function changeAnswer() {
     reAsked.current = true;
+    /*
+     * Back to the state a fresh mount would be in. A drag that commits answers
+     * the press through `gestureDecided` and the `click` that consumes it never
+     * arrives — settling unmounts the halves in the same flush — so the flag is
+     * still set here. Advancing to the next question threw it away with the
+     * whole screen (`key={poll.id}`); this is the one path that returns to a
+     * live screen, so it is the one that has to clear it. Left set, it swallows
+     * the first keyboard press on a half, which is exactly where the focus move
+     * below sends someone.
+     */
+    gestureDecided.current = false;
+    drag.current = null;
     setLean(AT_REST);
     reset();
   }

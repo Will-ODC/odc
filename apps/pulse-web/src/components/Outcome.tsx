@@ -79,7 +79,7 @@ export function Outcome({
       </span>
       {state.status === "counted" && changeable ? (
         <span className="outcome__changeable">
-          You can change your answer until this closes.
+          You can change your answer until this question closes.
         </span>
       ) : null}
       {state.status === "counted" && changeable ? (

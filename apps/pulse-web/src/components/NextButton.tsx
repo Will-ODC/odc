@@ -17,7 +17,7 @@ export function NextButton({
   onNext: () => void;
 }) {
   return (
-    <button type="button" className="outcome__next" onClick={onNext}>
+    <button type="button" className="way-on" onClick={onNext}>
       <span className="ballot__eyebrow">NEXT</span>
       {/* Named when we know it, and still pressable when we do not. */}
       <span>{nextQuestion ?? "The next question"}</span>

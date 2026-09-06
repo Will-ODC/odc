@@ -383,13 +383,19 @@ describe("the copy", () => {
  * is not decoration: it is what stands in for the confirmation step.
  */
 describe("telling someone the answer is in, and not final", () => {
+  const COUNTED = {
+    status: "counted" as const,
+    ballot: [1],
+    results: EMPTY_RESULTS,
+  };
+
   it("says the answer can still be changed", async () => {
     show();
     fireEvent.keyDown(screen.getByText("Yes"), { key: "ArrowRight" });
     const done = await screen.findByRole("status");
     expect(done.textContent).toContain("Counted.");
     expect(done.textContent).toContain(
-      "You can change your answer until this closes.",
+      "You can change your answer until this question closes.",
     );
   });
 
@@ -451,6 +457,9 @@ describe("telling someone the answer is in, and not final", () => {
 
     await screen.findByText("That replaces your earlier answer.");
     expect(cast).toHaveBeenNthCalledWith(2, "ads-free", [0]);
+    // The count, not only the arguments: a double-cast on the re-answer path
+    // is the regression this whole control is most at risk of.
+    expect(cast).toHaveBeenCalledTimes(2);
   });
 
   /**
@@ -460,7 +469,8 @@ describe("telling someone the answer is in, and not final", () => {
    * the body, and someone who came back by keyboard finds the arrows dead.
    */
   it("puts focus on a side, so the arrow keys still answer", async () => {
-    show();
+    const cast = vi.fn(stubApi().cast);
+    show({ cast });
     fireEvent.keyDown(screen.getByText("Yes"), { key: "ArrowRight" });
     await screen.findByText("Counted.");
     fireEvent.click(screen.getByRole("button", { name: "Change my answer" }));
@@ -468,6 +478,67 @@ describe("telling someone the answer is in, and not final", () => {
     await waitFor(() =>
       expect(document.activeElement?.className).toContain("ballot__half"),
     );
+
+    // The half of the name that matters. Asserting only where focus landed
+    // would pass on a build with the section's `onKeyDown` deleted.
+    fireEvent.keyDown(document.activeElement as HTMLElement, {
+      key: "ArrowLeft",
+    });
+    await waitFor(() => expect(cast).toHaveBeenCalledTimes(2));
+  });
+
+  /**
+   * A drag that commits answers the press through `gestureDecided`, and the
+   * `click` that would consume the flag never arrives - settling unmounts the
+   * halves in the same flush. That was harmless while settling was terminal:
+   * `key={poll.id}` gave the next question fresh refs. Putting the question
+   * back is the one path that returns to a live screen with the old ones, so
+   * the flag has to be cleared with the lean.
+   *
+   * The press this swallowed was a keyboard press on a half - Enter or Space -
+   * which is exactly where the focus move now sends someone. A pointer tap
+   * clears the flag on `pointerdown` and an arrow key bypasses `pick`, so this
+   * is the one combination that breaks, and it is the one the change control
+   * leads people into.
+   */
+  it("answers the first press after the question is put back", async () => {
+    const cast = vi.fn(stubApi().cast);
+    show({ cast });
+
+    fireEvent.pointerDown(split(), { clientX: 200, pointerId: 1 });
+    fireEvent.pointerMove(split(), { clientX: 40, pointerId: 1 });
+    fireEvent.pointerUp(split(), { clientX: 40, pointerId: 1 });
+    await screen.findByText("Counted.");
+    expect(cast).toHaveBeenCalledTimes(1);
+
+    fireEvent.click(screen.getByRole("button", { name: "Change my answer" }));
+    fireEvent.click(screen.getByRole("button", { name: /Yes/ }));
+
+    await screen.findByText("Counted.");
+    expect(cast).toHaveBeenCalledTimes(2);
+  });
+
+  /**
+   * The closed-cast tests below do NOT cover this: `<Outcome>` returns early on
+   * a `closed` cast and never reads `changeable` at all. Without this, both
+   * screens could pass `changeable={true}` and the suite would stay green -
+   * which is the whole of what ADR-0022 section 3 rests on.
+   */
+  it("promises nothing on a poll it already knows is shut", async () => {
+    render(
+      <SwipeBallot
+        api={stubApi({ cast: () => Promise.resolve(COUNTED) })}
+        poll={poll({ open: false })}
+        onAnswered={() => {}}
+      />,
+    );
+    fireEvent.keyDown(screen.getByText("Yes"), { key: "ArrowRight" });
+    await screen.findByText("Counted.");
+
+    expect(document.body.textContent).not.toContain("You can change");
+    expect(
+      screen.queryByRole("button", { name: "Change my answer" }),
+    ).toBeNull();
   });
 
   it("offers no way to change an answer on a poll that has closed", async () => {

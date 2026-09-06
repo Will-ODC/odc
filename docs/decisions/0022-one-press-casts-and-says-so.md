@@ -49,7 +49,7 @@ in for the confirmation step.**
    or to any pulse action that is not changeable.
 2. **The outcome must say the answer is in, and that it can still be changed** —
    plainly, in the words a person would use, on the same screen as the vote.
-   `<Outcome>` renders "You can change your answer until this closes." under
+   `<Outcome>` renders "You can change your answer until this question closes." under
    "Counted." and under "That replaces your earlier answer."
 3. **That sentence is conditional on the fact, not assumed.** It is a
    `changeable` prop read from `poll.open`, not a constant, so it is never
@@ -80,8 +80,12 @@ in for the confirmation step.**
   there is no reversibility there is no exception. Do not read this ADR as "pulse
   does not confirm things".
 - A test asserts the sentence for both `counted` and `changed`, and asserts its
-  absence while casting and on a closed poll, so a later reorganisation of the
-  outcome cannot take the reassurance away silently. Separate tests assert that
+  absence in the three states where it would be untrue: while the cast is in
+  flight, when the poll closed before the vote landed, and on a poll the client
+  already knows is shut (`open: false`). That last one is the only test that
+  reads the `changeable` prop at all — `<Outcome>` returns early on a `closed`
+  cast — so without it both screens could pass a constant `true` and the suite
+  would stay green. Separate tests assert that
   the control actually puts the question back, on both ballots, and that the
   second answer is counted as a replacement.
 - **Changing an answer returns focus to a choice, not to the document body.**
