@@ -376,6 +376,192 @@ describe("the copy", () => {
   });
 });
 
+/**
+ * Pulse casts on one press, with no confirming second press - deliberately,
+ * against `odc-ui`'s rule, because a run is meant to move at the speed of an
+ * opinion. What makes that safe is that an answer is not final, so saying so
+ * is not decoration: it is what stands in for the confirmation step.
+ */
+describe("telling someone the answer is in, and not final", () => {
+  const COUNTED = {
+    status: "counted" as const,
+    ballot: [1],
+    results: EMPTY_RESULTS,
+  };
+
+  it("says the answer can still be changed", async () => {
+    show();
+    fireEvent.keyDown(screen.getByText("Yes"), { key: "ArrowRight" });
+    const done = await screen.findByRole("status");
+    expect(done.textContent).toContain("Counted.");
+    expect(done.textContent).toContain(
+      "You can change your answer until this question closes.",
+    );
+  });
+
+  it("says it again when the answer replaced an earlier one", async () => {
+    show({
+      cast: () =>
+        Promise.resolve({
+          status: "changed" as const,
+          ballot: [1],
+          results: EMPTY_RESULTS,
+        }),
+    });
+    fireEvent.keyDown(screen.getByText("Yes"), { key: "ArrowRight" });
+    const done = await screen.findByRole("status");
+    expect(done.textContent).toContain("That replaces your earlier answer.");
+    expect(done.textContent).toContain("You can change your answer");
+  });
+
+  it("promises nothing of the sort on a poll that has closed", async () => {
+    show({ cast: () => Promise.resolve({ status: "closed" as const }) });
+    fireEvent.keyDown(screen.getByText("Yes"), { key: "ArrowRight" });
+    await screen.findByText("This one has closed.");
+    expect(document.body.textContent).not.toContain("You can change");
+  });
+
+  /**
+   * The sentence is the whole of what stands in for a confirming press, so it
+   * has to be true. It was not: settling took the sides off the screen and
+   * nothing put them back, and on the run's first question there is no Back
+   * either, so someone told they could change their answer had no route to.
+   */
+  it("puts the question back when the answer is changed", async () => {
+    show();
+    fireEvent.keyDown(screen.getByText("Yes"), { key: "ArrowRight" });
+    await screen.findByText("Counted.");
+    expect(split()).toBeNull();
+
+    fireEvent.click(screen.getByRole("button", { name: "Change my answer" }));
+
+    expect(split()).toBeTruthy();
+    expect(screen.getByText("No")).toBeTruthy();
+    expect(screen.queryByText("Counted.")).toBeNull();
+  });
+
+  it("counts the second answer, and says it replaced the first", async () => {
+    const cast = vi.fn((_id: string, ballot: number[]) =>
+      Promise.resolve({
+        status: (cast.mock.calls.length > 1 ? "changed" : "counted") as
+          "changed" | "counted",
+        ballot,
+        results: EMPTY_RESULTS,
+      }),
+    );
+    show({ cast });
+    fireEvent.keyDown(screen.getByText("Yes"), { key: "ArrowRight" });
+    await screen.findByText("Counted.");
+    fireEvent.click(screen.getByRole("button", { name: "Change my answer" }));
+    fireEvent.keyDown(screen.getByText("No"), { key: "ArrowLeft" });
+
+    await screen.findByText("That replaces your earlier answer.");
+    expect(cast).toHaveBeenNthCalledWith(2, "ads-free", [0]);
+    // The count, not only the arguments: a double-cast on the re-answer path
+    // is the regression this whole control is most at risk of.
+    expect(cast).toHaveBeenCalledTimes(2);
+  });
+
+  /**
+   * The arrow keys are read by a handler on the `<section>`, so a keypress only
+   * reaches it from a control inside. The control pressed to come back is
+   * unmounted by that same render - without somewhere to send focus it lands on
+   * the body, and someone who came back by keyboard finds the arrows dead.
+   */
+  it("puts focus on a side, so the arrow keys still answer", async () => {
+    const cast = vi.fn(stubApi().cast);
+    show({ cast });
+    fireEvent.keyDown(screen.getByText("Yes"), { key: "ArrowRight" });
+    await screen.findByText("Counted.");
+    fireEvent.click(screen.getByRole("button", { name: "Change my answer" }));
+
+    await waitFor(() =>
+      expect(document.activeElement?.className).toContain("ballot__half"),
+    );
+
+    // The half of the name that matters. Asserting only where focus landed
+    // would pass on a build with the section's `onKeyDown` deleted.
+    fireEvent.keyDown(document.activeElement as HTMLElement, {
+      key: "ArrowLeft",
+    });
+    await waitFor(() => expect(cast).toHaveBeenCalledTimes(2));
+  });
+
+  /**
+   * A drag that commits answers the press through `gestureDecided`, and the
+   * `click` that would consume the flag never arrives - settling unmounts the
+   * halves in the same flush. That was harmless while settling was terminal:
+   * `key={poll.id}` gave the next question fresh refs. Putting the question
+   * back is the one path that returns to a live screen with the old ones, so
+   * the flag has to be cleared with the lean.
+   *
+   * The press this swallowed was a keyboard press on a half - Enter or Space -
+   * which is exactly where the focus move now sends someone. A pointer tap
+   * clears the flag on `pointerdown` and an arrow key bypasses `pick`, so this
+   * is the one combination that breaks, and it is the one the change control
+   * leads people into.
+   */
+  it("answers the first press after the question is put back", async () => {
+    const cast = vi.fn(stubApi().cast);
+    show({ cast });
+
+    fireEvent.pointerDown(split(), { clientX: 200, pointerId: 1 });
+    fireEvent.pointerMove(split(), { clientX: 40, pointerId: 1 });
+    fireEvent.pointerUp(split(), { clientX: 40, pointerId: 1 });
+    await screen.findByText("Counted.");
+    expect(cast).toHaveBeenCalledTimes(1);
+
+    fireEvent.click(screen.getByRole("button", { name: "Change my answer" }));
+    fireEvent.click(screen.getByRole("button", { name: /Yes/ }));
+
+    await screen.findByText("Counted.");
+    expect(cast).toHaveBeenCalledTimes(2);
+  });
+
+  /**
+   * The closed-cast tests below do NOT cover this: `<Outcome>` returns early on
+   * a `closed` cast and never reads `changeable` at all. Without this, both
+   * screens could pass `changeable={true}` and the suite would stay green -
+   * which is the whole of what ADR-0022 section 3 rests on.
+   */
+  it("promises nothing on a poll it already knows is shut", async () => {
+    render(
+      <SwipeBallot
+        api={stubApi({ cast: () => Promise.resolve(COUNTED) })}
+        poll={poll({ open: false })}
+        onAnswered={() => {}}
+      />,
+    );
+    fireEvent.keyDown(screen.getByText("Yes"), { key: "ArrowRight" });
+    await screen.findByText("Counted.");
+
+    expect(document.body.textContent).not.toContain("You can change");
+    expect(
+      screen.queryByRole("button", { name: "Change my answer" }),
+    ).toBeNull();
+  });
+
+  it("offers no way to change an answer on a poll that has closed", async () => {
+    show({ cast: () => Promise.resolve({ status: "closed" as const }) });
+    fireEvent.keyDown(screen.getByText("Yes"), { key: "ArrowRight" });
+    await screen.findByText("This one has closed.");
+    expect(
+      screen.queryByRole("button", { name: "Change my answer" }),
+    ).toBeNull();
+  });
+
+  /**
+   * Nothing is promised while the request is still out either - the answer is
+   * not in yet, so there is nothing to say can be changed.
+   */
+  it("waits until the answer is actually in", () => {
+    show({ cast: () => new Promise(() => {}) });
+    fireEvent.keyDown(screen.getByText("Yes"), { key: "ArrowRight" });
+    expect(screen.getByText("Sending\u2026")).toBeTruthy();
+    expect(document.body.textContent).not.toContain("You can change");
+  });
+});
+
 describe("seeing where the question stands", () => {
   const COUNTS = {
     status: "counted" as const,
@@ -423,6 +609,28 @@ describe("seeing where the question stands", () => {
     expect(
       await screen.findByRole("button", { name: "See results" }),
     ).toBeTruthy();
+  });
+
+  /**
+   * Opening the numbers used to take the only way forward off the screen, so a
+   * glance cost "Close" and then NEXT. A run moves at the speed of an opinion;
+   * making a glance cost two presses to undo teaches people not to glance.
+   */
+  it("keeps the way on while the numbers are open", async () => {
+    const onAnswered = vi.fn();
+    render(
+      <SwipeBallot
+        api={stubApi({ cast: () => Promise.resolve(COUNTS) })}
+        poll={poll({ next: ["ads-allowed", "pay-for-it"] })}
+        onAnswered={onAnswered}
+      />,
+    );
+    fireEvent.keyDown(screen.getByText("Yes"), { key: "ArrowRight" });
+    fireEvent.click(await screen.findByRole("button", { name: "See results" }));
+
+    const on = screen.getByRole("button", { name: /NEXT/ });
+    fireEvent.click(on);
+    expect(onAnswered).toHaveBeenCalledWith("pay-for-it");
   });
 
   it("offers nothing to see when the poll closed before the vote landed", async () => {

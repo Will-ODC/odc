@@ -1,5 +1,9 @@
-import { useRef, useState } from "react";
-import type { CSSProperties, PointerEvent as ReactPointerEvent } from "react";
+import { useEffect, useRef, useState } from "react";
+import type {
+  CSSProperties,
+  PointerEvent as ReactPointerEvent,
+  RefObject,
+} from "react";
 import type { Poll, PulseApi } from "../api/types.js";
 import type { Lean, Side } from "../flow/swipe.js";
 import {
@@ -42,7 +46,7 @@ export function SwipeBallot({
   onAnswered,
   onBack,
 }: SwipeBallotProps) {
-  const { state, cast } = useCastVote(api, poll.id);
+  const { state, cast, reset } = useCastVote(api, poll.id);
   const [lean, setLean] = useState<Lean>(AT_REST);
   const drag = useRef<{ from: number; moved: boolean } | null>(null);
   /**
@@ -56,6 +60,26 @@ export function SwipeBallot({
    */
   const gestureDecided = useRef(false);
   const nextQuestions = useNextQuestions(api, edgesOf(poll.next));
+  /**
+   * Set when the question was put back deliberately, so focus can be sent to a
+   * side rather than dropped on the document body.
+   *
+   * Focus matters more here than it looks: the arrow keys that answer this
+   * ballot are read by a handler on the `<section>`, so a keypress only reaches
+   * it from a control inside. The control that was pressed to come back is
+   * unmounted by the same render, and body-level keys do not bubble into the
+   * section - someone who changed their answer by keyboard would find the
+   * arrows dead.
+   */
+  const reAsked = useRef(false);
+  const firstSide = useRef<HTMLButtonElement>(null);
+
+  useEffect(() => {
+    if (state.status === "idle" && reAsked.current) {
+      reAsked.current = false;
+      firstSide.current?.focus();
+    }
+  }, [state.status]);
 
   const settled =
     state.status === "casting" ||
@@ -69,6 +93,29 @@ export function SwipeBallot({
   function commit(side: Side) {
     setLean({ side, strength: 1 });
     cast(choiceFor(side));
+  }
+
+  /**
+   * Put the question back. The lean goes with it - it is what tints the ballot
+   * towards the side that won, and leaving it set would show the old answer
+   * still winning a question nobody has answered yet.
+   */
+  function changeAnswer() {
+    reAsked.current = true;
+    /*
+     * Back to the state a fresh mount would be in. A drag that commits answers
+     * the press through `gestureDecided` and the `click` that consumes it never
+     * arrives — settling unmounts the halves in the same flush — so the flag is
+     * still set here. Advancing to the next question threw it away with the
+     * whole screen (`key={poll.id}`); this is the one path that returns to a
+     * live screen, so it is the one that has to clear it. Left set, it swallows
+     * the first keyboard press on a half, which is exactly where the focus move
+     * below sends someone.
+     */
+    gestureDecided.current = false;
+    drag.current = null;
+    setLean(AT_REST);
+    reset();
   }
 
   /**
@@ -162,6 +209,8 @@ export function SwipeBallot({
           <div className="ballot__done">
             <AfterVote
               state={state}
+              changeable={poll.open}
+              onChange={changeAnswer}
               label={chosen ? (poll.choices[choiceFor(chosen)] ?? "") : ""}
               hasNext={chosen ? poll.next[choiceFor(chosen)] !== null : false}
               nextQuestion={
@@ -187,10 +236,11 @@ export function SwipeBallot({
           >
             <Chevron side="left" />
             <Chevron side="right" />
-            {(["left", "right"] as const).map((side) => (
+            {(["left", "right"] as const).map((side, index) => (
               <Half
                 key={side}
                 side={side}
+                {...(index === 0 ? { buttonRef: firstSide } : {})}
                 label={poll.choices[choiceFor(side)] ?? ""}
                 question={poll.question}
                 next={nextQuestions[choiceFor(side)]}
@@ -210,12 +260,15 @@ function Half({
   question,
   next,
   onPick,
+  buttonRef,
 }: {
   side: Side;
   label: string;
   question: string;
   next: string | undefined;
   onPick: () => void;
+  /** Where focus lands when the question is put back to be answered again. */
+  buttonRef?: RefObject<HTMLButtonElement | null> | undefined;
 }) {
   return (
     <button
@@ -223,6 +276,7 @@ function Half({
       className={`ballot__half ballot__half--${side}`}
       aria-label={`${label} - ${question}`}
       onClick={onPick}
+      ref={buttonRef}
     >
       <span className="ballot__word">{label}</span>
       {next ? (

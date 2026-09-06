@@ -1,4 +1,4 @@
-import { useState } from "react";
+import { useEffect, useRef, useState } from "react";
 import type { FormEvent } from "react";
 import type {
   Poll,
@@ -41,7 +41,22 @@ export function ChoiceBallot({
   onAnswered,
   onBack,
 }: ChoiceBallotProps) {
-  const { state, cast } = useCastVote(api, poll.id);
+  const { state, cast, reset } = useCastVote(api, poll.id);
+  /**
+   * Set when the question was put back deliberately, so focus lands on a
+   * choice rather than on the document body - the control that was pressed to
+   * get here is unmounted by the same render.
+   */
+  const reAsked = useRef(false);
+  const firstChoice = useRef<HTMLButtonElement>(null);
+
+  useEffect(() => {
+    if (state.status === "idle" && reAsked.current) {
+      reAsked.current = false;
+      firstChoice.current?.focus();
+    }
+  }, [state.status]);
+
   const nextQuestions = useNextQuestions(api, edgesOf(poll.next));
 
   const settled =
@@ -63,6 +78,11 @@ export function ChoiceBallot({
           <div className="ballot__done">
             <AfterVote
               state={state}
+              changeable={poll.open}
+              onChange={() => {
+                reAsked.current = true;
+                reset();
+              }}
               label={chosen === null ? "" : (poll.choices[chosen] ?? "")}
               hasNext={chosen !== null && (poll.next[chosen] ?? null) !== null}
               nextQuestion={chosen === null ? undefined : nextQuestions[chosen]}
@@ -79,6 +99,7 @@ export function ChoiceBallot({
                   <button
                     type="button"
                     className="choices__one"
+                    {...(index === 0 ? { ref: firstChoice } : {})}
                     onClick={() => {
                       if (!settled) cast(index);
                     }}

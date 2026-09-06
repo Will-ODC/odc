@@ -58,6 +58,56 @@ describe("asking", () => {
     await screen.findByText("Counted.");
     expect(cast).toHaveBeenCalledTimes(1);
   });
+
+  /**
+   * `<Outcome>` returns early on a `closed` cast and never reads `changeable`,
+   * so only a poll the client already knows is shut exercises the prop. Without
+   * this, `changeable={true}` would leave the suite green - and ADR-0022
+   * section 3 rests entirely on the prop being read from `poll.open`.
+   */
+  it("promises nothing on a poll it already knows is shut", async () => {
+    render(
+      <ChoiceBallot
+        api={stubApi()}
+        poll={poll({ ...PAY, open: false })}
+        onAnswered={() => {}}
+      />,
+    );
+    fireEvent.click(screen.getByRole("button", { name: "Grants" }));
+    await screen.findByText("Counted.");
+
+    expect(document.body.textContent).not.toContain("You can change");
+    expect(
+      screen.queryByRole("button", { name: "Change my answer" }),
+    ).toBeNull();
+  });
+
+  /**
+   * One press is one vote here too, and the sentence saying the answer is not
+   * final is what stands in for the confirming press this screen does not ask
+   * for. It has to be true on both ballots, not only the swipe.
+   */
+  it("puts the choices back when the answer is changed", async () => {
+    show();
+    fireEvent.click(screen.getByRole("button", { name: "Grants" }));
+    const done = await screen.findByRole("status");
+    expect(done.textContent).toContain(
+      "You can change your answer until this question closes.",
+    );
+
+    fireEvent.click(screen.getByRole("button", { name: "Change my answer" }));
+
+    const again = screen.getByRole("button", { name: "Grants" });
+    expect(again).toBeTruthy();
+    expect(screen.queryByText("Counted.")).toBeNull();
+    // Focus lands on a choice, not on the body: the control that was pressed
+    // to get back here is unmounted by the same render.
+    await waitFor(() =>
+      expect(document.activeElement).toBe(
+        screen.getByRole("button", { name: "Members chip in" }),
+      ),
+    );
+  });
 });
 
 describe("saying something the poll did not offer", () => {
