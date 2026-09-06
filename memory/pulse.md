@@ -138,6 +138,34 @@ plain `text` so adding a vote type is **never a migration**, and
 
 | `af55032` | #140 | where a question stands, once someone has answered |
 
+### Landed 2026-09-06 — the one-press bargain, kept
+
+| Squash    | PR   | What                                                          |
+| --------- | ---- | ------------------------------------------------------------- |
+| `5deb395` | #146 | an answer that says it can be changed, and a way to change it |
+
+Pulse casts on one press. That was decided long ago and lived only in the body
+of a squashed PR; **it is now `docs/decisions/0022-one-press-casts-and-says-so.md`**,
+and `odc-ui`'s confirmation rule points at it as its one scoped exception. Read
+the ADR before touching the outcome — three things in it are load-bearing:
+
+- **The sentence and the control are one thing.** "You can change your answer
+  until this question closes" is what stands in for the confirming press pulse
+  does not ask for, so "Change my answer" must exist wherever the sentence is
+  shown. They ship gated on the identical condition. A review caught them
+  shipped apart — the sentence went in first, promising something no control
+  could do, because settling removes the ballot and Back (absent on a run's
+  first question) goes to the _previous_ one.
+- **Reversibility is what buys the exception, not speed.** Pillar 3's donations
+  and volunteer commitments are not reversible and still confirm. Do not read
+  the ADR as "pulse does not confirm things".
+- **`changeable` is read from `poll.open`, never assumed.** The sentence is not
+  printed while the cast is in flight, on a poll that closed before the vote
+  landed, or on a poll the client already knows is shut.
+
+NEXT also moved out of `<Outcome>` into `<NextButton>`, so it stands beside the
+results panel — settling open decision 7 below.
+
 **#135 is the PR #132 should have been.** #132 was auto-closed by GitHub when its
 base branch was deleted on merging #131, and could not be reopened because the
 head had been force-pushed after closing. Same commits, same content. **#132 still
@@ -203,6 +231,14 @@ decision 4).
   rather than only walking the run you were given. Undesigned and unscoped —
   it is not yet decided whether this is a list, a feed, or a search, nor how it
   relates to the graph a run walks.
+
+  **Sharpened 2026-09-06 by the operator: a home screen that browses all polls
+  and batches of related polls, story-style.** That is the first shape anyone
+  has given it, and it now has a second job — ADR-0022 names it as the route
+  back to a question from _outside_ a run, where "Change my answer" is the route
+  from inside one. Still unscoped, and **not a reason to weaken the in-run
+  control**: the ADR's promise has to hold today, on one screen, with no
+  navigation.
 
 - **Infrastructure, and a Docker dev environment that resembles production.**
   Asked for on 2026-08-25 after establishing that everything durable in pulse is
@@ -352,17 +388,48 @@ decision 4).
    second half of the rule was doing real work: the same PR shipped a genuine
    double-cast on tap.
 
-7. **Does NEXT stay on screen while the results panel is open?** (Raised
-   2026-09-03 by the two #140 reviews, which split on it.) Today it does not:
-   opening the panel replaces the whole outcome, so getting on with the run
-   costs "Close" then NEXT. One reviewer called the two-press cost fine and
-   said the real defect was the label collision (now fixed — the control is
-   "Close", not a second "Back"). The other called it wrong: a run is meant to
-   move at the speed of an opinion, and making a glance cost two presses to undo
-   teaches people not to glance. It also removes the only way forward from the
-   screen, which is what turned the panel's overflow bug into a trap before that
-   was fixed. **Left as-is deliberately** — the operator approved the six named
-   review fixes and this was not one of them.
+   **SETTLED 2026-09-06 — ADR-0022** (`docs/decisions/0022-one-press-casts-and-says-so.md`),
+   landed in #146. One press stays, `odc-ui` names the exception, and the
+   outcome now says the answer can be changed and offers a control that
+   changes it. **The exception is bought with reversibility, not with speed** —
+   do not extend it to anything final. The other half of the rule, "never let a
+   double-tap cast twice", was never overridden and still holds.
+
+7. ~~**Does NEXT stay on screen while the results panel is open?**~~
+   **SETTLED 2026-09-06 by the operator — yes, it stays** (#146). Raised
+   2026-09-03 by the two #140 reviews, which split on it; the second reviewer's
+   argument won. Opening the panel used to replace the whole outcome, so a
+   glance cost "Close" then NEXT, and it removed the only way forward from the
+   screen — which is what turned the panel's overflow bug into a trap. NEXT now
+   lives in `<NextButton>`, outside both the outcome and the panel, and stands
+   under whichever is showing. Note the earlier entry read "**Left as-is
+   deliberately**"; that was true of #140 and is no longer true of the code.
+
+### Traps the 2026-09-06 review round found, now fixed — do not reintroduce
+
+- **A ref that survived because nothing ever came back.** A drag that commits
+  answers the press through `gestureDecided`, and the `click` that consumes the
+  flag never arrives — settling unmounts the halves in the same flush. That was
+  harmless for as long as settling was terminal: `key={poll.id}` gave the next
+  question a whole fresh screen. "Change my answer" is the first path that
+  returns to a **live** screen with the old refs, and it swallowed the first
+  keyboard press on a half — precisely where the new focus move sends someone.
+  `changeAnswer()` now returns `gestureDecided` and `drag` to their mount state.
+  **The general shape, which will recur:** any state that was safe only because
+  a component always remounted becomes a bug the moment something resets it in
+  place. When adding a reset, audit every ref, not just the ones the feature
+  touches.
+- **The test that could not fail.** Both "closed poll" tests drove a `closed`
+  cast — and `<Outcome>` returns early on `closed` without ever reading
+  `changeable`. Replacing `changeable={poll.open}` with a constant `true` left
+  the entire suite green, so the clause ADR-0022 rests on was pinned by nothing.
+  A poll with `open: false` and a `counted` cast is the only case that exercises
+  the prop. **Ask of every guard: which test goes red if I hardcode this?**
+- **A CSS class that never applied.** `.outcome > span` is 0-1-1 and
+  `.outcome__changeable` was 0-1-0; specificity beats source order, so the
+  sentence painted identically to the line above it and the rule's comment
+  described behaviour the code did not have. Selector is now
+  `.outcome > span.outcome__changeable`.
 
 ### Two bugs the 2026-08-26 review round found, now fixed — do not reintroduce
 
@@ -467,3 +534,27 @@ exist`) looks like a credentials bug rather than a port collision. This cost
 - Pulse's own docs and this file are the only record of the workstream. The ODC
   core plan (`docs/implementation-plan.md`) does not cover pulse and will not
   tell you it exists.
+
+### Three known bugs, found 2026-09-06, NOT fixed
+
+Found by the review of #146 in code that PR did not touch, so they were left
+out of it rather than widening one reviewable change. Nobody has started them.
+
+- **`ResultsPanel` reads `yourChoice` two ways.** "You picked X" resolves it as
+  an array position (`results.choices[yourChoice]`), the row badge as
+  `choice.index`. They agree only because the server happens to return choices
+  in poll order. **ADR-0021 is what makes this urgent**: it gives
+  `poll_choice.id` a stable identity and demotes `position` to display order, so
+  the first time results come back ordered any other way, the panel names the
+  wrong answer back to the voter. Pick one and use it in both places.
+- **`apps/pulse/test/database.test.ts` skips on `url === undefined`.** An empty
+  string `PULSE_DATABASE_URL` runs the test instead, which then fails claiming
+  `PULSE_REQUIRE_DATABASE` is set when it is not — a misleading failure at the
+  exact moment someone is wiring the stores up.
+- **A poll the client already knows is shut is still fully pressable.**
+  `settled` never consults `poll.open` on either ballot, so one press still
+  casts. If the server disagrees and answers `counted`, the person gets a
+  binding one-press cast with neither a confirming press nor the reassurance
+  sentence — **the "worst of both worlds" ADR-0022 exists to prevent.** Needs
+  client/server disagreement to reach, so it is unlikely rather than impossible,
+  and it is the one state where the ADR's bargain is fully broken.
