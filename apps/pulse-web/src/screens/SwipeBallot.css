@@ -281,6 +281,16 @@
   color: var(--ballot-ink-soft);
 }
 
+/*
+ * The second half of the one-press bargain: pulse casts without a confirming
+ * press, and this is the sentence that makes that safe to read. Quieter than
+ * "Counted." because it is a standing fact rather than what just happened -
+ * muted, never faint, which measures under the 4.5:1 floor on this ground.
+ */
+.outcome__changeable {
+  color: var(--ballot-ink-muted);
+}
+
 .outcome__next {
   margin-top: var(--step);
   display: flex;

@@ -376,6 +376,57 @@ describe("the copy", () => {
   });
 });
 
+/**
+ * Pulse casts on one press, with no confirming second press - deliberately,
+ * against `odc-ui`'s rule, because a run is meant to move at the speed of an
+ * opinion. What makes that safe is that an answer is not final, so saying so
+ * is not decoration: it is what stands in for the confirmation step.
+ */
+describe("telling someone the answer is in, and not final", () => {
+  it("says the answer can still be changed", async () => {
+    show();
+    fireEvent.keyDown(screen.getByText("Yes"), { key: "ArrowRight" });
+    const done = await screen.findByRole("status");
+    expect(done.textContent).toContain("Counted.");
+    expect(done.textContent).toContain(
+      "You can change your answer until this closes.",
+    );
+  });
+
+  it("says it again when the answer replaced an earlier one", async () => {
+    show({
+      cast: () =>
+        Promise.resolve({
+          status: "changed" as const,
+          ballot: [1],
+          results: EMPTY_RESULTS,
+        }),
+    });
+    fireEvent.keyDown(screen.getByText("Yes"), { key: "ArrowRight" });
+    const done = await screen.findByRole("status");
+    expect(done.textContent).toContain("That replaces your earlier answer.");
+    expect(done.textContent).toContain("You can change your answer");
+  });
+
+  it("promises nothing of the sort on a poll that has closed", async () => {
+    show({ cast: () => Promise.resolve({ status: "closed" as const }) });
+    fireEvent.keyDown(screen.getByText("Yes"), { key: "ArrowRight" });
+    await screen.findByText("This one has closed.");
+    expect(document.body.textContent).not.toContain("You can change");
+  });
+
+  /**
+   * Nothing is promised while the request is still out either - the answer is
+   * not in yet, so there is nothing to say can be changed.
+   */
+  it("waits until the answer is actually in", () => {
+    show({ cast: () => new Promise(() => {}) });
+    fireEvent.keyDown(screen.getByText("Yes"), { key: "ArrowRight" });
+    expect(screen.getByText("Sending\u2026")).toBeTruthy();
+    expect(document.body.textContent).not.toContain("You can change");
+  });
+});
+
 describe("seeing where the question stands", () => {
   const COUNTS = {
     status: "counted" as const,
@@ -423,6 +474,28 @@ describe("seeing where the question stands", () => {
     expect(
       await screen.findByRole("button", { name: "See results" }),
     ).toBeTruthy();
+  });
+
+  /**
+   * Opening the numbers used to take the only way forward off the screen, so a
+   * glance cost "Close" and then NEXT. A run moves at the speed of an opinion;
+   * making a glance cost two presses to undo teaches people not to glance.
+   */
+  it("keeps the way on while the numbers are open", async () => {
+    const onAnswered = vi.fn();
+    render(
+      <SwipeBallot
+        api={stubApi({ cast: () => Promise.resolve(COUNTS) })}
+        poll={poll({ next: ["ads-allowed", "pay-for-it"] })}
+        onAnswered={onAnswered}
+      />,
+    );
+    fireEvent.keyDown(screen.getByText("Yes"), { key: "ArrowRight" });
+    fireEvent.click(await screen.findByRole("button", { name: "See results" }));
+
+    const on = screen.getByRole("button", { name: /NEXT/ });
+    fireEvent.click(on);
+    expect(onAnswered).toHaveBeenCalledWith("pay-for-it");
   });
 
   it("offers nothing to see when the poll closed before the vote landed", async () => {

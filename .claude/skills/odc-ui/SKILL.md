@@ -137,6 +137,11 @@ before building screens in a palette that isn't decided.
 - Disable submit while pending; never let a double-tap cast twice.
 - **Always confirm a destructive or binding action** — "You're voting YES
   on… — confirm?" Picking and casting are separate presses.
+  **One scoped exception, `docs/decisions/0022-one-press-casts-and-says-so.md`:**
+  a pulse ballot casts on one press, because the answer is changeable until the
+  poll closes — and it must then say so on screen, which is what stands in for
+  the confirming press. Reversibility is what buys the exception; anything not
+  reversible, in pulse or anywhere else, still confirms.
 - A vote is changeable until close: `changed` is a normal outcome, not an
   error, and the UI says so plainly rather than treating it as a correction.
 

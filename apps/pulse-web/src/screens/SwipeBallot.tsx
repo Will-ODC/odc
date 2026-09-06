@@ -162,6 +162,7 @@ export function SwipeBallot({
           <div className="ballot__done">
             <AfterVote
               state={state}
+              changeable={poll.open}
               label={chosen ? (poll.choices[choiceFor(chosen)] ?? "") : ""}
               hasNext={chosen ? poll.next[choiceFor(chosen)] !== null : false}
               nextQuestion={

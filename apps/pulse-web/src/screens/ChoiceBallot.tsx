@@ -63,6 +63,7 @@ export function ChoiceBallot({
           <div className="ballot__done">
             <AfterVote
               state={state}
+              changeable={poll.open}
               label={chosen === null ? "" : (poll.choices[chosen] ?? "")}
               hasNext={chosen !== null && (poll.next[chosen] ?? null) !== null}
               nextQuestion={chosen === null ? undefined : nextQuestions[chosen]}
