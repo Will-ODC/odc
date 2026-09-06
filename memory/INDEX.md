@@ -32,12 +32,14 @@ Do not apply charter rules to `apps/**`, and do not relax them anywhere else.
   EV-20 is closed. → `memory/STATE.md`
 - **Pulse:** pillars 1 and 2 are on master — magic-link identity, the voting
   core, and a story UI you can walk end to end (#128-#131, #135, #127, merged
-  2026-08-26), plus a results panel you can open after answering (#140, merged
-  2026-09-03). Storage is **decided and not built**: Postgres per ADR-0020, the
-  poll/vote schema per ADR-0021, and CI has a database as of #143 — no store is
-  written yet. What is missing: every screen except the ballot and that panel
-  (so nothing in the client signs anyone in), pillar 3's path to action, any
-  durable storage, and any `Mailer` implementation. → `memory/pulse.md`
+  2026-08-26), plus a results panel you can open after answering (#140) and an
+  answer you can change (#146, merged 2026-09-06, ADR-0022). Storage is
+  **decided and not built**: Postgres per ADR-0020, the poll/vote schema per
+  ADR-0021, and CI has a database as of #143 — no store is written yet. What is
+  missing: every screen except the ballot and that panel (so nothing in the
+  client signs anyone in), pillar 3's path to action, any durable storage, and
+  any `Mailer` implementation. **Three known bugs are recorded and unstarted.**
+  → `memory/pulse.md`
 
 ## Load order
 
