@@ -90,8 +90,11 @@ describe("asking", () => {
   it("puts the choices back when the answer is changed", async () => {
     show();
     fireEvent.click(screen.getByRole("button", { name: "Grants" }));
-    const done = await screen.findByRole("status");
-    expect(done.textContent).toContain(
+
+    // The settled words, not `role="status"` — that region is already on
+    // screen saying "Sending…" while the cast is in flight.
+    await screen.findByText("Counted.");
+    expect(screen.getByRole("status").textContent).toContain(
       "You can change your answer until this question closes.",
     );
 

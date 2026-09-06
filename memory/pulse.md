@@ -425,6 +425,15 @@ decision 4).
   the entire suite green, so the clause ADR-0022 rests on was pinned by nothing.
   A poll with `open: false` and a `counted` cast is the only case that exercises
   the prop. **Ask of every guard: which test goes red if I hardcode this?**
+- **`findByRole("status")` does not wait for the vote.** `<Outcome>` renders the
+  same `role="status"` region while the cast is in flight, saying "Sending…", so
+  the query resolves on the **casting** render and every assertion after it is a
+  race against a promise. Three tests in #146 read the settled copy that way.
+  They passed locally, where the microtask flushed first, and #147 went red in
+  CI, where it did not. **Wait on the settled words** — `findByText("Counted.")`
+  — then read the region. Reproduced locally by giving the stubbed `cast` a 20ms
+  delay, which is worth doing to any test that awaits a region rather than a
+  result.
 - **A CSS class that never applied.** `.outcome > span` is 0-1-1 and
   `.outcome__changeable` was 0-1-0; specificity beats source order, so the
   sentence painted identically to the line above it and the rule's comment

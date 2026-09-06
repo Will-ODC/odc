@@ -392,9 +392,13 @@ describe("telling someone the answer is in, and not final", () => {
   it("says the answer can still be changed", async () => {
     show();
     fireEvent.keyDown(screen.getByText("Yes"), { key: "ArrowRight" });
-    const done = await screen.findByRole("status");
-    expect(done.textContent).toContain("Counted.");
-    expect(done.textContent).toContain(
+
+    // Waiting on the settled words, not on `role="status"`: that region is
+    // already on screen saying "Sending…" while the cast is in flight, so
+    // `findByRole("status")` resolves on the casting render and whether the
+    // vote has landed by the time the assertion runs is a race.
+    await screen.findByText("Counted.");
+    expect(screen.getByRole("status").textContent).toContain(
       "You can change your answer until this question closes.",
     );
   });
@@ -409,9 +413,11 @@ describe("telling someone the answer is in, and not final", () => {
         }),
     });
     fireEvent.keyDown(screen.getByText("Yes"), { key: "ArrowRight" });
-    const done = await screen.findByRole("status");
-    expect(done.textContent).toContain("That replaces your earlier answer.");
-    expect(done.textContent).toContain("You can change your answer");
+
+    await screen.findByText("That replaces your earlier answer.");
+    expect(screen.getByRole("status").textContent).toContain(
+      "You can change your answer",
+    );
   });
 
   it("promises nothing of the sort on a poll that has closed", async () => {
