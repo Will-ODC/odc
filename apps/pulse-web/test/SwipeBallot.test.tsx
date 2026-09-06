@@ -416,6 +416,70 @@ describe("telling someone the answer is in, and not final", () => {
   });
 
   /**
+   * The sentence is the whole of what stands in for a confirming press, so it
+   * has to be true. It was not: settling took the sides off the screen and
+   * nothing put them back, and on the run's first question there is no Back
+   * either, so someone told they could change their answer had no route to.
+   */
+  it("puts the question back when the answer is changed", async () => {
+    show();
+    fireEvent.keyDown(screen.getByText("Yes"), { key: "ArrowRight" });
+    await screen.findByText("Counted.");
+    expect(split()).toBeNull();
+
+    fireEvent.click(screen.getByRole("button", { name: "Change my answer" }));
+
+    expect(split()).toBeTruthy();
+    expect(screen.getByText("No")).toBeTruthy();
+    expect(screen.queryByText("Counted.")).toBeNull();
+  });
+
+  it("counts the second answer, and says it replaced the first", async () => {
+    const cast = vi.fn((_id: string, ballot: number[]) =>
+      Promise.resolve({
+        status: (cast.mock.calls.length > 1 ? "changed" : "counted") as
+          "changed" | "counted",
+        ballot,
+        results: EMPTY_RESULTS,
+      }),
+    );
+    show({ cast });
+    fireEvent.keyDown(screen.getByText("Yes"), { key: "ArrowRight" });
+    await screen.findByText("Counted.");
+    fireEvent.click(screen.getByRole("button", { name: "Change my answer" }));
+    fireEvent.keyDown(screen.getByText("No"), { key: "ArrowLeft" });
+
+    await screen.findByText("That replaces your earlier answer.");
+    expect(cast).toHaveBeenNthCalledWith(2, "ads-free", [0]);
+  });
+
+  /**
+   * The arrow keys are read by a handler on the `<section>`, so a keypress only
+   * reaches it from a control inside. The control pressed to come back is
+   * unmounted by that same render - without somewhere to send focus it lands on
+   * the body, and someone who came back by keyboard finds the arrows dead.
+   */
+  it("puts focus on a side, so the arrow keys still answer", async () => {
+    show();
+    fireEvent.keyDown(screen.getByText("Yes"), { key: "ArrowRight" });
+    await screen.findByText("Counted.");
+    fireEvent.click(screen.getByRole("button", { name: "Change my answer" }));
+
+    await waitFor(() =>
+      expect(document.activeElement?.className).toContain("ballot__half"),
+    );
+  });
+
+  it("offers no way to change an answer on a poll that has closed", async () => {
+    show({ cast: () => Promise.resolve({ status: "closed" as const }) });
+    fireEvent.keyDown(screen.getByText("Yes"), { key: "ArrowRight" });
+    await screen.findByText("This one has closed.");
+    expect(
+      screen.queryByRole("button", { name: "Change my answer" }),
+    ).toBeNull();
+  });
+
+  /**
    * Nothing is promised while the request is still out either - the answer is
    * not in yet, so there is nothing to say can be changed.
    */

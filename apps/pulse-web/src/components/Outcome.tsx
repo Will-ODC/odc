@@ -14,6 +14,7 @@ export function Outcome({
   state,
   label,
   changeable,
+  onChange,
   onSeeResults,
   seeResultsRef,
 }: {
@@ -31,6 +32,12 @@ export function Outcome({
    * must not be printed on a poll where it cannot.
    */
   changeable: boolean;
+  /**
+   * Put the question back so the answer can be given again. Present exactly
+   * when `changeable` is true — the sentence above promises this control
+   * exists, so the two must never disagree.
+   */
+  onChange: () => void;
   /**
    * Open the standing of this question. Absent when there is nothing to open -
    * a poll that closed returns no counts, so the control is not drawn rather
@@ -74,6 +81,11 @@ export function Outcome({
         <span className="outcome__changeable">
           You can change your answer until this closes.
         </span>
+      ) : null}
+      {state.status === "counted" && changeable ? (
+        <button type="button" className="outcome__change" onClick={onChange}>
+          Change my answer
+        </button>
       ) : null}
       {state.status === "counted" && onSeeResults ? (
         <button

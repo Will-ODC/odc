@@ -29,6 +29,7 @@ export function AfterVote({
   state,
   label,
   changeable,
+  onChange,
   hasNext,
   nextQuestion,
   onNext,
@@ -37,6 +38,8 @@ export function AfterVote({
   label: string;
   /** Whether the answer can still be replaced. See `<Outcome>`. */
   changeable: boolean;
+  /** Put the question back, so it can be answered again. See `<Outcome>`. */
+  onChange: () => void;
   /**
    * Whether the chosen answer opens another question — read from the poll's
    * own graph, not from whether its preview loaded.
@@ -104,6 +107,7 @@ export function AfterVote({
         state={state}
         label={label}
         changeable={changeable}
+        onChange={onChange}
         // Only a counted vote has counts to show. `casting` has not been
         // answered yet and `closed` came back without them.
         {...(state.status === "counted"

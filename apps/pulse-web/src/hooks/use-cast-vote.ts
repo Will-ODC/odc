@@ -34,6 +34,16 @@ export type CastState =
 export interface CastVote {
   state: CastState;
   cast: (choice: number) => void;
+  /**
+   * Put the question back, so the answer can be given again.
+   *
+   * Not an undo — nothing is retracted, and the vote already cast stands until
+   * another replaces it. This only returns the screen to `idle`, which is what
+   * makes the ballot answerable again. An empty ballot is refused by the API
+   * and is never read as a retraction, so there is no way to un-vote and this
+   * does not pretend to be one.
+   */
+  reset: () => void;
 }
 
 /**
@@ -69,7 +79,9 @@ export function useCastVote(api: PulseApi, pollId: string): CastVote {
     [api, pollId],
   );
 
-  return { state, cast };
+  const reset = useCallback(() => setState({ status: "idle" }), []);
+
+  return { state, cast, reset };
 }
 
 /**

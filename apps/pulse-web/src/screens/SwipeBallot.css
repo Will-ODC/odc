@@ -447,6 +447,34 @@
   color: var(--ballot-ink);
 }
 
+/*
+ * The way to answer again. Quiet like the way to the numbers - both are for
+ * whoever wants them, and neither competes with NEXT, which is what the run is
+ * actually offering. Same 44px hit area for the same reason: a miss high hits
+ * NEXT, and one press is one action here.
+ */
+.outcome__change {
+  padding: 13px 16px;
+  border: 0;
+  background: none;
+  color: var(--ballot-ink-muted);
+  font: inherit;
+  font-size: var(--t-small);
+  text-decoration: underline;
+  text-underline-offset: 3px;
+  cursor: pointer;
+}
+
+.outcome__change:hover {
+  color: var(--ballot-ink);
+}
+
+.outcome__change:focus-visible {
+  outline: 2px solid rgba(255, 255, 255, 0.7);
+  outline-offset: 2px;
+  border-radius: var(--r-control);
+}
+
 .outcome__results:focus-visible {
   outline: 2px solid rgba(255, 255, 255, 0.7);
   outline-offset: 2px;

@@ -55,7 +55,14 @@ in for the confirmation step.**
    `changeable` prop read from `poll.open`, not a constant, so it is never
    printed on a poll where it is untrue. Nothing is promised while the cast is
    still in flight, or when the poll closed before the vote landed.
-4. **The rest of `odc-ui`'s rule is untouched.** "Never let a double-tap cast
+4. **A control on the same screen makes it true.** "Change my answer" puts the
+   question back to be answered again. Without it the sentence was a promise
+   the app could not keep: settling removes the ballot, and Back — which is
+   absent on the run's first question anyway — goes to the _previous_ question,
+   not to this one. The sentence and the control are present under exactly the
+   same condition and must never be separated; a review found them separated,
+   which is how this clause came to exist.
+5. **The rest of `odc-ui`'s rule is untouched.** "Never let a double-tap cast
    twice" still holds and is still tested; so does "`changed` is a normal
    outcome, not an error".
 
@@ -74,7 +81,24 @@ in for the confirmation step.**
   does not confirm things".
 - A test asserts the sentence for both `counted` and `changed`, and asserts its
   absence while casting and on a closed poll, so a later reorganisation of the
-  outcome cannot take the reassurance away silently.
+  outcome cannot take the reassurance away silently. Separate tests assert that
+  the control actually puts the question back, on both ballots, and that the
+  second answer is counted as a replacement.
+- **Changing an answer returns focus to a choice, not to the document body.**
+  The swipe ballot reads arrow keys with a handler on its `<section>`, so a
+  keypress only reaches it from a control inside; the control pressed to come
+  back is unmounted by the same render. Without the focus move, someone who
+  changed their answer by keyboard would find the arrows dead. This is the same
+  shape as the bug where an arrow key on Back cast a vote (`8ae4714`) — a
+  section that reads keys as answers makes every focus change its business.
+- **This control is the in-run route back to a question, not the only intended
+  one.** The operator's standing assumption (2026-09-06) is a home screen that
+  browses all polls and batches of related polls, story-style — the "subject
+  browser" `memory/pulse.md` has carried as an undesigned request since
+  2026-08-25. When that exists it becomes the way back to a question from
+  outside a run, and this ADR's promise is kept by two routes rather than one.
+  It is not a reason to defer the control: the browser is unscoped, and the
+  sentence has to be true today.
 - `odc-ui` gains a pointer to this ADR, so a reader of the rule finds the
   exception rather than finding pulse in violation of it.
 
