@@ -1,0 +1,141 @@
+/*
+ * Signing in, and what the emailed link opens. Shares the ballot's dark
+ * ground so the app does not change colour underneath someone.
+ *
+ * Follows docs/mockups/pulse-screens/01-claim.html and 02-sent.html for
+ * wording and shape; the palette is screen 1's dark set rather than those
+ * files' light Civic Glass, because the ballot beside it is dark and a light
+ * sign-in would read as a different product. Whether the whole deck goes dark
+ * is still the operator's open question.
+ */
+.signin__title {
+  margin: 0;
+  font-size: var(--t-hero);
+  font-weight: 800;
+  letter-spacing: -0.03em;
+  line-height: 1.2;
+  color: var(--ballot-ink);
+}
+
+.signin__lede {
+  margin: 0;
+  font-size: var(--t-body);
+  line-height: 1.5;
+  color: var(--ballot-ink-muted);
+}
+
+.signin__lede b {
+  color: var(--ballot-ink-soft);
+  font-weight: 600;
+}
+
+.signin__address {
+  color: var(--ballot-ink-soft);
+  font-weight: 600;
+}
+
+.signin__form {
+  display: flex;
+  flex-direction: column;
+  gap: calc(var(--step) * 1.5);
+  margin-top: var(--step);
+}
+
+.signin__label {
+  font-size: var(--t-small);
+  font-weight: 600;
+  color: var(--ballot-ink-soft);
+}
+
+.signin__field {
+  width: 100%;
+  box-sizing: border-box;
+  padding: 14px 16px;
+  font: inherit;
+  font-size: var(--t-body);
+  color: var(--ballot-ink);
+  background: var(--ballot-chip);
+  border: 1px solid var(--ballot-line);
+  border-radius: var(--r-control);
+}
+
+.signin__field::placeholder {
+  color: var(--ballot-ink-faint);
+}
+
+.signin__field:focus-visible {
+  outline: 2px solid rgb(var(--side-b));
+  outline-offset: 2px;
+}
+
+.signin__field[aria-invalid="true"] {
+  border-color: rgb(var(--side-a));
+}
+
+.signin__field:disabled {
+  opacity: 0.6;
+}
+
+.signin__optin {
+  display: flex;
+  align-items: flex-start;
+  gap: 10px;
+  font-size: var(--t-small);
+  line-height: 1.45;
+  color: var(--ballot-ink-muted);
+  cursor: pointer;
+}
+
+.signin__optin input {
+  flex: 0 0 auto;
+  width: 18px;
+  height: 18px;
+  margin: 1px 0 0;
+  accent-color: rgb(var(--side-b));
+}
+
+/* One plain sentence: what happened, and what to do about it. */
+.signin__problem {
+  margin: 0;
+  font-size: var(--t-small);
+  line-height: 1.45;
+  color: rgb(var(--side-a));
+}
+
+.signin__go {
+  margin-top: var(--step);
+  padding: 15px 18px;
+  font: inherit;
+  font-size: var(--t-body);
+  font-weight: 700;
+  letter-spacing: -0.01em;
+  color: var(--ballot-bg);
+  background: rgb(var(--side-b));
+  border: none;
+  border-radius: var(--r-control);
+  cursor: pointer;
+}
+
+.signin__go:disabled {
+  opacity: 0.55;
+  cursor: default;
+}
+
+.signin__again {
+  margin-top: var(--step);
+  padding: 13px 18px;
+  font: inherit;
+  font-size: var(--t-body);
+  font-weight: 600;
+  color: var(--ballot-ink-soft);
+  background: transparent;
+  border: 1px solid var(--ballot-line);
+  border-radius: var(--r-control);
+  cursor: pointer;
+}
+
+.signin__go:focus-visible,
+.signin__again:focus-visible {
+  outline: 2px solid rgb(var(--side-b));
+  outline-offset: 2px;
+}

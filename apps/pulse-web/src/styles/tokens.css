@@ -39,6 +39,10 @@
   --ballot-ink-faint: rgba(255, 255, 255, 0.32);
   --ballot-line: rgba(255, 255, 255, 0.1);
   --ballot-chip: rgba(255, 255, 255, 0.09);
+  /* The mark. Read by BOTH .ballot__brand and .screen__brand — a review
+     found they had drifted on six properties, so the values live here. */
+  --brand-ink: #eef2f8;
+  --brand-dot: rgba(255, 255, 255, 0.85);
 
   /* The two sides. `-lean` is the strongest tint a drag reaches before it
      commits; `-settled` is the flat ground the WHOLE screen takes once a side

@@ -1,0 +1,70 @@
+/*
+ * The phone-sized pane every screen that is not a ballot sits in.
+ *
+ * Dark, to match the ballot: a person moving between signing in and answering
+ * should not feel the app change under them, and the page behind it is dark
+ * already (App.css).
+ *
+ * The ballots carry their own copy of the `.screen` frame rules in
+ * SwipeBallot.css and ChoiceBallot.css. That duplication is deliberate and
+ * temporary — adopting this class there means editing two merged, tested
+ * screens, which belongs with the extraction work that gives the ballot a
+ * second home. The rules below are byte-for-byte the ones in
+ * `.ballot` / `.ballot__brand`; a review found the mark had already drifted on
+ * six properties, so the shared values now live in tokens.css and BOTH files
+ * read them. Change a brand value there, never here.
+ */
+.screen {
+  position: relative;
+  display: flex;
+  flex-direction: column;
+  overflow: hidden;
+  background: var(--ballot-bg);
+  color: var(--ballot-ink);
+  border: 1px solid var(--ballot-line);
+  border-radius: var(--r-screen);
+  box-shadow: var(--shadow-ballot);
+  width: min(390px, 100vw);
+  height: min(844px, 100dvh);
+}
+
+/*
+ * Pinned to the top, as the ballot's is — it sits above `.ballot__content`'s
+ * centred column rather than inside it. Centring the mark with the content is
+ * what made it visibly jump between the two screens.
+ */
+.screen__mark {
+  padding: var(--gutter) var(--gutter) 0;
+}
+
+/* Declaration for declaration, `.ballot__brand` in SwipeBallot.css. */
+.screen__brand {
+  display: flex;
+  align-items: center;
+  gap: var(--step);
+  font-size: var(--t-small);
+  font-weight: 600;
+  letter-spacing: 0.02em;
+  color: var(--brand-ink);
+}
+
+.screen__brand i {
+  width: var(--step);
+  height: var(--step);
+  border-radius: var(--r-pill);
+  background: var(--brand-dot);
+}
+
+/*
+ * The body: centred in what is left, gutter-padded, and the part that scrolls
+ * if a message runs long on a short screen.
+ */
+.screen__body {
+  flex: 1;
+  display: flex;
+  flex-direction: column;
+  justify-content: center;
+  gap: calc(var(--step) * 2);
+  padding: var(--gutter);
+  overflow-y: auto;
+}
