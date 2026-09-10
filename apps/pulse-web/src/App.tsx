@@ -1,85 +1,59 @@
-import { useCallback, useState } from "react";
-import type { Poll, PulseApi } from "./api/types.js";
-import { isSwipeable } from "./flow/swipe.js";
-import { usePoll } from "./hooks/use-poll.js";
-import { ViewState } from "./components/ViewState.js";
-import { SwipeBallot } from "./screens/SwipeBallot.js";
-import { ChoiceBallot } from "./screens/ChoiceBallot.js";
+import type { PulseApi } from "./api/types.js";
+import type { Route } from "./flow/route.js";
+import { FIRST_POLL_ID } from "./flow/route.js";
+import { useRoute } from "./hooks/use-route.js";
+import { Redeem } from "./screens/Redeem.js";
+import { Run } from "./screens/Run.js";
+import { SignIn } from "./screens/SignIn.js";
 import "./styles/tokens.css";
 import "./App.css";
 
 /**
- * Walks the run.
+ * Picks the screen for where we are, and owns no screen markup itself.
  *
- * pulse opens on a vote, not a sign-in form, and answering is also navigating:
- * each choice names the poll it opens, so the run is a path through a graph
- * rather than a fixed list of screens. This component holds where we are and
- * picks the screen the current question needs; the screens do the asking.
+ * Three places, and the emailed link is why two of them exist: a person who
+ * clicks it arrives holding a token, and before this the app read the URL for
+ * `?poll=`, found nothing, and opened the first question — so the link signed
+ * nobody in and said nothing about it.
  *
- * Where we are is the end of a trail rather than a single id, because a
- * question does not know what came before it: two different answers can open
- * the same poll, so "the previous question" is a property of the walk and not
- * of the graph. Keeping the path taken is the only way back.
+ * `route` is optional so a test can render one screen without driving the
+ * browser's history. Left out, the URL decides, which is what the real app
+ * wants and what the link depends on.
  */
-export function App({ api, pollId }: { api: PulseApi; pollId: string }) {
-  const [trail, setTrail] = useState<string[]>([pollId]);
-  const at = trail[trail.length - 1] ?? pollId;
-  const loaded = usePoll(api, at);
+export function App({ api, route }: { api: PulseApi; route?: Route }) {
+  const browser = useRoute();
+  const at = route ?? browser.route;
 
-  const answered = useCallback((next: string | null) => {
-    // A choice with nothing after it ends the run. Staying put is the honest
-    // thing until there is a screen to end on.
-    if (next) setTrail((walked) => [...walked, next]);
-  }, []);
-
-  /**
-   * Back is a step off the end of the trail, not a re-walk of the graph.
-   *
-   * The question it returns to is asked again from the top rather than shown
-   * with the earlier answer on it: an answer can be changed until the question
-   * closes, so the ballot is still the truthful screen, and the server says
-   * plainly that a second vote replaced the first.
-   */
-  const back = useCallback(() => {
-    setTrail((walked) => (walked.length > 1 ? walked.slice(0, -1) : walked));
-  }, []);
-
-  return (
-    <ViewState data={loaded}>
-      {(poll) => (
-        <Ballot
+  switch (at.kind) {
+    case "signIn":
+      return <SignIn api={api} />;
+    case "redeem":
+      return (
+        <Redeem
           api={api}
-          poll={poll}
-          onAnswered={answered}
-          // Nothing to go back to on the question the run opened on, and a
-          // control that would do nothing should not be on the screen.
-          {...(trail.length > 1 ? { onBack: back } : {})}
+          token={at.token}
+          /*
+           * Replaced, not pushed: the token is spent the moment it is
+           * redeemed, so leaving that URL in the history would hand the back
+           * button a link that can now only answer "already used".
+           */
+          onSignedIn={() => browser.replace({ kind: "run", pollId: LANDS_ON })}
+          onAskAgain={() => browser.replace({ kind: "signIn" })}
         />
-      )}
-    </ViewState>
-  );
+      );
+    case "run":
+      return <Run api={api} pollId={at.pollId} />;
+  }
 }
 
 /**
- * Which ballot a question needs is a property of the question: two choices are
- * a swipe, more than two are a list. Keyed by poll id so moving to the next
- * question starts a fresh screen rather than showing the last one's answer.
+ * Where someone lands once they are signed in.
+ *
+ * A placeholder, and deliberately a named one. What this should be is a
+ * three-way decision — continue a run already started, start the story if
+ * they never did, or go to the home feed if they have been through or skipped
+ * it — and none of the three is possible yet: nothing persists where a run
+ * got to, and there is no home to go to. Until both land, signing in returns
+ * to the first question, which is at least where the app already opens.
  */
-function Ballot({
-  api,
-  poll,
-  onAnswered,
-  onBack,
-}: {
-  api: PulseApi;
-  poll: Poll;
-  onAnswered: (next: string | null) => void;
-  onBack?: (() => void) | undefined;
-}) {
-  const shared = { api, poll, onAnswered, ...(onBack ? { onBack } : {}) };
-  return isSwipeable(poll) ? (
-    <SwipeBallot key={poll.id} {...shared} />
-  ) : (
-    <ChoiceBallot key={poll.id} {...shared} />
-  );
-}
+const LANDS_ON = FIRST_POLL_ID;
