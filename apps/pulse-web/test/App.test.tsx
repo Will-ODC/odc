@@ -130,6 +130,29 @@ describe("after the link is spent", () => {
 });
 
 /*
+ * Nothing in the app pushes a history entry today — every move is a `replace`
+ * away from a URL that must not come back — so the browser's own back and
+ * forward buttons cannot currently reach another screen from inside pulse.
+ *
+ * The listener is kept anyway, and tested here, because the moment anything
+ * does push (the home feed and the run's own navigation are both coming) a
+ * missing listener means Back changes the URL and leaves the screen behind.
+ * Without this test that listener is deletable with the whole suite green —
+ * which a review found it was.
+ */
+describe("following the browser's own navigation", () => {
+  it("re-reads the URL when the browser moves", async () => {
+    render(<App api={stubApi()} />);
+    await screen.findByText(poll().question);
+
+    globalThis.history.replaceState(null, "", "/sign-in");
+    globalThis.dispatchEvent(new PopStateEvent("popstate"));
+
+    expect(await screen.findByLabelText("Your school email")).toBeTruthy();
+  });
+});
+
+/*
  * The prop exists so a test can render one screen without driving history.
  * It must not become the only path that works — see the suite above, which
  * deliberately does not use it.
