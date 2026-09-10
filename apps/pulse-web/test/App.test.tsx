@@ -76,6 +76,7 @@ describe("after the link is spent", () => {
   it("leaves no spent link behind in the history", async () => {
     globalThis.history.replaceState(null, "", "/sign-in?token=abc123");
     render(<App api={stubApi({ redeem: () => Promise.resolve(ME) })} />);
+    const before = globalThis.history.length;
 
     await userEvent.click(
       await screen.findByRole("button", { name: "Continue" }),
@@ -83,6 +84,13 @@ describe("after the link is spent", () => {
 
     expect(await screen.findByText(poll().question)).toBeTruthy();
     expect(globalThis.location.pathname + globalThis.location.search).toBe("/");
+    /*
+     * The length, not the address. Pushing lands on "/" too, so asserting the
+     * URL alone is a test that cannot fail — it passed with `go` in place of
+     * `replace`, which is the whole bug. What separates them is whether the
+     * spent link is still one press of Back away.
+     */
+    expect(globalThis.history.length).toBe(before);
   });
 
   it("goes back to the form when the link had run out", async () => {

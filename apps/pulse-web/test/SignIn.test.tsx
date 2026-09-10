@@ -200,8 +200,16 @@ describe("checking the field", () => {
    */
   it("stays quiet while the address is being typed", async () => {
     render(<SignIn api={stubApi()} />);
-    await userEvent.type(field(), "jo@student.ubc.ca");
+    /*
+     * Deliberately stopped part-way, and deliberately invalid as it stands:
+     * "jo@ubc" is what "jo@ubc.ca" looks like three keystrokes from done.
+     * Typing the whole valid address instead proves nothing — it is valid by
+     * the time the assertion runs, so the test passes even if the check moved
+     * to onChange, which is exactly what it went green for once.
+     */
+    await userEvent.type(field(), "jo@ubc");
     expect(screen.queryByRole("alert")).toBeNull();
+    expect(field().getAttribute("aria-invalid")).toBe("false");
   });
 
   it("says so once they leave a malformed address", async () => {
