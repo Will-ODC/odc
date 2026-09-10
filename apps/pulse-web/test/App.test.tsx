@@ -111,6 +111,7 @@ describe("after the link is spent", () => {
       />,
     );
 
+    const before = globalThis.history.length;
     await userEvent.click(
       await screen.findByRole("button", { name: "Ask for a new link" }),
     );
@@ -118,6 +119,13 @@ describe("after the link is spent", () => {
     expect(await screen.findByLabelText("Your school email")).toBeTruthy();
     expect(globalThis.location.pathname).toBe("/sign-in");
     expect(globalThis.location.search).toBe("");
+    /*
+     * The same assertion the sibling test needed, for the same reason: without
+     * it, `go` in place of `replace` passes, and Back from the sign-in form
+     * lands on the dead token URL. A review found this call site after the
+     * other one had already been swept for exactly this.
+     */
+    expect(globalThis.history.length).toBe(before);
   });
 });
 

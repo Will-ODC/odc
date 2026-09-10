@@ -1,10 +1,11 @@
-import { useEffect, useRef, useState } from "react";
+import { useCallback, useEffect, useRef, useState } from "react";
 import type { Me, PulseApi } from "../api/types.js";
 import { ApiError } from "../api/types.js";
 import type { ViewData } from "./view-data.js";
 
 /**
- * Spend a sign-in token, once.
+ * Spend a sign-in token, once — and let a caller ask again when the ASKING
+ * failed rather than the token.
  *
  * Once is load-bearing rather than tidy. `POST /api/sign-in/redeem` consumes
  * the link, so a second call answers `410 already_used` — and React's
@@ -19,13 +20,22 @@ import type { ViewData } from "./view-data.js";
  * cleanup marks the first run dead, so a second run that returns early leaves
  * nobody listening and the screen sits on "Loading…" forever.
  *
+ * `retry` is the deliberate exception, and it is safe for the same reason the
+ * guard exists: a screen offers it only when the request never reached the
+ * server, so the token was never spent and asking again is the only way to
+ * use it.
+ *
  * The server's non-consuming `GET` exists for the neighbouring problem: mail
  * scanners follow every URL in a message. Nothing here calls it, because by
  * the time this screen renders a person really has clicked.
  */
-export function useRedeem(api: PulseApi, token: string): ViewData<Me> {
+export function useRedeem(
+  api: PulseApi,
+  token: string,
+): { redeemed: ViewData<Me>; retry: () => void } {
   const [state, setState] = useState<ViewData<Me>>({ status: "loading" });
   const sent = useRef<{ token: string; answer: Promise<Me> } | null>(null);
+  const [attempt, setAttempt] = useState(0);
 
   useEffect(() => {
     let live = true;
@@ -49,9 +59,18 @@ export function useRedeem(api: PulseApi, token: string): ViewData<Me> {
     return () => {
       live = false;
     };
-  }, [api, token]);
+    // `attempt` is a dependency so `retry` can re-run this effect. Never read.
+  }, [api, token, attempt]);
 
-  return state;
+  const retry = useCallback(() => {
+    // Forget the remembered answer first, or the effect re-attaches to the
+    // same rejected promise and reports the same failure without asking
+    // anyone.
+    sent.current = null;
+    setAttempt((n) => n + 1);
+  }, []);
+
+  return { redeemed: state, retry };
 }
 
 function failure(err: unknown): ViewData<never> {
@@ -61,6 +80,11 @@ function failure(err: unknown): ViewData<never> {
    * says which and tells the person to ask for a new one. Showing that beats
    * anything this file could invent, because only the server knows which of
    * the three it was.
+   *
+   * Everything else is `error`, and the difference is not cosmetic — `empty`
+   * means the token is gone, `error` means it is still good. The screen owes
+   * each of them a different control, and a review caught it owing them the
+   * same one.
    */
   if (err instanceof ApiError && (err.status === 410 || err.status === 400)) {
     return { status: "empty", message: err.message };
@@ -68,8 +92,5 @@ function failure(err: unknown): ViewData<never> {
   if (err instanceof ApiError) {
     return { status: "error", message: err.message };
   }
-  return {
-    status: "error",
-    message: "We could not sign you in. Check your connection and try again.",
-  };
+  return { status: "error", message: "We could not sign you in." };
 }

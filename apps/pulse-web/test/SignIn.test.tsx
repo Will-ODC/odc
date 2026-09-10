@@ -11,11 +11,21 @@ afterEach(cleanup);
 const field = () => screen.getByLabelText("Your school email");
 const go = () => screen.getByRole("button", { name: "Continue" });
 
+/*
+ * What `POST /api/sign-in` really answers with. The message is a hardcoded
+ * literal in `apps/pulse/src/http/server.ts`, sent on EVERY success, so a stub
+ * without it is a body the server cannot produce — and five of these tests
+ * used one, which is how the screen that ships ended up being the untested
+ * half. Anything asserted against this is asserted against production.
+ */
+const SERVER_SENT = {
+  status: "sent" as const,
+  message: "Check your email for a link to sign in.",
+};
+
 describe("asking for a link", () => {
   it("sends the address and the opt-in the person actually gave", async () => {
-    const requestLink = vi.fn(() =>
-      Promise.resolve({ status: "sent" as const }),
-    );
+    const requestLink = vi.fn(() => Promise.resolve(SERVER_SENT));
     render(<SignIn api={stubApi({ requestLink })} />);
 
     await userEvent.type(field(), "jo@student.ubc.ca");
@@ -30,9 +40,7 @@ describe("asking for a link", () => {
    * real `false`. Defaulting it anywhere else would opt people in by omission.
    */
   it("sends false when the box was never touched", async () => {
-    const requestLink = vi.fn(() =>
-      Promise.resolve({ status: "sent" as const }),
-    );
+    const requestLink = vi.fn(() => Promise.resolve(SERVER_SENT));
     render(<SignIn api={stubApi({ requestLink })} />);
 
     await userEvent.type(field(), "jo@student.ubc.ca");
@@ -42,9 +50,7 @@ describe("asking for a link", () => {
   });
 
   it("trims space the person did not mean to type", async () => {
-    const requestLink = vi.fn(() =>
-      Promise.resolve({ status: "sent" as const }),
-    );
+    const requestLink = vi.fn(() => Promise.resolve(SERVER_SENT));
     render(<SignIn api={stubApi({ requestLink })} />);
 
     await userEvent.type(field(), "  jo@student.ubc.ca ");
@@ -54,9 +60,7 @@ describe("asking for a link", () => {
   });
 
   it("can be sent from the keyboard alone", async () => {
-    const requestLink = vi.fn(() =>
-      Promise.resolve({ status: "sent" as const }),
-    );
+    const requestLink = vi.fn(() => Promise.resolve(SERVER_SENT));
     render(<SignIn api={stubApi({ requestLink })} />);
 
     await userEvent.tab();
@@ -86,7 +90,7 @@ describe("once the link is on its way", () => {
     render(
       <SignIn
         api={stubApi({
-          requestLink: () => Promise.resolve({ status: "sent" as const }),
+          requestLink: () => Promise.resolve(SERVER_SENT),
         })}
       />,
     );
@@ -99,18 +103,42 @@ describe("once the link is on its way", () => {
   });
 
   /*
-   * The server's sentence knows things this screen does not — how long the
-   * link lasts, for one. Carried rather than replaced with our own wording.
+   * The server's sentence is a hardcoded literal that duplicates the heading
+   * and does not name the address, so this screen deliberately does not show
+   * it. Asserting its ABSENCE is what stops someone reinstating it and giving
+   * the person "Check your email." twice.
    */
-  it("shows the server's own sentence when it sent one", async () => {
+  it("does not repeat the server's sentence back", async () => {
+    render(
+      <SignIn
+        api={stubApi({ requestLink: () => Promise.resolve(SERVER_SENT) })}
+      />,
+    );
+
+    await userEvent.type(field(), "jo@student.ubc.ca");
+    await userEvent.click(go());
+    await screen.findByText("Check your email.");
+
+    expect(screen.queryByText(SERVER_SENT.message)).toBeNull();
+  });
+
+  /*
+   * A 429 is good news wearing an error status — the link is already on its
+   * way. Answering it as a failure would tell someone their request did not
+   * work when it worked twice.
+   */
+  it("treats an already-sent link as sent, not as a failure", async () => {
     render(
       <SignIn
         api={stubApi({
           requestLink: () =>
-            Promise.resolve({
-              status: "sent" as const,
-              message: "Check your email. The link works for 15 minutes.",
-            }),
+            Promise.reject(
+              new ApiError(
+                429,
+                "A link is already on its way. Check your email.",
+                "too_many_requests",
+              ),
+            ),
         })}
       />,
     );
@@ -118,18 +146,52 @@ describe("once the link is on its way", () => {
     await userEvent.type(field(), "jo@student.ubc.ca");
     await userEvent.click(go());
 
-    expect(
-      await screen.findByText(
-        "Check your email. The link works for 15 minutes.",
-      ),
-    ).toBeTruthy();
+    expect(await screen.findByText("Check your email.")).toBeTruthy();
+    expect(screen.getByText("jo@student.ubc.ca")).toBeTruthy();
+  });
+
+  /*
+   * The form that was focused has just unmounted. Without moving focus it
+   * falls to `document.body`: a keyboard user tabs from the top of the page to
+   * reach the only control, and a screen reader announces nothing.
+   */
+  it("moves focus to the heading rather than dropping it", async () => {
+    render(
+      <SignIn
+        api={stubApi({ requestLink: () => Promise.resolve(SERVER_SENT) })}
+      />,
+    );
+
+    await userEvent.type(field(), "jo@student.ubc.ca");
+    await userEvent.click(go());
+
+    const heading = await screen.findByText("Check your email.");
+    expect(document.activeElement).toBe(heading);
+  });
+
+  it("puts focus back in the field when they come back to change it", async () => {
+    render(
+      <SignIn
+        api={stubApi({ requestLink: () => Promise.resolve(SERVER_SENT) })}
+      />,
+    );
+
+    await userEvent.type(field(), "jo@student.ubc.ca");
+    await userEvent.click(go());
+    await screen.findByText("Check your email.");
+
+    await userEvent.click(
+      screen.getByRole("button", { name: "Use a different email" }),
+    );
+
+    await waitFor(() => expect(document.activeElement).toBe(field()));
   });
 
   it("lets someone go back and use a different address", async () => {
     render(
       <SignIn
         api={stubApi({
-          requestLink: () => Promise.resolve({ status: "sent" as const }),
+          requestLink: () => Promise.resolve(SERVER_SENT),
         })}
       />,
     );
@@ -189,6 +251,59 @@ describe("when the address will not do", () => {
 
     expect(await screen.findByText("Couldn't reach pulse.")).toBeTruthy();
   });
+
+  /*
+   * A request that did not get through is not the field's fault. Marking the
+   * input invalid and describing it with "we could not reach pulse" tells a
+   * screen-reader user to fix an address that is perfectly good.
+   */
+  it("does not blame the field when it was the request that failed", async () => {
+    render(
+      <SignIn
+        api={stubApi({
+          requestLink: () =>
+            Promise.reject(new ApiError(0, "Couldn't reach pulse.")),
+        })}
+      />,
+    );
+
+    await userEvent.type(field(), "jo@student.ubc.ca");
+    await userEvent.click(go());
+    await screen.findByText("Couldn't reach pulse.");
+
+    expect(field().getAttribute("aria-invalid")).toBe("false");
+    expect(field().getAttribute("aria-describedby")).toBeNull();
+  });
+
+  /*
+   * A refusal naming the old domain is stale the moment they start replacing
+   * it — and leaving `aria-invalid` on marks the new address wrong before it
+   * has been sent anywhere.
+   */
+  it("drops the refusal once they start changing the address", async () => {
+    render(
+      <SignIn
+        api={stubApi({
+          requestLink: () =>
+            Promise.resolve({
+              status: "not_eligible" as const,
+              message: "No community uses gmail.com yet.",
+            }),
+        })}
+      />,
+    );
+
+    await userEvent.type(field(), "jo@gmail.com");
+    await userEvent.click(go());
+    await screen.findByText("No community uses gmail.com yet.");
+
+    await userEvent.type(field(), "x");
+
+    await waitFor(() =>
+      expect(screen.queryByText("No community uses gmail.com yet.")).toBeNull(),
+    );
+    expect(field().getAttribute("aria-invalid")).toBe("false");
+  });
 });
 
 describe("checking the field", () => {
@@ -219,6 +334,15 @@ describe("checking the field", () => {
     expect(
       await screen.findByText("That does not look like an email address."),
     ).toBeTruthy();
+    /*
+     * Asserted POSITIVELY, and that matters: the two neighbouring tests check
+     * `queryByRole("alert")` is null, so deleting `role="alert"` from the
+     * markup made both of them pass forever and never fail again. Something
+     * has to require the role to be there.
+     */
+    expect(screen.getByRole("alert").textContent).toBe(
+      "That does not look like an email address.",
+    );
   });
 
   it("says nothing about an empty field they merely passed through", async () => {
@@ -229,9 +353,7 @@ describe("checking the field", () => {
   });
 
   it("never sends a malformed address", async () => {
-    const requestLink = vi.fn(() =>
-      Promise.resolve({ status: "sent" as const }),
-    );
+    const requestLink = vi.fn(() => Promise.resolve(SERVER_SENT));
     render(<SignIn api={stubApi({ requestLink })} />);
 
     await userEvent.type(field(), "jo@ubc");

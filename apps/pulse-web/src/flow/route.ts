@@ -41,9 +41,14 @@ const PARSE_BASE = "http://pulse.invalid";
 
 export function routeFrom(href: string): Route {
   const url = new URL(href, PARSE_BASE);
-  // Trailing slashes are the same place: a link that gains one on the way
-  // through a mail client should still sign the person in.
-  const path = url.pathname.replace(/\/+$/, "") || "/";
+  /*
+   * Trailing slashes are the same place, and so is a different case: a link
+   * that gains a slash or gets title-cased on the way through a mail client
+   * should still sign the person in. Getting this wrong is the original bug in
+   * miniature — an unrecognised path falls through to the run and the token is
+   * dropped in silence.
+   */
+  const path = url.pathname.replace(/\/+$/, "").toLowerCase() || "/";
 
   if (path === SIGN_IN_PATH) {
     const token = url.searchParams.get("token");

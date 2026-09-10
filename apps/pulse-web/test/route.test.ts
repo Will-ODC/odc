@@ -54,6 +54,28 @@ describe("reading a URL", () => {
     });
   });
 
+  /*
+   * The original bug in miniature. A path this does not recognise falls
+   * through to the run and the token is dropped in silence — so a mail client
+   * that title-cases the URL would sign nobody in, exactly as before, with
+   * nothing to show for it.
+   */
+  it("treats a differently-cased path as the same place", () => {
+    expect(routeFrom("/Sign-In?token=abc123")).toEqual({
+      kind: "redeem",
+      token: "abc123",
+    });
+    expect(routeFrom("/SIGN-IN")).toEqual({ kind: "signIn" });
+  });
+
+  /* The token itself is case-sensitive — it is a secret, not a path. */
+  it("does not touch the case of the token", () => {
+    expect(routeFrom("/sign-in?token=AbC123")).toEqual({
+      kind: "redeem",
+      token: "AbC123",
+    });
+  });
+
   it("keeps a token that needed escaping", () => {
     const token = "a+b/c=d";
     expect(routeFrom(`/sign-in?token=${encodeURIComponent(token)}`)).toEqual({

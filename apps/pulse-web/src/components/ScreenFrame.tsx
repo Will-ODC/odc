@@ -11,12 +11,12 @@ import "./ScreenFrame.css";
 export function ScreenFrame({ children }: { children: ReactNode }) {
   return (
     <section className="screen">
-      <div className="screen__body">
+      <div className="screen__mark">
         <div className="screen__brand">
           <i aria-hidden="true" /> pulse
         </div>
-        {children}
       </div>
+      <div className="screen__body">{children}</div>
     </section>
   );
 }

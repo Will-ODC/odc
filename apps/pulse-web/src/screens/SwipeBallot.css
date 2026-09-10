@@ -95,14 +95,14 @@
   font-size: var(--t-small);
   font-weight: 600;
   letter-spacing: 0.02em;
-  color: #eef2f8;
+  color: var(--brand-ink);
 }
 
 .ballot__brand i {
   width: var(--step);
   height: var(--step);
   border-radius: var(--r-pill);
-  background: rgba(255, 255, 255, 0.85);
+  background: var(--brand-dot);
 }
 
 .ballot__chip {
