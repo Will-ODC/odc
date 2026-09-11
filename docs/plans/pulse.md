@@ -68,26 +68,7 @@ file.
 
 ---
 
-## P1 — The sign-in screens · READY TO BUILD
-
-**Nothing in the client signs anyone in.** Pillar 1 — magic-link identity — is
-built and served end to end on the server and has no UI at all: no CLAIM screen,
-no SENT screen, no redeem screen. `flow/story.ts` enumerates six steps the app
-does not render, and the design of record is `docs/mockups/pulse-screens/`.
-
-Listed first because **P2 and P4 both sit on top of it**, not because it
-outranks anything else.
-
-Two things a session should know before starting, both already paid for:
-
-- `GET /api/sign-in/redeem` reports on a link **without consuming it**, because
-  mail scanners follow every URL in an email. It is still not on `PulseApi`,
-  because no redeem screen has needed it.
-- The one 403 the client treats as an _answer_ rather than a failure is
-  `not_a_member`, which becomes `{ status: "not_eligible", message }` and shows
-  the server's own sentence, which names the domain.
-
-## P2 — The sign-in community picker · READY TO BUILD, depends on P1
+## P2 — The sign-in community picker · READY TO BUILD
 
 Owed by ADR-0023 and unticketed until now. A domain may prove membership of
 several communities — `allowed_domain` is keyed on `(community, domain)` on
@@ -137,7 +118,7 @@ Also owed by this item and not by #148: **there is no `GET /api/polls`.** Every
 route is `/api/polls/:id/...`, so a browsing screen needs a listing endpoint
 that does not exist.
 
-## P4 — A real `Mailer` · BLOCKED ON A DECISION, then READY; depends on P1 to be worth anything
+## P4 — A real `Mailer` · BLOCKED ON A DECISION, then READY
 
 `src/identity/mailer.ts` defines the interface and `ConsoleMailer` prints the
 link to a terminal. **No provider implementation exists anywhere**, so nobody
@@ -204,12 +185,12 @@ deciding who fills `closesAt` and `acceptsSuggestions` on a posted question.
 **Depends on** the storage work landing first — that is the operator's stated
 ordering — and on P2 for the community half.
 
-## P7 — Three known bugs · READY TO BUILD
+## P7 — Two known bugs · READY TO BUILD
 
 Found by the review of #146 on 2026-09-06, in code that PR did not touch, so
 they were left out of it rather than widening one reviewable change. Nobody has
 started them. They are small and independent; one branch each, or one branch for
-all three, is a judgement call about review size.
+both, is a judgement call about review size.
 
 ### P7a — `ResultsPanel` reads `yourChoice` two ways
 
@@ -220,12 +201,6 @@ what makes this urgent:** it gives `poll_choice.id` a stable identity and demote
 `position` to display order, so the first time results come back ordered any
 other way, the panel names the wrong answer back to the voter. Pick one reading
 and use it in both places.
-
-### P7b — `database.test.ts` skips on `url === undefined`
-
-An empty-string `PULSE_DATABASE_URL` runs the test instead, which then fails
-claiming `PULSE_REQUIRE_DATABASE` is set when it is not — a misleading failure at
-the exact moment somebody is wiring the stores up.
 
 ### P7c — A poll the client already knows is shut is still fully pressable
 
