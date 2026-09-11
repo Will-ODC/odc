@@ -3,6 +3,8 @@
 - **Status:** accepted
 - **Date:** 2026-09-11
 - **Phase:** 0
+- **Amends:** ADR-0021's `polls` column list, additively — three columns land in
+  migration 002, and `community` becomes a table the schema does not yet have
 
 ## Context
 
@@ -96,13 +98,195 @@ need somewhere to live, and the consequences below are that file's first
 entries. Splitting them would produce two ADRs with one Context section between
 them.
 
-### 3. What is deliberately not decided here
+### 3. The rules B needs, settled by the operator 2026-09-11
 
-Three rules the operator named as open when choosing B: **what filtering a
-posted question passes**, **who can post where**, and **what moderation looks
-like**. They are raised in the consequences and left open. B is the decision;
-the rules that make it safe are not settled by this ADR and must not be read
-out of it.
+B was chosen before the rules that make it safe were written. The operator has
+now settled them. Each is stated with the reasoning that produced it, because
+each is the kind of rule a later reader will otherwise re-derive from first
+principles and get differently.
+
+#### 3a. Duplicate questions are found with Postgres full-text search, and the result is a warning, never a refusal
+
+The obvious move was to reuse the matcher pulse already has. **It is not
+reused**, and the reason is a measurement rather than a preference. The operator
+ran three approaches against the live database:
+
+| Pair                                                           | `suggestions.ts` `overlap()` | `pg_trgm` |
+| -------------------------------------------------------------- | ---------------------------- | --------- |
+| "Should we allow ads?" · "Do we want advertising on the site?" | **0.00**                     | **0.13**  |
+| "we could charge members" · "charge the members"               | 1.00                         | 0.56      |
+
+**No word-matching method catches a genuine synonym.** The first pair is the
+same question asked twice and every method scores it near zero; the second pair
+is the same sentence rearranged and every method finds it. Postgres full-text
+search does close one real gap the current code has — it equates word forms,
+`advertising` with `advertise` and `members` with `member`, both verified — so
+it is strictly better than the hand-rolled matcher, and unlike a similarity loop
+it is **indexable**. That answers the scale objection below: scoring a new
+question against every existing row was a full scan per post.
+
+What full-text closes is the **inflection** gap, not the **synonym** gap. "Ads"
+and "advertising" do not stem to the same token, and no amount of configuration
+makes them. **That is precisely why the result is a hint and not a gate.** A
+check that misses real synonyms would turn people away for the duplicates it
+happens to catch while letting the ones it misses straight through — the worst
+of both, and the cost lands on the person who was trying to contribute. So the
+poster is shown what looks similar and may post anyway.
+
+**`suggestions.ts` is not reused for questions**, and the reasons are worth
+recording so nobody tries again:
+
+- Its `NOISE` list strips "should", "could" and "we", which carry no meaning in
+  a proposal and are load-bearing in an interrogative.
+- Its thresholds (`SAME_IDEA = 0.6`, `RELATED = 0.3`) were tuned against
+  suggestions of at most 120 characters. They may be right for questions; what
+  they are not is evidence.
+- It scores against every existing row in a loop, which is a short in-memory
+  array per poll and a full scan across a community's questions.
+
+**This decides nothing about suggestions.** They keep their existing matcher,
+their thresholds and their `on_ballot` behaviour, all of which are tuned for
+what they do and are not in question here.
+
+#### 3b. Removal hides; it never deletes
+
+A removed question gets a `hidden`/`removed` flag in migration 002. Its votes,
+choices and suggestions survive untouched.
+
+This is what the schema does **not** currently do: `001_initial.sql` gives
+`poll_choice`, `vote`, `vote_choice` and `suggestion` all `on delete cascade`
+from `polls`, so a `delete from polls` destroys every vote cast on the question.
+Under B, removal is a moderation action taken by a person who can be wrong, and
+**a moderator's mistake must not be unrecoverable.** Hiding is reversible;
+deleting is not.
+
+Decision 3h gives this a second, independent reason: a question that produced a
+real action has to keep that record even after it comes down.
+
+**Reconciling with draft PR #148:** its proposed `poll_related_poll` uses
+`on delete restrict`, which refuses the delete rather than taking the votes with
+it. Under "hide, never delete" the two never disagree, because no delete is
+issued — but `restrict` is the posture that matches this decision, and the four
+`cascade` rules in 001 are now the odd ones out. See the migration-002 list
+below for the recommendation and its cost.
+
+#### 3c. Moderation is community flagging with auto-hide at a threshold, plus manual removal
+
+Flagging scales without a moderator role, which is what makes it fit B: the
+volume that crowdsourcing produces is exactly the volume a queue cannot absorb.
+Enough flags on a question hides it automatically.
+
+**Manual removal exists as well**, so a minimal operator/moderator capability is
+needed after all — pulse has no role of any kind today, and this is the decision
+that creates one. Both paths hide rather than delete, per 3b.
+
+Two values are **deliberately not set here**: the auto-hide threshold, and who
+exactly holds manual removal. See §5.
+
+#### 3d. You post to your community; anybody may read
+
+Community scopes **contribution, not visibility**. A signed-out visitor can
+browse and vote, and the anonymous vote keeps the screen it was cast from.
+
+This is the answer to the question 3 raised against itself: once a poll belongs
+to a community, every listing query has a community in it, but the person
+reading has no community until they sign in. Scoping reads would have meant
+either a sign-in wall in front of browsing or an anonymous vote with nowhere to
+happen. Neither is worth it, and neither was ever how voting worked — a vote has
+counted before sign-in since PR #128.
+
+#### 3e. `community` becomes a real table
+
+Keyed, with `polls.community`, `voter.community`, `pending_claim.community` and
+`allowed_domain.community` all referencing it. No fourth unconstrained text
+column.
+
+Community is plain `text` in three tables today, referencing nothing, so a
+typo'd community name is a community that admits nobody and a question nobody
+finds. A key makes that a foreign-key violation at the point of the mistake.
+
+#### 3f. There is no upfront quality floor
+
+`createPoll`'s mechanical checks stay exactly as they are — a non-empty
+question, a known method, 2–25 distinct non-empty choices, a `next` array
+matching the choices in length. Nothing is added in front of posting to judge
+whether a question is any good. Flagging (3c) handles junk after the fact.
+
+This is the same posture as 3a and for the same reason: a filter that cannot
+tell a real question from noise refuses real questions, and the person it
+refuses is the contributor the product needs.
+
+#### 3g. `closesAt` and `acceptsSuggestions` are defaulted, and the defaults are editable
+
+Both are shown with their default value and can be changed behind a **secondary
+control**, so posting stays one fast screen for the person who does not care and
+stays configurable for the person who does.
+
+**The default values themselves are not chosen** — see §5. They become product
+policy the moment they are picked: a default close time decides how long a
+community question stays open, and a default for `acceptsSuggestions` decides
+whether crowdsourced questions gather free text by default.
+
+#### 3h. Questions that lead to action feed a newsletter
+
+Pillar 3 gains its first concrete shape. Questions that result in real action
+feed an **email newsletter**, whose distinctive job is telling people **what
+happened as a result of their votes** — not "here is a new question" but "here
+is what your vote did".
+
+This sharpens `proofEmailsOptIn`, collected at sign-in and currently leading
+nowhere, from a one-off proof email into a recurring digest.
+
+Cadence, who is included, and what counts as "an action" are open — see §5.
+
+> **This subsection is the operator's words summarised rather than quoted, and
+> it is new product information rather than a reconciliation of something
+> already written down. If the reading is wrong, this is the paragraph to
+> correct.**
+
+### 4. Two things settled by the code, not by the operator
+
+Recorded here so authoring does not stop to ask, and marked plainly so nobody
+cites them as operator decisions.
+
+- **Poll ids are minted by the server.** `NewPoll.id` is caller-supplied and
+  `polls.id` is `text primary key`; the seed supplies readable slugs like
+  `ads-free`, and `createPoll` throws on a duplicate. On a public endpoint a
+  caller-supplied id is a collision and a name-squatting surface at once. The
+  column stays `text` — #148's design explicitly does not assume UUIDs — so this
+  is a generated value written into the existing type, not a type change.
+- **A posted question with three or more choices routes to `ChoiceBallot`.**
+  Only the swipe ballot is two-sided; `ChoiceBallot.tsx` already exists and
+  already renders the general case. `createPoll` permits up to 25 choices and
+  needs no change. This is not a blocker and should not be rediscovered as one.
+
+### 5. What genuinely remains open
+
+Everything above is settled. These are not, and none of them is settled by
+implication:
+
+1. **The auto-hide flag threshold** (3c). Left open by the operator.
+2. **Who holds manual removal** (3c). Left open by the operator. Pulse has no
+   role of any kind today, so this is "what is the smallest capability that
+   works", not "which existing role gets a permission".
+3. **Cadence, audience, and what counts as "an action"** for the newsletter
+   (3h). Left open by the operator.
+4. **The default values** for `closesAt` and `acceptsSuggestions` (3g).
+5. **Who may flag** — raised here, not by the operator, and pointed at by 3d.
+   Flagging by ballot cookie is anonymous and trivially gameable; flagging by
+   signed-in voter is not, but 3d puts most readers outside any community. The
+   threshold in 1 is meaningless until this is answered, because it counts
+   something whose identity is undefined.
+6. **Whether flagging reaches suggestions.** 3c decides moderation for
+   questions. Suggestions are also public free text, also posted by anybody, and
+   have no moderation at all — `submit` folds near-duplicates and refuses
+   nothing else. Not a gap this ADR creates; one it makes visible.
+7. **The full-text language configuration** (3a). `to_tsvector` takes a
+   configuration — `'english'` — and a generated column pins it for every
+   community the deployment ever serves.
+8. **Whether `proofEmailsOptIn` consent covers a newsletter** (3h). See
+   consequence 14; this needs a decision before the first digest is sent, not
+   before the work starts.
 
 ## Consequences
 
@@ -120,7 +304,7 @@ out of it.
    survivable, because a run had an authored starting question — the dev client
    opens `FIRST_POLL_ID` when given no other. Under B nothing hands anyone a
    first question, so "what do I see when I arrive" is an unanswered route as
-   well as an unbuilt screen.
+   well as an unbuilt screen. Per 3d it takes no session and no community.
 
 3. **Arriving at a question you have already answered stops being rare.** Under
    A a run was a graph its author walked; under B a person is routed by
@@ -128,124 +312,116 @@ out of it.
    question they have seen. `GET /api/polls/:id/ballot` already returns this
    browser's prior ballot, so the data is there — but nothing renders "you
    already answered this" on arrival, because until now the only way back to a
-   settled question was ADR-0022's in-run "Change my answer". The common case
-   is about to become the one with no UI.
+   settled question was ADR-0022's in-run "Change my answer". The common case is
+   about to become the one with no UI.
 
-### What the schema owes, and what deferring it costs
+### What identity and community owe
 
-4. **`polls` needs at least two columns it does not have: the community a
-   question belongs to, and who posted it.** Neither goes into the schema PR
-   now open (#150) — the operator's explicit decision, and consistent with
-   dropping `is_entry_point` in ADR-0023: nothing writes them yet, and a column
-   nothing writes is not carried. They land in migration 002 with the authoring
-   work.
-
-   **The honest asymmetry, and it is the reason to state this rather than leave
-   it implicit.** `is_entry_point` is at least derivable later, painfully, from
-   an intact poll graph. **Authorship of an existing row cannot be backfilled at
-   all — only defaulted.** There is no artefact anywhere in pulse from which the
-   author of a poll created before migration 002 could be recovered, because the
-   fact was never captured. Any poll created before that migration has no
-   recoverable author, permanently. That is the price of deferring, it is
-   accepted, and the mitigation is simply that the window is short: it runs from
-   the first poll written to a real database until migration 002, and nothing
-   but the dev seed writes polls today.
-
-   Community is the gentler half: while exactly one community exists, defaulting
-   every existing poll to it is exact rather than a guess. That stops being true
-   the moment a second community is admitted, which is one `allowed_domain`
-   insert away.
-
-5. **Removing a question is a cascade today, not a state.** `001_initial.sql`
-   gives `poll_choice`, `vote`, `vote_choice` and `suggestion` all
-   `on delete cascade` from `polls`. Deleting a posted question therefore
-   destroys every vote cast on it. Any moderation that can remove a question
-   needs a removed/hidden **state** and a read path that respects it — another
-   column migration 002 owes — not a `delete`. Note also that #148's proposed
-   `poll_related_poll` uses `on delete restrict`, which would refuse the delete
-   outright rather than silently taking the votes with it; the two behaviours
-   need reconciling in whichever PR lands second.
-
-6. **Poll ids must be minted by the server.** `NewPoll.id` is a caller-supplied
-   non-empty string and `polls.id` is `text primary key`; the seed supplies
-   readable slugs like `ads-free`, and `createPoll` throws on a duplicate id.
-   That is fine for a literal written by one person and wrong for a public
-   endpoint, where a supplied id is a collision and a name-squatting surface at
-   once. Authoring generates the id; whether a readable slug is derived beside
-   it for URLs is a separate, smaller question.
-
-7. **There is no `community` table.** Community is a plain `text` column on
-   `voter`, `pending_claim` and `allowed_domain`, and `allowed_domain`'s primary
-   key is the pair `(community, domain)`, so there is nothing for a
-   `polls.community` foreign key to reference. Migration 002 either adds a
-   fourth unconstrained text column or promotes community to a real table with a
-   key. That is a decision, not a detail, and it is better made when the column
-   lands than discovered by a typo'd community name that admits nobody.
-
-### What identity owes
-
-8. **Posting requires being signed in; voting does not.** PR #128 established
+4. **Posting requires being signed in; voting does not.** PR #128 established
    that a vote counts before anyone signs in — a vote is filed under the
-   `pulse_ballot` cookie and nothing else, and `API.md` states that signing in
-   afterwards verifies a person and is never how their vote is found. Under B
-   that asymmetry stops being an artefact and becomes deliberate and
-   load-bearing: **vote anonymously, post identified.** Moderation needs
-   somebody to attribute a removed question to, and per-person rate limiting
-   needs a person; neither can be built on a cookie a browser mints for itself.
+   `pulse_ballot` cookie and nothing else. Under B that asymmetry becomes
+   deliberate and load-bearing: **vote anonymously, post identified.**
+   Moderation needs somebody to attribute a removed question to, and per-person
+   rate limiting needs a person; neither can be built on a cookie a browser
+   mints for itself. 3d completes the shape — read anonymously too.
 
    Mechanically this is a first: `requireVoter` exists and today guards only
    `GET /api/me`. `POST /api/polls` would be **the first route in pulse that
    requires a session in order to write anything.**
 
-9. **Which community someone posts into follows from ADR-0023's sign-in
-   picker.** A domain may serve several communities, and ADR-0023's answer is
-   that the person picks at sign-in. That pick is what decides where they can
-   post. The picker is unbuilt and unticketed, and nothing in the client signs
-   anyone in at all — so this is a **dependency of poll authoring, not a detail
-   of it.** Until it exists, the interim tie-break in
-   `apps/pulse/src/identity/allowlist.ts` would silently decide which community
-   a person's question lands in, by the alphabet. That is an acceptable answer
-   for which community admits you and a bad one for where your question is
-   published.
+5. **Which community someone posts into follows from ADR-0023's sign-in
+   picker**, and the picker has a constraint nobody has written down. ADR-0023's
+   answer is that the person picks at sign-in. But `ClaimService.requestLink`
+   resolves membership and writes `community` into the `PendingClaim` **when the
+   link is requested**, and `pending_claim.community` is `not null` — so the
+   community is fixed before the email is sent, not when the link is clicked.
+   The picker therefore either happens on the sign-in screen, before the link
+   goes out, which needs the client to learn which communities an address
+   matches; or `pending_claim.community` becomes nullable and the pick moves to
+   redemption. **That is a real fork and it is cheaper to decide than to
+   discover.** Until the picker exists, the interim alphabetical tie-break in
+   `apps/pulse/src/identity/allowlist.ts` silently decides which community a
+   person's question is published into — tolerable for which community admits
+   you, bad for where your words appear.
 
-10. **Reading is not community-scoped, and under 8 it cannot easily become so.**
-    Once a poll belongs to a community, every listing and related-polls query
-    has a community in its `where` clause — but the visitor casting a vote has
-    no community, because they have no identity beyond a ballot cookie. So
-    either polls are world-readable and community scopes only _posting_, or
-    browsing requires a sign-in and the anonymous vote loses the screen it was
-    cast from. **Open question, raised not settled.** It is the first place
-    where "vote anonymously, post identified" costs something rather than only
-    buying something.
+6. **A person belongs to one community at a time, and B does not change that.**
+   `voter.community` is singular and 3e keys it. Someone whose address matches
+   two communities picks one per sign-in, so "post to your community" means the
+   one they picked. Acting in both in one session is not supported and is not
+   decided here.
 
-### Quality, volume, and the things nobody owns yet
+### What the schema owes, and what deferring it costs
 
-11. **Duplicate questions become the main quality problem, and pulse already has
-    machinery pointed at it.** `apps/pulse/src/voting/suggestions.ts` has
-    `keywords()` and `overlap()` with `SAME_IDEA = 0.6` and `RELATED = 0.3`,
-    built for exactly this shape of problem: two people saying the same thing in
-    different words are counted as agreeing, and told so. Whether that is reused
-    for questions, or duplicates are simply allowed and merged later, is an
-    **open question and is not settled here.**
+7. **`polls` needs three columns it does not have: the community, the author,
+   and the hidden flag.** None goes into the schema PR now open (#150) — the
+   operator's decision, and consistent with dropping `is_entry_point` in
+   ADR-0023: nothing writes them yet, and a column nothing writes is not
+   carried. They land in migration 002 with the authoring work.
 
-    Two things to know before reusing it, so the reuse is decided rather than
-    assumed. First, **it does not scale as written**: `submit` scores a new text
-    against every existing suggestion on one poll, which is a short in-memory
-    array; scoring a new question against every question in a community is a
-    full scan per post, and wants a trigram or `tsvector` index rather than a
-    loop. Second, **the thresholds were tuned against suggestions, not
-    questions** — `MAX_SUGGESTION_LENGTH` is 120 and the `NOISE` list strips
-    "should", "could", "we", which are load-bearing words in an interrogative.
-    The constants may well be right; what they are not is evidence.
+   **The honest asymmetry.** `is_entry_point` is at least derivable later,
+   painfully, from an intact poll graph. **Authorship of an existing row cannot
+   be backfilled at all — only defaulted.** No artefact anywhere in pulse
+   records who wrote a poll, so any poll created before migration 002 has no
+   recoverable author, permanently. That is the price of deferring, it is
+   accepted, and the mitigation is that the window is short: it runs from the
+   first poll written to a real database until migration 002, and nothing but
+   the dev seed writes polls today.
 
-12. **`createPoll`'s validation is syntactic, and is not a quality floor.** It
-    requires a non-empty id, a non-empty question, a known method, 2–25 distinct
-    non-empty choices, and a `next` array matching the choices in length. Every
-    one of those is a shape check. It cannot tell a real question from noise, an
-    insult, or the same question asked yesterday, and it was never meant to —
-    the comment on it says it rejects "shapes the UI could not render or a voter
-    could not answer meaningfully". Whatever filtering B needs is new code, not a
-    tightening of this function.
+   Community is the gentler half, and 3e makes it gentler still: while exactly
+   one community exists, defaulting every existing poll to it is exact rather
+   than a guess.
+
+8. **Migration 002 rewrites three shipped columns, which is more than adding
+   two.** 3e means `voter.community`, `pending_claim.community` and
+   `allowed_domain.community` all gain a foreign key, and a `community` table
+   has to be **backfilled from the distinct values already in them** before
+   those keys can be added. Forward-only numbering makes that fine; what it is
+   not is a purely additive migration, and it is the reason the full list below
+   is worth writing down in one place.
+
+9. **The `on delete cascade` rules in 001 are now the odd ones out.** Under 3b
+   nothing deletes a poll, so they should never fire — but they are still there,
+   and `delete from polls` still destroys votes. Changing them to `restrict`
+   makes the schema enforce the decision rather than trusting the code to honour
+   it, and matches #148's `poll_related_poll`. The cost is that a genuine
+   cleanup — a dev reset, a test teardown — then has to delete children first.
+   Recommended, not decided.
+
+10. **Migration 002 will trip `test/migrations.test.ts`, and that is the guard
+    working.** The test asserts the **set** of column defaults in the migration
+    SQL is exactly `'{}'::jsonb` and `1`. A `hidden boolean not null default
+false` adds a third, so the test fails until `false` is added to `DEFAULTS`
+    **deliberately** — which is what that list is for. Note it reads the SQL
+    text, so `add column … default false` followed by `drop default` still trips
+    it. The same file's `timestamptz(3)` and `\btimestamp\b` guards apply to
+    every timestamp 002 adds.
+
+11. **What migration 002 owes, in one list.** Assembled here because it is now
+    large enough that discovering it piecemeal is how half of it gets missed:
+
+    1. A `community` table, keyed, backfilled from the distinct values in
+       `voter`, `pending_claim` and `allowed_domain`.
+    2. Foreign keys from those three columns to it.
+    3. `polls.community`, not null, keyed to the same table.
+    4. `polls.created_by`, keyed to `voter.id`, **nullable** — pre-migration
+       rows have no author and never will (consequence 7).
+    5. `polls.hidden` (or `removed_at`), plus the `DEFAULTS` update in
+       `test/migrations.test.ts` (consequence 10).
+    6. A full-text index on the question — a generated `tsvector` column and a
+       GIN index — and with it the language configuration of open question 7.
+    7. A `flag` table: who flagged which poll, when, at most once each. Needed
+       by 3c, and its "who" is open question 5.
+    8. Optionally the `cascade` → `restrict` change of consequence 9.
+    9. **A number that does not collide with #148.** The runner refuses a file
+       that has never run but numbers below one that has, so authoring and
+       related polls cannot both be `002` and cannot land in either order by
+       accident. Whichever lands second renumbers before it merges.
+
+12. **Poll ids must be minted by the server** (decision 4). Authoring generates
+    the id; whether a readable slug is derived beside it for URLs is a separate,
+    smaller question.
+
+### Quality, volume, and the things that now have owners
 
 13. **Rate limiting needs a shared store, and needs to be keyed on the person.**
     `@fastify/rate-limit` is registered with `{ global: false }` and defaults to
@@ -254,33 +430,35 @@ out of it.
     processes. The default key is also the client address, which is the wrong
     key for an identified action: posting is limited per voter, or one person
     behind a shared address limits a campus. Both halves land with authoring.
+    **This is the one place a hard limit survives 3a and 3f's warn-don't-block
+    posture** — a rate limit is not a judgement about quality, so it may refuse.
 
-14. **No moderator role exists anywhere in pulse.** There is no role column, no
-    admin route, no permission check of any kind — `requireVoter` answers "is
-    somebody signed in", never "who". So moderation is not a feature to switch
-    on; it is a concept the codebase has never had. The fork, raised and **not
-    settled here**: post-moderation needs someone who can remove a question and
-    the removed state from consequence 5, and leaves bad questions visible until
-    they act; pre-moderation needs a queue, someone to work it, and kills the
-    volume that is B's entire point. Whoever settles it should also settle what
-    a removed question does to the votes already cast on it, which consequence 5
-    makes a real choice rather than a side effect.
+14. **The newsletter reopens what `proofEmailsOptIn` consented to.** The flag is
+    strictly opt-in — the route reads `body.proofEmailsOptIn === true` — and both
+    `API.md` and the sign-in screen describe it as hearing what came of a vote.
+    A recurring digest is a broader thing than a one-off proof email, and
+    repurposing an existing opt-in into a subscription without changing the
+    words is the kind of consent drift that is easy to do and unpleasant to
+    undo. Either the copy changes before the first send, or the newsletter gets
+    its own opt-in. Open question 8.
 
-15. **A posted question has fields nobody has decided who fills.** `closesAt`
-    and `acceptsSuggestions` are both properties of a poll, and the seed sets
-    them by hand — three days, and suggestions on for the two follow-ups. Under
-    B either the poster is asked, which is two more fields on a form meant to be
-    fast, or the system defaults them, and those defaults become product policy
-    about how long a community question stays open. Smaller than the rest of this
-    list, and easy to ship by accident.
+    Note also a pre-existing discrepancy this surfaces, which is **not** created
+    by this ADR: `apps/pulse/CLAUDE.md` describes pillar 3 as emailing proof
+    "unless the person opted out", while the code and `API.md` are opt-**in** and
+    default to false. The code is the honest one. Flagged under Documents
+    reconciled.
 
-16. **The swipe ballot has two sides.** Screen 1 is a left/right swipe, and the
-    seed's own comment says a third choice "would have no side to land on", while
-    `createPoll` permits up to 25. Posting is the first path by which a stranger
-    chooses how many choices a question has, so authoring has to either route
-    anything but a two-choice question to `ChoiceBallot`, or constrain what can
-    be posted. The client already has both ballots; what it does not have is
-    anything that picks between them at authoring time.
+15. **The newsletter cannot be built before a `Mailer` exists.** No provider
+    implementation exists anywhere in pulse; `ConsoleMailer` prints to a
+    terminal. Pillar 3's digest is therefore blocked on the same missing piece
+    that stops anybody outside a terminal signing in.
+
+16. **Duplicate detection is a read path with a latency budget.** Full-text plus
+    a GIN index makes the check indexable, but it still runs inside the posting
+    request, against a community's whole question set, to render a warning the
+    poster may ignore. It is a hint: if it is slow or unavailable, the post must
+    still go through. Building it as a gate-shaped call that happens to be
+    advisory is how it silently becomes a gate.
 
 ### What B makes cheaper, and one thing it makes worse
 
@@ -310,55 +488,73 @@ out of it.
   predict this decision ("per-choice branching becomes the exception rather than
   the rule") and record that ordering is a query rather than stored data, that
   there is no `GET /api/polls`, and the naming hazard around _ballot_ / _run_ /
-  _agenda_. **Nothing in it is contradicted or superseded; this ADR cashes a
-  prediction it made.** Checked, no change needed.
+  _agenda_. None of that is contradicted. **Its four-table sketch is amended
+  additively**: `polls` gains community, author and hidden in migration 002, and
+  `community` becomes a table its sketch does not have. Following ADR-0023's
+  precedent, ADR-0021 is **not edited** — ADRs here are a dated record, not a
+  living spec, and the header of this file names what it amends.
 - **`docs/decisions/0023-pulse-ships-without-is-entry-point-and-lets-a-domain-serve-several-communities.md`**
-  — this ADR depends on it twice. Its community picker is a prerequisite of
-  posting (consequence 9), and its reasoning for dropping `is_entry_point` — do
-  not carry a column nothing writes — is the precedent for keeping community and
-  author out of #150 (consequence 4). **Consistent; no edit needed.** Note that
-  ADR-0023's own first argument, that there is no authoring surface to write
-  `is_entry_point` from, is the thing this ADR starts to undo: whoever builds
-  authoring should re-read that ADR and decide whether an entry-point column is
-  wanted after all, which under B it probably is not, since no run has an
-  authored start.
+  — depended on twice: its community picker is a prerequisite of posting
+  (consequence 5), and its reasoning for dropping `is_entry_point` is the
+  precedent for keeping the three new columns out of #150 (consequence 7).
+  **Consistent; no edit needed.** Two notes for whoever builds authoring. Its
+  first argument — that there is no authoring surface to write `is_entry_point`
+  from — is the thing this ADR starts to undo, and the column should be
+  re-decided rather than re-added by default; under B it is probably still not
+  wanted, since no run has an authored start. And its `(community, domain)` key
+  is unaffected by 3e: keying the community column does not make a domain serve
+  one community.
+- **`apps/pulse/migrations/001_initial.sql`** — ships without the three columns
+  of consequence 7 and with community as plain text, both of which this ADR
+  confirms as intended rather than as omissions. **Checked, deliberately
+  unchanged.** Migration 002 is where 3b, 3e and 3a land; see consequence 11.
+- **`apps/pulse/test/migrations.test.ts`** — its `DEFAULTS` guard will fail on
+  migration 002's `hidden` column, by design. **Not changed here** — it changes
+  in the migration's own PR, where adding to that list is the deliberate act the
+  guard exists to force. Checked, no change needed now.
 - **`apps/pulse/API.md`** — describes only what the server speaks today, and
   this ADR adds no route and changes no response. `POST /api/polls` is not
   documented here, deliberately: it does not exist, and API.md's first line is a
-  promise that everything in it does. **Checked, no change needed.** The PR that
-  builds authoring updates it in the same change.
-- **`apps/pulse/CLAUDE.md`** — says domain allowlists are rows rather than code,
-  and that pillar 2 is a guided story. B keeps the first exactly and re-reads
-  the second: a story becomes a generated sequence rather than an authored run,
-  which is a change in how the sequence is produced, not in what a person sees.
-  **Checked, no change needed**, and worth re-checking when the subject browser
-  lands, because that is the change a reader would feel.
-- **`apps/pulse/migrations/001_initial.sql`** — ships without the two columns of
-  consequence 4, which this ADR confirms as intended rather than as an omission.
-  **Checked, deliberately unchanged**: adding them here would put columns
-  nothing writes into the first migration, which is the mistake ADR-0023 exists
-  to avoid.
-- **`apps/pulse/src/voting/poll.ts`** and **`apps/pulse/src/dev-server.ts`** —
-  unchanged. `Poll.next` keeps its meaning and the `SEED` literal keeps its job;
-  this is a documents-only change and nothing about how polls are created today
-  moves until authoring is built.
+  promise that everything in it does. Its description of `proofEmailsOptIn` as
+  "the opt-in for hearing what came of a vote" is **still exactly true today**
+  and is what consequence 14 says must be revisited before the first digest.
+  **Checked, no change needed.**
+- **`apps/pulse/CLAUDE.md`** — two things. Pillar 2's "guided story" is re-read
+  rather than changed: a story becomes a generated sequence rather than an
+  authored run, which changes how the sequence is produced, not what a person
+  sees. And pillar 3 says pulse "emails proof of what happened **unless the
+  person opted out**", while the code is opt-**in** and defaults to false — a
+  pre-existing discrepancy this ADR surfaces rather than creates. **Not changed
+  here**, because correcting a pillar description is a documents change of its
+  own and this PR owns two files; it is recorded in consequence 14 and belongs
+  to whoever builds pillar 3.
+- **`apps/pulse/src/identity/claim.ts`** — fixes `community` at link-request
+  time and is what makes consequence 5's fork real. **Unchanged**; named so the
+  picker's builder finds it before designing around the wrong assumption.
+- **`apps/pulse/src/voting/poll.ts`**, **`apps/pulse/src/voting/suggestions.ts`**
+  and **`apps/pulse/src/dev-server.ts`** — unchanged. `Poll.next` keeps its
+  meaning, `createPoll` keeps exactly the checks it has (3f), the suggestion
+  matcher keeps its thresholds and its job (3a), and the `SEED` literal keeps
+  being a development fixture. This is a documents-only change.
 - **`docs/plans/pulse.md`** — **created in this PR** by decision 2, and seeded
   with the unstarted work already recorded in `memory/pulse.md`.
-- **`memory/pulse.md`** — open decision 4 is settled by decision 2; the three
-  operator requests it carries move into the plan file; the "poll creation,
-  which has no home at all" item under the infrastructure list is what this ADR
-  answers. **Not updated in this PR, deliberately:** memory entries are updated
-  on master at merge time, never on a feature branch, per the merge checklist in
-  `.claude/skills/odc-pipeline`. Owed at merge, and it is the larger-than-usual
-  memory edit — an open decision closes, a section moves out, and the line in
-  `memory/INDEX.md` should gain the plan file.
+- **`memory/pulse.md`** — open decision 4 is settled by decision 2; the operator
+  requests it carries move into the plan file; its "poll creation, which has no
+  home at all" item is what this ADR answers. **Not updated in this PR,
+  deliberately:** memory entries are updated on master at merge time, never on a
+  feature branch, per the merge checklist in `.claude/skills/odc-pipeline`. Owed
+  at merge, and it is a larger-than-usual edit — an open decision closes, a
+  section moves out, `memory/INDEX.md` should gain the plan file, and **two
+  entries are already stale against master**: #149 landed the sign-in and redeem
+  screens, so "nothing in the client signs anyone in" is no longer true, and
+  #150 fixed the `database.test.ts` skip bug.
 - **Open draft PR #148** — proposes an ADR numbered **0023**
   (`docs/decisions/0023-related-polls-are-answer-independent.md`) for
-  answer-independent related polls. **0023 is taken** by the decision above,
-  which is on the branch this file sits on. Its content is unaffected and is
-  depended on by consequence 1; only the number collides. Not renumbered here —
-  it is somebody else's branch — and the recommendation is in the report that
-  accompanies this change.
+  answer-independent related polls. **0023 is taken** by the decision on the
+  branch this file sits on, and 0024 by this one. Its content is unaffected and
+  is depended on by consequence 1; only the number collides, and its migration
+  number now collides too (consequence 11, item 9). Not renumbered here — it is
+  somebody else's branch.
 - **`docs/charter.md` and `contracts/`** — pulse is charter-exempt and this ADR
   shares nothing with either. **Checked, no change needed.**
 
@@ -368,23 +564,28 @@ out of it.
 `apps/pulse/CLAUDE.md` and routed by `memory/INDEX.md`, so P1–P4 are not the
 standard applied here and claiming otherwise would misrepresent the workstream.
 The section is kept because the template requires it and because the two
-boundaries that survive the exemption are real. Both are checked, and this ADR
-touches the second more closely than most.
+boundaries that survive the exemption are real. Both are checked, and the
+decisions in §3 touch the second more closely than most.
 
 - **"No reads or writes across into `services/` or `contracts/`."** Honoured.
-  Every consequence above is about pulse's own tables, pulse's own routes and
-  pulse's own membership check. Note specifically that crowdsourced authoring is
-  **not** a step toward publishing to the ODC ledger: a posted pulse poll is a
-  mutable row in pulse's own database, deletable and editable, and nothing here
-  proposes a pipe to `services/`. If pulse ever publishes, it does so through
-  the ledger's public HTTP API, and this ADR must never be cited as having
-  started that.
+  Every decision and consequence above is about pulse's own tables, pulse's own
+  routes and pulse's own membership check. Note specifically that crowdsourced
+  authoring is **not** a step toward publishing to the ODC ledger: a posted
+  pulse poll is a mutable row in pulse's own database, hideable and editable,
+  and nothing here proposes a pipe to `services/`. Note also that 3b's "hide,
+  never delete" is **not** append-only discipline arriving by the back door — it
+  is a moderation-reversibility rule on a mutable table, and it must never be
+  cited as precedent for event storage.
 - **"The counting is never the subject."** Honoured, and it constrains the work
-  this ADR makes visible. Posting a question, browsing related questions and
-  moderating one are all things a person does with a question — none of them may
-  be explained to anybody in terms of how a tally is computed. In particular,
-  the duplicate detection of consequence 11 must never tell a person their
-  question was folded together with another **because of an overlap score**; the
-  suggestion flow already gets this right, saying someone had said it and naming
-  their wording, and question posting inherits that standard rather than
-  inventing its own.
+  this ADR makes visible. Posting a question, browsing related questions,
+  flagging one and reading the newsletter are all things a person does with a
+  question — none may be explained in terms of how a tally is computed. Three
+  specifics, because each is a place the wrong copy is the natural copy:
+  - The duplicate warning of 3a says a question looks like another one and shows
+    it. It never shows a **score**, and never explains why the two matched.
+  - The auto-hide of 3c tells somebody their question is no longer visible. It
+    does not publish a flag count, which is both a number about the machinery
+    and an invitation to brigade.
+  - The newsletter of 3h says what happened as a result of people's votes. That
+    is the one thing it is for, and it is a statement about an outcome, never
+    about a tally's arithmetic.
