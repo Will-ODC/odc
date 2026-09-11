@@ -1,0 +1,24 @@
+# Pulse's own database (ADR-0020), matching CI's in .github/workflows/repo.yml.
+#
+# Port 5433, never 5432: a local Postgres already on 5432 would silently take
+# the connection instead. Data lives in memory and is gone on `down`.
+#
+# Database only — there is no Dockerfile for the pulse server yet.
+name: pulse
+
+services:
+  db:
+    image: postgres:17
+    environment:
+      POSTGRES_USER: pulse
+      POSTGRES_PASSWORD: pulse
+      POSTGRES_DB: pulse_test
+    ports:
+      - "127.0.0.1:5433:5432"
+    tmpfs:
+      - /var/lib/postgresql/data
+    healthcheck:
+      test: ["CMD", "pg_isready", "-U", "pulse", "-d", "pulse_test"]
+      interval: 2s
+      timeout: 5s
+      retries: 15

@@ -166,7 +166,9 @@ describe("once the link is on its way", () => {
     await userEvent.click(go());
 
     const heading = await screen.findByText("Check your email.");
-    expect(document.activeElement).toBe(heading);
+    // Focus moves in an effect after the heading renders; wait for it rather
+    // than racing it (the same race failed Redeem's test on CI in #154).
+    await waitFor(() => expect(document.activeElement).toBe(heading));
   });
 
   it("puts focus back in the field when they come back to change it", async () => {
