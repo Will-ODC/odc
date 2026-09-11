@@ -1,6 +1,6 @@
 // @vitest-environment jsdom
 import { StrictMode } from "react";
-import { cleanup, render, screen } from "@testing-library/react";
+import { cleanup, render, screen, waitFor } from "@testing-library/react";
 import userEvent from "@testing-library/user-event";
 import { afterEach, describe, expect, it, vi } from "vitest";
 import { ApiError } from "../src/api/types.js";
@@ -277,7 +277,10 @@ describe("telling somebody who cannot see the screen", () => {
         <Redeem api={api()} token="abc" onSignedIn={noop} onAskAgain={noop} />,
       );
       const heading = await screen.findByText(title);
-      expect(document.activeElement).toBe(heading);
+      // Focus moves in an effect that runs after the heading renders, so
+      // wait for it: asserting straight after `findByText` races the effect
+      // and failed on CI (#154) while passing locally.
+      await waitFor(() => expect(document.activeElement).toBe(heading));
       expect(heading.closest('[role="status"]')).toBeTruthy();
     });
   }
