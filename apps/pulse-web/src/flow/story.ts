@@ -126,9 +126,10 @@ export function isCastable(
 }
 
 /**
- * Order-insensitive on purpose. A ballot is a set of choices, and nothing in
- * the API contract promises the server returns them sorted — comparing
- * element-wise would call `[2,0]` and `[0,2]` different votes.
+ * Order-insensitive on purpose. A ballot is a set of choices. The server
+ * returns them in the poll's order (API.md), but a ballot built here need not
+ * be, and comparing element-wise would call `[2,0]` and `[0,2]` different
+ * votes.
  */
 export function sameBallot(a: Ballot, b: Ballot): boolean {
   if (a.length !== b.length) return false;
