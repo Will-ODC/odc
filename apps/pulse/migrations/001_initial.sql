@@ -1,8 +1,10 @@
 -- 001_initial — the whole of pulse's storage, first cut.
 --
 -- Forward-only: once applied anywhere, this file is never edited. A correction
--- is a new numbered file, and the runner refuses to start if an applied file's
--- checksum changed, so that is enforced rather than hoped for.
+-- is a new numbered file. The runner refuses to start if an applied file's
+-- checksum changed, and refuses a file that has never run but numbers below one
+-- that has — see the header of src/db/migrate.ts for why the second half is a
+-- separate promise from the first.
 --
 -- Two rules run through every table here, and both are the kind a later reader
 -- tidies back in. `test/migrations.test.ts` fails if either goes:
@@ -32,12 +34,14 @@ create table polls (
   created_at          timestamptz(3) not null,
   -- Null means the poll never closes on its own.
   closes_at           timestamptz(3),
-  accepts_suggestions boolean not null,
-  -- Whether a run may START here, rather than being reachable only through
-  -- another poll's onward link. Deciding it retroactively would need a
-  -- backfill, so it is recorded when the poll is written.
-  is_entry_point      boolean not null
+  accepts_suggestions boolean not null
 );
+
+-- No `is_entry_point`. ADR-0021 specifies one, so its absence is a decision and
+-- not an oversight: the operator chose not to carry a column nothing writes,
+-- and ADR-0023 records that, supersedes that one element of ADR-0021, and
+-- states the accepted cost — re-adding it later is a migration AND a backfill
+-- over polls whose branch-or-not is no longer recoverable.
 
 create table poll_choice (
   -- A stable identity, which is what lets a poll gain a choice or be reordered
@@ -68,6 +72,14 @@ create table vote (
 );
 
 create table vote_choice (
+  -- NOTHING HERE TIES THE TWO FOREIGN KEYS TO THE SAME POLL. A row may name a
+  -- vote on poll A and a choice belonging to poll B, and the database will
+  -- take it: expressing the constraint needs a composite key carrying poll_id
+  -- through both parents, which is not the shape ADR-0021 specifies and is not
+  -- deviated from here. The store is therefore the only guard, and the
+  -- conformance suite that lands with the stores owes a case that tries to
+  -- write a cross-poll pair and is refused — against both implementations,
+  -- since the in-memory one has no foreign keys at all to lean on.
   vote_id   uuid not null references vote (id) on delete cascade,
   choice_id uuid not null references poll_choice (id) on delete cascade,
   -- What the pair means depends on the method: 1 for single and approval, a
@@ -76,6 +88,11 @@ create table vote_choice (
   value     integer not null default 1,
   primary key (vote_id, choice_id)
 );
+
+-- The tally aggregates by choice_id, which the primary key above cannot serve:
+-- vote_id is its leading column, so a scan by choice alone reads every row.
+-- It also serves the cascade from poll_choice.
+create index vote_choice_choice_id_idx on vote_choice (choice_id);
 
 -- Options people add themselves. Not choices: a suggestion cannot be voted for.
 create table suggestion (
@@ -87,6 +104,10 @@ create table suggestion (
   count    integer not null,
   added_at timestamptz(3) not null
 );
+
+-- SuggestionStore.list(pollId) is the only way suggestions are read, and it is
+-- a bare scan without this. Also serves the cascade from polls.
+create index suggestion_poll_id_idx on suggestion (poll_id);
 
 create table voter (
   id                  text primary key,
@@ -125,5 +146,12 @@ create table allowed_domain (
   domain             text not null,
   -- When true, subdomains count too. Off unless someone decided it.
   include_subdomains boolean not null,
+  -- The key is the PAIR, so one domain may prove membership of several
+  -- communities — an operator decision, recorded in ADR-0023. It leaves
+  -- DomainAllowlist.check with more than one answer for an address, which it
+  -- currently settles by an interim rule (longest domain, then lowest
+  -- community). The real resolution is that the person picks their community
+  -- at sign-in; that is sign-in work and is not built here. A `unique
+  -- (domain)` added later would be a schema change AND a product reversal.
   primary key (community, domain)
 );

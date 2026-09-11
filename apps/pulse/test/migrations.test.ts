@@ -23,17 +23,33 @@ test("migrations_are_numbered_uniquely_and_load_oldest_first", () => {
   assert.equal(versions[0], "001");
 });
 
-test("no_column_takes_its_timestamp_from_the_database_clock", () => {
+/**
+ * The known column defaults: `method_params` and `vote_choice.value`, and
+ * nothing else. Adding to this list is how you declare a new one deliberately.
+ */
+const DEFAULTS = ["'{}'::jsonb", "1"];
+
+test("the_only_column_defaults_are_the_two_constants_we_chose", () => {
   // ADR-0020: a clock is constructor-injected in five places and every HTTP
   // test runs on a frozen one. A database default bypasses all of it while
   // most tests keep passing, which is what makes it dangerous rather than
   // merely wrong. Every timestamp is supplied by the application.
-  const generated =
-    /default\s+(now\s*\(|current_timestamp|localtimestamp|clock_timestamp|statement_timestamp|transaction_timestamp)/i;
-  assert.equal(
-    generated.test(schema),
-    false,
-    "a migration gives a column a database-generated timestamp default",
+  //
+  // Stated as the SET of defaults rather than as a list of forbidden spellings.
+  // The forbidden-spellings version matched `default now()` and `default
+  // current_timestamp` and missed `default (now())` and `default
+  // timezone('utc', now())` — unreachable from 001, entirely reachable from
+  // the next migration anyone writes. A guard that has to enumerate every way
+  // of saying `now` is a guard that will be got past.
+  const found = [...schema.matchAll(/\bdefault\s+(.+?)\s*,?\s*$/gim)].map(
+    (match) => match[1],
+  );
+  assert.deepEqual(
+    [...new Set(found)].sort(),
+    [...DEFAULTS].sort(),
+    "a migration gives a column a default that was not declared here — if it " +
+      "is a database clock it must not land at all (ADR-0020), and if it is a " +
+      "constant, add it to DEFAULTS deliberately",
   );
 });
 
@@ -41,7 +57,30 @@ test("every_timestamp_column_keeps_milliseconds", () => {
   // The sub-second lockout bug in 35159dd came from two timestamps disagreeing
   // on precision. A bare `timestamptz` would round-trip a different value than
   // the Date the application handed over.
-  assert.equal(/timestamptz(?!\(3\))/i.test(schema), false);
+  assert.equal(
+    /timestamptz(?!\(3\))/i.test(schema),
+    false,
+    "a timestamptz column does not keep milliseconds",
+  );
+  // And the long spelling, which the check above cannot see at all: `timestamp
+  // with time zone` is the same type and `timestamp` alone is a different and
+  // worse one. Neither is reachable from 001; both are one keystroke away in
+  // 002. `current_timestamp` is not matched — the underscore is a word
+  // character, so there is no boundary before `timestamp`.
+  assert.equal(
+    /\btimestamp\b/i.test(schema),
+    false,
+    "a column is declared `timestamp` or `timestamp with time zone` — write " +
+      "`timestamptz(3)`, which is the only spelling the guard above can read",
+  );
+});
+
+test("the_schema_carries_no_is_entry_point", () => {
+  // ADR-0021 specifies the column; ADR-0023 is the operator's decision not to
+  // ship it, and this is what stops a later reader finding the discrepancy and
+  // helpfully "fixing" it. Re-adding it is a decision with a cost — a
+  // migration and a backfill nobody can do accurately — not a tidy-up.
+  assert.equal(/is_entry_point/i.test(schema), false);
 });
 
 test("the_poll_method_column_is_plain_text", () => {

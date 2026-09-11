@@ -11,11 +11,22 @@ import type { Pool, PoolClient } from "pg";
  * The migration runner: plain reviewed SQL files applied in order, no ORM and
  * no auto-migration (ADR-0020).
  *
- * Forward-only. There are no down migrations: a mistake is corrected by a new
- * numbered file, never by editing one that has been applied — which is what
- * the recorded checksum enforces. Running it twice is a no-op, so it is safe
- * on every boot, and several processes may boot at once, so the whole run
- * holds an advisory lock.
+ * Forward-only, which is two separate promises and the runner keeps both:
+ *
+ *   * **A file that has run is never edited.** A mistake is corrected by a new
+ *     numbered file. The recorded checksum is what enforces this.
+ *   * **A file never runs out of order.** A migration that sorts below the
+ *     highest one already applied is refused. This is not a theoretical case:
+ *     two branches that each add a migration merge cleanly, and whichever
+ *     merges second lands a lower-numbered file that has never run. Applying
+ *     it on top would leave `schema_migrations` recording a history that never
+ *     happened, and the previous version of this comment claimed the property
+ *     was enforced when only the first half of it was.
+ *
+ * Running it twice is a no-op, so it is safe on every boot, and several
+ * processes may boot at once, so the whole run holds an advisory lock — taken
+ * under a `lock_timeout`, because a process that dies holding it would
+ * otherwise block every other boot forever with nothing printed.
  */
 export interface Migration {
   /** The file's numeric prefix, as written: `"001"`. */
@@ -31,6 +42,14 @@ export interface MigrateOptions {
   dir?: string;
   /** Injected, like every other clock in pulse — never `default now()`. */
   clock?: () => Date;
+  /**
+   * How long to wait for the advisory lock before giving up, in milliseconds.
+   *
+   * Long enough that a slow but healthy migration on another process is waited
+   * out, short enough that a lock nobody will ever release becomes an error
+   * naming it rather than a boot that hangs in silence.
+   */
+  lockTimeoutMs?: number;
 }
 
 export interface MigrateResult {
@@ -51,10 +70,23 @@ export const SCHEMA_MIGRATIONS_DDL = `create table if not exists schema_migratio
   applied_at timestamptz(3) not null
 )`;
 
-/** Arbitrary, constant, and pulse's alone: "puls" as an integer. */
-const LOCK_KEY = 1886546803;
+/**
+ * Arbitrary, constant, and pulse's alone: "puls" as an integer. Exported so a
+ * test can hold the lock the runner will ask for, and so the number in the
+ * error message has one definition.
+ */
+export const LOCK_KEY = 1886546803;
 
-const FILENAME = /^(\d{3,})_([a-z0-9-]+)\.sql$/;
+const DEFAULT_LOCK_TIMEOUT_MS = 30_000;
+
+/**
+ * `<digits>_<name>.sql`. The name may carry `_` as well as `-`, because both
+ * read fine and a runner that accepts one and rejects the other fails the
+ * whole run over a filename — `loadMigrations` throws on any `.sql` it cannot
+ * parse, so one mis-styled file stops every migration, including the ones that
+ * were already fine.
+ */
+const FILENAME = /^(\d{3,})_([a-z0-9_-]+)\.sql$/;
 
 export class MigrationError extends Error {
   constructor(message: string, options?: ErrorOptions) {
@@ -72,15 +104,18 @@ export async function migrate(
   const result: MigrateResult = { applied: [], alreadyApplied: [] };
 
   const client = await pool.connect();
+  let locked = false;
   try {
     // Held for the whole run: two processes booting together must not both
     // decide the same file is pending.
-    await client.query(`select pg_advisory_lock(${LOCK_KEY})`);
+    await lock(client, options.lockTimeoutMs ?? DEFAULT_LOCK_TIMEOUT_MS);
+    locked = true;
     await client.query(SCHEMA_MIGRATIONS_DDL);
     const { rows } = await client.query<{ version: string; checksum: string }>(
       "select version, checksum from schema_migrations",
     );
     const seen = new Map(rows.map((row) => [row.version, row.checksum]));
+    refuseOutOfOrder(migrations, rows);
 
     for (const migration of migrations) {
       const applied = seen.get(migration.version);
@@ -102,10 +137,82 @@ export async function migrate(
     // Advisory locks are held by the session, and a pooled connection is
     // reused, so this has to be explicit. Failing to unlock a connection that
     // is already broken must not mask the error that broke it.
-    await client
-      .query(`select pg_advisory_unlock(${LOCK_KEY})`)
-      .catch(() => undefined);
+    if (locked) {
+      await client
+        .query(`select pg_advisory_unlock(${LOCK_KEY})`)
+        .catch(() => undefined);
+    }
     client.release();
+  }
+}
+
+/**
+ * Take the run's advisory lock, or say who is holding it.
+ *
+ * `lock_timeout` does apply to `pg_advisory_lock` — checked against a real
+ * server, because the documentation's list of lockable things does not name
+ * advisory locks outright. Without it a process that died holding the lock
+ * blocks every subsequent boot forever, printing nothing at all: the most
+ * expensive failure shape there is, because it looks like a hang rather than
+ * an error. The timeout is reset before the migrations themselves run — it is
+ * for waiting on this lock, not a budget for the DDL.
+ */
+async function lock(client: PoolClient, timeoutMs: number): Promise<void> {
+  if (!Number.isInteger(timeoutMs) || timeoutMs < 0) {
+    // Interpolated into SQL, so it is never free text.
+    throw new MigrationError(`not a usable lock timeout: ${timeoutMs}`);
+  }
+  await client.query(`set lock_timeout = ${timeoutMs}`);
+  try {
+    await client.query(`select pg_advisory_lock(${LOCK_KEY})`);
+  } catch (cause) {
+    throw new MigrationError(
+      `waited ${timeoutMs}ms for pulse's migration advisory lock ` +
+        `(${LOCK_KEY}) and did not get it — another process is migrating, or ` +
+        "one died holding it; `select * from pg_locks where locktype = " +
+        "'advisory'` names the session to end",
+      { cause },
+    );
+  } finally {
+    await client.query("reset lock_timeout").catch(() => undefined);
+  }
+}
+
+/**
+ * Refuse a pending migration that sorts below one already applied.
+ *
+ * The case is ordinary rather than exotic: two branches each add a migration,
+ * they merge without conflicting, and whichever merges second contributes a
+ * lower number that has never run. Applying it after the higher one would
+ * leave `schema_migrations` describing an order that never happened, and every
+ * environment would then disagree about what the schema is depending on when
+ * each first booted.
+ *
+ * Checked for every pending file before any of them is applied, so a run that
+ * is going to be refused changes nothing.
+ */
+function refuseOutOfOrder(
+  migrations: readonly Migration[],
+  rows: readonly { version: string }[],
+): void {
+  let highest: string | undefined;
+  for (const row of rows) {
+    if (highest === undefined || Number(row.version) > Number(highest)) {
+      highest = row.version;
+    }
+  }
+  if (highest === undefined) return;
+
+  const applied = new Set(rows.map((row) => row.version));
+  for (const migration of migrations) {
+    if (applied.has(migration.version)) continue;
+    if (Number(migration.version) < Number(highest)) {
+      throw new MigrationError(
+        `${fileOf(migration)} has never run but sorts below ${highest}, ` +
+          "which has — migrations are forward-only in file order too; " +
+          "renumber it above the highest applied version",
+      );
+    }
   }
 }
 
@@ -125,7 +232,11 @@ async function apply(
     );
     await client.query("commit");
   } catch (cause) {
-    await client.query("rollback");
+    // Same reason the unlock above is swallowed: a rollback that fails is
+    // almost always a connection that has already gone, and letting it throw
+    // would replace the error that actually explains the failure — carried
+    // here as `cause` — with a meaningless one about the rollback.
+    await client.query("rollback").catch(() => undefined);
     throw new MigrationError(
       `${fileOf(migration)} failed and was rolled back`,
       {
@@ -149,7 +260,9 @@ export async function loadMigrations(
     const name = match?.[2];
     if (version === undefined || name === undefined) {
       throw new MigrationError(
-        `a migration file is named <number>_<name>.sql: ${file}`,
+        `${file} is not a usable migration filename: it must be at least ` +
+          "three digits, an underscore, then a name of lowercase letters, " +
+          "digits, underscores and hyphens, then `.sql`",
       );
     }
     if (versions.has(version)) {
