@@ -181,13 +181,72 @@ holds the review discussion** — go there for it, not to #135.
 - The non-consuming `GET /api/sign-in/redeem` check is **still not on `PulseApi`**.
   No redeem screen exists yet, so nothing has needed it.
 
+### Landed 2026-09-09/11 — sign-in reaches the client, and storage starts
+
+| Squash    | PR   | What                                             |
+| --------- | ---- | ------------------------------------------------ |
+| `3907cc9` | #149 | the emailed sign-in link finally lands somewhere |
+| `4ad806f` | #150 | the schema, and a runner that applies it         |
+
+**#149 closed pillar 1's UI hole.** The server emails `<web origin>/sign-in?token=…`
+and the client had no router, so that URL opened the app, found no `?poll=`, and
+showed the first question — `requestLink`, `redeem`, `me` and `signOut` sat fully
+implemented in `HttpPulseApi`, called by nothing. `flow/route.ts` + `use-route.ts`
+give three places; `App` becomes a picker owning no markup and the run moves to
+`screens/Run.tsx`. Two screens follow mockups 01-claim and 02-sent. Three things
+worth not rediscovering: `use-redeem.ts` holds the request in a **ref** rather
+than guarding with a flag, because redeeming spends the link and StrictMode runs
+every effect twice — bailing on the second run leaves nobody listening and the
+screen sits on "Loading…"; a spent link is **replaced** in history, never pushed,
+so Back cannot land on a URL guaranteed to fail; and a spent, expired or unknown
+link is `empty`, not `error`, because only the server knows which and it already
+writes the sentence.
+
+**#150 is the first real storage.** `migrations/001_initial.sql` is the whole
+schema as one forward-only file — ADR-0021's four voting tables column-for-column,
+plus `voter`, `pending_claim`, `suggestion`, `allowed_domain` and the runner's own
+`schema_migrations`. **ADR-0020's "the schema is five tables" is wrong** and was
+always a remark inside an argument about ORMs, not a constraint. `src/db/migrate.ts`
+applies pending files in numeric order, one transaction each, under an advisory
+lock with a `lock_timeout`; it refuses both a file whose checksum changed after it
+ran and a file numbering below one already applied. `src/db/config.ts` is now the
+single place deciding what "unset" means. `pg` moved to `dependencies`.
+
+**No stores yet.** #150 is foundation only — no store implementations, no compose
+file, no vote-method registry (deferred by operator decision; the schema carries
+`method_params` so it never needs a migration).
+
+**The review caught the hole that mattered**, and it is the shape to expect again:
+the runner applied anything absent from `schema_migrations` without checking it
+sorted above the highest applied version, so 001 + 003 then 002 ran 002 **after**
+003 and recorded a history that never happened — two branches each adding a
+migration, merged either way. The file's own comment claimed forward-only was
+"enforced rather than hoped for", which is exactly what made it hard to see:
+the checksum guard stops an applied file being _edited_ and nothing stopped
+history being _inserted into_. **Two promises, one of them unkept, behind one
+confident sentence.**
+
+**Every guard in #150 was mutation-checked** — twelve mutations, each rule
+removed, each leaving its own test red and nothing else. Worth keeping as the
+standard; `memory/pulse.md` has recorded "tests that could not fail" four
+separate times now.
+
+**What #150 owes the next change:** `vote_choice.vote_id` and `.choice_id`
+reference their parents independently, so a row may name a vote on poll A and a
+choice from poll B and the database will take it. Expressing it needs a composite
+key that is not ADR-0021's shape, so the DDL is unchanged and **the store is the
+only guard** — the conformance suite owes a case that writes a cross-poll pair
+and is refused, against **both** implementations, the in-memory one having no
+foreign keys at all.
+
 ## Not built
 
-- **Screens 2-7 of the story.** The ballot exists, and since #140 so does a
-  results panel reachable from it. There is still no CLAIM or SENT screen, no
-  bite/case screens and no action screen — so the magic-link identity built in
-  pillar 1 has **no UI at all**: nothing in the client signs anyone in. `flow/story.ts` still enumerates six steps the app does
-  not render. The mockups in `docs/mockups/pulse-screens/` are the design.
+- **The bite/case screens and the action screen.** The ballot exists, since #140
+  a results panel reachable from it, and since #149 the sign-in and redeem screens
+  — so **the earlier note that nothing in the client signs anyone in is stale**.
+  What is still missing is the middle of the story: `flow/story.ts` enumerates
+  steps the app does not render. The mockups in `docs/mockups/pulse-screens/` are
+  the design.
 - **Pillar 3, the path to action** in any form: soliciting ideas, volunteer time
   or donations, and the proof-of-what-happened email. `proofEmailsOptIn` is
   collected at sign-in and currently leads nowhere.
@@ -195,10 +254,12 @@ holds the review discussion** — go there for it, not to #135.
   stores are what the tests run against; nothing is durable. **Persistence is now
   decided but not built** — Postgres, per ADR-0020, with the schema in ADR-0021,
   and CI has a database to run against as of #143. What is still owed is the work
-  itself: the migration runner, the four store implementations, and the shared
-  conformance suite that must run the same tests against both the in-memory and
-  Postgres versions. No `Mailer` implementation exists anywhere, so nobody
-  outside a terminal can sign in — that half is undecided as well as unbuilt.
+  itself. **The migration runner and the schema landed in #150**; what remains is
+  the four store implementations and the shared conformance suite that must run
+  the same tests against both the in-memory and Postgres versions. Nothing in
+  `src/` writes to a database yet, so a `pnpm dev` session still keeps nothing.
+  No `Mailer` implementation exists anywhere, so nobody outside a terminal can
+  sign in — that half is undecided as well as unbuilt.
 
 ### Asked for by the operator, 2026-08-25
 
@@ -405,6 +466,55 @@ decision 4).
    under whichever is showing. Note the earlier entry read "**Left as-is
    deliberately**"; that was true of #140 and is no longer true of the code.
 
+8. ~~**Where a feature request goes.**~~ **SETTLED 2026-09-11 — `docs/plans/pulse.md`**,
+   mirroring the ODC core's `docs/plans/phase-0.md`. It keeps the workstream's
+   record in-repo, where this file says pulse's own docs are the only record,
+   and avoids the conflict problem a `memory/BACKLOG.md` would have — memory
+   entries are updated on master at merge time precisely because parallel agents
+   collide on files everyone edits. Open decision 4 above is closed by this.
+
+9. ~~**`is_entry_point`, and whether a domain may serve two communities.**~~
+   **SETTLED 2026-09-11 by the operator — ADR-0023**, landed in #150.
+   `is_entry_point` is **dropped**: ADR-0021 specifies it, so its absence is a
+   decision and not an oversight, and the cost is accepted — the backfill, not
+   the migration, is the expensive half. **A domain may serve several
+   communities**; the key stays `(community, domain)`. That made a latent bug
+   reachable, since `DomainAllowlist` kept whichever equal-length row came first
+   and a database-backed source has no inherent order, so one address could
+   resolve to a different community run to run. The tie-break is now explicit —
+   longest domain, then lowest community — and is **interim**. The real answer
+   is that **the person picks** when their address matches more than one, which
+   is sign-in work and lands with the sign-in screens.
+
+10. ~~**How polls come to exist.**~~ **SETTLED 2026-09-11 by the operator —
+    crowdsourced questions with computed navigation**, not authored stories.
+    Community members post questions; `next_poll_id` stays mostly empty;
+    grouping and related polls do the navigating. **ADR-0024 records it** (in
+    flight at the time of writing — check it landed). Four consequences to hold
+    on to:
+    - **Navigation stops being optional.** Draft PR #148's related-polls work
+      moves from nice-to-have to the primary way anyone reaches a second
+      question. Note its proposed ADR number **0023 is now taken**.
+    - **`polls` needs `community` and `created_by`, and has neither.** By
+      operator decision they did **not** go into #150, since nothing writes them
+      yet — consistent with dropping `is_entry_point`. They land in migration 002
+      with the authoring work. The honest asymmetry: unlike `is_entry_point`,
+      authorship **cannot be backfilled at all**, only defaulted, so any poll
+      created before that migration has no recoverable author.
+    - **Posting requires signing in; voting does not** (#128 counts a vote before
+      anyone signs in). That asymmetry becomes deliberate and load-bearing —
+      moderation and per-person rate limiting both depend on it.
+    - **Which community you post into follows from ADR-0023's sign-in picker**,
+      which is unbuilt. A dependency, not a detail.
+
+    **Still open underneath it, and needed before any code:** duplicate
+    filtering (reuse `overlap()`/`keywords()` from `suggestions.ts`, or allow
+    duplicates and merge later?); moderation before or after posting (pre-
+    moderation needs a queue and throttles the volume this choice exists for;
+    post-moderation needs a **moderator role that exists nowhere in pulse**);
+    and what counts as a real question at all, since `createPoll`'s validation
+    is syntactic only.
+
 ### Traps the 2026-09-06 review round found, now fixed — do not reintroduce
 
 - **A ref that survived because nothing ever came back.** A drag that commits
@@ -523,6 +633,14 @@ exist`) looks like a credentials bug rather than a port collision. This cost
   do not re-copy the rules back here** — one place only, per `memory/INDEX.md`.
   The same PR replaced the old blanket "do not stack PRs" ban, which no operator
   ever asked for, with a shallow-stack discipline. Do not re-derive the ban.
+- **`.github/scripts/diff-size.sh` prints a false promise for pulse.** Its own
+  comment says "The WARN at 400 still fires for pulse and is the honest signal",
+  and this file repeated it — but the implementation excludes `apps/pulse/**`
+  from the `--numstat` pathspec entirely, so a pulse branch reports **0 changed
+  lines** and the WARN can never fire. #150 was ~1080 lines and printed 0.
+  **Count by hand for any pulse change**, and do not cite the guard as evidence
+  a branch is small. Unfixed: which half is wrong, the comment or the exclusion,
+  is a decision rather than a typo.
 - **`pnpm dev` generates an ephemeral session secret** and announces it; every
   restart invalidates every cookie. That is deliberate, not a bug to fix.
 - **`pulse/4b-sign-in-routes` is an unlanded remote branch with no open PR**
@@ -544,10 +662,13 @@ exist`) looks like a credentials bug rather than a port collision. This cost
   core plan (`docs/implementation-plan.md`) does not cover pulse and will not
   tell you it exists.
 
-### Three known bugs, found 2026-09-06, NOT fixed
+### Two known bugs, found 2026-09-06, NOT fixed
 
 Found by the review of #146 in code that PR did not touch, so they were left
 out of it rather than widening one reviewable change. Nobody has started them.
+(A third — `database.test.ts` skipping on `url === undefined`, so an empty
+`PULSE_DATABASE_URL` ran the test and then failed about a variable that was not
+set — **was fixed in #150**, which owned that file.)
 
 - **`ResultsPanel` reads `yourChoice` two ways.** "You picked X" resolves it as
   an array position (`results.choices[yourChoice]`), the row badge as
@@ -556,10 +677,6 @@ out of it rather than widening one reviewable change. Nobody has started them.
   `poll_choice.id` a stable identity and demotes `position` to display order, so
   the first time results come back ordered any other way, the panel names the
   wrong answer back to the voter. Pick one and use it in both places.
-- **`apps/pulse/test/database.test.ts` skips on `url === undefined`.** An empty
-  string `PULSE_DATABASE_URL` runs the test instead, which then fails claiming
-  `PULSE_REQUIRE_DATABASE` is set when it is not — a misleading failure at the
-  exact moment someone is wiring the stores up.
 - **A poll the client already knows is shut is still fully pressable.**
   `settled` never consults `poll.open` on either ballot, so one press still
   casts. If the server disagrees and answers `counted`, the person gets a
