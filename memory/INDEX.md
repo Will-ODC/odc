@@ -31,15 +31,17 @@ Do not apply charter rules to `apps/**`, and do not relax them anywhere else.
   `contracts/` contradictions remain open for an operator decision; EV-9 vs
   EV-20 is closed. → `memory/STATE.md`
 - **Pulse:** pillars 1 and 2 are on master — magic-link identity, the voting
-  core, and a story UI you can walk end to end (#128-#131, #135, #127, merged
-  2026-08-26), plus a results panel you can open after answering (#140) and an
-  answer you can change (#146, merged 2026-09-06, ADR-0022). Storage is
-  **decided and not built**: Postgres per ADR-0020, the poll/vote schema per
-  ADR-0021, and CI has a database as of #143 — no store is written yet. What is
-  missing: every screen except the ballot and that panel (so nothing in the
-  client signs anyone in), pillar 3's path to action, any durable storage, and
-  any `Mailer` implementation. **Three known bugs are recorded and unstarted.**
-  → `memory/pulse.md`
+  core, a story UI you can walk end to end, a results panel (#140), an answer
+  you can change (#146, ADR-0022), and since #149 the sign-in and redeem screens,
+  so the client **can** now sign someone in. **Storage has started:** the schema
+  and migration runner landed in #150 (ADR-0020, ADR-0021, and ADR-0023 for what
+  was dropped) — but **no store writes to it yet**, so a `pnpm dev` session still
+  keeps nothing. Owed next: the four stores and the shared conformance suite.
+  Still missing: the middle of the story (bite/case/action screens), pillar 3,
+  and any `Mailer` — nobody outside a terminal can sign in. **Poll authoring is
+  decided in principle** (crowdsourced questions, computed navigation; ADR-0024)
+  and blocked on rules for filtering, posting rights and moderation.
+  **Two known bugs are recorded and unstarted.** → `memory/pulse.md`
 
 ## Load order
 
