@@ -63,6 +63,17 @@ export class StaticDomainSource implements AllowedDomainSource {
  * When several rows match — a subdomain rule and an exact rule, say — the most
  * specific one wins, so a narrower row can always be added to carve out a
  * community without rewriting the broader one.
+ *
+ * **One domain may serve several communities.** `allowed_domain` is keyed on
+ * `(community, domain)`, deliberately (ADR-0023), so two communities can both
+ * claim `ubc.ca` and both rows match the same address at the same length. The
+ * tie-break below is INTERIM and is not the product answer: the answer is that
+ * the person picks their community at sign-in, which lands with the sign-in
+ * screens. Until then this has to pick something, and what it must not do is
+ * pick differently from one run to the next — which is exactly what it did
+ * before, because `>` alone keeps whichever equal-length row the source
+ * happened to return first, and a table query without an `ORDER BY` makes no
+ * promise about that at all.
  */
 export class DomainAllowlist implements VerificationMethod {
   readonly #source: AllowedDomainSource;
@@ -77,11 +88,20 @@ export class DomainAllowlist implements VerificationMethod {
     );
     if (matches.length === 0) return undefined;
 
-    const best = matches.reduce((a, b) =>
-      b.domain.length > a.domain.length ? b : a,
-    );
+    // Longest domain first, then lowest community alphabetically. The second
+    // clause is the whole point: it makes the answer a property of the rows
+    // rather than of the order they arrived in.
+    const best = matches.reduce((a, b) => (moreSpecific(b, a) ? b : a));
     return { community: best.community, via: best };
   }
+}
+
+/** Strictly: `b` only loses to an equal row, so the reduce is stable either way. */
+function moreSpecific(b: AllowedDomain, a: AllowedDomain): boolean {
+  if (b.domain.length !== a.domain.length) {
+    return b.domain.length > a.domain.length;
+  }
+  return b.community < a.community;
 }
 
 function matches_(row: AllowedDomain, domain: string): boolean {

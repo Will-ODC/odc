@@ -101,3 +101,42 @@ test("rows_match_regardless_of_the_case_they_were_entered_in", async () => {
     "ubc-students",
   );
 });
+
+test("two_communities_claiming_one_domain_resolve_the_same_way_either_way_round", async () => {
+  // ADR-0023: `allowed_domain` is keyed on (community, domain), so a domain
+  // may serve several communities. Both rows then match the same address at
+  // the same length, and `>` alone keeps whichever one the source happened to
+  // hand over first — a static array's literal order today, and a table query
+  // with no ORDER BY tomorrow. Same address, different community, run to run.
+  //
+  // The interim rule is longest domain, then lowest community alphabetically.
+  // Asserted over BOTH row orderings, because a rule that only works in the
+  // order it was written in is the bug, not the fix.
+  const forward = [
+    { community: "ubc-alumni", domain: "ubc.ca" },
+    { community: "ubc-staff", domain: "ubc.ca" },
+  ];
+  const backward = [...forward].reverse();
+
+  for (const rows of [forward, backward]) {
+    const membership = await allowlist(rows).check(parseEmail("ada@ubc.ca"));
+    assert.equal(membership?.community, "ubc-alumni");
+    // `via` is the row that admitted them, and must be the same row, not just
+    // a row with the same community.
+    assert.equal(membership?.via.community, "ubc-alumni");
+  }
+});
+
+test("a_longer_domain_still_beats_an_alphabetically_earlier_community", async () => {
+  // The tie-break is second, not first: specificity still decides whenever the
+  // domains differ. A community-first rule would hand "aaa" every address in
+  // the system, which is the obvious way to get this wrong.
+  const list = allowlist([
+    { community: "aaa-everyone", domain: "ubc.ca", includeSubdomains: true },
+    { community: "zzz-students", domain: "student.ubc.ca" },
+  ]);
+  assert.equal(
+    (await list.check(parseEmail("ada@student.ubc.ca")))?.community,
+    "zzz-students",
+  );
+});

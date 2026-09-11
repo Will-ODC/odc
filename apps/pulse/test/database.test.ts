@@ -3,6 +3,7 @@ import { test } from "node:test";
 // `pg` is CommonJS, and its named exports are built dynamically enough that
 // Node's ESM interop cannot always see them. The default import always works.
 import pg from "pg";
+import { databaseRequired, databaseUrl } from "../src/db/config.js";
 
 /**
  * Proves the database CI provides is reachable and that `pg` can talk to it.
@@ -23,6 +24,12 @@ import pg from "pg";
  *   from `CI`, which developers carry in their shells for other reasons and
  *   which is sometimes set to the string "false".
  *
+ * Reading them is `src/db/config.ts`'s job, so this file and the migration
+ * tests cannot drift on what "unset" means — and an empty `PULSE_DATABASE_URL`
+ * is unset, not a connection string. Deciding that here with `=== undefined`
+ * ran this test on a blank value and then failed saying
+ * `PULSE_REQUIRE_DATABASE` was set when it was not.
+ *
  * So: no URL and not required means skip, and `pnpm test` still works on a
  * laptop with nothing installed. Required and no URL is a failure, because a
  * skip there would report success while proving nothing — the deletable-green
@@ -32,8 +39,8 @@ import pg from "pg";
  * swallowed the evidence. The guard lives here, in the thing that actually
  * runs, rather than in a workflow step that can only see the shell.
  */
-const url = process.env["PULSE_DATABASE_URL"];
-const required = process.env["PULSE_REQUIRE_DATABASE"] === "1";
+const url = databaseUrl();
+const required = databaseRequired();
 
 test(
   "connects_to_the_configured_database_and_runs_a_statement",
