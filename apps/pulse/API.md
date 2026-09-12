@@ -268,7 +268,9 @@ none yet.
 { "ballot": [0, 2] }
 ```
 
-`ballot` is `null` when this browser has not voted on this poll.
+`ballot` is `null` when this browser has not voted on this poll. Its choices come back
+in the poll's order, whatever order they were cast in: for `single` and `approval` — the
+only methods today — a ballot says which choices, not a ranking of them.
 
 | Status | Body                 | When         |
 | ------ | -------------------- | ------------ |
@@ -291,8 +293,8 @@ retraction — the client never sends one, so an empty ballot is a bug, not some
 withdrawing their vote.
 
 On a `counted` (first ballot) or `changed` (replacing a prior one) outcome, the
-response carries the stored ballot and the fresh results, so the client need not ask
-again:
+response carries the stored ballot (in the poll's order, as above) and the fresh
+results, so the client need not ask again:
 
 ```json
 {

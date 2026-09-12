@@ -204,13 +204,17 @@ test("the_ballot_route_reports_this_browsers_current_ballot_or_null", async () =
   assert.equal(before.statusCode, 200);
   assert.equal(before.json().ballot, null);
 
-  await visit({
+  const cast = await visit({
     method: "POST",
     url: "/api/polls/p1/votes",
     payload: { ballot: [2, 0] },
   });
+  // The cast's own reply names the stored ballot, in the same order.
+  assert.deepEqual(cast.json().ballot, [0, 2]);
   const after = await visit({ url: "/api/polls/p1/ballot" });
-  assert.deepEqual(after.json().ballot, [2, 0]);
+  // In the poll's order, not the order cast: a ballot says which choices, and
+  // a database store can only give them back in position order.
+  assert.deepEqual(after.json().ballot, [0, 2]);
 });
 
 test("a_vote_counts_with_no_session_at_all", async () => {

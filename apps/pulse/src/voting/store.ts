@@ -161,8 +161,13 @@ export class InMemoryVotingStore implements VotingStore {
 
     const key = voteKey(pollId, voterId);
     const replacing = this.#votes.has(key);
-    // Copy the array so a caller mutating theirs later cannot reach into ours.
-    const vote: Vote = { pollId, voterId, choices: [...ballot], castAt: now };
+    // A copy, so a caller mutating theirs later cannot reach into ours, and in
+    // choice order: a single or approval ballot — the only methods there are —
+    // says which choices, not an order, and a database store can only give
+    // them back in the poll's own order. A ranked method will carry its order
+    // in `vote_choice.value`, not in the order of this array.
+    const choices = [...ballot].sort((a, b) => a - b);
+    const vote: Vote = { pollId, voterId, choices, castAt: now };
     this.#votes.set(key, vote);
     return { status: replacing ? "changed" : "counted", vote };
   }
