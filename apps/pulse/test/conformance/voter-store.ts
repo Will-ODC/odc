@@ -1,6 +1,10 @@
 import assert from "node:assert/strict";
 import { describe, test, type TestContext } from "node:test";
-import type { Voter, VoterStore } from "../../src/identity/store.js";
+import {
+  VoterExistsError,
+  type Voter,
+  type VoterStore,
+} from "../../src/identity/store.js";
 import type { MakeStore, SuiteOptions } from "./make.js";
 
 /** Milliseconds on purpose: a store that drops them fails the round trips. */
@@ -85,7 +89,36 @@ export function voterStoreConformance(
       test("one_voter_per_address", async (t) => {
         const store = await fresh(t);
         await store.create(voter());
-        await assert.rejects(() => store.create(voter({ id: "voter-2" })));
+        // By name: a first sign-in that loses a race recovers on exactly this.
+        await assert.rejects(
+          () => store.create(voter({ id: "voter-2" })),
+          VoterExistsError,
+        );
+      });
+
+      test("a_second_voter_under_an_existing_id_is_refused_but_not_as_an_existing_address", async (t) => {
+        // VoterExistsError means "this person already has a voter", and sign-in
+        // answers it by signing them in as that voter. A clash on the id alone
+        // is a different fault, and must not be read as one.
+        const store = await fresh(t);
+        await store.create(voter());
+        await assert.rejects(
+          () => store.create(voter({ email: "sam@student.ubc.ca" })),
+          (error: unknown) =>
+            error instanceof Error && !(error instanceof VoterExistsError),
+        );
+        // And the attempt changed nobody.
+        assert.equal(
+          (await store.byId("voter-1"))?.email,
+          "ada@student.ubc.ca",
+        );
+        assert.equal(await store.byEmail("sam@student.ubc.ca"), undefined);
+      });
+
+      test("a_repeat_of_both_id_and_address_is_an_existing_address", async (t) => {
+        const store = await fresh(t);
+        await store.create(voter());
+        await assert.rejects(() => store.create(voter()), VoterExistsError);
       });
 
       test("the_opt_in_can_be_turned_on_and_off_again", async (t) => {
