@@ -452,6 +452,9 @@ export async function createServer(deps: ServerDeps): Promise<FastifyInstance> {
             .code(400)
             .send({ error: "bad_suggestion", message: error.message });
         }
+        // The poll was read a moment ago, but a store that keeps its own rows
+        // checks again and may not have it: a 404, as it is for a vote.
+        if (error instanceof UnknownPollError) return notFoundPoll(reply);
         throw error;
       }
     },

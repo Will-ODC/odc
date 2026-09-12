@@ -13,13 +13,16 @@ import {
 } from "../src/identity/store.js";
 import { createServer } from "../src/http/server.js";
 import { SESSION_COOKIE, SessionSigner } from "../src/http/session.js";
-import { InMemorySuggestionStore } from "../src/voting/suggestions.js";
-import { InMemoryVotingStore } from "../src/voting/store.js";
+import {
+  InMemorySuggestionStore,
+  type SuggestionStore,
+} from "../src/voting/suggestions.js";
+import { InMemoryVotingStore, UnknownPollError } from "../src/voting/store.js";
 
 const SECRET = "test-secret-that-is-long-enough";
 const START = new Date("2026-08-09T12:00:00.000Z");
 
-async function setup(pollCloses?: Date) {
+async function setup(pollCloses?: Date, suggestions?: SuggestionStore) {
   const now = START;
   const clock = () => now;
   const mailer = new ConsoleMailer(() => {});
@@ -46,7 +49,7 @@ async function setup(pollCloses?: Date) {
     claims,
     voters,
     votes,
-    suggestions: new InMemorySuggestionStore({ clock }),
+    suggestions: suggestions ?? new InMemorySuggestionStore({ clock }),
     signer,
     clock,
     secureCookies: false,
@@ -469,6 +472,25 @@ test("suggestions_on_an_unknown_poll_are_a_404", async () => {
     payload: { text: "Charge the members" },
   });
   assert.equal(reply.statusCode, 404);
+});
+
+test("a_suggestion_store_without_the_poll_answers_404_rather_than_500", async () => {
+  // The route read the poll a moment ago, but a store that keeps its own rows
+  // checks again. If it has no such poll, that is a 404, as it is for a vote.
+  const gone: SuggestionStore = {
+    submit: async () => {
+      throw new UnknownPollError("open-ended");
+    },
+    list: async () => [],
+  };
+  const { app } = await setup(undefined, gone);
+  const reply = await app.inject({
+    method: "POST",
+    url: "/api/polls/open-ended/suggestions",
+    payload: { text: "Charge the members" },
+  });
+  assert.equal(reply.statusCode, 404);
+  assert.equal(reply.json().error, "not_found");
 });
 
 test("a_closed_poll_takes_no_more_options", async () => {

@@ -155,10 +155,91 @@ export interface SuggestionStore {
    * Takes the whole poll, not just its id, because a suggestion that repeats
    * one of the poll's own choices is the commonest duplicate of all — the
    * choices are on the screen directly above the field.
+   *
+   * Throws `SuggestionError` for text no person could have meant, and
+   * `UnknownPollError` when the store has no such poll to attach it to.
    */
   submit(poll: Poll, text: string): Promise<SubmitResult>;
   /** Most-said first. */
   list(pollId: string): Promise<Suggestion[]>;
+}
+
+/**
+ * What submitting `text` against `poll` comes to, given the suggestions
+ * already on it. Decided here, once, so every store answers the same way;
+ * a store only has to keep the rows. Throws `SuggestionError` for text no
+ * person could have meant.
+ */
+export type Decision =
+  /** The poll already offers it: point at the choice, add nothing. */
+  | { kind: "on_ballot"; choice: BallotChoice; related: Suggestion[] }
+  /** Someone already said it: that suggestion gains one. */
+  | { kind: "second"; suggestion: Suggestion; related: Suggestion[] }
+  /** Nobody has: add `text`, which is the submission tidied. */
+  | { kind: "add"; text: string; related: Suggestion[] };
+
+/**
+ * The submission as it will be stored — trimmed, inner whitespace collapsed —
+ * or a `SuggestionError` for text no person could have meant. It needs only
+ * the text, so a store can refuse junk before it touches anything.
+ */
+export function tidy(text: string): string {
+  const trimmed = text.trim().replace(/\s+/g, " ");
+  if (trimmed === "") {
+    throw new SuggestionError("Write what you would rather see.");
+  }
+  if (trimmed.length > MAX_SUGGESTION_LENGTH) {
+    throw new SuggestionError(
+      `Keep it under ${MAX_SUGGESTION_LENGTH} characters.`,
+    );
+  }
+  if (keywords(trimmed).size === 0) {
+    throw new SuggestionError("Say a little more about what you mean.");
+  }
+  return trimmed;
+}
+
+export function decide(
+  poll: Poll,
+  text: string,
+  existing: readonly Suggestion[],
+): Decision {
+  const trimmed = tidy(text);
+
+  const scored = existing
+    .map((suggestion) => ({
+      suggestion,
+      score: overlap(trimmed, suggestion.text),
+    }))
+    .sort((a, b) => b.score - a.score);
+
+  // The poll's own choices come first. Saying what the ballot already offers
+  // is not a new idea to be counted beside the poll; it is a vote the person
+  // has not cast yet, and the only useful answer is to say so. Suggestions
+  // are never appended to `Poll.choices` — see the note at the top of this
+  // file — so a duplicate left standing would be an option nobody can vote
+  // for, sitting under one they can.
+  const onBallot = poll.choices
+    .map((label, index) => ({ index, label, score: overlap(trimmed, label) }))
+    .sort((a, b) => b.score - a.score)[0];
+  if (onBallot && onBallot.score >= SAME_IDEA) {
+    return {
+      kind: "on_ballot",
+      choice: { index: onBallot.index, label: onBallot.label },
+      related: nearby(scored),
+    };
+  }
+
+  const best = scored[0];
+  if (best && best.score >= SAME_IDEA) {
+    return {
+      kind: "second",
+      suggestion: best.suggestion,
+      related: nearby(scored.slice(1)),
+    };
+  }
+
+  return { kind: "add", text: trimmed, related: nearby(scored) };
 }
 
 export class InMemorySuggestionStore implements SuggestionStore {
@@ -172,63 +253,34 @@ export class InMemorySuggestionStore implements SuggestionStore {
   }
 
   async submit(poll: Poll, text: string): Promise<SubmitResult> {
-    const trimmed = text.trim().replace(/\s+/g, " ");
-    if (trimmed === "") {
-      throw new SuggestionError("Write what you would rather see.");
-    }
-    if (trimmed.length > MAX_SUGGESTION_LENGTH) {
-      throw new SuggestionError(
-        `Keep it under ${MAX_SUGGESTION_LENGTH} characters.`,
-      );
-    }
-    if (keywords(trimmed).size === 0) {
-      throw new SuggestionError("Say a little more about what you mean.");
-    }
-
     const existing = this.#byPoll.get(poll.id) ?? [];
-    const scored = existing
-      .map((suggestion) => ({
-        suggestion,
-        score: overlap(trimmed, suggestion.text),
-      }))
-      .sort((a, b) => b.score - a.score);
-
-    // The poll's own choices come first. Saying what the ballot already offers
-    // is not a new idea to be counted beside the poll; it is a vote the person
-    // has not cast yet, and the only useful answer is to say so. Suggestions
-    // are never appended to `Poll.choices` — see the note at the top of this
-    // file — so a duplicate left standing would be an option nobody can vote
-    // for, sitting under one they can.
-    const onBallot = poll.choices
-      .map((label, index) => ({ index, label, score: overlap(trimmed, label) }))
-      .sort((a, b) => b.score - a.score)[0];
-    if (onBallot && onBallot.score >= SAME_IDEA) {
-      return {
-        status: "on_ballot",
-        choice: { index: onBallot.index, label: onBallot.label },
-        related: nearby(scored),
-      };
+    const decision = decide(poll, text, existing);
+    switch (decision.kind) {
+      case "on_ballot":
+        return {
+          status: "on_ballot",
+          choice: decision.choice,
+          related: decision.related,
+        };
+      case "second":
+        decision.suggestion.count += 1;
+        return {
+          status: "seconded",
+          suggestion: decision.suggestion,
+          related: decision.related,
+        };
+      case "add": {
+        const suggestion: Suggestion = {
+          id: this.#newId(),
+          pollId: poll.id,
+          text: decision.text,
+          count: 1,
+          addedAt: this.#clock(),
+        };
+        this.#byPoll.set(poll.id, [...existing, suggestion]);
+        return { status: "added", suggestion, related: decision.related };
+      }
     }
-
-    const best = scored[0];
-    if (best && best.score >= SAME_IDEA) {
-      best.suggestion.count += 1;
-      return {
-        status: "seconded",
-        suggestion: best.suggestion,
-        related: nearby(scored.slice(1)),
-      };
-    }
-
-    const suggestion: Suggestion = {
-      id: this.#newId(),
-      pollId: poll.id,
-      text: trimmed,
-      count: 1,
-      addedAt: this.#clock(),
-    };
-    this.#byPoll.set(poll.id, [...existing, suggestion]);
-    return { status: "added", suggestion, related: nearby(scored) };
   }
 
   async list(pollId: string): Promise<Suggestion[]> {
