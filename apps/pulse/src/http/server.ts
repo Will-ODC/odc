@@ -5,6 +5,7 @@ import Fastify, {
   type FastifyInstance,
   type FastifyReply,
   type FastifyRequest,
+  type FastifyServerOptions,
 } from "fastify";
 import type { ClaimService } from "../identity/claim.js";
 import type { Voter, VoterStore } from "../identity/store.js";
@@ -15,6 +16,7 @@ import {
   type VotingStore,
 } from "../voting/store.js";
 import {
+  PollClosedError,
   SuggestionError,
   type Suggestion,
   type SuggestionStore,
@@ -53,6 +55,18 @@ export interface ServerDeps {
   suggestRateLimit?: { max: number; timeWindow: string };
   /** Overridable so tests get a ballot identity they can predict. */
   newBallotId?: () => string;
+  /**
+   * Where unplanned faults go. Off by default, which is right for tests and
+   * for a dev run that already prints its own banner — but the catch-all
+   * handler calls `request.log.error`, so without one of these a 500 is
+   * answered and then forgotten by every process that ever serves this app.
+   *
+   * The pair mirrors Fastify's own API rather than inventing a third spelling:
+   * `logger` takes `true` or a config object, `loggerInstance` takes a logger
+   * you already built. Fastify refuses both at once, so pass one.
+   */
+  logger?: FastifyServerOptions["logger"];
+  loggerInstance?: FastifyServerOptions["loggerInstance"];
   clock?: () => Date;
 }
 
@@ -64,7 +78,11 @@ export interface ServerDeps {
  * UI can show as-is. Nothing here explains how anything is counted.
  */
 export async function createServer(deps: ServerDeps): Promise<FastifyInstance> {
-  const app = Fastify({ logger: false });
+  const app = Fastify(
+    deps.loggerInstance
+      ? { loggerInstance: deps.loggerInstance }
+      : { logger: deps.logger ?? false },
+  );
   const now = deps.clock ?? (() => new Date());
 
   // Awaited, not fire-and-forget: a plugin's onRoute hook only sees routes
@@ -219,8 +237,12 @@ export async function createServer(deps: ServerDeps): Promise<FastifyInstance> {
             message: `${result.domain} is not part of a community on pulse yet.`,
           });
         case "too_many_requests":
+          // NOT `too_many_requests`, which the rate limiter already uses for
+          // the opposite fact. This 429 means a link IS on its way; that one
+          // means nothing was sent. A client that cannot tell them apart shows
+          // "check your email" to someone who will never receive one.
           return reply.code(429).send({
-            error: "too_many_requests",
+            error: "link_already_sent",
             message: "A link is already on its way. Check your email.",
           });
       }
@@ -414,13 +436,6 @@ export async function createServer(deps: ServerDeps): Promise<FastifyInstance> {
           message: "This question has a fixed set of answers.",
         });
       }
-      if (!isOpen(poll, now())) {
-        return reply.code(409).send({
-          error: "closed",
-          message: "This one has closed.",
-        });
-      }
-
       const text = (request.body as { text?: unknown } | undefined)?.text;
       if (typeof text !== "string") {
         return reply.code(400).send({
@@ -447,6 +462,14 @@ export async function createServer(deps: ServerDeps): Promise<FastifyInstance> {
           related,
         });
       } catch (error) {
+        // Closure is the store's rule, not this route's: it is checked where
+        // the poll row is held, so a question that shuts mid-request is
+        // refused rather than raced past.
+        if (error instanceof PollClosedError) {
+          return reply
+            .code(409)
+            .send({ error: "closed", message: "This one has closed." });
+        }
         if (error instanceof SuggestionError) {
           return reply
             .code(400)

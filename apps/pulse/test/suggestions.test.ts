@@ -3,6 +3,7 @@ import test from "node:test";
 import { createPoll } from "../src/voting/poll.js";
 import {
   InMemorySuggestionStore,
+  PollClosedError,
   decide,
   keywords,
   overlap,
@@ -58,17 +59,23 @@ const said = (text: string): Suggestion => ({
 });
 
 test("a seconded suggestion is not listed as related to itself", () => {
-  const decision = decide(withGrants, "we could charge members", [
-    said("Charge the members"),
-  ]);
+  const decision = decide(
+    withGrants,
+    "we could charge members",
+    [said("Charge the members")],
+    ON,
+  );
   assert.equal(decision.kind, "second");
   assert.deepEqual(decision.related, []);
 });
 
 test("pointing at the ballot still shows the suggestions near it", () => {
-  const decision = decide(withGrants, "Grants", [
-    said("Grants from the council"),
-  ]);
+  const decision = decide(
+    withGrants,
+    "Grants",
+    [said("Grants from the council")],
+    ON,
+  );
   assert.equal(decision.kind, "on_ballot");
   assert.deepEqual(
     decision.related.map((s) => s.text),
@@ -81,3 +88,23 @@ suggestionStoreConformance(
   "in memory",
   async (clock) => new InMemorySuggestionStore({ clock }),
 );
+
+test("a shut question takes no suggestion, whoever is holding the store", () => {
+  const shut = createPoll(
+    {
+      id: "p2",
+      question: "How do we pay for it?",
+      choices: ["Yes", "No"],
+      method: "single",
+      acceptsSuggestions: true,
+      closesAt: new Date(ON.getTime() - 1000),
+    },
+    ON,
+  );
+  // The rule used to live in the HTTP route, so anything else holding a store
+  // walked straight past it. This is the test that could not be written then.
+  assert.throws(
+    () => decide(shut, "something new entirely", [], ON),
+    PollClosedError,
+  );
+});

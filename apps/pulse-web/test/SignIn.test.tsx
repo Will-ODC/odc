@@ -136,7 +136,7 @@ describe("once the link is on its way", () => {
               new ApiError(
                 429,
                 "A link is already on its way. Check your email.",
-                "too_many_requests",
+                "link_already_sent",
               ),
             ),
         })}
@@ -148,6 +148,39 @@ describe("once the link is on its way", () => {
 
     expect(await screen.findByText("Check your email.")).toBeTruthy();
     expect(screen.getByText("jo@student.ubc.ca")).toBeTruthy();
+  });
+
+  /*
+   * The other 429, and the reason the first one cannot be matched on status.
+   * The rate limiter refuses without sending anything, so showing the "check
+   * your email" screen here strands the person waiting for a mail that is not
+   * coming. It must read as the failure it is.
+   */
+  it("treats a rate-limited request as a failure, not as sent", async () => {
+    render(
+      <SignIn
+        api={stubApi({
+          requestLink: () =>
+            Promise.reject(
+              new ApiError(
+                429,
+                "Too many tries just now. Try again a little later.",
+                "too_many_requests",
+              ),
+            ),
+        })}
+      />,
+    );
+
+    await userEvent.type(field(), "jo@student.ubc.ca");
+    await userEvent.click(go());
+
+    expect(
+      await screen.findByText(
+        "Too many tries just now. Try again a little later.",
+      ),
+    ).toBeTruthy();
+    expect(screen.queryByText("Check your email.")).toBeNull();
   });
 
   /*

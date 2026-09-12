@@ -1,5 +1,5 @@
 import { randomUUID } from "node:crypto";
-import type { Poll } from "./poll.js";
+import { isOpen, type Poll } from "./poll.js";
 
 /**
  * Options people add themselves.
@@ -130,6 +130,24 @@ export class SuggestionError extends Error {
   }
 }
 
+/**
+ * A suggestion arriving after the question shut.
+ *
+ * Separate from `SuggestionError` because it is not a fault in what the person
+ * wrote — the same words a minute earlier would have been taken. The HTTP edge
+ * answers it 409 rather than 400 for that reason.
+ *
+ * It lives here, beside the rule, rather than at the edge that used to hold it:
+ * a store is reached by anything holding one, not only by a route, and the
+ * shared conformance suite can hold a rule that lives in `decide`.
+ */
+export class PollClosedError extends Error {
+  constructor(readonly pollId: string) {
+    super(`poll ${pollId} has closed`);
+    this.name = "PollClosedError";
+  }
+}
+
 /** A choice the poll already lists, named so a person can go and pick it. */
 export interface BallotChoice {
   /** Position in `Poll.choices`. What a vote records. */
@@ -199,11 +217,25 @@ export function tidy(text: string): string {
   return trimmed;
 }
 
+/**
+ * The rule itself, as one function, so a store that checks early and `decide`
+ * cannot disagree about when a question is shut — or about which refusal a
+ * closed poll with unusable text earns.
+ */
+export function assertOpen(poll: Poll, now: Date): void {
+  if (!isOpen(poll, now)) throw new PollClosedError(poll.id);
+}
+
 export function decide(
   poll: Poll,
   text: string,
   existing: readonly Suggestion[],
+  now: Date,
 ): Decision {
+  // Before anything about the words: a shut question takes nothing, and every
+  // store reaches this line.
+  assertOpen(poll, now);
+
   const trimmed = tidy(text);
 
   const scored = existing
@@ -254,7 +286,7 @@ export class InMemorySuggestionStore implements SuggestionStore {
 
   async submit(poll: Poll, text: string): Promise<SubmitResult> {
     const existing = this.#byPoll.get(poll.id) ?? [];
-    const decision = decide(poll, text, existing);
+    const decision = decide(poll, text, existing, this.#clock());
     switch (decision.kind) {
       case "on_ballot":
         return {
