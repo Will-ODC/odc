@@ -189,21 +189,7 @@ export class InMemoryVotingStore implements VotingStore {
       }
     }
 
-    return {
-      pollId,
-      question: poll.question,
-      method: poll.method,
-      voters,
-      choices: poll.choices.map((label, index) => {
-        const count = counts[index] ?? 0;
-        return {
-          index,
-          label,
-          count,
-          share: voters === 0 ? 0 : round1((count / voters) * 100),
-        };
-      }),
-    };
+    return resultsFor(poll, voters, counts);
   }
 
   #requirePoll(pollId: string): Poll {
@@ -224,6 +210,34 @@ export class InMemoryVotingStore implements VotingStore {
  */
 function voteKey(pollId: string, voterId: string): string {
   return `${pollId.length}:${pollId}:${voterId}`;
+}
+
+/**
+ * A poll's results from how many people voted and how many picked each choice
+ * (indexed by position). Every store builds its results here, so the share
+ * arithmetic — of voters, not of selections, rounded to one decimal — cannot
+ * differ between them.
+ */
+export function resultsFor(
+  poll: Poll,
+  voters: number,
+  counts: readonly number[],
+): Results {
+  return {
+    pollId: poll.id,
+    question: poll.question,
+    method: poll.method,
+    voters,
+    choices: poll.choices.map((label, index) => {
+      const count = counts[index] ?? 0;
+      return {
+        index,
+        label,
+        count,
+        share: voters === 0 ? 0 : round1((count / voters) * 100),
+      };
+    }),
+  };
 }
 
 function round1(n: number): number {
