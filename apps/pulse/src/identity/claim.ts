@@ -2,7 +2,13 @@ import { createHash, randomBytes, randomUUID } from "node:crypto";
 import type { VerificationMethod } from "./allowlist.js";
 import { InvalidEmailError, parseEmail } from "./email.js";
 import type { Mailer } from "./mailer.js";
-import type { ClaimStore, PendingClaim, Voter, VoterStore } from "./store.js";
+import {
+  VoterExistsError,
+  type ClaimStore,
+  type PendingClaim,
+  type Voter,
+  type VoterStore,
+} from "./store.js";
 
 /** What came of asking for a sign-in link. */
 export type RequestResult =
@@ -144,29 +150,48 @@ export class ClaimService {
     if (claim.usedAt !== undefined) return { status: "already_used" };
     if (claim.expiresAt <= now) return { status: "expired" };
 
-    await this.#claims.markUsed(claim.tokenHash, now);
-
-    const existing = await this.#voters.byEmail(claim.email);
-    if (existing) {
-      // An opt-in given on a later request is honoured; it is never silently
-      // turned back off by someone signing in again.
-      const voter =
-        claim.proofEmailsOptIn && !existing.proofEmailsOptIn
-          ? ((await this.#voters.setProofEmails(existing.id, true)) ?? existing)
-          : existing;
-      return { status: "signed_in", voter, firstTime: false };
+    // The checks above read the link before any concurrent click could mark
+    // it. Spending is one step that says whether THIS request spent it, so a
+    // second click that got this far is told here instead of signed in twice.
+    if (!(await this.#claims.markUsed(claim.tokenHash, now))) {
+      return { status: "already_used" };
     }
 
-    const voter = await this.#voters.create({
-      id: randomUUID(),
-      email: claim.email,
-      // The community recorded at claim time. If the allowlist changes later,
-      // an existing member does not lose the community they joined.
-      community: claim.community,
-      claimedAt: now,
-      proofEmailsOptIn: claim.proofEmailsOptIn,
-    });
-    return { status: "signed_in", voter, firstTime: true };
+    const existing = await this.#voters.byEmail(claim.email);
+    if (existing) return this.#signInExisting(existing, claim);
+
+    try {
+      const voter = await this.#voters.create({
+        id: randomUUID(),
+        email: claim.email,
+        // The community recorded at claim time. If the allowlist changes
+        // later, an existing member does not lose the community they joined.
+        community: claim.community,
+        claimedAt: now,
+        proofEmailsOptIn: claim.proofEmailsOptIn,
+      });
+      return { status: "signed_in", voter, firstTime: true };
+    } catch (error) {
+      // Another link for this address was redeemed at the same moment and
+      // created the voter first. This person IS that voter: sign them in.
+      if (!(error instanceof VoterExistsError)) throw error;
+      const winner = await this.#voters.byEmail(claim.email);
+      if (!winner) throw error;
+      return this.#signInExisting(winner, claim);
+    }
+  }
+
+  async #signInExisting(
+    existing: Voter,
+    claim: PendingClaim,
+  ): Promise<RedeemResult> {
+    // An opt-in given on a later request is honoured; it is never silently
+    // turned back off by someone signing in again.
+    const voter =
+      claim.proofEmailsOptIn && !existing.proofEmailsOptIn
+        ? ((await this.#voters.setProofEmails(existing.id, true)) ?? existing)
+        : existing;
+    return { status: "signed_in", voter, firstTime: false };
   }
 }
 

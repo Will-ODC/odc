@@ -38,9 +38,22 @@ export interface PendingClaim {
   usedAt?: Date;
 }
 
+/**
+ * Thrown by `VoterStore.create` when the address already has a voter. Named,
+ * because two first sign-ins for one address can race — two links clicked at
+ * once — and the one that loses recovers by reading the winner's voter.
+ */
+export class VoterExistsError extends Error {
+  constructor(email: string) {
+    super(`a voter already exists for ${email}`);
+    this.name = "VoterExistsError";
+  }
+}
+
 export interface VoterStore {
   byEmail(email: string): Promise<Voter | undefined>;
   byId(id: string): Promise<Voter | undefined>;
+  /** Throws `VoterExistsError` when the address already has a voter. */
   create(voter: Voter): Promise<Voter>;
   /** Change the opt-in. The one field about a voter that is theirs to change. */
   setProofEmails(id: string, optIn: boolean): Promise<Voter | undefined>;
@@ -51,7 +64,12 @@ export interface VoterStore {
 export interface ClaimStore {
   put(claim: PendingClaim): Promise<void>;
   byTokenHash(tokenHash: string): Promise<PendingClaim | undefined>;
-  markUsed(tokenHash: string, usedAt: Date): Promise<void>;
+  /**
+   * Spend a link: record `usedAt` and return true — or return false, changing
+   * nothing, when it was already spent or does not exist. Checking and
+   * spending are one step, so two clicks at once cannot both spend it.
+   */
+  markUsed(tokenHash: string, usedAt: Date): Promise<boolean>;
   /** Outstanding, unexpired links for an address — used to throttle requests. */
   liveFor(email: string, now: Date): Promise<readonly PendingClaim[]>;
 }
@@ -71,7 +89,12 @@ export class InMemoryVoterStore implements VoterStore {
 
   async create(voter: Voter): Promise<Voter> {
     if (this.#byEmail.has(voter.email)) {
-      throw new Error(`a voter already exists for ${voter.email}`);
+      throw new VoterExistsError(voter.email);
+    }
+    // The id is the voter everywhere else: a second voter under it would
+    // leave the first address signing in as someone else.
+    if (this.#byId.has(voter.id)) {
+      throw new Error(`a voter already has the id ${voter.id}`);
     }
     this.#byId.set(voter.id, voter);
     this.#byEmail.set(voter.email, voter.id);
@@ -109,9 +132,11 @@ export class InMemoryClaimStore implements ClaimStore {
     return this.#claims.get(tokenHash);
   }
 
-  async markUsed(tokenHash: string, usedAt: Date): Promise<void> {
+  async markUsed(tokenHash: string, usedAt: Date): Promise<boolean> {
     const claim = this.#claims.get(tokenHash);
-    if (claim) this.#claims.set(tokenHash, { ...claim, usedAt });
+    if (!claim || claim.usedAt !== undefined) return false;
+    this.#claims.set(tokenHash, { ...claim, usedAt });
+    return true;
   }
 
   async liveFor(email: string, now: Date): Promise<readonly PendingClaim[]> {
