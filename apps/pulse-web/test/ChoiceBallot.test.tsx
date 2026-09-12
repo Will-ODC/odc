@@ -307,4 +307,21 @@ describe("seeing where a many-answer question stands", () => {
     fireEvent.click(screen.getByRole("button", { name: "Close" }));
     expect(screen.getByRole("button", { name: "See results" })).toBeTruthy();
   });
+
+  /**
+   * The same dead end as the swipe ballot's, reached the same way. Both
+   * screens hand `closed` to the one `<Outcome>`, so both owe the way out.
+   */
+  it("leaves a way back to the question when the poll closed under the press", async () => {
+    show({ cast: () => Promise.resolve({ status: "closed" as const }) });
+    fireEvent.click(screen.getByRole("button", { name: "Grants" }));
+    await screen.findByText("This one has closed.");
+
+    fireEvent.click(
+      screen.getByRole("button", { name: "Back to the question" }),
+    );
+
+    expect(screen.queryByText("This one has closed.")).toBeNull();
+    expect(screen.getByRole("button", { name: "Grants" })).toBeTruthy();
+  });
 });

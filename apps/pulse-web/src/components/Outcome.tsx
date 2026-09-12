@@ -54,10 +54,23 @@ export function Outcome({
   seeResultsRef?: RefObject<HTMLButtonElement | null> | undefined;
 }) {
   if (state.status === "closed") {
+    /*
+     * A way back to the question, because this is otherwise a terminal screen
+     * with nothing on it at all: settling has unmounted the choices, there are
+     * no counts to open, there is no answer to change, and NEXT is gated on a
+     * counted vote — so on the first question of a run, where Back is not
+     * drawn either, the person is left with two sentences and no control.
+     *
+     * It puts the question back rather than moving anyone on: which question
+     * comes next is a property of the answer, and this answer was not taken.
+     */
     return (
       <div className="outcome" role="status">
         <b>This one has closed.</b>
         <span>Nothing you do here will change it.</span>
+        <button type="button" className="outcome__change" onClick={onChange}>
+          Back to the question
+        </button>
       </div>
     );
   }
