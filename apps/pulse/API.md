@@ -1,6 +1,9 @@
 # pulse API
 
-What the server speaks today. Anything not listed here does not exist yet.
+What the server speaks today. Anything not listed here does not exist yet. A
+section headed **Planned — not served** records an accepted interface before
+implementation, as required by the service-boundary workflow; it says so
+explicitly and is not part of the current server.
 
 Every error is `{ "error": "<slug>", "message": "<one plain sentence>" }`. The
 `message` is safe to show a person as-is. No response explains how anything is
@@ -191,6 +194,45 @@ clock the client would have to re-check.
 | ------ | -------------------- | ------------ |
 | 200    | the poll             | it exists    |
 | 404    | `error: "not_found"` | no such poll |
+
+### Planned — not served: `GET /api/polls/:id/related`
+
+> **The current server does not serve this route.** This is the accepted contract for
+> the next implementation PR (ADR-0025); no current client depends on it.
+
+The polls related to this question independently of the answer anyone gave. No
+session or ballot cookie is required. This is separate from `next`: `next` is selected
+by a choice, while this route can return any number of related questions regardless of
+the ballot.
+
+```json
+{
+  "polls": [
+    {
+      "id": "community-budget",
+      "question": "Where should next year's community budget go?",
+      "method": "approval",
+      "open": true
+    }
+  ]
+}
+```
+
+Each related poll appears once. `polls` is an ordered array in the display order the
+server selected for this request. Relationship storage carries membership only, so
+clients must not treat array position as a durable rank. An empty set is
+`200 { "polls": [] }`.
+
+Related links are directed. A link from poll A to poll B does not imply B links to A.
+Self-links, repeated targets, and links to missing polls are rejected when the
+relationship is written. A target may also be the answer-specific `next` poll; a
+future client that combines both lists shows that target once, with `next` taking
+precedence.
+
+| Status | Body                 | When                   |
+| ------ | -------------------- | ---------------------- |
+| 200    | `{ polls: [...] }`   | the source poll exists |
+| 404    | `error: "not_found"` | no such source poll    |
 
 ### `GET /api/polls/:id/results`
 
