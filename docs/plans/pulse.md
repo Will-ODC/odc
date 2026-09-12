@@ -213,6 +213,122 @@ and it is the one state where that ADR's bargain is fully broken.
 
 ---
 
+## P8 — Identity becomes a credential, and a public link becomes a way in · PARTLY BLOCKED ON DECISIONS
+
+Asked for by the operator 2026-09-12: **can pulse support varying levels of
+authentication — emailed link, a public link anyone can click, in-person
+verification, an app that scans people in — or does that need an overhaul?**
+
+**It does not need an overhaul.** The seams are already in the right places and
+the extensibility pattern already exists in this repo. What it needs is for the
+email address to stop being the identity.
+
+### Why this is cheap now and gets dearer
+
+Four properties make the blast radius small, and they are worth not breaking:
+
+- **Voting does not depend on identity at all.** `vote.voter_id` is the browser's
+  ballot cookie and is explicitly **not** a foreign key to `voter` — the DDL says
+  so. Adding sign-in methods therefore cannot touch the vote path. Everything
+  below stays inside `apps/pulse/src/identity/`, six files.
+- **`pending_claim` is already method-agnostic** apart from one column: a token
+  hash, a community, an expiry, and a one-use marker.
+- **Community is decided at claim time and stored**, not re-derived from the
+  address on read, so a different way of deciding it does not ripple.
+- **The stores are already interfaces with two implementations each** (#156,
+  #158), so the seam to widen is the one the conformance suite already guards.
+
+Against that, `email` is not a field on the voter — it **is** the key:
+`voter.email not null unique` described in the DDL as "the natural key",
+`VoterStore.byEmail` as the primary lookup, `ClaimStore.liveFor(email)` for
+throttling, and `VoterExistsError(email)` carrying it into the error type.
+**Nothing anywhere records how a person was verified.** There is no column for
+it, which is the actual gap: levels cannot vary if nothing stores which level
+applied.
+
+**Timing is the whole argument.** Nothing is deployed and there are zero
+production rows, so this is the cheapest it will ever be. P4 (a real `Mailer`)
+and P6 (poll authoring) both build on sign-in, and any screen that treats
+"sign in" as "type your address" is another place to unpick later.
+
+### The shape, and the precedent it follows
+
+ADR-0021 already solved this problem once, for voting: `polls.method` is plain
+`text` with a `method_params jsonb` beside it, **so that adding a vote type is
+never a migration**. Apply the same shape to identity and the four methods above
+are rows, not releases.
+
+```
+voter              -- no email column; identity, community, assurance
+voter_credential   -- (kind, value_hash) PK, voter_id, params jsonb, verified_at
+                   -- kind: 'email' today; 'in_person', 'scan' later, no migration
+invite_link        -- the public link: community, expiry, revocation, use cap
+```
+
+A credential is **something a person can present again to be recognised**. That
+is the line that decides what goes in the table, and it is why a public link is
+a separate thing rather than a credential kind (see decision D1).
+
+### Build order — four branches, each shippable alone
+
+1. **Credential model, no behaviour change.** `002_*.sql` moves `voter.email`
+   into `voter_credential` as kind `email`; `byEmail` becomes
+   `byCredential(kind, value)`; `liveFor(email)` becomes `liveFor(kind, subject)`;
+   `VoterExistsError` carries a credential, not an address. **Every existing test
+   passes unchanged** — that is this branch's acceptance criterion, and it is
+   what makes the rest safe. The two sign-in races #158 closed (double-click on
+   one link; two links for one address at once) keep their tests **and keep
+   passing**; they are the regression most likely to be reintroduced here.
+2. **`assurance` recorded.** A plain `text` column on `voter`, set at claim time.
+   Recorded only — nothing reads it yet. See D2.
+3. **Invite links.** The `invite_link` table, a redeem path, and minting. **This
+   branch is blocked on D3** and shares P6's problem: pulse has no operator
+   surface of any kind, so there is nowhere for "create a link" to live.
+4. **The client's side of it** — a landing screen for a clicked link, and a `Me`
+   whose address is now optional. `apps/pulse-web`, `.claude/skills/odc-ui`.
+
+**Deliberately not in this item: per-poll minimum assurance.** Recording a level
+and _enforcing_ one are different changes, and the second touches the vote path
+this item is careful not to touch. Until it ships, levels are recorded and inert
+— say so rather than implying the door is guarded.
+
+### Decisions this needs first
+
+- **D1 — does a public-link voter survive their session?** A shared link
+  identifies nobody, so each click can only mint a new voter. **Recommendation:
+  no credential row; record provenance on the voter and accept that a signed-out
+  public-link voter is gone and a fresh click is a new person.** The alternative
+  — a durable secret held in a cookie — is real work and buys little. Whichever
+  is chosen, **write down the consequence**, because it is visible to users.
+- **D2 — what are the levels, and are they ordered?** Naming them is cheap;
+  committing to a total order is not, and D-anything about ordering only matters
+  once something enforces it. Suggest naming `none`, `public_link`, `email` now
+  and deferring the order to the item that gates on it.
+- **D3 — who mints an invite link, and where?** There is no admin route, no
+  poll-creation route, and no production entry point. This is the same hole P6
+  hits, and the two should probably be answered together rather than growing two
+  different admin surfaces.
+- **D4 — can one link serve more than one community?** `allowed_domain` is keyed
+  `(community, domain)` precisely so one domain may prove several (ADR-0023), and
+  P2 exists because somebody must then pick. A link that named several communities
+  would inherit that whole problem; a link that names exactly one avoids it.
+  **Recommendation: one link, one community.**
+
+### What the operator said, and what is honest about it
+
+The ask was framed as preventing double votes. **A public link cannot do that**
+— it is a shared secret, usable from any number of browsers — and the operator
+has already said plainly that it is meant as a filter, not a guarantee. Recorded
+here so nobody re-argues it: expiry, revocation, a use cap and rate limiting make
+a public link a real speed bump, and that is all it is claimed to be.
+
+Worth stating beside it, because it is easy to assume otherwise: **pulse does not
+prevent double voting today either.** Deduplication is per browser, `API.md` calls
+it "weak on its own", and signing out and back in is documented as counting the
+same person twice. Any item that claims to improve on that is making a change to
+ballot secrecy — no stored record currently connects a person to an answer — and
+that is an ADR, not an implementation detail.
+
 ## Not in this file
 
 - **Infrastructure and a Docker dev environment that resembles production.**
