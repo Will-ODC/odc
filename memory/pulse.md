@@ -239,6 +239,46 @@ only guard** — the conformance suite owes a case that writes a cross-poll pair
 and is refused, against **both** implementations, the in-memory one having no
 foreign keys at all.
 
+### Landed 2026-09-12 — storage is real, and a `pnpm dev` that keeps things
+
+| Squash    | PR   | What                                               |
+| --------- | ---- | -------------------------------------------------- |
+| `97aeff6` | #158 | identity on Postgres, and two sign-in races closed |
+| `59b76c0` | #159 | the suggestion store on Postgres                   |
+| `1efd457` | #160 | the dev server keeps what it is given, in Postgres |
+
+**The four stores and the conformance suite are done.** With `PULSE_DATABASE_URL`
+set, all five stores switch together — voters, votes, suggestions, sign-in links
+and the allowlist — and without it everything stays in memory exactly as before,
+so the demo still runs with nothing installed. **Item 1 of the eight-item list
+below is closed, and so is item 3** (`PostgresDomainSource` plus `allowDomain`
+make the allowlist rows, as `CLAUDE.md` always promised).
+
+**Verified end to end on 2026-09-12, not just by tests:** sign in with a printed
+link, vote, get `counted` with live results, kill the server, start it again —
+same voter, vote still there, no crash on reseed. This is the first time a pulse
+session has survived its own process.
+
+**Two races #158 closed, both with a test that failed first.** Two clicks on one
+link at once both signed in; `markUsed` now checks and spends in one step and says
+whether _this_ call spent it, so the second click is told `already_used`. Two links
+for one address redeemed at once made the slower one fail; `VoterStore.create`
+throws `VoterExistsError` and the loser is signed in as the winner's voter, keeping
+its own opt-in.
+
+**The three PRs all went CONFLICTING before merge, and none of the conflicts was
+real.** Each branch still carried the original commits of #156 (and #160 those of
+#157) while master had them squashed, so git saw the same files added twice. This
+is exactly the case `.claude/skills/odc-pipeline` describes, and its fix — replay
+only the child's own work with `git rebase --onto origin/master <old-base-tip>` —
+is the right one. **It was NOT the fix used here, because force-push was
+unavailable to the session.** Instead master was merged in and the conflicted
+files resolved to the content the clean rebase produces, with the merged tree
+compared byte-for-byte against that rebase before pushing. Same master, extra
+commits left on the branches. **Prefer the rebase when you can push one**; if you
+cannot, verify the tree rather than trusting the conflict markers, because
+resolving these by hand re-applies the base's changes on top of themselves.
+
 ## Not built
 
 - **The bite/case screens and the action screen.** The ballot exists, since #140
@@ -250,16 +290,14 @@ foreign keys at all.
 - **Pillar 3, the path to action** in any form: soliciting ideas, volunteer time
   or donations, and the proof-of-what-happened email. `proofEmailsOptIn` is
   collected at sign-in and currently leads nowhere.
-- **Real mail delivery and real persistence.** `src/identity/mailer.ts` and the
-  stores are what the tests run against; nothing is durable. **Persistence is now
-  decided but not built** — Postgres, per ADR-0020, with the schema in ADR-0021,
-  and CI has a database to run against as of #143. What is still owed is the work
-  itself. **The migration runner and the schema landed in #150**; what remains is
-  the four store implementations and the shared conformance suite that must run
-  the same tests against both the in-memory and Postgres versions. Nothing in
-  `src/` writes to a database yet, so a `pnpm dev` session still keeps nothing.
-  No `Mailer` implementation exists anywhere, so nobody outside a terminal can
-  sign in — that half is undecided as well as unbuilt.
+- **Real mail delivery.** ~~and real persistence~~ — **persistence is BUILT as of
+  2026-09-12** (#158, #159, #160): Postgres per ADR-0020 with ADR-0021's schema,
+  the runner from #150, and a `pnpm dev` that keeps everything across a restart.
+  Do not re-do it. What is still missing is the other half: **`ConsoleMailer` is
+  the only `Mailer` anywhere**, so sign-in links print to a terminal and nobody
+  who is not watching your console can sign in. That is now the single largest
+  blocker to anyone but the operator using pulse, and it is undecided as well as
+  unbuilt — no provider has been chosen.
 
 ### Asked for by the operator, 2026-08-25
 
@@ -375,6 +413,30 @@ decision 4).
      that was written assuming it never had to be.
   8. `@fastify/rate-limit` defaults to an in-memory store — correct for one
      process, useless across several. Multi-instance needs a shared store.
+
+### How close is a deploy? Assessed 2026-09-12, by reading the code
+
+Storage was the visible blocker, so finishing it feels like the finish line. It
+is not. **Four things block a deploy and three of them have no code at all** —
+checked directly, not inferred:
+
+| Blocker                       | State                                                                                                                                                                                                          |
+| ----------------------------- | -------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- |
+| **No `Mailer`**               | `ConsoleMailer` is the only `implements Mailer` in the tree. **This is the real gate** — without it a deployed pulse is unusable by anyone but whoever is reading the console.                                 |
+| **No production entry point** | `src/dev-server.ts` is the only server file, and `assertDevelopment` guards it twice on purpose. Needs a sibling `main`, **never an edit to it** — item 5 below.                                               |
+| **No poll creation**          | There is still no `POST /api/polls` in `src/http/server.ts`; polls are the `SEED` literal in `dev-server.ts`. A deployed pulse has nothing to vote on. Item 6, and still the gap most likely to be found late. |
+| **No Dockerfile**             | Still none anywhere in the repo, on any branch. `apps/pulse/docker-compose.yml` now exists but brings up **Postgres only** — there is no image of the app to run. `just up` still starts nothing and exits 0.  |
+
+Already fine, so do not re-litigate: **item 4's cookie half is correct** —
+`src/http/server.ts` defaults `secure: deps.secureCookies ?? true`, and
+`dev-server.ts` is the only thing that sets it false, guarded. Only the
+"`PULSE_SESSION_SECRET` as a managed secret" half is outstanding.
+
+Rough shape of the remaining work: **Mailer, a production entry point, and poll
+creation are about three PRs the size of #158–#160** and would produce something
+another person could actually use. Pillars 1 and 2 would then be deployable;
+the middle of the story and pillar 3 would still be missing, so that is a demo,
+not a product.
 
 ## Open decisions
 
@@ -587,6 +649,23 @@ decision 4).
 
 ## Live cautions
 
+- **`polls` is the only plural table; the other seven are singular.**
+  `polls`, then `poll_choice`, `vote`, `vote_choice`, `suggestion`, `voter`,
+  `pending_claim`, `allowed_domain`. It reads at its worst inside `poll_choice`,
+  which declares `references polls (id)` — both conventions on one line. This is
+  **inherited, not a slip**: ADR-0021's own schema sketch writes `polls` beside
+  `poll_choice`, and `001_initial.sql` copied it faithfully, as its header says
+  it is doing. Cosmetic, but every query pays it. If it is ever standardised,
+  singular is the cheaper end (seven of eight already are) and it **cannot be a
+  hand-edit of `001_initial.sql`** — #150's runner refuses a file whose
+  checksum changed after it ran, by design — so it needs a `002_*.sql` doing
+  `alter table polls rename to poll`, plus the seven call sites. Raised
+  2026-09-12; no decision taken.
+- **The README's demo details drift from the seed.** As of 2026-09-12 the seeded
+  polls are `ads-free`, `pay-for-it` and `ads-allowed`, and the cast route is
+  `POST /api/polls/:id/votes` — **plural**. Both are easy to guess wrong from the
+  prose; check `src/dev-server.ts` and `API.md` rather than the README when a
+  smoke test 404s.
 - **`pnpm run test` is `turbo run test`, and turbo 2 strips undeclared
   environment variables.** A variable set on a CI job does **not** reach the
   task unless `turbo.json` declares it. On 2026-09-02 this made PR #143 go green

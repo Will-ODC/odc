@@ -33,14 +33,17 @@ Do not apply charter rules to `apps/**`, and do not relax them anywhere else.
 - **Pulse:** pillars 1 and 2 are on master — magic-link identity, the voting
   core, a story UI you can walk end to end, a results panel (#140), an answer
   you can change (#146, ADR-0022), and since #149 the sign-in and redeem screens,
-  so the client **can** now sign someone in. **Storage has started:** the schema
-  and migration runner landed in #150 (ADR-0020, ADR-0021, and ADR-0023 for what
-  was dropped) — but **no store writes to it yet**, so a `pnpm dev` session still
-  keeps nothing. Owed next: the four stores and the shared conformance suite.
-  Still missing: the middle of the story (bite/case/action screens), pillar 3,
-  and any `Mailer` — nobody outside a terminal can sign in. **Poll authoring is
-  decided in principle** (crowdsourced questions, computed navigation; ADR-0024)
-  and blocked on rules for filtering, posting rights and moderation.
+  so the client **can** now sign someone in. **Storage is DONE** — the schema and
+  runner in #150, then the four stores and the shared conformance suite in #158,
+  #159 and #160 (ADR-0020, ADR-0021, ADR-0023). A `pnpm dev` session with
+  `PULSE_DATABASE_URL` set now **keeps everything across a restart**, verified end
+  to end on 2026-09-12. Still missing: the middle of the story (bite/case/action
+  screens), pillar 3, and any `Mailer` — **nobody outside a terminal can sign in,
+  and that is now the largest single blocker.** A deploy also needs a production
+  entry point, poll creation and a Dockerfile; **none of the three exists** (see
+  the dated assessment in the entry). **Poll authoring is decided in principle**
+  (crowdsourced questions, computed navigation; ADR-0024) and blocked on rules for
+  filtering, posting rights and moderation.
   **Two known bugs are recorded and unstarted.** → `memory/pulse.md`
 
 ## Load order
