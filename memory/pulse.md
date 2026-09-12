@@ -279,6 +279,49 @@ commits left on the branches. **Prefer the rebase when you can push one**; if yo
 cannot, verify the tree rather than trusting the conflict markers, because
 resolving these by hand re-applies the base's changes on top of themselves.
 
+### Identity and authentication levels — decided 2026-09-12, NOT started
+
+The operator asked whether pulse can carry varying levels of authentication
+(emailed link, public link, in-person, an app that scans people in) or whether
+that needs an overhaul. **It does not.** `vote.voter_id` is the ballot cookie and
+explicitly not a foreign key to `voter`, so sign-in methods cannot disturb voting.
+The plan is `docs/plans/pulse.md` **P8-P11**; the decisions are recorded there and
+are not repeated here. Two things worth carrying in memory:
+
+- **`email` is not a field on the voter, it is the key** — named "the natural key"
+  in the DDL and reached through `byEmail`, `liveFor(email)` and
+  `VoterExistsError`. Nothing anywhere records **how** a person was verified.
+  That missing fact is the whole change, and it gets dearer every week: P4 (the
+  `Mailer`) and P6 (poll authoring) both build on sign-in.
+- **The interaction principle the operator named:** "I want the app to behave like
+  we are interacting now, where users decide on bite-sized decisions, which models
+  the community." A poll that wants a higher level is **one more small decision,
+  offered and declinable** — never a wall. That binds the gate design in P10.
+
+**Two claims made in that session that the code contradicts — check before
+repeating them:**
+
+- **There is no anonymity indicator in the client.** `apps/pulse-web` has none and
+  `docs/mockups/pulse-screens/` has none; "anonymous" appears only as sample poll
+  text in ODC-core decks. Showing anonymity is new UI, not an asset swap.
+- **ADR-0025 is accepted and NOT built.** No related-poll table exists and
+  `API.md:198` lists `GET /api/polls/:id/related` as "Planned — not served". The
+  declinable gate in P10 depends on it, because `next` hangs off the choice a
+  skipper did not make.
+
+**The trap this work will hit, recorded once:** changing an answer is an
+**upsert**, not a new row (`voting/pg-store.ts:138-145`), so any rule phrased as
+"stamped once and never changed" is undefined for a re-cast — and ADR-0022 makes
+re-casting a promise, so it is routine. Settled: a stamp describes the answer
+currently standing. Locking the vote instead would have cost a confirm press on
+every question or superseding ADR-0022, whose one-press exception is **justified
+by changeability**.
+
+Both drafts of this plan were reviewed in a fresh context and both returned
+REQUEST CHANGES; the second found two decisions dropped in a split, a column and
+a table with no owner in the build order, and the re-cast hole above. **Neither
+review's findings were things the authoring context could see.**
+
 ## Not built
 
 - **The bite/case screens and the action screen.** The ballot exists, since #140

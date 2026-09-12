@@ -43,7 +43,10 @@ Do not apply charter rules to `apps/**`, and do not relax them anywhere else.
   entry point, poll creation and a Dockerfile; **none of the three exists** (see
   the dated assessment in the entry). **Poll authoring is decided in principle**
   (crowdsourced questions, computed navigation; ADR-0024) and blocked on rules for
-  filtering, posting rights and moderation.
+  filtering, posting rights and moderation. **Varying levels of sign-in are
+  designed and unstarted** — `docs/plans/pulse.md` P8-P11, decided 2026-09-12;
+  P8 is ready, the rest wait on an ADR and on an admin surface that does not
+  exist.
   **Two known bugs are recorded and unstarted.** → `memory/pulse.md`
 
 ## Load order

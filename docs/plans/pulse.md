@@ -61,10 +61,11 @@ Every item carries exactly one:
 authoring.** Everything else in this file is unordered, deliberately — do not
 read position on the page as priority, and do not assign one.
 
-Two things are **in flight and are therefore not items here**: the storage work
-(migration, runner and the four stores — PR #150 and what follows it) and
-answer-independent related polls (draft PR #148). Go to those PRs, not to this
-file.
+**Work in flight is not an item here — go to its PR.** Check the open PRs
+rather than this paragraph; a hardcoded list of what is in flight is wrong the
+next time anyone opens a branch. The storage work and answer-independent related
+polls were both listed here as in flight and have since landed (#150, #156, #157,
+#158, #159, #160; and ADR-0025 via #148).
 
 ---
 
@@ -111,7 +112,7 @@ It has three jobs, and the third is new:
 to the graph a run walks. None of that is decided. Two pieces of it are decided
 or in flight and should be read first — ADR-0021 rules that **ordering is a
 query, not stored data** (a curated group, a relevance ranking, and random are
-all resolved at request time), and draft PR #148 designs the related-poll edges
+all resolved at request time), and ADR-0025 defines the related-poll edges (landed, #148)
 this screen would batch.
 
 Also owed by this item and not by #148: **there is no `GET /api/polls`.** Every
@@ -211,123 +212,236 @@ one-press cast with neither a confirming press nor the reassurance sentence —
 client/server disagreement to reach, so it is unlikely rather than impossible,
 and it is the one state where that ADR's bargain is fully broken.
 
+## The identity work — P8 to P11, and why it is four items
+
+Asked for by the operator 2026-09-12: **can pulse carry varying levels of
+authentication — emailed link, public link, in-person verification, an app that
+scans people in — or does that need an overhaul?** It does not. But the work
+splits four ways because each part is gated differently, and only the first is
+ready.
+
+### The interaction principle behind all four
+
+**"I want the app to behave like we are interacting now, where users decide on
+bite-sized decisions, which models the community."** — the operator, 2026-09-12.
+
+Pulse already has the machinery: `poll_choice.next_poll_id` means an answer picks
+the next question, and ADR-0024 makes computed navigation primary. This states the
+intent behind it: the run of small decisions **is** the product. Two consequences
+bind every item below — **never interrupt a run with a wall** (a poll wanting a
+higher level is one more small decision, offered and declinable), and **asking for
+identity is itself one of those decisions**, offered when it buys something rather
+than demanded at the door.
+
+### Decided by the operator, 2026-09-12 — do not re-open
+
+1. **Three levels, ordered: `none` < `link` < `email`.** Stored as words with the
+   order in code, per ADR-0021's `polls.method` precedent, so `in_person` and
+   `scan` are added later **with no migration**. The long-term direction named is
+   **people verifying each other** — bumping phones or scanning a QR to confirm a
+   real meeting — which is a rung for now, with `voter_credential.params` holding
+   "who vouched" when it arrives.
+2. **Votes carry `community` and `assurance`** — not who voted, what kind of
+   voter.
+3. **A stamp describes the answer currently standing.** Signing in does **not**
+   re-stamp votes nobody re-cast; but re-casting is a fresh act and is stamped
+   afresh. This keeps ADR-0022 whole: a vote stays changeable, so the one-press
+   cast keeps the justification it depends on.
+4. **Anonymous voting stays** — `community NULL, assurance 'none'`.
+5. **Signing in upgrades the person, never their past votes.** A guest who
+   verifies keeps their identity and gains the credential — unless the address
+   already belongs to someone, in which case they become that person and the
+   guest identity is dropped. **Nothing ever merges.**
+6. **Anonymity is shown, not hidden.** **No such indicator exists today** —
+   `apps/pulse-web` has none and `docs/mockups/pulse-screens/` has none; the word
+   appears only as sample poll text in ODC-core decks. New UI, not an asset swap.
+   It should eventually link to an explanation of data privacy and how pulse is
+   paid for; that copy does not exist.
+7. **The address is stored readably.** The client renders "Signed in as …"
+   (`Redeem.tsx:135`, `Me.email` non-optional at `api/types.ts:105`) and
+   `proofEmailsOptIn` promises mail that cannot be sent to a fingerprint. The
+   operator's reasoning, recorded: storing addresses is what nearly every site
+   does, and pulse's sensitive asset is vote attribution, which is protected
+   structurally rather than by hiding addresses.
+8. **A filtered tally is hidden below five people.** Filtering to three members of
+   one community is close to naming how they voted.
+9. **A gate mid-run is offered and declinable** — verify, or skip that question
+   and carry on. **This depends on ADR-0025 being built** (see P10).
+10. **Gating a poll later does not disturb votes already cast.** They keep the
+    stamp they had and keep counting.
+
+### What is still open
+
+- **Does a public-link voter survive signing out?** Sign-out clears the ballot
+  cookie (`server.ts:300-301`) and a link voter has no credential to re-present,
+  so today they are gone. User-visible either way; confirm it is intended.
+- **Does `/api/me` still return an address?** `publicVoter` returns
+  `voter.email` (`server.ts:502`) and `API.md` documents `{ id, email, community }`.
+  P8 must own that shape and the `API.md` edit, or say it is unchanged.
+- **What does `proofEmailsOptIn` mean for someone with no address?** Stored on
+  `voter` and `pending_claim`, asserted in four tests, rendered at
+  `SignIn.tsx:172-183`.
+- **May a filtered tally imply one person one vote?** It may not. `API.md:160-164`
+  records that signing out and back in counts the same person **twice**. A result
+  labelled "verified members only" reads as a stronger claim than pulse can
+  support, and the label must not overstate it.
+- **Is a `community` claimed via a public link worth the same as one proven by a
+  domain?** Today both would sit in a tally indistinguishable. They are not the
+  same evidence.
+- **P2 interacts.** P2 changes how the community is decided at claim time, which
+  is what makes P8 cheap. Whichever lands second is rework.
+
+## P8 — Identity becomes a credential · READY TO BUILD
+
+The one piece that needs no admin surface and no unwritten ADR.
+
+**Why the blast radius is small.** `vote.voter_id` is the browser's ballot cookie
+and the DDL says explicitly it is **not** a foreign key to `voter`
+(`001_initial.sql:64-67`), so changing how people sign in cannot disturb voting.
+Community is decided at claim time and stored (`claim.ts:112`), not re-derived.
+The stores are interfaces with two implementations each (#156, #158), and the
+conformance suite already guards the seam that widens.
+
+Against that, `email` is not a field on the voter — it **is** the key
+(`001_initial.sql:114-115`), reached through `VoterStore.byEmail` (`store.ts:54`),
+`ClaimStore.liveFor(email)` (`store.ts:74`) and `VoterExistsError`
+(`store.ts:46-51`). **Nothing records how a person was verified.**
+
+```
+voter              id, community, assurance   (no email column)
+voter_credential   (kind, value) -> voter_id, params jsonb, verified_at
+pending_claim      + kind; `email` becomes a generic subject column;
+                   the index at 001_initial.sql:139 moves with it
+```
+
+**Scope, in full — this is larger than "move one column".** The `assurance`
+column on `voter` and the ordered level vocabulary are **this item's**, not a
+later one's. `liveFor(email)` → `liveFor(kind, subject)` is incoherent over a
+table that only knows addresses, so `pending_claim` changes here too: its
+Postgres query is `where email = $1` (`pg-store.ts:144`), called from
+`claim.ts:105`. Decision 5's upgrade path — a guest who verifies keeps their
+identity, or becomes the existing person — is also this item's; today `redeem`
+mints an unrelated voter with `randomUUID()` (`claim.ts:165`) and never touches
+the ballot cookie, so the path does not exist yet.
+
+**What it must prove.** "Every existing test passes unchanged" is **not
+available**: this renames the methods tests call by name —
+`conformance/voter-store.ts` (`byEmail` at 41, 43, 115; `VoterExistsError` at 4,
+95, 108, 121), `conformance/claim-store.ts:96`, `claim.test.ts:299`,
+`http-sign-in.test.ts:310`. The honest criterion is **every existing behavioural
+assertion still holds, with call sites renamed mechanically in the same diff.**
+
+And passing them would not catch the regression that matters. Of the two races
+#158 closed, race 1 (one link double-clicked) lives in `markUsed` and is
+untouched. **Race 2 (two links, one address) is exactly what changes**: today
+`PgVoterStore.create` is a single insert guarded by the `voter.email` unique index
+and recovered via `isUniqueViolation` (`pg-store.ts:40-64`); it becomes two
+inserts across two tables with uniqueness moved to `voter_credential` — new
+transaction boundary, new error discrimination, and a new failure mode, **a voter
+with no credential**. The tests that look like cover are not: `claim.test.ts:84`
+uses the in-memory store, which has no concurrency, and
+`conformance/voter-store.ts:89` is sequential. **`pg-identity-stores.test.ts` has
+five tests and none creates concurrently.** So this item **adds** tests: two
+concurrent `create` calls for one credential against Postgres (row-hold template
+at `pg-identity-stores.test.ts:32`), and a case proving voter+credential is
+written atomically. `memory/pulse.md:231` records "tests that could not fail"
+four times; this would be the fifth.
+
+**Note the tension with P10:** a public-link voter is _by construction_ a voter
+with no credential — the failure mode above. Either this item's model
+accommodates a credential-less voter deliberately, or P10 records that a link
+voter is a `voter` row with `assurance 'link'` and no credential, unrecoverable
+once signed out. **Decide it here, not there.**
+
+**Migration traps.** Do **not** hard-code a number — P10, P11 and P6 all want one
+and the runner refuses a file numbering below one already applied
+(`migrate.ts:118`, `:194-215`). `test/migrations.test.ts:30-54` allows exactly two
+column defaults, `'{}'::jsonb` and `1`, as set-equality — a defaulted `assurance`
+fails it. Timestamps must be `timestamptz(3)` (`migrations.test.ts:56-76`).
+
+**One seam to fold in, not duplicate.** `allowlist.ts:30-38` defines
+`VerificationMethod`, whose docstring says invite codes and vouching "plug in here
+without any caller changing" and whose `check(email)` is itself email-shaped.
+Reconcile `voter_credential.kind` with it rather than adding a third word for the
+same idea.
+
+## P9 — Votes say what kind of voter cast them · BLOCKED ON A DECISION
+
+Adds `community` and `assurance` to `vote`, written at cast time, plus the
+anonymity indicator.
+
+**Blocked because it changes a promise `API.md` makes in plain words:**
+
+> No stored record connects an address to an answer, because the vote was never
+> written down beside one. — `API.md:144-145`
+
+The cast route reads no session today, deliberately (`server.ts:337-341`), and
+this makes it the **first** handler to touch both the ballot identity and the
+session cookie. In a community of three, `community` on a vote row is close to an
+identifier — and that is about _storage_, which decision 8's display floor does
+not address. **Write the ADR before the code**, and put `API.md` in scope.
+
+**Wider than "the route".** `castVote(pollId, voterId, ballot)`
+(`voting/store.ts:61-65`) has nowhere to put a stamp and `Vote`
+(`voting/store.ts:17-23`) is shared, so this touches the interface, **both**
+stores, the conformance suite and `server.ts:353`. Re-casting is an upsert
+(`voting/pg-store.ts:138-145`), and per decision 3 the `do update` **must** carry
+the new stamp.
+
+**Recorded only — nothing reads it yet.** `results(pollId)`
+(`voting/store.ts:68`) takes a poll id, `Results` (`:37-44`) has no filter, and
+the tally is an unfiltered count (`voting/pg-store.ts:199-210`). Reading and
+filtering — with decision 8's floor of five — is a further piece of work. Until
+it lands, levels are recorded and inert; say so rather than implying the door is
+guarded.
+
+## P10 — Public links, and polls that ask for more · BLOCKED ON A DECISION
+
+**Decided:** a link carries **one community**, an **expiry** and an **off
+switch** — no use cap, which needs an exact counter under simultaneous clicks for
+a limit anyone defeats by minting a second link.
+
+```
+invite_link   id, community, token_hash, expires_at, revoked_at, created_at
+polls         + min_assurance
+```
+
+All timestamps `timestamptz(3)`; a defaulted `min_assurance` trips the guard at
+`migrations.test.ts:30` — see P8's traps, they apply here unchanged.
+
+**A public link is a shared secret.** Anyone who sees it can use it from any
+number of browsers, so it gives **no deduplication at all**. The operator has
+said plainly it is meant as a filter; expiry and revocation are what make it a
+real speed bump. Recorded so nobody re-argues it.
+
+**Decision 9 depends on ADR-0025, which is accepted and NOT built.** Skipping a
+gated question needs somewhere to go, and `next` hangs off the choice you did not
+make. ADR-0025's answer-independent related links are exactly that mechanism —
+but there is no related-poll table in `001_initial.sql` and `API.md:198` lists
+`GET /api/polls/:id/related` as "Planned — not served". **Building ADR-0025 is a
+prerequisite for the skip path.**
+
+**Blocked on P11**, and on three decisions of its own: who may mint a link for
+which community; whether a gated poll hides itself or explains what is needed;
+and whether a `community` claimed by link is presented differently from one
+proven by a domain.
+
+## P11 — An admin surface · BLOCKED ON A DECISION
+
+Chosen by the operator over a throwaway script. **Two items point at this and it
+had no entry**, which is what this file exists to prevent.
+
+Needed by P10 (minting links, setting `min_assurance`) and by P6 (poll
+authoring). Nothing of it exists: `src/http/server.ts` serves eleven routes and
+none is administrative, there is no admin concept, no admin sign-in, and no
+permission rules.
+
+**Undecided, and all of it is "what is an admin?":** what makes someone one; how
+they sign in; whether one admin acts for any community or only their own; and
+whether this is a screen in `apps/pulse-web` or a separate surface. Read P6
+before starting — one surface should serve links, polls and gates rather than
+growing two.
 ---
-
-## P8 — Identity becomes a credential, and a public link becomes a way in · PARTLY BLOCKED ON DECISIONS
-
-Asked for by the operator 2026-09-12: **can pulse support varying levels of
-authentication — emailed link, a public link anyone can click, in-person
-verification, an app that scans people in — or does that need an overhaul?**
-
-**It does not need an overhaul.** The seams are already in the right places and
-the extensibility pattern already exists in this repo. What it needs is for the
-email address to stop being the identity.
-
-### Why this is cheap now and gets dearer
-
-Four properties make the blast radius small, and they are worth not breaking:
-
-- **Voting does not depend on identity at all.** `vote.voter_id` is the browser's
-  ballot cookie and is explicitly **not** a foreign key to `voter` — the DDL says
-  so. Adding sign-in methods therefore cannot touch the vote path. Everything
-  below stays inside `apps/pulse/src/identity/`, six files.
-- **`pending_claim` is already method-agnostic** apart from one column: a token
-  hash, a community, an expiry, and a one-use marker.
-- **Community is decided at claim time and stored**, not re-derived from the
-  address on read, so a different way of deciding it does not ripple.
-- **The stores are already interfaces with two implementations each** (#156,
-  #158), so the seam to widen is the one the conformance suite already guards.
-
-Against that, `email` is not a field on the voter — it **is** the key:
-`voter.email not null unique` described in the DDL as "the natural key",
-`VoterStore.byEmail` as the primary lookup, `ClaimStore.liveFor(email)` for
-throttling, and `VoterExistsError(email)` carrying it into the error type.
-**Nothing anywhere records how a person was verified.** There is no column for
-it, which is the actual gap: levels cannot vary if nothing stores which level
-applied.
-
-**Timing is the whole argument.** Nothing is deployed and there are zero
-production rows, so this is the cheapest it will ever be. P4 (a real `Mailer`)
-and P6 (poll authoring) both build on sign-in, and any screen that treats
-"sign in" as "type your address" is another place to unpick later.
-
-### The shape, and the precedent it follows
-
-ADR-0021 already solved this problem once, for voting: `polls.method` is plain
-`text` with a `method_params jsonb` beside it, **so that adding a vote type is
-never a migration**. Apply the same shape to identity and the four methods above
-are rows, not releases.
-
-```
-voter              -- no email column; identity, community, assurance
-voter_credential   -- (kind, value_hash) PK, voter_id, params jsonb, verified_at
-                   -- kind: 'email' today; 'in_person', 'scan' later, no migration
-invite_link        -- the public link: community, expiry, revocation, use cap
-```
-
-A credential is **something a person can present again to be recognised**. That
-is the line that decides what goes in the table, and it is why a public link is
-a separate thing rather than a credential kind (see decision D1).
-
-### Build order — four branches, each shippable alone
-
-1. **Credential model, no behaviour change.** `002_*.sql` moves `voter.email`
-   into `voter_credential` as kind `email`; `byEmail` becomes
-   `byCredential(kind, value)`; `liveFor(email)` becomes `liveFor(kind, subject)`;
-   `VoterExistsError` carries a credential, not an address. **Every existing test
-   passes unchanged** — that is this branch's acceptance criterion, and it is
-   what makes the rest safe. The two sign-in races #158 closed (double-click on
-   one link; two links for one address at once) keep their tests **and keep
-   passing**; they are the regression most likely to be reintroduced here.
-2. **`assurance` recorded.** A plain `text` column on `voter`, set at claim time.
-   Recorded only — nothing reads it yet. See D2.
-3. **Invite links.** The `invite_link` table, a redeem path, and minting. **This
-   branch is blocked on D3** and shares P6's problem: pulse has no operator
-   surface of any kind, so there is nowhere for "create a link" to live.
-4. **The client's side of it** — a landing screen for a clicked link, and a `Me`
-   whose address is now optional. `apps/pulse-web`, `.claude/skills/odc-ui`.
-
-**Deliberately not in this item: per-poll minimum assurance.** Recording a level
-and _enforcing_ one are different changes, and the second touches the vote path
-this item is careful not to touch. Until it ships, levels are recorded and inert
-— say so rather than implying the door is guarded.
-
-### Decisions this needs first
-
-- **D1 — does a public-link voter survive their session?** A shared link
-  identifies nobody, so each click can only mint a new voter. **Recommendation:
-  no credential row; record provenance on the voter and accept that a signed-out
-  public-link voter is gone and a fresh click is a new person.** The alternative
-  — a durable secret held in a cookie — is real work and buys little. Whichever
-  is chosen, **write down the consequence**, because it is visible to users.
-- **D2 — what are the levels, and are they ordered?** Naming them is cheap;
-  committing to a total order is not, and D-anything about ordering only matters
-  once something enforces it. Suggest naming `none`, `public_link`, `email` now
-  and deferring the order to the item that gates on it.
-- **D3 — who mints an invite link, and where?** There is no admin route, no
-  poll-creation route, and no production entry point. This is the same hole P6
-  hits, and the two should probably be answered together rather than growing two
-  different admin surfaces.
-- **D4 — can one link serve more than one community?** `allowed_domain` is keyed
-  `(community, domain)` precisely so one domain may prove several (ADR-0023), and
-  P2 exists because somebody must then pick. A link that named several communities
-  would inherit that whole problem; a link that names exactly one avoids it.
-  **Recommendation: one link, one community.**
-
-### What the operator said, and what is honest about it
-
-The ask was framed as preventing double votes. **A public link cannot do that**
-— it is a shared secret, usable from any number of browsers — and the operator
-has already said plainly that it is meant as a filter, not a guarantee. Recorded
-here so nobody re-argues it: expiry, revocation, a use cap and rate limiting make
-a public link a real speed bump, and that is all it is claimed to be.
-
-Worth stating beside it, because it is easy to assume otherwise: **pulse does not
-prevent double voting today either.** Deduplication is per browser, `API.md` calls
-it "weak on its own", and signing out and back in is documented as counting the
-same person twice. Any item that claims to improve on that is making a change to
-ballot secrecy — no stored record currently connects a person to an answer — and
-that is an ADR, not an implementation detail.
 
 ## Not in this file
 
