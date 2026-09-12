@@ -50,7 +50,7 @@ export function claimStoreConformance(
         const store = await fresh(t);
         await store.put(claim());
         const usedAt = new Date(AT.getTime() + 60_000);
-        await store.markUsed("hash-1", usedAt);
+        assert.equal(await store.markUsed("hash-1", usedAt), true);
         assert.equal(
           (await store.byTokenHash("hash-1"))?.usedAt?.getTime(),
           usedAt.getTime(),
@@ -59,8 +59,26 @@ export function claimStoreConformance(
 
       test("marking_an_unknown_claim_used_changes_nothing", async (t) => {
         const store = await fresh(t);
-        await store.markUsed("hash-1", AT);
+        assert.equal(await store.markUsed("hash-1", AT), false);
         assert.equal(await store.byTokenHash("hash-1"), undefined);
+      });
+
+      test("a_link_can_be_spent_only_once", async (t) => {
+        // The second spend answers false and leaves the first moment standing.
+        // ClaimService relies on this answer, not on a read taken before it —
+        // that read is what two simultaneous clicks both get wrong.
+        const store = await fresh(t);
+        await store.put(claim());
+        const first = new Date(AT.getTime() + 60_000);
+        assert.equal(await store.markUsed("hash-1", first), true);
+        assert.equal(
+          await store.markUsed("hash-1", new Date(first.getTime() + 60_000)),
+          false,
+        );
+        assert.equal(
+          (await store.byTokenHash("hash-1"))?.usedAt?.getTime(),
+          first.getTime(),
+        );
       });
 
       test("live_links_are_the_unused_unexpired_ones_for_that_address", async (t) => {

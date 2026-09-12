@@ -64,6 +64,48 @@ function setup(options: ClaimOptions = {}) {
   };
 }
 
+test("two_clicks_on_one_link_sign_in_once_and_the_other_hears_it_was_used", async () => {
+  // A double click, or a mail scanner racing the person. Unless spending a
+  // link is one step, both requests read it as unused before either marks it.
+  const h = setup();
+  await h.service.requestLink("ada@student.ubc.ca");
+  const token = h.lastToken("ada@student.ubc.ca");
+
+  const results = await Promise.all([
+    h.service.redeem(token),
+    h.service.redeem(token),
+  ]);
+  assert.deepEqual(results.map((result) => result.status).sort(), [
+    "already_used",
+    "signed_in",
+  ]);
+});
+
+test("two_links_for_one_address_redeemed_at_once_are_one_voter", async () => {
+  // Two requests leave two live links. Clicking both at once must not make
+  // two voters — nor fail the slower click on one-voter-per-address.
+  const h = setup();
+  await h.service.requestLink("ada@student.ubc.ca");
+  const first = h.lastToken("ada@student.ubc.ca");
+  await h.service.requestLink("ada@student.ubc.ca");
+  const second = h.lastToken("ada@student.ubc.ca");
+  assert.notEqual(first, second);
+
+  const results = await Promise.all([
+    h.service.redeem(first),
+    h.service.redeem(second),
+  ]);
+  const signedIn = results.flatMap((result) =>
+    result.status === "signed_in" ? [result] : [],
+  );
+  assert.equal(signedIn.length, 2);
+  assert.equal(new Set(signedIn.map((result) => result.voter.id)).size, 1);
+  assert.deepEqual(signedIn.map((result) => result.firstTime).sort(), [
+    false,
+    true,
+  ]);
+});
+
 test("sends_a_link_to_a_member_and_signs_them_in_when_clicked", async () => {
   const h = setup();
   const requested = await h.service.requestLink("Ada@student.ubc.ca");
@@ -235,4 +277,36 @@ test("the_mailed_link_is_the_url_the_caller_builds", async () => {
   const message = h.mailer.lastTo("ada@student.ubc.ca");
   assert.match(message?.body ?? "", /^https:\/\/pulse\.test\/claim\?token=/);
   assert.equal(message?.kind, "claim-link");
+});
+
+test("the_slower_of_two_links_still_has_its_opt_in_honoured", async () => {
+  // The second race above, but only the slower link asked for proof emails.
+  // It loses the race to create the voter and signs in as the winner's — and
+  // what it asked for must not be dropped on the way.
+  const h = setup();
+  await h.service.requestLink("ada@student.ubc.ca");
+  const first = h.lastToken("ada@student.ubc.ca");
+  await h.service.requestLink("ada@student.ubc.ca", { proofEmailsOptIn: true });
+  const second = h.lastToken("ada@student.ubc.ca");
+
+  const [winner, loser] = await Promise.all([
+    h.service.redeem(first),
+    h.service.redeem(second),
+  ]);
+  assert.equal(winner.status === "signed_in" && winner.firstTime, true);
+  assert.equal(loser.status === "signed_in" && loser.firstTime, false);
+  assert.equal(
+    (await h.voters.byEmail("ada@student.ubc.ca"))?.proofEmailsOptIn,
+    true,
+  );
+});
+
+test("a_link_used_and_since_expired_says_it_was_used", async () => {
+  // "Used" is the more useful answer: the person already got in with it.
+  const h = setup();
+  await h.service.requestLink("ada@student.ubc.ca");
+  const token = h.lastToken("ada@student.ubc.ca");
+  assert.equal((await h.service.redeem(token)).status, "signed_in");
+  h.after(16 * 60 * 1000);
+  assert.equal((await h.service.redeem(token)).status, "already_used");
 });
