@@ -72,6 +72,10 @@ GET. On success:
 One door: this creates the identity the first time and signs the same person back in
 every time after. There is no separate sign-up.
 
+Two clicks on one link at once — a double click — sign in once: the first sets the
+cookie and the second is answered 410 `already_used`. A client should not show that
+second answer as a failure to someone who is, in fact, signed in.
+
 ### `POST /api/sign-out`
 
 No body. Always answers `200 { "status": "signed_out" }`, whether or not anyone was
