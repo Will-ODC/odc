@@ -13,8 +13,8 @@ changing anything here.
 
 - **Built:** sign-in by emailed link, voting (single-choice and approval), and
   results. Routes are in [API.md](./API.md); screens are in `apps/pulse-web`.
-- **Database:** the schema and migration runner exist (`migrations/`,
-  `src/db/`), but nothing uses them yet. All data is kept in memory.
+- **Storage:** Postgres when `PULSE_DATABASE_URL` is set, migrated on every
+  start; memory otherwise. The tests run every store against both.
 - **Not built:** real email, creating polls, and the path to action.
 
 ## Run it
@@ -27,7 +27,16 @@ pnpm --filter @odc/pulse-web dev   # app on http://localhost:5173
 Sign-in links print to the API's terminal instead of being emailed. The API
 seeds three linked polls and the community `demo-community`, which admits
 `@example.test` addresses. To change the demo, edit `src/dev-server.ts`.
-Everything is lost when the API stops.
+
+Without a database, everything is lost when the API stops. To keep it, start
+pulse's database (see [Test](#test)) and set `PULSE_DATABASE_URL` before `dev`.
+Set `PULSE_SESSION_SECRET` too: the ballot cookie is signed with it, so without
+it a restart signs everyone out and lets each browser vote again.
+
+With a database, the seed writes only polls that are not stored yet. Editing
+`src/dev-server.ts` does not change polls already there, and the seeded polls
+close three days after the start that first wrote them. For a fresh demo, empty
+the database with `docker compose -f apps/pulse/docker-compose.yml down`.
 
 `dev` refuses to start unless `NODE_ENV` is unset, `development`, or `test`. It
 is not a production server.
@@ -37,6 +46,7 @@ is not a production server.
 | `PULSE_PORT`           | `8080`                                        |
 | `PULSE_SESSION_SECRET` | new each run, so a restart signs everyone out |
 | `PULSE_WEB_ORIGIN`     | `http://localhost:5173`                       |
+| `PULSE_DATABASE_URL`   | unset: everything in memory                   |
 
 ## Test
 
