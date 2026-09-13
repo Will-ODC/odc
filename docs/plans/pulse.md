@@ -119,21 +119,62 @@ Also owed by this item and not by #148: **there is no `GET /api/polls`.** Every
 route is `/api/polls/:id/...`, so a browsing screen needs a listing endpoint
 that does not exist.
 
-## P4 — A real `Mailer` · BLOCKED ON A DECISION, then READY
+## P4 — A real `Mailer` · BUILT 2026-09-13
 
-`src/identity/mailer.ts` defines the interface and `ConsoleMailer` prints the
-link to a terminal. **No provider implementation exists anywhere**, so nobody
-outside a terminal can sign in and a staging environment is unusable without
-this.
+**The provider decision is made: Resend, by the operator on 2026-09-13, recorded
+as ADR-0027.** `src/identity/resend-mailer.ts` implements `Mailer` against
+Resend's one-request API with `fetch` and no SDK, and both things this item said
+to ship with it are shipped: a provider that is down answers **503** from
+`POST /api/sign-in` rather than 500, and `ConsoleMailer` is untouched, so `dev`
+still prints the link to a terminal and needs no account.
 
-**Blocked on:** which provider. That is an operator decision and it is one
-sentence long; everything after it is ordinary work behind an interface that
-already exists.
+**It has no caller yet, and that is the sequencing rather than an oversight.**
+`dev-server.ts` refuses to start outside development and is guarded twice on
+purpose, so it is not where a production mailer is constructed. **The production
+entry point is what calls `resendConfig(process.env)`** — see the deploy list in
+`memory/pulse.md`, item 5.
 
-Ship it with the things a mailer is always retrofitted with and should not be:
-what happens when the provider is down (the sign-in route must not 500 on it),
-and what the terminal mailer keeps doing in development, which is the flow being
-demonstrable without a provider at all.
+**Two things are still owed before anyone can actually sign in by email:**
+
+1. **A sending domain**, verified with Resend, with SPF and DKIM records
+   published to its DNS. It is the expensive half of this item, it is the same
+   work whichever provider was chosen, and it is an operator task with no code
+   in it. Until it is done `PULSE_RESEND_API_KEY` cannot be set to anything that
+   works.
+2. **The production entry point**, above.
+
+### P4a — `ClaimStore.discard`, so a failed send does not spend the cap · READY TO BUILD
+
+Deferred out of the mailer change by ADR-0027 rather than widening it. The claim
+is written before the send is attempted, so three failed sends inside the
+15-minute TTL leave three live claims, and the fourth request is answered _"A
+link is already on its way. Check your email."_ — which is false.
+
+The fix is a `ClaimStore.discard(tokenHash)` called on the `MailSendError` path.
+That is a new store method, so it is the full round: both implementations, and a
+case in the shared conformance suite.
+
+**Discard only when the provider positively refused.** `MailSendError.status` is
+the discriminator and it is already there: set when the provider answered, and
+`undefined` when the request never got an answer — a refused connection, a DNS
+failure, or **the 10-second timeout**. A timeout is exactly the case where
+Resend may have accepted and delivered the message, so discarding there
+invalidates a link already sitting in someone's inbox — trading a wrong sentence
+for a broken one. On `status === undefined`, keep the claim.
+
+**It is smaller than "a new store method" suggests.** `markUsed` already exists
+on both stores and `liveFor` filters on `used_at is null`, so the cap could be
+freed today with no interface change at all. `discard` is the honester name —
+`usedAt` on a link nobody used is a lie in the data that a later audit will
+misread — but whoever picks this up should know the cheap version exists.
+
+**Nothing currently pins the deferred behaviour.** No test asserts that three
+failed sends leave three live claims, so the day someone fixes this there is no
+red test telling them they changed anything. Write that test first.
+
+**It needs the provider to be down to reach, and the window is 15 minutes** — it
+is a wrong sentence, not a lockout. Do not let that reasoning grow: it stops
+being true the moment anything else writes a claim it may not send.
 
 ## P5 — Pillar 3, the path to action · BLOCKED ON A DECISION
 

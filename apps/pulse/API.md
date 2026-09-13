@@ -32,6 +32,7 @@ rather than read as `false`, because it is the opt-in for hearing what came of a
 | 403    | `error: "not_a_member"`      | the domain belongs to no community             |
 | 429    | `error: "link_already_sent"` | a link is already outstanding for this address |
 | 429    | `error: "too_many_requests"` | too many attempts from this client             |
+| 503    | `error: "send_failed"`       | the mail provider would not take the message   |
 
 The 200 body is `{ "status": "sent", "message": "Check your email for a link to sign
 in." }` — a sentence safe to show as-is, for a client that would rather not write its
@@ -47,6 +48,18 @@ should show it the same screen a first request shows. `too_many_requests` is the
 limiter: nothing was sent and nothing is coming, so it has to read as a failure.
 Answering both with one slug told rate-limited people to go and check an inbox that
 would stay empty.
+
+**The 503 is the same distinction one step further, and a refusal rather than a
+fault (ADR-0027).** `too_many_requests` is pulse declining to send; `send_failed` is
+pulse having tried and the provider having refused. Both must read as failures and
+neither may show "Check your email", which shown for mail that was never sent leaves
+someone waiting instead of pressing the button again. A provider that is down is not
+a bug in pulse, so it is not answered with a 500 and not logged as one. The message
+is `"We could not send that email just now. Try again."`, and the provider's own
+explanation is never in it — a 422 naming an unverified sending domain is an
+operator's problem and reads to anyone else as gibberish. **A refusal repeating
+cannot fix — a revoked key, an unverified domain — is not this 503**; it stays a 500,
+because telling everyone to retry forever is how a broken deploy goes unnoticed.
 
 ### `GET /api/sign-in/redeem?token=…`
 

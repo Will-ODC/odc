@@ -257,14 +257,20 @@ export async function buildDevServer(
     await seedPolls(storage.votes);
 
     const mailer = new ConsoleMailer();
-    const claims = new ClaimService({
-      membership: new DomainAllowlist(storage.domains),
-      voters: storage.voters,
-      claims: storage.claims,
-      mailer,
-      linkFor: (token) =>
-        `${config.webOrigin}/sign-in?token=${encodeURIComponent(token)}`,
-    });
+    const claims = new ClaimService(
+      {
+        membership: new DomainAllowlist(storage.domains),
+        voters: storage.voters,
+        claims: storage.claims,
+        mailer,
+        linkFor: (token) =>
+          `${config.webOrigin}/sign-in?token=${encodeURIComponent(token)}`,
+      },
+      // `ConsoleMailer` cannot fail, so this never fires here. It is wired
+      // anyway so the warning goes where every other dev-server warning goes,
+      // rather than being the one thing that reaches raw `console.error`.
+      { log: (message, error) => log(`${message}: ${String(error)}`) },
+    );
 
     const app = await createServer({
       claims,

@@ -14,6 +14,52 @@ export interface Mailer {
 }
 
 /**
+ * The provider would not take the message.
+ *
+ * This is the one failure a `Mailer` is expected to have, so it is named rather
+ * than left as a bare `Error`: a provider being down is not a bug in pulse, and
+ * the sign-in route answers it as a refusal a person can retry rather than as a
+ * fault (ADR-0027). Anything else a mailer throws is a fault and keeps its 500.
+ */
+export class MailSendError extends Error {
+  /** The provider's status code, when it answered with one. */
+  readonly status: number | undefined;
+
+  constructor(
+    message: string,
+    options: { status?: number; cause?: unknown } = {},
+  ) {
+    super(message, options.cause === undefined ? {} : { cause: options.cause });
+    this.name = "MailSendError";
+    this.status = options.status;
+  }
+}
+
+/**
+ * The provider understood the message and will never accept it.
+ *
+ * A revoked key, a sending domain nobody verified, a malformed payload. These
+ * are pulse's own deployment faults, not outages: retrying never works, so they
+ * are deliberately NOT `MailSendError` and keep their 500. A 422 answered as
+ * "try again" would tell every person to retry forever while instructing the
+ * operator not to alert on it — the silent permanent breakage ADR-0027 exists
+ * to avoid, arrived at from the other direction.
+ */
+export class MailRejectedError extends Error {
+  readonly status: number;
+
+  constructor(
+    message: string,
+    status: number,
+    options: { cause?: unknown } = {},
+  ) {
+    super(message, options.cause === undefined ? {} : { cause: options.cause });
+    this.name = "MailRejectedError";
+    this.status = status;
+  }
+}
+
+/**
  * Development sender: prints instead of sending, and keeps what it printed.
  *
  * This is what makes the whole claim flow testable and demonstrable before any

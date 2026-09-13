@@ -48,6 +48,26 @@ is not a production server.
 | `PULSE_WEB_ORIGIN`     | `http://localhost:5173`                       |
 | `PULSE_DATABASE_URL`   | unset: everything in memory                   |
 
+### Sending real email
+
+`dev` always prints the sign-in link to the terminal and never sends anything,
+which is what keeps the flow demonstrable with no provider account at all. A
+served pulse sends through Resend (ADR-0027), configured with:
+
+| Variable               | Meaning                                                  |
+| ---------------------- | -------------------------------------------------------- |
+| `PULSE_RESEND_API_KEY` | unset means no provider, so `ConsoleMailer` is used      |
+| `PULSE_MAIL_FROM`      | the From header, e.g. `pulse <sign-in@your-domain.org>`  |
+| `PULSE_MAIL_REPLY_TO`  | optional, when replies should not go to the From address |
+
+A key set without `PULSE_MAIL_FROM` refuses to start rather than failing at the
+first sign-in. Nothing is read from a bare `RESEND_API_KEY`, for the same reason
+a bare `DATABASE_URL` is not read.
+
+**Before any of this works you need a sending domain** verified with the
+provider, with its SPF and DKIM records published to DNS. That is the expensive
+half, and it is the same work whichever provider is used.
+
 ## Test
 
 ```bash

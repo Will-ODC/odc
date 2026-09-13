@@ -245,6 +245,15 @@ export async function createServer(deps: ServerDeps): Promise<FastifyInstance> {
             error: "link_already_sent",
             message: "A link is already on its way. Check your email.",
           });
+        case "send_failed":
+          // 503, not 500: the mail provider is down, which is not a fault in
+          // pulse and must not be logged or alerted on as one (ADR-0027). The
+          // sentence says the email did not go, because the person's next move
+          // is to try again — not to wait for mail that is not coming.
+          return reply.code(503).send({
+            error: "send_failed",
+            message: "We could not send that email just now. Try again.",
+          });
       }
     },
   );

@@ -184,6 +184,35 @@ describe("once the link is on its way", () => {
   });
 
   /*
+   * The third refusal in the same family, and the one furthest from the first:
+   * pulse tried to send and the provider would not take it. Like the rate
+   * limiter it must read as a failure — ADR-0027's user-facing promise is that
+   * a mail provider being down never shows "Check your email", which would
+   * leave someone waiting for mail nobody sent instead of pressing the button
+   * again as the message asks. All three sit one `err.status >= 429` refactor
+   * away from collapsing into the first, which is exactly why each is pinned.
+   */
+  it("treats mail that could not be sent as a failure to retry", async () => {
+    const message = "We could not send that email just now. Try again.";
+    render(
+      <SignIn
+        api={stubApi({
+          requestLink: () =>
+            Promise.reject(new ApiError(503, message, "send_failed")),
+        })}
+      />,
+    );
+
+    await userEvent.type(field(), "jo@student.ubc.ca");
+    await userEvent.click(go());
+
+    expect(await screen.findByText(message)).toBeTruthy();
+    expect(screen.queryByText("Check your email.")).toBeNull();
+    // The retry the sentence asks for has to be possible: the form stays.
+    expect(field()).toBeTruthy();
+  });
+
+  /*
    * The form that was focused has just unmounted. Without moving focus it
    * falls to `document.body`: a keyboard user tabs from the top of the page to
    * reach the only control, and a screen reader announces nothing.
