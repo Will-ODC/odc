@@ -95,8 +95,14 @@ export function SignIn({ api }: { api: PulseApi }) {
        * "A link is already on its way" is good news wearing a 429. Answering
        * it as a failure would tell someone their request did not work when it
        * worked twice — so it lands on the same screen a first request does.
+       *
+       * Matched on `link_already_sent`, never on the status or on
+       * `too_many_requests`: the rate limiter answers 429 with that second slug
+       * and means the opposite — nothing was sent, and nothing is coming. That
+       * one must fall through to the failure below, or this screen tells the
+       * person to go and wait for an email they will never get.
        */
-      if (err instanceof ApiError && err.code === "too_many_requests") {
+      if (err instanceof ApiError && err.code === "link_already_sent") {
         setAsking({ status: "sent", email: address });
         return;
       }

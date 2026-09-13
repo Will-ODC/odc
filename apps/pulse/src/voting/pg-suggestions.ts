@@ -4,6 +4,7 @@ import { inTransaction } from "../db/transaction.js";
 import type { Poll } from "./poll.js";
 import { UnknownPollError } from "./store.js";
 import {
+  assertOpen,
   decide,
   tidy,
   type SubmitResult,
@@ -34,6 +35,11 @@ export class PostgresSuggestionStore implements SuggestionStore {
 
   async submit(poll: Poll, text: string): Promise<SubmitResult> {
     // Junk is refused before a connection or a lock is taken.
+    const now = this.#clock();
+    // Checked before `tidy` so this store refuses a closed poll with unusable
+    // text the same way the in-memory one does — `decide` checks it again
+    // inside the transaction, where the poll row is actually held.
+    assertOpen(poll, now);
     const tidied = tidy(text);
     return inTransaction<SubmitResult>(this.#pool, async (client) => {
       // One submission per poll at a time. Two people saying the same new
@@ -53,7 +59,7 @@ export class PostgresSuggestionStore implements SuggestionStore {
           " order by added_at, id",
         [poll.id],
       );
-      const decision = decide(poll, tidied, rows.map(toSuggestion));
+      const decision = decide(poll, tidied, rows.map(toSuggestion), now);
       switch (decision.kind) {
         case "on_ballot":
           return {

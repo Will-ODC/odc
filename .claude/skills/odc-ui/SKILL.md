@@ -24,17 +24,19 @@ belong to `services/web` only.
 React 19 · Vite 7 · TypeScript · vitest 3. Three modules already exist, are
 pure and tested, and decide things the screens only render:
 
-| Module              | What it gives you                                                                                                            |
-| ------------------- | ---------------------------------------------------------------------------------------------------------------------------- |
-| `src/flow/story.ts` | `Step` union, `steps` / `nextStep` / `previousStep` / `progress`, `toggleChoice`, `isValidBallot`, `isCastable`, `castLabel` |
-| `src/api/types.ts`  | `Poll`, `Ballot = number[]`, `Results`, `CastOutcome`, `Me`, `PulseApi`, `ApiError`                                          |
-| `src/api/http.ts`   | `HttpPulseApi` — since #118 the only implementation of `PulseApi`                                                            |
+| Module              | What it gives you                                                                   |
+| ------------------- | ----------------------------------------------------------------------------------- |
+| `src/flow/route.ts` | `Route` union and `routeFrom` / `pathOf` — which of the three places a URL names    |
+| `src/flow/swipe.ts` | `isSwipeable`, and the gesture maths behind the two-choice ballot                   |
+| `src/api/types.ts`  | `Poll`, `Ballot = number[]`, `Results`, `CastOutcome`, `Me`, `PulseApi`, `ApiError` |
+| `src/api/http.ts`   | `HttpPulseApi` — since #118 the only implementation of `PulseApi`                   |
 
 Facts that will bite you if you assume otherwise:
 
-- **There is no app yet.** No `index.html`, no `src/main.tsx`, no component of
-  any kind; `build` is `tsc --noEmit` and nothing bundles. The first UI branch
-  ships the runnable shell before it ships any screen.
+- **The app exists and runs.** `index.html`, `src/main.tsx`, `<App>`, screens,
+  components and hooks are all on master; `build` is `tsc --noEmit` then
+  `vite build`. Read the screens before adding one — most of what a new screen
+  needs is already a component.
 - `tsconfig` is `strict` **plus** `exactOptionalPropertyTypes` (omit an
   optional prop, never pass `undefined`), `noUncheckedIndexedAccess`
   (`items[0]` is `T | undefined`), and `verbatimModuleSyntax` (`import type`).
@@ -44,9 +46,9 @@ Facts that will bite you if you assume otherwise:
 - Dev is same-origin on purpose: vite proxies `/api` → `localhost:8080`
   (`apps/pulse/src/dev-server.ts`). The session cookie depends on it — never
   point the client at an absolute API origin.
-- Component tests need `@testing-library/react` and `jsdom` added, and
-  vitest's environment set to `jsdom`. Neither is installed today; the
-  existing tests are pure-logic.
+- Component tests run on `@testing-library/react` + `@testing-library/user-event`
+  under `jsdom`, all installed. `test/stub-api.tsx` gives you a `PulseApi` stub
+  and poll/results fixtures — use it rather than hand-rolling another.
 
 ## Where code goes
 
@@ -54,7 +56,7 @@ Facts that will bite you if you assume otherwise:
 src/
   main.tsx          entry — mounts <App>, nothing else
   App.tsx           picks the screen for the current Step; owns no screen markup
-  screens/          one file per Step: Claim, Sent, Bite, Vote, Results, Action
+  screens/          one file per place: SignIn, Redeem, Run, and the two ballots
   components/       reusable, screen-agnostic pieces
   hooks/            state + effects (use-poll.ts, use-cast-vote.ts)
   api/  flow/       already exist — pure, no React
@@ -73,8 +75,9 @@ imports from `api/`.
    returns markup. It does not fetch, does not touch `PulseApi`, does not read
    global state. Data enters at the screen, which gets it from a hook.
 3. **No logic in JSX.** Past a single ternary, it moves — pure decisions to
-   `flow/`, stateful ones to a hook. `story.ts` is the precedent: the screen
-   renders the decision, it does not make it.
+   `flow/`, stateful ones to a hook. `swipe.ts` is the precedent: it decides
+   which ballot a poll needs and where a drag landed, and the screen only
+   renders that.
 4. **Name for what it is, not where it sits.** `<ChoiceRow>`, never
    `<VoteScreenChoiceRow>` — a screen-specific name is a promise that you will
    copy it next time instead of reusing it.

@@ -333,6 +333,39 @@ test("sign_in_is_rate_limited_per_client", async () => {
   });
   assert.equal(blocked.statusCode, 429);
   assert.equal(h.mailer.sent.length, 2);
+  // The body, not just the status. This 429 means NOTHING was sent, and it
+  // must not wear the slug that means a link is on its way — a client that
+  // cannot tell them apart tells this person to go and check their email.
+  assert.deepEqual(blocked.json(), {
+    error: "too_many_requests",
+    message: "Too many tries just now. Try again a little later.",
+  });
+});
+
+test("a_second_link_for_one_address_says_a_link_is_already_coming", async () => {
+  // The opposite fact to the test above, and the reason the two cannot share a
+  // slug: here a link really is on its way, so the client is right to show the
+  // same screen a first request shows.
+  const h = await setup();
+  for (let i = 0; i < 3; i++) {
+    const reply = await h.app.inject({
+      method: "POST",
+      url: "/api/sign-in",
+      payload: { email: "ada@student.ubc.ca" },
+    });
+    assert.equal(reply.statusCode, 200);
+  }
+
+  const capped = await h.app.inject({
+    method: "POST",
+    url: "/api/sign-in",
+    payload: { email: "ada@student.ubc.ca" },
+  });
+  assert.equal(capped.statusCode, 429);
+  assert.deepEqual(capped.json(), {
+    error: "link_already_sent",
+    message: "A link is already on its way. Check your email.",
+  });
 });
 
 test("a_body_that_is_not_json_is_refused_in_the_same_shape", async () => {

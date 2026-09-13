@@ -3,6 +3,7 @@ import { describe, test, type TestContext } from "node:test";
 import { createPoll, type Poll } from "../../src/voting/poll.js";
 import {
   MAX_SUGGESTION_LENGTH,
+  PollClosedError,
   SuggestionError,
   type SuggestionStore,
 } from "../../src/voting/suggestions.js";
@@ -29,6 +30,19 @@ const poll = (id: string, choices: readonly string[] = ["Yes", "No"]) =>
 
 const p1 = poll("p1");
 
+/** A question that shut an hour before the suite's clock reads. */
+const shut = createPoll(
+  {
+    id: "shut",
+    question: "How do we pay for it?",
+    choices: ["Yes", "No"],
+    method: "single",
+    acceptsSuggestions: true,
+    closesAt: new Date(clock().getTime() - 3600_000),
+  },
+  new Date(clock().getTime() - 7200_000),
+);
+
 /** The seeded funding question, choices and all. */
 const funding = () =>
   poll("funding", [
@@ -39,7 +53,7 @@ const funding = () =>
   ]);
 
 /** Every poll the suite submits against. */
-const POLLS: readonly Poll[] = [p1, funding()];
+const POLLS: readonly Poll[] = [p1, funding(), shut];
 
 /**
  * A fresh, empty store for one test, as `MakeStore` — plus the polls the suite
@@ -65,6 +79,21 @@ export function suggestionStoreConformance(
     `SuggestionStore conformance: ${label}`,
     { skip: options.skip ?? false },
     () => {
+      /**
+       * The rule this test holds used to live in the HTTP route, where no
+       * store could be held to it and anything else holding a store walked
+       * past it. It is a conformance case now because it is a property of the
+       * store, not of the way one caller happens to reach it.
+       */
+      test("a question that has shut takes no suggestion", async (t) => {
+        const suggestions = await store(t);
+        await assert.rejects(
+          () => suggestions.submit(shut, "something new entirely"),
+          PollClosedError,
+        );
+        assert.deepEqual(await suggestions.list(shut.id), []);
+      });
+
       test("the first wording of an idea keeps the floor, and the count rises", async (t) => {
         const suggestions = await store(t);
         await suggestions.submit(p1, "Charge the members");

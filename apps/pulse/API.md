@@ -24,13 +24,14 @@ table — adding one is an insert, not a deploy.
 `proofEmailsOptIn` is optional and must be a real boolean; anything else is refused
 rather than read as `false`, because it is the opt-in for hearing what came of a vote.
 
-| Status | Body                         | When                                             |
-| ------ | ---------------------------- | ------------------------------------------------ |
-| 200    | `status: "sent"` + `message` | a link is on its way                             |
-| 400    | `error: "invalid_email"`     | not a usable address                             |
-| 400    | `error: "bad_request"`       | no `email`, or a non-boolean opt-in              |
-| 403    | `error: "not_a_member"`      | the domain belongs to no community               |
-| 429    | `error: "too_many_requests"` | too many links outstanding, or too many attempts |
+| Status | Body                         | When                                           |
+| ------ | ---------------------------- | ---------------------------------------------- |
+| 200    | `status: "sent"` + `message` | a link is on its way                           |
+| 400    | `error: "invalid_email"`     | not a usable address                           |
+| 400    | `error: "bad_request"`       | no `email`, or a non-boolean opt-in            |
+| 403    | `error: "not_a_member"`      | the domain belongs to no community             |
+| 429    | `error: "link_already_sent"` | a link is already outstanding for this address |
+| 429    | `error: "too_many_requests"` | too many attempts from this client             |
 
 The 200 body is `{ "status": "sent", "message": "Check your email for a link to sign
 in." }` — a sentence safe to show as-is, for a client that would rather not write its
@@ -39,6 +40,13 @@ own.
 Rate limited per client (10/hour by default), separately from the per-address cap on
 outstanding links. The 429 sentence names no interval, because the window is
 configurable.
+
+**The two 429s mean opposite things and must not be read off the status.**
+`link_already_sent` is the per-address cap: a link really is on its way, and a client
+should show it the same screen a first request shows. `too_many_requests` is the rate
+limiter: nothing was sent and nothing is coming, so it has to read as a failure.
+Answering both with one slug told rate-limited people to go and check an inbox that
+would stay empty.
 
 ### `GET /api/sign-in/redeem?token=…`
 
@@ -401,6 +409,12 @@ closely enough, the choice wins, because the choice is the one that can be voted
 | 409    | `error: "closed"`            | the poll is past its closing time         |
 | 429    | `error: "too_many_requests"` | too many additions from one client        |
 | 404    | `error: "not_found"`         | no such poll                              |
+
+Closure is enforced by the store, not by this route: the check sits in `decide`, which
+every implementation runs, so a question that shuts mid-request is refused rather than
+raced past — and anything else holding a `SuggestionStore` is held to the same rule.
+Note that `closed` is a _refusal_ here and a _success_ on a cast (`200 {"status":
+"closed"}`); they share a word and mean different things.
 
 ## The client
 
