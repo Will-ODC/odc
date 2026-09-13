@@ -31,6 +31,7 @@ rather than read as `false`, because it is the opt-in for hearing what came of a
 | 400    | `error: "bad_request"`       | no `email`, or a non-boolean opt-in              |
 | 403    | `error: "not_a_member"`      | the domain belongs to no community               |
 | 429    | `error: "too_many_requests"` | too many links outstanding, or too many attempts |
+| 503    | `error: "send_failed"`       | the mail provider would not take the message     |
 
 The 200 body is `{ "status": "sent", "message": "Check your email for a link to sign
 in." }` — a sentence safe to show as-is, for a client that would rather not write its
@@ -39,6 +40,14 @@ own.
 Rate limited per client (10/hour by default), separately from the per-address cap on
 outstanding links. The 429 sentence names no interval, because the window is
 configurable.
+
+**The 503 is a refusal, not a fault (ADR-0027).** A mail provider that is down is
+not a bug in pulse, so it is not answered with a 500 and not logged as one. It is
+separated from the 200 for the client's sake: "Check your email" shown for mail
+that was never sent leaves someone waiting instead of pressing the button again.
+The message is `"We could not send that email just now. Try again."` and the
+provider's own explanation is never in it — a 422 naming an unverified sending
+domain is an operator's problem and reads to anyone else as gibberish.
 
 ### `GET /api/sign-in/redeem?token=…`
 

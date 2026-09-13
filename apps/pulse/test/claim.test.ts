@@ -9,7 +9,11 @@ import {
   hashToken,
   type ClaimOptions,
 } from "../src/identity/claim.js";
-import { ConsoleMailer } from "../src/identity/mailer.js";
+import {
+  ConsoleMailer,
+  MailSendError,
+  type Mailer,
+} from "../src/identity/mailer.js";
 import {
   InMemoryClaimStore,
   InMemoryVoterStore,
@@ -18,7 +22,10 @@ import {
 const START = new Date("2026-08-09T12:00:00.000Z");
 
 /** A service wired to one community, a silent mailer, and a movable clock. */
-function setup(options: ClaimOptions = {}) {
+function setup(
+  options: ClaimOptions = {},
+  overrides: { mailer?: Mailer } = {},
+) {
   let now = START;
   const mailer = new ConsoleMailer(() => {});
   const voters = new InMemoryVoterStore();
@@ -34,7 +41,9 @@ function setup(options: ClaimOptions = {}) {
       ),
       voters,
       claims,
-      mailer,
+      // The override is what a test uses to make sending fail; `mailer`
+      // stays the console one so the helpers below can still read what was sent.
+      mailer: overrides.mailer ?? mailer,
       linkFor: (token) => `https://pulse.test/claim?token=${token}`,
     },
     {
@@ -309,4 +318,44 @@ test("a_link_used_and_since_expired_says_it_was_used", async () => {
   assert.equal((await h.service.redeem(token)).status, "signed_in");
   h.after(16 * 60 * 1000);
   assert.equal((await h.service.redeem(token)).status, "already_used");
+});
+
+test("a_mail_provider_that_is_down_is_an_answer_the_person_can_act_on", async () => {
+  // "Check your email" for mail that is never coming is the one answer worse
+  // than saying nothing: the person waits instead of pressing the button again.
+  // ADR-0027 makes a provider outage a refusal, not a fault.
+  const h = setup(
+    {},
+    {
+      mailer: {
+        sendClaimLink: () => {
+          throw new MailSendError("the mail provider could not be reached");
+        },
+        sendProofOfAction: async () => undefined,
+      },
+    },
+  );
+
+  const result = await h.service.requestLink("ada@student.ubc.ca");
+  assert.equal(result.status, "send_failed");
+});
+
+test("a_mailer_fault_that_is_not_a_send_failure_is_still_a_fault", async () => {
+  // The catch is scoped to MailSendError on purpose. A bug in a mailer — a
+  // TypeError, a bad config read — must not be reported to the world as "the
+  // provider is down", which is the sentence nobody investigates.
+  const boom = new TypeError("mailer is broken");
+  const h = setup(
+    {},
+    {
+      mailer: {
+        sendClaimLink: () => {
+          throw boom;
+        },
+        sendProofOfAction: async () => undefined,
+      },
+    },
+  );
+
+  await assert.rejects(h.service.requestLink("ada@student.ubc.ca"), boom);
 });

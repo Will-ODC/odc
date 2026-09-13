@@ -1,7 +1,7 @@
 import { createHash, randomBytes, randomUUID } from "node:crypto";
 import type { VerificationMethod } from "./allowlist.js";
 import { InvalidEmailError, parseEmail } from "./email.js";
-import type { Mailer } from "./mailer.js";
+import { MailSendError, type Mailer } from "./mailer.js";
 import {
   VoterExistsError,
   type ClaimStore,
@@ -15,7 +15,8 @@ export type RequestResult =
   | { status: "sent"; expiresAt: Date }
   | { status: "invalid_email"; reason: string }
   | { status: "not_a_member"; domain: string }
-  | { status: "too_many_requests" };
+  | { status: "too_many_requests" }
+  | { status: "send_failed" };
 
 /** What a link is worth, without spending it. */
 export type InspectResult =
@@ -115,7 +116,20 @@ export class ClaimService {
       expiresAt: new Date(now.getTime() + this.#ttlMs),
     };
     await this.#claims.put(claim);
-    await this.#mailer.sendClaimLink(email.value, this.#linkFor(token));
+    try {
+      await this.#mailer.sendClaimLink(email.value, this.#linkFor(token));
+    } catch (error) {
+      // The provider being down is not a fault in pulse, and telling someone
+      // "check your email" for mail that is never coming is the one answer
+      // worse than saying nothing (ADR-0027). Anything a mailer throws that is
+      // NOT this is a real fault and keeps its 500.
+      if (!(error instanceof MailSendError)) throw error;
+      // The claim stays: it is already written, it is unreachable without the
+      // token that only the email carries, and it expires on its own. It does
+      // count against `maxLiveLinksPerEmail` until it does — see the
+      // `ClaimStore.discard` item in `docs/plans/pulse.md`.
+      return { status: "send_failed" };
+    }
 
     return { status: "sent", expiresAt: claim.expiresAt };
   }

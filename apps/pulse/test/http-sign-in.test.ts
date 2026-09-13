@@ -5,7 +5,7 @@ import {
   StaticDomainSource,
 } from "../src/identity/allowlist.js";
 import { ClaimService } from "../src/identity/claim.js";
-import { ConsoleMailer } from "../src/identity/mailer.js";
+import { ConsoleMailer, MailSendError } from "../src/identity/mailer.js";
 import {
   InMemoryClaimStore,
   InMemoryVoterStore,
@@ -357,4 +357,40 @@ test("an_unknown_path_answers_in_the_same_shape_as_everything_else", async () =>
   assert.equal(missing.statusCode, 404);
   assert.equal(missing.json().error, "not_found");
   assert.equal(typeof missing.json().message, "string");
+});
+
+test("a_mail_provider_that_is_down_answers_503_and_never_says_check_your_email", async () => {
+  // ADR-0027: a provider outage is a refusal the person can retry, not a fault.
+  // A 500 would be logged and alerted on as a bug in pulse, and — worse — the
+  // screen would have to guess; a 503 says the email did not go.
+  const failing = new ClaimService({
+    membership: new DomainAllowlist(
+      new StaticDomainSource([
+        { community: "ubc-students", domain: "student.ubc.ca" },
+      ]),
+    ),
+    voters: new InMemoryVoterStore(),
+    claims: new InMemoryClaimStore(),
+    mailer: {
+      sendClaimLink: () => {
+        throw new MailSendError("the mail provider could not be reached");
+      },
+      sendProofOfAction: async () => undefined,
+    },
+    linkFor: (token) => `https://pulse.test/claim?token=${token}`,
+  });
+
+  const h = await setup({ claims: failing });
+  const asked = await h.app.inject({
+    method: "POST",
+    url: "/api/sign-in",
+    payload: { email: "ada@student.ubc.ca" },
+  });
+
+  assert.equal(asked.statusCode, 503);
+  assert.equal(asked.json().error, "send_failed");
+  // The sentence is the whole point of the status: it must not tell someone to
+  // go and look for mail that was never sent.
+  assert.doesNotMatch(String(asked.json().message), /check your email/i);
+  assert.match(String(asked.json().message), /try again/i);
 });
