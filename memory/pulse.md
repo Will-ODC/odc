@@ -279,6 +279,83 @@ commits left on the branches. **Prefer the rebase when you can push one**; if yo
 cannot, verify the tree rather than trusting the conflict markers, because
 resolving these by hand re-applies the base's changes on top of themselves.
 
+### Landed 2026-09-13 — pulse can send mail, and can be served
+
+| Squash    | PR   | What                                               |
+| --------- | ---- | -------------------------------------------------- |
+| `45fc8a2` | #164 | a mailer that can actually send (Resend, ADR-0027) |
+| `88d87b5` | #165 | a production entry point and two images (ADR-0028) |
+
+**#164 — mail.** `ResendMailer` talks to Resend's one-request API with `fetch`
+and **no SDK**; `fetch` is injected, so the whole mailer is tested with no
+network, account or key. Two classes of failure, deliberately split:
+`MailSendError` is an outage (408, 429, 5xx) and becomes a **503 the person can
+retry**; `MailRejectedError` is a revoked key or unverified domain and **keeps
+its 500**, because answering it "try again" would tell everyone to retry forever
+while the ADR told the operator not to alert on it. `ClaimService` takes a `log`
+and writes the provider's refusal down — the review found it collected and then
+dropped, which would have made an unverified domain look exactly like a passing
+outage.
+
+**#165 — serving.** `src/main.ts` refuses where `dev-server.ts` defaults:
+`PULSE_SESSION_SECRET`, `PULSE_DATABASE_URL`, `PULSE_RESEND_API_KEY` and
+`PULSE_WEB_ORIGIN` have no defaults, and everything missing is named in one
+message. Two images on **one origin** — the client's nginx serves the page and
+forwards `/api`, so the `SameSite=Lax` cookie keeps working. Also: SIGTERM
+handled, `0.0.0.0` bound, migrations on boot, and `PULSE_DATABASE_SCHEMA` for
+sharing a database.
+
+**Both PRs were reviewed in a fresh context and both returned REQUEST CHANGES.**
+Every finding was a thing the authoring context could not see, which is now the
+fourth time this file has been able to say that.
+
+### Cautions from the 2026-09-13 round — do not reintroduce
+
+- **A sign-in token in a log is a sign-in token given away.**
+  `GET /api/sign-in/redeem?token=…` carries it in the query string, and BOTH
+  Fastify's default request serializer and nginx's `combined` access log write
+  the whole request target. The token stays live for its full 15 minutes,
+  because that GET deliberately does not consume it. Closed in both places
+  (`SERVED_LOGGER` in `main.ts`, `log_format pulse_no_query` in `nginx.conf`) —
+  and note this is the same failure ADR-0027 bans `ConsoleMailer` for, reached
+  by another door. **Any new log line that includes a URL must be checked.**
+- **A proxy makes every request look like one client.** Rate limits key on
+  `request.ip`, so behind the new front door with `trustProxy` off, one bucket
+  served the whole deployment. Set to the **hop count `1`, never `true`**:
+  `X-Forwarded-For` is a list a client can seed and nginx prepends to, so
+  trusting the chain lets anyone claim any address.
+- **`.dockerignore` matches whole paths, not basenames.** Unlike `.gitignore`, a
+  bare `node_modules` excludes only `/node_modules` — `apps/pulse/.env`, where a
+  live key would sit, went straight into a layer. **Every pattern needs `**/`.**
+- **Compose interpolates the whole file before profiles filter it.** A
+  `${VAR:?...}` on a profiled service breaks `up db`, the database-only command
+  the tests depend on, with an error naming a service nobody started. The error
+  looks exactly like the guard working, and was mistaken for it.
+- **The client's `tsconfig.json` includes `test/**`, and `end-to-end.test.ts`
+  imports `apps/pulse`'s source.** So `pnpm --filter @odc/pulse-web build`
+  cannot run in an image containing only the client. `tsconfig.build.json`
+  exists for that and is the one the Dockerfile uses.
+- **NEITHER IMAGE HAS EVER BEEN BUILT.** No Docker daemon in the session that
+  wrote them. Inputs were each verified separately — `pnpm deploy --prod` really
+  was run and really does emit production dependencies plus `migrations/`, and
+  `migrationsDir()`'s upward walk was traced against the runtime layout — but
+  **the first `docker build` is still the test.** Green CI is not evidence.
+
+### Decided by the operator, 2026-09-13
+
+- **Resend** is the mail provider (ADR-0027). Chosen over Postmark, SES and
+  plain SMTP; deliverability was the property being bought, not price.
+- **Two processes, one origin** (ADR-0028), after establishing that "how many
+  servers" and "how many addresses" are different questions and only the second
+  has consequences.
+- **Open sign-up** — `docs/plans/pulse.md` P4c, **decided and NOT built.** In
+  answer to "must we have a community to start?". The answer is no, and it is
+  cheap because **community does almost nothing today**: `polls` has no
+  `community` column, nothing in `src/voting/` or `src/http/` branches on it,
+  and the client only displays it. Its one real job is gating who may sign in —
+  which is exactly what makes a fresh deployment unusable. Read P4c before
+  starting: it names the two things that decision does NOT settle.
+
 ### Identity and authentication levels — decided 2026-09-12, NOT started
 
 The operator asked whether pulse can carry varying levels of authentication
@@ -292,7 +369,10 @@ are not repeated here. Two things worth carrying in memory:
   in the DDL and reached through `byEmail`, `liveFor(email)` and
   `VoterExistsError`. Nothing anywhere records **how** a person was verified.
   That missing fact is the whole change, and it gets dearer every week: P4 (the
-  `Mailer`) and P6 (poll authoring) both build on sign-in.
+  `Mailer`, now landed) and P6 (poll authoring) both built on sign-in, and
+  **P4c (open sign-up) now touches `voter.community` directly** — it is
+  `not null` in `001_initial.sql`, so what it holds for someone who proved
+  nothing is a migration question P4c has to answer.
 - **The interaction principle the operator named:** "I want the app to behave like
   we are interacting now, where users decide on bite-sized decisions, which models
   the community." A poll that wants a higher level is **one more small decision,
@@ -333,14 +413,18 @@ review's findings were things the authoring context could see.**
 - **Pillar 3, the path to action** in any form: soliciting ideas, volunteer time
   or donations, and the proof-of-what-happened email. `proofEmailsOptIn` is
   collected at sign-in and currently leads nowhere.
-- **Real mail delivery.** ~~and real persistence~~ — **persistence is BUILT as of
-  2026-09-12** (#158, #159, #160): Postgres per ADR-0020 with ADR-0021's schema,
-  the runner from #150, and a `pnpm dev` that keeps everything across a restart.
-  Do not re-do it. What is still missing is the other half: **`ConsoleMailer` is
-  the only `Mailer` anywhere**, so sign-in links print to a terminal and nobody
-  who is not watching your console can sign in. That is now the single largest
-  blocker to anyone but the operator using pulse, and it is undecided as well as
-  unbuilt — no provider has been chosen.
+- ~~**Real mail delivery.**~~ ~~and real persistence~~ — **both are BUILT. Do not
+  re-do either.** Persistence landed 2026-09-12 (#158, #159, #160): Postgres per
+  ADR-0020 with ADR-0021's schema and the runner from #150. **Mail landed
+  2026-09-13 (#164): Resend, ADR-0027**, with `ResendMailer` implementing the
+  interface that already existed. `ConsoleMailer` is still what `pnpm dev` uses
+  and that is deliberate — it is what keeps the flow demonstrable with no
+  provider account.
+
+  **What is left is not code.** A sending domain has to be verified with Resend
+  and its SPF and DKIM records published to DNS. That is an operator task, it is
+  the same work whichever provider had been chosen, and until it is done
+  `PULSE_RESEND_API_KEY` cannot be set to anything that works.
 
 ### Asked for by the operator, 2026-08-25
 
@@ -388,15 +472,18 @@ decision 4).
   be able to bring up the same shape of thing that will run in production, with
   one command, repeatably.
 
-  **We do not have this, and the appearance that we do is the trap.** `justfile`
-  defines `up: docker compose up --build -d`, and `docs/implementation-plan.md`
-  and ADR-0001 both lock "root justfile over root docker-compose" as the dev
-  entry point — so every document says the story is settled. But
-  `docker-compose.yml` is literally `services: {}` with a comment saying
-  "Populated as services land in Phase 1+", and **there is no Dockerfile
-  anywhere in the repository, on any branch, in the entire history.** `just up`
-  today starts nothing and exits 0. Do not cite the justfile or the ADR as
-  evidence that infra exists; check for a Dockerfile.
+  **SATISFIED 2026-09-13 by #165 — but read the next paragraph before trusting
+  it.** `just pulse-up` brings up the database, the API and the client that
+  fronts it, which is the "one command, repeatably" this item asked for.
+
+  **The root `just up` still starts nothing and exits 0**, and that is now
+  deliberate rather than a gap: root `docker-compose.yml` is `services: {}` and
+  is described by its own comment and by `odc-service-boundaries` as the full
+  stack of **`services/`**, which pulse is not part of. ADR-0028 records the
+  choice not to redefine it. So the old trap has changed shape rather than
+  disappeared: **`just up` is still not evidence that pulse infra exists — but
+  `just pulse-up` is where pulse's is.** And neither image has ever actually
+  been built; see the 2026-09-13 cautions above.
 
   Pulse is also not covered by the convention even on paper. The root compose
   comment and `.claude/skills/odc-service-boundaries` describe per-service
@@ -432,54 +519,65 @@ decision 4).
      constrained: one row per `(pollId, voterId)`, and re-casting **replaces**,
      so it is an upsert on a unique key — the thing `services/ledger` forbids
      and pulse is exempt from.
-  2. `ConsoleMailer` → a real `Mailer`. The interface exists; no provider
-     implementation does anywhere. Without it nobody outside a terminal can
-     sign in, so a staging environment is unusable without solving it.
+  2. ~~`ConsoleMailer` → a real `Mailer`.~~ **DONE #164** — `ResendMailer`,
+     ADR-0027. A staging environment needs a verified sending domain, not code.
   3. `StaticDomainSource` → a DB-backed `AllowedDomainSource`. `CLAUDE.md`
      promises allowlists are rows and adding a domain is an insert; today it is
      a literal in `dev-server.ts`, so it is a deploy.
-  4. `PULSE_SESSION_SECRET` as a managed secret, and `secureCookies: true`.
-  5. **A production entry point that is not `dev-server.ts`.** That file refuses
-     to start outside development, guarded twice (`assertDevelopment`), on
-     purpose — so this is a sibling `main`, never an edit to it. Anything that
-     "makes dev-server production-capable" is undoing a deliberate safety
-     property.
+  4. ~~`PULSE_SESSION_SECRET` as a managed secret, and `secureCookies: true`.~~
+     **DONE #165** — `src/main.ts` refuses to start without the secret, and
+     `secureCookies` was already right by default.
+  5. ~~**A production entry point that is not `dev-server.ts`.**~~ **DONE #165 —
+     `src/main.ts`, ADR-0028.** The constraint this item stated was honoured:
+     it is a sibling, and `dev-server.ts` is unmodified. Keep it that way.
+     Anything that "makes dev-server production-capable" is still undoing a
+     deliberate safety property.
   6. **Poll creation, which has no home at all.** There is no `POST /api/polls`
      in `src/http/server.ts`; polls and their `next` graph are the `SEED`
      literal in `dev-server.ts`. A deployed pulse has nothing to vote on until
      authoring exists — an admin route, a seed job, or a migration. This is the
      gap most likely to be discovered late, because in dev it is invisible.
-  7. Origin: dev relies on Vite's `/api` → `:8080` proxy so the session cookie
-     is same-origin with no CORS or `SameSite` special-casing. Serving
-     `pulse-web`'s `vite build` output from the same origin in production keeps
-     that assumption true; splitting the origins means revisiting cookie code
-     that was written assuming it never had to be.
+  7. ~~Origin.~~ **SETTLED #165 by ADR-0028 — one origin**, the operator's
+     decision on 2026-09-13. `apps/pulse-web`'s container serves the page and
+     proxies `/api` to the API container, so the cookie code stays exactly as
+     written. This item's warning was right and is now a rule: **splitting the
+     origins means `SameSite=None` and rebuilding cross-site protection by
+     hand.** Do not do it casually.
   8. `@fastify/rate-limit` defaults to an in-memory store — correct for one
-     process, useless across several. Multi-instance needs a shared store.
+     process, useless across several. **Still open, and now the first thing
+     that stops being true when pulse scales out**: three instances mean three
+     separate buckets and triple the limit. Note #165 fixed the _other_ half of
+     this — `trustProxy: 1`, so the limits key on the person rather than on the
+     proxy — which is not the same problem and does not close this one.
 
-### How close is a deploy? Assessed 2026-09-12, by reading the code
+### How close is a deploy? First assessed 2026-09-12; three of four closed 2026-09-13
 
-Storage was the visible blocker, so finishing it feels like the finish line. It
-is not. **Four things block a deploy and three of them have no code at all** —
-checked directly, not inferred:
-
-| Blocker                       | State                                                                                                                                                                                                          |
-| ----------------------------- | -------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- |
-| **No `Mailer`**               | `ConsoleMailer` is the only `implements Mailer` in the tree. **This is the real gate** — without it a deployed pulse is unusable by anyone but whoever is reading the console.                                 |
-| **No production entry point** | `src/dev-server.ts` is the only server file, and `assertDevelopment` guards it twice on purpose. Needs a sibling `main`, **never an edit to it** — item 5 below.                                               |
-| **No poll creation**          | There is still no `POST /api/polls` in `src/http/server.ts`; polls are the `SEED` literal in `dev-server.ts`. A deployed pulse has nothing to vote on. Item 6, and still the gap most likely to be found late. |
-| **No Dockerfile**             | Still none anywhere in the repo, on any branch. `apps/pulse/docker-compose.yml` now exists but brings up **Postgres only** — there is no image of the app to run. `just up` still starts nothing and exits 0.  |
+| Blocker                       | State                                                                                                                                                                                  |
+| ----------------------------- | -------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- |
+| ~~No `Mailer`~~               | **CLOSED #164** — Resend, ADR-0027. What remains is a verified sending domain, which is DNS and not code.                                                                              |
+| ~~No production entry point~~ | **CLOSED #165** — `src/main.ts`, a sibling of `dev-server.ts` and not an edit to it, per ADR-0028.                                                                                     |
+| ~~No Dockerfile~~             | **CLOSED #165** — two images plus an nginx front door. **But neither has ever been built** (see the caution below); the first `docker build` is still the test.                        |
+| **No poll creation**          | **STILL OPEN.** No `POST /api/polls`; polls are the `SEED` literal in `dev-server.ts`, so a deployed pulse has nothing to vote on. P6, and still the gap most likely to be found late. |
 
 Already fine, so do not re-litigate: **item 4's cookie half is correct** —
 `src/http/server.ts` defaults `secure: deps.secureCookies ?? true`, and
-`dev-server.ts` is the only thing that sets it false, guarded. Only the
-"`PULSE_SESSION_SECRET` as a managed secret" half is outstanding.
+`dev-server.ts` is the only thing that sets it false, guarded. The
+"`PULSE_SESSION_SECRET` as a managed secret" half is now the deployment's
+problem rather than the code's: `src/main.ts` refuses to start without it.
 
-Rough shape of the remaining work: **Mailer, a production entry point, and poll
-creation are about three PRs the size of #158–#160** and would produce something
-another person could actually use. Pillars 1 and 2 would then be deployable;
-the middle of the story and pillar 3 would still be missing, so that is a demo,
-not a product.
+**What now stands between this and a site somebody could use**, which is a
+shorter list than it was and is mostly not code:
+
+1. **Build the two images once.** Never done.
+2. **A host, and a domain.** Operator decisions; nothing is chosen.
+3. **Verify that domain with Resend.** DNS, not code.
+4. **Open sign-up** — decided 2026-09-13, `docs/plans/pulse.md` P4c. Until it
+   lands, nobody can sign in to a fresh deployment at all: the allowlist has no
+   rows and there is no way to add one but SQL.
+5. **Poll authoring** (P6), still blocked on the moderation decisions.
+
+The middle of the story and pillar 3 would still be missing after all five, so
+that is a demo people can use, not a product.
 
 ## Open decisions
 

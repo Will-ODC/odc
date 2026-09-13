@@ -32,22 +32,22 @@ Do not apply charter rules to `apps/**`, and do not relax them anywhere else.
   EV-20 is closed. → `memory/STATE.md`
 - **Pulse:** pillars 1 and 2 are on master — magic-link identity, the voting
   core, a story UI you can walk end to end, a results panel (#140), an answer
-  you can change (#146, ADR-0022), and since #149 the sign-in and redeem screens,
-  so the client **can** now sign someone in. **Storage is DONE** — the schema and
-  runner in #150, then the four stores and the shared conformance suite in #158,
-  #159 and #160 (ADR-0020, ADR-0021, ADR-0023). A `pnpm dev` session with
-  `PULSE_DATABASE_URL` set now **keeps everything across a restart**, verified end
-  to end on 2026-09-12. Still missing: the middle of the story (bite/case/action
-  screens), pillar 3, and any `Mailer` — **nobody outside a terminal can sign in,
-  and that is now the largest single blocker.** A deploy also needs a production
-  entry point, poll creation and a Dockerfile; **none of the three exists** (see
-  the dated assessment in the entry). **Poll authoring is decided in principle**
-  (crowdsourced questions, computed navigation; ADR-0024) and blocked on rules for
-  filtering, posting rights and moderation. **Varying levels of sign-in are
-  designed and unstarted** — `docs/plans/pulse.md` P8-P11, decided 2026-09-12;
-  P8 is ready, the rest wait on an ADR and on an admin surface that does not
-  exist.
-  **Two known bugs are recorded and unstarted.** → `memory/pulse.md`
+  you can change (#146, ADR-0022), and since #149 the sign-in and redeem screens.
+  **Storage is DONE** (#150, #158-#160; ADR-0020, ADR-0021, ADR-0023) and a
+  `pnpm dev` with `PULSE_DATABASE_URL` keeps everything across a restart.
+  **Mail is DONE** — Resend, #164, ADR-0027. **Serving is DONE** — a production
+  entry point and two images on one origin, #165, ADR-0028; **but neither image
+  has ever been built, and the first `docker build` is still the test.**
+  Of the four things that blocked a deploy, **only poll creation is left**, and
+  it is blocked on the moderation decisions under ADR-0024. Also outstanding and
+  mostly not code: a verified sending domain, a host, a domain, and **open
+  sign-up** — decided 2026-09-13 and unbuilt (`docs/plans/pulse.md` P4c), which
+  is what stops anyone signing in to a fresh deployment at all. Still missing
+  from the product: the middle of the story (bite/case/action screens) and
+  pillar 3. **Varying levels of sign-in are designed and unstarted** — P8-P11,
+  decided 2026-09-12; P8 is ready, the rest wait on an ADR and on an admin
+  surface that does not exist. **Two known bugs are recorded and unstarted.**
+  → `memory/pulse.md`
 
 ## Load order
 
