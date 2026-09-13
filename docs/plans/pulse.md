@@ -152,8 +152,25 @@ link is already on its way. Check your email."_ — which is false.
 
 The fix is a `ClaimStore.discard(tokenHash)` called on the `MailSendError` path.
 That is a new store method, so it is the full round: both implementations, and a
-case in the shared conformance suite. Small, but not a one-liner, which is why
-it is its own item.
+case in the shared conformance suite.
+
+**Discard only when the provider positively refused.** `MailSendError.status` is
+the discriminator and it is already there: set when the provider answered, and
+`undefined` when the request never got an answer — a refused connection, a DNS
+failure, or **the 10-second timeout**. A timeout is exactly the case where
+Resend may have accepted and delivered the message, so discarding there
+invalidates a link already sitting in someone's inbox — trading a wrong sentence
+for a broken one. On `status === undefined`, keep the claim.
+
+**It is smaller than "a new store method" suggests.** `markUsed` already exists
+on both stores and `liveFor` filters on `used_at is null`, so the cap could be
+freed today with no interface change at all. `discard` is the honester name —
+`usedAt` on a link nobody used is a lie in the data that a later audit will
+misread — but whoever picks this up should know the cheap version exists.
+
+**Nothing currently pins the deferred behaviour.** No test asserts that three
+failed sends leave three live claims, so the day someone fixes this there is no
+red test telling them they changed anything. Write that test first.
 
 **It needs the provider to be down to reach, and the window is 15 minutes** — it
 is a wrong sentence, not a lockout. Do not let that reasoning grow: it stops

@@ -1,6 +1,6 @@
 import assert from "node:assert/strict";
 import { test } from "node:test";
-import { MailSendError } from "../src/identity/mailer.js";
+import { MailRejectedError, MailSendError } from "../src/identity/mailer.js";
 import {
   ResendMailer,
   resendConfig,
@@ -67,6 +67,46 @@ test("a_sign_in_link_is_posted_to_the_provider_with_the_key_and_the_sender", asy
   assert.notEqual(call.body["subject"], "");
 });
 
+test("with_nothing_overridden_it_posts_to_resend_and_carries_a_timeout", async () => {
+  // Every other test injects an endpoint and a timeout, so without this one the
+  // real URL is never exercised and the default timeout can be changed to an
+  // hour with the suite still green — the held-open sign-in request the
+  // constant exists to prevent.
+  const calls: { url: string; init: RequestInit }[] = [];
+  const mailer = new ResendMailer(CONFIG, {
+    fetch: async (input, init) => {
+      calls.push({ url: String(input), init: init ?? {} });
+      return new Response("{}", { status: 200 });
+    },
+  });
+  await mailer.sendClaimLink("ada@pulse.test", "https://pulse.test/x");
+
+  assert.equal(calls[0]?.url, "https://api.resend.com/emails");
+  assert.ok(
+    calls[0]?.init.signal instanceof AbortSignal,
+    "the request must carry an abort signal",
+  );
+});
+
+test("a_very_long_refusal_is_truncated_before_it_becomes_an_error_message", async () => {
+  // Providers answer with HTML error pages. Without the cap the whole page ends
+  // up in one log line.
+  const h = setup(() => new Response("x".repeat(5000), { status: 500 }));
+
+  const error = await h.mailer
+    .sendClaimLink("ada@pulse.test", "https://pulse.test/x")
+    .then(
+      () => undefined,
+      (err: unknown) => err,
+    );
+
+  assert.ok(error instanceof MailSendError);
+  assert.ok(
+    error.message.length < 700,
+    `expected a truncated message, got ${error.message.length} characters`,
+  );
+});
+
 test("the_link_is_in_the_text_part_as_well_as_the_html_one", async () => {
   // A mail client that strips the anchor, or a person forwarding this to the
   // device they actually read on, still needs something to click or paste.
@@ -96,6 +136,22 @@ test("a_link_carrying_an_ampersand_is_escaped_in_the_html_and_left_alone_in_the_
   assert.match(String(call.body["html"]), /token=abc&amp;from=email/);
   assert.doesNotMatch(String(call.body["html"]), /token=abc&from=email/);
   assert.match(String(call.body["text"]), /token=abc&from=email/);
+});
+
+test("a_link_carrying_a_quote_cannot_break_out_of_the_href_attribute", async () => {
+  // The link goes into a double-quoted attribute, so the quote is the one
+  // escape that decides whether a value stays inside it. `linkFor` builds a
+  // base64url token today and nothing hostile can reach this, which makes the
+  // guard cheap insurance — not something to leave unpinned.
+  const h = setup();
+  await h.mailer.sendClaimLink(
+    "ada@pulse.test",
+    'https://pulse.test/sign-in?token=a"b',
+  );
+
+  const html = String(h.only().body["html"]);
+  assert.match(html, /token=a&quot;b/);
+  assert.doesNotMatch(html, /token=a"b/);
 });
 
 test("a_proof_of_action_body_is_escaped_before_it_becomes_markup", async () => {
@@ -147,7 +203,7 @@ test("a_reply_to_is_sent_only_when_one_is_configured", async () => {
   assert.equal(calls[0]?.body["reply_to"], "hello@pulse.test");
 });
 
-test("a_provider_that_refuses_the_message_raises_MailSendError_carrying_its_status", async () => {
+test("a_refusal_keeps_the_providers_own_words_for_whoever_reads_the_log", async () => {
   const h = setup(
     () =>
       new Response(JSON.stringify({ message: "domain is not verified" }), {
@@ -162,11 +218,50 @@ test("a_provider_that_refuses_the_message_raises_MailSendError_carrying_its_stat
       (err: unknown) => err,
     );
 
-  assert.ok(error instanceof MailSendError, "expected a MailSendError");
-  assert.equal(error.status, 422);
-  // The provider's own words are kept for the log — an operator reading a 422
-  // needs to know it was the sending domain and not the address.
+  assert.ok(error instanceof Error);
+  // An operator reading this needs to know it was the sending domain and not
+  // the address. Nobody signing in ever sees it.
   assert.match(error.message, /domain is not verified/);
+  assert.match(error.message, /422/);
+});
+
+test("a_refusal_that_repeating_cannot_fix_is_a_fault_rather_than_an_outage", async () => {
+  // A revoked key, an unverified sending domain, a malformed payload. Answering
+  // these as "try again" would tell every person to retry forever while
+  // ADR-0027 instructs the operator not to alert on them — silent permanent
+  // breakage, reached from the other side.
+  for (const status of [400, 401, 403, 404, 422]) {
+    const h = setup(() => new Response("nope", { status }));
+    const error = await h.mailer
+      .sendClaimLink("ada@pulse.test", "https://pulse.test/x")
+      .then(
+        () => undefined,
+        (err: unknown) => err,
+      );
+
+    assert.ok(
+      error instanceof MailRejectedError,
+      `${status} should be a rejection`,
+    );
+    // Not a MailSendError, which is what keeps it on its 500.
+    assert.equal(error instanceof MailSendError, false);
+    assert.equal(error.status, status);
+  }
+});
+
+test("a_provider_that_is_busy_or_broken_is_an_outage_worth_retrying", async () => {
+  for (const status of [408, 429, 500, 502, 503]) {
+    const h = setup(() => new Response("later", { status }));
+    const error = await h.mailer
+      .sendClaimLink("ada@pulse.test", "https://pulse.test/x")
+      .then(
+        () => undefined,
+        (err: unknown) => err,
+      );
+
+    assert.ok(error instanceof MailSendError, `${status} should be retryable`);
+    assert.equal(error.status, status);
+  }
 });
 
 test("a_provider_that_cannot_be_reached_raises_MailSendError_rather_than_the_raw_failure", async () => {
@@ -221,26 +316,26 @@ test("a_send_that_takes_too_long_is_abandoned_rather_than_held_open", async () =
     endpoint: ENDPOINT,
     timeoutMs: 5,
     fetch: (_input, init) =>
-      new Promise((_resolve, reject) => {
+      new Promise((resolve, reject) => {
+        // This settles on its own if the abort never comes, so dropping the
+        // signal from the request makes this test FAIL rather than hang — and
+        // the timer is ref'd, which also holds the loop open for the wait.
+        // `AbortSignal.timeout` schedules an unref'd timer, so with nothing
+        // else pending the loop would drain before it could ever fire.
+        const answersLate = setTimeout(() => {
+          resolve(new Response("{}", { status: 200 }));
+        }, 500);
         init?.signal?.addEventListener("abort", () => {
+          clearTimeout(answersLate);
           reject(new Error("aborted"));
         });
       }),
   });
 
-  // `AbortSignal.timeout` schedules an UNREF'd timer, so with nothing else
-  // pending the loop drains before it can fire and this test is cancelled
-  // rather than run. A ref'd timer holds the loop open for the wait. In a
-  // served process the server itself is what holds it.
-  const keepAlive = setTimeout(() => undefined, 1000);
-  try {
-    await assert.rejects(
-      mailer.sendClaimLink("ada@pulse.test", "https://pulse.test/x"),
-      MailSendError,
-    );
-  } finally {
-    clearTimeout(keepAlive);
-  }
+  await assert.rejects(
+    mailer.sendClaimLink("ada@pulse.test", "https://pulse.test/x"),
+    MailSendError,
+  );
 });
 
 test("no_key_means_no_provider_is_configured", () => {

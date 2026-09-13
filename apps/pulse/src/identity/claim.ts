@@ -40,6 +40,16 @@ export interface ClaimOptions {
   clock?: () => Date;
   /** Test seam. Real tokens come from the system's CSPRNG. */
   newToken?: () => string;
+  /**
+   * Where a mail provider's refusal goes.
+   *
+   * A failed send is answered to the person as a refusal they can retry
+   * (ADR-0027), which means the provider's explanation reaches nobody unless
+   * something writes it down here. Without it, a revoked key or an unverified
+   * sending domain refuses every sign-in forever and looks exactly like a
+   * passing outage — and the one person who could fix it is told to try again.
+   */
+  log?: (message: string, error: unknown) => void;
 }
 
 const FIFTEEN_MINUTES = 15 * 60 * 1000;
@@ -60,6 +70,7 @@ export class ClaimService {
   readonly #maxLive: number;
   readonly #clock: () => Date;
   readonly #newToken: () => string;
+  readonly #log: (message: string, error: unknown) => void;
 
   constructor(
     deps: {
@@ -82,6 +93,11 @@ export class ClaimService {
     this.#clock = options.clock ?? (() => new Date());
     this.#newToken =
       options.newToken ?? (() => randomBytes(32).toString("base64url"));
+    this.#log =
+      options.log ??
+      ((message, error) => {
+        console.error(message, error);
+      });
   }
 
   async requestLink(
@@ -116,18 +132,24 @@ export class ClaimService {
       expiresAt: new Date(now.getTime() + this.#ttlMs),
     };
     await this.#claims.put(claim);
+    const link = this.#linkFor(token);
     try {
-      await this.#mailer.sendClaimLink(email.value, this.#linkFor(token));
+      await this.#mailer.sendClaimLink(email.value, link);
     } catch (error) {
       // The provider being down is not a fault in pulse, and telling someone
       // "check your email" for mail that is never coming is the one answer
       // worse than saying nothing (ADR-0027). Anything a mailer throws that is
-      // NOT this is a real fault and keeps its 500.
+      // NOT this is a real fault and keeps its 500 — a rejected key or an
+      // unverified sending domain among them.
       if (!(error instanceof MailSendError)) throw error;
+      // Not a fault does not mean not worth knowing. This is the only place the
+      // provider's own explanation exists, and the person who sees the 503
+      // cannot act on it.
+      this.#log("pulse: a sign-in link could not be sent", error);
       // The claim stays: it is already written, it is unreachable without the
       // token that only the email carries, and it expires on its own. It does
-      // count against `maxLiveLinksPerEmail` until it does — see the
-      // `ClaimStore.discard` item in `docs/plans/pulse.md`.
+      // count against `maxLiveLinksPerEmail` until it does — see P4a in
+      // `docs/plans/pulse.md`.
       return { status: "send_failed" };
     }
 

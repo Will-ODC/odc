@@ -324,12 +324,15 @@ test("a_mail_provider_that_is_down_is_an_answer_the_person_can_act_on", async ()
   // "Check your email" for mail that is never coming is the one answer worse
   // than saying nothing: the person waits instead of pressing the button again.
   // ADR-0027 makes a provider outage a refusal, not a fault.
+  const logged: unknown[] = [];
   const h = setup(
-    {},
+    { log: (_message, error) => logged.push(error) },
     {
       mailer: {
         sendClaimLink: () => {
-          throw new MailSendError("the mail provider could not be reached");
+          throw new MailSendError(
+            "the mail provider refused the message (422): domain is not verified",
+          );
         },
         sendProofOfAction: async () => undefined,
       },
@@ -338,6 +341,12 @@ test("a_mail_provider_that_is_down_is_an_answer_the_person_can_act_on", async ()
 
   const result = await h.service.requestLink("ada@student.ubc.ca");
   assert.equal(result.status, "send_failed");
+
+  // The person is told to try again and nothing else. This is the ONLY place
+  // the reason survives, and the one person who could act on it — whoever set
+  // the sending domain — is not the person looking at the screen.
+  assert.equal(logged.length, 1);
+  assert.match(String(logged[0]), /domain is not verified/);
 });
 
 test("a_mailer_fault_that_is_not_a_send_failure_is_still_a_fault", async () => {
@@ -346,7 +355,7 @@ test("a_mailer_fault_that_is_not_a_send_failure_is_still_a_fault", async () => {
   // provider is down", which is the sentence nobody investigates.
   const boom = new TypeError("mailer is broken");
   const h = setup(
-    {},
+    { log: () => undefined },
     {
       mailer: {
         sendClaimLink: () => {

@@ -9,7 +9,7 @@
  * `ConsoleMailer` is still what development uses. The provider is a deployment
  * detail; this file is the only thing in pulse that knows the word "Resend".
  */
-import { MailSendError, type Mailer } from "./mailer.js";
+import { MailRejectedError, MailSendError, type Mailer } from "./mailer.js";
 
 const RESEND_ENDPOINT = "https://api.resend.com/emails";
 
@@ -165,12 +165,30 @@ export class ResendMailer implements Mailer {
     // The provider's own words, for the log only. They are never shown to the
     // person signing in: a 422 naming an unverified sending domain is an
     // operator's problem and reads to anyone else as gibberish about pulse.
-    throw new MailSendError(
+    const explanation =
       `the mail provider refused the message (${response.status}): ` +
-        (await bodyText(response)),
-      { status: response.status },
-    );
+      (await bodyText(response));
+
+    // Which kind of refusal this is decides whether anyone ever finds out.
+    // Busy or broken, and trying again is the right advice; anything else is a
+    // deployment fault that will refuse identically forever, so it stays a
+    // fault and keeps its 500 rather than being dressed as an outage.
+    if (isTransient(response.status)) {
+      throw new MailSendError(explanation, { status: response.status });
+    }
+    throw new MailRejectedError(explanation, response.status);
   }
+}
+
+/**
+ * Is trying again the right advice?
+ *
+ * 408 and 429 say the provider is busy, 5xx says it is broken. Every other
+ * refusal — 400, 401, 403, 404, 422 — is pulse's key, payload or sending domain
+ * and does not improve by being repeated.
+ */
+function isTransient(status: number): boolean {
+  return status === 408 || status === 429 || status >= 500;
 }
 
 /** Never let a failure to read the error body replace the error. */

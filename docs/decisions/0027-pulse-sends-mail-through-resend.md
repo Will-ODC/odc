@@ -48,11 +48,27 @@ Four things follow from it, and they are the decision as much as the name is:
 2. **`fetch` is injected.** The tests drive a stub, so the whole mailer is
    exercised without a network, an account or a key. This is the same test seam
    the clock and the token generator already use in `ClaimService`.
-3. **A send failure is an answer, not a fault.** `ClaimService.requestLink`
-   catches `MailSendError` and returns `{ status: "send_failed" }`; the route
-   answers **503**, not 500. A provider outage is not a bug in pulse and must
-   not be logged as one, and the person is told plainly to try again rather than
-   being shown "Check your email" for mail that is never coming.
+3. **A send failure is an answer, not a fault — but only the failures that
+   repeating could fix.** `ClaimService.requestLink` catches `MailSendError` and
+   returns `{ status: "send_failed" }`; the route answers **503**, not 500. A
+   provider outage is not a bug in pulse, and the person is told plainly to try
+   again rather than being shown "Check your email" for mail that is never
+   coming.
+
+   **A refusal that repeating cannot fix is the opposite case and keeps its 500.** A revoked key, a sending domain nobody verified, a malformed payload:
+   `ResendMailer` raises `MailRejectedError` for those, which is deliberately
+   not a `MailSendError`, so it passes straight through to the fault handler.
+   Answering a 422 as "try again" would tell every person to retry forever while
+   this ADR instructed the operator not to alert on it — silent permanent
+   breakage, arrived at from the other direction. 408, 429 and 5xx are the
+   outages; everything else is a deployment fault.
+
+   **"Not a fault" is not "not worth knowing."** The provider's own explanation
+   exists nowhere else, and the person who sees the 503 cannot act on it, so
+   `ClaimService` takes a `log` and writes it down before returning. Without
+   that, an unverified sending domain refuses every sign-in forever and looks
+   exactly like a passing outage.
+
 4. **`ConsoleMailer` keeps its job.** Development stays demonstrable with no
    provider account and no key: `dev-server.ts` is unchanged and still prints
    the link to the terminal. The provider is a deployment detail, which is what
@@ -91,9 +107,13 @@ implementations and the shared conformance suite, so it is recorded in
 `docs/plans/pulse.md` rather than widening this change. The window is 15 minutes
 and it requires the provider to be down; it is a wrong sentence, not a lockout.
 
-**Rate limiting is unchanged.** `POST /api/sign-in` already caps at 10 an hour
-per address, which is what stands between a verified sending domain and being
-used to mail strangers.
+**Rate limiting is unchanged, and it is worth naming what it actually is**,
+because a verified sending domain aimed at arbitrary addresses is the thing
+that gets a domain blocked. Three controls already exist and none of them is
+new here: **3 outstanding links per address** (`maxLiveLinksPerEmail`), **10
+requests an hour per client** — keyed on IP, since `@fastify/rate-limit` is
+registered with no `keyGenerator` — and **only addresses at a domain some
+community has claimed** get as far as a send at all.
 
 ### Documents reconciled
 
