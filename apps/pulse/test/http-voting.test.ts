@@ -11,7 +11,7 @@ import {
   InMemoryClaimStore,
   InMemoryVoterStore,
 } from "../src/identity/store.js";
-import { createServer } from "../src/http/server.js";
+import { createServer, type ServerDeps } from "../src/http/server.js";
 import { SESSION_COOKIE, SessionSigner } from "../src/http/session.js";
 import {
   InMemorySuggestionStore,
@@ -22,7 +22,11 @@ import { InMemoryVotingStore, UnknownPollError } from "../src/voting/store.js";
 const SECRET = "test-secret-that-is-long-enough";
 const START = new Date("2026-08-09T12:00:00.000Z");
 
-async function setup(pollCloses?: Date, suggestions?: SuggestionStore) {
+async function setup(
+  pollCloses?: Date,
+  suggestions?: SuggestionStore,
+  overrides: Partial<ServerDeps> = {},
+) {
   const now = START;
   const clock = () => now;
   const mailer = new ConsoleMailer(() => {});
@@ -53,6 +57,7 @@ async function setup(pollCloses?: Date, suggestions?: SuggestionStore) {
     signer,
     clock,
     secureCookies: false,
+    ...overrides,
   });
 
   await votes.createPoll({
@@ -502,4 +507,37 @@ test("a_closed_poll_takes_no_more_options", async () => {
   });
   assert.equal(reply.statusCode, 409);
   assert.equal(reply.json().error, "closed");
+});
+
+test("an_unplanned_fault_reaches_the_logger_it_was_given", async () => {
+  // `createServer` hardcoded `logger: false`, so the `request.log.error` in the
+  // catch-all handler wrote to nothing in every process that has ever served
+  // this app. A 500 that leaves no trace is the one a deployment cannot debug.
+  const logged: unknown[] = [];
+  const sink = {
+    error: (...args: unknown[]) => logged.push(args),
+    fatal: () => {},
+    warn: () => {},
+    info: () => {},
+    debug: () => {},
+    trace: () => {},
+    child: () => sink,
+  };
+  const broken = {
+    getPoll: () => Promise.reject(new Error("the store fell over")),
+  } as unknown as ServerDeps["votes"];
+
+  const h = await setup(undefined, undefined, {
+    votes: broken,
+    loggerInstance: sink as unknown as ServerDeps["loggerInstance"],
+  });
+  const reply = await h.app.inject({ method: "GET", url: "/api/polls/p1" });
+
+  assert.equal(reply.statusCode, 500);
+  // The sentence the person sees stays plain; the detail goes to the log.
+  assert.deepEqual(reply.json(), {
+    error: "server_error",
+    message: "Something went wrong. Try again.",
+  });
+  assert.equal(logged.length, 1);
 });

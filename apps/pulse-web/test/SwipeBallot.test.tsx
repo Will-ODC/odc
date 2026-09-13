@@ -686,4 +686,22 @@ describe("the way back, after answering", () => {
     fireEvent.click(back);
     expect(onBack).toHaveBeenCalledTimes(1);
   });
+
+  /**
+   * The closed outcome used to be a dead end: settling unmounts the choices,
+   * `closed` carries no counts and no answer to change, and NEXT is gated on a
+   * counted vote — so on a run's first question, where Back is not drawn,
+   * nothing on the screen could be pressed at all.
+   */
+  it("leaves a way back to the question when the poll closed under the swipe", async () => {
+    show({ cast: () => Promise.resolve({ status: "closed" as const }) });
+    fireEvent.keyDown(screen.getByText("Yes"), { key: "ArrowRight" });
+    await screen.findByText("This one has closed.");
+
+    const back = screen.getByRole("button", { name: "Back to the question" });
+    fireEvent.click(back);
+
+    expect(screen.queryByText("This one has closed.")).toBeNull();
+    expect(screen.getByText("Yes")).toBeTruthy();
+  });
 });

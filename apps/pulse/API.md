@@ -24,14 +24,15 @@ table — adding one is an insert, not a deploy.
 `proofEmailsOptIn` is optional and must be a real boolean; anything else is refused
 rather than read as `false`, because it is the opt-in for hearing what came of a vote.
 
-| Status | Body                         | When                                             |
-| ------ | ---------------------------- | ------------------------------------------------ |
-| 200    | `status: "sent"` + `message` | a link is on its way                             |
-| 400    | `error: "invalid_email"`     | not a usable address                             |
-| 400    | `error: "bad_request"`       | no `email`, or a non-boolean opt-in              |
-| 403    | `error: "not_a_member"`      | the domain belongs to no community               |
-| 429    | `error: "too_many_requests"` | too many links outstanding, or too many attempts |
-| 503    | `error: "send_failed"`       | the mail provider would not take the message     |
+| Status | Body                         | When                                           |
+| ------ | ---------------------------- | ---------------------------------------------- |
+| 200    | `status: "sent"` + `message` | a link is on its way                           |
+| 400    | `error: "invalid_email"`     | not a usable address                           |
+| 400    | `error: "bad_request"`       | no `email`, or a non-boolean opt-in            |
+| 403    | `error: "not_a_member"`      | the domain belongs to no community             |
+| 429    | `error: "link_already_sent"` | a link is already outstanding for this address |
+| 429    | `error: "too_many_requests"` | too many attempts from this client             |
+| 503    | `error: "send_failed"`       | the mail provider would not take the message   |
 
 The 200 body is `{ "status": "sent", "message": "Check your email for a link to sign
 in." }` — a sentence safe to show as-is, for a client that would rather not write its
@@ -41,13 +42,24 @@ Rate limited per client (10/hour by default), separately from the per-address ca
 outstanding links. The 429 sentence names no interval, because the window is
 configurable.
 
-**The 503 is a refusal, not a fault (ADR-0027).** A mail provider that is down is
-not a bug in pulse, so it is not answered with a 500 and not logged as one. It is
-separated from the 200 for the client's sake: "Check your email" shown for mail
-that was never sent leaves someone waiting instead of pressing the button again.
-The message is `"We could not send that email just now. Try again."` and the
-provider's own explanation is never in it — a 422 naming an unverified sending
-domain is an operator's problem and reads to anyone else as gibberish.
+**The two 429s mean opposite things and must not be read off the status.**
+`link_already_sent` is the per-address cap: a link really is on its way, and a client
+should show it the same screen a first request shows. `too_many_requests` is the rate
+limiter: nothing was sent and nothing is coming, so it has to read as a failure.
+Answering both with one slug told rate-limited people to go and check an inbox that
+would stay empty.
+
+**The 503 is the same distinction one step further, and a refusal rather than a
+fault (ADR-0027).** `too_many_requests` is pulse declining to send; `send_failed` is
+pulse having tried and the provider having refused. Both must read as failures and
+neither may show "Check your email", which shown for mail that was never sent leaves
+someone waiting instead of pressing the button again. A provider that is down is not
+a bug in pulse, so it is not answered with a 500 and not logged as one. The message
+is `"We could not send that email just now. Try again."`, and the provider's own
+explanation is never in it — a 422 naming an unverified sending domain is an
+operator's problem and reads to anyone else as gibberish. **A refusal repeating
+cannot fix — a revoked key, an unverified domain — is not this 503**; it stays a 500,
+because telling everyone to retry forever is how a broken deploy goes unnoticed.
 
 ### `GET /api/sign-in/redeem?token=…`
 
@@ -410,6 +422,12 @@ closely enough, the choice wins, because the choice is the one that can be voted
 | 409    | `error: "closed"`            | the poll is past its closing time         |
 | 429    | `error: "too_many_requests"` | too many additions from one client        |
 | 404    | `error: "not_found"`         | no such poll                              |
+
+Closure is enforced by the store, not by this route: the check sits in `decide`, which
+every implementation runs, so a question that shuts mid-request is refused rather than
+raced past — and anything else holding a `SuggestionStore` is held to the same rule.
+Note that `closed` is a _refusal_ here and a _success_ on a cast (`200 {"status":
+"closed"}`); they share a word and mean different things.
 
 ## The client
 

@@ -136,7 +136,7 @@ describe("once the link is on its way", () => {
               new ApiError(
                 429,
                 "A link is already on its way. Check your email.",
-                "too_many_requests",
+                "link_already_sent",
               ),
             ),
         })}
@@ -151,11 +151,46 @@ describe("once the link is on its way", () => {
   });
 
   /*
-   * The 503 above it is the opposite case and sits one `err.status >= 429`
-   * refactor away from being swallowed into it. ADR-0027's user-facing promise
-   * is that a mail provider that is down never shows "Check your email": that
-   * sentence would leave someone waiting for mail nobody sent, instead of
-   * pressing the button again as the message asks.
+   * The other 429, and the reason the first one cannot be matched on status.
+   * The rate limiter refuses without sending anything, so showing the "check
+   * your email" screen here strands the person waiting for a mail that is not
+   * coming. It must read as the failure it is.
+   */
+  it("treats a rate-limited request as a failure, not as sent", async () => {
+    render(
+      <SignIn
+        api={stubApi({
+          requestLink: () =>
+            Promise.reject(
+              new ApiError(
+                429,
+                "Too many tries just now. Try again a little later.",
+                "too_many_requests",
+              ),
+            ),
+        })}
+      />,
+    );
+
+    await userEvent.type(field(), "jo@student.ubc.ca");
+    await userEvent.click(go());
+
+    expect(
+      await screen.findByText(
+        "Too many tries just now. Try again a little later.",
+      ),
+    ).toBeTruthy();
+    expect(screen.queryByText("Check your email.")).toBeNull();
+  });
+
+  /*
+   * The third refusal in the same family, and the one furthest from the first:
+   * pulse tried to send and the provider would not take it. Like the rate
+   * limiter it must read as a failure — ADR-0027's user-facing promise is that
+   * a mail provider being down never shows "Check your email", which would
+   * leave someone waiting for mail nobody sent instead of pressing the button
+   * again as the message asks. All three sit one `err.status >= 429` refactor
+   * away from collapsing into the first, which is exactly why each is pinned.
    */
   it("treats mail that could not be sent as a failure to retry", async () => {
     const message = "We could not send that email just now. Try again.";
