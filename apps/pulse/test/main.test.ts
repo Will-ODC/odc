@@ -159,8 +159,14 @@ test("a_schema_is_carried_through_when_one_is_named", () => {
 });
 
 test("a_second_stop_signal_does_not_start_a_second_close", async () => {
-  // Docker sends SIGTERM and then SIGKILL; an impatient operator sends two.
   // Closing twice races the onClose hook that ends the pool.
+  //
+  // It must be two DIFFERENT signals. `process.once` already removes the
+  // listener after the first call, so emitting SIGTERM twice exercises node
+  // and not this code — with the guard deleted, that version stayed green.
+  // SIGTERM then SIGINT is what the flag is actually for, and it is the
+  // realistic case: a container runtime sends SIGTERM, and an impatient person
+  // at a terminal sends SIGINT while it is still draining.
   let closes = 0;
   const app = {
     close: async () => {
@@ -178,7 +184,7 @@ test("a_second_stop_signal_does_not_start_a_second_close", async () => {
     // @ts-expect-error — only `close` is used.
     stopOnSignals(app, { log: () => undefined });
     process.emit("SIGTERM");
-    process.emit("SIGTERM");
+    process.emit("SIGINT");
     // Let the close promise and its `then` settle.
     await new Promise((resolve) => setImmediate(resolve));
   } finally {
@@ -229,6 +235,24 @@ test(
     t.after(async () => {
       await app.close();
     });
+
+    // In the schema it was given, not wherever the connection happens to
+    // point. Without this the tables could land in `public` and every
+    // assertion below would still pass — while a deployment sharing one
+    // database with something else had quietly written over it.
+    const tables = await pool.query<{ table_name: string }>(
+      "select table_name from information_schema.tables where table_schema = $1",
+      [schema],
+    );
+    const names = tables.rows.map((row) => row.table_name);
+    assert.ok(
+      names.includes("polls"),
+      `polls not in ${schema}: ${String(names)}`,
+    );
+    assert.ok(
+      names.includes("voter"),
+      `voter not in ${schema}: ${String(names)}`,
+    );
 
     // The allowlist is rows, so a community has to exist before anyone is a
     // member of one. This is the insert `CLAUDE.md` promises, standing in for
