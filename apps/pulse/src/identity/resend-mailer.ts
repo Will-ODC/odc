@@ -13,8 +13,14 @@ import { MailRejectedError, MailSendError, type Mailer } from "./mailer.js";
 
 const RESEND_ENDPOINT = "https://api.resend.com/emails";
 
-/** Long enough for a slow provider, short enough that nobody waits on a dead one. */
-const DEFAULT_TIMEOUT_MS = 10_000;
+/**
+ * Long enough for a slow provider, short enough that nobody waits on a dead one.
+ *
+ * Exported so a test can pin the judgement. A test that actually waited the
+ * default out would cost the default on every run, so what is asserted is the
+ * bound rather than the number.
+ */
+export const DEFAULT_TIMEOUT_MS = 10_000;
 
 export interface ResendConfig {
   apiKey: string;

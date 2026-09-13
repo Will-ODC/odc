@@ -2,6 +2,7 @@ import assert from "node:assert/strict";
 import { test } from "node:test";
 import { MailRejectedError, MailSendError } from "../src/identity/mailer.js";
 import {
+  DEFAULT_TIMEOUT_MS,
   ResendMailer,
   resendConfig,
   type ResendConfig,
@@ -85,6 +86,26 @@ test("with_nothing_overridden_it_posts_to_resend_and_carries_a_timeout", async (
   assert.ok(
     calls[0]?.init.signal instanceof AbortSignal,
     "the request must carry an abort signal",
+  );
+});
+
+test("the_default_timeout_stays_short_enough_that_nobody_waits_on_a_dead_provider", () => {
+  // Somebody is in front of a spinner for this whole duration, having just
+  // pressed the only button on the screen. Ten seconds is a judgement call;
+  // ten minutes is not a timeout at all, and raising it is exactly the kind of
+  // edit that looks harmless in a diff.
+  //
+  // The bound is asserted rather than the number, because a test that waited
+  // the real default out would add that wait to every run. The limit of this:
+  // it pins the constant, not the `??` that reads it — the abort-signal test
+  // above covers the wiring.
+  assert.ok(
+    DEFAULT_TIMEOUT_MS <= 30_000,
+    `a sign-in must not hang for ${DEFAULT_TIMEOUT_MS}ms`,
+  );
+  assert.ok(
+    DEFAULT_TIMEOUT_MS >= 1_000,
+    `${DEFAULT_TIMEOUT_MS}ms would abandon a merely slow provider`,
   );
 });
 
