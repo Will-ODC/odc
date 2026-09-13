@@ -1,0 +1,14 @@
+{
+  // Typechecking for the image build, which has only this package.
+  //
+  // The default `tsconfig.json` includes `test/**`, and `test/end-to-end.test.ts`
+  // imports `apps/pulse`'s source directly — deliberately, since it is the one
+  // proof that both halves of pulse still speak the same contract. That makes it
+  // unbuildable in an image that contains only the client, and the failure is
+  // eight "cannot find module" errors rather than anything that names the cause.
+  //
+  // The tests are still typechecked: `pnpm --filter @odc/pulse-web typecheck`
+  // uses the full config and CI runs it on every PR.
+  "extends": "./tsconfig.json",
+  "include": ["src/**/*.ts", "src/**/*.tsx"]
+}

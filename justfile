@@ -10,6 +10,15 @@ up:
 down:
     docker compose down
 
+# Serve pulse the way it is deployed: database, API, and the client that fronts
+# it (ADR-0028). Needs the variables src/main.ts refuses to start without —
+# see apps/pulse/README.md. Opens on http://127.0.0.1:8080.
+pulse-up:
+    docker compose -f apps/pulse/docker-compose.yml --profile serve up --build -d
+
+pulse-down:
+    docker compose -f apps/pulse/docker-compose.yml --profile serve down
+
 # Run every service's tests (JS via turbo, Go verifier natively)
 test:
     pnpm turbo run test
