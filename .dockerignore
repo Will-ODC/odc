@@ -3,19 +3,26 @@
 # ships every node_modules in the workspace as context.
 #
 # It also matters for correctness, not only speed: a host `node_modules` or
-# `dist` copied into the image would shadow what the build produced, so the
+# `dist` copied into the image would shadow what the build produced, so an
 # image could pass while containing bytes nobody built.
+#
+# **Every pattern needs `**/`.** Unlike `.gitignore`, a `.dockerignore` pattern
+# matches the whole path from the context root, not a basename — so a bare
+# `node_modules` excludes only `/node_modules` and lets `apps/pulse/node_modules`
+# and `apps/pulse/.env` straight into a layer via `COPY apps/pulse apps/pulse`.
+# Found by review; the first version of this file made two guarantees it did not
+# keep, one of them about secrets.
 
-node_modules
-dist
-.turbo
+**/node_modules
+**/dist
+**/.turbo
 
 .git
 .github
 
 # Never let a local secrets file reach an image layer.
-.env
-.env.*
+**/.env
+**/.env.*
 
-*.log
-.DS_Store
+**/*.log
+**/.DS_Store

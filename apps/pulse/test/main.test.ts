@@ -3,12 +3,14 @@ import { test } from "node:test";
 import {
   DEFAULT_HOST,
   DEFAULT_PORT,
+  SERVED_LOGGER,
   buildServer,
   serveConfig,
   stopOnSignals,
   type ServeConfig,
 } from "../src/main.js";
-import { ConsoleMailer, MailSendError } from "../src/identity/mailer.js";
+import { MailSendError } from "../src/identity/mailer.js";
+import { ResendMailer } from "../src/identity/resend-mailer.js";
 import { allowDomain } from "../src/identity/pg-store.js";
 import { databaseSkip, throwawaySchema } from "./support/database.js";
 
@@ -35,8 +37,9 @@ test("a_complete_environment_is_read_into_a_configuration", () => {
   assert.equal(config.secret, "a-secret-that-is-long-enough");
   assert.equal(config.webOrigin, "https://pulse.example.org");
   assert.equal(config.databaseUrl, COMPLETE["PULSE_DATABASE_URL"]);
-  // A real provider, never the one that prints to a terminal.
-  assert.equal(config.mailer instanceof ConsoleMailer, false);
+  // The real provider is wired. `not instanceof ConsoleMailer` was the first
+  // version of this and any object at all passes it.
+  assert.ok(config.mailer instanceof ResendMailer);
 });
 
 test("every_value_the_dev_server_may_invent_is_refused_here", () => {
@@ -158,15 +161,10 @@ test("a_schema_is_carried_through_when_one_is_named", () => {
   );
 });
 
-test("a_second_stop_signal_does_not_start_a_second_close", async () => {
-  // Closing twice races the onClose hook that ends the pool.
-  //
-  // It must be two DIFFERENT signals. `process.once` already removes the
-  // listener after the first call, so emitting SIGTERM twice exercises node
-  // and not this code — with the guard deleted, that version stayed green.
-  // SIGTERM then SIGINT is what the flag is actually for, and it is the
-  // realistic case: a container runtime sends SIGTERM, and an impatient person
-  // at a terminal sends SIGINT while it is still draining.
+/** Drive `stopOnSignals` with `process.exit` and the listeners replaced. */
+async function underSignals(
+  emit: (signal: "SIGTERM" | "SIGINT") => void,
+): Promise<{ closes: number; exits: number[] }> {
   let closes = 0;
   const app = {
     close: async () => {
@@ -175,7 +173,7 @@ test("a_second_stop_signal_does_not_start_a_second_close", async () => {
   };
   const exits: number[] = [];
   const realExit = process.exit;
-  // @ts-expect-error — replaced for the duration of this test only.
+  // @ts-expect-error — replaced for the duration of this call only.
   process.exit = (code?: number) => {
     exits.push(code ?? 0);
   };
@@ -183,8 +181,8 @@ test("a_second_stop_signal_does_not_start_a_second_close", async () => {
   try {
     // @ts-expect-error — only `close` is used.
     stopOnSignals(app, { log: () => undefined });
-    process.emit("SIGTERM");
-    process.emit("SIGINT");
+    emit("SIGTERM");
+    emit("SIGINT");
     // Let the close promise and its `then` settle.
     await new Promise((resolve) => setImmediate(resolve));
   } finally {
@@ -192,10 +190,71 @@ test("a_second_stop_signal_does_not_start_a_second_close", async () => {
     process.removeAllListeners("SIGTERM");
     process.removeAllListeners("SIGINT");
   }
+  return { closes, exits };
+}
+
+test("each_stop_signal_on_its_own_drains_rather_than_dying", async () => {
+  // One assertion per signal, because a test that emits both is satisfied by
+  // either: dropping SIGTERM — the one a container runtime actually sends, and
+  // the whole reason this function exists — left the earlier version green.
+  for (const signal of ["SIGTERM", "SIGINT"] as const) {
+    const { closes, exits } = await underSignals((s) => {
+      if (s === signal) process.emit(s);
+    });
+    assert.equal(closes, 1, `${signal} must drain`);
+    assert.deepEqual(exits, [0], `${signal} must exit cleanly`);
+  }
+});
+
+test("a_second_stop_signal_does_not_start_a_second_close", async () => {
+  // Closing twice races the onClose hook that ends the pool.
+  //
+  // It must be two DIFFERENT signals. `process.once` already removes the
+  // listener after the first call, so emitting SIGTERM twice exercises node
+  // and not this code. SIGTERM then SIGINT is the realistic case: a runtime
+  // sends SIGTERM, and somebody impatient at a terminal sends SIGINT while it
+  // is still draining.
+  const { closes, exits } = await underSignals((s) => process.emit(s));
 
   assert.equal(closes, 1);
   assert.deepEqual(exits, [0]);
 });
+
+test("the_served_log_never_writes_down_a_sign_in_token", () => {
+  // `GET /api/sign-in/redeem?token=…` carries the token in the query string,
+  // and Fastify's default serializer logs the whole URL — so the default writes
+  // a live credential for every sign-in. It stays live for its full 15 minutes:
+  // that GET does not consume the token, because mail scanners follow links.
+  //
+  // This is the failure `serveConfig` refuses `ConsoleMailer` for, reached by
+  // another door.
+  const logged = SERVED_LOGGER.serializers.req({
+    method: "GET",
+    url: "/api/sign-in/redeem?token=SECRET-MAGIC-TOKEN-123",
+  });
+
+  assert.equal(logged.url, "/api/sign-in/redeem");
+  assert.doesNotMatch(JSON.stringify(logged), /SECRET-MAGIC-TOKEN-123/);
+  assert.doesNotMatch(JSON.stringify(logged), /token/);
+  // The path is still there: a log that names no route is not a log.
+  assert.equal(logged.method, "GET");
+});
+
+/** A served configuration pointed at a throwaway schema, with a silent mailer. */
+function servedConfig(schema: string): ServeConfig {
+  return {
+    port: 0,
+    host: "127.0.0.1",
+    secret: "a-secret-that-is-long-enough",
+    databaseUrl: process.env["PULSE_DATABASE_URL"] as string,
+    webOrigin: "https://pulse.example.org",
+    schema,
+    mailer: {
+      sendClaimLink: async () => undefined,
+      sendProofOfAction: async () => undefined,
+    },
+  };
+}
 
 /**
  * The real production wiring, against a real database.
@@ -292,6 +351,63 @@ test(
     const header = Array.isArray(cookie) ? cookie.join(";") : String(cookie);
     assert.match(header, /Secure/);
     assert.match(header, /HttpOnly/);
+  },
+);
+
+test(
+  "closing_the_server_closes_the_pool_it_opened",
+  { skip: databaseSkip },
+  async (t) => {
+    // Nobody else holds this pool, so if `onClose` did not end it its idle
+    // connections would keep the process alive after a SIGTERM drain — which
+    // shows up as a container the runtime has to SIGKILL, not as a failure.
+    const { schema } = await throwawaySchema(t);
+    const { app, pool } = await buildServer(servedConfig(schema), {
+      log: () => undefined,
+    });
+
+    assert.equal(pool.ended, false);
+    await app.close();
+    assert.equal(pool.ended, true);
+  },
+);
+
+test(
+  "a_start_that_fails_does_not_leave_its_pool_open",
+  { skip: databaseSkip },
+  async (t) => {
+    // A pool left open after a failed start keeps the process alive, so the
+    // container neither serves nor exits — and the message saying why the start
+    // failed is never the thing anyone ends up looking at.
+    const { schema } = await throwawaySchema(t);
+    const config = servedConfig(schema);
+    // A schema nobody created, so `migrate` throws inside the try, after the
+    // pool is open. This is the only path that reaches that catch.
+    config.schema = `${schema}_missing`;
+
+    await assert.rejects(buildServer(config, { log: () => undefined }));
+  },
+);
+
+test(
+  "an_idle_connection_that_fails_is_reported_rather_than_fatal",
+  { skip: databaseSkip },
+  async (t) => {
+    // An "error" event nobody listens for is an uncaught exception, so one
+    // dropped pooled connection would take the whole server down.
+    const { schema } = await throwawaySchema(t);
+    const warnings: string[] = [];
+    const { app, pool } = await buildServer(servedConfig(schema), {
+      log: (message) => warnings.push(message),
+    });
+    t.after(async () => {
+      await app.close();
+    });
+
+    pool.emit("error", new Error("connection terminated unexpectedly"));
+
+    assert.equal(warnings.length, 1);
+    assert.match(String(warnings[0]), /connection terminated unexpectedly/);
   },
 );
 

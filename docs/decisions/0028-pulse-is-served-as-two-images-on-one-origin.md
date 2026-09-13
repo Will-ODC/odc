@@ -110,6 +110,29 @@ and pulse is an app, not a service. `just pulse-up` is added instead, so the
 "one command, repeatably" the operator asked for on 2026-08-25 exists without
 redefining what the root compose is for.
 
+**Two things the front door forces on the API, both found by review rather
+than by writing it.**
+
+_A proxy means `request.ip` is the proxy._ Every rate limit in
+`src/http/server.ts` keys on it, so behind nginx with Fastify's `trustProxy`
+off, one bucket is shared by the whole deployment — the eleventh person to ask
+for a sign-in link in an hour is told "too many tries", and one client can lock
+everyone out. `createServer` gains a `trustProxy` option and `main.ts` passes
+**`1`, the hop count, never `true`**: `X-Forwarded-For` is a list the client can
+seed and nginx prepends to, so trusting the whole chain lets anyone claim any
+address and walk past the limit that caught them. Counting one hop from the
+right takes the address the proxy we actually run observed.
+
+_Default request logging records sign-in tokens._
+`GET /api/sign-in/redeem?token=…` carries the token in the query string, and
+both Fastify's default serializer and nginx's `combined` access log write the
+whole request target. That token stays valid for its full fifteen minutes —
+the GET deliberately does not consume it, because mail scanners follow every
+link — so the default would file a live credential for every sign-in, whether
+or not the person ever clicked. **This is precisely the failure this ADR bans
+`ConsoleMailer` for, arriving by another door.** `main.ts` logs the path only,
+and `nginx.conf` defines a log format using `$uri` instead of `$request`.
+
 **Neither image was built in the session that wrote them.** No Docker daemon
 was available, so the Dockerfiles are reasoned and their inputs verified
 individually — `pnpm deploy --prod` was run for real and confirmed to emit
@@ -117,6 +140,13 @@ production dependencies plus `migrations/`, and `migrationsDir()`'s upward walk
 was traced against the runtime layout — but **the images themselves are
 unproven and the first `docker build` is the test.** This is stated here rather
 than left for someone to discover.
+
+**The `serve` services take their variables with `:-`, not `:?`.** The obvious
+choice fails: compose interpolates the whole file before profiles filter
+anything, so a `:?` on the profiled `api` service breaks `up db` — the
+database-only command the tests and `apps/pulse/README.md` depend on — with an
+error naming a service nobody asked to start. `src/main.ts` does the refusing
+instead, and names all four missing values at once.
 
 ### Documents reconciled
 

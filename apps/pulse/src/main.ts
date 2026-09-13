@@ -178,6 +178,33 @@ function port(raw: string | undefined): number {
   return value;
 }
 
+/**
+ * The served logger, which must never write a sign-in token down.
+ *
+ * `GET /api/sign-in/redeem?token=…` carries the token in the query string, and
+ * Fastify's default request serializer logs the whole URL — so the default
+ * would record a live credential for every sign-in. It stays live: that GET
+ * deliberately does not consume the token (mail scanners follow every link), so
+ * it is good for its full 15 minutes whether or not the person ever clicked.
+ *
+ * This is the same failure `serveConfig` refuses `ConsoleMailer` for, arriving
+ * by another door — a sign-in link in a log file. nginx has the identical hole
+ * in its default access log, and `apps/pulse-web/nginx.conf` closes it there.
+ */
+export const SERVED_LOGGER = {
+  serializers: {
+    req(request: { method: string; url: string }) {
+      return {
+        method: request.method,
+        // The path only. `split` rather than `new URL`: this is a request
+        // target, not an absolute URL, and it must not be able to throw inside
+        // a log serializer.
+        url: request.url.split("?")[0] ?? request.url,
+      };
+    },
+  },
+};
+
 export interface ServeOptions {
   /** Where warnings go. Defaults to stderr, which is what a container collects. */
   log?: (message: string) => void;
@@ -232,7 +259,11 @@ export async function buildServer(
       // Not passed at all, so the default holds. `secureCookies` defaults to
       // true and `dev-server` is the only thing that sets it false; naming it
       // here would put the insecure value one edit away from the served path.
-      logger: true,
+      logger: SERVED_LOGGER,
+      // One nginx in front (`apps/pulse-web/nginx.conf`). Without this every
+      // request carries the proxy's address and every rate limit in the server
+      // becomes one bucket shared by everybody.
+      trustProxy: 1,
     });
 
     app.addHook("onClose", async () => {
@@ -284,8 +315,11 @@ export function stopOnSignals(
 async function main(): Promise<void> {
   const config = serveConfig(process.env);
   const { app } = await buildServer(config);
-  await app.listen({ port: config.port, host: config.host });
+  // Before `listen`, not after: migrations are the slowest part of a boot and
+  // the window a rolling deploy is most likely to send SIGTERM into. Registered
+  // after, a signal arriving then kills the process outright.
   stopOnSignals(app);
+  await app.listen({ port: config.port, host: config.host });
 }
 
 // Only when run directly, so importing this module in a test wires nothing up
@@ -300,7 +334,21 @@ if (
     // The message, not a stack: these are configuration refusals meant for
     // whoever set the variables, and a stack buries the one sentence that says
     // which variable is missing.
-    console.error(error instanceof Error ? error.message : String(error));
+    console.error(
+      error instanceof Error
+        ? `pulse could not start: ${error.message}`
+        : String(error),
+    );
+    // But a refusal is not the only thing that reaches here. A dead database
+    // throws `connect ECONNREFUSED …`, which alone names neither pulse nor the
+    // database, and `MigrationError` keeps its real reason in `cause`. Dropping
+    // it leaves an operator one context-free line to work from.
+    const cause = error instanceof Error ? error.cause : undefined;
+    if (cause !== undefined) {
+      console.error(
+        `  caused by: ${cause instanceof Error ? cause.message : String(cause)}`,
+      );
+    }
     process.exit(1);
   }
 }

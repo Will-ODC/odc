@@ -67,6 +67,23 @@ export interface ServerDeps {
    */
   logger?: FastifyServerOptions["logger"];
   loggerInstance?: FastifyServerOptions["loggerInstance"];
+  /**
+   * How many proxies sit in front, so `request.ip` is the person and not the
+   * proxy.
+   *
+   * Every rate limit here keys on `request.ip`. Behind a reverse proxy with
+   * this unset, every request carries the proxy's address, so one bucket is
+   * shared by everyone: the eleventh person to ask for a sign-in link in an
+   * hour is told "too many tries", and a single client can lock out the whole
+   * deployment.
+   *
+   * **A hop count, never `true`.** `X-Forwarded-For` is a list a client can
+   * seed — nginx *prepends* to whatever arrived — so trusting the whole chain
+   * lets anyone claim any address and defeat the limit they were caught by.
+   * Counting hops from the right takes the address the proxy you actually run
+   * observed. One nginx in front means `1`.
+   */
+  trustProxy?: number;
   clock?: () => Date;
 }
 
@@ -78,11 +95,12 @@ export interface ServerDeps {
  * UI can show as-is. Nothing here explains how anything is counted.
  */
 export async function createServer(deps: ServerDeps): Promise<FastifyInstance> {
-  const app = Fastify(
-    deps.loggerInstance
+  const app = Fastify({
+    ...(deps.loggerInstance
       ? { loggerInstance: deps.loggerInstance }
-      : { logger: deps.logger ?? false },
-  );
+      : { logger: deps.logger ?? false }),
+    ...(deps.trustProxy === undefined ? {} : { trustProxy: deps.trustProxy }),
+  });
   const now = deps.clock ?? (() => new Date());
 
   // Awaited, not fire-and-forget: a plugin's onRoute hook only sees routes

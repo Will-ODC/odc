@@ -50,12 +50,21 @@ services:
       # The client's origin, which is where an emailed sign-in link must land.
       # Here they are the same address, because the client proxies /api.
       PULSE_WEB_ORIGIN: http://127.0.0.1:8080
-      # Not defaulted and not invented: a served pulse refuses to start without
-      # these, so a local run has to provide them too. `PULSE_RESEND_API_KEY`
-      # means real email really is sent — there is no console mailer here.
-      PULSE_SESSION_SECRET: ${PULSE_SESSION_SECRET:?set a session secret, 16 characters or more}
-      PULSE_RESEND_API_KEY: ${PULSE_RESEND_API_KEY:?set a Resend API key, or use pnpm dev instead}
-      PULSE_MAIL_FROM: ${PULSE_MAIL_FROM:?set the address mail is sent from}
+      # Passed through, never defaulted and never invented. `src/main.ts` is
+      # what refuses when one is missing, and it names all four at once.
+      #
+      # `:-` and NOT `:?`, which would be the obvious choice: compose
+      # interpolates the WHOLE file before profiles filter anything, so a `:?`
+      # here fails `up db` — the database-only command the tests and
+      # `apps/pulse/README.md` depend on — with an error about a service that
+      # was never being started. Found by review; it had been mistaken for the
+      # guard working.
+      #
+      # `PULSE_RESEND_API_KEY` being real means real email really is sent:
+      # there is no console mailer in this path.
+      PULSE_SESSION_SECRET: ${PULSE_SESSION_SECRET:-}
+      PULSE_RESEND_API_KEY: ${PULSE_RESEND_API_KEY:-}
+      PULSE_MAIL_FROM: ${PULSE_MAIL_FROM:-}
     depends_on:
       db:
         # Not just "started": the API migrates on boot, and a database still

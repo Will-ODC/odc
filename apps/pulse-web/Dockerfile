@@ -26,9 +26,16 @@ COPY apps/pulse-web/package.json apps/pulse-web/
 RUN pnpm install --frozen-lockfile --filter @odc/pulse-web...
 
 COPY apps/pulse-web apps/pulse-web
-# `build` is `tsc --noEmit && vite build`, so a type error fails the image
-# rather than shipping a page that was never checked.
-RUN pnpm --filter @odc/pulse-web build
+# Not `pnpm build`: that runs `tsc -p tsconfig.json`, whose `include` covers
+# `test/**`, and `test/end-to-end.test.ts` imports `apps/pulse`'s source on
+# purpose — it is the one thing holding client and server to one contract. This
+# image has only the client, so that config cannot resolve those imports.
+#
+# `tsconfig.build.json` is the same settings over `src/**` alone, so a type
+# error in the page still fails the image rather than shipping something that
+# was never checked. The tests keep their typecheck in CI.
+RUN pnpm --filter @odc/pulse-web exec tsc -p tsconfig.build.json --noEmit \
+    && pnpm --filter @odc/pulse-web exec vite build
 
 FROM nginx:1.29-alpine AS runtime
 
