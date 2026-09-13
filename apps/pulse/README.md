@@ -84,6 +84,46 @@ export PULSE_DATABASE_URL=postgres://pulse:pulse@127.0.0.1:5433/pulse_test
 export PULSE_REQUIRE_DATABASE=1   # fail instead of skip if the database is missing
 ```
 
-Stop it with `docker compose -f apps/pulse/docker-compose.yml down`.
+Stop it with `docker compose -f apps/pulse/docker-compose.yml down`. That command
+starts the database only — the served images are behind a profile, so testing
+does not build two images to get a Postgres.
 
 CI runs the same checks, with a database, on every PR.
+
+## Serve it
+
+`pnpm dev` is for a laptop and refuses to run anywhere else. Serving pulse is a
+second entry point, `src/main.ts`, and two images (ADR-0028):
+
+```bash
+just pulse-up      # or the docker compose line it wraps
+```
+
+**Two processes, one origin.** `web` serves the page and forwards `/api` to
+`api`, so the browser sees one website — which is what keeps the `SameSite=Lax`
+session cookie working without weakening it. It is the same shape `pnpm dev`
+already has, where vite proxies `/api` to port 8080.
+
+`src/main.ts` **refuses to start** without the four values below, rather than
+inventing them the way `dev-server.ts` may. Everything missing is named in one
+message, so configuring a deployment is not a sequence of failed boots:
+
+| Variable               | Why it has no default                                   |
+| ---------------------- | ------------------------------------------------------- |
+| `PULSE_SESSION_SECRET` | a generated one signs everyone out on every restart     |
+| `PULSE_DATABASE_URL`   | the in-memory fallback would lose every vote on deploy  |
+| `PULSE_RESEND_API_KEY` | `ConsoleMailer` would print sign-in links into the logs |
+| `PULSE_WEB_ORIGIN`     | a guessed default mails everyone a link to localhost    |
+
+Optional: `PULSE_PORT` (8080), `PULSE_HOST` (`0.0.0.0`, because loopback is
+unreachable from outside a container), `PULSE_MAIL_REPLY_TO`, and
+`PULSE_DATABASE_SCHEMA` for deploying pulse beside something else in one
+database.
+
+**A served pulse sends real email.** There is no console mailer in this path, so
+`just pulse-up` with a live Resend key mails whoever signs in. Use `pnpm dev`
+to click through the flow.
+
+**Two things this does not give you yet:** nobody can sign in unless a row in
+`allowed_domain` admits their email's domain, and there are no polls, because
+poll authoring is not built (`docs/plans/pulse.md` P6). Both are inserts today.

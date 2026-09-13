@@ -1,9 +1,17 @@
-# Pulse's own database (ADR-0020), matching CI's in .github/workflows/repo.yml.
+# Pulse: a database, the API, and the client that fronts it (ADR-0020, ADR-0028).
 #
-# Port 5433, never 5432: a local Postgres already on 5432 would silently take
-# the connection instead. Data lives in memory and is gone on `down`.
+# `db` alone is what the tests want, and it is still what CI starts:
 #
-# Database only — there is no Dockerfile for the pulse server yet.
+#   docker compose -f apps/pulse/docker-compose.yml up db
+#
+# Everything, as it is served — two processes, one origin — needs the variables
+# a served pulse refuses to start without (see `apps/pulse/README.md`):
+#
+#   docker compose -f apps/pulse/docker-compose.yml --profile serve up --build
+#
+# Then open http://127.0.0.1:8080. The client answers there and forwards /api to
+# the API container, so the browser sees one website and the session cookie
+# works as written.
 name: pulse
 
 services:
@@ -14,11 +22,56 @@ services:
       POSTGRES_PASSWORD: pulse
       POSTGRES_DB: pulse_test
     ports:
+      # Port 5433, never 5432: a local Postgres already on 5432 would silently
+      # take the connection instead, and the error it produces (`role "pulse"
+      # does not exist`) reads as a credentials bug rather than a collision.
       - "127.0.0.1:5433:5432"
     tmpfs:
+      # In memory, so `down` leaves nothing behind. Deliberate for a test
+      # database and wrong for anything you meant to keep.
       - /var/lib/postgresql/data
     healthcheck:
       test: ["CMD", "pg_isready", "-U", "pulse", "-d", "pulse_test"]
       interval: 2s
       timeout: 5s
       retries: 15
+
+  api:
+    # Behind a profile so `up db` — what the tests and CI need — does not build
+    # two images to start a database.
+    profiles: ["serve"]
+    build:
+      # The repository root: this is a pnpm workspace and an install that
+      # cannot see the root lockfile resolves versions CI never tested.
+      context: ../..
+      dockerfile: apps/pulse/Dockerfile
+    environment:
+      PULSE_DATABASE_URL: postgres://pulse:pulse@db:5432/pulse_test
+      # The client's origin, which is where an emailed sign-in link must land.
+      # Here they are the same address, because the client proxies /api.
+      PULSE_WEB_ORIGIN: http://127.0.0.1:8080
+      # Not defaulted and not invented: a served pulse refuses to start without
+      # these, so a local run has to provide them too. `PULSE_RESEND_API_KEY`
+      # means real email really is sent — there is no console mailer here.
+      PULSE_SESSION_SECRET: ${PULSE_SESSION_SECRET:?set a session secret, 16 characters or more}
+      PULSE_RESEND_API_KEY: ${PULSE_RESEND_API_KEY:?set a Resend API key, or use pnpm dev instead}
+      PULSE_MAIL_FROM: ${PULSE_MAIL_FROM:?set the address mail is sent from}
+    depends_on:
+      db:
+        # Not just "started": the API migrates on boot, and a database still
+        # starting refuses the connection.
+        condition: service_healthy
+    # No published port. The client reaches it over the compose network, and
+    # nothing else should reach it at all.
+    expose:
+      - "8080"
+
+  web:
+    profiles: ["serve"]
+    build:
+      context: ../..
+      dockerfile: apps/pulse-web/Dockerfile
+    ports:
+      - "127.0.0.1:8080:8080"
+    depends_on:
+      - api

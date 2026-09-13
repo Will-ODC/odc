@@ -1,0 +1,21 @@
+# Both pulse images build from the repository root, so this decides what the
+# daemon has to read before a build can start. Without it every `docker build`
+# ships every node_modules in the workspace as context.
+#
+# It also matters for correctness, not only speed: a host `node_modules` or
+# `dist` copied into the image would shadow what the build produced, so the
+# image could pass while containing bytes nobody built.
+
+node_modules
+dist
+.turbo
+
+.git
+.github
+
+# Never let a local secrets file reach an image layer.
+.env
+.env.*
+
+*.log
+.DS_Store
