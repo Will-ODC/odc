@@ -48,7 +48,12 @@ export function SwipeBallot({
 }: SwipeBallotProps) {
   const { state, cast, reset } = useCastVote(api, poll.id);
   const [lean, setLean] = useState<Lean>(AT_REST);
-  const drag = useRef<{ from: number; moved: boolean } | null>(null);
+  const drag = useRef<{
+    from: number;
+    moved: boolean;
+    /** Whether the pointer has been captured — see `onPointerMove`. */
+    captured: boolean;
+  } | null>(null);
   /**
    * Set when a gesture has already decided this press, so the `click` the
    * browser fires afterwards does not decide it a second time.
@@ -139,16 +144,42 @@ export function SwipeBallot({
   function onPointerDown(event: ReactPointerEvent<HTMLDivElement>) {
     if (settled) return;
     gestureDecided.current = false;
-    drag.current = { from: event.clientX, moved: false };
-    // Not implemented in jsdom, and not required for the gesture to work.
-    event.currentTarget.setPointerCapture?.(event.pointerId);
+    drag.current = { from: event.clientX, moved: false, captured: false };
+    /*
+     * The pointer is NOT captured here, and that is the whole point.
+     *
+     * Capturing on press retargets every later pointer event to the capturing
+     * element — and with it the compatibility `click` the browser sends
+     * afterwards. So a press anywhere on a half arrived as a click on this
+     * <div> instead of on the <button> inside it, the button's own handler
+     * never ran, and the vote was never cast. Nothing was wrong with the
+     * button, the hit area, or the press: the click was being delivered to
+     * the wrong element, every time.
+     *
+     * Capture is only needed once a drag is actually under way, to keep
+     * following a pointer that leaves the element. `onPointerMove` takes it
+     * at that point, which is late enough to leave an ordinary click alone.
+     */
   }
 
   function onPointerMove(event: ReactPointerEvent<HTMLDivElement>) {
     const held = drag.current;
     if (!held) return;
     const dx = event.clientX - held.from;
-    if (Math.abs(dx) > DRAG_SLOP) held.moved = true;
+    if (Math.abs(dx) > DRAG_SLOP) {
+      held.moved = true;
+      /*
+       * Now it is a drag, so follow the pointer even if it leaves the split.
+       * Taken here rather than on press so that a click is still delivered to
+       * the half it landed on. Once per drag; a second call is harmless but
+       * says the state is not being tracked.
+       */
+      if (!held.captured) {
+        held.captured = true;
+        // Not implemented in jsdom, and not required for the gesture to work.
+        event.currentTarget.setPointerCapture?.(event.pointerId);
+      }
+    }
     setLean(leanOf(dx));
   }
 
@@ -159,16 +190,31 @@ export function SwipeBallot({
 
     const dx = event.clientX - held.from;
 
-    // Any press that travelled is a gesture, and this is where it is answered
-    // — whether it committed or sprang back. The click that follows must not
-    // answer it again.
-    gestureDecided.current = held.moved;
-
     const released = releaseOf(dx);
     if (released) {
+      // A drag that committed answered the press. The click the browser sends
+      // afterwards must not answer it again.
       gestureDecided.current = true;
       return commit(released);
     }
+
+    /*
+     * The press travelled but sprang back, and whether the click that follows
+     * still counts depends on what was holding the pointer.
+     *
+     * A fingertip that moves away from where it pressed is swiping, and
+     * changing its mind is a real thing to do — that press stands down.
+     *
+     * A mouse is not a fingertip. Pressing a mouse or trackpad button drags
+     * the cursor a few pixels almost every time, and DRAG_SLOP is 4, so
+     * reading "it moved" as "they meant to swipe" swallowed ordinary clicks
+     * whole: not a vote, not a refusal, nothing. It was invisible on a phone,
+     * where a tap does not travel, and unmissable on a desktop, where the two
+     * halves are nearly a thousand pixels wide and every click is a small
+     * drag. A mouse that wanted to swipe still can — it just has to travel
+     * the same 70px as everybody else.
+     */
+    gestureDecided.current = event.pointerType !== "mouse" && held.moved;
 
     // A press that never travelled is a tap. The tap is NOT handled here: each
     // half is a real button and its `onClick` casts it — see `Half`. Casting

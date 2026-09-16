@@ -14,9 +14,17 @@ import type {
  */
 class TestPointerEvent extends MouseEvent {
   readonly pointerId: number;
+  /**
+   * Carried because the ballot reads it: a mouse that drifts a few pixels
+   * between press and release is clicking, and a fingertip that does the same
+   * is swiping. A stub that dropped this reported every press as neither, so
+   * a test could set `pointerType` and change nothing.
+   */
+  readonly pointerType: string;
   constructor(type: string, init: PointerEventInit = {}) {
     super(type, init);
     this.pointerId = init.pointerId ?? 1;
+    this.pointerType = init.pointerType ?? "";
   }
 }
 
