@@ -13,11 +13,11 @@
   overflow: hidden;
   background: var(--ballot-bg);
   color: var(--ballot-ink);
-  border: 1px solid var(--ballot-line);
-  border-radius: var(--r-screen);
-  box-shadow: var(--shadow-ballot);
-  width: min(390px, 100vw);
-  height: min(844px, 100dvh);
+  border: var(--frame-border);
+  border-radius: var(--frame-radius);
+  box-shadow: var(--frame-shadow);
+  width: var(--frame-w);
+  height: var(--frame-h);
 }
 
 /* the two colour layers, fading up into the black top third */
@@ -47,7 +47,7 @@
 /* ---- the question hero ---- */
 .ballot__head {
   position: relative;
-  min-height: 34%;
+  min-height: var(--head-min);
   padding: 0 var(--gutter);
   display: flex;
   flex-direction: column;
@@ -89,7 +89,7 @@
 }
 
 .ballot__brand {
-  display: flex;
+  display: var(--screen-brand-display);
   align-items: center;
   gap: var(--step);
   font-size: var(--t-small);
@@ -185,7 +185,7 @@
   line-height: 1.35;
   color: var(--ballot-ink-muted);
   min-height: 2.7em;
-  max-width: 118px;
+  max-width: var(--nextq-max);
   display: flex;
   align-items: center;
   justify-content: center;

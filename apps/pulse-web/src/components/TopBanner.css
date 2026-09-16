@@ -1,0 +1,41 @@
+.banner {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: var(--gutter);
+  padding: var(--step) var(--rail-gap);
+  border-bottom: 1px solid var(--ballot-line);
+}
+
+/* Declaration for declaration, `.screen__brand` — the values are the tokens
+   all three marks read, never a literal repeated here. */
+.banner__brand {
+  display: flex;
+  align-items: center;
+  gap: var(--step);
+  font-size: var(--t-small);
+  font-weight: 600;
+  letter-spacing: 0.02em;
+  color: var(--brand-ink);
+}
+
+.banner__brand i {
+  width: var(--step);
+  height: var(--step);
+  border-radius: var(--r-pill);
+  background: var(--brand-dot);
+}
+
+.banner__sign-in {
+  font-size: var(--t-small);
+  color: var(--ballot-ink-muted);
+}
+
+.banner__sign-in:hover {
+  color: var(--ballot-ink);
+}
+
+.banner__sign-in:focus-visible {
+  outline: 2px solid var(--ballot-ink);
+  outline-offset: 2px;
+}

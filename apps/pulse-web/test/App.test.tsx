@@ -1,5 +1,5 @@
 // @vitest-environment jsdom
-import { cleanup, render, screen } from "@testing-library/react";
+import { cleanup, render, screen, within } from "@testing-library/react";
 import userEvent from "@testing-library/user-event";
 import {
   afterEach,
@@ -48,7 +48,16 @@ describe("what the URL opens", () => {
 
   it("opens the run at the bare path", async () => {
     render(<App api={stubApi()} />);
-    expect(await screen.findByText(poll().question)).toBeTruthy();
+    /*
+     * In the ballot, not on the page: the left rail lists the questions
+     * answered so far, so the run's question is legitimately on screen twice
+     * and an unscoped query finds both. Racy rather than always red — the
+     * rail's wording arrives from an effect — which is exactly the kind of
+     * intermittent failure that gets misread as somebody else's flake.
+     */
+    expect(
+      await within(screen.getByRole("main")).findByText(poll().question),
+    ).toBeTruthy();
   });
 
   it("starts the run wherever ?poll= says", async () => {
@@ -82,7 +91,16 @@ describe("after the link is spent", () => {
       await screen.findByRole("button", { name: "Continue" }),
     );
 
-    expect(await screen.findByText(poll().question)).toBeTruthy();
+    /*
+     * In the ballot, not on the page: the left rail lists the questions
+     * answered so far, so the run's question is legitimately on screen twice
+     * and an unscoped query finds both. Racy rather than always red — the
+     * rail's wording arrives from an effect — which is exactly the kind of
+     * intermittent failure that gets misread as somebody else's flake.
+     */
+    expect(
+      await within(screen.getByRole("main")).findByText(poll().question),
+    ).toBeTruthy();
     expect(globalThis.location.pathname + globalThis.location.search).toBe("/");
     /*
      * The length, not the address. Pushing lands on "/" too, so asserting the
@@ -161,6 +179,15 @@ describe("a route handed in directly", () => {
   it("wins over the URL", async () => {
     globalThis.history.replaceState(null, "", "/sign-in");
     render(<App api={stubApi()} route={{ kind: "run", pollId: "ads-free" }} />);
-    expect(await screen.findByText(poll().question)).toBeTruthy();
+    /*
+     * In the ballot, not on the page: the left rail lists the questions
+     * answered so far, so the run's question is legitimately on screen twice
+     * and an unscoped query finds both. Racy rather than always red — the
+     * rail's wording arrives from an effect — which is exactly the kind of
+     * intermittent failure that gets misread as somebody else's flake.
+     */
+    expect(
+      await within(screen.getByRole("main")).findByText(poll().question),
+    ).toBeTruthy();
   });
 });
