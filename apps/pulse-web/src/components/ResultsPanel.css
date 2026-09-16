@@ -92,7 +92,7 @@
   inset: 0 auto 0 0;
   width: var(--fill);
   border-radius: inherit;
-  background: rgba(255, 255, 255, 0.34);
+  background: var(--track);
 }
 
 .results__row[data-yours="true"] .results__bar::after {
@@ -123,8 +123,8 @@
   align-self: center;
   padding: 11px 20px;
   border-radius: var(--r-pill);
-  border: 1px solid rgba(255, 255, 255, 0.22);
-  background: rgba(255, 255, 255, 0.14);
+  border: 1px solid var(--control-line);
+  background: var(--control-bg);
   color: var(--ballot-ink);
   font: inherit;
   font-size: var(--t-body);
@@ -132,6 +132,6 @@
 }
 
 .results__close:focus-visible {
-  outline: 2px solid rgba(255, 255, 255, 0.7);
+  outline: 2px solid var(--focus-ring);
   outline-offset: 2px;
 }
