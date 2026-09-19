@@ -1,4 +1,5 @@
 import type { Poll } from "../api/types.js";
+import privacyMark from "../assets/privacy-mark.svg";
 
 /**
  * The top of every ballot: the way back, the mark, what kind of thing this is,
@@ -44,67 +45,10 @@ export function BallotChrome({
       <div className="ballot__brand">
         <i aria-hidden="true" /> pulse
       </div>
-      <PrivacyMark />
+      <img src={privacyMark} width="92" height="83" alt="" />
       <span className="ballot__chip">{chipFor(poll)}</span>
       <h1 className="ballot__question">{poll.question}</h1>
     </header>
-  );
-}
-
-/** The incognito motif: this vote is yours, and stays that way. */
-function PrivacyMark() {
-  return (
-    <svg
-      width="92"
-      height="83"
-      viewBox="0 0 132 120"
-      fill="none"
-      aria-hidden="true"
-    >
-      <path
-        d="M44 62 C44 34 55 26 66 26 C77 26 88 34 88 62 Z"
-        fill="rgba(255,255,255,.92)"
-      />
-      <ellipse cx="66" cy="63" rx="46" ry="8.5" fill="rgba(255,255,255,.92)" />
-      <path
-        d="M30 80 h10"
-        stroke="rgba(255,255,255,.8)"
-        strokeWidth="2.5"
-        strokeLinecap="round"
-      />
-      <path
-        d="M92 80 h10"
-        stroke="rgba(255,255,255,.8)"
-        strokeWidth="2.5"
-        strokeLinecap="round"
-      />
-      <rect
-        x="38"
-        y="74"
-        width="26"
-        height="18"
-        rx="9"
-        fill="rgba(255,255,255,.12)"
-        stroke="rgba(255,255,255,.85)"
-        strokeWidth="2.5"
-      />
-      <rect
-        x="68"
-        y="74"
-        width="26"
-        height="18"
-        rx="9"
-        fill="rgba(255,255,255,.12)"
-        stroke="rgba(255,255,255,.85)"
-        strokeWidth="2.5"
-      />
-      <path
-        d="M64 81 h4"
-        stroke="rgba(255,255,255,.85)"
-        strokeWidth="2.5"
-        strokeLinecap="round"
-      />
-    </svg>
   );
 }
 
