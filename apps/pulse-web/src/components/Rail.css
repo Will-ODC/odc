@@ -1,0 +1,18 @@
+/*
+ * What both rails share.
+ *
+ * `.rail__heading` was defined in SideNav.css and used by NextUp, which meant
+ * deleting the left rail would have silently restyled the right one. Shared
+ * presentation belongs in a file both import; the semantics do not, which is
+ * why this is a stylesheet and not a component — the left rail is a <nav>
+ * landmark and the right one is a labelled region, and forcing one element on
+ * both would flatten a real difference.
+ */
+.rail__heading {
+  margin: 0 0 var(--step);
+  font-size: var(--t-eyebrow);
+  font-weight: 700;
+  letter-spacing: 0.14em;
+  text-transform: uppercase;
+  color: var(--ballot-ink-faint);
+}

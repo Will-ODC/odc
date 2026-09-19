@@ -21,11 +21,11 @@
   overflow: hidden;
   background: var(--ballot-bg);
   color: var(--ballot-ink);
-  border: 1px solid var(--ballot-line);
-  border-radius: var(--r-screen);
-  box-shadow: var(--shadow-ballot);
-  width: min(390px, 100vw);
-  height: min(844px, 100dvh);
+  border: var(--frame-border);
+  border-radius: var(--frame-radius);
+  box-shadow: var(--frame-shadow);
+  width: var(--frame-w);
+  height: var(--frame-h);
 }
 
 /*
@@ -39,7 +39,7 @@
 
 /* Declaration for declaration, `.ballot__brand` in SwipeBallot.css. */
 .screen__brand {
-  display: flex;
+  display: var(--screen-brand-display);
   align-items: center;
   gap: var(--step);
   font-size: var(--t-small);

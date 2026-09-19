@@ -1,7 +1,13 @@
-import { useCallback, useState } from "react";
+import { useCallback, useEffect, useState } from "react";
 import type { Poll, PulseApi } from "../api/types.js";
+import { pathOf } from "../flow/route.js";
 import { isSwipeable } from "../flow/swipe.js";
 import { usePoll } from "../hooks/use-poll.js";
+import { edgesOf, useNextQuestions } from "../hooks/use-next-questions.js";
+import { AppShell } from "../components/AppShell.js";
+import { NextUp, type NextItem } from "../components/NextUp.js";
+import { SideNav, type RunStep } from "../components/SideNav.js";
+import { TopBanner } from "../components/TopBanner.js";
 import { ViewState } from "../components/ViewState.js";
 import { SwipeBallot } from "./SwipeBallot.js";
 import { ChoiceBallot } from "./ChoiceBallot.js";
@@ -25,6 +31,35 @@ export function Run({ api, pollId }: { api: PulseApi; pollId: string }) {
   const [trail, setTrail] = useState<string[]>([pollId]);
   const at = trail[trail.length - 1] ?? pollId;
   const loaded = usePoll(api, at);
+  const poll = loaded.status === "ready" ? loaded.value : undefined;
+
+  /**
+   * The wording of every question this run has been through.
+   *
+   * The trail is ids, because that is all the walk knows; the left rail wants
+   * words. They are kept as each question loads rather than fetched for the
+   * rail, so going back costs no request and a rail that is one question
+   * behind is impossible — the text arrives with the question it belongs to.
+   */
+  const [asked, setAsked] = useState<Record<string, string>>({});
+  useEffect(() => {
+    if (!poll) return;
+    const { id, question } = poll;
+    setAsked((seen) =>
+      seen[id] === question ? seen : { ...seen, [id]: question },
+    );
+  }, [poll]);
+
+  /*
+   * The rail's own copy of the previews the ballot shows under each answer.
+   *
+   * Both ballots already call this hook, so the same polls are asked for
+   * twice. Tolerated rather than solved: the alternative is lifting the
+   * preview out of two merged, tested screens and passing it back down, which
+   * is the extraction this rail is not big enough to justify. The requests are
+   * GETs of a poll that is already cached by the time they land.
+   */
+  const nextQuestions = useNextQuestions(api, poll ? edgesOf(poll.next) : "");
 
   const answered = useCallback((next: string | null) => {
     // A choice with nothing after it ends the run. Staying put is the honest
@@ -44,19 +79,60 @@ export function Run({ api, pollId }: { api: PulseApi; pollId: string }) {
     setTrail((walked) => (walked.length > 1 ? walked.slice(0, -1) : walked));
   }, []);
 
+  /**
+   * Back, but by however many steps the rail was asked for.
+   *
+   * The same move as `back` and not a second idea of it: both cut the trail,
+   * because a run is the path walked and returning to an earlier question is
+   * forgetting what came after it. Asking for the question already showing
+   * does nothing, so the rail can pass any index without checking.
+   */
+  const goTo = useCallback((index: number) => {
+    setTrail((walked) =>
+      index >= 0 && index < walked.length - 1
+        ? walked.slice(0, index + 1)
+        : walked,
+    );
+  }, []);
+
+  const steps: RunStep[] = trail.map((id) => {
+    const question = asked[id];
+    // `exactOptionalPropertyTypes`: omit the key, never pass undefined.
+    return question === undefined ? { id } : { id, question };
+  });
+
+  /*
+   * One row per answer that opens something. An answer that ends the run has
+   * no row, which is what makes an empty rail mean "this is the last
+   * question" rather than "the previews have not loaded".
+   */
+  const opens: NextItem[] = poll
+    ? poll.choices.flatMap((answer, index) => {
+        if (poll.next[index] == null) return [];
+        const question = nextQuestions[index];
+        return [question === undefined ? { answer } : { answer, question }];
+      })
+    : [];
+
   return (
-    <ViewState data={loaded}>
-      {(poll) => (
-        <Ballot
-          api={api}
-          poll={poll}
-          onAnswered={answered}
-          // Nothing to go back to on the question the run opened on, and a
-          // control that would do nothing should not be on the screen.
-          {...(trail.length > 1 ? { onBack: back } : {})}
-        />
-      )}
-    </ViewState>
+    <AppShell
+      banner={<TopBanner signInHref={pathOf({ kind: "signIn" })} />}
+      nav={<SideNav steps={steps} current={trail.length - 1} onGoTo={goTo} />}
+      aside={<NextUp items={opens} />}
+    >
+      <ViewState data={loaded}>
+        {(current) => (
+          <Ballot
+            api={api}
+            poll={current}
+            onAnswered={answered}
+            // Nothing to go back to on the question the run opened on, and a
+            // control that would do nothing should not be on the screen.
+            {...(trail.length > 1 ? { onBack: back } : {})}
+          />
+        )}
+      </ViewState>
+    </AppShell>
   );
 }
 

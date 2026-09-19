@@ -1,0 +1,48 @@
+.rail-nav {
+  display: flex;
+  flex-direction: column;
+  gap: var(--gutter);
+}
+
+.rail-nav__steps {
+  list-style: none;
+  margin: 0;
+  padding: 0;
+  display: flex;
+  flex-direction: column;
+  gap: calc(var(--step) / 2);
+  counter-reset: step;
+}
+
+.rail-nav__step {
+  display: block;
+  width: 100%;
+  box-sizing: border-box;
+  text-align: left;
+  font: inherit;
+  font-size: var(--t-small);
+  padding: var(--step) calc(var(--step) * 1.5);
+  border: 1px solid transparent;
+  border-radius: var(--r-control);
+  background: none;
+  color: var(--ballot-ink-muted);
+  cursor: pointer;
+}
+
+button.rail-nav__step:hover {
+  background: var(--ballot-chip);
+  color: var(--ballot-ink);
+}
+
+.rail-nav__step--here {
+  background: var(--ballot-chip);
+  border-color: var(--ballot-line);
+  color: var(--ballot-ink);
+  cursor: default;
+}
+
+/* The accessibility floor: every control in the rail shows focus. */
+.rail-nav__step:focus-visible {
+  outline: 2px solid var(--ballot-ink);
+  outline-offset: 2px;
+}

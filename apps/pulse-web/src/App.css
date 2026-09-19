@@ -17,3 +17,19 @@ body {
     sans-serif;
   -webkit-font-smoothing: antialiased;
 }
+
+/*
+ * The mount point has to fill the page, or nothing inside it can.
+ *
+ * `#root` is styled by nobody by default, and as a flex item of a centred
+ * body it is shrink-to-fit — so it was 1168px wide inside a 1440px window and
+ * the desktop shell's `width: 100%` meant 100% of that, leaving 136px down
+ * each side belonging to nothing. Dead page that looks exactly like the app
+ * is the bug the desktop layout exists to remove, so it must not be
+ * reintroduced one element above it.
+ *
+ * Harmless on a phone: the screen is centred by `.shell__stage`, not by this.
+ */
+#root {
+  width: 100%;
+}

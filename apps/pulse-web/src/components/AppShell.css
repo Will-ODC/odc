@@ -1,0 +1,130 @@
+/*
+ * Two rooms, one markup.
+ *
+ * Written mobile-first on purpose: everything outside the media query is the
+ * phone, exactly as it was before this file existed, and the desktop layout
+ * is an addition below it that a narrow screen never reads. Nothing here is
+ * undone at phone width, because nothing here is applied at phone width.
+ *
+ * `--shell-wide` is a literal and cannot be a token — a media query is
+ * evaluated before custom properties resolve, so `@media (min-width: var(…))`
+ * never matches. It is the one number in this file that is not a token, and
+ * it lives here because these are the only rules that read it.
+ */
+
+/* ---- the phone: one column, the frame is a phone ---- */
+
+.shell {
+  display: flex;
+  flex-direction: column;
+}
+
+/* No page chrome on a phone: the screen is the app. */
+.shell__banner {
+  display: none;
+}
+
+.shell__body {
+  display: grid;
+  grid-template-columns: auto;
+}
+
+.shell__stage {
+  display: flex;
+  align-items: center;
+  justify-content: center;
+}
+
+/*
+ * `display: none`, not a visual trick: at this width the rails are not part
+ * of the app, and leaving them in the accessibility tree would offer a screen
+ * reader navigation nobody can see or reach.
+ */
+.shell__rail {
+  display: none;
+}
+
+/* ---- the website: 1100px and up ---- */
+
+@media (min-width: 1100px) {
+  .shell {
+    /*
+     * Claim the whole window.
+     *
+     * `body` centres its children (App.css), which is what the phone wants —
+     * a 390px screen in the middle of the page. A grid that inherits that
+     * treatment is shrink-to-fit, so the page was 1168px wide inside a 1440px
+     * window and 136px down each side belonged to nothing: dead page that
+     * looked exactly like the app, which is the bug this whole layout exists
+     * to remove.
+     */
+    width: 100%;
+    min-height: 100dvh;
+
+    /*
+     * The frame stops being a phone and becomes the page. Same five
+     * properties the phone sets, given different values — the screens
+     * themselves are not touched, and neither is their markup.
+     */
+    --frame-w: 100%;
+    --frame-h: 100%;
+    --frame-radius: 0;
+    --frame-border: 0;
+    --frame-shadow: none;
+
+    /*
+     * The two sides, louder. The resting tint was tuned against a 390px
+     * phone where it covers most of the screen; stretched across a window it
+     * washes out to nothing and the halves stop looking like anything.
+     */
+    --side-rest: 0.14;
+
+    /* The question keeps less of a tall window than it does of a phone. */
+    --head-min: 24%;
+
+    /* The bar carries the brand up here, so the screens stop carrying it. */
+    --screen-brand-display: none;
+
+    /* Room to read at arm's length rather than at reading distance. */
+    --t-hero: 34px;
+    --t-word: 42px;
+    --nextq-max: 20ch;
+  }
+
+  .shell__banner {
+    display: block;
+  }
+
+  .shell__body {
+    flex: 1;
+    grid-template-columns: var(--rail) minmax(0, 1fr) var(--rail);
+    align-items: stretch;
+    /* The rails scroll inside themselves rather than lengthening the page. */
+    min-height: 0;
+  }
+
+  .shell__stage {
+    /*
+     * A column of its own with a line either side, so the three read as one
+     * page rather than as a screenshot with notes beside it.
+     */
+    border-inline: 1px solid var(--ballot-line);
+  }
+
+  .shell__rail {
+    display: flex;
+    flex-direction: column;
+    gap: var(--gutter);
+    padding: var(--rail-gap);
+    box-sizing: border-box;
+    /*
+     * Scrolling inside itself rather than lengthening the page: the ballot is
+     * the height of the window, and a page that scrolled past it would move
+     * the vote off screen.
+     */
+    min-height: 0;
+    overflow-y: auto;
+    color: var(--ballot-ink-soft);
+    font-size: var(--t-body);
+  }
+}

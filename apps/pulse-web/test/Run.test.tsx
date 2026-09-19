@@ -1,5 +1,11 @@
 // @vitest-environment jsdom
-import { cleanup, render, screen, fireEvent } from "@testing-library/react";
+import {
+  cleanup,
+  render,
+  screen,
+  fireEvent,
+  within,
+} from "@testing-library/react";
 import { afterEach, beforeAll, describe, expect, it, vi } from "vitest";
 import { ApiError } from "../src/api/types.js";
 import { Run } from "../src/screens/Run.js";
@@ -7,6 +13,17 @@ import { graph, installPointerEvents, poll, stubApi } from "./stub-api.js";
 
 beforeAll(installPointerEvents);
 afterEach(cleanup);
+
+/**
+ * Queries scoped to the ballot itself, rather than to the whole run.
+ *
+ * On a wide screen the run stands between two rails, and the right rail names
+ * the same answers the ballot does — so an unscoped `getByText("Yes")` finds
+ * the ballot's half and the rail's row and refuses to choose. Scoping to the
+ * stage keeps each of these tests about what the ballot shows, which is what
+ * it was testing before the rails existed.
+ */
+const ballot = () => within(screen.getByRole("main"));
 
 describe("the four states", () => {
   it("says it is loading before the ballot arrives", () => {
@@ -102,7 +119,7 @@ describe("going back", () => {
   /** Answer the opening question and walk on to the question it opened. */
   async function walkOn() {
     await screen.findByText(first.question);
-    fireEvent.keyDown(screen.getByText("Yes"), { key: "ArrowRight" });
+    fireEvent.keyDown(ballot().getByText("Yes"), { key: "ArrowRight" });
     fireEvent.click(
       await screen.findByRole("button", { name: /How do we pay for it\?/ }),
     );
@@ -145,7 +162,7 @@ describe("going back", () => {
     );
 
     await screen.findByText(opener.question);
-    fireEvent.keyDown(screen.getByText("Yes"), { key: "ArrowRight" });
+    fireEvent.keyDown(ballot().getByText("Yes"), { key: "ArrowRight" });
     fireEvent.click(
       await screen.findByRole("button", {
         name: /Should members set the budget\?/,
@@ -164,7 +181,7 @@ describe("going back", () => {
 
     expect(cast).not.toHaveBeenCalled();
     // Still on the question, not moved on by a phantom vote.
-    expect((await screen.findByRole("heading")).textContent).toBe(
+    expect((await ballot().findByRole("heading")).textContent).toBe(
       secondSwipe.question,
     );
   });
@@ -179,7 +196,7 @@ describe("going back", () => {
     // question previews "How do we pay for it?" under its Yes side, so that
     // wording is legitimately on this screen. Which question is *being asked*
     // is the heading.
-    expect((await screen.findByRole("heading")).textContent).toBe(
+    expect((await ballot().findByRole("heading")).textContent).toBe(
       first.question,
     );
   });
@@ -220,7 +237,7 @@ describe("going back", () => {
     );
 
     await screen.findByText(first.question);
-    fireEvent.keyDown(screen.getByText("Yes"), { key: "ArrowRight" });
+    fireEvent.keyDown(ballot().getByText("Yes"), { key: "ArrowRight" });
     fireEvent.click(
       await screen.findByRole("button", { name: /How do we pay for it\?/ }),
     );
@@ -236,7 +253,7 @@ describe("going back", () => {
     fireEvent.click(screen.getByRole("button", { name: /Back/ }));
 
     // The middle question, not the one the run started on.
-    expect((await screen.findByRole("heading")).textContent).toBe(
+    expect((await ballot().findByRole("heading")).textContent).toBe(
       middle.question,
     );
   });
@@ -274,13 +291,15 @@ describe("walking the run", () => {
     );
     await screen.findByText(first.question);
 
-    fireEvent.keyDown(screen.getByText("Yes"), { key: "ArrowRight" });
+    fireEvent.keyDown(ballot().getByText("Yes"), { key: "ArrowRight" });
     fireEvent.click(
       await screen.findByRole("button", { name: /How do we pay for it\?/ }),
     );
 
     expect(await screen.findByText("How do we pay for it?")).toBeTruthy();
-    expect(screen.queryByText(first.question)).toBeNull();
+    // In the ballot: the left rail lists the questions the run has been
+    // through, so the old question is legitimately still on the page.
+    expect(ballot().queryByText(first.question)).toBeNull();
   });
 
   it("takes the other path when the other answer is given", async () => {
@@ -306,7 +325,7 @@ describe("walking the run", () => {
     );
     await screen.findByText(first.question);
 
-    fireEvent.keyDown(screen.getByText("No"), { key: "ArrowLeft" });
+    fireEvent.keyDown(ballot().getByText("No"), { key: "ArrowLeft" });
     fireEvent.click(
       await screen.findByRole("button", { name: /Which ads are allowed\?/ }),
     );
@@ -328,7 +347,7 @@ describe("walking the run", () => {
     );
     await screen.findByText(first.question);
 
-    fireEvent.keyDown(screen.getByText("Yes"), { key: "ArrowRight" });
+    fireEvent.keyDown(ballot().getByText("Yes"), { key: "ArrowRight" });
     fireEvent.click(
       await screen.findByRole("button", { name: /How do we pay for it\?/ }),
     );
@@ -337,5 +356,119 @@ describe("walking the run", () => {
     // The second question is being asked, not answered: no outcome is showing.
     expect(screen.queryByText("Counted.")).toBeNull();
     expect(screen.getByRole("button", { name: "A" })).toBeTruthy();
+  });
+});
+
+describe("the rails either side of the phone", () => {
+  const opener = poll({
+    question: "Should the ODC stay free of paid ads?",
+    next: ["ads-allowed", "pay-for-it"],
+  });
+  const paid = poll({
+    id: "pay-for-it",
+    question: "How do we pay for it?",
+    choices: ["A", "B", "C"],
+    next: [null, null, null],
+  });
+  const ads = poll({
+    id: "ads-allowed",
+    question: "Which ads are allowed?",
+    choices: ["All", "Some", "None"],
+    next: [null, null, null],
+  });
+
+  const runOf = () => (
+    <Run
+      api={stubApi({ poll: graph([opener, paid, ads]) })}
+      pollId="ads-free"
+    />
+  );
+  const nav = () =>
+    within(screen.getByRole("navigation", { name: "Answered" }));
+  const aside = () =>
+    within(screen.getByRole("region", { name: "Where this goes" }));
+
+  /** Answer the opening swipe with Yes and walk on to what it opens. */
+  const answerYesAndGo = async () => {
+    // The ballot has to be on screen before it can be answered; without this
+    // the helper races the first load and the failure it produces ("cannot
+    // find Yes") reads as a bug in the rail rather than in the test.
+    await ballot().findByText(opener.question);
+    fireEvent.keyDown(ballot().getByText("Yes"), { key: "ArrowRight" });
+    fireEvent.click(
+      await screen.findByRole("button", { name: /How do we pay for it\?/ }),
+    );
+    await ballot().findByText(paid.question);
+  };
+
+  it("names where each answer goes, before it is answered", async () => {
+    render(runOf());
+    await ballot().findByText(opener.question);
+    expect(await aside().findByText(ads.question)).toBeTruthy();
+    expect(aside().getByText(paid.question)).toBeTruthy();
+  });
+
+  it("says the run ends here when no answer opens anything", async () => {
+    render(runOf());
+    await answerYesAndGo();
+    expect(aside().getByText(/Nothing follows this one yet/)).toBeTruthy();
+  });
+
+  it("lists the run as it is walked", async () => {
+    render(runOf());
+    await ballot().findByText(opener.question);
+    // Only where we are, at the start: the rail lists where the run has been,
+    // and a forward list would be a guess at answers not yet given.
+    expect(nav().queryByText(paid.question)).toBeNull();
+
+    await answerYesAndGo();
+    /*
+     * `find`, not `get`: the rail's wording arrives from an effect that runs
+     * after the ballot has already rendered the new question, so reading it
+     * synchronously races that second commit. It passed alone and failed
+     * under a full suite, which is the same shape as #155.
+     */
+    expect(await nav().findByText(paid.question)).toBeTruthy();
+    expect(nav().getByText(opener.question)).toBeTruthy();
+  });
+
+  /*
+   * The rail is the Back control made visible, so it must move the run and
+   * not merely look like it does — the failure this test exists to catch is a
+   * rail that lists the walk and does nothing when pressed.
+   */
+  it("returns to a question that is pressed in the rail", async () => {
+    render(runOf());
+    await answerYesAndGo();
+
+    fireEvent.click(
+      await nav().findByRole("button", { name: opener.question }),
+    );
+
+    /*
+     * Asserted on the heading rather than on the other question being absent:
+     * the opening ballot PREVIEWS what each answer opens, so "How do we pay
+     * for it?" is legitimately on the ballot as a preview. The question being
+     * asked is the heading.
+     */
+    expect((await ballot().findByRole("heading")).textContent).toBe(
+      opener.question,
+    );
+  });
+
+  /*
+   * Going back forgets what came after. Otherwise the rail would grow a
+   * branch the run did not take and offer a way "back" to a question that is
+   * now ahead of it.
+   */
+  it("drops the questions that came after the one returned to", async () => {
+    render(runOf());
+    await answerYesAndGo();
+    fireEvent.click(
+      await nav().findByRole("button", { name: opener.question }),
+    );
+    await ballot().findByText(opener.question);
+
+    expect(nav().queryByText(paid.question)).toBeNull();
   });
 });
