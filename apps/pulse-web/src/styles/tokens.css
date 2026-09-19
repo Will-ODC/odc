@@ -44,6 +44,27 @@
   --brand-ink: #eef2f8;
   --brand-dot: rgba(255, 255, 255, 0.85);
 
+  /*
+   * The surfaces and edges drawn ON the dark ballot.
+   *
+   * Every one of these was a literal `rgba(255, 255, 255, …)` sitting in a
+   * component, which is the rule `odc-ui` already sets ("no hex, no magic
+   * pixels inside a component") and a straight blocker on ever having a light
+   * theme: seven of them are focus rings, and a white focus ring on a light
+   * background is an invisible focus ring. The values below are byte for byte
+   * what those literals were — this names them, it does not restyle anything.
+   */
+  --focus-ring: rgba(255, 255, 255, 0.7);
+  --surface-rest: rgba(255, 255, 255, 0.04);
+  --surface-hover: rgba(255, 255, 255, 0.08);
+  --surface-lifted: rgba(255, 255, 255, 0.1);
+  --control-bg: rgba(255, 255, 255, 0.14);
+  --control-bg-strong: rgba(255, 255, 255, 0.16);
+  --control-line: rgba(255, 255, 255, 0.22);
+  --track: rgba(255, 255, 255, 0.34);
+  --chip-ink: rgba(255, 255, 255, 0.65);
+  --ballot-ink-max: #fff;
+
   /* The two sides. `-lean` is the strongest tint a drag reaches before it
      commits; `-settled` is the flat ground the WHOLE screen takes once a side
      has won - both halves, one colour. It is much lighter than the lean
