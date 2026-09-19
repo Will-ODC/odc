@@ -326,14 +326,12 @@ fourth time this file has been able to say that.
   trusting the chain lets anyone claim any address.
 - **`.dockerignore` matches whole paths, not basenames.** Unlike `.gitignore`, a
   bare `node_modules` excludes only `/node_modules` — `apps/pulse/.env`, where a
-  live key would sit, went straight into a layer. **Every pattern needs `**/`.**
+  live key would sit, went straight into a layer. **Every pattern needs `**/`.\*\*
 - **Compose interpolates the whole file before profiles filter it.** A
   `${VAR:?...}` on a profiled service breaks `up db`, the database-only command
   the tests depend on, with an error naming a service nobody started. The error
   looks exactly like the guard working, and was mistaken for it.
-- **The client's `tsconfig.json` includes `test/**`, and `end-to-end.test.ts`
-  imports `apps/pulse`'s source.** So `pnpm --filter @odc/pulse-web build`
-  cannot run in an image containing only the client. `tsconfig.build.json`
+- **The client's `tsconfig.json` includes `test/**`, and `end-to-end.test.ts`imports`apps/pulse`'s source.** So `pnpm --filter @odc/pulse-web build`cannot run in an image containing only the client.`tsconfig.build.json`
   exists for that and is the one the Dockerfile uses.
 - **NEITHER IMAGE HAS EVER BEEN BUILT.** No Docker daemon in the session that
   wrote them. Inputs were each verified separately — `pnpm deploy --prod` really
@@ -355,6 +353,117 @@ fourth time this file has been able to say that.
   and the client only displays it. Its one real job is gating who may sign in —
   which is exactly what makes a fresh deployment unusable. Read P4c before
   starting: it names the two things that decision does NOT settle.
+
+### Landed 2026-09-16/19 — a click that lands, and a window that is a page
+
+| Squash    | PR   | What                                                        |
+| --------- | ---- | ----------------------------------------------------------- |
+| `cd4ff4a` | #167 | let a click reach the ballot half it landed on              |
+| `d1ba45a` | #168 | a desktop layout, so the width is a page and not dead space |
+| `e30d5cf` | #169 | the ballot's own colours become tokens                      |
+
+**#167 — the swipe ballot did not answer a mouse.** Reported from a desktop
+browser as "nothing works / clicks", and it was two faults stacked, both
+invisible on a phone and both invisible to the suite:
+
+- **`setPointerCapture` on `pointerdown` retargets the compatibility `click`.**
+  A press on a half arrived as a click on the parent `<div>`, so the
+  `<button>`'s handler never ran and nothing was cast. Measured in a real
+  browser on a press that never moved: `pointerdown` → the button,
+  `pointerup` and `click` → the split. Capture is only needed once a drag is
+  under way, so it is now taken on the first move past `DRAG_SLOP`.
+- **A four-pixel gap swallowed the rest.** `onPointerUp` treated any press
+  travelling past `DRAG_SLOP` (4px) as a gesture that had answered itself,
+  while a drag only commits at `COMMIT_DISTANCE` (70px). Pressing a mouse or
+  trackpad button drifts a few pixels almost every time, so everything between
+  sprang back without voting and then ate the click.
+
+**Why nothing caught it, and the standing gap it names:** jsdom implements
+neither pointer capture nor click retargeting, and every existing test
+dispatched press and release **with no move between them** — a fingertip, not
+a mouse. The pointer stub carried `pointerId` and silently dropped
+`pointerType`, so a test could set it and change nothing; it carries both now.
+**Two real bugs have now hidden in the gap between jsdom and a browser
+(`hidden={settled}` was the first), and there is still no browser-level test
+harness in this repo.** That is the shape to expect a third time.
+
+**#168 — the desktop layout.** On a laptop the 390px phone sat marooned in a
+page almost exactly its own colour, so the whole window read as the app and
+only the middle strip answered a press. The width is now given something to
+hold: a thin top bar (brand, and the way to sign in), a left rail of the
+questions answered so far — the existing Back control made visible — and a
+right rail naming where each answer leads, built from the poll's own `next`
+edges. New components: `AppShell`, `TopBanner`, `SideNav`, `NextUp`, plus
+`Rail.css`.
+
+Four things in it worth not rediscovering:
+
+- **One component tree, one bundle, no device detection.** Mobile-first:
+  everything outside the single `@media (min-width: 1100px)` block _is_ the
+  phone, unchanged, and the desktop rules are an addition a narrow screen
+  never reads — so a desktop edit cannot regress the phone.
+- **The shell owns the layout mode; the screens own their markup**, and the
+  interface between them is custom properties (`--frame-w/-h/-radius/-border/
+-shadow`, `--screen-brand-display`, `--head-min`, `--side-rest`), never a
+  selector reaching across files. The phone frame becoming five tokens is what
+  lets the breakpoint dissolve it into a page without touching either screen
+  that draws it — **those two copies had already drifted apart once.**
+- **The breakpoint cannot be a token.** A media query is evaluated before
+  custom properties resolve, so `1100px` is a literal in `AppShell.css`, next
+  to the only rule that uses it, and `tokens.css` says so.
+- **Trending and official polls are deliberately absent from the rails.**
+  There is no listing endpoint — every route is `/api/polls/:id/...` and
+  `VotingStore` has no enumeration — so those rows had no honest source and
+  inventing them was the wrong answer. **`GET /api/polls` is now blocking
+  visible UI, not just the unbuilt home screen** (plan item P3).
+
+**#169 — colours become tokens, ahead of a light theme.** Twenty-one literal
+`rgba(255, 255, 255, …)` values sat inside `SwipeBallot.css` (11),
+`ChoiceBallot.css` (6) and `ResultsPanel.css` (4). `odc-ui` already forbids
+that, but the reason it mattered now is that **seven of the twenty-one are
+focus rings** — a white focus ring on a light background is an invisible focus
+ring, so a light mode built on top of these would not have looked wrong, it
+would have silently deleted keyboard focus visibility across both ballots and
+the results panel. Named by role, so a second palette has something to answer:
+`--focus-ring`, `--surface-rest/-hover/-lifted`, `--control-bg`,
+`--control-bg-strong`, `--control-line`, `--track`, `--chip-ink`,
+`--ballot-ink-max`. **Nothing is restyled** — every value is byte for byte
+what it replaced, read back from the running page with `getComputedStyle` and
+compared, zero mismatches.
+
+**Not covered by CI, in both #168 and #169: jsdom applies no stylesheets.**
+Which layout shows at which width was verified by hand at five widths (377 /
+768 / 1099 stay on the phone; 1100 / 1440 get the page), and the token values
+were read out of a running browser. Neither fact is pinned by a test, and
+neither can be until there is a browser harness.
+
+**Still open from this round:**
+
+- **#170 (`pulse/20-opaque-anon-mark`) is the one PR not merged** — the privacy
+  mark extracted to a shared SVG asset and made fully opaque. Rebased onto
+  `e30d5cf` and green as of 2026-09-19.
+- **The privacy mark cannot be themed as `<img src>`.** #170 consumes
+  `src/assets/privacy-mark.svg` through an `<img>`, which is an isolated
+  document page CSS cannot reach into, with `#fff` baked in and
+  `--privacy-mark` dropped from `tokens.css`. Using the file as a `mask` with
+  `background: var(--privacy-mark)` keeps the extraction and restores theming.
+  Decide this before the light theme, not after.
+- **Nothing asks who is signed in.** There is no `useMe` hook, so `TopBanner`
+  carries an `identity` slot that is always empty and the bar always offers the
+  way in. The art for a recognised (non-anonymous) mark does not exist either.
+- **An intermittent failure was reported in `Redeem > leaves no spent link
+behind in the history`** during #168, described there as pre-existing and
+  older than that branch. Nobody has diagnosed it. Not reproduced since — this
+  session could not run the suite (no `node_modules`), so treat it as an open
+  report rather than a confirmed flake.
+
+### Asked for by the operator, 2026-09-16 — a light theme
+
+Named in #169 as the reason the tokens were worth extracting: **light once
+signed in, dark while anonymous.** So the theme is not a preference toggle, it
+is a _signal_ — the page tells you which of the two you currently are. Nothing
+is designed and no item covers it; it needs the two blockers above (`useMe`,
+and a themeable privacy mark) before any palette work starts.
 
 ### Identity and authentication levels — decided 2026-09-12, NOT started
 
@@ -863,9 +972,16 @@ exist`) looks like a credentials bug rather than a port collision. This cost
   is a decision rather than a typo.
 - **`pnpm dev` generates an ephemeral session secret** and announces it; every
   restart invalidates every cookie. That is deliberate, not a bug to fix.
-- **`pulse/4b-sign-in-routes` is an unlanded remote branch with no open PR**
-  (head `861b983`). Nobody has said whether it is abandoned or owed. Check
-  before starting sign-in work — do not assume either way.
+- ~~**`pulse/4b-sign-in-routes` is an unlanded remote branch.**~~ **GONE as of
+  2026-09-19** — the remote carries no such branch. Nothing was ever said about
+  whether it was abandoned or owed, and there is nothing left to check; sign-in
+  work starts from master.
+- **jsdom is not a browser, and two real bugs have now hidden in the gap.**
+  It applies no imported stylesheet (`hidden={settled}`, 2026-08-26) and
+  implements neither pointer capture nor click retargeting (#167, 2026-09-16).
+  Anything about layout, specificity, or what a real press does to a real
+  element is **unpinned by CI** and has to be checked by hand in a browser.
+  There is still no browser-level test harness in this repo.
 - **Two agents in one worktree will eat each other's work.** On 2026-08-25 a
   spawned task and the session that spawned it both edited
   `/Users/williamchu/Desktop/odc-pulse-ui`. The task committed to its own branch

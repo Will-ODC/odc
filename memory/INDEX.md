@@ -38,6 +38,10 @@ Do not apply charter rules to `apps/**`, and do not relax them anywhere else.
   **Mail is DONE** — Resend, #164, ADR-0027. **Serving is DONE** — a production
   entry point and two images on one origin, #165, ADR-0028; **but neither image
   has ever been built, and the first `docker build` is still the test.**
+  2026-09-16/19 landed the client on a desktop: a mouse click reaches the
+  ballot again (#167), the window is a page with two rails rather than dead
+  space (#168), and the ballot's colours are tokens ahead of a light theme
+  (#169). **#170 is open** and is the only pulse PR in flight.
   Of the four things that blocked a deploy, **only poll creation is left**, and
   it is blocked on the moderation decisions under ADR-0024. Also outstanding and
   mostly not code: a verified sending domain, a host, a domain, and **open

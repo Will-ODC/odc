@@ -116,8 +116,37 @@ all resolved at request time), and ADR-0025 defines the related-poll edges (land
 this screen would batch.
 
 Also owed by this item and not by #148: **there is no `GET /api/polls`.** Every
-route is `/api/polls/:id/...`, so a browsing screen needs a listing endpoint
-that does not exist.
+route is `/api/polls/:id/...` and `VotingStore` has no enumeration, so a
+browsing screen needs a listing endpoint that does not exist.
+
+**That endpoint stopped being hypothetical on 2026-09-16.** #168's desktop
+layout wanted rails of trending and official polls and could not have them —
+there was no honest source for the rows, and inventing them was refused. So the
+listing endpoint is now blocking UI that has shipped, not only the home screen
+that has not. It is small, it is server-side, and it does not need this item's
+blocked decision about list-vs-feed-vs-search: **`GET /api/polls` can be built
+before anyone decides what the home screen is.**
+
+### P3a — `GET /api/polls`, a listing endpoint · READY TO BUILD
+
+Split out of P3 on 2026-09-19 so it is not hidden behind that item's blocked
+label. **P3 is blocked on what the home screen is; this is not.**
+
+Every route today is `/api/polls/:id/...` and `VotingStore` has no enumeration,
+so nothing in pulse can answer "which questions exist". #168's desktop rails
+wanted trending and official polls, had no honest source for the rows, and
+shipped without them rather than inventing them — so this now blocks UI that
+has already shipped.
+
+Read before starting: **ADR-0021 rules that ordering is a query, not stored
+data** — a curated group, a relevance ranking and random are all resolved at
+request time — so this endpoint owns its ordering rather than reading one.
+ADR-0025 defines the related-poll edges (#148) a batched listing would group by.
+
+Not decided by this item, and it must not invent them: what a listing is
+allowed to expose about a poll nobody has answered, and whether an unauthored
+`community` filter is a parameter now or later (`polls` has no `community`
+column until P6's migration 002).
 
 ## P4 — A real `Mailer` · BUILT 2026-09-13
 
@@ -532,19 +561,63 @@ they sign in; whether one admin acts for any community or only their own; and
 whether this is a screen in `apps/pulse-web` or a separate surface. Read P6
 before starting — one surface should serve links, polls and gates rather than
 growing two.
+
+## P12 — A light theme that says whether you are signed in · READY TO BUILD, behind two dependencies
+
+**Asked for by the operator, 2026-09-16**, and named in #169 as the reason the
+ballot's colours were worth extracting into tokens: **light once signed in,
+dark while anonymous.**
+
+So this is not a preference toggle. The theme is a **signal** — the page tells
+you which of the two you currently are, in the same register as the privacy
+mark. That framing is the operator's and is the thing to design to; it is not
+decided how loud the switch should be, or what a person who signs in mid-run
+should see happen.
+
+**Ready underneath it:** #169 named the twenty-one literals by role
+(`--focus-ring`, `--surface-rest/-hover/-lifted`, `--control-bg`,
+`--control-bg-strong`, `--control-line`, `--track`, `--chip-ink`,
+`--ballot-ink-max`), so a second palette has something to answer. **Seven of
+them are focus rings** — this work exists partly because a light mode built on
+the old literals would have silently deleted keyboard focus visibility across
+both ballots and the results panel rather than looking wrong.
+
+**The decision it needed is made** — light signed in, dark anonymous — so this
+is READY TO BUILD by this file's vocabulary. **But it depends on two pieces of
+work that do not exist, neither of them palette work:**
+
+- **Nothing asks who is signed in.** There is no `useMe` hook, so no component
+  can switch on it. `TopBanner` carries an `identity` slot that is always empty
+  and the bar always offers the way in.
+- **The privacy mark cannot be recoloured where it stands.** #170 consumes
+  `src/assets/privacy-mark.svg` through an `<img src>`, which is an isolated
+  document that page CSS cannot reach into, with `#fff` baked in, and
+  `--privacy-mark` was dropped from `tokens.css`. Using the file as a `mask`
+  with `background: var(--privacy-mark)` keeps the extraction and restores
+  theming. Decide this **before** the palette, not after. The art for a
+  recognised (non-anonymous) mark does not exist at all.
+
+**And it cannot be proved by CI.** jsdom applies no stylesheets, so every
+claim this item makes about how something looks is checked by hand in a
+browser — the same gap that hid `hidden={settled}` and #167's pointer capture.
+
 ---
 
 ## Not in this file
 
 - **Infrastructure and a Docker dev environment that resembles production.**
-  Recorded at length in `memory/pulse.md` with eight things such an environment
-  must cover, most of which are now items above or in-flight storage work.
-  Whoever takes it reads that section first — and reads the caution with it:
-  every document says the story is settled (`justfile`, ADR-0001), and
-  `docker-compose.yml` is `services: {}` with **no Dockerfile anywhere in the
-  repository, on any branch, in its entire history.** `just up` starts nothing
-  and exits 0. Check for a Dockerfile; do not cite the ADR as evidence one
-  exists.
+  **SATISFIED 2026-09-13 by #165 (P4b).** `apps/pulse/Dockerfile`,
+  `apps/pulse-web/Dockerfile` and `apps/pulse/docker-compose.yml` exist, and
+  `just pulse-up` brings up the database, the API and the client that fronts
+  it. The old warning here — that no Dockerfile existed anywhere in the
+  repository — **is out of date and was removed on 2026-09-19.**
+  What survives of it: **root `just up` still starts nothing and exits 0**, by
+  the deliberate choice in ADR-0028, because root `docker-compose.yml` is the
+  stack of `services/` and pulse is not part of it. So `just up` is still not
+  evidence that pulse infra exists; `just pulse-up` is where pulse's is. And
+  **neither image has ever been built** — the first `docker build` is still the
+  test. `memory/pulse.md` keeps the eight things such an environment must
+  cover, five of which are now closed.
 - **Anything already built.** `memory/pulse.md` is the record of what landed and
   is the only place that answers "does this exist already". Three of the
   operator's earlier requests were satisfied by work that shipped afterwards, and
