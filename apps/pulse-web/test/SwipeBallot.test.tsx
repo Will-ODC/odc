@@ -168,15 +168,122 @@ describe("casting", () => {
     expect(cast).toHaveBeenCalledTimes(1);
   });
 
-  it("does not vote when a drag springs back, click included", async () => {
+  /*
+   * Capture is what broke clicking, and jsdom cannot show it: capturing a
+   * pointer retargets the browser's compatibility `click` to the capturing
+   * element, so every press arrived as a click on the <div> rather than on
+   * the <button> inside it and no vote was ever cast. jsdom implements
+   * neither capture nor that retargeting, which is exactly why a green suite
+   * sat on top of a ballot nobody could click.
+   *
+   * So this asserts the rule that keeps the click where it belongs — capture
+   * is taken when a drag starts, and never merely because a button went down.
+   */
+  it("does not capture the pointer on a press that has not moved", () => {
+    show({});
+    const split = document.querySelector(".ballot__split") as HTMLElement;
+    const capture = vi.fn();
+    split.setPointerCapture = capture;
+
+    fireEvent.pointerDown(split, {
+      clientX: 200,
+      pointerId: 1,
+      pointerType: "mouse",
+    });
+    fireEvent.pointerUp(split, {
+      clientX: 200,
+      pointerId: 1,
+      pointerType: "mouse",
+    });
+
+    expect(capture).not.toHaveBeenCalled();
+  });
+
+  it("captures the pointer once a drag is under way", () => {
+    show({});
+    const split = document.querySelector(".ballot__split") as HTMLElement;
+    const capture = vi.fn();
+    split.setPointerCapture = capture;
+
+    fireEvent.pointerDown(split, {
+      clientX: 200,
+      pointerId: 1,
+      pointerType: "mouse",
+    });
+    fireEvent.pointerMove(split, {
+      clientX: 260,
+      pointerId: 1,
+      pointerType: "mouse",
+    });
+    fireEvent.pointerMove(split, {
+      clientX: 280,
+      pointerId: 1,
+      pointerType: "mouse",
+    });
+
+    // Once for the drag, not once per move.
+    expect(capture).toHaveBeenCalledTimes(1);
+    expect(capture).toHaveBeenCalledWith(1);
+  });
+
+  /*
+   * A mouse is not a fingertip. Pressing a mouse or trackpad button drags the
+   * cursor a few pixels almost every time, and DRAG_SLOP is 4 — so treating
+   * "it moved" as "they meant to swipe" silently ate ordinary clicks on a
+   * desktop, where the two halves are nearly a thousand pixels wide. Nothing
+   * happened at all: not a vote, not a refusal.
+   */
+  it("votes for a mouse click that drifted a few pixels", async () => {
+    const cast = vi.fn(stubApi().cast);
+    show({ cast });
+
+    fireEvent.pointerDown(split(), {
+      clientX: 200,
+      pointerId: 1,
+      pointerType: "mouse",
+    });
+    fireEvent.pointerMove(split(), {
+      clientX: 214,
+      pointerId: 1,
+      pointerType: "mouse",
+    });
+    fireEvent.pointerUp(split(), {
+      clientX: 214,
+      pointerId: 1,
+      pointerType: "mouse",
+    });
+    fireEvent.click(screen.getByRole("button", { name: /^Yes -/ }));
+
+    await waitFor(() => expect(cast).toHaveBeenCalledWith("ads-free", [1]));
+    expect(cast).toHaveBeenCalledTimes(1);
+  });
+
+  /*
+   * A real swipe that changed its mind still stands down — on a touch screen,
+   * where travelling away from where you pressed is the gesture rather than
+   * the hand wobbling. Stated as touch now that the two inputs differ.
+   */
+  it("does not vote when a touch drag springs back, click included", async () => {
     const cast = vi.fn(stubApi().cast);
     show({ cast });
 
     // Travelled, but not far enough to commit. The click that follows must not
     // turn a cancelled gesture into a vote.
-    fireEvent.pointerDown(split(), { clientX: 200, pointerId: 1 });
-    fireEvent.pointerMove(split(), { clientX: 180, pointerId: 1 });
-    fireEvent.pointerUp(split(), { clientX: 180, pointerId: 1 });
+    fireEvent.pointerDown(split(), {
+      clientX: 200,
+      pointerId: 1,
+      pointerType: "touch",
+    });
+    fireEvent.pointerMove(split(), {
+      clientX: 180,
+      pointerId: 1,
+      pointerType: "touch",
+    });
+    fireEvent.pointerUp(split(), {
+      clientX: 180,
+      pointerId: 1,
+      pointerType: "touch",
+    });
     fireEvent.click(screen.getByRole("button", { name: /^Yes -/ }));
 
     expect(cast).not.toHaveBeenCalled();

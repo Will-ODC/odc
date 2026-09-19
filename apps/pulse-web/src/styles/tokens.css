@@ -44,6 +44,27 @@
   --brand-ink: #eef2f8;
   --brand-dot: rgba(255, 255, 255, 0.85);
 
+  /*
+   * The surfaces and edges drawn ON the dark ballot.
+   *
+   * Every one of these was a literal `rgba(255, 255, 255, …)` sitting in a
+   * component, which is the rule `odc-ui` already sets ("no hex, no magic
+   * pixels inside a component") and a straight blocker on ever having a light
+   * theme: seven of them are focus rings, and a white focus ring on a light
+   * background is an invisible focus ring. The values below are byte for byte
+   * what those literals were — this names them, it does not restyle anything.
+   */
+  --focus-ring: rgba(255, 255, 255, 0.7);
+  --surface-rest: rgba(255, 255, 255, 0.04);
+  --surface-hover: rgba(255, 255, 255, 0.08);
+  --surface-lifted: rgba(255, 255, 255, 0.1);
+  --control-bg: rgba(255, 255, 255, 0.14);
+  --control-bg-strong: rgba(255, 255, 255, 0.16);
+  --control-line: rgba(255, 255, 255, 0.22);
+  --track: rgba(255, 255, 255, 0.34);
+  --chip-ink: rgba(255, 255, 255, 0.65);
+  --ballot-ink-max: #fff;
+
   /* The two sides. `-lean` is the strongest tint a drag reaches before it
      commits; `-settled` is the flat ground the WHOLE screen takes once a side
      has won - both halves, one colour. It is much lighter than the lean
@@ -72,4 +93,50 @@
 
   --step: 8px;
   --gutter: 24px;
+
+  /*
+   * The desktop shell — the two rails either side of the phone-sized stage.
+   *
+   * They exist only above the width AppShell.css calls --shell-wide, which
+   * that file has to spell as a literal: a media query cannot read a custom
+   * property. The number lives there, next to the only rule that uses it.
+   */
+  --rail: 248px;
+  --rail-gap: 28px;
+
+  /*
+   * The frame every screen sits in.
+   *
+   * On a phone it is the phone: 390x844, rounded, with a shadow under it.
+   * On a wide screen AppShell.css redefines these five on `.shell` and the
+   * frame dissolves into a page — same markup, same components, a different
+   * room. They are tokens for the same reason the brand values are: the frame
+   * is written out in both SwipeBallot.css and ScreenFrame.css, and two
+   * copies of a literal is how the two screens drifted apart last time.
+   */
+  --frame-w: min(390px, 100vw);
+  --frame-h: min(844px, 100dvh);
+  --frame-radius: var(--r-screen);
+  --frame-border: 1px solid var(--ballot-line);
+  --frame-shadow: var(--shadow-ballot);
+
+  /*
+   * Whether a screen shows its own wordmark.
+   *
+   * It does on a phone, where the screen is the whole app. On a wide screen
+   * the top bar carries the brand and a second one four inches below it is
+   * just a second logo — so the shell sets this to `none` rather than
+   * reaching across into the screens' own classes to hide them.
+   */
+  --screen-brand-display: flex;
+
+  /*
+   * How much of the ballot the question keeps before the answers start.
+   * A third of a phone is the design; a third of a 900px window is a lot of
+   * nothing above the only two things you can press.
+   */
+  --head-min: 34%;
+
+  /* How wide the preview under a swipe answer is allowed to run. */
+  --nextq-max: 118px;
 }
