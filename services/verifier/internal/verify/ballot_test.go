@@ -304,6 +304,10 @@ func TestET24NonContiguousBatchREADING(t *testing.T) {
 		// T1 = {3, 7, 8} reaches 3; T2 = {4, 5, 6}; T3 = {9} is last. A
 		// prefix-at-a-time verifier would reject at line 4.
 		{"reopened_batch_fills", one, cat(votesAt(0, 1, T1), votesAt(0, 3, T2), votesAt(0, 2, T1), votesAt(0, 1, T3)), 0, ""},
+		// T1 = {3, 7} is under-size but holds the highest-seq ballot, so it
+		// is the exempt last batch even though it was opened before T2. A
+		// run-based reading would blame line 4.
+		{"reopened_undersize_is_last", one, cat(votesAt(0, 1, T1), votesAt(0, 3, T2), votesAt(0, 1, T1)), 0, ""},
 		// T1 = {3, 4, 8} (holds the last ballot, exempt anyway); T2 = {5, 6}
 		// is under-size and its last member is 6, so line 7 is blamed (T3 =
 		// {7}, proven at 8, is later).
