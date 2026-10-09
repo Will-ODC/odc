@@ -34,6 +34,12 @@ pulse's database (see [Test](#test)) and set `PULSE_DATABASE_URL` before `dev`.
 Set `PULSE_SESSION_SECRET` too: the ballot cookie is signed with it, so without
 it a restart signs everyone out and lets each browser vote again.
 
+Signing out advances a per-voter generation in the shared store, revoking prior
+session cookies across API instances even if their clocks differ. Existing
+session cookies require a new sign-in after this update; ballot cookies retain
+their format. Drain old API instances before serving the new version so all
+instances enforce the same revocation rule.
+
 With a database, the seed writes only polls that are not stored yet. Editing
 `src/dev-server.ts` does not change polls already there, and the seeded polls
 close three days after the start that first wrote them. For a fresh demo, empty
@@ -104,6 +110,11 @@ just pulse-up      # or the docker compose line it wraps
 `api`, so the browser sees one website — which is what keeps the `SameSite=Lax`
 session cookie working without weakening it. It is the same shape `pnpm dev`
 already has, where vite proxies `/api` to port 8080.
+
+The API trusts one forwarded IP hop only when its direct peer has a private
+network address, as nginx does on the Compose network. Requests from other
+peers ignore `X-Forwarded-For`. Keep the API port unpublished; rate limits use
+the resulting client IP.
 
 `src/main.ts` **refuses to start** without the four values below, rather than
 inventing them the way `dev-server.ts` may. Everything missing is named in one
