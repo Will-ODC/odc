@@ -27,8 +27,6 @@ type Asking =
   | { status: "idle" }
   | { status: "sending" }
   | { status: "sent"; email: string }
-  /** No community owns this domain yet. An answer, not a fault. */
-  | { status: "not_eligible"; message: string }
   /** The request itself did not get through. Nothing to do with the address. */
   | { status: "failed"; message: string };
 
@@ -84,12 +82,9 @@ export function SignIn({ api }: { api: PulseApi }) {
     setFieldError(null);
     setAsking({ status: "sending" });
     try {
-      const result = await api.requestLink(address, optIn);
-      setAsking(
-        result.status === "sent"
-          ? { status: "sent", email: address }
-          : { status: "not_eligible", message: result.message },
-      );
+      await api.requestLink(address, optIn);
+      // Anyone with a valid address gets a link, so the answer is always "sent".
+      setAsking({ status: "sent", email: address });
     } catch (err) {
       /*
        * "A link is already on its way" is good news wearing a 429. Answering
@@ -124,21 +119,20 @@ export function SignIn({ api }: { api: PulseApi }) {
    * the input `aria-invalid` and describing it with "we could not reach pulse"
    * tells a screen-reader user to fix an address that is perfectly good.
    */
-  const problem =
-    fieldError ?? (asking.status === "not_eligible" ? asking.message : null);
+  const problem = fieldError;
   const failure = asking.status === "failed" ? asking.message : null;
 
   return (
     <ScreenFrame>
       <h1 className="signin__title">Your campus is deciding something.</h1>
       <p className="signin__lede">
-        Enter your school email and we will send you a link. There is no
-        password to make up.
+        Enter your email and we will send you a link. There is no password to
+        make up.
       </p>
 
       <form className="signin__form" onSubmit={submit} noValidate>
         <label className="signin__label" htmlFor={emailId}>
-          Your school email
+          Your email
         </label>
         <input
           id={emailId}
@@ -156,14 +150,10 @@ export function SignIn({ api }: { api: PulseApi }) {
           onChange={(event) => {
             setEmail(event.target.value);
             // Whatever was wrong is being addressed; keep quiet until they
-            // stop typing and it is worth saying again. The answer about the
-            // OLD address goes too — a refusal naming a domain they are in
-            // the middle of replacing is stale the moment they start typing.
+            // stop typing and it is worth saying again. A failure from the
+            // last attempt goes too — it is stale the moment they start typing.
             if (fieldError) setFieldError(null);
-            if (
-              asking.status === "not_eligible" ||
-              asking.status === "failed"
-            ) {
+            if (asking.status === "failed") {
               setAsking({ status: "idle" });
             }
           }}

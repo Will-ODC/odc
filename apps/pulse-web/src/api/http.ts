@@ -38,30 +38,18 @@ export class HttpPulseApi implements PulseApi {
     email: string,
     proofEmailsOptIn: boolean,
   ): Promise<RequestLinkResult> {
-    try {
-      const body = await this.#send<{ message?: unknown }>("POST", "/sign-in", {
-        email,
-        proofEmailsOptIn,
-      });
-      // The server's own "check your email" sentence, carried rather than
-      // dropped: the screen that follows should not have to invent copy the
-      // API already documents as safe to show.
-      return typeof body.message === "string" && body.message !== ""
-        ? { status: "sent", message: body.message }
-        : { status: "sent" };
-    } catch (err) {
-      // A domain no community has claimed yet is an answer, not a failure: the
-      // server says so plainly, naming the domain, and that sentence is exactly
-      // what the person should read. Everything else still throws.
-      if (
-        err instanceof ApiError &&
-        err.status === 403 &&
-        err.code === "not_a_member"
-      ) {
-        return { status: "not_eligible", message: err.message };
-      }
-      throw err;
-    }
+    // Anyone with a valid address gets a link (ADR-0030), so there is no
+    // refusal to treat as an answer: every refusal throws.
+    const body = await this.#send<{ message?: unknown }>("POST", "/sign-in", {
+      email,
+      proofEmailsOptIn,
+    });
+    // The server's own "check your email" sentence, carried rather than
+    // dropped: the screen that follows should not have to invent copy the
+    // API already documents as safe to show.
+    return typeof body.message === "string" && body.message !== ""
+      ? { status: "sent", message: body.message }
+      : { status: "sent" };
   }
 
   async redeem(token: string): Promise<Me> {

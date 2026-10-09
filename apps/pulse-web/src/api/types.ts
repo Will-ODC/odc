@@ -100,7 +100,8 @@ export type CastOutcome =
  */
 export interface Me {
   id: string;
-  community: string;
+  /** `null` when the address's domain matched no community (ADR-0030). */
+  community: string | null;
   /** The address the link was sent to, shown back so a typo is obvious. */
   email: string;
 }
@@ -132,18 +133,14 @@ export interface PulseApi {
 }
 
 /**
- * Two answers, because the server gives two: the link is on its way, or the
- * address's domain belongs to no community yet. There is no `devLink`
- * variant — no implementation can produce one (the server never returns a link
- * in a response body), and a variant nothing can produce is a lie in the type.
- *
- * `message` on `not_eligible` is the server's own sentence, which names the
- * domain. It is shown as-is.
+ * One answer, because the server gives one: the link is on its way (anyone
+ * with a valid address gets one, ADR-0030). There is no `devLink` variant — no
+ * implementation can produce one (the server never returns a link in a
+ * response body), and a variant nothing can produce is a lie in the type.
  */
 export type RequestLinkResult =
   /** `message` is the server's own "check your email" sentence, when it sent one. */
-  | { status: "sent"; message?: string }
-  | { status: "not_eligible"; message: string };
+  { status: "sent"; message?: string };
 
 /**
  * How every implementation of `PulseApi` reports a refusal.
@@ -161,9 +158,9 @@ export class ApiError extends Error {
    * The server's machine-readable `error` slug, when it sent one.
    *
    * Kept deliberately narrow: callers show `message`, never this. It exists so
-   * the one refusal the UI has to *treat differently* — `not_a_member`, which
-   * is an answer to "can I take part?" rather than a fault — can be told apart
-   * from every other 403 without matching on a sentence.
+   * the one refusal the UI has to *treat differently* — `link_already_sent`,
+   * which is good news rather than a fault — can be told apart from every
+   * other refusal without matching on a sentence.
    */
   readonly code: string | undefined;
 
