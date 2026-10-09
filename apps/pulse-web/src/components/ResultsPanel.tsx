@@ -1,3 +1,4 @@
+import { Fragment } from "react";
 import type { CSSProperties, RefObject } from "react";
 import type { ChoiceResult, Results } from "../api/types.js";
 import "./ResultsPanel.css";
@@ -18,21 +19,22 @@ import "./ResultsPanel.css";
  */
 export function ResultsPanel({
   results,
-  yourChoice,
+  yourChoices = [],
   ended = false,
   onClose,
   panelRef,
 }: {
   results: Results;
   /**
-   * The index of the choice this person picked, matched against
-   * `ChoiceResult.index` - never used as a position in `results.choices`,
-   * which may arrive in any order (ADR-0021).
+   * The indexes of the choices this person picked - one on a `single` poll,
+   * any number on an `approval` one. Matched against `ChoiceResult.index`,
+   * never used as positions in `results.choices`, which may arrive in any
+   * order (ADR-0021).
    *
-   * Absent when there is nothing to mark: someone reading a closed question
-   * they never answered, or whose earlier answer could not be loaded.
+   * Empty or absent when there is nothing to mark: someone reading a closed
+   * question they never answered, or whose earlier answer could not be loaded.
    */
-  yourChoice?: number | undefined;
+  yourChoices?: readonly number[] | undefined;
   /**
    * The question has closed, so the count is a final one. "So far" would
    * promise more answers to come on a question that can take no more.
@@ -48,10 +50,10 @@ export function ResultsPanel({
    */
   panelRef?: RefObject<HTMLDivElement | null> | undefined;
 }) {
-  const yours =
-    yourChoice === undefined
-      ? undefined
-      : results.choices.find((choice) => choice.index === yourChoice);
+  // In the order the results list them, so the words read down the list.
+  const yours = results.choices.filter((choice) =>
+    yourChoices.includes(choice.index),
+  );
   return (
     <div
       className="results"
@@ -87,8 +89,10 @@ function Counts({
   yours,
 }: {
   results: Results;
-  yours: ChoiceResult | undefined;
+  yours: readonly ChoiceResult[];
 }) {
+  const isYours = (choice: ChoiceResult) =>
+    yours.some((one) => one.index === choice.index);
   /**
    * The widest share on screen, so the bars are read against each other rather
    * than against a hundred that nothing may reach. An `approval` poll can push
@@ -102,9 +106,9 @@ function Counts({
 
   return (
     <>
-      {yours ? (
+      {yours.length > 0 ? (
         <p className="results__yours">
-          You picked <b>{yours.label}</b>.
+          You picked <Labels choices={yours} />.
         </p>
       ) : null}
 
@@ -113,11 +117,11 @@ function Counts({
           <li
             key={choice.index}
             className="results__row"
-            {...(choice.index === yours?.index ? { "data-yours": "true" } : {})}
+            {...(isYours(choice) ? { "data-yours": "true" } : {})}
           >
             <span className="results__label">
               {choice.label}
-              {choice.index === yours?.index ? (
+              {isYours(choice) ? (
                 <span className="results__badge">yours</span>
               ) : null}
             </span>
@@ -143,6 +147,16 @@ function Counts({
       ) : null}
     </>
   );
+}
+
+/** "A", "A and B", "A, B and C" - each label in bold. */
+function Labels({ choices }: { choices: readonly ChoiceResult[] }) {
+  return choices.map((choice, at) => (
+    <Fragment key={choice.index}>
+      {at === 0 ? "" : at === choices.length - 1 ? " and " : ", "}
+      <b>{choice.label}</b>
+    </Fragment>
+  ));
 }
 
 /**
