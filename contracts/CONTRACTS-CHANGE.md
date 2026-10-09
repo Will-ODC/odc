@@ -19,6 +19,36 @@ Format (newest first, one entry per merged contracts change):
 
 ---
 
+## event-types.md v11 — 2026-10-09 — a ballot batch is a run, not a set (ADR-0029 review fixes)
+
+**Why a second entry.** #176 (v10) merged the first draft of ADR-0029 before its
+fresh-context review's findings were fixed. The review returned REQUEST CHANGES:
+ET-24a laid over a **set**-defined ET-24 still left the blamed line open. With
+`ballot_batch_min` 3 and one issue at T1, T1, T2, T2, T2, T1, the set reading
+blames the returning T1 (the T1 set holds three, so only ET-24a fires) and the
+run reading blames the first T2. EV-17 checks the line. Both verifiers already
+implement the run reading.
+
+- **`ET-24` redefined: a batch is a maximal run**, in `seq` order among one
+  issue's registered `(vote_cast, 1)` events, sharing one `ts`. It ends at the
+  issue's next registered ballot whose `ts` differs, and if it is under-size, that
+  ballot is the fatal line, on every chain, including one that also breaks
+  ET-24a. "Membership and lastness are decided by `seq`" is now literally true.
+- **`ET-24a` restated:** no two batches of one issue share a `ts`. On every chain
+  that satisfies it, runs and sets coincide, so v10's meaning is unchanged
+  wherever it was well-defined. Each sentence now says "registered" inline. It
+  states the **new producer obligation**: a ledger whose clock steps backwards
+  MUST hold or advance the batch instant, since a chain that breaks ET-24a cannot
+  be repaired.
+- **`ET-23` clarified:** zero and negative multiples count (an instant before
+  1970 has a negative offset), so an implementation using unsigned arithmetic
+  cannot diverge.
+- **ADR-0029** body revised to the decision as finally specified, with a status
+  note saying so. `services/ledger/CLAUDE.md` and `docs/implementation-plan.md`
+  name ET-24a and the clock obligation.
+- **No fixture changes and no corpus verdict changes.** The owed vectors in
+  ADR-0029 now include the review's counterexample.
+
 ## event-types.md v10 · event-schema.md v5 — 2026-10-08 — a ballot batch, once left, is closed (ADR-0029)
 
 **The defect.** ET-24 defined a batch as a *set* of an issue's ballots sharing a
