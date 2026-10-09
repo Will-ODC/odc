@@ -46,6 +46,24 @@ export function claimStoreConformance(
         assert.equal(await store.byTokenHash("hash-2"), undefined);
       });
 
+      test("a_claim_with_no_community_reads_back_as_null_everywhere", async (t) => {
+        // ADR-0030: an address no community claims still gets a link, and
+        // its claim carries community null to the redeem that copies it onto
+        // the voter. Null, not undefined or "", through every read.
+        const store = await fresh(t);
+        const stored = claim({ email: "jo@gmail.com", community: null });
+        await store.put(stored);
+        assert.deepEqual(await store.byTokenHash("hash-1"), stored);
+
+        const live = await store.liveFor("jo@gmail.com", AT);
+        assert.deepEqual(live, [stored]);
+
+        await store.markUsed("hash-1", AT);
+        const spent = await store.byTokenHash("hash-1");
+        assert.ok(spent && "community" in spent);
+        assert.equal(spent.community, null);
+      });
+
       test("marking_a_claim_used_records_when", async (t) => {
         const store = await fresh(t);
         await store.put(claim());

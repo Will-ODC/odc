@@ -44,6 +44,27 @@ export function voterStoreConformance(
         assert.equal(await store.byId("nobody"), undefined);
       });
 
+      test("a_voter_with_no_community_reads_back_as_null_everywhere", async (t) => {
+        // ADR-0030: no community is null — not undefined, not "", and not a
+        // missing key — and every read and every update hands it back that
+        // way, so a caller never has to know which store it is talking to.
+        const store = await fresh(t);
+        const created = await store.create(
+          voter({ email: "jo@gmail.com", community: null }),
+        );
+        assert.equal(created.community, null);
+        assert.deepEqual(await store.byEmail("jo@gmail.com"), created);
+        assert.deepEqual(await store.byId("voter-1"), created);
+
+        const optedIn = await store.setProofEmails("voter-1", true);
+        assert.ok(optedIn && "community" in optedIn);
+        assert.equal(optedIn.community, null);
+        const signedOut = await store.invalidateSessionsBefore("voter-1", AT);
+        assert.ok(signedOut && "community" in signedOut);
+        assert.equal(signedOut.community, null);
+        assert.equal((await store.byId("voter-1"))?.community, null);
+      });
+
       test("a_new_voter_has_no_sign_out_recorded", async (t) => {
         // Undefined, not epoch zero: a voter who has never signed out must not
         // have their first session compared against a real timestamp.
