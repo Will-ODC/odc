@@ -337,7 +337,7 @@ test("a_validly_signed_cookie_for_a_voter_who_does_not_exist_is_signed_out", asy
   // Signature valid, voter absent. Only the existence check stands between
   // this cookie and a session.
   const h = await setup();
-  const cookie = `${SESSION_COOKIE}=${h.signer.sign("no-such-voter")}`;
+  const cookie = `${SESSION_COOKIE}=${h.signer.sign("no-such-voter", 0)}`;
   assert.equal(
     (await h.app.inject({ url: "/api/me", headers: { cookie } })).statusCode,
     401,
@@ -348,15 +348,23 @@ test("forged_and_foreign_cookies_are_signed_out", async () => {
   const h = await setup();
   const real = await h.signIn("ada@student.ubc.ca");
   const value = real.slice(SESSION_COOKIE.length + 1);
-  const [voterId, iat, exp, mac] = value.split(".");
+  assert.equal(
+    (await h.app.inject({ url: "/api/me", headers: { cookie: real } }))
+      .statusCode,
+    200,
+  );
+  const [version, voterId, generation, iat, exp, mac] = value.split(".");
+  assert.equal(version, "v1");
+  assert.ok(voterId && generation && iat && exp && mac);
   const other = new SessionSigner("a-completely-different-secret");
 
   for (const forged of [
-    `${SESSION_COOKIE}=${voterId}.${iat}.${exp}.not-a-signature`,
-    `${SESSION_COOKIE}=${voterId}.${iat}.${exp}`,
-    `${SESSION_COOKIE}=someone-else.${iat}.${exp}.${mac}`,
-    `${SESSION_COOKIE}=${voterId}.${iat}.${Number(exp) + 86_400}.${mac}`,
-    `${SESSION_COOKIE}=${other.sign(voterId as string)}`,
+    `${SESSION_COOKIE}=v1.${voterId}.${generation}.${iat}.${exp}.not-a-signature`,
+    `${SESSION_COOKIE}=v1.${voterId}.${generation}.${iat}.${exp}`,
+    `${SESSION_COOKIE}=v1.someone-else.${generation}.${iat}.${exp}.${mac}`,
+    `${SESSION_COOKIE}=v1.${voterId}.${Number(generation) + 1}.${iat}.${exp}.${mac}`,
+    `${SESSION_COOKIE}=v1.${voterId}.${generation}.${iat}.${Number(exp) + 86_400}.${mac}`,
+    `${SESSION_COOKIE}=${other.sign(voterId, Number(generation))}`,
     `${SESSION_COOKIE}=`,
   ]) {
     const me = await h.app.inject({

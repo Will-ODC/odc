@@ -13,6 +13,7 @@ import {
   migrate,
 } from "../src/db/migrate.js";
 import { createPool } from "../src/db/pool.js";
+import { PostgresVoterStore } from "../src/identity/pg-store.js";
 
 /**
  * The runner, against a real Postgres.
@@ -93,6 +94,48 @@ test("applying_twice_changes_nothing", { skip }, async () => {
     assert.equal(rows[0]?.applied_at.getTime(), AT.getTime());
   });
 });
+
+test(
+  "upgrading_existing_voters_initializes_session_generation",
+  { skip },
+  async () => {
+    await inTempDir(async (dir) => {
+      const migrations = await loadMigrations();
+      for (const migration of migrations.filter((m) => m.version !== "003")) {
+        await writeFile(
+          path.join(dir, `${migration.version}_${migration.name}.sql`),
+          migration.sql,
+        );
+      }
+      await inThrowawaySchema(async (pool) => {
+        assert.deepEqual(
+          (await migrate(pool, { dir, clock: () => AT })).applied,
+          ["001", "002"],
+        );
+        await pool.query(
+          "insert into voter (id, email, community, claimed_at, proof_emails_opt_in) values ($1, $2, $3, $4, $5)",
+          ["voter-1", "ada@student.ubc.ca", "ubc-students", AT, false],
+        );
+        const next = migrations.find((m) => m.version === "003");
+        assert.ok(next);
+        await writeFile(
+          path.join(dir, `${next.version}_${next.name}.sql`),
+          next.sql,
+        );
+        assert.deepEqual(
+          (await migrate(pool, { dir, clock: () => AT })).applied,
+          ["003"],
+        );
+        const store = new PostgresVoterStore(pool);
+        assert.equal((await store.byId("voter-1"))?.sessionGeneration ?? 0, 0);
+        assert.equal(
+          (await store.advanceSessionGeneration("voter-1"))?.sessionGeneration,
+          1,
+        );
+      });
+    });
+  },
+);
 
 test("refuses_a_migration_that_changed_after_it_ran", { skip }, async () => {
   const dir = await mkdtemp(path.join(tmpdir(), "pulse-migrations-"));
