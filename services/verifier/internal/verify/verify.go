@@ -125,7 +125,6 @@ type vstate struct {
 	regPK   []byte                // genesis registrar_pk, decoded (ET-17)
 	haveKey bool                  // genesis keys captured
 	issues  map[string]*issueInfo // issue_created hash -> tracked facts (ID-7/ET-18a/ET-14b)
-	byIdx   []*issueInfo          // the same issues, by issueInfo.idx
 	ballots ballotState           // ET-24/ET-24a batch instants already left
 }
 
@@ -465,10 +464,8 @@ func stageBIssue(st *vstate, e *event) (string, bool) {
 	}
 	// ID-7: issue_id is this event's hash; record with its choice_count
 	// (ET-18a) and the ET-14b batching parameters ET-23/ET-24 read.
-	iss := &issueInfo{idx: len(st.byIdx), choiceCount: ccV.ival,
+	st.issues[e.hash] = &issueInfo{choiceCount: ccV.ival,
 		intervalMS: intervalV.ival, batchMin: minV.ival}
-	st.issues[e.hash] = iss
-	st.byIdx = append(st.byIdx, iss)
 	return "", true
 }
 
@@ -511,7 +508,7 @@ func stageBVote(st *vstate, e *event) (string, bool) {
 		return "ts is not a multiple of the issue's ballot_batch_interval_ms (ET-23)", false
 	}
 	// ET-24 / ET-24a: place the ballot in its issue's batch sequence. Both
-	// rules are decided at this ballot's own line (event-types.md v10): a
+	// rules are decided at this ballot's own line (event-types.md v11): a
 	// change of ts closes the previous batch for good (ET-24a), so an
 	// under-size batch is proven not-last exactly here (ET-24), and a ts equal
 	// to an instant this issue has already left is a return (ET-24a).
