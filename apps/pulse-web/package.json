@@ -3,7 +3,7 @@
   "version": "0.0.0",
   "private": true,
   "type": "module",
-  "description": "Pulse — the one-screen story client.",
+  "description": "Pulse \u2014 the one-screen story client.",
   "scripts": {
     "build": "tsc -p tsconfig.json --noEmit && vite build",
     "test": "vitest run",
@@ -24,6 +24,6 @@
     "@vitejs/plugin-react": "^5.1.0",
     "jsdom": "^26",
     "vite": "^7.2.0",
-    "vitest": "^3.2.0"
+    "vitest": "^4.1.11"
   }
 }
