@@ -518,3 +518,14 @@
 .ballot__half:disabled .ballot__nextq {
   color: var(--ballot-ink-faint);
 }
+
+/*
+ * Under a closed question: the quiet way to its results (`<SeeResults>`),
+ * centred below the answers on both ballots. Layout only - the control brings
+ * its own look from `.outcome__results`.
+ */
+.ballot__foot {
+  display: flex;
+  justify-content: center;
+  padding: 0 var(--gutter) var(--step);
+}

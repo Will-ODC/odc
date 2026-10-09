@@ -7,12 +7,15 @@ import type {
   Suggestion,
 } from "../api/types.js";
 import { useCastVote } from "../hooks/use-cast-vote.js";
+import { useClosedResults } from "../hooks/use-closed-results.js";
 import { edgesOf, useNextQuestions } from "../hooks/use-next-questions.js";
 import { useSuggestions } from "../hooks/use-suggestions.js";
 import { BallotChrome } from "../components/BallotChrome.js";
 import { AfterVote } from "../components/AfterVote.js";
 import { ClosedNotice } from "../components/ClosedNotice.js";
+import { ClosedResults } from "../components/ClosedResults.js";
 import { Refusal } from "../components/Refusal.js";
+import { SeeResults } from "../components/SeeResults.js";
 import "./SwipeBallot.css";
 import "./ChoiceBallot.css";
 
@@ -76,6 +79,8 @@ export function ChoiceBallot({
    */
   const shut = !poll.open;
   const closedId = useId();
+  /** A shut poll's results, for anyone who asks - see `useClosedResults`. */
+  const ended = useClosedResults(api, poll.id);
 
   return (
     <section className="ballot ballot--list">
@@ -98,6 +103,15 @@ export function ChoiceBallot({
               onNext={() =>
                 onAnswered(chosen === null ? null : (poll.next[chosen] ?? null))
               }
+            />
+          </div>
+        ) : shut && ended.showing ? (
+          <div className="ballot__done">
+            <ClosedResults
+              data={ended.data}
+              onRetry={ended.retry}
+              onClose={ended.close}
+              panelRef={ended.panelRef}
             />
           </div>
         ) : (
@@ -132,6 +146,12 @@ export function ChoiceBallot({
                 </li>
               ))}
             </ul>
+
+            {shut ? (
+              <div className="ballot__foot">
+                <SeeResults onOpen={ended.open} buttonRef={ended.triggerRef} />
+              </div>
+            ) : null}
 
             {poll.acceptsSuggestions ? (
               <AddYourOwn api={api} pollId={poll.id} shut={shut} />
