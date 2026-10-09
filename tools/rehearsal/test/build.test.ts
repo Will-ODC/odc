@@ -6,10 +6,12 @@
 import assert from "node:assert/strict";
 import { describe, it } from "node:test";
 
+import type { Event as BuiltEvent } from "@odc/fixtures-gen/encode";
 import { serializeEvent } from "@odc/fixtures-gen/serialize";
 
 import {
   assertTitleLegal,
+  BATCH_MIN,
   buildChain,
   DEFAULT_SHAPE,
   MAX_CHOICE_COUNT,
@@ -29,6 +31,56 @@ function countByType(events: readonly { type: string }[]): Map<string, number> {
   const counts = new Map<string, number>();
   for (const e of events) counts.set(e.type, (counts.get(e.type) ?? 0) + 1);
   return counts;
+}
+
+interface Batch {
+  readonly ts: string;
+  readonly seqs: number[];
+}
+
+// ET-24's grouping, read straight off the events: a batch is every ballot sharing an `issue_id`
+// AND a `ts`, contiguous or not. Batches are listed per issue in order of their first `seq`.
+function batchesByIssue(events: readonly BuiltEvent[]): Map<string, Batch[]> {
+  const byIssue = new Map<string, Batch[]>();
+  for (const e of events) {
+    if (e.type !== "vote_cast") continue;
+    const issueId = String(e.payload["issue_id"]);
+    const batches = byIssue.get(issueId) ?? [];
+    byIssue.set(issueId, batches);
+    const batch = batches.find((b) => b.ts === e.ts);
+    if (batch) batch.seqs.push(e.seq);
+    else batches.push({ ts: e.ts, seqs: [e.seq] });
+  }
+  return byIssue;
+}
+
+// The batch holding an issue's highest-`seq` ballot — decided by `seq`, never by `ts` (ET-24).
+function lastBatch(batches: readonly Batch[]): Batch {
+  const top = Math.max(...batches.flatMap((b) => b.seqs));
+  return batches.find((b) => b.seqs.includes(top)) as Batch;
+}
+
+/** Every ET-23/ET-24 breach in a chain, as readable strings; empty when the chain is legal. */
+function batchingViolations(events: readonly BuiltEvent[]): string[] {
+  const out: string[] = [];
+  for (const e of events) {
+    if (e.type === "vote_cast" && Date.parse(e.ts) % 60_000 !== 0) {
+      out.push(
+        `seq ${String(e.seq)} ts ${e.ts} is not on the 60000 ms interval (ET-23)`,
+      );
+    }
+  }
+  for (const [issueId, batches] of batchesByIssue(events)) {
+    const last = lastBatch(batches);
+    for (const b of batches) {
+      if (b !== last && b.seqs.length < BATCH_MIN) {
+        out.push(
+          `issue ${issueId.slice(0, 8)} batch ${b.ts} holds ${String(b.seqs.length)} and is not its last (ET-24)`,
+        );
+      }
+    }
+  }
+  return out;
 }
 
 describe("TITLE_CHARS", () => {
@@ -320,6 +372,44 @@ describe("buildChain", () => {
         }
       });
 
+      it("publishes every ballot in a legal batch (ET-23, ET-24)", () => {
+        assert.deepEqual(batchingViolations(chain.events), []);
+      });
+
+      // Without an issue spanning two batches, ET-24's rule for a NON-last batch never reaches a
+      // verifier, and the chain would be legal by having one batch per issue — the shape every
+      // committed vector already has.
+      it("spreads at least one issue across two or more batches", () => {
+        const spans = [...batchesByIssue(chain.events).values()].map(
+          (b) => b.length,
+        );
+        assert.ok(
+          spans.some((n) => n >= 2),
+          `batches per issue: ${spans.join(", ")}`,
+        );
+      });
+
+      // ET-24 exempts each ISSUE's last batch, not the chain's. An under-size batch with other
+      // issues' ballots after it is what tells those two readings apart; one at the very end of
+      // the chain satisfies both. (That it is its own issue's last is checked above.)
+      it("carries an under-size batch with later ballots on another issue (ET-24)", () => {
+        const lastBallot = Math.max(
+          ...chain.events
+            .filter((e) => e.type === "vote_cast")
+            .map((e) => e.seq),
+        );
+        const early = [...batchesByIssue(chain.events).values()]
+          .flat()
+          .filter(
+            (b) =>
+              b.seqs.length < BATCH_MIN && Math.max(...b.seqs) < lastBallot,
+          );
+        assert.ok(
+          early.length > 0,
+          "no under-size batch before the last ballot",
+        );
+      });
+
       it("carries no voter fingerprint on any ballot (ET-21)", () => {
         for (const e of chain.events) {
           if (e.type !== "vote_cast") continue;
@@ -391,5 +481,27 @@ describe("interleaving invariant (structural, not pinned to seeds)", () => {
       noVoteAfterCount < SEED_COUNT * 0.3,
       `${String(noVoteAfterCount)}/${String(SEED_COUNT)} vote-heavy seeds had no vote after the last issue`,
     );
+  });
+
+  it("publishes legal batches across seeds and shapes (ET-23, ET-24)", () => {
+    // Small vote counts are where a remainder or the forced under-size batch can land wrong.
+    const shapes: ChainShape[] = [
+      SMALL_SHAPE,
+      VOTE_HEAVY,
+      { participants: 3, issues: 1, votes: 2 },
+      { participants: 3, issues: 3, votes: 4 },
+      { participants: 3, issues: 2, votes: 7 },
+      SHAPE,
+    ];
+    for (const shape of shapes) {
+      for (let seed = 0; seed < SEED_COUNT; seed += 1) {
+        const chain = buildChain(seed, shape);
+        assert.deepEqual(
+          batchingViolations(chain.events),
+          [],
+          `seed ${String(seed)} shape ${JSON.stringify(shape)}`,
+        );
+      }
+    }
   });
 });
