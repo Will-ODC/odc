@@ -730,6 +730,16 @@ was reused for the vector work on 2026-08-26 and carries nothing of its own.
 
 ## Blockers & live cautions
 
+- **Codex audits of 2026-10-09 left verifier edits in `/private/tmp` — Codex
+  owns them; do not build on or merge them without the operator.**
+  `odc-audit-go-fix` (`codex/audit-verifier-go-anchors`, uncommitted) and
+  `odc-audit-ts-fix` (`codex/audit-verifier-ts-anchors`, `bd3f7ba`, unpushed)
+  both add `--chain` and genesis/head reporting — the phase-4 work in #193. If
+  one context made both, that breaks the never-both-verifiers rule. The core
+  audit's "clean rehearsal violates ET-24" finding is **already fixed** by #172;
+  it audited `c366ca2`, before that merge. Its "no ET-23 / rejecting ET-24
+  vector" finding is #192.
+
 - **`just up` starts nothing, and every document implies otherwise.**
   `justfile` runs `docker compose up --build -d`, and both
   `docs/implementation-plan.md` and ADR-0001 lock that as the dev entry point —
