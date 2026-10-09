@@ -60,8 +60,17 @@ Two stages, per `evolution.md` EV-6/EV-15:
   signatures under the type's named key (with the ET-4a/ET-4b canonical-encoding
   and ET-4c prime-order checks run on the raw bytes _before_ the verify
   primitive), title/`choice_count`/`choice` bounds, the `ballot_batch_interval_ms`
-  and `ballot_batch_min` floors an `issue_created` declares (ET-14b), and `issue_id`
-  back-references. A well-formed but unregistered `(type, version)` yields
+  and `ballot_batch_min` floors an `issue_created` declares (ET-14b), `issue_id`
+  back-references, and the ballot publication discipline (`src/batching.ts`):
+  ET-23 (a `vote_cast`'s `ts`, converted exactly to epoch milliseconds, is a
+  multiple of its issue's declared interval — rejected at that ballot) and ET-24
+  (every batch — all registered ballots sharing an `issue_id` and a `ts` — holds
+  at least the issue's declared minimum, except the batch holding the issue's
+  highest-`seq` ballot; a violation is blamed on the first ballot of that issue
+  appended after the under-size batch's last member). ET-24 is decided once the
+  scan ends, in one linear pass over the batches, and folded with every other
+  fault by lowest line. ET-25 is unverifiable by the contract's own statement and
+  has no check. A well-formed but unregistered `(type, version)` yields
   `PARTIAL` for that line, never `INVALID` (EV-8) — **except at line 1**, where
   an unregistered `genesis` is `INVALID at line 1` (EV-20, the sole exception),
   because an unreadable `genesis` payload leaves every later signature
@@ -73,13 +82,14 @@ Two stages, per `evolution.md` EV-6/EV-15:
 pnpm --filter @odc/verifier-ts test
 ```
 
-Seven files (six suites and one shared builder), and the split between them is deliberate — **`contracts/fixtures/`
+Eight files (seven suites and one shared builder), and the split between them is deliberate — **`contracts/fixtures/`
 is the sole oracle for what a given input verifies to.** `fixtures.test.ts` is
 the conformance suite; `robustness.test.ts`, `extreme-values.test.ts` and
 `report-shape.test.ts` assert only that a verdict of the right _shape_ came back
 at all. `genesis-ancestry.test.ts` is the one exception and says so in its own
 header: it asserts verdict values for rules the fixture corpus does not yet
-cover, from synthetic chains, and is superseded by a fixture the day one lands.
+cover, from synthetic chains, and is superseded by a fixture the day one lands;
+`ballot-batching.test.ts` is the second such exception, on the same terms.
 Anything else that froze an expected verdict outside the fixture corpus would be
 inventing conformance in a file no reviewer treats as normative.
 
@@ -96,8 +106,9 @@ inventing conformance in a file no reviewer treats as normative.
   over-broadly would reject every genesis and a negative-only suite would not
   notice. Same synthetic-chain caveat as the file below.
 - **`test/genesis-builder.ts`** — not a suite: the shared synthetic-`genesis`
-  builder those two files use, kept in one place so two signing harnesses
-  cannot drift apart. Its `rawExtra` option writes a payload value as a raw
+  builder those two files use, plus `signedEventLine`, the
+  general signed-event builder the ballot suite uses, kept in one place so two
+  signing harnesses cannot drift apart. Its `rawExtra` option writes a payload value as a raw
   JSON token rather than a string, which is the only way to build a well-formed
   payload whose value has the wrong TYPE (`{"ancestor_chain":1}`) — correct
   order, hash and signature, so only the schema's own type rule can reject it.
@@ -107,6 +118,18 @@ inventing conformance in a file no reviewer treats as normative.
   self-consistent (hashed and signed by the functions under test), which the
   file's header states plainly. They are a harness, not an oracle: a fixture
   for these rules supersedes them the day one exists.
+- **`test/ballot-batching.test.ts`** — ET-23 and ET-24. When written, no
+  fixture cited ET-23 and none had an issue whose ballots span more than one
+  batch, so the conformance suite could not tell whether either rule exists.
+  Synthetic, self-consistent chains (built with `genesis-builder.ts`'s
+  `signedEventLine`), asserting verdict and blamed line in both directions:
+  off-by-one-millisecond `ts`, declared (not floor) interval and minimum, a batch
+  exactly at the minimum, the legal under-size final batch, interleaved issues,
+  non-contiguous batches, lastness by `seq` rather than `ts`, interaction with
+  other faults and `--head`, unregistered `vote_cast` versions, a linear-cost
+  budget, and the CLI's line and exit status. `epochMs` is checked against
+  `Date` (via `setUTCFullYear`, which unlike `Date.UTC` does not remap years
+  0–99) over every year of ES-20's range.
 - **`test/report-shape.test.ts`** — the CLI output contract: exactly one verdict
   line, advisory reason after a colon on that same line, of bounded length. A
   reason on a second line makes a single-line consumer regex **throw** rather

@@ -18,6 +18,7 @@ import {
   isCanonicalSigEncoding,
   isPrimeOrderKey,
 } from "./crypto.js";
+import { BallotBatches, epochMs, isQuantized } from "./batching.js";
 
 export type Verdict =
   | { verdict: "VALID" }
@@ -63,7 +64,15 @@ const GENESIS_OPTIONAL_KEYS = ["ancestor_chain", "ancestor_head"] as const;
 interface ChainState {
   operatorPk: Buffer | null; // raw 32 bytes, validated at genesis
   registrarPk: Buffer | null; // raw 32 bytes, validated at genesis
-  issues: Map<string, number>; // issue_id (hash) -> choice_count
+  issues: Map<string, IssueParams>; // issue_id (hash) -> its declared parameters
+  batches: BallotBatches; // ET-24 accumulator over accepted ballots
+}
+
+// What a vote_cast needs from its issue_created (ET-18a, ET-23; ET-24's
+// minimum lives in `batches`).
+interface IssueParams {
+  choiceCount: number;
+  batchIntervalMs: number;
 }
 
 // Look a payload key up. Returns undefined if absent.
@@ -141,7 +150,7 @@ function titleOk(title: string): boolean {
  * type-specific semantic checks; false (INVALID) otherwise. Mutates `state` for
  * genesis (keys) and issue_created (issue registry) on success.
  */
-function stageB(ev: ParsedEvent, state: ChainState): boolean {
+function stageB(ev: ParsedEvent, state: ChainState, lineNo: number): boolean {
   switch (ev.type) {
     case "genesis": {
       // ES-18 + ES-34: five required keys, two OPTIONAL ancestry keys.
@@ -270,8 +279,12 @@ function stageB(ev: ParsedEvent, state: ChainState): boolean {
       if (op === null) return false; // no genesis operator key (unreachable on a valid chain)
       if (!isCanonicalSigEncoding(sig)) return false; // ET-4a
       if (!ed25519Verify(signingPreimage(ev), sig, op)) return false; // ET-13
-      // issue_id is this event's hash (ID-7); track its choice_count for ET-18a.
-      state.issues.set(ev.hash, choiceCount);
+      // issue_id is this event's hash (ID-7); track choice_count for ET-18a,
+      // the interval for ET-23 and the minimum for ET-24. A hash collision is
+      // impossible on a chain that passed HA-14 and ES-25, so `set` never
+      // overwrites a live issue.
+      state.issues.set(ev.hash, { choiceCount, batchIntervalMs });
+      state.batches.openIssue(ev.hash, batchMin);
       return true;
     }
 
@@ -284,14 +297,21 @@ function stageB(ev: ParsedEvent, state: ChainState): boolean {
       if (choice === null) return false;
       if (sigHex === null || !HEX128.test(sigHex)) return false;
       // ET-18/ID-8: must reference a prior issue_created (strictly lower seq).
-      const cc = state.issues.get(issueId);
-      if (cc === undefined) return false;
-      if (choice < 0 || choice >= cc) return false; // ET-18a
+      const issue = state.issues.get(issueId);
+      if (issue === undefined) return false;
+      if (choice < 0 || choice >= issue.choiceCount) return false; // ET-18a
+      // ET-23: ts (already calendar-valid, ES-20) must be an exact multiple of
+      // the issue's declared interval, in epoch ms. The value is checked; it
+      // orders and selects nothing (ES-21).
+      const instant = epochMs(ev.ts);
+      if (!isQuantized(instant, issue.batchIntervalMs)) return false; // ET-23
       const sig = Buffer.from(sigHex, "hex");
       const reg = state.registrarPk;
       if (reg === null) return false;
       if (!isCanonicalSigEncoding(sig)) return false; // ET-4a
       if (!ed25519Verify(signingPreimage(ev), sig, reg)) return false; // ET-17
+      // Only a ballot that passed every per-line check joins a batch (ET-24).
+      state.batches.admit(issueId, instant, lineNo);
       return true;
     }
 
@@ -395,6 +415,7 @@ export function verifyExport(bytes: Buffer, head?: string): Verdict {
     operatorPk: null,
     registrarPk: null,
     issues: new Map(),
+    batches: new BallotBatches(),
   };
 
   let prevHash: string | null = null;
@@ -465,7 +486,7 @@ export function verifyExport(bytes: Buffer, head?: string): Verdict {
 
     // Stage B — only for registered (type, version) pairs (EV-6).
     if (isRegistered(ev.type, ev.version)) {
-      if (!stageB(ev, state)) {
+      if (!stageB(ev, state, lineNo)) {
         contentFault = {
           line: lineNo,
           // `ev.type` is one of the four registered names on this branch, so
@@ -499,6 +520,20 @@ export function verifyExport(bytes: Buffer, head?: string): Verdict {
   }
 
   if (contentFault !== null) invalid.push(contentFault);
+
+  // ET-24, over every ballot accepted before the scan stopped. It is a
+  // property of the chain's batches, not of one line, so it can only be
+  // decided once the scan is over; the line it blames is the first vote_cast
+  // of the issue appended after an under-size, non-last batch (ET-24 "Line
+  // attribution"), which the fold below weighs against every other fault.
+  const batchFault = state.batches.firstViolation();
+  if (batchFault !== null) {
+    invalid.push({
+      line: batchFault,
+      reason:
+        "ET-24: an earlier batch of this ballot's issue is under the issue's ballot_batch_min and is not its last batch",
+    });
+  }
 
   // EX-15/EX-19: a --head mismatch is INVALID at the last line. Only meaningful
   // once every line has passed (link checks complete); if the chain already has
