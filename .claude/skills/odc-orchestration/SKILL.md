@@ -1,6 +1,6 @@
 ---
 name: odc-orchestration
-description: How to dispatch work in the ODC monorepo — which model runs which task, how to write a subagent brief that works, , how to run agents in parallel without corrupting one working tree, and how to run lead sessions that each own one feature and run their own implementers. Use this skill whenever delegating, starting or acting as a lead, spawning a subagent, planning a multi-step task, choosing between Opus and Sonnet, or deciding whether to do something yourself.
+description: How to dispatch work in the ODC monorepo — which model runs which task, how to write a subagent brief that works, how to run agents in parallel without corrupting one working tree, and how to run lead sessions that each own one feature and run their own implementers. Use this skill whenever delegating, starting or acting as a lead, spawning a subagent, planning a multi-step task, choosing between Opus and Sonnet, or deciding whether to do something yourself.
 ---
 
 # ODC Orchestration
