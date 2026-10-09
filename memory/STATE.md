@@ -519,7 +519,7 @@ while reaching nothing_.
    (option b) over qualifying EX-16. `event-types.md` v10 and `event-schema.md`
    v5 (ES-21 names the `ts` equality comparison).
 3. **#177 (Go) MERGED (`9858885`)**, also before its review nits were pushed;
-   **#181 OPEN** carries them (no verdict changes). **#178 (TS) OPEN** with its
+   **#181 OPEN** carries them (no verdict changes). **#178 (TS) MERGED** with its
    fixes included, MERGED (`a3abba3`). Merge order for what is left: #180, then
    #181. Each
    was built in its own isolated worktree. Both check per line: the ballot that
@@ -722,7 +722,7 @@ builder could not read the other verifier. See Blockers for the technique.
 | `claude/t9-phase3-et24-runs`        | #180 | `~/Desktop/odc-hash-chain` | open: merge first              |
 | `claude/t9-phase3-verifier-go`      | #177 | `~/Desktop/odc-p3-go`      | MERGED `9858885`               |
 | `claude/t9-phase3-verifier-go-nits` | #181 | `~/Desktop/odc-p3-go`      | open: after #180               |
-| `claude/t9-phase3-verifier-ts`      | #178 | `~/Desktop/odc-p3-ts`      | open: after #180               |
+| `claude/t9-phase3-verifier-ts`      | #178 | `~/Desktop/odc-p3-ts`      | MERGED `a3abba3`               |
 
 **Do not go looking for an open hash-chain PR.** `claude/hash-chain-context-3uaob2`
 is the only branch that ever carried "hash chain" in its name and it is merged;
