@@ -494,3 +494,27 @@
   outline-offset: 2px;
   border-radius: var(--r-control);
 }
+
+/* ---- a poll that has already closed ----
+ * The question and its answers stay, as the record of what was asked, but
+ * nothing on them can be pressed. The sentence above them says so in words;
+ * the greying is the second way of saying it, never the only one.
+ *
+ * `.ballot__half:disabled .ballot__word` is 0-3-0, so it beats the 0-2-0
+ * lean colours above regardless of source order.
+ */
+.ballot__closed {
+  padding: var(--step) var(--gutter) 0;
+}
+
+.ballot__half:disabled {
+  cursor: default;
+}
+
+.ballot__half:disabled .ballot__word {
+  color: var(--ballot-ink-muted);
+}
+
+.ballot__half:disabled .ballot__nextq {
+  color: var(--ballot-ink-faint);
+}
