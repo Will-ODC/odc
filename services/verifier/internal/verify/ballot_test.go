@@ -13,22 +13,19 @@ import (
 	"time"
 )
 
-// ET-23 (quantized ballot ts) and ET-24 (minimum batch size, with its line
-// attribution), event-types.md "Ballot publication discipline".
+// ET-23 (quantized ballot ts), ET-24 (minimum batch size, with its line
+// attribution) and ET-24a (a batch, once left, is closed), event-types.md v10
+// "Ballot publication discipline".
 //
 // HARNESS CAVEAT (as in genesis_ancestry_test.go): these chains are hashed and
 // signed by the code under test, so they are self-consistent by construction
 // and pin no preimage shape. contracts/fixtures/ ships no vector whose ballots
 // span more than one batch and none citing ET-23, so until vectors land these
-// tests are the only thing exercising the two rules. Every case is a
+// tests are the only thing exercising these rules. Every case is a
 // differential: one ts, one extra ballot, one reordering moves the verdict in
 // the direction the rule names. Rejections also assert the advisory reason —
 // not conformance (EV-17), but "INVALID at line N" alone is satisfied by any
 // fault on that line.
-//
-// Cases marked READING are not pinned by the contract text; they record the
-// reading this verifier implements where the text is ambiguous (see the
-// comment on Verify in verify.go).
 
 // --- harness -----------------------------------------------------------
 
@@ -37,11 +34,25 @@ type issueSpec struct {
 	min      int64 // ballot_batch_min
 }
 
-// vote is one ballot: the 0-based index of its issue, and its ts.
+// vote is one chain entry after the issues. By default it is a registered
+// vote_cast of the 0-based issue at ts. kind selects the two other entries the
+// ET-24a cases need between one batch's members.
 type vote struct {
 	issue int
 	ts    string
+	kind  entryKind
 }
+
+type entryKind int
+
+const (
+	ballotV1     entryKind = iota // registered (vote_cast, 1)
+	participant                   // a participant_registered line (ts any)
+	ballotUnregV                  // (vote_cast, 1000000): unregistered, EV-8
+)
+
+func participantAt(ts string) vote          { return vote{0, ts, participant} }
+func unregBallot(issue int, ts string) vote { return vote{issue, ts, ballotUnregV} }
 
 // defaultIssue is at both ET-14b floors.
 var defaultIssue = issueSpec{interval: 60000, min: 3}
@@ -82,10 +93,26 @@ func ballotChainLines(t *testing.T, issues []issueSpec, votes []vote) [][]byte {
 	}
 	for _, v := range votes {
 		seq++
-		l := signAndSeal(t, regPriv, seq, "vote_cast", 1, map[string]any{
-			"issue_id": ids[v.issue],
-			"choice":   int64(seq % 2),
-		}, v.ts, prev)
+		var l []byte
+		switch v.kind {
+		case ballotV1:
+			l = signAndSeal(t, regPriv, seq, "vote_cast", 1, map[string]any{
+				"issue_id": ids[v.issue],
+				"choice":   int64(seq % 2),
+			}, v.ts, prev)
+		case participant:
+			pp := ed25519.NewKeyFromSeed(bytes32(byte(seq)))
+			l = signAndSeal(t, pp, seq, "participant_registered", 1, map[string]any{
+				"pubkey": fmt.Sprintf("%x", []byte(pp.Public().(ed25519.PublicKey))),
+			}, v.ts, prev)
+		case ballotUnregV:
+			// Stage B never runs on it, so it needs no valid sig; its payload
+			// names a real issue so that a verifier that DID read it would act.
+			l = seal(t, seq, "vote_cast", 1000000, map[string]any{
+				"issue_id": ids[v.issue],
+				"choice":   int64(0),
+			}, v.ts, prev)
+		}
 		prev = parseLineOrFail(t, l).hash
 		lines = append(lines, l)
 	}
@@ -110,7 +137,7 @@ func ballotChain(t *testing.T, issues []issueSpec, votes []vote) []byte {
 func votesAt(issue, n int, ts string) []vote {
 	out := make([]vote, n)
 	for i := range out {
-		out[i] = vote{issue, ts}
+		out[i] = vote{issue: issue, ts: ts}
 	}
 	return out
 }
@@ -247,7 +274,7 @@ func TestET24InterleavedIssues(t *testing.T) {
 	alt := func(ts string, n int) []vote {
 		var v []vote
 		for i := 0; i < n; i++ {
-			v = append(v, vote{0, ts}, vote{1, ts})
+			v = append(v, vote{0, ts, ballotV1}, vote{1, ts, ballotV1})
 		}
 		return v
 	}
@@ -255,9 +282,9 @@ func TestET24InterleavedIssues(t *testing.T) {
 	legal := cat(alt(T1, 3), alt(T2, 1))
 	// Issue 0 gets only 2 at T1; issue 1 gets 3. Then issue 0 votes at T2.
 	// Lines: 4 A,5 B,6 A,7 B,8 B,9 A@T2.
-	bad := cat(alt(T1, 2), []vote{{1, T1}}, []vote{{0, T2}})
+	bad := cat(alt(T1, 2), []vote{{1, T1, ballotV1}}, []vote{{0, T2, ballotV1}})
 	// Same, but issue 0 never votes again: its under-size batch is its last.
-	badButLast := cat(alt(T1, 2), []vote{{1, T1}}, []vote{{1, T2}})
+	badButLast := cat(alt(T1, 2), []vote{{1, T1, ballotV1}}, []vote{{1, T2, ballotV1}})
 	runBallotCases(t, []ballotCase{
 		{"interleaved_legal", two, legal, 0, ""},
 		{"interleaved_undersize_proven", two, bad, 9, "ET-24"},
@@ -293,33 +320,88 @@ func TestET24LastnessIsBySeqNotTS(t *testing.T) {
 	})
 }
 
-// READING: a batch is "the set of all vote_cast events ... sharing both an
-// issue_id and a ts" — not a contiguous run — so a batch may gain members after
-// another batch of its issue has intervened, and its size is its final size.
-// The blamed line for an under-size one is the first ballot of its issue after
-// its highest-seq member ("appended after the under-size batch").
-func TestET24NonContiguousBatchREADING(t *testing.T) {
+// ET-24a: "Taking one issue's vote_cast events in seq order, a ballot whose ts
+// differs from the ts of that issue's previous ballot MUST NOT equal the ts of
+// any earlier ballot of that issue", rejected "at the line of the returning
+// ballot".
+func TestET24aReturnToLeftInstant(t *testing.T) {
 	one := []issueSpec{defaultIssue}
 	runBallotCases(t, []ballotCase{
-		// T1 = {3, 7, 8} reaches 3; T2 = {4, 5, 6}; T3 = {9} is last. A
-		// prefix-at-a-time verifier would reject at line 4.
-		{"reopened_batch_fills", one, cat(votesAt(0, 1, T1), votesAt(0, 3, T2), votesAt(0, 2, T1), votesAt(0, 1, T3)), 0, ""},
-		// T1 = {3, 7} is under-size but holds the highest-seq ballot, so it
-		// is the exempt last batch even though it was opened before T2. A
-		// run-based reading would blame line 4.
-		{"reopened_undersize_is_last", one, cat(votesAt(0, 1, T1), votesAt(0, 3, T2), votesAt(0, 1, T1)), 0, ""},
-		// T1 = {3, 4, 8} (holds the last ballot, exempt anyway); T2 = {5, 6}
-		// is under-size and its last member is 6, so line 7 is blamed (T3 =
-		// {7}, proven at 8, is later).
-		{"undersize_between_reopened", one, cat(votesAt(0, 2, T1), votesAt(0, 2, T2), votesAt(0, 1, T3), votesAt(0, 1, T1)), 7, "ET-24"},
-		// T1 = {3, 7}: under-size even after reopening; its last member is 7,
-		// so line 8 is blamed — not 4, the first ballot after its FIRST member.
-		{"reopened_still_undersize", one, cat(votesAt(0, 1, T1), votesAt(0, 3, T2), votesAt(0, 1, T1), votesAt(0, 3, T3)), 8, "ET-24"},
+		// Rejected at the returning line — not at the first member (line 3)
+		// of the batch it returns to.
+		{"return_at_end_of_chain", one, cat(votesAt(0, 3, T1), votesAt(0, 3, T2), votesAt(0, 1, T1)), 9, "ET-24a"},
+		{"return_mid_chain", one, cat(votesAt(0, 3, T1), votesAt(0, 3, T2), votesAt(0, 1, T1), votesAt(0, 3, T3)), 9, "ET-24a"},
+		// The left instant is two batches back, not the immediately previous.
+		{"return_past_two_batches", one, cat(votesAt(0, 3, T1), votesAt(0, 3, T2), votesAt(0, 3, T3), votesAt(0, 1, T1)), 12, "ET-24a"},
+		// The returning ballot also closes an under-size batch: ET-24 and
+		// ET-24a both name line 7, and either reason is right.
+		{"return_after_undersize_batch", one, cat(votesAt(0, 3, T1), votesAt(0, 1, T2), votesAt(0, 1, T1)), 7, "ET-24"},
+		// Returning to an under-size batch cannot rescue it: it was closed,
+		// and proven not-last, at line 4.
+		{"return_to_undersize_batch", one, cat(votesAt(0, 1, T1), votesAt(0, 3, T2), votesAt(0, 2, T1)), 4, "ET-24"},
+
+		// Accepted: staying at an instant is not a return, and a new instant
+		// is not one either, whatever its value relative to the others.
+		{"one_long_batch", one, votesAt(0, 7, T1), 0, ""},
+		{"new_earlier_instant", one, cat(votesAt(0, 3, T3), votesAt(0, 3, T1), votesAt(0, 3, T2)), 0, ""},
 	})
 }
 
-// ET-24's interaction with every other rule: the reported line is the first
-// fatal line in file order (EV-17).
+// ET-24a binds each issue separately: "other events, including other issues'
+// ballots, MAY fall between the ballots of one batch".
+func TestET24aPerIssueRuns(t *testing.T) {
+	one := []issueSpec{defaultIssue}
+	two := []issueSpec{defaultIssue, defaultIssue}
+	// A = issue 0, B = issue 1; ballots start at line 4.
+	shared := cat(votesAt(0, 2, T1), votesAt(1, 3, T1), votesAt(0, 1, T1), votesAt(1, 3, T2))
+	runBallotCases(t, []ballotCase{
+		// A's T1 batch {4, 5, 9} has B's ballots in between: one run of A's.
+		{"other_issue_between_members", two, shared, 0, ""},
+		// B left T1 at line 10, so its ballot at line 13 returns.
+		{"other_issue_returns", two, cat(shared, votesAt(1, 1, T1)), 13, "ET-24a"},
+		// A left T1; B's FIRST ballot at T1 is no return — instants are per
+		// issue, not per chain.
+		{"same_instant_other_issue_after_leaving", two, cat(votesAt(0, 3, T1), votesAt(0, 3, T2), votesAt(1, 3, T1)), 0, ""},
+		// Non-ballot events between one batch's members, carrying a ts the
+		// issue has never used.
+		{"participants_between_members", one, []vote{
+			{0, T1, ballotV1}, participantAt(T2), {0, T1, ballotV1}, participantAt(T3),
+			{0, T1, ballotV1}, {0, T2, ballotV1},
+		}, 0, ""},
+	})
+}
+
+// "Which ballots count": a vote_cast at an unregistered version "joins no
+// batch, closes none, and proves none not-last". The chains below are PARTIAL
+// at the unregistered line and nothing else.
+func TestET24UnregisteredVoteVersionCountsForNothing(t *testing.T) {
+	one := []issueSpec{defaultIssue}
+	cases := []struct {
+		name  string
+		votes []vote
+		line  int
+	}{
+		// Does not prove A's under-size T1 batch not-last.
+		{"proves_none_not_last", cat(votesAt(0, 2, T1), []vote{unregBallot(0, T2)}), 5},
+		// Does not close T1: the v1 ballot at line 6 rejoins the same run,
+		// making T1 = {3, 4, 6} — neither a return nor an under-size close.
+		{"closes_none", cat(votesAt(0, 2, T1), []vote{unregBallot(0, T2)}, votesAt(0, 1, T1), votesAt(0, 1, T2)), 5},
+		// Does not join a batch: at an instant A has left, it is no return,
+		// and it does not interrupt A's open T2 run.
+		{"joins_none", cat(votesAt(0, 3, T1), votesAt(0, 2, T2), []vote{unregBallot(0, T1)}, votesAt(0, 1, T2), votesAt(0, 1, T3)), 8},
+	}
+	for _, c := range cases {
+		t.Run(c.name, func(t *testing.T) {
+			res := Verify(ballotChain(t, one, c.votes), nil)
+			if res.Verdict != PARTIAL || len(res.Lines) != 1 || res.Lines[0] != c.line {
+				t.Fatalf("got %s %v (line %d, %s), want PARTIAL at lines %d", res.Verdict, res.Lines, res.Line, res.Reason, c.line)
+			}
+		})
+	}
+}
+
+// ET-24/ET-24a against every other rule: the reported line is the first fatal
+// line in file order (EV-17).
 func TestET24FirstFatalLineAcrossRules(t *testing.T) {
 	one := []issueSpec{defaultIssue}
 
@@ -338,17 +420,15 @@ func TestET24FirstFatalLineAcrossRules(t *testing.T) {
 		res := Verify(ballotChain(t, one, cat(votesAt(0, 2, T1), votesAt(0, 1, "2026-01-01T00:03:00.007Z"))), nil)
 		assertResult(t, res, 5, "ET-23")
 	})
-	// READING: a line that fails any check is not an event of the chain, so
-	// it cannot complete a batch. Verified prefix 1..7 has T1 = {3, 4}
-	// under-size and proven at 5; the would-be third T1 ballot at line 8 is
-	// corrupt. The alternative reading (count line 8) reports line 8.
-	t.Run("corrupt_line_cannot_fill_a_batch_READING", func(t *testing.T) {
-		lines := ballotChainLines(t, one, cat(votesAt(0, 2, T1), votesAt(0, 3, T2), votesAt(0, 1, T1)))
-		if res := Verify(joinLines(lines), nil); res.Verdict != VALID {
-			t.Fatalf("uncorrupted control: %s at %d (%s)", res.Verdict, res.Line, res.Reason)
-		}
-		lines[7] = corruptHash(lines[7])
-		assertResult(t, Verify(joinLines(lines), nil), 5, "ET-24")
+	t.Run("et24a_before_later_hash_fault", func(t *testing.T) {
+		lines := ballotChainLines(t, one, cat(votesAt(0, 3, T1), votesAt(0, 3, T2), votesAt(0, 1, T1), votesAt(0, 3, T3)))
+		lines[10] = corruptHash(lines[10]) // line 11
+		assertResult(t, Verify(joinLines(lines), nil), 9, "ET-24a")
+	})
+	t.Run("hash_fault_before_et24a", func(t *testing.T) {
+		lines := ballotChainLines(t, one, cat(votesAt(0, 3, T1), votesAt(0, 3, T2), votesAt(0, 1, T1)))
+		lines[7] = corruptHash(lines[7]) // line 8
+		assertResult(t, Verify(joinLines(lines), nil), 8, "HA-14")
 	})
 }
 
@@ -368,45 +448,27 @@ func TestET24TruncationResidualAndHead(t *testing.T) {
 	assertResult(t, Verify(full, &head), 5, "ET-24")
 }
 
-// READING: ET-24 is a v1 rule over registered vote_cast events. A vote_cast at
-// an unregistered version has no Stage B (EV-8), so its payload — including any
-// issue_id — is not read and it neither joins a batch nor proves one not last.
-func TestET24IgnoresUnregisteredVoteVersionREADING(t *testing.T) {
-	lines := ballotChainLines(t, []issueSpec{defaultIssue}, votesAt(0, 2, T1))
-	prev := parseLineOrFail(t, lines[len(lines)-1])
-	issueID := parseLineOrFail(t, lines[1]).hash
-	extra := seal(t, prev.seq+1, "vote_cast", 1000000, map[string]any{
-		"issue_id": issueID, "choice": int64(0),
-	}, T2, prev.hash)
-	lines = append(lines, extra)
-	res := Verify(joinLines(lines), nil)
-	if res.Verdict != PARTIAL || len(res.Lines) != 1 || res.Lines[0] != 5 {
-		t.Fatalf("got %s %v (line %d, %s), want PARTIAL at lines 5", res.Verdict, res.Lines, res.Line, res.Reason)
-	}
-}
-
-// Scale: every ballot switches batch (ts alternates between two instants), the
-// pattern that would make a "re-scan the batch on reopen" implementation
-// quadratic. Both batches end far above the minimum, so the chain is VALID;
-// then one extra batch of 1 followed by a ballot makes it INVALID at the end.
-func TestET24LargeAlternatingChain(t *testing.T) {
+// Scale: thousands of closed batches, then one ballot returning to the very
+// first instant. An implementation that compares a new instant against every
+// earlier batch is quadratic here; the map lookup is not.
+func TestET24aLargeChain(t *testing.T) {
 	if testing.Short() {
 		t.Skip("large chain")
 	}
-	const n = 20000
-	votes := make([]vote, 0, n+2)
-	for i := 0; i < n; i++ {
-		ts := T1
-		if i%2 == 1 {
-			ts = T2
-		}
-		votes = append(votes, vote{0, ts})
+	const batches = 5000
+	base := time.Date(2026, 1, 1, 0, 0, 0, 0, time.UTC)
+	at := func(k int) string { return base.Add(time.Duration(k) * time.Minute).Format("2006-01-02T15:04:05.000Z") }
+	votes := make([]vote, 0, 3*batches+1)
+	for k := 0; k < batches; k++ {
+		votes = append(votes, votesAt(0, 3, at(k))...)
 	}
+	votes = append(votes, vote{0, at(0), ballotV1})
 	start := time.Now()
-	assertResult(t, Verify(ballotChain(t, []issueSpec{defaultIssue}, votes), nil), 0, "")
-	votes = append(votes, vote{0, T3}, vote{0, T4})
-	assertResult(t, Verify(ballotChain(t, []issueSpec{defaultIssue}, votes), nil), 2+n+2, "ET-24")
-	t.Logf("two chains of ~%d ballots built and verified in %s", n, time.Since(start))
+	lines := ballotChainLines(t, []issueSpec{defaultIssue}, votes)
+	built := time.Since(start)
+	assertResult(t, Verify(joinLines(lines[:len(lines)-1]), nil), 0, "")
+	assertResult(t, Verify(joinLines(lines), nil), len(lines), "ET-24a")
+	t.Logf("%d ballots built in %s, verified twice in %s", len(votes), built, time.Since(start)-built)
 }
 
 // corruptHash flips one hex digit of the line's hash field (HA-14 fault).
@@ -435,7 +497,7 @@ func buildCLI(t *testing.T) string {
 	return p
 }
 
-func TestET23ET24CLISurface(t *testing.T) {
+func TestBallotRulesCLISurface(t *testing.T) {
 	bin := buildCLI(t)
 	one := []issueSpec{defaultIssue}
 	cases := []struct {
@@ -447,6 +509,7 @@ func TestET23ET24CLISurface(t *testing.T) {
 		{"valid", cat(votesAt(0, 3, T1), votesAt(0, 1, T2)), regexp.MustCompile(`^VALID\n$`), 0},
 		{"et24", cat(votesAt(0, 2, T1), votesAt(0, 1, T2)), regexp.MustCompile(`^INVALID at line 5: [^\n]*\n$`), 1},
 		{"et23", votesAt(0, 1, "2026-01-01T00:02:00.001Z"), regexp.MustCompile(`^INVALID at line 3: [^\n]*\n$`), 1},
+		{"et24a", cat(votesAt(0, 3, T1), votesAt(0, 3, T2), votesAt(0, 1, T1)), regexp.MustCompile(`^INVALID at line 9: [^\n]*\n$`), 1},
 	}
 	for _, c := range cases {
 		t.Run(c.name, func(t *testing.T) {

@@ -1,6 +1,6 @@
 package verify
 
-// Ballot publication discipline (event-types.md ET-23, ET-24; ADR-0014).
+// Ballot publication discipline (event-types.md v10: ET-23, ET-24, ET-24a).
 //
 // ET-25 (order within a batch) is deliberately absent: the contract declares it
 // unverifiable from the log and assigns it to neither verification stage
@@ -8,87 +8,75 @@ package verify
 // so there is nothing here to check.
 
 // issueInfo is what the verifier tracks per accepted issue_created (ID-7):
-// choice_count for ET-18a and the two ET-14b batching parameters that
-// ET-23/ET-24 are checked against.
+// choice_count for ET-18a, the two ET-14b batching parameters that
+// ET-23/ET-24 are checked against, and the issue's open batch.
 type issueInfo struct {
-	idx         int   // dense per-chain index, used as the batch-map key
+	idx         int   // dense per-chain index, used in the left-instant key
 	choiceCount int64 // ET-14a / ET-18a
 	intervalMS  int64 // ballot_batch_interval_ms (ET-14b, ET-23)
 	batchMin    int64 // ballot_batch_min (ET-14b, ET-24)
-	lastBatch   *batch
+
+	// The open batch: the batch instant of this issue's most recent ballot
+	// and how many ballots it holds. ET-24a makes every batch one run of its
+	// issue's ballots, so this is the only batch of the issue that can still
+	// grow; every earlier one is closed and was checked when it closed.
+	haveOpen  bool
+	openTS    int64
+	openCount int64
 }
 
-// batchKey identifies an ET-24 batch: "the set of all vote_cast events on a
-// chain sharing both an issue_id and a ts". ts is keyed by its millisecond
-// offset; ES-20 fixes ts to one textual form per instant, so offset equality is
-// string equality.
+// batchKey names one batch instant of one issue. ts is keyed by its
+// millisecond offset; ES-20 fixes one textual form per instant, so offset
+// equality is ts equality — the only comparison ES-21 permits here.
 type batchKey struct {
 	issue int
 	ts    int64
 }
 
-// batch is one ET-24 batch.
-//
-// nextAfter is the line of the first ballot of the same issue appended after
-// this batch's highest-seq member, or 0 when no such ballot has been seen yet.
-// It is maintained incrementally: when a ballot of issue X arrives, the batch
-// holding X's previous ballot (X's lastBatch) has that ballot as its latest
-// member, so if the new ballot belongs to a different batch it is exactly the
-// "first vote_cast of that issue appended after" that batch; and the batch the
-// new ballot joins gains a new latest member, so its nextAfter resets. At the
-// end of the scan, nextAfter == 0 holds for exactly one batch per issue — the
-// one containing the issue's highest-seq ballot, which ET-24 exempts.
-type batch struct {
-	count     int64
-	nextAfter int
-}
-
-// ballotState accumulates ET-24 batches across the scan. Cost is O(1) expected
-// per ballot (one map operation) and O(batches) at the end, so the whole check
-// is linear in the export: no pairwise comparison of ballots ever happens.
+// ballotState holds the batch instants each issue has LEFT (ET-24a). Cost is
+// one map lookup and at most one insert per ballot, and the map holds at most
+// one entry per closed batch: linear in the export, with no pairwise
+// comparison of ballots and nothing deferred to the end of the scan.
 type ballotState struct {
-	batches map[batchKey]*batch
+	left map[batchKey]struct{}
 }
 
 func newBallotState() ballotState {
-	return ballotState{batches: map[batchKey]*batch{}}
+	return ballotState{left: map[batchKey]struct{}{}}
 }
 
-// add records one fully verified vote_cast at line ln, of issue iss, whose
-// ts offset is tsMS.
-func (b *ballotState) add(iss *issueInfo, tsMS int64, ln int) {
-	k := batchKey{issue: iss.idx, ts: tsMS}
-	cur := b.batches[k]
-	if cur == nil {
-		cur = &batch{}
-		b.batches[k] = cur
+// observe applies ET-24 and ET-24a to one registered vote_cast (ET-24a "which
+// ballots count": only the registered (vote_cast, 1) is ever passed here) of
+// issue iss whose ts offset is tsMS. Both rules, when broken, are broken AT
+// THIS BALLOT'S LINE, so it returns (reason, false) for the caller to report
+// there.
+//
+//   - Same ts as the issue's previous ballot: the ballot joins the open batch.
+//   - Different ts: the open batch is left and closed for good (ET-24a). If it
+//     is under-size it was not the issue's last, and this is "the first
+//     vote_cast of that issue appended after the under-size batch" (ET-24).
+//     If the new ts is an instant this issue already left, this ballot is the
+//     returning ballot (ET-24a). Both faults name this same line, so which is
+//     reported first does not matter (EV-17).
+//
+// The batch still open at the end of the scan holds the issue's highest-seq
+// ballot and is exempt from the minimum (ET-24); it is never checked.
+func (b *ballotState) observe(iss *issueInfo, tsMS int64) (string, bool) {
+	if iss.haveOpen && iss.openTS == tsMS {
+		iss.openCount++
+		return "", true
 	}
-	if prev := iss.lastBatch; prev != nil && prev != cur {
-		prev.nextAfter = ln
+	if iss.haveOpen {
+		if iss.openCount < iss.batchMin {
+			return "an earlier batch of this issue is under ballot_batch_min and this ballot proves it was not the issue's last (ET-24)", false
+		}
+		b.left[batchKey{issue: iss.idx, ts: iss.openTS}] = struct{}{}
 	}
-	cur.count++
-	cur.nextAfter = 0
-	iss.lastBatch = cur
-}
-
-// firstUndersize returns the ET-24 fatal line: over every batch that is
-// under-size and is not its issue's last, the first ballot of that issue
-// appended after it; the earliest such line wins (EV-17, first fatal line in
-// file order). min is looked up per batch from its issue.
-func (b *ballotState) firstUndersize(minOf func(issue int) int64) (int, bool) {
-	best := 0
-	for k, bt := range b.batches {
-		if bt.nextAfter == 0 {
-			continue // the batch holding the issue's highest-seq ballot: exempt
-		}
-		if bt.count >= minOf(k.issue) {
-			continue
-		}
-		if best == 0 || bt.nextAfter < best {
-			best = bt.nextAfter
-		}
+	if _, ok := b.left[batchKey{issue: iss.idx, ts: tsMS}]; ok {
+		return "ballot returns to a batch instant its issue has already left (ET-24a)", false
 	}
-	return best, best != 0
+	iss.haveOpen, iss.openTS, iss.openCount = true, tsMS, 1
+	return "", true
 }
 
 // tsMillis converts an ES-20-valid ts to milliseconds since
