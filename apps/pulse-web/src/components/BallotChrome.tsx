@@ -52,8 +52,13 @@ export function BallotChrome({
   );
 }
 
-/** What kind of thing this is, and when it closes if the poll says. */
+/**
+ * What kind of thing this is, and when it closes if the poll says. A closed
+ * poll says so: its closing day is in the past, and "Closes Monday" would read
+ * as a Monday still to come.
+ */
 export function chipFor(poll: Poll): string {
+  if (!poll.open) return "Official Ballot - Closed";
   if (!poll.closesAt) return "Official Ballot";
   const closes = new Date(poll.closesAt);
   if (Number.isNaN(closes.getTime())) return "Official Ballot";

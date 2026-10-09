@@ -1,6 +1,7 @@
 import type { RefObject } from "react";
 import type { CastState } from "../hooks/use-cast-vote.js";
 import { ClosedNotice } from "./ClosedNotice.js";
+import { SeeResults } from "./SeeResults.js";
 
 /**
  * What happened to the vote.
@@ -100,14 +101,7 @@ export function Outcome({
         </button>
       ) : null}
       {state.status === "counted" && onSeeResults ? (
-        <button
-          type="button"
-          className="outcome__results"
-          onClick={onSeeResults}
-          ref={seeResultsRef}
-        >
-          See results
-        </button>
+        <SeeResults onOpen={onSeeResults} buttonRef={seeResultsRef} />
       ) : null}
     </div>
   );
