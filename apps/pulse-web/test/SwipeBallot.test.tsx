@@ -6,6 +6,7 @@ import {
   fireEvent,
   waitFor,
 } from "@testing-library/react";
+import userEvent from "@testing-library/user-event";
 import { afterEach, beforeAll, describe, expect, it, vi } from "vitest";
 import { ApiError } from "../src/api/types.js";
 import { SwipeBallot } from "../src/screens/SwipeBallot.js";
@@ -637,16 +638,25 @@ describe("telling someone the answer is in, and not final", () => {
    * screens could pass `changeable={true}` and the suite would stay green -
    * which is the whole of what ADR-0022 section 3 rests on.
    */
-  it("promises nothing on a poll it already knows is shut", async () => {
-    render(
+  it("promises nothing once the poll it was answered on has shut", async () => {
+    const api = stubApi({ cast: () => Promise.resolve(COUNTED) });
+    const { rerender } = render(
+      <SwipeBallot api={api} poll={POLL} onAnswered={() => {}} />,
+    );
+    fireEvent.keyDown(screen.getByText("Yes"), { key: "ArrowRight" });
+    await screen.findByText("Counted.");
+    expect(document.body.textContent).toContain("You can change");
+
+    // A closed poll can no longer be answered at all (see the block at the end
+    // of this file), so the only way to reach a counted answer on a shut poll
+    // is for the poll to shut under an answer that is already in.
+    rerender(
       <SwipeBallot
-        api={stubApi({ cast: () => Promise.resolve(COUNTED) })}
+        api={api}
         poll={poll({ open: false })}
         onAnswered={() => {}}
       />,
     );
-    fireEvent.keyDown(screen.getByText("Yes"), { key: "ArrowRight" });
-    await screen.findByText("Counted.");
 
     expect(document.body.textContent).not.toContain("You can change");
     expect(
@@ -810,5 +820,133 @@ describe("the way back, after answering", () => {
 
     expect(screen.queryByText("This one has closed.")).toBeNull();
     expect(screen.getByText("Yes")).toBeTruthy();
+  });
+});
+
+/**
+ * A poll the client already knows is shut (`poll.open === false`).
+ *
+ * One press casts here, and ADR-0022 makes that safe only because the answer
+ * can be changed afterwards. On a shut poll it cannot, so a press that still
+ * cast - and came back `counted` because the server disagreed - would be a
+ * binding vote given with no confirming press and no sentence saying so.
+ *
+ * So nothing casts at all. The question and both answers stay on screen,
+ * greyed out, as the record of what was asked.
+ */
+describe("a poll that has already closed", () => {
+  function showClosed() {
+    const cast = vi.fn(stubApi().cast);
+    render(
+      <SwipeBallot
+        api={stubApi({ cast })}
+        poll={poll({ open: false })}
+        onAnswered={() => {}}
+      />,
+    );
+    return cast;
+  }
+
+  const half = (label: string) =>
+    screen.getByText(label).closest("button") as HTMLButtonElement;
+
+  /** Let anything a press started settle, so a cast would have been seen. */
+  const settle = () => new Promise((done) => setTimeout(done, 0));
+
+  function stillShowsTheRecord() {
+    expect(screen.getByText(POLL.question)).toBeTruthy();
+    expect(screen.getByText("No")).toBeTruthy();
+    expect(screen.getByText("Yes")).toBeTruthy();
+    expect(screen.getByText("This one has closed.")).toBeTruthy();
+    expect(
+      screen.getByText("Nothing you do here will change it."),
+    ).toBeTruthy();
+    expect(screen.queryByText("Counted.")).toBeNull();
+    expect(screen.queryByText("Sending\u2026")).toBeNull();
+  }
+
+  it("keeps the question and both answers, and says it has closed", () => {
+    showClosed();
+    stillShowsTheRecord();
+    // Said in words, not only by greying: the halves are switched off, and the
+    // sentence is a status a screen reader is told about.
+    expect(half("No").disabled).toBe(true);
+    expect(half("Yes").disabled).toBe(true);
+    expect(screen.getByRole("status").textContent).toContain(
+      "This one has closed.",
+    );
+    // The question is already on screen, so there is no way "back" to it.
+    expect(
+      screen.queryByRole("button", { name: "Back to the question" }),
+    ).toBeNull();
+  });
+
+  it("casts nothing when a half is clicked", async () => {
+    const cast = showClosed();
+    fireEvent.click(half("No"));
+    fireEvent.click(half("Yes"));
+    await settle();
+    expect(cast).not.toHaveBeenCalled();
+    stillShowsTheRecord();
+  });
+
+  it("casts nothing for a tap, pointer and click together", async () => {
+    const cast = showClosed();
+    fireEvent.pointerDown(split(), { clientX: 200, pointerId: 1 });
+    fireEvent.pointerUp(split(), { clientX: 200, pointerId: 1 });
+    fireEvent.click(half("Yes"));
+    await settle();
+    expect(cast).not.toHaveBeenCalled();
+    stillShowsTheRecord();
+  });
+
+  it("casts nothing on Enter or Space", async () => {
+    const cast = showClosed();
+    const user = userEvent.setup();
+    for (const label of ["No", "Yes"]) {
+      half(label).focus();
+      await user.keyboard("{Enter}");
+      half(label).focus();
+      await user.keyboard(" ");
+    }
+    await settle();
+    expect(cast).not.toHaveBeenCalled();
+    stillShowsTheRecord();
+  });
+
+  it("casts nothing on the arrow keys", async () => {
+    const cast = showClosed();
+    fireEvent.keyDown(half("No"), { key: "ArrowLeft" });
+    fireEvent.keyDown(half("Yes"), { key: "ArrowRight" });
+    fireEvent.keyDown(split(), { key: "ArrowRight" });
+    await settle();
+    expect(cast).not.toHaveBeenCalled();
+    stillShowsTheRecord();
+  });
+
+  it("casts nothing for a drag past the commit distance, either way", async () => {
+    const cast = showClosed();
+    for (const to of [40, 360]) {
+      fireEvent.pointerDown(split(), { clientX: 200, pointerId: 1 });
+      fireEvent.pointerMove(split(), { clientX: to, pointerId: 1 });
+      fireEvent.pointerUp(split(), { clientX: to, pointerId: 1 });
+    }
+    await settle();
+    expect(cast).not.toHaveBeenCalled();
+    stillShowsTheRecord();
+  });
+
+  it("keeps the way back working", () => {
+    const onBack = vi.fn();
+    render(
+      <SwipeBallot
+        api={stubApi()}
+        poll={poll({ open: false })}
+        onAnswered={() => {}}
+        onBack={onBack}
+      />,
+    );
+    fireEvent.click(screen.getByRole("button", { name: /Back/ }));
+    expect(onBack).toHaveBeenCalledTimes(1);
   });
 });
