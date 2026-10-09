@@ -400,6 +400,28 @@ test("trusts_only_the_private_proxy_peer_and_one_forwarded_hop", async () => {
   assert.deepEqual(direct.json(), { ip: "198.51.100.30" });
 });
 
+test("forged_forwarded_prefixes_share_the_observed_clients_sign_in_limit", async () => {
+  const h = await setup({
+    trustProxy: 1,
+    signInRateLimit: { max: 2, timeWindow: "1 minute" },
+  });
+
+  for (let i = 0; i < 3; i++) {
+    const reply = await h.app.inject({
+      method: "POST",
+      url: "/api/sign-in",
+      remoteAddress: "172.20.0.4",
+      headers: {
+        "x-forwarded-for": `203.0.113.${i + 1}, 198.51.100.20`,
+      },
+      payload: { email: `person${i}@student.ubc.ca` },
+    });
+    assert.equal(reply.statusCode, i === 2 ? 429 : 200);
+  }
+
+  assert.equal(h.mailer.sent.length, 2);
+});
+
 test("a_second_link_for_one_address_says_a_link_is_already_coming", async () => {
   // The opposite fact to the test above, and the reason the two cannot share a
   // slug: here a link really is on its way, so the client is right to show the
