@@ -34,8 +34,7 @@ export function voterStoreConformance(
     { skip: options.skip ?? false },
     () => {
       test("finds_a_voter_by_address_and_by_id", async (t) => {
-        // A voter who never signed out comes back with no `sessionsValidFrom`
-        // key at all, not one set to undefined or to the epoch.
+        // The two stores return the same voter shape, including legacy fields.
         const store = await fresh(t);
         const created = await store.create(voter());
         assert.deepEqual(await store.byEmail("ada@student.ubc.ca"), created);
@@ -59,30 +58,42 @@ export function voterStoreConformance(
         const optedIn = await store.setProofEmails("voter-1", true);
         assert.ok(optedIn && "community" in optedIn);
         assert.equal(optedIn.community, null);
-        const signedOut = await store.invalidateSessionsBefore("voter-1", AT);
+        const signedOut = await store.advanceSessionGeneration("voter-1");
         assert.ok(signedOut && "community" in signedOut);
         assert.equal(signedOut.community, null);
         assert.equal((await store.byId("voter-1"))?.community, null);
       });
 
-      test("a_new_voter_has_no_sign_out_recorded", async (t) => {
-        // Undefined, not epoch zero: a voter who has never signed out must not
-        // have their first session compared against a real timestamp.
+      test("a_new_voter_starts_in_generation_zero", async (t) => {
         const store = await fresh(t);
         const created = await store.create(voter());
-        assert.equal(created.sessionsValidFrom, undefined);
+        assert.equal(created.sessionGeneration ?? 0, 0);
       });
 
-      test("signing_out_records_the_moment_sessions_stop_counting", async (t) => {
+      test("signing_out_advances_the_session_generation", async (t) => {
         const store = await fresh(t);
         await store.create(voter());
-        const updated = await store.invalidateSessionsBefore("voter-1", AT);
+        const updated = await store.advanceSessionGeneration("voter-1");
 
-        assert.equal(updated?.sessionsValidFrom?.getTime(), AT.getTime());
-        assert.equal(
-          (await store.byId("voter-1"))?.sessionsValidFrom?.getTime(),
-          AT.getTime(),
+        assert.equal(updated?.sessionGeneration, 1);
+        assert.equal((await store.byId("voter-1"))?.sessionGeneration, 1);
+      });
+
+      test("concurrent_sign_outs_each_advance_the_generation", async (t) => {
+        const store = await fresh(t);
+        await store.create(voter());
+        const updates = await Promise.all(
+          Array.from({ length: 8 }, () =>
+            store.advanceSessionGeneration("voter-1"),
+          ),
         );
+        assert.deepEqual(
+          updates
+            .map((v) => v?.sessionGeneration)
+            .sort((a, b) => (a ?? 0) - (b ?? 0)),
+          [1, 2, 3, 4, 5, 6, 7, 8],
+        );
+        assert.equal((await store.byId("voter-1"))?.sessionGeneration, 8);
       });
 
       test("signing_out_touches_only_that_voter", async (t) => {
@@ -92,19 +103,16 @@ export function voterStoreConformance(
           voter({ id: "voter-2", email: "sam@student.ubc.ca" }),
         );
 
-        await store.invalidateSessionsBefore("voter-1", AT);
+        await store.advanceSessionGeneration("voter-1");
         assert.equal(
-          (await store.byId("voter-2"))?.sessionsValidFrom,
+          (await store.byId("voter-2"))?.sessionGeneration,
           undefined,
         );
       });
 
       test("signing_out_an_unknown_voter_changes_nothing", async (t) => {
         const store = await fresh(t);
-        assert.equal(
-          await store.invalidateSessionsBefore("nobody", AT),
-          undefined,
-        );
+        assert.equal(await store.advanceSessionGeneration("nobody"), undefined);
       });
 
       test("one_voter_per_address", async (t) => {

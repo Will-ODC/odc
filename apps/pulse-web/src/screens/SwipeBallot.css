@@ -339,19 +339,51 @@
 .ballot {
   --lean-left: 0;
   --lean-right: 0;
+  --hover-left: 0;
+  --hover-right: 0;
+}
+
+/*
+ * Where to press, for anyone who has a pointer.
+ *
+ * On a phone the two halves fill most of a small screen and the resting wash
+ * is loud enough to show them. On a wide window the same halves are words
+ * floating in black with no edges, and the honest report was "I don't know
+ * where to click". Hover answers it. `(hover: hover)` rather than a width,
+ * because the question is whether there is a pointer, not how wide the screen
+ * is; a touch screen would otherwise keep the tint stuck on after a tap.
+ *
+ * Its own pair of numbers, not --lean-*: the screen sets those inline, which
+ * no stylesheet rule can outrank, and a hover is not a lean. A disabled half
+ * (a closed poll) lights nothing.
+ */
+@media (hover: hover) {
+  .ballot:has(.ballot__half--left:hover:not(:disabled)) {
+    --hover-left: 1;
+  }
+
+  .ballot:has(.ballot__half--right:hover:not(:disabled)) {
+    --hover-right: 1;
+  }
 }
 
 .ballot__tint .ballot__tint-left {
   background: rgba(
     var(--side-a),
-    calc(var(--side-rest) + var(--lean-left) * var(--side-lean))
+    calc(
+      var(--side-rest) + max(var(--lean-left), var(--hover-left)) *
+        var(--side-lean)
+    )
   );
 }
 
 .ballot__tint .ballot__tint-right {
   background: rgba(
     var(--side-b),
-    calc(var(--side-rest) + var(--lean-right) * var(--side-lean))
+    calc(
+      var(--side-rest) + max(var(--lean-right), var(--hover-right)) *
+        var(--side-lean)
+    )
   );
 }
 
