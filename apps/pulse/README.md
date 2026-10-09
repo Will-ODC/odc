@@ -33,6 +33,13 @@ seeds three linked polls and the community `demo-community`, which
 `@example.test` addresses belong to. Any other address signs in too, with no
 community. To change the demo, edit `src/dev-server.ts`.
 
+To see the community picker, sign in as anyone `@both.example.test`: the seed lists
+that one domain under two communities, `demo-community` and `demo-neighbours`, so the
+sign-in screen asks which one. It is a separate domain so that `@example.test` signs
+in exactly as it always has. With a database, any domain gets the same question once
+two rows name it:
+`insert into allowed_domain (community, domain, include_subdomains) values ('other', 'example.test', false);`.
+
 Without a database, everything is lost when the API stops. To keep it, start
 pulse's database (see [Test](#test)) and set `PULSE_DATABASE_URL` before `dev`.
 Set `PULSE_SESSION_SECRET` too: the ballot cookie is signed with it, so without
