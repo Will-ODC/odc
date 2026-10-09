@@ -293,6 +293,30 @@ test("signing_in_again_after_the_allowlist_changed_keeps_the_community_first_rec
   assert.equal((await h.voters.byEmail("ada@gmail.com"))?.community, null);
 });
 
+test("signing_in_again_after_the_domain_was_removed_keeps_the_community_first_recorded", async () => {
+  // The other direction, and the one that would hurt: an operator removes a
+  // domain, and existing members must not silently lose the community they
+  // joined under.
+  const domains = new EditableDomains([
+    { community: "ubc-students", domain: "student.ubc.ca" },
+  ]);
+  const h = setup({}, { domains });
+  await h.service.requestLink("ada@student.ubc.ca");
+  await h.service.redeem(h.lastToken("ada@student.ubc.ca"));
+
+  domains.remove("student.ubc.ca");
+  await h.service.requestLink("ada@student.ubc.ca");
+  const again = await h.service.redeem(h.lastToken("ada@student.ubc.ca"));
+  assert.equal(again.status, "signed_in");
+  if (again.status !== "signed_in") return;
+  assert.equal(again.firstTime, false);
+  assert.equal(again.voter.community, "ubc-students");
+  assert.equal(
+    (await h.voters.byEmail("ada@student.ubc.ca"))?.community,
+    "ubc-students",
+  );
+});
+
 test("says_what_is_wrong_with_an_unusable_address_and_sends_nothing", async () => {
   const h = setup();
   const result = await h.service.requestLink("not-an-address");
