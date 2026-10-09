@@ -15,6 +15,13 @@ import {
 export type RequestResult =
   | { status: "sent"; expiresAt: Date }
   | { status: "invalid_email"; reason: string }
+  /**
+   * The address proves several communities and no pick came with it. Nothing
+   * was sent and no claim exists: ask the person, then ask again with one.
+   */
+  | { status: "choose_community"; communities: readonly string[] }
+  /** A pick came with it that this address does not prove. Nothing sent. */
+  | { status: "unknown_community" }
   | { status: "too_many_requests" }
   | { status: "send_failed" };
 
@@ -104,9 +111,18 @@ export class ClaimService {
       });
   }
 
+  /**
+   * Ask for a sign-in link.
+   *
+   * `community` is the person's pick (ADR-0023, P2). It is needed only when
+   * the address proves two or more communities; with one or none the answer
+   * is the same with or without it. When it is given, it must be one the
+   * address proves, at any count — a pick is never quietly dropped, because
+   * the person would then be signed in somewhere other than where they asked.
+   */
   async requestLink(
     rawEmail: string,
-    opts: { proofEmailsOptIn?: boolean } = {},
+    opts: { proofEmailsOptIn?: boolean; community?: string } = {},
   ): Promise<RequestResult> {
     let email;
     try {
@@ -120,8 +136,22 @@ export class ClaimService {
     // A label, not a gate (ADR-0030): no matching row means no community,
     // never a refusal. Null rather than an empty string or a placeholder, so
     // "no community" cannot be mistaken for a community called "".
-    const membership = await this.#membership.check(email);
-    const community = membership?.community ?? null;
+    const proven = (await this.#membership.memberships(email)).map(
+      (m) => m.community,
+    );
+    let community: string | null;
+    if (opts.community !== undefined) {
+      if (!proven.includes(opts.community)) {
+        return { status: "unknown_community" };
+      }
+      community = opts.community;
+    } else if (proven.length > 1) {
+      // The person picks (ADR-0023). Asked before the throttle and before any
+      // claim is written, so being asked costs them none of their live links.
+      return { status: "choose_community", communities: proven };
+    } else {
+      community = proven[0] ?? null;
+    }
 
     const now = this.#clock();
     const live = await this.#claims.liveFor("email", email.value, now);

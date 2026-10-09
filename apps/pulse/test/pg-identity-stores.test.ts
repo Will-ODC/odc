@@ -300,8 +300,11 @@ test(
       ["\t Student.UBC.ca \n"],
     );
     const allowlist = new DomainAllowlist(new PostgresDomainSource(pool));
-    const ada = await allowlist.check(parseEmail("ada@student.ubc.ca"));
-    assert.equal(ada?.community, "ubc-students");
+    const ada = await allowlist.memberships(parseEmail("ada@student.ubc.ca"));
+    assert.deepEqual(
+      ada.map((m) => m.community),
+      ["ubc-students"],
+    );
   },
 );
 
@@ -340,6 +343,25 @@ async function until(ready: () => Promise<boolean>): Promise<void> {
 }
 
 test(
+  "two_communities_on_one_domain_both_come_back_from_the_table",
+  { skip: databaseSkip },
+  async (t) => {
+    // The (community, domain) key is what lets this happen at all (ADR-0023);
+    // the picker (P2) is only reachable if the table hands both rows over.
+    const pool = await migratedSchema(t);
+    await allowDomain(pool, { community: "ubc-staff", domain: "ubc.ca" });
+    await allowDomain(pool, { community: "ubc-alumni", domain: "ubc.ca" });
+    const allowlist = new DomainAllowlist(new PostgresDomainSource(pool));
+
+    const found = await allowlist.memberships(parseEmail("ada@ubc.ca"));
+    assert.deepEqual(
+      found.map((m) => m.community),
+      ["ubc-alumni", "ubc-staff"],
+    );
+  },
+);
+
+test(
   "a_domain_row_names_its_community_through_the_allowlist",
   { skip: databaseSkip },
   async (t) => {
@@ -352,9 +374,15 @@ test(
     });
     const allowlist = new DomainAllowlist(new PostgresDomainSource(pool));
 
-    const ada = await allowlist.check(parseEmail("ada@student.ubc.ca"));
-    assert.equal(ada?.community, "ubc-students");
-    assert.equal(await allowlist.check(parseEmail("ada@gmail.com")), undefined);
+    const ada = await allowlist.memberships(parseEmail("ada@student.ubc.ca"));
+    assert.deepEqual(
+      ada.map((m) => m.community),
+      ["ubc-students"],
+    );
+    assert.deepEqual(
+      await allowlist.memberships(parseEmail("ada@gmail.com")),
+      [],
+    );
   },
 );
 
