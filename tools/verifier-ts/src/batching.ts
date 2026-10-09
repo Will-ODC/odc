@@ -1,5 +1,6 @@
-// Ballot publication discipline: ET-23 (quantized ballot `ts`) and ET-24
-// (minimum batch size, with its line attribution). event-types.md, "Ballot
+// Ballot publication discipline (event-types.md v10): ET-23 (quantized ballot
+// `ts`), ET-24 (minimum batch size, with its line attribution) and ET-24a (a
+// batch, once left, is closed). event-types.md, "Ballot
 // publication discipline". ET-25 (order within a batch) is declared
 // unverifiable by the contract (ET-25, EV-15) and has no check here, by design.
 //
@@ -65,93 +66,86 @@ export function isQuantized(ms: number, intervalMs: number): boolean {
   return ms % intervalMs === 0;
 }
 
-/** One ET-24 batch: the ballots of one issue at one batch instant. */
-interface Batch {
-  /** Members admitted so far (all of them, once the scan ends). */
-  count: number;
-  /**
-   * Line of the first ballot of the same issue appended after this batch's
-   * highest-seq member, or null while no such ballot has been seen. Reset to
-   * null each time the batch gains a member, so at the end of the scan it
-   * names the first same-issue ballot after the batch's LAST member — ET-24's
-   * blamed line, if the batch turns out under-size and not last.
-   */
-  successor: number | null;
-}
+/** Which ballot-publication rule a ballot breaks, if any. */
+export type BatchFault = "ET-24" | "ET-24a";
 
-/** Per-issue ET-24 state. */
-interface IssueBatches {
+/** Per-issue state for ET-24 and ET-24a. */
+interface IssueRun {
   batchMin: number;
-  /** issue's batches keyed by batch instant (epoch ms). Equality only — never compared. */
-  byInstant: Map<number, Batch>;
-  /**
-   * Batch the issue's most recent (highest-seq so far) ballot went into: the
-   * batch whose `successor` the issue's next ballot settles.
-   */
-  last: Batch | null;
+  /** Batch instant (epoch ms) of the issue's previous ballot; null before its first. */
+  current: number | null;
+  /** Ballots in the current batch so far. */
+  count: number;
+  /** Instants of batches this issue has LEFT. Equality lookups only — never ordered. */
+  left: Set<number>;
 }
 
 /**
- * ET-24 accumulator. O(1) amortised per ballot and O(batches) at the end, so
- * the whole rule is linear in the export: no ballot is ever revisited and no
- * batch is ever rescanned, whatever order a hostile export interleaves them in.
+ * ET-24 / ET-24a, checked ballot by ballot in file (= `seq`) order.
  *
- * Membership and lastness are by `seq` (ES-8), never by comparing `ts`:
- * ballots are fed in file order (which Stage A has already pinned to `seq`
- * order), a batch is found by EQUALITY of its instant, and "last" means no
- * later ballot of the issue follows the batch's last member.
+ * ET-24a (event-types.md v10) makes every batch a single run of its issue's
+ * ballots: "a ballot whose `ts` differs from the `ts` of that issue's previous
+ * ballot MUST NOT equal the `ts` of any earlier ballot of that issue", rejected
+ * "at the line of the returning ballot". So a batch is complete the moment the
+ * issue's next ballot lands at a different instant — "the first later ballot of
+ * the issue closes the batch for good" (ET-24) — and both rules are decided AT
+ * that ballot's line, with no end-of-scan pass:
+ *
+ *   - ET-24: leaving a batch that holds fewer than the issue's
+ *     `ballot_batch_min` ballots proves it was not the last, and the leaving
+ *     ballot is "the first `vote_cast` of that issue appended after the
+ *     under-size batch" — the fatal line. A batch never left is the issue's
+ *     last (it holds the issue's highest-`seq` ballot) and may be under-size.
+ *   - ET-24a: arriving at an instant the issue has already left.
+ *
+ * Both checks are per issue; other events and other issues' ballots between
+ * one batch's members change nothing (ET-24a). `ts` values are compared for
+ * equality only (ES-21 v5). Cost: one Map lookup, one Set lookup and at most
+ * one Set insert per ballot — linear in the export whatever a hostile export
+ * does, since no earlier ballot or batch is ever rescanned.
+ *
+ * Only registered, otherwise-accepted `(vote_cast, 1)` events are fed in: an
+ * unregistered version's payload is never read, so it "joins no batch, closes
+ * none, and proves none not-last" (ET-24a, "Which ballots count").
  */
 export class BallotBatches {
-  private readonly issues = new Map<string, IssueBatches>();
-  private readonly all: { issue: IssueBatches; batch: Batch }[] = [];
+  private readonly issues = new Map<string, IssueRun>();
 
   /** Register an issue (at its `issue_created`) with its ET-14b minimum. */
   openIssue(issueId: string, batchMin: number): void {
-    this.issues.set(issueId, { batchMin, byInstant: new Map(), last: null });
+    this.issues.set(issueId, {
+      batchMin,
+      current: null,
+      count: 0,
+      left: new Set(),
+    });
   }
 
   /**
-   * Admit one accepted ballot of `issueId` at batch instant `ms`, on `line`.
-   * The issue MUST have been opened (ET-18 has already been checked).
+   * Admit one ballot of `issueId` at batch instant `ms`. Returns the rule the
+   * ballot breaks (the caller reports INVALID at this ballot's line), or null
+   * after recording it. The issue MUST have been opened (ET-18 checked first).
    */
-  admit(issueId: string, ms: number, line: number): void {
-    const issue = this.issues.get(issueId);
-    if (issue === undefined) throw new Error("admit: unknown issue");
-    let batch = issue.byInstant.get(ms);
-    if (batch === undefined) {
-      batch = { count: 0, successor: null };
-      issue.byInstant.set(ms, batch);
-      this.all.push({ issue, batch });
+  admit(issueId: string, ms: number): BatchFault | null {
+    const run = this.issues.get(issueId);
+    if (run === undefined) throw new Error("admit: unknown issue");
+    if (run.current === null) {
+      run.current = ms;
+      run.count = 1;
+      return null;
     }
-    // The previous ballot of this issue was the last member of `issue.last`,
-    // so this ballot is the first one appended after that member. If it joins
-    // a DIFFERENT batch, that is the batch's (provisional) successor.
-    const prev = issue.last;
-    if (prev !== null && prev !== batch) prev.successor = line;
-    batch.count++;
-    batch.successor = null;
-    issue.last = batch;
-  }
-
-  /**
-   * ET-24 over every ballot admitted: the lowest blamed line among the
-   * under-size batches that are not their issue's last, or null if none.
-   *
-   * Lastness is read off `successor` alone. It is null exactly when no ballot
-   * of the issue follows the batch's last member (it is reset on every new
-   * member and set by the next ballot of the issue that lands elsewhere), i.e.
-   * exactly when the batch holds the issue's highest-seq ballot — ET-24's
-   * exempt last batch. One test, so there is no second lastness rule to drift
-   * out of step with it.
-   */
-  firstViolation(): number | null {
-    let first: number | null = null;
-    for (const { issue, batch } of this.all) {
-      if (batch.count >= issue.batchMin) continue;
-      const line = batch.successor;
-      if (line === null) continue; // the issue's last batch: may be under-size
-      if (first === null || line < first) first = line;
+    if (ms === run.current) {
+      run.count++;
+      return null;
     }
-    return first;
+    // This ballot leaves the current batch. Either fault makes THIS the fatal
+    // line; which one is named is advisory (EV-17 does not order checks within
+    // a line).
+    if (run.left.has(ms)) return "ET-24a";
+    if (run.count < run.batchMin) return "ET-24";
+    run.left.add(run.current);
+    run.current = ms;
+    run.count = 1;
+    return null;
   }
 }

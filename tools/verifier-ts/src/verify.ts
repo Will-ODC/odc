@@ -65,7 +65,10 @@ interface ChainState {
   operatorPk: Buffer | null; // raw 32 bytes, validated at genesis
   registrarPk: Buffer | null; // raw 32 bytes, validated at genesis
   issues: Map<string, IssueParams>; // issue_id (hash) -> its declared parameters
-  batches: BallotBatches; // ET-24 accumulator over accepted ballots
+  batches: BallotBatches; // ET-24 / ET-24a per-issue batch runs
+  // Advisory reason for the rule a failing Stage B line broke, where it is more
+  // specific than the generic one (set for ET-24 / ET-24a only).
+  stageBReason: string | null;
 }
 
 // What a vote_cast needs from its issue_created (ET-18a, ET-23; ET-24's
@@ -150,7 +153,7 @@ function titleOk(title: string): boolean {
  * type-specific semantic checks; false (INVALID) otherwise. Mutates `state` for
  * genesis (keys) and issue_created (issue registry) on success.
  */
-function stageB(ev: ParsedEvent, state: ChainState, lineNo: number): boolean {
+function stageB(ev: ParsedEvent, state: ChainState): boolean {
   switch (ev.type) {
     case "genesis": {
       // ES-18 + ES-34: five required keys, two OPTIONAL ancestry keys.
@@ -310,8 +313,22 @@ function stageB(ev: ParsedEvent, state: ChainState, lineNo: number): boolean {
       if (reg === null) return false;
       if (!isCanonicalSigEncoding(sig)) return false; // ET-4a
       if (!ed25519Verify(signingPreimage(ev), sig, reg)) return false; // ET-17
-      // Only a ballot that passed every per-line check joins a batch (ET-24).
-      state.batches.admit(issueId, instant, lineNo);
+      // ET-24 / ET-24a (event-types.md v10). Both are decided at THIS ballot:
+      // it is either the first ballot of its issue after an under-size batch
+      // (ET-24's fatal line) or a ballot returning to an instant its issue has
+      // left (ET-24a: "at the line of the returning ballot"). Run last, so a
+      // ballot failing any other check never touches the batch state.
+      const batchFault = state.batches.admit(issueId, instant);
+      if (batchFault === "ET-24") {
+        state.stageBReason =
+          "ET-24: this ballot closes an earlier batch of its issue that holds fewer than the issue's ballot_batch_min ballots";
+        return false;
+      }
+      if (batchFault === "ET-24a") {
+        state.stageBReason =
+          "ET-24a: this ballot returns to a batch instant its issue has already left";
+        return false;
+      }
       return true;
     }
 
@@ -416,6 +433,7 @@ export function verifyExport(bytes: Buffer, head?: string): Verdict {
     registrarPk: null,
     issues: new Map(),
     batches: new BallotBatches(),
+    stageBReason: null,
   };
 
   let prevHash: string | null = null;
@@ -486,13 +504,15 @@ export function verifyExport(bytes: Buffer, head?: string): Verdict {
 
     // Stage B — only for registered (type, version) pairs (EV-6).
     if (isRegistered(ev.type, ev.version)) {
-      if (!stageB(ev, state, lineNo)) {
+      if (!stageB(ev, state)) {
         contentFault = {
           line: lineNo,
           // `ev.type` is one of the four registered names on this branch, so
           // `excerpt` cannot bite here; it is applied anyway so that no
           // interpolation of a value read out of the export goes unclipped.
-          reason: `Stage B: ${excerpt(ev.type)} v${ev.version} fails a type-specific check (event-types.md)`,
+          reason:
+            state.stageBReason ??
+            `Stage B: ${excerpt(ev.type)} v${ev.version} fails a type-specific check (event-types.md)`,
         };
         break;
       }
@@ -520,20 +540,6 @@ export function verifyExport(bytes: Buffer, head?: string): Verdict {
   }
 
   if (contentFault !== null) invalid.push(contentFault);
-
-  // ET-24, over every ballot accepted before the scan stopped. It is a
-  // property of the chain's batches, not of one line, so it can only be
-  // decided once the scan is over; the line it blames is the first vote_cast
-  // of the issue appended after an under-size, non-last batch (ET-24 "Line
-  // attribution"), which the fold below weighs against every other fault.
-  const batchFault = state.batches.firstViolation();
-  if (batchFault !== null) {
-    invalid.push({
-      line: batchFault,
-      reason:
-        "ET-24: an earlier batch of this ballot's issue is under the issue's ballot_batch_min and is not its last batch",
-    });
-  }
 
   // EX-15/EX-19: a --head mismatch is INVALID at the last line. Only meaningful
   // once every line has passed (link checks complete); if the chain already has

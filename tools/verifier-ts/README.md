@@ -61,15 +61,29 @@ Two stages, per `evolution.md` EV-6/EV-15:
   and ET-4c prime-order checks run on the raw bytes _before_ the verify
   primitive), title/`choice_count`/`choice` bounds, the `ballot_batch_interval_ms`
   and `ballot_batch_min` floors an `issue_created` declares (ET-14b), `issue_id`
-  back-references, and the ballot publication discipline (`src/batching.ts`):
-  ET-23 (a `vote_cast`'s `ts`, converted exactly to epoch milliseconds, is a
-  multiple of its issue's declared interval — rejected at that ballot) and ET-24
-  (every batch — all registered ballots sharing an `issue_id` and a `ts` — holds
-  at least the issue's declared minimum, except the batch holding the issue's
-  highest-`seq` ballot; a violation is blamed on the first ballot of that issue
-  appended after the under-size batch's last member). ET-24 is decided once the
-  scan ends, in one linear pass over the batches, and folded with every other
-  fault by lowest line. ET-25 is unverifiable by the contract's own statement and
+  back-references, and the ballot publication discipline of `event-types.md`
+  v10 (`src/batching.ts`):
+  - **ET-23** — a `vote_cast`'s `ts`, converted exactly to epoch milliseconds
+    (proleptic Gregorian, no leap seconds; exact in a JS number over all of
+    ES-20's range), is a multiple of its issue's declared interval; rejected
+    at that ballot.
+  - **ET-24** — every batch (an issue's ballots at one `ts`) holds at least the
+    issue's declared minimum, except the issue's last batch. Blamed on the
+    first ballot of that issue after the under-size batch — the ballot that
+    leaves it.
+  - **ET-24a** — a batch, once left, is closed: taking one issue's ballots in
+    `seq` order, a ballot that changes instant MUST NOT return to an instant
+    that issue has already left; rejected at the returning ballot. Per issue
+    only — other events and other issues' ballots may fall between one batch's
+    members.
+
+  Because ET-24a makes every batch one run of its issue's ballots, both
+  batching rules are decided at the ballot that changes instant, in file order:
+  one Map and one Set lookup per ballot, so cost stays linear and there is no
+  end-of-scan pass. `ts` values are compared for equality only (ES-21 v5).
+  Only registered `(vote_cast, 1)` ballots count; an unregistered `vote_cast`
+  joins no batch, closes none and proves none not-last (ET-24a, "Which ballots
+  count"). ET-25 is unverifiable by the contract's own statement and
   has no check. A well-formed but unregistered `(type, version)` yields
   `PARTIAL` for that line, never `INVALID` (EV-8) — **except at line 1**, where
   an unregistered `genesis` is `INVALID at line 1` (EV-20, the sole exception),
@@ -118,18 +132,21 @@ inventing conformance in a file no reviewer treats as normative.
   self-consistent (hashed and signed by the functions under test), which the
   file's header states plainly. They are a harness, not an oracle: a fixture
   for these rules supersedes them the day one exists.
-- **`test/ballot-batching.test.ts`** — ET-23 and ET-24. When written, no
-  fixture cited ET-23 and none had an issue whose ballots span more than one
-  batch, so the conformance suite could not tell whether either rule exists.
-  Synthetic, self-consistent chains (built with `genesis-builder.ts`'s
-  `signedEventLine`), asserting verdict and blamed line in both directions:
-  off-by-one-millisecond `ts`, declared (not floor) interval and minimum, a batch
-  exactly at the minimum, the legal under-size final batch, interleaved issues,
-  non-contiguous batches, lastness by `seq` rather than `ts`, interaction with
-  other faults and `--head`, unregistered `vote_cast` versions, a linear-cost
-  budget, and the CLI's line and exit status. `epochMs` is checked against
-  `Date` (via `setUTCFullYear`, which unlike `Date.UTC` does not remap years
-  0–99) over every year of ES-20's range.
+- **`test/ballot-batching.test.ts`** — ET-23, ET-24 and ET-24a
+  (`event-types.md` v10). When written, no fixture cited ET-23 or ET-24a and
+  none had an issue whose ballots span more than one batch, so the conformance
+  suite could not tell whether any of the three exists. Synthetic,
+  self-consistent chains (built with `genesis-builder.ts`'s `signedEventLine`),
+  asserting verdict and blamed line in both directions: off-by-one-millisecond
+  `ts`, declared (not floor) interval and minimum, a batch exactly at the
+  minimum, the legal under-size final batch, interleaved issues, lastness by
+  `seq` rather than `ts`, a ballot returning to a left instant (mid-chain, at
+  the very end, two batches back, after an under-size batch), other issues'
+  ballots and other events between one batch's members, unregistered
+  `vote_cast` versions in between, interaction with other faults and `--head`,
+  a linear-cost budget, and the CLI's line and exit status. `epochMs` is
+  checked against `Date` (via `setUTCFullYear`, which unlike `Date.UTC` does
+  not remap years 0–99) over every year of ES-20's range.
 - **`test/report-shape.test.ts`** — the CLI output contract: exactly one verdict
   line, advisory reason after a colon on that same line, of bounded length. A
   reason on a second line makes a single-line consumer regex **throw** rather

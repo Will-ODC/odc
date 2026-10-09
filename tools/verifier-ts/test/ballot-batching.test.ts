@@ -1,5 +1,6 @@
-// ET-23 (quantized ballot `ts`) and ET-24 (minimum batch size and its blamed
-// line), event-types.md "Ballot publication discipline".
+// ET-23 (quantized ballot `ts`), ET-24 (minimum batch size and its blamed line)
+// and ET-24a (a batch, once left, is closed), event-types.md v10 "Ballot
+// publication discipline".
 //
 // WHAT THIS FILE IS, AND WHAT IT IS NOT. When this file was written no vector in
 // `contracts/fixtures/` cited ET-23, and no vector had an issue whose ballots
@@ -391,28 +392,6 @@ test("ET-24: lastness is by seq — a later-seq batch with an EARLIER ts is the 
   assert.equal(c.verdict(), "VALID");
 });
 
-test("ET-24: a batch is ALL ballots sharing issue and ts, even when not contiguous", () => {
-  // 00:01 x2, 00:02 x3, 00:01 x1: the 00:01 batch has 3 members in total and
-  // holds the highest-seq ballot; the 00:02 batch has 3. Every batch is full.
-  const c = new Chain();
-  const a = c.issue();
-  c.votes(a, T1, 2);
-  c.votes(a, T2, 3);
-  c.votes(a, T1, 1);
-  assert.equal(c.verdict(), "VALID");
-});
-
-test("ET-24: an under-size batch that is RETURNED to and holds the highest-seq ballot is last", () => {
-  // 00:01 x1, 00:02 x3, 00:01 x1: the 00:01 batch has 2 members (under-size)
-  // but holds the issue's highest-seq ballot, so it is the exempt last batch.
-  const c = new Chain();
-  const a = c.issue();
-  c.votes(a, T1, 1);
-  c.votes(a, T2, 3);
-  c.votes(a, T1, 1);
-  assert.equal(c.verdict(), "VALID");
-});
-
 test("ET-24: a full batch plus a partial final one verifies under a matching --head", () => {
   const c = new Chain();
   const a = c.issue();
@@ -465,23 +444,8 @@ test("ET-24: lastness is by seq — an under-size batch with the GREATEST ts is 
   assert.equal(c.verdict(), `INVALID at line ${blamed}`);
 });
 
-test("ET-24: a non-contiguous under-size batch is blamed at the first same-issue ballot after its LAST member", () => {
-  // 00:01 x2, 00:02 x1 (line u), 00:01 x1 (line u+1), 00:03 x3.
-  // Final batches: 00:01 = 3 (full), 00:02 = 1 (under-size, not last),
-  // 00:03 = 3 (last). The 00:02 batch's last member is line u, so the blamed
-  // line is u+1 — a ballot of the 00:01 batch, which itself is legal.
-  const c = new Chain();
-  const a = c.issue();
-  c.votes(a, T1, 2);
-  const u = c.vote(a, T2);
-  const blamed = c.vote(a, T1);
-  c.votes(a, T3, 3);
-  assert.equal(blamed, u + 1);
-  assert.equal(c.verdict(), `INVALID at line ${blamed}`);
-});
-
-test("ET-24: with several violations, the LOWEST blamed line wins (not the first batch created)", () => {
-  // a's under-size batch is created first but blamed later than b's.
+test("ET-24: with violations on two issues, the first in file order is named", () => {
+  // a's under-size batch is opened first but closed later than b's.
   const c = new Chain();
   const a = c.issue();
   const b = c.issue();
@@ -524,20 +488,6 @@ test("ET-24 vs an earlier Stage A fault: the earlier fault wins", () => {
   assert.equal(c.verdict(), `INVALID at line ${bad}`);
 });
 
-test("ET-24: a ballot that fails its own checks joins no batch", () => {
-  // 00:01 x2, 00:02 x1 (blamed), then a 00:01 ballot signed by the OPERATOR
-  // key (fails ET-17). Were the failing ballot admitted, the 00:01 batch would
-  // reach 3 and become last again, hiding the ET-24 violation behind the
-  // later ET-17 line.
-  const c = new Chain();
-  const a = c.issue();
-  c.votes(a, T1, 2);
-  const blamed = c.vote(a, T2);
-  const badSig = c.vote(a, T1, 1, c.op);
-  assert.ok(blamed < badSig);
-  assert.equal(c.verdict(), `INVALID at line ${blamed}`);
-});
-
 test("ET-24 with --head: the ET-24 line is named, not the last line", () => {
   const c = new Chain();
   const a = c.issue();
@@ -545,6 +495,146 @@ test("ET-24 with --head: the ET-24 line is named, not the last line", () => {
   const blamed = c.vote(a, T2);
   c.votes(a, T2, 4);
   assert.equal(c.verdict(c.head()), `INVALID at line ${blamed}`);
+});
+
+// --- ET-24a: what MUST be rejected, and WHERE ---------------------------------
+
+test("ET-24a: a ballot returning to a left instant is INVALID at the returning line", () => {
+  // Both batches are full, so ET-24 is satisfied; only the return is wrong.
+  const c = new Chain();
+  const a = c.issue();
+  const first = c.votes(a, T1, 3);
+  c.votes(a, T2, 3);
+  const back = c.vote(a, T1);
+  c.votes(a, T3, 3);
+  assert.equal(c.verdict(), `INVALID at line ${back}`);
+  assert.notEqual(back, first[0]); // never the resumed batch's first member
+});
+
+test("ET-24a: a return at the very end of the chain is INVALID at that last line", () => {
+  // The returning ballot is the issue's highest-seq one; being last does not
+  // excuse it (ET-24a has no last-batch exemption).
+  const c = new Chain();
+  const a = c.issue();
+  c.votes(a, T1, 3);
+  c.votes(a, T2, 3);
+  const back = c.vote(a, T1);
+  assert.equal(c.verdict(), `INVALID at line ${back}`);
+});
+
+test("ET-24a: a return to ANY earlier instant counts, not only the batch just left", () => {
+  // 00:01, 00:02, 00:03, then back to 00:01 — two batches back.
+  const c = new Chain();
+  const a = c.issue();
+  c.votes(a, T1, 3);
+  c.votes(a, T2, 3);
+  c.votes(a, T3, 3);
+  const back = c.vote(a, T1);
+  assert.equal(c.verdict(), `INVALID at line ${back}`);
+});
+
+test("ET-24a: a return that follows an under-size batch is INVALID at the returning line", () => {
+  // 00:01 x3, 00:02 x1 (under-size), back to 00:01. The returning ballot is
+  // both the first ballot after the under-size batch (ET-24) and a return
+  // (ET-24a); either way it is the fatal line.
+  const c = new Chain();
+  const a = c.issue();
+  c.votes(a, T1, 3);
+  c.vote(a, T2);
+  const back = c.vote(a, T1);
+  assert.equal(c.verdict(), `INVALID at line ${back}`);
+});
+
+test("ET-24a: an under-size batch returned to — the old 'set' reading's VALID case — is INVALID", () => {
+  // 00:01 x1, 00:02 x3, 00:01 x1. Under v9 this was one 00:01 batch of 2 that
+  // held the issue's highest-seq ballot. v10: leaving 00:01 at size 1 already
+  // breaks ET-24, at the first 00:02 ballot.
+  const c = new Chain();
+  const a = c.issue();
+  c.vote(a, T1);
+  const [closes] = c.votes(a, T2, 3);
+  c.vote(a, T1);
+  assert.equal(c.verdict(), `INVALID at line ${closes}`);
+});
+
+test("ET-24a: returning to the same instant of ANOTHER issue's batch is not a return", () => {
+  // a leaves 00:01 for 00:02; b, a different issue, then publishes at 00:01.
+  // ET-24a binds each issue separately, so b's 00:01 batch is legal.
+  const c = new Chain();
+  const a = c.issue();
+  const b = c.issue();
+  c.votes(a, T1, 3);
+  c.votes(a, T2, 3);
+  c.votes(b, T1, 3);
+  c.votes(b, T2, 3);
+  assert.equal(c.verdict(), "VALID");
+});
+
+// --- ET-24a: what MUST be accepted --------------------------------------------
+
+test("ET-24a: other issues' ballots and other events between one batch's members are VALID", () => {
+  const c = new Chain();
+  const a = c.issue();
+  const b = c.issue();
+  c.vote(a, T1);
+  c.votes(b, T1, 3); // another issue's whole batch
+  c.vote(a, T1);
+  c.participant(); // a non-ballot event
+  c.issue(); // and another issue opening
+  c.vote(a, T1);
+  c.votes(b, T2, 2); // b's last batch, under-size: legal
+  c.votes(a, T2, 3);
+  assert.equal(c.verdict(), "VALID");
+});
+
+test("ET-24a: interleaving two issues at DIFFERENT instants is VALID", () => {
+  // a at 00:01 and b at 00:02 alternate line by line: each issue's own run
+  // never changes instant, though the file's ts alternates every line.
+  const c = new Chain();
+  const a = c.issue();
+  const b = c.issue();
+  for (let i = 0; i < 3; i++) {
+    c.vote(a, T1);
+    c.vote(b, T2);
+  }
+  c.votes(a, T3, 3);
+  c.votes(b, T4, 3);
+  assert.equal(c.verdict(), "VALID");
+});
+
+// --- ET-24 / ET-24a and unregistered vote_cast versions -----------------------
+
+test("ET-24a: an unregistered vote_cast at another instant closes no batch", () => {
+  // 00:01 x3, a vote_cast v1000000 at 00:02, then 00:01 again. The unregistered
+  // line is not read, so a's run never left 00:01 and the last ballot is no
+  // return: PARTIAL (the unregistered line), not INVALID.
+  const c = new Chain();
+  const a = c.issue();
+  c.votes(a, T1, 3);
+  const unreg = c.vote(a, T2, 1000000);
+  c.vote(a, T1);
+  assert.equal(c.verdict(), `PARTIAL at lines ${unreg}`);
+});
+
+test("ET-24a: an unregistered vote_cast at a left instant is not a return", () => {
+  const c = new Chain();
+  const a = c.issue();
+  c.votes(a, T1, 3);
+  c.votes(a, T2, 3);
+  const unreg = c.vote(a, T1, 1000000);
+  c.votes(a, T2, 1);
+  assert.equal(c.verdict(), `PARTIAL at lines ${unreg}`);
+});
+
+test("ET-24: an unregistered vote_cast between an under-size batch's members does not split it", () => {
+  // 00:01, unregistered@00:02, 00:01, 00:01: the v1 batch at 00:01 has 3.
+  const c = new Chain();
+  const a = c.issue();
+  c.vote(a, T1);
+  const unreg = c.vote(a, T2, 1000000);
+  c.votes(a, T1, 2);
+  c.votes(a, T2, 3);
+  assert.equal(c.verdict(), `PARTIAL at lines ${unreg}`);
 });
 
 // --- ET-24 and unregistered vote_cast versions (EV-8) --------------------------
@@ -572,32 +662,38 @@ test("ET-24: an unregistered vote_cast after an under-size batch does not prove 
 
 // --- cost: linear in the export ------------------------------------------------
 
-test("BallotBatches stays linear under a hostile pattern (200k batches, one issue)", () => {
-  // Every ballot opens a new under-size batch of the same issue: the worst case
-  // for any implementation that rescans earlier batches per ballot (O(n^2) —
-  // ~2e10 steps here) instead of touching one batch per ballot.
+test("BallotBatches stays linear under a hostile pattern (200k instants, one issue)", () => {
+  // Every ballot opens a new instant, so the set of left instants grows to
+  // 200k and every ballot must be checked against all of them (ET-24a). An
+  // implementation that rescans the earlier ballots or instants per ballot is
+  // O(n^2) — ~2e10 steps here; this one does one Set lookup per ballot.
   const t = new BallotBatches();
-  t.openIssue("a", 3);
+  t.openIssue("a", 1); // below the ET-14b floor on purpose: no ET-24 stop
   const n = 200000;
   const start = process.hrtime.bigint();
-  for (let i = 0; i < n; i++) t.admit("a", i * 60000, i + 3);
-  const first = t.firstViolation();
+  for (let i = 0; i < n; i++) assert.equal(t.admit("a", i * 60000), null);
+  const back = t.admit("a", 0); // return to the very first instant
   const ms = Number(process.hrtime.bigint() - start) / 1e6;
-  assert.equal(first, 4); // batch @0 under-size, next ballot on line 4
+  assert.equal(back, "ET-24a");
   assert.ok(ms < 2000, `took ${ms} ms`);
 });
 
-test("BallotBatches: blamed line is the successor of the batch's last member", () => {
+test("BallotBatches: the leaving ballot reports ET-24 when the batch it leaves is under-size", () => {
   const t = new BallotBatches();
   t.openIssue("a", 3);
   t.openIssue("b", 3);
-  t.admit("a", 0, 10);
-  t.admit("b", 0, 11);
-  t.admit("a", 0, 12); // a@0 now has 2
-  t.admit("a", 60000, 13); // successor of a@0
-  t.admit("a", 60000, 14);
-  t.admit("a", 60000, 15);
-  assert.equal(t.firstViolation(), 13);
+  assert.equal(t.admit("a", 0), null);
+  assert.equal(t.admit("b", 60000), null); // other issue: no effect on a
+  assert.equal(t.admit("a", 0), null);
+  assert.equal(t.admit("a", 60000), "ET-24"); // a@0 holds 2 < 3
+});
+
+test("BallotBatches: a batch left at the minimum is closed; returning to it is ET-24a", () => {
+  const t = new BallotBatches();
+  t.openIssue("a", 3);
+  for (let i = 0; i < 3; i++) assert.equal(t.admit("a", 0), null);
+  assert.equal(t.admit("a", 60000), null);
+  assert.equal(t.admit("a", 0), "ET-24a");
 });
 
 // --- the CLI: one verdict line and the exit status ----------------------------
@@ -632,6 +728,17 @@ test("CLI: an ET-23 violation prints one INVALID line naming the ballot and exit
   const { status, stdout } = runCli(c.bytes());
   assert.equal(status, 1);
   assert.match(stdout, new RegExp(`^INVALID at line ${bad}(: [^\\n]*)?\\n$`));
+});
+
+test("CLI: an ET-24a return prints one INVALID line naming the returning ballot and exits 1", () => {
+  const c = new Chain();
+  const a = c.issue();
+  c.votes(a, T1, 3);
+  c.votes(a, T2, 3);
+  const back = c.vote(a, T1);
+  const { status, stdout } = runCli(c.bytes());
+  assert.equal(status, 1);
+  assert.match(stdout, new RegExp(`^INVALID at line ${back}(: [^\\n]*)?\\n$`));
 });
 
 test("CLI: a legal multi-batch chain with an under-size final batch prints VALID and exits 0", () => {
