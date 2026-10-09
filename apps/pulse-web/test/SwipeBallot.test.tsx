@@ -866,6 +866,20 @@ describe("a poll that has already closed", () => {
     expect(screen.queryByText("Sending\u2026")).toBeNull();
   }
 
+  it("says the poll closed rather than naming a closing day", () => {
+    // The closing day is in the past here, so "Closes <day>" would read as a
+    // day still to come.
+    render(
+      <SwipeBallot
+        api={stubApi()}
+        poll={poll({ open: false, closesAt: "2026-01-05T12:00:00.000Z" })}
+        onAnswered={() => {}}
+      />,
+    );
+    expect(screen.getByText("Official Ballot - Closed")).toBeTruthy();
+    expect(screen.queryByText(/Closes/)).toBeNull();
+  });
+
   it("keeps the question and both answers, and says it has closed", () => {
     showClosed();
     stillShowsTheRecord();
