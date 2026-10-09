@@ -83,7 +83,7 @@ answer a property of the rows rather than of the order a query returned them.
 
 ADR-0024 gives this a second job, which raises what it is worth: **the community
 someone picks at sign-in is what decides where they may post a question.** An
-arbitrary answer is tolerable for which community admits you and is not
+arbitrary answer is tolerable for which community you are recorded under and is not
 tolerable for where your question is published.
 
 Decided already, do not re-open: that the person picks (ADR-0023), and that
@@ -195,9 +195,9 @@ session that wrote them, so their inputs were each verified separately and the
 images themselves are unproven. **The first `docker build` is the test** — do
 not treat green CI as evidence they work.
 
-**What a deployment still lacks, and it is not this item:** nobody can sign in
-until a row admits their domain — which P4c is about to remove — and there is
-nothing to vote on until P6.
+**What a deployment still lacks, and it is not this item:** there is nothing to
+vote on until P6. Signing in is no longer a gap: since open sign-up (ADR-0030,
+#182, #183) anyone can sign in, and a domain row only names their community.
 
 ## P5 — Pillar 3, the path to action · BLOCKED ON A DECISION
 

@@ -10,7 +10,7 @@ function allowlist(rows: ConstructorParameters<typeof StaticDomainSource>[0]) {
   return new DomainAllowlist(new StaticDomainSource(rows));
 }
 
-test("admits_an_address_whose_domain_is_listed", async () => {
+test("names_the_community_of_an_address_whose_domain_is_listed", async () => {
   const list = allowlist([
     { community: "ubc-students", domain: "student.ubc.ca" },
   ]);
@@ -20,16 +20,17 @@ test("admits_an_address_whose_domain_is_listed", async () => {
   assert.equal(membership?.via.domain, "student.ubc.ca");
 });
 
-test("turns_away_an_address_whose_domain_is_not_listed", async () => {
+test("finds_no_community_for_an_address_whose_domain_is_not_listed", async () => {
   const list = allowlist([
     { community: "ubc-students", domain: "student.ubc.ca" },
   ]);
   assert.equal(await list.check(parseEmail("ada@gmail.com")), undefined);
 });
 
-test("an_empty_allowlist_admits_nobody", async () => {
-  // The failure that would matter most: an empty table must never mean "open to
-  // everyone".
+test("an_empty_allowlist_names_no_community", async () => {
+  // Since ADR-0030 anyone signs in whatever this says, so an empty table is a
+  // fresh deployment, not a locked one. What it must never do is put everyone
+  // in a community nobody listed.
   const list = allowlist([]);
   assert.equal(await list.check(parseEmail("ada@student.ubc.ca")), undefined);
 });
@@ -61,7 +62,7 @@ test("subdomains_are_excluded_unless_the_row_says_otherwise", async () => {
   );
 });
 
-test("a_subdomain_row_does_not_admit_the_parent_domain", async () => {
+test("a_subdomain_row_does_not_match_the_parent_domain", async () => {
   const list = allowlist([
     { community: "ubc", domain: "ubc.ca", includeSubdomains: true },
   ]);
@@ -121,8 +122,8 @@ test("two_communities_claiming_one_domain_resolve_the_same_way_either_way_round"
   for (const rows of [forward, backward]) {
     const membership = await allowlist(rows).check(parseEmail("ada@ubc.ca"));
     assert.equal(membership?.community, "ubc-alumni");
-    // `via` is the row that admitted them, and must be the same row, not just
-    // a row with the same community.
+    // `via` is the row that named their community, and must be the same row,
+    // not just a row with the same community.
     assert.equal(membership?.via.community, "ubc-alumni");
   }
 });
