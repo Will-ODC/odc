@@ -38,7 +38,8 @@ node tools/rehearsal/dist/src/cli.js --help
 `just rehearsal` is the T8 gate. It builds the Go verifier and the standalone
 TypeScript verifier, then invokes both as external processes over the clean
 export and every tamper case. It compares only EV-17's verdict token and line
-attribution; advisory reason text is deliberately ignored. No verifier source
+attribution, including strictly ascending `PARTIAL` line numbers; advisory reason
+text is deliberately ignored. No verifier source
 or workspace implementation is imported into the other.
 
 The export goes to stdout (or `--out FILE`); the summary goes to stderr, so

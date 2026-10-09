@@ -70,7 +70,15 @@ export function conformanceVerdict(stdout: string): string {
     /^PARTIAL at lines? ([1-9][0-9]*(?:, [1-9][0-9]*)*)(?::[^\n]*)?$/.exec(
       line,
     );
-  if (partial !== null) return `PARTIAL at lines ${partial[1] as string}`;
+  if (partial !== null) {
+    const lines = (partial[1] as string).split(", ");
+    for (let i = 1; i < lines.length; i++) {
+      if (BigInt(lines[i] as string) <= BigInt(lines[i - 1] as string)) {
+        throw new Error(`not an EV-17 verdict: ${JSON.stringify(line)}`);
+      }
+    }
+    return `PARTIAL at lines ${partial[1] as string}`;
+  }
   throw new Error(`not an EV-17 verdict: ${JSON.stringify(line)}`);
 }
 
