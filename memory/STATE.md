@@ -525,7 +525,7 @@ while reaching nothing_.
    instant is fatal at its own line (ET-24a). Both verifiers, plus an
    orchestrator-written reference, agree on verdict and line for 6,000 generated
    chains. #178 also fixes a Node SIGSEGV on `process.exit` (see Blockers).
-4. **NEXT — the vectors**, listed in ADR-0029:
+4. **NEXT — the vectors** ([#192](https://github.com/Will-ODC/odc/issues/192)), listed in ADR-0029:
    - a resumed batch (INVALID at the returning line);
    - another issue's ballots between one batch's members (VALID);
    - an under-size batch proven not-last (INVALID at the next ballot of its
@@ -541,7 +541,7 @@ while reaching nothing_.
 PRs (2026-10-08). The verifier reviewers each work in their builder's sparse
 worktree and must never see the other verifier.
 
-**Phase 4.** F1 — `--chain <genesis-hash>` and printing the computed genesis hash
+**Phase 4** ([#193](https://github.com/Will-ODC/odc/issues/193)). F1 — `--chain <genesis-hash>` and printing the computed genesis hash
 and head (EX-24, scoped as tool output not verdict, so no collision with EV-17).
 The fixture index already carries per-vector inputs (`003`/`053` use `head`), so
 `--chain` needs no new fixture mechanism.
@@ -709,7 +709,8 @@ Kept here as the branch → PR → squash map; **no phase-2 branch is open.**
 | `claude/t9-phase2-verifier-go-rebuild` | #123 | `6a9ce4a` | Go: ancestry, EV-20, ET-9d, quadratic fix, the stack-overflow crash |
 | `claude/t9-phase2-verifier-ts-rebuild` | #124 | `a57f41b` | TS: ancestry, EV-20, ET-9d, one-line verdict, exit status           |
 
-**Phase 3 branches (2026-10-08).** Each verifier was built in a **sparse**
+**Phase 3 branches (2026-10-08). All merged; the `odc-p3-go`/`odc-p3-ts`
+worktrees were removed 2026-10-09.** Each verifier was built in a **sparse**
 worktree holding only `contracts/`, its own verifier and the charter, so the
 builder could not read the other verifier. See Blockers for the technique.
 
@@ -799,6 +800,10 @@ was reused for the vector work on 2026-08-26 and carries nothing of its own.
   checkout leaves untracked directories behind. Hand amended-but-unmerged specs
   to builders as copies in the scratchpad, never by committing them into the
   builder's branch. Reviewers reuse the same worktrees.
+- **The TS verifier exits 1, INVALID's code, on an internal error**
+  ([#194](https://github.com/Will-ODC/odc/issues/194)). Any throw in `main` becomes
+  a false `INVALID` instead of a tool error (≥ 3). Nothing reaches it today. Fix
+  it in an isolated context.
 - **Node 24 on macOS can SIGSEGV when `process.exit()` runs straight after the
   TS verifier's verify path.** About 2% of runs died with `status null` and empty
   stderr, which was the long-flaky "the CLI writes exactly one stdout line" test.

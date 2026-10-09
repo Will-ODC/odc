@@ -29,7 +29,7 @@ Do not apply charter rules to `apps/**`, and do not relax them anywhere else.
   corpus to **98 vectors** and closing the five rules that both verifiers
   enforced and no vector cited. **Phase 3 (F2 batching): the contract and both verifiers are
   merged** (#172, #176 + #180 → `event-types.md` v11, #177 + #181 Go, #178 TS).
-  **Next: the phase-3 vectors** listed in ADR-0029; until they land, CI cannot
+  **Next: the phase-3 vectors** ([#192](https://github.com/Will-ODC/odc/issues/192)), listed in ADR-0029; until they land, CI cannot
   tell whether ET-23/ET-24/ET-24a are enforced. Four `contracts/` contradictions remain
   open for an operator decision. → `memory/STATE.md`
 - **Pulse:** pillars 1 and 2 are on master — magic-link identity, the voting
