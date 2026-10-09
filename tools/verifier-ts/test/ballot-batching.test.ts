@@ -402,6 +402,17 @@ test("ET-24: a batch is ALL ballots sharing issue and ts, even when not contiguo
   assert.equal(c.verdict(), "VALID");
 });
 
+test("ET-24: an under-size batch that is RETURNED to and holds the highest-seq ballot is last", () => {
+  // 00:01 x1, 00:02 x3, 00:01 x1: the 00:01 batch has 2 members (under-size)
+  // but holds the issue's highest-seq ballot, so it is the exempt last batch.
+  const c = new Chain();
+  const a = c.issue();
+  c.votes(a, T1, 1);
+  c.votes(a, T2, 3);
+  c.votes(a, T1, 1);
+  assert.equal(c.verdict(), "VALID");
+});
+
 test("ET-24: a full batch plus a partial final one verifies under a matching --head", () => {
   const c = new Chain();
   const a = c.issue();

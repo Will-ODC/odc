@@ -84,7 +84,10 @@ interface IssueBatches {
   batchMin: number;
   /** issue's batches keyed by batch instant (epoch ms). Equality only — never compared. */
   byInstant: Map<number, Batch>;
-  /** Batch holding the issue's highest-seq ballot so far (ET-24's "last" batch). */
+  /**
+   * Batch the issue's most recent (highest-seq so far) ballot went into: the
+   * batch whose `successor` the issue's next ballot settles.
+   */
   last: Batch | null;
 }
 
@@ -95,8 +98,8 @@ interface IssueBatches {
  *
  * Membership and lastness are by `seq` (ES-8), never by comparing `ts`:
  * ballots are fed in file order (which Stage A has already pinned to `seq`
- * order), a batch is found by EQUALITY of its instant, and "last" is simply the
- * batch the most recent ballot of the issue went into.
+ * order), a batch is found by EQUALITY of its instant, and "last" means no
+ * later ballot of the issue follows the batch's last member.
  */
 export class BallotBatches {
   private readonly issues = new Map<string, IssueBatches>();
@@ -134,16 +137,19 @@ export class BallotBatches {
    * ET-24 over every ballot admitted: the lowest blamed line among the
    * under-size batches that are not their issue's last, or null if none.
    *
-   * A batch that is not its issue's last does not hold the issue's highest-seq
-   * ballot, so some ballot of that issue follows its last member and
-   * `successor` is set; the null branch is unreachable.
+   * Lastness is read off `successor` alone. It is null exactly when no ballot
+   * of the issue follows the batch's last member (it is reset on every new
+   * member and set by the next ballot of the issue that lands elsewhere), i.e.
+   * exactly when the batch holds the issue's highest-seq ballot — ET-24's
+   * exempt last batch. One test, so there is no second lastness rule to drift
+   * out of step with it.
    */
   firstViolation(): number | null {
     let first: number | null = null;
     for (const { issue, batch } of this.all) {
-      if (batch === issue.last || batch.count >= issue.batchMin) continue;
+      if (batch.count >= issue.batchMin) continue;
       const line = batch.successor;
-      if (line === null) continue; // unreachable, see above
+      if (line === null) continue; // the issue's last batch: may be under-size
       if (first === null || line < first) first = line;
     }
     return first;
