@@ -1,6 +1,7 @@
 import assert from "node:assert/strict";
 import { test } from "node:test";
 import { DomainAllowlist } from "../src/identity/allowlist.js";
+import { migrate } from "../src/db/migrate.js";
 import { parseEmail } from "../src/identity/email.js";
 import {
   PostgresClaimStore,
@@ -11,7 +12,11 @@ import {
 import type { Pool, PoolClient } from "pg";
 import { claimStoreConformance } from "./conformance/claim-store.js";
 import { voterStoreConformance } from "./conformance/voter-store.js";
-import { databaseSkip, migratedSchema } from "./support/database.js";
+import {
+  databaseSkip,
+  migratedSchema,
+  throwawaySchema,
+} from "./support/database.js";
 
 // The Postgres identity stores, held to the suites every implementation runs.
 voterStoreConformance(
@@ -191,5 +196,37 @@ test(
         includeSubdomains: true,
       },
     ]);
+  },
+);
+
+test(
+  "migration_002_makes_community_optional_and_nothing_else",
+  { skip: databaseSkip },
+  async (t) => {
+    // ADR-0030. The conformance suites prove a null community round-trips;
+    // this pins that the migration dropped exactly the two `not null`s it
+    // names, so a later file loosening `email` or `community` on the
+    // allowlist by accident is a red test rather than a quiet change.
+    const { pool, schema } = await throwawaySchema(t);
+    await migrate(pool);
+    const { rows } = await pool.query<{
+      table_name: string;
+      column_name: string;
+    }>(
+      "select table_name, column_name from information_schema.columns" +
+        " where table_schema = $1 and is_nullable = 'YES'" +
+        " and table_name in ('voter', 'pending_claim', 'allowed_domain')" +
+        " order by table_name, column_name",
+      [schema],
+    );
+    assert.deepEqual(
+      rows.map((row) => `${row.table_name}.${row.column_name}`),
+      [
+        "pending_claim.community",
+        "pending_claim.used_at",
+        "voter.community",
+        "voter.sessions_valid_from",
+      ],
+    );
   },
 );

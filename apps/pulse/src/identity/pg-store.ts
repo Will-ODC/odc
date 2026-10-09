@@ -208,7 +208,7 @@ export async function allowDomain(
 interface VoterRow {
   id: string;
   email: string;
-  community: string;
+  community: string | null;
   claimed_at: Date;
   proof_emails_opt_in: boolean;
   sessions_valid_from: Date | null;
@@ -217,7 +217,7 @@ interface VoterRow {
 interface ClaimRow {
   token_hash: string;
   email: string;
-  community: string;
+  community: string | null;
   proof_emails_opt_in: boolean;
   created_at: Date;
   expires_at: Date;
@@ -225,7 +225,8 @@ interface ClaimRow {
 }
 
 // Optional fields are left out when the column is null, never set to
-// undefined — the shape the in-memory stores hand back.
+// undefined — the shape the in-memory stores hand back. `community` is not
+// optional: it is always present, and null is its value for no community.
 
 function toVoter(row: VoterRow): Voter {
   const voter: Voter = {
