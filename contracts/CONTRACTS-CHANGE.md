@@ -19,6 +19,15 @@ Format (newest first, one entry per merged contracts change):
 
 ---
 
+## fixtures/ v13 — 2026-10-09 — Phase 3 batching vectors (#192)
+
+Added `099`–`108` to pin ET-14b's two floors, ET-23 quantization against a
+per-issue two-minute interval, ET-24 maximal runs and the final under-size
+exception, and ET-24a's closed-batch rule. The two ADR-0029 counterexamples
+reject at the first T2 ballot; a separate valid case has two full batches.
+Only new golden vector files and their index/manifest entries were generated;
+existing vector bytes and verdicts are unchanged.
+
 ## event-types.md v11 — 2026-10-09 — a ballot batch is a run, not a set (ADR-0029 review fixes)
 
 **Why a second entry.** #176 (v10) merged the first draft of ADR-0029 before its

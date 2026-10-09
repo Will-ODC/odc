@@ -1260,6 +1260,129 @@
         "ET-9a"
       ],
       "note": "A genesis with registrar_pk absent entirely. This is the other half of ES-18 on the genesis key set, and it is the likelier mistake of the two: 'make these two ancestry keys optional' is precisely the edit that touches the required-key list, and a verifier that loosens one key too many accepts a chain with no registrar at all — silently defeating ET-9a, ET-9d and ET-17 together, since every ballot signature check then has no key to run against. 083 and 094 cannot catch it because both carry registrar_pk; they exercise its VALUE, and nothing until now exercised its PRESENCE. Note this is not the ET-9d fault in another form: 094 declares one key twice and is visible in the log as a collapse, while this chain declares no registrar at all. Which rule a verifier cites is deliberately not pinned — ES-18 rejects the key set and ET-9b rejects the absent key's format, both reaching INVALID at line 1, and EV-17 makes the token and the line the whole of conformance. A verifier with both barriers is unaffected by loosening either one alone, which is a property worth having rather than a gap in this vector."
+    },
+    {
+      "id": "099-batch-resumed",
+      "export": "vectors/099-batch-resumed.ndjson",
+      "expect": {
+        "verdict": "INVALID",
+        "line": 9
+      },
+      "cites": [
+        "ET-24a"
+      ],
+      "note": "Two full batches at T1 and T2; returning to T1 is fatal at the returning ballot, without an ET-24 size fault."
+    },
+    {
+      "id": "100-batch-interleaved-issues",
+      "export": "vectors/100-batch-interleaved-issues.ndjson",
+      "expect": {
+        "verdict": "VALID"
+      },
+      "cites": [
+        "ET-24",
+        "ET-24a"
+      ],
+      "note": "Another issue's ballot falls between A's batch members; A's three ballots are still one full batch."
+    },
+    {
+      "id": "101-under-size-not-last",
+      "export": "vectors/101-under-size-not-last.ndjson",
+      "expect": {
+        "verdict": "INVALID",
+        "line": 6
+      },
+      "cites": [
+        "ET-24"
+      ],
+      "note": "The first batch has two ballots against minimum three; the next ballot of that issue ends it at line 6."
+    },
+    {
+      "id": "102-under-size-last-interleaved",
+      "export": "vectors/102-under-size-last-interleaved.ndjson",
+      "expect": {
+        "verdict": "VALID"
+      },
+      "cites": [
+        "ET-24"
+      ],
+      "note": "A's final batch contains two ballots, and B's ballots after A's last ballot do not make A's batch non-last."
+    },
+    {
+      "id": "103-off-interval-ballot",
+      "export": "vectors/103-off-interval-ballot.ndjson",
+      "expect": {
+        "verdict": "INVALID",
+        "line": 4
+      },
+      "cites": [
+        "ET-23"
+      ],
+      "note": "Five minutes after midnight is on a whole-minute boundary but off this issue's two-minute interval."
+    },
+    {
+      "id": "104-interval-below-floor",
+      "export": "vectors/104-interval-below-floor.ndjson",
+      "expect": {
+        "verdict": "INVALID",
+        "line": 2
+      },
+      "cites": [
+        "ET-14b"
+      ],
+      "note": "The declared interval is one millisecond below the permanent 60000 ms floor."
+    },
+    {
+      "id": "105-minimum-below-floor",
+      "export": "vectors/105-minimum-below-floor.ndjson",
+      "expect": {
+        "verdict": "INVALID",
+        "line": 2
+      },
+      "cites": [
+        "ET-14b"
+      ],
+      "note": "The declared minimum is one below the permanent three-ballot floor."
+    },
+    {
+      "id": "106-run-two-then-three-return",
+      "export": "vectors/106-run-two-then-three-return.ndjson",
+      "expect": {
+        "verdict": "INVALID",
+        "line": 5
+      },
+      "cites": [
+        "ET-24",
+        "ET-24a"
+      ],
+      "note": "T1,T1,T2,T2,T2,T1: first T2 ends the under-size T1 run; the later return cannot repair it."
+    },
+    {
+      "id": "107-run-one-then-three-return",
+      "export": "vectors/107-run-one-then-three-return.ndjson",
+      "expect": {
+        "verdict": "INVALID",
+        "line": 4
+      },
+      "cites": [
+        "ET-24",
+        "ET-24a",
+        "EX-16"
+      ],
+      "note": "T1,T2,T2,T2,T1,T1: the first T2 is fatal even though a set-based count would later fill T1."
+    },
+    {
+      "id": "108-two-full-batches",
+      "export": "vectors/108-two-full-batches.ndjson",
+      "expect": {
+        "verdict": "VALID"
+      },
+      "cites": [
+        "ET-23",
+        "ET-24",
+        "ET-24a"
+      ],
+      "note": "One issue has two distinct full three-ballot batches; the first is non-last and still legal."
     }
   ]
 }
