@@ -155,6 +155,17 @@ class Chain {
     return line;
   }
 
+  /** The export cut after its first `n` lines (end-truncation, EX-16). */
+  prefixBytes(n: number): Buffer {
+    return Buffer.from(
+      this.lines
+        .slice(0, n)
+        .map((l) => l + "\n")
+        .join(""),
+      "utf8",
+    );
+  }
+
   head(): string {
     return this.prev;
   }
@@ -583,6 +594,19 @@ test("ET-24a: an issue moving to an instant ANOTHER issue has left is not a retu
   assert.equal(c.verdict(), "VALID");
 });
 
+test("ET-24 over ET-24a: T1, T1, T2, T2, T2, T1 (min 3) is INVALID at the first T2", () => {
+  // The contract's own example (ET-24 "Line attribution"): the run of two T1
+  // ballots ends at the first T2, which is the fatal line. The returning T1 is
+  // a later ET-24a violation and is never reached.
+  const c = new Chain();
+  const a = c.issue();
+  c.votes(a, T1, 2);
+  const [firstT2] = c.votes(a, T2, 3);
+  const back = c.vote(a, T1);
+  assert.ok(firstT2 !== undefined && firstT2 < back);
+  assert.equal(c.verdict(), `INVALID at line ${firstT2}`);
+});
+
 // --- ET-24a: what MUST be accepted --------------------------------------------
 
 test("ET-24a: other issues' ballots and other events between one batch's members are VALID", () => {
@@ -613,6 +637,53 @@ test("ET-24a: interleaving two issues at DIFFERENT instants is VALID", () => {
   c.votes(a, T3, 3);
   c.votes(b, T4, 3);
   assert.equal(c.verdict(), "VALID");
+});
+
+// --- ET-24: the per-batch counter and the EX-16 truncation residual ------------
+
+test("ET-24: three batches each exactly at the minimum, then a short fourth, is VALID", () => {
+  // Pins the counter reset directly: each batch must be counted from 1. A
+  // counter reset to 0 would make each exact-minimum batch look one short.
+  const c = new Chain();
+  const a = c.issue();
+  c.votes(a, T1, 3);
+  c.votes(a, T2, 3);
+  c.votes(a, T3, 3);
+  c.votes(a, T4, 1);
+  assert.equal(c.verdict(), "VALID");
+});
+
+test("ET-24: after three batches at the minimum, an under-size fourth that is ended is INVALID", () => {
+  // A counter that kept accumulating across batches would see the fourth batch
+  // as holding 11 and miss it.
+  const c = new Chain();
+  const a = c.issue();
+  c.votes(a, T1, 3);
+  c.votes(a, T2, 3);
+  c.votes(a, T3, 3);
+  c.votes(a, T4, 2);
+  const ends = c.vote(a, "2026-07-21T00:05:00.000Z");
+  assert.equal(c.verdict(), `INVALID at line ${ends}`);
+});
+
+test("ET-24 / EX-16: truncation that makes a mid-chain under-size batch last hides it without --head", () => {
+  // Full chain: T1 x3, T2 x2 (under-size), T3 x3. INVALID at the first T3.
+  // Truncated just after T2, the under-size batch becomes the issue's last:
+  // VALID on its own (EX-16), and INVALID at its last line under the original
+  // head (EX-15, EX-19). ET-24 names this residual and this remedy.
+  const c = new Chain();
+  const a = c.issue();
+  c.votes(a, T1, 3);
+  const t2 = c.votes(a, T2, 2);
+  const [firstT3] = c.votes(a, T3, 3);
+  const cut = t2[t2.length - 1] as number;
+  assert.equal(c.verdict(), `INVALID at line ${firstT3}`);
+  const truncated = c.prefixBytes(cut);
+  assert.equal(tokenAndLine(verifyExport(truncated)), "VALID");
+  assert.equal(
+    tokenAndLine(verifyExport(truncated, c.head())),
+    `INVALID at line ${cut}`,
+  );
 });
 
 // --- ET-24 / ET-24a and unregistered vote_cast versions -----------------------

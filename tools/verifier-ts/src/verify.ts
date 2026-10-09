@@ -307,21 +307,25 @@ function stageB(ev: ParsedEvent, state: ChainState): boolean {
       // the issue's declared interval, in epoch ms. The value is checked; it
       // orders and selects nothing (ES-21).
       const instant = epochMs(ev.ts);
-      if (!isQuantized(instant, issue.batchIntervalMs)) return false; // ET-23
+      if (!isQuantized(instant, issue.batchIntervalMs)) {
+        state.stageBReason =
+          "ET-23: this ballot's ts is not an exact multiple of its issue's ballot_batch_interval_ms";
+        return false;
+      }
       const sig = Buffer.from(sigHex, "hex");
       const reg = state.registrarPk;
       if (reg === null) return false;
       if (!isCanonicalSigEncoding(sig)) return false; // ET-4a
       if (!ed25519Verify(signingPreimage(ev), sig, reg)) return false; // ET-17
       // ET-24 / ET-24a (event-types.md v10). Both are decided at THIS ballot:
-      // it is either the first ballot of its issue after an under-size batch
-      // (ET-24's fatal line) or a ballot returning to an instant its issue has
-      // left (ET-24a: "at the line of the returning ballot"). Run last, so a
-      // ballot failing any other check never touches the batch state.
+      // it is either the ballot that ends an under-size batch (ET-24's fatal
+      // line) or a ballot returning to an instant its issue has left (ET-24a:
+      // "at the line of the returning ballot"). Run last, so a ballot failing
+      // any other check never touches the batch state.
       const batchFault = state.batches.admit(issueId, instant);
       if (batchFault === "ET-24") {
         state.stageBReason =
-          "ET-24: this ballot closes an earlier batch of its issue that holds fewer than the issue's ballot_batch_min ballots";
+          "ET-24: this ballot ends an earlier batch of its issue that holds fewer than the issue's ballot_batch_min ballots";
         return false;
       }
       if (batchFault === "ET-24a") {

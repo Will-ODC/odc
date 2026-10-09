@@ -39,10 +39,14 @@ backstop. `src/report.ts` is the single place that renders it and strips any
 line terminator a reason could carry; `test/report-shape.test.ts` pins the shape.
 
 The CLI sets `process.exitCode` and lets the process end on its own instead of
-calling `process.exit()` right after verifying: on Node v24.7.0 (macOS) the
-immediate `process.exit()` was measured dying with SIGSEGV in about 1.5% of
-runs (no output on stderr, child status `null`), which made the process-level
-tests flaky. With the natural exit, 1000 runs showed none.
+calling `process.exit()` right after verifying. This is a workaround for a
+crash that was **observed, not proven**: on one machine (Node v24.7.0, macOS),
+a child running the verify path and then calling `process.exit()` died with
+SIGSEGV (status `null`, empty stderr) in 9 of 300, 6 of 400 and 2 of 400 runs
+across three variants, roughly 0.5–3%. That made the process-level tests flaky.
+The same verification with `process.exit()` stubbed out died 0 of 400 times,
+and the CLI with natural exit 0 of 1000. A separate review could not reproduce
+the crash in about 600 runs of each variant, so treat the cause as unconfirmed.
 
 `--head` supplies the out-of-band anchored head. It is the ONLY way to detect
 clean end-truncation, which is invisible from the export alone
@@ -71,24 +75,26 @@ Two stages, per `evolution.md` EV-6/EV-15:
   v10 (`src/batching.ts`):
   - **ET-23** — a `vote_cast`'s `ts`, converted exactly to epoch milliseconds
     (proleptic Gregorian, no leap seconds; exact in a JS number over all of
-    ES-20's range), is a multiple of its issue's declared interval; rejected
-    at that ballot.
-  - **ET-24** — every batch (an issue's ballots at one `ts`) holds at least the
-    issue's declared minimum, except the issue's last batch. Blamed on the
-    first ballot of that issue after the under-size batch — the ballot that
-    leaves it.
-  - **ET-24a** — a batch, once left, is closed: taking one issue's ballots in
-    `seq` order, a ballot that changes instant MUST NOT return to an instant
-    that issue has already left; rejected at the returning ballot. Per issue
+    ES-20's range), is a multiple of its issue's declared interval (zero and
+    negative multiples count); rejected at that ballot.
+  - **ET-24** — a batch is a maximal run, in `seq` order among one issue's
+    registered `(vote_cast, 1)` events, sharing one `ts`. Every batch holds at
+    least the issue's declared minimum, except the issue's last batch. An
+    under-size batch is blamed on the ballot that ends it (the issue's next
+    registered ballot at a different `ts`) on every chain. Example: T1, T1, T2,
+    T2, T2, T1 with minimum 3 is INVALID at the first T2, not the returning T1.
+  - **ET-24a** — a batch, once left, is closed: no two batches of one issue
+    share a `ts`, so a ballot that changes instant MUST NOT return to an
+    instant that issue has already left; rejected at the returning ballot. Per issue
     only — other events and other issues' ballots may fall between one batch's
     members.
 
-  Because ET-24a makes every batch one run of its issue's ballots, both
-  batching rules are decided at the ballot that changes instant, in file order:
+  Since a batch ends at the ballot that changes instant, both batching rules
+  are decided at that ballot, in file order:
   one Map and one Set lookup per ballot, so cost stays linear and there is no
   end-of-scan pass. `ts` values are compared for equality only (ES-21 v5).
   Only registered `(vote_cast, 1)` ballots count; an unregistered `vote_cast`
-  joins no batch, closes none and proves none not-last (ET-24a, "Which ballots
+  joins no batch, ends none and proves none not-last (ET-24a, "Which ballots
   count"). ET-25 is unverifiable by the contract's own statement and
   has no check. A well-formed but unregistered `(type, version)` yields
   `PARTIAL` for that line, never `INVALID` (EV-8) — **except at line 1**, where
@@ -149,7 +155,10 @@ inventing conformance in a file no reviewer treats as normative.
   `seq` rather than `ts`, a ballot returning to a left instant (mid-chain, at
   the very end, two batches back, after an under-size batch), other issues'
   ballots and other events between one batch's members, unregistered
-  `vote_cast` versions in between, interaction with other faults and `--head`,
+  `vote_cast` versions in between, ET-24 winning over ET-24a on the contract's
+  own T1, T1, T2, T2, T2, T1 example, three batches at exactly the minimum
+  (the per-batch counter reset), the EX-16 truncation residual with and
+  without `--head`, interaction with other faults and `--head`,
   a linear-cost budget, and the CLI's line and exit status. `epochMs` is
   checked against `Date` (via `setUTCFullYear`, which unlike `Date.UTC` does
   not remap years 0–99) over every year of ES-20's range.

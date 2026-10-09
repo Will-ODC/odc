@@ -1,10 +1,10 @@
 // Ballot publication discipline (event-types.md v10): ET-23 (quantized ballot
 // `ts`), ET-24 (minimum batch size, with its line attribution) and ET-24a (a
-// batch, once left, is closed). event-types.md, "Ballot
-// publication discipline". ET-25 (order within a batch) is declared
-// unverifiable by the contract (ET-25, EV-15) and has no check here, by design.
+// batch, once left, is closed), from the section "Ballot publication
+// discipline". ET-25 (order within a batch) is declared unverifiable by the
+// contract (ET-25, EV-15) and has no check here, by design.
 //
-// Both rules are Stage B (EV-15: "every rule of event-types.md (ET-*)"), so
+// All three are Stage B (EV-15: "every rule of event-types.md (ET-*)"), so
 // only REGISTERED `vote_cast` events that have passed every other Stage B check
 // are fed to the tracker. A well-formed `vote_cast` at an unregistered version
 // is PARTIAL (EV-8): its payload is never read, so it has no issue_id this
@@ -59,8 +59,9 @@ function daysFromCivil(y: number, m: number, d: number): number {
 
 /**
  * ET-23: is `ms` an exact multiple of `intervalMs`? Both are exact integers
- * (see `epochMs`; `intervalMs` is an ES-5 integer ≥ 60000). For a negative
- * multiple `%` yields -0, which `=== 0` accepts.
+ * (see `epochMs`; `intervalMs` is an ES-5 integer ≥ 60000). ET-23: "zero and
+ * negative multiples count" — for a negative multiple `%` yields -0, which
+ * `=== 0` accepts.
  */
 export function isQuantized(ms: number, intervalMs: number): boolean {
   return ms % intervalMs === 0;
@@ -83,29 +84,33 @@ interface IssueRun {
 /**
  * ET-24 / ET-24a, checked ballot by ballot in file (= `seq`) order.
  *
- * ET-24a (event-types.md v10) makes every batch a single run of its issue's
- * ballots: "a ballot whose `ts` differs from the `ts` of that issue's previous
- * ballot MUST NOT equal the `ts` of any earlier ballot of that issue", rejected
- * "at the line of the returning ballot". So a batch is complete the moment the
- * issue's next ballot lands at a different instant — "the first later ballot of
- * the issue closes the batch for good" (ET-24) — and both rules are decided AT
- * that ballot's line, with no end-of-scan pass:
+ * ET-24 (event-types.md v10) defines a batch as "a maximal run" of one issue's
+ * registered `(vote_cast, 1)` events, in `seq` order, "that share one `ts`".
+ * A run ends at the issue's next registered ballot whose `ts` differs, so both
+ * rules are decided AT that ballot's line, with no end-of-scan pass:
  *
- *   - ET-24: leaving a batch that holds fewer than the issue's
- *     `ballot_batch_min` ballots proves it was not the last, and the leaving
- *     ballot is "the first `vote_cast` of that issue appended after the
- *     under-size batch" — the fatal line. A batch never left is the issue's
- *     last (it holds the issue's highest-`seq` ballot) and may be under-size.
- *   - ET-24a: arriving at an instant the issue has already left.
+ *   - ET-24: a run that ends holding fewer than the issue's `ballot_batch_min`
+ *     ballots was not the last, and the fatal line is "the registered
+ *     `(vote_cast, 1)` of that issue that ends the under-size batch". A run
+ *     that never ends holds the issue's highest-`seq` registered ballot: the
+ *     last batch, which may be under-size. This holds "on every chain,
+ *     including one that also breaks ET-24a": at T1, T1, T2, T2, T2, T1 with
+ *     minimum 3 the fatal line is the first T2, not the returning T1.
+ *   - ET-24a: "No two batches of one issue may share a `ts`" — a ballot that
+ *     starts a run at an instant its issue has already left is rejected "at
+ *     the line of the returning ballot".
+ *
+ * A ballot can break both at once (it ends an under-size run AND returns);
+ * the line is the same and the reason is advisory ("One line, two rules").
  *
  * Both checks are per issue; other events and other issues' ballots between
- * one batch's members change nothing (ET-24a). `ts` values are compared for
- * equality only (ES-21 v5). Cost: one Map lookup, one Set lookup and at most
- * one Set insert per ballot — linear in the export whatever a hostile export
- * does, since no earlier ballot or batch is ever rescanned.
+ * one batch's members change nothing. `ts` values are compared for equality
+ * only (ES-21 v5). Cost: one Map lookup, one Set lookup and at most one Set
+ * insert per ballot — linear in the export whatever a hostile export does,
+ * since no earlier ballot or batch is ever rescanned.
  *
  * Only registered, otherwise-accepted `(vote_cast, 1)` events are fed in: an
- * unregistered version's payload is never read, so it "joins no batch, closes
+ * unregistered version's payload is never read, so it "joins no batch, ends
  * none, and proves none not-last" (ET-24a, "Which ballots count").
  */
 export class BallotBatches {
@@ -138,9 +143,9 @@ export class BallotBatches {
       run.count++;
       return null;
     }
-    // This ballot leaves the current batch. Either fault makes THIS the fatal
-    // line; which one is named is advisory (EV-17 does not order checks within
-    // a line).
+    // This ballot ends the current run and starts a new one. Either fault
+    // makes THIS the fatal line; which one is named is advisory (ET-24a "One
+    // line, two rules"; EV-17).
     if (run.left.has(ms)) return "ET-24a";
     if (run.count < run.batchMin) return "ET-24";
     run.left.add(run.current);

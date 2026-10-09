@@ -70,8 +70,7 @@ function main(argv: string[]): number {
 }
 
 // Set the exit code and let the process end on its own rather than calling
-// process.exit() straight after verification. On this toolchain (Node
-// v24.7.0, macOS) an immediate process.exit() after the verify path was seen to
-// die with SIGSEGV in roughly 1-3% of runs (status null, no stderr), never on
-// natural exit; see the README. The exit codes themselves are unchanged.
+// process.exit() straight after verification: an immediate process.exit() was
+// OBSERVED (not proven) to die with SIGSEGV on one machine. The measured
+// numbers are in the README, in one place. The exit codes are unchanged.
 process.exitCode = main(process.argv);
