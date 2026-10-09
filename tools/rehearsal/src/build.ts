@@ -6,7 +6,12 @@
 // fixtures, and T8 a cross-language comparison target. Not a conformance suite — see
 // `docs/plans/phase-0.md` T6.
 
-import { ChainBuilder, OPERATOR, REGISTRAR } from "@odc/fixtures-gen/chain";
+import {
+  ChainBuilder,
+  DEFAULT_BALLOT_BATCH_MIN,
+  OPERATOR,
+  REGISTRAR,
+} from "@odc/fixtures-gen/chain";
 import type { Event } from "@odc/fixtures-gen/encode";
 import { head, serializeExport } from "@odc/fixtures-gen/serialize";
 
@@ -23,6 +28,12 @@ export const MAX_CHOICE_COUNT = 64;
 
 /** ET-14: a title is 1–200 Unicode scalar values. */
 export const MAX_TITLE_SCALARS = 200;
+
+/** ET-24: every issue `chain.issue()` creates declares this `ballot_batch_min`. */
+export const BATCH_MIN = DEFAULT_BALLOT_BATCH_MIN;
+
+/** A full batch holds `BATCH_MIN` … `BATCH_MIN + BATCH_SPREAD` ballots. */
+const BATCH_SPREAD = 3;
 
 // Character pool titles are drawn from, chosen to exercise encoders rather than look like prose.
 // Astral characters are deliberate (M34): a TS-side bug emitting astral code points as `\u`
@@ -119,8 +130,15 @@ function maxLengthTitle(rng: Rng): string {
 }
 
 // Builds one rehearsal chain: genesis, then all participants, then an interleaving of issues and
-// votes where every vote references an already-on-chain issue (ET-18). Interleaving, not
+// ballot batches where every vote references an already-on-chain issue (ET-18). Interleaving, not
 // issues-then-votes, is the point — it's what fails a verifier assuming all issues precede ballots.
+//
+// Ballots are published in batches (ET-23, ET-24): one issue's ballots at one shared batch instant,
+// at least `BATCH_MIN` of them, except an issue's LAST batch, which may be smaller. One ballot per
+// minute — this builder's shape until phase 3 — is a batch of one every time, which a verifier
+// enforcing ET-24 rejects at the second ballot of each issue. Every chain carries exactly one
+// deliberate under-size last batch, forced rather than left to chance, so the exemption is in
+// front of both verifiers on every run; the issue it closes takes no further ballots.
 export function buildChain(
   seed: number,
   shape: ChainShape = DEFAULT_SHAPE,
@@ -134,8 +152,9 @@ export function buildChain(
     chain.participant(FIRST_PARTICIPANT_OCTET + i);
   }
 
-  // `issue_id` → `choice_count`, so every ballot honours ET-18a.
-  const issues: { id: string; choiceCount: number }[] = [];
+  // Issues still taking ballots: `issue_id` → `choice_count`, so every ballot honours ET-18a. An
+  // issue leaves this list once it publishes an under-size batch, which must be its last (ET-24).
+  const open: { id: string; choiceCount: number }[] = [];
 
   const createIssue = (title: string): void => {
     // Coverage note: this call is not killable — every generated title is legal by construction,
@@ -143,8 +162,22 @@ export function buildChain(
     assertTitleLegal(title);
     const choiceCount = rng.intBetween(MIN_CHOICE_COUNT, MAX_CHOICE_COUNT);
     const e = chain.issue(title, choiceCount);
-    issues.push({ id: e.hash, choiceCount });
+    open.push({ id: e.hash, choiceCount });
   };
+
+  // All of a batch's ballots share the minute of its first `seq`: a whole minute is a multiple of
+  // the 60000 ms interval every issue here declares (ET-23).
+  const castBatch = (
+    issue: { id: string; choiceCount: number },
+    size: number,
+  ): void => {
+    const minutes = chain.all.length + 1;
+    for (let i = 0; i < size; i += 1) {
+      chain.vote(issue.id, rng.int(issue.choiceCount), { minutes });
+    }
+  };
+
+  let underSizeCast = false;
 
   // The first issue always carries a maximum-length title, so ET-14's upper bound is in every chain.
   createIssue(maxLengthTitle(rng));
@@ -158,18 +191,41 @@ export function buildChain(
   while (issuesLeft > 0 || votesLeft > 0) {
     const isLastIssue = issuesLeft === 1;
     const mustCastVoteFirst = isLastIssue && votesLeft > 0 && !voteCast;
-    // Weighted so issues appear throughout rather than clustering at the front.
+    // Weighted so issues appear throughout rather than clustering at the front. With no issue
+    // open — the under-size batch just closed the only one — the next event must be an issue.
     const makeIssue =
-      !mustCastVoteFirst &&
-      (votesLeft === 0 ||
-        (issuesLeft > 0 && rng.int(issuesLeft + votesLeft) < issuesLeft));
+      open.length === 0 ||
+      (!mustCastVoteFirst &&
+        (votesLeft === 0 ||
+          (issuesLeft > 0 && rng.int(issuesLeft + votesLeft) < issuesLeft)));
     if (makeIssue) {
       createIssue(randomTitle(rng));
       issuesLeft -= 1;
     } else {
-      const issue = rng.pick(issues);
-      chain.vote(issue.id, rng.int(issue.choiceCount));
-      votesLeft -= 1;
+      const issue = rng.pick(open);
+      // The forced under-size batch closes its issue, so it waits until another issue — open now,
+      // or still to be created — can take the ballots that remain. It fires at the first batch
+      // where that holds, so any shape with two issues and two votes carries one.
+      if (
+        !underSizeCast &&
+        votesLeft >= 2 &&
+        (open.length >= 2 || issuesLeft > 0)
+      ) {
+        const size = rng.intBetween(1, Math.min(BATCH_MIN - 1, votesLeft - 1));
+        castBatch(issue, size);
+        open.splice(open.indexOf(issue), 1);
+        votesLeft -= size;
+        underSizeCast = true;
+      } else {
+        // Capped by the votes left: a batch cut short that way holds the chain's final ballot, so
+        // it is its issue's last and may be under-size.
+        const size = Math.min(
+          rng.intBetween(BATCH_MIN, BATCH_MIN + BATCH_SPREAD),
+          votesLeft,
+        );
+        castBatch(issue, size);
+        votesLeft -= size;
+      }
       voteCast = true;
     }
   }
