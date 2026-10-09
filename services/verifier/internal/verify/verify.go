@@ -121,15 +121,42 @@ const (
 
 // vstate carries chain-wide facts gathered during Stage B.
 type vstate struct {
-	opPK    []byte           // genesis operator_pk, decoded (ET-8/ET-13)
-	regPK   []byte           // genesis registrar_pk, decoded (ET-17)
-	haveKey bool             // genesis keys captured
-	issues  map[string]int64 // issue_created hash -> choice_count (ID-7/ET-18a)
+	opPK    []byte                // genesis operator_pk, decoded (ET-8/ET-13)
+	regPK   []byte                // genesis registrar_pk, decoded (ET-17)
+	haveKey bool                  // genesis keys captured
+	issues  map[string]*issueInfo // issue_created hash -> tracked facts (ID-7/ET-18a/ET-14b)
+	byIdx   []*issueInfo          // the same issues, by issueInfo.idx
+	ballots ballotState           // ET-24 batches
 }
 
 // Verify runs the whole two-stage verification (EV-6). head, when non-nil, is a
 // validated 64-lowercase-hex expected chain head (EX-15).
+//
+// ET-24 cannot be settled line by line: a batch is "the set of all vote_cast
+// events on a chain sharing both an issue_id and a ts", ts is not required to
+// be monotone (ES-21 forbids ordering by it), so a batch may gain members
+// after a ballot of another batch of its issue has intervened, and whether it
+// is under-size is known only once its membership is complete. The scan
+// therefore records every fully verified ballot and the ET-24 fatal line is
+// computed when the scan stops — at EOF, or at the first fatal line F of any
+// other rule, in which case only lines before F (the verified prefix) form the
+// chain ET-24 is judged on. The reported line is the earlier of the two
+// (EV-17: the first fatal line in file order).
 func Verify(data []byte, head *string) Result {
+	st := &vstate{issues: map[string]*issueInfo{}, ballots: newBallotState()}
+	res := scan(st, data, head)
+	minOf := func(issue int) int64 { return st.byIdx[issue].batchMin }
+	if ln, bad := st.ballots.firstUndersize(minOf); bad {
+		if res.Verdict != INVALID || ln < res.Line {
+			return invalid(ln, "an earlier batch of this issue is under ballot_batch_min and this ballot proves it was not the issue's last (ET-24)")
+		}
+	}
+	return res
+}
+
+// scan is the line-by-line two-stage driver. It stops at the first fatal line
+// of every rule except ET-24, which Verify resolves from st.ballots afterwards.
+func scan(st *vstate, data []byte, head *string) Result {
 	lines, faults := frame(data)
 
 	// An empty export verified as a chain is INVALID at line 1: it has no
@@ -138,7 +165,6 @@ func Verify(data []byte, head *string) Result {
 		return invalid(1, "empty export: no genesis (EX-18)")
 	}
 
-	st := &vstate{issues: map[string]int64{}}
 	var prev *event
 	var partial []int
 
@@ -461,8 +487,12 @@ func stageBIssue(st *vstate, e *event) (string, bool) {
 	if !verifyEd25519(st.opPK, hexToBytes(sig), preimage(e, "sig")) {
 		return "issue signature invalid under operator_pk (ET-13)", false
 	}
-	// ID-7: issue_id is this event's hash; record with its choice_count (ET-18a).
-	st.issues[e.hash] = ccV.ival
+	// ID-7: issue_id is this event's hash; record with its choice_count
+	// (ET-18a) and the ET-14b batching parameters ET-23/ET-24 read.
+	iss := &issueInfo{idx: len(st.byIdx), choiceCount: ccV.ival,
+		intervalMS: intervalV.ival, batchMin: minV.ival}
+	st.issues[e.hash] = iss
+	st.byIdx = append(st.byIdx, iss)
 	return "", true
 }
 
@@ -480,14 +510,14 @@ func stageBVote(st *vstate, e *event) (string, bool) {
 	if !isHex64(issueID) {
 		return "issue_id not 64 lowercase hex (ID-8)", false
 	}
-	cc, known := st.issues[issueID]
+	iss, known := st.issues[issueID]
 	if !known {
 		return "vote references unknown or forward issue (ET-18/ID-8)", false
 	}
 	if choiceV.kind != kInt {
 		return "choice must be an integer (ET-19)", false
 	}
-	if choiceV.ival < 0 || choiceV.ival >= cc {
+	if choiceV.ival < 0 || choiceV.ival >= iss.choiceCount {
 		return "choice out of [0, choice_count) (ET-18a)", false
 	}
 	if !isHex128(sig) {
@@ -497,6 +527,17 @@ func stageBVote(st *vstate, e *event) (string, bool) {
 	if !verifyEd25519(st.regPK, hexToBytes(sig), preimage(e, "sig")) {
 		return "vote signature invalid under registrar_pk (ET-17)", false
 	}
+	// ET-23: the ballot's ts, as a millisecond offset from the epoch, MUST be
+	// an exact multiple of its issue's declared interval. This is a test of the
+	// VALUE of ts only; nothing is ordered or selected by it (ES-21).
+	tsMS := tsMillis(e.ts)
+	if tsMS%iss.intervalMS != 0 {
+		return "ts is not a multiple of the issue's ballot_batch_interval_ms (ET-23)", false
+	}
+	// ET-24: record the ballot in its batch. The line is fully verified here,
+	// so only verified ballots ever enter a batch. For a well-formed chain the
+	// line number equals seq (ES-6/ES-7), so file order is seq order (ES-8).
+	st.ballots.add(iss, tsMS, int(e.seq))
 	return "", true
 }
 

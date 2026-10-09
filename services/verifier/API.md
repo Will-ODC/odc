@@ -66,7 +66,30 @@ Two stages (EV-6):
   `chain_id` derivation
   (ET-7), title bounds and forbidden characters (ET-14), `choice_count` range
   (ET-14a), the ballot batching parameters and their floors (ET-14b),
-  `issue_id` back-reference (ET-18/ID-8), and `choice` range (ET-18a).
+  `issue_id` back-reference (ET-18/ID-8), `choice` range (ET-18a), ballot
+  `ts` quantization to the issue's declared interval (ET-23), and the minimum
+  ballot batch size (ET-24). ET-25 (order within a batch) is unverifiable by
+  the contract's own statement and is not checked.
+
+### Ballot batches (ET-23, ET-24)
+
+A `vote_cast`'s `ts`, as milliseconds since `1970-01-01T00:00:00.000Z`
+(proleptic Gregorian, no leap seconds), must be an exact multiple of its issue's
+`ballot_batch_interval_ms`; otherwise the ballot's own line is `INVALID`.
+
+A batch is every verified `vote_cast` sharing one `issue_id` and one `ts`,
+wherever on the chain those ballots sit — `ts` need not increase, and a batch
+may gain members after another batch of its issue has intervened. A batch
+smaller than its issue's `ballot_batch_min` is legal only if it holds the
+issue's highest-`seq` ballot. Any other under-size batch makes the chain
+`INVALID` at the first ballot of the same issue appended after that batch's
+highest-`seq` member; with several, the earliest such line. Because batch sizes
+are final only when the scan stops, ET-24 is resolved then: at end of file, or
+— if another rule fails first at line F — over lines 1..F−1 only (a failing
+line is never counted as a batch member), and the earlier of the two lines is
+reported. Ballots of an unregistered `vote_cast` version join no batch. The
+check is one map update per ballot plus one pass over the batches: linear.
+End-truncation can hide an ET-24 violation (EX-16); run with `--head`.
 
 The v1 registry is the four types `genesis`, `participant_registered`,
 `issue_created`, `vote_cast`, each at `version` 1 (ET-1/ET-2). A well-formed but

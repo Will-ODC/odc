@@ -39,10 +39,12 @@ internal/verify/
   hashing.go                byte-exact preimage + SHA-256 (HA-1..HA-16)
   crypto.go                 Ed25519 canonical + prime-order key checks (ET-4a/b/c)
   verify.go                 two-stage driver, verdict + precedence
+  ballot.go                 ballot ts quantization + batch tracking (ET-23/ET-24)
   verify_test.go            fixture-driven conformance tests
   genesis_ancestry_test.go  ET-9e/ET-9f/ES-34 key set, EV-20/EV-21 (synthetic)
   genesis_keys_test.go      ET-9d, the two genesis keys are distinct (synthetic)
   issue_title_test.go       ET-14 title bounds, counted in scalars (synthetic)
+  ballot_test.go            ET-23 quantization, ET-24 batches + blamed line (synthetic)
   parse_dupkeys_test.go     HA-6 duplicate keys across the parser's threshold
 ```
 
@@ -89,6 +91,16 @@ otherwise identical chain moves the verdict in the direction the rule names.
   1–200 bound is in Unicode SCALARS while HA-2/HA-3 length-prefix the same
   string in BYTES, so the accept cases are titles of 200 three-byte and 200
   four-byte scalars, which a byte-length bound would reject.
+- **`internal/verify/ballot_test.go`** (synthetic) covers ET-23 and ET-24. No
+  committed vector has ballots spanning more than one batch or cites ET-23, so
+  this is the only coverage of either rule until vectors land. It asserts the
+  blamed line on every rejection, the boundary cases (a batch exactly at the
+  minimum, the one legal under-size batch, an under-size batch proven by a
+  later ballot of its issue, interleaved issues, `ts` one millisecond off),
+  lastness by `seq` rather than `ts`, the interaction with other faults, the
+  truncation residual with `--head`, and the CLI's exit status and single
+  output line on a built binary. Cases named `…READING` pin this verifier's
+  reading where the contract text is ambiguous, not the contract.
 - **`internal/verify/parse_dupkeys_test.go`** covers HA-6 duplicate-key
   detection across the parser's linear-scan/set threshold, with the duplicate
   placed both before and after the crossing. It is not synthetic in the sense
