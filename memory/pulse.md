@@ -348,7 +348,8 @@ fourth time this file has been able to say that.
 - **Two processes, one origin** (ADR-0028), after establishing that "how many
   servers" and "how many addresses" are different questions and only the second
   has consequences.
-- **Open sign-up** — `docs/plans/pulse.md` P4c, **decided and NOT built.** In
+- **Open sign-up** — `docs/plans/pulse.md` P4c, **BUILT 2026-10-09** (#182,
+  #183, ADR-0030; see "Landed 2026-10-09" below). In
   answer to "must we have a community to start?". The answer is no, and it is
   cheap because **community does almost nothing today**: `polls` has no
   `community` column, nothing in `src/voting/` or `src/http/` branches on it,
@@ -372,7 +373,8 @@ are not repeated here. Two things worth carrying in memory:
   `Mailer`, now landed) and P6 (poll authoring) both built on sign-in, and
   **P4c (open sign-up) now touches `voter.community` directly** — it is
   `not null` in `001_initial.sql`, so what it holds for someone who proved
-  nothing is a migration question P4c has to answer.
+  nothing is a migration question P4c has to answer. **Answered by #182:**
+  migration 002 drops the `not null`; no community is stored as `null`.
 - **The interaction principle the operator named:** "I want the app to behave like
   we are interacting now, where users decide on bite-sized decisions, which models
   the community." A poll that wants a higher level is **one more small decision,
@@ -401,6 +403,71 @@ Both drafts of this plan were reviewed in a fresh context and both returned
 REQUEST CHANGES; the second found two decisions dropped in a split, a column and
 a table with no owner in the build order, and the re-cast hole above. **Neither
 review's findings were things the authoring context could see.**
+
+### Landed 2026-10-09 — open sign-up (Lead A, the first lead pilot)
+
+| Squash    | PR   | What                                                                  |
+| --------- | ---- | --------------------------------------------------------------------- |
+| `e6f937b` | #182 | migration 002: `voter.community` / `pending_claim.community` nullable |
+| `2984354` | #183 | open sign-up — anyone signs in, community is a label (ADR-0030)       |
+
+**ADR-0030 is the one to read.** Anyone with a valid address signs in; the
+403 `not_a_member` is gone from the API. Someone whose domain matches no
+`allowed_domain` row has community **`null`** (never an empty string or a
+placeholder). The allowlist **stays, as a label only** — same tie-break as
+before. **No anti-abuse mechanism replaces it**, by operator decision: one
+person can sign in under many free addresses and vote many times, which widens
+the known counted-not-verified weakness.
+
+- **A person's community is fixed when they request a sign-in link.** Adding
+  their domain later does not change it; removing a row does not take it away.
+  **No test locks this in yet.**
+- **ADR-0024's `polls` columns must use migration 003 or later.**
+- **Owed in `apps/pulse-web`, not done:** the client still maps 403
+  `not_a_member` to `not_eligible` (`SignIn.tsx`, `api/http.ts`), a path the
+  server no longer reaches, and types `Me.community` as `string` where the
+  server sends `string | null`. Nothing breaks. Also stale: wording in P4b and
+  P8 of `docs/plans/pulse.md`.
+
+### Landed 2026-10-09 — the two 2026-09-06 bugs, fixed (Lead B, the first lead pilot)
+
+| Squash    | PR   | What                                                            |
+| --------- | ---- | --------------------------------------------------------------- |
+| `2e41c10` | #174 | the results panel names your answer by its index, not its place |
+| `ffa590e` | #175 | a poll already known to be closed takes no vote, stays readable |
+
+**#174:** "You picked X" now looks the choice up by `ChoiceResult.index`, the
+same rule as the "yours" badge. `yourChoice` is a ballot index and is **never**
+an array position into `results.choices` (ADR-0021: order is display only).
+
+**#175:** when `poll.open` is false, both ballots lock every way of casting
+(click, Enter/Space, tap, drag, arrows) through one `locked` value plus native
+`disabled`. The question and answers **stay on screen, greyed out**, under the
+shared `ClosedNotice` ("This one has closed."), with no "Back to the question"
+button. The swipe chevrons are not drawn; the add-your-own field is hidden but
+suggestions already made stay listed. The server-answers-`closed` path on an
+open poll is unchanged.
+
+**How it was checked:** each fix has tests that fail with the fix reverted, and
+both were driven in the real browser. No demo poll is closed and the seed is in
+`apps/pulse`, so the closed state was reached through a throwaway proxy that
+rewrote `"open":true` to false. **Reuse that trick rather than editing the seed
+for a screen check.**
+
+### Decided by the operator, 2026-10-09
+
+- **A closed poll is a lasting record.** Shown greyed out rather than replaced
+  by a message — operator, verbatim: "A greyed out, there should be a lasting
+  record of the discussion". Do not hide what was asked.
+- **Closed results are shown to people who did not vote.** A "See results"
+  control on the closed ballot, using the existing no-sign-in
+  `GET /api/polls/:id/results`. In flight: **#187**,
+  which also makes the badge say "Official Ballot - Closed". Follow-ups filed:
+  #188 (server errors read "Request failed (502)") and #189 (an approval poll
+  marks only one of your answers as yours).
+- **A closed first question leaves nothing to press** (no Back on the first
+  question of a run). **Deferred** until polls can be created — issue #186.
+- **The swipe ballot's dimmed next-question hints stay** on a closed poll.
 
 ## Not built
 
@@ -571,9 +638,9 @@ shorter list than it was and is mostly not code:
 1. **Build the two images once.** Never done.
 2. **A host, and a domain.** Operator decisions; nothing is chosen.
 3. **Verify that domain with Resend.** DNS, not code.
-4. **Open sign-up** — decided 2026-09-13, `docs/plans/pulse.md` P4c. Until it
-   lands, nobody can sign in to a fresh deployment at all: the allowlist has no
-   rows and there is no way to add one but SQL.
+4. ~~**Open sign-up**~~ — **BUILT 2026-10-09** (#182, #183, ADR-0030). Anyone
+   with a valid address can sign in to a fresh deployment; the allowlist only
+   labels a community and turns nobody away.
 5. **Poll authoring** (P6), still blocked on the moderation decisions.
 
 The middle of the story and pillar 3 would still be missing after all five, so
@@ -700,8 +767,10 @@ that is a demo people can use, not a product.
       question. Note its proposed ADR number **0023 is now taken**.
     - **`polls` needs `community` and `created_by`, and has neither.** By
       operator decision they did **not** go into #150, since nothing writes them
-      yet — consistent with dropping `is_entry_point`. They land in migration 002
-      with the authoring work. The honest asymmetry: unlike `is_entry_point`,
+      yet — consistent with dropping `is_entry_point`. They land with the
+      authoring work in **migration 003 or later** — 002 was taken by open
+      sign-up (#182, ADR-0030 decision 4), and the runner refuses a file
+      numbered below one already applied. The honest asymmetry: unlike `is_entry_point`,
       authorship **cannot be backfilled at all**, only defaulted, so any poll
       created before that migration has no recoverable author.
     - **Posting requires signing in; voting does not** (#128 counts a vote before
@@ -882,25 +951,16 @@ exist`) looks like a credentials bug rather than a port collision. This cost
   core plan (`docs/implementation-plan.md`) does not cover pulse and will not
   tell you it exists.
 
-### Two known bugs, found 2026-09-06, NOT fixed
+### Two bugs the 2026-09-06 review round found, now fixed — do not reintroduce
 
-Found by the review of #146 in code that PR did not touch, so they were left
-out of it rather than widening one reviewable change. Nobody has started them.
-(A third — `database.test.ts` skipping on `url === undefined`, so an empty
-`PULSE_DATABASE_URL` ran the test and then failed about a variable that was not
-set — **was fixed in #150**, which owned that file.)
+Fixed 2026-10-09 in #174 and #175 (see "Landed 2026-10-09" above). (A third —
+`database.test.ts` skipping on `url === undefined` — was fixed in #150.)
 
-- **`ResultsPanel` reads `yourChoice` two ways.** "You picked X" resolves it as
-  an array position (`results.choices[yourChoice]`), the row badge as
-  `choice.index`. They agree only because the server happens to return choices
-  in poll order. **ADR-0021 is what makes this urgent**: it gives
-  `poll_choice.id` a stable identity and demotes `position` to display order, so
-  the first time results come back ordered any other way, the panel names the
-  wrong answer back to the voter. Pick one and use it in both places.
-- **A poll the client already knows is shut is still fully pressable.**
-  `settled` never consults `poll.open` on either ballot, so one press still
-  casts. If the server disagrees and answers `counted`, the person gets a
-  binding one-press cast with neither a confirming press nor the reassurance
-  sentence — **the "worst of both worlds" ADR-0022 exists to prevent.** Needs
-  client/server disagreement to reach, so it is unlikely rather than impossible,
-  and it is the one state where the ADR's bargain is fully broken.
+- **Never index `results.choices` by `yourChoice`.** Match on
+  `ChoiceResult.index`. They agreed only because the server happened to return
+  choices in poll order; ADR-0021 makes that order display-only.
+- **Every way of casting must check `poll.open`.** A one-press cast on a poll
+  the client knows is shut, answered `counted` by a server that disagrees, is
+  a binding vote with no confirming press and no way to change it — **the
+  "worst of both worlds" ADR-0022 exists to prevent.** A new cast path (a new
+  gesture, a new ballot type) that forgets `locked` reopens it.
