@@ -24,6 +24,8 @@ export interface Voter {
    * than only on the one that clicked.
    */
   sessionsValidFrom?: Date;
+  /** Monotonic revocation counter. Zero for voters created before migration. */
+  sessionGeneration?: number;
 }
 
 /**
@@ -64,8 +66,8 @@ export interface VoterStore {
   create(voter: Voter): Promise<Voter>;
   /** Change the opt-in. The one field about a voter that is theirs to change. */
   setProofEmails(id: string, optIn: boolean): Promise<Voter | undefined>;
-  /** Sign out everywhere: every session issued at or before `at` stops working. */
-  invalidateSessionsBefore(id: string, at: Date): Promise<Voter | undefined>;
+  /** Atomically revoke every session in the current generation. */
+  advanceSessionGeneration(id: string): Promise<Voter | undefined>;
 }
 
 export interface ClaimStore {
@@ -116,18 +118,12 @@ export class InMemoryVoterStore implements VoterStore {
     return updated;
   }
 
-  async invalidateSessionsBefore(
-    id: string,
-    at: Date,
-  ): Promise<Voter | undefined> {
+  async advanceSessionGeneration(id: string): Promise<Voter | undefined> {
     const voter = this.#byId.get(id);
     if (!voter) return undefined;
     const updated: Voter = {
       ...voter,
-      sessionsValidFrom:
-        voter.sessionsValidFrom && voter.sessionsValidFrom > at
-          ? voter.sessionsValidFrom
-          : at,
+      sessionGeneration: (voter.sessionGeneration ?? 0) + 1,
     };
     this.#byId.set(id, updated);
     return updated;

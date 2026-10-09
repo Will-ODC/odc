@@ -11,16 +11,10 @@ import { createHmac, timingSafeEqual } from "node:crypto";
  * - `exp` is checked on every request, so a stolen cookie is useless after it
  *   passes. A `Set-Cookie` max-age would not do this: that is a request to the
  *   browser, not something the server enforces.
- * - `iat` is what makes signing out real. A voter carries a `sessionsValidFrom`
- *   timestamp; sign-out advances it through the presented session, and every cookie issued at or before that
- *   moment stops verifying — on every device, not just the one that clicked.
- *
- * Both timestamps are **milliseconds**, matching `sessionsValidFrom`. Seconds
- * would round `iat` down to the start of its second, so someone who signed out
- * at .400 and signed back in at .600 would be handed a cookie stamped .000 —
- * earlier than their own sign-out, and refused on the next request. Flooring
- * `sessionsValidFrom` instead only moves the hole to the other side, where
- * cookies from earlier in the same second survive a sign-out.
+ * - A session carries a per-voter generation. Sign-out atomically increments
+ *   that generation in shared storage, so clock skew cannot revive a cookie.
+ * Legacy cookies remain readable for ballot identities, but cannot authorize
+ * a voter session because they carry no generation.
  */
 export const SESSION_COOKIE = "pulse_session";
 
@@ -30,7 +24,8 @@ export const SESSION_TTL_SECONDS = 30 * 24 * 60 * 60;
 /** What a valid cookie proves. */
 export interface SessionClaims {
   voterId: string;
-  /** When the cookie was issued. Compared against the voter's sign-out time. */
+  /** Missing only for old-format cookies and ballot identities. */
+  generation?: number;
   issuedAt: Date;
   expiresAt: Date;
 }
@@ -52,14 +47,20 @@ export class SessionSigner {
     this.#clock = options.clock ?? (() => new Date());
   }
 
-  /** `<voterId>.<iat>.<exp>.<signature>` — the cookie's whole value. */
-  sign(voterId: string, after?: Date): string {
-    // A sign-out in this same millisecond must revoke the old cookie. Issue
-    // the replacement one strictly after its saved cutoff, even when the
-    // clock has not ticked yet.
-    const iat = Math.max(this.#clock().getTime(), (after?.getTime() ?? -1) + 1);
+  /** Session cookies include generation; ballot cookies retain their format. */
+  sign(voterId: string, generation?: number): string {
+    if (
+      generation !== undefined &&
+      (!Number.isSafeInteger(generation) || generation < 0)
+    ) {
+      throw new Error("session generation must be a nonnegative safe integer");
+    }
+    const iat = this.#clock().getTime();
     const exp = iat + this.#ttlSeconds * 1000;
-    const payload = `${voterId}.${iat}.${exp}`;
+    const payload =
+      generation === undefined
+        ? `${voterId}.${iat}.${exp}`
+        : `v1.${voterId}.${generation}.${iat}.${exp}`;
     return `${payload}.${this.#mac(payload)}`;
   }
 
@@ -82,13 +83,26 @@ export class SessionSigner {
     const expDot = payload.lastIndexOf(".");
     const iatDot = payload.lastIndexOf(".", expDot - 1);
 
-    const voterId = payload.slice(0, iatDot);
+    const hasGeneration = payload.startsWith("v1.");
+    const generationDot = hasGeneration
+      ? payload.lastIndexOf(".", iatDot - 1)
+      : -1;
+    const voterId = hasGeneration
+      ? payload.slice(3, generationDot)
+      : payload.slice(0, iatDot);
+    const generation = hasGeneration
+      ? Number(payload.slice(generationDot + 1, iatDot))
+      : undefined;
     const iat = Number(payload.slice(iatDot + 1, expDot));
     const exp = Number(payload.slice(expDot + 1));
     if (
       voterId === "" ||
       !Number.isSafeInteger(iat) ||
-      !Number.isSafeInteger(exp)
+      !Number.isSafeInteger(exp) ||
+      (hasGeneration &&
+        (generation === undefined ||
+          !Number.isSafeInteger(generation) ||
+          generation < 0))
     ) {
       return undefined;
     }
@@ -98,6 +112,7 @@ export class SessionSigner {
 
     return {
       voterId,
+      ...(hasGeneration ? { generation: generation! } : {}),
       issuedAt: new Date(iat),
       expiresAt: new Date(exp),
     };

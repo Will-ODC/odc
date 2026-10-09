@@ -154,10 +154,11 @@ export async function createServer(deps: ServerDeps): Promise<FastifyInstance> {
 
     const voter = await deps.voters.byId(claims.voterId);
     if (!voter) return undefined;
-    // Sessions issued at or before the voter last signed out are dead, wherever the
-    // cookie is held. This is what makes signing out more than a request to
-    // the browser that clicked it.
-    if (voter.sessionsValidFrom && claims.issuedAt <= voter.sessionsValidFrom) {
+    // The shared generation revokes sessions across instances despite clock skew.
+    if (
+      claims.generation === undefined ||
+      claims.generation !== (voter.sessionGeneration ?? 0)
+    ) {
       return undefined;
     }
     return voter;
@@ -306,7 +307,7 @@ export async function createServer(deps: ServerDeps): Promise<FastifyInstance> {
 
     reply.setCookie(
       SESSION_COOKIE,
-      deps.signer.sign(result.voter.id, result.voter.sessionsValidFrom),
+      deps.signer.sign(result.voter.id, result.voter.sessionGeneration ?? 0),
       {
         httpOnly: true,
         sameSite: "lax",
@@ -323,8 +324,7 @@ export async function createServer(deps: ServerDeps): Promise<FastifyInstance> {
   });
 
   /**
-   * Sign out everywhere, not only here: the voter's sessions-valid-from moves
-   * to now, so a copy of the cookie someone else kept stops working too.
+   * Sign out everywhere by advancing the shared session generation.
    *
    * The ballot identity goes with it. It has to: `pulse_ballot` lasts thirty
    * days and is what a ballot is filed under, so a browser that kept it after
@@ -345,14 +345,7 @@ export async function createServer(deps: ServerDeps): Promise<FastifyInstance> {
   app.post("/api/sign-out", async (request, reply) => {
     const voter = await currentVoter(request);
     if (voter) {
-      const issuedAt = deps.signer.verify(
-        request.cookies[SESSION_COOKIE],
-      )?.issuedAt;
-      const at = now();
-      await deps.voters.invalidateSessionsBefore(
-        voter.id,
-        issuedAt && issuedAt > at ? issuedAt : at,
-      );
+      await deps.voters.advanceSessionGeneration(voter.id);
     }
     reply.clearCookie(SESSION_COOKIE, { path: "/" });
     reply.clearCookie(BALLOT_COOKIE, { path: "/" });

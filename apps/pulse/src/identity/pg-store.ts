@@ -18,7 +18,7 @@ import {
  */
 
 const VOTER_COLUMNS =
-  "id, email, community, claimed_at, proof_emails_opt_in, sessions_valid_from";
+  "id, email, community, claimed_at, proof_emails_opt_in, sessions_valid_from, session_generation";
 
 export class PostgresVoterStore implements VoterStore {
   readonly #pool: Pool;
@@ -40,7 +40,7 @@ export class PostgresVoterStore implements VoterStore {
   async create(voter: Voter): Promise<Voter> {
     try {
       await this.#pool.query(
-        `insert into voter (${VOTER_COLUMNS}) values ($1, $2, $3, $4, $5, $6)`,
+        `insert into voter (${VOTER_COLUMNS}) values ($1, $2, $3, $4, $5, $6, $7)`,
         [
           voter.id,
           voter.email,
@@ -48,6 +48,7 @@ export class PostgresVoterStore implements VoterStore {
           voter.claimedAt,
           voter.proofEmailsOptIn,
           voter.sessionsValidFrom ?? null,
+          voter.sessionGeneration ?? 0,
         ],
       );
     } catch (error) {
@@ -71,14 +72,11 @@ export class PostgresVoterStore implements VoterStore {
     );
   }
 
-  async invalidateSessionsBefore(
-    id: string,
-    at: Date,
-  ): Promise<Voter | undefined> {
+  async advanceSessionGeneration(id: string): Promise<Voter | undefined> {
     return this.#one(
-      "update voter set sessions_valid_from = greatest(sessions_valid_from, $2) where id = $1" +
+      "update voter set session_generation = session_generation + 1 where id = $1" +
         ` returning ${VOTER_COLUMNS}`,
-      [id, at],
+      [id],
     );
   }
 
@@ -213,6 +211,7 @@ interface VoterRow {
   claimed_at: Date;
   proof_emails_opt_in: boolean;
   sessions_valid_from: Date | null;
+  session_generation: string;
 }
 
 interface ClaimRow {
@@ -230,6 +229,10 @@ interface ClaimRow {
 // optional: it is always present, and null is its value for no community.
 
 function toVoter(row: VoterRow): Voter {
+  const generation = Number(row.session_generation);
+  if (!Number.isSafeInteger(generation) || generation < 0) {
+    throw new Error("stored session generation is out of range");
+  }
   const voter: Voter = {
     id: row.id,
     email: row.email,
@@ -237,9 +240,13 @@ function toVoter(row: VoterRow): Voter {
     claimedAt: row.claimed_at,
     proofEmailsOptIn: row.proof_emails_opt_in,
   };
-  return row.sessions_valid_from
-    ? { ...voter, sessionsValidFrom: row.sessions_valid_from }
-    : voter;
+  return {
+    ...voter,
+    ...(row.sessions_valid_from
+      ? { sessionsValidFrom: row.sessions_valid_from }
+      : {}),
+    ...(generation ? { sessionGeneration: generation } : {}),
+  };
 }
 
 function toClaim(row: ClaimRow): PendingClaim {

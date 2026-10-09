@@ -57,8 +57,25 @@ async function setup(
 
   return {
     app,
+    mailer,
     voters,
     signer,
+    peer(offsetMs: number) {
+      return createServer({
+        claims,
+        voters,
+        votes: new InMemoryVotingStore(
+          () => new Date(now.getTime() + offsetMs),
+        ),
+        suggestions: new InMemorySuggestionStore(),
+        signer: new SessionSigner(SECRET, {
+          ttlSeconds: 3600,
+          clock: () => new Date(now.getTime() + offsetMs),
+        }),
+        clock: () => new Date(now.getTime() + offsetMs),
+        secureCookies: false,
+      });
+    },
     after(seconds: number) {
       now = new Date(now.getTime() + seconds * 1000);
     },
@@ -147,6 +164,59 @@ test("signing_out_revokes_a_cookie_issued_in_the_same_millisecond", async () => 
   assert.equal(out.statusCode, 200);
   assert.equal(
     (await h.app.inject({ url: "/api/me", headers: { cookie } })).statusCode,
+    401,
+  );
+});
+
+test("old_format_session_cookie_cannot_authenticate", async () => {
+  const h = await setup();
+  const current = await h.signIn("ada@student.ubc.ca");
+  const voterId = h.signer.verify(
+    current.slice(SESSION_COOKIE.length + 1),
+  )?.voterId;
+  assert.ok(voterId);
+  const legacy = `${SESSION_COOKIE}=${h.signer.sign(voterId)}`;
+  assert.equal(
+    (await h.app.inject({ url: "/api/me", headers: { cookie: legacy } }))
+      .statusCode,
+    401,
+  );
+});
+
+test("signing_out_revokes_an_earlier_cookie_from_a_faster_server_clock", async () => {
+  const h = await setup();
+  const peer = await h.peer(20);
+  const first = await h.signIn("ada@student.ubc.ca");
+  await peer.inject({
+    method: "POST",
+    url: "/api/sign-in",
+    payload: { email: "ada@student.ubc.ca" },
+  });
+  // The peer's clock is ahead, but it issues this cookie before sign-out.
+  const token = new URL(
+    h.mailer.lastTo("ada@student.ubc.ca")?.body ?? "",
+  ).searchParams.get("token");
+  assert.ok(token);
+  const second = await peer.inject({
+    method: "POST",
+    url: "/api/sign-in/redeem",
+    payload: { token },
+  });
+  const peerCookie = second.cookies.find((c) => c.name === SESSION_COOKIE);
+  assert.ok(peerCookie);
+  h.afterMs(5);
+  await h.app.inject({
+    method: "POST",
+    url: "/api/sign-out",
+    headers: { cookie: first },
+  });
+  assert.equal(
+    (
+      await peer.inject({
+        url: "/api/me",
+        headers: { cookie: `${SESSION_COOKIE}=${peerCookie.value}` },
+      })
+    ).statusCode,
     401,
   );
 });
