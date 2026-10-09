@@ -105,6 +105,11 @@ just pulse-up      # or the docker compose line it wraps
 session cookie working without weakening it. It is the same shape `pnpm dev`
 already has, where vite proxies `/api` to port 8080.
 
+The API trusts one forwarded IP hop only when its direct peer has a private
+network address, as nginx does on the Compose network. Requests from other
+peers ignore `X-Forwarded-For`. Keep the API port unpublished; rate limits use
+the resulting client IP.
+
 `src/main.ts` **refuses to start** without the four values below, rather than
 inventing them the way `dev-server.ts` may. Everything missing is named in one
 message, so configuring a deployment is not a sequence of failed boots:

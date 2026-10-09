@@ -3,7 +3,7 @@
   "version": "0.0.0",
   "private": true,
   "type": "module",
-  "description": "Pulse \u2014 the one-screen story client.",
+  "description": "Pulse — the one-screen story client.",
   "scripts": {
     "build": "tsc -p tsconfig.json --noEmit && vite build",
     "test": "vitest run",
