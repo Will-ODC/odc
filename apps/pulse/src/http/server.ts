@@ -1,4 +1,5 @@
 import { randomUUID } from "node:crypto";
+import { BlockList, isIP } from "node:net";
 import cookie from "@fastify/cookie";
 import rateLimit from "@fastify/rate-limit";
 import Fastify, {
@@ -41,6 +42,15 @@ const BALLOT_COOKIE = "pulse_ballot";
 /** Marks a ballot identity so it can never be mistaken for a voter id. */
 const BALLOT_PREFIX = "b:";
 
+// The served API is only reached from nginx on its private container network.
+// Numeric hop trust is no longer supported by Fastify, and trusting a hop
+// without checking the immediate peer lets a direct client forge its IP.
+const privateProxies = new BlockList();
+privateProxies.addSubnet("10.0.0.0", 8);
+privateProxies.addSubnet("172.16.0.0", 12);
+privateProxies.addSubnet("192.168.0.0", 16);
+privateProxies.addSubnet("fc00::", 7, "ipv6");
+
 export interface ServerDeps {
   claims: ClaimService;
   voters: VoterStore;
@@ -77,8 +87,9 @@ export interface ServerDeps {
    * hour is told "too many tries", and a single client can lock out the whole
    * deployment.
    *
-   * **A hop count, never `true`.** `X-Forwarded-For` is a list a client can
-   * seed — nginx *prepends* to whatever arrived — so trusting the whole chain
+   * **A hop count, never `true`.** Only private network peers can supply it.
+   * `X-Forwarded-For` is a list a client can seed — nginx *prepends* to
+   * whatever arrived — so trusting the whole chain
    * lets anyone claim any address and defeat the limit they were caught by.
    * Counting hops from the right takes the address the proxy you actually run
    * observed. One nginx in front means `1`.
@@ -95,11 +106,23 @@ export interface ServerDeps {
  * UI can show as-is. Nothing here explains how anything is counted.
  */
 export async function createServer(deps: ServerDeps): Promise<FastifyInstance> {
+  const trustedProxyHops = deps.trustProxy ?? 0;
   const app = Fastify({
     ...(deps.loggerInstance
       ? { loggerInstance: deps.loggerInstance }
       : { logger: deps.logger ?? false }),
-    ...(deps.trustProxy === undefined ? {} : { trustProxy: deps.trustProxy }),
+    ...(trustedProxyHops === 0
+      ? {}
+      : {
+          trustProxy: (address: string, hop: number) => {
+            const family = isIP(address);
+            return (
+              hop < trustedProxyHops &&
+              family !== 0 &&
+              privateProxies.check(address, family === 6 ? "ipv6" : "ipv4")
+            );
+          },
+        }),
   });
   const now = deps.clock ?? (() => new Date());
 
