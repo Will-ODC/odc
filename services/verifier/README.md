@@ -92,7 +92,7 @@ otherwise identical chain moves the verdict in the direction the rule names.
   string in BYTES, so the accept cases are titles of 200 three-byte and 200
   four-byte scalars, which a byte-length bound would reject.
 - **`internal/verify/ballot_test.go`** (synthetic) covers ET-23, ET-24 and
-  ET-24a (`contracts/event-types.md` v10). No committed vector has ballots
+  ET-24a (`contracts/event-types.md` v11). No committed vector has ballots
   spanning more than one batch or cites ET-23/ET-24a, so this is the only
   coverage of these rules until vectors land. It asserts the blamed line on
   every rejection: a batch (a maximal run of one issue's registered ballots

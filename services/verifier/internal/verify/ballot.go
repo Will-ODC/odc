@@ -1,6 +1,6 @@
 package verify
 
-// Ballot publication discipline (event-types.md v10: ET-23, ET-24, ET-24a).
+// Ballot publication discipline (event-types.md v11: ET-23, ET-24, ET-24a).
 //
 // ET-25 (order within a batch) is deliberately absent: the contract declares it
 // unverifiable from the log and assigns it to neither verification stage
@@ -89,7 +89,7 @@ func (b *ballotState) observe(iss *issueInfo, tsMS int64) (string, bool) {
 // 1970-01-01T00:00:00.000Z on the proleptic Gregorian calendar, 86400000 ms per
 // day, no leap seconds (ET-23). The caller guarantees validTS(s). Years 0000
 // through 9999 are representable by ES-20's four-digit field; dates before 1970
-// yield negative offsets; ET-23 v10 states that zero and negative multiples
+// yield negative offsets; ET-23 v11 states that zero and negative multiples
 // count, which the % test below honours.
 func tsMillis(s string) int64 {
 	y := int64(atoiFixed(s[0:4]))

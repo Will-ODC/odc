@@ -67,13 +67,13 @@ Two stages (EV-6):
   (ET-7), title bounds and forbidden characters (ET-14), `choice_count` range
   (ET-14a), the ballot batching parameters and their floors (ET-14b),
   `issue_id` back-reference (ET-18/ID-8), `choice` range (ET-18a), and the
-  ballot publication discipline of `contracts/event-types.md` v10: ballot `ts`
+  ballot publication discipline of `contracts/event-types.md` v11: ballot `ts`
   quantized to the issue's declared interval (ET-23), a minimum batch size
   (ET-24), and no return to a batch instant already left (ET-24a). ET-25
   (order within a batch) is unverifiable by the contract's own statement and
   is not checked.
 
-### Ballot batches (ET-23, ET-24, ET-24a — event-types.md v10)
+### Ballot batches (ET-23, ET-24, ET-24a — event-types.md v11)
 
 A `vote_cast`'s `ts`, as milliseconds since `1970-01-01T00:00:00.000Z`
 (proleptic Gregorian, no leap seconds), must be an exact multiple of its issue's

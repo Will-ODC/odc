@@ -14,7 +14,7 @@ import (
 )
 
 // ET-23 (quantized ballot ts), ET-24 (minimum batch size, with its line
-// attribution) and ET-24a (a batch, once left, is closed), event-types.md v10
+// attribution) and ET-24a (a batch, once left, is closed), event-types.md v11
 // "Ballot publication discipline".
 //
 // HARNESS CAVEAT (as in genesis_ancestry_test.go): these chains are hashed and
@@ -352,7 +352,7 @@ func TestET24PerIssueMinimum(t *testing.T) {
 	})
 }
 
-// ET-24 v10: "Lastness is decided by seq. ts values are compared only for
+// ET-24 v11: "Lastness is decided by seq. ts values are compared only for
 // equality, to tell where a batch ends, and are never ordered (ES-21)." ts need
 // not increase along the chain; the exempt batch is the one holding the
 // highest-SEQ registered ballot, not the one with the greatest ts.
@@ -385,7 +385,7 @@ func TestET24aReturnToLeftInstant(t *testing.T) {
 		// The returning ballot also ends an under-size batch: ET-24 and
 		// ET-24a both name line 7, and either reason is right.
 		{"return_after_undersize_batch", one, cat(votesAt(0, 3, T1), votesAt(0, 1, T2), votesAt(0, 1, T1)), 7, "ET-24|ET-24a"},
-		// The contract's own example (ET-24 v10, line attribution): min 3,
+		// The contract's own example (ET-24 v11, line attribution): min 3,
 		// T1, T1, T2, T2, T2, T1. The fatal line is the first T2 (line 5),
 		// where the run of two T1 ballots ends — not the returning T1 at line
 		// 8, which starts a new batch and does not rejoin the first.
