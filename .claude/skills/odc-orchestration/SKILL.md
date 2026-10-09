@@ -1,6 +1,6 @@
 ---
 name: odc-orchestration
-description: How to dispatch work in the ODC monorepo — which model runs which task, how to write a subagent brief that works, and how to run agents in parallel without corrupting one working tree. Use this skill whenever delegating, spawning a subagent, planning a multi-step task, choosing between Opus and Sonnet, or deciding whether to do something yourself.
+description: How to dispatch work in the ODC monorepo — which model runs which task, how to write a subagent brief that works, how to run agents in parallel without corrupting one working tree, and how to run lead sessions that each own one feature and run their own implementers. Use this skill whenever delegating, starting or acting as a lead, spawning a subagent, planning a multi-step task, choosing between Opus and Sonnet, or deciding whether to do something yourself.
 ---
 
 # ODC Orchestration
@@ -117,6 +117,57 @@ These are unchanged and non-negotiable:
 are one context. Conversely a Sonnet dispatch does **not** earn an exemption
 from isolation because it is cheap — an isolated build is an Opus job
 (`odc-verifier-builder`) regardless.
+
+## Leads: one level between the orchestrator and the implementers
+
+Decided by the operator 2026-10-08. Use this when an initiative has two or more
+whole features that live in **separate folders** and the operator's direction
+is broad rather than step by step. One feature, or features that share files:
+stay flat and use the sections above.
+
+**Three levels.** The **orchestrator** is the session the operator talks to. It
+turns the operator's direction into one goal per lead. A **lead** owns one
+feature and one set of folders, and decides how to build it. **Implementers**
+and helpers are subagents the lead starts, routed by the table above.
+
+**A lead must be its own session, not a subagent.** A subagent cannot start
+subagents, so a lead started with the Agent tool could not run implementers.
+The orchestrator offers each lead with `spawn_task`; the operator starting it
+is the go-ahead. Each lead works in its own worktree. The two sessions talk with
+`SendMessage` (find the other with `ListAgents`).
+
+**The lead's brief** is the five sections above, plus: the goal in the
+operator's words, the folders it owns, the folders other leads own right now,
+and the orchestrator's session name to report to.
+
+**What a lead does, in order:**
+
+1. **Read** what the brief names, then **send a synopsis and stop.** It is for
+   the operator, so it is short and in plain words, no jargon: what will be
+   built, what a user will notice, which folders change, how the work will split
+   into PRs, and any decision the lead needs. Show it in the lead's own session
+   and send it to the orchestrator. Build nothing until the operator says go.
+2. **Build the whole feature** on one local branch, with implementer and helper
+   subagents. The lead is the one context in its worktree that commits; its
+   subagents get the git guardrails above.
+3. **Check it itself:** the unit's tests, `pnpm -s format:check`, and for any
+   screen, the real browser — green jsdom tests are not proof a screen works.
+4. **Bring it up to date with master,** then split it into small PRs in a
+   sensible order (stacked, two or three deep, per `odc-pipeline`). Push; get CI
+   green.
+5. **Report to the orchestrator and stop:** the PRs, how they fit together,
+   anything stale it saw, any decision it needs.
+
+**What a lead never does:** merge anything, or start a reviewer or auditor.
+Every review is the operator's call. A lead also stops and sends the question up
+— rather than deciding — on a charter conflict, any change under `contracts/`,
+a file in another lead's folders, or anything the operator owns.
+
+**The orchestrator then** checks the leads' PRs do not collide, and tells the
+operator which are ready for review, in what order.
+
+Diff size: `apps/pulse*` is exempt from the hard ceiling, so a pulse feature
+can arrive as large PRs; everywhere else the `diff-size.sh` ceiling applies.
 
 ## After the fan-out
 
