@@ -38,6 +38,12 @@ through `excerpt` (64 code points) and every rendered reason is capped as a
 backstop. `src/report.ts` is the single place that renders it and strips any
 line terminator a reason could carry; `test/report-shape.test.ts` pins the shape.
 
+The CLI sets `process.exitCode` and lets the process end on its own instead of
+calling `process.exit()` right after verifying: on Node v24.7.0 (macOS) the
+immediate `process.exit()` was measured dying with SIGSEGV in about 1.5% of
+runs (no output on stderr, child status `null`), which made the process-level
+tests flaky. With the natural exit, 1000 runs showed none.
+
 `--head` supplies the out-of-band anchored head. It is the ONLY way to detect
 clean end-truncation, which is invisible from the export alone
 (`export-format.md` EX-16): a prefix of a valid chain is itself a valid chain.

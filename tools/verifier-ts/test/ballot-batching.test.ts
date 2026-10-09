@@ -570,6 +570,19 @@ test("ET-24a: returning to the same instant of ANOTHER issue's batch is not a re
   assert.equal(c.verdict(), "VALID");
 });
 
+test("ET-24a: an issue moving to an instant ANOTHER issue has left is not a return", () => {
+  // a leaves 00:01; b, starting at 00:03, then moves to 00:01. Left instants
+  // are per issue, so b never left 00:01 and its move is legal.
+  const c = new Chain();
+  const a = c.issue();
+  const b = c.issue();
+  c.votes(a, T1, 3);
+  c.votes(a, T2, 3);
+  c.votes(b, T3, 3);
+  c.votes(b, T1, 3);
+  assert.equal(c.verdict(), "VALID");
+});
+
 // --- ET-24a: what MUST be accepted --------------------------------------------
 
 test("ET-24a: other issues' ballots and other events between one batch's members are VALID", () => {
