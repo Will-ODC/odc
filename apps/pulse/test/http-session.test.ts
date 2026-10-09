@@ -136,6 +136,47 @@ test("signing_out_kills_a_cookie_someone_else_kept_a_copy_of", async () => {
   assert.equal(replayed.statusCode, 401, "the old cookie still works");
 });
 
+test("signing_out_revokes_a_cookie_issued_in_the_same_millisecond", async () => {
+  const h = await setup();
+  const cookie = await h.signIn("ada@student.ubc.ca");
+  const out = await h.app.inject({
+    method: "POST",
+    url: "/api/sign-out",
+    headers: { cookie },
+  });
+  assert.equal(out.statusCode, 200);
+  assert.equal(
+    (await h.app.inject({ url: "/api/me", headers: { cookie } })).statusCode,
+    401,
+  );
+});
+
+test("repeated_sign_outs_in_one_millisecond_revoke_each_session", async () => {
+  const h = await setup();
+  const first = await h.signIn("ada@student.ubc.ca");
+  await h.app.inject({
+    method: "POST",
+    url: "/api/sign-out",
+    headers: { cookie: first },
+  });
+  const second = await h.signIn("ada@student.ubc.ca");
+  assert.equal(
+    (await h.app.inject({ url: "/api/me", headers: { cookie: second } }))
+      .statusCode,
+    200,
+  );
+  await h.app.inject({
+    method: "POST",
+    url: "/api/sign-out",
+    headers: { cookie: second },
+  });
+  assert.equal(
+    (await h.app.inject({ url: "/api/me", headers: { cookie: second } }))
+      .statusCode,
+    401,
+  );
+});
+
 test("signing_out_does_not_sign_anyone_else_out", async () => {
   const h = await setup();
   const ada = await h.signIn("ada@student.ubc.ca");

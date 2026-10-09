@@ -85,6 +85,15 @@ export function voterStoreConformance(
         );
       });
 
+      test("an_older_sign_out_cannot_move_the_revocation_cutoff_back", async (t) => {
+        const store = await fresh(t);
+        await store.create(voter());
+        const later = new Date(AT.getTime() + 1);
+        await store.invalidateSessionsBefore("voter-1", later);
+        const updated = await store.invalidateSessionsBefore("voter-1", AT);
+        assert.equal(updated?.sessionsValidFrom?.getTime(), later.getTime());
+      });
+
       test("signing_out_touches_only_that_voter", async (t) => {
         const store = await fresh(t);
         await store.create(voter());

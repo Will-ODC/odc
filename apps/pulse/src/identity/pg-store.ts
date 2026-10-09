@@ -76,7 +76,7 @@ export class PostgresVoterStore implements VoterStore {
     at: Date,
   ): Promise<Voter | undefined> {
     return this.#one(
-      "update voter set sessions_valid_from = $2 where id = $1" +
+      "update voter set sessions_valid_from = greatest(sessions_valid_from, $2) where id = $1" +
         ` returning ${VOTER_COLUMNS}`,
       [id, at],
     );

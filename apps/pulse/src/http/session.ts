@@ -12,7 +12,7 @@ import { createHmac, timingSafeEqual } from "node:crypto";
  *   passes. A `Set-Cookie` max-age would not do this: that is a request to the
  *   browser, not something the server enforces.
  * - `iat` is what makes signing out real. A voter carries a `sessionsValidFrom`
- *   timestamp; sign-out moves it to now, and every cookie issued before that
+ *   timestamp; sign-out advances it through the presented session, and every cookie issued at or before that
  *   moment stops verifying — on every device, not just the one that clicked.
  *
  * Both timestamps are **milliseconds**, matching `sessionsValidFrom`. Seconds
@@ -53,8 +53,11 @@ export class SessionSigner {
   }
 
   /** `<voterId>.<iat>.<exp>.<signature>` — the cookie's whole value. */
-  sign(voterId: string): string {
-    const iat = this.#clock().getTime();
+  sign(voterId: string, after?: Date): string {
+    // A sign-out in this same millisecond must revoke the old cookie. Issue
+    // the replacement one strictly after its saved cutoff, even when the
+    // clock has not ticked yet.
+    const iat = Math.max(this.#clock().getTime(), (after?.getTime() ?? -1) + 1);
     const exp = iat + this.#ttlSeconds * 1000;
     const payload = `${voterId}.${iat}.${exp}`;
     return `${payload}.${this.#mac(payload)}`;

@@ -154,10 +154,10 @@ export async function createServer(deps: ServerDeps): Promise<FastifyInstance> {
 
     const voter = await deps.voters.byId(claims.voterId);
     if (!voter) return undefined;
-    // Sessions issued before the voter last signed out are dead, wherever the
+    // Sessions issued at or before the voter last signed out are dead, wherever the
     // cookie is held. This is what makes signing out more than a request to
     // the browser that clicked it.
-    if (voter.sessionsValidFrom && claims.issuedAt < voter.sessionsValidFrom) {
+    if (voter.sessionsValidFrom && claims.issuedAt <= voter.sessionsValidFrom) {
       return undefined;
     }
     return voter;
@@ -304,13 +304,17 @@ export async function createServer(deps: ServerDeps): Promise<FastifyInstance> {
     const result = await deps.claims.redeem(token);
     if (result.status !== "signed_in") return gone(reply, result.status);
 
-    reply.setCookie(SESSION_COOKIE, deps.signer.sign(result.voter.id), {
-      httpOnly: true,
-      sameSite: "lax",
-      secure: deps.secureCookies ?? true,
-      path: "/",
-      maxAge: deps.signer.ttlSeconds,
-    });
+    reply.setCookie(
+      SESSION_COOKIE,
+      deps.signer.sign(result.voter.id, result.voter.sessionsValidFrom),
+      {
+        httpOnly: true,
+        sameSite: "lax",
+        secure: deps.secureCookies ?? true,
+        path: "/",
+        maxAge: deps.signer.ttlSeconds,
+      },
+    );
     return reply.send({
       status: "signed_in",
       voter: publicVoter(result.voter),
@@ -340,7 +344,16 @@ export async function createServer(deps: ServerDeps): Promise<FastifyInstance> {
    */
   app.post("/api/sign-out", async (request, reply) => {
     const voter = await currentVoter(request);
-    if (voter) await deps.voters.invalidateSessionsBefore(voter.id, now());
+    if (voter) {
+      const issuedAt = deps.signer.verify(
+        request.cookies[SESSION_COOKIE],
+      )?.issuedAt;
+      const at = now();
+      await deps.voters.invalidateSessionsBefore(
+        voter.id,
+        issuedAt && issuedAt > at ? issuedAt : at,
+      );
+    }
     reply.clearCookie(SESSION_COOKIE, { path: "/" });
     reply.clearCookie(BALLOT_COOKIE, { path: "/" });
     return reply.send({ status: "signed_out" });

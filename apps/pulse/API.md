@@ -113,8 +113,9 @@ second answer as a failure to someone who is, in fact, signed in.
 
 No body. Always answers `200 { "status": "signed_out" }`, whether or not anyone was
 signed in — asking to be signed out is not something to refuse. It clears the session
-cookie **and** moves the voter's sessions-valid-from to now, so a copy of the cookie
-kept elsewhere stops working too.
+cookie **and** advances the voter's sessions-valid-from through the presented
+session's issue time, so a copy of the cookie kept elsewhere stops working too,
+even when sign-in and sign-out happen in the same millisecond.
 
 It also clears **`pulse_ballot`** — see "The ballot cookie" below. Signing out ends
 this browser's ability to read or change the vote it cast. The vote itself is not
@@ -132,10 +133,10 @@ The voter is **wrapped**, the same way it is in the redeem response, so a later 
 about the session itself can be added beside it without changing what `voter` means.
 `community` is a string or `null`, exactly as in the redeem response.
 
-| Status | Body                  | When                                                                      |
-| ------ | --------------------- | ------------------------------------------------------------------------- |
-| 200    | `{ voter }`           | signed in                                                                 |
-| 401    | `error: "signed_out"` | no cookie, an expired one, one issued before a sign-out, or no such voter |
+| Status | Body                  | When                                                                            |
+| ------ | --------------------- | ------------------------------------------------------------------------------- |
+| 200    | `{ voter }`           | signed in                                                                       |
+| 401    | `error: "signed_out"` | no cookie, an expired one, one issued at or before a sign-out, or no such voter |
 
 A 401 here is an ordinary answer — "nobody is signed in" — not a fault. The client
 reads it as `null`.
@@ -147,8 +148,9 @@ path `/`, 30 days.
 
 It carries the voter id, when it was issued, when it expires, and a signature over all
 three. Expiry is checked on the server, not left to the browser. Signing out moves the
-voter's sessions-valid-from to now, so every cookie issued earlier stops working — on
-every device, not only the one that clicked.
+voter's sessions-valid-from through the presented session's issue time, so every
+cookie issued at or before that cutoff stops working — on every device, not only
+the one that clicked. A fresh sign-in is issued after the cutoff.
 
 ## Polls, ballots, and results
 

@@ -19,7 +19,7 @@ export interface Voter {
   /** Opt-in, asked at registration. Nothing is sent when false. */
   proofEmailsOptIn: boolean;
   /**
-   * Sessions issued before this moment no longer count. Signing out moves it to
+   * Sessions issued at or before this moment no longer count. Signing out moves it to
    * now, which is what makes signing out mean something on every device rather
    * than only on the one that clicked.
    */
@@ -64,7 +64,7 @@ export interface VoterStore {
   create(voter: Voter): Promise<Voter>;
   /** Change the opt-in. The one field about a voter that is theirs to change. */
   setProofEmails(id: string, optIn: boolean): Promise<Voter | undefined>;
-  /** Sign out everywhere: every session issued before `at` stops working. */
+  /** Sign out everywhere: every session issued at or before `at` stops working. */
   invalidateSessionsBefore(id: string, at: Date): Promise<Voter | undefined>;
 }
 
@@ -122,7 +122,13 @@ export class InMemoryVoterStore implements VoterStore {
   ): Promise<Voter | undefined> {
     const voter = this.#byId.get(id);
     if (!voter) return undefined;
-    const updated: Voter = { ...voter, sessionsValidFrom: at };
+    const updated: Voter = {
+      ...voter,
+      sessionsValidFrom:
+        voter.sessionsValidFrom && voter.sessionsValidFrom > at
+          ? voter.sessionsValidFrom
+          : at,
+    };
     this.#byId.set(id, updated);
     return updated;
   }
