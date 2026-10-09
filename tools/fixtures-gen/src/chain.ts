@@ -107,7 +107,14 @@ type RawSigner = (content: EventContent) => string;
 
 /** The rule ids the builder knows how to check. */
 export type BuilderRule =
-  "ET-9d" | "ET-9e" | "ET-9f" | "ET-14" | "ET-14a" | "ET-18" | "ET-18a";
+  | "ET-9d"
+  | "ET-9e"
+  | "ET-9f"
+  | "ET-14"
+  | "ET-14a"
+  | "ET-14b"
+  | "ET-18"
+  | "ET-18a";
 
 /** ET-14: the title ceiling, counted in the unit ET-14 names — scalar values. */
 export const TITLE_MAX_SCALARS = 200;
@@ -142,9 +149,8 @@ export const BALLOT_BATCH_MIN_FLOOR = 3;
  *   this parameter (see `valid.ts` 005 for the one vector where that matters).
  *
  * The floor values also read as the least remarkable thing on the line, which is
- * what a vector about titles, `choice_count` or seq gaps needs them to be. A
- * vector that means to exercise ET-14b or ET-23–ET-25 must state its own values
- * rather than inherit these — that work is the later F2 pass, not this one.
+ * what a vector about titles, `choice_count` or seq gaps needs them to be. The
+ * Phase 3 batching vectors override them when the declared issue values matter.
  */
 export const DEFAULT_BALLOT_BATCH_INTERVAL_MS = BALLOT_BATCH_INTERVAL_MS_FLOOR;
 export const DEFAULT_BALLOT_BATCH_MIN = BALLOT_BATCH_MIN_FLOOR;
@@ -217,7 +223,12 @@ function genesisViolations(
 }
 
 /** Which of ET-14 / ET-14a an `issue_created` payload actually breaks. */
-function issueViolations(title: string, choiceCount: number): BuilderRule[] {
+function issueViolations(
+  title: string,
+  choiceCount: number,
+  interval: number,
+  minimum: number,
+): BuilderRule[] {
   const out: BuilderRule[] = [];
   const scalars = [...title].length; // scalar values, not UTF-16 code units
   if (scalars < 1 || scalars > TITLE_MAX_SCALARS || hasForbiddenChar(title)) {
@@ -229,6 +240,14 @@ function issueViolations(title: string, choiceCount: number): BuilderRule[] {
     choiceCount > CHOICE_COUNT_MAX
   ) {
     out.push("ET-14a");
+  }
+  if (
+    !Number.isSafeInteger(interval) ||
+    interval < BALLOT_BATCH_INTERVAL_MS_FLOOR ||
+    !Number.isSafeInteger(minimum) ||
+    minimum < BALLOT_BATCH_MIN_FLOOR
+  ) {
+    out.push("ET-14b");
   }
   return out;
 }
@@ -294,6 +313,9 @@ export interface EventOpts {
   minutes?: number;
   /** Rules this payload breaks DELIBERATELY. Must match exactly what it breaks. */
   violates?: readonly BuilderRule[];
+  /** Per-issue ET-14b values, overriding the ordinary-vector floors. */
+  batchIntervalMs?: number;
+  batchMin?: number;
 }
 
 export class ChainBuilder {
@@ -446,22 +468,23 @@ export class ChainBuilder {
    * choice_count for ET-18a. Enforces ET-14/ET-14a unless `opts.violates`
    * declares the breach.
    *
-   * The two ET-14b batching parameters are required payload keys, so they are
-   * emitted unconditionally at the defaults above; no vector in this set means
-   * to exercise them, and none may omit them.
+   * The two ET-14b batching parameters are required payload keys. Ordinary
+   * vectors use the defaults; batching vectors can supply per-issue values.
    */
   issue(title: string, choiceCount: number, opts: EventOpts = {}): Event {
+    const interval = opts.batchIntervalMs ?? DEFAULT_BALLOT_BATCH_INTERVAL_MS;
+    const minimum = opts.batchMin ?? DEFAULT_BALLOT_BATCH_MIN;
     reconcile(
       `issue_created(title=${JSON.stringify(title.length > 40 ? `${title.slice(0, 40)}…` : title)}, choice_count=${String(choiceCount)})`,
-      issueViolations(title, choiceCount),
+      issueViolations(title, choiceCount, interval, minimum),
       opts.violates,
     );
     const e = this.seal(
       "issue_created",
       1,
       {
-        ballot_batch_interval_ms: DEFAULT_BALLOT_BATCH_INTERVAL_MS,
-        ballot_batch_min: DEFAULT_BALLOT_BATCH_MIN,
+        ballot_batch_interval_ms: interval,
+        ballot_batch_min: minimum,
         choice_count: choiceCount,
         title,
       },

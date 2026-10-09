@@ -1,10 +1,10 @@
 # contracts/fixtures/ — golden vectors
 
-**Version:** 12
+**Version:** 13
 **Status:** DRAFTING (Phase 0 · T5, T5j, ADR-0009, ADR-0010, ADR-0011). Not
 frozen.
 
-**98 vectors** — 15 `VALID`, 4 `PARTIAL`, 79 `INVALID`. They are numbered in
+**108 vectors** — 18 `VALID`, 4 `PARTIAL`, 86 `INVALID`. They are numbered in
 category order: `VALID` (`001`–`007`), `PARTIAL` (`008`–`011`), then `INVALID` —
 the envelope and Stage A checks (`012`–`042`), the export framing and canonical
 line form (`043`–`052`), `--head` (`053`–`054`), the Stage B type semantics
@@ -12,6 +12,13 @@ line form (`043`–`052`), `--head` (`053`–`054`), the Stage B type semantics
 after that scheme rather than inserted into it, because **ids never change once
 shipped**: renumbering to keep the categories contiguous would silently
 invalidate a conformance run that cites them.
+
+`099`–`108` cover Phase 3 batching (ADR-0029): ET-24a returning to a closed
+batch, ET-24's maximal runs and first fatal lines, interleaving across issues,
+the under-size last-batch exception, ET-23 against a two-minute issue interval,
+both ET-14b parameter floors, and a valid issue with two full batches. The
+counterexamples `106` and `107` reject at the first ballot of T2, before the
+return to T1; a set-based ET-24 would attribute those lines incorrectly.
 
 `071`–`073` cover scalar values above U+FFFF — `071` that a title above the BMP
 is stored as literal UTF-8, `072`/`073` that `event-types.md` ET-14 counts
