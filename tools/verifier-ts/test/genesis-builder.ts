@@ -95,10 +95,11 @@ function eventLine(
   payload: string,
   prevHash: string,
   hash: string,
+  ts: string = TS,
 ): string {
   return (
     `{"seq":${seq},"type":${jsonString(type)},"version":${version},` +
-    `"payload":${payload},"ts":${jsonString(TS)},` +
+    `"payload":${payload},"ts":${jsonString(ts)},` +
     `"prev_hash":${jsonString(prevHash)},"hash":${jsonString(hash)}}`
   );
 }
@@ -169,6 +170,56 @@ export function genesisExport(
     eventLine(1, "genesis", version, withSig, ZERO64, hash) + "\n",
     "utf8",
   );
+}
+
+/**
+ * One signed (or deliberately unsigned) non-genesis event line, built the same
+ * two-pass way as `genesisExport`: sign over the preimage `hashing.ts` derives
+ * with a placeholder `sig`, then hash the completed line. `strings` are quoted
+ * payload values, `ints` are written as bare canonical integers. Every caller
+ * gets the same signing harness as the genesis suites, so they cannot drift.
+ *
+ * `signer: null` writes the placeholder `sig` (for a line whose Stage B never
+ * runs, e.g. an unregistered version).
+ */
+export function signedEventLine(e: {
+  seq: number;
+  type: string;
+  version?: number;
+  strings: Record<string, string>;
+  ints: Record<string, number>;
+  ts: string;
+  prevHash: string;
+  signer: KeyPair | null;
+}): { line: string; hash: string } {
+  const version = e.version ?? 1;
+  const raw: Record<string, string> = {};
+  for (const [k, v] of Object.entries(e.ints)) raw[k] = String(v);
+  const draft = eventLine(
+    e.seq,
+    e.type,
+    version,
+    payloadJson({ ...e.strings, sig: PLACEHOLDER_SIG }, raw),
+    e.prevHash,
+    ZERO64,
+    e.ts,
+  );
+  const sigHex =
+    e.signer === null
+      ? PLACEHOLDER_SIG
+      : sign(null, signingPreimage(mustParse(draft)), e.signer.priv).toString(
+          "hex",
+        );
+  const payload = payloadJson({ ...e.strings, sig: sigHex }, raw);
+  const hash = computeHash(
+    mustParse(
+      eventLine(e.seq, e.type, version, payload, e.prevHash, ZERO64, e.ts),
+    ),
+  );
+  return {
+    line: eventLine(e.seq, e.type, version, payload, e.prevHash, hash, e.ts),
+    hash,
+  };
 }
 
 /** Token + line only. Reason text is advisory and never asserted (EV-17). */

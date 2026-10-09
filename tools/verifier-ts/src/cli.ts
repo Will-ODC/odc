@@ -69,4 +69,8 @@ function main(argv: string[]): number {
   }
 }
 
-process.exit(main(process.argv));
+// Set the exit code and let the process end on its own rather than calling
+// process.exit() straight after verification: an immediate process.exit() was
+// OBSERVED (not proven) to die with SIGSEGV on one machine. The measured
+// numbers are in the README, in one place. The exit codes are unchanged.
+process.exitCode = main(process.argv);
