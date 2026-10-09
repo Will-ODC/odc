@@ -14,6 +14,7 @@ import {
   EMPTY_RESULTS,
   installPointerEvents,
   poll,
+  results,
   stubApi,
 } from "./stub-api.js";
 
@@ -948,5 +949,125 @@ describe("a poll that has already closed", () => {
     );
     fireEvent.click(screen.getByRole("button", { name: /Back/ }));
     expect(onBack).toHaveBeenCalledTimes(1);
+  });
+});
+
+/**
+ * A closed poll is a lasting record, so its results are open to anyone who
+ * asks - voted or not (operator decision, 2026-10-09). Fetched on the press,
+ * not on arrival: most people reading a closed question will not ask.
+ */
+describe("the results of a poll that has already closed", () => {
+  const ENDED = results({
+    voters: 5,
+    choices: [
+      { index: 0, label: "No", count: 2, share: 40 },
+      { index: 1, label: "Yes", count: 3, share: 60 },
+    ],
+  });
+
+  function showClosed(over: Parameters<typeof stubApi>[0] = {}) {
+    const cast = vi.fn(stubApi().cast);
+    const api = stubApi({
+      cast,
+      results: vi.fn(() => Promise.resolve(ENDED)),
+      myBallot: () => Promise.resolve(null),
+      ...over,
+    });
+    render(
+      <SwipeBallot
+        api={api}
+        poll={poll({ open: false })}
+        onAnswered={() => {}}
+      />,
+    );
+    return { cast, api };
+  }
+
+  const seeResults = () => screen.getByRole("button", { name: "See results" });
+  const settle = () => new Promise((done) => setTimeout(done, 0));
+
+  it("offers the results, and shows the counts when asked", async () => {
+    const { api } = showClosed();
+    // Nothing is fetched for someone who only reads the question.
+    expect(api.results).not.toHaveBeenCalled();
+    fireEvent.click(seeResults());
+    expect(await screen.findByText("3 · 60%")).toBeTruthy();
+    expect(screen.getByText("2 · 40%")).toBeTruthy();
+    expect(screen.getByText("5 people answered")).toBeTruthy();
+  });
+
+  it("says so plainly when nobody answered", async () => {
+    showClosed({ results: () => Promise.resolve(results({ voters: 0 })) });
+    fireEvent.click(seeResults());
+    expect(await screen.findByText("Nobody answered this one.")).toBeTruthy();
+    expect(document.querySelector(".results__bar")).toBeNull();
+  });
+
+  it("says when the results would not load, and tries again", async () => {
+    let calls = 0;
+    const load = vi.fn(() =>
+      ++calls === 1
+        ? Promise.reject(new TypeError("Failed to fetch"))
+        : Promise.resolve(ENDED),
+    );
+    showClosed({ results: load });
+    fireEvent.click(seeResults());
+    expect(await screen.findByText(/could not load the results/)).toBeTruthy();
+    fireEvent.click(screen.getByRole("button", { name: "Try again" }));
+    expect(await screen.findByText("3 · 60%")).toBeTruthy();
+    expect(load).toHaveBeenCalledTimes(2);
+  });
+
+  it("marks the answer this browser gave before it closed", async () => {
+    showClosed({ myBallot: () => Promise.resolve([1]) });
+    fireEvent.click(seeResults());
+    expect((await screen.findByText(/You picked/)).textContent).toContain(
+      "Yes",
+    );
+    expect(
+      document.querySelector('[data-yours="true"]')?.textContent,
+    ).toContain("Yes");
+  });
+
+  it("marks nothing for someone who did not answer", async () => {
+    showClosed({ myBallot: () => Promise.resolve(null) });
+    fireEvent.click(seeResults());
+    await screen.findByText("3 · 60%");
+    expect(screen.queryByText(/You picked/)).toBeNull();
+    expect(document.querySelector('[data-yours="true"]')).toBeNull();
+  });
+
+  it("still shows the results when this browser's answer will not load", async () => {
+    showClosed({ myBallot: () => Promise.reject(new TypeError("offline")) });
+    fireEvent.click(seeResults());
+    expect(await screen.findByText("3 · 60%")).toBeTruthy();
+    expect(screen.queryByText(/You picked/)).toBeNull();
+  });
+
+  it("never casts, whatever is pressed with the results open", async () => {
+    const { cast } = showClosed();
+    fireEvent.click(seeResults());
+    await screen.findByText("3 · 60%");
+    const close = screen.getByRole("button", { name: "Close" });
+    fireEvent.keyDown(close, { key: "ArrowLeft" });
+    fireEvent.keyDown(close, { key: "ArrowRight" });
+    fireEvent.click(close);
+    fireEvent.keyDown(seeResults(), { key: "ArrowRight" });
+    await settle();
+    expect(cast).not.toHaveBeenCalled();
+  });
+
+  it("moves focus into the results, and back to the button on Close", async () => {
+    showClosed();
+    fireEvent.click(seeResults());
+    await screen.findByText("3 · 60%");
+    expect(document.activeElement).toBe(
+      screen.getByRole("group", { name: "How people answered" }),
+    );
+    fireEvent.click(screen.getByRole("button", { name: "Close" }));
+    // Back to the closed question, with focus on what opened the results.
+    expect(screen.getByText("This one has closed.")).toBeTruthy();
+    expect(document.activeElement).toBe(seeResults());
   });
 });

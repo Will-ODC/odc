@@ -14,11 +14,14 @@ import {
   sideOfKey,
 } from "../flow/swipe.js";
 import { useCastVote } from "../hooks/use-cast-vote.js";
+import { useClosedResults } from "../hooks/use-closed-results.js";
 import { edgesOf, useNextQuestions } from "../hooks/use-next-questions.js";
 import { BallotChrome } from "../components/BallotChrome.js";
 import { AfterVote } from "../components/AfterVote.js";
 import { ClosedNotice } from "../components/ClosedNotice.js";
+import { ClosedResults } from "../components/ClosedResults.js";
 import { Refusal } from "../components/Refusal.js";
+import { SeeResults } from "../components/SeeResults.js";
 import "./SwipeBallot.css";
 
 const AT_REST: Lean = { side: null, strength: 0 };
@@ -105,6 +108,8 @@ export function SwipeBallot({
   /** Whether a press may cast. Every way of casting checks this one value. */
   const locked = settled || shut;
   const closedId = useId();
+  /** A shut poll's results, for anyone who asks - see `useClosedResults`. */
+  const ended = useClosedResults(api, poll.id);
 
   function commit(side: Side) {
     setLean({ side, strength: 1 });
@@ -280,6 +285,15 @@ export function SwipeBallot({
               }
             />
           </div>
+        ) : shut && ended.showing ? (
+          <div className="ballot__done">
+            <ClosedResults
+              data={ended.data}
+              onRetry={ended.retry}
+              onClose={ended.close}
+              panelRef={ended.panelRef}
+            />
+          </div>
         ) : (
           <>
             {shut ? (
@@ -314,6 +328,11 @@ export function SwipeBallot({
                 />
               ))}
             </div>
+            {shut ? (
+              <div className="ballot__foot">
+                <SeeResults onOpen={ended.open} buttonRef={ended.triggerRef} />
+              </div>
+            ) : null}
           </>
         )}
       </div>
