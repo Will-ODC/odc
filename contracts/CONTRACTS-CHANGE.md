@@ -30,25 +30,31 @@ itself a valid chain") are both false. Ballots at T1, T2, T2, T2, T1, T1 with
 first T2 for any verifier that judges prefixes. Both phase-3 verifier builders,
 working in isolation, found this independently and picked the same reading.
 
-- **`ET-24a` added** (`event-types.md`). An issue's ballots MUST NOT return to a
-  batch instant they have left, and a breach is `INVALID` at the returning
-  ballot's line. The rule applies per issue, so other events may fall between one
-  batch's ballots, and it compares `ts` for equality only. It also states which
-  ballots ET-24/ET-24a count: only the registered `(vote_cast, 1)`, because an
-  unregistered version's payload is not read (EV-8).
-- **`ET-24` tightened.** "Membership and lastness are decided by `seq`" becomes:
-  lastness by `seq`, `ts` compared only for equality. The attribution paragraph
-  now says ET-24a is why its two descriptions of the fatal line coincide. Its
-  definition now says "registered `(vote_cast, 1)`" itself, rather than leaving
-  that narrowing to ET-24a, and a note says that when one ballot breaks ET-24 and
-  ET-24a on the same line no precedence is needed (EV-17), as ET-9f already says
-  for genesis.
+- **`ET-24` redefined: a batch is a run, not a set** (`event-types.md`). A batch
+  is a maximal run, in `seq` order among one issue's registered `(vote_cast, 1)`
+  events, sharing one `ts`. It ends at the issue's next registered ballot whose
+  `ts` differs, and if it is under-size, that ballot is the fatal line. "Membership
+  and lastness are decided by `seq`" is now literally true. A note says that when
+  one ballot breaks ET-24 and ET-24a on the same line no precedence is needed
+  (EV-17), as ET-9f already says for genesis.
+- **`ET-24a` added.** No two batches of one issue share a `ts`: a ballot
+  returning to an instant its issue has left is `INVALID` at its own line. The
+  rule applies per issue and compares `ts` for equality only. On every chain
+  that satisfies it, runs and sets coincide. It also states a **new producer
+  obligation**: a ledger whose clock steps backwards MUST hold or advance the
+  batch instant. And it states which ballots count: only the registered
+  `(vote_cast, 1)` (EV-8).
+- **Both halves are needed.** The PR's first draft added ET-24a over the set
+  definition. Its fresh-context review found that this still left the blamed line
+  open: on T1, T1, T2, T2, T2, T1 (min 3), the set reading blames the returning T1
+  and the run reading blames the first T2. Both verifiers already implement the run
+  reading.
 - **`ES-21` amended** (`event-schema.md` v4 → v5). Its exception now names the
   equality comparison ET-24/ET-24a use to group ballots. Read literally, the old
   wording forbade the grouping ET-24 already required.
 - **No fixture changes and no verdict changes in the corpus.** No committed vector
-  carries a resumed batch. This narrows the `VALID` set only for chains no
-  conforming producer writes. The vectors that pin ET-24a are owed **after** both
+  carries a resumed batch. This narrows the `VALID` set, which is legitimate while
+  DRAFTING (ADR-0007; root `CLAUDE.md` rule 3 binds after the freeze). The vectors that pin ET-24a are owed **after** both
   verifiers implement it (fixtures may never precede verifiers). ADR-0029 lists
   them.
 

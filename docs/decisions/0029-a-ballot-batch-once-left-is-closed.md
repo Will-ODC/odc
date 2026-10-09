@@ -33,20 +33,35 @@ at the first T2 ballot. Both of ours accept it. A real verdict divergence was on
 fixture away.
 
 The rehearsal (#172) and every committed vector publish each batch as one run, so
-no committed verdict depends on the question. Both verifiers agree on 6,000
-generated chains that include resumed batches, but they agree on the set reading,
-which is the reading that breaks EX-16.
+no committed verdict depends on the question. The first builds of both
+verifiers agreed on verdict and blamed line for 6,000 generated chains that
+included resumed batches, but they agreed on the set reading, which is the
+reading that breaks EX-16.
 
 ## Decision
 
-Add **ET-24a**: an issue's ballots MUST NOT return to a batch instant they have
-left. Taking one issue's `vote_cast` events in `seq` order, a ballot whose `ts`
-differs from that issue's previous ballot MUST NOT equal the `ts` of any earlier
-ballot of that issue. A verifier rejects the chain **at the line of the returning
-ballot**.
+**A batch is a run, not a set.** ET-24 now defines a batch as a maximal run, in
+`seq` order among one issue's registered ballots, of ballots sharing one `ts`. A
+batch ends at the issue's next registered ballot whose `ts` differs, and if it is
+under-size, that ballot is the fatal line.
+
+Add **ET-24a**: no two batches of one issue may share a `ts`. A ballot whose
+`ts` differs from its issue's previous registered ballot MUST NOT equal the `ts`
+of any earlier registered ballot of that issue. A verifier rejects the chain **at
+the line of the returning ballot**. On every chain that satisfies ET-24a, runs
+and sets coincide, so ET-24's v9 meaning is unchanged wherever it was
+well-defined.
+
+Both halves are needed. ET-24a alone, over a set-defined ET-24, still leaves the
+blamed line open on a chain that breaks ET-24a. Take `ballot_batch_min` 3 and one
+issue's ballots at T1, T1, T2, T2, T2, T1. Under the run definition, the fatal
+line is the first T2, where the run of two ends. Under the set definition, the T1
+set is three ballots, so ET-24 never fires, and only ET-24a fires, at the
+returning T1. The fresh-context review of this ADR's first draft found this;
+EV-17 checks the line, so it was blocking.
 
 - **Per issue, not per file.** Other events, including other issues' ballots, MAY
-  fall between one batch's ballots. A batch is a run of its issue's ballots.
+  fall between one batch's ballots.
 - **Equality only.** The rule compares `ts` values for equality and never orders
   them. `event-schema.md` ES-21 is amended to name this equality comparison
   alongside ET-23's value check, because ET-24's grouping by equal `ts` was
@@ -58,29 +73,41 @@ ballot**.
   assigned to any batch. Both verifiers already do this. It is stated here
   because both builders had to infer it.
 
-ET-24's text is tightened in two places. The sentence "Membership and lastness are
-decided by `seq`" made no literal sense, because membership is by `ts` equality.
-It now says lastness is decided by `seq` and `ts` is compared only for equality.
-The attribution paragraph now says why its two descriptions of the fatal line
-coincide: ET-24a.
+The v9 sentence "Membership and lastness are decided by `seq`" made no literal
+sense, because v9 membership was by `ts` equality. Under the run definition both
+membership and lastness are decided by `seq` order, and `ts` is compared only for
+equality, to tell where a batch ends.
+
+**A new producer obligation.** Nothing before v10 required a ledger never to
+revisit a batch instant; ES-21 does not order by `ts`. ET-24a now says a producer
+whose clock steps backwards across a batch boundary MUST hold or advance the
+instant, because a chain that breaks ET-24a is permanently `INVALID` in an
+append-only log. The ledger's own guidance is updated to match (below).
 
 **Rejected: keep the set reading and qualify EX-16.** That would keep both
 verifiers unchanged, but it makes ET-24 the one rule whose verdict a prefix can
 contradict. A streaming verifier would have to buffer every batch to the end of
-the chain before it could report any ET-24 line. And it protects a shape no
-honest producer writes, because a ledger publishes each batch as one unit
-(ADR-0014, ET-25).
+the chain before it could report any ET-24 line. The shape it protects, a batch
+resumed after a later one started, is not one a ledger publishing each batch as a
+unit (ADR-0014) means to write. The one realistic way to write it, a clock
+stepping backwards, is better caught at the line where it happens than tolerated.
 
 ## Consequences
 
-- With ET-24a, both ET-24 and ET-24a are **per-line** checks. At any ballot, a
-  verifier knows whether that line is fatal from the lines before it. EX-16 holds
-  again without qualification. The builders' other two ambiguities go away: the
-  rule no longer needs a precedence statement for faults after the blamed line,
-  and the question of whether a failed line can fill a batch is answered by EV-7,
-  because verification stops at the first fatal line.
+- With the run definition and ET-24a, both rules are **per-line** checks. At any
+  ballot, a verifier knows whether that line is fatal from the lines before it,
+  and no later line can change that. EX-16 holds again without qualification.
+  The builders' other two ambiguities go away by definition rather than by
+  appeal to EV-7. A fault after the blamed line cannot matter, because the blamed
+  line depends only on lines before it. A ballot that fails another check cannot
+  fill an earlier batch, because a batch ends at the first registered ballot with
+  a different `ts`, and a returning ballot starts a new batch rather than
+  rejoining an old one.
 - **This narrows the set of `VALID` chains.** A chain with a resumed batch was
-  `VALID` under v9 and is `INVALID` under v10. `contracts/` is DRAFTING (ADR-0007),
+  `VALID` under v9 and is `INVALID` under v10. Root `CLAUDE.md` rule 3
+  ("additive-only, version-bumped, never retroactive") binds after the freeze;
+  `contracts/` is DRAFTING (ADR-0007), where specs may still change, and ADR-0014
+  set the precedent of narrowing the `VALID` set before it. Here,
   no committed vector carries a resumed batch, and no ledger exists, so nothing
   that was published changes verdict. After the RC this would be a breaking
   change; it is cheap only now.
@@ -92,12 +119,15 @@ honest producer writes, because a ledger publishes each batch as one unit
      issue's ballots between one batch's members (`VALID`); an under-size batch
      proven not-last (`INVALID` at the next ballot of its issue); the legal
      under-size last batch with other issues' ballots after it (`VALID`); and an
-     ET-23 off-interval ballot. None of these exists yet, and ET-24a is not
-     covered by any vector until they land.
+     ET-23 off-interval ballot. Also the review's counterexample, one issue at
+     T1, T1, T2, T2, T2, T1 with `ballot_batch_min` 3 (`INVALID` at the first T2,
+     not the returning T1), and this ADR's own example, T1, T2, T2, T2, T1, T1
+     (`INVALID` at the first T2). None of these exists yet, and neither ET-24a nor
+     the run definition is covered by any vector until they land.
 
 ### Documents reconciled
 
-- `contracts/event-types.md` v9 → v10: ET-24 tightened, ET-24a added, the
+- `contracts/event-types.md` v9 → v10: ET-24 redefined as runs, ET-24a added, the
   section intro (four rules, three verifiable), the degrees-of-freedom table, and
   the acid-test walkthrough.
 - `contracts/event-schema.md` v4 → v5: ES-21's exception names the equality
@@ -112,6 +142,9 @@ honest producer writes, because a ledger publishes each batch as one unit
 - `services/verifier/API.md` and `tools/verifier-ts/README.md`: on master they
   do not mention ET-24 yet. The phase-3 verifier PRs that add ET-24 describe
   ET-24a in the same change.
+- `services/ledger/CLAUDE.md` and `docs/implementation-plan.md`: both described
+  the ledger's batching duties as "ET-23–ET-25". Both now name ET-24a and the
+  clock-regression obligation, **in this PR**.
 - `memory/STATE.md`: updated at merge time on master, per `odc-pipeline`.
 
 ## Charter check
