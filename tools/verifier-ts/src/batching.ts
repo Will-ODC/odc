@@ -1,4 +1,4 @@
-// Ballot publication discipline (event-types.md v10): ET-23 (quantized ballot
+// Ballot publication discipline (event-types.md v11): ET-23 (quantized ballot
 // `ts`), ET-24 (minimum batch size, with its line attribution) and ET-24a (a
 // batch, once left, is closed), from the section "Ballot publication
 // discipline". ET-25 (order within a batch) is declared unverifiable by the
@@ -84,7 +84,7 @@ interface IssueRun {
 /**
  * ET-24 / ET-24a, checked ballot by ballot in file (= `seq`) order.
  *
- * ET-24 (event-types.md v10) defines a batch as "a maximal run" of one issue's
+ * ET-24 (event-types.md v11) defines a batch as "a maximal run" of one issue's
  * registered `(vote_cast, 1)` events, in `seq` order, "that share one `ts`".
  * A run ends at the issue's next registered ballot whose `ts` differs, so both
  * rules are decided AT that ballot's line, with no end-of-scan pass:

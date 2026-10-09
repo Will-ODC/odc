@@ -72,7 +72,7 @@ Two stages, per `evolution.md` EV-6/EV-15:
   primitive), title/`choice_count`/`choice` bounds, the `ballot_batch_interval_ms`
   and `ballot_batch_min` floors an `issue_created` declares (ET-14b), `issue_id`
   back-references, and the ballot publication discipline of `event-types.md`
-  v10 (`src/batching.ts`):
+  v11 (`src/batching.ts`):
   - **ET-23** — a `vote_cast`'s `ts`, converted exactly to epoch milliseconds
     (proleptic Gregorian, no leap seconds; exact in a JS number over all of
     ES-20's range), is a multiple of its issue's declared interval (zero and
@@ -145,7 +145,7 @@ inventing conformance in a file no reviewer treats as normative.
   file's header states plainly. They are a harness, not an oracle: a fixture
   for these rules supersedes them the day one exists.
 - **`test/ballot-batching.test.ts`** — ET-23, ET-24 and ET-24a
-  (`event-types.md` v10). When written, no fixture cited ET-23 or ET-24a and
+  (`event-types.md` v11). When written, no fixture cited ET-23 or ET-24a and
   none had an issue whose ballots span more than one batch, so the conformance
   suite could not tell whether any of the three exists. Synthetic,
   self-consistent chains (built with `genesis-builder.ts`'s `signedEventLine`),

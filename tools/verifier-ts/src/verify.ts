@@ -317,7 +317,7 @@ function stageB(ev: ParsedEvent, state: ChainState): boolean {
       if (reg === null) return false;
       if (!isCanonicalSigEncoding(sig)) return false; // ET-4a
       if (!ed25519Verify(signingPreimage(ev), sig, reg)) return false; // ET-17
-      // ET-24 / ET-24a (event-types.md v10). Both are decided at THIS ballot:
+      // ET-24 / ET-24a (event-types.md v11). Both are decided at THIS ballot:
       // it is either the ballot that ends an under-size batch (ET-24's fatal
       // line) or a ballot returning to an instant its issue has left (ET-24a:
       // "at the line of the returning ballot"). Run last, so a ballot failing

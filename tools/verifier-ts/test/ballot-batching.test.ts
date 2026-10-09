@@ -1,5 +1,5 @@
 // ET-23 (quantized ballot `ts`), ET-24 (minimum batch size and its blamed line)
-// and ET-24a (a batch, once left, is closed), event-types.md v10 "Ballot
+// and ET-24a (a batch, once left, is closed), event-types.md v11 "Ballot
 // publication discipline".
 //
 // WHAT THIS FILE IS, AND WHAT IT IS NOT. When this file was written no vector in
@@ -558,7 +558,7 @@ test("ET-24a: a return that follows an under-size batch is INVALID at the return
 
 test("ET-24a: an under-size batch returned to — the old 'set' reading's VALID case — is INVALID", () => {
   // 00:01 x1, 00:02 x3, 00:01 x1. Under v9 this was one 00:01 batch of 2 that
-  // held the issue's highest-seq ballot. v10: leaving 00:01 at size 1 already
+  // held the issue's highest-seq ballot. v11: leaving 00:01 at size 1 already
   // breaks ET-24, at the first 00:02 ballot.
   const c = new Chain();
   const a = c.issue();
