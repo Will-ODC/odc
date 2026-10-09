@@ -180,7 +180,7 @@ describe("failures", () => {
     "says a %i without a sentence is our fault and worth retrying",
     async (status) => {
       expect(await messageFor(status, "<html>gateway</html>")).toBe(
-        "Something went wrong on our side. Try again in a moment.",
+        "Something went wrong. Try again.",
       );
     },
   );
@@ -197,23 +197,30 @@ describe("failures", () => {
     );
   });
 
+  it("says a 410 without a sentence means ask for a new link, not retry", async () => {
+    const said = await messageFor(410, "");
+    expect(said).toBe("That link no longer works. Ask for a new one.");
+    expect(said).not.toContain("Try again");
+  });
+
   it("gives any other refusal without a sentence a plain one", async () => {
     expect(await messageFor(418, "")).toBe("That didn't work. Try again.");
   });
 
   it("never shows the status number when the body carries no message", async () => {
-    for (const status of [400, 403, 409, 429, 500, 502, 503, 504]) {
+    for (const status of [400, 403, 409, 410, 429, 500, 502, 503, 504]) {
       expect(await messageFor(status, "")).not.toMatch(/\d{3}/);
     }
   });
 
   it("keeps the server's sentence over the fallback, even on a 5xx", async () => {
+    // A different sentence from the fallback's, so this can tell them apart.
     expect(
       await messageFor(
         500,
-        JSON.stringify({ message: "Something went wrong. Try again." }),
+        JSON.stringify({ message: "The poll store is restarting." }),
       ),
-    ).toBe("Something went wrong. Try again.");
+    ).toBe("The poll store is restarting.");
   });
 
   it("rejects a 2xx body it cannot read, rather than resolving to null", async () => {

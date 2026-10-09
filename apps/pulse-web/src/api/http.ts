@@ -176,17 +176,20 @@ function messageFrom(parsed: unknown): string | undefined {
 /**
  * The sentence for a refusal whose body carried none — a proxy's own error page
  * (nginx's 502 or 504), a dropped upstream. The person reads it, so it says what
- * happened and whether to try again; it never shows the status number. The 429
- * and 404 wordings match what the server says when it does answer.
+ * happened and whether to try again; it never shows the status number. Each
+ * wording matches what the server itself says for that status, so one failure
+ * reads the same whether pulse answered or a proxy did.
  */
 function fallbackMessage(status: number): string {
   if (status >= 500) {
-    return "Something went wrong on our side. Try again in a moment.";
+    return "Something went wrong. Try again.";
   }
   if (status === 429) {
     return "Too many tries just now. Try again a little later.";
   }
   if (status === 404) return "There is nothing here.";
+  // Only a sign-in link answers 410, and a dead link never works again.
+  if (status === 410) return "That link no longer works. Ask for a new one.";
   return "That didn't work. Try again.";
 }
 
