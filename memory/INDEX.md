@@ -27,10 +27,10 @@ Do not apply charter rules to `apps/**`, and do not relax them anywhere else.
   fixture/verifier conformance work runs in four phases. **Phases 1 and 2 are
   COMPLETE** — phase 2's fixture half landed 2026-08-26 (#136, #137), taking the
   corpus to **98 vectors** and closing the five rules that both verifiers
-  enforced and no vector cited. **Phase 3 (F2 batching) is in flight:** the
-  rehearsal reshape (#172), ET-24a's first draft (#176) and both verifiers (#177
-  Go, #178 TS) are merged. Open, and to merge in this order: #180 (ET-24 as runs,
-  the review fix #176 merged without), then #181 (#177's review fixes). The vectors come after them. Four `contracts/` contradictions remain
+  enforced and no vector cited. **Phase 3 (F2 batching): the contract and both verifiers are
+  merged** (#172, #176 + #180 → `event-types.md` v11, #177 + #181 Go, #178 TS).
+  **Next: the phase-3 vectors** listed in ADR-0029; until they land, CI cannot
+  tell whether ET-23/ET-24/ET-24a are enforced. Four `contracts/` contradictions remain
   open for an operator decision. → `memory/STATE.md`
 - **Pulse:** pillars 1 and 2 are on master — magic-link identity, the voting
   core, a story UI you can walk end to end, a results panel (#140), an answer
