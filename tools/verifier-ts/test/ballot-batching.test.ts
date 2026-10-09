@@ -108,14 +108,14 @@ class Chain {
   }
 
   /** Append one registrar-signed ballot; returns its line number. */
-  vote(issueId: string, ts: string, version = 1): number {
+  vote(issueId: string, ts: string, version = 1, signer?: KeyPair): number {
     return this.push("vote_cast", {
       version,
       strings: { issue_id: issueId },
       ints: { choice: 0 },
       ts,
       // An unregistered version never reaches Stage B, so it needs no signature.
-      signer: version === 1 ? this.reg : null,
+      signer: signer ?? (version === 1 ? this.reg : null),
     }).line;
   }
 
@@ -522,6 +522,20 @@ test("ET-24 vs an earlier Stage A fault: the earlier fault wins", () => {
   const bad = c.corruptLine();
   c.vote(a, T2);
   assert.equal(c.verdict(), `INVALID at line ${bad}`);
+});
+
+test("ET-24: a ballot that fails its own checks joins no batch", () => {
+  // 00:01 x2, 00:02 x1 (blamed), then a 00:01 ballot signed by the OPERATOR
+  // key (fails ET-17). Were the failing ballot admitted, the 00:01 batch would
+  // reach 3 and become last again, hiding the ET-24 violation behind the
+  // later ET-17 line.
+  const c = new Chain();
+  const a = c.issue();
+  c.votes(a, T1, 2);
+  const blamed = c.vote(a, T2);
+  const badSig = c.vote(a, T1, 1, c.op);
+  assert.ok(blamed < badSig);
+  assert.equal(c.verdict(), `INVALID at line ${blamed}`);
 });
 
 test("ET-24 with --head: the ET-24 line is named, not the last line", () => {
