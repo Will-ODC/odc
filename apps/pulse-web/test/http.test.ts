@@ -67,7 +67,7 @@ describe("asking for a sign-in link", () => {
     });
   });
 
-  it("turns the 403 for an unclaimed domain into an answer, showing the server's sentence", async () => {
+  it("rejects a 403 not_a_member like any other refusal (open sign-up, ADR-0030)", async () => {
     stubFetch({
       status: 403,
       body: JSON.stringify({
@@ -75,12 +75,9 @@ describe("asking for a sign-in link", () => {
         message: "gmail.com is not part of a community on pulse yet.",
       }),
     });
-    expect(await new HttpPulseApi().requestLink("jo@gmail.com", false)).toEqual(
-      {
-        status: "not_eligible",
-        message: "gmail.com is not part of a community on pulse yet.",
-      },
-    );
+    await expect(
+      new HttpPulseApi().requestLink("jo@gmail.com", false),
+    ).rejects.toThrow(ApiError);
   });
 
   it("still throws on a 403 that is not about membership", async () => {

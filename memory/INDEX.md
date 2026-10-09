@@ -29,7 +29,7 @@ Do not apply charter rules to `apps/**`, and do not relax them anywhere else.
   corpus to **98 vectors** and closing the five rules that both verifiers
   enforced and no vector cited. **Phase 3 (F2 batching): the contract and both verifiers are
   merged** (#172, #176 + #180 → `event-types.md` v11, #177 + #181 Go, #178 TS).
-  **Next: the phase-3 vectors** listed in ADR-0029; until they land, CI cannot
+  **Next: the phase-3 vectors** ([#192](https://github.com/Will-ODC/odc/issues/192)), listed in ADR-0029; until they land, CI cannot
   tell whether ET-23/ET-24/ET-24a are enforced. Four `contracts/` contradictions remain
   open for an operator decision. → `memory/STATE.md`
 - **Pulse:** pillars 1 and 2 are on master — magic-link identity, the voting
@@ -42,13 +42,13 @@ Do not apply charter rules to `apps/**`, and do not relax them anywhere else.
   has ever been built, and the first `docker build` is still the test.**
   Of the four things that blocked a deploy, **only poll creation is left**, and
   it is blocked on the moderation decisions under ADR-0024. Also outstanding and
-  mostly not code: a verified sending domain, a host, a domain, and **open
-  sign-up** — decided 2026-09-13 and unbuilt (`docs/plans/pulse.md` P4c), which
-  is what stops anyone signing in to a fresh deployment at all. Still missing
+  mostly not code: a verified sending domain, a host and a domain. **Open
+  sign-up is DONE** — #182, #183, ADR-0030: anyone signs in, and community is
+  an optional label. Still missing
   from the product: the middle of the story (bite/case/action screens) and
   pillar 3. **Varying levels of sign-in are designed and unstarted** — P8-P11,
   decided 2026-09-12; P8 is ready, the rest wait on an ADR and on an admin
-  surface that does not exist. **Two known bugs are recorded and unstarted.**
+  surface that does not exist. The two known screen bugs are **fixed** (#174, #175).
   → `memory/pulse.md`
 
 ## Load order

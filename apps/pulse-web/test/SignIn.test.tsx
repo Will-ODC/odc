@@ -8,7 +8,7 @@ import { stubApi } from "./stub-api.js";
 
 afterEach(cleanup);
 
-const field = () => screen.getByLabelText("Your school email");
+const field = () => screen.getByLabelText("Your email");
 const go = () => screen.getByRole("button", { name: "Continue" });
 
 /*
@@ -268,38 +268,11 @@ describe("once the link is on its way", () => {
       screen.getByRole("button", { name: "Use a different email" }),
     );
 
-    expect(await screen.findByLabelText("Your school email")).toBeTruthy();
+    expect(await screen.findByLabelText("Your email")).toBeTruthy();
   });
 });
 
 describe("when the address will not do", () => {
-  /*
-   * An unclaimed domain is an answer, not a fault: the server names the domain
-   * and that sentence is exactly what the person needs. Shown as-is.
-   */
-  it("shows the server's sentence for a domain no community owns", async () => {
-    render(
-      <SignIn
-        api={stubApi({
-          requestLink: () =>
-            Promise.resolve({
-              status: "not_eligible" as const,
-              message: "No community uses gmail.com yet.",
-            }),
-        })}
-      />,
-    );
-
-    await userEvent.type(field(), "jo@gmail.com");
-    await userEvent.click(go());
-
-    expect(
-      await screen.findByText("No community uses gmail.com yet."),
-    ).toBeTruthy();
-    // Still on the form: the next thing to do is try another address.
-    expect(screen.getByLabelText("Your school email")).toBeTruthy();
-  });
-
   it("shows one plain sentence when the request fails outright", async () => {
     render(
       <SignIn
@@ -340,31 +313,27 @@ describe("when the address will not do", () => {
   });
 
   /*
-   * A refusal naming the old domain is stale the moment they start replacing
-   * it — and leaving `aria-invalid` on marks the new address wrong before it
-   * has been sent anywhere.
+   * A failure from the last attempt is stale the moment they start replacing
+   * the address.
    */
-  it("drops the refusal once they start changing the address", async () => {
+  it("drops the failure once they start changing the address", async () => {
     render(
       <SignIn
         api={stubApi({
           requestLink: () =>
-            Promise.resolve({
-              status: "not_eligible" as const,
-              message: "No community uses gmail.com yet.",
-            }),
+            Promise.reject(new ApiError(0, "Couldn't reach pulse.")),
         })}
       />,
     );
 
     await userEvent.type(field(), "jo@gmail.com");
     await userEvent.click(go());
-    await screen.findByText("No community uses gmail.com yet.");
+    await screen.findByText("Couldn't reach pulse.");
 
     await userEvent.type(field(), "x");
 
     await waitFor(() =>
-      expect(screen.queryByText("No community uses gmail.com yet.")).toBeNull(),
+      expect(screen.queryByText("Couldn't reach pulse.")).toBeNull(),
     );
     expect(field().getAttribute("aria-invalid")).toBe("false");
   });
