@@ -242,6 +242,31 @@ test(
 );
 
 test(
+  "a_credential_that_is_not_an_email_is_never_shown_as_the_address",
+  { skip: databaseSkip },
+  async (t) => {
+    // P10/P11 will add kinds like `in_person`, whose value is who vouched,
+    // not where to send mail. Only an `email` credential is an address:
+    // anything else read back as one would put the vouch on /api/me and
+    // address proof-of-action mail to it.
+    const pool = await migratedSchema(t);
+    await pool.query(
+      "insert into voter" +
+        " (id, community, assurance, claimed_at, proof_emails_opt_in," +
+        " session_generation) values ('met', null, 'link', $1, false, 0)",
+      [AT],
+    );
+    await pool.query(
+      "insert into voter_credential (kind, value, voter_id, verified_at)" +
+        " values ('in_person', 'vouched-by-voter-7', 'met', $1)",
+      [AT],
+    );
+    const store = new PostgresVoterStore(pool);
+    assert.equal((await store.byId("met"))?.email, null);
+  },
+);
+
+test(
   "an_assurance_word_this_build_does_not_know_is_refused",
   { skip: databaseSkip },
   async (t) => {

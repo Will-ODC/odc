@@ -164,7 +164,7 @@ export class InMemoryVoterStore implements VoterStore {
     if (this.#byId.has(voter.id)) {
       throw new Error(`a voter already has the id ${voter.id}`);
     }
-    const row = withoutEmail(voter);
+    const row = voter;
     this.#byId.set(voter.id, row);
     this.#holder.set(key, voter.id);
     const email = emailOf(credential);
@@ -200,19 +200,9 @@ function credentialKey(kind: CredentialKind, value: string): string {
   return JSON.stringify([kind, value]);
 }
 
-/**
- * The row as written, with no `email` key even when the caller's object had
- * one: the address is the credential's to say, never the voter's.
- */
-function withoutEmail(voter: NewVoter): NewVoter {
-  const row: NewVoter & { email?: unknown } = { ...voter };
-  delete row.email;
-  return row;
-}
-
 /** The voter a store hands back: the row, with the address its credential gave. */
 export function voterWith(voter: NewVoter, email: string | null): Voter {
-  return { ...withoutEmail(voter), email };
+  return { ...voter, email };
 }
 
 export class InMemoryClaimStore implements ClaimStore {

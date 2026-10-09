@@ -1,7 +1,10 @@
 # ADR-0032: Pulse identity is a credential
 
-- **Status:** proposed — **for the operator to confirm** (the decisions below
-  were taken by the orchestrator when P8 slice 1 was briefed, 2026-10-09)
+- **Status:** proposed — **for the operator to confirm**, except decision 2
+  (the level vocabulary), which is the operator's own decision 1 of 2026-09-12
+  and is recorded here, not re-opened. The rest — the migration shape, the
+  store seam, allowing a voter with no credential, and the naming — were taken
+  by the orchestrator when P8 slice 1 was briefed, 2026-10-09.
 - **Date:** 2026-10-09
 - **Phase:** 0 (pulse workstream, P8 slice 1)
 
@@ -32,7 +35,8 @@ behaviour-preserving storage change. Nobody signs in any differently.
    `pending_claim`, `email` becomes `subject`, a `kind` column is added the
    same way, and the throttling index moves to `(kind, subject)`.
 
-2. **The level vocabulary lives in `src/identity/assurance.ts`:** `none`,
+2. **(Already decided by the operator, 2026-09-12.) The level vocabulary lives
+   in `src/identity/assurance.ts`:** `none`,
    `link`, `email`, in that order. The database stores the word and knows no
    order (the `polls.method` rule, ADR-0021). A stored word the build does not
    know is refused on read, never guessed at. Every voter created in this slice
