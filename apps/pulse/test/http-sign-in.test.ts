@@ -344,7 +344,7 @@ test("the_opt_in_is_carried_through_to_the_voter", async () => {
     payload: { token: h.tokenFor("ada@student.ubc.ca") },
   });
 
-  const voter = await h.voters.byEmail("ada@student.ubc.ca");
+  const voter = await h.voters.byCredential("email", "ada@student.ubc.ca");
   assert.equal(voter?.proofEmailsOptIn, true);
 });
 

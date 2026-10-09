@@ -35,6 +35,16 @@ export interface Membership {
  * How an address proves membership. Email domain is the only method today;
  * invite codes and vouching by an existing member are the expected next ones,
  * and they plug in here without any caller changing.
+ *
+ * **Not the same question as a credential's `kind`** (`./assurance.ts`,
+ * ADR-0032), and deliberately not a third word for it. A credential answers
+ * "who is this person, and how sure are we" — its kind is the assurance level
+ * it confers. A verification method answers "which community, if any" — it
+ * reads a credential the person already proved (today, always an `email` one,
+ * which is why `check` takes an address) and never decides whether they may
+ * sign in (ADR-0030). A later vouching method would read a vouching
+ * credential the same way, and an invite code would be a method with no
+ * credential kind of its own.
  */
 export interface VerificationMethod {
   /**

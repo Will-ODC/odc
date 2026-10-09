@@ -1,9 +1,10 @@
 import { createHash, randomBytes, randomUUID } from "node:crypto";
 import type { VerificationMethod } from "./allowlist.js";
+import { assuranceOf } from "./assurance.js";
 import { InvalidEmailError, parseEmail } from "./email.js";
 import { MailSendError, type Mailer } from "./mailer.js";
 import {
-  VoterExistsError,
+  CredentialTakenError,
   type ClaimStore,
   type PendingClaim,
   type Voter,
@@ -123,13 +124,14 @@ export class ClaimService {
     const community = membership?.community ?? null;
 
     const now = this.#clock();
-    const live = await this.#claims.liveFor(email.value, now);
+    const live = await this.#claims.liveFor("email", email.value, now);
     if (live.length >= this.#maxLive) return { status: "too_many_requests" };
 
     const token = this.#newToken();
     const claim: PendingClaim = {
       tokenHash: hashToken(token),
-      email: email.value,
+      kind: "email",
+      subject: email.value,
       community,
       proofEmailsOptIn: opts.proofEmailsOptIn ?? false,
       createdAt: now,
@@ -189,7 +191,7 @@ export class ClaimService {
     if (!claim) return { status: "unknown_link" };
     if (claim.usedAt !== undefined) return { status: "already_used" };
     if (claim.expiresAt <= this.#clock()) return { status: "expired" };
-    return { status: "live", email: claim.email, expiresAt: claim.expiresAt };
+    return { status: "live", email: claim.subject, expiresAt: claim.expiresAt };
   }
 
   /**
@@ -214,26 +216,32 @@ export class ClaimService {
       return { status: "already_used" };
     }
 
-    const existing = await this.#voters.byEmail(claim.email);
+    const existing = await this.#voters.byCredential(claim.kind, claim.subject);
     if (existing) return this.#signInExisting(existing, claim);
 
     try {
-      const voter = await this.#voters.create({
-        id: randomUUID(),
-        email: claim.email,
-        // The community recorded at claim time, null included. If the
-        // allowlist changes later, an existing member does not lose the
-        // community they joined.
-        community: claim.community,
-        claimedAt: now,
-        proofEmailsOptIn: claim.proofEmailsOptIn,
-      });
+      // The voter and the credential the link just proved, written together
+      // (ADR-0032): the address is something this voter holds, not what the
+      // voter is. Clicking a mailed link is `email` assurance.
+      const voter = await this.#voters.create(
+        {
+          id: randomUUID(),
+          // The community recorded at claim time, null included. If the
+          // allowlist changes later, an existing member does not lose the
+          // community they joined.
+          community: claim.community,
+          assurance: assuranceOf(claim.kind),
+          claimedAt: now,
+          proofEmailsOptIn: claim.proofEmailsOptIn,
+        },
+        { kind: claim.kind, value: claim.subject, verifiedAt: now },
+      );
       return { status: "signed_in", voter, firstTime: true };
     } catch (error) {
       // Another link for this address was redeemed at the same moment and
       // created the voter first. This person IS that voter: sign them in.
-      if (!(error instanceof VoterExistsError)) throw error;
-      const winner = await this.#voters.byEmail(claim.email);
+      if (!(error instanceof CredentialTakenError)) throw error;
+      const winner = await this.#voters.byCredential(claim.kind, claim.subject);
       if (!winner) throw error;
       return this.#signInExisting(winner, claim);
     }

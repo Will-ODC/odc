@@ -15,6 +15,10 @@ changing anything here.
   results. Routes are in [API.md](./API.md); screens are in `apps/pulse-web`.
 - **Storage:** Postgres when `PULSE_DATABASE_URL` is set, migrated on every
   start; memory otherwise. The tests run every store against both.
+- **Identity:** a voter's address is a credential they hold (`voter_credential`),
+  not their key, and each voter records an assurance level — `none`, `link` or
+  `email`, ordered in `src/identity/assurance.ts` (ADR-0032). Everyone signs in
+  by email today, so everyone is `email`.
 - **Not built:** real email, creating polls, and the path to action.
 
 ## Run it
