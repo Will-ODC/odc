@@ -423,11 +423,14 @@ the known counted-not-verified weakness.
   their domain later does not change it; removing a row does not take it away.
   **No test locks this in yet.**
 - **ADR-0024's `polls` columns must use migration 003 or later.**
-- **Owed in `apps/pulse-web`, not done:** the client still maps 403
-  `not_a_member` to `not_eligible` (`SignIn.tsx`, `api/http.ts`), a path the
-  server no longer reaches, and types `Me.community` as `string` where the
-  server sends `string | null`. Nothing breaks. Also stale: wording in P4b and
-  P8 of `docs/plans/pulse.md`.
+- **The pulse-web follow-up is DONE** (#191, `8a3d6c1`): the dead 403
+  `not_a_member` → `not_eligible` path is gone and `Me.community` is
+  `string | null`; the email field now says "Your email". **The stale wording is
+  DONE** (#196, `e0929be`): plan P4b/P2 lines, six test names, three comments.
+- **Still owed, small:** the sign-in heading still reads "Your campus is
+  deciding something." (`SignIn.tsx:127`) — the operator was asked for new
+  wording and has not answered — and `docs/mockups/pulse-story-mobile-v1.html`
+  still says "school email".
 
 ### Landed 2026-10-09 — the two 2026-09-06 bugs, fixed (Lead B, the first lead pilot)
 
@@ -461,7 +464,7 @@ for a screen check.**
   record of the discussion". Do not hide what was asked.
 - **Closed results are shown to people who did not vote.** A "See results"
   control on the closed ballot, using the existing no-sign-in
-  `GET /api/polls/:id/results`. In flight: **#187**,
+  `GET /api/polls/:id/results`. **Merged as #187** (`df053dd`),
   which also makes the badge say "Official Ballot - Closed". Follow-ups filed:
   #188 (server errors read "Request failed (502)") and #189 (an approval poll
   marks only one of your answers as yours).
@@ -858,6 +861,18 @@ that is a demo people can use, not a product.
   imported stylesheet — so no test could have caught it either way.
 
 ## Live cautions
+
+- **Codex security audits of 2026-10-09 left unmerged work — Codex owns it.**
+  Worktrees `/private/tmp/odc-audit-*`. `#184` (`42ec2c5`, sign-in tokens kept
+  out of nginx referrer logs) came from the pulse-web audit and is merged. Still
+  unmerged, by operator decision left for Codex to finish:
+  `odc-audit-pulse-server` (commit `35df95d`) fixes **a copied session that
+  survives sign-out in the same millisecond** — `server.ts` compares
+  `issuedAt < sessionsValidFrom`, so equal times pass; master still has it. Its
+  untracked ADR is numbered **0030**, which clashes with open sign-up's
+  ADR-0030 and must be renumbered. `odc-audit-dependencies` (`10e74fe`) bumps
+  vulnerable dependencies. Do not build on or merge either without the
+  operator.
 
 - **`polls` is the only plural table; the other seven are singular.**
   `polls`, then `poll_choice`, `vote`, `vote_choice`, `suggestion`, `voter`,
