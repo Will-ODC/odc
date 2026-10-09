@@ -40,13 +40,12 @@ until real operational use; `contracts/` remains **DRAFTING**.
 **Conformance work: phases 1 and 2 are COMPLETE.** Phase 1 #104/#105; phase 2's
 contracts half (ADR-0019, #112), verifier half (#122, #123, #124, merged
 2026-08-23) and **fixture half (#136, #137, merged 2026-08-26)**. The corpus is
-**98 vectors** (VALID 15, PARTIAL 4, INVALID 79). **Phase 3 is IN FLIGHT
-(2026-10-09):** merged: the rehearsal reshape (#172), ADR-0029's first draft
-(#176, `event-types.md` v10 / `event-schema.md` v5) and both verifiers (#177 Go,
-#178 TS).
-Open: #180 (`event-types.md` v11: a batch is a run; the review fix #176 merged
-without) and #181 (#177's review fixes). The vectors are
-still to come. Detail is under Next → Phase 3. Phase 4 has not
+**98 vectors** (VALID 15, PARTIAL 4, INVALID 79). **Phase 3: the contract and
+verifier halves are COMPLETE (2026-10-09).** Merged: the rehearsal reshape
+(#172), ADR-0029 (#176, then its review fix #180: `event-types.md` **v11**, a
+batch is a maximal run; `event-schema.md` **v5**), and both verifiers (#177 +
+#181 Go, #178 TS). **The vector half is the live work**, and nothing in CI yet
+exercises ET-23, ET-24 or ET-24a. Detail is under Next → Phase 3. Phase 4 has not
 started. The phase list is under
 Next — **and note the coupling rule there is NOT "fixtures and verifiers must land
 together"**, which is true only of phase 1. The real rule: **fixtures may never
@@ -74,7 +73,7 @@ this list alone.**
    → § Blockers, first entry
 4. ~~**ET-23/ET-24 are implemented by neither verifier.**~~ **Implemented in
    both: Go merged in #177, TS merged in #178; ET-24a merged with #176 and is
-   corrected by #180.** Still owed: the vectors. No committed vector cites ET-23, and none
+   corrected by #180, all merged.** Still owed: the vectors. No committed vector cites ET-23, and none
    has an issue whose ballots span more than one batch, so until the vectors land
    **nothing in CI can tell whether ET-24 or ET-24a is implemented.**
    → Next → Phase 3
@@ -510,7 +509,7 @@ while reaching nothing_.
    batch, once left, is closed".** Its review returned REQUEST CHANGES (ET-24a
    over a set-defined ET-24 left the blamed line open: on T1, T1, T2, T2, T2, T1
    the set reading blames the returning T1 and the run reading the first T2).
-   The fix was pushed after the merge, so **#180 OPEN** carries it as
+   The fix was pushed after the merge, so **#180 (MERGED `a807e9f`)** carries it as
    `event-types.md` v11: a batch is a maximal run. Background: Both
    isolated builders independently found that ET-24's set definition made a
    batch resumable, which falsified its own line attribution and EX-16's prefix
@@ -519,15 +518,14 @@ while reaching nothing_.
    (option b) over qualifying EX-16. `event-types.md` v10 and `event-schema.md`
    v5 (ES-21 names the `ts` equality comparison).
 3. **#177 (Go) MERGED (`9858885`)**, also before its review nits were pushed;
-   **#181 OPEN** carries them (no verdict changes). **#178 (TS) MERGED** with its
-   fixes included, MERGED (`a3abba3`). Merge order for what is left: #180, then
-   #181. Each
+   **#181 (MERGED `5545099`)** carries them (no verdict changes). **#178 (TS) MERGED** with its
+   fixes included, MERGED (`a3abba3`). All merged. Each
    was built in its own isolated worktree. Both check per line: the ballot that
    leaves an under-size batch is fatal (ET-24), and a ballot returning to a left
    instant is fatal at its own line (ET-24a). Both verifiers, plus an
    orchestrator-written reference, agree on verdict and line for 6,000 generated
    chains. #178 also fixes a Node SIGSEGV on `process.exit` (see Blockers).
-4. **Owed after #180 and #181 merge: the vectors**, listed in ADR-0029:
+4. **NEXT — the vectors**, listed in ADR-0029:
    - a resumed batch (INVALID at the returning line);
    - another issue's ballots between one batch's members (VALID);
    - an under-size batch proven not-last (INVALID at the next ballot of its
@@ -719,9 +717,9 @@ builder could not read the other verifier. See Blockers for the technique.
 | ----------------------------------- | ---- | -------------------------- | ------------------------------ |
 | `claude/t9-phase3-rehearsal`        | #172 | `~/Desktop/odc-hash-chain` | MERGED `ffcf189`               |
 | `claude/t9-phase3-et24-contiguity`  | #176 | `~/Desktop/odc-hash-chain` | MERGED `515374c` (first draft) |
-| `claude/t9-phase3-et24-runs`        | #180 | `~/Desktop/odc-hash-chain` | open: merge first              |
+| `claude/t9-phase3-et24-runs`        | #180 | `~/Desktop/odc-hash-chain` | MERGED `a807e9f`               |
 | `claude/t9-phase3-verifier-go`      | #177 | `~/Desktop/odc-p3-go`      | MERGED `9858885`               |
-| `claude/t9-phase3-verifier-go-nits` | #181 | `~/Desktop/odc-p3-go`      | open: after #180               |
+| `claude/t9-phase3-verifier-go-nits` | #181 | `~/Desktop/odc-p3-go`      | MERGED `5545099`               |
 | `claude/t9-phase3-verifier-ts`      | #178 | `~/Desktop/odc-p3-ts`      | MERGED `a3abba3`               |
 
 **Do not go looking for an open hash-chain PR.** `claude/hash-chain-context-3uaob2`
