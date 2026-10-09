@@ -126,13 +126,13 @@ export function SignIn({ api }: { api: PulseApi }) {
     <ScreenFrame>
       <h1 className="signin__title">Your campus is deciding something.</h1>
       <p className="signin__lede">
-        Enter your school email and we will send you a link. There is no
-        password to make up.
+        Enter your email and we will send you a link. There is no password to
+        make up.
       </p>
 
       <form className="signin__form" onSubmit={submit} noValidate>
         <label className="signin__label" htmlFor={emailId}>
-          Your school email
+          Your email
         </label>
         <input
           id={emailId}

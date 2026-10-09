@@ -8,7 +8,7 @@ import { stubApi } from "./stub-api.js";
 
 afterEach(cleanup);
 
-const field = () => screen.getByLabelText("Your school email");
+const field = () => screen.getByLabelText("Your email");
 const go = () => screen.getByRole("button", { name: "Continue" });
 
 /*
@@ -268,7 +268,7 @@ describe("once the link is on its way", () => {
       screen.getByRole("button", { name: "Use a different email" }),
     );
 
-    expect(await screen.findByLabelText("Your school email")).toBeTruthy();
+    expect(await screen.findByLabelText("Your email")).toBeTruthy();
   });
 });
 

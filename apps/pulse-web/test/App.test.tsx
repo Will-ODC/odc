@@ -43,7 +43,7 @@ describe("what the URL opens", () => {
   it("asks for a link when /sign-in carries no token", async () => {
     globalThis.history.replaceState(null, "", "/sign-in");
     render(<App api={stubApi()} />);
-    expect(await screen.findByLabelText("Your school email")).toBeTruthy();
+    expect(await screen.findByLabelText("Your email")).toBeTruthy();
   });
 
   it("opens the run at the bare path", async () => {
@@ -134,7 +134,7 @@ describe("after the link is spent", () => {
       await screen.findByRole("button", { name: "Ask for a new link" }),
     );
 
-    expect(await screen.findByLabelText("Your school email")).toBeTruthy();
+    expect(await screen.findByLabelText("Your email")).toBeTruthy();
     expect(globalThis.location.pathname).toBe("/sign-in");
     expect(globalThis.location.search).toBe("");
     /*
@@ -166,7 +166,7 @@ describe("following the browser's own navigation", () => {
     globalThis.history.replaceState(null, "", "/sign-in");
     globalThis.dispatchEvent(new PopStateEvent("popstate"));
 
-    expect(await screen.findByLabelText("Your school email")).toBeTruthy();
+    expect(await screen.findByLabelText("Your email")).toBeTruthy();
   });
 });
 
