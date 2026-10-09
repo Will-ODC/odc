@@ -180,15 +180,51 @@ test("a_token_that_was_never_issued_signs_nobody_in", async () => {
   assert.equal((await h.service.redeem("")).status, "unknown_link");
 });
 
-test("turns_away_an_address_from_a_domain_no_community_claimed", async () => {
+test("signs_in_an_address_from_a_domain_no_community_claimed_with_no_community", async () => {
+  // ADR-0030: the allowlist is a label, not a gate. An address that matches no
+  // row is sent a link like anyone else and signs in with community null —
+  // null, not "" and not a placeholder, from the claim through to the voter.
   const h = setup();
   const result = await h.service.requestLink("someone@gmail.com");
-  assert.equal(result.status, "not_a_member");
-  assert.equal(
-    result.status === "not_a_member" ? result.domain : "",
-    "gmail.com",
+  assert.equal(result.status, "sent");
+  assert.equal(h.mailer.sent.length, 1);
+
+  const token = h.lastToken("someone@gmail.com");
+  const claim = await h.claims.byTokenHash(hashToken(token));
+  assert.equal(claim?.community, null);
+
+  const redeemed = await h.service.redeem(token);
+  assert.equal(redeemed.status, "signed_in");
+  if (redeemed.status !== "signed_in") return;
+  assert.equal(redeemed.firstTime, true);
+  assert.equal(redeemed.voter.email, "someone@gmail.com");
+  assert.equal(redeemed.voter.community, null);
+  assert.equal((await h.voters.byEmail("someone@gmail.com"))?.community, null);
+});
+
+test("a_domain_near_a_listed_one_but_not_on_it_gets_no_community", async () => {
+  // The row is `student.ubc.ca` without subdomains. Its parent and its
+  // children are different domains, so both sign in — as no community, not as
+  // the listed one.
+  const h = setup();
+  for (const email of ["ada@ubc.ca", "sam@cs.student.ubc.ca"]) {
+    assert.equal((await h.service.requestLink(email)).status, "sent");
+    const redeemed = await h.service.redeem(h.lastToken(email));
+    assert.equal(redeemed.status, "signed_in");
+    if (redeemed.status !== "signed_in") return;
+    assert.equal(redeemed.voter.community, null, email);
+  }
+});
+
+test("a_matching_domain_still_records_its_community_on_the_claim", async () => {
+  // Opening sign-up must not cost the label: the community is decided when
+  // the link is asked for and carried on the claim, not re-derived later.
+  const h = setup();
+  await h.service.requestLink("ada@student.ubc.ca");
+  const claim = await h.claims.byTokenHash(
+    hashToken(h.lastToken("ada@student.ubc.ca")),
   );
-  assert.equal(h.mailer.sent.length, 0);
+  assert.equal(claim?.community, "ubc-students");
 });
 
 test("says_what_is_wrong_with_an_unusable_address_and_sends_nothing", async () => {

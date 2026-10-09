@@ -235,13 +235,24 @@ describe("the client against the real server", () => {
     expect(second.status === "changed" && second.results.voters).toBe(1);
   });
 
-  it("tells someone from an unclaimed domain so, naming the domain", async () => {
-    const result = await api.requestLink("someone@gmail.com", false);
-    expect(result.status).toBe("not_eligible");
-    expect(result.status === "not_eligible" && result.message).toContain(
-      "gmail.com",
-    );
-    expect(mailer.sent).toHaveLength(0);
+  it("someone from an unclaimed domain gets a link and signs in", async () => {
+    // Open sign-up (ADR-0030): the domain names a community or none, and never
+    // turns anyone away. No community is null, not an empty string.
+    expect(await api.requestLink("someone@gmail.com", false)).toEqual({
+      status: "sent",
+      message: "Check your email for a link to sign in.",
+    });
+
+    const link = mailer.lastTo("someone@gmail.com");
+    expect(link?.kind).toBe("claim-link");
+
+    const me = await api.redeem(tokenFromLink(link?.body ?? ""));
+    expect(me).toEqual({
+      id: expect.any(String),
+      email: "someone@gmail.com",
+      community: null,
+    });
+    expect(await api.me()).toEqual(me);
   });
 
   it("counts a vote from someone who has never signed in", async () => {

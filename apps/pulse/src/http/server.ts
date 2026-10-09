@@ -249,11 +249,6 @@ export async function createServer(deps: ServerDeps): Promise<FastifyInstance> {
             error: "invalid_email",
             message: "That does not look like an email address.",
           });
-        case "not_a_member":
-          return reply.code(403).send({
-            error: "not_a_member",
-            message: `${result.domain} is not part of a community on pulse yet.`,
-          });
         case "too_many_requests":
           // NOT `too_many_requests`, which the rate limiter already uses for
           // the opposite fact. This 429 means a link IS on its way; that one
@@ -547,7 +542,11 @@ function pollBody(poll: Poll, now: Date) {
   };
 }
 
-/** What a voter is allowed to see about themselves. Never anyone else's. */
+/**
+ * What a voter is allowed to see about themselves. Never anyone else's.
+ * `community` is null for someone whose address matched no community
+ * (ADR-0030) — sent as null, not left out, so the shape never varies.
+ */
 function publicVoter(voter: Voter) {
   return { id: voter.id, email: voter.email, community: voter.community };
 }

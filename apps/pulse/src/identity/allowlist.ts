@@ -1,11 +1,15 @@
 import type { EmailAddress } from "./email.js";
 
 /**
- * Who counts as a member of a community, decided by data rather than code.
+ * Which community an address belongs to, decided by data rather than code.
  *
- * Adding a community, or letting another email domain into one, must be an
- * insert — never a deploy. That is why the rows are the whole configuration and
- * why nothing here hardcodes a domain.
+ * **A label, not a gate** (ADR-0030). Anyone with a working address may sign
+ * in; these rows only decide which community, if any, they are recorded under.
+ * An address no row matches signs in with no community.
+ *
+ * Adding a community, or another email domain to one, must be an insert —
+ * never a deploy. That is why the rows are the whole configuration and why
+ * nothing here hardcodes a domain.
  */
 export interface AllowedDomain {
   /** The community this domain proves membership of, e.g. "ubc-students". */
@@ -33,7 +37,10 @@ export interface Membership {
  * and they plug in here without any caller changing.
  */
 export interface VerificationMethod {
-  /** The membership this address proves, or undefined if it proves none. */
+  /**
+   * The membership this address proves, or undefined if it proves none —
+   * which since ADR-0030 means "no community", not "may not sign in".
+   */
   check(email: EmailAddress): Promise<Membership | undefined>;
 }
 
