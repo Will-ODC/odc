@@ -25,7 +25,9 @@ import (
 // differential: one ts, one extra ballot, one reordering moves the verdict in
 // the direction the rule names. Rejections also assert the advisory reason —
 // not conformance (EV-17), but "INVALID at line N" alone is satisfied by any
-// fault on that line.
+// fault on that line. The reason is matched by rule id as a whole token
+// (assertRule), so "ET-24" does not match "ET-24a"; where both rules name one
+// line, the case accepts either (ET-24a, "One line, two rules").
 
 // --- harness -----------------------------------------------------------
 
@@ -179,7 +181,52 @@ func assertResult(t *testing.T, res Result, line int, reason string) {
 	if res.Verdict != INVALID || res.Line != line {
 		t.Fatalf("got %s at line %d, want INVALID at line %d (reason: %s)", res.Verdict, res.Line, line, res.Reason)
 	}
-	assertReason(t, res, reason)
+	assertRule(t, res, reason)
+}
+
+// assertRule checks that the advisory reason cites one of the rule ids in
+// rules ("|"-separated) as a whole token: "ET-24" must not be satisfied by
+// "ET-24a", nor "ET-2" by "ET-23". Not conformance (EV-17); it pins that a
+// case reaches the rule it is named for.
+func assertRule(t *testing.T, res Result, rules string) {
+	t.Helper()
+	if rules == "" {
+		t.Fatal("test bug: an INVALID case with no expected rule")
+	}
+	if !citesRule(res.Reason, rules) {
+		t.Errorf("reason does not cite %s as a whole rule id; reason was: %s", rules, res.Reason)
+	}
+}
+
+func citesRule(reason, rules string) bool {
+	var alts []string
+	for _, r := range strings.Split(rules, "|") {
+		alts = append(alts, regexp.QuoteMeta(r))
+	}
+	re := regexp.MustCompile(`(^|[^0-9A-Za-z-])(` + strings.Join(alts, "|") + `)($|[^0-9A-Za-z])`)
+	return re.MatchString(reason)
+}
+
+// The matcher itself: whole-token, so a sibling rule id never satisfies it.
+func TestCitesRuleIsWholeToken(t *testing.T) {
+	cases := []struct {
+		reason, rules string
+		want          bool
+	}{
+		{"x (ET-24)", "ET-24", true},
+		{"x (ET-24a)", "ET-24", false},
+		{"x (ET-24a)", "ET-24a", true},
+		{"x (ET-24)", "ET-24a", false},
+		{"x (ET-24a)", "ET-24|ET-24a", true},
+		{"x (ET-23)", "ET-2", false},
+		{"hash mismatch (HA-14/ES-28)", "HA-14", true},
+		{"head mismatch (EX-15/EX-19)", "EX-19", true},
+	}
+	for _, c := range cases {
+		if got := citesRule(c.reason, c.rules); got != c.want {
+			t.Errorf("citesRule(%q, %q) = %v, want %v", c.reason, c.rules, got, c.want)
+		}
+	}
 }
 
 // --- ET-23 -------------------------------------------------------------
@@ -305,9 +352,10 @@ func TestET24PerIssueMinimum(t *testing.T) {
 	})
 }
 
-// "Membership and lastness are decided by seq (ES-8), never by comparing ts
-// values." ts need not increase along the chain; the exempt batch is the one
-// holding the highest-SEQ ballot, not the one with the greatest ts.
+// ET-24 v10: "Lastness is decided by seq. ts values are compared only for
+// equality, to tell where a batch ends, and are never ordered (ES-21)." ts need
+// not increase along the chain; the exempt batch is the one holding the
+// highest-SEQ registered ballot, not the one with the greatest ts.
 func TestET24LastnessIsBySeqNotTS(t *testing.T) {
 	one := []issueSpec{defaultIssue}
 	runBallotCases(t, []ballotCase{
@@ -320,10 +368,11 @@ func TestET24LastnessIsBySeqNotTS(t *testing.T) {
 	})
 }
 
-// ET-24a: "Taking one issue's vote_cast events in seq order, a ballot whose ts
-// differs from the ts of that issue's previous ballot MUST NOT equal the ts of
-// any earlier ballot of that issue", rejected "at the line of the returning
-// ballot".
+// ET-24a: "No two batches of one issue (ET-24) may share a ts. Taking one
+// issue's registered (vote_cast, 1) events in seq order, a ballot whose ts
+// differs from the ts of that issue's previous registered ballot MUST NOT
+// equal the ts of any earlier registered ballot of that issue", rejected "at
+// the line of the returning ballot".
 func TestET24aReturnToLeftInstant(t *testing.T) {
 	one := []issueSpec{defaultIssue}
 	runBallotCases(t, []ballotCase{
@@ -333,9 +382,14 @@ func TestET24aReturnToLeftInstant(t *testing.T) {
 		{"return_mid_chain", one, cat(votesAt(0, 3, T1), votesAt(0, 3, T2), votesAt(0, 1, T1), votesAt(0, 3, T3)), 9, "ET-24a"},
 		// The left instant is two batches back, not the immediately previous.
 		{"return_past_two_batches", one, cat(votesAt(0, 3, T1), votesAt(0, 3, T2), votesAt(0, 3, T3), votesAt(0, 1, T1)), 12, "ET-24a"},
-		// The returning ballot also closes an under-size batch: ET-24 and
+		// The returning ballot also ends an under-size batch: ET-24 and
 		// ET-24a both name line 7, and either reason is right.
-		{"return_after_undersize_batch", one, cat(votesAt(0, 3, T1), votesAt(0, 1, T2), votesAt(0, 1, T1)), 7, "ET-24"},
+		{"return_after_undersize_batch", one, cat(votesAt(0, 3, T1), votesAt(0, 1, T2), votesAt(0, 1, T1)), 7, "ET-24|ET-24a"},
+		// The contract's own example (ET-24 v10, line attribution): min 3,
+		// T1, T1, T2, T2, T2, T1. The fatal line is the first T2 (line 5),
+		// where the run of two T1 ballots ends — not the returning T1 at line
+		// 8, which starts a new batch and does not rejoin the first.
+		{"contract_example_first_T2", one, cat(votesAt(0, 2, T1), votesAt(0, 3, T2), votesAt(0, 1, T1)), 5, "ET-24"},
 		// Returning to an under-size batch cannot rescue it: it was closed,
 		// and proven not-last, at line 4.
 		{"return_to_undersize_batch", one, cat(votesAt(0, 1, T1), votesAt(0, 3, T2), votesAt(0, 2, T1)), 4, "ET-24"},
@@ -372,7 +426,7 @@ func TestET24aPerIssueRuns(t *testing.T) {
 }
 
 // "Which ballots count": a vote_cast at an unregistered version "joins no
-// batch, closes none, and proves none not-last". The chains below are PARTIAL
+// batch, ends none, and proves none not-last". The chains below are PARTIAL
 // at the unregistered line and nothing else.
 func TestET24UnregisteredVoteVersionCountsForNothing(t *testing.T) {
 	one := []issueSpec{defaultIssue}
@@ -383,9 +437,9 @@ func TestET24UnregisteredVoteVersionCountsForNothing(t *testing.T) {
 	}{
 		// Does not prove A's under-size T1 batch not-last.
 		{"proves_none_not_last", cat(votesAt(0, 2, T1), []vote{unregBallot(0, T2)}), 5},
-		// Does not close T1: the v1 ballot at line 6 rejoins the same run,
+		// Does not end T1: the v1 ballot at line 6 rejoins the same run,
 		// making T1 = {3, 4, 6} — neither a return nor an under-size close.
-		{"closes_none", cat(votesAt(0, 2, T1), []vote{unregBallot(0, T2)}, votesAt(0, 1, T1), votesAt(0, 1, T2)), 5},
+		{"ends_none", cat(votesAt(0, 2, T1), []vote{unregBallot(0, T2)}, votesAt(0, 1, T1), votesAt(0, 1, T2)), 5},
 		// Does not join a batch: at an instant A has left, it is no return,
 		// and it does not interrupt A's open T2 run.
 		{"joins_none", cat(votesAt(0, 3, T1), votesAt(0, 2, T2), []vote{unregBallot(0, T1)}, votesAt(0, 1, T2), votesAt(0, 1, T3)), 8},
