@@ -3,8 +3,8 @@
 A community votes on something and sees the result.
 
 People vote by swiping and can change their answer until the poll closes. They
-sign in with a link sent to their email, and the email's domain proves which
-community they belong to.
+sign in with a link sent to their email. Anyone with a working address can; the
+email's domain only decides which community, if any, they belong to (ADR-0030).
 
 Pulse is exempt from the ODC charter. Read [CLAUDE.md](./CLAUDE.md) before
 changing anything here.
@@ -25,8 +25,9 @@ pnpm --filter @odc/pulse-web dev   # app on http://localhost:5173
 ```
 
 Sign-in links print to the API's terminal instead of being emailed. The API
-seeds three linked polls and the community `demo-community`, which admits
-`@example.test` addresses. To change the demo, edit `src/dev-server.ts`.
+seeds three linked polls and the community `demo-community`, which
+`@example.test` addresses belong to. Any other address signs in too, with no
+community. To change the demo, edit `src/dev-server.ts`.
 
 Without a database, everything is lost when the API stops. To keep it, start
 pulse's database (see [Test](#test)) and set `PULSE_DATABASE_URL` before `dev`.
@@ -124,6 +125,8 @@ database.
 `just pulse-up` with a live Resend key mails whoever signs in. Use `pnpm dev`
 to click through the flow.
 
-**Two things this does not give you yet:** nobody can sign in unless a row in
-`allowed_domain` admits their email's domain, and there are no polls, because
-poll authoring is not built (`docs/plans/pulse.md` P6). Both are inserts today.
+**One thing this does not give you yet:** there are no polls, because poll
+authoring is not built (`docs/plans/pulse.md` P6); today they are inserts.
+Sign-in needs no setup: anyone with a working address can sign in, and a row in
+`allowed_domain` only names the community an email domain belongs to
+(ADR-0030).

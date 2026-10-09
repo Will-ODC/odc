@@ -199,33 +199,6 @@ not treat green CI as evidence they work.
 until a row admits their domain — which P4c is about to remove — and there is
 nothing to vote on until P6.
 
-## P4c — Open sign-up · READY TO BUILD
-
-**Decided by the operator on 2026-09-13**, in answer to "must we have a
-community to start?". The answer is no, and the reason it is cheap is that
-**community does almost nothing today**: `polls` has no `community` column,
-nothing in `src/voting/` or `src/http/` branches on it, and the client only
-displays it. Its one real job is gating who may sign in at all.
-
-So the domain allowlist is what makes a fresh deployment unusable — no rows,
-nobody gets in — and removing that gate is a small change to `ClaimService`
-plus a decision recorded in an ADR that partly supersedes ADR-0023.
-
-**This is step one of the model in P8-P11, not a departure from it.** The shape
-agreed is: anyone signs in; a poll that wants more — proof you are a UBC student,
-say — asks for it as one more small decision, offered and declinable, never a
-wall. That is the interaction principle already written down above, and open
-sign-up forecloses none of it.
-
-**Not decided, and this item must not invent them:** what `voter.community`
-holds for someone who proved nothing (empty, a sentinel, or nullable — it is
-`not null` in `001_initial.sql` today, so this is a migration question), and
-what replaces the allowlist as the anti-abuse story, since it is currently the
-only thing standing between a tally and unlimited free email addresses. Pulse is
-already counted-not-verified and accepts being double-counted per browser, so
-the bar is lower than it first appears — but it is not nothing, and the ADR
-should say which it chose.
-
 ## P5 — Pillar 3, the path to action · BLOCKED ON A DECISION
 
 The third MVP pillar, in any form: soliciting ideas, volunteer time or

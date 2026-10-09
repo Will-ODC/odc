@@ -382,8 +382,10 @@ test(
   { skip: databaseSkip },
   async (t) => {
     // The start-up writes the demo's domain into the table, so the seeded
-    // community can sign in; and a domain inserted there by hand counts too,
-    // which a list held in memory would not see.
+    // community is recorded for its addresses; and a domain inserted there by
+    // hand counts too, which a list held in memory would not see. Since
+    // ADR-0030 everyone signs in, so what the table decides is the community
+    // a voter ends up with — and an address it does not list has none.
     const { url, pool } = await databaseFor(t);
     const { app, mailer } = await buildDevServer(
       devConfig({ PULSE_DATABASE_URL: url, PULSE_SESSION_SECRET: SECRET }),
@@ -392,15 +394,27 @@ test(
       "insert into allowed_domain (community, domain, include_subdomains)" +
         " values ('elsewhere', 'other.test', false)",
     );
-    for (const email of ["jo@example.test", "sam@other.test"]) {
+    const expected: [string, string | null][] = [
+      ["jo@example.test", "demo-community"],
+      ["sam@other.test", "elsewhere"],
+      ["kim@unlisted.test", null],
+    ];
+    for (const [email, community] of expected) {
       const signIn = await app.inject({
         method: "POST",
         url: "/api/sign-in",
         payload: { email },
       });
-      assert.equal(signIn.statusCode, 200, `${email} was not admitted`);
+      assert.equal(signIn.statusCode, 200, `${email} was not sent a link`);
+      const redeemed = await app.inject({
+        method: "POST",
+        url: "/api/sign-in/redeem",
+        payload: { token: tokenIn(mailer.lastTo(email)?.body) },
+      });
+      assert.equal(redeemed.statusCode, 200, `${email} did not sign in`);
+      assert.equal(redeemed.json().voter.community, community, email);
     }
-    assert.equal(mailer.sent.length, 2);
+    assert.equal(mailer.sent.length, 3);
     await app.close();
   },
 );

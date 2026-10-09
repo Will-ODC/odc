@@ -11,9 +11,11 @@ counted.
 
 ## Signing in
 
-Identity is an email address and nothing stronger. There are no passwords. Membership
-of a community is proven by the email's domain, and the allowed domains are rows in a
-table — adding one is an insert, not a deploy.
+Identity is an email address and nothing stronger. There are no passwords. **Anyone
+with a working address may sign in** (ADR-0030). The address's domain decides only
+which community, if any, the person belongs to: a domain listed in a table names a
+community — adding one is an insert, not a deploy — and any other address signs in
+with no community.
 
 ### `POST /api/sign-in`
 
@@ -29,7 +31,6 @@ rather than read as `false`, because it is the opt-in for hearing what came of a
 | 200    | `status: "sent"` + `message` | a link is on its way                           |
 | 400    | `error: "invalid_email"`     | not a usable address                           |
 | 400    | `error: "bad_request"`       | no `email`, or a non-boolean opt-in            |
-| 403    | `error: "not_a_member"`      | the domain belongs to no community             |
 | 429    | `error: "link_already_sent"` | a link is already outstanding for this address |
 | 429    | `error: "too_many_requests"` | too many attempts from this client             |
 | 503    | `error: "send_failed"`       | the mail provider would not take the message   |
@@ -37,6 +38,10 @@ rather than read as `false`, because it is the opt-in for hearing what came of a
 The 200 body is `{ "status": "sent", "message": "Check your email for a link to sign
 in." }` — a sentence safe to show as-is, for a client that would rather not write its
 own.
+
+There is no refusal for the domain. Until ADR-0030 an address whose domain named no
+community was answered `403 not_a_member`; that answer no longer exists, and such an
+address is sent a link like any other.
 
 Rate limited per client (10/hour by default), separately from the per-address cap on
 outstanding links. The 429 sentence names no interval, because the window is
@@ -93,6 +98,13 @@ GET. On success:
 One door: this creates the identity the first time and signs the same person back in
 every time after. There is no separate sign-up.
 
+`community` is a string, or **`null` when the address's domain named no community**
+(ADR-0030). It is always present, never left out, so a client reads one shape either
+way. Null is the honest answer — no community — rather than an empty string or a
+placeholder a client would have to know to treat as absent. The community is decided
+when the link is asked for and kept: a domain added to the table later does not change
+the community of someone who already signed in.
+
 Two clicks on one link at once — a double click — sign in once: the first sets the
 cookie and the second is answered 410 `already_used`. A client should not show that
 second answer as a failure to someone who is, in fact, signed in.
@@ -118,6 +130,7 @@ Who is signed in, according to the cookie.
 
 The voter is **wrapped**, the same way it is in the redeem response, so a later field
 about the session itself can be added beside it without changing what `voter` means.
+`community` is a string or `null`, exactly as in the redeem response.
 
 | Status | Body                  | When                                                                      |
 | ------ | --------------------- | ------------------------------------------------------------------------- |
@@ -431,11 +444,13 @@ Note that `closed` is a _refusal_ here and a _success_ on a cast (`200 {"status"
 
 ## The client
 
-`apps/pulse-web/src/api/http.ts` speaks exactly this: the paths above, the
-`proofEmailsOptIn` opt-in, the wrapped `{ voter }` bodies, and `id` as the voter's
-field name. There is no remaining disagreement to record here; `apps/pulse-web/test/end-to-end.test.ts`
-holds it that way by driving this server over a real socket.
+`apps/pulse-web/src/api/http.ts` speaks this: the paths above, the `proofEmailsOptIn`
+opt-in, the wrapped `{ voter }` bodies, and `id` as the voter's field name.
+`apps/pulse-web/test/end-to-end.test.ts` holds it that way by driving this server over
+a real socket.
 
-The one refusal the client treats as an _answer_ rather than a failure is the 403
-`not_a_member`: it becomes `{ status: "not_eligible", message }` and shows the
-server's sentence, which names the domain, as-is.
+**Two disagreements, owed to `apps/pulse-web` (ADR-0030).** The client still maps a
+403 `not_a_member` to `{ status: "not_eligible", message }`; the server no longer
+sends it, so that path is unreachable, and the end-to-end test that expects it fails
+until the client's side changes. The client also types `Me.community` as `string`,
+where the server now sends `string | null`. Both are the client's to change.

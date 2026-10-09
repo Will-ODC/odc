@@ -56,7 +56,8 @@ export const DEFAULT_PORT = 8080;
 const THREE_DAYS_MS = 3 * 24 * 60 * 60 * 1000;
 
 /**
- * The seed: one community, one domain that proves membership of it, one poll.
+ * The seed: one community, one domain that names it, and three polls. Any
+ * address can sign in; only `@example.test` ones are members of the community.
  *
  * A literal, not configuration: a knob for the poll's wording would only be a
  * way to hand `createPoll` a shape it refuses, and every one of these values is
@@ -389,7 +390,7 @@ async function main(): Promise<void> {
       config.databaseUrl === undefined
         ? "  storage: in memory — everything is lost when it stops"
         : "  storage: Postgres (PULSE_DATABASE_URL) — kept across restarts",
-      `  community "${SEED.community}" admits @${SEED.domain} addresses`,
+      `  community "${SEED.community}" is @${SEED.domain}; any other address signs in with none`,
       ...SEED.polls.map((poll) => `  poll "${poll.id}": ${poll.question}`),
       "  sign-in links are printed here; paste one into the browser",
     ].join("\n"),

@@ -10,7 +10,7 @@ import {
 
 /**
  * Identity on Postgres: voters, outstanding sign-in links, and the domains
- * that prove membership. Held to the same conformance suites as the in-memory
+ * that name a community. Held to the same conformance suites as the in-memory
  * stores (`test/conformance/voter-store.ts`, `claim-store.ts`).
  *
  * Every timestamp is one the caller passed in; nothing here asks the database
@@ -184,7 +184,8 @@ export class PostgresDomainSource implements AllowedDomainSource {
 }
 
 /**
- * Let a domain prove membership of a community. Normalised as
+ * Let a domain name a community: addresses at it sign in as members of it
+ * (ADR-0030 — every other address still signs in, with no community). Normalised as
  * `StaticDomainSource` normalises — trimmed and lowercase — and idempotent on
  * the `(community, domain)` key, so a seed can run it on every boot.
  */
