@@ -385,6 +385,103 @@ test("a_mail_provider_that_is_down_is_an_answer_the_person_can_act_on", async ()
   assert.match(String(logged[0]), /domain is not verified/);
 });
 
+/**
+ * A mailer that fails the next `failures` sends the way `fail` says, then
+ * delivers like the console mailer. What a person meets when the provider
+ * comes back after an outage.
+ */
+function flakyMailer(
+  failures: number,
+  fail: () => MailSendError,
+): Mailer & { delivered: number } {
+  let left = failures;
+  const mailer = {
+    delivered: 0,
+    sendClaimLink: async () => {
+      if (left > 0) {
+        left -= 1;
+        throw fail();
+      }
+      mailer.delivered += 1;
+    },
+    sendProofOfAction: async () => undefined,
+  };
+  return mailer;
+}
+
+test("a_send_the_provider_refused_does_not_spend_the_live_link_cap", async () => {
+  // P4a. The provider answered "not now" (a 503), so no email went out and
+  // no link is sitting in anyone's inbox. Keeping the claim would leave the
+  // person told "A link is already on its way" after the provider recovers,
+  // which is false.
+  const mailer = flakyMailer(
+    3,
+    () => new MailSendError("provider unavailable", { status: 503 }),
+  );
+  const h = setup(
+    { maxLiveLinksPerEmail: 2, log: () => undefined },
+    { mailer },
+  );
+
+  for (let tries = 0; tries < 3; tries += 1) {
+    assert.equal(
+      (await h.service.requestLink("ada@student.ubc.ca")).status,
+      "send_failed",
+    );
+  }
+  assert.equal((await h.claims.liveFor("ada@student.ubc.ca", START)).length, 0);
+  assert.equal(
+    (await h.service.requestLink("ada@student.ubc.ca")).status,
+    "sent",
+  );
+  assert.equal(mailer.delivered, 1);
+});
+
+test("a_send_that_got_no_answer_keeps_its_link_live", async () => {
+  // A timeout or a dropped connection: the provider may have accepted and
+  // delivered the message anyway. Discarding the claim there would break a
+  // link already in the inbox, so it stays and keeps counting until it
+  // expires. MailSendError.status undefined is "never got an answer".
+  const mailer = flakyMailer(
+    2,
+    () => new MailSendError("the mail provider could not be reached"),
+  );
+  const h = setup(
+    { maxLiveLinksPerEmail: 2, log: () => undefined },
+    { mailer },
+  );
+
+  await h.service.requestLink("ada@student.ubc.ca");
+  await h.service.requestLink("ada@student.ubc.ca");
+  assert.equal((await h.claims.liveFor("ada@student.ubc.ca", START)).length, 2);
+  assert.equal(
+    (await h.service.requestLink("ada@student.ubc.ca")).status,
+    "too_many_requests",
+  );
+  assert.equal(mailer.delivered, 0);
+});
+
+test("a_link_whose_send_got_no_answer_still_signs_in_if_it_arrived", async () => {
+  // The reason the claim is kept: the email may have been delivered.
+  const tokens: string[] = [];
+  const h = setup(
+    { log: () => undefined },
+    {
+      mailer: {
+        sendClaimLink: async (_to, link) => {
+          tokens.push(new URL(link).searchParams.get("token") as string);
+          throw new MailSendError("the mail provider could not be reached");
+        },
+        sendProofOfAction: async () => undefined,
+      },
+    },
+  );
+  await h.service.requestLink("ada@student.ubc.ca");
+  const [token] = tokens;
+  assert.ok(token);
+  assert.equal((await h.service.redeem(token)).status, "signed_in");
+});
+
 test("a_mailer_fault_that_is_not_a_send_failure_is_still_a_fault", async () => {
   // The catch is scoped to MailSendError on purpose. A bug in a mailer — a
   // TypeError, a bad config read — must not be reported to the world as "the

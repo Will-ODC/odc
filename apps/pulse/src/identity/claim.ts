@@ -150,10 +150,17 @@ export class ClaimService {
       // provider's own explanation exists, and the person who sees the 503
       // cannot act on it.
       this.#log("pulse: a sign-in link could not be sent", error);
-      // The claim stays: it is already written, it is unreachable without the
-      // token that only the email carries, and it expires on its own. It does
-      // count against `maxLiveLinksPerEmail` until it does — see P4a in
-      // `docs/plans/pulse.md`.
+      // The provider answered and refused, so no email exists and nobody can
+      // hold this link: forget it, or it counts against
+      // `maxLiveLinksPerEmail` and the next request after the outage is told
+      // "a link is already on its way" — which is false (P4a).
+      //
+      // No answer at all (`status` undefined: a timeout, a dropped
+      // connection) is different. The provider may have accepted and
+      // delivered the message, so discarding would break a link already in
+      // the inbox. That claim stays, and expires on its own.
+      if (error.status !== undefined)
+        await this.#claims.discard(claim.tokenHash);
       return { status: "send_failed" };
     }
 

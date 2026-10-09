@@ -79,6 +79,13 @@ export interface ClaimStore {
   markUsed(tokenHash: string, usedAt: Date): Promise<boolean>;
   /** Outstanding, unexpired links for an address — used to throttle requests. */
   liveFor(email: string, now: Date): Promise<readonly PendingClaim[]>;
+  /**
+   * Forget a link nobody can ever hold: its email was refused by the provider,
+   * so it never left pulse. It stops counting against the address's live-link
+   * cap (P4a). A link already spent is kept — "already used" is what a second
+   * click must hear — and an unknown hash changes nothing.
+   */
+  discard(tokenHash: string): Promise<void>;
 }
 
 export class InMemoryVoterStore implements VoterStore {
@@ -144,6 +151,12 @@ export class InMemoryClaimStore implements ClaimStore {
     if (!claim || claim.usedAt !== undefined) return false;
     this.#claims.set(tokenHash, { ...claim, usedAt });
     return true;
+  }
+
+  async discard(tokenHash: string): Promise<void> {
+    if (this.#claims.get(tokenHash)?.usedAt === undefined) {
+      this.#claims.delete(tokenHash);
+    }
   }
 
   async liveFor(email: string, now: Date): Promise<readonly PendingClaim[]> {
