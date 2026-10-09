@@ -7,6 +7,7 @@ import {
   waitFor,
   within,
 } from "@testing-library/react";
+import userEvent from "@testing-library/user-event";
 import { afterEach, describe, expect, it, vi } from "vitest";
 import type { PulseApi, SuggestResult } from "../src/api/types.js";
 import { ApiError } from "../src/api/types.js";
@@ -65,16 +66,25 @@ describe("asking", () => {
    * this, `changeable={true}` would leave the suite green - and ADR-0022
    * section 3 rests entirely on the prop being read from `poll.open`.
    */
-  it("promises nothing on a poll it already knows is shut", async () => {
-    render(
+  it("promises nothing once the poll it was answered on has shut", async () => {
+    const api = stubApi();
+    const { rerender } = render(
+      <ChoiceBallot api={api} poll={PAY} onAnswered={() => {}} />,
+    );
+    fireEvent.click(screen.getByRole("button", { name: "Grants" }));
+    await screen.findByText("Counted.");
+    expect(document.body.textContent).toContain("You can change");
+
+    // A closed poll can no longer be answered at all (see the block at the end
+    // of this file), so the only way to reach a counted answer on a shut poll
+    // is for the poll to shut under an answer that is already in.
+    rerender(
       <ChoiceBallot
-        api={stubApi()}
+        api={api}
         poll={poll({ ...PAY, open: false })}
         onAnswered={() => {}}
       />,
     );
-    fireEvent.click(screen.getByRole("button", { name: "Grants" }));
-    await screen.findByText("Counted.");
 
     expect(document.body.textContent).not.toContain("You can change");
     expect(
@@ -323,5 +333,110 @@ describe("seeing where a many-answer question stands", () => {
 
     expect(screen.queryByText("This one has closed.")).toBeNull();
     expect(screen.getByRole("button", { name: "Grants" })).toBeTruthy();
+  });
+});
+
+/**
+ * A poll the client already knows is shut (`poll.open === false`).
+ *
+ * One press casts here, and ADR-0022 makes that safe only because the answer
+ * can be changed afterwards. On a shut poll it cannot, so nothing casts at all.
+ * The question and its answers stay on screen, greyed out, as the record of
+ * what was asked.
+ */
+describe("a many-answer poll that has already closed", () => {
+  function showClosed(over: Partial<PulseApi> = {}) {
+    const cast = vi.fn(stubApi().cast);
+    render(
+      <ChoiceBallot
+        api={stubApi({ cast, ...over })}
+        poll={poll({ ...PAY, open: false })}
+        onAnswered={() => {}}
+      />,
+    );
+    return cast;
+  }
+
+  const choice = (label: string) =>
+    screen.getByText(label).closest("button") as HTMLButtonElement;
+
+  const settle = () => new Promise((done) => setTimeout(done, 0));
+
+  function stillShowsTheRecord() {
+    expect(screen.getByText(PAY.question)).toBeTruthy();
+    for (const label of PAY.choices) {
+      expect(screen.getByText(label)).toBeTruthy();
+    }
+    expect(screen.getByText("This one has closed.")).toBeTruthy();
+    expect(
+      screen.getByText("Nothing you do here will change it."),
+    ).toBeTruthy();
+    expect(screen.queryByText("Counted.")).toBeNull();
+    expect(screen.queryByText("Sending\u2026")).toBeNull();
+  }
+
+  it("keeps the question and every answer, and says it has closed", () => {
+    showClosed();
+    stillShowsTheRecord();
+    for (const label of PAY.choices) {
+      expect(choice(label).disabled).toBe(true);
+    }
+    expect(screen.getByRole("status").textContent).toContain(
+      "This one has closed.",
+    );
+    expect(
+      screen.queryByRole("button", { name: "Back to the question" }),
+    ).toBeNull();
+  });
+
+  it("casts nothing when an answer is clicked", async () => {
+    const cast = showClosed();
+    for (const label of PAY.choices) fireEvent.click(choice(label));
+    await settle();
+    expect(cast).not.toHaveBeenCalled();
+    stillShowsTheRecord();
+  });
+
+  it("casts nothing on Enter or Space", async () => {
+    const cast = showClosed();
+    const user = userEvent.setup();
+    for (const label of PAY.choices) {
+      choice(label).focus();
+      await user.keyboard("{Enter}");
+      choice(label).focus();
+      await user.keyboard(" ");
+    }
+    await settle();
+    expect(cast).not.toHaveBeenCalled();
+    stillShowsTheRecord();
+  });
+
+  /**
+   * Adding an answer to a question nobody can answer any more asks for work
+   * that cannot count, so the field is gone. What others already said stays:
+   * it is part of the record of the discussion, like the answers above it.
+   */
+  it("offers no way to add an answer, but keeps what others said", async () => {
+    showClosed({
+      suggestions: () =>
+        Promise.resolve([{ id: "s1", text: "A bake sale", count: 3 }]),
+    });
+    expect(await screen.findByText("A bake sale")).toBeTruthy();
+    expect(screen.queryByLabelText("Something else?")).toBeNull();
+    expect(screen.queryByRole("button", { name: "Add" })).toBeNull();
+  });
+
+  it("keeps the way back working", () => {
+    const onBack = vi.fn();
+    render(
+      <ChoiceBallot
+        api={stubApi()}
+        poll={poll({ ...PAY, open: false })}
+        onAnswered={() => {}}
+        onBack={onBack}
+      />,
+    );
+    fireEvent.click(screen.getByRole("button", { name: /Back/ }));
+    expect(onBack).toHaveBeenCalledTimes(1);
   });
 });

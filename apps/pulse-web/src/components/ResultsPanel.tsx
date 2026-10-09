@@ -20,7 +20,11 @@ export function ResultsPanel({
   panelRef,
 }: {
   results: Results;
-  /** Position in the poll's choices that this person picked. */
+  /**
+   * The index of the choice this person picked, matched against
+   * `ChoiceResult.index` - never used as a position in `results.choices`,
+   * which may arrive in any order (ADR-0021).
+   */
   yourChoice: number;
   onClose: () => void;
   /**
@@ -32,7 +36,7 @@ export function ResultsPanel({
    */
   panelRef?: RefObject<HTMLDivElement | null> | undefined;
 }) {
-  const yours = results.choices[yourChoice];
+  const yours = results.choices.find((choice) => choice.index === yourChoice);
   /**
    * The widest share on screen, so the bars are read against each other rather
    * than against a hundred that nothing may reach. An `approval` poll can push

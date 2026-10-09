@@ -1,6 +1,7 @@
 # ADR-0014: Ballot batching — a fixed mechanism with governable parameters
 
-- **Status:** accepted
+- **Status:** accepted — amended in part by ADR-0029 (a batch, once left, is
+  closed: ET-24a)
 - **Date:** 2026-08-15
 - **Phase:** 0
 

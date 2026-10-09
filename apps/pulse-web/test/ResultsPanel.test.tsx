@@ -64,6 +64,29 @@ describe("showing where a question stands", () => {
   });
 
   /**
+   * `yourChoice` is a choice's index, not a place in the list. ADR-0021 makes
+   * position only the display order, so results may arrive in any order, and
+   * the words and the mark must still name the same choice.
+   */
+  it("names the choice whose index you picked, whatever order results arrive in", () => {
+    show({
+      results: results({
+        voters: 10,
+        choices: [
+          { index: 2, label: "Maybe", count: 2, share: 20 },
+          { index: 0, label: "No", count: 3, share: 30 },
+          { index: 1, label: "Yes", count: 5, share: 50 },
+        ],
+      }),
+      yourChoice: 1,
+    });
+    const said = screen.getByText(/You picked/).querySelector("b");
+    expect(said?.textContent).toBe("Yes");
+    const marked = document.querySelector('[data-yours="true"]');
+    expect(marked?.textContent).toContain(said?.textContent);
+  });
+
+  /**
    * An approval poll's shares legitimately sum past 100, and someone reading
    * "70% and 60%" without being told why is right to think it is broken.
    */

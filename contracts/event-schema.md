@@ -1,8 +1,8 @@
 # Event Schema — contracts/event-schema.md
 
-**Version:** 4
-**Status:** DRAFTING (Phase 0 · T3, amended T4a, T9a/ADR-0014, ADR-0016, and
-ADR-0019). Not frozen.
+**Version:** 5
+**Status:** DRAFTING (Phase 0 · T3, amended T4a, T9a/ADR-0014, ADR-0016,
+ADR-0019, and ADR-0029). Not frozen.
 **Companion specs:** `event-types.md` (payloads), `ids.md` (identifiers),
 `hashing.md` (byte-exact preimage — T4), `export-format.md` (NDJSON — T4).
 
@@ -126,10 +126,12 @@ fewer:
   A verifier MUST reject any `ts` failing either gate.
 - **ES-21.** `ts` is advisory metadata only. It MUST NOT be used to order or
   select events, and MUST NOT be used to validate them beyond the format check in
-  ES-20 and the one type-specific constraint on its **value** that
+  ES-20, the one type-specific constraint on its **value** that
   `event-types.md` ET-23 places on `vote_cast` — a ballot's `ts` is quantized to
-  its issue's declared batch interval, so a verifier checks that value, and still
-  never orders or selects by it. `seq` orders (ES-8), always and only.
+  its issue's declared batch interval, so a verifier checks that value — and the
+  **equality** comparison of two ballots' `ts` by which `event-types.md` ET-24
+  and ET-24a group one issue's ballots into batches. Neither orders events by
+  `ts`, and neither selects an event by it. `seq` orders (ES-8), always and only.
 - **ES-22.** `ts` is nonetheless covered by `hash` (Section 8): once written it
   is immutable, even though it is not authoritative.
 
