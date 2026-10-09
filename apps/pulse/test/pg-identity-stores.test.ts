@@ -97,7 +97,7 @@ test(
 );
 
 test(
-  "a_domain_row_typed_by_hand_in_mixed_case_still_admits_its_members",
+  "a_domain_row_typed_by_hand_in_mixed_case_still_names_its_community",
   { skip: databaseSkip },
   async (t) => {
     // The allowlist is managed by inserts, not only through allowDomain. A
@@ -149,10 +149,10 @@ async function until(ready: () => Promise<boolean>): Promise<void> {
 }
 
 test(
-  "a_domain_row_admits_its_members_through_the_allowlist",
+  "a_domain_row_names_its_community_through_the_allowlist",
   { skip: databaseSkip },
   async (t) => {
-    // The whole point of the table: membership decided by a row, read by the
+    // The whole point of the table: the community decided by a row, read by the
     // same DomainAllowlist the sign-in flow uses.
     const pool = await migratedSchema(t);
     await allowDomain(pool, {

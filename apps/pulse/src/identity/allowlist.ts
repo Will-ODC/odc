@@ -17,7 +17,7 @@ export interface AllowedDomain {
   /** Lowercase domain, e.g. "student.ubc.ca". */
   domain: string;
   /**
-   * When true, subdomains count too: `student.ubc.ca` would also admit
+   * When true, subdomains count too: `student.ubc.ca` would also match
    * `cs.student.ubc.ca`. Off by default — widening reach should be a decision
    * someone made, not something a row does silently.
    */
@@ -27,7 +27,7 @@ export interface AllowedDomain {
 /** The answer to "is this address a member, and of what?". */
 export interface Membership {
   community: string;
-  /** The row that admitted them, useful for showing why they got in. */
+  /** The row that named their community, useful for showing why. */
   via: AllowedDomain;
 }
 

@@ -163,7 +163,7 @@ export class PostgresDomainSource implements AllowedDomainSource {
   async rows(): Promise<readonly AllowedDomain[]> {
     // Normalised on the way out, as StaticDomainSource normalises on the way
     // in: the allowlist is managed by inserts, and a row typed by hand as
-    // 'Student.UBC.ca' must still admit ada@student.ubc.ca. Tabs and line
+    // 'Student.UBC.ca' must still match ada@student.ubc.ca. Tabs and line
     // breaks are stripped too, as JavaScript's trim() strips them; SQL's
     // trim() alone takes only spaces. The order only makes the list read the
     // same each time; nothing depends on it.
