@@ -8,7 +8,13 @@ export interface Voter {
   id: string;
   /** Normalized address — the natural key. One voter per address. */
   email: string;
-  community: string;
+  /**
+   * The community their address's domain matched when they first signed in,
+   * or `null` when it matched none (ADR-0030). Null, never an empty string or
+   * a placeholder: having no community is an ordinary state, not a missing
+   * value, and it reads back from every store exactly as it was written.
+   */
+  community: string | null;
   claimedAt: Date;
   /** Opt-in, asked at registration. Nothing is sent when false. */
   proofEmailsOptIn: boolean;
@@ -30,7 +36,8 @@ export interface Voter {
 export interface PendingClaim {
   tokenHash: string;
   email: string;
-  community: string;
+  /** Decided when the link is asked for; `null` for no community (ADR-0030). */
+  community: string | null;
   proofEmailsOptIn: boolean;
   createdAt: Date;
   expiresAt: Date;

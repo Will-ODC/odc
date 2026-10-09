@@ -14,7 +14,6 @@ import {
 export type RequestResult =
   | { status: "sent"; expiresAt: Date }
   | { status: "invalid_email"; reason: string }
-  | { status: "not_a_member"; domain: string }
   | { status: "too_many_requests" }
   | { status: "send_failed" };
 
@@ -57,8 +56,12 @@ const FIFTEEN_MINUTES = 15 * 60 * 1000;
 /**
  * Claiming an identity in pulse: enter an email, click the link it sends, and
  * you can vote. There is no password, because there is nothing here worth
- * protecting with one — the email itself is the whole proof, and the domain it
- * belongs to is what proves membership of a community.
+ * protecting with one — the email itself is the whole proof.
+ *
+ * **Anyone with a working address gets in** (ADR-0030). The domain decides
+ * only which community, if any, the person is recorded under: a domain that
+ * matches a row in the allowlist names that community, and any other address
+ * signs in with none. Nothing here turns an address away for its domain.
  */
 export class ClaimService {
   readonly #membership: VerificationMethod;
@@ -113,10 +116,11 @@ export class ClaimService {
       throw err;
     }
 
+    // A label, not a gate (ADR-0030): no matching row means no community,
+    // never a refusal. Null rather than an empty string or a placeholder, so
+    // "no community" cannot be mistaken for a community called "".
     const membership = await this.#membership.check(email);
-    // Said plainly rather than hidden: the allowlist is public information, and
-    // "your school isn't set up yet" is a more useful answer than silence.
-    if (!membership) return { status: "not_a_member", domain: email.domain };
+    const community = membership?.community ?? null;
 
     const now = this.#clock();
     const live = await this.#claims.liveFor(email.value, now);
@@ -126,7 +130,7 @@ export class ClaimService {
     const claim: PendingClaim = {
       tokenHash: hashToken(token),
       email: email.value,
-      community: membership.community,
+      community,
       proofEmailsOptIn: opts.proofEmailsOptIn ?? false,
       createdAt: now,
       expiresAt: new Date(now.getTime() + this.#ttlMs),
@@ -200,8 +204,9 @@ export class ClaimService {
       const voter = await this.#voters.create({
         id: randomUUID(),
         email: claim.email,
-        // The community recorded at claim time. If the allowlist changes
-        // later, an existing member does not lose the community they joined.
+        // The community recorded at claim time, null included. If the
+        // allowlist changes later, an existing member does not lose the
+        // community they joined.
         community: claim.community,
         claimedAt: now,
         proofEmailsOptIn: claim.proofEmailsOptIn,

@@ -243,27 +243,64 @@ test("the_session_cookie_is_http_only_same_site_and_secure_by_default", async ()
   assert.equal(cookie?.path, "/");
 });
 
-test("sign_in_refuses_an_unusable_address_and_a_domain_with_no_community", async () => {
+test("sign_in_refuses_an_unusable_address", async () => {
   const h = await setup();
-  assert.equal(
-    (
-      await h.app.inject({
-        method: "POST",
-        url: "/api/sign-in",
-        payload: { email: "nonsense" },
-      })
-    ).statusCode,
-    400,
-  );
+  const reply = await h.app.inject({
+    method: "POST",
+    url: "/api/sign-in",
+    payload: { email: "nonsense" },
+  });
+  assert.equal(reply.statusCode, 400);
+  assert.equal(reply.json().error, "invalid_email");
+  assert.equal(h.mailer.sent.length, 0);
+});
 
-  const outsider = await h.app.inject({
+test("an_address_no_community_claims_gets_a_link_and_signs_in_with_community_null", async () => {
+  // ADR-0030: this was a 403 `not_a_member`. Now the domain is a label, not a
+  // gate — the address is sent a link like anyone's, and the voter it makes
+  // has community null. Null and present, on the redeem and on /api/me alike,
+  // so a client reads one shape whether or not someone has a community.
+  const h = await setup();
+  const asked = await h.app.inject({
     method: "POST",
     url: "/api/sign-in",
     payload: { email: "someone@gmail.com" },
   });
-  assert.equal(outsider.statusCode, 403);
-  assert.match(outsider.json().message, /gmail\.com/);
-  assert.equal(h.mailer.sent.length, 0);
+  assert.equal(asked.statusCode, 200);
+  assert.deepEqual(asked.json(), {
+    status: "sent",
+    message: "Check your email for a link to sign in.",
+  });
+  assert.equal(h.mailer.sent.length, 1);
+
+  const token = h.tokenFor("someone@gmail.com");
+  const looked = await h.app.inject({
+    url: `/api/sign-in/redeem?token=${encodeURIComponent(token)}`,
+  });
+  assert.equal(looked.statusCode, 200);
+  assert.equal(looked.json().status, "ready");
+
+  const clicked = await h.app.inject({
+    method: "POST",
+    url: "/api/sign-in/redeem",
+    payload: { token },
+  });
+  assert.equal(clicked.statusCode, 200);
+  const voter = clicked.json().voter;
+  assert.equal(voter.email, "someone@gmail.com");
+  assert.ok("community" in voter, "community was left out of the voter");
+  assert.equal(voter.community, null);
+  const cookie = clicked.cookies.find((c) => c.name === SESSION_COOKIE);
+  assert.ok(cookie, "no session cookie was set");
+
+  const me = await h.app.inject({
+    url: "/api/me",
+    headers: { cookie: `${SESSION_COOKIE}=${cookie.value}` },
+  });
+  assert.equal(me.statusCode, 200);
+  assert.deepEqual(me.json(), {
+    voter: { id: voter.id, email: "someone@gmail.com", community: null },
+  });
 });
 
 test("sign_in_needs_an_email_and_a_real_answer_about_updates", async () => {

@@ -14,9 +14,12 @@ follows. That is the whole product.
 
 Three MVP pillars, in build order:
 
-1. **Email magic-link identity** — an email link claims an id; the email's
-   domain is the membership proof. Domain allowlists are **rows in a table**,
-   never code: adding a community's domain is an insert, not a deploy.
+1. **Email magic-link identity** — an email link claims an id, and anyone
+   with a working address may claim one (ADR-0030). The email's domain decides
+   only which community, if any, the person belongs to; an unlisted domain
+   means no community (`null`), never a refusal. Domain allowlists are **rows
+   in a table**, never code: adding a community's domain is an insert, not a
+   deploy.
 2. **One-screen story UI** — one screen, guided, media-and-information bites
    with the vote embedded. The design of record is `docs/mockups/pulse-screens/`
    — translucent "Civic Glass" for screens 2–7, dark swipe ballot for screen 1,

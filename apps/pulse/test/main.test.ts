@@ -313,9 +313,9 @@ test(
       `voter not in ${schema}: ${String(names)}`,
     );
 
-    // The allowlist is rows, so a community has to exist before anyone is a
-    // member of one. This is the insert `CLAUDE.md` promises, standing in for
-    // the bootstrap a deployment does not have yet.
+    // The allowlist is rows: this is the insert `CLAUDE.md` promises, so the
+    // voter below is recorded as a member of a community. Without it they
+    // would still sign in, with community null (ADR-0030).
     await allowDomain(pool, {
       community: "example-community",
       domain: "example.org",
@@ -343,6 +343,7 @@ test(
     });
     assert.equal(clicked.statusCode, 200);
     assert.equal(clicked.json().voter.email, "ada@example.org");
+    assert.equal(clicked.json().voter.community, "example-community");
 
     // Secure, because this one is served over https and a cookie without it is
     // readable by anyone on the path. `dev-server` is the only thing that turns
