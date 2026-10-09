@@ -95,8 +95,10 @@ otherwise identical chain moves the verdict in the direction the rule names.
   ET-24a (`contracts/event-types.md` v10). No committed vector has ballots
   spanning more than one batch or cites ET-23/ET-24a, so this is the only
   coverage of these rules until vectors land. It asserts the blamed line on
-  every rejection: a batch exactly at the minimum, the one legal under-size
-  batch, an under-size batch proven by a later ballot of its issue, interleaved
+  every rejection: a batch (a maximal run of one issue's registered ballots
+  sharing a `ts`) exactly at the minimum, the one legal under-size batch, an
+  under-size batch ended by a later ballot of its issue — including the
+  contract's own T1, T1, T2, T2, T2, T1 example, fatal at the first T2 — interleaved
   issues and other events between one batch's members, a ballot returning to a
   left instant (mid-chain, at the end, past several batches, after an
   under-size batch), unregistered `vote_cast` versions in between, `ts` one

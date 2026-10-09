@@ -66,34 +66,41 @@ Two stages (EV-6):
   `chain_id` derivation
   (ET-7), title bounds and forbidden characters (ET-14), `choice_count` range
   (ET-14a), the ballot batching parameters and their floors (ET-14b),
-  `issue_id` back-reference (ET-18/ID-8), `choice` range (ET-18a), ballot
-  `ts` quantization to the issue's declared interval (ET-23), and the minimum
-  ballot batch size (ET-24), and that a batch once left stays closed (ET-24a),
-  all per `contracts/event-types.md` v10. ET-25 (order within a batch) is
-  unverifiable by the contract's own statement and is not checked.
+  `issue_id` back-reference (ET-18/ID-8), `choice` range (ET-18a), and the
+  ballot publication discipline of `contracts/event-types.md` v10: ballot `ts`
+  quantized to the issue's declared interval (ET-23), a minimum batch size
+  (ET-24), and no return to a batch instant already left (ET-24a). ET-25
+  (order within a batch) is unverifiable by the contract's own statement and
+  is not checked.
 
 ### Ballot batches (ET-23, ET-24, ET-24a — event-types.md v10)
 
 A `vote_cast`'s `ts`, as milliseconds since `1970-01-01T00:00:00.000Z`
 (proleptic Gregorian, no leap seconds), must be an exact multiple of its issue's
-`ballot_batch_interval_ms`; otherwise the ballot's own line is `INVALID`
-(ET-23).
+`ballot_batch_interval_ms`; zero and negative multiples (instants at or before
+the epoch) count. Otherwise the ballot's own line is `INVALID` (ET-23).
 
-Take one issue's registered `vote_cast` events in `seq` order. A batch is a run
-of them sharing one `ts`; other events, including other issues' ballots, may sit
-between its members. A ballot whose `ts` differs from its issue's previous
-ballot closes that batch for good, and then:
+Take one issue's registered `(vote_cast, 1)` events in `seq` order. A batch is
+a **maximal run** of them sharing one `ts` (ET-24); other events, including
+other issues' ballots, may sit between its members. A ballot whose `ts` differs
+from its issue's previous registered ballot ends that batch and starts a new
+one, and then:
 
-- if the closed batch holds fewer than the issue's `ballot_batch_min` ballots,
-  the chain is `INVALID` at this ballot's line (ET-24: the first ballot of the
-  issue appended after the under-size batch);
-- if this ballot's `ts` equals that of any earlier, closed batch of the issue,
-  the chain is `INVALID` at this ballot's line (ET-24a: the returning ballot).
+- if the batch it ends holds fewer than the issue's `ballot_batch_min` ballots,
+  the chain is `INVALID` at this ballot's line (ET-24: the ballot that ends the
+  under-size batch);
+- if this ballot's `ts` equals that of any earlier batch of the issue, the
+  chain is `INVALID` at this ballot's line (ET-24a: the returning ballot, which
+  starts a new batch and never rejoins the old one).
 
-The batch still open at the end of the chain holds the issue's highest-`seq`
-ballot and may be under-size (ET-24). `ts` values are compared for equality
-only, never ordered (ES-21 v5). A `vote_cast` at an unregistered version joins
-no batch, closes none and proves none not-last (ET-24a, "which ballots count").
+Both can name the same line; either reason is correct (ET-24a, "One line, two
+rules"). So with `ballot_batch_min` 3 and one issue's ballots at T1, T1, T2,
+T2, T2, T1, the chain is `INVALID` at the first T2, where the under-size run of
+two T1 ballots ends. The batch still open at the end of the chain holds the
+issue's highest-`seq` registered ballot and may be under-size (ET-24). `ts`
+values are compared for equality only, never ordered (ES-21 v5). A `vote_cast`
+at an unregistered version joins no batch, ends none and proves none not-last
+(ET-24a, "Which ballots count").
 Each ballot costs one map lookup and at most one insert: linear. End-truncation
 can hide an ET-24 violation (EX-16); run with `--head`.
 
