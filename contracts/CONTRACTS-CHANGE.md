@@ -19,6 +19,39 @@ Format (newest first, one entry per merged contracts change):
 
 ---
 
+## event-types.md v10 · event-schema.md v5 — 2026-10-08 — a ballot batch, once left, is closed (ADR-0029)
+
+**The defect.** ET-24 defined a batch as a *set* of an issue's ballots sharing a
+`ts`, so a batch could be resumed after a later batch of the same issue had
+started. With a resumable batch, ET-24's attribution ("the line a verifier
+scanning in file order reaches first") and EX-16 ("a prefix of a valid chain is
+itself a valid chain") are both false. Ballots at T1, T2, T2, T2, T1, T1 with
+`ballot_batch_min` 3 are `VALID` under the set definition and `INVALID` at the
+first T2 for any verifier that judges prefixes. Both phase-3 verifier builders,
+working in isolation, found this independently and picked the same reading.
+
+- **`ET-24a` added** (`event-types.md`). An issue's ballots MUST NOT return to a
+  batch instant they have left, and a breach is `INVALID` at the returning
+  ballot's line. The rule applies per issue, so other events may fall between one
+  batch's ballots, and it compares `ts` for equality only. It also states which
+  ballots ET-24/ET-24a count: only the registered `(vote_cast, 1)`, because an
+  unregistered version's payload is not read (EV-8).
+- **`ET-24` tightened.** "Membership and lastness are decided by `seq`" becomes:
+  lastness by `seq`, `ts` compared only for equality. The attribution paragraph
+  now says ET-24a is why its two descriptions of the fatal line coincide. Its
+  definition now says "registered `(vote_cast, 1)`" itself, rather than leaving
+  that narrowing to ET-24a, and a note says that when one ballot breaks ET-24 and
+  ET-24a on the same line no precedence is needed (EV-17), as ET-9f already says
+  for genesis.
+- **`ES-21` amended** (`event-schema.md` v4 → v5). Its exception now names the
+  equality comparison ET-24/ET-24a use to group ballots. Read literally, the old
+  wording forbade the grouping ET-24 already required.
+- **No fixture changes and no verdict changes in the corpus.** No committed vector
+  carries a resumed batch. This narrows the `VALID` set only for chains no
+  conforming producer writes. The vectors that pin ET-24a are owed **after** both
+  verifiers implement it (fixtures may never precede verifiers). ADR-0029 lists
+  them.
+
 ## evolution.md v5 · fixtures/ README v12 · vectors 095–098 — 2026-08-26 — EV-9 stops contradicting EV-20
 
 **No decision is made here.** ADR-0015 decided this on 2026-08-15 — a `genesis`

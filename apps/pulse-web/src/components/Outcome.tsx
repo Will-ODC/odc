@@ -1,5 +1,6 @@
 import type { RefObject } from "react";
 import type { CastState } from "../hooks/use-cast-vote.js";
+import { ClosedNotice } from "./ClosedNotice.js";
 
 /**
  * What happened to the vote.
@@ -65,13 +66,11 @@ export function Outcome({
      * comes next is a property of the answer, and this answer was not taken.
      */
     return (
-      <div className="outcome" role="status">
-        <b>This one has closed.</b>
-        <span>Nothing you do here will change it.</span>
+      <ClosedNotice>
         <button type="button" className="outcome__change" onClick={onChange}>
           Back to the question
         </button>
-      </div>
+      </ClosedNotice>
     );
   }
 

@@ -1,4 +1,4 @@
-import { useEffect, useRef, useState } from "react";
+import { useEffect, useId, useRef, useState } from "react";
 import type { FormEvent } from "react";
 import type {
   Poll,
@@ -11,6 +11,7 @@ import { edgesOf, useNextQuestions } from "../hooks/use-next-questions.js";
 import { useSuggestions } from "../hooks/use-suggestions.js";
 import { BallotChrome } from "../components/BallotChrome.js";
 import { AfterVote } from "../components/AfterVote.js";
+import { ClosedNotice } from "../components/ClosedNotice.js";
 import { Refusal } from "../components/Refusal.js";
 import "./SwipeBallot.css";
 import "./ChoiceBallot.css";
@@ -67,6 +68,14 @@ export function ChoiceBallot({
     state.status === "casting" || state.status === "counted"
       ? state.choice
       : null;
+  /**
+   * The poll was already shut when it reached this screen. One press casts,
+   * which is safe only because the answer can be changed afterwards (ADR-0022)
+   * - on a shut poll it cannot, so nothing may cast. The answers stay on
+   * screen, switched off, as the record of what was asked.
+   */
+  const shut = !poll.open;
+  const closedId = useId();
 
   return (
     <section className="ballot ballot--list">
@@ -93,6 +102,7 @@ export function ChoiceBallot({
           </div>
         ) : (
           <div className="choices">
+            {shut ? <ClosedNotice id={closedId} /> : null}
             <ul className="choices__list">
               {poll.choices.map((label, index) => (
                 <li key={label}>
@@ -100,8 +110,16 @@ export function ChoiceBallot({
                     type="button"
                     className="choices__one"
                     {...(index === 0 ? { ref: firstChoice } : {})}
+                    /*
+                     * The native `disabled`, not `aria-disabled`: it stops the
+                     * click, takes the answer out of the tab order, and is still
+                     * read out, as unavailable, by a screen reader moving
+                     * through the page.
+                     */
+                    disabled={shut}
+                    {...(shut ? { "aria-describedby": closedId } : {})}
                     onClick={() => {
-                      if (!settled) cast(index);
+                      if (!settled && !shut) cast(index);
                     }}
                   >
                     <span>{label}</span>
@@ -116,7 +134,7 @@ export function ChoiceBallot({
             </ul>
 
             {poll.acceptsSuggestions ? (
-              <AddYourOwn api={api} pollId={poll.id} />
+              <AddYourOwn api={api} pollId={poll.id} shut={shut} />
             ) : null}
           </div>
         )}
@@ -132,9 +150,31 @@ export function ChoiceBallot({
  * a dialogue in front of it. Being told that eleven other people already said
  * your idea should feel like being counted, not like being corrected.
  */
-function AddYourOwn({ api, pollId }: { api: PulseApi; pollId: string }) {
+function AddYourOwn({
+  api,
+  pollId,
+  shut,
+}: {
+  api: PulseApi;
+  pollId: string;
+  /**
+   * The poll is shut. An answer added now could never be picked, so the field
+   * is not drawn - not drawn dead either, for the same reason `BallotChrome`
+   * leaves out a Back with nothing behind it. What others already said stays:
+   * it is part of the record of the discussion, like the answers above it.
+   */
+  shut: boolean;
+}) {
   const { all, add, submit, reset } = useSuggestions(api, pollId);
   const [text, setText] = useState("");
+
+  if (shut) {
+    return all.length > 0 ? (
+      <div className="own">
+        <Added all={all} />
+      </div>
+    ) : null;
+  }
 
   function onSubmit(event: FormEvent) {
     event.preventDefault();

@@ -55,6 +55,20 @@
   outline-offset: 2px;
 }
 
+/*
+ * A poll that has already closed: the answer is still there to read, as the
+ * record of what was asked, but it no longer looks like something to press.
+ * The sentence above the list says why; the greying is never the only signal.
+ * The hover rule restates the resting ground so a pointer over a dead answer
+ * does not light it up.
+ */
+.choices__one:disabled,
+.choices__one:disabled:hover {
+  background: var(--surface-rest);
+  color: var(--ballot-ink-muted);
+  cursor: default;
+}
+
 .choices__next {
   font-size: var(--t-small);
   color: var(--ballot-ink-faint);
