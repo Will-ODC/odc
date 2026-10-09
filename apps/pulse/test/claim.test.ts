@@ -3,6 +3,8 @@ import { test } from "node:test";
 import {
   DomainAllowlist,
   StaticDomainSource,
+  type AllowedDomain,
+  type AllowedDomainSource,
 } from "../src/identity/allowlist.js";
 import {
   ClaimService,
@@ -24,7 +26,7 @@ const START = new Date("2026-08-09T12:00:00.000Z");
 /** A service wired to one community, a silent mailer, and a movable clock. */
 function setup(
   options: ClaimOptions = {},
-  overrides: { mailer?: Mailer } = {},
+  overrides: { mailer?: Mailer; domains?: AllowedDomainSource } = {},
 ) {
   let now = START;
   const mailer = new ConsoleMailer(() => {});
@@ -35,9 +37,10 @@ function setup(
   const service = new ClaimService(
     {
       membership: new DomainAllowlist(
-        new StaticDomainSource([
-          { community: "ubc-students", domain: "student.ubc.ca" },
-        ]),
+        overrides.domains ??
+          new StaticDomainSource([
+            { community: "ubc-students", domain: "student.ubc.ca" },
+          ]),
       ),
       voters,
       claims,
@@ -225,6 +228,69 @@ test("a_matching_domain_still_records_its_community_on_the_claim", async () => {
     hashToken(h.lastToken("ada@student.ubc.ca")),
   );
   assert.equal(claim?.community, "ubc-students");
+});
+
+/** Allowlist rows an operator can add and remove while links are out. */
+class EditableDomains implements AllowedDomainSource {
+  #rows: AllowedDomain[];
+  constructor(rows: AllowedDomain[]) {
+    this.#rows = [...rows];
+  }
+  add(row: AllowedDomain): void {
+    this.#rows.push(row);
+  }
+  remove(domain: string): void {
+    this.#rows = this.#rows.filter((row) => row.domain !== domain);
+  }
+  async rows(): Promise<readonly AllowedDomain[]> {
+    return this.#rows;
+  }
+}
+
+// ADR-0030: a person's community is fixed when they ask for a link. An
+// allowlist edit made while the link is in their inbox, or after they have
+// joined, does not reach them. Joining and leaving communities is P8-P11.
+
+test("a_domain_added_after_the_link_was_asked_for_does_not_give_that_person_a_community", async () => {
+  const domains = new EditableDomains([]);
+  const h = setup({}, { domains });
+  await h.service.requestLink("ada@gmail.com");
+  domains.add({ community: "gmail-users", domain: "gmail.com" });
+
+  const redeemed = await h.service.redeem(h.lastToken("ada@gmail.com"));
+  assert.equal(redeemed.status, "signed_in");
+  if (redeemed.status !== "signed_in") return;
+  assert.equal(redeemed.voter.community, null);
+});
+
+test("a_domain_removed_after_the_link_was_asked_for_does_not_take_the_community_away", async () => {
+  const domains = new EditableDomains([
+    { community: "ubc-students", domain: "student.ubc.ca" },
+  ]);
+  const h = setup({}, { domains });
+  await h.service.requestLink("ada@student.ubc.ca");
+  domains.remove("student.ubc.ca");
+
+  const redeemed = await h.service.redeem(h.lastToken("ada@student.ubc.ca"));
+  assert.equal(redeemed.status, "signed_in");
+  if (redeemed.status !== "signed_in") return;
+  assert.equal(redeemed.voter.community, "ubc-students");
+});
+
+test("signing_in_again_after_the_allowlist_changed_keeps_the_community_first_recorded", async () => {
+  const domains = new EditableDomains([]);
+  const h = setup({}, { domains });
+  await h.service.requestLink("ada@gmail.com");
+  await h.service.redeem(h.lastToken("ada@gmail.com"));
+
+  domains.add({ community: "gmail-users", domain: "gmail.com" });
+  await h.service.requestLink("ada@gmail.com");
+  const again = await h.service.redeem(h.lastToken("ada@gmail.com"));
+  assert.equal(again.status, "signed_in");
+  if (again.status !== "signed_in") return;
+  assert.equal(again.firstTime, false);
+  assert.equal(again.voter.community, null);
+  assert.equal((await h.voters.byEmail("ada@gmail.com"))?.community, null);
 });
 
 test("says_what_is_wrong_with_an_unusable_address_and_sends_nothing", async () => {
