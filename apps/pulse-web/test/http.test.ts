@@ -166,11 +166,54 @@ describe("failures", () => {
     );
   });
 
-  it("falls back to a status when the body carries no message", async () => {
-    stubFetch({ status: 503, body: "<html>gateway</html>" });
-    await expect(new HttpPulseApi().poll("p1")).rejects.toThrow(
-      "Request failed (503)",
+  // A proxy's own error page (nginx's 502/504, a dropped upstream) carries no
+  // sentence. The person sees what follows, so it is words, never a number.
+  async function messageFor(status: number, body: string): Promise<string> {
+    stubFetch({ status, body });
+    const error = await new HttpPulseApi().poll("p1").catch((e: unknown) => e);
+    expect(error).toBeInstanceOf(ApiError);
+    expect((error as ApiError).status).toBe(status);
+    return (error as ApiError).message;
+  }
+
+  it.each([500, 502, 503, 504])(
+    "says a %i without a sentence is our fault and worth retrying",
+    async (status) => {
+      expect(await messageFor(status, "<html>gateway</html>")).toBe(
+        "Something went wrong on our side. Try again in a moment.",
+      );
+    },
+  );
+
+  it("says a 429 without a sentence means wait, not retry now", async () => {
+    expect(await messageFor(429, "")).toBe(
+      "Too many tries just now. Try again a little later.",
     );
+  });
+
+  it("says a 404 without a sentence means there is nothing there", async () => {
+    expect(await messageFor(404, "<html>not found</html>")).toBe(
+      "There is nothing here.",
+    );
+  });
+
+  it("gives any other refusal without a sentence a plain one", async () => {
+    expect(await messageFor(418, "")).toBe("That didn't work. Try again.");
+  });
+
+  it("never shows the status number when the body carries no message", async () => {
+    for (const status of [400, 403, 409, 429, 500, 502, 503, 504]) {
+      expect(await messageFor(status, "")).not.toMatch(/\d{3}/);
+    }
+  });
+
+  it("keeps the server's sentence over the fallback, even on a 5xx", async () => {
+    expect(
+      await messageFor(
+        500,
+        JSON.stringify({ message: "Something went wrong. Try again." }),
+      ),
+    ).toBe("Something went wrong. Try again.");
   });
 
   it("rejects a 2xx body it cannot read, rather than resolving to null", async () => {
