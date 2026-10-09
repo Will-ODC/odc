@@ -106,8 +106,8 @@ needs a `ClaimStore.discard`, which is a new store method across two
 implementations and the shared conformance suite, so it is recorded in
 `docs/plans/pulse.md` rather than widening this change. The window is 15 minutes
 and it requires the provider to be down; it is a wrong sentence, not a lockout.
-_(Resolved 2026-10-09 by P4a: a send the provider refused discards its claim; one
-that got no answer keeps it.)_
+_(Resolved 2026-10-09 by P4a: a send the provider refused before accepting (408,
+429, 503) discards its claim; any other failure keeps it.)_
 
 **Rate limiting is unchanged, and it is worth naming what it actually is**,
 because a verified sending domain aimed at arbitrary addresses is the thing

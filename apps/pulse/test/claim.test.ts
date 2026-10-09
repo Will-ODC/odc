@@ -437,6 +437,68 @@ test("a_send_the_provider_refused_does_not_spend_the_live_link_cap", async () =>
   assert.equal(mailer.delivered, 1);
 });
 
+for (const status of [408, 429]) {
+  test(`a_${status}_refusal_also_frees_the_live_link_cap`, async () => {
+    const mailer = flakyMailer(
+      1,
+      () => new MailSendError("provider refused", { status }),
+    );
+    const h = setup(
+      { maxLiveLinksPerEmail: 1, log: () => undefined },
+      { mailer },
+    );
+    await h.service.requestLink("ada@student.ubc.ca");
+    assert.equal(
+      (await h.claims.liveFor("ada@student.ubc.ca", START)).length,
+      0,
+    );
+  });
+}
+
+for (const status of [500, 502, 504]) {
+  test(`a_${status}_keeps_its_link_live_because_a_gateway_may_have_answered_after_delivery`, async () => {
+    // Resend accepts and delivers, the gateway in front of it times out and
+    // answers 504. The email is in the inbox; discarding would break it.
+    const tokens: string[] = [];
+    const h = setup(
+      { maxLiveLinksPerEmail: 1, log: () => undefined },
+      {
+        mailer: {
+          sendClaimLink: async (_to, link) => {
+            tokens.push(new URL(link).searchParams.get("token") as string);
+            throw new MailSendError("gateway gave up", { status });
+          },
+          sendProofOfAction: async () => undefined,
+        },
+      },
+    );
+    await h.service.requestLink("ada@student.ubc.ca");
+    assert.equal(
+      (await h.claims.liveFor("ada@student.ubc.ca", START)).length,
+      1,
+    );
+    const [token] = tokens;
+    assert.ok(token);
+    assert.equal((await h.service.redeem(token)).status, "signed_in");
+  });
+}
+
+test("a_discard_that_fails_still_answers_send_failed_not_a_fault", async () => {
+  // Freeing the cap is best-effort; the person must still hear "try again".
+  const logged: string[] = [];
+  const mailer = flakyMailer(
+    1,
+    () => new MailSendError("provider unavailable", { status: 503 }),
+  );
+  const h = setup({ log: (message) => logged.push(message) }, { mailer });
+  h.claims.discard = () => Promise.reject(new Error("database went away"));
+  assert.equal(
+    (await h.service.requestLink("ada@student.ubc.ca")).status,
+    "send_failed",
+  );
+  assert.ok(logged.some((m) => /could not be discarded/.test(m)));
+});
+
 test("a_send_that_got_no_answer_keeps_its_link_live", async () => {
   // A timeout or a dropped connection: the provider may have accepted and
   // delivered the message anyway. Discarding the claim there would break a
