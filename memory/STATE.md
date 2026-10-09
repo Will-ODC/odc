@@ -41,10 +41,11 @@ until real operational use; `contracts/` remains **DRAFTING**.
 contracts half (ADR-0019, #112), verifier half (#122, #123, #124, merged
 2026-08-23) and **fixture half (#136, #137, merged 2026-08-26)**. The corpus is
 **98 vectors** (VALID 15, PARTIAL 4, INVALID 79). **Phase 3 is IN FLIGHT
-(2026-10-08):** the rehearsal reshape merged (#172); the ET-24a contract (#176)
-and both verifiers' ET-23/ET-24/ET-24a checks (#177 Go, #178 TS) are open, with
-the vectors still to come. `event-types.md` is **v10** and `event-schema.md`
-**v5** only once #176 merges. Detail is under Next → Phase 3. Phase 4 has not
+(2026-10-09):** merged: the rehearsal reshape (#172), ADR-0029's first draft
+(#176, `event-types.md` v10 / `event-schema.md` v5) and the Go verifier (#177).
+Open: #180 (`event-types.md` v11: a batch is a run; the review fix #176 merged
+without), #181 (#177's review fixes) and #178 (the TS verifier). The vectors are
+still to come. Detail is under Next → Phase 3. Phase 4 has not
 started. The phase list is under
 Next — **and note the coupling rule there is NOT "fixtures and verifiers must land
 together"**, which is true only of phase 1. The real rule: **fixtures may never
@@ -71,8 +72,8 @@ this list alone.**
    implementer cannot know what is permitted.
    → § Blockers, first entry
 4. ~~**ET-23/ET-24 are implemented by neither verifier.**~~ **Implemented in
-   both, in open PRs #177 (Go) and #178 (TS), together with the new ET-24a
-   (#176).** Still owed: the vectors. No committed vector cites ET-23, and none
+   both: Go merged in #177; TS is open in #178; ET-24a merged with #176 and is
+   corrected by #180.** Still owed: the vectors. No committed vector cites ET-23, and none
    has an issue whose ballots span more than one batch, so until the vectors land
    **nothing in CI can tell whether ET-24 or ET-24a is implemented.**
    → Next → Phase 3
@@ -504,20 +505,27 @@ while reaching nothing_.
    ET-24 first, the required rehearsal job would have rejected a clean chain.
    Every chain now carries a forced under-size last batch with other issues'
    ballots after it.
-2. **#176 OPEN: ADR-0029 / ET-24a, "a batch, once left, is closed".** Both
+2. **#176 MERGED (`515374c`), but as its FIRST DRAFT: ADR-0029 / ET-24a, "a
+   batch, once left, is closed".** Its review returned REQUEST CHANGES (ET-24a
+   over a set-defined ET-24 left the blamed line open: on T1, T1, T2, T2, T2, T1
+   the set reading blames the returning T1 and the run reading the first T2).
+   The fix was pushed after the merge, so **#180 OPEN** carries it as
+   `event-types.md` v11: a batch is a maximal run. Background: Both
    isolated builders independently found that ET-24's set definition made a
    batch resumable, which falsified its own line attribution and EX-16's prefix
    property. Example (min 3): T1, T2×3, T1×2 is VALID under the set reading, but
    its prefix is INVALID at the first T2. The operator chose to forbid resuming
    (option b) over qualifying EX-16. `event-types.md` v10 and `event-schema.md`
    v5 (ES-21 names the `ts` equality comparison).
-3. **#177 (Go) and #178 (TS) OPEN**, each after #176 and in either order. Each
+3. **#177 (Go) MERGED (`9858885`)**, also before its review nits were pushed;
+   **#181 OPEN** carries them (no verdict changes). **#178 (TS) OPEN** with its
+   fixes included. Merge order: #180, then #181 and #178. Each
    was built in its own isolated worktree. Both check per line: the ballot that
    leaves an under-size batch is fatal (ET-24), and a ballot returning to a left
    instant is fatal at its own line (ET-24a). Both verifiers, plus an
    orchestrator-written reference, agree on verdict and line for 6,000 generated
    chains. #178 also fixes a Node SIGSEGV on `process.exit` (see Blockers).
-4. **Owed after #177 and #178 merge: the vectors**, listed in ADR-0029:
+4. **Owed after #178 and #181 merge: the vectors**, listed in ADR-0029:
    - a resumed batch (INVALID at the returning line);
    - another issue's ballots between one batch's members (VALID);
    - an under-size batch proven not-last (INVALID at the next ballot of its
@@ -705,12 +713,14 @@ Kept here as the branch → PR → squash map; **no phase-2 branch is open.**
 worktree holding only `contracts/`, its own verifier and the charter, so the
 builder could not read the other verifier. See Blockers for the technique.
 
-| branch                             | PR   | worktree                   | state             |
-| ---------------------------------- | ---- | -------------------------- | ----------------- |
-| `claude/t9-phase3-rehearsal`       | #172 | `~/Desktop/odc-hash-chain` | MERGED `ffcf189`  |
-| `claude/t9-phase3-et24-contiguity` | #176 | `~/Desktop/odc-hash-chain` | open: merge first |
-| `claude/t9-phase3-verifier-go`     | #177 | `~/Desktop/odc-p3-go`      | open: after #176  |
-| `claude/t9-phase3-verifier-ts`     | #178 | `~/Desktop/odc-p3-ts`      | open: after #176  |
+| branch                              | PR   | worktree                   | state                          |
+| ----------------------------------- | ---- | -------------------------- | ------------------------------ |
+| `claude/t9-phase3-rehearsal`        | #172 | `~/Desktop/odc-hash-chain` | MERGED `ffcf189`               |
+| `claude/t9-phase3-et24-contiguity`  | #176 | `~/Desktop/odc-hash-chain` | MERGED `515374c` (first draft) |
+| `claude/t9-phase3-et24-runs`        | #180 | `~/Desktop/odc-hash-chain` | open: merge first              |
+| `claude/t9-phase3-verifier-go`      | #177 | `~/Desktop/odc-p3-go`      | MERGED `9858885`               |
+| `claude/t9-phase3-verifier-go-nits` | #181 | `~/Desktop/odc-p3-go`      | open: after #180               |
+| `claude/t9-phase3-verifier-ts`      | #178 | `~/Desktop/odc-p3-ts`      | open: after #180               |
 
 **Do not go looking for an open hash-chain PR.** `claude/hash-chain-context-3uaob2`
 is the only branch that ever carried "hash chain" in its name and it is merged;
@@ -734,7 +744,8 @@ was reused for the vector work on 2026-08-26 and carries nothing of its own.
 
 - **FOUR `contracts/` contradictions are open and need an operator decision.**
   (Item 1 below is CLOSED by #137 and kept for its reasoning. The ET-24
-  set/prefix contradiction that phase 3 found is resolved by ADR-0029, #176.)
+  set/prefix contradiction that phase 3 found is resolved by ADR-0029: #176,
+  corrected by #180.)
   All were found by implementers or reviewers who had to _decide_ what a rule
   meant; none has any verdict impact on the committed corpus, which is precisely
   why nothing automated can find them and why they would otherwise freeze wrong.
@@ -793,12 +804,20 @@ was reused for the vector work on 2026-08-26 and carries nothing of its own.
   stderr, which was the long-flaky "the CLI writes exactly one stdout line" test.
   #178 switches to `process.exitCode`: 0 crashes in 1,000 runs. `usage()` still
   calls `process.exit(3)`.
+- **A PR can merge while its review fixes are still being written.** In phase
+  3, #176 and #177 both merged with only their first commits: the review fixes
+  were pushed minutes or hours later, to branches that were already merged, and
+  #176's fix was a BLOCKING one. Follow-ups #180 and #181 carry them. While
+  review fixes are pending, **mark the PR as a draft** (`gh pr ready --undo`) and
+  say so in the hand-off. After pushing to a PR branch, check the PR is still
+  open, not just that the push succeeded.
 - **A differential generator can lie about its own coverage.** The phase-3
   generator first used a power-of-two LCG, whose low bit simply alternates, so
   `rand(2)` was not random. 95% of chains came out tidy and VALID. Print the
   verdict and shape distribution before trusting an "all agree".
 - ~~**ET-23 and ET-24 are implemented by NEITHER verifier.**~~ **Implemented in
-  #177/#178 (open); the vectors are still owed, so CI cannot yet tell.**
+  #177 (merged) and #178 (open); the vectors are still owed, so CI cannot yet
+  tell.**
   Original entry: ET-23 and ET-24 are implemented by NEITHER verifier, and ET-23 is cited by
   no vector. Both are stated as verifier MUSTs — ET-23 ballot `ts`
   quantization, ET-24 minimum batch size — and these are the **anonymity** rules:
