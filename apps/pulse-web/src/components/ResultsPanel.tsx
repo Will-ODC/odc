@@ -51,6 +51,8 @@ export function ResultsPanel({
   panelRef?: RefObject<HTMLDivElement | null> | undefined;
 }) {
   // In the order the results list them, so the words read down the list.
+  // Right only while a ballot is unordered (`single`, `approval`): a ranked
+  // method would need the ballot's own order here, or it drops the ranking.
   const yours = results.choices.filter((choice) =>
     yourChoices.includes(choice.index),
   );
@@ -153,10 +155,16 @@ function Counts({
 function Labels({ choices }: { choices: readonly ChoiceResult[] }) {
   return choices.map((choice, at) => (
     <Fragment key={choice.index}>
-      {at === 0 ? "" : at === choices.length - 1 ? " and " : ", "}
+      {separatorBefore(at, choices.length)}
       <b>{choice.label}</b>
     </Fragment>
   ));
+}
+
+/** What goes before the label at `at` of `count`: nothing, ", " or " and ". */
+function separatorBefore(at: number, count: number): string {
+  if (at === 0) return "";
+  return at === count - 1 ? " and " : ", ";
 }
 
 /**
