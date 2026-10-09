@@ -1,9 +1,9 @@
 # Event Types — contracts/event-types.md
 
-**Version:** 9
+**Version:** 10
 **Status:** DRAFTING (Phase 0 · T3, amended T4a, T5i, T5j, ADR-0009, ADR-0010,
-ADR-0011, T9a/ADR-0013, ADR-0014, ADR-0016, ADR-0018, and ADR-0019). Not
-frozen.
+ADR-0011, T9a/ADR-0013, ADR-0014, ADR-0016, ADR-0018, ADR-0019, and ADR-0029).
+Not frozen.
 **Companion specs:** `event-schema.md` (envelope), `ids.md` (identifiers),
 `hashing.md` (preimage — T4).
 
@@ -521,10 +521,10 @@ off-log eligibility check.
 
 ### Ballot publication discipline (per ADR-0014)
 
-Three producer rules, checked against the parameters the issue itself declared
+Four producer rules, checked against the parameters the issue itself declared
 (ET-14b). They constrain the **value** of a ballot's `ts` and the **grouping** of
 ballot appends; they change no wire format, no payload key, and no hashing rule.
-Two of the three are verifiable from the export; the third is not, and says so.
+Three of the four are verifiable from the export; the fourth is not, and says so.
 
 - **ET-23.** _Quantized ballot `ts`._ A `vote_cast` event's `ts` MUST be an exact
   multiple of its issue's `ballot_batch_interval_ms` (ET-14b), measured in
@@ -538,29 +538,65 @@ Two of the three are verifiable from the export; the third is not, and says so.
   verifier already tracks. This is the one rule that constrains the value of `ts`;
   `ts` remains barred from ordering or selecting anything (`event-schema.md`
   ES-21).
-- **ET-24.** _Minimum batch size._ A **batch** is the set of all `vote_cast`
-  events on a chain sharing both an `issue_id` and a `ts` — the ballots of one
-  issue at one batch instant (ET-23). Every batch MUST contain at least that
+- **ET-24.** _Minimum batch size._ A **batch** is the set of all registered
+  `(vote_cast, 1)` events on a chain sharing both an `issue_id` and a `ts` — the
+  ballots of one issue at one batch instant (ET-23); ET-24a says why only the
+  registered version counts. Every batch MUST contain at least that
   issue's `ballot_batch_min` ballots (ET-14b), **except** the batch containing the
   issue's highest-`seq` ballot, which MAY be smaller: an issue that closes before
   its final batch fills must still publish the ballots it has. A verifier MUST
   reject a chain in which any other batch of an issue is under-size. At most one
   under-size batch per issue is therefore legal, and only as that issue's last.
-  Membership and lastness are decided by `seq` (ES-8), never by comparing `ts`
-  values.
+  Lastness is decided by `seq` (ES-8): the last batch is the one holding the
+  issue's highest-`seq` ballot. `ts` values are compared only for **equality**, to
+  group ballots into batches, and are never ordered (ES-21).
 
   _Line attribution (`evolution.md` EV-17)._ An under-size batch is not a
   violation where it appears — it becomes one only when a later ballot of the same
   issue proves it was not the last. The fatal line is therefore the **first
   `vote_cast` of that issue appended after the under-size batch**, which is the
   line at which the chain first violates this rule and the line a verifier
-  scanning in file order reaches first. Two consequences are worth stating rather
+  scanning in file order reaches first. Those two descriptions name the same line
+  only because ET-24a keeps every batch a single run of its issue's ballots: the
+  first later ballot of the issue closes the batch for good, so nothing after it
+  can add to the batch. Two consequences are worth stating rather
   than discovering: a ledger that publishes an under-size batch and then keeps
   appending ballots for that issue has broken this rule and the export shows it
   (detection working, not a past line's legality changing); and end-truncation can
   hide a violation by making a mid-chain under-size batch the last one for its
   issue — the same residual EX-16 already documents for everything at the end of a
   chain, with the same remedy, `--head`.
+- **ET-24a.** _A batch, once left, is closed._ An issue's ballots MUST NOT return
+  to a batch instant they have left. Taking one issue's `vote_cast` events in
+  `seq` order, a ballot whose `ts` differs from the `ts` of that issue's previous
+  ballot MUST NOT equal the `ts` of any earlier ballot of that issue. A verifier
+  MUST reject a chain that breaks this, **at the line of the returning ballot**.
+  The comparison is equality only (ES-21). The rule binds each issue separately:
+  other events, including other issues' ballots, MAY fall between the ballots of
+  one batch, so a batch is a run of its **issue's** ballots, not of the file's
+  lines.
+
+  _Why._ ET-24 defines a batch as a set, and without this rule a batch could gain
+  members after a later batch of the same issue had started. That breaks two
+  things. First, an under-size batch would no longer be proven not-last at one
+  line: a later ballot could fill it again, so ET-24's attribution would name a
+  line at which the chain is not yet in violation. Second, EX-16's "a prefix of a
+  valid chain is itself a valid chain" would fail: a chain could verify `VALID`
+  while a prefix of it is `INVALID` under ET-24. A ledger publishes each batch as
+  one unit (ADR-0014), so a conforming producer never resumes a batch, and this
+  rule forbids nothing that one would write. ADR-0029 records the decision.
+
+  _Which ballots count._ ET-24 and ET-24a read the `issue_id` of a `vote_cast`,
+  so they apply only to `vote_cast` events whose payload a verifier reads: the
+  registered `(vote_cast, 1)`. A `vote_cast` at an unregistered version gets
+  `evolution.md` EV-8's treatment and its payload is not read, so it joins no
+  batch, closes none, and proves none not-last.
+
+  _One line, two rules._ A ballot that returns to a left instant can also be the
+  ballot that closes an under-size batch, so ET-24 and ET-24a can both name the
+  same line. No precedence between them is needed: EV-17 makes the line the
+  conformance-checked result and the reason advisory, so either reason is
+  correct and a vector pins only the line.
 - **ET-25.** _Order within a batch._ The order in which a batch's ballots are
   appended MUST be independent of the order in which they arrived; a producer MUST
   NOT append a batch in arrival order. Any order that does not derive from arrival
@@ -607,6 +643,7 @@ Two of the three are verifiable from the export; the third is not, and says so.
 | What future `vote_cast` versions may not do    | ET-22             |
 | Ballot `ts` quantization (the batch instant)   | ET-23             |
 | What a batch is; minimum size; blamed line     | ET-24             |
+| A batch is one run of its issue's ballots      | ET-24a            |
 | Order within a batch (producer-only, uncheckable) | ET-25          |
 
 ## Acid-test walkthrough
@@ -643,7 +680,9 @@ vote for a not-yet-created issue, or
 with `choice` outside `[0, choice_count)`, is rejected (ET-18, ET-18a); that a
 ballot whose `ts` is not a multiple of its issue's declared interval is rejected
 (ET-23), and that an under-size batch is rejected at the first later ballot of
-the same issue, never at the batch itself (ET-24); and that
+the same issue, never at the batch itself (ET-24); that a ballot returning to a
+batch instant its issue has already left is rejected at its own line, while
+other issues' ballots between one batch's members are accepted (ET-24a); and that
 `choice` is otherwise an opaque integer (ET-19). They also agree that ET-25's
 shuffle cannot be checked by either of them, which is why it is stated as a
 producer obligation rather than a verifier check. The only undecided bytes are

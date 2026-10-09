@@ -1,4 +1,4 @@
-import { useEffect, useRef, useState } from "react";
+import { useEffect, useId, useRef, useState } from "react";
 import type {
   CSSProperties,
   PointerEvent as ReactPointerEvent,
@@ -17,6 +17,7 @@ import { useCastVote } from "../hooks/use-cast-vote.js";
 import { edgesOf, useNextQuestions } from "../hooks/use-next-questions.js";
 import { BallotChrome } from "../components/BallotChrome.js";
 import { AfterVote } from "../components/AfterVote.js";
+import { ClosedNotice } from "../components/ClosedNotice.js";
 import { Refusal } from "../components/Refusal.js";
 import "./SwipeBallot.css";
 
@@ -94,6 +95,16 @@ export function SwipeBallot({
     state.status === "casting" || state.status === "counted"
       ? (sideOfChoice(state.choice) ?? null)
       : null;
+  /**
+   * The poll was already shut when it reached this screen. One press casts
+   * here, which ADR-0022 makes safe only because the answer can be changed
+   * afterwards - on a shut poll it cannot, so nothing may cast at all. The
+   * halves stay on screen, switched off, as the record of what was asked.
+   */
+  const shut = !poll.open;
+  /** Whether a press may cast. Every way of casting checks this one value. */
+  const locked = settled || shut;
+  const closedId = useId();
 
   function commit(side: Side) {
     setLean({ side, strength: 1 });
@@ -137,12 +148,12 @@ export function SwipeBallot({
       gestureDecided.current = false;
       return;
     }
-    if (settled) return;
+    if (locked) return;
     commit(side);
   }
 
   function onPointerDown(event: ReactPointerEvent<HTMLDivElement>) {
-    if (settled) return;
+    if (locked) return;
     gestureDecided.current = false;
     drag.current = { from: event.clientX, moved: false, captured: false };
     /*
@@ -236,7 +247,7 @@ export function SwipeBallot({
       {...(chosen ? { "data-won": chosen } : {})}
       onKeyDown={(event) => {
         const side = sideOfKey(event.key);
-        if (side && !settled) {
+        if (side && !locked) {
           event.preventDefault();
           commit(side);
         }
@@ -270,30 +281,40 @@ export function SwipeBallot({
             />
           </div>
         ) : (
-          <div
-            className="ballot__split"
-            onPointerDown={onPointerDown}
-            onPointerMove={onPointerMove}
-            onPointerUp={onPointerUp}
-            onPointerCancel={() => {
-              drag.current = null;
-              setLean(AT_REST);
-            }}
-          >
-            <Chevron side="left" />
-            <Chevron side="right" />
-            {(["left", "right"] as const).map((side, index) => (
-              <Half
-                key={side}
-                side={side}
-                {...(index === 0 ? { buttonRef: firstSide } : {})}
-                label={poll.choices[choiceFor(side)] ?? ""}
-                question={poll.question}
-                next={nextQuestions[choiceFor(side)]}
-                onPick={() => pick(side)}
-              />
-            ))}
-          </div>
+          <>
+            {shut ? (
+              <div className="ballot__closed">
+                <ClosedNotice id={closedId} />
+              </div>
+            ) : null}
+            <div
+              className="ballot__split"
+              onPointerDown={onPointerDown}
+              onPointerMove={onPointerMove}
+              onPointerUp={onPointerUp}
+              onPointerCancel={() => {
+                drag.current = null;
+                setLean(AT_REST);
+              }}
+            >
+              {/* The chevrons say "swipe me"; a shut poll says the opposite. */}
+              {shut ? null : <Chevron side="left" />}
+              {shut ? null : <Chevron side="right" />}
+              {(["left", "right"] as const).map((side, index) => (
+                <Half
+                  key={side}
+                  side={side}
+                  shut={shut}
+                  {...(shut ? { describedBy: closedId } : {})}
+                  {...(index === 0 ? { buttonRef: firstSide } : {})}
+                  label={poll.choices[choiceFor(side)] ?? ""}
+                  question={poll.question}
+                  next={nextQuestions[choiceFor(side)]}
+                  onPick={() => pick(side)}
+                />
+              ))}
+            </div>
+          </>
         )}
       </div>
     </section>
@@ -307,6 +328,8 @@ function Half({
   next,
   onPick,
   buttonRef,
+  shut,
+  describedBy,
 }: {
   side: Side;
   label: string;
@@ -315,6 +338,15 @@ function Half({
   onPick: () => void;
   /** Where focus lands when the question is put back to be answered again. */
   buttonRef?: RefObject<HTMLButtonElement | null> | undefined;
+  /**
+   * The poll is shut. The native `disabled`, not `aria-disabled`: it stops the
+   * click, takes the half out of the tab order - so focus cannot land inside
+   * the section and reach the arrow-key handler either - and is still read
+   * out, as unavailable, by a screen reader moving through the page.
+   */
+  shut: boolean;
+  /** The sentence saying why, when `shut`. */
+  describedBy?: string | undefined;
 }) {
   return (
     <button
@@ -323,6 +355,8 @@ function Half({
       aria-label={`${label} - ${question}`}
       onClick={onPick}
       ref={buttonRef}
+      disabled={shut}
+      aria-describedby={describedBy}
     >
       <span className="ballot__word">{label}</span>
       {next ? (
