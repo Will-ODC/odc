@@ -41,9 +41,6 @@ const EMAIL_OF_VOTER =
 
 const VOTER_COLUMNS = `${VOTER_ROW_COLUMNS}, ${EMAIL_OF_VOTER}`;
 
-/** The primary key that makes one credential one voter (`004_*.sql`). */
-const CREDENTIAL_KEY = "voter_credential_pkey";
-
 export class PostgresVoterStore implements VoterStore {
   readonly #pool: Pool;
 
@@ -105,11 +102,11 @@ export class PostgresVoterStore implements VoterStore {
       // written first, so a repeat of both id and credential reports the id.
       // A clash on the id alone is a different fault and is not dressed up as
       // that. Two creates racing for one credential: the loser waits on the
-      // winner's uncommitted key, then fails on it once the winner commits.
+      // winner's uncommitted key and fails on it once the winner commits, so
+      // by the time this reads, the winner's credential is there to find.
       if (
         isUniqueViolation(error) &&
-        (constraintOf(error) === CREDENTIAL_KEY ||
-          (await this.byCredential(credential.kind, credential.value)))
+        (await this.byCredential(credential.kind, credential.value))
       ) {
         throw new CredentialTakenError(credential.kind, credential.value);
       }
@@ -351,8 +348,4 @@ function isUniqueViolation(error: unknown): boolean {
     error !== null &&
     (error as { code?: unknown }).code === UNIQUE_VIOLATION
   );
-}
-
-function constraintOf(error: unknown): unknown {
-  return (error as { constraint?: unknown }).constraint;
 }
