@@ -34,8 +34,7 @@ export function voterStoreConformance(
     { skip: options.skip ?? false },
     () => {
       test("finds_a_voter_by_address_and_by_id", async (t) => {
-        // A voter who never signed out comes back with no `sessionsValidFrom`
-        // key at all, not one set to undefined or to the epoch.
+        // The two stores return the same voter shape, including legacy fields.
         const store = await fresh(t);
         const created = await store.create(voter());
         assert.deepEqual(await store.byEmail("ada@student.ubc.ca"), created);

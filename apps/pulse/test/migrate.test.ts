@@ -71,7 +71,7 @@ test("only_the_string_1_makes_a_database_required", () => {
 test("applies_a_fresh_schema", { skip }, async () => {
   await inThrowawaySchema(async (pool, schema) => {
     const result = await migrate(pool, { clock: () => AT });
-    assert.deepEqual(result.applied, ["001", "002"]);
+    assert.deepEqual(result.applied, ["001", "002", "003"]);
     assert.deepEqual(await tablesIn(pool, schema), TABLES);
   });
 });
@@ -87,7 +87,7 @@ test("applying_twice_changes_nothing", { skip }, async () => {
     const { rows } = await pool.query<{ version: string; applied_at: Date }>(
       "select version, applied_at from schema_migrations",
     );
-    assert.equal(rows.length, 2);
+    assert.equal(rows.length, 3);
     // Still the first run's timestamp, and still the injected clock's — to the
     // millisecond, which is what timestamptz(3) is for.
     assert.equal(rows[0]?.applied_at.getTime(), AT.getTime());

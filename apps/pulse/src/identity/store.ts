@@ -18,11 +18,7 @@ export interface Voter {
   claimedAt: Date;
   /** Opt-in, asked at registration. Nothing is sent when false. */
   proofEmailsOptIn: boolean;
-  /**
-   * Sessions issued at or before this moment no longer count. Signing out moves it to
-   * now, which is what makes signing out mean something on every device rather
-   * than only on the one that clicked.
-   */
+  /** Legacy column retained in the forward-only schema; no longer authorizes sessions. */
   sessionsValidFrom?: Date;
   /** Monotonic revocation counter. Zero for voters created before migration. */
   sessionGeneration?: number;

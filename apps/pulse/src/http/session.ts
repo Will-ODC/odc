@@ -3,10 +3,9 @@ import { createHmac, timingSafeEqual } from "node:crypto";
 /**
  * The signed-in cookie.
  *
- * The cookie carries the voter id, when it was issued, when it expires, and an
- * HMAC over all three under a server secret. Everything the server needs is in
- * the cookie, so there is no session table to keep — but unlike a bare signed
- * id, this one actually stops working:
+ * The cookie carries the voter id, generation, issue time, expiry, and an HMAC
+ * under a server secret. No session table is needed, but the voter row provides
+ * the current generation:
  *
  * - `exp` is checked on every request, so a stolen cookie is useless after it
  *   passes. A `Set-Cookie` max-age would not do this: that is a request to the
@@ -68,8 +67,7 @@ export class SessionSigner {
   verify(cookie: string | undefined): SessionClaims | undefined {
     if (!cookie) return undefined;
 
-    // Split from the right: the signature and the two timestamps are the last
-    // three fields, so a voter id containing dots stays intact.
+    // Split from the right: dotted voter ids stay intact.
     const lastDot = cookie.lastIndexOf(".");
     const payload = cookie.slice(0, lastDot);
     if (!this.#macMatches(payload, cookie.slice(lastDot + 1))) return undefined;
