@@ -49,6 +49,9 @@ working in isolation, found this independently and picked the same reading.
   open: on T1, T1, T2, T2, T2, T1 (min 3), the set reading blames the returning T1
   and the run reading blames the first T2. Both verifiers already implement the run
   reading.
+- **`ET-23` clarified:** zero and negative multiples count (an instant before
+  1970 has a negative offset), so an implementation using unsigned arithmetic
+  cannot diverge. No verdict changes.
 - **`ES-21` amended** (`event-schema.md` v4 → v5). Its exception now names the
   equality comparison ET-24/ET-24a use to group ballots. Read literally, the old
   wording forbade the grouping ET-24 already required.
