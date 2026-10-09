@@ -121,15 +121,18 @@ const (
 
 // vstate carries chain-wide facts gathered during Stage B.
 type vstate struct {
-	opPK    []byte           // genesis operator_pk, decoded (ET-8/ET-13)
-	regPK   []byte           // genesis registrar_pk, decoded (ET-17)
-	haveKey bool             // genesis keys captured
-	issues  map[string]int64 // issue_created hash -> choice_count (ID-7/ET-18a)
+	opPK    []byte                // genesis operator_pk, decoded (ET-8/ET-13)
+	regPK   []byte                // genesis registrar_pk, decoded (ET-17)
+	haveKey bool                  // genesis keys captured
+	issues  map[string]*issueInfo // issue_created hash -> tracked facts (ID-7/ET-18a/ET-14b)
+	byIdx   []*issueInfo          // the same issues, by issueInfo.idx
+	ballots ballotState           // ET-24/ET-24a batch instants already left
 }
 
 // Verify runs the whole two-stage verification (EV-6). head, when non-nil, is a
 // validated 64-lowercase-hex expected chain head (EX-15).
 func Verify(data []byte, head *string) Result {
+	st := &vstate{issues: map[string]*issueInfo{}, ballots: newBallotState()}
 	lines, faults := frame(data)
 
 	// An empty export verified as a chain is INVALID at line 1: it has no
@@ -138,7 +141,6 @@ func Verify(data []byte, head *string) Result {
 		return invalid(1, "empty export: no genesis (EX-18)")
 	}
 
-	st := &vstate{issues: map[string]int64{}}
 	var prev *event
 	var partial []int
 
@@ -461,8 +463,12 @@ func stageBIssue(st *vstate, e *event) (string, bool) {
 	if !verifyEd25519(st.opPK, hexToBytes(sig), preimage(e, "sig")) {
 		return "issue signature invalid under operator_pk (ET-13)", false
 	}
-	// ID-7: issue_id is this event's hash; record with its choice_count (ET-18a).
-	st.issues[e.hash] = ccV.ival
+	// ID-7: issue_id is this event's hash; record with its choice_count
+	// (ET-18a) and the ET-14b batching parameters ET-23/ET-24 read.
+	iss := &issueInfo{idx: len(st.byIdx), choiceCount: ccV.ival,
+		intervalMS: intervalV.ival, batchMin: minV.ival}
+	st.issues[e.hash] = iss
+	st.byIdx = append(st.byIdx, iss)
 	return "", true
 }
 
@@ -480,14 +486,14 @@ func stageBVote(st *vstate, e *event) (string, bool) {
 	if !isHex64(issueID) {
 		return "issue_id not 64 lowercase hex (ID-8)", false
 	}
-	cc, known := st.issues[issueID]
+	iss, known := st.issues[issueID]
 	if !known {
 		return "vote references unknown or forward issue (ET-18/ID-8)", false
 	}
 	if choiceV.kind != kInt {
 		return "choice must be an integer (ET-19)", false
 	}
-	if choiceV.ival < 0 || choiceV.ival >= cc {
+	if choiceV.ival < 0 || choiceV.ival >= iss.choiceCount {
 		return "choice out of [0, choice_count) (ET-18a)", false
 	}
 	if !isHex128(sig) {
@@ -496,6 +502,21 @@ func stageBVote(st *vstate, e *event) (string, bool) {
 	// ET-17: registrar-signed.
 	if !verifyEd25519(st.regPK, hexToBytes(sig), preimage(e, "sig")) {
 		return "vote signature invalid under registrar_pk (ET-17)", false
+	}
+	// ET-23: the ballot's ts, as a millisecond offset from the epoch, MUST be
+	// an exact multiple of its issue's declared interval. This is a test of the
+	// VALUE of ts only; nothing is ordered or selected by it (ES-21).
+	tsMS := tsMillis(e.ts)
+	if tsMS%iss.intervalMS != 0 {
+		return "ts is not a multiple of the issue's ballot_batch_interval_ms (ET-23)", false
+	}
+	// ET-24 / ET-24a: place the ballot in its issue's batch sequence. Both
+	// rules are decided at this ballot's own line (event-types.md v10): a
+	// change of ts closes the previous batch for good (ET-24a), so an
+	// under-size batch is proven not-last exactly here (ET-24), and a ts equal
+	// to an instant this issue has already left is a return (ET-24a).
+	if reason, ok := st.ballots.observe(iss, tsMS); !ok {
+		return reason, false
 	}
 	return "", true
 }
