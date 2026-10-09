@@ -42,9 +42,10 @@ contracts half (ADR-0019, #112), verifier half (#122, #123, #124, merged
 2026-08-23) and **fixture half (#136, #137, merged 2026-08-26)**. The corpus is
 **98 vectors** (VALID 15, PARTIAL 4, INVALID 79). **Phase 3 is IN FLIGHT
 (2026-10-09):** merged: the rehearsal reshape (#172), ADR-0029's first draft
-(#176, `event-types.md` v10 / `event-schema.md` v5) and the Go verifier (#177).
+(#176, `event-types.md` v10 / `event-schema.md` v5) and both verifiers (#177 Go,
+#178 TS).
 Open: #180 (`event-types.md` v11: a batch is a run; the review fix #176 merged
-without), #181 (#177's review fixes) and #178 (the TS verifier). The vectors are
+without) and #181 (#177's review fixes). The vectors are
 still to come. Detail is under Next → Phase 3. Phase 4 has not
 started. The phase list is under
 Next — **and note the coupling rule there is NOT "fixtures and verifiers must land
@@ -72,7 +73,7 @@ this list alone.**
    implementer cannot know what is permitted.
    → § Blockers, first entry
 4. ~~**ET-23/ET-24 are implemented by neither verifier.**~~ **Implemented in
-   both: Go merged in #177; TS is open in #178; ET-24a merged with #176 and is
+   both: Go merged in #177, TS merged in #178; ET-24a merged with #176 and is
    corrected by #180.** Still owed: the vectors. No committed vector cites ET-23, and none
    has an issue whose ballots span more than one batch, so until the vectors land
    **nothing in CI can tell whether ET-24 or ET-24a is implemented.**
@@ -519,13 +520,14 @@ while reaching nothing_.
    v5 (ES-21 names the `ts` equality comparison).
 3. **#177 (Go) MERGED (`9858885`)**, also before its review nits were pushed;
    **#181 OPEN** carries them (no verdict changes). **#178 (TS) OPEN** with its
-   fixes included. Merge order: #180, then #181 and #178. Each
+   fixes included, MERGED (`a3abba3`). Merge order for what is left: #180, then
+   #181. Each
    was built in its own isolated worktree. Both check per line: the ballot that
    leaves an under-size batch is fatal (ET-24), and a ballot returning to a left
    instant is fatal at its own line (ET-24a). Both verifiers, plus an
    orchestrator-written reference, agree on verdict and line for 6,000 generated
    chains. #178 also fixes a Node SIGSEGV on `process.exit` (see Blockers).
-4. **Owed after #178 and #181 merge: the vectors**, listed in ADR-0029:
+4. **Owed after #180 and #181 merge: the vectors**, listed in ADR-0029:
    - a resumed batch (INVALID at the returning line);
    - another issue's ballots between one batch's members (VALID);
    - an under-size batch proven not-last (INVALID at the next ballot of its
@@ -816,7 +818,7 @@ was reused for the vector work on 2026-08-26 and carries nothing of its own.
   `rand(2)` was not random. 95% of chains came out tidy and VALID. Print the
   verdict and shape distribution before trusting an "all agree".
 - ~~**ET-23 and ET-24 are implemented by NEITHER verifier.**~~ **Implemented in
-  #177 (merged) and #178 (open); the vectors are still owed, so CI cannot yet
+  #177 and #178 (both merged); the vectors are still owed, so CI cannot yet
   tell.**
   Original entry: ET-23 and ET-24 are implemented by NEITHER verifier, and ET-23 is cited by
   no vector. Both are stated as verifier MUSTs — ET-23 ballot `ts`
