@@ -129,17 +129,43 @@ describe("showing where a question stands", () => {
     );
   });
 
-  /** Nobody can reach this with no votes, but dividing by zero is still a crash. */
-  it("draws empty bars rather than throwing when nothing is counted", () => {
+  /**
+   * Reachable now: a closed poll's results are open to people who did not
+   * vote, and a poll can close with nobody having answered it. Empty bars and
+   * "0 people" say the same thing worse than a sentence does.
+   */
+  it("says nobody answered instead of drawing empty bars", () => {
     show({
-      results: results({
-        voters: 0,
-        choices: [{ index: 0, label: "Yes", count: 0, share: 0 }],
-      }),
-      yourChoice: 0,
+      results: results({ voters: 0 }),
+      yourChoice: undefined,
+      ended: true,
     });
-    const bar = document.querySelector(".results__bar") as HTMLElement;
-    expect(bar.style.getPropertyValue("--fill")).toBe("0%");
+    expect(screen.getByText("Nobody answered this one.")).toBeTruthy();
+    expect(document.querySelector(".results__bar")).toBeNull();
+    expect(screen.queryByText(/0 people/)).toBeNull();
+    // Still a way out.
+    expect(screen.getByRole("button", { name: "Close" })).toBeTruthy();
+  });
+
+  it("says nobody has answered yet while the question is open", () => {
+    show({ results: results({ voters: 0 }), yourChoice: undefined });
+    expect(screen.getByText("Nobody has answered yet.")).toBeTruthy();
+    expect(document.querySelector(".results__bar")).toBeNull();
+  });
+
+  it("does not say 'so far' about a question that has closed", () => {
+    show({ ended: true });
+    expect(screen.getByText("10 people answered")).toBeTruthy();
+    expect(screen.queryByText(/so far/)).toBeNull();
+  });
+
+  /** Someone who did not vote sees the results with nothing marked as theirs. */
+  it("marks nothing when there is no choice of yours", () => {
+    show({ yourChoice: undefined });
+    expect(screen.getByText("7 · 70%")).toBeTruthy();
+    expect(screen.queryByText(/You picked/)).toBeNull();
+    expect(document.querySelector('[data-yours="true"]')).toBeNull();
+    expect(screen.queryByText("yours")).toBeNull();
   });
 
   it("gives a way out that is not called Back", () => {

@@ -42,13 +42,13 @@ Do not apply charter rules to `apps/**`, and do not relax them anywhere else.
   has ever been built, and the first `docker build` is still the test.**
   Of the four things that blocked a deploy, **only poll creation is left**, and
   it is blocked on the moderation decisions under ADR-0024. Also outstanding and
-  mostly not code: a verified sending domain, a host, a domain, and **open
-  sign-up** — decided 2026-09-13 and unbuilt (`docs/plans/pulse.md` P4c), which
-  is what stops anyone signing in to a fresh deployment at all. Still missing
+  mostly not code: a verified sending domain, a host and a domain. **Open
+  sign-up is DONE** — #182, #183, ADR-0030: anyone signs in, and community is
+  an optional label. Still missing
   from the product: the middle of the story (bite/case/action screens) and
   pillar 3. **Varying levels of sign-in are designed and unstarted** — P8-P11,
   decided 2026-09-12; P8 is ready, the rest wait on an ADR and on an admin
-  surface that does not exist. **Two known bugs are recorded and unstarted.**
+  surface that does not exist. The two known screen bugs are **fixed** (#174, #175).
   → `memory/pulse.md`
 
 ## Load order

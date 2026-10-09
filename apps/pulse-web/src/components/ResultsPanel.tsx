@@ -1,13 +1,16 @@
 import type { CSSProperties, RefObject } from "react";
-import type { Results } from "../api/types.js";
+import type { ChoiceResult, Results } from "../api/types.js";
 import "./ResultsPanel.css";
 
 /**
- * Where the question stands, once someone has answered it.
+ * Where the question stands.
  *
- * Shown only after a vote, and only when asked for: the point of the run is to
- * answer, and a screen that leads with the numbers invites people to agree
- * with them instead of saying what they think.
+ * Shown in two places, and only ever when asked for. On an open question it
+ * waits until after a vote: the point of the run is to answer, and a screen
+ * that leads with the numbers invites people to agree with them instead of
+ * saying what they think. On a closed question there is nothing left to
+ * answer, so it is open to anyone - voted or not - as the record of how the
+ * question ended (operator decision, 2026-10-09).
  *
  * What people chose, never how the choosing is counted - that boundary is the
  * one thing this component must not cross. No wording about tallies, records
@@ -16,6 +19,7 @@ import "./ResultsPanel.css";
 export function ResultsPanel({
   results,
   yourChoice,
+  ended = false,
   onClose,
   panelRef,
 }: {
@@ -24,8 +28,16 @@ export function ResultsPanel({
    * The index of the choice this person picked, matched against
    * `ChoiceResult.index` - never used as a position in `results.choices`,
    * which may arrive in any order (ADR-0021).
+   *
+   * Absent when there is nothing to mark: someone reading a closed question
+   * they never answered, or whose earlier answer could not be loaded.
    */
-  yourChoice: number;
+  yourChoice?: number | undefined;
+  /**
+   * The question has closed, so the count is a final one. "So far" would
+   * promise more answers to come on a question that can take no more.
+   */
+  ended?: boolean | undefined;
   onClose: () => void;
   /**
    * Focus lands here when the panel opens. The control that was pressed is
@@ -36,7 +48,47 @@ export function ResultsPanel({
    */
   panelRef?: RefObject<HTMLDivElement | null> | undefined;
 }) {
-  const yours = results.choices.find((choice) => choice.index === yourChoice);
+  const yours =
+    yourChoice === undefined
+      ? undefined
+      : results.choices.find((choice) => choice.index === yourChoice);
+  return (
+    <div
+      className="results"
+      role="group"
+      aria-label="How people answered"
+      ref={panelRef}
+      tabIndex={-1}
+    >
+      <p className="ballot__eyebrow">WHERE IT STANDS</p>
+      <p className="results__count">{howMany(results.voters, ended)}</p>
+
+      {/*
+        Nobody answered: the sentence above says so, and a list of empty bars
+        under it would only say it again, worse. The way out stays.
+      */}
+      {results.voters > 0 ? <Counts results={results} yours={yours} /> : null}
+
+      {/*
+        Not "Back": the chrome's own back control is on screen at the same time
+        and abandons the question entirely. Two controls both starting with the
+        same word, doing opposite things, is how someone loses their place.
+      */}
+      <button type="button" className="results__close" onClick={onClose}>
+        Close
+      </button>
+    </div>
+  );
+}
+
+/** Every choice's count and share, and which one was yours. */
+function Counts({
+  results,
+  yours,
+}: {
+  results: Results;
+  yours: ChoiceResult | undefined;
+}) {
   /**
    * The widest share on screen, so the bars are read against each other rather
    * than against a hundred that nothing may reach. An `approval` poll can push
@@ -49,16 +101,7 @@ export function ResultsPanel({
   );
 
   return (
-    <div
-      className="results"
-      role="group"
-      aria-label="How people answered"
-      ref={panelRef}
-      tabIndex={-1}
-    >
-      <p className="ballot__eyebrow">WHERE IT STANDS</p>
-      <p className="results__count">{peopleSoFar(results.voters)}</p>
-
+    <>
       {yours ? (
         <p className="results__yours">
           You picked <b>{yours.label}</b>.
@@ -70,11 +113,11 @@ export function ResultsPanel({
           <li
             key={choice.index}
             className="results__row"
-            {...(choice.index === yourChoice ? { "data-yours": "true" } : {})}
+            {...(choice.index === yours?.index ? { "data-yours": "true" } : {})}
           >
             <span className="results__label">
               {choice.label}
-              {choice.index === yourChoice ? (
+              {choice.index === yours?.index ? (
                 <span className="results__badge">yours</span>
               ) : null}
             </span>
@@ -98,22 +141,23 @@ export function ResultsPanel({
           everybody.
         </p>
       ) : null}
-
-      {/*
-        Not "Back": the chrome's own back control is on screen at the same time
-        and abandons the question entirely. Two controls both starting with the
-        same word, doing opposite things, is how someone loses their place.
-      */}
-      <button type="button" className="results__close" onClick={onClose}>
-        Close
-      </button>
-    </div>
+    </>
   );
 }
 
-/** Nobody has voted is impossible here - this is only shown after a vote. */
-function peopleSoFar(voters: number): string {
-  return voters === 1 ? "1 person so far" : `${voters} people so far`;
+/**
+ * How many people answered, in words.
+ *
+ * Nobody is a real answer now. After a vote it cannot happen - the vote just
+ * given is in the count - but a closed question's results are open to people
+ * who did not vote, and a question can close with nobody having answered it.
+ */
+function howMany(voters: number, ended: boolean): string {
+  if (voters === 0) {
+    return ended ? "Nobody answered this one." : "Nobody has answered yet.";
+  }
+  const people = voters === 1 ? "1 person" : `${voters} people`;
+  return ended ? `${people} answered` : `${people} so far`;
 }
 
 /** A bar's width as a share of the widest one, never dividing by zero. */
