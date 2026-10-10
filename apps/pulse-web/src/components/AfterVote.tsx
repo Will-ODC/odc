@@ -92,7 +92,7 @@ export function AfterVote({
       <>
         <ResultsPanel
           results={state.results}
-          yourChoice={state.choice}
+          yourChoices={[state.choice]}
           onClose={() => setShowing(false)}
           panelRef={panelRef}
         />

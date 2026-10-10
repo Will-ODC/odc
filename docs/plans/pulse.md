@@ -143,7 +143,11 @@ entry point is what calls `resendConfig(process.env)`** — see the deploy list 
    works.
 2. **The production entry point**, above.
 
-### P4a — `ClaimStore.discard`, so a failed send does not spend the cap · READY TO BUILD
+### P4a — `ClaimStore.discard`, so a failed send does not spend the cap · BUILT 2026-10-09
+
+**Built** as `ClaimStore.discard` on both stores, with conformance cases, called
+only when the provider answered 408, 429 or 503. A 500, 502 or 504 keeps the claim,
+because a gateway can send one after delivery. The text below is the brief it was built to.
 
 Deferred out of the mailer change by ADR-0027 rather than widening it. The claim
 is written before the send is attempted, so three failed sends inside the

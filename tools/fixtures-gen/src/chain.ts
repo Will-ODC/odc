@@ -55,6 +55,28 @@ export function tsAt(minutesAfterGenesis: number): string {
   );
 }
 
+/** ES-20's syntactic gate: UTC, exactly millisecond precision, trailing `Z`. */
+const ES20_SHAPE = /^\d{4}-\d{2}-\d{2}T\d{2}:\d{2}:\d{2}\.\d{3}Z$/;
+
+/**
+ * Asserts an explicitly supplied `ts` passes both ES-20 gates and returns it
+ * untouched — a checkpoint, never a transform, like `assertWholeMinute`. A
+ * value that is not a real UTC instant (or that `Date` would normalize, such
+ * as day 31 of a 30-day month) is thrown on, so a hand-typed genesis `ts`
+ * cannot ship a vector that is INVALID at line 1 by accident.
+ */
+export function assertCalendarTs(ts: string): string {
+  const ms = Date.parse(ts);
+  if (
+    !ES20_SHAPE.test(ts) ||
+    Number.isNaN(ms) ||
+    new Date(ms).toISOString() !== ts
+  ) {
+    throw new Error(`${ts} is not an ES-20 timestamp (a real UTC instant)`);
+  }
+  return ts;
+}
+
 /**
  * Asserts `tsAt`'s promised shape and returns `ts` untouched — a checkpoint,
  * never a transform. Named rather than inlined so the check is REACHABLE from a
@@ -419,6 +441,13 @@ export class ChainBuilder {
       contracts?: string;
       ancestorChain?: string;
       ancestorHead?: string;
+      /**
+       * The genesis `ts`. Defaults to hashing.md §6's GENESIS_TS. Only the
+       * chain-identity vectors set it: two chains one operator starts at
+       * different instants are otherwise byte-identical genesis events, and
+       * differ in identity only because `hash` covers `ts` (ET-7a).
+       */
+      ts?: string;
       violates?: readonly BuilderRule[];
     } = {},
   ): Event {
@@ -448,7 +477,13 @@ export class ChainBuilder {
     if (opts.ancestorHead !== undefined) {
       payload.ancestor_head = opts.ancestorHead;
     }
-    return this.seal("genesis", 1, payload, GENESIS_TS, operator);
+    return this.seal(
+      "genesis",
+      1,
+      payload,
+      assertCalendarTs(opts.ts ?? GENESIS_TS),
+      operator,
+    );
   }
 
   /** `participant_registered`, self-signed by its own `pubkey` (ET-10). */
