@@ -39,8 +39,8 @@ Do not apply charter rules to `apps/**`, and do not relax them anywhere else.
   **Storage is DONE** (#150, #158-#160; ADR-0020, ADR-0021, ADR-0023) and a
   `pnpm dev` with `PULSE_DATABASE_URL` keeps everything across a restart.
   **Mail is DONE** — Resend, #164, ADR-0027. **Serving is DONE** — a production
-  entry point and two images on one origin, #165, ADR-0028; **but neither image
-  has ever been built, and the first `docker build` is still the test.**
+  entry point and two images on one origin, #165, ADR-0028; **both images were
+  first built and smoke-tested 2026-10-09** (`just pulse-up` serves end to end).
   Of the four things that blocked a deploy, **only poll creation is left**, and
   it is blocked on the moderation decisions under ADR-0024. Also outstanding and
   mostly not code: a verified sending domain, a host and a domain. **Open

@@ -143,7 +143,11 @@ entry point is what calls `resendConfig(process.env)`** — see the deploy list 
    works.
 2. **The production entry point**, above.
 
-### P4a — `ClaimStore.discard`, so a failed send does not spend the cap · READY TO BUILD
+### P4a — `ClaimStore.discard`, so a failed send does not spend the cap · BUILT 2026-10-09
+
+**Built** as `ClaimStore.discard` on both stores, with conformance cases, called
+only when the provider answered 408, 429 or 503. A 500, 502 or 504 keeps the claim,
+because a gateway can send one after delivery. The text below is the brief it was built to.
 
 Deferred out of the mailer change by ADR-0027 rather than widening it. The claim
 is written before the send is attempted, so three failed sends inside the
@@ -213,7 +217,16 @@ bought with **reversibility, not speed**, and pillar 3's donations and volunteer
 commitments are not reversible and therefore **do** confirm. Do not read pulse's
 ballot as a precedent for how this pillar's actions are taken.
 
-## P6 — Poll authoring under ADR-0024 · BLOCKED ON DECISIONS; the operator's stated next work after storage
+## P6 — Poll authoring under ADR-0024 · BLOCKED ON VALUES, NOT RULES; the operator's stated next work after storage
+
+> **Corrected 2026-10-09.** The three rules listed below as open were settled
+> by the operator on 2026-09-11 and are recorded in **ADR-0024 §3** (3a
+> duplicates warn, 3b removal hides, 3c flagging plus manual removal, 3d post
+> to your community). What remains is ADR-0024 §5's values, grouped by what
+> each unblocks in issue **#217**: a first "post a question" slice needs only
+> §5.4, the default `closesAt` and `acceptsSuggestions`. The paragraphs below
+> predate ADR-0024 and are kept for their reasoning; ADR-0024 wins where they
+> disagree.
 
 **How polls come to exist.** ADR-0024 chooses crowdsourced posting with computed
 navigation, and this is the item that builds it. Today polls and their entire
