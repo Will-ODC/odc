@@ -225,6 +225,23 @@ test("the_ballot_route_reports_this_browsers_current_ballot_or_null", async () =
   assert.deepEqual(after.json().ballot, [0, 2]);
 });
 
+test("old_format_ballot_cookie_still_reads_its_stored_ballot", async () => {
+  const { app, votes } = await setup();
+  const ballotId = "b:legacy-browser";
+  await votes.castVote("p1", ballotId, [1]);
+  const signer = new SessionSigner(SECRET, {
+    ttlSeconds: 3600,
+    clock: () => START,
+  });
+  const oldCookie = `pulse_ballot=${signer.sign(ballotId)}`;
+  const reply = await app.inject({
+    url: "/api/polls/p1/ballot",
+    headers: { cookie: oldCookie },
+  });
+  assert.equal(reply.statusCode, 200);
+  assert.deepEqual(reply.json().ballot, [1]);
+});
+
 test("a_vote_counts_with_no_session_at_all", async () => {
   const { browser } = await setup();
   const reply = await browser()({
