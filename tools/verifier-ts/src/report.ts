@@ -94,3 +94,47 @@ export function verdictLine(result: Verdict): string {
       return `PARTIAL at line${result.lines.length > 1 ? "s" : ""} ${result.lines.join(", ")}`;
   }
 }
+
+const HEX64 = /^[0-9a-f]{64}$/;
+const LF = 0x0a;
+
+/** The stored `hash` of one line, or "unavailable" if it cannot be read. */
+function storedHash(line: Buffer): string {
+  try {
+    const v: unknown = JSON.parse(line.toString("utf8"));
+    if (typeof v === "object" && v !== null && !Array.isArray(v)) {
+      const h = (v as Record<string, unknown>)["hash"];
+      if (typeof h === "string" && HEX64.test(h)) return h;
+    }
+  } catch {
+    // fall through: not JSON
+  }
+  return "unavailable";
+}
+
+/**
+ * EX-24: the genesis hash (EX-21) and head (EX-14) to report on STDERR on every
+ * run over a NON-EMPTY export, whatever the verdict. Returns the two lines
+ * (with trailing newlines), or null for an empty export, which has neither.
+ *
+ * Each value is the stored `hash` field of the first / last line, read as-is:
+ * the bytes are split on LF, the one empty segment after a final LF is
+ * dropped, and the line is JSON.parse'd. A line that is not JSON, or whose
+ * `hash` is absent or not 64 lowercase hex, reports the literal `unavailable`
+ * for that one value. This is deliberately independent of the verdict: on an
+ * INVALID export the values are whatever the file claims, which is exactly
+ * what a reader needs to compare against an anchor.
+ *
+ * Tool output, not conformance surface (EV-17): no fixture asserts it.
+ */
+export function chainIdentityLines(bytes: Buffer): string | null {
+  if (bytes.length === 0) return null;
+  const firstEnd = bytes.indexOf(LF);
+  const first = firstEnd === -1 ? bytes : bytes.subarray(0, firstEnd);
+  const end = bytes[bytes.length - 1] === LF ? bytes.length - 1 : bytes.length;
+  // end === 0 only for the one-byte export "\n"; a negative offset would make
+  // lastIndexOf count from the END, so handle it explicitly.
+  const lastStart = end === 0 ? 0 : bytes.lastIndexOf(LF, end - 1) + 1;
+  const last = bytes.subarray(lastStart, end);
+  return `genesis: ${storedHash(first)}\nhead: ${storedHash(last)}\n`;
+}

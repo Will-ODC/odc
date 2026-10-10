@@ -20,6 +20,9 @@ interface Vector {
   id: string;
   export: string;
   head?: string;
+  // EX-22 `--chain` value. Optional, like `head` (109-115 carry one); passed
+  // through exactly like `head`.
+  chain?: string;
   expect:
     | { verdict: "VALID" }
     | { verdict: "INVALID"; line: number }
@@ -42,13 +45,13 @@ function actualToExpectShape(v: Verdict): unknown {
 }
 
 test(`fixtures index has all vectors`, () => {
-  assert.equal(index.vectors.length, 98);
+  assert.equal(index.vectors.length, 115);
 });
 
 for (const vec of index.vectors) {
   test(vec.id, () => {
     const bytes = readFileSync(resolve(fixturesDir, vec.export));
-    const result = verifyExport(bytes, vec.head);
+    const result = verifyExport(bytes, vec.head, vec.chain);
     assert.deepEqual(
       actualToExpectShape(result),
       vec.expect,

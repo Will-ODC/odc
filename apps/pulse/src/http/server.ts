@@ -177,10 +177,11 @@ export async function createServer(deps: ServerDeps): Promise<FastifyInstance> {
 
     const voter = await deps.voters.byId(claims.voterId);
     if (!voter) return undefined;
-    // Sessions issued before the voter last signed out are dead, wherever the
-    // cookie is held. This is what makes signing out more than a request to
-    // the browser that clicked it.
-    if (voter.sessionsValidFrom && claims.issuedAt < voter.sessionsValidFrom) {
+    // The shared generation revokes sessions across instances despite clock skew.
+    if (
+      claims.generation === undefined ||
+      claims.generation !== (voter.sessionGeneration ?? 0)
+    ) {
       return undefined;
     }
     return voter;
@@ -327,13 +328,17 @@ export async function createServer(deps: ServerDeps): Promise<FastifyInstance> {
     const result = await deps.claims.redeem(token);
     if (result.status !== "signed_in") return gone(reply, result.status);
 
-    reply.setCookie(SESSION_COOKIE, deps.signer.sign(result.voter.id), {
-      httpOnly: true,
-      sameSite: "lax",
-      secure: deps.secureCookies ?? true,
-      path: "/",
-      maxAge: deps.signer.ttlSeconds,
-    });
+    reply.setCookie(
+      SESSION_COOKIE,
+      deps.signer.sign(result.voter.id, result.voter.sessionGeneration ?? 0),
+      {
+        httpOnly: true,
+        sameSite: "lax",
+        secure: deps.secureCookies ?? true,
+        path: "/",
+        maxAge: deps.signer.ttlSeconds,
+      },
+    );
     return reply.send({
       status: "signed_in",
       voter: publicVoter(result.voter),
@@ -342,8 +347,7 @@ export async function createServer(deps: ServerDeps): Promise<FastifyInstance> {
   });
 
   /**
-   * Sign out everywhere, not only here: the voter's sessions-valid-from moves
-   * to now, so a copy of the cookie someone else kept stops working too.
+   * Sign out everywhere by advancing the shared session generation.
    *
    * The ballot identity goes with it. It has to: `pulse_ballot` lasts thirty
    * days and is what a ballot is filed under, so a browser that kept it after
@@ -363,7 +367,9 @@ export async function createServer(deps: ServerDeps): Promise<FastifyInstance> {
    */
   app.post("/api/sign-out", async (request, reply) => {
     const voter = await currentVoter(request);
-    if (voter) await deps.voters.invalidateSessionsBefore(voter.id, now());
+    if (voter) {
+      await deps.voters.advanceSessionGeneration(voter.id);
+    }
     reply.clearCookie(SESSION_COOKIE, { path: "/" });
     reply.clearCookie(BALLOT_COOKIE, { path: "/" });
     return reply.send({ status: "signed_out" });

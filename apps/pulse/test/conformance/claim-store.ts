@@ -46,6 +46,40 @@ export function claimStoreConformance(
         assert.equal(await store.byTokenHash("hash-2"), undefined);
       });
 
+      test("a_discarded_claim_neither_reads_back_nor_counts", async (t) => {
+        // P4a: a link whose email the provider refused never left pulse, so
+        // it must stop counting against the address's live-link cap.
+        const store = await fresh(t);
+        await store.put(claim());
+        await store.put(claim({ tokenHash: "hash-2" }));
+        await store.discard("hash-1");
+        assert.equal(await store.byTokenHash("hash-1"), undefined);
+        const live = await store.liveFor("ada@student.ubc.ca", AT);
+        assert.deepEqual(
+          live.map((c) => c.tokenHash),
+          ["hash-2"],
+        );
+      });
+
+      test("discarding_a_claim_that_is_not_there_changes_nothing", async (t) => {
+        const store = await fresh(t);
+        await store.put(claim());
+        await store.discard("hash-404");
+        assert.deepEqual(await store.byTokenHash("hash-1"), claim());
+      });
+
+      test("discard_never_removes_a_link_that_was_already_used", async (t) => {
+        // A spent link is the record that it was spent: "already used" is
+        // what a second click must hear, not "not one of ours".
+        const store = await fresh(t);
+        await store.put(claim());
+        assert.equal(await store.markUsed("hash-1", AT), true);
+        await store.discard("hash-1");
+        const kept = await store.byTokenHash("hash-1");
+        assert.ok(kept);
+        assert.deepEqual(kept.usedAt, AT);
+      });
+
       test("a_claim_with_no_community_reads_back_as_null_everywhere", async (t) => {
         // ADR-0030: an address no community claims still gets a link, and
         // its claim carries community null to the redeem that copies it onto

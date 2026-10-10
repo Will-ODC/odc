@@ -66,6 +66,14 @@ operator's problem and reads to anyone else as gibberish. **A refusal repeating
 cannot fix — a revoked key, an unverified domain — is not this 503**; it stays a 500,
 because telling everyone to retry forever is how a broken deploy goes unnoticed.
 
+**A 503 does not use up the address's link allowance when the provider said it never
+took the message** (its answer was 408, 429 or 503). The link pulse wrote for that
+email is forgotten, because no email carries it, so the next request after the outage
+is sent rather than told a link is already on its way. **Any other failure keeps the
+link live** until it expires: a timeout or dropped connection, or a 500, 502 or 504
+that a gateway may have sent after the provider had already delivered the email
+(P4a in `docs/plans/pulse.md`).
+
 ### `GET /api/sign-in/redeem?token=…`
 
 Reports whether a link is still good. **Consumes nothing.** Mail scanners and
@@ -113,8 +121,9 @@ second answer as a failure to someone who is, in fact, signed in.
 
 No body. Always answers `200 { "status": "signed_out" }`, whether or not anyone was
 signed in — asking to be signed out is not something to refuse. It clears the session
-cookie **and** moves the voter's sessions-valid-from to now, so a copy of the cookie
-kept elsewhere stops working too.
+cookie **and** atomically advances that voter's session generation in shared
+storage, so every earlier session stops working on every server instance,
+regardless of differences between their clocks.
 
 It also clears **`pulse_ballot`** — see "The ballot cookie" below. Signing out ends
 this browser's ability to read or change the vote it cast. The vote itself is not
@@ -132,10 +141,10 @@ The voter is **wrapped**, the same way it is in the redeem response, so a later 
 about the session itself can be added beside it without changing what `voter` means.
 `community` is a string or `null`, exactly as in the redeem response.
 
-| Status | Body                  | When                                                                      |
-| ------ | --------------------- | ------------------------------------------------------------------------- |
-| 200    | `{ voter }`           | signed in                                                                 |
-| 401    | `error: "signed_out"` | no cookie, an expired one, one issued before a sign-out, or no such voter |
+| Status | Body                  | When                                                        |
+| ------ | --------------------- | ----------------------------------------------------------- |
+| 200    | `{ voter }`           | signed in                                                   |
+| 401    | `error: "signed_out"` | no cookie, an expired or older generation, or no such voter |
 
 A 401 here is an ordinary answer — "nobody is signed in" — not a fault. The client
 reads it as `null`.
@@ -145,10 +154,17 @@ reads it as `null`.
 `pulse_session`, `HttpOnly`, `SameSite=Lax`, `Secure` (off only in local development),
 path `/`, 30 days.
 
-It carries the voter id, when it was issued, when it expires, and a signature over all
-three. Expiry is checked on the server, not left to the browser. Signing out moves the
-voter's sessions-valid-from to now, so every cookie issued earlier stops working — on
-every device, not only the one that clicked.
+It carries the voter id, a session generation, issue and expiry times, and a
+signature over them. Expiry is checked on the server, not left to the browser.
+Each request compares the generation with the current voter row. Sign-out
+increments that row atomically, so earlier sessions stop working on every
+device. A new sign-in receives the current generation. A sign-in racing with
+sign-out may receive an older generation and need a fresh link; it cannot
+restore a session that sign-out revoked.
+
+Session cookies issued before the generation format are refused and require a
+new sign-in. Existing ballot cookies keep working, so deploying this change
+does not erase a browser's access to its ballot.
 
 ## Polls, ballots, and results
 

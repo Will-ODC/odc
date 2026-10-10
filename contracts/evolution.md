@@ -1,6 +1,6 @@
 # Evolution — contracts/evolution.md
 
-**Version:** 5
+**Version:** 6
 **Status:** DRAFTING (Phase 0 · T5f, amended T9a/ADR-0014, ADR-0015,
 ADR-0017). Not frozen.
 **Companion specs:** `event-schema.md`, `event-types.md`, `hashing.md`,
@@ -166,8 +166,9 @@ the surface has to live here.
 
 - **EV-15.** **Stage A is exactly the set of checks that do not consult the type
   registry**; EV-6's enumeration is illustrative, not exhaustive. Stage A
-  comprises, in full: every rule of `export-format.md` (EX-1–EX-20 — framing,
-  canonical line form, chain linkage, head) **except the `sig` clause of EX-11,
+  comprises, in full: every per-export validity check of `export-format.md`
+  (EX-1–EX-23 — framing, canonical line form, chain linkage, head, chain
+  identity) **except the `sig` clause of EX-11,
   which is Stage B** (verifying `sig` per `hashing.md` HA-16 requires the
   per-type signing key, ET-8/ET-10/ET-13/ET-17); from `event-schema.md` ES-1–ES-8,
   ES-10, ES-12, ES-15–ES-17, ES-19, ES-20, ES-23–ES-28, and ES-33; and from
@@ -181,7 +182,9 @@ the surface has to live here.
   Stage B with anywhere on the chain (EV-20).**
   `event-schema.md` ES-13, ES-14, ES-21, ES-22 and ES-29 state definitions, or
   constraints on the verifier itself, rather than per-event checks; they are
-  outside this split and belong to neither stage. So are, in `event-types.md`,
+  outside this split and belong to neither stage. EX-24 is likewise outside
+  the split: it requires tool output on every non-empty run and does not change
+  the chain verdict. So are, in `event-types.md`,
   the boundary statements ET-20 and ET-21 and the evolution constraint ET-22
   (which describe what the log does not enforce, and what a future version may
   not do), and **ET-25**, which is a producer obligation no reader can check —

@@ -24,6 +24,23 @@ test("a_freshly_signed_cookie_verifies_and_names_its_voter", () => {
   assert.equal(claims?.expiresAt.getTime(), START.getTime() + 3600_000);
 });
 
+test("a_session_cookie_carries_a_signed_generation", () => {
+  const { signer } = signerAt();
+  const cookie = signer.sign("voter.with.dots", 3);
+  assert.equal(signer.verify(cookie)?.voterId, "voter.with.dots");
+  assert.equal(signer.verify(cookie)?.generation, 3);
+  assert.equal(signer.verify(cookie.replace(".3.", ".4.")), undefined);
+});
+
+test("legacy_cookie_has_no_session_generation", () => {
+  const { signer } = signerAt();
+  assert.equal(
+    signer.verify(signer.sign("b:ballot-id"))?.generation,
+    undefined,
+  );
+  assert.equal(signer.verify(signer.sign("voter-1"))?.generation, undefined);
+});
+
 test("a_cookie_stops_verifying_once_it_expires", () => {
   // The whole point of the rewrite: expiry is checked by the server, not left
   // to a Set-Cookie attribute the browser may ignore or a copy may never see.
