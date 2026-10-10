@@ -21,6 +21,10 @@ hash chain and ledger.
 - Initially the operator selects features for agents to implement; no vote is
   needed while there is one participant. Later, solicit feedback on what to
   build and how it should look and behave.
+- The broader app can use different interfaces; Pulse begins as the primary
+  interface. The interface itself, including its appearance and behavior, is
+  open to public input and voting. A chat-style interface with decision popups,
+  like the prompts in this conversation, is a strong candidate.
 - Support numerous polls while reducing duplicate proposals and questions.
   ADR-0024 already accepts similar-question warnings using full-text search;
   they are warnings, not posting refusals.
@@ -53,6 +57,25 @@ eligibility and account-level repeat-vote prevention; duplicate warnings;
 published participation/support rules; links from a proposal to implementation
 and release feedback. Their final issue scopes and order still need a plan.
 Voting can select work without bypassing code review, tests or release checks.
+
+## Created work and issue-writing skill
+
+- [Epic #227](https://github.com/Will-ODC/odc/issues/227) tracks the bounded
+  development-feedback loop. It does not settle the confirmation, privacy or
+  threshold decisions below.
+- [Ticket #228](https://github.com/Will-ODC/odc/issues/228) is a contained
+  interactive chat-popup prototype: a sample conversation, one single-choice
+  poll, eligibility/error states and keyboard/mobile behavior. Sample responses
+  are labelled as a preview. Live integration waits for shared eligibility,
+  account-ballot and decision-rule support.
+- `/create-issue` produces short, bullet-focused Jira-style feature tickets:
+  summary, scope, 3–5 observable acceptance criteria, real dependencies and
+  context links. Search for duplicates and keep decision-only material in
+  memory. The user authorised creating and applying this skill.
+- [Skill PR #229](https://github.com/Will-ODC/odc/pull/229) adds the canonical
+  `.claude/skills/create-issue/SKILL.md` and a `.agents/skills/create-issue`
+  alias for Codex-compatible discovery. One copy is maintained. Both #227 and
+  #228 were written using it. This PR and the memory update are pending merge.
 
 ## Unresolved before voting implementation
 
