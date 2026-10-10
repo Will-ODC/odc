@@ -73,6 +73,14 @@ jobs:
       # the verifier disagrees, even without a branch-protection update.
       - run: go test ./...
         working-directory: services/verifier
+      # ADR-0032: file errors precede anchor mismatches, and endpoint reports
+      # are stored claims. Exercise both real CLIs, outside golden verdict
+      # conformance, so a report/precedence regression cannot pass unnoticed.
+      - name: Check anchor precedence and endpoint reports
+        run: |
+          (cd services/verifier && go build -o "$RUNNER_TEMP/odc-verify" .)
+          python3 docs/security/attacks/check-anchor-policy.py "$RUNNER_TEMP/odc-verify"
+          python3 docs/security/attacks/check-anchor-policy.py node tools/verifier-ts/dist/src/cli.js verify
       # T8's complete gate: one clean chain and all eight contract tamper cases,
       # each checked by both independent verifiers.
       - run: pnpm --filter @odc/rehearsal rehearse
