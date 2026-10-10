@@ -38,8 +38,9 @@ genesis hash (stored claim): <64 lowercase hex | unavailable>
 head hash (stored claim): <64 lowercase hex | unavailable>
 ```
 
-These are the `hash` fields **as written** in the first and last records of the
-file, not recomputed or verified hashes: on an `INVALID` verdict they prove
+These are the decoded `hash` string values **stored** in the first and last
+records of the file (no normalisation beyond JSON decoding), not recomputed or
+verified hashes: on an `INVALID` verdict they prove
 nothing, and they mean something only alongside the verdict and an
 independently trusted anchor. A value is `unavailable` when that record does
 not decode as a JSON object with a 64-lowercase-hex `hash` string. Nothing is

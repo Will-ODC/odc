@@ -136,6 +136,12 @@ func TestChainFlag(t *testing.T) {
 	// INVALID at 3 (its last line) by a registered event's semantic check, ET-17.
 	semantic := writeExport(t, "semantic", string(fixtureVector(t, "058-vote-sig-wrong-key.ndjson")))
 
+	// Framing failures (EX-20 lines) on otherwise-intact 002: anchors compare
+	// only after framing passes too (EX-15/EX-22).
+	vls := strings.Split(strings.TrimSuffix(string(valid), "\n"), "\n")
+	noFinalLF := writeExport(t, "no-final-lf", strings.Join(vls, "\n"))
+	crLine2 := writeExport(t, "cr-line2", vls[0]+"\n"+vls[1]+"\r\n"+strings.Join(vls[2:], "\n")+"\n")
+
 	cases := []struct {
 		name     string
 		args     []string
@@ -169,6 +175,9 @@ func TestChainFlag(t *testing.T) {
 		{"partial-head-mismatch-last-line", []string{pp, "--head", otherHash}, reInvalid, 1, "5"},
 		{"partial-both-wrong-chain-wins", []string{pp, "--head", otherHash, "--chain", otherHash}, reInvalid, 1, "1"},
 		{"partial-chain-correct-head-wrong", []string{pp, "--chain", pGen, "--head", otherHash}, reInvalid, 1, "5"},
+		// A framing INVALID keeps its EX-20 line too.
+		{"framing-missing-final-lf-both-wrong", []string{noFinalLF, "--chain", otherHash, "--head", otherHash}, reInvalid, 1, "4"},
+		{"framing-cr-chain-wrong", []string{crLine2, "--chain", otherHash}, reInvalid, 1, "2"},
 	}
 	for _, c := range cases {
 		t.Run(c.name, func(t *testing.T) {
@@ -338,6 +347,13 @@ func TestEX24CandidateExtraction(t *testing.T) {
 		// Insignificant JSON whitespace around a decodable object still
 		// decodes (the line is non-canonical, EX-10, but the claim recovers).
 		{"spaced-object", valid + ` { "hash" : "` + otherHash + `" } ` + "\n", gen, otherHash},
+		// The claim is the DECODED JSON string: JSON escapes are decoding, not
+		// normalisation — an escaped hex digit, or an escaped key spelling
+		// `hash`, still yields the claim.
+		{"escaped-hash-value", valid + `{"hash":"\u0031` + otherHash[1:] + `"}` + "\n", gen, otherHash},
+		{"escaped-hash-key", valid + `{"\u0068ash":"` + otherHash + `"}` + "\n", gen, otherHash},
+		// ... but an escape decoding to an uppercase letter is still uppercase.
+		{"escaped-uppercase", valid + `{"hash":"\u0041` + otherHash[1:] + `"}` + "\n", gen, ua},
 		// One missing value never suppresses the other.
 		{"both-unavailable", "x\ny\n", ua, ua},
 		{"bom-genesis-unavailable", "\xef\xbb\xbf" + valid, ua, head},

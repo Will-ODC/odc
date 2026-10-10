@@ -11,7 +11,7 @@ import (
 const Unavailable = "unavailable"
 
 // ReportClaims returns the two endpoint STORED CLAIMS of export-format.md
-// EX-24: the `hash` field as written in the first candidate record (the
+// EX-24: the decoded `hash` string stored in the first candidate record (the
 // claimed genesis hash, EX-21) and in the last candidate record (the claimed
 // head, EX-14). ok is false for an empty input, which has no endpoints and so
 // nothing to report.
@@ -50,12 +50,13 @@ func candidates(data []byte) [][]byte {
 }
 
 // claim recovers one endpoint's stored claim from its candidate record. The
-// claim is available only if the candidate, taken byte-for-byte, decodes as a
+// claim is available only if the candidate, taken as-is, decodes as a
 // JSON object (RFC 8259: valid UTF-8, one value, insignificant whitespace
 // allowed) whose top-level `hash` member is a string of exactly 64 lowercase
 // hexadecimal characters. A repeated top-level `hash` key resolves to its LAST
 // occurrence (encoding/json's map decoding overwrites earlier members). The
-// value is never normalised, lowercased, trimmed or substituted: anything else
+// claim is the DECODED string, so JSON escapes in the key or value are decoded
+// (decoding is not normalisation); beyond that the value is never normalised, lowercased, trimmed or substituted: anything else
 // is Unavailable.
 func claim(cand []byte) string {
 	// encoding/json silently replaces invalid UTF-8 with U+FFFD; such bytes

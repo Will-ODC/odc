@@ -70,7 +70,8 @@ Nothing else is written to stderr on such a run; stdout is always exactly the
 one verdict line.
 
 **These are stored claims, not verified hashes.** Each value is the `hash`
-field exactly as written in the file — never a recomputation. On a
+field's decoded JSON string value as stored in the file — never a
+recomputation, and never normalised beyond JSON decoding. On a
 structurally valid export they coincide with the genesis hash (EX-21) and the
 head (EX-14); on an `INVALID` verdict they are **not** verified chain anchors
 and prove neither integrity nor identity. Read them only together with the
@@ -85,13 +86,18 @@ head claim from the last; for a single candidate both come from it. These
 rules apply even when framing (a CR, a BOM, a missing final LF, a blank line)
 or any other file check fails.
 
-**Claims.** A claim is available only if its candidate, taken byte-for-byte,
-decodes as a JSON object — valid UTF-8, a single JSON value with optional JSON
+**Claims.** A claim is available only if its candidate, taken as-is (no
+bytes stripped or repaired), decodes as a JSON object — valid UTF-8, a single JSON value with optional JSON
 whitespace around it, and that value an object — whose **top-level** `hash`
 member is a string of exactly 64 lowercase hexadecimal characters. If the
 top-level `hash` key is repeated, the **last** occurrence is the claim (this
 does not make duplicate keys valid in an export; EX-10/HA-6 still reject them).
-Nothing is normalised, lowercased, trimmed or substituted: any other candidate
+The claim is the member's **decoded** JSON string value, so JSON escapes are
+decoded as usual (`"\u0031…"` yields `1…`, and an escaped key that decodes to
+`hash` is the `hash` member); beyond that JSON decoding nothing is
+normalised, lowercased, trimmed or substituted, and an escape that decodes to
+a non-hex or uppercase character leaves the claim unavailable. Any other
+candidate
 (not JSON, not an object, invalid UTF-8, a BOM, no `hash`, a non-string or
 `null` `hash`, the wrong length or case) gives `unavailable` for that endpoint
 only. One endpoint being `unavailable` never suppresses the other line.

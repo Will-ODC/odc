@@ -123,7 +123,7 @@ func run(args []string, stdout, stderr *os.File) int {
 
 	// EX-24: on every run that produced a chain verdict over non-empty input,
 	// whatever the verdict, report the two endpoint STORED CLAIMS — the `hash`
-	// field as written in the first and last candidate records — on STDERR,
+	// field stored in the first and last candidate records — on STDERR,
 	// after the verdict line, so stdout stays exactly the one verdict line.
 	// They are labelled as stored claims because they are not recomputed and,
 	// on INVALID input, not verified chain anchors. Tool output, not
