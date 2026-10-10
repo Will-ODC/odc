@@ -39,8 +39,59 @@ hash chain and ledger.
 - **Thresholds cover both participation and support.** Actual numbers and the
   support calculation are not chosen. A filtered-tally privacy cutoff or a
   moderation auto-hide threshold is not a development quorum.
+- Cut tickets by distinct behavior and responsibility, not by the message in
+  which an idea appeared. Shared backend work belongs in one ticket; separate
+  interfaces depend on it instead of rebuilding it.
+
+## Confirmation, trust and abuse decisions
+
+Operator answers recorded 2026-10-09:
+
+- The operator is the first account with full powers. People approved directly
+  by that operator should also have full powers. Use plain product language;
+  the term "super-user" is not required.
+- As approval relationships extend beyond the operator, permissions should
+  depend on trust. Possible factors include how closely someone is connected
+  to a fully trusted account, contributions, and authentication evidence such
+  as email verification or an in-person confirmation through the app. This is
+  a direction for a later rule, not an approved score formula or weighting.
+- The normal confirmation requirement is **one authorised community
+  representative or two authorised individual participants**. The operator
+  can establish the initial group directly. Two approvals must come from
+  different people; repeat submissions by one person cannot supply both.
+- Removing someone's voting access stops future votes. Past votes remain
+  unless evidence of abuse calls for review; removal does not automatically
+  erase their voting history or change finished decisions.
+- People should be able to report participants, polls and messages easily,
+  including abuse and threats. Reporting itself needs protections against
+  misuse. Shared reporting, review and each report entry point are distinct
+  implementation responsibilities.
+
+Still open: the exact meaning of full application powers; permission propagation
+and trust factors/weights; how contributions are established; approved community
+representatives; the evidence required for in-person confirmation; effects of
+revoked approvals on other people; and how past votes can be reviewed while
+protecting ballot privacy. Trust-based permissions and vote weighting are
+separate questions; no vote-weighting change was chosen.
+
+ADR-0024 §3c currently accepts automatic poll hiding after enough flags, with
+the count unchosen. Preserve that rule unless the operator explicitly changes
+it and the architectural decision is amended. The reporting tickets below do
+not choose a new penalty rule.
+
+Reporting questions currently presented to the operator: who may submit reports,
+and whether penalties require human review or may happen automatically. Proposed
+protections include private reports, server-side submission limits and preventing
+repeat submissions from multiplying the same unresolved complaint. Exact limits,
+review roles, appeal behavior and the evidence needed to act remain undecided.
 
 ## Suggested structure, not yet ratified
+
+While there is one participant, record each design question, its options and the
+operator's decision in memory without posting a poll. Later, the same question
+can be put to eligible participants under the published voting rules. Selected
+work becomes a contained implementation ticket; delivery still requires review
+and passing checks.
 
 Give a proposed improvement one home, with linked polls for priority, design
 choices and post-release feedback. Create implementation issues when the work
@@ -61,8 +112,8 @@ Voting can select work without bypassing code review, tests or release checks.
 ## Created work and issue-writing skill
 
 - [Epic #227](https://github.com/Will-ODC/odc/issues/227) tracks the bounded
-  development-feedback loop. It does not settle the confirmation, privacy or
-  threshold decisions below.
+  development-feedback loop. The confirmation count is now decided above; trust
+  calculation, ballot privacy and threshold values remain open.
 - [Ticket #228](https://github.com/Will-ODC/odc/issues/228) is a contained
   interactive chat-popup prototype: a sample conversation, one single-choice
   poll, eligibility/error states and keyboard/mobile behavior. Sample responses
@@ -75,16 +126,45 @@ Voting can select work without bypassing code review, tests or release checks.
 - [Skill PR #229](https://github.com/Will-ODC/odc/pull/229) adds the canonical
   `.claude/skills/create-issue/SKILL.md` and a `.agents/skills/create-issue`
   alias for Codex-compatible discovery. One copy is maintained. Both #227 and
-  #228 were written using it. This PR and the memory update are pending merge.
+  #228 were written using it. The original memory
+  update #226 is merged; the skill PR remains pending merge.
+
+## Contained trust and reporting tickets
+
+Each is future implementation work with five acceptance checks. Open policy
+values stay in this note and are explicit prerequisites, rather than being
+chosen by the ticket author. These tickets do not start implementation.
+
+- [#230](https://github.com/Will-ODC/odc/issues/230) — Give owner-approved users full application permissions.
+- [#231](https://github.com/Will-ODC/odc/issues/231) — Record confirmations and check participant eligibility.
+- [#232](https://github.com/Will-ODC/odc/issues/232) — Check confirmation permissions using trust rules.
+- [#233](https://github.com/Will-ODC/odc/issues/233) — Submit abuse reports with duplicate and rate limits.
+- [#234](https://github.com/Will-ODC/odc/issues/234) — Review reports and record outcomes.
+- [#235](https://github.com/Will-ODC/odc/issues/235) — Report a participant from their profile or menu.
+- [#236](https://github.com/Will-ODC/odc/issues/236) — Report an abusive poll from its screen.
+- [#237](https://github.com/Will-ODC/odc/issues/237) — Report an individual chat message.
+- [#238](https://github.com/Will-ODC/odc/issues/238) — Stop future development votes without erasing past ballots.
+
+Dependency order: owner grants #230 before confirmation records #231; #231
+uses initial owner-granted authority before the later trust check #232. Shared
+report submission #233 precedes review #234 and entry points #235–#237; those
+entry points also wait for their actual product surfaces. #237 requires saved
+chat messages, which prototype #228 does not supply. Voting restrictions #238
+wait for account-based development voting and accepted reviewer authority.
+
+Merge order for this checkpoint: the independent issue-writing skill #229 and
+this memory update can land in either order after review and green CI. Neither
+requires or changes the parallel Pulse implementation or core audit work.
 
 ## Unresolved before voting implementation
 
-1. What qualifies a community to confirm someone, who may act for it, and how
-   the initial trusted participants are established. The operator can select
-   work while these rules remain undecided.
-2. Whether one endorsement is sufficient, how endorsements are recorded, and
-   what revocation, disputes and abuse handling do to eligibility and prior
-   votes. A chain of endorsements alone does not prove unique humans.
+1. What qualifies a community to confirm someone and who may act for it.
+   Initial operator/direct approvals and full powers are decided above; later
+   trust rules and their evidence remain open.
+2. The confirmation count is decided above. Its recording, revocation and
+   dispute rules remain open. A chain of endorsements alone does not prove
+   unique humans. Voting-access removal preserves past votes pending an
+   evidence-based review; the review/privacy mechanism still needs a design.
 3. How one eligible account retains one ballot across devices and sign-ins.
    Current Pulse ballots are browser-cookie identities, separate from signed-in
    accounts; API.md explicitly describes repeat voting after signing out/in.
@@ -107,8 +187,8 @@ ideas. Their original GitHub bodies remain available as provenance.
 - **#192 — completed:** #202 supplied the batching conformance vectors. This
   is historical work, not a pending feature request.
 - **#193 — completed:** #220/#221 supplied chain identity/reporting and #222
-  supplied its fixtures. The reporting/precedence amendment remains separate
-  PR #224; closing #193 does not clear T9.
+  supplied its fixtures. The reporting/precedence amendment landed as
+  PR #224; closing #193 does not clear T9. See the core audit memory for its gate.
 - **#217 — context transferred:** ADR-0024 settled duplicate warnings, hide
   rather than delete, community flagging/manual removal, posting to one's
   community and public reading. PR #218 corrected the plan's stale blocker.
@@ -148,3 +228,9 @@ Checkpoint self-review: this note distinguishes accepted operator requirements
 from proposals and unanswered questions, preserves the transferred issues'
 essential reasoning, and leaves existing product behavior unchanged. Issue
 cleanup does not implement participant verification, ballot privacy or thresholds.
+
+Checkpoint scope review: shared reporting is defined once, report controls only
+call it, report review records outcomes, and voting restrictions enforce a
+separate access change. Trust evidence is recorded separately from the later
+permission calculation. None of these tickets defines trust weights, ballot
+weights, reporting eligibility, penalties or privacy architecture.

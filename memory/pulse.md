@@ -5,7 +5,8 @@
 > the served API is `apps/pulse/API.md`. Keep this short — history is in git.
 
 For the operator's development-feedback direction, confirmed-voter requirement,
-private-choice default, thresholds and transferred issue decisions, read
+private-choice default, trust/confirmation decisions, reporting tickets,
+thresholds and transferred issue decisions, read
 `memory/pulse-development.md`. Those requirements are not implemented yet.
 
 ## What pulse is
