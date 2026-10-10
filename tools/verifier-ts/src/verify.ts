@@ -417,8 +417,13 @@ function frame(bytes: Buffer): Framing {
  * Verify a whole export.
  * @param bytes  raw file bytes (read as bytes, never as decoded text)
  * @param head   optional expected head (64 lowercase hex), EX-15
+ * @param chain  optional expected genesis hash (64 lowercase hex), EX-22
  */
-export function verifyExport(bytes: Buffer, head?: string): Verdict {
+export function verifyExport(
+  bytes: Buffer,
+  head?: string,
+  chain?: string,
+): Verdict {
   // EX-6/EX-18: an empty export is a well-formed export but NOT a valid chain;
   // the missing genesis is attributed to line 1.
   if (bytes.length === 0)
@@ -443,6 +448,7 @@ export function verifyExport(bytes: Buffer, head?: string): Verdict {
   let prevHash: string | null = null;
   let expectedSeq = 1;
   let lastHash: string | null = null;
+  let genesisHash: string | null = null; // EX-21: line 1's hash, once it passed
   let contentFault: Fault | null = null;
 
   for (let i = 0; i < lines.length; i++) {
@@ -538,6 +544,7 @@ export function verifyExport(bytes: Buffer, head?: string): Verdict {
       partialLines.push(lineNo);
     }
 
+    if (isFirst) genesisHash = ev.hash;
     prevHash = ev.hash;
     lastHash = ev.hash;
     expectedSeq++;
@@ -545,11 +552,30 @@ export function verifyExport(bytes: Buffer, head?: string): Verdict {
 
   if (contentFault !== null) invalid.push(contentFault);
 
-  // EX-15/EX-19: a --head mismatch is INVALID at the last line. Only meaningful
-  // once every line has passed (link checks complete); if the chain already has
-  // a fatal line, that lower-or-equal line number wins by the fold below anyway.
-  if (invalid.length === 0 && head !== undefined) {
-    if (lastHash === null || lastHash !== head) {
+  // EX-22/EX-23 (--chain) and EX-15/EX-19 (--head): the two out-of-band
+  // anchors are checked at the SAME point and under the SAME condition — only
+  // once every line has passed (link checks complete; EX-15 "after all link
+  // checks pass", EX-22 "even when every link check passes"). So either one
+  // can turn a VALID or a PARTIAL verdict into INVALID (INVALID outranks
+  // PARTIAL, EV-17), but neither can change an INVALID the file already earned
+  // on its own: that fatal line is at or below any line these would blame.
+  //
+  // Precedence when BOTH mismatch: the spec does not state it directly. EV-17
+  // names "the first fatal line, scanning the export in file order", and
+  // EX-23 / EX-19 attribute the two mismatches to line 1 and the last line
+  // respectively — so the --chain mismatch (line 1) wins, the lowest line
+  // being blamed first like every other first-fatal-line attribution. The fold
+  // below implements that; the --chain fault is pushed first so that on a
+  // one-line export (both at line 1) its reason is the one reported.
+  if (invalid.length === 0) {
+    if (chain !== undefined && genesisHash !== chain) {
+      invalid.push({
+        line: 1,
+        reason:
+          "EX-22/EX-23: genesis hash does not match the --chain value supplied out of band",
+      });
+    }
+    if (head !== undefined && (lastHash === null || lastHash !== head)) {
       invalid.push({
         line: lines.length,
         reason:

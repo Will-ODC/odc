@@ -8,7 +8,7 @@
 
 import { readFileSync } from "node:fs";
 import { verifyExport } from "./verify.js";
-import { oneLine, verdictLine } from "./report.js";
+import { chainIdentityLines, oneLine, verdictLine } from "./report.js";
 
 const HEX64 = /^[0-9a-f]{64}$/;
 
@@ -36,7 +36,9 @@ export function run(argv: string[], deps: CliDeps = defaultDeps): number {
 }
 
 function usage(deps: CliDeps): number {
-  deps.err("usage: verify <export.ndjson> [--head <64-lowercase-hex>]\n");
+  deps.err(
+    "usage: verify <export.ndjson> [--head <64-lowercase-hex>] [--chain <64-lowercase-hex>]\n",
+  );
   return 3;
 }
 
@@ -44,6 +46,7 @@ function main(argv: string[], deps: CliDeps): number {
   const args = argv.slice(2);
   let file: string | undefined;
   let head: string | undefined;
+  let chain: string | undefined;
 
   for (let i = 0; i < args.length; i++) {
     const a = args[i];
@@ -51,6 +54,11 @@ function main(argv: string[], deps: CliDeps): number {
       const v = args[i + 1];
       if (v === undefined) return usage(deps);
       head = v;
+      i++;
+    } else if (a === "--chain") {
+      const v = args[i + 1];
+      if (v === undefined) return usage(deps);
+      chain = v;
       i++;
     } else if (a === "verify") {
       // Optional leading subcommand word; ignored so `verify verify f` also works.
@@ -68,6 +76,10 @@ function main(argv: string[], deps: CliDeps): number {
     deps.err("error: --head must be 64 lowercase hex\n");
     return 3;
   }
+  if (chain !== undefined && !HEX64.test(chain)) {
+    deps.err("error: --chain must be 64 lowercase hex\n");
+    return 3;
+  }
 
   let bytes: Buffer;
   try {
@@ -77,10 +89,15 @@ function main(argv: string[], deps: CliDeps): number {
     return 3;
   }
 
-  const result = deps.verify(bytes, head);
+  const result = deps.verify(bytes, head, chain);
   // Render before writing so a throw while rendering leaves stdout empty.
   const line = verdictLine(result) + "\n";
+  // EX-24: genesis hash and head, on STDERR only (stdout stays the one verdict
+  // line), after the verdict, for every non-empty export whatever the verdict.
+  // Tool output, not conformance surface (EV-17).
+  const identity = chainIdentityLines(bytes);
   deps.out(line);
+  if (identity !== null) deps.err(identity);
   switch (result.verdict) {
     case "VALID":
       return 0;
