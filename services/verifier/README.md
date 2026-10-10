@@ -6,7 +6,7 @@ fresh, isolated context — independence from the ledger is the entire point, so
 second independent verifier can agree with it by construction.
 
 ```
-verify <export.ndjson> [--head <hash>]
+verify <export.ndjson> [--head <hash>] [--chain <genesis-hash>]
 ```
 
 It reports exactly one of the three chain verdicts of `contracts/evolution.md`
@@ -23,6 +23,13 @@ EV-7/EV-17:
 Tool-level failures (bad usage, unreadable file) exit `3` and are never a chain
 verdict. The reason text after a verdict is **advisory only** and is not part of
 conformance (EV-17); conformance is the verdict token and line number(s) alone.
+
+`--chain` pins which chain (its genesis hash, EX-22; mismatch is `INVALID at
+line 1`), `--head` pins how much of it (EX-15). Either mismatch can only turn a
+`VALID` or `PARTIAL` into `INVALID`, never move an earlier `INVALID`; if both
+mismatch, line 1 is blamed. On every non-empty export the verifier also writes
+`genesis: <hex>` and `head: <hex>` to stderr (EX-24) — tool output, not
+conformance. Details in `API.md`.
 
 See `API.md` for the full interface, and `docs/charter.md` §4 for the record
 model this verifier enforces.
