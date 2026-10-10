@@ -24,12 +24,11 @@
 
 **Phase 0 — Contracts.** The T9 audit has **run** and returned **REQUEST
 CHANGES** (six blocking findings, `docs/security/audit-phase-0.md`). All six were
-decided and answered in the specs as **ADR-0013…0018** (#98). Versions, checked
-against the files 2026-08-23: `event-types.md` **v9**, `event-schema.md` **v4**,
-`export-format.md` **v4**, `evolution.md` **v4**, `hashing.md` **v2**,
-`read-api.md` v1, `ids.md` v1. (This line read v8/v3/v3 until 2026-08-23 — ADR-0019
-bumped three of them in #112 and updated only the Next section. Re-read the
-`**Version:**` lines rather than trusting any prose, this line included.)
+decided and answered in the specs as **ADR-0013…0018** (#98). Versions, checked against master `f13c8cd` on 2026-10-10 UTC:
+`event-types.md` **v11**, `event-schema.md` **v5**, `export-format.md` **v4**,
+`evolution.md` **v6**, `hashing.md` **v2**, `read-api.md` v1, `ids.md` v1.
+The approved anchor-policy branch proposes `export-format.md` v5; it is not merged.
+Read the specs' `Version:` lines rather than historical prose.
 
 **The gate is still closed.** Spec changes alone do not clear T9 — it reopens only
 after fixtures, both verifiers, and a **fresh re-audit** (see Next). Nothing may be
@@ -37,20 +36,37 @@ implemented in services/ until then, and T9a advances `contracts/` to **RELEASE
 CANDIDATE** (ADR-0007) only after that. The `contracts-v1` freeze stays deferred
 until real operational use; `contracts/` remains **DRAFTING**.
 
-**Conformance work: phases 1 and 2 are COMPLETE.** Phase 1 #104/#105; phase 2's
-contracts half (ADR-0019, #112), verifier half (#122, #123, #124, merged
-2026-08-23) and **fixture half (#136, #137, merged 2026-08-26)**. The corpus is
-**98 vectors** (VALID 15, PARTIAL 4, INVALID 79). **Phase 3: the contract and
-verifier halves are COMPLETE (2026-10-09).** Merged: the rehearsal reshape
-(#172), ADR-0029 (#176, then its review fix #180: `event-types.md` **v11**, a
-batch is a maximal run; `event-schema.md` **v5**), and both verifiers (#177 +
-#181 Go, #178 TS). **The vector half is the live work**, and nothing in CI yet
-exercises ET-23, ET-24 or ET-24a. Detail is under Next → Phase 3. Phase 4 has not
-started. The phase list is under
-Next — **and note the coupling rule there is NOT "fixtures and verifiers must land
-together"**, which is true only of phase 1. The real rule: **fixtures may never
-precede verifiers; verifiers may land alone whenever their new checks are no-ops
-on the committed corpus.** Assuming the stronger rule costs a needless mega-PR.
+**Conformance work: phases 1–3 are COMPLETE.** Phase 3's ten batching
+vectors `099`–`108` landed in #202 (`249eb49`), closing #192. The committed
+corpus is **115 vectors** (VALID 21, PARTIAL 4, INVALID 90); fixtures v14
+after #222 (`660201a`) added chain-identity vectors `109`–`115`.
+The rehearsal, ADR-0029 and both batching verifiers had already merged.
+**Phase 4 implementations and fixtures are merged:** #220's Go chain-identity/reporting
+implementation merged as `85f767f`; TS #221 merged as `b3491e3`; #222 merged
+as `660201a`. #203's EV-15 stage map merged as `25ff5af`. #219
+(`151c36d`) fixes TS internal errors returning INVALID; #201 fixes the
+rehearsal judge's acceptance of unordered PARTIAL lines.
+
+**Checkpoint / ownership (updated 2026-10-10 UTC).** Codex resolved #203's changelog conflict
+and pushed `83a6224`, preserving #202's entry; its five required GitHub checks
+passed before merge. Claude resolved #222, now merged, and retains the separate
+Pulse workstream. Codex owns only these pushed follow-ups, all pending merge:
+`codex/core-security-checkpoint-20261009`, `codex/hash-chain-anchor-policy`
+(`942d00c`, ADR-0032), and `codex/hash-chain-unknown-batching-proposal`
+(`86cc615`, unratified proposal). **Merge order: core checkpoint → approved
+anchor policy → batching proposal artifact → decide detailed batching policy →
+isolated verifier implementations → fixtures → fresh T9 re-audit → RC.**
+Local pipeline-equivalent checks pass, including required PostgreSQL tests,
+Go tests/vet, 39 guard tests and the 9×2 rehearsal. Both CLIs pass 16 anchor
+checks and eight current batching cases; three proposed cases fail identically,
+as expected until a decision and implementation. Git pushes work, but GitHub
+API access is blocked by the environment proxy: no PRs or new remote CI results
+are claimed for these branches. The saved environment draft adds
+`api.github.com`; it must be reviewed/saved/published to apply.
+See `docs/security/hash-chain-checkpoint-2026-10-09.md` for scope and evidence.
+
+The coupling rule remains: **fixtures may never precede verifiers**; verifiers
+may land alone when their new checks are no-ops on the committed corpus.
 
 ### Owed right now — must ride into the next PR that touches each
 
@@ -71,12 +87,15 @@ this list alone.**
    depth-64 bound the Go verifier ships has **no spec behind it**, so a third
    implementer cannot know what is permitted.
    → § Blockers, first entry
-4. ~~**ET-23/ET-24 are implemented by neither verifier.**~~ **Implemented in
-   both: Go merged in #177, TS merged in #178; ET-24a merged with #176 and is
-   corrected by #180, all merged.** Still owed: the vectors. No committed vector cites ET-23, and none
-   has an issue whose ballots span more than one batch, so until the vectors land
-   **nothing in CI can tell whether ET-24 or ET-24a is implemented.**
-   → Next → Phase 3
+4. **Batching conformance is DONE** (#202): the corpus now pins ET-23,
+   ET-24 and ET-24a, including both ADR-0029 run-attribution counterexamples.
+5. **Settle the future-version batching question before RC.** Unknown
+   `vote_cast` versions can hide members of an earlier batch; current v1-only
+   counting risks an old verifier returning INVALID solely for unknown data.
+   See `memory/OPEN-QUESTIONS.md` → Future `vote_cast` versions and ballot batching.
+6. **Merge the approved reporting/precedence amendment**, decide the batching
+   proposal and remaining contradictions, then run a fresh T9 re-audit.
+   A passing pipeline or this context checkpoint does not clear T9.
 
 ## Done (ledger — detail is in the cited squash commit)
 
@@ -370,7 +389,7 @@ it deadlocks; the cost of assuming is a needless mega-PR.
   phase-1 review then built both CLIs and ran **25 differential cases** across the
   floor boundary: identical verdict **and** line every time.
 
-**Phase 2 — IN FLIGHT. Its contracts half is LANDED; verifiers and fixtures are owed.** F3 (unregistered `genesis` → INVALID line 1)
+**Phase 2 — COMPLETE (#136/#137).** Historical plan: F3 (unregistered `genesis` → INVALID line 1)
 
 - F6 (distinct genesis keys) + F4 (fork ancestry) vectors, the matching verifier
   checks, and **inverting `conformance.test.ts:189`** — which must happen _with_ the
@@ -496,7 +515,7 @@ while reaching nothing_.
   the same round, because an asymmetric landing means the two verifiers disagree
   on a real verdict — worse than being wrong together.
 
-**Phase 3 — IN FLIGHT (started 2026-10-08).** These must merge in this order:
+**Phase 3 — COMPLETE (#202).** Historical merge sequence:
 
 1. **#172 MERGED (`ffcf189`): the rehearsal publishes ballots in batches.** The
    old builder minted one ballot per minute, so every batch held one ballot.
@@ -525,26 +544,35 @@ while reaching nothing_.
    instant is fatal at its own line (ET-24a). Both verifiers, plus an
    orchestrator-written reference, agree on verdict and line for 6,000 generated
    chains. #178 also fixes a Node SIGSEGV on `process.exit` (see Blockers).
-4. **NEXT — the vectors** ([#192](https://github.com/Will-ODC/odc/issues/192)), listed in ADR-0029:
-   - a resumed batch (INVALID at the returning line);
-   - another issue's ballots between one batch's members (VALID);
-   - an under-size batch proven not-last (INVALID at the next ballot of its
-     issue);
-   - the legal under-size last batch with other issues' ballots after it
-     (VALID);
-   - an ET-23 off-interval ballot. `fixtures-gen` mints only whole minutes
-     against a 60000 ms interval, so this one needs an issue that declares a
-     coarser interval.
-   - the below-floor ET-14b cases.
+4. **DONE — the vectors** (#202, `249eb49`, closes #192): `099`–`108`
+   pin resumed batches, interleaving across issues, non-last under-size runs,
+   the legal under-size final batch, off-interval timestamps, both ET-14b
+   floors, the two ADR-0029 counterexamples and two legal full batches.
+   Existing golden bytes and verdicts were preserved.
+   **Reviews:** the operator asked for a fresh-context review of each of the three
+   PRs (2026-10-08). The verifier reviewers each work in their builder's sparse
+   worktree and must never see the other verifier.
 
-**Reviews:** the operator asked for a fresh-context review of each of the three
-PRs (2026-10-08). The verifier reviewers each work in their builder's sparse
-worktree and must never see the other verifier.
+**Phase 4** ([#193](https://github.com/Will-ODC/odc/issues/193)). F1:
+`--chain <genesis-hash>` and genesis/head reporting. **Go DONE** (#220,
+`85f767f`). **TS DONE** (#221, `b3491e3`). **Fixtures DONE** (#222, `660201a`, seven
+vectors `109`–`115`; Claude resolved its conflicts).
+#203 reconciles EV-15's stage map with EX-21–EX-24 and merged as `25ff5af`.
 
-**Phase 4** ([#193](https://github.com/Will-ODC/odc/issues/193)). F1 — `--chain <genesis-hash>` and printing the computed genesis hash
-and head (EX-24, scoped as tool output not verdict, so no collision with EV-17).
-The fixture index already carries per-vector inputs (`003`/`053` use `head`), so
-`--chain` needs no new fixture mechanism.
+Before treating Phase 4 as audit-cleared, merge the approved clarification of what EX-24 reports on malformed
+or hash-mismatched input (stored fields versus recomputed hashes, and missing
+values), and whether an incorrect `--chain` precedes a later file error.
+#220's current policy preserves the file's existing INVALID line and reports
+stored hash fields. The checkpoint reproduced both behaviours without reading
+both verifier implementations. The decisions and regression cases must be
+explicit; agreement between implementations is insufficient.
+The operator subsequently approved stored-claim/unavailable reporting and
+keeping existing structural **and semantic** file errors ahead of anchors.
+Codex pushed the separate versioned amendment and an unratified mixed-version
+batching proposal/regression cases after #203/#222 merged (branches above).
+Do not record those follow-ups as merged protocol changes. The proposal's
+one-event/one-ballot evolution constraint, uncertainty algorithm and expanded
+PARTIAL attribution still require a decision before implementation.
 
 **Then: fresh re-audit** by a context that did **not** write
 `audit-phase-0.md` — the step that actually clears T9; acceptance is APPROVE.
@@ -714,19 +742,19 @@ worktrees were removed 2026-10-09.** Each verifier was built in a **sparse**
 worktree holding only `contracts/`, its own verifier and the charter, so the
 builder could not read the other verifier. See Blockers for the technique.
 
-| branch                              | PR   | worktree                   | state                          |
-| ----------------------------------- | ---- | -------------------------- | ------------------------------ |
-| `claude/t9-phase3-rehearsal`        | #172 | `~/Desktop/odc-hash-chain` | MERGED `ffcf189`               |
-| `claude/t9-phase3-et24-contiguity`  | #176 | `~/Desktop/odc-hash-chain` | MERGED `515374c` (first draft) |
-| `claude/t9-phase3-et24-runs`        | #180 | `~/Desktop/odc-hash-chain` | MERGED `a807e9f`               |
-| `claude/t9-phase3-verifier-go`      | #177 | `~/Desktop/odc-p3-go`      | MERGED `9858885`               |
-| `claude/t9-phase3-verifier-go-nits` | #181 | `~/Desktop/odc-p3-go`      | MERGED `5545099`               |
-| `claude/t9-phase3-verifier-ts`      | #178 | `~/Desktop/odc-p3-ts`      | MERGED `a3abba3`               |
+| branch                              | PR   | state                          |
+| ----------------------------------- | ---- | ------------------------------ |
+| `claude/t9-phase3-rehearsal`        | #172 | MERGED `ffcf189`               |
+| `claude/t9-phase3-et24-contiguity`  | #176 | MERGED `515374c` (first draft) |
+| `claude/t9-phase3-et24-runs`        | #180 | MERGED `a807e9f`               |
+| `claude/t9-phase3-verifier-go`      | #177 | MERGED `9858885`               |
+| `claude/t9-phase3-verifier-go-nits` | #181 | MERGED `5545099`               |
+| `claude/t9-phase3-verifier-ts`      | #178 | MERGED `a3abba3`               |
 
-**Do not go looking for an open hash-chain PR.** `claude/hash-chain-context-3uaob2`
-is the only branch that ever carried "hash chain" in its name and it is merged;
-a stale `codex/odc-hash-chain` worktree branch, 33 commits behind and 0 ahead,
-was reused for the vector work on 2026-08-26 and carries nothing of its own.
+Machine-specific checkout paths have been omitted; the merged commits preserve
+provenance. Phase 4 PRs #220/#221/#222 and #203 are merged. The core checkpoint,
+anchor-policy amendment and batching proposal follow-ups remain pending merge.
+Use current PR/master evidence rather than assuming every hash-chain branch is complete.
 
 ## Blockers & live cautions
 
@@ -738,21 +766,15 @@ was reused for the vector work on 2026-08-26 and carries nothing of its own.
   one context made both, that breaks the never-both-verifiers rule. The core
   audit's "clean rehearsal violates ET-24" finding is **already fixed** by #172;
   it audited `c366ca2`, before that merge. Its "no ET-23 / rejecting ET-24
-  vector" finding is #192.
+  vector" finding is closed by #202. The old scratch checkouts are not available
+  in this cloud machine; the current Phase 4 work is #220/#221/#222, not those
+  unpublished edits.
 
-- **`just up` starts nothing, and every document implies otherwise.**
-  `justfile` runs `docker compose up --build -d`, and both
-  `docs/implementation-plan.md` and ADR-0001 lock that as the dev entry point —
-  but `docker-compose.yml` is `services: {}`, and **no Dockerfile exists in this
-  repository on any branch or anywhere in its history.** The per-service compose
-  files described by `.claude/skills/odc-service-boundaries` (one postgres
-  container each, per rule 1) do not exist either. This is expected — the
-  services are unbuilt — but it means the infra scaffolding is a stub, not a
-  starting point, and the first service to land owns writing the first
-  Dockerfile the project has ever had. See `memory/pulse.md` for the operator's
-  2026-08-25 ask for a production-resembling Docker dev environment, which will
-  likely force this decision before Phase 1 does.
-
+- **The root ODC stack is still a stub.** Root `docker-compose.yml` remains
+  `services: {}` and `just smoke`/`just verify` remain TODOs. Pulse has its own
+  Dockerfiles and compose stack, with image CI added in #212; the historical
+  claim that no Dockerfile exists anywhere is obsolete. Ledger remains unbuilt
+  and is outside this checkpoint; do not implement it before T9/T9a.
 - **FOUR `contracts/` contradictions are open and need an operator decision.**
   (Item 1 below is CLOSED by #137 and kept for its reasoning. The ET-24
   set/prefix contradiction that phase 3 found is resolved by ADR-0029: #176,
@@ -810,10 +832,9 @@ was reused for the vector work on 2026-08-26 and carries nothing of its own.
   checkout leaves untracked directories behind. Hand amended-but-unmerged specs
   to builders as copies in the scratchpad, never by committing them into the
   builder's branch. Reviewers reuse the same worktrees.
-- **The TS verifier exits 1, INVALID's code, on an internal error**
-  ([#194](https://github.com/Will-ODC/odc/issues/194)). Any throw in `main` becomes
-  a false `INVALID` instead of a tool error (≥ 3). Nothing reaches it today. Fix
-  it in an isolated context.
+- **TS internal-error exit handling is FIXED** (#219, `151c36d`, closes #194).
+  Internal errors return a tool error (3), not INVALID (1). Keep that distinction
+  covered by the now-merged #221 reporting work; retain its regression tests.
 - **Node 24 on macOS can SIGSEGV when `process.exit()` runs straight after the
   TS verifier's verify path.** About 2% of runs died with `status null` and empty
   stderr, which was the long-flaky "the CLI writes exactly one stdout line" test.
@@ -831,9 +852,8 @@ was reused for the vector work on 2026-08-26 and carries nothing of its own.
   `rand(2)` was not random. 95% of chains came out tidy and VALID. Print the
   verdict and shape distribution before trusting an "all agree".
 - ~~**ET-23 and ET-24 are implemented by NEITHER verifier.**~~ **Implemented in
-  #177 and #178 (both merged); the vectors are still owed, so CI cannot yet
-  tell.**
-  Original entry: ET-23 and ET-24 are implemented by NEITHER verifier, and ET-23 is cited by
+  #177 and #178; vectors `099`–`108` landed in #202.**
+  Historical entry (superseded by #177/#178 and fixture PR #202): ET-23 and ET-24 were implemented by NEITHER verifier, and ET-23 is cited by
   no vector. Both are stated as verifier MUSTs — ET-23 ballot `ts`
   quantization, ET-24 minimum batch size — and these are the **anonymity** rules:
   ET-24's batch minimum is what hides an individual vote in the stream. The Go
@@ -853,9 +873,8 @@ was reused for the vector work on 2026-08-26 and carries nothing of its own.
   check it against that regex** — and prefer widening the judge over coupling the
   two verifiers on a shared output string, since EV-17 makes printed wording
   non-normative _on purpose_, to keep the CLI surface revisable.
-  Still unfixed and out of scope there: the judge does not check EV-17's
-  **ascending** line order for a multi-line PARTIAL, so it would report a
-  disagreement without saying which verifier broke the ordering rule.
+  **The ascending-line check is now fixed in #201** (`2099ec6`); malformed
+  PARTIAL line order is rejected by the judge.
 
 - **`odc-verifier-builder`'s role definition says Go, but it was used for the TS
   verifier too.** The isolation property held — no context opened both
