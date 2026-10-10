@@ -8,14 +8,9 @@ hash chain and ledger.
 
 ## Accepted direction
 
-- GitHub issues mainly describe new features or changes to existing behavior.
-  Each should be contained, small enough for one developer, and independently
-  reviewable. An epic may group a finite set of such changes. Record necessary
-  dependencies explicitly. Defects with a concrete behavioral fix still belong
-  in issues.
-- Session state, unresolved decisions, handoffs and deferred ideas belong in
-  memory. Accepted architectural decisions belong in ADRs. A request to remember
-  an uncertainty is not automatically an implementation ticket.
+- Where things go (issues, memory, ADRs) follows the repo-wide rule in
+  `memory/INDEX.md` → "Where new information goes". Not restated here. A request
+  to remember an uncertainty is not automatically an implementation ticket.
 - Develop Pulse through a feedback loop: propose an improvement, gather feedback,
   select work, implement it, review it, then ask whether it helped.
 - Initially the operator selects features for agents to implement; no vote is
@@ -123,11 +118,9 @@ Voting can select work without bypassing code review, tests or release checks.
   summary, scope, 3–5 observable acceptance criteria, real dependencies and
   context links. Search for duplicates and keep decision-only material in
   memory. The user authorised creating and applying this skill.
-- [Skill PR #229](https://github.com/Will-ODC/odc/pull/229) adds the canonical
-  `.claude/skills/create-issue/SKILL.md` and a `.agents/skills/create-issue`
-  alias for Codex-compatible discovery. One copy is maintained. Both #227 and
-  #228 were written using it. The original memory
-  update #226 is merged; the skill PR remains pending merge.
+- The skill is `.claude/skills/create-issue/SKILL.md` (#229, merged), with a
+  `.agents/skills/create-issue` symlink for Codex discovery. One copy is
+  maintained. #227 and #228 were written with it.
 
 ## Contained trust and reporting tickets
 
@@ -151,10 +144,6 @@ report submission #233 precedes review #234 and entry points #235–#237; those
 entry points also wait for their actual product surfaces. #237 requires saved
 chat messages, which prototype #228 does not supply. Voting restrictions #238
 wait for account-based development voting and accepted reviewer authority.
-
-Merge order for this checkpoint: the independent issue-writing skill #229 and
-this memory update can land in either order after review and green CI. Neither
-requires or changes the parallel Pulse implementation or core audit work.
 
 ## Unresolved before voting implementation
 
@@ -224,63 +213,16 @@ Issue provenance: https://github.com/Will-ODC/odc/issues/217,
 https://github.com/Will-ODC/odc/issues/214,
 https://github.com/Will-ODC/odc/issues/173.
 
-Checkpoint self-review: this note distinguishes accepted operator requirements
-from proposals and unanswered questions, preserves the transferred issues'
-essential reasoning, and leaves existing product behavior unchanged. Issue
-cleanup does not implement participant verification, ballot privacy or thresholds.
+## Merged follow-ups (#213, #215, #239), cautions that remain
 
-Checkpoint scope review: shared reporting is defined once, report controls only
-call it, report review records outcomes, and voting restrictions enforce a
-separate access change. Trust evidence is recorded separately from the later
-permission calculation. None of these tickets defines trust weights, ballot
-weights, reporting eligibility, penalties or privacy architecture.
-
-## PR #213 review checkpoint
-
-PR #213 (P8 identity credentials) was rebased onto master `19f1042` and updated
-at head `0d04ada`. Conflicts came from #207's mail-provider refusal cleanup;
-retain `discard` in both stores while using `liveFor(kind, subject, now)`.
-Seven newly merged test calls also needed the renamed APIs.
-
-Self-review found and fixed email disclosure in `CredentialTakenError`; the
-regression failed on both stores first. The upgrade test now redeems old links
-for existing and new voters, preserves the existing session generation and
-opt-in, and rejects repeat clicks. Local validation: Pulse build/lint and 384
-Postgres-required tests pass, none skipped; 288 client tests pass. Required
-remote checks must pass on the updated PR head before merge.
-
-The Pulse credential record (renumbered to ADR-0033 by #215) remains proposed except the previously accepted assurance vocabulary.
-This checkpoint does not approve its remaining architectural choices or start
-P8 slice 2, social confirmation, trust scoring or account-based development
-voting. Email assurance alone still does not meet the development voting rule.
-Drain old API instances before migration 004, as its README requires.
-
-Merge order: #229 and this context PR #239 are independent of #213. Merge #213
-after architectural review and green CI, before later credential-dependent
-Pulse changes. No ledger or core hash-chain implementation is involved.
-
-## PR #215 review and numbering checkpoint
-
-Operator follow-up recorded 2026-10-09. #213 merged as `bdbd9b9`. PR #215 was
-replayed onto that master after dropping its old #213 parent commits, then
-updated at head `15b555a`. Keep both store methods: `discard(tokenHash)` and
-`liveFor(kind, subject, now)`. #207's tests use the new signature. The shared
-claim-test setup preserves both dynamic domain sources and static picker rows;
-the migrated-link regression now uses `memberships`, matching the new interface.
-
-Core #224 already used ADR-0032. #215 renames the Pulse credential record to
-ADR-0033 and fixes references outside the checksum-protected migration. Migration
-004 remains byte-for-byte unchanged; ADR-0033 explains its historical 0032
-comment. Do not alter an applied migration merely to renumber that comment.
-
-Self-review found that the client accepted duplicate or single-choice community
-lists. Both regressions failed before the parser was tightened. Local checks:
-404 server tests with required Postgres, none skipped; 305 client tests; both
-builds, lint, formatting and guards pass. Required CI must be green on the
-updated head before merge. The picker keeps returning voters in their first
-community; whether a later choice should move them remains an open decision.
-
-Recommended remaining order at this checkpoint: **#215 → #229 → #239**.
-#213 is already merged. #229 is independent and can land earlier. #239 should
-land after the reviewed code so memory and ADR references match master. These
-PRs do not implement social confirmation, trust scoring or ledger changes.
+- #213 (P8 slice 1) and #215 (P2 picker) are merged. Both stores keep
+  `discard(tokenHash)` **and** `liveFor(kind, subject, now)`.
+- Core #224 took ADR-0032, so the Pulse credential record is **ADR-0033**.
+  Migration 004 still says 0032 in a comment, and it stays byte-for-byte as is,
+  because it is checksum-protected. Drain old API instances before applying 004.
+- ADR-0033 is still proposed, apart from the assurance vocabulary. Email
+  assurance alone does not meet the development-voting rule. Nothing here starts
+  P8 slice 2, social confirmation, trust scoring or account-based development
+  voting.
+- Open: whether a later community pick should move a returning voter (see
+  `memory/pulse.md`).

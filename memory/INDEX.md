@@ -6,6 +6,10 @@
 > If you find yourself adding an argument, a decision, or a caveat here, it
 > belongs in the document this file points at.
 
+**GitHub issues are only for feature tasks, bounded epics, and defects with a
+concrete fix.** Status, handoffs and open questions go in memory, and decisions
+go in ADRs. The table at the end says exactly where.
+
 ## Two workstreams, different rules
 
 | Workstream                         | Lives in                            | Governed by                                  | Memory entry      |
@@ -23,34 +27,15 @@ Do not apply charter rules to `apps/**`, and do not relax them anywhere else.
 > entry, the entry wins — and fix the line.** You read this file first and it is
 > smaller, so on a divergence you would otherwise trust the wrong one.
 
-- **ODC core:** Phase 0 / T9; the security-audit gate remains **closed**.
-  Conformance phases **1–3 are complete**: #202 added batching vectors
-  `099`–`108`; #222 added `109`–`115` (115 total). Phase 4's Go/TS work
-  (#220/#221), fixtures #222 and stage-map #203 are merged. Codex pushed the
-  core checkpoint, approved anchor-policy amendment and unratified batching
-  proposal (#223/#224/#225), all pending merge. **Order: checkpoint → anchor policy → proposal
-  artifact → detailed decision → isolated implementations → fixtures → fresh
-  T9 → RC.** Remaining contract contradictions need decisions; the batching
-  proposal does not ratify a protocol. Claude retains Pulse. Ledger remains
-  unstarted. → `memory/STATE.md`
-- **Pulse:** pillars 1 and 2 are on master — magic-link identity, the voting
-  core, a story UI you can walk end to end, a results panel (#140), an answer
-  you can change (#146, ADR-0022), and since #149 the sign-in and redeem screens.
-  **Storage is DONE** (#150, #158-#160; ADR-0020, ADR-0021, ADR-0023) and a
-  `pnpm dev` with `PULSE_DATABASE_URL` keeps everything across a restart.
-  **Mail is DONE** — Resend, #164, ADR-0027. **Serving is DONE** — a production
-  entry point and two images on one origin, #165, ADR-0028; **both images were
-  first built and smoke-tested 2026-10-09** (`just pulse-up` serves end to end).
-  Of the four things that blocked a deploy, **only poll creation is left**, and
-  it is blocked on the moderation decisions under ADR-0024. Also outstanding and
-  mostly not code: a verified sending domain, a host and a domain. **Open
-  sign-up is DONE** — #182, #183, ADR-0030: anyone signs in, and community is
-  an optional label. Still missing
-  from the product: the middle of the story (bite/case/action screens) and
-  pillar 3. **P8 credential storage is merged** — #213; its guest upgrade path and
-  P9-P11 remain unstarted. P2's community picker is reviewed in #215, pending
-  merge; see the linked memory for decisions and the current merge order. The two known screen bugs are **fixed** (#174, #175).
-  → `memory/pulse.md`
+- **ODC core:** Phase 0. The T9 gate is **closed**. Conformance phases 1-4 are
+  merged (115 vectors, `export-format.md` v5 via #224). In progress: both
+  verifiers report EX-24 "stored claims". Next: decide the batching proposal
+  (#225, unratified) and four contradictions, then a fresh T9 re-audit, then the
+  RC. The ledger is unstarted. → `memory/STATE.md`
+- **Pulse:** identity, the ballot run, storage, mail and serving are built.
+  P2 picker (#215) and P8 slice 1 (#213) are merged. A deploy is blocked on poll
+  creation (P6, ADR-0024 values), a host/domain, and a Resend domain. The story's
+  middle and pillar 3 are not built. → `memory/pulse.md`
 
 ## Load order
 
@@ -69,7 +54,7 @@ behind a decision, or one of the few deferred entries its index names.
 | -------------------------------------------------- | ------------------------------------------------------ |
 | Why the project exists; what it may never do       | `docs/charter.md`                                      |
 | Which service does what, and in which phase        | `docs/implementation-plan.md`                          |
-| Pulse's development feedback loop and issue triage | `memory/pulse-development.md`                          |
+| Pulse's development loop, trust rules, ticket list | `memory/pulse-development.md`                          |
 | The current Phase 0 ticket text and acceptance     | `docs/plans/phase-0.md` (your ticket only)             |
 | A settled decision and its reasoning               | `docs/decisions/` — one ADR per decision; `ls` it      |
 | An **un**settled design question                   | `memory/OPEN-QUESTIONS.md` (its index, then one entry) |
@@ -91,14 +76,16 @@ line of memory recording it** (pulse, PRs #79–#97). That is the failure this
 index exists to prevent, and the fix is not diligence, it is having an obvious
 destination for every kind of fact.
 
-| The thing you learned                         | Goes in                                                        |
-| --------------------------------------------- | -------------------------------------------------------------- |
-| A ticket landed / a phase moved               | The workstream's memory entry, **at merge time on master**     |
-| A choice with alternatives and consequences   | A new ADR in `docs/decisions/` (copy `0000-template.md`)       |
-| A question you could not settle               | `memory/OPEN-QUESTIONS.md`, under a dated heading              |
-| A trap the next session will otherwise re-hit | "Blockers & live cautions" in the workstream's memory entry    |
-| A rule about how we work                      | The matching `.claude/skills/odc-*` skill — **one place only** |
-| A **new workstream**                          | A new `memory/<name>.md` **and a row in the two tables above** |
+| The thing you learned                          | Goes in                                                        |
+| ---------------------------------------------- | -------------------------------------------------------------- |
+| A ticket landed / a phase moved                | The workstream's memory entry, **at merge time on master**     |
+| A choice with alternatives and consequences    | A new ADR in `docs/decisions/` (copy `0000-template.md`)       |
+| A question you could not settle                | `memory/OPEN-QUESTIONS.md`, under a dated heading              |
+| A trap the next session will otherwise re-hit  | "Blockers & live cautions" in the workstream's memory entry    |
+| A rule about how we work                       | The matching `.claude/skills/odc-*` skill — **one place only** |
+| A feature, bounded epic or concrete defect fix | A GitHub issue (`.claude/skills/create-issue`), nothing else   |
+| Status, a handoff, a deferred idea             | Memory, never an issue                                         |
+| A **new workstream**                           | A new `memory/<name>.md` **and a row in the two tables above** |
 
 **The rule that keeps this file honest, and the CI job that enforces it:** a
 directory that agents commit to and that has no row in the workstream table above
