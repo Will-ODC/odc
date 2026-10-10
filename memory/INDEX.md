@@ -64,23 +64,24 @@ behind a decision, or one of the few deferred entries its index names.
 
 ## Topic → document
 
-| If your task is about…                          | Read                                                   |
-| ----------------------------------------------- | ------------------------------------------------------ |
-| Why the project exists; what it may never do    | `docs/charter.md`                                      |
-| Which service does what, and in which phase     | `docs/implementation-plan.md`                          |
-| The current Phase 0 ticket text and acceptance  | `docs/plans/phase-0.md` (your ticket only)             |
-| A settled decision and its reasoning            | `docs/decisions/` — one ADR per decision; `ls` it      |
-| An **un**settled design question                | `memory/OPEN-QUESTIONS.md` (its index, then one entry) |
-| Event schema, hashing, export, IDs, fixtures    | `contracts/` + `.claude/skills/odc-contracts`          |
-| Adding an endpoint or consuming another service | `.claude/skills/odc-service-boundaries`                |
-| Any schema, migration, or grant                 | `.claude/skills/odc-storage`                           |
-| Writing code of any kind                        | `.claude/skills/odc-testing`                           |
-| Branches, CI, guards, merging                   | `.claude/skills/odc-pipeline`                          |
-| Reviewing a diff                                | `.claude/skills/odc-code-review`                       |
-| User-facing screens or copy                     | `.claude/skills/odc-ui`                                |
-| Which model to dispatch, and how to brief it    | `.claude/skills/odc-orchestration`                     |
-| Threat models and phase-gate audits             | `docs/security/README.md`, then the dated audit        |
-| What the UI is supposed to look like            | `.claude/skills/odc-design`, then `docs/mockups/`      |
+| If your task is about…                             | Read                                                   |
+| -------------------------------------------------- | ------------------------------------------------------ |
+| Why the project exists; what it may never do       | `docs/charter.md`                                      |
+| Which service does what, and in which phase        | `docs/implementation-plan.md`                          |
+| Pulse's development feedback loop and issue triage | `memory/pulse-development.md`                          |
+| The current Phase 0 ticket text and acceptance     | `docs/plans/phase-0.md` (your ticket only)             |
+| A settled decision and its reasoning               | `docs/decisions/` — one ADR per decision; `ls` it      |
+| An **un**settled design question                   | `memory/OPEN-QUESTIONS.md` (its index, then one entry) |
+| Event schema, hashing, export, IDs, fixtures       | `contracts/` + `.claude/skills/odc-contracts`          |
+| Adding an endpoint or consuming another service    | `.claude/skills/odc-service-boundaries`                |
+| Any schema, migration, or grant                    | `.claude/skills/odc-storage`                           |
+| Writing code of any kind                           | `.claude/skills/odc-testing`                           |
+| Branches, CI, guards, merging                      | `.claude/skills/odc-pipeline`                          |
+| Reviewing a diff                                   | `.claude/skills/odc-code-review`                       |
+| User-facing screens or copy                        | `.claude/skills/odc-ui`                                |
+| Which model to dispatch, and how to brief it       | `.claude/skills/odc-orchestration`                     |
+| Threat models and phase-gate audits                | `docs/security/README.md`, then the dated audit        |
+| What the UI is supposed to look like               | `.claude/skills/odc-design`, then `docs/mockups/`      |
 
 ## Where new information goes — decide this before you write it down
 
