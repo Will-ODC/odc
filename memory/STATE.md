@@ -68,15 +68,8 @@ In this order. Passing CI or a checkpoint does not clear T9.
 
 **Owed with no ticket:**
 
-- **Go extreme-value fuzzer.** The TS half
-  (`tools/verifier-ts/test/extreme-values.test.ts`) is on master. The Go half was
-  last recorded as owed, and that was not re-checked on 2026-10-10. The task:
-  generate structurally valid exports with extreme values (huge line counts,
-  huge strings, boundary integers), run the verifier, and assert only that it
-  returns exactly one of the three verdicts. Never assert which verdict. Its
-  Go-specific hazards are in `memory/OPEN-QUESTIONS-archive.md`, under the
-  unbounded-value entry. Do not hunt for the "six more spread sites near
-  `verify.ts:93-102`". They do not exist.
+- **Cloud setup/network draft** is saved but not yet reviewed, saved and
+  published by the operator, so it does not persist. Confirm or drop.
 - **Conformance coverage is thinner than the vector count suggests.** The last
   exact count, taken at T9 when the corpus held 83 vectors: 143 rule ids, 73
   cited by no vector. It has not been re-run since. Gaps include **all of
@@ -108,7 +101,7 @@ In this order. Passing CI or a checkpoint does not clear T9.
 - T9 audit and answers: ADR-0013 to ADR-0018 (#98). Charter §4 anchoring edit
   ratified 2026-08-15.
 - Conformance phase 1 (ET-14b regeneration): #104, #105.
-- Phase 2 (fork ancestry, ADR-0019 #112): verifiers #122/#123/#124, vectors
+- Phase 2 (fork ancestry, ADR-0019 #112): #122 rehearsal judge, verifiers #123/#124, vectors
   `084`-`098` in #136/#137.
 - Phase 3 (batching, ADR-0029): #172 rehearsal batches, #176/#180 contract,
   #177/#181 Go, #178 TS, vectors in #202. #201 fixed the rehearsal judge.
@@ -208,16 +201,14 @@ In this order. Passing CI or a checkpoint does not clear T9.
   _created_ looks the same as one still running. Merging auto-deletes the head
   branch, so a later push creates a new branch with no PR. Agent sessions can
   delete remote branches.
-- **`turbo` caches `lint`.** Run `npx eslint` directly after moving files. turbo
-  also writes an untracked `AGENTS.md` at the repo root on every run. Do not
-  commit it.
+- **`turbo` caches `lint`.** Run `npx eslint` directly after moving files. turbo's
+  untracked root `AGENTS.md` is switched off by `agentGuidance: false` (#240).
 - **Tell dispatched agents to use the scratchpad for worktrees**, and commit
   before running a review or mutation agent, since reviewers edit and restore the
   tree.
 - **Reviews:** fifteen of the first sixteen reviewed slices had a real defect.
   Treat a clean review as a surprise.
-- **Kept remote branches:** the squashed T9 branches (`claude/t9-audit`,
-  `claude/t9-decisions`, `claude/t9-adrs-contracts`) hold #98's granular history.
-  The closed #109/#110 branches are superseded, so do not reopen them. Last
-  verified 2026-08-22: `claude/review-memory-context-skills-383f6i`, an unlanded
-  `odc-keys-and-signatures` skill. Check the remote before deleting anything.
+- **Remote branches (checked 2026-10-10):** the T9 branches and
+  `claude/review-memory-context-skills-383f6i` are gone, so #98's granular history
+  is lost. `claude/t9-phase3-et24-contiguity` and `claude/t9-phase3-verifier-go`
+  belong to merged PRs and are safe to delete.

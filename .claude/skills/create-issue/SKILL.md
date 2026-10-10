@@ -8,9 +8,8 @@ user-invocable: true
 
 Turn an authorised feature request into a short ticket a single developer can
 implement and a reviewer can assess. Use simple words and bullets. The issue
-tracks work; memory preserves session context and unresolved decisions. The
-repo-wide rule (issues are only for feature tasks, bounded epics and defects
-with a concrete fix) lives in `memory/INDEX.md` → "Where new information goes".
+tracks work; memory preserves session context and unresolved decisions. What belongs
+in an issue is decided in `memory/INDEX.md` → "Where new information goes".
 
 ## Workflow
 

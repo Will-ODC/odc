@@ -2,8 +2,8 @@
 
 > Session-to-session truth for the `apps/pulse` + `apps/pulse-web` workstream.
 > Read `memory/INDEX.md` first. Agent rules are in `apps/pulse/CLAUDE.md`, the
-> served API is in `apps/pulse/API.md`, and the work queue is in
-> `docs/plans/pulse.md`. This file holds current state only, and history is in
+> served API is in `apps/pulse/API.md`, and the work queue is GitHub
+> issues (design detail an issue links to is in `docs/plans/pulse.md`). This file holds current state only, and history is in
 > git. Slimmed 2026-10-10. The long ledger it replaced is in
 > `git log -p -- memory/pulse.md`.
 >
@@ -51,7 +51,7 @@ branch per change (`pulse/<n>-<short>`), and the same CI runs.
   built.** `flow/story.ts` lists steps the app does not render.
 - **Pillar 3 (path to action) is not started.** `proofEmailsOptIn` is collected
   and leads nowhere.
-- **Infrastructure is built.** Postgres storage (#150, #158-#160; ADR-0020,
+- **Infrastructure is built.** Postgres storage (#150, #156-#160; ADR-0020,
   ADR-0021, ADR-0023), Resend mail (#164, ADR-0027), and two images on one origin
   (#165, ADR-0028). The images were first built and smoke-tested 2026-10-09
   (`just pulse-up`), and CI now builds both on every relevant PR (#212).
@@ -107,8 +107,6 @@ branch per change (`pulse/<n>-<short>`), and the same CI runs.
 - `diff-size.sh` says the 400-line WARN "still fires for pulse", but it excludes
   `apps/pulse/**` entirely and reports 0. Whether the comment or the exclusion is
   wrong is still a decision. **Count pulse diffs by hand.**
-- `pulse/4b-sign-in-routes` (head `861b983`) is an unlanded remote branch with
-  no PR. Nobody has said whether it is abandoned.
 
 ## Standing decisions — one line each, read the ADR before touching
 

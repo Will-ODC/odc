@@ -18,7 +18,7 @@ one more row in it. The short version:
 
 | The thing you have                              | Where it goes                                     |
 | ----------------------------------------------- | ------------------------------------------------- |
-| A thing we want built that nobody has started   | **Here**                                          |
+| A thing we want built that nobody has started   | A GitHub issue; its design detail may live here   |
 | A ticket that landed, or a phase that moved     | `memory/pulse.md`, at merge time **on master**    |
 | A choice with alternatives and consequences     | A new ADR in `docs/decisions/`                    |
 | A design question you could not settle          | `memory/OPEN-QUESTIONS.md`, under a dated heading |
@@ -455,7 +455,7 @@ uses the in-memory store, which has no concurrency, and
 five tests and none creates concurrently.** So this item **adds** tests: two
 concurrent `create` calls for one credential against Postgres (row-hold template
 at `pg-identity-stores.test.ts:32`), and a case proving voter+credential is
-written atomically. `memory/pulse.md:231` records "tests that could not fail"
+written atomically. `memory/pulse.md` (live cautions) records "tests that could not fail"
 four times; this would be the fifth.
 
 **Note the tension with P10:** a public-link voter is _by construction_ a voter
