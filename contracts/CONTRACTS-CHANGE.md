@@ -19,6 +19,14 @@ Format (newest first, one entry per merged contracts change):
 
 ---
 
+## evolution.md v6 — 2026-10-09 — EV-15 names chain identity checks
+
+- EV-15's exhaustive Stage A map now includes `export-format.md` EX-21–EX-23:
+  the genesis-hash definition and optional `--chain` comparison do not consult
+  the type registry. EX-24 is identified as a tool-output obligation outside
+  the per-event stage split. This corrects a stale range after export-format v3;
+  verdict semantics, old data, hashes, and fixtures do not change.
+
 ## fixtures/ v13 — 2026-10-09 — Phase 3 batching vectors (#192)
 
 Added `099`–`108` to pin ET-14b's two floors, ET-23 quantization against a
