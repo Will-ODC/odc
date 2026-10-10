@@ -281,6 +281,34 @@ test("v5 EX-15/EX-22: both anchors wrong never displace an earlier file-check IN
   }
 });
 
+test("v5 EX-15/EX-22: a registered-event semantic INVALID keeps its declared line under wrong anchors", () => {
+  // Golden Stage B vectors, verdicts read from contracts/fixtures/index.json
+  // (058: ET-17 signature under the wrong key; 066: ET-18 unknown issue).
+  const index = JSON.parse(
+    readFileSync(resolve(vectors, "../index.json"), "utf8"),
+  ) as {
+    vectors: {
+      id: string;
+      export: string;
+      expect: { verdict: string; line?: number };
+    }[];
+  };
+  for (const id of ["058-vote-sig-wrong-key", "066-vote-unknown-issue"]) {
+    const v = index.vectors.find((x) => x.id === id);
+    assert.ok(v !== undefined, `${id} is in index.json`);
+    assert.equal(v.expect.verdict, "INVALID");
+    const file = resolve(vectors, "..", v.export);
+    const r = verify(file, "--chain", WRONG, "--head", WRONG);
+    assert.equal(r.status, 1, id);
+    assertOneStdoutLine(r);
+    assert.match(
+      r.stdout,
+      new RegExp(`^INVALID at line ${v.expect.line}(:|\\n)`),
+      id,
+    );
+  }
+});
+
 test("v5 EX-15/EX-22: a framing INVALID keeps its line under wrong anchors", () => {
   // A trailing blank record (EX-5) is INVALID at that line, line 5; neither a
   // wrong --chain (line 1) nor a wrong --head may replace it.
@@ -424,6 +452,19 @@ test("EX-24 claim: `hash` must be a top-level string member of an object", () =>
   }
 });
 
+test("EX-24 claim: JSON escapes are decoded — decoding is not normalisation", () => {
+  // Value written entirely with \u escapes that decode to 64 lowercase hex.
+  const escaped = A.replace(/a/g, "\\u0061");
+  assert.equal(claimOf(`{"hash":"${escaped}"}`), A);
+  // An escaped key that decodes to `hash` IS the key `hash`.
+  assert.equal(claimOf(`{"h\\u0061sh":"${A}"}`), A);
+  // ...and takes part in the last-occurrence rule like a literal key.
+  assert.equal(claimOf(`{"hash":"${A}","h\\u0061sh":"${B}"}`), B);
+  // An escape decoding to UPPERCASE hex is still unavailable: the decoded
+  // value is taken as-is, never lowercased.
+  assert.equal(claimOf(`{"hash":"${"\\u0041" + A.slice(1)}"}`), "unavailable");
+});
+
 test("EX-24 claim: recovery is not a canonical-form check", () => {
   // Whitespace, a different key order and extra keys are all non-canonical
   // (EX-7/EX-10), but the candidate still decodes as a JSON object.
@@ -473,7 +514,8 @@ test("EX-24: the report labels describe stored claims, one line per endpoint", (
   assert.equal(r.stdout, "VALID\n");
   const lines = r.stderr.split("\n").slice(0, -1);
   assert.equal(lines.length, 2, "exactly one line per endpoint");
-  // Exact bytes, shared with the Go verifier so the two can be diffed.
+  // Exact labels, pinned so the two verifiers' stderr can be diffed
+  // (operator choice; EX-24 leaves labels free).
   assert.equal(GENESIS_CLAIM_LABEL, "genesis hash (stored claim)");
   assert.equal(HEAD_CLAIM_LABEL, "head hash (stored claim)");
   assert.equal(lines[0], `genesis hash (stored claim): ${valid.genesis}`);

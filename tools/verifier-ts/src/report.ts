@@ -115,8 +115,11 @@ const UTF8 = new TextDecoder("utf-8", { fatal: true, ignoreBOM: true });
  * Available only if the candidate decodes as a JSON OBJECT whose top-level
  * `hash` is a string of exactly 64 lowercase hex characters. JSON.parse keeps
  * the LAST occurrence of a repeated key, which is EX-24's rule for a repeated
- * top-level `hash`; nested `hash` keys are never read. The value is never
- * lowercased, trimmed or otherwise normalised to make it available.
+ * top-level `hash`; nested `hash` keys are never read. Keys and values are
+ * taken as DECODED JSON strings, so `"hash"` is the key `hash` and a
+ * `\u`-escaped value that decodes to 64 lowercase hex is available — decoding
+ * is not normalisation. Beyond JSON decoding the value is never lowercased,
+ * trimmed or otherwise normalised to make it available.
  *
  * This is NOT a canonical-form or integrity check (EX-24): a candidate EX-7–
  * EX-10 would reject — whitespace, reordered or duplicated keys — still yields
@@ -175,9 +178,9 @@ export function storedClaims(bytes: Uint8Array): StoredClaims | null {
 
 /**
  * Labels of the two EX-24 stderr lines; the value follows after ": ".
- * "(stored claim)" says the value is the `hash` field as written — not a
- * recomputed or verified hash. Kept byte-identical with the Go verifier's
- * labels so the two tools' stderr can be diffed directly.
+ * "(stored claim)" says the value is the stored `hash` field's decoded string
+ * — not a recomputed or verified hash. The exact labels are pinned so the two
+ * verifiers' stderr can be diffed (operator choice; EX-24 leaves labels free).
  */
 export const GENESIS_CLAIM_LABEL = "genesis hash (stored claim)";
 export const HEAD_CLAIM_LABEL = "head hash (stored claim)";
@@ -187,11 +190,13 @@ export const HEAD_CLAIM_LABEL = "head hash (stored claim)";
  * a NON-EMPTY input — one line per endpoint, each with its trailing newline —
  * or null for an empty input, which has no endpoints.
  *
- * The labels say "(stored claim)" because that is all these values are: the `hash` field AS WRITTEN in the first / last candidate record.
- * On an INVALID verdict they are what the file asserts, never verified chain
- * anchors; a reader must take them together with the verdict and an
- * independently trusted `--chain` / `--head`. On a VALID or PARTIAL file they
- * coincide with EX-21's genesis hash and EX-14's head.
+ * The labels say "(stored claim)" because that is all these values are: the
+ * decoded JSON string value of the `hash` field in the first / last candidate
+ * record, with no normalisation beyond JSON decoding. On an INVALID verdict
+ * they are what the file asserts, never verified chain anchors; a reader must
+ * take them together with the verdict and an independently trusted `--chain` /
+ * `--head`. On a VALID or PARTIAL file they coincide with EX-21's genesis hash
+ * and EX-14's head.
  *
  * Tool output, not conformance surface (EV-17, EX-24): no fixture asserts it.
  */

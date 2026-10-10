@@ -79,8 +79,9 @@ genesis hash (stored claim): <64-lowercase-hex | unavailable>
 head hash (stored claim): <64-lowercase-hex | unavailable>
 ```
 
-These are **stored claims**: the `hash` field as written in the first and the
-last candidate record, never a recomputed or verified hash. On a structurally
+These are **stored claims**: the decoded JSON string value of the `hash` field
+in the first and the last candidate record, with no normalisation beyond JSON
+decoding — never a recomputed or verified hash. On a structurally
 valid export they coincide with the genesis hash (EX-21) and head (EX-14); on an
 `INVALID` export they are only what the file asserts and are **not** verified
 chain anchors. Read them with the verdict and an independently trusted
@@ -95,8 +96,11 @@ chain anchors. Read them with the verdict and an independently trusted
   and decodes (`JSON.parse`) as a JSON **object** with a top-level `hash` string
   of exactly 64 lowercase hex characters; otherwise that endpoint is
   `unavailable`, and the other endpoint is still reported. A repeated top-level
-  `hash` key uses its last occurrence. Nothing is normalised — no lowercasing,
-  trimming, BOM stripping or U+FFFD substitution. Recovery is not a
+  `hash` key uses its last occurrence. Keys and values are compared as decoded
+  JSON strings, so `"hash"` is the key `hash` and a `\u`-escaped value
+  that decodes to 64 lowercase hex is available. Nothing is normalised beyond
+  JSON decoding — no lowercasing, trimming, BOM stripping or U+FFFD
+  substitution. Recovery is not a
   canonical-form check: a non-canonical but well-formed JSON object still
   yields its claim.
 - **When.** Not for an empty input (no endpoints), and not on a tool error,
