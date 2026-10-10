@@ -17,6 +17,7 @@ is decided, and delete it when it becomes moot. Pulse's open decisions are in
 | **Future `vote_cast` versions and ballot batching**: settle before the RC freezes ET-24's wording   | "Future `vote_cast` versions and ballot batching (2026-10-09)" |
 | **Q-F**: the registrar's signature as a subliminal channel                                          | "Q-F — What mitigates the registrar's signature…"              |
 | **Anchor contents and cadence** (Q-A item 4, which ADR-0013 and ADR-0032 left open)                 | "Anchor contents and cadence"                                  |
+| **EX-24 claim decoding**: invalid UTF-8, BOM, `\u` escapes, nesting depth (2026-10-10)              | "EX-24 claim decoding (2026-10-10)"                            |
 | Does `read-api.md` (RA-1 to RA-13, **zero** conformance coverage) need vectors before Phase 1?      | "Read-API conformance coverage"                                |
 | **⚠️ Ballot expressiveness vs receipt-freeness**: a live contradiction between charter §5 and ET-22 | **Archive file**. Read it before writing ceiling ADR part B.   |
 | Registrar key custody and the no-receipt discipline in Phase 1 identity                             | Archive file: "Registrar-side ballot privacy"                  |
@@ -68,6 +69,16 @@ archive with a one-line pointer to the ADR or PR that settled it.
   Open: does the read API need conformance vectors before Phase 1 builds against
   it, or is it out of scope for a fixture suite whose unit is an export line? An
   HTTP surface probably needs a different instrument from NDJSON vectors.
+
+## EX-24 claim decoding (2026-10-10)
+
+**Open; report output only, not conformance.** EX-24 says a claim is available
+if the candidate "decodes as a JSON object" but does not settle: bytes that are
+not valid UTF-8; a leading BOM (RFC 8259 lets parsers ignore it, EX-24 forbids
+normalising); `\u` escapes in the `hash` value or key; nesting depth (Go gives
+up past 10,000 levels, JS differs). Both verifiers (#241, #242) chose: strict
+UTF-8, BOM → `unavailable`, escapes decode (an escape decoding to uppercase
+stays `unavailable`). If `contracts/` pins this, both must follow.
 
 ## Future `vote_cast` versions and ballot batching (2026-10-09)
 

@@ -43,13 +43,12 @@ internal error exit 3, not 1. #223 is the security checkpoint
 
 In this order. Passing CI or a checkpoint does not clear T9.
 
-1. **IN PROGRESS: both verifiers conform to `export-format.md` v5 EX-24.** Both
-   still print plain `genesis:` / `head:` on stderr. v5 requires the output to
-   call these **stored claims**, take the **last** occurrence of a repeated
-   top-level `hash` key, and follow the candidate-record extraction rules
-   (final LF, trailing blank record, unavailable claims). A separate stage is
-   updating both verifiers now, each in isolation. Then add the matching vectors.
-   Fixtures may never come before the verifiers.
+1. **Merge #241 (Go) and #242 (TS): both verifiers conform to `export-format.md`
+   v5 EX-24.** stderr becomes `genesis hash (stored claim): …` /
+   `head hash (stored claim): …`; strict UTF-8, last repeated `hash` wins,
+   `\u` escapes decode. 504-run black-box parity. stdout is unchanged, so no
+   vectors are needed (EX-24 is not conformance surface, EV-17). The decoding
+   gaps are in `memory/OPEN-QUESTIONS.md` → "EX-24 claim decoding".
 2. **Decide mixed-version ballot batching.** The proposal
    (`docs/plans/hash-chain-unknown-ballot-batching.md`, #225) is **PROPOSED, not
    ratified**. Its one-event/one-ballot evolution constraint, its uncertainty
@@ -169,8 +168,8 @@ In this order. Passing CI or a checkpoint does not clear T9.
 - **When verifier stdout or stderr changes, check it against the rehearsal
   judge.** `conformanceVerdict` in `tools/rehearsal` matches with a regex and has
   aborted, rather than compared, on unexpected output four times. Widen the
-  judge; do not couple the two verifiers on one output string. This is live for
-  the in-progress stored-claims wording change.
+  judge; do not couple the two verifiers on one output string. The stored-claims
+  change (#241/#242) touches stderr only.
 - **Before a verifier enforces a new rule about chain shape, run the rehearsal
   chain through it.** The rehearsal chain must verify VALID in required CI, and
   isolated builders cannot read `tools/rehearsal`.
