@@ -1,6 +1,7 @@
 # ADR-0024: Pulse polls are posted by the community and navigated by computation
 
-- **Status:** accepted
+- **Status:** accepted — amended in part by ADR-0030 decision 4 (its `polls`
+  columns move from migration 002 to the next free number)
 - **Date:** 2026-09-11
 - **Phase:** 0
 - **Amends:** ADR-0021's `polls` column list, additively — three columns land in

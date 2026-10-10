@@ -13,7 +13,7 @@ The operator's rule, verbatim:
 > for routine exploration and simple implementation."**
 
 This skill is the single source of truth for what that means in practice. The
-table in the root `CLAUDE.md` is a pointer to here; `.claude/agents/*.md` carry
+root `CLAUDE.md` points here and carries no table of its own; `.claude/agents/*.md` carry
 the same routing baked into each role's `model:` field. If any of the three
 disagree, **this file wins and the other two get fixed in the same PR.**
 
@@ -78,8 +78,8 @@ One tree, several agents, is the default here and it is where work gets lost.
   fix a file mid-edit.
 - **Commit before dispatching a review or mutation agent.** Reviewers edit and
   restore the tree; a dirty tree has already been clobbered once here.
-- **One active branch per unit of work** (`odc-pipeline`). An agent should never
-  conflict with its own unmerged work.
+- **Respect the WIP limit in `odc-pipeline`** (one active branch per service).
+  An agent should never conflict with its own unmerged work.
 - Genuinely independent work fans out. Sequential work does not — do not spawn
   three agents where the second needs the first's answer.
 
@@ -103,9 +103,11 @@ needs a context that has **not** seen what yours has seen.
 Model routing does not touch, weaken, or substitute for any isolation rule.
 These are unchanged and non-negotiable:
 
-- **Verifier independence.** `odc-verifier-builder` reads `contracts/`,
-  `services/verifier/`, and `docs/charter.md` §4 — never `services/ledger/` or
-  any other service's source, and never ledger details pasted into its context.
+- **Verifier independence.** `odc-verifier-builder` reads `contracts/`, the
+  one verifier it is building (`services/verifier/` or `tools/verifier-ts/`),
+  and `docs/charter.md` §4 — never `services/ledger/`, never the other
+  verifier, never any other service's source, and never ledger details pasted
+  into its context (the full read list is in `.claude/agents/odc-verifier-builder.md`).
   Never open verifier source and ledger source in one context, whatever the
   model. If a task needs both, refuse and split it.
 - **Fresh-context review.** `odc-reviewer` must not be the context that wrote
@@ -166,8 +168,8 @@ a file in another lead's folders, or anything the operator owns.
 **The orchestrator then** checks the leads' PRs do not collide, and tells the
 operator which are ready for review, in what order.
 
-Diff size: `apps/pulse*` is exempt from the hard ceiling, so a pulse feature
-can arrive as large PRs; everywhere else the `diff-size.sh` ceiling applies.
+Diff size: `apps/pulse*` is exempt from the `diff-size.sh` ceiling (the script
+lists every exemption), so a pulse feature can arrive as large PRs.
 
 ### What the first pilot taught (2026-10-09)
 

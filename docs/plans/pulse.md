@@ -71,7 +71,7 @@ polls were both listed here as in flight and have since landed (#150, #156, #157
 
 ## P2 — The sign-in community picker · BUILT 2026-10-09; one question left
 
-**Built** (branch `pulse/36-sign-in-community-picker`, stacked on #213). When an
+**Built and merged** (#215, after its base #213). When an
 address's domain matches two or more `allowed_domain` rows, `POST /api/sign-in`
 answers 422 `choose_community` with the list, sends nothing and writes no claim;
 the client asks "Which community are you signing in to?" and sends the same
@@ -262,8 +262,9 @@ and the summary below is not a substitute for them.
   kills the volume that is the whole point of crowdsourcing. The fork is open.
 
 **Ready and waiting behind those, once decided** — all from ADR-0024's
-consequences: migration 002 adding the community and author columns to `polls`
-(author **cannot** be backfilled later, only defaulted); a removed/hidden state,
+consequences: a new migration adding the community and author columns to `polls`
+(the next free number, since ADR-0030 decision 4 took ADR-0024's 002 and
+001–004 are applied; author **cannot** be backfilled later, only defaulted); a removed/hidden state,
 because `on delete cascade` means deleting a question destroys the votes cast on
 it; server-minted poll ids, because `polls.id` is caller-supplied text today; a
 rate limit keyed on the voter and backed by a shared store, since
@@ -273,31 +274,12 @@ deciding who fills `closesAt` and `acceptsSuggestions` on a posted question.
 **Depends on** the storage work landing first — that is the operator's stated
 ordering — and on P2 for the community half.
 
-## P7 — Two known bugs · READY TO BUILD
+## P7 — Two known bugs · FIXED
 
-Found by the review of #146 on 2026-09-06, in code that PR did not touch, so
-they were left out of it rather than widening one reviewable change. Nobody has
-started them. They are small and independent; one branch each, or one branch for
-both, is a judgement call about review size.
-
-### P7a — `ResultsPanel` reads `yourChoice` two ways
-
-"You picked X" resolves it as an array position
-(`results.choices[yourChoice]`); the row badge uses `choice.index`. They agree
-only because the server happens to return choices in poll order. **ADR-0021 is
-what makes this urgent:** it gives `poll_choice.id` a stable identity and demotes
-`position` to display order, so the first time results come back ordered any
-other way, the panel names the wrong answer back to the voter. Pick one reading
-and use it in both places.
-
-### P7c — A poll the client already knows is shut is still fully pressable
-
-`settled` never consults `poll.open` on either ballot, so one press still casts.
-If the server disagrees and answers `counted`, the person gets a binding
-one-press cast with neither a confirming press nor the reassurance sentence —
-**the "worst of both worlds" ADR-0022 exists to prevent.** It needs
-client/server disagreement to reach, so it is unlikely rather than impossible,
-and it is the one state where that ADR's bargain is fully broken.
+Both bugs the review of #146 found are fixed on master: P7a (`ResultsPanel`
+read `yourChoice` two ways) by #174, and P7c (a poll the client already knew
+was shut was still pressable) by #175. The section is kept only so the P-numbers
+stay stable; delete it with the next edit that prunes landed items.
 
 ## The identity work — P8 to P11, and why it is four items
 
@@ -552,6 +534,7 @@ they sign in; whether one admin acts for any community or only their own; and
 whether this is a screen in `apps/pulse-web` or a separate surface. Read P6
 before starting — one surface should serve links, polls and gates rather than
 growing two.
+
 ---
 
 ## Not in this file

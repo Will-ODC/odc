@@ -37,13 +37,19 @@ memory/          # INDEX.md (read first), STATE.md, pulse.md, OPEN-QUESTIONS(-ar
 
 ## Context protocol (read this order, every session)
 
+**Exception:** a verifier build session reads only what its ticket lists
+(`odc-verifier-builder`); that list overrides this protocol.
+
 1. **`memory/INDEX.md`** — small on purpose. It names the two workstreams, says
    where each stands in one line, and routes you to the 20 KB you actually need
    instead of the 80 KB you do not. Read it before anything else.
 2. The memory entry it points you at: `memory/STATE.md` (ODC core) or
    `memory/pulse.md` (pulse).
-3. The current phase's section of `docs/implementation-plan.md`, or your ticket
-   in `docs/plans/phase-0.md`.
+3. The governing documents for your task: for the ODC core, `docs/charter.md`
+   and the current phase's section of `docs/implementation-plan.md`; then your
+   GitHub issue (the work queue) and its design detail in
+   `docs/plans/<workstream>.md` (`phase-0.md` for core tickets, `pulse.md` for
+   pulse); then any ADR in `docs/decisions/` that the issue or plan cites.
 4. Before touching any service or app: its `README.md`, `API.md`, and `CLAUDE.md`.
 5. Skills auto-trigger by description; when in doubt, `odc-service-boundaries`
    before writing any endpoint and `odc-testing` before writing any code.
@@ -51,10 +57,10 @@ memory/          # INDEX.md (read first), STATE.md, pulse.md, OPEN-QUESTIONS(-ar
 Memory entries are updated **on master at merge time** (merge checklist in
 `odc-pipeline`, owned by `odc-navigator`) — never on feature branches, where
 parallel agents would conflict. Log any architectural choice as an ADR in
-`docs/decisions/` (copy `0000-template.md`). Unresolved design questions go
-in `memory/OPEN-QUESTIONS.md`, not in your head. `memory/INDEX.md` has the full
-"where does this fact go" table — use it, and add a row when you start a
-workstream it does not list.
+`docs/decisions/` (copy `0000-template.md`). Everything else you learn — status,
+handoffs, unsettled questions, traps — goes where `memory/INDEX.md`'s "Where
+new information goes" table says, which is the one home for that rule. Add a row
+there when you start a workstream it does not list.
 
 ## Non-negotiable rules (from the implementation plan)
 
@@ -72,17 +78,14 @@ The operator's standing instruction, verbatim: **"using opus as an orchestrator
 and for complex implementation, and sonnet for routine exploration and simple
 implementation."**
 
-| Model      | Work                                                                                                                                    | Agents                                                                                             |
-| ---------- | --------------------------------------------------------------------------------------------------------------------------------------- | -------------------------------------------------------------------------------------------------- |
-| **Opus**   | Orchestration, architecture, `contracts/`, ADRs, complex implementation, review, security audit                                         | `odc-architect`, `odc-implementer`, `odc-verifier-builder`, `odc-reviewer`, `odc-security-auditor` |
-| **Sonnet** | Exploration, inventory, lookups, renames, verifying cited facts, running tests, formatting, merge mechanics, simple one-behaviour fixes | `odc-navigator`                                                                                    |
+**`.claude/skills/odc-orchestration` is the single home** for what that means:
+the routing table, the simple-versus-complex line, how to write a subagent
+brief, how to run parallel agents in one working tree, and when not to spawn at
+all. Each `.claude/agents/*.md` carries its model in its `model:` field. Read the
+skill before delegating. When in doubt between Opus and Sonnet, route Opus.
 
-**`.claude/skills/odc-orchestration` is the single source of truth** for the
-full decision table, how to write a subagent brief, how to run parallel agents
-in one working tree, and when not to spawn at all. Read it before delegating.
-When in doubt between Opus and Sonnet, route Opus.
-
-Default flow per unit of work: Opus plans → Opus implements on a small branch →
+Default flow per unit of work: Opus plans → implement on a small branch (Opus,
+or Sonnet for simple work per the skill) →
 fresh-context review per `.claude/skills/odc-code-review` → merge on green CI.
 
 The isolation and fresh-context rules are **unaffected by model choice** — they
@@ -93,5 +96,6 @@ that saw the same thing are one context.
 
 - One small branch per change (see `.claude/skills/odc-pipeline` for size limits).
 - Write or update tests with the change, never after (see `.claude/skills/odc-testing`).
-- The verifier service is special: never open its source and ledger source in
-  the same context. Independence is its entire purpose. Use `odc-verifier-builder`.
+- The verifiers are special: never open either verifier's source
+  (`services/verifier/`, `tools/verifier-ts/`) and ledger source in the same
+  context. Independence is their entire purpose. Use `odc-verifier-builder`.

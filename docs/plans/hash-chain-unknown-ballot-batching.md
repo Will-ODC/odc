@@ -8,9 +8,10 @@ to prepare it does not ratify its detailed uncertainty algorithm.
 its conflict resolution is merged. Pulse changes remain outside this proposal.
 **Intended amendments after decision:** `event-types.md` v11 → v12 and
 `evolution.md` v6 → v7, with an ADR and contracts change-log entry. Check final
-version numbers at implementation time. This branch changes neither spec nor
-golden fixtures. Merge after the approved anchor-policy amendment, and implement
-verifiers independently before adding conformance vectors.
+version numbers at implementation time. This proposal changes neither spec nor
+golden fixtures. It merged as #225, after the approved anchor-policy amendment
+(#224, ADR-0032); implement verifiers independently before adding conformance
+vectors.
 
 ## Problem
 
@@ -145,7 +146,7 @@ checks exit codes and a single verdict line. No verifier implementation was
 opened or changed. These eight cases do not establish the completeness or
 streaming complexity of a future uncertainty algorithm.
 
-Order: #222 (merged) → core checkpoint → approved anchor-policy
-amendment → decide this proposal/ADR → isolated Go and TS implementations →
+Order: #222 (merged) → core checkpoint (#223, merged) → approved anchor-policy
+amendment (#224, merged) → proposal written (#225, merged) → operator decides it / ADR → isolated Go and TS implementations →
 new declared fixtures → fresh T9 re-audit → T9a RC. Ledger remains unstarted;
 no freeze tag belongs in this proposal. Keep Pulse work independent.

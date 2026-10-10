@@ -45,7 +45,8 @@ push, so a PR lands green on the first try instead of round-tripping through red
 CI. This is the standing loop for every branch:
 
 - `pnpm -s format:check` — prettier. Markdown is checked (docs, memory, skills);
-  `contracts/` is excluded (`.prettierignore`). Fix with `prettier --write` and
+  `contracts/` is excluded (`.prettierignore`). Fix with
+  `pnpm exec prettier --write` (the repo's pinned prettier, not a global one) and
   eyeball the diff (it is usually just `*em*` → `_em_`).
 - `BASE=origin/master HEAD=HEAD bash .github/scripts/diff-size.sh` — the scripts
   are the source of truth for the ceiling and the exemptions.
@@ -73,11 +74,12 @@ IS the ticket.
 ## Ticket-shaped workflow
 
 1. **The architect (`odc-architect`) cuts issues** from the plan: each issue = one behavior, with
-   3–5 acceptance bullets. If it can't be described that tightly, split it.
-   Dependent issues are planned as an ordered stack up front.
-2. **One issue = one branch = one PR = one Opus session.** The issue text is
-   the session's prompt; branch name carries the issue number
-   (`ledger/14-insert-only-guard`).
+   3–5 acceptance bullets (the ticket shape is the `create-issue` skill). If it
+   can't be described that tightly, split it. Dependent issues are planned as
+   an ordered stack up front.
+2. **One issue = one branch = one PR = one session**, on the model
+   `odc-orchestration` routes it to. The issue text is the session's prompt;
+   branch name carries the issue number (`ledger/14-insert-only-guard`).
 3. **Review in a fresh context** per `odc-code-review`; **CI green** per this
    skill; **squash-merge** so master reads as one commit per ticket, message
    referencing the issue.
@@ -89,9 +91,9 @@ IS the ticket.
 ## Branch rules
 
 - One branch = one reviewable idea. Target diff < 400 lines (WARN); hard ceiling
-  1000 (FAIL) — the live thresholds are in `.github/scripts/diff-size.sh`, the
-  source of truth; markdown, generated code, and lockfiles are exempt. Bigger?
-  Split it.
+  1000 (FAIL). `.github/scripts/diff-size.sh` is the one home for the live
+  thresholds and the exempt paths.
+  Bigger? Split it.
 - **Prefer one branch off `master` at a time.** Merge, then branch the next.
   Independent work has no reason to stack, and every stacked level costs a
   rebase once the level below it merges.

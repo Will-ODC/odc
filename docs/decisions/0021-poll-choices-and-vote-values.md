@@ -1,6 +1,8 @@
 # ADR-0021: A pulse poll models every vote method as (choice, value) pairs
 
-- **Status:** accepted
+- **Status:** accepted — superseded in part by ADR-0023 (no
+  `is_entry_point` column on `polls`); amended by ADR-0024 (three `polls`
+  columns added)
 - **Date:** 2026-09-02
 - **Phase:** 0
 

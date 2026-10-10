@@ -1,6 +1,7 @@
 # ADR-0023: Pulse ships without `is_entry_point`, and a domain may serve several communities
 
-- **Status:** accepted
+- **Status:** accepted — superseded in part by ADR-0030 (the domain allowlist
+  no longer gates sign-in; that one domain may name several communities stands)
 - **Date:** 2026-09-11
 - **Phase:** 0
 - **Supersedes:** one element of ADR-0021 (the `is_entry_point` column on `polls`)

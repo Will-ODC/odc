@@ -23,6 +23,9 @@ Tickets touching fixtures or the rehearsal also read
 `.claude/skills/odc-testing/SKILL.md`. T7 (verifier) reads ONLY what its
 ticket lists — its isolation rules override this section.
 
+**Where a ticket stands is not recorded here.** The ✅ DONE notes on T1, T2 and
+T7-fix are historical; current Phase 0 status lives in `memory/STATE.md`.
+
 ## Pinned decisions (made this session — do not relitigate; record as ADRs in T3)
 
 | #   | Decision                                                                                                | Rationale (short)                                                                                                                                            |
@@ -322,6 +325,10 @@ ET-9c. `operator_pk` is unaffected (already checked at genesis via ET-8).
   (→ `INVALID` at line 1); no other verdict changes; small, scoped diff.
 
 ### T7b — Second independent verifier (TypeScript) · **odc-implementer — FRESH CONTEXT, HARD ISOLATION**
+
+> **Routing since written:** a TS verifier build or change now goes to
+> `odc-verifier-builder` (`.claude/skills/odc-orchestration` routes both
+> verifiers there); the isolation list below is unchanged and still binds it.
 
 **Why this ticket exists.** ADR-0007 §5 names two independent verifiers agreeing
 on a non-synthetic chain as a freeze-readiness signal, and T6's scope decision

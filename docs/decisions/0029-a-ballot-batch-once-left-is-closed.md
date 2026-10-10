@@ -6,6 +6,7 @@
   the fix, and this body describes the decision as finally specified.
 - **Date:** 2026-10-08
 - **Phase:** 0
+- **Amends:** in part ADR-0014 (ET-24a: a batch instant, once left, is closed)
 
 ## Context
 

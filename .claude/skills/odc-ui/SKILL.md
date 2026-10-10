@@ -185,8 +185,10 @@ pointer drag, tap-a-half, and ←/→). Animation respects
 | verify the export              | "check the record yourself"  |
 
 Keys are generated, stored and used invisibly: "Sign up" creates a keypair,
-"Vote" signs an event, and the user is told neither unless they open an
-"Advanced" section, where export-your-key lives for the curious.
+"Vote" authenticates with it, and the user is told neither unless they open an
+"Advanced" section, where export-your-key lives for the curious. The ballot
+itself is signed by the registrar, never by the voter's key (ADR-0004;
+`services/ledger/CLAUDE.md`).
 
 **Pulse goes further, not less far.** Its rule is that the counting is never
 the subject at all — it does not translate "hash chain" into "tamper-proof

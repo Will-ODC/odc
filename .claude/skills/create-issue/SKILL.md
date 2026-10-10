@@ -35,8 +35,10 @@ in an issue is decided in `memory/INDEX.md` → "Where new information goes".
 5. If the user authorised creating the issue, create it without another
    confirmation. Use a structured body argument or `gh issue create --body-file`.
    If the request is only to draft or discuss, return the draft instead.
-6. Return the issue link and record durable decisions or unresolved questions in
-   the workstream's memory. Follow repository rules for memory commits and PRs.
+6. Return the issue link. Record unresolved questions and status in memory and
+   a durable decision as an ADR — `memory/INDEX.md`'s "where new information
+   goes" table is the one home for that rule. Follow repository rules for
+   memory commits and PRs.
 
 If essential scope is missing, ask one focused question and continue independent
 research. Do not make a decision-only issue to hold a question. Do not choose
