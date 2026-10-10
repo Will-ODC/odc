@@ -213,8 +213,10 @@ differ are named under Consequences.
   ET-22. Changing an issue's interval or minimum after creation is also ruled
   out for good; a community that wants different parameters opens a new issue.
 - **Owed, in order** (fixtures may never precede verifiers):
-  1. A fresh-context review of this ADR and the three spec amendments,
-     specifically of ET-24b's soundness argument and its line sets.
+  1. **Done.** A fresh-context review of this ADR and the three spec
+     amendments, specifically of ET-24b's soundness argument and its line
+     sets. Two fresh-context reviews approved the spec content; their nits are
+     folded in.
   2. Both verifiers implement ET-22a's scope change, ET-18b and ET-24b, each in its own
      isolated sparse worktree. Hand the builders the unmerged spec as
      scratchpad copies. On the committed corpus the new logic is a no-op,

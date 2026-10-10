@@ -100,7 +100,8 @@ chain, or a fork that added types, charter §8).
   ballot's batch check unresolved, that check is not failed, and the line is
   enumerated in `PARTIAL` (EV-7). Where a failure holds whatever the
   unregistered events are (ET-24b's definite failures, and every check that
-  does not involve them, such as ET-23), it is `INVALID` as before. A newer
+  does not involve them, such as ET-17's signature, or ET-23 on a ballot whose
+  issue the verifier registers), it is `INVALID` as before. A newer
   verifier that registers those events reaches `INVALID` on the same chain, but
   it may name an earlier line, for example the newer ballot's own: ET-24b
   guarantees a failure at or before the line it names, not at it. Uncertainty
@@ -212,9 +213,10 @@ the surface has to live here.
   version may not do or must be), and **ET-25**, which is a producer
   obligation no reader can check — a shuffled batch and an arrival-ordered one
   are indistinguishable, so no verifier can report it and no stage contains it
-  (ADR-0014). **ET-18b** is Stage B; it reads nothing of the unregistered
-  `issue_created` beyond its `type` and `hash`. **ET-24b** is Stage B, a check on registered ballots like ET-24 and ET-24a
-  which it qualifies. It reads only the envelope `seq` and `ts` of the
+  (ADR-0014). **ET-18b** is Stage B; of the unregistered `issue_created` it
+  reads only the envelope (`type`, `version`, `seq` and `hash`), never the
+  payload. **ET-24b** is Stage B, a check on registered ballots like ET-24 and
+  ET-24a which it qualifies. It reads only the envelope `seq` and `ts` of the
   unregistered `vote_cast` events it considers, never their payloads, and it
   never makes one of them `INVALID`.
 - **EV-16.** **A payload-shape failure is `INVALID`, never `PARTIAL`.** An event
@@ -333,8 +335,9 @@ the surface has to live here.
 ## 6. What may never be registered on this chain (added in v4)
 
 EV-1 permits **any** new event type additively. Two things are permanently
-excluded from that permission: the ballot-plane changes ET-22 and EV-13 already
-bar, and the sentiment plane, whose bar was missing.
+excluded from that permission: the ballot-plane changes ET-22, ET-22a and EV-13
+already bar (ET-22a also bars any type other than `vote_cast` from carrying a
+ballot), and the sentiment plane, whose bar was missing.
 
 - **EV-22.** **The sentiment and monetizable-response plane is permanently barred
   from the governance chain.** No contracts version — v1 or any successor — MAY

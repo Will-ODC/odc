@@ -3,7 +3,7 @@
 **Status: DECIDED (ADR-0034, option 2).** On 2026-10-10 the operator adopted
 the permanent constraint below as written and chose a simpler, conservative
 uncertainty rule instead of this proposal's exact one. The normative text is
-`contracts/event-types.md` v12 ET-22a/ET-24b and `contracts/evolution.md` v7.
+`contracts/event-types.md` v12 ET-18b/ET-22a/ET-24b and `contracts/evolution.md` v7.
 This document is the record of the proposal and is not normative. The rest of
 it is unchanged. The operator authorised preparing this proposal and
 regression cases on 2026-10-09.

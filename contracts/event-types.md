@@ -423,7 +423,8 @@ Opens an issue for voting. Title only — no free-text body (charter §5 MVP; D4
   publishing each ballot alone, in arrival order, at millisecond resolution — the
   mechanism made decorative by configuration. The **values above the floor are
   per-issue and votable**, which is why they live in the payload and not in this
-  spec. This is exactly the cut ET-14a already draws for `choice_count`: *that a
+  spec. They are chosen when an issue is created and never amended afterwards
+  (ET-22a); a community that wants different values opens a new issue. This is exactly the cut ET-14a already draws for `choice_count`: *that a
   bound exists at all* is permanent, *the number* is a drafting decision. The two
   floor numbers are drafting decisions recorded in ADR-0014; a later
   `issue_created` version may raise them, and may never lower them to where the
@@ -861,7 +862,10 @@ and leaves unresolved, never failed, exactly the registered batch checks ET-24b
 names, so that with `ballot_batch_min` 3, two known ballots and one such ballot at T1 followed by three
 known ballots at T2 are `PARTIAL` naming the opaque line and the first T2, while
 one known ballot and one such ballot at T1 followed by the same T2 ballots are
-`INVALID` at the first T2 (ET-24b); and that
+`INVALID` at the first T2 (ET-24b); that a v1 ballot whose `issue_id` names an
+`issue_created` at a version neither registers still has its signature checked,
+and is reported `PARTIAL` naming both lines, the issue's and the ballot's, never
+`INVALID` for its unreadable issue (ET-18b); and that
 `choice` is otherwise an opaque integer (ET-19). They also agree that ET-25's
 shuffle cannot be checked by either of them, which is why it is stated as a
 producer obligation rather than a verifier check. The only undecided bytes are
