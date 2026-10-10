@@ -1,0 +1,178 @@
+/*
+ * One decision as a popup. Same dark ground and the same controls as the
+ * ballot and sign-in screens, so a question asked in a conversation reads as
+ * the same kind of thing as a question asked on its own screen.
+ *
+ * Sized from tokens: never wider than the phone frame less its gutters, never
+ * taller than the window, and scrolling inside itself when the choices run
+ * long on a short screen.
+ */
+.decision {
+  box-sizing: border-box;
+  width: var(--dialog-w);
+  max-width: var(--dialog-w);
+  max-height: var(--dialog-h);
+  overflow-y: auto;
+  margin: auto;
+  padding: var(--gutter);
+  display: none;
+  flex-direction: column;
+  gap: calc(var(--step) * 2);
+  color: var(--ballot-ink);
+  background: var(--ballot-bg);
+  border: var(--hairline) solid var(--control-line);
+  border-radius: var(--r-card);
+  box-shadow: var(--shadow-ballot);
+}
+
+/* `display` only while open: an author `display` would otherwise beat the
+   browser's own `dialog:not([open]) { display: none }` and draw it shut. */
+.decision[open] {
+  display: flex;
+  animation: decision-in var(--motion-quick) ease-out;
+}
+
+.decision::backdrop {
+  background: var(--scrim);
+}
+
+@keyframes decision-in {
+  from {
+    opacity: 0;
+    transform: translateY(var(--step));
+  }
+}
+
+@media (prefers-reduced-motion: reduce) {
+  .decision[open] {
+    animation: none;
+  }
+}
+
+.decision__top {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: var(--step);
+}
+
+.decision__eyebrow {
+  margin: 0;
+  font-size: var(--t-eyebrow);
+  font-weight: 700;
+  letter-spacing: 0.16em;
+  color: var(--ballot-ink-faint);
+}
+
+.decision__close {
+  padding: var(--step) calc(var(--step) * 1.5);
+  font: inherit;
+  font-size: var(--t-small);
+  font-weight: 600;
+  color: var(--ballot-ink-soft);
+  background: transparent;
+  border: var(--hairline) solid var(--ballot-line);
+  border-radius: var(--r-pill);
+  cursor: pointer;
+}
+
+.decision__question {
+  margin: 0;
+  font-size: var(--t-hero);
+  font-weight: 800;
+  letter-spacing: -0.03em;
+  line-height: 1.2;
+}
+
+/* A radio group drawn as rows, each row the whole label, as on sign-in. */
+.decision__choices {
+  display: flex;
+  flex-direction: column;
+  gap: var(--step);
+  min-inline-size: 0;
+  margin: 0;
+  padding: 0;
+  border: none;
+}
+
+.decision__choice {
+  display: flex;
+  align-items: center;
+  gap: calc(var(--step) * 1.5);
+  padding: calc(var(--step) * 1.75) calc(var(--step) * 2);
+  font-size: var(--t-body);
+  color: var(--ballot-ink);
+  background: var(--ballot-chip);
+  border: var(--hairline) solid var(--ballot-line);
+  border-radius: var(--r-control);
+  cursor: pointer;
+}
+
+.decision__choice input {
+  flex: 0 0 auto;
+  margin: 0;
+  accent-color: rgb(var(--side-b));
+}
+
+.decision__choice:has(input:checked) {
+  background: var(--surface-hover);
+  border-color: rgb(var(--side-b));
+}
+
+.decision__choice:has(input:focus-visible) {
+  outline: calc(var(--hairline) * 2) solid rgb(var(--side-b));
+  outline-offset: calc(var(--hairline) * 2);
+}
+
+.decision__choices:disabled .decision__choice {
+  color: var(--ballot-ink-muted);
+  cursor: default;
+}
+
+.decision__privacy,
+.decision__note {
+  margin: 0;
+  font-size: var(--t-small);
+  line-height: 1.45;
+  color: var(--ballot-ink-muted);
+}
+
+/* One plain sentence: what happened, and what to do about it. */
+.decision__problem {
+  margin: 0;
+  font-size: var(--t-small);
+  line-height: 1.45;
+  color: rgb(var(--side-a));
+}
+
+.decision__primary {
+  padding: calc(var(--step) * 1.75) calc(var(--step) * 2.25);
+  font: inherit;
+  font-size: var(--t-body);
+  font-weight: 700;
+  letter-spacing: -0.01em;
+  color: var(--ballot-bg);
+  background: rgb(var(--side-b));
+  border: none;
+  border-radius: var(--r-control);
+  cursor: pointer;
+}
+
+.decision__primary:disabled {
+  opacity: 0.55;
+  cursor: default;
+}
+
+.decision__close:focus-visible,
+.decision__primary:focus-visible {
+  outline: calc(var(--hairline) * 2) solid rgb(var(--side-b));
+  outline-offset: calc(var(--hairline) * 2);
+}
+
+.decision__done {
+  display: flex;
+  flex-direction: column;
+  gap: calc(var(--step) * 2);
+  font-size: var(--t-body);
+  line-height: 1.5;
+}

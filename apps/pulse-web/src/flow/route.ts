@@ -4,8 +4,8 @@
  * Pure on purpose, like `story.ts` and `swipe.ts`: reading a URL is a decision
  * with edge cases worth testing exhaustively, and none of them need React.
  *
- * There are three places to be, and the emailed sign-in link is the reason the
- * first two exist. `apps/pulse/src/dev-server.ts` builds that link as
+ * There are three places to be, plus one prototype (#228), and the emailed
+ * sign-in link is the reason the first two exist. `apps/pulse/src/dev-server.ts` builds that link as
  * `<web origin>/sign-in?token=…`, so the client has to answer that path or the
  * link goes nowhere — which is precisely what it did before this module: the
  * app read `?poll=`, found nothing, and opened the first question as though
@@ -17,7 +17,12 @@ export type Route =
   /** Asking for a sign-in link. */
   | { kind: "signIn" }
   /** Arrived from the emailed link, holding a token to spend. */
-  | { kind: "redeem"; token: string };
+  | { kind: "redeem"; token: string }
+  /**
+   * The chat-voting prototype (#228). Sample data, no server calls; reachable
+   * only by typing the path, so nobody arrives in it by accident.
+   */
+  | { kind: "chatPreview" };
 
 /**
  * Where a run begins when the URL does not say.
@@ -29,6 +34,7 @@ export type Route =
 export const FIRST_POLL_ID = "ads-free";
 
 const SIGN_IN_PATH = "/sign-in";
+const CHAT_PREVIEW_PATH = "/preview/chat";
 
 /**
  * A base for parsing, never for navigating.
@@ -58,6 +64,8 @@ export function routeFrom(href: string): Route {
     return token ? { kind: "redeem", token } : { kind: "signIn" };
   }
 
+  if (path === CHAT_PREVIEW_PATH) return { kind: "chatPreview" };
+
   // `?poll=` so a run can be started anywhere in the graph without a rebuild.
   return { kind: "run", pollId: url.searchParams.get("poll") || FIRST_POLL_ID };
 }
@@ -69,6 +77,8 @@ export function pathOf(route: Route): string {
       return SIGN_IN_PATH;
     case "redeem":
       return `${SIGN_IN_PATH}?token=${encodeURIComponent(route.token)}`;
+    case "chatPreview":
+      return CHAT_PREVIEW_PATH;
     case "run":
       // The default start is the bare path, so the common URL stays clean and
       // shareable rather than carrying a parameter that changes nothing.

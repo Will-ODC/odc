@@ -141,4 +141,14 @@
 
   /* How wide the preview under a swipe answer is allowed to run. */
   --nextq-max: 118px;
+
+  /*
+   * A popup over the page (DecisionDialog). The scrim dims what is behind it
+   * so the page reads as paused, not gone; the popup never runs wider than
+   * the phone frame less its gutters, and never wider than the window.
+   */
+  --scrim: rgba(0, 0, 0, 0.62);
+  --dialog-w: calc(min(390px, 100vw) - var(--gutter) * 2);
+  --dialog-h: calc(100dvh - var(--gutter) * 2);
+  --motion-quick: 0.16s;
 }
