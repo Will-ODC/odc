@@ -79,6 +79,7 @@ destination for every kind of fact.
 | A ticket landed / a phase moved                | The workstream's memory entry, **at merge time on master**      |
 | A choice with alternatives and consequences    | A new ADR in `docs/decisions/` (copy `0000-template.md`)        |
 | A question you could not settle                | `memory/OPEN-QUESTIONS.md`, under a dated heading               |
+| A Pulse decision waiting on the operator       | `memory/pulse.md` → "Open decisions (operator)"                 |
 | A trap the next session will otherwise re-hit  | "Blockers & live cautions" in the workstream's memory entry     |
 | A rule about how we work                       | The matching `.claude/skills/odc-*` skill — **one place only**  |
 | A feature, bounded epic or concrete defect fix | A GitHub issue (`.claude/skills/create-issue`) — the work queue |
