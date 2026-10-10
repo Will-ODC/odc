@@ -97,44 +97,111 @@ export function verdictLine(result: Verdict): string {
 
 const HEX64 = /^[0-9a-f]{64}$/;
 const LF = 0x0a;
+const UNAVAILABLE = "unavailable";
 
-/** The stored `hash` of one line, or "unavailable" if it cannot be read. */
-function storedHash(line: Buffer): string {
+/**
+ * Strict UTF-8. A candidate whose bytes are not UTF-8 is not a JSON text
+ * (RFC 8259 §8.1), so it does not "decode as a JSON object" (EX-24); a lossy
+ * decoder would substitute U+FFFD and let it through, which is the
+ * substitution EX-24 forbids. `ignoreBOM: true` KEEPS a leading U+FEFF in the
+ * decoded text instead of silently stripping it; JSON.parse then rejects it,
+ * so a BOM-prefixed candidate is `unavailable` rather than normalised.
+ */
+const UTF8 = new TextDecoder("utf-8", { fatal: true, ignoreBOM: true });
+
+/**
+ * The stored `hash` claim of one EX-24 candidate record, or "unavailable".
+ *
+ * Available only if the candidate decodes as a JSON OBJECT whose top-level
+ * `hash` is a string of exactly 64 lowercase hex characters. JSON.parse keeps
+ * the LAST occurrence of a repeated key, which is EX-24's rule for a repeated
+ * top-level `hash`; nested `hash` keys are never read. Keys and values are
+ * taken as DECODED JSON strings, so `"hash"` is the key `hash` and a
+ * `\u`-escaped value that decodes to 64 lowercase hex is available — decoding
+ * is not normalisation. Beyond JSON decoding the value is never lowercased,
+ * trimmed or otherwise normalised to make it available.
+ *
+ * This is NOT a canonical-form or integrity check (EX-24): a candidate EX-7–
+ * EX-10 would reject — whitespace, reordered or duplicated keys — still yields
+ * its claim, and nothing here recomputes a hash.
+ */
+export function storedHashClaim(candidate: Uint8Array): string {
   try {
-    const v: unknown = JSON.parse(line.toString("utf8"));
-    if (typeof v === "object" && v !== null && !Array.isArray(v)) {
+    const v: unknown = JSON.parse(UTF8.decode(candidate));
+    if (
+      typeof v === "object" &&
+      v !== null &&
+      !Array.isArray(v) &&
+      Object.hasOwn(v, "hash") // never a value inherited from Object.prototype
+    ) {
       const h = (v as Record<string, unknown>)["hash"];
       if (typeof h === "string" && HEX64.test(h)) return h;
     }
   } catch {
-    // fall through: not JSON
+    // fall through: not UTF-8, not JSON, or too large to decode
   }
-  return "unavailable";
+  return UNAVAILABLE;
+}
+
+/** The two EX-24 endpoint claims, each 64 lowercase hex or "unavailable". */
+export interface StoredClaims {
+  genesis: string;
+  head: string;
 }
 
 /**
- * EX-24: the genesis hash (EX-21) and head (EX-14) to report on STDERR on every
- * run over a NON-EMPTY export, whatever the verdict. Returns the two lines
- * (with trailing newlines), or null for an empty export, which has neither.
+ * EX-24 candidate extraction and claim recovery, independent of the verdict.
+ * Returns null for an empty input, which has no endpoints.
  *
- * Each value is the stored `hash` field of the first / last line, read as-is:
- * the bytes are split on LF, the one empty segment after a final LF is
- * dropped, and the line is JSON.parse'd. A line that is not JSON, or whose
- * `hash` is absent or not 64 lowercase hex, reports the literal `unavailable`
- * for that one value. This is deliberately independent of the verdict: on an
- * INVALID export the values are whatever the file claims, which is exactly
- * what a reader needs to compare against an anchor.
- *
- * Tool output, not conformance surface (EV-17): no fixture asserts it.
+ * Candidates are the input split at LF, with exactly ONE terminal LF taken as
+ * ending the last record (it adds no empty candidate):
+ *   "a\n" -> ["a"]    "a" -> ["a"] (no final LF: the fragment is the last)
+ *   "a\n\n" -> ["a", ""]    "\n" -> [""]
+ * An additional trailing blank record IS a candidate, so on "a\n\n" the head
+ * claim is `unavailable`. These rules apply whether or not framing, or any
+ * other file check, fails. Each endpoint is recovered on its own, so one
+ * `unavailable` never suppresses the other.
  */
-export function chainIdentityLines(bytes: Buffer): string | null {
+export function storedClaims(bytes: Uint8Array): StoredClaims | null {
   if (bytes.length === 0) return null;
   const firstEnd = bytes.indexOf(LF);
   const first = firstEnd === -1 ? bytes : bytes.subarray(0, firstEnd);
+  // Set aside the one terminal framing LF, if any; the last candidate is what
+  // follows the last LF before that point.
   const end = bytes[bytes.length - 1] === LF ? bytes.length - 1 : bytes.length;
-  // end === 0 only for the one-byte export "\n"; a negative offset would make
+  // end === 0 only for the one-byte input "\n"; a negative fromIndex would make
   // lastIndexOf count from the END, so handle it explicitly.
   const lastStart = end === 0 ? 0 : bytes.lastIndexOf(LF, end - 1) + 1;
   const last = bytes.subarray(lastStart, end);
-  return `genesis: ${storedHash(first)}\nhead: ${storedHash(last)}\n`;
+  return { genesis: storedHashClaim(first), head: storedHashClaim(last) };
+}
+
+/**
+ * Labels of the two EX-24 stderr lines; the value follows after ": ".
+ * "(stored claim)" says the value is the stored `hash` field's decoded string
+ * — not a recomputed or verified hash. The exact labels are pinned so the two
+ * verifiers' stderr can be diffed (operator choice; EX-24 leaves labels free).
+ */
+export const GENESIS_CLAIM_LABEL = "genesis hash (stored claim)";
+export const HEAD_CLAIM_LABEL = "head hash (stored claim)";
+
+/**
+ * EX-24: the report for STDERR on every run that produces a chain verdict over
+ * a NON-EMPTY input — one line per endpoint, each with its trailing newline —
+ * or null for an empty input, which has no endpoints.
+ *
+ * The labels say "(stored claim)" because that is all these values are: the
+ * decoded JSON string value of the `hash` field in the first / last candidate
+ * record, with no normalisation beyond JSON decoding. On an INVALID verdict
+ * they are what the file asserts, never verified chain anchors; a reader must
+ * take them together with the verdict and an independently trusted `--chain` /
+ * `--head`. On a VALID or PARTIAL file they coincide with EX-21's genesis hash
+ * and EX-14's head.
+ *
+ * Tool output, not conformance surface (EV-17, EX-24): no fixture asserts it.
+ */
+export function storedClaimLines(bytes: Uint8Array): string | null {
+  const c = storedClaims(bytes);
+  if (c === null) return null;
+  return `${GENESIS_CLAIM_LABEL}: ${c.genesis}\n${HEAD_CLAIM_LABEL}: ${c.head}\n`;
 }

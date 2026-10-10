@@ -8,7 +8,7 @@
 
 import { readFileSync } from "node:fs";
 import { verifyExport } from "./verify.js";
-import { chainIdentityLines, oneLine, verdictLine } from "./report.js";
+import { oneLine, storedClaimLines, verdictLine } from "./report.js";
 
 const HEX64 = /^[0-9a-f]{64}$/;
 
@@ -90,14 +90,18 @@ function main(argv: string[], deps: CliDeps): number {
   }
 
   const result = deps.verify(bytes, head, chain);
-  // Render before writing so a throw while rendering leaves stdout empty.
+  // Render BOTH outputs before writing either, so a throw while rendering
+  // reaches run()'s catch with stdout still empty (#194: exit 3, one stderr
+  // line, no verdict, and therefore no EX-24 report either).
   const line = verdictLine(result) + "\n";
-  // EX-24: genesis hash and head, on STDERR only (stdout stays the one verdict
-  // line), after the verdict, for every non-empty export whatever the verdict.
-  // Tool output, not conformance surface (EV-17).
-  const identity = chainIdentityLines(bytes);
+  // EX-24: the STORED genesis-hash and head claims (never recomputed values),
+  // on STDERR only — stdout stays the one verdict line — after the verdict, on
+  // every run that produced a chain verdict over non-empty input, whatever
+  // that verdict is. null for an empty input, which has no endpoints. Tool
+  // output, not conformance surface (EV-17).
+  const claims = storedClaimLines(bytes);
   deps.out(line);
-  if (identity !== null) deps.err(identity);
+  if (claims !== null) deps.err(claims);
   switch (result.verdict) {
     case "VALID":
       return 0;
