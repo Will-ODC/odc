@@ -1,0 +1,185 @@
+/*
+ * The chat preview (#228). The same dark ground as every other screen, so the
+ * prototype is judged on the idea - a decision inside a conversation - rather
+ * than on a new look.
+ */
+.chatpreview {
+  display: flex;
+  justify-content: center;
+}
+
+/*
+ * Fills the frame's body and scrolls inside it. The body centres its content,
+ * and centred content taller than its box overflows at the top, where nothing
+ * can scroll to it; a child that is exactly the body's height cannot.
+ */
+.chatpreview__body {
+  flex: 1;
+  min-height: 0;
+  overflow-y: auto;
+  display: flex;
+  flex-direction: column;
+  gap: calc(var(--step) * 2.5);
+}
+
+.chatpreview__head {
+  display: flex;
+  flex-direction: column;
+  align-items: flex-start;
+  gap: var(--step);
+}
+
+.chatpreview__badge {
+  margin: 0;
+  padding: calc(var(--step) / 2) calc(var(--step) * 1.25);
+  font-size: var(--t-small);
+  font-weight: 700;
+  color: var(--ballot-bg);
+  background: rgb(var(--side-b));
+  border-radius: var(--r-pill);
+}
+
+.chatpreview__title {
+  margin: 0;
+  font-size: var(--t-hero);
+  font-weight: 800;
+  letter-spacing: -0.03em;
+  line-height: 1.2;
+}
+
+.chatpreview__lede {
+  margin: 0;
+  font-size: var(--t-small);
+  line-height: 1.45;
+  color: var(--ballot-ink-muted);
+}
+
+.chatpreview__pick {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: center;
+  gap: var(--step);
+  font-size: var(--t-small);
+  font-weight: 600;
+  color: var(--ballot-ink-soft);
+}
+
+.chatpreview__select {
+  padding: var(--step) calc(var(--step) * 1.5);
+  font: inherit;
+  color: var(--ballot-ink);
+  background: var(--ballot-chip);
+  border: var(--hairline) solid var(--ballot-line);
+  border-radius: var(--r-control);
+}
+
+.chatpreview__select option {
+  color: var(--ink);
+  background: var(--glass-strong);
+}
+
+.chatpreview__select:focus-visible,
+.chat__open:focus-visible {
+  outline: calc(var(--hairline) * 2) solid rgb(var(--side-b));
+  outline-offset: calc(var(--hairline) * 2);
+}
+
+.chatpreview__proto {
+  margin: 0;
+  font-size: var(--t-eyebrow);
+  font-weight: 700;
+  letter-spacing: 0.16em;
+  text-transform: uppercase;
+  color: rgb(var(--side-b));
+}
+
+.chatpreview__said {
+  margin: 0;
+}
+
+/* ---- the conversation ---- */
+.chat {
+  list-style: none;
+  margin: 0;
+  padding: 0;
+  display: flex;
+  flex-direction: column;
+  gap: calc(var(--step) * 1.5);
+}
+
+.chat__msg {
+  display: flex;
+  flex-direction: column;
+  align-items: flex-start;
+  gap: calc(var(--step) / 2);
+}
+
+.chat__msg--mine {
+  align-items: flex-end;
+}
+
+.chat__author {
+  font-size: var(--t-small);
+  font-weight: 600;
+  color: var(--ballot-ink-muted);
+}
+
+.chat__bubble {
+  margin: 0;
+  max-width: 85%;
+  padding: var(--step) calc(var(--step) * 1.5);
+  font-size: var(--t-body);
+  line-height: 1.4;
+  background: var(--surface-lifted);
+  border-radius: var(--r-control);
+}
+
+.chat__bubble--mine {
+  color: var(--ballot-bg);
+  background: rgb(var(--side-b));
+}
+
+.chat__aside {
+  font-size: var(--t-small);
+  color: var(--ballot-ink-faint);
+}
+
+.chat__card {
+  box-sizing: border-box;
+  width: 85%;
+  display: flex;
+  flex-direction: column;
+  gap: var(--step);
+  padding: calc(var(--step) * 1.5);
+  background: var(--surface-rest);
+  border: var(--hairline) solid var(--control-line);
+  border-radius: var(--r-control);
+}
+
+.chat__eyebrow {
+  margin: 0;
+  font-size: var(--t-eyebrow);
+  font-weight: 700;
+  letter-spacing: 0.16em;
+  color: var(--ballot-ink-faint);
+}
+
+.chat__question {
+  margin: 0;
+  font-size: var(--t-body);
+  font-weight: 700;
+  line-height: 1.35;
+}
+
+.chat__open {
+  align-self: flex-start;
+  padding: var(--step) calc(var(--step) * 2);
+  font: inherit;
+  font-size: var(--t-small);
+  font-weight: 700;
+  color: var(--ballot-bg);
+  background: rgb(var(--side-b));
+  border: none;
+  border-radius: var(--r-pill);
+  cursor: pointer;
+}

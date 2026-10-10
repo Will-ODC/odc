@@ -75,6 +75,22 @@ describe("what the URL opens", () => {
   });
 });
 
+describe("the chat preview", () => {
+  it("opens at /preview/chat without asking the server for anything", async () => {
+    globalThis.history.replaceState(null, "", "/preview/chat");
+    const poll = vi.fn();
+    const cast = vi.fn();
+    const me = vi.fn();
+    render(<App api={stubApi({ poll, cast, me })} />);
+
+    expect(await screen.findByText("Preview")).toBeTruthy();
+    expect(screen.getByRole("button", { name: "Answer" })).toBeTruthy();
+    expect(poll).not.toHaveBeenCalled();
+    expect(cast).not.toHaveBeenCalled();
+    expect(me).not.toHaveBeenCalled();
+  });
+});
+
 describe("after the link is spent", () => {
   /*
    * The token is gone the moment it is redeemed, so the URL that carried it

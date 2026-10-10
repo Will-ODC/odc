@@ -91,6 +91,30 @@ describe("reading a URL", () => {
     });
   });
 
+  it("opens the chat preview at /preview/chat", () => {
+    expect(routeFrom("/preview/chat")).toEqual({ kind: "chatPreview" });
+  });
+
+  /* The same tolerance the sign-in path has, for the same reasons. */
+  it("opens the chat preview with a trailing slash or another case", () => {
+    expect(routeFrom("/preview/chat/")).toEqual({ kind: "chatPreview" });
+    expect(routeFrom("/Preview/Chat")).toEqual({ kind: "chatPreview" });
+    expect(routeFrom("http://localhost:5173/PREVIEW/CHAT/?x=1")).toEqual({
+      kind: "chatPreview",
+    });
+  });
+
+  it("does not open the preview for a path that only starts like it", () => {
+    expect(routeFrom("/preview")).toEqual({
+      kind: "run",
+      pollId: FIRST_POLL_ID,
+    });
+    expect(routeFrom("/preview/chatter")).toEqual({
+      kind: "run",
+      pollId: FIRST_POLL_ID,
+    });
+  });
+
   it("opens the first question when ?poll= is empty", () => {
     expect(routeFrom("/?poll=")).toEqual({
       kind: "run",
@@ -114,6 +138,10 @@ describe("writing a URL", () => {
     expect(pathOf({ kind: "signIn" })).toBe("/sign-in");
   });
 
+  it("points at the chat preview", () => {
+    expect(pathOf({ kind: "chatPreview" })).toBe("/preview/chat");
+  });
+
   it("escapes a token on the way out", () => {
     expect(pathOf({ kind: "redeem", token: "a+b/c=d" })).toBe(
       "/sign-in?token=a%2Bb%2Fc%3Dd",
@@ -132,6 +160,7 @@ describe("the two directions agree", () => {
     { kind: "signIn" },
     { kind: "redeem", token: "abc123" },
     { kind: "redeem", token: "a+b/c=d" },
+    { kind: "chatPreview" },
   ] as const;
 
   for (const route of routes) {

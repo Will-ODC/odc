@@ -1,10 +1,7 @@
 # ADR-0033: Pulse identity is a credential
 
-- **Status:** proposed — **for the operator to confirm**, except decision 2
-  (the level vocabulary), which is the operator's own decision 1 of 2026-09-12
-  and is recorded here, not re-opened. The rest — the migration shape, the
-  store seam, allowing a voter with no credential, and the naming — were taken
-  by the orchestrator when P8 slice 1 was briefed, 2026-10-09.
+- **Status:** accepted (operator, 2026-10-10). Decision 2 is the operator's
+  own decision 1 of 2026-09-12; decision 7 (the upgrade path) stays open.
 - **Date:** 2026-10-09
 - **Phase:** 0 (pulse workstream, P8 slice 1)
 
