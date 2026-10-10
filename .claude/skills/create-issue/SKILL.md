@@ -17,12 +17,20 @@ tracks work; memory preserves session context and unresolved decisions.
 2. Choose one observable change. Split large work into a bounded epic and small
    tickets; do not create all its children before their scopes are defined.
    An epic lists a finite set of outcomes, not an entire product roadmap.
+   Cut by distinct behavior and responsibility, never by chat-message boundaries.
+   Put shared foundations in one ticket; separate interfaces depend on them.
+   Keep evidence recording, policy evaluation and enforcement separate when
+   each has its own reviewable outcome. Avoid circular dependencies; name the
+   initial supported path before a later extension.
 3. Write the complete ticket locally using the template below. Keep normal
    tickets around 150–250 words, with 3–5 acceptance criteria. Use only the
    headings that help; omit empty sections.
 4. Review it: can one developer finish the slice, can each criterion be checked,
    are dependencies real, and are undecided choices kept in memory? Label a
    prototype as a prototype. Do not claim an unfinished dependency is available.
+   Compare proposed tickets together: no duplicated implementation ownership,
+   and each one has its own outcome. An open policy prerequisite can block a
+   defined feature, but a question by itself belongs in memory.
 5. If the user authorised creating the issue, create it without another
    confirmation. Use a structured body argument or `gh issue create --body-file`.
    If the request is only to draft or discuss, return the draft instead.
