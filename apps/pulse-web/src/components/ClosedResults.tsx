@@ -31,7 +31,7 @@ export function ClosedResults({
     return (
       <ResultsPanel
         results={data.value.results}
-        yourChoice={data.value.yourChoice}
+        yourChoices={data.value.yourChoices}
         ended
         onClose={onClose}
         panelRef={panelRef}

@@ -20,7 +20,7 @@ function show(over: Partial<Parameters<typeof ResultsPanel>[0]> = {}) {
   render(
     <ResultsPanel
       results={COUNTED}
-      yourChoice={1}
+      yourChoices={[1]}
       onClose={onClose}
       {...over}
     />,
@@ -46,7 +46,7 @@ describe("showing where a question stands", () => {
         voters: 1,
         choices: [{ index: 0, label: "Yes", count: 1, share: 100 }],
       }),
-      yourChoice: 0,
+      yourChoices: [0],
     });
     expect(screen.getByText("1 person so far")).toBeTruthy();
   });
@@ -64,7 +64,7 @@ describe("showing where a question stands", () => {
   });
 
   /**
-   * `yourChoice` is a choice's index, not a place in the list. ADR-0021 makes
+   * `yourChoices` holds choices' indexes, not a place in the list. ADR-0021 makes
    * position only the display order, so results may arrive in any order, and
    * the words and the mark must still name the same choice.
    */
@@ -78,12 +78,65 @@ describe("showing where a question stands", () => {
           { index: 1, label: "Yes", count: 5, share: 50 },
         ],
       }),
-      yourChoice: 1,
+      yourChoices: [1],
     });
     const said = screen.getByText(/You picked/).querySelector("b");
     expect(said?.textContent).toBe("Yes");
     const marked = document.querySelector('[data-yours="true"]');
     expect(marked?.textContent).toContain(said?.textContent);
+  });
+
+  /**
+   * On an approval poll a ballot names several answers. Every one is marked,
+   * and the sentence names them all, in the order the results list them.
+   */
+  describe("more than one answer of yours", () => {
+    const THREE = results({
+      method: "approval",
+      voters: 10,
+      choices: [
+        { index: 0, label: "Buses", count: 7, share: 70 },
+        { index: 1, label: "Bikes", count: 6, share: 60 },
+        { index: 2, label: "Trams", count: 2, share: 20 },
+      ],
+    });
+    const named = () =>
+      [...screen.getByText(/You picked/).querySelectorAll("b")].map(
+        (b) => b.textContent,
+      );
+    const marked = () =>
+      [...document.querySelectorAll('[data-yours="true"]')].map(
+        (row) => row.querySelector(".results__label")?.firstChild?.textContent,
+      );
+
+    it("marks every answer you picked, and no other", () => {
+      show({ results: THREE, yourChoices: [2, 0] });
+      expect(marked()).toEqual(["Buses", "Trams"]);
+      expect(screen.getAllByText("yours")).toHaveLength(2);
+    });
+
+    it("names two answers joined by 'and'", () => {
+      show({ results: THREE, yourChoices: [0, 2] });
+      expect(named()).toEqual(["Buses", "Trams"]);
+      expect(screen.getByText(/You picked/).textContent).toBe(
+        "You picked Buses and Trams.",
+      );
+    });
+
+    it("names three answers as a list", () => {
+      show({ results: THREE, yourChoices: [0, 1, 2] });
+      expect(screen.getByText(/You picked/).textContent).toBe(
+        "You picked Buses, Bikes and Trams.",
+      );
+    });
+
+    it("ignores an index the results do not have", () => {
+      show({ results: THREE, yourChoices: [1, 9] });
+      expect(marked()).toEqual(["Bikes"]);
+      expect(screen.getByText(/You picked/).textContent).toBe(
+        "You picked Bikes.",
+      );
+    });
   });
 
   /**
@@ -137,7 +190,7 @@ describe("showing where a question stands", () => {
   it("says nobody answered instead of drawing empty bars", () => {
     show({
       results: results({ voters: 0 }),
-      yourChoice: undefined,
+      yourChoices: [],
       ended: true,
     });
     expect(screen.getByText("Nobody answered this one.")).toBeTruthy();
@@ -148,7 +201,7 @@ describe("showing where a question stands", () => {
   });
 
   it("says nobody has answered yet while the question is open", () => {
-    show({ results: results({ voters: 0 }), yourChoice: undefined });
+    show({ results: results({ voters: 0 }), yourChoices: [] });
     expect(screen.getByText("Nobody has answered yet.")).toBeTruthy();
     expect(document.querySelector(".results__bar")).toBeNull();
   });
@@ -161,7 +214,7 @@ describe("showing where a question stands", () => {
 
   /** Someone who did not vote sees the results with nothing marked as theirs. */
   it("marks nothing when there is no choice of yours", () => {
-    show({ yourChoice: undefined });
+    show({ yourChoices: [] });
     expect(screen.getByText("7 · 70%")).toBeTruthy();
     expect(screen.queryByText(/You picked/)).toBeNull();
     expect(document.querySelector('[data-yours="true"]')).toBeNull();
