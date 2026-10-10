@@ -29,8 +29,8 @@ alone — but the CLI note fixes this scheme so the two verifiers agree, and
 | PARTIAL (lines …)      | `PARTIAL at lines a, b`         | 2    |
 | tool error (any cause) | one line on stderr              | ≥ 3  |
 
-On a verdict over a non-empty export, stderr also carries the two EX-24 lines
-(below); a tool error never does.
+On a verdict over a non-empty input, stderr also carries the two EX-24
+stored-claim lines (below); a tool error never does.
 
 **The verdict is exactly ONE line**, and any advisory reason (EV-17, EV-21) sits
 after a colon on that same line — never on a second line. Consumers parse the
@@ -60,35 +60,54 @@ identity (EX-21, EX-22): `--chain` fixes _which chain_, `--head` fixes _how much
 of it_. They are independent and may be given together. A malformed value
 (anything but 64 lowercase hex) for either is a tool error, exit 3.
 
-Which verdicts the two anchors can override: both are compared at the same
-point, only after every line has passed its own checks (EX-15 "after all link
-checks pass", EX-22 "even when every link check passes"). So a mismatch turns
-`VALID` or `PARTIAL` into `INVALID` — `--chain` at line 1 (EX-23), `--head` at
-the last line (EX-19) — but never changes an `INVALID` the file already earned
-on its own; that line number stands. When both mismatch, the verdict is
-`INVALID at line 1`: the spec does not state the precedence outright, and
-EV-17's "first fatal line, scanning the export in file order" puts the
-`--chain` mismatch first.
+Which verdicts the two anchors can override (`export-format.md` v5, EX-15 /
+EX-22 / EX-23): both are compared at the same point, only after every other
+file-validity check has passed — framing, each event's structural checks and
+every registered event's semantic checks. Unknown events yielding `PARTIAL` do
+not prevent the comparison. So a mismatch turns `VALID` or `PARTIAL` into
+`INVALID` — `--chain` at line 1 (EX-23), `--head` at the last line (EX-19) —
+but never replaces an `INVALID` a file check already established; that line
+number stands. When both mismatch on a file eligible for comparison, the
+verdict is the chain mismatch, `INVALID at line 1` (EX-23).
 
-**Genesis hash and head on stderr (EX-24).** On every run over a non-empty
-export, whatever the verdict, the CLI writes two lines to **stderr**, after the
-verdict line is on stdout:
+**Stored claims on stderr (EX-24).** On every run that produces a chain
+verdict over non-empty input, whatever the verdict, the CLI writes two lines to
+**stderr**, one per endpoint, after the verdict line is on stdout:
 
 ```
-genesis: <64-lowercase-hex | unavailable>
-head: <64-lowercase-hex | unavailable>
+genesis hash (stored claim): <64-lowercase-hex | unavailable>
+head hash (stored claim): <64-lowercase-hex | unavailable>
 ```
 
-Each is the stored `hash` field of the first / last line, read as-is (split on
-LF, `JSON.parse` the line); `unavailable` replaces a value whose line is not
-JSON or whose `hash` is absent or not 64 lowercase hex. On an `INVALID` export
-these are what the file _claims_, which is what a reader compares against an
-anchor. Neither line is printed for an empty export, or on a tool error where
-no verdict was produced. stdout stays exactly the one verdict line. These lines
-are **tool output, not conformance surface**: EV-17 judges conformance on the
-verdict token and line number(s) alone, and EX-24 leaves labels, order and
-format free, so no fixture asserts them and another verifier may print them
-differently. `test/chain-and-report.test.ts` pins this CLI's behaviour.
+These are **stored claims**: the `hash` field as written in the first and the
+last candidate record, never a recomputed or verified hash. On a structurally
+valid export they coincide with the genesis hash (EX-21) and head (EX-14); on an
+`INVALID` export they are only what the file asserts and are **not** verified
+chain anchors. Read them with the verdict and an independently trusted
+`--chain` / `--head`; the report alone proves no integrity or identity.
+
+- **Candidates.** The input is split at LF. One terminal LF ends the last
+  record and adds no empty candidate; an additional trailing blank record _is_
+  a candidate (so `…\n\n` reports the head `unavailable`). Without a final LF,
+  the final fragment is the last candidate. These rules apply even when
+  framing or any other file check fails (a CRLF export still reports both).
+- **Availability.** A claim is available only if its candidate is strict UTF-8
+  and decodes (`JSON.parse`) as a JSON **object** with a top-level `hash` string
+  of exactly 64 lowercase hex characters; otherwise that endpoint is
+  `unavailable`, and the other endpoint is still reported. A repeated top-level
+  `hash` key uses its last occurrence. Nothing is normalised — no lowercasing,
+  trimming, BOM stripping or U+FFFD substitution. Recovery is not a
+  canonical-form check: a non-canonical but well-formed JSON object still
+  yields its claim.
+- **When.** Not for an empty input (no endpoints), and not on a tool error,
+  where no verdict was produced: an unreadable file, bad usage, a malformed
+  anchor, or an internal error (#194: exit 3, one stderr line, empty stdout).
+
+stdout stays exactly the one verdict line. These lines are **tool output, not
+conformance surface**: EV-17 judges conformance on the verdict token and line
+number(s) alone, and EX-24 leaves labels, order and format free, so no fixture
+asserts them and another verifier may print them differently.
+`test/chain-and-report.test.ts` pins this CLI's behaviour.
 
 ## What it checks
 
@@ -146,16 +165,19 @@ Two stages, per `evolution.md` EV-6/EV-15:
 pnpm --filter @odc/verifier-ts test
 ```
 
-Eight files (seven suites and one shared builder), and the split between them is deliberate — **`contracts/fixtures/`
-is the sole oracle for what a given input verifies to.** `fixtures.test.ts` is
-the conformance suite; `robustness.test.ts`, `extreme-values.test.ts` and
-`report-shape.test.ts` assert only that a verdict of the right _shape_ came back
-at all. `genesis-ancestry.test.ts` is the one exception and says so in its own
-header: it asserts verdict values for rules the fixture corpus does not yet
-cover, from synthetic chains, and is superseded by a fixture the day one lands;
-`ballot-batching.test.ts` is the second such exception, on the same terms.
-Anything else that froze an expected verdict outside the fixture corpus would be
-inventing conformance in a file no reviewer treats as normative.
+Eleven files (ten suites and one shared builder), and the split between them is
+deliberate — **`contracts/fixtures/` is the sole oracle for what a given input
+verifies to.** `fixtures.test.ts` is the conformance suite; `robustness.test.ts`,
+`extreme-values.test.ts` and `report-shape.test.ts` assert only that a verdict
+of the right _shape_ came back at all, and `cli-exit-codes.test.ts` only the
+exit status. `genesis-ancestry.test.ts` and `genesis-key-distinctness.test.ts`
+are exceptions and say so in their own headers: they assert verdict values for
+rules the fixture corpus does not yet cover, from synthetic chains, and are
+superseded by a fixture the day one lands; `ballot-batching.test.ts` is another
+such exception, on the same terms, and `chain-and-report.test.ts` asserts the
+anchor-precedence verdicts EX-15/EX-22/EX-23 fix on byte-level edits of golden
+exports. Anything else that froze an expected verdict outside the fixture corpus
+would be inventing conformance in a file no reviewer treats as normative.
 
 - **`test/fixtures.test.ts`** — drives every vector in
   `contracts/fixtures/index.json` and asserts the declared verdict token and
@@ -200,6 +222,18 @@ inventing conformance in a file no reviewer treats as normative.
   a linear-cost budget, and the CLI's line and exit status. `epochMs` is
   checked against `Date` (via `setUTCFullYear`, which unlike `Date.UTC` does
   not remap years 0–99) over every year of ES-20's range.
+- **`test/chain-and-report.test.ts`** — `--chain` (EX-22/EX-23) and the v5
+  anchor precedence: both anchors wrong on an eligible (VALID or PARTIAL) file
+  blames line 1, PARTIAL does not block either comparison, and an earlier
+  file-check `INVALID` (a tampered hash, a framing fault) keeps its line under
+  wrong anchors. Also the EX-24 stored-claim report: exact labels, candidate
+  extraction (terminal LF, extra blank record, no final LF, CRLF), claim
+  availability (last repeated `hash`, no normalisation, strict UTF-8, BOM,
+  non-objects, nested keys), each endpoint independent of the other, and no
+  report on empty input or any tool error.
+- **`test/cli-exit-codes.test.ts`** — issue #194: a throw inside the CLI's work
+  (forced in-process through `run`'s injectable verify) exits 3 with one
+  stderr line and empty stdout, never 1; usage errors exit 3 with `usage:`.
 - **`test/report-shape.test.ts`** — the CLI output contract: exactly one verdict
   line, advisory reason after a colon on that same line, of bounded length. A
   reason on a second line makes a single-line consumer regex **throw** rather
