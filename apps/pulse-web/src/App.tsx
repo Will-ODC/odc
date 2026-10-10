@@ -2,6 +2,7 @@ import type { PulseApi } from "./api/types.js";
 import type { Route } from "./flow/route.js";
 import { FIRST_POLL_ID } from "./flow/route.js";
 import { useRoute } from "./hooks/use-route.js";
+import { ChatPreview } from "./screens/ChatPreview.js";
 import { Redeem } from "./screens/Redeem.js";
 import { Run } from "./screens/Run.js";
 import { SignIn } from "./screens/SignIn.js";
@@ -43,6 +44,9 @@ export function App({ api, route }: { api: PulseApi; route?: Route }) {
       );
     case "run":
       return <Run api={api} pollId={at.pollId} />;
+    case "chatPreview":
+      // Sample data only: the prototype never touches `api`.
+      return <ChatPreview />;
   }
 }
 
