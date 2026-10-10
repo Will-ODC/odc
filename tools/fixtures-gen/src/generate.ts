@@ -59,6 +59,7 @@ function writeVectors(): void {
       id: vec.id,
       export: file,
       ...(vec.head === undefined ? {} : { head: vec.head }),
+      ...(vec.chain === undefined ? {} : { chain: vec.chain }),
       expect: vec.expect,
       cites: vec.cites,
       note: vec.note,

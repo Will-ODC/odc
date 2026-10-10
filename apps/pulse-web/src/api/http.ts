@@ -143,7 +143,7 @@ export class HttpPulseApi implements PulseApi {
     if (!response.ok) {
       throw new ApiError(
         response.status,
-        messageFrom(parsed) ?? `Request failed (${response.status})`,
+        messageFrom(parsed) ?? fallbackMessage(response.status),
         stringField(parsed, "error"),
       );
     }
@@ -171,6 +171,26 @@ function safeJson(text: string): unknown {
 /** Server errors carry a plain sentence in `message`; show that, never the status. */
 function messageFrom(parsed: unknown): string | undefined {
   return stringField(parsed, "message");
+}
+
+/**
+ * The sentence for a refusal whose body carried none — a proxy's own error page
+ * (nginx's 502 or 504), a dropped upstream. The person reads it, so it says what
+ * happened and whether to try again; it never shows the status number. Each
+ * wording matches what the server itself says for that status, so one failure
+ * reads the same whether pulse answered or a proxy did.
+ */
+function fallbackMessage(status: number): string {
+  if (status >= 500) {
+    return "Something went wrong. Try again.";
+  }
+  if (status === 429) {
+    return "Too many tries just now. Try again a little later.";
+  }
+  if (status === 404) return "There is nothing here.";
+  // Only a sign-in link answers 410, and a dead link never works again.
+  if (status === 410) return "That link no longer works. Ask for a new one.";
+  return "That didn't work. Try again.";
 }
 
 /** A non-empty string property of a parsed body, or undefined. */

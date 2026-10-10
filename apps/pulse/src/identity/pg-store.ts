@@ -134,6 +134,15 @@ export class PostgresClaimStore implements ClaimStore {
     return rowCount === 1;
   }
 
+  async discard(tokenHash: string): Promise<void> {
+    // `used_at is null` in the statement, not checked first: a click that
+    // spends the link between a read and a delete must win.
+    await this.#pool.query(
+      "delete from pending_claim where token_hash = $1 and used_at is null",
+      [tokenHash],
+    );
+  }
+
   async liveFor(email: string, now: Date): Promise<readonly PendingClaim[]> {
     // `expires_at > now`: a link expiring exactly now is expired, as
     // ClaimService reads it (`expiresAt <= now` refuses).

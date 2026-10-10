@@ -19,6 +19,27 @@ Format (newest first, one entry per merged contracts change):
 
 ---
 
+## fixtures/ v14 — 2026-10-10 — `--chain` vectors (#193)
+
+Added `109`–`115`, the F1 owed fixtures below, to pin EX-21–EX-23: a `--chain`
+match (`109`) and mismatch (`110`, `INVALID` line 1); the two-chain pair under
+one operator key, differing only in the genesis `ts` (`111`/`112` each
+`INVALID` line 1 under the other's genesis hash, `113` and `109` each `VALID`
+under its own); and `--chain` with `--head` (`114` both correct, `VALID`; `115`
+wrong head, `INVALID` at the last line per EX-19). `index.json` gains an
+optional `chain` input parallel to `head`, present only when a vector must be
+run with `--chain`. No normative document or version changes; only new golden
+vector files and their index/manifest entries were generated, and existing
+vector bytes and verdicts are unchanged.
+
+## evolution.md v6 — 2026-10-09 — EV-15 names chain identity checks
+
+- EV-15's exhaustive Stage A map now includes `export-format.md` EX-21–EX-23:
+  the genesis-hash definition and optional `--chain` comparison do not consult
+  the type registry. EX-24 is identified as a tool-output obligation outside
+  the per-event stage split. This corrects a stale range after export-format v3;
+  verdict semantics, old data, hashes, and fixtures do not change.
+
 ## fixtures/ v13 — 2026-10-09 — Phase 3 batching vectors (#192)
 
 Added `099`–`108` to pin ET-14b's two floors, ET-23 quantization against a
@@ -392,7 +413,7 @@ EV-5, and both verifiers are untouched by design.
 - **Owed fixtures:** a `--chain` match (`VALID`) and mismatch (`INVALID` line 1)
   vector; and the two-chain pair under one operator key differing only in
   `genesis.ts` — both `VALID` unflagged, each `INVALID` under the other's
-  `--chain`. **Owed verifier work (both verifiers, isolated passes):** the
+  `--chain`. **Delivered** in fixtures v14 (#193): `109`–`115`. **Owed verifier work (both verifiers, isolated passes):** the
   `--chain` flag, the line-1 mismatch verdict, and EX-24 reporting.
 
 ### F2 — ballot batching, with governable parameters (ADR-0014)

@@ -1,0 +1,43 @@
+name: pulse-images
+
+# Builds both pulse images whenever something that goes into them changes.
+#
+# The images were written in #165 and first built by hand on 2026-10-09; until
+# then "the first docker build is still the test" sat in memory for a month,
+# because nothing ran one. This is that test, on every PR that could break it.
+#
+# A separate, path-filtered workflow rather than a step in repo.yml's `checks`,
+# because two image builds would add minutes to every PR in the repo, core
+# included, for files most PRs never touch. The cost of that choice: a new job
+# is NOT a required check until a repo admin adds `pulse-images` to the
+# `protect-master` ruleset, so until then a red run warns and blocks nothing.
+on:
+  pull_request:
+    paths:
+      - "apps/pulse/**"
+      - "apps/pulse-web/**"
+      - "pnpm-lock.yaml"
+      - "pnpm-workspace.yaml"
+      - "package.json"
+      - ".dockerignore"
+      - ".github/workflows/pulse-images.yml"
+
+permissions:
+  contents: read
+
+concurrency:
+  group: pulse-images-${{ github.ref }}
+  cancel-in-progress: true
+
+jobs:
+  build:
+    name: pulse-images
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+      # The context is the repo root, as both Dockerfiles say: pulse is a pnpm
+      # workspace and the lockfile lives at the top.
+      - name: Build the API image
+        run: docker build -f apps/pulse/Dockerfile -t pulse-api:ci .
+      - name: Build the web image
+        run: docker build -f apps/pulse-web/Dockerfile -t pulse-web:ci .

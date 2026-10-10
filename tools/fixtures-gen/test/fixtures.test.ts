@@ -35,6 +35,7 @@ interface IndexEntry {
   id: string;
   export: string;
   head?: string;
+  chain?: string;
   expect: Expect;
   cites: string[];
   note: string;
@@ -342,11 +343,21 @@ test("each non-canonical vector's declared line parses but is NOT canonical (EX-
  * entry and report success having never exercised the `--head` paths.
  */
 const SAME_BYTES: string[][] = [
-  ["002-four-types", "003-head-match", "054-head-mismatch-substituted"],
+  [
+    "002-four-types",
+    "003-head-match",
+    "054-head-mismatch-substituted",
+    "109-chain-match",
+    "110-chain-mismatch",
+    "111-chain-a-under-b",
+    "114-chain-and-head-match",
+    "115-chain-match-head-mismatch",
+  ],
   ["004-truncated-without-head", "053-head-mismatch-truncated"],
+  ["112-chain-b-under-a", "113-chain-b-match"],
 ];
 
-test("the deliberately byte-identical vectors are identical, and differ only in head (EX-15, EX-16)", () => {
+test("the deliberately byte-identical vectors are identical, and differ only in head/chain (EX-15, EX-16, EX-22)", () => {
   for (const group of SAME_BYTES) {
     const [first, ...rest] = group as [string, ...string[]];
     const want = read(`vectors/${first}.ndjson`);
@@ -358,14 +369,15 @@ test("the deliberately byte-identical vectors are identical, and differ only in 
       );
     }
 
-    // The head values must all differ, or two members are the same test.
-    const heads = group.map(
-      (id) => index.vectors.find((e) => e.id === id)?.head ?? "<absent>",
-    );
+    // The (head, chain) inputs must all differ, or two members are the same test.
+    const inputs = group.map((id) => {
+      const e = index.vectors.find((x) => x.id === id);
+      return `${e?.head ?? "<absent>"}|${e?.chain ?? "<absent>"}`;
+    });
     assert.equal(
-      new Set(heads).size,
+      new Set(inputs).size,
       group.length,
-      `${group.join("/")} share a head value, so they are the same test twice`,
+      `${group.join("/")} share a head/chain input, so they are the same test twice`,
     );
   }
 });
@@ -507,4 +519,68 @@ test("074/075 pin ET-14's control-character clause at the BYTE level", () => {
       `075: title contains U+${c.toString(16).padStart(4, "0")}, which ET-14 forbids`,
     );
   }
+});
+
+// --- chain identity (EX-21–EX-23, ET-7a) -----------------------------------
+
+/** The parsed lines of one committed vector. */
+const eventsOf = (id: string): Event[] =>
+  read(`vectors/${id}.ndjson`)
+    .toString("utf8")
+    .trimEnd()
+    .split("\n")
+    .map((l) => JSON.parse(l) as Event);
+
+test("chains A (109) and B (113) share every genesis payload key but differ in identity (ET-7, ET-7a)", () => {
+  const a = eventsOf("109-chain-match");
+  const b = eventsOf("113-chain-b-match");
+  const ga = a[0] as Event;
+  const gb = b[0] as Event;
+  // One operator, one registrar, one chain_id: chain_id cannot tell them apart.
+  for (const key of ["chain_id", "operator_pk", "registrar_pk", "contracts"]) {
+    assert.equal(gb.payload[key], ga.payload[key], key);
+  }
+  // Only ts differs among the genesis content fields, so the identities differ.
+  assert.notEqual(gb.ts, ga.ts);
+  assert.notEqual(gb.hash, ga.hash);
+  // Past the genesis, B is A's events relinked: same type/payload-shape/ts.
+  assert.equal(b.length, a.length);
+  for (let i = 1; i < a.length; i++) {
+    assert.equal(b[i]?.type, a[i]?.type);
+    assert.equal(b[i]?.ts, a[i]?.ts);
+  }
+});
+
+test("every --chain value is the intended chain's genesis hash, or provably not this export's", () => {
+  const idOf = (id: string): string => (eventsOf(id)[0] as Event).hash;
+  const entry = (id: string): IndexEntry => {
+    const e = index.vectors.find((x) => x.id === id);
+    assert.ok(e, id);
+    return e;
+  };
+  const A_ID = idOf("002-four-types");
+  const B_ID = idOf("113-chain-b-match");
+  assert.equal(entry("109-chain-match").chain, A_ID);
+  assert.equal(entry("113-chain-b-match").chain, B_ID);
+  assert.equal(entry("114-chain-and-head-match").chain, A_ID);
+  assert.equal(entry("115-chain-match-head-mismatch").chain, A_ID);
+  assert.equal(entry("111-chain-a-under-b").chain, B_ID);
+  assert.equal(entry("112-chain-b-under-a").chain, A_ID);
+  // 110's wrong value is this export's own head: a real hash, never its identity.
+  const a = eventsOf("110-chain-mismatch");
+  assert.equal(
+    entry("110-chain-mismatch").chain,
+    (a[a.length - 1] as Event).hash,
+  );
+  assert.notEqual(entry("110-chain-mismatch").chain, A_ID);
+  // 114's head is right and 115's is B's head — wrong for A.
+  assert.equal(
+    entry("114-chain-and-head-match").head,
+    (a[a.length - 1] as Event).hash,
+  );
+  const b = eventsOf("113-chain-b-match");
+  assert.equal(
+    entry("115-chain-match-head-mismatch").head,
+    (b[b.length - 1] as Event).hash,
+  );
 });
