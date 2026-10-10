@@ -181,6 +181,21 @@ export function voterStoreConformance(
         );
       });
 
+      test("a_taken_credential_error_does_not_expose_the_address", async (t) => {
+        const store = await fresh(t);
+        const address = "private-address@example.test";
+        await store.create(voter(), email(address));
+        await assert.rejects(
+          () => store.create(voter({ id: "voter-2" }), email(address)),
+          (error: unknown) => {
+            assert.ok(error instanceof CredentialTakenError);
+            assert.ok(!String(error).includes(address));
+            assert.ok(!error.stack?.includes(address));
+            return true;
+          },
+        );
+      });
+
       test("a_refused_credential_leaves_no_voter_behind", async (t) => {
         // Both or neither (ADR-0032). The voter row is written first, so a
         // store that does not write the pair as one leaves voter-2 standing

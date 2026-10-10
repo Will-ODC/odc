@@ -41,8 +41,8 @@ export type NewVoter = Omit<Voter, "email">;
 
 /**
  * Something a voter has proved — today, that they hold an address. One
- * `(kind, value)` belongs to at most one voter: that is what makes one address
- * one person.
+ * `(kind, value)` belongs to at most one voter: that is what assigns one address
+ * to one voter, without proving that each person holds only one address.
  */
 export interface Credential {
   kind: CredentialKind;
@@ -83,8 +83,8 @@ export interface PendingClaim {
  * winner's voter.
  */
 export class CredentialTakenError extends Error {
-  constructor(kind: CredentialKind, value: string) {
-    super(`a voter already holds the ${kind} credential ${value}`);
+  constructor(kind: CredentialKind) {
+    super(`a voter already holds this ${kind} credential`);
     this.name = "CredentialTakenError";
   }
 }
@@ -157,7 +157,7 @@ export class InMemoryVoterStore implements VoterStore {
     // Both checks before either write, so a refusal leaves nothing behind.
     const key = credentialKey(credential.kind, credential.value);
     if (this.#holder.has(key)) {
-      throw new CredentialTakenError(credential.kind, credential.value);
+      throw new CredentialTakenError(credential.kind);
     }
     // The id is the voter everywhere else: a second voter under it would
     // leave the first address signing in as someone else.

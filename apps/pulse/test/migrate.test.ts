@@ -18,6 +18,8 @@ import {
   PostgresClaimStore,
   PostgresVoterStore,
 } from "../src/identity/pg-store.js";
+import { ClaimService, hashToken } from "../src/identity/claim.js";
+import { ConsoleMailer } from "../src/identity/mailer.js";
 import { CredentialTakenError } from "../src/identity/store.js";
 
 /**
@@ -169,8 +171,14 @@ test(
         await pool.query(
           "insert into pending_claim (token_hash, email, community," +
             " proof_emails_opt_in, created_at, expires_at)" +
-            " values ('hash-1', 'sam@student.ubc.ca', 'ubc-students', true, $1, $2)",
-          [AT, new Date(AT.getTime() + 15 * 60_000)],
+            " values ($1, 'sam@student.ubc.ca', 'ubc-students', true, $2, $3)," +
+            " ($4, 'ada@student.ubc.ca', 'ubc-students', false, $2, $3)",
+          [
+            hashToken("before-upgrade-new"),
+            AT,
+            new Date(AT.getTime() + 15 * 60_000),
+            hashToken("before-upgrade-existing"),
+          ],
         );
 
         await writeMigrations(dir, migrations, (v) => v >= "004");
@@ -252,8 +260,46 @@ test(
             c.subject,
             c.proofEmailsOptIn,
           ]),
-          [["hash-1", "email", "sam@student.ubc.ca", true]],
+          [
+            [
+              hashToken("before-upgrade-new"),
+              "email",
+              "sam@student.ubc.ca",
+              true,
+            ],
+          ],
         );
+        const service = new ClaimService(
+          {
+            membership: { check: async () => undefined },
+            voters,
+            claims,
+            mailer: new ConsoleMailer(() => {}),
+            linkFor: (token) => token,
+          },
+          { clock: () => AT },
+        );
+        const existing = await service.redeem("before-upgrade-existing");
+        assert.equal(existing.status, "signed_in");
+        if (existing.status !== "signed_in")
+          assert.fail("old link must sign in");
+        assert.equal(existing.firstTime, false);
+        assert.equal(existing.voter.id, "voter-1");
+        assert.equal(existing.voter.sessionGeneration, 2);
+        assert.equal(existing.voter.proofEmailsOptIn, false);
+        const created = await service.redeem("before-upgrade-new");
+        assert.equal(created.status, "signed_in");
+        if (created.status !== "signed_in")
+          assert.fail("old link must sign up");
+        assert.equal(created.firstTime, true);
+        assert.equal(created.voter.email, "sam@student.ubc.ca");
+        assert.equal(created.voter.assurance, "email");
+        assert.equal(created.voter.proofEmailsOptIn, true);
+        for (const token of ["before-upgrade-existing", "before-upgrade-new"]) {
+          assert.deepEqual(await service.redeem(token), {
+            status: "already_used",
+          });
+        }
       });
     });
   },

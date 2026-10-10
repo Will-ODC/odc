@@ -293,7 +293,10 @@ test("signing_in_again_after_the_allowlist_changed_keeps_the_community_first_rec
   if (again.status !== "signed_in") return;
   assert.equal(again.firstTime, false);
   assert.equal(again.voter.community, null);
-  assert.equal((await h.voters.byEmail("ada@gmail.com"))?.community, null);
+  assert.equal(
+    (await h.voters.byCredential("email", "ada@gmail.com"))?.community,
+    null,
+  );
 });
 
 test("signing_in_again_after_the_domain_was_removed_keeps_the_community_first_recorded", async () => {
@@ -315,7 +318,7 @@ test("signing_in_again_after_the_domain_was_removed_keeps_the_community_first_re
   assert.equal(again.firstTime, false);
   assert.equal(again.voter.community, "ubc-students");
   assert.equal(
-    (await h.voters.byEmail("ada@student.ubc.ca"))?.community,
+    (await h.voters.byCredential("email", "ada@student.ubc.ca"))?.community,
     "ubc-students",
   );
 });
@@ -524,7 +527,10 @@ test("a_send_the_provider_refused_does_not_spend_the_live_link_cap", async () =>
       "send_failed",
     );
   }
-  assert.equal((await h.claims.liveFor("ada@student.ubc.ca", START)).length, 0);
+  assert.equal(
+    (await h.claims.liveFor("email", "ada@student.ubc.ca", START)).length,
+    0,
+  );
   assert.equal(
     (await h.service.requestLink("ada@student.ubc.ca")).status,
     "sent",
@@ -544,7 +550,7 @@ for (const status of [408, 429]) {
     );
     await h.service.requestLink("ada@student.ubc.ca");
     assert.equal(
-      (await h.claims.liveFor("ada@student.ubc.ca", START)).length,
+      (await h.claims.liveFor("email", "ada@student.ubc.ca", START)).length,
       0,
     );
   });
@@ -569,7 +575,7 @@ for (const status of [500, 502, 504]) {
     );
     await h.service.requestLink("ada@student.ubc.ca");
     assert.equal(
-      (await h.claims.liveFor("ada@student.ubc.ca", START)).length,
+      (await h.claims.liveFor("email", "ada@student.ubc.ca", START)).length,
       1,
     );
     const [token] = tokens;
@@ -610,7 +616,10 @@ test("a_send_that_got_no_answer_keeps_its_link_live", async () => {
 
   await h.service.requestLink("ada@student.ubc.ca");
   await h.service.requestLink("ada@student.ubc.ca");
-  assert.equal((await h.claims.liveFor("ada@student.ubc.ca", START)).length, 2);
+  assert.equal(
+    (await h.claims.liveFor("email", "ada@student.ubc.ca", START)).length,
+    2,
+  );
   assert.equal(
     (await h.service.requestLink("ada@student.ubc.ca")).status,
     "too_many_requests",

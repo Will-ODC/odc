@@ -108,7 +108,7 @@ export class PostgresVoterStore implements VoterStore {
         isUniqueViolation(error) &&
         (await this.byCredential(credential.kind, credential.value))
       ) {
-        throw new CredentialTakenError(credential.kind, credential.value);
+        throw new CredentialTakenError(credential.kind);
       }
       throw error;
     }

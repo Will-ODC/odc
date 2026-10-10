@@ -55,7 +55,7 @@ export function claimStoreConformance(
         await store.put(claim({ tokenHash: "hash-2" }));
         await store.discard("hash-1");
         assert.equal(await store.byTokenHash("hash-1"), undefined);
-        const live = await store.liveFor("ada@student.ubc.ca", AT);
+        const live = await store.liveFor("email", "ada@student.ubc.ca", AT);
         assert.deepEqual(
           live.map((c) => c.tokenHash),
           ["hash-2"],
