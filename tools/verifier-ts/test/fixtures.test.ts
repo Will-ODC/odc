@@ -20,8 +20,8 @@ interface Vector {
   id: string;
   export: string;
   head?: string;
-  // EX-22 `--chain` value. Optional: no vector carries one yet; when one does,
-  // it is passed through exactly like `head`.
+  // EX-22 `--chain` value. Optional, like `head` (109-115 carry one); passed
+  // through exactly like `head`.
   chain?: string;
   expect:
     | { verdict: "VALID" }
@@ -45,7 +45,7 @@ function actualToExpectShape(v: Verdict): unknown {
 }
 
 test(`fixtures index has all vectors`, () => {
-  assert.equal(index.vectors.length, 108);
+  assert.equal(index.vectors.length, 115);
 });
 
 for (const vec of index.vectors) {
