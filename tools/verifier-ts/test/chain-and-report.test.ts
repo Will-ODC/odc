@@ -1,10 +1,11 @@
 // Issue #193: `--chain <genesis-hash>` (export-format.md EX-22/EX-23) and the
-// EX-24 report of the genesis hash and head on every non-empty run.
+// EX-24 report of the stored genesis-hash and head claims on every non-empty
+// run; brought to export-format.md v5 (anchor precedence, stored claims).
 //
 // Inputs are golden fixture exports (and byte-level edits of them); the
-// expected verdicts follow from EX-22/EX-23 and the precedence documented in
-// verifyExport. The EX-24 lines are tool output, not conformance surface
-// (EV-17), so they are asserted here and never in fixtures.test.ts.
+// expected verdicts follow from EX-15/EX-22/EX-23. The EX-24 lines are tool
+// output, not conformance surface (EV-17), so they are asserted here and never
+// in fixtures.test.ts.
 
 import { test } from "node:test";
 import assert from "node:assert/strict";
@@ -13,6 +14,12 @@ import { mkdtempSync, readFileSync, writeFileSync } from "node:fs";
 import { tmpdir } from "node:os";
 import { dirname, join, resolve } from "node:path";
 import { fileURLToPath } from "node:url";
+import {
+  GENESIS_CLAIM_LABEL,
+  HEAD_CLAIM_LABEL,
+  storedClaims,
+} from "../src/report.js";
+import { run, type CliDeps } from "../src/run.js";
 
 const here = dirname(fileURLToPath(import.meta.url));
 const cliPath = resolve(here, "../src/cli.js"); // dist/test -> dist/src/cli.js
@@ -60,8 +67,9 @@ function assertOneStdoutLine(r: Run): void {
   );
 }
 
+/** The exact EX-24 stderr report: one line per endpoint, stored claims. */
 function identity(genesis: string, head: string): string {
-  return `genesis: ${genesis}\nhead: ${head}\n`;
+  return `${GENESIS_CLAIM_LABEL}: ${genesis}\n${HEAD_CLAIM_LABEL}: ${head}\n`;
 }
 
 const valid = storedHashes(VALID4);
@@ -239,4 +247,305 @@ test("EX-24: an unreadable file is a tool error with no identity lines", () => {
   assert.equal(r.status, 3);
   assert.equal(r.stdout, "");
   assert.match(r.stderr, /^[^\n]*\n$/);
+});
+
+// --- v5: anchor precedence (EX-15 / EX-22 / EX-23) ---------------------------
+
+test("v5 EX-23: both anchors wrong on a PARTIAL (eligible) file blames line 1", () => {
+  const r = verify(PARTIAL5, "--head", WRONG, "--chain", WRONG);
+  assert.equal(r.status, 1);
+  assertOneStdoutLine(r);
+  assert.match(r.stdout, /^INVALID at line 1(:|\n)/);
+});
+
+test("v5 EX-15: PARTIAL does not block the --head comparison (last line blamed)", () => {
+  const r = verify(PARTIAL5, "--head", WRONG);
+  assert.equal(r.status, 1);
+  assert.match(r.stdout, /^INVALID at line 5(:|\n)/);
+});
+
+test("v5 EX-15/EX-22: both anchors wrong never displace an earlier file-check INVALID", () => {
+  // Line 3's stored hash flipped: INVALID at line 3 on its own (HA-14).
+  const lines = readFileSync(VALID4, "utf8").split("\n");
+  const l3 = JSON.parse(lines[2] as string) as { hash: string };
+  const flipped = (l3.hash[0] === "0" ? "1" : "0") + l3.hash.slice(1);
+  lines[2] = (lines[2] as string).replace(l3.hash, flipped);
+  const p = writeScratch("tampered-line3-both.ndjson", lines.join("\n"));
+  for (const args of [
+    ["--head", WRONG],
+    ["--chain", WRONG, "--head", WRONG],
+  ]) {
+    const r = verify(p, ...args);
+    assert.equal(r.status, 1);
+    assert.match(r.stdout, /^INVALID at line 3(:|\n)/);
+  }
+});
+
+test("v5 EX-15/EX-22: a registered-event semantic INVALID keeps its declared line under wrong anchors", () => {
+  // Golden Stage B vectors, verdicts read from contracts/fixtures/index.json
+  // (058: ET-17 signature under the wrong key; 066: ET-18 unknown issue).
+  const index = JSON.parse(
+    readFileSync(resolve(vectors, "../index.json"), "utf8"),
+  ) as {
+    vectors: {
+      id: string;
+      export: string;
+      expect: { verdict: string; line?: number };
+    }[];
+  };
+  for (const id of ["058-vote-sig-wrong-key", "066-vote-unknown-issue"]) {
+    const v = index.vectors.find((x) => x.id === id);
+    assert.ok(v !== undefined, `${id} is in index.json`);
+    assert.equal(v.expect.verdict, "INVALID");
+    const file = resolve(vectors, "..", v.export);
+    const r = verify(file, "--chain", WRONG, "--head", WRONG);
+    assert.equal(r.status, 1, id);
+    assertOneStdoutLine(r);
+    assert.match(
+      r.stdout,
+      new RegExp(`^INVALID at line ${v.expect.line}(:|\\n)`),
+      id,
+    );
+  }
+});
+
+test("v5 EX-15/EX-22: a framing INVALID keeps its line under wrong anchors", () => {
+  // A trailing blank record (EX-5) is INVALID at that line, line 5; neither a
+  // wrong --chain (line 1) nor a wrong --head may replace it.
+  const p = writeScratch(
+    "trailing-blank.ndjson",
+    readFileSync(VALID4, "utf8") + "\n",
+  );
+  const r = verify(p, "--chain", WRONG, "--head", WRONG);
+  assert.equal(r.status, 1);
+  assert.match(r.stdout, /^INVALID at line 5(:|\n)/);
+});
+
+// --- v5 EX-24: candidate extraction -----------------------------------------
+
+const A = "a".repeat(64);
+const B = "b".repeat(64);
+const enc = (s: string) => Buffer.from(s, "utf8");
+
+test("EX-24 extraction: one terminal LF ends the last record, adds no candidate", () => {
+  assert.deepEqual(storedClaims(enc(`{"hash":"${A}"}\n{"hash":"${B}"}\n`)), {
+    genesis: A,
+    head: B,
+  });
+});
+
+test("EX-24 extraction: an additional trailing blank record IS the last candidate", () => {
+  assert.deepEqual(storedClaims(enc(`{"hash":"${A}"}\n{"hash":"${B}"}\n\n`)), {
+    genesis: A,
+    head: "unavailable",
+  });
+});
+
+test("EX-24 extraction: without a final LF the final fragment is the last candidate", () => {
+  assert.deepEqual(storedClaims(enc(`{"hash":"${A}"}\n{"hash":"${B}"}`)), {
+    genesis: A,
+    head: B,
+  });
+  // One record, no LF at all: it is both the first and the last candidate.
+  assert.deepEqual(storedClaims(enc(`{"hash":"${A}"}`)), {
+    genesis: A,
+    head: A,
+  });
+});
+
+test("EX-24 extraction: a leading blank record is the first candidate", () => {
+  assert.deepEqual(storedClaims(enc(`\n{"hash":"${B}"}\n`)), {
+    genesis: "unavailable",
+    head: B,
+  });
+});
+
+test("EX-24 extraction: a lone LF is one blank candidate, both claims unavailable", () => {
+  for (const s of ["\n", "\n\n"]) {
+    assert.deepEqual(storedClaims(enc(s)), {
+      genesis: "unavailable",
+      head: "unavailable",
+    });
+  }
+});
+
+test("EX-24 extraction: an empty input has no endpoints", () => {
+  assert.equal(storedClaims(enc("")), null);
+});
+
+test("EX-24 extraction applies when framing fails: CRLF records still yield claims", () => {
+  // Every line carries a CR (EX-3, INVALID), but each candidate is still a
+  // JSON object — a trailing CR is JSON whitespace — so both stored claims
+  // are recovered.
+  const crlf = readFileSync(VALID4, "utf8").replace(/\n/g, "\r\n");
+  const r = verify(writeScratch("crlf.ndjson", crlf));
+  assert.equal(r.status, 1);
+  assertOneStdoutLine(r);
+  assert.equal(r.stderr, identity(valid.genesis, valid.head));
+});
+
+test("EX-24 extraction applies when framing fails: a trailing blank record makes head unavailable", () => {
+  const p = writeScratch(
+    "trailing-blank-report.ndjson",
+    readFileSync(VALID4, "utf8") + "\n",
+  );
+  const r = verify(p);
+  assert.equal(r.status, 1);
+  assertOneStdoutLine(r);
+  assert.equal(r.stderr, identity(valid.genesis, "unavailable"));
+});
+
+// --- v5 EX-24: claim availability -------------------------------------------
+
+/** The claim of a one-candidate input (first and last coincide). */
+function claimOf(record: string | Buffer): string {
+  const c = storedClaims(typeof record === "string" ? enc(record) : record);
+  assert.ok(c !== null);
+  assert.equal(c.genesis, c.head, "a one-candidate input has one claim");
+  return c.genesis;
+}
+
+test("EX-24 claim: a repeated top-level `hash` key uses its LAST occurrence", () => {
+  assert.equal(claimOf(`{"hash":"${A}","hash":"${B}"}`), B);
+  // The last occurrence decides even when it is the unusable one: there is
+  // no fallback to an earlier well-formed value.
+  assert.equal(
+    claimOf(`{"hash":"${A}","hash":"${A.toUpperCase()}"}`),
+    "unavailable",
+  );
+  assert.equal(claimOf(`{"hash":"${A.toUpperCase()}","hash":"${A}"}`), A);
+});
+
+test("EX-24 claim: no normalisation — case, padding and length are not repaired", () => {
+  for (const bad of [
+    A.toUpperCase(),
+    "A" + A.slice(1),
+    ` ${A}`,
+    `${A} `,
+    A.slice(1), // 63 hex
+    A + "a", // 65 hex
+    "g".repeat(64),
+  ]) {
+    assert.equal(
+      claimOf(`{"hash":${JSON.stringify(bad)}}`),
+      "unavailable",
+      bad,
+    );
+  }
+});
+
+test("EX-24 claim: `hash` must be a top-level string member of an object", () => {
+  for (const rec of [
+    `{"hash":42}`,
+    `{"hash":null}`,
+    `{"hash":["${A}"]}`,
+    `{"payload":{"hash":"${A}"}}`, // nested only
+    `["${A}"]`,
+    `[{"hash":"${A}"}]`,
+    `"${A}"`,
+    `{"Hash":"${A}"}`,
+    `{}`,
+    `{"hash":"${A}"`, // truncated JSON
+    `not json`,
+  ]) {
+    assert.equal(claimOf(rec), "unavailable", rec);
+  }
+});
+
+test("EX-24 claim: JSON escapes are decoded — decoding is not normalisation", () => {
+  // Value written entirely with \u escapes that decode to 64 lowercase hex.
+  const escaped = A.replace(/a/g, "\\u0061");
+  assert.equal(claimOf(`{"hash":"${escaped}"}`), A);
+  // An escaped key that decodes to `hash` IS the key `hash`.
+  assert.equal(claimOf(`{"h\\u0061sh":"${A}"}`), A);
+  // ...and takes part in the last-occurrence rule like a literal key.
+  assert.equal(claimOf(`{"hash":"${A}","h\\u0061sh":"${B}"}`), B);
+  // An escape decoding to UPPERCASE hex is still unavailable: the decoded
+  // value is taken as-is, never lowercased.
+  assert.equal(claimOf(`{"hash":"${"\\u0041" + A.slice(1)}"}`), "unavailable");
+});
+
+test("EX-24 claim: recovery is not a canonical-form check", () => {
+  // Whitespace, a different key order and extra keys are all non-canonical
+  // (EX-7/EX-10), but the candidate still decodes as a JSON object.
+  assert.equal(claimOf(`  { "seq" : 9 , "hash" : "${A}" , "x" : 1 }  `), A);
+});
+
+test("EX-24 claim: bytes that are not UTF-8, or a leading BOM, make the claim unavailable", () => {
+  const ok = enc(`{"hash":"${A}","t":"x"}`);
+  assert.equal(claimOf(ok), A); // control: the unedited candidate is available
+  const badUtf8 = Buffer.from(ok);
+  badUtf8[badUtf8.length - 3] = 0xff; // the "x" in "t"'s value
+  assert.equal(claimOf(badUtf8), "unavailable");
+  const bom = Buffer.concat([Buffer.from([0xef, 0xbb, 0xbf]), ok]);
+  assert.equal(claimOf(bom), "unavailable");
+});
+
+test("EX-24 claim: an inherited property is never read as `hash`", () => {
+  assert.equal(claimOf(`{"__proto__":{"hash":"${A}"}}`), "unavailable");
+});
+
+test("EX-24: one unavailable endpoint never suppresses the other", () => {
+  assert.deepEqual(storedClaims(enc(`not json\n{"hash":"${B}"}\n`)), {
+    genesis: "unavailable",
+    head: B,
+  });
+  assert.deepEqual(storedClaims(enc(`{"hash":"${A}"}\nnot json\n`)), {
+    genesis: A,
+    head: "unavailable",
+  });
+});
+
+// --- v5 EX-24: when the report is (and is not) written ----------------------
+
+function inProcess(verifyFn: CliDeps["verify"], file: string) {
+  const out: string[] = [];
+  const err: string[] = [];
+  const code = run(["node", "cli.js", "verify", file], {
+    verify: verifyFn,
+    out: (s) => out.push(s),
+    err: (s) => err.push(s),
+  });
+  return { code, stdout: out.join(""), stderr: err.join("") };
+}
+
+test("EX-24: the report labels describe stored claims, one line per endpoint", () => {
+  const r = verify(VALID4);
+  assert.equal(r.stdout, "VALID\n");
+  const lines = r.stderr.split("\n").slice(0, -1);
+  assert.equal(lines.length, 2, "exactly one line per endpoint");
+  // Exact labels, pinned so the two verifiers' stderr can be diffed
+  // (operator choice; EX-24 leaves labels free).
+  assert.equal(GENESIS_CLAIM_LABEL, "genesis hash (stored claim)");
+  assert.equal(HEAD_CLAIM_LABEL, "head hash (stored claim)");
+  assert.equal(lines[0], `genesis hash (stored claim): ${valid.genesis}`);
+  assert.equal(lines[1], `head hash (stored claim): ${valid.head}`);
+  for (const l of lines) {
+    assert.match(l, /\(stored claim\): [0-9a-f]{64}$/);
+    // Never presented as a successful verification or recomputation.
+    assert.doesNotMatch(l, /verif|recomput|comput/i);
+  }
+});
+
+test("EX-24: every chain verdict (here an injected INVALID) gets the report", () => {
+  const r = inProcess(() => ({ verdict: "INVALID", line: 2 }), VALID4);
+  assert.equal(r.code, 1);
+  assert.equal(r.stdout, "INVALID at line 2\n");
+  assert.equal(r.stderr, identity(valid.genesis, valid.head));
+});
+
+test("EX-24: an internal error (#194) has no report — exit 3, one stderr line, empty stdout", () => {
+  const r = inProcess(() => {
+    throw new Error("boom");
+  }, VALID4);
+  assert.equal(r.code, 3);
+  assert.equal(r.stdout, "");
+  assert.match(r.stderr, /^[^\n]*internal error[^\n]*\n$/);
+});
+
+test("EX-24: a malformed --head is a tool error with no report", () => {
+  const r = verify(VALID4, "--head", "abc");
+  assert.equal(r.status, 3);
+  assert.equal(r.stdout, "");
+  assert.match(r.stderr, /^[^\n]*--head[^\n]*\n$/);
 });

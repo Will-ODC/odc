@@ -552,21 +552,20 @@ export function verifyExport(
 
   if (contentFault !== null) invalid.push(contentFault);
 
-  // EX-22/EX-23 (--chain) and EX-15/EX-19 (--head): the two out-of-band
-  // anchors are checked at the SAME point and under the SAME condition — only
-  // once every line has passed (link checks complete; EX-15 "after all link
-  // checks pass", EX-22 "even when every link check passes"). So either one
-  // can turn a VALID or a PARTIAL verdict into INVALID (INVALID outranks
-  // PARTIAL, EV-17), but neither can change an INVALID the file already earned
-  // on its own: that fatal line is at or below any line these would blame.
+  // EX-22/EX-23 (--chain) and EX-15/EX-19 (--head), export-format.md v5: the
+  // two out-of-band anchors are compared at the SAME point and under the SAME
+  // condition — only after every other file-validity check has passed
+  // (framing, each event's structural checks and every registered event's
+  // semantic checks, EV-6), i.e. only when `invalid` is still empty here.
+  // Unknown events yielding PARTIAL do not prevent the comparison, so either
+  // anchor can turn a VALID or a PARTIAL verdict into INVALID (INVALID
+  // outranks PARTIAL, EV-17). Neither can replace an INVALID a file check
+  // already established: that verdict keeps its original line (EX-15, EX-22).
   //
-  // Precedence when BOTH mismatch: the spec does not state it directly. EV-17
-  // names "the first fatal line, scanning the export in file order", and
-  // EX-23 / EX-19 attribute the two mismatches to line 1 and the last line
-  // respectively — so the --chain mismatch (line 1) wins, the lowest line
-  // being blamed first like every other first-fatal-line attribution. The fold
-  // below implements that; the --chain fault is pushed first so that on a
-  // one-line export (both at line 1) its reason is the one reported.
+  // Both mismatch on an eligible file: EX-23 requires the chain mismatch at
+  // line 1, not the head mismatch at the last line. The fold below keeps the
+  // lowest line, and the --chain fault is pushed first so that on a one-line
+  // export (both at line 1) its reason is the one reported, too.
   if (invalid.length === 0) {
     if (chain !== undefined && genesisHash !== chain) {
       invalid.push({
