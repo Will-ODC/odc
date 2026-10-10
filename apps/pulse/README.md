@@ -15,6 +15,10 @@ changing anything here.
   results. Routes are in [API.md](./API.md); screens are in `apps/pulse-web`.
 - **Storage:** Postgres when `PULSE_DATABASE_URL` is set, migrated on every
   start; memory otherwise. The tests run every store against both.
+- **Identity:** a voter's address is a credential they hold (`voter_credential`),
+  not their key, and each voter records an assurance level — `none`, `link` or
+  `email`, ordered in `src/identity/assurance.ts` (ADR-0032). Everyone signs in
+  by email today, so everyone is `email`.
 - **Not built:** real email, creating polls, and the path to action.
 
 ## Run it
@@ -38,7 +42,10 @@ Signing out advances a per-voter generation in the shared store, revoking prior
 session cookies across API instances even if their clocks differ. Existing
 session cookies require a new sign-in after this update; ballot cookies retain
 their format. Drain old API instances before serving the new version so all
-instances enforce the same revocation rule.
+instances enforce the same revocation rule. Migration 004 (P8, identity as a
+credential) is the same kind of change: it drops `voter.email` and renames
+`pending_claim.email`, so an old API instance still running fails every sign-in
+once 004 has run. Drain old instances before it, too.
 
 With a database, the seed writes only polls that are not stored yet. Editing
 `src/dev-server.ts` does not change polls already there, and the seeded polls

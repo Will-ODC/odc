@@ -355,6 +355,8 @@ than demanded at the door.
 - **Does `/api/me` still return an address?** `publicVoter` returns
   `voter.email` (`server.ts:502`) and `API.md` documents `{ id, email, community }`.
   P8 must own that shape and the `API.md` edit, or say it is unchanged.
+  **Answered by P8 slice 1: unchanged** (ADR-0032) — `email` is read back from
+  the voter's `email` credential. What a credential-less voter is sent is P10's.
 - **What does `proofEmailsOptIn` mean for someone with no address?** Stored on
   `voter` and `pending_claim`, asserted in four tests, rendered at
   `SignIn.tsx:172-183`.
@@ -368,9 +370,31 @@ than demanded at the door.
 - **P2 interacts.** P2 changes how the community is decided at claim time, which
   is what makes P8 cheap. Whichever lands second is rework.
 
-## P8 — Identity becomes a credential · READY TO BUILD
+## P8 — Identity becomes a credential · SLICE 1 BUILT, SLICE 2 NOT BUILT
 
 The one piece that needs no admin surface and no unwritten ADR.
+
+**Status (2026-10-09).** Split in two, recorded in ADR-0032 (proposed, for the
+operator to confirm):
+
+- **Slice 1 — built** (branch `pulse/35-identity-is-a-credential`): the storage
+  change, behaviour-preserving. Migration `004_identity_is_a_credential.sql`
+  adds `voter_credential`, `voter.assurance` and `pending_claim.kind`, renames
+  `pending_claim.email` to `subject`, and drops `voter.email`. The levels live
+  in `src/identity/assurance.ts`. `byEmail` → `byCredential(kind, value)`,
+  `liveFor(email)` → `liveFor(kind, subject)`, `VoterExistsError` →
+  `CredentialTakenError`, and `create(voter, credential)` writes both or
+  neither. A voter with no credential is **allowed by the model and created by
+  nothing** — that is this item's answer to the P10 tension below. `/api/me`
+  is unchanged. The concurrent-create and atomicity tests below are written.
+- **Slice 2 — not built:** decision 5's upgrade path. A guest who verifies
+  keeps their identity and gains the credential, or becomes the existing
+  person; and the ballot cookie. `redeem` still mints a fresh voter
+  (`randomUUID()`) and never touches the ballot cookie.
+
+The file and line references below are as of before slice 1 and are kept as
+the reasoning that scoped it; the identifiers they name have since been renamed
+as listed above.
 
 **Why the blast radius is small.** `vote.voter_id` is the browser's ballot cookie
 and the DDL says explicitly it is **not** a foreign key to `voter`

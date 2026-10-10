@@ -10,7 +10,8 @@ const LATER = new Date(AT.getTime() + 15 * 60_000);
 function claim(overrides: Partial<PendingClaim> = {}): PendingClaim {
   return {
     tokenHash: "hash-1",
-    email: "ada@student.ubc.ca",
+    kind: "email",
+    subject: "ada@student.ubc.ca",
     community: "ubc-students",
     proofEmailsOptIn: false,
     createdAt: AT,
@@ -54,7 +55,7 @@ export function claimStoreConformance(
         await store.put(claim({ tokenHash: "hash-2" }));
         await store.discard("hash-1");
         assert.equal(await store.byTokenHash("hash-1"), undefined);
-        const live = await store.liveFor("ada@student.ubc.ca", AT);
+        const live = await store.liveFor("email", "ada@student.ubc.ca", AT);
         assert.deepEqual(
           live.map((c) => c.tokenHash),
           ["hash-2"],
@@ -85,11 +86,11 @@ export function claimStoreConformance(
         // its claim carries community null to the redeem that copies it onto
         // the voter. Null, not undefined or "", through every read.
         const store = await fresh(t);
-        const stored = claim({ email: "jo@gmail.com", community: null });
+        const stored = claim({ subject: "jo@gmail.com", community: null });
         await store.put(stored);
         assert.deepEqual(await store.byTokenHash("hash-1"), stored);
 
-        const live = await store.liveFor("jo@gmail.com", AT);
+        const live = await store.liveFor("email", "jo@gmail.com", AT);
         assert.deepEqual(live, [stored]);
 
         await store.markUsed("hash-1", AT);
@@ -142,13 +143,42 @@ export function claimStoreConformance(
         // whose `expiresAt <= now`, so calling it live would disagree with it.
         await store.put(claim({ tokenHash: "expired-now", expiresAt: AT }));
         await store.put(
-          claim({ tokenHash: "other-address", email: "sam@student.ubc.ca" }),
+          claim({ tokenHash: "other-address", subject: "sam@student.ubc.ca" }),
         );
 
-        const live = await store.liveFor("ada@student.ubc.ca", AT);
+        const live = await store.liveFor("email", "ada@student.ubc.ca", AT);
         assert.deepEqual(
           live.map((c) => c.tokenHash),
           ["live"],
+        );
+      });
+
+      test("a_claim_reads_back_its_kind_and_subject", async (t) => {
+        // P8 (ADR-0032): a link proves a credential of some kind, and the
+        // address it was sent to is that credential's subject.
+        const store = await fresh(t);
+        await store.put(claim());
+        const stored = await store.byTokenHash("hash-1");
+        assert.equal(stored?.kind, "email");
+        assert.equal(stored?.subject, "ada@student.ubc.ca");
+      });
+
+      test("live_links_are_counted_per_kind_as_well_as_per_subject", async (t) => {
+        // The throttle is on the pair. Only `email` exists today, so the other
+        // half is read through the lookup: the same subject under a kind that
+        // is not `email` has no live links.
+        const store = await fresh(t);
+        await store.put(claim({ tokenHash: "one" }));
+        await store.put(claim({ tokenHash: "two" }));
+        assert.deepEqual(
+          (await store.liveFor("email", "ada@student.ubc.ca", AT))
+            .map((c) => c.tokenHash)
+            .sort(),
+          ["one", "two"],
+        );
+        assert.deepEqual(
+          await store.liveFor("in_person" as "email", "ada@student.ubc.ca", AT),
+          [],
         );
       });
     },

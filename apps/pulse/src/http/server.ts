@@ -575,6 +575,11 @@ function pollBody(poll: Poll, now: Date) {
  * What a voter is allowed to see about themselves. Never anyone else's.
  * `community` is null for someone whose address matched no community
  * (ADR-0030) — sent as null, not left out, so the shape never varies.
+ *
+ * `email` is the address of the voter's `email` credential, which the voter
+ * store reads back onto `Voter` (ADR-0032), so this shape did not change when
+ * the address stopped being the voter's key. Every voter today signs in by
+ * email and so has one; a voter with no credential (P10) would send null.
  */
 function publicVoter(voter: Voter) {
   return { id: voter.id, email: voter.email, community: voter.community };

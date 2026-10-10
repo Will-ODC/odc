@@ -202,7 +202,10 @@ test("signs_in_an_address_from_a_domain_no_community_claimed_with_no_community",
   assert.equal(redeemed.firstTime, true);
   assert.equal(redeemed.voter.email, "someone@gmail.com");
   assert.equal(redeemed.voter.community, null);
-  assert.equal((await h.voters.byEmail("someone@gmail.com"))?.community, null);
+  assert.equal(
+    (await h.voters.byCredential("email", "someone@gmail.com"))?.community,
+    null,
+  );
 });
 
 test("a_domain_near_a_listed_one_but_not_on_it_gets_no_community", async () => {
@@ -290,7 +293,10 @@ test("signing_in_again_after_the_allowlist_changed_keeps_the_community_first_rec
   if (again.status !== "signed_in") return;
   assert.equal(again.firstTime, false);
   assert.equal(again.voter.community, null);
-  assert.equal((await h.voters.byEmail("ada@gmail.com"))?.community, null);
+  assert.equal(
+    (await h.voters.byCredential("email", "ada@gmail.com"))?.community,
+    null,
+  );
 });
 
 test("signing_in_again_after_the_domain_was_removed_keeps_the_community_first_recorded", async () => {
@@ -312,7 +318,7 @@ test("signing_in_again_after_the_domain_was_removed_keeps_the_community_first_re
   assert.equal(again.firstTime, false);
   assert.equal(again.voter.community, "ubc-students");
   assert.equal(
-    (await h.voters.byEmail("ada@student.ubc.ca"))?.community,
+    (await h.voters.byCredential("email", "ada@student.ubc.ca"))?.community,
     "ubc-students",
   );
 });
@@ -374,7 +380,8 @@ test("the_raw_token_is_never_stored_only_its_hash", async () => {
   assert.equal(await h.claims.byTokenHash(token), undefined);
   const stored = await h.claims.byTokenHash(hashToken(token));
   assert.ok(stored);
-  assert.equal(stored.email, "ada@student.ubc.ca");
+  assert.equal(stored.kind, "email");
+  assert.equal(stored.subject, "ada@student.ubc.ca");
 });
 
 test("proof_emails_are_off_unless_asked_for", async () => {
@@ -431,7 +438,8 @@ test("the_slower_of_two_links_still_has_its_opt_in_honoured", async () => {
   assert.equal(winner.status === "signed_in" && winner.firstTime, true);
   assert.equal(loser.status === "signed_in" && loser.firstTime, false);
   assert.equal(
-    (await h.voters.byEmail("ada@student.ubc.ca"))?.proofEmailsOptIn,
+    (await h.voters.byCredential("email", "ada@student.ubc.ca"))
+      ?.proofEmailsOptIn,
     true,
   );
 });
@@ -519,7 +527,10 @@ test("a_send_the_provider_refused_does_not_spend_the_live_link_cap", async () =>
       "send_failed",
     );
   }
-  assert.equal((await h.claims.liveFor("ada@student.ubc.ca", START)).length, 0);
+  assert.equal(
+    (await h.claims.liveFor("email", "ada@student.ubc.ca", START)).length,
+    0,
+  );
   assert.equal(
     (await h.service.requestLink("ada@student.ubc.ca")).status,
     "sent",
@@ -539,7 +550,7 @@ for (const status of [408, 429]) {
     );
     await h.service.requestLink("ada@student.ubc.ca");
     assert.equal(
-      (await h.claims.liveFor("ada@student.ubc.ca", START)).length,
+      (await h.claims.liveFor("email", "ada@student.ubc.ca", START)).length,
       0,
     );
   });
@@ -564,7 +575,7 @@ for (const status of [500, 502, 504]) {
     );
     await h.service.requestLink("ada@student.ubc.ca");
     assert.equal(
-      (await h.claims.liveFor("ada@student.ubc.ca", START)).length,
+      (await h.claims.liveFor("email", "ada@student.ubc.ca", START)).length,
       1,
     );
     const [token] = tokens;
@@ -605,7 +616,10 @@ test("a_send_that_got_no_answer_keeps_its_link_live", async () => {
 
   await h.service.requestLink("ada@student.ubc.ca");
   await h.service.requestLink("ada@student.ubc.ca");
-  assert.equal((await h.claims.liveFor("ada@student.ubc.ca", START)).length, 2);
+  assert.equal(
+    (await h.claims.liveFor("email", "ada@student.ubc.ca", START)).length,
+    2,
+  );
   assert.equal(
     (await h.service.requestLink("ada@student.ubc.ca")).status,
     "too_many_requests",

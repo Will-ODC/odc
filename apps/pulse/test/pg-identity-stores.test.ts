@@ -10,6 +10,11 @@ import {
   allowDomain,
 } from "../src/identity/pg-store.js";
 import type { Pool, PoolClient } from "pg";
+import {
+  CredentialTakenError,
+  type Credential,
+  type NewVoter,
+} from "../src/identity/store.js";
 import { claimStoreConformance } from "./conformance/claim-store.js";
 import { voterStoreConformance } from "./conformance/voter-store.js";
 import {
@@ -46,7 +51,8 @@ test(
     const store = new PostgresClaimStore(pool);
     await store.put({
       tokenHash: "hash-1",
-      email: "ada@student.ubc.ca",
+      kind: "email",
+      subject: "ada@student.ubc.ca",
       community: "ubc-students",
       proofEmailsOptIn: false,
       createdAt: AT,
@@ -81,17 +87,202 @@ test(
   async (t) => {
     const store = new PostgresVoterStore(await migratedSchema(t));
     const signedOut = new Date(AT.getTime() + 1_000);
-    await store.create({
-      id: "voter-1",
-      email: "ada@student.ubc.ca",
-      community: "ubc-students",
-      claimedAt: AT,
-      proofEmailsOptIn: false,
-      sessionsValidFrom: signedOut,
+    await store.create(newVoter("voter-1", { sessionsValidFrom: signedOut }), {
+      kind: "email",
+      value: "ada@student.ubc.ca",
+      verifiedAt: AT,
     });
     assert.equal(
       (await store.byId("voter-1"))?.sessionsValidFrom?.getTime(),
       signedOut.getTime(),
+    );
+  },
+);
+
+function newVoter(id: string, overrides: Partial<NewVoter> = {}): NewVoter {
+  return {
+    id,
+    community: "ubc-students",
+    assurance: "email",
+    claimedAt: AT,
+    proofEmailsOptIn: false,
+    ...overrides,
+  };
+}
+
+const ADA: Credential = {
+  kind: "email",
+  value: "ada@student.ubc.ca",
+  verifiedAt: AT,
+};
+
+test(
+  "two_first_sign_ins_for_one_address_at_once_make_one_voter",
+  { skip: databaseSkip },
+  async (t) => {
+    // Race 2 of #158, now across two tables (ADR-0032). Two creates for one
+    // credential rarely overlap on their own, and a store that checks before
+    // it writes passes when they run one after another. So hold the
+    // credential's key in an open transaction — both creates then wait on it
+    // — and let go: only a store whose uniqueness lives in the credential's
+    // key, and that names the loser's failure, ends with one voter and one
+    // CredentialTakenError.
+    const pool = await migratedSchema(t);
+    const store = new PostgresVoterStore(pool);
+
+    const hold = await pool.connect();
+    try {
+      await hold.query("begin");
+      await hold.query(
+        "insert into voter" +
+          " (id, community, assurance, claimed_at, proof_emails_opt_in," +
+          " session_generation) values ('holder', null, 'email', $1, false, 0)",
+        [AT],
+      );
+      await hold.query(
+        "insert into voter_credential (kind, value, voter_id, verified_at)" +
+          " values ('email', $1, 'holder', $2)",
+        [ADA.value, AT],
+      );
+      const holdPid = await backendPid(hold);
+      const creates = Promise.allSettled([
+        store.create(newVoter("voter-a"), ADA),
+        store.create(newVoter("voter-b"), ADA),
+      ]);
+      await until(async () => (await blockedBy(pool, holdPid)) >= 2);
+      // Rolled back, not committed: the key is free again, and the two
+      // waiting creates now race each other for it.
+      await hold.query("rollback");
+
+      const results = await creates;
+      const won = results.flatMap((r) =>
+        r.status === "fulfilled" ? [r.value] : [],
+      );
+      const lost = results.flatMap((r) =>
+        r.status === "rejected" ? [r.reason as unknown] : [],
+      );
+      assert.equal(won.length, 1);
+      assert.equal(lost.length, 1);
+      assert.ok(
+        lost[0] instanceof CredentialTakenError,
+        `the loser failed with ${String(lost[0])}`,
+      );
+
+      const winner = won[0];
+      assert.ok(winner);
+      assert.equal(
+        (await store.byCredential("email", ADA.value))?.id,
+        winner.id,
+      );
+      // And the loser's voter row went with its refused credential.
+      const { rows } = await pool.query<{ id: string }>(
+        "select id from voter order by id",
+      );
+      assert.deepEqual(
+        rows.map((row) => row.id),
+        [winner.id],
+      );
+    } finally {
+      await hold.query("rollback").catch(() => null);
+      hold.release();
+    }
+  },
+);
+
+test(
+  "a_credential_the_database_refuses_leaves_no_voter_behind",
+  { skip: databaseSkip },
+  async (t) => {
+    // Atomicity forced from the credential side by something other than a
+    // taken key: jsonb cannot hold a NUL character, so the credential insert
+    // fails after the voter insert has succeeded. Only a store that writes
+    // the two in one transaction is left with no voter-1.
+    const pool = await migratedSchema(t);
+    const store = new PostgresVoterStore(pool);
+    await assert.rejects(() =>
+      store.create(newVoter("voter-1"), {
+        ...ADA,
+        params: { vouchedBy: "\u0000" },
+      }),
+    );
+    assert.equal(await store.byId("voter-1"), undefined);
+    const { rows } = await pool.query("select id from voter");
+    assert.equal(rows.length, 0);
+    assert.equal(await store.byCredential("email", ADA.value), undefined);
+  },
+);
+
+test(
+  "a_voter_with_no_credential_is_a_voter_with_no_address",
+  { skip: databaseSkip },
+  async (t) => {
+    // Deliberately representable (ADR-0032): a public-link or anonymous
+    // voter (P10) is a voter row with no credential. Nothing in pulse writes
+    // one yet, so it is written here by hand — and every read must hand it
+    // back with `email: null` rather than fail or invent an address.
+    const pool = await migratedSchema(t);
+    await pool.query(
+      "insert into voter" +
+        " (id, community, assurance, claimed_at, proof_emails_opt_in," +
+        " session_generation) values ('guest', null, 'link', $1, false, 0)",
+      [AT],
+    );
+    const store = new PostgresVoterStore(pool);
+    const guest = await store.byId("guest");
+    assert.deepEqual(guest, {
+      id: "guest",
+      email: null,
+      community: null,
+      assurance: "link",
+      claimedAt: AT,
+      proofEmailsOptIn: false,
+    });
+    assert.equal((await store.advanceSessionGeneration("guest"))?.email, null);
+  },
+);
+
+test(
+  "a_credential_that_is_not_an_email_is_never_shown_as_the_address",
+  { skip: databaseSkip },
+  async (t) => {
+    // P10/P11 will add kinds like `in_person`, whose value is who vouched,
+    // not where to send mail. Only an `email` credential is an address:
+    // anything else read back as one would put the vouch on /api/me and
+    // address proof-of-action mail to it.
+    const pool = await migratedSchema(t);
+    await pool.query(
+      "insert into voter" +
+        " (id, community, assurance, claimed_at, proof_emails_opt_in," +
+        " session_generation) values ('met', null, 'link', $1, false, 0)",
+      [AT],
+    );
+    await pool.query(
+      "insert into voter_credential (kind, value, voter_id, verified_at)" +
+        " values ('in_person', 'vouched-by-voter-7', 'met', $1)",
+      [AT],
+    );
+    const store = new PostgresVoterStore(pool);
+    assert.equal((await store.byId("met"))?.email, null);
+  },
+);
+
+test(
+  "an_assurance_word_this_build_does_not_know_is_refused",
+  { skip: databaseSkip },
+  async (t) => {
+    // Levels are words with the order in code. A word the code does not know
+    // — written by a newer build, say — must not be read as some level it is
+    // not.
+    const pool = await migratedSchema(t);
+    await pool.query(
+      "insert into voter" +
+        " (id, community, assurance, claimed_at, proof_emails_opt_in," +
+        " session_generation) values ('v', null, 'telepathy', $1, false, 0)",
+      [AT],
+    );
+    await assert.rejects(
+      () => new PostgresVoterStore(pool).byId("v"),
+      /unknown assurance level/,
     );
   },
 );
@@ -215,7 +406,7 @@ test(
     }>(
       "select table_name, column_name from information_schema.columns" +
         " where table_schema = $1 and is_nullable = 'YES'" +
-        " and table_name in ('voter', 'pending_claim', 'allowed_domain')" +
+        " and table_name in ('voter', 'voter_credential', 'pending_claim', 'allowed_domain')" +
         " order by table_name, column_name",
       [schema],
     );
