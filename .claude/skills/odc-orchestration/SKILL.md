@@ -177,18 +177,19 @@ These held, or broke, and are now rules:
 - **Put the operator's answers in the brief.** Re-issuing a lead's card with the
   answers in it was cheaper than relaying them afterwards.
 - **Give each lead its branch numbers.** Both leads guessed "the next free
-  `pulse/N`" and could have collided. Also name `.claude/launch.json` in the
-  brief if the lead needs the browser: it sits outside a lead's folders. Its
-  preview server starts the **main checkout's** dev servers, not the lead's
-  worktree's, so a lead checking its own screens runs its worktree's servers
-  directly.
+  `pulse/N`" and could have collided.
+- **Name `.claude/launch.json` in the brief if the lead needs the browser.** It
+  sits outside a lead's folders. Its entries `cd` by relative path, so the
+  preview starts the dev servers of the checkout the session was opened in, not
+  the lead's worktree: a lead checking its own screens runs its worktree's
+  servers directly.
 - **Say which channel a go comes through.** Either the operator answers in the
   lead's own session, or a go the orchestrator relays, quoting the operator,
-  counts. A relayed go was not acted on once. The operator may also answer inside
+  counts. In the pilot a relayed go was ignored because neither was said. The operator may also answer inside
   a lead's session, so the orchestrator keeps its list of open questions in step
   with what the leads report as answered.
-- **Silence is not a yes.** Leads recommend an option and wait. "My pick goes
-  ahead unless told otherwise" is not allowed.
+- **Silence is not a yes.** Leads recommend an option and wait; do not proceed
+  until told. Never write "my pick goes ahead unless told otherwise".
 - **After offering `spawn_task` cards, check every one is still pending.** A new
   card can silently push an older one off the list.
 - **No commits does not mean an idle lead.** One lead had built everything
