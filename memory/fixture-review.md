@@ -31,7 +31,7 @@ are retained: each full invocation has distinct inputs.
 ## Evidence
 
 An independent context read the contracts and fixtures without the generator
-or verifier implementations. It checked 115 unique IDs/exports, counts
+or verifier implementations. It checked 115 unique IDs and their export files, counts
 (21 VALID, 4 PARTIAL, 90 INVALID), expectation shapes and line bounds,
 duplicate JSON keys, and citation existence. It independently reproduced
 both preimages (607 and 443 bytes), both seed/key and identifier derivations,
@@ -45,8 +45,20 @@ repository's disposable Postgres 17 container. All 1,411 workspace tests
 passed (141 fixture generator, 404 Pulse with database required, 372 web,
 268 TypeScript verifier, 226 rehearsal), with no skipped Node suites.
 Go packages passed; build, lint, typecheck, format, manifest and the nine
-rehearsal scenarios through both verifiers passed. Node 24 initially failed
+rehearsal scenarios through both verifiers passed. Both CLIs also passed all
+16 anchor/report policy checks. The Pulse API and seeded poll/community picker
+worked through the web proxy after restarting the API with the saved command.
+Repeated installation and fixture regeneration passed. Node 24 initially failed
 two library-behavior isolation assertions; CI's Node 20 resolves that mismatch.
+
+## Review
+
+A separate fresh-context reviewer returned **APPROVE WITH NITS**, confirming
+the corrections against the normative contracts and actual bytes. Its wording
+nit about unique IDs/files versus unique byte sequences was fixed. Neither
+audit nor review context read verifier/ledger implementation. Review used the
+available Codex model; this environment does not offer the repository's named
+Opus model.
 
 ## Handoff
 
