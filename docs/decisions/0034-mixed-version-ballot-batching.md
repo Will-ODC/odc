@@ -192,12 +192,18 @@ differ are named under Consequences.
   4. `docs/security/attacks/check-unknown-batching-proposal.py`'s `proposed`
      mode now matches the ratified expectations. It can join required CI once
      both verifiers pass it.
-- **Not decided here (open questions for the operator):** whether a registered
-  `vote_cast` may name an `issue_created` at an unregistered version, and what
-  ID-8/ET-18a/ET-23 then check. EV-8's new paragraph covers ballot batching only.
-  Also open: whether a **new event type**, rather than a new `vote_cast`
-  version, could carry ballots and so escape ET-22, ET-22a and batching.
-  ET-22a binds `vote_cast` versions only, as the operator adopted it.
+- **Not decided here (open questions for the operator):**
+  1. **Whether an issue's interval and minimum are fixed at `issue_created`
+     forever.** ET-24b reads _Δ_ and _m_ from the `issue_created` alone. A
+     later event type that amended them would make old verifiers mis-count
+     candidates and minimums. This is pending an operator decision.
+  2. **A registered ballot naming an `issue_created` at an unregistered
+     version.** Whether that is allowed, and what ID-8/ET-18a/ET-23 then check,
+     is open. EV-8's new paragraph covers ballot batching only.
+  3. **A new event type carrying ballots.** A new type, rather than a new
+     `vote_cast` version, could carry ballots and so escape ET-22, ET-22a and
+     batching. ET-22a binds `vote_cast` versions only, as the operator adopted
+     it.
 
 ### Documents reconciled
 

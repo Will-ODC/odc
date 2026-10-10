@@ -99,7 +99,10 @@ chain, or a fork that added types, charter §8).
   ballot's batch check unresolved, that check is not failed, and the line is
   enumerated in `PARTIAL` (EV-7). Where a failure holds whatever the
   unregistered events are (ET-24b's definite failures, and every check that
-  does not involve them, such as ET-23), it is `INVALID` as before. Uncertainty
+  does not involve them, such as ET-23), it is `INVALID` as before. A newer
+  verifier that registers those events reaches `INVALID` on the same chain, but
+  it may name an earlier line, for example the newer ballot's own: ET-24b
+  guarantees a failure at or before the line it names, not at it. Uncertainty
   never strengthens a verdict to `INVALID`, and it never erases what the
   registered events alone prove. The ballot batch checks are the only checks
   this paragraph covers. ET-24b is the rule that decides them.

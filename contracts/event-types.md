@@ -519,7 +519,7 @@ off-log eligibility check.
   would violate charter §5/§8, which are non-negotiable and survive any future
   community vote (§8).
 - **ET-22a.** _Permanent evolution constraint: one event, one issue, one ballot
-  (binds `evolution.md`; ADR-0034)._ Every registered version of `vote_cast` MUST
+  (binds `evolution.md`; ADR-0034)._ Every version of `vote_cast` that any contracts version registers MUST
   identify exactly one issue and represent exactly one ballot. It MUST carry
   `issue_id` under that name with the `ids.md` ID-8 / ET-18 reference meaning,
   and MUST obey its issue's declared timestamp interval (ET-23), minimum batch
@@ -646,7 +646,8 @@ when the chain also holds ballots at a `vote_cast` version it does not register.
   (`evolution.md` EV-6, EV-16). Of an opaque ballot a verifier MUST use only its
   envelope `seq` and `ts`, and MUST NOT read its payload ("Which ballots count",
   above). This rule decides ET-24 and ET-24a on a chain that holds opaque
-  ballots. It applies to each issue the verifier registers separately. For such
+  ballots. It applies separately to each issue whose `issue_created` is at a version the
+  verifier registers. For such
   an issue *I*, whose `issue_created` is at `seq` *c*, write *Δ* for its
   `ballot_batch_interval_ms` and *m* for its `ballot_batch_min`.
 

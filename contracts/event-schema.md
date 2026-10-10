@@ -124,8 +124,10 @@ fewer:
      `time.Parse`) reach the SAME verdict. A value that passes the regex but is
      not a real instant (e.g. `2026-13-40T25:61:61.999Z`) MUST be rejected.
   A verifier MUST reject any `ts` failing either gate.
-- **ES-21.** `ts` is advisory metadata only. It MUST NOT be used to order or
-  select events, and MUST NOT be used to validate them beyond the format check in
+- **ES-21.** `ts` is advisory metadata only. It MUST NOT be used to order
+  events, MUST NOT be used to select events (to choose which events are ordered
+  or verified, or how) except by `event-types.md` ET-24b's candidacy test below,
+  and MUST NOT be used to validate them beyond the format check in
   ES-20, the one type-specific constraint on its **value** that
   `event-types.md` ET-23 places on `vote_cast` — a ballot's `ts` is quantized to
   its issue's declared batch interval, so a verifier checks that value — and the
@@ -134,9 +136,10 @@ fewer:
   applies the same two tests, ET-23's multiple test and `ts` equality, to the
   `ts` of a `vote_cast` at a version the verifier does not register. It does so
   only to decide whether a registered ballot's batch check is unresolved, never
-  to accept or reject that event. None of these orders events by `ts`, and none
-  selects by `ts` which events are verified. `seq` orders (ES-8), always and
-  only.
+  to accept or reject that event. That candidacy test is the one exception to
+  the ban on selecting by `ts`: it selects which unregistered ballots may bear on
+  a registered ballot's batch check. None of these orders events by `ts`.
+  `seq` orders (ES-8), always and only.
 - **ES-22.** `ts` is nonetheless covered by `hash` (Section 8): once written it
   is immutable, even though it is not authoritative.
 
