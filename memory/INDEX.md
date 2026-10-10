@@ -47,9 +47,9 @@ Do not apply charter rules to `apps/**`, and do not relax them anywhere else.
   sign-up is DONE** — #182, #183, ADR-0030: anyone signs in, and community is
   an optional label. Still missing
   from the product: the middle of the story (bite/case/action screens) and
-  pillar 3. **Varying levels of sign-in are designed and unstarted** — P8-P11,
-  decided 2026-09-12; P8 is ready, the rest wait on an ADR and on an admin
-  surface that does not exist. The two known screen bugs are **fixed** (#174, #175).
+  pillar 3. **P8 credential storage is merged** — #213; its guest upgrade path and
+  P9-P11 remain unstarted. P2's community picker is reviewed in #215, pending
+  merge; see the linked memory for decisions and the current merge order. The two known screen bugs are **fixed** (#174, #175).
   → `memory/pulse.md`
 
 ## Load order

@@ -5,7 +5,8 @@
 > the served API is `apps/pulse/API.md`. Keep this short — history is in git.
 
 For the operator's development-feedback direction, confirmed-voter requirement,
-private-choice default, thresholds and transferred issue decisions, read
+private-choice default, trust/confirmation decisions, reporting tickets,
+thresholds and transferred issue decisions, read
 `memory/pulse-development.md`. Those requirements are not implemented yet.
 
 ## What pulse is
@@ -368,7 +369,7 @@ fourth time this file has been able to say that.
   which is exactly what makes a fresh deployment unusable. Read P4c before
   starting: it names the two things that decision does NOT settle.
 
-### Identity and authentication levels — decided 2026-09-12, NOT started
+### Identity and authentication levels — P8 storage merged, upgrades unstarted
 
 The operator asked whether pulse can carry varying levels of authentication
 (emailed link, public link, in-person, an app that scans people in) or whether
@@ -377,15 +378,22 @@ explicitly not a foreign key to `voter`, so sign-in methods cannot disturb votin
 The plan is `docs/plans/pulse.md` **P8-P11**; the decisions are recorded there and
 are not repeated here. Two things worth carrying in memory:
 
-- **`email` is not a field on the voter, it is the key** — named "the natural key"
-  in the DDL and reached through `byEmail`, `liveFor(email)` and
-  `VoterExistsError`. Nothing anywhere records **how** a person was verified.
-  That missing fact is the whole change, and it gets dearer every week: P4 (the
-  `Mailer`, now landed) and P6 (poll authoring) both built on sign-in, and
-  **P4c (open sign-up) now touches `voter.community` directly** — it is
-  `not null` in `001_initial.sql`, so what it holds for someone who proved
-  nothing is a migration question P4c has to answer. **Answered by #182:**
-  migration 002 drops the `not null`; no community is stored as `null`.
+- **P8 storage slice 1 is merged** — #213 (`bdbd9b9`). Email addresses are
+  `voter_credential` rows, voters carry an assurance word, and voter/credential
+  creation is atomic. `byCredential` and `liveFor(kind, subject, now)` replace
+  the address-only store APIs; mail-failure `discard` remains available.
+  Existing voter IDs, sessions, preferences and old sign-in links are preserved.
+- **The guest upgrade path is unstarted**, as are P9–P11. Current email
+  assurance does not prove social confirmation or one unique human. Account-based
+  development ballots still need their own accepted privacy design.
+- **Numbering correction is in #215:** Pulse's credential record becomes
+  ADR-0033 because core #224 already used ADR-0032. Applied migration 004 keeps
+  its checksum and historical comment reference, explained in ADR-0033. Drain
+  old API instances before applying 004; they refer to dropped/renamed columns.
+- **P2 community picker is reviewed in #215**, pending merge at this checkpoint.
+  A returning voter retains their first community; changing that is still an
+  open product decision. Review details and merge order are in
+  `memory/pulse-development.md`.
 - **The interaction principle the operator named:** "I want the app to behave like
   we are interacting now, where users decide on bite-sized decisions, which models
   the community." A poll that wants a higher level is **one more small decision,
