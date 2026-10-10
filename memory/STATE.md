@@ -39,6 +39,13 @@ and #222 (vectors `109`-`115`). #203 reconciled EV-15's stage map. #219 made a T
 internal error exit 3, not 1. #223 is the security checkpoint
 (`docs/security/hash-chain-checkpoint-2026-10-09.md`).
 
+## Pending fixture review (2026-10-10)
+
+At the operator's request, `contracts/fixture-consistency-review` records an
+unmerged fixture prose audit. See [fixture review](fixture-review.md) for
+confirmed findings, validation, limitations, and the merge handoff. Golden
+bytes and expected verdicts are unchanged; this does not clear T9.
+
 ## Next
 
 In this order. Passing CI or a checkpoint does not clear T9.

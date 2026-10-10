@@ -83,7 +83,7 @@ export const chainIdentityVectors: Vector[] = [
     frame(Alines),
     { verdict: "INVALID", line: 1 },
     ["EX-21", "EX-22", "EX-23", "ET-7", "ET-7a"],
-    "Chain A (002's bytes) run with --chain set to chain B's genesis hash (113). A and B are two chains started under ONE operator key: their genesis payloads are identical — same chain_id, operator_pk, registrar_pk and contracts — and differ only in the genesis ts, one millisecond apart. chain_id alone would call them the same chain (ET-7); the genesis hash says they are not (ET-7a, ADR-0013). A verifier that implements --chain by comparing chain_id or operator_pk accepts this. INVALID at line 1 per EX-23.",
+    "Chain A (002's bytes) run with --chain set to chain B's genesis hash (113). A and B are two chains started under ONE operator key: their genesis payloads share chain_id, operator_pk, registrar_pk and contracts. The genesis ts values are one millisecond apart; HA-15/HA-16 therefore require different signatures, and the genesis hashes differ too. chain_id alone would call them the same chain (ET-7); the genesis hash says they are not (ET-7a, ADR-0013). A verifier that implements --chain by comparing chain_id or operator_pk accepts this. INVALID at line 1 per EX-23.",
     undefined,
     B_ID,
   ),

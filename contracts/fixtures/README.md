@@ -1,6 +1,6 @@
 # contracts/fixtures/ — golden vectors
 
-**Version:** 14
+**Version:** 15
 **Status:** DRAFTING (Phase 0 · T5, T5j, ADR-0009, ADR-0010, ADR-0011). Not
 frozen.
 
@@ -26,14 +26,19 @@ under its own genesis hash; `110` rejects it at line 1 under its own **head** (a
 real hash of the same chain, so wiring `--chain` to the `--head` comparison
 fails). `111`–`113` are the two-chain pair under **one** operator key: chain B
 is `002`'s four events over a genesis one millisecond earlier, so both genesis
-payloads carry the same `chain_id`, `operator_pk` and `registrar_pk` and only
-`ts` — and therefore the genesis hash — differs (`event-types.md` ET-7, ET-7a).
+payloads carry the same `chain_id`, `contracts`, `operator_pk` and
+`registrar_pk`. Changing `ts` also changes the signing preimage, `sig`, and
+therefore the genesis hash (`hashing.md` HA-15–HA-16; `event-types.md` ET-7, ET-7a).
 Each is `INVALID` at line 1 under the other's identity (`111`, `112`), and B is
 `VALID` under its own (`113`; A under its own is `109`). `114` gives `--chain`
 and `--head` together, both correct; `115` gives the correct `--chain` and a
 wrong `--head`, still `INVALID` at the last line (EX-19). No vector gives both
 inputs wrong, or a wrong `--chain` on an export already `INVALID` elsewhere: the
-spec does not say which line wins there.
+current corpus does not pin those cases. `export-format.md` v5 now defines
+their ordering: file-validity failures retain their original line
+(EX-15/EX-22), and when both eligible anchor comparisons fail, `--chain`
+wins at line 1 (EX-23). EX-24 endpoint reporting is tool output, outside
+golden verdict conformance (EV-17).
 
 `071`–`073` cover scalar values above U+FFFF — `071` that a title above the BMP
 is stored as literal UTF-8, `072`/`073` that `event-types.md` ET-14 counts
@@ -49,9 +54,10 @@ their literal UTF-8 octets: EX-9 escapes only U+0000–U+001F.
 `genesis` whose `operator_pk` (`076`) or `registrar_pk` (`077`) is **uppercase
 hex**, `INVALID` at line 1. The uppercase key decodes to the same 32 bytes, so
 `chain_id` still derives (ET-7), the self-signature still verifies (ET-8) and the
-`hash` still matches — **only the case is wrong**, the same isolation `033` and
-`036` have for `prev_hash`/`hash`. Before these, no vector asserted `INVALID` on a
-malformed genesis key, so a verifier omitting the format check passed every vector
+`hash` still matches — **only the case is wrong**, as with `036` for the
+stored `hash`. Unlike these format-only cases, `033` also changes the hashing
+preimage because `prev_hash` is encoded as its literal hex text (HA-12). Before
+these, no vector asserted `INVALID` on a malformed genesis key, so a verifier omitting the format check passed every vector
 with no signal. Two vectors, not one, because `registrar_pk` — unused until a
 ballot arrives — is the key an implementation is likelier to skip.
 
@@ -145,8 +151,9 @@ MANIFEST.sha256                   sha256 of every file above (sha256sum -c)
 
 Both `preimages/*.hex` files are the exact octets fed to SHA-256 for one event,
 so an implementer can diff their own construction against a golden one before
-they ever reach a digest. They are a matched pair: `001`'s payload is four
-strings, so it shows only the `0x73` tag, while `002`'s line 3 has an integer
+they ever reach a digest. They are a matched pair: `001`'s hashed payload has five
+strings (including `sig`), so it shows only the `0x73` tag, while `002`'s line 3
+has an integer
 `choice_count` sorting ahead of `sig` and `title` — the `0x69` tag, an `ENC_INT`
 payload value, and the `0x69`/`0x73` adjacency (`hashing.md` HA-4, HA-7, HA-9).
 With `001` alone, a swapped tag constant or a wrong integer width shows up only
@@ -249,9 +256,11 @@ The one value in here that does **not** come from the generator is vector
 which was derived by hand before this code existed. It is the calibration point.
 If the generator and vector 001 ever disagree, the generator is wrong.
 
-Independent reproduction is what actually validates these bytes — T7 builds a Go
-verifier from the specs alone, and T8 compares the two languages' digests. Until
-then, treat the non-001 values as "self-consistent", not "known correct".
+Independent reproduction validates these bytes: T7 built a Go verifier from
+the specs alone, and T8 completed the two-verifier rehearsal. Those checks
+cover the vectors each run consumed; additions still need their own independent
+review and cross-language checks. Generator agreement alone establishes only
+self-consistency.
 
 `derivations.json` also pins the keypairs: the operator and registrar keys come
 from 32-octet Ed25519 seeds of one repeated byte (`0x01…01` and `0x02…02`, per

@@ -19,6 +19,19 @@ Format (newest first, one entry per merged contracts change):
 
 ---
 
+## fixtures/ v15 — 2026-10-10 — fixture consistency review
+
+- Align the README with export-format v5's anchor precedence, and distinguish
+  missing golden coverage from unspecified behavior. Preserve intentional
+  byte-identical exports whose anchor inputs exercise different checks.
+- Correct the genesis payload/signature descriptions, the five-key hashed
+  payload count, vector 095's ES-10 explanation, and the format-only isolation
+  claim about vector 033. Remove vector 011's false assertion that all v1
+  payloads forbid controls. Synchronize generated advisory notes with their source.
+- Record completed T7/T8 validation without treating generator agreement or
+  historical runs as independent confirmation of later additions. Golden export
+  bytes, preimages, derivations, inputs, and expected verdicts are unchanged.
+
 ## event-types.md v12 · evolution.md v7 · event-schema.md v6 — 2026-10-10 — mixed-version ballot batching (ADR-0034)
 
 **The defect.** ET-24/ET-24a counted only the registered `(vote_cast, 1)`, and
