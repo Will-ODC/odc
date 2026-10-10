@@ -20,20 +20,96 @@ with no community.
 ### `POST /api/sign-in`
 
 ```json
-{ "email": "ada@student.ubc.ca", "proofEmailsOptIn": false }
+{
+  "email": "ada@student.ubc.ca",
+  "proofEmailsOptIn": false,
+  "community": "ubc-students"
+}
 ```
 
 `proofEmailsOptIn` is optional and must be a real boolean; anything else is refused
 rather than read as `false`, because it is the opt-in for hearing what came of a vote.
 
-| Status | Body                         | When                                           |
-| ------ | ---------------------------- | ---------------------------------------------- |
-| 200    | `status: "sent"` + `message` | a link is on its way                           |
-| 400    | `error: "invalid_email"`     | not a usable address                           |
-| 400    | `error: "bad_request"`       | no `email`, or a non-boolean opt-in            |
-| 429    | `error: "link_already_sent"` | a link is already outstanding for this address |
-| 429    | `error: "too_many_requests"` | too many attempts from this client             |
-| 503    | `error: "send_failed"`       | the mail provider would not take the message   |
+`community` is optional and, when present, must be a string — `null` is refused like
+any other non-string rather than read as "no pick". It is the person's answer to
+`choose_community` below, and is only needed then.
+
+| Status | Body                                        | When                                                           |
+| ------ | ------------------------------------------- | -------------------------------------------------------------- |
+| 200    | `status: "sent"` + `message`                | a link is on its way                                           |
+| 400    | `error: "invalid_email"`                    | not a usable address                                           |
+| 400    | `error: "bad_request"`                      | no `email`, a non-boolean opt-in, or a non-string `community`  |
+| 400    | `error: "unknown_community"`                | `community` names one this address does not belong to          |
+| 422    | `error: "choose_community"` + `communities` | the address belongs to several communities and none was picked |
+| 429    | `error: "link_already_sent"`                | a link is already outstanding for this address                 |
+| 429    | `error: "too_many_requests"`                | too many attempts from this client                             |
+| 503    | `error: "send_failed"`                      | the mail provider would not take the message                   |
+
+#### Picking a community (P2, ADR-0023)
+
+One email domain may belong to several communities (`allowed_domain` is keyed on
+`(community, domain)`). When an address's domain matches two or more rows, **the
+person picks** which community they are signing in to, and the server does not pick
+for them. The community they pick is recorded on the link and copied onto the voter
+when it is clicked, and it is what decides where they may post (ADR-0024).
+
+Asked without `community`, such an address is answered:
+
+```json
+{
+  "error": "choose_community",
+  "message": "That address can sign in to more than one community. Choose one.",
+  "communities": [{ "id": "ubc-alumni" }, { "id": "ubc-staff" }]
+}
+```
+
+**Nothing is mailed and no link is created**, so being asked costs the person none of
+their outstanding-link allowance. The client asks them and sends the same request
+again with `community` set to one of the `id`s. `communities` is sorted by `id` for
+display and the order means nothing. Each entry is an object so that a display name
+can sit beside `id` later; `allowed_domain` has no such column today, so `id` is all
+there is. 422 rather than 400 because nothing in the request is wrong — it is one
+answer short.
+
+The rules for `community`, the same at every number of matches:
+
+- **Two or more matches, no `community`:** 422 `choose_community`, as above.
+- **Any number of matches, `community` one of them:** that community is used. With a
+  single match, sending it is allowed and changes nothing.
+- **Any number of matches, `community` not one of them** — another domain's
+  community, one that does not exist, or any community at all for an address that
+  matches none: **400 `unknown_community`**, `"That address cannot sign in to that
+community."`, and nothing is mailed. A pick is never quietly dropped: someone who
+  asked for one community and was signed in to another, or to none, would be told
+  nothing went wrong. The realistic way to hit this is a row removed between the two
+  requests; a client should take the person back to the email step.
+- **Zero or one match, no `community`:** exactly as before this existed — no extra
+  step and the same responses.
+
+"Matches" means the most specific rows only. Matching is by exact domain unless a row
+says `include_subdomains`, and where a subdomain row and an exact row both match, the
+exact one is the answer, not a choice: a narrower row carves a community out of a
+broader one. An exact row and a subdomain row **for the same domain** are the same
+specificity, and both are choices.
+
+The choice is checked before the per-address cap, so a pick that would be refused is
+refused as `unknown_community` even when the address is at its cap; a valid pick is
+then capped like any request (`link_already_sent`). The cap is per address, not per
+community — picking the other community is not another link. The per-client rate
+limit counts every request, `choose_community` answers included, so signing in this
+way costs two of the client's ten an hour.
+
+**Only the first pick sticks — open, for the operator.** The voter's community is
+written once, when the voter is created by their first click, and a returning voter
+keeps it (see `POST /api/sign-in/redeem` below). So a returning person whose address
+matches several communities is still asked, and their pick is recorded on the link,
+but **signing in does not move them to the community they picked**. They are not
+skipped past the question, because answering "you already have a community" only to
+addresses that have signed in before would tell anyone which addresses have. Whether a
+later pick should move a voter is a product decision P2 does not take
+(`docs/plans/pulse.md` P2).
+
+**Not decided, and not supported:** acting in two communities in one session.
 
 The 200 body is `{ "status": "sent", "message": "Check your email for a link to sign
 in." }` — a sentence safe to show as-is, for a client that would rather not write its
@@ -140,6 +216,10 @@ Who is signed in, according to the cookie.
 The voter is **wrapped**, the same way it is in the redeem response, so a later field
 about the session itself can be added beside it without changing what `voter` means.
 `community` is a string or `null`, exactly as in the redeem response.
+
+This shape is unchanged by P8 (ADR-0033), which stores the address as a credential the
+voter holds rather than as the voter's key: `email` is read back from that credential,
+and every voter so far signs in by email, so it is always a string.
 
 | Status | Body                  | When                                                        |
 | ------ | --------------------- | ----------------------------------------------------------- |
@@ -461,7 +541,9 @@ Note that `closed` is a _refusal_ here and a _success_ on a cast (`200 {"status"
 ## The client
 
 `apps/pulse-web/src/api/http.ts` speaks this: the paths above, the `proofEmailsOptIn`
-opt-in, the wrapped `{ voter }` bodies, and `id` as the voter's field name.
+opt-in, the optional `community` pick and the 422 `choose_community` answer (which it
+returns as a result, not an error), the wrapped `{ voter }` bodies, and `id` as the
+voter's field name.
 `apps/pulse-web/test/end-to-end.test.ts` holds it that way by driving this server over
 a real socket.
 

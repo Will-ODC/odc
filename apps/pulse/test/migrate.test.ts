@@ -9,11 +9,18 @@ import { databaseRequired, databaseUrl } from "../src/db/config.js";
 import {
   LOCK_KEY,
   MigrationError,
+  type Migration,
   loadMigrations,
   migrate,
 } from "../src/db/migrate.js";
 import { createPool } from "../src/db/pool.js";
-import { PostgresVoterStore } from "../src/identity/pg-store.js";
+import {
+  PostgresClaimStore,
+  PostgresVoterStore,
+} from "../src/identity/pg-store.js";
+import { ClaimService, hashToken } from "../src/identity/claim.js";
+import { ConsoleMailer } from "../src/identity/mailer.js";
+import { CredentialTakenError } from "../src/identity/store.js";
 
 /**
  * The runner, against a real Postgres.
@@ -46,6 +53,7 @@ const TABLES = [
   "vote",
   "vote_choice",
   "voter",
+  "voter_credential",
 ];
 
 test("an_empty_database_url_is_unset_rather_than_a_connection_string", () => {
@@ -72,7 +80,7 @@ test("only_the_string_1_makes_a_database_required", () => {
 test("applies_a_fresh_schema", { skip }, async () => {
   await inThrowawaySchema(async (pool, schema) => {
     const result = await migrate(pool, { clock: () => AT });
-    assert.deepEqual(result.applied, ["001", "002", "003"]);
+    assert.deepEqual(result.applied, ["001", "002", "003", "004"]);
     assert.deepEqual(await tablesIn(pool, schema), TABLES);
   });
 });
@@ -88,7 +96,7 @@ test("applying_twice_changes_nothing", { skip }, async () => {
     const { rows } = await pool.query<{ version: string; applied_at: Date }>(
       "select version, applied_at from schema_migrations",
     );
-    assert.equal(rows.length, 3);
+    assert.equal(rows.length, 4);
     // Still the first run's timestamp, and still the injected clock's — to the
     // millisecond, which is what timestamptz(3) is for.
     assert.equal(rows[0]?.applied_at.getTime(), AT.getTime());
@@ -101,12 +109,7 @@ test(
   async () => {
     await inTempDir(async (dir) => {
       const migrations = await loadMigrations();
-      for (const migration of migrations.filter((m) => m.version !== "003")) {
-        await writeFile(
-          path.join(dir, `${migration.version}_${migration.name}.sql`),
-          migration.sql,
-        );
-      }
+      await writeMigrations(dir, migrations, (v) => v < "003");
       await inThrowawaySchema(async (pool) => {
         assert.deepEqual(
           (await migrate(pool, { dir, clock: () => AT })).applied,
@@ -116,15 +119,11 @@ test(
           "insert into voter (id, email, community, claimed_at, proof_emails_opt_in) values ($1, $2, $3, $4, $5)",
           ["voter-1", "ada@student.ubc.ca", "ubc-students", AT, false],
         );
-        const next = migrations.find((m) => m.version === "003");
-        assert.ok(next);
-        await writeFile(
-          path.join(dir, `${next.version}_${next.name}.sql`),
-          next.sql,
-        );
+        // 003 and everything after it: the store reads today's schema.
+        await writeMigrations(dir, migrations, (v) => v >= "003");
         assert.deepEqual(
           (await migrate(pool, { dir, clock: () => AT })).applied,
-          ["003"],
+          migrations.map((m) => m.version).filter((v) => v >= "003"),
         );
         const store = new PostgresVoterStore(pool);
         assert.equal((await store.byId("voter-1"))?.sessionGeneration ?? 0, 0);
@@ -136,6 +135,189 @@ test(
     });
   },
 );
+
+test(
+  "upgrading_existing_voters_and_claims_moves_each_address_to_a_credential",
+  { skip },
+  async () => {
+    // 004 (ADR-0033): every voter that existed keeps signing in as themselves,
+    // because their address becomes their `email` credential, proved when
+    // they first claimed it; and a link sent before the upgrade still counts
+    // against its address and still redeems.
+    await inTempDir(async (dir) => {
+      const migrations = await loadMigrations();
+      await writeMigrations(dir, migrations, (v) => v < "004");
+      await inThrowawaySchema(async (pool) => {
+        assert.deepEqual(
+          (await migrate(pool, { dir, clock: () => AT })).applied,
+          ["001", "002", "003"],
+        );
+        const later = new Date(AT.getTime() + 60_000);
+        await pool.query(
+          "insert into voter (id, email, community, claimed_at," +
+            " proof_emails_opt_in, session_generation)" +
+            " values ($1, $2, $3, $4, $5, 2), ($6, $7, null, $8, true, 0)",
+          [
+            "voter-1",
+            "ada@student.ubc.ca",
+            "ubc-students",
+            AT,
+            false,
+            "voter-2",
+            "jo@gmail.com",
+            later,
+          ],
+        );
+        await pool.query(
+          "insert into pending_claim (token_hash, email, community," +
+            " proof_emails_opt_in, created_at, expires_at)" +
+            " values ($1, 'sam@student.ubc.ca', 'ubc-students', true, $2, $3)," +
+            " ($4, 'ada@student.ubc.ca', 'ubc-students', false, $2, $3)",
+          [
+            hashToken("before-upgrade-new"),
+            AT,
+            new Date(AT.getTime() + 15 * 60_000),
+            hashToken("before-upgrade-existing"),
+          ],
+        );
+
+        await writeMigrations(dir, migrations, (v) => v >= "004");
+        assert.deepEqual(
+          (await migrate(pool, { dir, clock: () => AT })).applied,
+          migrations.map((m) => m.version).filter((v) => v >= "004"),
+        );
+
+        const voters = new PostgresVoterStore(pool);
+        assert.deepEqual(
+          await voters.byCredential("email", "ada@student.ubc.ca"),
+          {
+            id: "voter-1",
+            email: "ada@student.ubc.ca",
+            community: "ubc-students",
+            assurance: "email",
+            claimedAt: AT,
+            proofEmailsOptIn: false,
+            sessionGeneration: 2,
+          },
+        );
+        assert.deepEqual(await voters.byCredential("email", "jo@gmail.com"), {
+          id: "voter-2",
+          email: "jo@gmail.com",
+          community: null,
+          assurance: "email",
+          claimedAt: later,
+          proofEmailsOptIn: true,
+        });
+        // Proved at the moment they first claimed it, to the millisecond.
+        const { rows } = await pool.query<{
+          kind: string;
+          value: string;
+          voter_id: string;
+          params: unknown;
+          verified_at: Date;
+        }>(
+          "select kind, value, voter_id, params, verified_at" +
+            " from voter_credential order by voter_id",
+        );
+        assert.deepEqual(rows, [
+          {
+            kind: "email",
+            value: "ada@student.ubc.ca",
+            voter_id: "voter-1",
+            params: {},
+            verified_at: AT,
+          },
+          {
+            kind: "email",
+            value: "jo@gmail.com",
+            voter_id: "voter-2",
+            params: {},
+            verified_at: later,
+          },
+        ]);
+
+        // One address is still one voter: the uniqueness moved with it.
+        await assert.rejects(
+          () =>
+            voters.create(
+              {
+                id: "voter-3",
+                community: null,
+                assurance: "email",
+                claimedAt: later,
+                proofEmailsOptIn: false,
+              },
+              { kind: "email", value: "jo@gmail.com", verifiedAt: later },
+            ),
+          CredentialTakenError,
+        );
+
+        const claims = new PostgresClaimStore(pool);
+        assert.deepEqual(
+          (await claims.liveFor("email", "sam@student.ubc.ca", AT)).map((c) => [
+            c.tokenHash,
+            c.kind,
+            c.subject,
+            c.proofEmailsOptIn,
+          ]),
+          [
+            [
+              hashToken("before-upgrade-new"),
+              "email",
+              "sam@student.ubc.ca",
+              true,
+            ],
+          ],
+        );
+        const service = new ClaimService(
+          {
+            membership: { memberships: async () => [] },
+            voters,
+            claims,
+            mailer: new ConsoleMailer(() => {}),
+            linkFor: (token) => token,
+          },
+          { clock: () => AT },
+        );
+        const existing = await service.redeem("before-upgrade-existing");
+        assert.equal(existing.status, "signed_in");
+        if (existing.status !== "signed_in")
+          assert.fail("old link must sign in");
+        assert.equal(existing.firstTime, false);
+        assert.equal(existing.voter.id, "voter-1");
+        assert.equal(existing.voter.sessionGeneration, 2);
+        assert.equal(existing.voter.proofEmailsOptIn, false);
+        const created = await service.redeem("before-upgrade-new");
+        assert.equal(created.status, "signed_in");
+        if (created.status !== "signed_in")
+          assert.fail("old link must sign up");
+        assert.equal(created.firstTime, true);
+        assert.equal(created.voter.email, "sam@student.ubc.ca");
+        assert.equal(created.voter.assurance, "email");
+        assert.equal(created.voter.proofEmailsOptIn, true);
+        for (const token of ["before-upgrade-existing", "before-upgrade-new"]) {
+          assert.deepEqual(await service.redeem(token), {
+            status: "already_used",
+          });
+        }
+      });
+    });
+  },
+);
+
+/** Copy the migrations whose version `keep` accepts into `dir`. */
+async function writeMigrations(
+  dir: string,
+  migrations: readonly Migration[],
+  keep: (version: string) => boolean,
+): Promise<void> {
+  for (const migration of migrations.filter((m) => keep(m.version))) {
+    await writeFile(
+      path.join(dir, `${migration.version}_${migration.name}.sql`),
+      migration.sql,
+    );
+  }
+}
 
 test("refuses_a_migration_that_changed_after_it_ran", { skip }, async () => {
   const dir = await mkdtemp(path.join(tmpdir(), "pulse-migrations-"));
@@ -313,7 +495,7 @@ test(
       await migrate(pool, { clock: () => AT });
       assert.deepEqual(await indexesIn(pool, schema), [
         "allowed_domain_pkey",
-        "pending_claim_email_idx",
+        "pending_claim_kind_subject_idx",
         "pending_claim_pkey",
         "poll_choice_pkey",
         "poll_choice_poll_id_position_key",
@@ -325,7 +507,8 @@ test(
         "vote_choice_pkey",
         "vote_pkey",
         "vote_poll_id_voter_id_key",
-        "voter_email_key",
+        "voter_credential_pkey",
+        "voter_credential_voter_id_idx",
         "voter_pkey",
       ]);
     });

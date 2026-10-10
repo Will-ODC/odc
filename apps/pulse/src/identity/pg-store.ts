@@ -1,24 +1,45 @@
 import type { Pool } from "pg";
+import { inTransaction } from "../db/transaction.js";
 import type { AllowedDomain, AllowedDomainSource } from "./allowlist.js";
+import { parseAssurance, type CredentialKind } from "./assurance.js";
 import {
-  VoterExistsError,
+  CredentialTakenError,
+  emailOf,
+  voterWith,
   type ClaimStore,
+  type Credential,
+  type NewVoter,
   type PendingClaim,
   type Voter,
   type VoterStore,
 } from "./store.js";
 
 /**
- * Identity on Postgres: voters, outstanding sign-in links, and the domains
- * that name a community. Held to the same conformance suites as the in-memory
- * stores (`test/conformance/voter-store.ts`, `claim-store.ts`).
+ * Identity on Postgres: voters, the credentials they hold, outstanding sign-in
+ * links, and the domains that name a community. Held to the same conformance
+ * suites as the in-memory stores (`test/conformance/voter-store.ts`,
+ * `claim-store.ts`).
  *
  * Every timestamp is one the caller passed in; nothing here asks the database
  * for the time (ADR-0021).
  */
 
-const VOTER_COLUMNS =
-  "id, email, community, claimed_at, proof_emails_opt_in, sessions_valid_from, session_generation";
+/** The columns `voter` itself holds. Its address lives in `voter_credential`. */
+const VOTER_ROW_COLUMNS =
+  "id, community, assurance, claimed_at, proof_emails_opt_in," +
+  " sessions_valid_from, session_generation";
+
+/**
+ * A voter's address, read from their `email` credential. One today; were there
+ * ever several, the first proved is the one shown, so the answer never depends
+ * on the order rows happen to come back in. Null for a voter with none.
+ */
+const EMAIL_OF_VOTER =
+  "(select c.value from voter_credential c" +
+  " where c.voter_id = voter.id and c.kind = 'email'" +
+  " order by c.verified_at, c.value limit 1) as email";
+
+const VOTER_COLUMNS = `${VOTER_ROW_COLUMNS}, ${EMAIL_OF_VOTER}`;
 
 export class PostgresVoterStore implements VoterStore {
   readonly #pool: Pool;
@@ -27,41 +48,71 @@ export class PostgresVoterStore implements VoterStore {
     this.#pool = pool;
   }
 
-  async byEmail(email: string): Promise<Voter | undefined> {
-    return this.#one(`select ${VOTER_COLUMNS} from voter where email = $1`, [
-      email,
-    ]);
+  async byCredential(
+    kind: CredentialKind,
+    value: string,
+  ): Promise<Voter | undefined> {
+    return this.#one(
+      `select ${VOTER_COLUMNS} from voter` +
+        " join voter_credential held on held.voter_id = voter.id" +
+        " where held.kind = $1 and held.value = $2",
+      [kind, value],
+    );
   }
 
   async byId(id: string): Promise<Voter | undefined> {
     return this.#one(`select ${VOTER_COLUMNS} from voter where id = $1`, [id]);
   }
 
-  async create(voter: Voter): Promise<Voter> {
+  async create(voter: NewVoter, credential: Credential): Promise<Voter> {
     try {
-      await this.#pool.query(
-        `insert into voter (${VOTER_COLUMNS}) values ($1, $2, $3, $4, $5, $6, $7)`,
-        [
-          voter.id,
-          voter.email,
-          voter.community,
-          voter.claimedAt,
-          voter.proofEmailsOptIn,
-          voter.sessionsValidFrom ?? null,
-          voter.sessionGeneration ?? 0,
-        ],
-      );
+      // One transaction: a voter whose credential is refused is never left
+      // behind as a voter with none. Nothing creates one of those on purpose
+      // yet (ADR-0033), so one appearing here would be this method's fault.
+      await inTransaction(this.#pool, async (client) => {
+        await client.query(
+          `insert into voter (${VOTER_ROW_COLUMNS})` +
+            " values ($1, $2, $3, $4, $5, $6, $7)",
+          [
+            voter.id,
+            voter.community,
+            voter.assurance,
+            voter.claimedAt,
+            voter.proofEmailsOptIn,
+            voter.sessionsValidFrom ?? null,
+            voter.sessionGeneration ?? 0,
+          ],
+        );
+        await client.query(
+          "insert into voter_credential" +
+            " (kind, value, voter_id, params, verified_at)" +
+            " values ($1, $2, $3, $4, $5)",
+          [
+            credential.kind,
+            credential.value,
+            voter.id,
+            JSON.stringify(credential.params ?? {}),
+            credential.verifiedAt,
+          ],
+        );
+      });
     } catch (error) {
-      // "This person already has a voter" is decided by the address, whichever
-      // key the database happened to check first — a repeat of both id and
-      // address reports the id. A clash on the id alone is a different fault
-      // and is not dressed up as that.
-      if (isUniqueViolation(error) && (await this.byEmail(voter.email))) {
-        throw new VoterExistsError(voter.email);
+      // "This person already has a voter" is decided by the credential,
+      // whichever key the database happened to check first — the voter row is
+      // written first, so a repeat of both id and credential reports the id.
+      // A clash on the id alone is a different fault and is not dressed up as
+      // that. Two creates racing for one credential: the loser waits on the
+      // winner's uncommitted key and fails on it once the winner commits, so
+      // by the time this reads, the winner's credential is there to find.
+      if (
+        isUniqueViolation(error) &&
+        (await this.byCredential(credential.kind, credential.value))
+      ) {
+        throw new CredentialTakenError(credential.kind);
       }
       throw error;
     }
-    return voter;
+    return voterWith(voter, emailOf(credential));
   }
 
   async setProofEmails(id: string, optIn: boolean): Promise<Voter | undefined> {
@@ -88,7 +139,7 @@ export class PostgresVoterStore implements VoterStore {
 }
 
 const CLAIM_COLUMNS =
-  "token_hash, email, community, proof_emails_opt_in, created_at," +
+  "token_hash, kind, subject, community, proof_emails_opt_in, created_at," +
   " expires_at, used_at";
 
 export class PostgresClaimStore implements ClaimStore {
@@ -101,10 +152,11 @@ export class PostgresClaimStore implements ClaimStore {
   async put(claim: PendingClaim): Promise<void> {
     await this.#pool.query(
       `insert into pending_claim (${CLAIM_COLUMNS})` +
-        " values ($1, $2, $3, $4, $5, $6, $7)",
+        " values ($1, $2, $3, $4, $5, $6, $7, $8)",
       [
         claim.tokenHash,
-        claim.email,
+        claim.kind,
+        claim.subject,
         claim.community,
         claim.proofEmailsOptIn,
         claim.createdAt,
@@ -143,14 +195,18 @@ export class PostgresClaimStore implements ClaimStore {
     );
   }
 
-  async liveFor(email: string, now: Date): Promise<readonly PendingClaim[]> {
+  async liveFor(
+    kind: CredentialKind,
+    subject: string,
+    now: Date,
+  ): Promise<readonly PendingClaim[]> {
     // `expires_at > now`: a link expiring exactly now is expired, as
     // ClaimService reads it (`expiresAt <= now` refuses).
     const { rows } = await this.#pool.query<ClaimRow>(
       `select ${CLAIM_COLUMNS} from pending_claim` +
-        " where email = $1 and used_at is null and expires_at > $2" +
-        " order by created_at",
-      [email, now],
+        " where kind = $1 and subject = $2 and used_at is null" +
+        " and expires_at > $3 order by created_at",
+      [kind, subject, now],
     );
     return rows.map(toClaim);
   }
@@ -215,8 +271,9 @@ export async function allowDomain(
 
 interface VoterRow {
   id: string;
-  email: string;
+  email: string | null;
   community: string | null;
+  assurance: string;
   claimed_at: Date;
   proof_emails_opt_in: boolean;
   sessions_valid_from: Date | null;
@@ -225,7 +282,8 @@ interface VoterRow {
 
 interface ClaimRow {
   token_hash: string;
-  email: string;
+  kind: string;
+  subject: string;
   community: string | null;
   proof_emails_opt_in: boolean;
   created_at: Date;
@@ -234,8 +292,9 @@ interface ClaimRow {
 }
 
 // Optional fields are left out when the column is null, never set to
-// undefined — the shape the in-memory stores hand back. `community` is not
-// optional: it is always present, and null is its value for no community.
+// undefined — the shape the in-memory stores hand back. `community` and
+// `email` are not optional: they are always present, and null is their value
+// for no community and no address.
 
 function toVoter(row: VoterRow): Voter {
   const generation = Number(row.session_generation);
@@ -246,6 +305,7 @@ function toVoter(row: VoterRow): Voter {
     id: row.id,
     email: row.email,
     community: row.community,
+    assurance: parseAssurance(row.assurance),
     claimedAt: row.claimed_at,
     proofEmailsOptIn: row.proof_emails_opt_in,
   };
@@ -261,13 +321,22 @@ function toVoter(row: VoterRow): Voter {
 function toClaim(row: ClaimRow): PendingClaim {
   const claim: PendingClaim = {
     tokenHash: row.token_hash,
-    email: row.email,
+    kind: credentialKind(row.kind),
+    subject: row.subject,
     community: row.community,
     proofEmailsOptIn: row.proof_emails_opt_in,
     createdAt: row.created_at,
     expiresAt: row.expires_at,
   };
   return row.used_at ? { ...claim, usedAt: row.used_at } : claim;
+}
+
+/** A stored kind this build does not know is refused, not guessed at. */
+function credentialKind(word: string): CredentialKind {
+  if (word !== "email") {
+    throw new Error(`unknown credential kind: ${JSON.stringify(word)}`);
+  }
+  return word;
 }
 
 /** Postgres's code for a unique violation. */

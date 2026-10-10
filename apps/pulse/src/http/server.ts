@@ -239,6 +239,7 @@ export async function createServer(deps: ServerDeps): Promise<FastifyInstance> {
       const body = (request.body ?? {}) as {
         email?: unknown;
         proofEmailsOptIn?: unknown;
+        community?: unknown;
       };
       if (typeof body.email !== "string") {
         return reply
@@ -258,8 +259,19 @@ export async function createServer(deps: ServerDeps): Promise<FastifyInstance> {
         });
       }
 
+      // The pick (P2). Absent means "no pick"; anything present must be a
+      // string, and `null` is refused like any other non-string rather than
+      // read as absent, so a client bug cannot pass as "I did not choose".
+      if (body.community !== undefined && typeof body.community !== "string") {
+        return reply.code(400).send({
+          error: "bad_request",
+          message: "Choose a community from the list.",
+        });
+      }
+
       const result = await deps.claims.requestLink(body.email, {
         proofEmailsOptIn: body.proofEmailsOptIn === true,
+        ...(body.community === undefined ? {} : { community: body.community }),
       });
 
       switch (result.status) {
@@ -272,6 +284,23 @@ export async function createServer(deps: ServerDeps): Promise<FastifyInstance> {
           return reply.code(400).send({
             error: "invalid_email",
             message: "That does not look like an email address.",
+          });
+        case "choose_community":
+          // 422, not 400: nothing in the request is wrong, it is one answer
+          // short. The person picks (ADR-0023); nothing was sent and no claim
+          // was written, so the same request with `community` is the next
+          // step. Objects rather than bare ids so a display name can be added
+          // beside `id` later without changing the shape.
+          return reply.code(422).send({
+            error: "choose_community",
+            message:
+              "That address can sign in to more than one community. Choose one.",
+            communities: result.communities.map((id) => ({ id })),
+          });
+        case "unknown_community":
+          return reply.code(400).send({
+            error: "unknown_community",
+            message: "That address cannot sign in to that community.",
           });
         case "too_many_requests":
           // NOT `too_many_requests`, which the rate limiter already uses for
@@ -575,6 +604,11 @@ function pollBody(poll: Poll, now: Date) {
  * What a voter is allowed to see about themselves. Never anyone else's.
  * `community` is null for someone whose address matched no community
  * (ADR-0030) — sent as null, not left out, so the shape never varies.
+ *
+ * `email` is the address of the voter's `email` credential, which the voter
+ * store reads back onto `Voter` (ADR-0033), so this shape did not change when
+ * the address stopped being the voter's key. Every voter today signs in by
+ * email and so has one; a voter with no credential (P10) would send null.
  */
 function publicVoter(voter: Voter) {
   return { id: voter.id, email: voter.email, community: voter.community };

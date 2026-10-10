@@ -26,7 +26,11 @@ const START = new Date("2026-08-09T12:00:00.000Z");
 /** A service wired to one community, a silent mailer, and a movable clock. */
 function setup(
   options: ClaimOptions = {},
-  overrides: { mailer?: Mailer; domains?: AllowedDomainSource } = {},
+  overrides: {
+    mailer?: Mailer;
+    domains?: AllowedDomainSource;
+    rows?: readonly AllowedDomain[];
+  } = {},
 ) {
   let now = START;
   const mailer = new ConsoleMailer(() => {});
@@ -38,9 +42,11 @@ function setup(
     {
       membership: new DomainAllowlist(
         overrides.domains ??
-          new StaticDomainSource([
-            { community: "ubc-students", domain: "student.ubc.ca" },
-          ]),
+          new StaticDomainSource(
+            overrides.rows ?? [
+              { community: "ubc-students", domain: "student.ubc.ca" },
+            ],
+          ),
       ),
       voters,
       claims,
@@ -202,7 +208,10 @@ test("signs_in_an_address_from_a_domain_no_community_claimed_with_no_community",
   assert.equal(redeemed.firstTime, true);
   assert.equal(redeemed.voter.email, "someone@gmail.com");
   assert.equal(redeemed.voter.community, null);
-  assert.equal((await h.voters.byEmail("someone@gmail.com"))?.community, null);
+  assert.equal(
+    (await h.voters.byCredential("email", "someone@gmail.com"))?.community,
+    null,
+  );
 });
 
 test("a_domain_near_a_listed_one_but_not_on_it_gets_no_community", async () => {
@@ -290,7 +299,10 @@ test("signing_in_again_after_the_allowlist_changed_keeps_the_community_first_rec
   if (again.status !== "signed_in") return;
   assert.equal(again.firstTime, false);
   assert.equal(again.voter.community, null);
-  assert.equal((await h.voters.byEmail("ada@gmail.com"))?.community, null);
+  assert.equal(
+    (await h.voters.byCredential("email", "ada@gmail.com"))?.community,
+    null,
+  );
 });
 
 test("signing_in_again_after_the_domain_was_removed_keeps_the_community_first_recorded", async () => {
@@ -312,7 +324,7 @@ test("signing_in_again_after_the_domain_was_removed_keeps_the_community_first_re
   assert.equal(again.firstTime, false);
   assert.equal(again.voter.community, "ubc-students");
   assert.equal(
-    (await h.voters.byEmail("ada@student.ubc.ca"))?.community,
+    (await h.voters.byCredential("email", "ada@student.ubc.ca"))?.community,
     "ubc-students",
   );
 });
@@ -374,7 +386,8 @@ test("the_raw_token_is_never_stored_only_its_hash", async () => {
   assert.equal(await h.claims.byTokenHash(token), undefined);
   const stored = await h.claims.byTokenHash(hashToken(token));
   assert.ok(stored);
-  assert.equal(stored.email, "ada@student.ubc.ca");
+  assert.equal(stored.kind, "email");
+  assert.equal(stored.subject, "ada@student.ubc.ca");
 });
 
 test("proof_emails_are_off_unless_asked_for", async () => {
@@ -431,7 +444,8 @@ test("the_slower_of_two_links_still_has_its_opt_in_honoured", async () => {
   assert.equal(winner.status === "signed_in" && winner.firstTime, true);
   assert.equal(loser.status === "signed_in" && loser.firstTime, false);
   assert.equal(
-    (await h.voters.byEmail("ada@student.ubc.ca"))?.proofEmailsOptIn,
+    (await h.voters.byCredential("email", "ada@student.ubc.ca"))
+      ?.proofEmailsOptIn,
     true,
   );
 });
@@ -519,7 +533,10 @@ test("a_send_the_provider_refused_does_not_spend_the_live_link_cap", async () =>
       "send_failed",
     );
   }
-  assert.equal((await h.claims.liveFor("ada@student.ubc.ca", START)).length, 0);
+  assert.equal(
+    (await h.claims.liveFor("email", "ada@student.ubc.ca", START)).length,
+    0,
+  );
   assert.equal(
     (await h.service.requestLink("ada@student.ubc.ca")).status,
     "sent",
@@ -539,7 +556,7 @@ for (const status of [408, 429]) {
     );
     await h.service.requestLink("ada@student.ubc.ca");
     assert.equal(
-      (await h.claims.liveFor("ada@student.ubc.ca", START)).length,
+      (await h.claims.liveFor("email", "ada@student.ubc.ca", START)).length,
       0,
     );
   });
@@ -564,7 +581,7 @@ for (const status of [500, 502, 504]) {
     );
     await h.service.requestLink("ada@student.ubc.ca");
     assert.equal(
-      (await h.claims.liveFor("ada@student.ubc.ca", START)).length,
+      (await h.claims.liveFor("email", "ada@student.ubc.ca", START)).length,
       1,
     );
     const [token] = tokens;
@@ -605,7 +622,10 @@ test("a_send_that_got_no_answer_keeps_its_link_live", async () => {
 
   await h.service.requestLink("ada@student.ubc.ca");
   await h.service.requestLink("ada@student.ubc.ca");
-  assert.equal((await h.claims.liveFor("ada@student.ubc.ca", START)).length, 2);
+  assert.equal(
+    (await h.claims.liveFor("email", "ada@student.ubc.ca", START)).length,
+    2,
+  );
   assert.equal(
     (await h.service.requestLink("ada@student.ubc.ca")).status,
     "too_many_requests",
@@ -652,4 +672,142 @@ test("a_mailer_fault_that_is_not_a_send_failure_is_still_a_fault", async () => {
   );
 
   await assert.rejects(h.service.requestLink("ada@student.ubc.ca"), boom);
+});
+
+/** One domain serving two communities, as ADR-0023 lets it. */
+const SHARED: readonly AllowedDomain[] = [
+  { community: "ubc-staff", domain: "ubc.ca" },
+  { community: "ubc-alumni", domain: "ubc.ca" },
+  { community: "ubc-students", domain: "student.ubc.ca" },
+];
+
+test("an_address_that_proves_several_communities_is_asked_which_and_sent_nothing", async () => {
+  // ADR-0023: the person picks. No pick is not a licence to pick for them, and
+  // a link sent now would carry a community nobody chose.
+  const h = setup({}, { rows: SHARED });
+  const result = await h.service.requestLink("ada@ubc.ca");
+
+  assert.deepEqual(result, {
+    status: "choose_community",
+    communities: ["ubc-alumni", "ubc-staff"],
+  });
+  assert.equal(h.mailer.sent.length, 0);
+  assert.equal(
+    (await h.claims.liveFor("email", "ada@ubc.ca", START)).length,
+    0,
+  );
+});
+
+test("the_community_picked_is_the_one_on_the_claim_and_on_the_voter", async () => {
+  // Both choices, so a rule that ignored the pick and took the first (or the
+  // alphabetical) one fails on one of them.
+  for (const pick of ["ubc-staff", "ubc-alumni"]) {
+    const h = setup({}, { rows: SHARED });
+    const result = await h.service.requestLink("ada@ubc.ca", {
+      community: pick,
+    });
+    assert.equal(result.status, "sent", pick);
+
+    const token = h.lastToken("ada@ubc.ca");
+    const claim = await h.claims.byTokenHash(hashToken(token));
+    assert.equal(claim?.community, pick);
+
+    const redeemed = await h.service.redeem(token);
+    assert.equal(redeemed.status, "signed_in");
+    if (redeemed.status !== "signed_in") return;
+    assert.equal(redeemed.voter.community, pick);
+  }
+});
+
+test("a_pick_that_is_not_one_of_the_addresss_communities_is_refused_and_sent_nothing", async () => {
+  // A community that exists, but for another domain; and one that does not
+  // exist at all. Neither may be signed in to by naming it.
+  for (const pick of ["ubc-students", "anything-at-all", ""]) {
+    const h = setup({}, { rows: SHARED });
+    const result = await h.service.requestLink("ada@ubc.ca", {
+      community: pick,
+    });
+    assert.deepEqual(result, { status: "unknown_community" }, pick);
+    assert.equal(h.mailer.sent.length, 0, pick);
+  }
+});
+
+test("a_single_match_needs_no_pick_and_naming_it_changes_nothing", async () => {
+  const h = setup({}, { rows: SHARED });
+  for (const opts of [{}, { community: "ubc-students" }]) {
+    const result = await h.service.requestLink("ada@student.ubc.ca", opts);
+    assert.equal(result.status, "sent");
+    const claim = await h.claims.byTokenHash(
+      hashToken(h.lastToken("ada@student.ubc.ca")),
+    );
+    assert.equal(claim?.community, "ubc-students");
+  }
+});
+
+test("a_single_match_refuses_a_pick_of_some_other_community", async () => {
+  // The rule is the same at every count: a named community must be one this
+  // address proves. Quietly ignoring it would sign someone in somewhere other
+  // than where they asked.
+  const h = setup({}, { rows: SHARED });
+  const result = await h.service.requestLink("ada@student.ubc.ca", {
+    community: "ubc-staff",
+  });
+  assert.deepEqual(result, { status: "unknown_community" });
+  assert.equal(h.mailer.sent.length, 0);
+});
+
+test("no_match_with_a_pick_is_refused_rather_than_signed_in_without_one", async () => {
+  // Someone who named a community and was signed in as no community would be
+  // told nothing went wrong. A domain removed from the table between the two
+  // requests is the one honest way to get here.
+  const h = setup({}, { rows: SHARED });
+  const result = await h.service.requestLink("someone@gmail.com", {
+    community: "ubc-staff",
+  });
+  assert.deepEqual(result, { status: "unknown_community" });
+  assert.equal(h.mailer.sent.length, 0);
+
+  // And without a pick it is the open sign-up it always was (ADR-0030).
+  assert.equal(
+    (await h.service.requestLink("someone@gmail.com")).status,
+    "sent",
+  );
+});
+
+test("the_throttle_still_applies_to_an_address_that_picks", async () => {
+  const h = setup({ maxLiveLinksPerEmail: 1 }, { rows: SHARED });
+  const pick = { community: "ubc-staff" };
+  assert.equal(
+    (await h.service.requestLink("ada@ubc.ca", pick)).status,
+    "sent",
+  );
+  // Picking the other community is not a way round the per-address cap.
+  assert.equal(
+    (await h.service.requestLink("ada@ubc.ca", { community: "ubc-alumni" }))
+      .status,
+    "too_many_requests",
+  );
+  assert.equal(h.mailer.sent.length, 1);
+});
+
+test("a_returning_voter_keeps_their_first_community_whatever_they_pick_later", async () => {
+  // Pins today's behaviour so changing it is a decision, not an accident. The
+  // voter's community is written once, at creation (ADR-0030), and P2 leaves
+  // redeem unchanged — so a later pick lands on the claim and not the voter.
+  // Whether it should move them is open (docs/plans/pulse.md P2).
+  const h = setup({}, { rows: SHARED });
+  await h.service.requestLink("ada@ubc.ca", { community: "ubc-staff" });
+  await h.service.redeem(h.lastToken("ada@ubc.ca"));
+
+  await h.service.requestLink("ada@ubc.ca", { community: "ubc-alumni" });
+  const token = h.lastToken("ada@ubc.ca");
+  assert.equal(
+    (await h.claims.byTokenHash(hashToken(token)))?.community,
+    "ubc-alumni",
+  );
+  const again = await h.service.redeem(token);
+  assert.equal(again.status, "signed_in");
+  if (again.status !== "signed_in") return;
+  assert.equal(again.firstTime, false);
+  assert.equal(again.voter.community, "ubc-staff");
 });

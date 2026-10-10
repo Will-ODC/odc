@@ -118,6 +118,31 @@ test("seeds a run of polls and one domain, so the flow works the moment it start
   await app.close();
 });
 
+test("the seed has one domain that asks which community, so the picker can be seen", async () => {
+  const { app, mailer } = await buildDevServer(devConfig({}));
+
+  const asked = await app.inject({
+    method: "POST",
+    url: "/api/sign-in",
+    payload: { email: "jo@both.example.test" },
+  });
+  assert.equal(asked.statusCode, 422);
+  assert.deepEqual(asked.json().communities, [
+    { id: "demo-community" },
+    { id: "demo-neighbours" },
+  ]);
+  assert.equal(mailer.sent.length, 0);
+
+  const picked = await app.inject({
+    method: "POST",
+    url: "/api/sign-in",
+    payload: { email: "jo@both.example.test", community: "demo-neighbours" },
+  });
+  assert.equal(picked.statusCode, 200);
+  assert.equal(mailer.sent.length, 1);
+  await app.close();
+});
+
 test("sends the link to the client origin it was told about", async () => {
   const { app, mailer } = await buildDevServer(
     devConfig({ PULSE_WEB_ORIGIN: "http://localhost:4321" }),

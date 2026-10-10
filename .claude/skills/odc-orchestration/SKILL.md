@@ -169,6 +169,42 @@ operator which are ready for review, in what order.
 Diff size: `apps/pulse*` is exempt from the hard ceiling, so a pulse feature
 can arrive as large PRs; everywhere else the `diff-size.sh` ceiling applies.
 
+### What the first pilot taught (2026-10-09)
+
+Two pulse leads shipped open sign-up and two screen bugs in about two hours.
+These held, or broke, and are now rules:
+
+- **Put the operator's answers in the brief.** Re-issuing a lead's card with the
+  answers in it was cheaper than relaying them afterwards.
+- **Give each lead its branch numbers.** Both leads guessed "the next free
+  `pulse/N`" and could have collided.
+- **Name `.claude/launch.json` in the brief if the lead needs the browser.** It
+  sits outside a lead's folders. Its entries `cd` by relative path, so the
+  preview starts the dev servers of the checkout the session was opened in, not
+  the lead's worktree: a lead checking its own screens runs its worktree's
+  servers directly.
+- **Say which channel a go comes through.** Either the operator answers in the
+  lead's own session, or a go the orchestrator relays, quoting the operator,
+  counts. In the pilot a relayed go was ignored because neither was said. The operator may also answer inside
+  a lead's session, so the orchestrator keeps its list of open questions in step
+  with what the leads report as answered.
+- **Silence is not a yes.** Leads recommend an option and wait; do not proceed
+  until told. Never write "my pick goes ahead unless told otherwise".
+- **After offering `spawn_task` cards, check every one is still pending.** A new
+  card can silently push an older one off the list.
+- **No commits does not mean an idle lead.** One lead had built everything
+  without committing. A lead may also finish without reporting: check
+  `gh pr list` and the lead's worktree rather than waiting for a message.
+- **Cross-folder needs show up at the end,** when CI runs another folder's tests
+  (one lead's server change broke a client end-to-end test). The orchestrator
+  grants a narrow, **one-off** edit when no other lead holds those files, and says
+  it is one-off.
+- **A restarted lead can widen its own scope.** One edited a plan file beyond
+  what was approved. After any restart, re-check the open PRs for overlap.
+- What worked: a lead **can** `SendMessage` the orchestrator, the synopses were
+  short and plain, and the orchestrator caught a clash between two leads (a
+  migration number against an ADR's columns) and settled it by message.
+
 ## After the fan-out
 
 You own reconciliation. Read every report; resolve contradictions between them

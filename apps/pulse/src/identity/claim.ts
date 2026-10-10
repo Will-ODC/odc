@@ -1,9 +1,10 @@
 import { createHash, randomBytes, randomUUID } from "node:crypto";
 import type { VerificationMethod } from "./allowlist.js";
+import { assuranceOf } from "./assurance.js";
 import { InvalidEmailError, parseEmail } from "./email.js";
 import { MailSendError, type Mailer } from "./mailer.js";
 import {
-  VoterExistsError,
+  CredentialTakenError,
   type ClaimStore,
   type PendingClaim,
   type Voter,
@@ -14,6 +15,13 @@ import {
 export type RequestResult =
   | { status: "sent"; expiresAt: Date }
   | { status: "invalid_email"; reason: string }
+  /**
+   * The address proves several communities and no pick came with it. Nothing
+   * was sent and no claim exists: ask the person, then ask again with one.
+   */
+  | { status: "choose_community"; communities: readonly string[] }
+  /** A pick came with it that this address does not prove. Nothing sent. */
+  | { status: "unknown_community" }
   | { status: "too_many_requests" }
   | { status: "send_failed" };
 
@@ -103,9 +111,18 @@ export class ClaimService {
       });
   }
 
+  /**
+   * Ask for a sign-in link.
+   *
+   * `community` is the person's pick (ADR-0023, P2). It is needed only when
+   * the address proves two or more communities; with one or none the answer
+   * is the same with or without it. When it is given, it must be one the
+   * address proves, at any count — a pick is never quietly dropped, because
+   * the person would then be signed in somewhere other than where they asked.
+   */
   async requestLink(
     rawEmail: string,
-    opts: { proofEmailsOptIn?: boolean } = {},
+    opts: { proofEmailsOptIn?: boolean; community?: string } = {},
   ): Promise<RequestResult> {
     let email;
     try {
@@ -119,17 +136,32 @@ export class ClaimService {
     // A label, not a gate (ADR-0030): no matching row means no community,
     // never a refusal. Null rather than an empty string or a placeholder, so
     // "no community" cannot be mistaken for a community called "".
-    const membership = await this.#membership.check(email);
-    const community = membership?.community ?? null;
+    const proven = (await this.#membership.memberships(email)).map(
+      (m) => m.community,
+    );
+    let community: string | null;
+    if (opts.community !== undefined) {
+      if (!proven.includes(opts.community)) {
+        return { status: "unknown_community" };
+      }
+      community = opts.community;
+    } else if (proven.length > 1) {
+      // The person picks (ADR-0023). Asked before the throttle and before any
+      // claim is written, so being asked costs them none of their live links.
+      return { status: "choose_community", communities: proven };
+    } else {
+      community = proven[0] ?? null;
+    }
 
     const now = this.#clock();
-    const live = await this.#claims.liveFor(email.value, now);
+    const live = await this.#claims.liveFor("email", email.value, now);
     if (live.length >= this.#maxLive) return { status: "too_many_requests" };
 
     const token = this.#newToken();
     const claim: PendingClaim = {
       tokenHash: hashToken(token),
-      email: email.value,
+      kind: "email",
+      subject: email.value,
       community,
       proofEmailsOptIn: opts.proofEmailsOptIn ?? false,
       createdAt: now,
@@ -189,7 +221,7 @@ export class ClaimService {
     if (!claim) return { status: "unknown_link" };
     if (claim.usedAt !== undefined) return { status: "already_used" };
     if (claim.expiresAt <= this.#clock()) return { status: "expired" };
-    return { status: "live", email: claim.email, expiresAt: claim.expiresAt };
+    return { status: "live", email: claim.subject, expiresAt: claim.expiresAt };
   }
 
   /**
@@ -214,26 +246,32 @@ export class ClaimService {
       return { status: "already_used" };
     }
 
-    const existing = await this.#voters.byEmail(claim.email);
+    const existing = await this.#voters.byCredential(claim.kind, claim.subject);
     if (existing) return this.#signInExisting(existing, claim);
 
     try {
-      const voter = await this.#voters.create({
-        id: randomUUID(),
-        email: claim.email,
-        // The community recorded at claim time, null included. If the
-        // allowlist changes later, an existing member does not lose the
-        // community they joined.
-        community: claim.community,
-        claimedAt: now,
-        proofEmailsOptIn: claim.proofEmailsOptIn,
-      });
+      // The voter and the credential the link just proved, written together
+      // (ADR-0033): the address is something this voter holds, not what the
+      // voter is. Clicking a mailed link is `email` assurance.
+      const voter = await this.#voters.create(
+        {
+          id: randomUUID(),
+          // The community recorded at claim time, null included. If the
+          // allowlist changes later, an existing member does not lose the
+          // community they joined.
+          community: claim.community,
+          assurance: assuranceOf(claim.kind),
+          claimedAt: now,
+          proofEmailsOptIn: claim.proofEmailsOptIn,
+        },
+        { kind: claim.kind, value: claim.subject, verifiedAt: now },
+      );
       return { status: "signed_in", voter, firstTime: true };
     } catch (error) {
       // Another link for this address was redeemed at the same moment and
       // created the voter first. This person IS that voter: sign them in.
-      if (!(error instanceof VoterExistsError)) throw error;
-      const winner = await this.#voters.byEmail(claim.email);
+      if (!(error instanceof CredentialTakenError)) throw error;
+      const winner = await this.#voters.byCredential(claim.kind, claim.subject);
       if (!winner) throw error;
       return this.#signInExisting(winner, claim);
     }

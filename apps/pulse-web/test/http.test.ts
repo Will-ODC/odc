@@ -102,6 +102,95 @@ describe("asking for a sign-in link", () => {
       "That does not look like an email address.",
     );
   });
+
+  // P2: one refusal is a question, and comes back as an answer.
+  const CHOOSE = {
+    error: "choose_community",
+    message: "That address can sign in to more than one community. Choose one.",
+    communities: [{ id: "ubc-alumni" }, { id: "ubc-staff" }],
+  };
+
+  it("returns the choice of communities rather than throwing", async () => {
+    stubFetch({ status: 422, body: JSON.stringify(CHOOSE) });
+    expect(await new HttpPulseApi().requestLink("jo@ubc.ca", false)).toEqual({
+      status: "choose_community",
+      communities: [{ id: "ubc-alumni" }, { id: "ubc-staff" }],
+    });
+  });
+
+  it("sends the pick as community, and leaves it out when there is none", async () => {
+    const calls = stubFetch({ body: JSON.stringify({ status: "sent" }) });
+    await new HttpPulseApi().requestLink("jo@ubc.ca", true, "ubc-staff");
+    await new HttpPulseApi().requestLink("jo@ubc.ca", true);
+    expect(calls[0]?.init.body).toBe(
+      JSON.stringify({
+        email: "jo@ubc.ca",
+        proofEmailsOptIn: true,
+        community: "ubc-staff",
+      }),
+    );
+    expect(calls[1]?.init.body).toBe(
+      JSON.stringify({ email: "jo@ubc.ca", proofEmailsOptIn: true }),
+    );
+  });
+
+  it("refuses a list of communities it could not offer anyone", async () => {
+    for (const communities of [undefined, [], [{ id: "" }], ["ubc-staff"]]) {
+      stubFetch({
+        status: 422,
+        body: JSON.stringify({ ...CHOOSE, communities }),
+      });
+      await expect(
+        new HttpPulseApi().requestLink("jo@ubc.ca", false),
+      ).rejects.toThrow("pulse sent a response the app couldn't read.");
+    }
+  });
+
+  it("refuses a community question with duplicate choices", async () => {
+    stubFetch({
+      status: 422,
+      body: JSON.stringify({
+        ...CHOOSE,
+        communities: [{ id: "ubc-staff" }, { id: "ubc-staff" }],
+      }),
+    });
+    await expect(
+      new HttpPulseApi().requestLink("jo@ubc.ca", false),
+    ).rejects.toThrow("pulse sent a response the app couldn't read.");
+  });
+
+  it("refuses a community question with only one choice", async () => {
+    stubFetch({
+      status: 422,
+      body: JSON.stringify({ ...CHOOSE, communities: [{ id: "ubc-staff" }] }),
+    });
+    await expect(
+      new HttpPulseApi().requestLink("jo@ubc.ca", false),
+    ).rejects.toThrow("pulse sent a response the app couldn't read.");
+  });
+
+  it("still throws on a 422 that is not the community question, and on a bad pick", async () => {
+    stubFetch({
+      status: 422,
+      body: JSON.stringify({ error: "something_else", message: "No." }),
+    });
+    await expect(
+      new HttpPulseApi().requestLink("jo@ubc.ca", false),
+    ).rejects.toThrow("No.");
+
+    stubFetch({
+      status: 400,
+      body: JSON.stringify({
+        error: "unknown_community",
+        message: "That address cannot sign in to that community.",
+      }),
+    });
+    const refused = await new HttpPulseApi()
+      .requestLink("jo@ubc.ca", false, "made-up")
+      .catch((err: unknown) => err);
+    expect(refused).toBeInstanceOf(ApiError);
+    expect((refused as ApiError).code).toBe("unknown_community");
+  });
 });
 
 describe("redeeming a link", () => {
