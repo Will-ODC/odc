@@ -234,3 +234,27 @@ call it, report review records outcomes, and voting restrictions enforce a
 separate access change. Trust evidence is recorded separately from the later
 permission calculation. None of these tickets defines trust weights, ballot
 weights, reporting eligibility, penalties or privacy architecture.
+
+## PR #213 review checkpoint
+
+PR #213 (P8 identity credentials) was rebased onto master `19f1042` and updated
+at head `0d04ada`. Conflicts came from #207's mail-provider refusal cleanup;
+retain `discard` in both stores while using `liveFor(kind, subject, now)`.
+Seven newly merged test calls also needed the renamed APIs.
+
+Self-review found and fixed email disclosure in `CredentialTakenError`; the
+regression failed on both stores first. The upgrade test now redeems old links
+for existing and new voters, preserves the existing session generation and
+opt-in, and rejects repeat clicks. Local validation: Pulse build/lint and 384
+Postgres-required tests pass, none skipped; 288 client tests pass. Required
+remote checks must pass on the updated PR head before merge.
+
+ADR-0032 remains proposed except the previously accepted assurance vocabulary.
+This checkpoint does not approve its remaining architectural choices or start
+P8 slice 2, social confirmation, trust scoring or account-based development
+voting. Email assurance alone still does not meet the development voting rule.
+Drain old API instances before migration 004, as its README requires.
+
+Merge order: #229 and this context PR #239 are independent of #213. Merge #213
+after architectural review and green CI, before later credential-dependent
+Pulse changes. No ledger or core hash-chain implementation is involved.
