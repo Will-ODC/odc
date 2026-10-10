@@ -32,7 +32,10 @@ def main():
         else:
             assert output.split()[0] == verdict, (name, output)
         if claims is not None:
-            expected = [f"genesis: {claims[0]}", f"head: {claims[1]}"]
+            expected = [
+                f"genesis hash (stored claim): {claims[0]}",
+                f"head hash (stored claim): {claims[1]}",
+            ]
             assert result.stderr.splitlines() == expected, (name, "stored claims")
         checks += 1
 

@@ -553,7 +553,7 @@ func buildCLI(t *testing.T) string {
 
 func TestBallotRulesCLISurface(t *testing.T) {
 	bin := buildCLI(t)
-	reportOnly := regexp.MustCompile(`^genesis: [0-9a-f]{64}\nhead: [0-9a-f]{64}\n$`)
+	reportOnly := regexp.MustCompile(`^genesis hash \(stored claim\): [0-9a-f]{64}\nhead hash \(stored claim\): [0-9a-f]{64}\n$`)
 	one := []issueSpec{defaultIssue}
 	cases := []struct {
 		name  string

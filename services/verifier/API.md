@@ -13,8 +13,8 @@ verify <export.ndjson> [--head <hash>] [--chain <genesis-hash>]
   and canonical-form rules operate on the exact bytes; the file is never
   re-encoded or normalized.
 - `--head <hash>` — optional expected chain head, 64 lowercase hex characters
-  (`--head=<hash>` is also accepted). When given, after all link checks pass the
-  last line's `hash` must equal it (EX-15); otherwise the chain is `INVALID` at
+  (`--head=<hash>` is also accepted). When given, after all other file checks pass
+  (see below) the last line's `hash` must equal it (EX-15); otherwise the chain is `INVALID` at
   its last line (EX-19). Without `--head`, clean end-truncation is undetectable
   (EX-16) and reports `VALID`.
 - `--chain <genesis-hash>` — optional expected chain identity, 64 lowercase hex
@@ -29,18 +29,18 @@ missing) is a tool-level error, exit 3, never a chain verdict.
 
 ### When `--chain` and `--head` apply, and their precedence
 
-Both comparisons run at the same point: after every per-line check has passed,
-that is, only when the export would otherwise be `VALID` or `PARTIAL`. So a
-mismatch of either one turns `VALID` or `PARTIAL` into `INVALID`, and **never
-overrides an earlier `INVALID`**. A file already `INVALID` at line N stays
-`INVALID` at line N, whatever the flags.
+Both comparisons run at the same point (EX-15/EX-22): after every other
+file-validity check has passed — framing, each event's structural checks and
+every registered event's semantic checks — that is, only when the export would
+otherwise be `VALID` or `PARTIAL`. So a mismatch of either one turns `VALID` or
+`PARTIAL` into `INVALID`, and **never replaces an earlier `INVALID`**. A file
+already `INVALID` at line N stays `INVALID` at line N, whatever the flags.
+Unregistered events yielding `PARTIAL` do not prevent the comparison.
 
-When both are given and **both** mismatch, the verdict is `INVALID at line 1`
-(the `--chain` mismatch). EX-22 requires the chain mismatch to be reported
-"even when every link check passes" but does not order it against `--head`.
-EV-17 blames the first fatal line in file order, and EX-23/EX-19 attribute each
-mismatch to the line whose `hash` was compared (line 1 for `--chain`, the last
-line for `--head`), so the lower line, line 1, is blamed.
+When both are given and **both** mismatch on a file eligible for comparison,
+the verdict is `INVALID at line 1` — the `--chain` mismatch, not the `--head`
+mismatch at the last line (EX-23). That ordering is between the two anchors
+only; it never displaces an earlier file-check verdict.
 
 ## Output
 
@@ -54,29 +54,56 @@ The reason text and the specific normative-sentence identifiers in it are
 **advisory** (EV-17). Conformance is judged on the verdict token and the line
 number(s) alone.
 
-### Genesis hash and head on stderr (EX-24)
+### Stored-claim report on stderr (EX-24)
 
-On every run over a **non-empty** export, whatever the verdict, after the
-verdict line, the verifier writes exactly two lines to **stderr**, in this
-order:
+On every run that produces a chain verdict over **non-empty** input, whatever
+the verdict — malformed input included — after the verdict line, the verifier
+writes exactly two lines to **stderr**, in this order, one per endpoint:
 
 ```
-genesis: <hex>
-head: <hex>
+genesis hash (stored claim): <value>
+head hash (stored claim): <value>
 ```
 
-- `genesis` is the stored `hash` field of the first line (EX-21);
-- `head` is the stored `hash` field of the last line (EX-14).
+`<value>` is either 64 lowercase hex characters or the literal `unavailable`.
+Nothing else is written to stderr on such a run; stdout is always exactly the
+one verdict line.
 
-Each value is printed when that line, taken as-is, parses as JSON and has a
-string `hash` field matching `^[0-9a-f]{64}$`; otherwise that one value is the
-literal `unavailable` (for example, line 1 carries a byte-order mark or is not
-JSON, or the last line has no `hash`). These are the values the file
-**states**, reported even when the verdict is `INVALID`, so a reader can compare
-them against an anchor, publish them, or forward them.
+**These are stored claims, not verified hashes.** Each value is the `hash`
+field's decoded JSON string value as stored in the file — never a
+recomputation, and never normalised beyond JSON decoding. On a
+structurally valid export they coincide with the genesis hash (EX-21) and the
+head (EX-14); on an `INVALID` verdict they are **not** verified chain anchors
+and prove neither integrity nor identity. Read them only together with the
+verdict and an independently trusted anchor (`--chain`, `--head`).
 
-Nothing is reported for an empty (zero-byte) export, nor on a tool-level error
-where no verification ran. stdout is always exactly the one verdict line.
+**Candidate records.** The input is split at LF (`0x0A`). One terminal LF ends
+the last record and does not add an empty candidate; any additional trailing
+blank record **is** a candidate (so `…}\n\n` has a blank last candidate, and
+the head claim is `unavailable`). Without a final LF, the final fragment is
+the last candidate. The genesis claim comes from the first candidate and the
+head claim from the last; for a single candidate both come from it. These
+rules apply even when framing (a CR, a BOM, a missing final LF, a blank line)
+or any other file check fails.
+
+**Claims.** A claim is available only if its candidate, taken as-is (no
+bytes stripped or repaired), decodes as a JSON object — valid UTF-8, a single JSON value with optional JSON
+whitespace around it, and that value an object — whose **top-level** `hash`
+member is a string of exactly 64 lowercase hexadecimal characters. If the
+top-level `hash` key is repeated, the **last** occurrence is the claim (this
+does not make duplicate keys valid in an export; EX-10/HA-6 still reject them).
+The claim is the member's **decoded** JSON string value, so JSON escapes are
+decoded as usual (`"\u0031…"` yields `1…`, and an escaped key that decodes to
+`hash` is the `hash` member); beyond that JSON decoding nothing is
+normalised, lowercased, trimmed or substituted, and an escape that decodes to
+a non-hex or uppercase character leaves the claim unavailable. Any other
+candidate
+(not JSON, not an object, invalid UTF-8, a BOM, no `hash`, a non-string or
+`null` `hash`, the wrong length or case) gives `unavailable` for that endpoint
+only. One endpoint being `unavailable` never suppresses the other line.
+
+Nothing is reported for an empty (zero-byte) input, which has no endpoints,
+nor on a tool-level error (exit ≥ 3) where no chain verdict is produced.
 
 These two lines are **tool output, not conformance surface**: per EV-17
 conformance is the verdict token and line number(s) alone, and EX-24 leaves
