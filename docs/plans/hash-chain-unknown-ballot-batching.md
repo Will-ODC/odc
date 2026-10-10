@@ -147,6 +147,6 @@ opened or changed. These eight cases do not establish the completeness or
 streaming complexity of a future uncertainty algorithm.
 
 Order: #222 (merged) → core checkpoint (#223, merged) → approved anchor-policy
-amendment (#224, merged) → this proposal (#225, merged) → decide this proposal/ADR → isolated Go and TS implementations →
+amendment (#224, merged) → proposal written (#225, merged) → operator decides it / ADR → isolated Go and TS implementations →
 new declared fixtures → fresh T9 re-audit → T9a RC. Ledger remains unstarted;
 no freeze tag belongs in this proposal. Keep Pulse work independent.

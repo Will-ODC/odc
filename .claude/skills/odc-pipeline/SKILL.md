@@ -92,8 +92,7 @@ IS the ticket.
 
 - One branch = one reviewable idea. Target diff < 400 lines (WARN); hard ceiling
   1000 (FAIL). `.github/scripts/diff-size.sh` is the one home for the live
-  thresholds and the exemptions (today: markdown, lockfiles, generated output,
-  `contracts/fixtures/`, `docs/mockups/`, both verifiers, and `apps/pulse*`).
+  thresholds and the exempt paths.
   Bigger? Split it.
 - **Prefer one branch off `master` at a time.** Merge, then branch the next.
   Independent work has no reason to stack, and every stacked level costs a

@@ -47,8 +47,8 @@ override the dark screen floats on a light page and looks broken.
 
 **Screens 2–7 are still light.** Whether the whole deck goes dark is not
 recorded anywhere in the repo. Do not settle it by building: put the question
-where `memory/INDEX.md`'s "where new information goes" table sends an
-unsettled question, get an answer, then build. Same
+in `memory/pulse.md` → "Open decisions (operator)" (per `memory/INDEX.md` →
+"Where new information goes"), get an answer, then build. Same
 for the swipe graph's up/down axis — left/right is the vote, and what up/down
 navigates to (comments, alternate next-votes, or both) is undecided; only
 left/right is wired today.

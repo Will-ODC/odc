@@ -263,9 +263,8 @@ and the summary below is not a substitute for them.
 
 **Ready and waiting behind those, once decided** — all from ADR-0024's
 consequences: a new migration adding the community and author columns to `polls`
-(the next free number — ADR-0024 said 002, but ADR-0030 decision 4 took 002
-and 001–004 are applied)
-(author **cannot** be backfilled later, only defaulted); a removed/hidden state,
+(the next free number, since ADR-0030 decision 4 took ADR-0024's 002 and
+001–004 are applied; author **cannot** be backfilled later, only defaulted); a removed/hidden state,
 because `on delete cascade` means deleting a question destroys the votes cast on
 it; server-minted poll ids, because `polls.id` is caller-supplied text today; a
 rate limit keyed on the voter and backed by a shared store, since

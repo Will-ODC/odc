@@ -37,6 +37,9 @@ memory/          # INDEX.md (read first), STATE.md, pulse.md, OPEN-QUESTIONS(-ar
 
 ## Context protocol (read this order, every session)
 
+**Exception:** a verifier build session reads only what its ticket lists
+(`odc-verifier-builder`); that list overrides this protocol.
+
 1. **`memory/INDEX.md`** — small on purpose. It names the two workstreams, says
    where each stands in one line, and routes you to the 20 KB you actually need
    instead of the 80 KB you do not. Read it before anything else.
@@ -55,8 +58,8 @@ Memory entries are updated **on master at merge time** (merge checklist in
 `odc-pipeline`, owned by `odc-navigator`) — never on feature branches, where
 parallel agents would conflict. Log any architectural choice as an ADR in
 `docs/decisions/` (copy `0000-template.md`). Everything else you learn — status,
-handoffs, unsettled questions, traps — goes where `memory/INDEX.md`'s "where
-does this fact go" table says, which is the one home for that rule. Add a row
+handoffs, unsettled questions, traps — goes where `memory/INDEX.md`'s "Where
+new information goes" table says, which is the one home for that rule. Add a row
 there when you start a workstream it does not list.
 
 ## Non-negotiable rules (from the implementation plan)
