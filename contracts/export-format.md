@@ -1,6 +1,6 @@
 # Export Format — contracts/export-format.md
 
-**Version:** 4
+**Version:** 5
 **Status:** DRAFTING (Phase 0 · T4a, amended T9a/ADR-0013 and ADR-0019). Not
 frozen.
 **Companion specs:** `event-schema.md` (envelope), `hashing.md` (preimage +
@@ -106,9 +106,13 @@ a portable content fingerprint (the `hash`) and a unique on-disk form (this §2)
 ## 4. `--head` and what truncation the export can and cannot self-detect
 
 - **EX-15.** A verifier MAY be given an expected head via `--head <hash>` (64
-  lowercase hex). When given, after all link checks pass the verifier MUST
+  lowercase hex). When given, after all other file-validity checks pass
+  (including framing, each event's structural checks and every registered
+  event's semantic checks, EV-6), the verifier MUST
   confirm the last line's `hash` equals `<hash>` and MUST report `INVALID` if it
-  does not.
+  does not. An `INVALID` already established by a file check MUST retain its
+  original line and MUST NOT be replaced by an expected-head mismatch.
+  Unknown events yielding `PARTIAL` do not prevent the comparison.
 - **EX-16.** **End-truncation is not detectable from the export alone.** A prefix
   of a valid chain is itself a valid chain — every remaining line still links
   correctly — so dropping trailing lines yields a file that verifies `VALID` on
@@ -169,8 +173,14 @@ question (ADR-0013).
   it is not a valid chain in any case (EX-18).
 - **EX-22.** A verifier MAY be given an expected chain identity via
   `--chain <genesis-hash>` (64 lowercase hex). When given, the verifier MUST
-  confirm the first line's `hash` equals `<genesis-hash>` and MUST report
-  `INVALID` if it does not, even when every link check passes. `--chain` and
+  compare it only after all other file-validity checks pass
+  (including framing, each event's structural checks and every registered
+  event's semantic checks, EV-6), as for EX-15. At that point
+  the verifier MUST confirm the first line's `hash` equals `<genesis-hash>` and
+  MUST report `INVALID` if it does not. An `INVALID` already established by a
+  structural or registered-event semantic check MUST retain its original line;
+  neither expected anchor overrides it. Unknown events yielding `PARTIAL` do not
+  prevent the comparison. `--chain` and
   `--head` (EX-15) are independent and may be given together: `--chain` fixes
   **which chain**, `--head` fixes **how much of it**. Neither is required for a
   verdict on the file's own integrity; both exist because integrity alone does
@@ -178,16 +188,46 @@ question (ADR-0013).
 - **EX-23.** A `--chain` mismatch (EX-22) is `INVALID`, attributed to **line 1**
   — the line whose `hash` is the identity that failed to match. This mirrors
   EX-19, which attributes a `--head` mismatch to the last line for the same
-  reason: the blamed line is the one whose `hash` was compared.
-- **EX-24.** On every run over a non-empty export, a verifier MUST report both
-  the **genesis hash** (EX-21) and the **head** (EX-14) it computed, whatever the
-  verdict. A verifier that emits only a verdict token leaves a reader with
-  nothing to compare against an anchor, to publish, or to forward, so a chain
-  substituted wholesale verifies silently; reporting both makes every run a
-  potential witness (charter §4). This constrains the **tool's output**, not the
-  chain verdict: per `evolution.md` EV-17 conformance is judged on the verdict
-  token and line number(s) alone, so no golden fixture asserts these two values
-  and their presentation — labels, order, formatting — is deliberately left free.
+  reason: the blamed line is the one whose `hash` was compared. When both
+  expected anchors mismatch on a file eligible for comparison (EX-15/EX-22),
+  the verifier MUST report the chain mismatch at line 1, not the head mismatch
+  at the final line. This ordering applies to anchor comparisons only; it does
+  not replace an earlier file-check verdict.
+- **EX-24.** On every run that produces a chain verdict over non-empty input,
+  a verifier MUST report both endpoint **stored claims**: the `hash` field of
+  the first candidate record (claimed genesis hash) and of the last candidate
+  record (claimed head). Split the input at LF; one terminal framing LF ends
+  the last record and does not add an empty candidate, while an additional
+  trailing blank record remains a candidate. Without a final LF, the final
+  fragment is the last candidate. These extraction rules apply even when the
+  framing or any other file check fails.
+
+  A claim is available only if its candidate decodes as a JSON object with a
+  `hash` string of exactly 64 lowercase hexadecimal characters. The verifier
+  MUST report `unavailable` for that endpoint when it cannot recover such a
+  field; absence of one value MUST NOT suppress reporting of the other.
+  If a candidate repeats its top-level `hash` key, the claim uses its last
+  occurrence; this recovery rule does not permit duplicate keys in a valid
+  export. Recovery for this report is not a canonical-form or integrity verdict and
+  MUST NOT normalise, lowercase or substitute a value to make it available.
+  Reported values MUST be described as stored claims in the tool's output
+  interface, not as successful hash recomputations. A tool MAY additionally
+  report recomputed hashes, but MUST distinguish them from the stored claims.
+
+  On an `INVALID` input these claims MUST NOT be represented as verified chain
+  anchors. Consumers MUST interpret them with the verdict and any independently
+  trusted expected anchors; the report alone proves no integrity or identity.
+  An empty input has no endpoints, and a tool-level failure with no chain verdict
+  has no EX-24 report obligation. A non-empty malformed input still does.
+
+  Reporting constrains the **tool's output**, not the chain verdict. Per EV-17,
+  conformance is judged on the verdict token and line number(s) alone; golden
+  fixtures MUST NOT assert report values or presentation. Labels, order and
+  formatting remain free, with the stored-claim distinction documented in the
+  tool interface. A verifier that emits only a verdict leaves a reader with
+  nothing to compare against an anchor, publish, or forward (charter §4).
+  The available claims coincide with EX-21/EX-14's genesis hash and head on a
+  structurally valid export; on invalid input they may be unverified or missing.
 
 ---
 
