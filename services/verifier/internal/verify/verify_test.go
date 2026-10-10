@@ -20,6 +20,7 @@ type vector struct {
 	ID     string  `json:"id"`
 	Export string  `json:"export"`
 	Head   *string `json:"head"`
+	Chain  *string `json:"chain"` // optional expected genesis hash (EX-22)
 	Expect struct {
 		Verdict string `json:"verdict"`
 		Line    int    `json:"line"`
@@ -74,7 +75,7 @@ func TestFixtures(t *testing.T) {
 			if err != nil {
 				t.Fatalf("read export %s: %v", v.Export, err)
 			}
-			res := Verify(data, v.Head)
+			res := VerifyWith(data, Options{Head: v.Head, Chain: v.Chain})
 
 			if res.Verdict.String() != v.Expect.Verdict {
 				t.Fatalf("verdict = %s, want %s (reason: %s)",

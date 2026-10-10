@@ -10,6 +10,7 @@ import { createPublicKey, verify } from "node:crypto";
 import { test } from "node:test";
 
 import {
+  assertCalendarTs,
   assertWholeMinute,
   BALLOT_BATCH_INTERVAL_MS_FLOOR,
   BALLOT_BATCH_MIN_FLOOR,
@@ -220,6 +221,39 @@ test("assertWholeMinute rejects a non-whole-minute instant instead of trimming i
 
   // It is an assertion, not a transform: a legal instant comes back untouched.
   assert.equal(assertWholeMinute(GENESIS_TS), GENESIS_TS);
+});
+
+test("genesis({ ts }) changes only ts and the hash: same keys, same chain_id (ET-7, ET-7a)", () => {
+  const a = newChain().all[0] as Event;
+  const c = new ChainBuilder();
+  const b = c.genesis({ ts: "2026-07-20T23:59:59.999Z" });
+  assert.equal(b.ts, "2026-07-20T23:59:59.999Z");
+  assert.equal(a.ts, GENESIS_TS);
+  // The payload differs only in the signature, which covers ts (HA-15).
+  const { sig: sigA, ...restA } = a.payload;
+  const { sig: sigB, ...restB } = b.payload;
+  assert.deepEqual(restB, restA);
+  assert.notEqual(sigB, sigA);
+  assert.notEqual(b.hash, a.hash);
+  assert.equal(b.hash, eventHash(b));
+});
+
+test("assertCalendarTs passes a real instant through and rejects the rest (ES-20)", () => {
+  assert.equal(assertCalendarTs(GENESIS_TS), GENESIS_TS);
+  assert.equal(
+    assertCalendarTs("2026-07-20T23:59:59.999Z"),
+    "2026-07-20T23:59:59.999Z",
+  );
+  for (const bad of [
+    "2026-07-21T00:00:00Z", // no milliseconds
+    "2026-07-21T00:00:00.000+00:00", // not Z
+    "2026-06-31T00:00:00.000Z", // Date would roll this to July 1
+    "2026-13-40T25:61:61.999Z", // ES-20's own example
+    "2026-07-21T23:59:60.000Z", // leap second
+  ]) {
+    assert.throws(() => assertCalendarTs(bad), /ES-20/, bad);
+    assert.throws(() => new ChainBuilder().genesis({ ts: bad }), /ES-20/, bad);
+  }
 });
 
 test("a headless builder starts at seq 1 with the genesis anchor", () => {

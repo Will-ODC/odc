@@ -27,6 +27,8 @@ export interface Vector {
   bytes: Buffer;
   /** `--head` input, when the vector must be run with one (EX-15/EX-16). */
   head?: string;
+  /** `--chain` input, when the vector must be run with one (EX-22/EX-23). */
+  chain?: string;
   expect: Expect;
   /** Advisory: the normative sentences this vector exercises. NOT asserted. */
   cites: string[];
@@ -127,10 +129,17 @@ export function v(
   cites: string[],
   note: string,
   head?: string,
+  chainArg?: string,
 ): Vector {
-  return head === undefined
-    ? { id, bytes, expect, cites, note }
-    : { id, bytes, expect, cites, note, head };
+  return {
+    id,
+    bytes,
+    expect,
+    cites,
+    note,
+    ...(head === undefined ? {} : { head }),
+    ...(chainArg === undefined ? {} : { chain: chainArg }),
+  };
 }
 
 export const ok = (
