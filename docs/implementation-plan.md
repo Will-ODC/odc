@@ -33,7 +33,7 @@ operational use):
 6. **Read API shape:** pagination and limits for `GET /events?since=` — consumed by `tally` and `mcp`, so it is a contract, not a ledger detail.
 7. **Evolution rule:** event versions are additive-only; hashing rules never change retroactively; verifiers must accept all published versions.
 
-**Phase 0 exit gate — genesis rehearsal:** build a throwaway chain against the draft contracts, export it, verify it, tamper-test it. Only then freeze the contracts and declare genesis. A hashing mistake found after real events exist is permanent.
+**Phase 0 exit gate — genesis rehearsal:** build a throwaway chain against the draft contracts, export it, verify it, tamper-test it. Only then, after the T9 security audit, do the contracts move to **RELEASE CANDIDATE** — not to a freeze, which ADR-0007 defers until real operational use (the gate's checklist is in `.claude/skills/odc-contracts`). A hashing mistake found after real events exist is permanent.
 
 Everything not in `contracts/` is a private detail of some service.
 
@@ -93,7 +93,7 @@ Thin protocol wrapper. Resources = `tally` and `ledger` reads; tools = vote cast
 
 | Phase | Work                                      | Parallel?                       |
 | ----- | ----------------------------------------- | ------------------------------- |
-| 0     | `contracts/` — write, review, freeze      | —                               |
+| 0     | `contracts/` — write, review, RC          | —                               |
 | 1     | `ledger` · `verifier` · `identity`        | yes — three agents              |
 | 2     | `tally` · `web`                           | yes — mocks until Phase 1 lands |
 | 3     | `mcp`; first deferred service when needed | —                               |

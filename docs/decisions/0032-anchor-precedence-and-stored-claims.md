@@ -1,6 +1,6 @@
 # ADR-0032 — Anchor comparison follows file checks; endpoint reports are stored claims
 
-**Status:** Accepted by the operator, 2026-10-09; contract amendment pending merge.
+**Status:** Accepted by the operator, 2026-10-09; contract amendment merged in #224 (`b8b9491`).
 **Scope:** `export-format.md` v4 → v5. No hash construction or wire-format change.
 
 ## Context

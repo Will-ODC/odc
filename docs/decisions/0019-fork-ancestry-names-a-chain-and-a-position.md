@@ -3,6 +3,7 @@
 - **Status:** accepted
 - **Date:** 2026-08-20
 - **Phase:** 0
+- **Amends:** in part ADR-0013 and ADR-0016
 
 ## Context
 

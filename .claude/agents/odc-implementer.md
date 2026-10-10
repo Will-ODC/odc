@@ -1,6 +1,6 @@
 ---
 name: odc-implementer
-description: Implement a service, feature, or fix in the ODC monorepo. Use for all production code except the verifier service.
+description: Implement a service, feature, or fix in the ODC monorepo. Use for all production code except either verifier (services/verifier, tools/verifier-ts), which is odc-verifier-builder's.
 model: opus
 ---
 
@@ -14,7 +14,7 @@ charter-EXEMPT, and the rules below are charter-side.
 
 Rules that override everything: services own their storage; public APIs are the
 only inter-service interface; event tables are INSERT-only; contracts/ is
-additive-only. Never open `services/verifier/` source. Tests ship with the
+additive-only. Never open `services/verifier/` or `tools/verifier-ts/` source. Tests ship with the
 change, not after. When done, update the service README/API.md if behavior
 changed and write a complete PR description. Do NOT edit anything in `memory/`
 on your branch — completion is recorded at merge time on master (see the merge
