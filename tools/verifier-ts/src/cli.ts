@@ -1,7 +1,9 @@
 #!/usr/bin/env node
-// CLI: verify <export.ndjson> [--head <hash>]
+// CLI: verify <export.ndjson> [--head <hash>] [--chain <genesis-hash>]
 //
-// Prints one of VALID / INVALID at line N / PARTIAL at lines ... and exits:
+// Prints one of VALID / INVALID at line N / PARTIAL at lines ... on stdout,
+// then (EX-24, non-empty export) `genesis: <hex>` and `head: <hex>` on stderr,
+// and exits:
 //   0 VALID, 1 INVALID, 2 PARTIAL, >=3 tool-level error (bad args, unreadable
 //   file, internal error). The work and the exit-code scheme live in run.ts.
 

@@ -128,9 +128,23 @@ type vstate struct {
 	ballots ballotState           // ET-24/ET-24a batch instants already left
 }
 
+// Options carries the optional out-of-band expectations a run may be given.
+// Each, when non-nil, is an already-validated 64-lowercase-hex string.
+type Options struct {
+	Head  *string // expected head, `--head` (EX-15)
+	Chain *string // expected genesis hash / chain identity, `--chain` (EX-22)
+}
+
 // Verify runs the whole two-stage verification (EV-6). head, when non-nil, is a
 // validated 64-lowercase-hex expected chain head (EX-15).
 func Verify(data []byte, head *string) Result {
+	return VerifyWith(data, Options{Head: head})
+}
+
+// VerifyWith runs the whole two-stage verification (EV-6) with the optional
+// `--head` (EX-15) and `--chain` (EX-22) expectations.
+func VerifyWith(data []byte, opts Options) Result {
+	head, chain := opts.Head, opts.Chain
 	st := &vstate{issues: map[string]*issueInfo{}, ballots: newBallotState()}
 	lines, faults := frame(data)
 
@@ -141,6 +155,7 @@ func Verify(data []byte, head *string) Result {
 	}
 
 	var prev *event
+	var genesisHash string // line 1's stored hash (EX-21), once line 1 parses
 	var partial []int
 
 	for i := range lines {
@@ -183,6 +198,10 @@ func Verify(data []byte, head *string) Result {
 			}
 		}
 
+		if i == 0 {
+			genesisHash = e.hash
+		}
+
 		// Hash recomputation (HA-14), Stage A, type-agnostic.
 		if hashHex(preimage(e, "")) != e.hash {
 			return invalid(ln, "hash mismatch (HA-14/ES-28)")
@@ -215,9 +234,25 @@ func Verify(data []byte, head *string) Result {
 		prev = e
 	}
 
-	// --head check (EX-15), Stage A, after all link checks. INVALID outranks
-	// PARTIAL (EV-17), so it is evaluated first. Attributed to the last line
-	// (EX-19).
+	// --chain (EX-22) and --head (EX-15) checks, Stage A, run at the same
+	// point: after every per-line check has passed, i.e. only when the export
+	// would otherwise be VALID or PARTIAL. An earlier INVALID has already
+	// returned above and is never overridden by either. INVALID outranks
+	// PARTIAL (EV-17), so both are evaluated before the PARTIAL verdict.
+	//
+	// Precedence when BOTH mismatch: the --chain mismatch wins, INVALID at
+	// line 1 (EX-23), over the --head mismatch at the last line (EX-19). EX-22
+	// requires the chain mismatch be reported "even when every link check
+	// passes" but does not order it against --head; EV-17 attributes INVALID
+	// to the first fatal line scanning in file order, and EX-23 makes line 1
+	// the line whose hash was compared, so the lowest line is blamed first —
+	// consistent with every other first-fatal-line attribution. (On a
+	// one-line export both name line 1 anyway.)
+	if chain != nil && *chain != genesisHash {
+		return invalid(1, "chain mismatch: genesis hash differs from --chain (EX-22/EX-23)")
+	}
+
+	// --head: attributed to the last line (EX-19).
 	if head != nil && *head != prev.hash {
 		return invalid(len(lines), "head mismatch (EX-15/EX-19)")
 	}
