@@ -14,20 +14,23 @@ Node standard library.
 
 ```sh
 pnpm --filter @odc/verifier-ts build
-node dist/src/cli.js verify <export.ndjson> [--head <64-lowercase-hex>]
+node dist/src/cli.js verify <export.ndjson> [--head <64-lowercase-hex>] [--chain <64-lowercase-hex>]
 ```
 
 Output and process exit codes (the exit code is **not** conformance-checked —
 `evolution.md` EV-17 pins conformance on the verdict token and line number(s)
 alone — but the CLI note fixes this scheme so the two verifiers agree, and
-`test/report-shape.test.ts` asserts every row of it):
+`test/report-shape.test.ts` and `test/cli-exit-codes.test.ts` assert every row):
 
 | Verdict                | stdout                          | exit |
 | ---------------------- | ------------------------------- | ---- |
 | VALID                  | `VALID`                         | 0    |
 | INVALID (line N)       | `INVALID at line N[: <reason>]` | 1    |
 | PARTIAL (lines …)      | `PARTIAL at lines a, b`         | 2    |
-| tool error (bad args…) | message on stderr               | ≥ 3  |
+| tool error (any cause) | one line on stderr              | ≥ 3  |
+
+On a verdict over a non-empty export, stderr also carries the two EX-24 lines
+(below); a tool error never does.
 
 **The verdict is exactly ONE line**, and any advisory reason (EV-17, EV-21) sits
 after a colon on that same line — never on a second line. Consumers parse the
@@ -51,6 +54,41 @@ the crash in about 600 runs of each variant, so treat the cause as unconfirmed.
 `--head` supplies the out-of-band anchored head. It is the ONLY way to detect
 clean end-truncation, which is invisible from the export alone
 (`export-format.md` EX-16): a prefix of a valid chain is itself a valid chain.
+
+`--chain` supplies the out-of-band expected **genesis hash**, the chain's
+identity (EX-21, EX-22): `--chain` fixes _which chain_, `--head` fixes _how much
+of it_. They are independent and may be given together. A malformed value
+(anything but 64 lowercase hex) for either is a tool error, exit 3.
+
+Which verdicts the two anchors can override: both are compared at the same
+point, only after every line has passed its own checks (EX-15 "after all link
+checks pass", EX-22 "even when every link check passes"). So a mismatch turns
+`VALID` or `PARTIAL` into `INVALID` — `--chain` at line 1 (EX-23), `--head` at
+the last line (EX-19) — but never changes an `INVALID` the file already earned
+on its own; that line number stands. When both mismatch, the verdict is
+`INVALID at line 1`: the spec does not state the precedence outright, and
+EV-17's "first fatal line, scanning the export in file order" puts the
+`--chain` mismatch first.
+
+**Genesis hash and head on stderr (EX-24).** On every run over a non-empty
+export, whatever the verdict, the CLI writes two lines to **stderr**, after the
+verdict line is on stdout:
+
+```
+genesis: <64-lowercase-hex | unavailable>
+head: <64-lowercase-hex | unavailable>
+```
+
+Each is the stored `hash` field of the first / last line, read as-is (split on
+LF, `JSON.parse` the line); `unavailable` replaces a value whose line is not
+JSON or whose `hash` is absent or not 64 lowercase hex. On an `INVALID` export
+these are what the file _claims_, which is what a reader compares against an
+anchor. Neither line is printed for an empty export, or on a tool error where
+no verdict was produced. stdout stays exactly the one verdict line. These lines
+are **tool output, not conformance surface**: EV-17 judges conformance on the
+verdict token and line number(s) alone, and EX-24 leaves labels, order and
+format free, so no fixture asserts them and another verifier may print them
+differently. `test/chain-and-report.test.ts` pins this CLI's behaviour.
 
 ## What it checks
 

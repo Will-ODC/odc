@@ -55,6 +55,28 @@ export function tsAt(minutesAfterGenesis: number): string {
   );
 }
 
+/** ES-20's syntactic gate: UTC, exactly millisecond precision, trailing `Z`. */
+const ES20_SHAPE = /^\d{4}-\d{2}-\d{2}T\d{2}:\d{2}:\d{2}\.\d{3}Z$/;
+
+/**
+ * Asserts an explicitly supplied `ts` passes both ES-20 gates and returns it
+ * untouched — a checkpoint, never a transform, like `assertWholeMinute`. A
+ * value that is not a real UTC instant (or that `Date` would normalize, such
+ * as day 31 of a 30-day month) is thrown on, so a hand-typed genesis `ts`
+ * cannot ship a vector that is INVALID at line 1 by accident.
+ */
+export function assertCalendarTs(ts: string): string {
+  const ms = Date.parse(ts);
+  if (
+    !ES20_SHAPE.test(ts) ||
+    Number.isNaN(ms) ||
+    new Date(ms).toISOString() !== ts
+  ) {
+    throw new Error(`${ts} is not an ES-20 timestamp (a real UTC instant)`);
+  }
+  return ts;
+}
+
 /**
  * Asserts `tsAt`'s promised shape and returns `ts` untouched — a checkpoint,
  * never a transform. Named rather than inlined so the check is REACHABLE from a
@@ -107,7 +129,14 @@ type RawSigner = (content: EventContent) => string;
 
 /** The rule ids the builder knows how to check. */
 export type BuilderRule =
-  "ET-9d" | "ET-9e" | "ET-9f" | "ET-14" | "ET-14a" | "ET-18" | "ET-18a";
+  | "ET-9d"
+  | "ET-9e"
+  | "ET-9f"
+  | "ET-14"
+  | "ET-14a"
+  | "ET-14b"
+  | "ET-18"
+  | "ET-18a";
 
 /** ET-14: the title ceiling, counted in the unit ET-14 names — scalar values. */
 export const TITLE_MAX_SCALARS = 200;
@@ -142,9 +171,8 @@ export const BALLOT_BATCH_MIN_FLOOR = 3;
  *   this parameter (see `valid.ts` 005 for the one vector where that matters).
  *
  * The floor values also read as the least remarkable thing on the line, which is
- * what a vector about titles, `choice_count` or seq gaps needs them to be. A
- * vector that means to exercise ET-14b or ET-23–ET-25 must state its own values
- * rather than inherit these — that work is the later F2 pass, not this one.
+ * what a vector about titles, `choice_count` or seq gaps needs them to be. The
+ * Phase 3 batching vectors override them when the declared issue values matter.
  */
 export const DEFAULT_BALLOT_BATCH_INTERVAL_MS = BALLOT_BATCH_INTERVAL_MS_FLOOR;
 export const DEFAULT_BALLOT_BATCH_MIN = BALLOT_BATCH_MIN_FLOOR;
@@ -217,7 +245,12 @@ function genesisViolations(
 }
 
 /** Which of ET-14 / ET-14a an `issue_created` payload actually breaks. */
-function issueViolations(title: string, choiceCount: number): BuilderRule[] {
+function issueViolations(
+  title: string,
+  choiceCount: number,
+  interval: number,
+  minimum: number,
+): BuilderRule[] {
   const out: BuilderRule[] = [];
   const scalars = [...title].length; // scalar values, not UTF-16 code units
   if (scalars < 1 || scalars > TITLE_MAX_SCALARS || hasForbiddenChar(title)) {
@@ -229,6 +262,14 @@ function issueViolations(title: string, choiceCount: number): BuilderRule[] {
     choiceCount > CHOICE_COUNT_MAX
   ) {
     out.push("ET-14a");
+  }
+  if (
+    !Number.isSafeInteger(interval) ||
+    interval < BALLOT_BATCH_INTERVAL_MS_FLOOR ||
+    !Number.isSafeInteger(minimum) ||
+    minimum < BALLOT_BATCH_MIN_FLOOR
+  ) {
+    out.push("ET-14b");
   }
   return out;
 }
@@ -294,6 +335,9 @@ export interface EventOpts {
   minutes?: number;
   /** Rules this payload breaks DELIBERATELY. Must match exactly what it breaks. */
   violates?: readonly BuilderRule[];
+  /** Per-issue ET-14b values, overriding the ordinary-vector floors. */
+  batchIntervalMs?: number;
+  batchMin?: number;
 }
 
 export class ChainBuilder {
@@ -397,6 +441,13 @@ export class ChainBuilder {
       contracts?: string;
       ancestorChain?: string;
       ancestorHead?: string;
+      /**
+       * The genesis `ts`. Defaults to hashing.md §6's GENESIS_TS. Only the
+       * chain-identity vectors set it: two chains one operator starts at
+       * different instants are otherwise byte-identical genesis events, and
+       * differ in identity only because `hash` covers `ts` (ET-7a).
+       */
+      ts?: string;
       violates?: readonly BuilderRule[];
     } = {},
   ): Event {
@@ -426,7 +477,13 @@ export class ChainBuilder {
     if (opts.ancestorHead !== undefined) {
       payload.ancestor_head = opts.ancestorHead;
     }
-    return this.seal("genesis", 1, payload, GENESIS_TS, operator);
+    return this.seal(
+      "genesis",
+      1,
+      payload,
+      assertCalendarTs(opts.ts ?? GENESIS_TS),
+      operator,
+    );
   }
 
   /** `participant_registered`, self-signed by its own `pubkey` (ET-10). */
@@ -446,22 +503,23 @@ export class ChainBuilder {
    * choice_count for ET-18a. Enforces ET-14/ET-14a unless `opts.violates`
    * declares the breach.
    *
-   * The two ET-14b batching parameters are required payload keys, so they are
-   * emitted unconditionally at the defaults above; no vector in this set means
-   * to exercise them, and none may omit them.
+   * The two ET-14b batching parameters are required payload keys. Ordinary
+   * vectors use the defaults; batching vectors can supply per-issue values.
    */
   issue(title: string, choiceCount: number, opts: EventOpts = {}): Event {
+    const interval = opts.batchIntervalMs ?? DEFAULT_BALLOT_BATCH_INTERVAL_MS;
+    const minimum = opts.batchMin ?? DEFAULT_BALLOT_BATCH_MIN;
     reconcile(
       `issue_created(title=${JSON.stringify(title.length > 40 ? `${title.slice(0, 40)}…` : title)}, choice_count=${String(choiceCount)})`,
-      issueViolations(title, choiceCount),
+      issueViolations(title, choiceCount, interval, minimum),
       opts.violates,
     );
     const e = this.seal(
       "issue_created",
       1,
       {
-        ballot_batch_interval_ms: DEFAULT_BALLOT_BATCH_INTERVAL_MS,
-        ballot_batch_min: DEFAULT_BALLOT_BATCH_MIN,
+        ballot_batch_interval_ms: interval,
+        ballot_batch_min: minimum,
         choice_count: choiceCount,
         title,
       },

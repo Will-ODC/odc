@@ -553,6 +553,7 @@ func buildCLI(t *testing.T) string {
 
 func TestBallotRulesCLISurface(t *testing.T) {
 	bin := buildCLI(t)
+	reportOnly := regexp.MustCompile(`^genesis: [0-9a-f]{64}\nhead: [0-9a-f]{64}\n$`)
 	one := []issueSpec{defaultIssue}
 	cases := []struct {
 		name  string
@@ -587,7 +588,8 @@ func TestBallotRulesCLISurface(t *testing.T) {
 			if code != c.code {
 				t.Fatalf("exit status %d, want %d", code, c.code)
 			}
-			if errb.Len() != 0 {
+			// stderr carries only the EX-24 genesis/head report.
+			if !reportOnly.MatchString(errb.String()) {
 				t.Fatalf("unexpected stderr: %s", errb.String())
 			}
 		})

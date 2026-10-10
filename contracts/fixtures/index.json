@@ -1260,6 +1260,235 @@
         "ET-9a"
       ],
       "note": "A genesis with registrar_pk absent entirely. This is the other half of ES-18 on the genesis key set, and it is the likelier mistake of the two: 'make these two ancestry keys optional' is precisely the edit that touches the required-key list, and a verifier that loosens one key too many accepts a chain with no registrar at all — silently defeating ET-9a, ET-9d and ET-17 together, since every ballot signature check then has no key to run against. 083 and 094 cannot catch it because both carry registrar_pk; they exercise its VALUE, and nothing until now exercised its PRESENCE. Note this is not the ET-9d fault in another form: 094 declares one key twice and is visible in the log as a collapse, while this chain declares no registrar at all. Which rule a verifier cites is deliberately not pinned — ES-18 rejects the key set and ET-9b rejects the absent key's format, both reaching INVALID at line 1, and EV-17 makes the token and the line the whole of conformance. A verifier with both barriers is unaffected by loosening either one alone, which is a property worth having rather than a gap in this vector."
+    },
+    {
+      "id": "099-batch-resumed",
+      "export": "vectors/099-batch-resumed.ndjson",
+      "expect": {
+        "verdict": "INVALID",
+        "line": 9
+      },
+      "cites": [
+        "ET-24a"
+      ],
+      "note": "Two full batches at T1 and T2; returning to T1 is fatal at the returning ballot, without an ET-24 size fault."
+    },
+    {
+      "id": "100-batch-interleaved-issues",
+      "export": "vectors/100-batch-interleaved-issues.ndjson",
+      "expect": {
+        "verdict": "VALID"
+      },
+      "cites": [
+        "ET-24",
+        "ET-24a"
+      ],
+      "note": "Another issue's ballot falls between A's batch members; A's three ballots are still one full batch."
+    },
+    {
+      "id": "101-under-size-not-last",
+      "export": "vectors/101-under-size-not-last.ndjson",
+      "expect": {
+        "verdict": "INVALID",
+        "line": 6
+      },
+      "cites": [
+        "ET-24"
+      ],
+      "note": "The first batch has two ballots against minimum three; the next ballot of that issue ends it at line 6."
+    },
+    {
+      "id": "102-under-size-last-interleaved",
+      "export": "vectors/102-under-size-last-interleaved.ndjson",
+      "expect": {
+        "verdict": "VALID"
+      },
+      "cites": [
+        "ET-24"
+      ],
+      "note": "A's final batch contains two ballots, and B's ballots after A's last ballot do not make A's batch non-last."
+    },
+    {
+      "id": "103-off-interval-ballot",
+      "export": "vectors/103-off-interval-ballot.ndjson",
+      "expect": {
+        "verdict": "INVALID",
+        "line": 4
+      },
+      "cites": [
+        "ET-23"
+      ],
+      "note": "Five minutes after midnight is on a whole-minute boundary but off this issue's two-minute interval."
+    },
+    {
+      "id": "104-interval-below-floor",
+      "export": "vectors/104-interval-below-floor.ndjson",
+      "expect": {
+        "verdict": "INVALID",
+        "line": 2
+      },
+      "cites": [
+        "ET-14b"
+      ],
+      "note": "The declared interval is one millisecond below the permanent 60000 ms floor."
+    },
+    {
+      "id": "105-minimum-below-floor",
+      "export": "vectors/105-minimum-below-floor.ndjson",
+      "expect": {
+        "verdict": "INVALID",
+        "line": 2
+      },
+      "cites": [
+        "ET-14b"
+      ],
+      "note": "The declared minimum is one below the permanent three-ballot floor."
+    },
+    {
+      "id": "106-run-two-then-three-return",
+      "export": "vectors/106-run-two-then-three-return.ndjson",
+      "expect": {
+        "verdict": "INVALID",
+        "line": 5
+      },
+      "cites": [
+        "ET-24",
+        "ET-24a"
+      ],
+      "note": "T1,T1,T2,T2,T2,T1: first T2 ends the under-size T1 run; the later return cannot repair it."
+    },
+    {
+      "id": "107-run-one-then-three-return",
+      "export": "vectors/107-run-one-then-three-return.ndjson",
+      "expect": {
+        "verdict": "INVALID",
+        "line": 4
+      },
+      "cites": [
+        "ET-24",
+        "ET-24a",
+        "EX-16"
+      ],
+      "note": "T1,T2,T2,T2,T1,T1: the first T2 is fatal even though a set-based count would later fill T1."
+    },
+    {
+      "id": "108-two-full-batches",
+      "export": "vectors/108-two-full-batches.ndjson",
+      "expect": {
+        "verdict": "VALID"
+      },
+      "cites": [
+        "ET-23",
+        "ET-24",
+        "ET-24a"
+      ],
+      "note": "One issue has two distinct full three-ballot batches; the first is non-last and still legal."
+    },
+    {
+      "id": "109-chain-match",
+      "export": "vectors/109-chain-match.ndjson",
+      "chain": "78ed980bdd5f660fd54ddffa100f2302094678e8500188e8faacc8ac57f6409a",
+      "expect": {
+        "verdict": "VALID"
+      },
+      "cites": [
+        "EX-21",
+        "EX-22",
+        "ET-7a"
+      ],
+      "note": "Chain 002 run with --chain set to its own genesis hash (the first line's hash, EX-21), so the EX-22 check passes. The same bytes as 002/003/054; only the --chain input distinguishes them. This is also chain A of the 111/112/113 pair run under its own identity."
+    },
+    {
+      "id": "110-chain-mismatch",
+      "export": "vectors/110-chain-mismatch.ndjson",
+      "chain": "6554b798885009b6d0bcdce61235df2419351bdb72ed5dea298216c70965b600",
+      "expect": {
+        "verdict": "INVALID",
+        "line": 1
+      },
+      "cites": [
+        "EX-22",
+        "EX-23"
+      ],
+      "note": "Chain 002 run with --chain set to a hash that is not its genesis hash. The value is deliberately this export's own HEAD — the last line's hash, a real hash in this very chain — so a verifier that wired --chain to the --head comparison (EX-15) wrongly accepts it. Every link check passes; the mismatch alone is fatal, and EX-23 attributes it to line 1, the line whose hash was compared."
+    },
+    {
+      "id": "111-chain-a-under-b",
+      "export": "vectors/111-chain-a-under-b.ndjson",
+      "chain": "9f6e1910e6f0d13f3564f9777ae2312834c7a4cc6c92de2b68e39509ed556a7b",
+      "expect": {
+        "verdict": "INVALID",
+        "line": 1
+      },
+      "cites": [
+        "EX-21",
+        "EX-22",
+        "EX-23",
+        "ET-7",
+        "ET-7a"
+      ],
+      "note": "Chain A (002's bytes) run with --chain set to chain B's genesis hash (113). A and B are two chains started under ONE operator key: their genesis payloads are identical — same chain_id, operator_pk, registrar_pk and contracts — and differ only in the genesis ts, one millisecond apart. chain_id alone would call them the same chain (ET-7); the genesis hash says they are not (ET-7a, ADR-0013). A verifier that implements --chain by comparing chain_id or operator_pk accepts this. INVALID at line 1 per EX-23."
+    },
+    {
+      "id": "112-chain-b-under-a",
+      "export": "vectors/112-chain-b-under-a.ndjson",
+      "chain": "78ed980bdd5f660fd54ddffa100f2302094678e8500188e8faacc8ac57f6409a",
+      "expect": {
+        "verdict": "INVALID",
+        "line": 1
+      },
+      "cites": [
+        "EX-21",
+        "EX-22",
+        "EX-23",
+        "ET-7",
+        "ET-7a"
+      ],
+      "note": "The mirror of 111: chain B run with --chain set to chain A's genesis hash. B is 002's four events over a genesis one millisecond earlier, under the same operator and registrar keys, so its chain_id equals A's while its identity does not (ET-7, ET-7a, ADR-0013). Both directions are pinned so a verifier cannot pass by special-casing the §6 genesis. INVALID at line 1 per EX-23."
+    },
+    {
+      "id": "113-chain-b-match",
+      "export": "vectors/113-chain-b-match.ndjson",
+      "chain": "9f6e1910e6f0d13f3564f9777ae2312834c7a4cc6c92de2b68e39509ed556a7b",
+      "expect": {
+        "verdict": "VALID"
+      },
+      "cites": [
+        "EX-21",
+        "EX-22",
+        "ET-7a"
+      ],
+      "note": "Chain B run with --chain set to its own genesis hash. This is what makes 112 mean something: B is a valid chain in its own right, so 112's INVALID can only come from the identity mismatch, not from a fault in B. (A under its own identity is 109.)"
+    },
+    {
+      "id": "114-chain-and-head-match",
+      "export": "vectors/114-chain-and-head-match.ndjson",
+      "head": "6554b798885009b6d0bcdce61235df2419351bdb72ed5dea298216c70965b600",
+      "chain": "78ed980bdd5f660fd54ddffa100f2302094678e8500188e8faacc8ac57f6409a",
+      "expect": {
+        "verdict": "VALID"
+      },
+      "cites": [
+        "EX-15",
+        "EX-22"
+      ],
+      "note": "Chain 002 run with BOTH --chain (its genesis hash) and --head (its last line's hash), each correct. EX-22 makes the two inputs independent and allows them together: --chain fixes which chain, --head how much of it. A verifier that accepts only one of the two flags, or lets one override the other, fails here or at 115."
+    },
+    {
+      "id": "115-chain-match-head-mismatch",
+      "export": "vectors/115-chain-match-head-mismatch.ndjson",
+      "head": "1eaa570b9307f44a3ab9c570614545a74b2093a9c563799a340fd01876e8a9de",
+      "chain": "78ed980bdd5f660fd54ddffa100f2302094678e8500188e8faacc8ac57f6409a",
+      "expect": {
+        "verdict": "INVALID",
+        "line": 4
+      },
+      "cites": [
+        "EX-15",
+        "EX-19",
+        "EX-22"
+      ],
+      "note": "Chain 002 run with the correct --chain and a wrong --head — chain B's head, a real head of another chain under the same operator key. The --chain check passes, so the --head check must still run and still reject, and EX-19 still attributes a --head mismatch to the last line (4), not to line 1. A verifier that stops checking once --chain matches, or that blames line 1 for any identity input, fails here."
     }
   ]
 }
