@@ -20,14 +20,14 @@ node dist/src/cli.js verify <export.ndjson> [--head <64-lowercase-hex>]
 Output and process exit codes (the exit code is **not** conformance-checked —
 `evolution.md` EV-17 pins conformance on the verdict token and line number(s)
 alone — but the CLI note fixes this scheme so the two verifiers agree, and
-`test/report-shape.test.ts` asserts every row of it):
+`test/report-shape.test.ts` and `test/cli-exit-codes.test.ts` assert every row):
 
 | Verdict                | stdout                          | exit |
 | ---------------------- | ------------------------------- | ---- |
 | VALID                  | `VALID`                         | 0    |
 | INVALID (line N)       | `INVALID at line N[: <reason>]` | 1    |
 | PARTIAL (lines …)      | `PARTIAL at lines a, b`         | 2    |
-| tool error (bad args…) | message on stderr               | ≥ 3  |
+| tool error (any cause) | one line on stderr              | ≥ 3  |
 
 **The verdict is exactly ONE line**, and any advisory reason (EV-17, EV-21) sits
 after a colon on that same line — never on a second line. Consumers parse the
