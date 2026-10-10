@@ -17,7 +17,7 @@ changing anything here.
   start; memory otherwise. The tests run every store against both.
 - **Identity:** a voter's address is a credential they hold (`voter_credential`),
   not their key, and each voter records an assurance level — `none`, `link` or
-  `email`, ordered in `src/identity/assurance.ts` (ADR-0032). Everyone signs in
+  `email`, ordered in `src/identity/assurance.ts` (ADR-0033). Everyone signs in
   by email today, so everyone is `email`.
 - **Not built:** real email, creating polls, and the path to action.
 

@@ -120,7 +120,7 @@ test(
   "two_first_sign_ins_for_one_address_at_once_make_one_voter",
   { skip: databaseSkip },
   async (t) => {
-    // Race 2 of #158, now across two tables (ADR-0032). Two creates for one
+    // Race 2 of #158, now across two tables (ADR-0033). Two creates for one
     // credential rarely overlap on their own, and a store that checks before
     // it writes passes when they run one after another. So hold the
     // credential's key in an open transaction — both creates then wait on it
@@ -216,7 +216,7 @@ test(
   "a_voter_with_no_credential_is_a_voter_with_no_address",
   { skip: databaseSkip },
   async (t) => {
-    // Deliberately representable (ADR-0032): a public-link or anonymous
+    // Deliberately representable (ADR-0033): a public-link or anonymous
     // voter (P10) is a voter row with no credential. Nothing in pulse writes
     // one yet, so it is written here by hand — and every read must hand it
     // back with `email: null` rather than fail or invent an address.

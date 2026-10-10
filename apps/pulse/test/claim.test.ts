@@ -26,7 +26,11 @@ const START = new Date("2026-08-09T12:00:00.000Z");
 /** A service wired to one community, a silent mailer, and a movable clock. */
 function setup(
   options: ClaimOptions = {},
-  overrides: { mailer?: Mailer; domains?: AllowedDomainSource; rows?: readonly AllowedDomain[] } = {},
+  overrides: {
+    mailer?: Mailer;
+    domains?: AllowedDomainSource;
+    rows?: readonly AllowedDomain[];
+  } = {},
 ) {
   let now = START;
   const mailer = new ConsoleMailer(() => {});
@@ -38,11 +42,11 @@ function setup(
     {
       membership: new DomainAllowlist(
         overrides.domains ??
-        new StaticDomainSource(
-          overrides.rows ?? [
-            { community: "ubc-students", domain: "student.ubc.ca" },
-          ],
-        ),
+          new StaticDomainSource(
+            overrides.rows ?? [
+              { community: "ubc-students", domain: "student.ubc.ca" },
+            ],
+          ),
       ),
       voters,
       claims,

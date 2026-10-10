@@ -37,7 +37,7 @@ export interface Membership {
  * and they plug in here without any caller changing.
  *
  * **Not the same question as a credential's `kind`** (`./assurance.ts`,
- * ADR-0032), and deliberately not a third word for it. A credential answers
+ * ADR-0033), and deliberately not a third word for it. A credential answers
  * "who is this person, and how sure are we" — its kind is the assurance level
  * it confers. A verification method answers "which community, if any" — it
  * reads a credential the person already proved (today, always an `email` one,

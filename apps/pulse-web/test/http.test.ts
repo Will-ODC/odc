@@ -146,6 +146,29 @@ describe("asking for a sign-in link", () => {
     }
   });
 
+  it("refuses a community question with duplicate choices", async () => {
+    stubFetch({
+      status: 422,
+      body: JSON.stringify({
+        ...CHOOSE,
+        communities: [{ id: "ubc-staff" }, { id: "ubc-staff" }],
+      }),
+    });
+    await expect(
+      new HttpPulseApi().requestLink("jo@ubc.ca", false),
+    ).rejects.toThrow("pulse sent a response the app couldn't read.");
+  });
+
+  it("refuses a community question with only one choice", async () => {
+    stubFetch({
+      status: 422,
+      body: JSON.stringify({ ...CHOOSE, communities: [{ id: "ubc-staff" }] }),
+    });
+    await expect(
+      new HttpPulseApi().requestLink("jo@ubc.ca", false),
+    ).rejects.toThrow("pulse sent a response the app couldn't read.");
+  });
+
   it("still throws on a 422 that is not the community question, and on a bad pick", async () => {
     stubFetch({
       status: 422,

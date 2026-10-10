@@ -251,7 +251,7 @@ export class ClaimService {
 
     try {
       // The voter and the credential the link just proved, written together
-      // (ADR-0032): the address is something this voter holds, not what the
+      // (ADR-0033): the address is something this voter holds, not what the
       // voter is. Clicking a mailed link is `email` assurance.
       const voter = await this.#voters.create(
         {

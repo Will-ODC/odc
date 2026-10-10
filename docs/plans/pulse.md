@@ -365,7 +365,7 @@ than demanded at the door.
 - **Does `/api/me` still return an address?** `publicVoter` returns
   `voter.email` (`server.ts:502`) and `API.md` documents `{ id, email, community }`.
   P8 must own that shape and the `API.md` edit, or say it is unchanged.
-  **Answered by P8 slice 1: unchanged** (ADR-0032) — `email` is read back from
+  **Answered by P8 slice 1: unchanged** (ADR-0033) — `email` is read back from
   the voter's `email` credential. What a credential-less voter is sent is P10's.
 - **What does `proofEmailsOptIn` mean for someone with no address?** Stored on
   `voter` and `pending_claim`, asserted in four tests, rendered at
@@ -384,7 +384,7 @@ than demanded at the door.
 
 The one piece that needs no admin surface and no unwritten ADR.
 
-**Status (2026-10-09).** Split in two, recorded in ADR-0032 (proposed, for the
+**Status (2026-10-09).** Split in two, recorded in ADR-0033 (proposed, for the
 operator to confirm):
 
 - **Slice 1 — built** (branch `pulse/35-identity-is-a-credential`): the storage

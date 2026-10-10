@@ -217,7 +217,7 @@ The voter is **wrapped**, the same way it is in the redeem response, so a later 
 about the session itself can be added beside it without changing what `voter` means.
 `community` is a string or `null`, exactly as in the redeem response.
 
-This shape is unchanged by P8 (ADR-0032), which stores the address as a credential the
+This shape is unchanged by P8 (ADR-0033), which stores the address as a credential the
 voter holds rather than as the voter's key: `email` is read back from that credential,
 and every voter so far signs in by email, so it is always a string.
 

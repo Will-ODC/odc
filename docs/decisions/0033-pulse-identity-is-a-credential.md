@@ -1,4 +1,4 @@
-# ADR-0032: Pulse identity is a credential
+# ADR-0033: Pulse identity is a credential
 
 - **Status:** proposed — **for the operator to confirm**, except decision 2
   (the level vocabulary), which is the operator's own decision 1 of 2026-09-12
@@ -121,3 +121,13 @@ boundaries that survive the exemption:
   Every change is to pulse's own tables and code.
 - **"The counting is never the subject."** Honoured. No user-visible string is
   added or changed.
+
+## Numbering correction
+
+This Pulse record was originally numbered 0032 in PR #213. Core PR #224 had
+already assigned 0032 to anchor precedence and stored claims, so PR #215 moves
+this record to **0033** without changing its decision or status. The comment
+in checksum-protected migration `004_identity_is_a_credential.sql` retains its
+original reference: its mention of ADR-0032 means this Pulse record, now 0033,
+not the core anchor policy. That applied migration must not be edited merely
+to change a comment.

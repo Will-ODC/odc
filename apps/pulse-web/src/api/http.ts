@@ -196,8 +196,8 @@ function safeJson(text: string): unknown {
 /**
  * The 422 `choose_community` answer to `POST /api/sign-in`, as a result.
  *
- * Read strictly: a list that is missing, empty, or holds anything but
- * `{ id: string }` cannot be offered to anyone, so it is a response the app
+ * Read strictly: a list needs at least two distinct, non-empty ids. Missing
+ * or duplicate choices cannot be offered to anyone, so it is a response the app
  * could not read rather than a question with no answers.
  */
 type ChooseCommunity = Extract<
@@ -224,7 +224,11 @@ function chooseCommunity(
   const ids = Array.isArray(list)
     ? list.map((entry: unknown) => stringField(entry, "id"))
     : [];
-  if (ids.length === 0 || ids.some((id) => id === undefined)) {
+  if (
+    ids.length < 2 ||
+    ids.some((id) => id === undefined) ||
+    new Set(ids).size !== ids.length
+  ) {
     throw new ApiError(status, "pulse sent a response the app couldn't read.");
   }
   return {
