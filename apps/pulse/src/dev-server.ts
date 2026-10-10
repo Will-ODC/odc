@@ -10,6 +10,7 @@ import { SessionSigner } from "./http/session.js";
 import {
   DomainAllowlist,
   StaticDomainSource,
+  type AllowedDomain,
   type AllowedDomainSource,
 } from "./identity/allowlist.js";
 import { ClaimService } from "./identity/claim.js";
@@ -57,7 +58,8 @@ const THREE_DAYS_MS = 3 * 24 * 60 * 60 * 1000;
 
 /**
  * The seed: one community, one domain that names it, and three polls. Any
- * address can sign in; only `@example.test` ones are members of the community.
+ * address can sign in; only `@example.test` ones are members of the community
+ * (and `@both.example.test` ones, who pick — see `SHARED_DOMAIN` below).
  *
  * A literal, not configuration: a knob for the poll's wording would only be a
  * way to hand `createPoll` a shape it refuses, and every one of these values is
@@ -115,6 +117,27 @@ const SEED = {
     },
   ] satisfies NewPoll[],
 };
+
+/**
+ * One more domain, shared by two communities, so the sign-in picker (P2) can
+ * be seen in `pnpm dev`. A separate domain on purpose: `@example.test` still
+ * signs in exactly as before, and only an `@both.example.test` address is
+ * asked which community it is signing in to. Matching is exact, so this row
+ * and the one above never meet.
+ */
+const SHARED_DOMAIN = {
+  domain: "both.example.test",
+  communities: [SEED.community, "demo-neighbours"],
+} as const;
+
+/** Every allowlist row the dev server starts with. */
+const SEED_DOMAINS: readonly AllowedDomain[] = [
+  { community: SEED.community, domain: SEED.domain },
+  ...SHARED_DOMAIN.communities.map((community) => ({
+    community,
+    domain: SHARED_DOMAIN.domain,
+  })),
+];
 
 /** Where a run starts. The client opens this one when it is given no other. */
 export const FIRST_POLL_ID = "ads-free";
@@ -309,9 +332,7 @@ function inMemory(): Storage {
     votes: new InMemoryVotingStore(),
     suggestions: new InMemorySuggestionStore(),
     claims: new InMemoryClaimStore(),
-    domains: new StaticDomainSource([
-      { community: SEED.community, domain: SEED.domain },
-    ]),
+    domains: new StaticDomainSource(SEED_DOMAINS),
   };
 }
 
@@ -331,7 +352,7 @@ async function inPostgres(
     // On every start. Harmless when nothing is new: the runner skips what ran.
     await migrate(pool);
     // The allowlist is rows, as CLAUDE.md promises; this is the insert.
-    await allowDomain(pool, { community: SEED.community, domain: SEED.domain });
+    for (const row of SEED_DOMAINS) await allowDomain(pool, row);
   } catch (error) {
     // Closed so nothing keeps the process alive; the error explaining why the
     // start failed is the one to report, not a failure to close.
@@ -391,6 +412,7 @@ async function main(): Promise<void> {
         ? "  storage: in memory — everything is lost when it stops"
         : "  storage: Postgres (PULSE_DATABASE_URL) — kept across restarts",
       `  community "${SEED.community}" is @${SEED.domain}; any other address signs in with none`,
+      `  @${SHARED_DOMAIN.domain} is asked to choose: ${SHARED_DOMAIN.communities.join(" or ")}`,
       ...SEED.polls.map((poll) => `  poll "${poll.id}": ${poll.question}`),
       "  sign-in links are printed here; paste one into the browser",
     ].join("\n"),

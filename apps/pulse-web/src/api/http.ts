@@ -37,13 +37,22 @@ export class HttpPulseApi implements PulseApi {
   async requestLink(
     email: string,
     proofEmailsOptIn: boolean,
+    community?: string,
   ): Promise<RequestLinkResult> {
-    // Anyone with a valid address gets a link (ADR-0030), so there is no
-    // refusal to treat as an answer: every refusal throws.
-    const body = await this.#send<{ message?: unknown }>("POST", "/sign-in", {
-      email,
-      proofEmailsOptIn,
-    });
+    // Anyone with a valid address gets a link (ADR-0030). The one refusal that
+    // is really a question — "which community?" (P2) — comes back as an answer;
+    // every other refusal throws.
+    const body = await this.#send<{ message?: unknown }, ChooseCommunity>(
+      "POST",
+      "/sign-in",
+      {
+        email,
+        proofEmailsOptIn,
+        ...(community === undefined ? {} : { community }),
+      },
+      chooseCommunity,
+    );
+    if (body instanceof Answered) return body.value;
     // The server's own "check your email" sentence, carried rather than
     // dropped: the screen that follows should not have to invent copy the
     // API already documents as safe to show.
@@ -114,7 +123,17 @@ export class HttpPulseApi implements PulseApi {
     });
   }
 
-  async #send<T>(method: string, path: string, body?: unknown): Promise<T> {
+  /**
+   * `answer` is how a caller turns one particular refusal into a result: it
+   * sees every non-2xx body and returns a value to resolve with, or undefined
+   * to let the refusal throw as usual.
+   */
+  async #send<T, A = never>(
+    method: string,
+    path: string,
+    body?: unknown,
+    answer?: (status: number, parsed: unknown) => A | undefined,
+  ): Promise<T | ([A] extends [never] ? never : Answered<A>)> {
     let response: Response;
     try {
       response = await this.#fetch(this.#base + path, {
@@ -141,6 +160,12 @@ export class HttpPulseApi implements PulseApi {
     const parsed: unknown = text === "" ? null : safeJson(text);
 
     if (!response.ok) {
+      const answered = answer?.(response.status, parsed);
+      if (answered !== undefined) {
+        return new Answered(answered) as [A] extends [never]
+          ? never
+          : Answered<A>;
+      }
       throw new ApiError(
         response.status,
         messageFrom(parsed) ?? fallbackMessage(response.status),
@@ -166,6 +191,50 @@ function safeJson(text: string): unknown {
   } catch {
     return null;
   }
+}
+
+/**
+ * The 422 `choose_community` answer to `POST /api/sign-in`, as a result.
+ *
+ * Read strictly: a list needs at least two distinct, non-empty ids. Missing
+ * or duplicate choices cannot be offered to anyone, so it is a response the app
+ * could not read rather than a question with no answers.
+ */
+type ChooseCommunity = Extract<
+  RequestLinkResult,
+  { status: "choose_community" }
+>;
+
+/**
+ * A refusal a caller asked to have as a result. Boxed so it can never be
+ * mistaken for a success body that happens to share its shape.
+ */
+class Answered<A> {
+  constructor(readonly value: A) {}
+}
+
+function chooseCommunity(
+  status: number,
+  parsed: unknown,
+): ChooseCommunity | undefined {
+  if (status !== 422 || stringField(parsed, "error") !== "choose_community") {
+    return undefined;
+  }
+  const list = (parsed as { communities?: unknown }).communities;
+  const ids = Array.isArray(list)
+    ? list.map((entry: unknown) => stringField(entry, "id"))
+    : [];
+  if (
+    ids.length < 2 ||
+    ids.some((id) => id === undefined) ||
+    new Set(ids).size !== ids.length
+  ) {
+    throw new ApiError(status, "pulse sent a response the app couldn't read.");
+  }
+  return {
+    status: "choose_community",
+    communities: (ids as string[]).map((id) => ({ id })),
+  };
 }
 
 /** Server errors carry a plain sentence in `message`; show that, never the status. */

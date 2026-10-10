@@ -154,7 +154,7 @@ export function claimStoreConformance(
       });
 
       test("a_claim_reads_back_its_kind_and_subject", async (t) => {
-        // P8 (ADR-0032): a link proves a credential of some kind, and the
+        // P8 (ADR-0033): a link proves a credential of some kind, and the
         // address it was sent to is that credential's subject.
         const store = await fresh(t);
         await store.put(claim());

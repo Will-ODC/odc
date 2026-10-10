@@ -10,7 +10,7 @@ export interface Voter {
   id: string;
   /**
    * The address of the voter's `email` credential, or `null` for a voter who
-   * holds none. Since P8 (ADR-0032) the address is not the voter's key but a
+   * holds none. Since P8 (ADR-0033) the address is not the voter's key but a
    * credential they hold, read back here so `/api/me` keeps its shape.
    *
    * Every voter created today signs in by email and so has one. Null is the

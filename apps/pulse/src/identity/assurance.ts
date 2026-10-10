@@ -1,6 +1,6 @@
 /**
  * How sure pulse is about who a voter is — the levels of sign-in decided
- * 2026-09-12 (docs/plans/pulse.md, P8 decision 1; ADR-0032).
+ * 2026-09-12 (docs/plans/pulse.md, P8 decision 1; ADR-0033).
  *
  * **Stored as words, ordered here.** The database holds `voter.assurance` as
  * plain text and knows nothing of the order, exactly as `polls.method` holds a

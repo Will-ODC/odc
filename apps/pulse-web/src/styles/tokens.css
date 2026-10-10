@@ -93,6 +93,8 @@
 
   --step: 8px;
   --gutter: 24px;
+  /* A drawn line: borders, and (doubled) focus rings. */
+  --hairline: 1px;
 
   /*
    * The desktop shell — the two rails either side of the phone-sized stage.

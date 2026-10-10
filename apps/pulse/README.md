@@ -17,7 +17,7 @@ changing anything here.
   start; memory otherwise. The tests run every store against both.
 - **Identity:** a voter's address is a credential they hold (`voter_credential`),
   not their key, and each voter records an assurance level — `none`, `link` or
-  `email`, ordered in `src/identity/assurance.ts` (ADR-0032). Everyone signs in
+  `email`, ordered in `src/identity/assurance.ts` (ADR-0033). Everyone signs in
   by email today, so everyone is `email`.
 - **Not built:** real email, creating polls, and the path to action.
 
@@ -32,6 +32,13 @@ Sign-in links print to the API's terminal instead of being emailed. The API
 seeds three linked polls and the community `demo-community`, which
 `@example.test` addresses belong to. Any other address signs in too, with no
 community. To change the demo, edit `src/dev-server.ts`.
+
+To see the community picker, sign in as anyone `@both.example.test`: the seed lists
+that one domain under two communities, `demo-community` and `demo-neighbours`, so the
+sign-in screen asks which one. It is a separate domain so that `@example.test` signs
+in exactly as it always has. With a database, any domain gets the same question once
+two rows name it:
+`insert into allowed_domain (community, domain, include_subdomains) values ('other', 'example.test', false);`.
 
 Without a database, everything is lost when the API stops. To keep it, start
 pulse's database (see [Test](#test)) and set `PULSE_DATABASE_URL` before `dev`.
