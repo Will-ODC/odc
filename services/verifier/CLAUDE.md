@@ -7,7 +7,7 @@
 - Go only; zero shared code/runtime/serialization with ledger. Standard library
   only, with ONE exception: `filippo.io/edwards25519`, used **solely** for the
   ET-4c prime-order subgroup check (ADR-0010).
-- `verify <export.ndjson> [--head <hash>]` → one of the three chain verdicts of
+- `verify <export.ndjson> [--head <hash>] [--chain <genesis-hash>]` → one of the three chain verdicts of
   `contracts/evolution.md` EV-7/EV-17: `VALID` / `INVALID at line N` /
   `PARTIAL at lines …`. Exit codes 0 / 1 / 2, and ≥3 for tool-level errors.
   Reason text is advisory only; conformance is the verdict token and line

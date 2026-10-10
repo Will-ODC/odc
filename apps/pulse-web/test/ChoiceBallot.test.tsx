@@ -545,6 +545,25 @@ describe("the results of a many-answer poll that has already closed", () => {
     ).toContain("Grants");
   });
 
+  /** An approval ballot is a list; every answer on it was this person's. */
+  it("marks every answer this browser gave on an approval poll", async () => {
+    showClosed({
+      results: () => Promise.resolve({ ...ENDED, method: "approval" }),
+      myBallot: () => Promise.resolve([0, 2]),
+    });
+    fireEvent.click(seeResults());
+    const said = await screen.findByText(/You picked/);
+    expect([...said.querySelectorAll("b")].map((b) => b.textContent)).toEqual([
+      "Members chip in",
+      "Grants",
+    ]);
+    const marked = [...document.querySelectorAll('[data-yours="true"]')];
+    expect(marked.map((row) => row.textContent)).toEqual([
+      expect.stringContaining("Members chip in"),
+      expect.stringContaining("Grants"),
+    ]);
+  });
+
   it("marks nothing for someone who did not answer", async () => {
     showClosed({ myBallot: () => Promise.resolve(null) });
     fireEvent.click(seeResults());
@@ -567,8 +586,13 @@ describe("the results of a many-answer poll that has already closed", () => {
     showClosed();
     fireEvent.click(seeResults());
     await screen.findByText("3 · 50%");
-    expect(document.activeElement).toBe(
-      screen.getByRole("group", { name: "How people answered" }),
+    // Focus moves in an effect that runs after the counts render, so the
+    // counts can be on screen a beat before focus is. Under CI load the gap
+    // was enough to fail here (#200's run).
+    await waitFor(() =>
+      expect(document.activeElement).toBe(
+        screen.getByRole("group", { name: "How people answered" }),
+      ),
     );
     fireEvent.click(screen.getByRole("button", { name: "Close" }));
     expect(screen.getByText("This one has closed.")).toBeTruthy();

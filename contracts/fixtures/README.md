@@ -1,10 +1,10 @@
 # contracts/fixtures/ — golden vectors
 
-**Version:** 12
+**Version:** 14
 **Status:** DRAFTING (Phase 0 · T5, T5j, ADR-0009, ADR-0010, ADR-0011). Not
 frozen.
 
-**98 vectors** — 15 `VALID`, 4 `PARTIAL`, 79 `INVALID`. They are numbered in
+**115 vectors** — 21 `VALID`, 4 `PARTIAL`, 90 `INVALID`. They are numbered in
 category order: `VALID` (`001`–`007`), `PARTIAL` (`008`–`011`), then `INVALID` —
 the envelope and Stage A checks (`012`–`042`), the export framing and canonical
 line form (`043`–`052`), `--head` (`053`–`054`), the Stage B type semantics
@@ -12,6 +12,28 @@ line form (`043`–`052`), `--head` (`053`–`054`), the Stage B type semantics
 after that scheme rather than inserted into it, because **ids never change once
 shipped**: renumbering to keep the categories contiguous would silently
 invalidate a conformance run that cites them.
+
+`099`–`108` cover Phase 3 batching (ADR-0029): ET-24a returning to a closed
+batch, ET-24's maximal runs and first fatal lines, interleaving across issues,
+the under-size last-batch exception, ET-23 against a two-minute issue interval,
+both ET-14b parameter floors, and a valid issue with two full batches. The
+counterexamples `106` and `107` reject at the first ballot of T2, before the
+return to T1; a set-based ET-24 would attribute those lines incorrectly.
+
+`109`–`115` cover `--chain` (`export-format.md` EX-21–EX-23, ADR-0013), and are
+the first vectors to carry the `chain` input below. `109` accepts `002`'s chain
+under its own genesis hash; `110` rejects it at line 1 under its own **head** (a
+real hash of the same chain, so wiring `--chain` to the `--head` comparison
+fails). `111`–`113` are the two-chain pair under **one** operator key: chain B
+is `002`'s four events over a genesis one millisecond earlier, so both genesis
+payloads carry the same `chain_id`, `operator_pk` and `registrar_pk` and only
+`ts` — and therefore the genesis hash — differs (`event-types.md` ET-7, ET-7a).
+Each is `INVALID` at line 1 under the other's identity (`111`, `112`), and B is
+`VALID` under its own (`113`; A under its own is `109`). `114` gives `--chain`
+and `--head` together, both correct; `115` gives the correct `--chain` and a
+wrong `--head`, still `INVALID` at the last line (EX-19). No vector gives both
+inputs wrong, or a wrong `--chain` on an export already `INVALID` elsewhere: the
+spec does not say which line wins there.
 
 `071`–`073` cover scalar values above U+FFFF — `071` that a title above the BMP
 is stored as literal UTF-8, `072`/`073` that `event-types.md` ET-14 counts
@@ -97,7 +119,7 @@ to read `contracts/` and nothing else, so anything T7 needs must be here.
 >
 > - `vectors/`, `preimages/`, `derivations.json` — **additions only.**
 > - `index.json` — **may gain entries, may never lose a line.** Appending is a
->   pure insertion and passes; editing any existing `expect`, `head`, `export`
+>   pure insertion and passes; editing any existing `expect`, `head`, `chain`, `export`
 >   **or `note`** rewrites a line and fails. Ids must stay unique, and no object
 >   may repeat a key — a second `"expect"` added after the first is a pure
 >   insertion that every parser resolves to the LAST value. Note prose is frozen
@@ -168,6 +190,15 @@ One entry of `index.json`:
   end-truncation undetectable from the export alone, so those identical bytes are
   the *only* thing pinning the rule. Running either vector without its `head`
   field, or both with it, tests nothing.
+- **`chain`** — present only when the vector MUST be run with
+  `--chain <value>` (`export-format.md` EX-22). Absent means run without
+  `--chain`. Independent of `head`: a vector may carry either, both, or neither,
+  and a runner passes each one it finds.
+
+  The byte-identity is load-bearing here too: `109`–`111`, `114` and `115` are `002`'s bytes
+  again, and `112`/`113` are one other export, each pair told apart only by its
+  `chain` (and `head`) inputs. A runner that ignores `chain` reports `110`–`112`
+  as `VALID`.
 - **`expect`** — the verdict, and nothing else. See below.
 - **`cites`** and **`note`** — **advisory**. For the human reviewing the vector.
 
@@ -193,7 +224,7 @@ reason-code registry** and none will be defined for v1.
 
 Line attribution for failures with no offending event — an empty export, a
 `--head` mismatch, a framing violation — is fixed by `export-format.md`
-EX-18–EX-20.
+EX-18–EX-20, and for a `--chain` mismatch by EX-23.
 
 ## Verifying the bytes
 
