@@ -19,6 +19,52 @@ Format (newest first, one entry per merged contracts change):
 
 ---
 
+## event-types.md v12 · evolution.md v7 · event-schema.md v6 — 2026-10-10 — mixed-version ballot batching (ADR-0034)
+
+**The defect.** ET-24/ET-24a counted only the registered `(vote_cast, 1)`, and
+an unregistered `vote_cast` "joins no batch, ends none, and proves none
+not-last". With `ballot_batch_min` 3, two v1 ballots and one newer-version ballot
+at T1, then three v1 ballots at T2, are conforming to a reader who registers the
+newer version, but a v11 verifier reports `INVALID` at the first T2. EV-8 forbids
+that. Nothing also bound future `vote_cast` versions to batching at all. The
+operator chose option 2 of `docs/plans/hash-chain-unknown-ballot-batching.md`
+(#225) on 2026-10-10.
+
+- **`ET-22a` added** (`event-types.md`): a permanent evolution constraint. Every
+  registered `vote_cast` version identifies exactly one issue, represents exactly
+  one ballot, carries `issue_id` with the ID-8/ET-18 meaning, and obeys its
+  issue's interval, minimum and closed-instant discipline. No future version may
+  remove these or count one event as several ballots.
+- **`ET-24`/`ET-24a` scope** widened from `(vote_cast, 1)` to every registered
+  `vote_cast` version (in v12, still only version 1). "Which ballots count" now
+  says a verifier MUST NOT inspect an unregistered version's payload for batch
+  membership, and that such a ballot is no longer disregarded.
+- **`ET-24b` added**: the conservative uncertainty rule. An opaque ballot is a
+  **candidate** of an issue created before it whose interval its `ts` is a
+  multiple of. Each registered ballot's batch check is **definite** (a known
+  ET-24a failure, or a known ET-24 failure that the candidates at the run's
+  instant are too few to cure: `|R| + F < m`), **unresolved** (a curable known
+  ET-24 failure, or a known pass that a candidate in a stated position and `ts`
+  relation could change), or **resolved**. Definite failures are `INVALID`;
+  unresolved checks are listed in `PARTIAL`. It uses only `seq` order, `ts`
+  equality and ET-23's multiple test, and every test at a line reads only
+  earlier lines, so EX-16's prefix property holds.
+- **`EV-7`/`EV-17`**: `PARTIAL` enumerates the unregistered lines together with
+  the registered lines ET-24b leaves unresolved, ascending, each once. **`EV-8`**
+  gains a paragraph: no `INVALID` because a verifier does not know what an
+  unregistered event is, and no erasing of what registered events alone prove.
+  **`EV-15`** puts ET-22a outside the stage split and ET-24b in Stage B.
+- **`ES-21`** (`event-schema.md` v5 → v6) names ET-24b's use of an unregistered
+  `vote_cast`'s `ts` (ET-23's multiple test and equality), which decides only
+  whether a registered check is unresolved.
+- **Verdicts.** On every chain in which no unregistered `vote_cast` is a
+  candidate of any issue, v12 verdicts and lines equal v11's. No committed
+  vector contains an unregistered `vote_cast`, so **no corpus verdict changes**
+  and **no fixture changes here**. The eight proposal cases come out as the
+  proposal declared them (ADR-0034 tabulates them). Vectors are owed after both
+  verifiers implement ET-24b, each in isolation (fixtures never precede
+  verifiers).
+
 ## export-format.md v5 — 2026-10-09 — explicit anchor precedence and stored claims (ADR-0032)
 
 - EX-15/EX-22 compare expected anchors only after the file's structural and

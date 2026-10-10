@@ -3,7 +3,10 @@
 - **Status:** accepted — revised 2026-10-09 by its own review fixes (`event-types.md`
   v11): a batch is a run, not a set. #176 merged the first draft before the
   fresh-context review's blocking finding was fixed; the follow-up PR carries
-  the fix, and this body describes the decision as finally specified.
+  the fix, and this body describes the decision as finally specified. Amended in
+  part by ADR-0034 (`event-types.md` v12): the "Which ballots count" bullet no
+  longer holds. ET-24/ET-24a count every registered `vote_cast` version, and an
+  unregistered one can leave a batch check unresolved (ET-24b).
 - **Date:** 2026-10-08
 - **Phase:** 0
 - **Amends:** in part ADR-0014 (ET-24a: a batch instant, once left, is closed)

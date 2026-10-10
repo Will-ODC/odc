@@ -1,8 +1,8 @@
 # Event Schema — contracts/event-schema.md
 
-**Version:** 5
+**Version:** 6
 **Status:** DRAFTING (Phase 0 · T3, amended T4a, T9a/ADR-0014, ADR-0016,
-ADR-0019, and ADR-0029). Not frozen.
+ADR-0019, ADR-0029, and ADR-0034). Not frozen.
 **Companion specs:** `event-types.md` (payloads), `ids.md` (identifiers),
 `hashing.md` (byte-exact preimage — T4), `export-format.md` (NDJSON — T4).
 
@@ -130,8 +130,13 @@ fewer:
   `event-types.md` ET-23 places on `vote_cast` — a ballot's `ts` is quantized to
   its issue's declared batch interval, so a verifier checks that value — and the
   **equality** comparison of two ballots' `ts` by which `event-types.md` ET-24
-  and ET-24a group one issue's ballots into batches. Neither orders events by
-  `ts`, and neither selects an event by it. `seq` orders (ES-8), always and only.
+  and ET-24a group one issue's ballots into batches. `event-types.md` ET-24b
+  applies the same two tests, ET-23's multiple test and `ts` equality, to the
+  `ts` of a `vote_cast` at a version the verifier does not register. It does so
+  only to decide whether a registered ballot's batch check is unresolved, never
+  to accept or reject that event. None of these orders events by `ts`, and none
+  selects by `ts` which events are verified. `seq` orders (ES-8), always and
+  only.
 - **ES-22.** `ts` is nonetheless covered by `hash` (Section 8): once written it
   is immutable, even though it is not authoritative.
 

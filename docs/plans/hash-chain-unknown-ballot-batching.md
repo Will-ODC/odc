@@ -1,8 +1,12 @@
 # Proposal — mixed-version ballot batching
 
-**Status: PROPOSED, not a normative contract or an implementation.** The operator
-authorised preparing this proposal and regression cases on 2026-10-09. Approval
-to prepare it does not ratify its detailed uncertainty algorithm.
+**Status: DECIDED (ADR-0034, option 2).** On 2026-10-10 the operator adopted
+the permanent constraint below as written and chose a simpler, conservative
+uncertainty rule instead of this proposal's exact one. The normative text is
+`contracts/event-types.md` v12 ET-22a/ET-24b and `contracts/evolution.md` v7.
+This document is the record of the proposal and is not normative. The rest of
+it is unchanged. The operator authorised preparing this proposal and
+regression cases on 2026-10-09.
 
 **Base:** `f13c8cd` (includes #203/#219/#220/#221/#222). Claude completed #222;
 its conflict resolution is merged. Pulse changes remain outside this proposal.

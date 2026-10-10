@@ -1,8 +1,8 @@
 # Evolution — contracts/evolution.md
 
-**Version:** 6
+**Version:** 7
 **Status:** DRAFTING (Phase 0 · T5f, amended T9a/ADR-0014, ADR-0015,
-ADR-0017). Not frozen.
+ADR-0017, ADR-0034). Not frozen.
 **Companion specs:** `event-schema.md`, `event-types.md`, `hashing.md`,
 `export-format.md`, `read-api.md`.
 **Governing ADRs:** ADR-0006 (verifier scope & forward compatibility),
@@ -79,7 +79,10 @@ chain, or a fork that added types, charter §8).
   - **`PARTIAL`** — Stage A passes for the whole chain and no registered event
     fails Stage B, but one or more events carry a **well-formed** (ES-10) `type`
     or `(type, version)` the verifier does not register, so Stage B could not run
-    for them. The verifier MUST enumerate the affected line numbers.
+    for them. The verifier MUST enumerate the affected line numbers: every such
+    line, and every line of a registered `vote_cast` whose batch check
+    `event-types.md` ET-24b leaves **unresolved** because of them (EV-17). An
+    unresolved check is not a Stage B failure.
 - **EV-8.** A verifier MUST NOT report `INVALID` **solely** because a well-formed
   event has an unregistered `(type, version)` — **with the single exception of
   `genesis`, EV-20.** Such an event is hash-checkable
@@ -87,6 +90,19 @@ chain, or a fork that added types, charter §8).
   only its type-specific semantics are left unchecked (`PARTIAL`, EV-7). This is
   the property the fork/exit right and P1 require: an old verifier confirms the
   integrity of a newer chain instead of falsely condemning it.
+
+  **Nor through a registered event (added in v7, ADR-0034).** A check on a
+  registered event can depend on an unregistered one: a ballot at a newer
+  `vote_cast` version may belong to a batch the verifier checks under
+  `event-types.md` ET-24/ET-24a. A verifier MUST NOT report `INVALID` because
+  it does not know what such an event is. Where ET-24b leaves a registered
+  ballot's batch check unresolved, that check is not failed, and the line is
+  enumerated in `PARTIAL` (EV-7). Where a failure holds whatever the
+  unregistered events are (ET-24b's definite failures, and every check that
+  does not involve them, such as ET-23), it is `INVALID` as before. Uncertainty
+  never strengthens a verdict to `INVALID`, and it never erases what the
+  registered events alone prove. The ballot batch checks are the only checks
+  this paragraph covers. ET-24b is the rule that decides them.
 - **EV-9.** **Refinement of "reject" for unregistered types.** Where
   `event-schema.md` ES-9/ES-11 and `event-types.md` ET-1/ET-2 direct a verifier
   to *reject* an event of an unregistered `type` or `(type, version)`, that
@@ -185,11 +201,15 @@ the surface has to live here.
   outside this split and belong to neither stage. EX-24 is likewise outside
   the split: it requires tool output on every non-empty run and does not change
   the chain verdict. So are, in `event-types.md`,
-  the boundary statements ET-20 and ET-21 and the evolution constraint ET-22
-  (which describe what the log does not enforce, and what a future version may
-  not do), and **ET-25**, which is a producer obligation no reader can check —
-  a shuffled batch and an arrival-ordered one are indistinguishable, so no
+  the boundary statements ET-20 and ET-21 and the evolution constraints ET-22
+  and ET-22a (which describe what the log does not enforce, and what a future
+  version may not do or must be), and **ET-25**, which is a producer
+  obligation no reader can check — a shuffled batch and an arrival-ordered one are indistinguishable, so no
   verifier can report it and no stage contains it (ADR-0014).
+  **ET-24b** is Stage B, a check on registered ballots like ET-24 and ET-24a
+  which it qualifies. It reads only the envelope `seq` and `ts` of the
+  unregistered `vote_cast` events it considers, never their payloads, and it
+  never makes one of them `INVALID`.
 - **EV-16.** **A payload-shape failure is `INVALID`, never `PARTIAL`.** An event
   violating `event-schema.md` ES-15, ES-16, or ES-17 — a non-object `payload`, or
   a float, boolean, `null`, nested object, or array anywhere in it — MUST be
@@ -208,7 +228,14 @@ the surface has to live here.
     line is deliberately not pinned, since it cannot change which line is named.
     Failures with no natural line are attributed by `export-format.md` EX-18–EX-20.
   - **`PARTIAL` enumeration.** `PARTIAL` MUST enumerate the affected line numbers
-    in ascending order (EV-7).
+    in ascending order (EV-7). The affected lines are the union of two sets,
+    each line listed once: every line whose `(type, version)` the verifier does
+    not register, and every registered `vote_cast` line whose batch check
+    `event-types.md` ET-24b leaves unresolved. An unregistered line appears even
+    when it leaves no registered check unresolved. The two sets never overlap,
+    because the first holds only unregistered events and the second only
+    registered ones. (Added in v7, ADR-0034. Up to v6 the set was the
+    unregistered lines alone.)
   - **Reason text is advisory.** A verifier SHOULD accompany `INVALID` with a
     human-readable reason and SHOULD name the violated normative sentence (`ES-7`,
     `HA-14`, `EX-10`, …), reusing the identifiers these specs already assign. That
@@ -357,6 +384,7 @@ bar, and the sentiment plane, whose bar was missing.
 | Two-stage split                                       | EV-6           |
 | The verdict set (VALID/INVALID/PARTIAL)               | EV-7           |
 | Unknown well-formed type: INVALID vs PARTIAL          | EV-8, EV-9     |
+| A registered check that depends on an unknown event   | EV-8, ET-24b   |
 | Behavior on a same-version chain                      | EV-10          |
 | Correction forms (scoped LWW; targeted supersedes)    | EV-11, EV-12   |
 | Ballot-plane exclusion from corrections               | EV-13          |
@@ -364,6 +392,7 @@ bar, and the sentiment plane, whose bar was missing.
 | Which checks are Stage A vs Stage B (exhaustively)    | EV-15          |
 | Malformed payload on an unknown type: INVALID/PARTIAL | EV-16          |
 | Verdict precedence, line attribution, exit codes      | EV-17          |
+| Which lines `PARTIAL` names                           | EV-7, EV-17    |
 | What a fixture asserts (verdict + line only)          | EV-17          |
 | Placeholder type for `PARTIAL` fixtures               | EV-18          |
 | Placeholder version for `PARTIAL` fixtures            | EV-19          |
@@ -379,6 +408,11 @@ hypothetical v2 `delegation_created` event, both: pass Stage A on every line
 (including the v2 event, hash-recomputed by the generic rule, HA-7), find the v2
 `(type, version)` outside their registry, skip Stage B for it, and report
 `PARTIAL` naming that line — never `INVALID` (EV-7/EV-8/EV-9). Run on a chain
+whose ballots include one at a newer `vote_cast` version beside batches they can
+check, both leave unresolved exactly the registered batch checks
+`event-types.md` ET-24b names, and both list those lines together with the
+newer ballot's line; a batch failure that holds whatever the newer ballot is
+stays `INVALID` at the same line for both (EV-8, EV-17). Run on a chain
 whose **`genesis`** is at a version neither registers, both report `INVALID` at
 line 1 rather than walking a chain they cannot authenticate to `PARTIAL`
 (EV-20), and both say which of "my registry is old" and "this genesis is
