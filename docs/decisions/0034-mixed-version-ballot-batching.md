@@ -1,9 +1,10 @@
 # ADR-0034: Mixed-version ballot batching — one ballot per event, conservative uncertainty
 
 - **Status:** accepted. The operator chose option 2 of
-  `docs/plans/hash-chain-unknown-ballot-batching.md` (#225) on 2026-10-10. The
-  decidable test in `event-types.md` ET-24b is this ADR's drafting of that
-  decision and needs a fresh-context review before it merges.
+  `docs/plans/hash-chain-unknown-ballot-batching.md` (#225) on 2026-10-10, and
+  answered the open questions that drafting raised the same day (decisions 6 to
+  9). A fresh-context review of ET-24b approved it with nits, which are folded
+  in.
 - **Date:** 2026-10-10
 - **Phase:** 0
 - **Amends:** in part ADR-0029 ("Which ballots count") and ADR-0006 (what
@@ -40,8 +41,8 @@ held the question as "Future `vote_cast` versions and ballot batching".
 
 ## Decision
 
-**1. Adopt the permanent constraint as written (ET-22a).** Every registered
-`vote_cast` version identifies exactly one issue and represents exactly one
+**1. Adopt the permanent constraint as written (ET-22a).** Every `vote_cast`
+version that any contracts version registers identifies exactly one issue and represents exactly one
 ballot. It carries `issue_id` with the ID-8/ET-18 meaning and obeys its issue's
 interval, minimum batch size and closed-instant discipline. No future version may
 remove these constraints or count one event as several ballots. It is in the
@@ -97,7 +98,40 @@ event that a registered check depends on.
 equality to an opaque ballot's `ts`, only to decide whether a registered check is
 unresolved. `event-schema.md` ES-21 lists permitted uses of `ts`, so it names
 this one. Two earlier builders flagged ES-21 when ET-24 used `ts` without being
-named there (ADR-0029).
+named there (ADR-0029). ES-21's ban on selecting events by `ts` now names the
+candidacy test as its one exception, rather than redefining "select".
+
+The operator answered the questions the draft left open on 2026-10-10:
+
+**6. A definite shortfall stays `INVALID`.** When the candidates at a run's
+instant are too few to cure an under-size run (`|R| + F < m`), the failure is
+`INVALID` at its line, as in the "insufficient even optimistically" case. The
+one-ballot bound is what makes this provable, and the operator confirmed that
+the conservative rule should use it.
+
+**7. Vectors pin only cases where the two rules agree.** A golden vector for
+ET-24b MUST pin only a chain on which the conservative rule and the exact
+all-assignments rule give the same verdict and the same lines. The rule can then
+be tightened to the exact one later without contradicting a frozen vector. ET-24b
+says so in its text.
+
+**8. A ballot of an issue the verifier cannot read is unresolved (ET-18b).** A
+registered `vote_cast` whose `issue_id` names an `issue_created` at a version the
+verifier does not register passes ET-18. That issue is still a prior
+`issue_created`. Its ET-18a, ET-23, ET-24 and ET-24a checks are unresolved: the
+line is enumerated in `PARTIAL` (EV-7, EV-17), and never `INVALID` on that
+ground. Its signature and other checks apply as usual. Such a ballot takes no
+part in ET-24b for any issue.
+
+**9. Two more permanent clauses in ET-22a**, in the register of ET-22/EV-13:
+
+- **Only `vote_cast` carries ballots.** No other event type, present or future,
+  may represent a ballot. Otherwise a new type could escape ET-22, ET-22a and
+  batching entirely, and a verifier could not even tell that it was a ballot.
+- **An issue's batch parameters are fixed at `issue_created`.** An issue's
+  interval and minimum are exactly those its `issue_created` declares, and no
+  later event may change them. Otherwise a verifier that could not read the
+  amending event would count candidates and minimums against the wrong numbers.
 
 ### The proposal's eight cases under this rule
 
@@ -147,8 +181,11 @@ differ are named under Consequences.
 ## Consequences
 
 - **The `INVALID` set narrows, and only on chains holding an unregistered
-  `vote_cast`.** Where no unregistered `vote_cast` is a candidate of any issue,
-  v12 verdicts and lines equal v11's. Some v11 `INVALID` results with an opaque
+  `vote_cast` or `issue_created`.** Where no unregistered `vote_cast` is a
+  candidate of any issue and no registered ballot names an unregistered
+  `issue_created`, v12 verdicts and lines equal v11's. A v11 verifier that
+  rejected a ballot of an unregistered issue version under ET-18 now reports
+  `PARTIAL` (ET-18b). No committed vector holds such a ballot. Some v11 `INVALID` results with an opaque
   ballot become `PARTIAL`, and some v11 `PARTIAL` results name more lines. No
   committed vector contains an unregistered `vote_cast`. The ones that use
   version 1000000 (`009`, `070`, `096`) put it on `participant_registered` or
@@ -159,31 +196,35 @@ differ are named under Consequences.
   `ts(L)` just before a run start _L_. It reports `PARTIAL` where only a search
   could prove `INVALID`, most plainly on a single-issue chain, where every
   candidate must belong to that issue. Both err toward the weaker claim.
-- **Tightening to the exact rule later has a cost, and it grows after the RC.**
-  The operator left that option open. It would shrink some `PARTIAL` line sets
-  and turn some `PARTIAL` verdicts into `INVALID`, and both are conformance
-  surface (EV-17). Before the freeze, that is a spec bump that updates the
-  affected vectors. After the freeze, ADR-0008 makes vectors add-only, so a
-  vector pinning a conservative line set the exact rule would not produce
-  becomes the time bomb EV-18/EV-19 were written to prevent. **When vectors for
-  ET-24b are written, prefer cases on which the conservative and exact rules
-  agree** (all eight above do), and pin at most a few cases that show the
-  conservative over-reporting, each with a `note` saying so.
+- **Tightening to the exact rule later stays possible, and decision 7 keeps it
+  cheap.** Tightening would shrink some `PARTIAL` line sets and turn some
+  `PARTIAL` verdicts into `INVALID`, and both are conformance surface (EV-17).
+  After the freeze, ADR-0008 makes vectors add-only, so a vector pinning a line
+  set the exact rule would not produce would be the time bomb EV-18/EV-19 were
+  written to prevent. **ET-24b vectors therefore pin only cases on which the
+  conservative and exact rules agree** (all eight above do). The
+  over-reporting is covered by verifier unit tests, never by golden vectors.
+  Whoever writes the vectors must show agreement for each case, for example by
+  running the exact rule's exhaustive search on that small chain.
 - **ET-22a is permanent and binds whoever designs `vote_cast` v2.** A ranked or
-  multi-issue ballot cannot be one event. It must be one event per ballot per
-  issue, batched under its issue's rules. This narrows the design space of
-  ballot-expressiveness ADR part B, alongside ET-22.
+  multi-issue ballot cannot be one event. It must be one `vote_cast` per ballot
+  per issue, batched under its issue's rules, and no other type may carry it.
+  This narrows the design space of ballot-expressiveness ADR part B, alongside
+  ET-22. Changing an issue's interval or minimum after creation is also ruled
+  out for good; a community that wants different parameters opens a new issue.
 - **Owed, in order** (fixtures may never precede verifiers):
   1. A fresh-context review of this ADR and the three spec amendments,
      specifically of ET-24b's soundness argument and its line sets.
-  2. Both verifiers implement ET-22a's scope change and ET-24b, each in its own
+  2. Both verifiers implement ET-22a's scope change, ET-18b and ET-24b, each in its own
      isolated sparse worktree. Hand the builders the unmerged spec as
      scratchpad copies. On the committed corpus the new logic is a no-op,
      because no vector holds an opaque `vote_cast`, so each PR can land alone.
      Each builder must test the lines ET-24b defines against a brute-force
      reading of the definition on generated chains. That reading is
      quadratic, so this needs no exhaustive oracle.
-  3. Vectors: the eight cases above, plus multiple opaque ballots, an opaque
+  3. Vectors, each a case where the conservative and exact rules agree: the
+     eight cases above, a registered ballot naming an unregistered
+     `issue_created` version (`PARTIAL` naming both lines), plus multiple opaque ballots, an opaque
      ballot before an issue's first registered ballot, several issues sharing
      instants, an opaque `ts` that is a multiple of one issue's interval and not
      another's, an opaque ballot created before an issue (not a candidate),
@@ -192,26 +233,16 @@ differ are named under Consequences.
   4. `docs/security/attacks/check-unknown-batching-proposal.py`'s `proposed`
      mode now matches the ratified expectations. It can join required CI once
      both verifiers pass it.
-- **Not decided here (open questions for the operator):**
-  1. **Whether an issue's interval and minimum are fixed at `issue_created`
-     forever.** ET-24b reads _Δ_ and _m_ from the `issue_created` alone. A
-     later event type that amended them would make old verifiers mis-count
-     candidates and minimums. This is pending an operator decision.
-  2. **A registered ballot naming an `issue_created` at an unregistered
-     version.** Whether that is allowed, and what ID-8/ET-18a/ET-23 then check,
-     is open. EV-8's new paragraph covers ballot batching only.
-  3. **A new event type carrying ballots.** A new type, rather than a new
-     `vote_cast` version, could carry ballots and so escape ET-22, ET-22a and
-     batching. ET-22a binds `vote_cast` versions only, as the operator adopted
-     it.
+- **Nothing from the draft's open questions remains open.** The operator
+  settled all three on 2026-10-10 (decisions 8 and 9).
 
 ### Documents reconciled
 
-- `contracts/event-types.md` v11 → v12: ET-22a added; ET-24, ET-24a and "Which
+- `contracts/event-types.md` v11 → v12: ET-18b and ET-22a added; ET-24, ET-24a and "Which
   ballots count" widened to every registered version; ET-24b added; the
   section intro, degrees-of-freedom table and acid-test walkthrough updated.
 - `contracts/evolution.md` v6 → v7: EV-7 (what `PARTIAL` enumerates), EV-8
-  (new paragraph), EV-15 (ET-22a outside the split, ET-24b in Stage B), EV-17
+  (new paragraph), EV-15 (ET-22a outside the split, ET-18b and ET-24b in Stage B), EV-17
   (the enumeration set), the table and the walkthrough.
 - `contracts/event-schema.md` v5 → v6: ES-21 names ET-24b's use of `ts`.
 - `contracts/export-format.md`: **unchanged**. ET-24b item 5 says an unresolved
@@ -240,8 +271,8 @@ differ are named under Consequences.
   versions without changing anything a v1 ledger does.
 - `memory/STATE.md` and `memory/OPEN-QUESTIONS.md`: updated on master at merge
   time, per `odc-pipeline`. The open question "Future `vote_cast` versions and
-  ballot batching" moves to the archive with a pointer here, and the two open
-  questions above get entries.
+  ballot batching" moves to the archive with a pointer here. No new open
+  question is left.
 
 ## Charter check
 

@@ -467,6 +467,23 @@ off-log eligibility check.
   `choice_count` is that of the `issue_created` event referenced by `issue_id`
   (ET-14a). A verifier MUST reject an out-of-range `choice`; it already tracks
   each issue's `hash` for ID-8, and tracks the issue's `choice_count` alongside.
+- **ET-18b.** _A ballot of an issue the verifier cannot read (ADR-0034)._ An
+  `issue_created` event at a version the verifier does not register is still a
+  prior `issue_created` event for ID-8 and ET-18, so a verifier MUST NOT reject
+  under ET-18 a registered `vote_cast` whose `issue_id` names one. The verifier
+  cannot read that issue's `choice_count`, `ballot_batch_interval_ms` or
+  `ballot_batch_min`, so the ballot's ET-18a, ET-23, ET-24 and ET-24a checks are
+  **unresolved**. A verifier MUST NOT report `INVALID` on that ground, and MUST
+  enumerate the ballot's line in `PARTIAL` (`evolution.md` EV-7, EV-17). An
+  unresolved check here has the effect ET-24b item 5 gives one there; the
+  unregistered `issue_created` is itself a `PARTIAL` line, so the chain is never
+  `VALID`. Every
+  other check on the ballot (ET-17's signature, ET-19, `event-schema.md` ES-18)
+  applies as on any registered ballot, and its failure is `INVALID` as usual.
+  Such a ballot is not a registered ballot of any issue for ET-24b, and it is
+  not a candidate there either, because it is not opaque. An `issue_id` that
+  names an event of any other type, or no prior event, is rejected under ET-18
+  as before.
 - **ET-19.** `choice` MUST be a JSON integer. Within its valid range the
   contract records the integer verbatim and assigns it no meaning: interpreting
   choices into a result is a derived-view act of the tally engine, never of the
@@ -519,15 +536,20 @@ off-log eligibility check.
   would violate charter §5/§8, which are non-negotiable and survive any future
   community vote (§8).
 - **ET-22a.** _Permanent evolution constraint: one event, one issue, one ballot
-  (binds `evolution.md`; ADR-0034)._ Every version of `vote_cast` that any contracts version registers MUST
-  identify exactly one issue and represent exactly one ballot. It MUST carry
-  `issue_id` under that name with the `ids.md` ID-8 / ET-18 reference meaning,
-  and MUST obey its issue's declared timestamp interval (ET-23), minimum batch
-  size (ET-24) and closed-instant discipline (ET-24a). No future version may
-  remove these publication constraints or count a single event as multiple
-  ballots for the minimum. Like the batching mechanism itself (ET-14b), this is
-  in the register of ET-22 and `evolution.md` EV-13: no contracts version and no
-  community vote may remove it.
+  (binds `evolution.md`; ADR-0034)._ Every version of `vote_cast` that any
+  contracts version registers MUST identify exactly one issue and represent
+  exactly one ballot. It MUST carry `issue_id` under that name with the
+  `ids.md` ID-8 / ET-18 reference meaning, and MUST obey its issue's declared
+  timestamp interval (ET-23), minimum batch size (ET-24) and closed-instant
+  discipline (ET-24a). No future version may remove these publication
+  constraints or count a single event as multiple ballots for the minimum.
+  **Ballots MUST only ever be carried by `vote_cast` events: no other event
+  type, present or future, may represent a ballot.** **An issue's timestamp
+  interval and minimum batch size are exactly the `ballot_batch_interval_ms`
+  and `ballot_batch_min` its `issue_created` declares, and no later event, of
+  any type or version, may change them.** Like the batching mechanism itself
+  (ET-14b), this is in the register of ET-22 and `evolution.md` EV-13: no
+  contracts version and no community vote may remove it.
 
   _Why it is permanent._ A verifier frozen at one contracts version meets newer
   `vote_cast` versions it cannot read (`evolution.md` EV-8). Two things let it
@@ -535,7 +557,12 @@ off-log eligibility check.
   their payloads: every such event is a ballot of exactly one issue, published
   under that issue's batching rules; and it counts as exactly one ballot. The
   second is what lets it prove that one known ballot and one unreadable event
-  cannot fill a minimum-three batch (ET-24b). This sentence constrains what a
+  cannot fill a minimum-three batch (ET-24b). The other two clauses close the
+  remaining ways round that reasoning. A ballot carried by another type would
+  escape ET-22, this sentence and batching entirely, and a verifier could not
+  even tell that it was a ballot. A later event that changed an issue's interval
+  or minimum would make a verifier that cannot read it count candidates and
+  minimums against the wrong numbers. This sentence constrains what a
   future contracts version may register. It is not a check, and it never
   licenses a verifier to read an unregistered version's payload (ET-24b).
 
@@ -689,8 +716,9 @@ when the chain also holds ballots at a `vote_cast` version it does not register.
      in a `PARTIAL` verdict (`evolution.md` EV-7, EV-17). Wherever a rule
      requires every registered event's semantic checks to have passed
      (`export-format.md` EX-15, EX-22), an unresolved check counts as not
-     failed, exactly as an unregistered event does. A chain with an unresolved
-     check holds at least one opaque ballot, so it is never `VALID`.
+     failed, exactly as an unregistered event does. A check left unresolved by
+     this rule implies at least one opaque ballot on the chain, so the chain is
+     never `VALID`.
 
   Every comparison in this rule is an order on `seq`, an equality of `ts`
   values, or ET-23's multiple test; `ts` values are never ordered
@@ -715,6 +743,15 @@ when the chain also holds ballots at a `vote_cast` version it does not register.
   never reports an `INVALID` that only a search over all assignments could
   prove, for example on a chain with a single issue, where every candidate must
   belong to that issue. ADR-0034 records why the exact rule was not chosen.
+
+  _Conformance vectors for this rule._ This rule may later be
+  tightened to the exact one, which would change some `PARTIAL` line sets and
+  turn some `PARTIAL` verdicts into `INVALID`. A golden vector for ET-24b
+  therefore MUST pin only a chain on which this rule and the exact
+  all-assignments rule give the same verdict and the same lines (ADR-0034). A
+  vector that pinned the over-reporting would be contradicted by the tightened
+  rule after the freeze, which is the time bomb `evolution.md` EV-18/EV-19
+  exist to prevent.
 
   _One pass (informative)._ A verifier scanning in file order can decide this
   rule in one pass, keeping per registered issue: the instants its registered
@@ -768,10 +805,13 @@ when the chain also holds ballots at a `vote_cast` version it does not register.
 | Title normalization (none)                     | ET-16             |
 | Issue id source                                | ET-15             |
 | Vote signing key (registrar) + issue direction | ET-17, ET-18      |
+| A ballot of an unregistered issue version      | ET-18b            |
 | `choice` type, range, and who interprets it    | ET-18a, ET-19     |
 | What the log does/does not enforce for ballots | ET-20, ET-21      |
 | What future `vote_cast` versions may not do    | ET-22             |
 | What every `vote_cast` version must be         | ET-22a            |
+| Only `vote_cast` carries ballots               | ET-22a            |
+| Batch parameters fixed at `issue_created`      | ET-22a            |
 | Ballot `ts` quantization (the batch instant)   | ET-23             |
 | What a batch is; minimum size; blamed line     | ET-24             |
 | No two batches of one issue share a `ts`       | ET-24a            |

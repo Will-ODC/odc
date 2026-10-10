@@ -80,9 +80,9 @@ chain, or a fork that added types, charter §8).
     fails Stage B, but one or more events carry a **well-formed** (ES-10) `type`
     or `(type, version)` the verifier does not register, so Stage B could not run
     for them. The verifier MUST enumerate the affected line numbers: every such
-    line, and every line of a registered `vote_cast` whose batch check
-    `event-types.md` ET-24b leaves **unresolved** because of them (EV-17). An
-    unresolved check is not a Stage B failure.
+    line, and every line of a registered `vote_cast` with a check that
+    `event-types.md` ET-18b or ET-24b leaves **unresolved** because of them
+    (EV-17). An unresolved check is not a Stage B failure.
 - **EV-8.** A verifier MUST NOT report `INVALID` **solely** because a well-formed
   event has an unregistered `(type, version)` — **with the single exception of
   `genesis`, EV-20.** Such an event is hash-checkable
@@ -94,7 +94,8 @@ chain, or a fork that added types, charter §8).
   **Nor through a registered event (added in v7, ADR-0034).** A check on a
   registered event can depend on an unregistered one: a ballot at a newer
   `vote_cast` version may belong to a batch the verifier checks under
-  `event-types.md` ET-24/ET-24a. A verifier MUST NOT report `INVALID` because
+  `event-types.md` ET-24/ET-24a, and a registered ballot may name an issue
+  created at a version the verifier does not register. A verifier MUST NOT report `INVALID` because
   it does not know what such an event is. Where ET-24b leaves a registered
   ballot's batch check unresolved, that check is not failed, and the line is
   enumerated in `PARTIAL` (EV-7). Where a failure holds whatever the
@@ -104,8 +105,10 @@ chain, or a fork that added types, charter §8).
   it may name an earlier line, for example the newer ballot's own: ET-24b
   guarantees a failure at or before the line it names, not at it. Uncertainty
   never strengthens a verdict to `INVALID`, and it never erases what the
-  registered events alone prove. The ballot batch checks are the only checks
-  this paragraph covers. ET-24b is the rule that decides them.
+  registered events alone prove. This paragraph covers exactly two cases, and
+  the rules that decide them: ballot batch checks beside unreadable ballots
+  (ET-24b), and the checks of a ballot whose issue the verifier cannot read
+  (ET-18b).
 - **EV-9.** **Refinement of "reject" for unregistered types.** Where
   `event-schema.md` ES-9/ES-11 and `event-types.md` ET-1/ET-2 direct a verifier
   to *reject* an event of an unregistered `type` or `(type, version)`, that
@@ -207,9 +210,10 @@ the surface has to live here.
   the boundary statements ET-20 and ET-21 and the evolution constraints ET-22
   and ET-22a (which describe what the log does not enforce, and what a future
   version may not do or must be), and **ET-25**, which is a producer
-  obligation no reader can check — a shuffled batch and an arrival-ordered one are indistinguishable, so no
-  verifier can report it and no stage contains it (ADR-0014).
-  **ET-24b** is Stage B, a check on registered ballots like ET-24 and ET-24a
+  obligation no reader can check — a shuffled batch and an arrival-ordered one
+  are indistinguishable, so no verifier can report it and no stage contains it
+  (ADR-0014). **ET-18b** is Stage B; it reads nothing of the unregistered
+  `issue_created` beyond its `type` and `hash`. **ET-24b** is Stage B, a check on registered ballots like ET-24 and ET-24a
   which it qualifies. It reads only the envelope `seq` and `ts` of the
   unregistered `vote_cast` events it considers, never their payloads, and it
   never makes one of them `INVALID`.
@@ -233,8 +237,8 @@ the surface has to live here.
   - **`PARTIAL` enumeration.** `PARTIAL` MUST enumerate the affected line numbers
     in ascending order (EV-7). The affected lines are the union of two sets,
     each line listed once: every line whose `(type, version)` the verifier does
-    not register, and every registered `vote_cast` line whose batch check
-    `event-types.md` ET-24b leaves unresolved. An unregistered line appears even
+    not register, and every registered `vote_cast` line with a check that
+    `event-types.md` ET-18b or ET-24b leaves unresolved. An unregistered line appears even
     when it leaves no registered check unresolved. The two sets never overlap,
     because the first holds only unregistered events and the second only
     registered ones. (Added in v7, ADR-0034. Up to v6 the set was the
