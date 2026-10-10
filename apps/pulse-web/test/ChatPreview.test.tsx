@@ -192,7 +192,9 @@ describe("answering", () => {
     await user.dblClick(screen.getByRole("button", { name: "Submit" }));
 
     const sending = screen.getByRole("button", { name: "Sending…" });
-    expect((sending as HTMLButtonElement).disabled).toBe(true);
+    expect(sending.getAttribute("aria-disabled")).toBe("true");
+    // Focus stays on it, so "Sending…" is announced.
+    expect(document.activeElement).toBe(sending);
     expect(send.started()).toBe(1);
 
     send.release();
@@ -306,7 +308,7 @@ describe("a closed poll", () => {
 
     await expectNoPicking();
     expect(screen.queryByRole("button", { name: "Submit" })).toBeNull();
-    expect(screen.getByText(/This question has closed/)).toBeTruthy();
+    expect(screen.getByText("This one has closed.")).toBeTruthy();
   });
 });
 

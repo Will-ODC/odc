@@ -5,7 +5,8 @@
  * with edge cases worth testing exhaustively, and none of them need React.
  *
  * There are three places to be, plus one prototype (#228), and the emailed
- * sign-in link is the reason the first two exist. `apps/pulse/src/dev-server.ts` builds that link as
+ * sign-in link is the reason the first two exist.
+ * `apps/pulse/src/dev-server.ts` builds that link as
  * `<web origin>/sign-in?token=…`, so the client has to answer that path or the
  * link goes nowhere — which is precisely what it did before this module: the
  * app read `?poll=`, found nothing, and opened the first question as though

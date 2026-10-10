@@ -1,4 +1,5 @@
 import { useEffect, useId, useRef } from "react";
+import { ClosedNotice } from "./ClosedNotice.js";
 import type { ReactNode } from "react";
 import type { Access, Decision } from "../flow/decision.js";
 import { canSubmit, privacyNote } from "../flow/decision.js";
@@ -71,6 +72,7 @@ export function DecisionDialog({
   const opener = useRef<HTMLElement | null>(null);
   const questionId = useId();
   const noteId = useId();
+  const doneId = useId();
   const groupName = useId();
 
   const answerable = access === "answerable";
@@ -147,10 +149,18 @@ export function DecisionDialog({
 
       {view === "sent" ? (
         <div className="decision__done">
-          <div role="status">{confirmation}</div>
+          <div role="status" id={doneId}>
+            {confirmation}
+          </div>
+          {/*
+           * Focus lands here as the confirmation appears, and a live region
+           * that arrives already filled is often not announced - so the
+           * button carries the confirmation as its description too.
+           */}
           <button
             type="button"
             className="decision__primary"
+            aria-describedby={doneId}
             onClick={onClose}
             {...autofocus(true)}
           >
@@ -196,23 +206,27 @@ export function DecisionDialog({
                 className="decision__primary"
                 /*
                  * The one guard against sending twice: `canSubmit` is false
-                 * while an answer is on its way, so a second press lands on a
-                 * disabled button and does nothing.
+                 * while an answer is on its way, so a second press does
+                 * nothing. While sending the button is only `aria-disabled`,
+                 * not `disabled`, so focus stays on it and "Sending…" is read
+                 * out rather than focus falling to the page.
                  */
-                disabled={!allowed}
+                disabled={!allowed && !sending}
+                aria-disabled={!allowed}
                 onClick={() => {
-                  if (picked !== null) onSubmit(picked);
+                  if (allowed && picked !== null) onSubmit(picked);
                 }}
                 {...autofocus(view === "failed")}
               >
                 {primaryLabel(progress)}
               </button>
             </>
+          ) : access === "closed" ? (
+            <ClosedNotice id={noteId} />
           ) : (
             <p id={noteId} className="decision__note">
-              {access === "closed"
-                ? "This question has closed and is no longer taking answers."
-                : "Only confirmed members can answer this question. Another member or your community needs to confirm you first."}
+              Only confirmed members can answer this question. Another member or
+              your community needs to confirm you first.
             </p>
           )}
         </>

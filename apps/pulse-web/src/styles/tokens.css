@@ -148,7 +148,7 @@
    * the phone frame less its gutters, and never wider than the window.
    */
   --scrim: rgba(0, 0, 0, 0.62);
-  --dialog-w: calc(min(390px, 100vw) - var(--gutter) * 2);
+  --dialog-w: calc(var(--frame-w) - var(--gutter) * 2);
   --dialog-h: calc(100dvh - var(--gutter) * 2);
   --motion-quick: 0.16s;
 }

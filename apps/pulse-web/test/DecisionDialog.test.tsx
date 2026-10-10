@@ -144,8 +144,9 @@ describe("the decision popup", () => {
       expect(radio.matches(":disabled")).toBe(true);
     }
     expect(
-      (screen.getByRole("button", { name: "Sending…" }) as HTMLButtonElement)
-        .disabled,
-    ).toBe(true);
+      screen
+        .getByRole("button", { name: "Sending…" })
+        .getAttribute("aria-disabled"),
+    ).toBe("true");
   });
 });

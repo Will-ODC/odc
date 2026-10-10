@@ -43,7 +43,7 @@ export const SAMPLE_CONVERSATION: readonly ChatMessage[] = [
     kind: "text",
     id: "m3",
     author: "Amira",
-    text: "Let's settle it properly. Answer below.",
+    text: "Let's settle it properly. Try answering below.",
   },
   {
     kind: "decision",
