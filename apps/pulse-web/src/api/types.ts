@@ -115,6 +115,12 @@ export interface PulseApi {
   requestLink(
     email: string,
     proofEmailsOptIn: boolean,
+    /**
+     * The community the person picked, after a `choose_community` answer.
+     * Left out otherwise — the server needs it only for an address that
+     * belongs to several, and refuses one the address does not belong to.
+     */
+    community?: string,
   ): Promise<RequestLinkResult>;
   /** Redeem the token from the emailed link. */
   redeem(token: string): Promise<Me>;
@@ -132,15 +138,27 @@ export interface PulseApi {
   cast(pollId: string, ballot: Ballot): Promise<CastOutcome>;
 }
 
+/** One community an address may sign in to. Mirrors the server's entry. */
+export interface CommunityChoice {
+  /** What is sent back as `community`, and today also what is shown. */
+  id: string;
+}
+
 /**
- * One answer, because the server gives one: the link is on its way (anyone
- * with a valid address gets one, ADR-0030). There is no `devLink` variant — no
- * implementation can produce one (the server never returns a link in a
- * response body), and a variant nothing can produce is a lie in the type.
+ * Two answers. Usually the link is on its way (anyone with a valid address
+ * gets one, ADR-0030). But an address whose domain belongs to several
+ * communities is asked which one first (ADR-0023, P2): nothing was sent, and
+ * the same request with `community` set is the next step. That is a question,
+ * not a failure, which is why it is a result here and not an `ApiError`.
+ *
+ * There is no `devLink` variant — no implementation can produce one (the
+ * server never returns a link in a response body), and a variant nothing can
+ * produce is a lie in the type.
  */
 export type RequestLinkResult =
   /** `message` is the server's own "check your email" sentence, when it sent one. */
-  { status: "sent"; message?: string };
+  | { status: "sent"; message?: string }
+  | { status: "choose_community"; communities: CommunityChoice[] };
 
 /**
  * How every implementation of `PulseApi` reports a refusal.
@@ -158,8 +176,9 @@ export class ApiError extends Error {
    * The server's machine-readable `error` slug, when it sent one.
    *
    * Kept deliberately narrow: callers show `message`, never this. It exists so
-   * the one refusal the UI has to *treat differently* — `link_already_sent`,
-   * which is good news rather than a fault — can be told apart from every
+   * the refusals the UI has to *treat differently* — `link_already_sent`,
+   * which is good news rather than a fault, and `unknown_community`, which
+   * sends the person back to the email step — can be told apart from every
    * other refusal without matching on a sentence.
    */
   readonly code: string | undefined;

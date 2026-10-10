@@ -56,7 +56,7 @@ export function voterStoreConformance(
       });
 
       test("a_voter_reads_back_its_address_from_its_credential", async (t) => {
-        // P8 (ADR-0032): the address is a credential the voter holds, not a
+        // P8 (ADR-0033): the address is a credential the voter holds, not a
         // column of the voter, and `/api/me` still shows it — so every read
         // and every update hands it back, along with the assurance level.
         const store = await fresh(t);
@@ -197,7 +197,7 @@ export function voterStoreConformance(
       });
 
       test("a_refused_credential_leaves_no_voter_behind", async (t) => {
-        // Both or neither (ADR-0032). The voter row is written first, so a
+        // Both or neither (ADR-0033). The voter row is written first, so a
         // store that does not write the pair as one leaves voter-2 standing
         // with no credential — a voter nothing can sign in as.
         const store = await fresh(t);

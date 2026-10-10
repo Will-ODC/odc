@@ -68,7 +68,7 @@ export class PostgresVoterStore implements VoterStore {
     try {
       // One transaction: a voter whose credential is refused is never left
       // behind as a voter with none. Nothing creates one of those on purpose
-      // yet (ADR-0032), so one appearing here would be this method's fault.
+      // yet (ADR-0033), so one appearing here would be this method's fault.
       await inTransaction(this.#pool, async (client) => {
         await client.query(
           `insert into voter (${VOTER_ROW_COLUMNS})` +

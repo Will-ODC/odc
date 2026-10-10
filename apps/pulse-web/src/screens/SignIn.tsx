@@ -1,5 +1,5 @@
 import { useEffect, useId, useRef, useState } from "react";
-import type { PulseApi } from "../api/types.js";
+import type { CommunityChoice, PulseApi } from "../api/types.js";
 import { ApiError } from "../api/types.js";
 import { ScreenFrame } from "../components/ScreenFrame.js";
 import { looksLikeEmail } from "../flow/email.js";
@@ -28,7 +28,22 @@ type Asking =
   | { status: "sending" }
   | { status: "sent"; email: string }
   /** The request itself did not get through. Nothing to do with the address. */
-  | { status: "failed"; message: string };
+  | { status: "failed"; message: string }
+  /**
+   * The address belongs to several communities and the server asked which
+   * (P2). Nothing has been sent yet. `sending` is the pick on its way;
+   * `failure` is a pick that did not get through, said on this step rather
+   * than by throwing the person back to the email field.
+   */
+  | {
+      status: "choosing";
+      email: string;
+      communities: CommunityChoice[];
+      sending: boolean;
+      failure: string | null;
+    };
+
+const COULD_NOT_SEND = "We could not send the link. Try again in a moment.";
 
 export function SignIn({ api }: { api: PulseApi }) {
   const [email, setEmail] = useState("");
@@ -60,14 +75,70 @@ export function SignIn({ api }: { api: PulseApi }) {
     field.current?.focus();
   }, [asking.status]);
 
+  const backToEmail = (failure?: string) => {
+    returning.current = true;
+    setAsking(
+      failure === undefined
+        ? { status: "idle" }
+        : { status: "failed", message: failure },
+    );
+  };
+
   if (asking.status === "sent") {
+    return <LinkSent email={asking.email} onUseAnother={() => backToEmail()} />;
+  }
+
+  if (asking.status === "choosing") {
+    const choosing = asking;
+    const pick = async (community: string) => {
+      setAsking({ ...choosing, sending: true, failure: null });
+      try {
+        const result = await api.requestLink(choosing.email, optIn, community);
+        if (result.status === "sent") {
+          setAsking({ status: "sent", email: choosing.email });
+        } else {
+          // Asked again despite answering. Today's server never does this: it
+          // answers a sent pick with "sent" or unknown_community, never 422
+          // (claim.ts). Kept as a guard should a later server re-ask, so the
+          // person sees the list it has now and why they are still here.
+          setAsking({
+            ...choosing,
+            communities: result.communities,
+            sending: false,
+            failure: "That list just changed. Choose again.",
+          });
+        }
+      } catch (err) {
+        // Same good news as on the email step.
+        if (err instanceof ApiError && err.code === "link_already_sent") {
+          setAsking({ status: "sent", email: choosing.email });
+          return;
+        }
+        // The address no longer belongs to what they picked — a row removed
+        // between the two requests. Nothing on this step can fix that, so they
+        // go back to the address with the server's sentence.
+        if (err instanceof ApiError && err.code === "unknown_community") {
+          backToEmail(err.message);
+          return;
+        }
+        setAsking({
+          ...choosing,
+          sending: false,
+          failure: err instanceof ApiError ? err.message : COULD_NOT_SEND,
+        });
+      }
+    };
     return (
-      <LinkSent
-        email={asking.email}
-        onUseAnother={() => {
-          returning.current = true;
-          setAsking({ status: "idle" });
-        }}
+      <ChooseCommunity
+        // A new list is a new question: a pick from the old one must not
+        // survive into it and be sent for a community no longer offered.
+        key={choosing.communities.map((c) => c.id).join("\n")}
+        email={choosing.email}
+        communities={choosing.communities}
+        sending={choosing.sending}
+        failure={choosing.failure}
+        onPick={(community) => void pick(community)}
+        onBack={() => backToEmail()}
       />
     );
   }
@@ -82,9 +153,21 @@ export function SignIn({ api }: { api: PulseApi }) {
     setFieldError(null);
     setAsking({ status: "sending" });
     try {
-      await api.requestLink(address, optIn);
-      // Anyone with a valid address gets a link, so the answer is always "sent".
-      setAsking({ status: "sent", email: address });
+      const result = await api.requestLink(address, optIn);
+      // Anyone with a valid address gets a link. The one other answer is a
+      // question: the address belongs to several communities, and the person
+      // picks which one before anything is sent (ADR-0023).
+      setAsking(
+        result.status === "choose_community"
+          ? {
+              status: "choosing",
+              email: address,
+              communities: result.communities,
+              sending: false,
+              failure: null,
+            }
+          : { status: "sent", email: address },
+      );
     } catch (err) {
       /*
        * "A link is already on its way" is good news wearing a 429. Answering
@@ -103,10 +186,7 @@ export function SignIn({ api }: { api: PulseApi }) {
       }
       setAsking({
         status: "failed",
-        message:
-          err instanceof ApiError
-            ? err.message
-            : "We could not send the link. Try again in a moment.",
+        message: err instanceof ApiError ? err.message : COULD_NOT_SEND,
       });
     }
   };
@@ -237,6 +317,117 @@ function LinkSent({
         We sent a link to <b>{email}</b>. Open it and you are in.
       </p>
       <button className="signin__again" type="button" onClick={onUseAnother}>
+        Use a different email
+      </button>
+    </ScreenFrame>
+  );
+}
+
+/**
+ * Which community, when an address belongs to more than one (P2, ADR-0023).
+ *
+ * The person picks; the app never picks for them, because the community
+ * they sign in to is where they may post (ADR-0024). A radio group rather
+ * than a button per community so that choosing and sending are two acts: a
+ * stray press on the wrong name would otherwise mail a link for it.
+ *
+ * Communities are shown by their id because that is all the server has —
+ * `allowed_domain` holds no display name. If one is added, it goes beside
+ * `id` in `CommunityChoice` and is shown here instead.
+ *
+ * Local to this file for the same reason `LinkSent` is: one use.
+ */
+function ChooseCommunity({
+  email,
+  communities,
+  sending,
+  failure,
+  onPick,
+  onBack,
+}: {
+  email: string;
+  communities: CommunityChoice[];
+  sending: boolean;
+  failure: string | null;
+  onPick: (community: string) => void;
+  onBack: () => void;
+}) {
+  const [picked, setPicked] = useState<string | null>(null);
+  const [unpicked, setUnpicked] = useState(false);
+  const heading = useRef<HTMLHeadingElement>(null);
+  const headingId = useId();
+  const problemId = useId();
+
+  /*
+   * The email form has just unmounted. Focus goes to the question, as it does
+   * on "Check your email", so a screen reader says what is being asked and a
+   * keyboard user is one Tab from the first community.
+   */
+  useEffect(() => heading.current?.focus(), []);
+
+  const submit = (event: React.FormEvent) => {
+    event.preventDefault();
+    if (picked === null) {
+      setUnpicked(true);
+      return;
+    }
+    onPick(picked);
+  };
+
+  const problem = unpicked ? "Choose a community first." : failure;
+
+  return (
+    <ScreenFrame>
+      <h1 className="signin__title" id={headingId} tabIndex={-1} ref={heading}>
+        Which community are you signing in to?
+      </h1>
+      <p className="signin__lede">
+        <b>{email}</b> belongs to more than one. Choose one and we will send
+        your link. If you have signed in before, you stay in the community you
+        first joined.
+      </p>
+
+      <form className="signin__form" onSubmit={submit} noValidate>
+        <fieldset
+          className="signin__choices"
+          aria-labelledby={headingId}
+          disabled={sending}
+          {...(problem !== null ? { "aria-describedby": problemId } : {})}
+        >
+          {communities.map((community) => (
+            <label className="signin__choice" key={community.id}>
+              <input
+                type="radio"
+                name="community"
+                value={community.id}
+                checked={picked === community.id}
+                onChange={() => {
+                  setPicked(community.id);
+                  setUnpicked(false);
+                }}
+              />
+              <span>{community.id}</span>
+            </label>
+          ))}
+        </fieldset>
+
+        {problem !== null ? (
+          <p className="signin__problem" id={problemId} role="alert">
+            {problem}
+          </p>
+        ) : null}
+
+        <button className="signin__go" type="submit" disabled={sending}>
+          {sending ? "Sending…" : "Send my link"}
+        </button>
+      </form>
+
+      <button
+        className="signin__again"
+        type="button"
+        onClick={onBack}
+        disabled={sending}
+      >
         Use a different email
       </button>
     </ScreenFrame>

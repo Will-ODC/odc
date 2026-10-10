@@ -69,27 +69,37 @@ polls were both listed here as in flight and have since landed (#150, #156, #157
 
 ---
 
-## P2 — The sign-in community picker · READY TO BUILD
+## P2 — The sign-in community picker · BUILT 2026-10-09; one question left
 
-Owed by ADR-0023 and unticketed until now. A domain may prove membership of
-several communities — `allowed_domain` is keyed on `(community, domain)` on
-purpose — and **the answer is that the person picks which community they are
-signing in to.**
-
-What holds until this ships is an interim tie-break in
-`apps/pulse/src/identity/allowlist.ts`: longest domain, then lowest community
-alphabetically. It is commented as interim and its only job is to make the
-answer a property of the rows rather than of the order a query returned them.
-
-ADR-0024 gives this a second job, which raises what it is worth: **the community
-someone picks at sign-in is what decides where they may post a question.** An
-arbitrary answer is tolerable for which community you are recorded under and is not
-tolerable for where your question is published.
+**Built** (branch `pulse/36-sign-in-community-picker`, stacked on #213). When an
+address's domain matches two or more `allowed_domain` rows, `POST /api/sign-in`
+answers 422 `choose_community` with the list, sends nothing and writes no claim;
+the client asks "Which community are you signing in to?" and sends the same
+request with `community`. A pick the address does not belong to is a 400
+`unknown_community` at every count of matches, never quietly dropped. Zero or
+one match is unchanged. The interim tie-break is **gone**: `DomainAllowlist.check`
+became `memberships`, which returns every community at the most specific level
+and picks none, because nothing else called it. The rules are in
+`apps/pulse/API.md` under "Picking a community".
 
 Decided already, do not re-open: that the person picks (ADR-0023), and that
-`(community, domain)` stays the key. Not decided, and this item does not have to
-settle it: what happens to a person who belongs to two communities and wants to
-act in both in one session.
+`(community, domain)` stays the key.
+
+**Open, for the operator — a later pick does not move a returning voter.** The
+voter's community is written once, when their first click creates them
+(ADR-0030), and redeem was left unchanged. So someone who first signed in to
+`ubc-staff` and later picks `ubc-alumni` gets a link whose claim says
+`ubc-alumni` and signs in still as `ubc-staff`. They are asked anyway, because
+skipping the question only for addresses that have signed in before would tell
+anyone which addresses have. `claim.test.ts`
+`a_returning_voter_keeps_their_first_community_whatever_they_pick_later` pins
+today's answer so a change is deliberate. The likely fix is redeem copying the
+claim's community onto an existing voter when it differs — a one-line change,
+but it reverses ADR-0030's "decided once" for this case, so it is a decision.
+
+**Not decided, and not this item:** a person who belongs to two communities and
+wants to act in both in one session. ADR-0024 point 6 says one community at a
+time.
 
 ## P3 — The subject browser / home screen · BLOCKED ON A DECISION
 
@@ -355,7 +365,7 @@ than demanded at the door.
 - **Does `/api/me` still return an address?** `publicVoter` returns
   `voter.email` (`server.ts:502`) and `API.md` documents `{ id, email, community }`.
   P8 must own that shape and the `API.md` edit, or say it is unchanged.
-  **Answered by P8 slice 1: unchanged** (ADR-0032) — `email` is read back from
+  **Answered by P8 slice 1: unchanged** (ADR-0033) — `email` is read back from
   the voter's `email` credential. What a credential-less voter is sent is P10's.
 - **What does `proofEmailsOptIn` mean for someone with no address?** Stored on
   `voter` and `pending_claim`, asserted in four tests, rendered at
@@ -374,7 +384,7 @@ than demanded at the door.
 
 The one piece that needs no admin surface and no unwritten ADR.
 
-**Status (2026-10-09).** Split in two, recorded in ADR-0032 (proposed, for the
+**Status (2026-10-09).** Split in two, recorded in ADR-0033 (proposed, for the
 operator to confirm):
 
 - **Slice 1 — built** (branch `pulse/35-identity-is-a-credential`): the storage

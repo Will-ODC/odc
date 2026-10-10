@@ -120,7 +120,12 @@ describe("the client against the real server", () => {
     app = await createServer({
       claims: new ClaimService({
         membership: new DomainAllowlist(
-          new StaticDomainSource([{ community: COMMUNITY, domain: ALLOWED }]),
+          new StaticDomainSource([
+            { community: COMMUNITY, domain: ALLOWED },
+            // One domain, two communities: the person picks (P2).
+            { community: "shared-a", domain: "shared.test" },
+            { community: "shared-b", domain: "shared.test" },
+          ]),
         ),
         voters,
         claims: new InMemoryClaimStore(),
@@ -253,6 +258,25 @@ describe("the client against the real server", () => {
       community: null,
     });
     expect(await api.me()).toEqual(me);
+  });
+
+  it("asks which community when an address belongs to two, and signs in to the one picked", async () => {
+    expect(await api.requestLink("kim@shared.test", false)).toEqual({
+      status: "choose_community",
+      communities: [{ id: "shared-a" }, { id: "shared-b" }],
+    });
+    expect(mailer.lastTo("kim@shared.test")).toBeUndefined();
+
+    expect(await api.requestLink("kim@shared.test", false, "shared-b")).toEqual(
+      {
+        status: "sent",
+        message: "Check your email for a link to sign in.",
+      },
+    );
+    const me = await api.redeem(
+      tokenFromLink(mailer.lastTo("kim@shared.test")?.body ?? ""),
+    );
+    expect(me.community).toBe("shared-b");
   });
 
   it("counts a vote from someone who has never signed in", async () => {

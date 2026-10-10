@@ -3,6 +3,7 @@ import { test } from "node:test";
 import {
   DomainAllowlist,
   StaticDomainSource,
+  type AllowedDomain,
 } from "../src/identity/allowlist.js";
 import { ClaimService } from "../src/identity/claim.js";
 import { ConsoleMailer, MailSendError } from "../src/identity/mailer.js";
@@ -21,6 +22,9 @@ const START = new Date("2026-08-09T12:00:00.000Z");
 async function setup(
   overrides: Partial<ServerDeps> = {},
   omitSecureFlag = false,
+  rows: readonly AllowedDomain[] = [
+    { community: "ubc-students", domain: "student.ubc.ca" },
+  ],
 ) {
   let now = START;
   const clock = () => now;
@@ -30,11 +34,7 @@ async function setup(
 
   const claims = new ClaimService(
     {
-      membership: new DomainAllowlist(
-        new StaticDomainSource([
-          { community: "ubc-students", domain: "student.ubc.ca" },
-        ]),
-      ),
+      membership: new DomainAllowlist(new StaticDomainSource(rows)),
       voters,
       claims: new InMemoryClaimStore(),
       mailer,
@@ -506,4 +506,171 @@ test("a_mail_provider_that_is_down_answers_503_and_never_says_check_your_email",
   // go and look for mail that was never sent.
   assert.doesNotMatch(String(asked.json().message), /check your email/i);
   assert.match(String(asked.json().message), /try again/i);
+});
+
+/** One domain serving two communities, as ADR-0023 lets it. */
+const SHARED: readonly AllowedDomain[] = [
+  { community: "ubc-staff", domain: "ubc.ca" },
+  { community: "ubc-alumni", domain: "ubc.ca" },
+  { community: "ubc-students", domain: "student.ubc.ca" },
+];
+
+function signIn(
+  h: Awaited<ReturnType<typeof setup>>,
+  payload: Record<string, unknown>,
+) {
+  return h.app.inject({ method: "POST", url: "/api/sign-in", payload });
+}
+
+test("an_address_proving_several_communities_is_asked_which_and_nothing_is_mailed", async () => {
+  const h = await setup({}, false, SHARED);
+  const asked = await signIn(h, { email: "ada@ubc.ca" });
+
+  assert.equal(asked.statusCode, 422);
+  assert.deepEqual(asked.json(), {
+    error: "choose_community",
+    message: "That address can sign in to more than one community. Choose one.",
+    communities: [{ id: "ubc-alumni" }, { id: "ubc-staff" }],
+  });
+  assert.equal(h.mailer.sent.length, 0);
+});
+
+test("the_picked_community_is_the_one_the_voter_signs_in_with", async () => {
+  // Each choice in turn, so a server that ignored the pick and took the first
+  // (or the alphabetical) row fails on one of them.
+  for (const pick of ["ubc-staff", "ubc-alumni"]) {
+    const h = await setup({}, false, SHARED);
+    const asked = await signIn(h, { email: "ada@ubc.ca", community: pick });
+    assert.equal(asked.statusCode, 200, pick);
+    assert.equal(asked.json().status, "sent");
+    assert.equal(h.mailer.sent.length, 1);
+
+    const clicked = await h.app.inject({
+      method: "POST",
+      url: "/api/sign-in/redeem",
+      payload: { token: h.tokenFor("ada@ubc.ca") },
+    });
+    assert.equal(clicked.statusCode, 200);
+    assert.equal(clicked.json().voter.community, pick);
+    const cookie = clicked.cookies.find((c) => c.name === SESSION_COOKIE);
+    assert.ok(cookie, "no session cookie was set");
+
+    const me = await h.app.inject({
+      url: "/api/me",
+      headers: { cookie: `${SESSION_COOKIE}=${cookie.value}` },
+    });
+    assert.equal(me.json().voter.community, pick);
+  }
+});
+
+test("a_pick_the_address_does_not_prove_is_a_400_and_nothing_is_mailed", async () => {
+  for (const [email, pick] of [
+    ["ada@ubc.ca", "ubc-students"], // another domain's community
+    ["ada@ubc.ca", "made-up"], // no such community
+    ["ada@student.ubc.ca", "ubc-staff"], // one match, and it is not this
+    ["someone@gmail.com", "ubc-staff"], // no match at all
+  ] as const) {
+    const h = await setup({}, false, SHARED);
+    const reply = await signIn(h, { email, community: pick });
+    assert.equal(reply.statusCode, 400, `${email} ${pick}`);
+    assert.deepEqual(reply.json(), {
+      error: "unknown_community",
+      message: "That address cannot sign in to that community.",
+    });
+    assert.equal(h.mailer.sent.length, 0);
+  }
+});
+
+test("a_community_that_is_not_a_string_is_a_bad_request", async () => {
+  for (const community of [null, 3, ["ubc-staff"], { id: "ubc-staff" }]) {
+    const h = await setup({}, false, SHARED);
+    const reply = await signIn(h, { email: "ada@ubc.ca", community });
+    assert.equal(reply.statusCode, 400);
+    assert.equal(reply.json().error, "bad_request");
+    assert.equal(h.mailer.sent.length, 0);
+  }
+});
+
+test("one_match_or_none_answers_exactly_as_before_and_naming_the_one_is_harmless", async () => {
+  const h = await setup({}, false, SHARED);
+  for (const payload of [
+    { email: "ada@student.ubc.ca" },
+    { email: "sam@student.ubc.ca", community: "ubc-students" },
+    { email: "someone@gmail.com" },
+  ]) {
+    const reply = await signIn(h, payload);
+    assert.equal(reply.statusCode, 200, payload.email);
+    assert.deepEqual(reply.json(), {
+      status: "sent",
+      message: "Check your email for a link to sign in.",
+    });
+  }
+  assert.equal(h.mailer.sent.length, 3);
+});
+
+test("picking_is_still_throttled_per_address", async () => {
+  // The cap is per address, not per (address, community): picking the other
+  // community is not a fourth link.
+  const h = await setup({}, false, SHARED);
+  for (const pick of ["ubc-staff", "ubc-alumni", "ubc-staff"]) {
+    const reply = await signIn(h, { email: "ada@ubc.ca", community: pick });
+    assert.equal(reply.statusCode, 200);
+  }
+  const capped = await signIn(h, {
+    email: "ada@ubc.ca",
+    community: "ubc-alumni",
+  });
+  assert.equal(capped.statusCode, 429);
+  assert.equal(capped.json().error, "link_already_sent");
+  assert.equal(h.mailer.sent.length, 3);
+});
+
+test("at_the_link_cap_a_missing_or_bad_pick_is_still_answered_as_a_pick", async () => {
+  // API.md promises the pick is settled before the per-address cap. Were the
+  // cap checked first, a capped person who sent a bad pick would hear
+  // link_already_sent, and the client would say "Check your email" for a
+  // link to a community they never chose.
+  const h = await setup({}, false, SHARED);
+  for (let sent = 0; sent < 3; sent += 1) {
+    assert.equal(
+      (await signIn(h, { email: "ada@ubc.ca", community: "ubc-staff" }))
+        .statusCode,
+      200,
+    );
+  }
+  const unpicked = await signIn(h, { email: "ada@ubc.ca" });
+  assert.equal(unpicked.statusCode, 422);
+  assert.equal(unpicked.json().error, "choose_community");
+
+  const misPicked = await signIn(h, {
+    email: "ada@ubc.ca",
+    community: "ubc-students",
+  });
+  assert.equal(misPicked.statusCode, 400);
+  assert.equal(misPicked.json().error, "unknown_community");
+  assert.equal(h.mailer.sent.length, 3);
+});
+
+test("an_empty_pick_is_refused_never_quietly_treated_as_no_pick", async () => {
+  // "Never quietly dropped": a client that sends "" meant to pick something.
+  const h = await setup({}, false, SHARED);
+  const reply = await signIn(h, { email: "ada@ubc.ca", community: "" });
+  assert.equal(reply.statusCode, 400);
+  assert.notEqual(reply.json().error, "choose_community");
+  assert.equal(h.mailer.sent.length, 0);
+});
+
+test("being_asked_to_choose_counts_against_the_per_client_rate_limit", async () => {
+  // A refusal that sends nothing is still a request: an address-guessing loop
+  // must not be free just because every guess comes back as a question.
+  const h = await setup(
+    { signInRateLimit: { max: 2, timeWindow: "1 minute" } },
+    false,
+    SHARED,
+  );
+  assert.equal((await signIn(h, { email: "ada@ubc.ca" })).statusCode, 422);
+  assert.equal((await signIn(h, { email: "sam@ubc.ca" })).statusCode, 422);
+  const blocked = await signIn(h, { email: "kim@ubc.ca" });
+  assert.equal(blocked.statusCode, 429);
+  assert.equal(blocked.json().error, "too_many_requests");
 });

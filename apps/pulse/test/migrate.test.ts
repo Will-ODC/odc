@@ -140,7 +140,7 @@ test(
   "upgrading_existing_voters_and_claims_moves_each_address_to_a_credential",
   { skip },
   async () => {
-    // 004 (ADR-0032): every voter that existed keeps signing in as themselves,
+    // 004 (ADR-0033): every voter that existed keeps signing in as themselves,
     // because their address becomes their `email` credential, proved when
     // they first claimed it; and a link sent before the upgrade still counts
     // against its address and still redeems.
@@ -271,7 +271,7 @@ test(
         );
         const service = new ClaimService(
           {
-            membership: { check: async () => undefined },
+            membership: { memberships: async () => [] },
             voters,
             claims,
             mailer: new ConsoleMailer(() => {}),

@@ -1,8 +1,14 @@
 // @vitest-environment jsdom
-import { cleanup, render, screen, waitFor } from "@testing-library/react";
+import {
+  cleanup,
+  render,
+  screen,
+  waitFor,
+  within,
+} from "@testing-library/react";
 import userEvent from "@testing-library/user-event";
-import { afterEach, describe, expect, it, vi } from "vitest";
-import { ApiError } from "../src/api/types.js";
+import { afterEach, beforeAll, describe, expect, it, vi } from "vitest";
+import { ApiError, type PulseApi } from "../src/api/types.js";
 import { SignIn } from "../src/screens/SignIn.js";
 import { stubApi } from "./stub-api.js";
 
@@ -420,5 +426,218 @@ describe("checking the field", () => {
     expect(document.getElementById(described ?? "")?.textContent).toBe(
       "That does not look like an email address.",
     );
+  });
+});
+
+/*
+ * P2: an address whose domain belongs to several communities. The server
+ * answers `choose_community` and sends nothing; the person picks, and the
+ * same request goes again with the pick.
+ */
+describe("when the address belongs to more than one community", () => {
+  /*
+   * user-event walks a radio group with `CSS.escape`, which jsdom does not
+   * have. Only the arrow-key test needs it; the real browser has it.
+   */
+  beforeAll(() => {
+    globalThis.CSS ??= {} as typeof CSS;
+    CSS.escape ??= (value: string) =>
+      value.replace(/[^a-zA-Z0-9_-]/g, (c) => `\\${c}`);
+  });
+  const ASKED = {
+    status: "choose_community" as const,
+    communities: [{ id: "ubc-alumni" }, { id: "ubc-staff" }],
+  };
+  const QUESTION = "Which community are you signing in to?";
+
+  /** First call asks; every call after that sends. */
+  function asksThenSends() {
+    return vi.fn(
+      (_email: string, _optIn: boolean, community?: string) =>
+        Promise.resolve(community === undefined ? ASKED : SERVER_SENT) as
+          Promise<typeof ASKED> | Promise<typeof SERVER_SENT>,
+    );
+  }
+
+  async function reachTheQuestion(requestLink: PulseApi["requestLink"]) {
+    render(<SignIn api={stubApi({ requestLink })} />);
+    await userEvent.type(field(), "jo@ubc.ca");
+    await userEvent.click(go());
+    return screen.findByRole("heading", { name: QUESTION });
+  }
+
+  it("asks which, offering every community the server listed", async () => {
+    await reachTheQuestion(asksThenSends());
+
+    const group = screen.getByRole("group", { name: QUESTION });
+    const options = within(group).getAllByRole("radio");
+    expect(options.map((o) => (o as HTMLInputElement).value)).toEqual([
+      "ubc-alumni",
+      "ubc-staff",
+    ]);
+    // Nothing chosen for them, and nothing said to have been sent.
+    expect(options.some((o) => (o as HTMLInputElement).checked)).toBe(false);
+    expect(screen.queryByText("Check your email.")).toBeNull();
+  });
+
+  it("moves focus to the question", async () => {
+    const heading = await reachTheQuestion(asksThenSends());
+    await waitFor(() => expect(document.activeElement).toBe(heading));
+  });
+
+  it("sends the same request again with the pick and the opt-in, then says check your email", async () => {
+    const requestLink = asksThenSends();
+    render(<SignIn api={stubApi({ requestLink })} />);
+    await userEvent.type(field(), "jo@ubc.ca");
+    await userEvent.click(screen.getByLabelText(/Email me once/));
+    await userEvent.click(go());
+    await screen.findByRole("heading", { name: QUESTION });
+
+    await userEvent.click(screen.getByLabelText("ubc-staff"));
+    await userEvent.click(screen.getByRole("button", { name: "Send my link" }));
+
+    expect(await screen.findByText("Check your email.")).toBeTruthy();
+    expect(requestLink).toHaveBeenNthCalledWith(1, "jo@ubc.ca", true);
+    expect(requestLink).toHaveBeenNthCalledWith(
+      2,
+      "jo@ubc.ca",
+      true,
+      "ubc-staff",
+    );
+  });
+
+  it("can be answered from the keyboard alone", async () => {
+    const requestLink = asksThenSends();
+    await reachTheQuestion(requestLink);
+
+    // Focus is on the question; Tab enters the group, arrows move the pick.
+    await userEvent.tab();
+    expect(document.activeElement).toBe(screen.getByLabelText("ubc-alumni"));
+    await userEvent.keyboard("{ArrowDown}");
+    expect(
+      (screen.getByLabelText("ubc-staff") as HTMLInputElement).checked,
+    ).toBe(true);
+    await userEvent.tab();
+    expect(document.activeElement).toBe(
+      screen.getByRole("button", { name: "Send my link" }),
+    );
+    await userEvent.keyboard("{Enter}");
+
+    expect(await screen.findByText("Check your email.")).toBeTruthy();
+    expect(requestLink).toHaveBeenLastCalledWith(
+      "jo@ubc.ca",
+      false,
+      "ubc-staff",
+    );
+  });
+
+  it("does not send without a pick, and says what is missing", async () => {
+    const requestLink = asksThenSends();
+    await reachTheQuestion(requestLink);
+
+    await userEvent.click(screen.getByRole("button", { name: "Send my link" }));
+
+    expect(screen.getByRole("alert").textContent).toBe(
+      "Choose a community first.",
+    );
+    expect(requestLink).toHaveBeenCalledTimes(1);
+  });
+
+  it("says it is sending and refuses a second press meanwhile", async () => {
+    const requestLink = vi.fn(
+      (_email: string, _optIn: boolean, community?: string) =>
+        community === undefined
+          ? Promise.resolve(ASKED)
+          : new Promise<never>(() => {}),
+    );
+    await reachTheQuestion(requestLink);
+
+    await userEvent.click(screen.getByLabelText("ubc-alumni"));
+    await userEvent.click(screen.getByRole("button", { name: "Send my link" }));
+
+    const sending = screen.getByRole("button", { name: "Sending…" });
+    expect((sending as HTMLButtonElement).disabled).toBe(true);
+    // Disabled by the fieldset, which `.disabled` on the input does not report.
+    expect(screen.getByLabelText("ubc-staff").matches(":disabled")).toBe(true);
+    expect(
+      (
+        screen.getByRole("button", {
+          name: "Use a different email",
+        }) as HTMLButtonElement
+      ).disabled,
+    ).toBe(true);
+    await userEvent.click(sending);
+    expect(requestLink).toHaveBeenCalledTimes(2);
+  });
+
+  it("goes back to the address, still filled in and focused", async () => {
+    await reachTheQuestion(asksThenSends());
+
+    await userEvent.click(
+      screen.getByRole("button", { name: "Use a different email" }),
+    );
+
+    await waitFor(() => expect(document.activeElement).toBe(field()));
+    expect((field() as HTMLInputElement).value).toBe("jo@ubc.ca");
+  });
+
+  it("shows a failed pick on this step so they can try again", async () => {
+    const message = "We could not send that email just now. Try again.";
+    const requestLink = vi.fn(
+      (_email: string, _optIn: boolean, community?: string) =>
+        community === undefined
+          ? Promise.resolve(ASKED)
+          : Promise.reject(new ApiError(503, message, "send_failed")),
+    );
+    await reachTheQuestion(requestLink);
+
+    await userEvent.click(screen.getByLabelText("ubc-alumni"));
+    await userEvent.click(screen.getByRole("button", { name: "Send my link" }));
+
+    expect(await screen.findByText(message)).toBeTruthy();
+    expect(screen.getByRole("heading", { name: QUESTION })).toBeTruthy();
+    expect(
+      (screen.getByLabelText("ubc-alumni") as HTMLInputElement).checked,
+    ).toBe(true);
+    expect(screen.queryByText("Check your email.")).toBeNull();
+  });
+
+  it("treats an already-sent link for the pick as sent", async () => {
+    const requestLink = vi.fn(
+      (_email: string, _optIn: boolean, community?: string) =>
+        community === undefined
+          ? Promise.resolve(ASKED)
+          : Promise.reject(
+              new ApiError(
+                429,
+                "A link is already on its way. Check your email.",
+                "link_already_sent",
+              ),
+            ),
+    );
+    await reachTheQuestion(requestLink);
+
+    await userEvent.click(screen.getByLabelText("ubc-alumni"));
+    await userEvent.click(screen.getByRole("button", { name: "Send my link" }));
+
+    expect(await screen.findByText("Check your email.")).toBeTruthy();
+  });
+
+  it("goes back to the address when the pick is no longer one of theirs", async () => {
+    const message = "That address cannot sign in to that community.";
+    const requestLink = vi.fn(
+      (_email: string, _optIn: boolean, community?: string) =>
+        community === undefined
+          ? Promise.resolve(ASKED)
+          : Promise.reject(new ApiError(400, message, "unknown_community")),
+    );
+    await reachTheQuestion(requestLink);
+
+    await userEvent.click(screen.getByLabelText("ubc-alumni"));
+    await userEvent.click(screen.getByRole("button", { name: "Send my link" }));
+
+    expect(await screen.findByText(message)).toBeTruthy();
+    await waitFor(() => expect(document.activeElement).toBe(field()));
+    expect(screen.queryByRole("heading", { name: QUESTION })).toBeNull();
   });
 });
