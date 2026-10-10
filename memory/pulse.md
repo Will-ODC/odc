@@ -95,8 +95,6 @@ branch per change (`pulse/<n>-<short>`), and the same CI runs.
 
 - **P2: should a later community pick move a returning voter?** Today it does
   not (ADR-0030 writes community once). `claim.test.ts` pins the current answer.
-- **ADR-0031 and ADR-0033 are "proposed".** ADR-0033's remaining choices await
-  confirmation, apart from the assurance vocabulary.
 - **The sign-in heading still reads "Your campus is deciding something."**
   (`SignIn.tsx`). The operator has been asked for new wording.
 - **Signing out clears the ballot cookie**, so a person who votes, signs out,

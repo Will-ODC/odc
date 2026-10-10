@@ -220,7 +220,7 @@ https://github.com/Will-ODC/odc/issues/173.
 - Core #224 took ADR-0032, so the Pulse credential record is **ADR-0033**.
   Migration 004 still says 0032 in a comment, and it stays byte-for-byte as is,
   because it is checksum-protected. Drain old API instances before applying 004.
-- ADR-0033 is still proposed, apart from the assurance vocabulary. Email
+- ADR-0033 is accepted (2026-10-10); its upgrade path stays open. Email
   assurance alone does not meet the development-voting rule. Nothing here starts
   P8 slice 2, social confirmation, trust scoring or account-based development
   voting.
