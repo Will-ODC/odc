@@ -66,6 +66,14 @@ operator's problem and reads to anyone else as gibberish. **A refusal repeating
 cannot fix — a revoked key, an unverified domain — is not this 503**; it stays a 500,
 because telling everyone to retry forever is how a broken deploy goes unnoticed.
 
+**A 503 does not use up the address's link allowance when the provider said it never
+took the message** (its answer was 408, 429 or 503). The link pulse wrote for that
+email is forgotten, because no email carries it, so the next request after the outage
+is sent rather than told a link is already on its way. **Any other failure keeps the
+link live** until it expires: a timeout or dropped connection, or a 500, 502 or 504
+that a gateway may have sent after the provider had already delivered the email
+(P4a in `docs/plans/pulse.md`).
+
 ### `GET /api/sign-in/redeem?token=…`
 
 Reports whether a link is still good. **Consumes nothing.** Mail scanners and

@@ -7,8 +7,11 @@ import type { ViewData } from "./view-data.js";
 /** What a closed question's results panel needs: the counts, and your mark. */
 export interface Standing {
   results: Results;
-  /** The choice this browser gave before the poll closed, if it gave one. */
-  yourChoice: number | undefined;
+  /**
+   * The choices this browser gave before the poll closed: the whole ballot,
+   * since an `approval` poll takes several. Empty if it gave none.
+   */
+  yourChoices: readonly number[];
 }
 
 export interface ClosedResults {
@@ -67,13 +70,13 @@ export function useClosedResults(api: PulseApi, pollId: string): ClosedResults {
     Promise.all([
       api.results(pollId),
       api.myBallot(pollId).then(
-        (ballot) => ballot?.[0],
-        () => undefined,
+        (ballot) => ballot ?? [],
+        () => [],
       ),
     ]).then(
-      ([results, yourChoice]) => {
+      ([results, yourChoices]) => {
         if (request === latest.current) {
-          setData({ status: "ready", value: { results, yourChoice } });
+          setData({ status: "ready", value: { results, yourChoices } });
         }
       },
       (err: unknown) => {

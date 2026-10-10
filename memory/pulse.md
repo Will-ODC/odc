@@ -335,11 +335,18 @@ fourth time this file has been able to say that.
   imports `apps/pulse`'s source.** So `pnpm --filter @odc/pulse-web build`
   cannot run in an image containing only the client. `tsconfig.build.json`
   exists for that and is the one the Dockerfile uses.
-- **NEITHER IMAGE HAS EVER BEEN BUILT.** No Docker daemon in the session that
-  wrote them. Inputs were each verified separately — `pnpm deploy --prod` really
-  was run and really does emit production dependencies plus `migrations/`, and
-  `migrationsDir()`'s upward walk was traced against the runtime layout — but
-  **the first `docker build` is still the test.** Green CI is not evidence.
+- **Both images were first built 2026-10-09, at master `0e73988`, and work.**
+  `docker build -f apps/pulse/Dockerfile .` (248 MB) and
+  `-f apps/pulse-web/Dockerfile .` (92 MB) both succeed from the repo root. Then
+  `docker compose -f apps/pulse/docker-compose.yml --profile serve up --build`
+  with dummy `PULSE_SESSION_SECRET` / `PULSE_RESEND_API_KEY` / `PULSE_MAIL_FROM`
+  came up healthy: the API migrated on boot, `/` and a deep link
+  (`/sign-in?token=…`) served the page, `/api/me` answered 401 through the
+  nginx proxy, and a redeem token appeared in **neither** container's log.
+  **There are no polls in a served deployment** (no seed in the production
+  entry; poll authoring is P6). Harmless noise in both builds: lefthook's
+  postinstall prints `exec: "git": executable file not found`. **Still nothing
+  builds the images in CI**, so a Dockerfile can break again unseen.
 
 ### Decided by the operator, 2026-09-13
 
@@ -467,7 +474,10 @@ for a screen check.**
   `GET /api/polls/:id/results`. **Merged as #187** (`df053dd`),
   which also makes the badge say "Official Ballot - Closed". Follow-ups filed:
   #188 (server errors read "Request failed (502)") and #189 (an approval poll
-  marks only one of your answers as yours).
+  marks only one of your answers as yours). **#205** (filed 2026-10-09): the
+  client can only ever cast one answer, on any poll, so an approval poll cannot
+  be answered with several. It needs an operator decision on ADR-0022's
+  one-press cast before anyone builds it.
 - **A closed first question leaves nothing to press** (no Back on the first
   question of a run). **Deferred** until polls can be created — issue #186.
 - **The swipe ballot's dimmed next-question hints stay** on a closed poll.
@@ -626,7 +636,7 @@ decision 4).
 | ----------------------------- | -------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- |
 | ~~No `Mailer`~~               | **CLOSED #164** — Resend, ADR-0027. What remains is a verified sending domain, which is DNS and not code.                                                                              |
 | ~~No production entry point~~ | **CLOSED #165** — `src/main.ts`, a sibling of `dev-server.ts` and not an edit to it, per ADR-0028.                                                                                     |
-| ~~No Dockerfile~~             | **CLOSED #165** — two images plus an nginx front door. **But neither has ever been built** (see the caution below); the first `docker build` is still the test.                        |
+| ~~No Dockerfile~~             | **CLOSED #165** — two images plus an nginx front door. First built and smoke-tested 2026-10-09 (see the caution above); CI does not build them.                                        |
 | **No poll creation**          | **STILL OPEN.** No `POST /api/polls`; polls are the `SEED` literal in `dev-server.ts`, so a deployed pulse has nothing to vote on. P6, and still the gap most likely to be found late. |
 
 Already fine, so do not re-litigate: **item 4's cookie half is correct** —
