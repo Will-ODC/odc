@@ -8,7 +8,8 @@ user-invocable: true
 
 Turn an authorised feature request into a short ticket a single developer can
 implement and a reviewer can assess. Use simple words and bullets. The issue
-tracks work; memory preserves session context and unresolved decisions.
+tracks work; memory preserves session context and unresolved decisions. What belongs
+in an issue is decided in `memory/INDEX.md` → "Where new information goes".
 
 ## Workflow
 

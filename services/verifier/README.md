@@ -27,9 +27,25 @@ conformance (EV-17); conformance is the verdict token and line number(s) alone.
 `--chain` pins which chain (its genesis hash, EX-22; mismatch is `INVALID at
 line 1`), `--head` pins how much of it (EX-15). Either mismatch can only turn a
 `VALID` or `PARTIAL` into `INVALID`, never move an earlier `INVALID`; if both
-mismatch, line 1 is blamed. On every non-empty export the verifier also writes
-`genesis: <hex>` and `head: <hex>` to stderr (EX-24) — tool output, not
-conformance. Details in `API.md`.
+mismatch, line 1 is blamed (EX-23).
+
+On every run that reaches a verdict over non-empty input — whatever the
+verdict, malformed input included — the verifier also writes the two endpoint
+**stored claims** of EX-24 to stderr, one line each:
+
+```
+genesis hash (stored claim): <64 lowercase hex | unavailable>
+head hash (stored claim): <64 lowercase hex | unavailable>
+```
+
+These are the decoded `hash` string values **stored** in the first and last
+records of the file (no normalisation beyond JSON decoding), not recomputed or
+verified hashes: on an `INVALID` verdict they prove
+nothing, and they mean something only alongside the verdict and an
+independently trusted anchor. A value is `unavailable` when that record does
+not decode as a JSON object with a 64-lowercase-hex `hash` string. Nothing is
+reported for an empty file or on a tool-level error. This is tool output, not
+conformance (EV-17). Exact rules in `API.md`.
 
 See `API.md` for the full interface, and `docs/charter.md` §4 for the record
 model this verifier enforces.
@@ -46,6 +62,7 @@ internal/verify/
   hashing.go                byte-exact preimage + SHA-256 (HA-1..HA-16)
   crypto.go                 Ed25519 canonical + prime-order key checks (ET-4a/b/c)
   verify.go                 two-stage driver, verdict + precedence
+  report.go                 EX-24 stored-claim report (candidates + claims)
   ballot.go                 ballot ts quantization + batch runs (ET-23/ET-24/ET-24a)
   verify_test.go            fixture-driven conformance tests
   genesis_ancestry_test.go  ET-9e/ET-9f/ES-34 key set, EV-20/EV-21 (synthetic)
@@ -53,6 +70,8 @@ internal/verify/
   issue_title_test.go       ET-14 title bounds, counted in scalars (synthetic)
   ballot_test.go            ET-23, ET-24, ET-24a + blamed lines (synthetic)
   parse_dupkeys_test.go     HA-6 duplicate keys across the parser's threshold
+  report_test.go            EX-24 candidate-record splitting
+chain_report_test.go        --chain/--head precedence and the EX-24 report (CLI)
 ```
 
 ## Dependencies
@@ -116,6 +135,16 @@ otherwise identical chain moves the verdict in the direction the rule names.
   detection across the parser's linear-scan/set threshold, with the duplicate
   placed both before and after the crossing. It is not synthetic in the sense
   above: it drives the parser directly rather than building chains.
+- **`chain_report_test.go`** drives the CLI as a subprocess over committed
+  vectors (and edits of them) to pin the `--chain`/`--head` precedence of
+  EX-15/EX-22/EX-23 — an earlier file-check `INVALID`, structural or semantic,
+  keeps its line; `PARTIAL` does not block either comparison; both anchors
+  wrong blames line 1 — and every EX-24 candidate and claim rule against the
+  exact stderr report: terminal LF vs. trailing blank record, missing final LF,
+  CRLF, last-occurrence duplicate `hash`, no normalisation, one endpoint
+  `unavailable` without suppressing the other, and no report on empty input
+  or tool errors. Verdicts there are those `contracts/fixtures/` fixes; the
+  report lines are this tool's interface, not conformance.
 - **`cli_extremes_test.go`** drives the CLI as a subprocess over structurally
   valid exports carrying extreme values — deep nesting, integers straddling
   2^63, huge and escape-heavy strings, very wide payloads, very large line
