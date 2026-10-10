@@ -150,10 +150,27 @@ export class ClaimService {
       // provider's own explanation exists, and the person who sees the 503
       // cannot act on it.
       this.#log("pulse: a sign-in link could not be sent", error);
-      // The claim stays: it is already written, it is unreachable without the
-      // token that only the email carries, and it expires on its own. It does
-      // count against `maxLiveLinksPerEmail` until it does — see P4a in
-      // `docs/plans/pulse.md`.
+      // When the provider says it never took the message, no email exists and
+      // nobody can hold this link: forget it, or it counts against
+      // `maxLiveLinksPerEmail` and the next request after the outage is told
+      // "a link is already on its way" — which is false (P4a).
+      //
+      // Any other failure may hide a delivery: a timeout or dropped connection
+      // (no status at all), or a 500/502/504 from a gateway that gave up after
+      // Resend had already accepted. Discarding there would break a link
+      // already in the inbox, so the claim stays and expires on its own.
+      if (neverAccepted(error)) {
+        try {
+          await this.#claims.discard(claim.tokenHash);
+        } catch (discardError) {
+          // Freeing the cap is best-effort. The person still hears the 503
+          // and its "try again"; the claim expires on its own.
+          this.#log(
+            "pulse: a refused sign-in link could not be discarded",
+            discardError,
+          );
+        }
+      }
       return { status: "send_failed" };
     }
 
@@ -234,6 +251,18 @@ export class ClaimService {
         : existing;
     return { status: "signed_in", voter, firstTime: false };
   }
+}
+
+/**
+ * Did the provider answer that it did not take the message?
+ *
+ * 408 (it timed out reading the request), 429 (it turned the request away)
+ * and 503 (it is not taking requests) all come before acceptance. A 500, 502
+ * or 504 can come from a gateway after the provider accepted, so it is not
+ * proof that no email went out; neither is a failure with no status.
+ */
+function neverAccepted(error: MailSendError): boolean {
+  return error.status === 408 || error.status === 429 || error.status === 503;
 }
 
 /**
