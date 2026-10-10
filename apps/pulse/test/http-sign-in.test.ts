@@ -625,6 +625,41 @@ test("picking_is_still_throttled_per_address", async () => {
   assert.equal(h.mailer.sent.length, 3);
 });
 
+test("at_the_link_cap_a_missing_or_bad_pick_is_still_answered_as_a_pick", async () => {
+  // API.md promises the pick is settled before the per-address cap. Were the
+  // cap checked first, a capped person who sent a bad pick would hear
+  // link_already_sent, and the client would say "Check your email" for a
+  // link to a community they never chose.
+  const h = await setup({}, false, SHARED);
+  for (let sent = 0; sent < 3; sent += 1) {
+    assert.equal(
+      (await signIn(h, { email: "ada@ubc.ca", community: "ubc-staff" }))
+        .statusCode,
+      200,
+    );
+  }
+  const unpicked = await signIn(h, { email: "ada@ubc.ca" });
+  assert.equal(unpicked.statusCode, 422);
+  assert.equal(unpicked.json().error, "choose_community");
+
+  const misPicked = await signIn(h, {
+    email: "ada@ubc.ca",
+    community: "ubc-students",
+  });
+  assert.equal(misPicked.statusCode, 400);
+  assert.equal(misPicked.json().error, "unknown_community");
+  assert.equal(h.mailer.sent.length, 3);
+});
+
+test("an_empty_pick_is_refused_never_quietly_treated_as_no_pick", async () => {
+  // "Never quietly dropped": a client that sends "" meant to pick something.
+  const h = await setup({}, false, SHARED);
+  const reply = await signIn(h, { email: "ada@ubc.ca", community: "" });
+  assert.equal(reply.statusCode, 400);
+  assert.notEqual(reply.json().error, "choose_community");
+  assert.equal(h.mailer.sent.length, 0);
+});
+
 test("being_asked_to_choose_counts_against_the_per_client_rate_limit", async () => {
   // A refusal that sends nothing is still a request: an address-guessing loop
   // must not be free just because every guess comes back as a question.

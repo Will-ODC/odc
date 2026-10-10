@@ -97,8 +97,10 @@ export function SignIn({ api }: { api: PulseApi }) {
         if (result.status === "sent") {
           setAsking({ status: "sent", email: choosing.email });
         } else {
-          // Asked again despite answering: the list changed underneath them.
-          // Show the list the server has now, and say why they are still here.
+          // Asked again despite answering. Today's server never does this: it
+          // answers a sent pick with "sent" or unknown_community, never 422
+          // (claim.ts). Kept as a guard should a later server re-ask, so the
+          // person sees the list it has now and why they are still here.
           setAsking({
             ...choosing,
             communities: result.communities,
@@ -380,8 +382,9 @@ function ChooseCommunity({
         Which community are you signing in to?
       </h1>
       <p className="signin__lede">
-        <b>{email}</b> belongs to more than one. Choose the one you are here
-        for, and we will send your link.
+        <b>{email}</b> belongs to more than one. Choose one and we will send
+        your link. If you have signed in before, you stay in the community you
+        first joined.
       </p>
 
       <form className="signin__form" onSubmit={submit} noValidate>
