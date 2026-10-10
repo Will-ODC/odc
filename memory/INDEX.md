@@ -23,15 +23,16 @@ Do not apply charter rules to `apps/**`, and do not relax them anywhere else.
 > entry, the entry wins — and fix the line.** You read this file first and it is
 > smaller, so on a divergence you would otherwise trust the wrong one.
 
-- **ODC core:** Phase 0, ticket T9. The security-audit gate is **closed**; the
-  fixture/verifier conformance work runs in four phases. **Phases 1 and 2 are
-  COMPLETE** — phase 2's fixture half landed 2026-08-26 (#136, #137), taking the
-  corpus to **98 vectors** and closing the five rules that both verifiers
-  enforced and no vector cited. **Phase 3 (F2 batching): the contract and both verifiers are
-  merged** (#172, #176 + #180 → `event-types.md` v11, #177 + #181 Go, #178 TS).
-  **Next: the phase-3 vectors** ([#192](https://github.com/Will-ODC/odc/issues/192)), listed in ADR-0029; until they land, CI cannot
-  tell whether ET-23/ET-24/ET-24a are enforced. Four `contracts/` contradictions remain
-  open for an operator decision. → `memory/STATE.md`
+- **ODC core:** Phase 0 / T9; the security-audit gate remains **closed**.
+  Conformance phases **1–3 are complete**: #202 added batching vectors
+  `099`–`108`; #222 added `109`–`115` (115 total). Phase 4's Go/TS work
+  (#220/#221), fixtures #222 and stage-map #203 are merged. Codex pushed the
+  core checkpoint, approved anchor-policy amendment and unratified batching
+  proposal (#223/#224/#225), all pending merge. **Order: checkpoint → anchor policy → proposal
+  artifact → detailed decision → isolated implementations → fixtures → fresh
+  T9 → RC.** Remaining contract contradictions need decisions; the batching
+  proposal does not ratify a protocol. Claude retains Pulse. Ledger remains
+  unstarted. → `memory/STATE.md`
 - **Pulse:** pillars 1 and 2 are on master — magic-link identity, the voting
   core, a story UI you can walk end to end, a results panel (#140), an answer
   you can change (#146, ADR-0022), and since #149 the sign-in and redeem screens.

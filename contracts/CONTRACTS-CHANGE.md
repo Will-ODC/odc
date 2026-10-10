@@ -19,6 +19,18 @@ Format (newest first, one entry per merged contracts change):
 
 ---
 
+## export-format.md v5 — 2026-10-09 — explicit anchor precedence and stored claims (ADR-0032)
+
+- EX-15/EX-22 compare expected anchors only after the file's structural and
+  registered-event semantic checks pass, preserving any existing INVALID line;
+  unknown events do not prevent comparison. EX-23 gives chain mismatch priority
+  over head mismatch when both comparisons apply.
+- EX-24 reports first/last stored hash claims, not successful recomputations;
+  unavailable endpoints are explicit, claims never authenticate INVALID input,
+  and report presentation remains outside golden conformance. No golden bytes,
+  hash construction or event payload changed. This ratifies #220/#221's existing
+  policy after the operator's 2026-10-09 decision.
+
 ## fixtures/ v14 — 2026-10-10 — `--chain` vectors (#193)
 
 Added `109`–`115`, the F1 owed fixtures below, to pin EX-21–EX-23: a `--chain`
