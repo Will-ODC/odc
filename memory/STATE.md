@@ -43,7 +43,7 @@ internal error exit 3, not 1. #223 is the security checkpoint
 
 In this order. Passing CI or a checkpoint does not clear T9.
 
-1. **Merge #241 (Go) and #242 (TS): both verifiers conform to `export-format.md`
+1. **Merge #241 (Go + TS): both verifiers conform to `export-format.md`
    v5 EX-24.** stderr becomes `genesis hash (stored claim): …` /
    `head hash (stored claim): …`; strict UTF-8, last repeated `hash` wins,
    `\u` escapes decode. 504-run black-box parity. stdout is unchanged, so no
@@ -169,7 +169,7 @@ In this order. Passing CI or a checkpoint does not clear T9.
   judge.** `conformanceVerdict` in `tools/rehearsal` matches with a regex and has
   aborted, rather than compared, on unexpected output four times. Widen the
   judge; do not couple the two verifiers on one output string. The stored-claims
-  change (#241/#242) touches stderr only.
+  change (#241) touches stderr only.
 - **Before a verifier enforces a new rule about chain shape, run the rehearsal
   chain through it.** The rehearsal chain must verify VALID in required CI, and
   isolated builders cannot read `tools/rehearsal`.

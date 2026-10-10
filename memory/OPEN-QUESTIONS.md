@@ -76,7 +76,7 @@ archive with a one-line pointer to the ADR or PR that settled it.
 if the candidate "decodes as a JSON object" but does not settle: bytes that are
 not valid UTF-8; a leading BOM (RFC 8259 lets parsers ignore it, EX-24 forbids
 normalising); `\u` escapes in the `hash` value or key; nesting depth (Go gives
-up past 10,000 levels, JS differs). Both verifiers (#241, #242) chose: strict
+up past 10,000 levels, JS differs). Both verifiers (#241) chose: strict
 UTF-8, BOM → `unavailable`, escapes decode (an escape decoding to uppercase
 stays `unavailable`). If `contracts/` pins this, both must follow.
 
