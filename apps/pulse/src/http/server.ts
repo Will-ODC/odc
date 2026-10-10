@@ -1,4 +1,5 @@
 import { randomUUID } from "node:crypto";
+import { BlockList, isIP } from "node:net";
 import cookie from "@fastify/cookie";
 import rateLimit from "@fastify/rate-limit";
 import Fastify, {
@@ -41,6 +42,15 @@ const BALLOT_COOKIE = "pulse_ballot";
 /** Marks a ballot identity so it can never be mistaken for a voter id. */
 const BALLOT_PREFIX = "b:";
 
+// The served API is only reached from nginx on its private container network.
+// Numeric hop trust is no longer supported by Fastify, and trusting a hop
+// without checking the immediate peer lets a direct client forge its IP.
+const privateProxies = new BlockList();
+privateProxies.addSubnet("10.0.0.0", 8);
+privateProxies.addSubnet("172.16.0.0", 12);
+privateProxies.addSubnet("192.168.0.0", 16);
+privateProxies.addSubnet("fc00::", 7, "ipv6");
+
 export interface ServerDeps {
   claims: ClaimService;
   voters: VoterStore;
@@ -77,8 +87,9 @@ export interface ServerDeps {
    * hour is told "too many tries", and a single client can lock out the whole
    * deployment.
    *
-   * **A hop count, never `true`.** `X-Forwarded-For` is a list a client can
-   * seed — nginx *prepends* to whatever arrived — so trusting the whole chain
+   * **A hop count, never `true`.** Only private network peers can supply it.
+   * `X-Forwarded-For` is a list a client can seed — nginx *prepends* to
+   * whatever arrived — so trusting the whole chain
    * lets anyone claim any address and defeat the limit they were caught by.
    * Counting hops from the right takes the address the proxy you actually run
    * observed. One nginx in front means `1`.
@@ -95,11 +106,23 @@ export interface ServerDeps {
  * UI can show as-is. Nothing here explains how anything is counted.
  */
 export async function createServer(deps: ServerDeps): Promise<FastifyInstance> {
+  const trustedProxyHops = deps.trustProxy ?? 0;
   const app = Fastify({
     ...(deps.loggerInstance
       ? { loggerInstance: deps.loggerInstance }
       : { logger: deps.logger ?? false }),
-    ...(deps.trustProxy === undefined ? {} : { trustProxy: deps.trustProxy }),
+    ...(trustedProxyHops === 0
+      ? {}
+      : {
+          trustProxy: (address: string, hop: number) => {
+            const family = isIP(address);
+            return (
+              hop < trustedProxyHops &&
+              family !== 0 &&
+              privateProxies.check(address, family === 6 ? "ipv6" : "ipv4")
+            );
+          },
+        }),
   });
   const now = deps.clock ?? (() => new Date());
 
@@ -154,10 +177,11 @@ export async function createServer(deps: ServerDeps): Promise<FastifyInstance> {
 
     const voter = await deps.voters.byId(claims.voterId);
     if (!voter) return undefined;
-    // Sessions issued before the voter last signed out are dead, wherever the
-    // cookie is held. This is what makes signing out more than a request to
-    // the browser that clicked it.
-    if (voter.sessionsValidFrom && claims.issuedAt < voter.sessionsValidFrom) {
+    // The shared generation revokes sessions across instances despite clock skew.
+    if (
+      claims.generation === undefined ||
+      claims.generation !== (voter.sessionGeneration ?? 0)
+    ) {
       return undefined;
     }
     return voter;
@@ -304,13 +328,17 @@ export async function createServer(deps: ServerDeps): Promise<FastifyInstance> {
     const result = await deps.claims.redeem(token);
     if (result.status !== "signed_in") return gone(reply, result.status);
 
-    reply.setCookie(SESSION_COOKIE, deps.signer.sign(result.voter.id), {
-      httpOnly: true,
-      sameSite: "lax",
-      secure: deps.secureCookies ?? true,
-      path: "/",
-      maxAge: deps.signer.ttlSeconds,
-    });
+    reply.setCookie(
+      SESSION_COOKIE,
+      deps.signer.sign(result.voter.id, result.voter.sessionGeneration ?? 0),
+      {
+        httpOnly: true,
+        sameSite: "lax",
+        secure: deps.secureCookies ?? true,
+        path: "/",
+        maxAge: deps.signer.ttlSeconds,
+      },
+    );
     return reply.send({
       status: "signed_in",
       voter: publicVoter(result.voter),
@@ -319,8 +347,7 @@ export async function createServer(deps: ServerDeps): Promise<FastifyInstance> {
   });
 
   /**
-   * Sign out everywhere, not only here: the voter's sessions-valid-from moves
-   * to now, so a copy of the cookie someone else kept stops working too.
+   * Sign out everywhere by advancing the shared session generation.
    *
    * The ballot identity goes with it. It has to: `pulse_ballot` lasts thirty
    * days and is what a ballot is filed under, so a browser that kept it after
@@ -340,7 +367,9 @@ export async function createServer(deps: ServerDeps): Promise<FastifyInstance> {
    */
   app.post("/api/sign-out", async (request, reply) => {
     const voter = await currentVoter(request);
-    if (voter) await deps.voters.invalidateSessionsBefore(voter.id, now());
+    if (voter) {
+      await deps.voters.advanceSessionGeneration(voter.id);
+    }
     reply.clearCookie(SESSION_COOKIE, { path: "/" });
     reply.clearCookie(BALLOT_COOKIE, { path: "/" });
     return reply.send({ status: "signed_out" });

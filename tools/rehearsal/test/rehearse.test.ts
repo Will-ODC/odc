@@ -74,6 +74,11 @@ describe("conformanceVerdict", () => {
     );
   });
 
+  it("rejects descending or repeated PARTIAL line numbers", () => {
+    assert.throws(() => conformanceVerdict("PARTIAL at lines 9, 2\n"), /EV-17/);
+    assert.throws(() => conformanceVerdict("PARTIAL at lines 2, 2\n"), /EV-17/);
+  });
+
   it("throws rather than guessing at output that is not a verdict", () => {
     // The throw is correct for genuine non-verdicts; the bug it masked was
     // reaching it for a well-formed one. Each case pins one property of the
