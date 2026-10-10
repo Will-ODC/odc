@@ -235,19 +235,18 @@ func VerifyWith(data []byte, opts Options) Result {
 	}
 
 	// --chain (EX-22) and --head (EX-15) checks, Stage A, run at the same
-	// point: after every per-line check has passed, i.e. only when the export
-	// would otherwise be VALID or PARTIAL. An earlier INVALID has already
-	// returned above and is never overridden by either. INVALID outranks
-	// PARTIAL (EV-17), so both are evaluated before the PARTIAL verdict.
+	// point: after every other file-validity check has passed — framing, each
+	// event's structural checks and every registered event's semantic checks
+	// (EX-15/EX-22 v5) — i.e. only when the export would otherwise be VALID or
+	// PARTIAL. An INVALID already established by a file check has returned
+	// above with its own line and is never replaced by either anchor. Unknown
+	// events yielding PARTIAL do not prevent the comparison, and INVALID
+	// outranks PARTIAL (EV-17), so both run before the PARTIAL verdict.
 	//
-	// Precedence when BOTH mismatch: the --chain mismatch wins, INVALID at
-	// line 1 (EX-23), over the --head mismatch at the last line (EX-19). EX-22
-	// requires the chain mismatch be reported "even when every link check
-	// passes" but does not order it against --head; EV-17 attributes INVALID
-	// to the first fatal line scanning in file order, and EX-23 makes line 1
-	// the line whose hash was compared, so the lowest line is blamed first —
-	// consistent with every other first-fatal-line attribution. (On a
-	// one-line export both name line 1 anyway.)
+	// Precedence when BOTH mismatch on an eligible file: the --chain mismatch
+	// at line 1 (EX-23) is reported, not the --head mismatch at the last line
+	// (EX-19) — EX-23 v5 says so explicitly. (On a one-line export both name
+	// line 1 anyway.)
 	if chain != nil && *chain != genesisHash {
 		return invalid(1, "chain mismatch: genesis hash differs from --chain (EX-22/EX-23)")
 	}

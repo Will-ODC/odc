@@ -8,8 +8,12 @@
 // EV-7/EV-17 — VALID, INVALID at line N, or PARTIAL naming the affected lines —
 // and exits 0 / 1 / 2 respectively. Tool-level failures (bad usage, unreadable
 // file) exit with status >= 3 and are never a chain verdict. Reason text is
-// advisory and not part of conformance (EV-17). On every run over a non-empty
-// export it also writes `genesis: <hex>` and `head: <hex>` to stderr (EX-24).
+// advisory and not part of conformance (EV-17). On every run that yields a
+// verdict over non-empty input it also writes the two endpoint STORED CLAIMS of
+// EX-24 to stderr, one line each:
+//
+//	genesis hash (stored claim): <hex|unavailable>
+//	head hash (stored claim): <hex|unavailable>
 package main
 
 import (
@@ -117,16 +121,26 @@ func run(args []string, stdout, stderr *os.File) int {
 		return 3
 	}
 
-	// EX-24: on every run over a non-empty export, whatever the verdict,
-	// report the genesis hash (EX-21) and the head (EX-14) — on STDERR, after
-	// the verdict line, so stdout stays exactly the one verdict line. This is
-	// tool output, not conformance surface (EV-17).
-	if genesis, headHash, ok := verify.ReportHashes(data); ok {
-		fmt.Fprintf(stderr, "genesis: %s\n", genesis)
-		fmt.Fprintf(stderr, "head: %s\n", headHash)
+	// EX-24: on every run that produced a chain verdict over non-empty input,
+	// whatever the verdict, report the two endpoint STORED CLAIMS — the `hash`
+	// field as written in the first and last candidate records — on STDERR,
+	// after the verdict line, so stdout stays exactly the one verdict line.
+	// They are labelled as stored claims because they are not recomputed and,
+	// on INVALID input, not verified chain anchors. Tool output, not
+	// conformance surface (EV-17).
+	if genesis, headHash, ok := verify.ReportClaims(data); ok {
+		fmt.Fprintf(stderr, "%s%s\n", reportGenesisLabel, genesis)
+		fmt.Fprintf(stderr, "%s%s\n", reportHeadLabel, headHash)
 	}
 	return code
 }
+
+// EX-24 report labels (stderr). "stored claim" is the EX-24 distinction: the
+// value is what the file states, not a successful hash recomputation.
+const (
+	reportGenesisLabel = "genesis hash (stored claim): "
+	reportHeadLabel    = "head hash (stored claim): "
+)
 
 const usage = "usage: verify <export.ndjson> [--head <hash>] [--chain <genesis-hash>]"
 
