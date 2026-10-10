@@ -249,7 +249,7 @@ opt-in, and rejects repeat clicks. Local validation: Pulse build/lint and 384
 Postgres-required tests pass, none skipped; 288 client tests pass. Required
 remote checks must pass on the updated PR head before merge.
 
-ADR-0032 remains proposed except the previously accepted assurance vocabulary.
+The Pulse credential record (renumbered to ADR-0033 by #215) remains proposed except the previously accepted assurance vocabulary.
 This checkpoint does not approve its remaining architectural choices or start
 P8 slice 2, social confirmation, trust scoring or account-based development
 voting. Email assurance alone still does not meet the development voting rule.
@@ -258,3 +258,29 @@ Drain old API instances before migration 004, as its README requires.
 Merge order: #229 and this context PR #239 are independent of #213. Merge #213
 after architectural review and green CI, before later credential-dependent
 Pulse changes. No ledger or core hash-chain implementation is involved.
+
+## PR #215 review and numbering checkpoint
+
+Operator follow-up recorded 2026-10-09. #213 merged as `bdbd9b9`. PR #215 was
+replayed onto that master after dropping its old #213 parent commits, then
+updated at head `15b555a`. Keep both store methods: `discard(tokenHash)` and
+`liveFor(kind, subject, now)`. #207's tests use the new signature. The shared
+claim-test setup preserves both dynamic domain sources and static picker rows;
+the migrated-link regression now uses `memberships`, matching the new interface.
+
+Core #224 already used ADR-0032. #215 renames the Pulse credential record to
+ADR-0033 and fixes references outside the checksum-protected migration. Migration
+004 remains byte-for-byte unchanged; ADR-0033 explains its historical 0032
+comment. Do not alter an applied migration merely to renumber that comment.
+
+Self-review found that the client accepted duplicate or single-choice community
+lists. Both regressions failed before the parser was tightened. Local checks:
+404 server tests with required Postgres, none skipped; 305 client tests; both
+builds, lint, formatting and guards pass. Required CI must be green on the
+updated head before merge. The picker keeps returning voters in their first
+community; whether a later choice should move them remains an open decision.
+
+Recommended remaining order at this checkpoint: **#215 → #229 → #239**.
+#213 is already merged. #229 is independent and can land earlier. #239 should
+land after the reviewed code so memory and ADR references match master. These
+PRs do not implement social confirmation, trust scoring or ledger changes.
