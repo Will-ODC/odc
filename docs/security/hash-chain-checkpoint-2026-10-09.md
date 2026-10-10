@@ -55,14 +55,17 @@ being labelled INVALID. #220 merged Go chain identity/reporting in `85f767f`.
 coverage, with no carried verifier implementation changes. Both fixture runners
 and the manifest check pass. Recheck master before each operation: merges are concurrent.
 
-Pushed follow-ups, rebased after #222: `codex/core-security-checkpoint-20261009`,
-`codex/hash-chain-anchor-policy` (`942d00c`) and
-`codex/hash-chain-unknown-batching-proposal` (`86cc615`). Merge in that order,
+Pushed follow-ups, rebased after #222: `codex/core-security-checkpoint-20261009`
+([#223](https://github.com/Will-ODC/odc/pull/223)),
+`codex/hash-chain-anchor-policy` ([#224](https://github.com/Will-ODC/odc/pull/224), `942d00c`) and
+`codex/hash-chain-unknown-batching-proposal` ([#225](https://github.com/Will-ODC/odc/pull/225), `86cc615`). Merge in that order,
 then decide the batching details before isolated implementations and fixtures.
-These branches are pending merge. GitHub API access is blocked by the environment
-proxy, so PR creation and remote CI for these new branches remain unconfirmed;
-branch pushes and local checks succeeded. A narrow `api.github.com` addition is
-saved in the environment draft, not applied/published.
+These PRs are pending merge. GitHub API access was initially blocked by the
+environment proxy, then recovered on the final recheck, allowing draft PR creation.
+Required remote checks must pass on each current head before readiness/merge;
+consult live PR results rather than inferring success from an earlier head.
+A narrow `api.github.com` addition and reusable setup instructions are saved in
+the environment draft; publishing the setup remains a separate user action.
 
 ## Decisions and security findings still outstanding
 
@@ -211,7 +214,7 @@ these local results. This review leaves the T9 gate closed.
 
 ## Next checkpoint
 
-Create/review the three pushed follow-up PRs and verify required remote checks
+Review the three follow-up PRs and verify required remote checks
 on each current head before merging. Record merged outcomes without promoting
 pending work to Done. Resolve the remaining contract questions, with isolated
 implementation/review where needed, and rerun

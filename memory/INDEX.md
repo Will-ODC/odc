@@ -28,7 +28,7 @@ Do not apply charter rules to `apps/**`, and do not relax them anywhere else.
   `099`–`108`; #222 added `109`–`115` (115 total). Phase 4's Go/TS work
   (#220/#221), fixtures #222 and stage-map #203 are merged. Codex pushed the
   core checkpoint, approved anchor-policy amendment and unratified batching
-  proposal, all pending merge. **Order: checkpoint → anchor policy → proposal
+  proposal (#223/#224/#225), all pending merge. **Order: checkpoint → anchor policy → proposal
   artifact → detailed decision → isolated implementations → fixtures → fresh
   T9 → RC.** Remaining contract contradictions need decisions; the batching
   proposal does not ratify a protocol. Claude retains Pulse. Ledger remains

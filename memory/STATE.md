@@ -51,18 +51,20 @@ rehearsal judge's acceptance of unordered PARTIAL lines.
 and pushed `83a6224`, preserving #202's entry; its five required GitHub checks
 passed before merge. Claude resolved #222, now merged, and retains the separate
 Pulse workstream. Codex owns only these pushed follow-ups, all pending merge:
-`codex/core-security-checkpoint-20261009`, `codex/hash-chain-anchor-policy`
-(`942d00c`, ADR-0032), and `codex/hash-chain-unknown-batching-proposal`
-(`86cc615`, unratified proposal). **Merge order: core checkpoint → approved
-anchor policy → batching proposal artifact → decide detailed batching policy →
-isolated verifier implementations → fixtures → fresh T9 re-audit → RC.**
+`codex/core-security-checkpoint-20261009` (#223), `codex/hash-chain-anchor-policy`
+(#224, `942d00c`, ADR-0032), and `codex/hash-chain-unknown-batching-proposal`
+(#225, `86cc615`, unratified proposal). **Merge order: #223 → #224 → #225 →
+approved
+detailed batching decision → isolated verifier implementations → fixtures →
+fresh T9 re-audit → RC.**
 Local pipeline-equivalent checks pass, including required PostgreSQL tests,
 Go tests/vet, 39 guard tests and the 9×2 rehearsal. Both CLIs pass 16 anchor
 checks and eight current batching cases; three proposed cases fail identically,
-as expected until a decision and implementation. Git pushes work, but GitHub
-API access is blocked by the environment proxy: no PRs or new remote CI results
-are claimed for these branches. The saved environment draft adds
-`api.github.com`; it must be reviewed/saved/published to apply.
+as expected until a decision and implementation. GitHub API access recovered
+on the final recheck; the three draft PRs are created. Required remote checks
+must pass on each current head before readiness/merge; consult the PR checks,
+not results from an earlier head. The saved setup/network draft still requires
+review/save/publish to persist the cloud setup.
 See `docs/security/hash-chain-checkpoint-2026-10-09.md` for scope and evidence.
 
 The coupling rule remains: **fixtures may never precede verifiers**; verifiers
