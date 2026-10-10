@@ -1,6 +1,6 @@
 # ADR-0031: Pulse revokes sessions with a stored generation
 
-- **Status:** proposed
+- **Status:** accepted (operator, 2026-10-10)
 - **Date:** 2026-10-09
 - **Phase:** 0
 
