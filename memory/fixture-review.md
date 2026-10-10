@@ -60,6 +60,15 @@ audit nor review context read verifier/ledger implementation. Review used the
 available Codex model; this environment does not offer the repository's named
 Opus model.
 
+The branch was rebased onto `f18d2bf` (ADR-0034) after remote master advanced.
+Both changelog entries were preserved. A follow-up independent review returned
+**APPROVE**: the corpus contains no unregistered `vote_cast` or `issue_created`
+version, so the new uncertainty rules do not change these expectations.
+New mixed-version golden cases and verifier support remain separate work.
+The checkout's missing local `master` ref was created from `origin/master` to
+let the existing pre-push hook run; reusable installation now creates it only
+when absent, without moving an existing branch.
+
 ## Handoff
 
 Do not delete or deduplicate vectors by export hash: anchor inputs are part of
