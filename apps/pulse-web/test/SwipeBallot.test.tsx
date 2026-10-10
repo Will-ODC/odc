@@ -1087,6 +1087,7 @@ describe("the results of a poll that has already closed", () => {
     fireEvent.click(screen.getByRole("button", { name: "Close" }));
     // Back to the closed question, with focus on what opened the results.
     expect(screen.getByText("This one has closed.")).toBeTruthy();
-    expect(document.activeElement).toBe(seeResults());
+    // Focus returns in an effect too, so wait for it as above.
+    await waitFor(() => expect(document.activeElement).toBe(seeResults()));
   });
 });
