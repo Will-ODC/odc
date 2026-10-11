@@ -15,7 +15,8 @@ The operator's rule, verbatim:
 This skill is the single source of truth for what that means in practice. The
 root `CLAUDE.md` points here and carries no table of its own; `.claude/agents/*.md` carry
 the same routing baked into each role's `model:` field. If any of the three
-disagree, **this file wins and the other two get fixed in the same PR.**
+disagree, **this file wins and the other two get fixed in the same PR.** On
+branches, PRs and merging, `odc-pipeline` is the source; this file follows it.
 
 ## Routing table
 
@@ -34,7 +35,7 @@ disagree, **this file wins and the other two get fixed in the same PR.**
 | Renames, mechanical find-and-replace, formatting              | **Sonnet** | `odc-navigator`         |
 | Running tests or guards and reporting the output              | **Sonnet** | `odc-navigator`         |
 | Simple implementation: a one-behaviour fix with a clear spec  | **Sonnet** | `odc-navigator`         |
-| Merge mechanics (the `odc-pipeline` merge checklist)          | **Sonnet** | `odc-navigator`         |
+| Merge mechanics, once the operator says merge                 | **Sonnet** | `odc-navigator`         |
 
 **The line between "simple" and "complex" implementation.** Simple means: the
 change is fully specified before it starts, it touches one file or one obvious
@@ -47,7 +48,10 @@ Opus dispatch is some tokens.
 
 ## Writing a brief that actually works
 
-A subagent starts with nothing but the brief. Five sections, always:
+A subagent starts with nothing but the brief. **Start it with the ticket
+number** (`#301`) and the branch, `<area>/<issue>-<short>` (`odc-pipeline`).
+The ticket is how the operator, the agent and its report refer to the work; a
+brief without one has no handle. Then five sections, always:
 
 1. **Paths you own** — an explicit allow-list, and an explicit "do not touch"
    list naming anything another agent is editing right now. "Be careful" is not
@@ -56,10 +60,6 @@ A subagent starts with nothing but the brief. Five sections, always:
    _do not run `git commit`, `git push`, `git checkout`, `git stash`, or
    `git reset`; leave changes in the working tree._ The orchestrator commits.
    Without this, parallel agents rewrite each other's index.
-   **Start every brief with its ticket number** (`#301`) and the branch,
-   `<area>/<issue>-<short>` (`odc-pipeline`). The ticket is how the operator,
-   the agent and its report refer to the work; a brief without one has no
-   handle.
 3. **What to read first** — name the files. `memory/INDEX.md` always, then the
    workstream entry, then the two or three documents the task actually needs.
    Do not tell an agent to "get up to speed"; that is how a 25 KB read becomes a
@@ -74,15 +74,22 @@ A subagent starts with nothing but the brief. Five sections, always:
 
 ## Parallel agents in one working tree
 
-One tree, several agents, is the default here and it is where work gets lost.
+One tree, several agents, is where work gets lost. **Give an agent its own
+tree** — `isolation: "worktree"` on the Agent tool — whenever it will edit
+files while yours has uncommitted work, and always for a reviewer or a mutation
+run. Its changes stay in its worktree for you to commit and bring in. A spawned
+agent that shares your tree has already discarded another session's
+uncommitted edit here. When agents do share one tree:
 
 - **Partition by path, never by intent.** Two agents may both be "improving
   docs"; they must not both own `docs/`. Hand each a disjoint list.
 - **Say who else is running and where.** An agent that knows `apps/**` is live
   under another agent will route around it; one that does not will "helpfully"
   fix a file mid-edit.
-- **Commit before dispatching a review or mutation agent.** Reviewers edit and
-  restore the tree; a dirty tree has already been clobbered once here.
+- **Commit before dispatching a review or mutation agent.** Its worktree starts
+  from your last commit, so uncommitted work is invisible to it; in a shared
+  tree, reviewers edit and restore files, and a dirty tree has already been
+  clobbered once here.
 - **Respect the WIP limit in `odc-pipeline`** (one active branch per service).
   An agent should never conflict with its own unmerged work.
 - Genuinely independent work fans out. Sequential work does not — do not spawn
@@ -143,75 +150,93 @@ The orchestrator offers each lead with `spawn_task`; the operator starting it
 is the go-ahead. Each lead works in its own worktree. The two sessions talk with
 `SendMessage` (find the other with `ListAgents`).
 
-**The lead's brief** is the five sections above, plus: the goal in the
-operator's words, the folders it owns, the folders other leads own right now,
-and the orchestrator's session name to report to.
+### The orchestrator, before offering leads
 
-**What a lead does, in order:**
+1. **Fetch first.** `git fetch origin`, and branch every lead's worktree from
+   `origin/master`, not the local `master`. The skills a session loads come
+   from its own checkout; a stale checkout hands the lead stale rules.
+2. **Get the tickets.** One issue per lead, or per PR the lead will open. The
+   branch is `<area>/<issue>-<short>`; two leads that guess "the next free
+   number" can collide, a branch named for its issue cannot.
+3. **Ask the operator's questions now,** and put the answers in the brief.
+   Re-issuing a lead's card with the answers in it is cheaper than relaying
+   them afterwards.
+
+### The lead's brief
+
+The five sections above, plus:
+
+- the goal in the operator's words, and every answer the operator has given;
+- its tickets and branch names;
+- the folders it owns, and the folders other leads own right now;
+- **how a go reaches it** — the operator answering in the lead's own session,
+  or the orchestrator relaying a go that quotes the operator. Name one or both.
+  In the pilot a relayed go was ignored because the brief did not say;
+- if it will check screens in the browser, that it may add a temporary
+  `.claude/launch.json` entry (see step 3 below), since that file sits outside
+  its folders;
+- the orchestrator's session name to report to.
+
+### What a lead does, in order
 
 1. **Read** what the brief names, then **send a synopsis and stop.** It is for
    the operator, so it is short and in plain words, no jargon: what will be
    built, what a user will notice, which folders change, how the work will split
-   into PRs, and any decision the lead needs. Show it in the lead's own session
-   and send it to the orchestrator. Build nothing until the operator says go.
+   into PRs, and any decision the lead needs, with the option it recommends.
+   Show it in the lead's own session and send it to the orchestrator. **Build
+   nothing until a go arrives by the channel the brief names. Silence is not a
+   yes:** never write "my pick goes ahead unless told otherwise".
 2. **Build the whole feature** on one local branch, with implementer and helper
-   subagents. The lead is the one context in its worktree that commits; its
-   subagents get the git guardrails above.
+   subagents. The lead is the one context in its worktree that commits, and it
+   commits as it goes; its subagents get the git guardrails above.
 3. **Check it itself:** the unit's tests, `pnpm -s format:check`, and for any
    screen, the real browser — green jsdom tests are not proof a screen works.
-4. **Bring it up to date with master,** then split it into small PRs in a
-   sensible order (stacked, two or three deep, per `odc-pipeline`). Push; get CI
-   green.
-5. **Report to the orchestrator and stop:** the PRs, how they fit together,
-   anything stale it saw, any decision it needs.
+   `preview_start` reads `.claude/launch.json` from the checkout the session
+   was opened in, and its entries `cd` by relative path, so as written they
+   start that checkout's servers, not the lead's worktree. Add a temporary
+   entry that `cd`s to the worktree's absolute path, use it, then restore the
+   file. Never commit that entry.
+4. **Bring it up to date with `origin/master`,** then split it into small PRs.
+   The operator allowed a lead to deliver one feature as several PRs at once
+   (2026-10-08); that is the one exception to the WIP limit in `odc-pipeline`.
+   Everything else there holds: a PR that does not need another branches off
+   `master`, and only a PR that needs an unmerged one stacks on it, two or
+   three deep at most. Push; get CI green.
+5. **Report to the orchestrator and stop:** the tickets and PRs
+   (`#301 → PR #307`), how they fit together, anything stale it saw, any
+   decision it needs.
 
 **What a lead never does:** merge anything, or start a reviewer or auditor.
 Every review is the operator's call. A lead also stops and sends the question up
 — rather than deciding — on a charter conflict, any change under `contracts/`,
-a file in another lead's folders, or anything the operator owns.
+a file in another lead's folders, or anything the operator owns. After a
+restart it re-reads its brief and does not go past it.
 
-**The orchestrator then** checks the leads' PRs do not collide, and tells the
-operator which are ready for review, in what order.
+### The orchestrator, while leads run
+
+- **After offering `spawn_task` cards, check every one is still pending.** A new
+  card can silently push an older one off the list.
+- **Keep one list of open questions.** The operator may answer inside a lead's
+  session; update the list from what leads report as answered.
+- **Do not wait for a message.** A lead with no commits may have built
+  everything, and a lead may finish without reporting. Check `gh pr list` and
+  the lead's worktree.
+- **Grant cross-folder edits narrowly.** They tend to appear at the end, when
+  CI runs another folder's tests. Grant one only when no other lead holds those
+  files, and say it is one-off.
+- **After any lead restarts, re-check the open PRs for overlap.** A restarted
+  lead in the pilot edited a plan file beyond what was approved.
+- **When the leads report,** check their PRs do not collide — settle a clash
+  between two leads by message — and tell the operator which PRs are ready for
+  review, in what order.
 
 Diff size: `apps/pulse*` is exempt from the `diff-size.sh` ceiling (the script
 lists every exemption), so a pulse feature can arrive as large PRs.
 
-### What the first pilot taught (2026-10-09)
-
-Two pulse leads shipped open sign-up and two screen bugs in about two hours.
-These held, or broke, and are now rules:
-
-- **Put the operator's answers in the brief.** Re-issuing a lead's card with the
-  answers in it was cheaper than relaying them afterwards.
-- **Give each lead its tickets, and branch on the ticket number.** Both leads
-  guessed "the next free `pulse/N`" and could have collided; a branch named for
-  its issue (`pulse/301-…`) cannot.
-- **Name `.claude/launch.json` in the brief if the lead needs the browser.** It
-  sits outside a lead's folders. Its entries `cd` by relative path, so the
-  preview starts the dev servers of the checkout the session was opened in, not
-  the lead's worktree: a lead checking its own screens runs its worktree's
-  servers directly.
-- **Say which channel a go comes through.** Either the operator answers in the
-  lead's own session, or a go the orchestrator relays, quoting the operator,
-  counts. In the pilot a relayed go was ignored because neither was said. The operator may also answer inside
-  a lead's session, so the orchestrator keeps its list of open questions in step
-  with what the leads report as answered.
-- **Silence is not a yes.** Leads recommend an option and wait; do not proceed
-  until told. Never write "my pick goes ahead unless told otherwise".
-- **After offering `spawn_task` cards, check every one is still pending.** A new
-  card can silently push an older one off the list.
-- **No commits does not mean an idle lead.** One lead had built everything
-  without committing. A lead may also finish without reporting: check
-  `gh pr list` and the lead's worktree rather than waiting for a message.
-- **Cross-folder needs show up at the end,** when CI runs another folder's tests
-  (one lead's server change broke a client end-to-end test). The orchestrator
-  grants a narrow, **one-off** edit when no other lead holds those files, and says
-  it is one-off.
-- **A restarted lead can widen its own scope.** One edited a plan file beyond
-  what was approved. After any restart, re-check the open PRs for overlap.
-- What worked: a lead **can** `SendMessage` the orchestrator, the synopses were
-  short and plain, and the orchestrator caught a clash between two leads (a
-  migration number against an ADR's columns) and settled it by message.
+**Where these rules came from.** The first pilot (2026-10-09): two pulse leads
+shipped open sign-up and two screen bugs in about two hours. The rules on
+tickets, answers in the brief, the go channel, silence, pending cards, checking
+`gh pr list`, one-off edits, restarts and `launch.json` are what it taught.
 
 ## After the fan-out
 
