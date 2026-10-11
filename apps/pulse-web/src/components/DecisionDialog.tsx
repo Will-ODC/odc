@@ -1,8 +1,9 @@
 import { useEffect, useId, useRef } from "react";
-import { ClosedNotice } from "./ClosedNotice.js";
+import { VoteCard } from "./VoteCard.js";
+import type { VoteCardStatus } from "./VoteCard.js";
 import type { ReactNode } from "react";
 import type { Access, Decision } from "../flow/decision.js";
-import { canSubmit, privacyNote } from "../flow/decision.js";
+import { privacyNote } from "../flow/decision.js";
 import "./DecisionDialog.css";
 
 /**
@@ -71,12 +72,9 @@ export function DecisionDialog({
   /** Whatever had focus when it opened, to hand focus back to. */
   const opener = useRef<HTMLElement | null>(null);
   const questionId = useId();
-  const noteId = useId();
   const doneId = useId();
-  const groupName = useId();
 
   const answerable = access === "answerable";
-  const sending = progress.status === "sending";
   const view =
     progress.status === "sent"
       ? "sent"
@@ -109,8 +107,20 @@ export function DecisionDialog({
      * browser: the control that was pressed to get to the confirmation is
      * unmounted by it, and focus left on a removed node falls to the page.
      */
-    node.querySelector<HTMLElement>("[data-autofocus]")?.focus();
-  }, [open, view]);
+    const selector =
+      view === "sent"
+        ? "[data-autofocus]"
+        : !answerable
+          ? "button"
+          : view === "failed"
+            ? ".vote-card__submit"
+            : "input:checked, input";
+    const selected =
+      view === "form" && answerable
+        ? node.querySelector<HTMLInputElement>("input:checked")
+        : null;
+    (selected ?? node.querySelector<HTMLElement>(selector))?.focus();
+  }, [open, view, answerable]);
 
   /**
    * The dialog closed itself - Escape, in a real browser. Closing it from
@@ -121,125 +131,80 @@ export function DecisionDialog({
     if (showing.current) onClose();
   }
 
-  const allowed = canSubmit({ decision, access, picked, sending });
-  const firstFocus = picked ?? decision.choices[0]?.id ?? null;
+  const pickedIndex = decision.choices.findIndex(
+    (choice) => choice.id === picked,
+  );
+  const cardStatus: VoteCardStatus =
+    access !== "answerable"
+      ? { kind: access }
+      : progress.status === "sending"
+        ? { kind: "sending" }
+        : progress.status === "failed"
+          ? { kind: "failed", message: progress.message }
+          : { kind: "answerable" };
 
   return (
     <dialog
       ref={dialog}
       className="decision"
-      aria-labelledby={questionId}
+      aria-label={decision.question}
       onClose={onNativeClose}
     >
-      <div className="decision__top">
-        <p className="decision__eyebrow">DECISION</p>
-        <button
-          type="button"
-          className="decision__close"
-          onClick={onClose}
-          {...autofocus(view === "form" && !answerable)}
-        >
-          Close
-        </button>
-      </div>
-
-      <h2 id={questionId} className="decision__question">
-        {decision.question}
-      </h2>
-
       {view === "sent" ? (
-        <div className="decision__done">
-          <div role="status" id={doneId}>
-            {confirmation}
-          </div>
-          {/*
-           * Focus lands here as the confirmation appears, and a live region
-           * that arrives already filled is often not announced - so the
-           * button carries the confirmation as its description too.
-           */}
-          <button
-            type="button"
-            className="decision__primary"
-            aria-describedby={doneId}
-            onClick={onClose}
-            {...autofocus(true)}
-          >
-            {doneLabel}
-          </button>
-        </div>
-      ) : (
         <>
-          <fieldset
-            className="decision__choices"
-            aria-labelledby={questionId}
-            {...(answerable ? {} : { "aria-describedby": noteId })}
-            disabled={!answerable || sending}
-          >
-            {decision.choices.map((choice) => (
-              <label key={choice.id} className="decision__choice">
-                <input
-                  type="radio"
-                  name={groupName}
-                  value={choice.id}
-                  checked={picked === choice.id}
-                  onChange={() => onPick(choice.id)}
-                  {...autofocus(
-                    view === "form" && answerable && choice.id === firstFocus,
-                  )}
-                />
-                <span>{choice.label}</span>
-              </label>
-            ))}
-          </fieldset>
-
-          <p className="decision__privacy">{privacyNote(decision.privacy)}</p>
-
-          {answerable ? (
-            <>
-              {progress.status === "failed" ? (
-                <p className="decision__problem" role="alert">
-                  {progress.message}
-                </p>
-              ) : null}
-              <button
-                type="button"
-                className="decision__primary"
-                /*
-                 * The one guard against sending twice: `canSubmit` is false
-                 * while an answer is on its way, so a second press does
-                 * nothing. While sending the button is only `aria-disabled`,
-                 * not `disabled`, so focus stays on it and "Sending…" is read
-                 * out rather than focus falling to the page.
-                 */
-                disabled={!allowed && !sending}
-                aria-disabled={!allowed}
-                onClick={() => {
-                  if (allowed && picked !== null) onSubmit(picked);
-                }}
-                {...autofocus(view === "failed")}
-              >
-                {primaryLabel(progress)}
-              </button>
-            </>
-          ) : access === "closed" ? (
-            <ClosedNotice id={noteId} />
-          ) : (
-            <p id={noteId} className="decision__note">
-              Only confirmed members can answer this question. Another member or
-              your community needs to confirm you first.
-            </p>
-          )}
+          <div className="decision__top">
+            <p className="decision__eyebrow">DECISION</p>
+            <button type="button" className="decision__close" onClick={onClose}>
+              Close
+            </button>
+          </div>
+          <h2 id={questionId} className="decision__question">
+            {decision.question}
+          </h2>
+          <div className="decision__done">
+            <div role="status" id={doneId}>
+              {confirmation}
+            </div>
+            <button
+              type="button"
+              className="decision__primary"
+              aria-describedby={doneId}
+              onClick={onClose}
+              {...autofocus(true)}
+            >
+              {doneLabel}
+            </button>
+          </div>
         </>
+      ) : (
+        <VoteCard
+          question={decision.question}
+          why="Pick an answer, then press Submit."
+          method="single"
+          choices={decision.choices.map((choice, index) => ({
+            index,
+            label: choice.label,
+          }))}
+          picked={pickedIndex < 0 ? [] : [pickedIndex]}
+          status={cardStatus}
+          privacyNote={privacyNote(decision.privacy)}
+          collapsed={false}
+          onPick={(ballot) => {
+            const choice = decision.choices[ballot[0] ?? -1];
+            if (choice) onPick(choice.id);
+          }}
+          onSubmit={(ballot) => {
+            const choice = decision.choices[ballot[0] ?? -1];
+            if (choice) onSubmit(choice.id);
+          }}
+          onCollapse={() => {
+            /* The modal stays expanded. */
+          }}
+          onClose={onClose}
+        />
       )}
     </dialog>
   );
-}
-
-/** The one button's words: it sends, then waits, then offers to try again. */
-function primaryLabel(progress: DialogProgress): string {
-  if (progress.status === "sending") return "Sending…";
-  if (progress.status === "failed") return "Try again";
-  return "Submit";
 }
 
 /**
