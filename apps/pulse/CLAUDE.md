@@ -40,7 +40,8 @@ Three MVP pillars, in build order:
   future option, not a current dependency.
 - Tests ship with the change, not after (`.claude/skills/odc-testing` still
   applies to how we work, even though the charter does not).
-- One small branch per change; `pulse/<n>-<short-description>`.
+- One small branch per change, named for its ticket: `pulse/<issue>-<short-description>`
+  (the GitHub issue number, not a running count — see `.claude/skills/odc-pipeline`).
 
 ## Layout
 
