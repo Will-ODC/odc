@@ -16,7 +16,11 @@ export function TopBanner({
   signInHref,
   identity,
 }: {
-  signInHref: string;
+  /**
+   * Where "Sign in" goes. Left out on the sign-in screens themselves, where
+   * the link would only reload the page the person is already on.
+   */
+  signInHref?: string;
   /**
    * Who is signed in, when anybody is — the mark and the address.
    *
@@ -35,11 +39,12 @@ export function TopBanner({
         pulse
       </span>
 
-      {identity ?? (
-        <a className="banner__sign-in" href={signInHref}>
-          Sign in
-        </a>
-      )}
+      {identity ??
+        (signInHref ? (
+          <a className="banner__sign-in" href={signInHref}>
+            Sign in
+          </a>
+        ) : null)}
     </div>
   );
 }

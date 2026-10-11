@@ -89,6 +89,9 @@
     --t-hero: 34px;
     --t-word: 42px;
     --nextq-max: 20ch;
+
+    /* A sign-in form, not a banner: a column a person reads down. */
+    --screen-measure: 400px;
   }
 
   .shell__banner {
@@ -103,7 +106,22 @@
     min-height: 0;
   }
 
+  /*
+   * Each column named, not left to auto-placement. A screen with no rails
+   * (signing in) would otherwise drop its stage into the first track — the
+   * 248px left rail's — and sit against the left edge of a wide window; a
+   * screen with only a right rail would put that rail on the left.
+   */
+  .shell__rail--start {
+    grid-column: 1;
+  }
+
+  .shell__rail--end {
+    grid-column: 3;
+  }
+
   .shell__stage {
+    grid-column: 2;
     /*
      * A column of its own with a line either side, so the three read as one
      * page rather than as a screenshot with notes beside it.

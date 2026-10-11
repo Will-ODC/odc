@@ -16,7 +16,9 @@ export function ScreenFrame({ children }: { children: ReactNode }) {
           <i aria-hidden="true" /> pulse
         </div>
       </div>
-      <div className="screen__body">{children}</div>
+      <div className="screen__body">
+        <div className="screen__column">{children}</div>
+      </div>
     </section>
   );
 }

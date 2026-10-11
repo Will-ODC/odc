@@ -123,6 +123,15 @@
   --frame-shadow: var(--shadow-ballot);
 
   /*
+   * How wide a non-ballot screen's column of text and fields may run.
+   *
+   * On a phone the frame is already that narrow, so this is `none`. On a wide
+   * screen the frame becomes the page's whole centre column, and a sign-in
+   * field stretched across it reads as a mistake; AppShell.css sets it there.
+   */
+  --screen-measure: none;
+
+  /*
    * Whether a screen shows its own wordmark.
    *
    * It does on a phone, where the screen is the whole app. On a wide screen

@@ -64,7 +64,24 @@
   display: flex;
   flex-direction: column;
   justify-content: center;
-  gap: calc(var(--step) * 2);
   padding: var(--gutter);
   overflow-y: auto;
+}
+
+/*
+ * One column holding the screen's sentences, fields and buttons. It keeps to
+ * a readable width when the frame is a page rather than a phone, and is the
+ * body's full width on a phone, where `--screen-measure` is `none`.
+ *
+ * A wrapper rather than a rule on each child: the screens set their own
+ * margins (`.signin__title { margin: 0 }`), and a centring margin on the
+ * children loses to those, leaving the heading flush left above a centred form.
+ */
+.screen__column {
+  display: flex;
+  flex-direction: column;
+  gap: calc(var(--step) * 2);
+  width: 100%;
+  max-inline-size: var(--screen-measure);
+  margin-inline: auto;
 }

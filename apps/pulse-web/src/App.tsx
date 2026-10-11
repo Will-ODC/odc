@@ -1,6 +1,9 @@
+import type { ReactNode } from "react";
 import type { PulseApi } from "./api/types.js";
 import type { Route } from "./flow/route.js";
 import { FIRST_POLL_ID } from "./flow/route.js";
+import { AppShell } from "./components/AppShell.js";
+import { TopBanner } from "./components/TopBanner.js";
 import { useRoute } from "./hooks/use-route.js";
 import { ChatPreview } from "./screens/ChatPreview.js";
 import { Redeem } from "./screens/Redeem.js";
@@ -27,20 +30,28 @@ export function App({ api, route }: { api: PulseApi; route?: Route }) {
 
   switch (at.kind) {
     case "signIn":
-      return <SignIn api={api} />;
+      return (
+        <SignInPage>
+          <SignIn api={api} />
+        </SignInPage>
+      );
     case "redeem":
       return (
-        <Redeem
-          api={api}
-          token={at.token}
-          /*
-           * Replaced, not pushed: the token is spent the moment it is
-           * redeemed, so leaving that URL in the history would hand the back
-           * button a link that can now only answer "already used".
-           */
-          onSignedIn={() => browser.replace({ kind: "run", pollId: LANDS_ON })}
-          onAskAgain={() => browser.replace({ kind: "signIn" })}
-        />
+        <SignInPage>
+          <Redeem
+            api={api}
+            token={at.token}
+            /*
+             * Replaced, not pushed: the token is spent the moment it is
+             * redeemed, so leaving that URL in the history would hand the back
+             * button a link that can now only answer "already used".
+             */
+            onSignedIn={() =>
+              browser.replace({ kind: "run", pollId: LANDS_ON })
+            }
+            onAskAgain={() => browser.replace({ kind: "signIn" })}
+          />
+        </SignInPage>
       );
     case "run":
       return <Run api={api} pollId={at.pollId} />;
@@ -48,6 +59,16 @@ export function App({ api, route }: { api: PulseApi; route?: Route }) {
       // Sample data only: the prototype never touches `api`.
       return <ChatPreview />;
   }
+}
+
+/**
+ * The page both sign-in screens stand in: the same bar and centre column the
+ * ballot has, so a wide window shows one website rather than a phone frame
+ * pinned to its left edge. No rails, because there is nothing to navigate
+ * while signing in, and no "Sign in" link in the bar, because this is it.
+ */
+function SignInPage({ children }: { children: ReactNode }) {
+  return <AppShell banner={<TopBanner />}>{children}</AppShell>;
 }
 
 /**

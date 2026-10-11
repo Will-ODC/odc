@@ -22,4 +22,14 @@ describe("the bar across the top", () => {
     expect(screen.getByText("you")).toBeTruthy();
     expect(screen.queryByRole("link", { name: "Sign in" })).toBeNull();
   });
+
+  /*
+   * On the sign-in screens themselves the link would only reload the page the
+   * person is already on, so those screens leave it out.
+   */
+  it("offers no way in when it is given nowhere to send someone", () => {
+    render(<TopBanner />);
+    expect(screen.queryByRole("link", { name: "Sign in" })).toBeNull();
+    expect(screen.getByText("pulse")).toBeTruthy();
+  });
 });

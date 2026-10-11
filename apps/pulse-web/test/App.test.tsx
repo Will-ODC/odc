@@ -191,6 +191,43 @@ describe("following the browser's own navigation", () => {
  * It must not become the only path that works — see the suite above, which
  * deliberately does not use it.
  */
+/*
+ * Signing in used to be the one place the desktop page did not reach: the
+ * screens drew a bare phone frame with no bar over it, and on a wide window
+ * that frame sat against the left edge. Both sign-in screens now stand in the
+ * same page the ballot does. The layout itself is CSS and jsdom cannot see it;
+ * what it can see is that they are in the page at all.
+ */
+describe("the sign-in screens on the page", () => {
+  it("puts the form in the page, under the bar", async () => {
+    globalThis.history.replaceState(null, "", "/sign-in");
+    render(<App api={stubApi()} />);
+
+    const main = screen.getByRole("main");
+    expect(await within(main).findByLabelText("Your email")).toBeTruthy();
+    expect(
+      screen.getByText("pulse", { selector: ".banner__brand" }),
+    ).toBeTruthy();
+  });
+
+  it("does not offer a way in to someone already on the way in", async () => {
+    globalThis.history.replaceState(null, "", "/sign-in");
+    render(<App api={stubApi()} />);
+    await screen.findByLabelText("Your email");
+    expect(screen.queryByRole("link", { name: "Sign in" })).toBeNull();
+  });
+
+  it("puts what the emailed link opens in the page too", async () => {
+    globalThis.history.replaceState(null, "", "/sign-in?token=abc123");
+    render(<App api={stubApi({ redeem: () => Promise.resolve(ME) })} />);
+
+    expect(
+      await within(screen.getByRole("main")).findByText("You are in."),
+    ).toBeTruthy();
+    expect(screen.queryByRole("link", { name: "Sign in" })).toBeNull();
+  });
+});
+
 describe("a route handed in directly", () => {
   it("wins over the URL", async () => {
     globalThis.history.replaceState(null, "", "/sign-in");
