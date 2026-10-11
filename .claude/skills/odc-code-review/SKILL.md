@@ -11,13 +11,16 @@ description: Code review procedure and checklist for ODC. Use this skill wheneve
    change. Input: the diff, the PR description, the service's `API.md`, and
    `contracts/`. Not the implementation conversation.
 2. Read the PR description first; if you can't tell what/why/how-tested,
-   that alone is a blocking finding.
+   that alone is a blocking finding. Then read **the ticket it names**
+   (`gh issue view N`) and check the diff's scope against it: work the ticket
+   gives to another ticket, or a PR that names no ticket, is a `[SHOULD]`.
 3. Walk the checklist below, then read the diff once more top-to-bottom for
    anything the checklist missed.
 
 ## Output format
 
-Verdict first: **APPROVE** / **APPROVE WITH NITS** / **REQUEST CHANGES**.
+Verdict first, with its handles: **PR #N (ticket #M) — APPROVE** /
+**APPROVE WITH NITS** / **REQUEST CHANGES**.
 Then findings, each tagged:
 
 - `[BLOCKING]` correctness, security, charter, or boundary violation
