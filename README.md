@@ -1,33 +1,46 @@
 # ODC — Online Democratic Community
 
-Public infrastructure for collective decision-making: a permanent, verifiable
-record of deliberation, votes, and action. Not an app — apps are clients of it.
+Tools for communities to decide things together: talk it through, vote, and
+act on the result.
 
-- **Why / what:** `docs/charter.md`
-- **How / when:** `docs/implementation-plan.md`
-- **Where we are:** `memory/INDEX.md` — start here; it routes to
-  `memory/STATE.md` (core) or `memory/pulse.md` (pulse)
-- **Working with agents:** `CLAUDE.md`
+This repo holds two things:
 
-Two workstreams live here: the charter-governed core (`contracts/`, `services/`)
-and **pulse** (`apps/pulse`, `apps/pulse-web`), a community-vote product that is
-deliberately exempt from the charter.
+- **pulse** (`apps/pulse`, `apps/pulse-web`) — a voting app people can use
+  today. Ask a question, people answer, everyone sees the result. It is kept
+  simple on purpose and is exempt from the charter: votes are a plain record,
+  with no signatures or public proof.
+- **The ODC core** (`contracts/`, `services/`, `tools/`) — a public record of
+  deliberation, votes and action that anyone can check for themselves. It is
+  built to outlast any one app: apps write to it, and independent verifiers
+  confirm nothing was changed. Still in its first phase: the rules (the
+  contracts) and two verifiers exist; the record itself does not yet.
+
+Pulse may write to the core one day, through its public API. Until then the two
+share a repo and nothing else.
+
+| You want                       | Read                                                               |
+| ------------------------------ | ------------------------------------------------------------------ |
+| Why ODC exists and its rules   | `docs/charter.md`                                                  |
+| How and when the core is built | `docs/implementation-plan.md`                                      |
+| Where things stand             | `memory/INDEX.md`, which points to `STATE.md` (core) or `pulse.md` |
+| Pulse: run, test, serve        | `apps/pulse/README.md`                                             |
+| Working with agents            | `CLAUDE.md`                                                        |
 
 ## Quickstart
 
 ```sh
-pnpm i                  # install workspace + tooling
-pnpm lefthook install   # wire up local git hooks (pre-commit, pre-push)
+pnpm i                  # install the workspace and tooling
+pnpm lefthook install   # turn on the git hooks
 
-just            # list commands
-just up         # start all services (docker compose)
-just test       # run every service's tests
-just verify     # run the Go verifier against a fresh export
+just              # list commands
+just test         # run every test (JS packages and the Go verifier)
+just rehearsal    # build a sample record and check it with both verifiers
 ```
 
-Local hooks run format + lint on staged files at commit time and unit tests of
-changed services at push time. Run them by hand anytime with
-`pnpm lefthook run pre-commit`.
+To try pulse on your computer, see `apps/pulse/README.md`.
 
-Core loop the MVP must demonstrate:
-**register → create issue → vote → tally → export → verify.**
+The git hooks format and lint staged files on commit, and run the tests of
+changed packages on push. Run them by hand with `pnpm lefthook run pre-commit`.
+
+The core is done when it can show the whole loop working:
+**register → create an issue → vote → count → export → verify.**
