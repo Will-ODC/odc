@@ -91,9 +91,12 @@ describe("opening the decision", () => {
     const popup = dialog();
     expect(popup).toBeTruthy();
     const radios = screen.getAllByRole("radio");
-    expect(radios.map((radio) => radio.closest("label")?.textContent)).toEqual(
-      SAMPLE_DECISION.choices.map((choice) => choice.label),
-    );
+    expect(radios).toHaveLength(SAMPLE_DECISION.choices.length);
+    for (const choice of SAMPLE_DECISION.choices) {
+      expect(
+        within(popup).getByRole("radio", { name: choice.label }),
+      ).toBeTruthy();
+    }
     expect(screen.getByText("Your answer is private.")).toBeTruthy();
   });
 
@@ -193,8 +196,9 @@ describe("answering", () => {
 
     const sending = screen.getByRole("button", { name: "Sending…" });
     expect(sending.getAttribute("aria-disabled")).toBe("true");
-    // Focus stays on it, so "Sending…" is announced.
-    expect(document.activeElement).toBe(sending);
+    // Native disabling removes button focus in a browser. The pending status
+    // takes it instead, so Sending is announced and focus stays in the dialog.
+    expect(document.activeElement).toBe(screen.getByRole("status"));
     expect(send.started()).toBe(1);
 
     send.release();
