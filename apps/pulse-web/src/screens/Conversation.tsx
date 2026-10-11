@@ -282,7 +282,7 @@ function LiveCard({
   if (!visible)
     return (
       <button type="button" ref={show} onClick={() => setVisible(true)}>
-        Show vote card
+        Vote
       </button>
     );
   if (shut && closed.showing)

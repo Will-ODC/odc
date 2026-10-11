@@ -34,9 +34,7 @@ function card() {
 }
 async function openCard() {
   if (!main().queryByRole("region")) {
-    await userEvent.click(
-      main().getByRole("button", { name: "Show vote card" }),
-    );
+    await userEvent.click(main().getByRole("button", { name: "Vote" }));
   }
 }
 async function answer(label = "Yes") {
@@ -59,7 +57,7 @@ it("loads a real question and keeps the assistant unavailable", async () => {
   ).toBe(true);
   expect(screen.getByText(/Use the vote card to answer/)).toBeTruthy();
   expect(main().queryByRole("region")).toBeNull();
-  expect(main().getByRole("button", { name: "Show vote card" })).toBeTruthy();
+  expect(main().getByRole("button", { name: "Vote" })).toBeTruthy();
   expect(cast).not.toHaveBeenCalled();
 });
 it("shows loading, empty and errors with a working retry", async () => {
@@ -84,7 +82,7 @@ it("shows loading, empty and errors with a working retry", async () => {
     await main().findByRole("heading", { name: poll().question, level: 1 }),
   ).toBeTruthy();
 });
-it("casts, changes, hides, closes and reopens results in the card", async () => {
+it("casts, changes, closes and reopens results in the card", async () => {
   const p = poll();
   let attempt = 0;
   const cast = vi.fn(
@@ -102,11 +100,10 @@ it("casts, changes, hides, closes and reopens results in the card", async () => 
   expect(
     within(card()).getByRole("group", { name: "How people answered" }),
   ).toBeTruthy();
-  await user.click(within(card()).getByRole("button", { name: "Hide" }));
-  expect(within(card()).queryByRole("group")).toBeNull();
-  await user.click(
-    within(card()).getByRole("button", { name: "Show vote card" }),
-  );
+  expect(within(card()).queryByRole("button", { name: "Hide" })).toBeNull();
+  await user.click(within(card()).getByRole("button", { name: "Close" }));
+  expect(main().queryByRole("region")).toBeNull();
+  await user.click(main().getByRole("button", { name: "Vote" }));
   await user.click(
     within(card()).getByRole("button", { name: "Change my answer" }),
   );
@@ -120,7 +117,7 @@ it("casts, changes, hides, closes and reopens results in the card", async () => 
   await user.click(within(card()).getByRole("button", { name: "Close" }));
   expect(main().queryByRole("region")).toBeNull();
   expect(document.activeElement).toBe(
-    main().getByRole("button", { name: "Show vote card" }),
+    main().getByRole("button", { name: "Vote" }),
   );
   await user.keyboard("{Enter}");
   expect(document.activeElement).toBe(within(card()).getByRole("group"));
@@ -266,7 +263,7 @@ it("keyboard-only picking and confirmation casts exactly once", async () => {
   const user = userEvent.setup();
   await user.tab();
   expect(document.activeElement).toBe(
-    main().getByRole("button", { name: "Show vote card" }),
+    main().getByRole("button", { name: "Vote" }),
   );
   await user.keyboard("{Enter}");
   await user.keyboard("2");
