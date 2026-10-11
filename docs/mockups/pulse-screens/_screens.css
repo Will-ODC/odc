@@ -24,6 +24,37 @@
   --r-card: 22px;
   --r-control: 15px;
   --r-pill: 999px;
+
+  /*
+   * The dark set, for screens drawn in the built ballot's palette (08 and
+   * on). Copied from apps/pulse-web/src/styles/tokens.css, names and all, so
+   * a value read off a mockup is the value in the app. The light tokens
+   * above stay for screens 2-7.
+   */
+  --ballot-page: #0c0f16;
+  --ballot-bg: #0a0b0e;
+  --ballot-ink: #f3f6fb;
+  --ballot-ink-soft: rgba(255, 255, 255, 0.82);
+  --ballot-ink-muted: rgba(255, 255, 255, 0.55);
+  --ballot-ink-faint: rgba(255, 255, 255, 0.32);
+  --ballot-line: rgba(255, 255, 255, 0.1);
+  --ballot-chip: rgba(255, 255, 255, 0.09);
+  --surface-rest: rgba(255, 255, 255, 0.04);
+  --surface-hover: rgba(255, 255, 255, 0.08);
+  --side-a: 235, 110, 110;
+  --side-b: 73, 205, 174;
+  --rail: 248px;
+  --gutter: 24px;
+  --bar-h: 56px;
+  --frame-w: 390px;
+  --frame-h: 844px;
+
+  /* Placeholder boxes: a part of the layout that is not built yet. */
+  --placeholder: 240, 190, 90;
+  /* Open-question tags: a guess the operator has not decided yet. */
+  --open-q: 140, 170, 255;
+  --sidebar: 260px;
+  --chat-col: 760px;
 }
 
 * {

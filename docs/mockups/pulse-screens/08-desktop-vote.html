@@ -1,0 +1,1029 @@
+<!doctype html>
+<html lang="en">
+  <head>
+    <meta charset="utf-8" />
+    <meta name="viewport" content="width=device-width,initial-scale=1" />
+    <title>pulse — 8 · vote page, desktop and phone</title>
+    <link rel="stylesheet" href="_screens.css" />
+    <style>
+      @import url("https://fonts.googleapis.com/css2?family=Inter:wght@400;500;600;700;800&display=swap");
+
+      /*
+       * Screen 8: the vote page as decided by the operator on 2026-10-11.
+       *
+       * Desktop (1100px and up): three columns, as built - Answered and
+       * browse on the left, the poll in the centre (photo, summary, question,
+       * ballot, results), comments on the right. Phone (390px): the same
+       * poll in one column, comments reached by swiping up (a proposal).
+       *
+       * Dark, like 01-claim.html, to match the built ballot; that is why it
+       * overrides _screens.css's light page. Tokens are the dark set in
+       * _screens.css. Anything not built is drawn inside a labelled
+       * placeholder box. All content is sample content.
+       */
+      html,
+      body {
+        background: var(--ballot-page);
+      }
+      body {
+        padding: 0;
+        color: var(--ballot-ink);
+        font-size: 15px;
+      }
+      button {
+        color: inherit;
+        background: none;
+        border: 0;
+        padding: 0;
+        cursor: pointer;
+      }
+      [hidden] {
+        display: none !important;
+      }
+
+      /* ---- mockup controls (not part of the design) ---- */
+      .mock-bar {
+        display: flex;
+        flex-wrap: wrap;
+        gap: 8px 16px;
+        align-items: center;
+        padding: 10px var(--gutter);
+        background: #1a1e28;
+        border-bottom: 1px dashed rgba(255, 255, 255, 0.2);
+        font-size: 12px;
+        color: var(--ballot-ink-muted);
+      }
+      .mock-bar strong {
+        color: var(--ballot-ink-soft);
+      }
+      .seg {
+        display: inline-flex;
+        border: 1px solid var(--ballot-line);
+        border-radius: var(--r-pill);
+        overflow: hidden;
+      }
+      .seg button {
+        padding: 5px 12px;
+        color: var(--ballot-ink-muted);
+      }
+      .seg button[aria-pressed="true"] {
+        background: var(--surface-hover);
+        color: var(--ballot-ink);
+      }
+      .mock-bar a {
+        color: #9db4ff;
+      }
+
+      /* ---- placeholder: a labelled box for what is not built ---- */
+      .ph {
+        position: relative;
+        border: 1.5px dashed rgba(var(--placeholder), 0.6);
+        border-radius: 16px;
+        padding: 10px 14px 14px;
+        background: rgba(var(--placeholder), 0.04);
+      }
+      .ph-label {
+        display: block;
+        margin-bottom: 10px;
+        font-size: 10.5px;
+        font-weight: 700;
+        letter-spacing: 0.02em;
+        color: rgb(var(--placeholder));
+        line-height: 1.3;
+      }
+      .ph .sample {
+        opacity: 0.75;
+      }
+
+      /* ---- shared pieces ---- */
+      .brand {
+        display: flex;
+        align-items: center;
+        gap: 8px;
+        font-weight: 600;
+        font-size: 14px;
+      }
+      .brand i {
+        width: 8px;
+        height: 8px;
+        border-radius: 50%;
+        background: rgba(255, 255, 255, 0.85);
+      }
+      .eyebrow {
+        font-size: 10px;
+        font-weight: 700;
+        letter-spacing: 0.12em;
+        text-transform: uppercase;
+        color: var(--ballot-ink-faint);
+        margin: 0 0 10px;
+      }
+      .chip {
+        align-self: flex-start;
+        font-size: 11px;
+        font-weight: 600;
+        color: rgba(255, 255, 255, 0.65);
+        background: var(--ballot-chip);
+        padding: 5px 10px;
+        border-radius: var(--r-pill);
+      }
+      .photo {
+        border-radius: 12px;
+        position: relative;
+        overflow: hidden;
+        background:
+          radial-gradient(
+            120% 90% at 20% 110%,
+            rgba(73, 205, 174, 0.35),
+            transparent 60%
+          ),
+          radial-gradient(
+            90% 80% at 85% 0%,
+            rgba(157, 180, 255, 0.35),
+            transparent 60%
+          ),
+          linear-gradient(160deg, #1d2433, #121620);
+      }
+      .photo span {
+        position: absolute;
+        left: 12px;
+        bottom: 10px;
+        font-size: 11px;
+        color: var(--ballot-ink-soft);
+        background: rgba(10, 11, 14, 0.6);
+        padding: 3px 9px;
+        border-radius: var(--r-pill);
+      }
+      .summary {
+        margin: 12px 2px 0;
+        font-size: 14px;
+        line-height: 1.55;
+        color: var(--ballot-ink-soft);
+      }
+      .posted {
+        margin: 8px 2px 0;
+        font-size: 12px;
+        color: var(--ballot-ink-faint);
+      }
+      .ballot {
+        display: grid;
+        grid-template-columns: 1fr 1fr;
+        border-radius: var(--r-card);
+        overflow: hidden;
+      }
+      .half {
+        display: flex;
+        flex-direction: column;
+        align-items: center;
+        justify-content: center;
+        gap: 6px;
+        font-size: 32px;
+        font-weight: 600;
+      }
+      .half.a {
+        background: rgba(var(--side-a), 0.14);
+      }
+      .half.b {
+        background: rgba(var(--side-b), 0.14);
+      }
+      .half.a:hover {
+        background: rgba(var(--side-a), 0.24);
+      }
+      .half.b:hover {
+        background: rgba(var(--side-b), 0.24);
+      }
+      .goes-line {
+        margin: 0;
+        font-size: 12px;
+        color: var(--ballot-ink-faint);
+        text-align: center;
+      }
+      .goes-line b {
+        color: var(--ballot-ink-muted);
+        font-weight: 600;
+      }
+      .counted {
+        border-radius: var(--r-card);
+        padding: 18px 20px;
+        background: rgba(var(--side-b), 0.1);
+        display: flex;
+        flex-wrap: wrap;
+        align-items: center;
+        gap: 12px 16px;
+      }
+      .tick {
+        width: 36px;
+        height: 36px;
+        border-radius: 50%;
+        display: grid;
+        place-items: center;
+        background: rgba(255, 255, 255, 0.14);
+        flex: none;
+      }
+      .counted .what {
+        flex: 1;
+        min-width: 160px;
+      }
+      .counted .what b {
+        font-size: 18px;
+      }
+      .counted .what small {
+        display: block;
+        color: var(--ballot-ink-muted);
+        font-size: 12px;
+        margin-top: 3px;
+      }
+      .ghost-btn {
+        border: 1px solid var(--ballot-line) !important;
+        border-radius: var(--r-pill);
+        padding: 8px 14px !important;
+        font-size: 13px;
+        color: var(--ballot-ink-soft);
+      }
+      .next-btn {
+        background: rgb(var(--side-b)) !important;
+        color: var(--ballot-bg);
+        border-radius: var(--r-pill);
+        padding: 9px 16px !important;
+        font-weight: 700;
+        font-size: 13px;
+      }
+      .bar {
+        margin-bottom: 12px;
+      }
+      .bar .row {
+        display: flex;
+        justify-content: space-between;
+        font-size: 13px;
+        color: var(--ballot-ink-soft);
+        margin-bottom: 5px;
+      }
+      .bar .track {
+        height: 8px;
+        border-radius: var(--r-pill);
+        background: var(--surface-hover);
+        overflow: hidden;
+      }
+      .bar .fill {
+        height: 100%;
+        border-radius: var(--r-pill);
+      }
+      .slot-note {
+        margin: 0;
+        font-size: 12px;
+        line-height: 1.5;
+        color: var(--ballot-ink-muted);
+      }
+      .comment {
+        padding: 10px 0;
+        border-top: 1px solid var(--ballot-line);
+        font-size: 13px;
+        line-height: 1.45;
+        color: var(--ballot-ink-soft);
+      }
+      .comment:first-of-type {
+        border-top: 0;
+      }
+      .comment .who {
+        display: block;
+        font-size: 11px;
+        color: var(--ballot-ink-faint);
+        margin-bottom: 3px;
+      }
+      .comment .who b {
+        color: var(--ballot-ink-muted);
+        font-weight: 600;
+      }
+      .write {
+        margin-top: 10px;
+        padding: 10px 12px;
+        border-radius: 12px;
+        background: var(--surface-rest);
+        border: 1px solid var(--ballot-line);
+        font-size: 13px;
+        color: var(--ballot-ink-faint);
+      }
+
+      /* ---- option B: the decision card and its pop-up (after #228) ---- */
+      .decide-card {
+        display: flex;
+        align-items: center;
+        gap: 16px;
+        padding: 18px 20px;
+        border-radius: var(--r-card);
+        background: var(--surface-rest);
+        border: 1px solid var(--ballot-line);
+      }
+      .decide-text {
+        flex: 1;
+        font-size: 14px;
+        color: var(--ballot-ink-soft);
+      }
+      .decide-text .eyebrow {
+        display: block;
+        margin-bottom: 4px;
+      }
+      .pop-backdrop {
+        position: fixed;
+        inset: 0;
+        z-index: 20;
+        display: grid;
+        place-items: center;
+        padding: var(--gutter);
+        background: rgba(0, 0, 0, 0.62);
+      }
+      .pop-backdrop.in-phone {
+        position: absolute;
+        place-items: end stretch;
+        padding: 0;
+      }
+      .pop {
+        width: min(460px, 100%);
+        display: flex;
+        flex-direction: column;
+        gap: 14px;
+        padding: 20px;
+        border-radius: var(--r-card);
+        background: var(--ballot-bg);
+        border: 1px solid var(--ballot-line);
+        box-shadow: 0 22px 55px rgba(0, 0, 0, 0.5);
+      }
+      .in-phone .pop {
+        width: 100%;
+        border-radius: 22px 22px 0 0;
+        padding-bottom: 28px;
+      }
+      .pop-top {
+        display: flex;
+        justify-content: space-between;
+        align-items: center;
+      }
+      .pop-q {
+        margin: 0;
+        font-size: 22px;
+        font-weight: 800;
+        letter-spacing: -0.02em;
+        line-height: 1.2;
+      }
+      .pop-choices {
+        display: flex;
+        flex-direction: column;
+        gap: 8px;
+      }
+      .pop-choice {
+        display: flex !important;
+        align-items: flex-start;
+        gap: 12px;
+        text-align: left;
+        padding: 12px 14px !important;
+        border-radius: var(--r-control);
+        background: var(--surface-rest) !important;
+        border: 1px solid var(--ballot-line) !important;
+      }
+      .pop-choice:hover {
+        background: var(--surface-hover) !important;
+      }
+      .pop-choice[aria-checked="true"] {
+        border-color: rgb(var(--side-b)) !important;
+        background: rgba(var(--side-b), 0.08) !important;
+      }
+      .pop-choice .pop-dot {
+        flex: none;
+        width: 16px;
+        height: 16px;
+        margin-top: 2px;
+        border-radius: 50%;
+        border: 2px solid var(--ballot-ink-faint);
+      }
+      .pop-choice[aria-checked="true"] .pop-dot {
+        border-color: rgb(var(--side-b));
+        background: radial-gradient(rgb(var(--side-b)) 45%, transparent 50%);
+      }
+      .pop-choice b {
+        display: block;
+        font-size: 15px;
+      }
+      .pop-choice small {
+        display: block;
+        margin-top: 2px;
+        font-size: 12.5px;
+        color: var(--ballot-ink-muted);
+        line-height: 1.4;
+      }
+      .pop-choice.other b {
+        color: var(--ballot-ink-soft);
+      }
+      .pop-note {
+        margin: 0;
+        font-size: 12px;
+        color: var(--ballot-ink-muted);
+      }
+      .pop-submit {
+        padding: 13px !important;
+        border-radius: var(--r-control);
+        background: rgb(var(--side-b)) !important;
+        color: var(--ballot-bg) !important;
+        font-weight: 700;
+      }
+      .pop-submit:disabled {
+        opacity: 0.45;
+        cursor: default;
+      }
+
+      /* ============ DESKTOP ============ */
+      .topbar {
+        display: flex;
+        align-items: center;
+        justify-content: space-between;
+        height: var(--bar-h);
+        padding: 0 var(--gutter);
+        border-bottom: 1px solid var(--ballot-line);
+      }
+      .topbar .signin {
+        color: var(--ballot-ink-soft);
+        font-size: 13px;
+        font-weight: 600;
+        text-decoration: none;
+      }
+      .page {
+        display: grid;
+        grid-template-columns: var(--rail) minmax(0, 1fr) var(--rail);
+        min-height: calc(100vh - var(--bar-h) - 41px);
+      }
+      .rail {
+        padding: 24px 16px;
+        display: flex;
+        flex-direction: column;
+        gap: 24px;
+        min-height: 0;
+      }
+      .rail--start {
+        border-right: 1px solid var(--ballot-line);
+      }
+      .rail--end {
+        border-left: 1px solid var(--ballot-line);
+      }
+      .answered {
+        display: block;
+        padding: 10px 12px;
+        border-radius: 12px;
+        background: var(--surface-rest);
+        margin-bottom: 8px;
+        font-size: 13px;
+        line-height: 1.35;
+        color: var(--ballot-ink-soft);
+      }
+      .answered.current {
+        background: var(--surface-hover);
+        color: var(--ballot-ink);
+      }
+      .browse-row {
+        display: grid;
+        grid-template-columns: 40px 1fr;
+        gap: 10px;
+        align-items: center;
+        margin-bottom: 10px;
+        font-size: 12.5px;
+        line-height: 1.3;
+        color: var(--ballot-ink-soft);
+      }
+      .thumb {
+        width: 40px;
+        height: 40px;
+        border-radius: 9px;
+        background: linear-gradient(135deg, #3a4a6b, #1d2433);
+      }
+      .browse-row small {
+        display: block;
+        font-size: 11px;
+        color: var(--ballot-ink-faint);
+      }
+      .stage {
+        padding: 24px 40px 64px;
+      }
+      .column {
+        max-width: 680px;
+        margin: 0 auto;
+        display: flex;
+        flex-direction: column;
+        gap: 18px;
+      }
+      .desktop .photo {
+        height: 190px;
+      }
+      .desktop h1 {
+        margin: 0;
+        font-size: 34px;
+        font-weight: 800;
+        letter-spacing: -0.03em;
+        line-height: 1.15;
+      }
+      .desktop .ballot {
+        height: 170px;
+      }
+      .comments-rail {
+        flex: 1;
+        display: flex;
+        flex-direction: column;
+      }
+      .comments-rail .list {
+        flex: 1;
+      }
+
+      /* ============ PHONE ============ */
+      .phone-stage {
+        display: flex;
+        justify-content: center;
+        gap: 48px;
+        flex-wrap: wrap;
+        padding: 32px 16px 64px;
+      }
+      .phone-wrap p.cap {
+        margin: 0 0 10px;
+        font-size: 12px;
+        color: var(--ballot-ink-muted);
+        text-align: center;
+      }
+      .phone {
+        width: var(--frame-w);
+        height: var(--frame-h);
+        border-radius: var(--r-screen);
+        border: 1px solid var(--ballot-line);
+        background: var(--ballot-bg);
+        overflow: hidden;
+        position: relative;
+        display: flex;
+        flex-direction: column;
+      }
+      .phone .scroll {
+        flex: 1;
+        overflow-y: auto;
+        padding: 20px 18px 0;
+        display: flex;
+        flex-direction: column;
+        gap: 14px;
+      }
+      .phone h1 {
+        margin: 0;
+        font-size: 24px;
+        font-weight: 800;
+        letter-spacing: -0.03em;
+        line-height: 1.2;
+      }
+      .phone .photo {
+        height: 120px;
+      }
+      .phone .ballot {
+        height: 220px;
+        flex: none;
+      }
+      .phone .half {
+        font-size: 26px;
+      }
+      .sheet {
+        flex: none;
+        margin-top: 8px;
+        border-top-left-radius: 22px;
+        border-top-right-radius: 22px;
+        background: #151821;
+        padding: 10px 16px 16px;
+      }
+      .sheet .grip {
+        width: 40px;
+        height: 4px;
+        border-radius: 2px;
+        background: rgba(255, 255, 255, 0.25);
+        margin: 0 auto 10px;
+      }
+      .open-sheet {
+        position: absolute;
+        inset: 120px 0 0;
+        margin: 0;
+        border-radius: 22px 22px 0 0;
+        display: flex;
+        flex-direction: column;
+        box-shadow: 0 -18px 40px rgba(0, 0, 0, 0.5);
+      }
+      .open-sheet .ph {
+        flex: 1;
+        display: flex;
+        flex-direction: column;
+      }
+      .open-sheet .list {
+        flex: 1;
+      }
+    </style>
+  </head>
+  <body>
+    <div class="mock-bar" role="region" aria-label="Mockup controls">
+      <strong>Mockup · screen 8 · the vote page</strong>
+      <span>Sample content only.</span>
+      <span class="seg" role="group" aria-label="Width">
+        <button type="button" data-view="desktop" aria-pressed="true">
+          Desktop 1440
+        </button>
+        <button type="button" data-view="phone" aria-pressed="false">
+          Phone 390
+        </button>
+      </span>
+      <span class="seg" role="group" aria-label="Ballot style">
+        <button type="button" data-ballot="halves" aria-pressed="true">
+          A · Two halves
+        </button>
+        <button type="button" data-ballot="popup" aria-pressed="false">
+          B · Pop-up
+        </button>
+      </span>
+      <span class="seg" role="group" aria-label="Ballot state">
+        <button type="button" data-state="before" aria-pressed="true">
+          Before voting
+        </button>
+        <button type="button" data-state="after" aria-pressed="false">
+          After voting
+        </button>
+      </span>
+      <a href="index.html">All screens</a>
+    </div>
+
+    <!-- ================= DESKTOP ================= -->
+    <div class="desktop" data-view-show="desktop">
+      <header class="topbar">
+        <span class="brand"><i aria-hidden="true"></i>pulse</span>
+        <a class="signin" href="#">Sign in</a>
+      </header>
+
+      <div class="page">
+        <nav class="rail rail--start" aria-label="Questions">
+          <section>
+            <p class="eyebrow">Answered</p>
+            <span class="answered current"
+              >Should the ODC stay free of paid ads?</span
+            >
+          </section>
+
+          <section class="ph">
+            <span class="ph-label"
+              >Placeholder: browse questions, #259/#260</span
+            >
+            <div class="sample">
+              <div class="browse-row">
+                <span class="thumb"></span
+                ><span
+                  >Fix the crossing on Sample Street?<small
+                    >Closes Friday</small
+                  ></span
+                >
+              </div>
+              <div class="browse-row">
+                <span
+                  class="thumb"
+                  style="background: linear-gradient(135deg, #2f5a4f, #142621)"
+                ></span
+                ><span
+                  >Open the hall on Sundays?<small>Closes in 5 days</small></span
+                >
+              </div>
+              <div class="browse-row">
+                <span
+                  class="thumb"
+                  style="background: linear-gradient(135deg, #5a3a4a, #26141b)"
+                ></span
+                ><span
+                  >Pick the clean-up date<small>Closes Monday</small></span
+                >
+              </div>
+            </div>
+          </section>
+        </nav>
+
+        <main class="stage">
+          <div class="column">
+            <section class="ph" aria-label="From the poster">
+              <span class="ph-label"
+                >Placeholder: poster photo and summary, #296 (needs poll
+                creation, P6)</span
+              >
+              <div class="photo"><span>Poster's photo · sample</span></div>
+              <p class="summary">
+                The site has been ad-free since it started. Hosting now costs
+                about $240 a month and donations cover $150, so we are asking
+                whether to allow any paid ads at all.
+              </p>
+              <p class="posted">Posted by Sample Poster · 2 days ago</p>
+            </section>
+
+            <span class="chip">Official Ballot · Closes Wednesday</span>
+            <h1>Should the ODC stay free of paid ads?</h1>
+
+            <div class="ballot" data-show="before" data-ballot-show="halves" role="group" aria-label="Your answer">
+              <button class="half a" type="button" data-vote>No</button>
+              <button class="half b" type="button" data-vote>Yes</button>
+            </div>
+            <div class="decide-card" data-show="before" data-ballot-show="popup">
+              <span class="decide-text"
+                ><span class="eyebrow">Decision</span>Two answers, and you can
+                suggest your own.</span
+              >
+              <button class="next-btn" type="button" data-open>Answer</button>
+            </div>
+            <p class="goes-line" data-show="before">
+              Where this goes: <b>No</b> → Which ads are allowed? ·
+              <b>Yes</b> → How do we pay for it?
+            </p>
+
+            <div class="counted" data-show="after" hidden>
+              <span class="tick" aria-hidden="true">✓</span>
+              <span class="what"
+                ><b>Yes</b
+                ><small
+                  >Counted. You can change your answer until this question
+                  closes.</small
+                ></span
+              >
+              <button class="ghost-btn" type="button" data-back>
+                Change my answer
+              </button>
+              <button class="next-btn" type="button">
+                Next: How do we pay for it? →
+              </button>
+            </div>
+
+            <section data-show="after" hidden aria-label="Results">
+              <p class="eyebrow">Results so far · 312 answers (sample)</p>
+              <div class="bar">
+                <div class="row"><span>Yes</span><span>64%</span></div>
+                <div class="track">
+                  <div
+                    class="fill"
+                    style="width: 64%; background: rgb(var(--side-b))"
+                  ></div>
+                </div>
+              </div>
+              <div class="bar">
+                <div class="row"><span>No</span><span>36%</span></div>
+                <div class="track">
+                  <div
+                    class="fill"
+                    style="width: 36%; background: rgb(var(--side-a))"
+                  ></div>
+                </div>
+              </div>
+            </section>
+
+            <section class="ph" aria-label="Vote validity">
+              <span class="ph-label"
+                >Placeholder: vote validity, under discussion</span
+              >
+              <p class="slot-note">
+                How you know your vote counted. Not designed: the operator is
+                reconsidering the rule against showing how votes are counted.
+              </p>
+            </section>
+          </div>
+        </main>
+
+        <aside class="rail rail--end" aria-label="Comments">
+          <section class="ph comments-rail">
+            <span class="ph-label">Placeholder: comments, #297</span>
+            <div class="list sample">
+              <div class="comment">
+                <span class="who"><b>Neighbour A</b> · 3 hours ago</span>Is the
+                $240 for this year only, or does it grow as more people join?
+              </div>
+              <div class="comment">
+                <span class="who"><b>Neighbour B</b> · 1 hour ago</span>I would
+                rather we raise the donation ask before we try ads.
+              </div>
+              <div class="comment">
+                <span class="who"><b>Neighbour C</b> · 40 min ago</span>Local
+                shops on a community site feels different from tracking ads.
+              </div>
+              <div class="comment">
+                <span class="who"><b>Neighbour D</b> · 5 min ago</span>Could
+                we try it for three months and vote again?
+              </div>
+            </div>
+            <div class="write">Write a comment…</div>
+          </section>
+        </aside>
+      </div>
+
+      <!-- option B, desktop: the pop-up over the page -->
+      <div class="pop-backdrop" data-popup>
+            <div class="pop" role="dialog" aria-modal="true" aria-labelledby="pop-d">
+              <div class="pop-top">
+                <span class="eyebrow" style="margin: 0">Decision</span>
+                <button class="ghost-btn" type="button" data-close>Close</button>
+              </div>
+              <h2 class="pop-q" id="pop-d">Should the ODC stay free of paid ads?</h2>
+              <div class="pop-choices" role="radiogroup">
+                <button class="pop-choice" type="button" role="radio" aria-checked="false" data-pick>
+                  <span class="pop-dot"></span
+                  ><span><b>Yes</b><small>Keep the site ad-free. Next: how do we pay for it?</small></span>
+                </button>
+                <button class="pop-choice" type="button" role="radio" aria-checked="false" data-pick>
+                  <span class="pop-dot"></span
+                  ><span><b>No</b><small>Allow some paid ads. Next: which ads are allowed?</small></span>
+                </button>
+                <button class="pop-choice other" type="button" role="radio" aria-checked="false" data-pick>
+                  <span class="pop-dot"></span
+                  ><span><b>Something else</b><small>Write your own answer. Others can pick it too.</small></span>
+                </button>
+              </div>
+              <p class="pop-note">Your answer is private. You can change it until Wednesday.</p>
+              <button class="pop-submit" type="button" data-submit disabled>Submit</button>
+            </div>
+          </div>
+    </div>
+
+    <!-- ================= PHONE ================= -->
+    <div class="phone-stage" data-view-show="phone" hidden>
+      <div class="phone-wrap">
+        <p class="cap">The vote, scrolled to the top</p>
+        <div class="phone">
+          <div class="scroll">
+            <span class="brand"><i aria-hidden="true"></i>pulse</span>
+            <span class="chip">Official Ballot · Closes Wednesday</span>
+            <h1>Should the ODC stay free of paid ads?</h1>
+
+            <section class="ph" aria-label="From the poster">
+              <span class="ph-label"
+                >Placeholder: poster photo and summary, #296 (needs poll
+                creation, P6)</span
+              >
+              <div class="photo"><span>Poster's photo · sample</span></div>
+              <p class="summary">
+                Hosting costs about $240 a month and donations cover $150. Should
+                we allow any paid ads at all?
+              </p>
+            </section>
+
+            <div class="ballot" data-show="before" data-ballot-show="halves">
+              <button class="half a" type="button" data-vote>No</button>
+              <button class="half b" type="button" data-vote>Yes</button>
+            </div>
+            <div class="decide-card" data-show="before" data-ballot-show="popup">
+              <span class="decide-text"
+                ><span class="eyebrow">Decision</span>Two answers, or suggest
+                your own.</span
+              >
+              <button class="next-btn" type="button" data-open>Answer</button>
+            </div>
+            <div class="counted" data-show="after" hidden>
+              <span class="tick" aria-hidden="true">✓</span>
+              <span class="what"
+                ><b>Yes</b><small>Counted. You can change it until it closes.</small></span
+              >
+            </div>
+            <section data-show="after" hidden>
+              <div class="bar">
+                <div class="row"><span>Yes</span><span>64%</span></div>
+                <div class="track">
+                  <div
+                    class="fill"
+                    style="width: 64%; background: rgb(var(--side-b))"
+                  ></div>
+                </div>
+              </div>
+              <div class="bar">
+                <div class="row"><span>No</span><span>36%</span></div>
+                <div class="track">
+                  <div
+                    class="fill"
+                    style="width: 36%; background: rgb(var(--side-a))"
+                  ></div>
+                </div>
+              </div>
+            </section>
+          </div>
+          <div class="sheet">
+            <div class="grip"></div>
+            <section class="ph">
+              <span class="ph-label"
+                >Placeholder: comments, #297 · swipe up to open (proposal: the
+                up/down axis is undecided)</span
+              >
+              <p class="slot-note">4 comments · swipe up</p>
+            </section>
+          </div>
+          <div class="pop-backdrop in-phone" data-popup>
+            <div class="pop" role="dialog" aria-modal="true" aria-labelledby="pop-p">
+              <div class="pop-top">
+                <span class="eyebrow" style="margin: 0">Decision</span>
+                <button class="ghost-btn" type="button" data-close>Close</button>
+              </div>
+              <h2 class="pop-q" id="pop-p">Should the ODC stay free of paid ads?</h2>
+              <div class="pop-choices" role="radiogroup">
+                <button class="pop-choice" type="button" role="radio" aria-checked="false" data-pick>
+                  <span class="pop-dot"></span
+                  ><span><b>Yes</b><small>Keep the site ad-free. Next: how do we pay for it?</small></span>
+                </button>
+                <button class="pop-choice" type="button" role="radio" aria-checked="false" data-pick>
+                  <span class="pop-dot"></span
+                  ><span><b>No</b><small>Allow some paid ads. Next: which ads are allowed?</small></span>
+                </button>
+                <button class="pop-choice other" type="button" role="radio" aria-checked="false" data-pick>
+                  <span class="pop-dot"></span
+                  ><span><b>Something else</b><small>Write your own answer. Others can pick it too.</small></span>
+                </button>
+              </div>
+              <p class="pop-note">Your answer is private. You can change it until Wednesday.</p>
+              <button class="pop-submit" type="button" data-submit disabled>Submit</button>
+            </div>
+          </div>
+        </div>
+      </div>
+
+      <div class="phone-wrap">
+        <p class="cap">After a swipe up (proposal)</p>
+        <div class="phone">
+          <div class="scroll" style="opacity: 0.35">
+            <span class="brand"><i aria-hidden="true"></i>pulse</span>
+            <h1>Should the ODC stay free of paid ads?</h1>
+          </div>
+          <div class="sheet open-sheet">
+            <div class="grip"></div>
+            <section class="ph">
+              <span class="ph-label"
+                >Placeholder: comments, #297 · swipe up to open (proposal: the
+                up/down axis is undecided)</span
+              >
+              <div class="list sample">
+                <div class="comment">
+                  <span class="who"><b>Neighbour A</b> · 3 hours ago</span>Is
+                  the $240 for this year only?
+                </div>
+                <div class="comment">
+                  <span class="who"><b>Neighbour B</b> · 1 hour ago</span>I would
+                  rather we raise the donation ask first.
+                </div>
+                <div class="comment">
+                  <span class="who"><b>Neighbour C</b> · 40 min ago</span>Local
+                  shops feel different from tracking ads.
+                </div>
+                <div class="comment">
+                  <span class="who"><b>Neighbour D</b> · 5 min ago</span>Try it
+                  for three months and vote again?
+                </div>
+              </div>
+              <div class="write">Write a comment…</div>
+            </section>
+          </div>
+        </div>
+      </div>
+    </div>
+
+    <script>
+      /* global document */
+      const ui = { view: "desktop", ballot: "halves", state: "before", open: false };
+      const render = () => {
+        const shown = (el) =>
+          (!el.dataset.viewShow || el.dataset.viewShow === ui.view) &&
+          (!el.dataset.ballotShow || el.dataset.ballotShow === ui.ballot) &&
+          (!el.dataset.show || el.dataset.show === ui.state);
+        document
+          .querySelectorAll("[data-view-show],[data-ballot-show],[data-show]")
+          .forEach((el) => {
+            el.hidden = !shown(el);
+          });
+        document.querySelectorAll("[data-popup]").forEach((el) => {
+          el.hidden = !(ui.open && ui.ballot === "popup" && ui.state === "before");
+        });
+        for (const key of ["view", "ballot", "state"]) {
+          document.querySelectorAll(`[data-${key}]`).forEach((b) => {
+            b.setAttribute("aria-pressed", String(b.dataset[key] === ui[key]));
+          });
+        }
+      };
+      const on = (sel, fn) =>
+        document.querySelectorAll(sel).forEach((b) => b.addEventListener("click", () => fn(b)));
+      on("[data-view]", (b) => { ui.view = b.dataset.view; render(); });
+      on("[data-ballot]", (b) => {
+        ui.ballot = b.dataset.ballot;
+        ui.state = "before";
+        ui.open = ui.ballot === "popup";
+        render();
+      });
+      on("[data-state]", (b) => { ui.state = b.dataset.state; ui.open = false; render(); });
+      on("[data-vote]", () => { ui.state = "after"; render(); });
+      on("[data-back]", () => {
+        ui.state = "before";
+        ui.open = ui.ballot === "popup";
+        render();
+      });
+      on("[data-open]", () => { ui.open = true; render(); });
+      on("[data-close]", () => { ui.open = false; render(); });
+      on("[data-pick]", (b) => {
+        const pop = b.closest(".pop");
+        pop.querySelectorAll("[data-pick]").forEach((x) =>
+          x.setAttribute("aria-checked", String(x === b)),
+        );
+        pop.querySelector("[data-submit]").disabled = false;
+      });
+      on("[data-submit]", () => { ui.open = false; ui.state = "after"; render(); });
+      document.addEventListener("keydown", (e) => {
+        if (e.key === "Escape" && ui.open) { ui.open = false; render(); }
+      });
+      render();
+    </script>
+  </body>
+</html>
