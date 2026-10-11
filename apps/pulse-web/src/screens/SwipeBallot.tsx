@@ -113,7 +113,7 @@ export function SwipeBallot({
 
   function commit(side: Side) {
     setLean({ side, strength: 1 });
-    cast(choiceFor(side));
+    cast([choiceFor(side)]);
   }
 
   /**

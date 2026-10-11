@@ -33,7 +33,8 @@ Do not apply charter rules to `apps/**`, and do not relax them anywhere else.
 - **Pulse:** identity, the ballot run, storage, mail and serving are built.
   P2 picker (#215) and P8 slice 1 (#213) are merged. A deploy is blocked on poll
   creation (P6, ADR-0024 values), a host/domain, and a Resend domain. The story's
-  middle and pillar 3 are not built. → `memory/pulse.md`
+  middle and pillar 3 are not built. **Next: the vote page becomes a
+  conversation** (epic #303, ADR-0035). → `memory/pulse.md`
 
 ## Load order
 

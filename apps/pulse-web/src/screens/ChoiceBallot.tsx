@@ -133,7 +133,7 @@ export function ChoiceBallot({
                     disabled={shut}
                     {...(shut ? { "aria-describedby": closedId } : {})}
                     onClick={() => {
-                      if (!settled && !shut) cast(index);
+                      if (!settled && !shut) cast([index]);
                     }}
                   >
                     <span>{label}</span>

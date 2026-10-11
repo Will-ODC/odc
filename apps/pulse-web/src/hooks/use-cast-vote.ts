@@ -1,10 +1,12 @@
 import { useCallback, useState } from "react";
-import type { PulseApi, Results } from "../api/types.js";
+import type { Ballot, PulseApi, Results } from "../api/types.js";
 import { ApiError } from "../api/types.js";
 
 /**
- * Casting one answer.
+ * Casting a complete ballot.
  *
+ * `ballot` retains every choice; `choice` is the first submitted index for the
+ * legacy single-choice screens only. Those screens still send one-element arrays.
  * By choice position, not by side: a swipe and a list are two ways of picking
  * the same thing, and only the swipe has sides. The chosen position is carried
  * through `casting` and into `counted` so a screen can keep showing what was
@@ -13,7 +15,7 @@ import { ApiError } from "../api/types.js";
  */
 export type CastState =
   | { status: "idle" }
-  | { status: "casting"; choice: number }
+  | { status: "casting"; choice: number; ballot: Ballot }
   /**
    * `changed` when this replaced an earlier answer to the same poll.
    *
@@ -25,6 +27,7 @@ export type CastState =
   | {
       status: "counted";
       choice: number;
+      ballot: Ballot;
       changed: boolean;
       results: Results;
     }
@@ -33,7 +36,7 @@ export type CastState =
 
 export interface CastVote {
   state: CastState;
-  cast: (choice: number) => void;
+  cast: (ballot: Ballot) => void;
   /**
    * Put the question back, so the answer can be given again.
    *
@@ -57,10 +60,14 @@ export function useCastVote(api: PulseApi, pollId: string): CastVote {
   const [state, setState] = useState<CastState>({ status: "idle" });
 
   const cast = useCallback(
-    (choice: number) => {
-      setState({ status: "casting", choice });
+    (ballot: Ballot) => {
+      // Keep a copy: subsequent controlled picks must not mutate an in-flight vote.
+      const submitted = [...ballot];
+      const choice = submitted[0];
+      if (choice === undefined) return; // An empty ballot is never a retraction.
+      setState({ status: "casting", choice, ballot: submitted });
 
-      api.cast(pollId, [choice]).then(
+      api.cast(pollId, submitted).then(
         (outcome) => {
           if (outcome.status === "closed") {
             setState({ status: "closed" });
@@ -69,6 +76,7 @@ export function useCastVote(api: PulseApi, pollId: string): CastVote {
           setState({
             status: "counted",
             choice,
+            ballot: [...outcome.ballot],
             changed: outcome.status === "changed",
             results: outcome.results,
           });
