@@ -1,0 +1,142 @@
+/* A dockable card; its caller chooses the width and position. */
+.vote-card {
+  box-sizing: border-box;
+  min-width: 0;
+  padding: calc(var(--step) * 2);
+  color: var(--ballot-ink);
+  background: var(--ballot-page);
+  border: var(--hairline) solid var(--control-line);
+  border-radius: var(--r-card);
+  box-shadow: var(--shadow-ballot);
+  text-align: left;
+}
+.vote-card__top,
+.vote-card__foot,
+.vote-card__actions,
+.vote-card--collapsed {
+  display: flex;
+  align-items: center;
+  flex-wrap: wrap;
+  gap: var(--step);
+}
+.vote-card__top {
+  justify-content: space-between;
+}
+.vote-card__heading {
+  color: rgb(var(--side-b));
+  font-size: var(--t-small);
+  font-weight: 700;
+}
+.vote-card__question {
+  margin: var(--step) 0;
+  font-size: var(--t-body);
+  line-height: 1.35;
+  overflow-wrap: anywhere;
+}
+.vote-card__why,
+.vote-card__note,
+.vote-card__choice small {
+  margin: 0;
+  color: var(--ballot-ink-muted);
+  font-size: var(--t-small);
+  line-height: 1.5;
+}
+.vote-card__choices {
+  display: grid;
+  gap: var(--step);
+  min-inline-size: 0;
+  margin: var(--step) 0;
+  padding: 0;
+  border: none;
+}
+.vote-card__choice {
+  display: flex;
+  align-items: flex-start;
+  gap: var(--step);
+  padding: calc(var(--step) * 1.5);
+  border: var(--hairline) solid var(--ballot-line);
+  border-radius: var(--r-control);
+  background: var(--surface-rest);
+  cursor: pointer;
+  overflow-wrap: anywhere;
+}
+.vote-card__choice input {
+  accent-color: rgb(var(--side-b));
+}
+.vote-card__choice b {
+  font-size: var(--t-body);
+}
+.vote-card__choice small {
+  display: block;
+}
+.vote-card__number {
+  flex: 0 0 auto;
+  padding: 0 var(--step);
+  border-radius: var(--r-control);
+  background: var(--surface-hover);
+  font-size: var(--t-small);
+}
+.vote-card__choice:has(input:checked) {
+  border-color: rgb(var(--side-b));
+  background: rgba(var(--side-b), var(--side-rest));
+}
+.vote-card__choice:has(input:focus-visible) {
+  outline: calc(var(--hairline) * 2) solid var(--focus-ring);
+  outline-offset: calc(var(--hairline) * 2);
+}
+.vote-card__choices:disabled .vote-card__choice {
+  color: var(--ballot-ink-muted);
+  cursor: default;
+}
+.vote-card__other {
+  min-width: 0;
+}
+.vote-card__foot,
+.vote-card__actions {
+  margin-top: var(--step);
+}
+.vote-card__foot > p {
+  flex: 1;
+}
+.vote-card__problem {
+  color: rgb(var(--side-a));
+  font-size: var(--t-small);
+}
+.vote-card button {
+  padding: var(--step) calc(var(--step) * 1.5);
+  font: inherit;
+  font-size: var(--t-small);
+  color: var(--ballot-ink);
+  background: var(--surface-hover);
+  border: var(--hairline) solid var(--control-line);
+  border-radius: var(--r-pill);
+  cursor: pointer;
+}
+.vote-card button.vote-card__submit {
+  color: var(--ballot-bg);
+  background: rgb(var(--side-b));
+  font-weight: 700;
+}
+.vote-card button:disabled {
+  opacity: 0.55;
+  cursor: default;
+}
+.vote-card button:focus-visible {
+  outline: calc(var(--hairline) * 2) solid var(--focus-ring);
+  outline-offset: calc(var(--hairline) * 2);
+}
+.vote-card__summary {
+  flex: 1;
+  min-width: 0;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+  font-size: var(--t-small);
+}
+.vote-card .results__close {
+  align-self: flex-end;
+}
+
+.vote-card--collapsed {
+  flex-wrap: nowrap;
+}
