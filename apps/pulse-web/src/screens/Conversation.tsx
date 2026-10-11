@@ -291,7 +291,10 @@ function LiveCard({
         <ClosedResults
           data={closed.data}
           onRetry={closed.retry}
-          onClose={closed.close}
+          onClose={() => {
+            closed.close();
+            close();
+          }}
           panelRef={closed.panelRef}
         />
       </div>

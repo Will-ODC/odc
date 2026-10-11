@@ -210,8 +210,11 @@ it("refuses a known closed poll and lets a non-voter read final results", async 
   expect(await main().findByText("Nobody answered this one.")).toBeTruthy();
   await userEvent.click(main().getByRole("button", { name: "Close" }));
   expect(document.activeElement).toBe(
-    main().getByRole("button", { name: "See results" }),
+    main().getByRole("button", { name: "Vote" }),
   );
+  await openCard();
+  expect(within(card()).getByText("This one has closed.")).toBeTruthy();
+  expect(main().queryByText("Nobody answered this one.")).toBeNull();
   expect(cast).not.toHaveBeenCalled();
 });
 it("handles a poll closing during submit without offering another cast", async () => {
