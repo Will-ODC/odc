@@ -133,8 +133,8 @@ entry records the checked state above, not a claim that open work has merged.
   Delegated limits: 10 attempts/minute and 300/hour per account across apps,
   plus separate traffic protection; atomic account/poll deduplication prevents
   duplicate AI ballots, quotas do not. Multiple accounts and browser/AI double
-  counting remain gaps. **Proposed ADR-0036 / draft PR #309 records these
-  choices but is unmerged.** Read implementation waits for explicit go in that
+  counting remain gaps. **PR #309 is merged; ADR-0036 records these choices but remains marked
+  proposed.** Read implementation waits for explicit go in that
   session and design acceptance; later storage/auth scope and the optional
   Pulse answer-check page require coordination. No runtime MCP voting is built. Photo/summary (#296),
   comments (#297), the assistant (#280-#284), browse (#259/#260) and vote
@@ -288,11 +288,18 @@ entry records the checked state above, not a claim that open work has merged.
   “Design AI app pulse voting” owns #300 / PR #309 and MCP/API work. Separate
   worktrees; agree optional answer-check page interfaces before #300 touches
   pulse-web. This session owns epic memory/candidate tracking.
-- PR #313 has all six GitHub checks passing; fresh review is underway. #302
+- PR #313 has all six GitHub checks passing; fresh review returned APPROVE with no remaining findings. #302
   waits on Will's merge, with no stacked PR.
-- Operator choices for #300 are recorded in PR #309; later persistence/auth
+- Operator choices for #300 are recorded in merged PR #309; later persistence/auth
   scope and the optional check page need coordination. Neither #301 nor MCP
   read tools implement the assistant.
 - At each logical checkpoint: test, fresh review, push, green pipeline, then
   update context. Will retains approval/merge authority. Check shared usage
   limits and save a concise handoff before approaching them.
+
+### Design merge checkpoint
+
+PR #309 merged as `c618450` on 2026-10-11. ADR-0036 still says proposed and
+explicitly requires Will's implementation go; merging the design is not proof
+that MCP or voting code exists. The #300 session has been notified. PR #313
+remains open, reviewed and green; #302 still waits on its merge.
