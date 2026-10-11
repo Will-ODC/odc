@@ -32,7 +32,8 @@ absolutely:
   verification or how a tally is computed.
 
 Repo discipline still applies: tests ship with the change, there is one small
-branch per change (`pulse/<n>-<short>`), and the same CI runs.
+branch per change, named for its ticket (`pulse/<issue>-<short>`, #310), and
+the same CI runs.
 
 ## Where it stands (2026-10-10)
 
