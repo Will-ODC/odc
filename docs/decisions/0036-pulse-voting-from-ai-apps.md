@@ -19,12 +19,29 @@ again. There is no browser-to-account ballot linkage. ADR-0030 accepts open
 email sign-up without a replacement anti-abuse gate. ADR-0033 makes identity a
 credential but does not implement guest-to-account ballot upgrades.
 
-**Nothing below is ratified. This PR builds no server or vote path.** Will must
-approve the read slice, and explicitly settle identity and confirmation before
-any casting implementation. Number 0036 was absent from origin/master and all
+**This PR builds no server or vote path.** Will has selected the product
+decisions below in this session; status remains proposed pending acceptance of
+the complete ADR. Implementation still waits for his explicit go. Number 0036 was absent from origin/master and all
 open PR file lists when checked on 2026-10-11; recheck before acceptance.
 
 ## Decision
+
+### Operator answers recorded in this session
+
+- Require Pulse sign-in for AI voting, with one stable AI ballot per account
+  across apps. Browser ballots remain separate.
+- Pulse confirmation of the exact answer is required. Use native chat elicitation
+  where supported and a Pulse webpage fallback otherwise. The app may add its
+  own tool approval; a second app prompt is not a Pulse requirement.
+- Vote per poll, immediately after its confirmation. No batch or final submit-all.
+- Show the server's saved answer in chat and offer an optional signed-in Pulse
+  check page. A check-page GET never casts or changes a ballot. External apps
+  still control their own display; this independent check is how the person can
+  verify the saved answer without trusting that display.
+- Run the adapter inside the existing Pulse API, calling public HTTP endpoints.
+- Will delegated the limits choice, prioritizing circumvention, duplicate votes
+  and availability. Use shared account limits of 10 voting attempts/minute and
+  300/hour as configurable initial values, plus separate traffic protection.
 
 ### 1. Who is voting — options and recommendation
 
@@ -34,7 +51,7 @@ open PR file lists when checked on 2026-10-11; recheck before acceptance.
 | Personal voting token configured by the person | A revocable bearer credential maps to a stable ballot identity; issuing replacements must not create extra ballots. If issued after sign-in, has the same multiple-email weakness as OAuth. Anonymous issuance has no uniqueness gate. | Adds a token-based ballot authority; account-issued tokens also introduce account linkage. Copying a secret into chat risks disclosure. |
 | Anonymous ballot per MCP connection/session    | Repeated answers under one credential replace each other; IP limits only slow new credentials. Reconnection or minting many credentials defeats deduplication.                                                                         | Retains account separation but adds another anonymous ballot channel. No meaningful stuffing prevention.                                |
 
-**Recommend OAuth**, with a stable account-scoped AI ballot identity rather than
+**Selected: OAuth**, with a stable account-scoped AI ballot identity rather than
 one ballot per grant. Authorization happens on Pulse in the browser, reusing
 magic-link sign-in and an explicit app-consent page. Never ask for email-link
 secrets or access tokens in tool arguments or elicitation forms. Public poll and
@@ -43,8 +60,8 @@ results tools require no sign-in; own-answer and voting operations do.
 This is deliberately weaker than one-human-one-vote. Neither verified email nor
 OAuth proves a unique human. Browser and AI ballots can both count for the same
 person; no automatic browser-ballot import, merge or reassignment is proposed.
-Will must accept that weakness and the new account-to-AI-ballot association, or
-choose the anonymous alternative. Merely hiding the account key in tool results
+The selected account-based AI channel introduces that association; it does not
+settle unique-person or cross-browser deduplication. Merely hiding the account key in tool results
 does not preserve today's no-linkage property.
 
 Proposed grants have `pulse:answer:read` and `pulse:vote` scopes, short-lived
@@ -69,8 +86,8 @@ ballot identity. Browser cookies keep their existing authority and routes.
 | Pulse confirmation only | Pulse requires a specific answer review; elicitation when supported, browser confirmation otherwise. | Adds a step; elicitation relies on the client's honest presentation of user input.                 |
 | Both                    | Pulse enforces its answer review; app adds its own tool approval where available.                    | Can produce two prompts; Pulse cannot enforce an app's local approval policy.                      |
 
-**Recommend both**, with Pulse confirmation mandatory and app approval requested
-where available. Authorization to use tools is not confirmation of a particular
+**Selected: Pulse confirmation mandatory**, with the app free to add its own
+approval prompt. Authorization to use tools is not confirmation of a particular
 ballot. Never treat poll text, a general “vote for me” instruction, or a
 model-supplied `confirmed: true` as server evidence of confirmation.
 
@@ -101,7 +118,7 @@ plus IP/global protection. Bulk voting could be one unrestricted batch, an
 explicitly reviewed batch, or one poll per confirmed action.
 
 **Recommend shared account quotas and no bulk tool initially:** 10 prepare/cast
-attempts per minute and 100 per hour, across grants and both protocols. Own-answer
+attempts per minute and 300 per hour, across grants and both protocols. Own-answer
 reads: 60/minute per account. Public reads: 120/minute per trusted client IP.
 Apply separate bounded IP/global admission limits and bounded request bodies;
 confirmation attempts also consume the mutation quota. These are proposed,
@@ -116,6 +133,20 @@ without a batch endpoint. No background voting, scheduled voting, or blanket
 approval across polls. Stronger social confirmation and cross-browser uniqueness
 remain separate product work.
 
+Deduplication must be enforced atomically by a unique account-scoped AI ballot
+identity and poll, not just checked before insertion. Concurrent casts and
+replayed confirmations cannot add voters. Switching apps, grants, access tokens,
+API audiences, instances or connections keeps the same identity; sign-out cannot
+reset it. The HTTP vote slice must test these paths, not rely on the quota as
+proof of deduplication. Changes replace the account's standing AI ballot.
+
+Availability protection is separate from these voting quotas: bounded bodies,
+upstream timeouts, concurrency limits and shared admission counters; edge traffic
+protection is deployment work. Account quotas do not stop distributed denial of
+service or many-account stuffing. Their starting values need observation, not a
+claim of proven capacity. Cross-channel and multiple-account duplicates remain
+explicit gaps, rather than something this design claims to prevent.
+
 ### 4. Where it runs — options and recommendation
 
 - Inside `apps/pulse`'s API process: preserves ADR-0028's two-process deployment,
@@ -125,7 +156,7 @@ remain separate product work.
   scaling, but adds a third process, routing and deployment work. Public HTTP
   calls preserve #291's boundary; direct voting-core imports defeat it.
 
-**Recommend an in-process adapter at `/api/mcp`**, with its new files under
+**Selected: an in-process adapter at `/api/mcp`**, with its new files under
 `apps/pulse/src/http/mcp/`, and a single HTTP client module calling the configured
 Pulse API base URL, including in dev and official-SDK tests. It imports no voting
 core, store, identity internals, `services/` or `contracts/`. The API owns token
@@ -194,11 +225,15 @@ provide HTTP/browser fallback rather than silently weakening confirmation.
 
 Proposed PR sequence, each branching from master after the previous PR merges:
 
-1. This documentation-only draft; Will chooses the options and authorizes reads.
+1. This documentation-only draft records Will’s selected options. Await explicit
+   authorization for the read slice; then accept the ADR before implementation.
 2. Read slice: MCP adapter/client, schemas and official SDK socket tests against
    the dev API, plus `apps/pulse/API.md` and README. No protected or casting tools.
 3. After identity/confirmation answers: public HTTP authorization and confirmation
-   contracts first, then the corresponding routes and tests under `src/http/`.
+   contracts first, then the corresponding routes and tests under `src/http/`. The optional
+   independent check page needs separate UI ownership: this session does not
+   modify `apps/pulse-web/`. Coordinate its scope with the page work before
+   claiming the complete assurance flow ships.
    If stable identity persistence needs a migration or identity-core changes,
    request a separately scoped ticket/path authorization before implementation:
    those files are outside this session's owned paths. Do not substitute an
