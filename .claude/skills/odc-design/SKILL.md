@@ -12,16 +12,18 @@ supposed to look like, and where that decision is written down.
 
 ## What is reference, and what is not
 
-| Deck                                                           | Surface                            | Standing                                   |
-| -------------------------------------------------------------- | ---------------------------------- | ------------------------------------------ |
-| `pulse-screens/01-…07-*.html`                                  | Pulse story client, seven screens  | **Current reference for pulse**            |
-| `pulse-vote-states-v1.html`                                    | The vote screen's six states       | Reference — states 1–6 are all required    |
-| `pulse-story-mobile-v1.html`                                   | The original single-file story     | v1 archive; superseded by the split        |
-| `odc-community-mobile-v1.html`                                 | Charter-side mobile feed           | Pending primary candidate (`services/web`) |
-| `odc-ballot-voting-mobile-v1.html`                             | Charter-side mobile ballot flow    | Pending primary candidate                  |
-| `odc-ballot-voting-desktop-v1-light.html`                      | Charter-side desktop workspace     | Pending primary candidate                  |
-| `governance-modern-v1.html`                                    | Alternate that names "Civic Glass" | Exploration only                           |
-| `hub-feed-v2.html`, `hub-feed-v3.html`, `hub-feed-mockup.html` | Hub feed explorations              | **NOT a reference for pulse.** Post-MVP    |
+| Deck                                                           | Surface                            | Standing                                                                     |
+| -------------------------------------------------------------- | ---------------------------------- | ---------------------------------------------------------------------------- |
+| `pulse-screens/01-…07-*.html`                                  | Pulse story client, seven screens  | **Current reference for pulse**                                              |
+| `pulse-screens/09-chat-vote.html`                              | Pulse vote page as a conversation  | **Chosen direction** (operator 2026-10-11): to become the default; not built |
+| `pulse-screens/08-desktop-vote.html`                           | Pulse vote page, three columns     | Option, not chosen — kept for reference (ballot A halves / B pop-up)         |
+| `pulse-vote-states-v1.html`                                    | The vote screen's six states       | Reference — states 1–6 are all required                                      |
+| `pulse-story-mobile-v1.html`                                   | The original single-file story     | v1 archive; superseded by the split                                          |
+| `odc-community-mobile-v1.html`                                 | Charter-side mobile feed           | Pending primary candidate (`services/web`)                                   |
+| `odc-ballot-voting-mobile-v1.html`                             | Charter-side mobile ballot flow    | Pending primary candidate                                                    |
+| `odc-ballot-voting-desktop-v1-light.html`                      | Charter-side desktop workspace     | Pending primary candidate                                                    |
+| `governance-modern-v1.html`                                    | Alternate that names "Civic Glass" | Exploration only                                                             |
+| `hub-feed-v2.html`, `hub-feed-v3.html`, `hub-feed-mockup.html` | Hub feed explorations              | **NOT a reference for pulse.** Post-MVP                                      |
 
 `docs/mockups/CANDIDATE_CONTEXT.md` is the curator index for the charter-side
 candidates and records why each is what it is. Update it in the same change

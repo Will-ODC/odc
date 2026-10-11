@@ -1,0 +1,936 @@
+<!doctype html>
+<html lang="en">
+  <head>
+    <meta charset="utf-8" />
+    <meta name="viewport" content="width=device-width,initial-scale=1" />
+    <title>pulse — 9 · vote page as a conversation</title>
+    <link rel="stylesheet" href="_screens.css" />
+    <style>
+      @import url("https://fonts.googleapis.com/css2?family=Inter:wght@400;500;600;700;800&display=swap");
+
+      /*
+       * Screen 9: the vote page as a conversation (operator, 2026-10-11).
+       *
+       * Modelled on the Claude app: one main column, a text box pinned to the
+       * bottom, and, when a choice is needed, a question card that rises just
+       * above the text box. The upper majority of the page is the poster's
+       * photo and summary. Screen 8 (three columns) is kept as the other
+       * option.
+       *
+       * One markup for both widths: "Phone 390" draws the same page inside a
+       * 390px frame. Dark, like 01 and 08. Amber boxes are parts not built;
+       * blue tags are guesses at questions the operator has not decided.
+       * Sample content only.
+       */
+      html,
+      body {
+        background: var(--ballot-page);
+      }
+      body {
+        padding: 0;
+        color: var(--ballot-ink);
+        font-size: 15px;
+        height: 100vh;
+        display: flex;
+        flex-direction: column;
+      }
+      .stage {
+        flex: 1;
+        min-height: 0;
+        display: flex;
+      }
+      button {
+        color: inherit;
+        background: none;
+        border: 0;
+        padding: 0;
+        cursor: pointer;
+        font: inherit;
+      }
+      [hidden] {
+        display: none !important;
+      }
+
+      /* ---- mockup controls (not part of the design) ---- */
+      .mock-bar {
+        display: flex;
+        flex-wrap: wrap;
+        gap: 8px 14px;
+        align-items: center;
+        padding: 10px var(--gutter);
+        background: #1a1e28;
+        border-bottom: 1px dashed rgba(255, 255, 255, 0.2);
+        font-size: 12px;
+        color: var(--ballot-ink-muted);
+      }
+      .mock-bar strong {
+        color: var(--ballot-ink-soft);
+      }
+      .seg {
+        display: inline-flex;
+        flex-wrap: wrap;
+        border: 1px solid var(--ballot-line);
+        border-radius: 14px;
+        overflow: hidden;
+      }
+      .seg button {
+        padding: 5px 11px;
+        color: var(--ballot-ink-muted);
+      }
+      .seg button[aria-pressed="true"] {
+        background: var(--surface-hover);
+        color: var(--ballot-ink);
+      }
+      .mock-bar a {
+        color: #9db4ff;
+      }
+
+      /* ---- placeholders and open questions ---- */
+      .ph {
+        border: 1.5px dashed rgba(var(--placeholder), 0.6);
+        border-radius: 16px;
+        padding: 10px 14px 14px;
+        background: rgba(var(--placeholder), 0.04);
+      }
+      .ph-label,
+      .oq {
+        display: block;
+        margin-bottom: 10px;
+        font-size: 10.5px;
+        font-weight: 700;
+        letter-spacing: 0.02em;
+        line-height: 1.35;
+      }
+      .ph-label {
+        color: rgb(var(--placeholder));
+      }
+      .oq {
+        color: rgb(var(--open-q));
+      }
+      .oq-box {
+        border: 1.5px dashed rgba(var(--open-q), 0.55);
+        border-radius: 14px;
+        padding: 10px 12px;
+      }
+
+      /* ---- the app frame ---- */
+      .app {
+        display: grid;
+        grid-template-columns: var(--sidebar) minmax(0, 1fr);
+        flex: 1;
+        min-height: 0;
+      }
+      .sidebar {
+        border-right: 1px solid var(--ballot-line);
+        padding: 18px 14px;
+        display: flex;
+        flex-direction: column;
+        gap: 18px;
+        overflow-y: auto;
+        font-size: 13px;
+      }
+      .brand {
+        display: flex;
+        align-items: center;
+        gap: 8px;
+        font-weight: 600;
+        font-size: 14px;
+      }
+      .brand i {
+        width: 8px;
+        height: 8px;
+        border-radius: 50%;
+        background: rgba(255, 255, 255, 0.85);
+      }
+      .eyebrow {
+        font-size: 10px;
+        font-weight: 700;
+        letter-spacing: 0.12em;
+        text-transform: uppercase;
+        color: var(--ballot-ink-faint);
+        margin: 0 0 8px;
+      }
+      .side-item {
+        display: block;
+        padding: 8px 10px;
+        border-radius: 10px;
+        color: var(--ballot-ink-soft);
+        line-height: 1.35;
+        margin-bottom: 4px;
+      }
+      .side-item.current {
+        background: var(--surface-hover);
+        color: var(--ballot-ink);
+      }
+      .side-item small {
+        display: block;
+        color: var(--ballot-ink-faint);
+        font-size: 11px;
+      }
+      .side-signin {
+        margin-top: auto;
+        color: var(--ballot-ink-soft);
+        font-weight: 600;
+      }
+
+      .main {
+        display: flex;
+        flex-direction: column;
+        min-height: 0;
+      }
+      .scroll {
+        flex: 1;
+        overflow-y: auto;
+        padding: 24px 24px 12px;
+      }
+      .col {
+        max-width: var(--chat-col);
+        margin: 0 auto;
+        display: flex;
+        flex-direction: column;
+        gap: 18px;
+      }
+
+      /* the upper majority: photo and summary */
+      .hero .photo {
+        height: 38vh;
+        min-height: 240px;
+        border-radius: 18px;
+        position: relative;
+        overflow: hidden;
+        background:
+          radial-gradient(
+            120% 90% at 20% 110%,
+            rgba(73, 205, 174, 0.38),
+            transparent 60%
+          ),
+          radial-gradient(
+            90% 80% at 85% 0%,
+            rgba(157, 180, 255, 0.38),
+            transparent 60%
+          ),
+          linear-gradient(160deg, #1d2433, #121620);
+      }
+      .hero .photo::before,
+      .hero .photo::after {
+        content: "";
+        position: absolute;
+        bottom: 0;
+        background: rgba(10, 11, 14, 0.55);
+        border-radius: 8px 8px 0 0;
+      }
+      .hero .photo::before {
+        left: 8%;
+        width: 24%;
+        height: 44%;
+      }
+      .hero .photo::after {
+        left: 38%;
+        width: 46%;
+        height: 28%;
+      }
+      .hero .photo span {
+        position: absolute;
+        left: 14px;
+        bottom: 12px;
+        z-index: 1;
+        font-size: 11px;
+        color: var(--ballot-ink-soft);
+        background: rgba(10, 11, 14, 0.6);
+        padding: 3px 9px;
+        border-radius: var(--r-pill);
+      }
+      .chip {
+        display: inline-block;
+        font-size: 11px;
+        font-weight: 600;
+        color: rgba(255, 255, 255, 0.65);
+        background: var(--ballot-chip);
+        padding: 5px 10px;
+        border-radius: var(--r-pill);
+      }
+      .hero h1 {
+        margin: 14px 0 10px;
+        font-size: 32px;
+        font-weight: 800;
+        letter-spacing: -0.03em;
+        line-height: 1.15;
+      }
+      .hero .summary {
+        margin: 0;
+        font-size: 15px;
+        line-height: 1.6;
+        color: var(--ballot-ink-soft);
+      }
+      .facts {
+        display: flex;
+        flex-wrap: wrap;
+        gap: 8px;
+        margin-top: 12px;
+      }
+      .facts span {
+        padding: 7px 12px;
+        border-radius: 12px;
+        background: var(--surface-rest);
+        font-size: 13px;
+        color: var(--ballot-ink-muted);
+      }
+      .facts b {
+        color: var(--ballot-ink);
+      }
+      .posted {
+        margin: 10px 0 0;
+        font-size: 12px;
+        color: var(--ballot-ink-faint);
+      }
+
+      /* conversation */
+      .tabs {
+        display: flex;
+        gap: 4px;
+        margin-bottom: 12px;
+      }
+      .tabs span {
+        padding: 6px 12px;
+        border-radius: var(--r-pill);
+        font-size: 13px;
+        color: var(--ballot-ink-muted);
+      }
+      .tabs span.on {
+        background: var(--surface-hover);
+        color: var(--ballot-ink);
+      }
+      .msg {
+        max-width: 85%;
+        padding: 10px 14px;
+        border-radius: 16px;
+        font-size: 14px;
+        line-height: 1.5;
+        margin-bottom: 10px;
+      }
+      .msg.me {
+        margin-left: auto;
+        background: var(--surface-hover);
+        border-bottom-right-radius: 6px;
+      }
+      .msg.ai {
+        color: var(--ballot-ink-soft);
+        padding-left: 0;
+      }
+      .msg.ai .who,
+      .msg.sys .who {
+        display: block;
+        font-size: 11px;
+        font-weight: 700;
+        color: var(--ballot-ink-faint);
+        margin-bottom: 3px;
+      }
+      .msg.sys {
+        max-width: 100%;
+        background: rgba(var(--side-b), 0.08);
+        border: 1px solid rgba(var(--side-b), 0.2);
+      }
+      .bar {
+        margin: 8px 0;
+      }
+      .bar .row {
+        display: flex;
+        justify-content: space-between;
+        font-size: 13px;
+        margin-bottom: 4px;
+      }
+      .bar .track {
+        height: 7px;
+        border-radius: var(--r-pill);
+        background: var(--surface-hover);
+        overflow: hidden;
+      }
+      .bar .fill {
+        height: 100%;
+        border-radius: var(--r-pill);
+      }
+
+      /* the dock: vote card above the text box */
+      .dock {
+        padding: 0 24px 18px;
+      }
+      .dock .col {
+        gap: 10px;
+      }
+      .card {
+        border-radius: 18px;
+        background: #13161e;
+        border: 1px solid rgba(255, 255, 255, 0.14);
+        box-shadow: 0 -10px 40px rgba(0, 0, 0, 0.45);
+        padding: 12px 16px 14px;
+      }
+      .card-top {
+        display: flex;
+        align-items: center;
+        gap: 10px;
+        margin-bottom: 6px;
+      }
+      .card-head {
+        font-size: 11px;
+        font-weight: 700;
+        letter-spacing: 0.06em;
+        text-transform: uppercase;
+        color: rgb(var(--side-b));
+      }
+      .card-top .x {
+        margin-left: auto;
+        font-size: 12px;
+        color: var(--ballot-ink-muted);
+      }
+      .card-q {
+        margin: 0 0 2px;
+        font-size: 16px;
+        font-weight: 700;
+        line-height: 1.3;
+      }
+      .card-why {
+        margin: 0 0 10px;
+        font-size: 12.5px;
+        color: var(--ballot-ink-muted);
+      }
+      .opts {
+        display: grid;
+        grid-template-columns: repeat(3, minmax(0, 1fr));
+        gap: 8px;
+      }
+      body.phone .opts {
+        grid-template-columns: minmax(0, 1fr);
+        gap: 6px;
+      }
+      .opt {
+        display: grid;
+        grid-template-columns: 22px 1fr;
+        gap: 10px;
+        align-items: start;
+        text-align: left;
+        padding: 10px 12px;
+        border-radius: 12px;
+        border: 1px solid var(--ballot-line);
+        background: var(--surface-rest);
+        color: var(--ballot-ink);
+      }
+      .opt:hover {
+        background: var(--surface-hover);
+      }
+      .opt[aria-checked="true"] {
+        border-color: rgb(var(--side-b));
+        background: rgba(var(--side-b), 0.08);
+      }
+      .opt .n {
+        width: 22px;
+        height: 22px;
+        border-radius: 6px;
+        display: grid;
+        place-items: center;
+        font-size: 11px;
+        font-weight: 700;
+        color: var(--ballot-ink-muted);
+        background: var(--surface-hover);
+      }
+      .opt[aria-checked="true"] .n {
+        background: rgb(var(--side-b));
+        color: var(--ballot-bg);
+      }
+      .opt b {
+        display: block;
+        font-size: 14px;
+      }
+      .opt small {
+        display: block;
+        font-size: 12px;
+        color: var(--ballot-ink-muted);
+        margin-top: 1px;
+      }
+      .opt .other-field {
+        margin-top: 6px;
+        padding: 7px 10px;
+        border-radius: 9px;
+        border: 1px solid var(--ballot-line);
+        font-size: 12px;
+        color: var(--ballot-ink-faint);
+      }
+      .opt[disabled] {
+        opacity: 0.45;
+        cursor: default;
+      }
+      .card-foot {
+        display: flex;
+        align-items: center;
+        gap: 12px;
+        margin-top: 10px;
+        flex-wrap: wrap;
+      }
+      .card-foot .note {
+        flex: 1;
+        font-size: 12px;
+        color: var(--ballot-ink-muted);
+        min-width: 180px;
+      }
+      .confirm {
+        padding: 9px 18px;
+        border-radius: var(--r-pill);
+        background: rgb(var(--side-b));
+        color: var(--ballot-bg);
+        font-weight: 700;
+        font-size: 13px;
+      }
+      .confirm:disabled {
+        opacity: 0.4;
+        cursor: default;
+      }
+      .problem {
+        margin: 10px 0 0;
+        font-size: 12.5px;
+        color: rgb(var(--side-a));
+      }
+      .proposal {
+        margin: 0 0 10px;
+        padding: 8px 10px;
+        border-radius: 10px;
+        border: 1.5px dashed rgba(var(--open-q), 0.55);
+        font-size: 12px;
+        line-height: 1.45;
+        color: rgb(var(--open-q));
+      }
+      .voted-line {
+        display: flex;
+        align-items: center;
+        gap: 10px;
+        padding: 10px 14px;
+        border-radius: 14px;
+        background: rgba(var(--side-b), 0.1);
+        font-size: 13px;
+      }
+      .voted-line b {
+        font-size: 14px;
+      }
+      .voted-line button {
+        margin-left: auto;
+        font-size: 12px;
+        color: var(--ballot-ink-soft);
+        border: 1px solid var(--ballot-line);
+        border-radius: var(--r-pill);
+        padding: 5px 11px;
+      }
+      .composer {
+        display: flex;
+        align-items: center;
+        gap: 10px;
+        padding: 12px 14px;
+        border-radius: 18px;
+        background: var(--surface-rest);
+        border: 1px solid rgba(255, 255, 255, 0.16);
+        color: var(--ballot-ink-faint);
+        font-size: 14px;
+      }
+      .composer .typed {
+        color: var(--ballot-ink);
+      }
+      .composer .send {
+        margin-left: auto;
+        width: 30px;
+        height: 30px;
+        border-radius: 50%;
+        background: var(--surface-hover);
+        display: grid;
+        place-items: center;
+        color: var(--ballot-ink-muted);
+      }
+
+      /* ---- phone: the same page in a 390px frame ---- */
+      body.phone {
+        height: auto;
+      }
+      body.phone .stage {
+        justify-content: center;
+        padding: 24px 16px;
+      }
+      body.phone .app {
+        grid-template-columns: minmax(0, 1fr);
+        width: var(--frame-w);
+        height: var(--frame-h);
+        flex: none;
+        border: 1px solid var(--ballot-line);
+        border-radius: var(--r-screen);
+        overflow: hidden;
+        background: var(--ballot-bg);
+      }
+      body.phone .sidebar {
+        display: none;
+      }
+      body.phone .scroll {
+        padding: 16px 14px 10px;
+      }
+      body.phone .dock {
+        padding: 0 10px 12px;
+      }
+      body.phone .hero .photo {
+        height: 200px;
+        min-height: 0;
+      }
+      body.phone .hero h1 {
+        font-size: 23px;
+      }
+      body.phone .hero .summary {
+        font-size: 14px;
+      }
+      .phone-only {
+        display: none;
+      }
+      body.phone .phone-only {
+        display: flex;
+      }
+      .phone-head {
+        align-items: center;
+        justify-content: space-between;
+        margin-bottom: 4px;
+        font-size: 13px;
+      }
+    </style>
+  </head>
+  <body>
+    <div class="mock-bar" role="region" aria-label="Mockup controls">
+      <strong>Mockup · screen 9 · the vote as a conversation</strong>
+      <span>Sample content only.</span>
+      <span class="seg" role="group" aria-label="Width">
+        <button type="button" data-view="desktop" aria-pressed="true">
+          Desktop
+        </button>
+        <button type="button" data-view="phone" aria-pressed="false">
+          Phone 390
+        </button>
+      </span>
+      <span class="seg" role="group" aria-label="State">
+        <button type="button" data-state="ask" aria-pressed="true">
+          1 · Vote card
+        </button>
+        <button type="button" data-state="typed" aria-pressed="false">
+          2 · Typed a vote
+        </button>
+        <button type="button" data-state="voted" aria-pressed="false">
+          3 · Voted
+        </button>
+        <button type="button" data-state="unconfirmed" aria-pressed="false">
+          Not yet confirmed
+        </button>
+        <button type="button" data-state="closed" aria-pressed="false">
+          Closed
+        </button>
+        <button type="button" data-state="fails" aria-pressed="false">
+          Send fails
+        </button>
+      </span>
+      <a href="08-desktop-vote.html">Option: screen 8</a>
+      <a href="index.html">All screens</a>
+    </div>
+
+    <div class="stage">
+      <div class="app">
+        <!-- ============ SIDEBAR (desktop) ============ -->
+        <nav class="sidebar" aria-label="Questions">
+          <span class="brand"><i aria-hidden="true"></i>pulse</span>
+          <div class="oq-box">
+            <span class="oq"
+              >Open question (b): keep a side column on desktop, like the
+              Claude app's list, or one centred column?</span
+            >
+            <p class="eyebrow">Answered</p>
+            <span class="side-item current"
+              >Should the ODC stay free of paid ads?</span
+            >
+          </div>
+          <div class="ph">
+            <span class="ph-label">Placeholder: browse questions, #259/#260</span>
+            <span class="side-item"
+              >Fix the crossing on Sample Street?<small
+                >Closes Friday</small
+              ></span
+            >
+            <span class="side-item"
+              >Open the hall on Sundays?<small>Closes in 5 days</small></span
+            >
+            <span class="side-item"
+              >Pick the clean-up date<small>Closes Monday</small></span
+            >
+          </div>
+          <a class="side-signin" href="#">Sign in</a>
+        </nav>
+
+        <!-- ============ MAIN ============ -->
+        <div class="main">
+          <div class="scroll">
+            <div class="col">
+              <div class="phone-only phone-head">
+                <span class="brand"><i aria-hidden="true"></i>pulse</span>
+                <span style="color: var(--ballot-ink-soft)">Sign in</span>
+              </div>
+
+              <!-- the upper majority: photo, question, summary -->
+              <section class="ph hero" aria-label="From the poster">
+                <span class="ph-label"
+                  >Placeholder: poster photo and summary, #296 (needs poll
+                  creation, P6)</span
+                >
+                <div class="photo"><span>Poster's photo · sample</span></div>
+                <h1>Should the ODC stay free of paid ads?</h1>
+                <p class="summary">
+                  The site has been ad-free since it started. Hosting now costs
+                  more than donations bring in, so we are asking whether to
+                  allow any paid ads at all.
+                </p>
+                <div class="facts">
+                  <span><b>$240</b> a month to run</span>
+                  <span><b>$150</b> a month in donations</span>
+                  <span>Closes <b>Wednesday</b></span>
+                </div>
+                <p class="posted">Posted by Sample Poster · 2 days ago</p>
+              </section>
+
+              <!-- conversation -->
+              <section class="ph" aria-label="Conversation">
+                <span class="ph-label"
+                  >Placeholder: AI assistant (no model in pulse yet; see the
+                  community-assistant pilot, #280-#284)</span
+                >
+                <div class="oq-box" style="margin-bottom: 12px">
+                  <span class="oq" style="margin-bottom: 6px"
+                    >Open question (a): do people's comments (#297) sit in a
+                    second tab, beside this, or in the same thread as the
+                    assistant?</span
+                  >
+                  <div class="tabs" style="margin: 0">
+                    <span class="on">Ask about it</span
+                    ><span>Comments · 24</span>
+                  </div>
+                </div>
+
+                <div class="msg me">What does this actually cost each month?</div>
+                <div class="msg ai">
+                  <span class="who">pulse assistant</span>From the poster's
+                  summary: about $240 a month to run, and donations bring in
+                  about $150, so roughly $90 a month is not covered.
+                </div>
+
+                <!-- state 2: typed a vote (proposal) -->
+                <div data-in="typed">
+                  <div class="msg me">yes, keep it ad-free</div>
+                  <div class="msg ai">
+                    <span class="who">pulse assistant</span>That sounds like a
+                    vote for <b>Yes</b>. I've picked it in the card below.
+                    Nothing is counted until you confirm.
+                  </div>
+                </div>
+
+                <!-- state 3: voted; results as a message -->
+                <div data-in="voted">
+                  <div class="msg sys">
+                    <span class="who">Counted · your answer: Yes</span>You can
+                    change it until this question closes on Wednesday.
+                    <div class="bar">
+                      <div class="row"><span>Yes</span><span>64%</span></div>
+                      <div class="track">
+                        <div
+                          class="fill"
+                          style="width: 64%; background: rgb(var(--side-b))"
+                        ></div>
+                      </div>
+                    </div>
+                    <div class="bar">
+                      <div class="row"><span>No</span><span>36%</span></div>
+                      <div class="track">
+                        <div
+                          class="fill"
+                          style="width: 36%; background: rgb(var(--side-a))"
+                        ></div>
+                      </div>
+                    </div>
+                    <span style="font-size: 12px; color: var(--ballot-ink-muted)"
+                      >312 answers so far (sample) · Next: How do we pay for
+                      it?</span
+                    >
+                  </div>
+                  <span class="oq"
+                    >Open question (d): results as a message here (drawn), or
+                    in the card's place?</span
+                  >
+                  <div class="ph" style="margin-top: 4px">
+                    <span class="ph-label" style="margin: 0"
+                      >Placeholder: vote validity, under discussion</span
+                    >
+                  </div>
+                </div>
+              </section>
+            </div>
+          </div>
+
+          <!-- ============ DOCK: vote card + text box ============ -->
+          <div class="dock">
+            <div class="col">
+              <!-- the vote card -->
+              <section
+                class="card"
+                data-not-in="voted"
+                role="group"
+                aria-labelledby="card-q"
+              >
+                <p class="proposal" data-in="typed">
+                  Proposal: you can vote by typing. The assistant reads what
+                  you typed and picks an answer here, but typing never casts a
+                  vote by itself: a misread is the risk, so you always confirm.
+                </p>
+                <div class="card-top">
+                  <span class="card-head" data-not-in="closed"
+                    >Official ballot</span
+                  >
+                  <span class="card-head" data-in="closed"
+                    >Official ballot · closed</span
+                  >
+                  <button class="x" type="button">Hide</button>
+                </div>
+                <p class="card-q" id="card-q">
+                  Should the ODC stay free of paid ads?
+                </p>
+                <p class="card-why" data-not-in="closed">
+                  Closes Wednesday · you can change your answer until then.
+                </p>
+                <p class="card-why" data-in="closed">
+                  <b>This one has closed.</b> You can still read the results.
+                </p>
+                <div class="opts" role="radiogroup" aria-label="Your answer">
+                  <button class="opt" type="button" role="radio" aria-checked="false" data-opt="yes">
+                    <span class="n">1</span
+                    ><span
+                      ><b>Yes</b
+                      ><small
+                        >Keep the site ad-free. Next: how do we pay for it?</small
+                      ></span
+                    >
+                  </button>
+                  <button class="opt" type="button" role="radio" aria-checked="false" data-opt="no">
+                    <span class="n">2</span
+                    ><span
+                      ><b>No</b
+                      ><small
+                        >Allow some paid ads. Next: which ads are
+                        allowed?</small
+                      ></span
+                    >
+                  </button>
+                  <button class="opt" type="button" role="radio" aria-checked="false" data-opt="other">
+                    <span class="n">3</span
+                    ><span
+                      ><b>Something else</b
+                      ><small>Suggest your own answer. Others can pick it too.</small
+                      ><span class="other-field" data-in-opt="other" hidden
+                        >Type your answer…</span
+                      ></span
+                    >
+                  </button>
+                </div>
+                <p class="problem" data-in="fails">
+                  Your answer did not go through. Check your connection and try
+                  again.
+                </p>
+                <div class="card-foot">
+                  <span class="note" data-not-in="unconfirmed"
+                    >Your answer is private.</span
+                  >
+                  <span class="note" data-in="unconfirmed"
+                    >You can read this. Answering needs a confirmed account
+                    (wording to be decided).</span
+                  >
+                  <button class="confirm" type="button" data-confirm disabled>
+                    <span data-not-in="fails">Submit answer</span
+                    ><span data-in="fails">Try again</span>
+                  </button>
+                </div>
+              </section>
+
+              <div class="voted-line" data-in="voted">
+                <span>✓</span><span>You answered <b>Yes</b></span>
+                <button type="button" data-change>Change my answer</button>
+              </div>
+
+              <div class="composer">
+                <span data-not-in="typed">Ask about this, or type your vote…</span>
+                <span data-in="typed">Ask about this, or type your vote…</span>
+                <span class="send" aria-hidden="true">↑</span>
+              </div>
+              <span
+                class="oq phone-only"
+                style="margin: 0; display: none"
+                data-phone-note
+                >Open question (c): does the swipe No/Yes ballot (built today)
+                stay on the phone, or does this replace it?</span
+              >
+            </div>
+          </div>
+        </div>
+      </div>
+    </div>
+
+    <script>
+      /* global document */
+      const ui = { view: "desktop", state: "ask", picked: null };
+      const render = () => {
+        document.body.classList.toggle("phone", ui.view === "phone");
+        document.querySelectorAll("[data-in]").forEach((el) => {
+          el.hidden = el.dataset.in !== ui.state;
+        });
+        document.querySelectorAll("[data-not-in]").forEach((el) => {
+          el.hidden = el.dataset.notIn === ui.state;
+        });
+        document.querySelectorAll("[data-phone-note]").forEach((el) => {
+          el.style.display = ui.view === "phone" ? "block" : "none";
+        });
+        const locked = ui.state === "closed" || ui.state === "unconfirmed";
+        document.querySelectorAll("[data-opt]").forEach((b) => {
+          b.setAttribute("aria-checked", String(b.dataset.opt === ui.picked));
+          b.disabled = locked;
+        });
+        document.querySelectorAll("[data-in-opt]").forEach((el) => {
+          el.hidden = el.dataset.inOpt !== ui.picked;
+        });
+        document.querySelector("[data-confirm]").disabled = locked || !ui.picked;
+        for (const key of ["view", "state"]) {
+          document.querySelectorAll(`[data-${key}]`).forEach((b) => {
+            b.setAttribute("aria-pressed", String(b.dataset[key] === ui[key]));
+          });
+        }
+      };
+      const on = (sel, fn) =>
+        document
+          .querySelectorAll(sel)
+          .forEach((b) => b.addEventListener("click", () => fn(b)));
+      on("[data-view]", (b) => {
+        ui.view = b.dataset.view;
+        render();
+      });
+      on("[data-state]", (b) => {
+        ui.state = b.dataset.state;
+        ui.picked =
+          ui.state === "typed" || ui.state === "fails" ? "yes" : null;
+        render();
+      });
+      on("[data-opt]", (b) => {
+        ui.picked = b.dataset.opt;
+        render();
+      });
+      on("[data-confirm]", () => {
+        ui.state = "voted";
+        render();
+      });
+      on("[data-change]", () => {
+        ui.state = "ask";
+        ui.picked = "yes";
+        render();
+      });
+      render();
+    </script>
+  </body>
+</html>
