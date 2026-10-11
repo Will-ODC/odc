@@ -78,14 +78,24 @@ IS the ticket.
    can't be described that tightly, split it. Dependent issues are planned as
    an ordered stack up front.
 2. **One issue = one branch = one PR = one session**, on the model
-   `odc-orchestration` routes it to. The issue text is the session's prompt;
-   branch name carries the issue number (`ledger/14-insert-only-guard`).
-3. **Review in a fresh context** per `odc-code-review`; **CI green** per this
+   `odc-orchestration` routes it to. The issue text is the session's prompt.
+3. **The ticket number is the one handle for the work** — the operator and
+   every agent say "#301" and mean the same thing everywhere:
+   - **Branch:** `<area>/<issue>-<short>`, the GitHub issue number, never a
+     running count (`ledger/14-insert-only-guard`, `pulse/301-conversation-page`).
+     Pulse once used `pulse/<n>` as a counter, which is how `pulse/38-vote-card`
+     came to mean #299.
+   - **PR:** the title or first line names the ticket, and the body says
+     `Closes #N` (or `Part of #N` for one slice of a larger ticket).
+   - **Commits:** the message references the ticket.
+   - **No ticket, no branch** — cut one first. Memory-only and docs-only
+     housekeeping may go without, but still name the ticket they record.
+4. **Review in a fresh context** per `odc-code-review`; **CI green** per this
    skill; **squash-merge** so master reads as one commit per ticket, message
    referencing the issue.
-4. Board columns = pipeline stages: Backlog → In progress (branch open) →
+5. Board columns = pipeline stages: Backlog → In progress (branch open) →
    Review (PR open) → Done (merged). GitHub Projects, nothing fancier.
-5. WIP limit: one active branch per service — an agent should never
+6. WIP limit: one active branch per service — an agent should never
    conflict with its own unmerged work.
 
 ## Branch rules
@@ -133,9 +143,11 @@ IS the ticket.
   > because dependent work has to wait on review latency otherwise. Do not
   > re-derive the ban from that incident.
 
-- Branch names: `svc/short-description` (e.g. `ledger/insert-only-guard`);
-  pulse uses `pulse/<n>-<short-description>`.
-- Commits: imperative subject ≤ 72 chars; body says WHY, not what.
+- Branch names: `<area>/<issue>-<short-description>`, the issue number as in
+  "The ticket number is the one handle" above (e.g. `ledger/14-insert-only-guard`,
+  `pulse/301-conversation-page`).
+- Commits: imperative subject ≤ 72 chars; body says WHY, not what, and names
+  the ticket.
 - PR description: what changed, how it was tested, which contract version
   it targets. A reviewer should need nothing else to start. (The PR template
   in `.github/` mirrors these three fields.)
