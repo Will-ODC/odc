@@ -244,3 +244,17 @@ describe("a route handed in directly", () => {
     ).toBeTruthy();
   });
 });
+
+it("opens live voting at /conversation while the prototype remains separate", async () => {
+  globalThis.history.replaceState(null, "", "/conversation?poll=ads-free");
+  const byId = vi.fn(async () => poll());
+  render(<App api={stubApi({ poll: byId })} />);
+  expect(
+    await within(screen.getByRole("main")).findByRole("heading", {
+      name: poll().question,
+      level: 1,
+    }),
+  ).toBeTruthy();
+  expect(byId).toHaveBeenCalledWith("ads-free");
+  expect(screen.queryByText("Preview")).toBeNull();
+});

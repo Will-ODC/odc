@@ -17,3 +17,17 @@ not-yet-confirmed, closed and send-fails states. It uses sample data only and
 makes no API calls; live voting in a conversation comes later. The decision
 itself (`src/flow/decision.ts`) carries no presentation, so the same question
 can be drawn by another interface.
+
+`/conversation` (or `/conversation?poll=ID`) is the live conversation vote page
+(#301), using the public Pulse API. Desktop has an Answered sidebar; phone and
+desktop keep the vote card above the disabled assistant composer. Select then
+Submit; results appear in the card, with Change my answer, Hide, Close, and Next
+where the selected answer opens another question. Approval votes submit every
+selection; equal-value navigation uses the lowest choice index (ADR-0021).
+Answered questions remain in the conversation and can be revisited. This history
+is local to the open page and resets on reload; votes remain on the server.
+Closed questions offer public results and cannot cast or change answers.
+
+The assistant is unavailable and typing is disabled. No placeholder photos,
+comments or generated messages are shown. `/` and the sign-in landing remain the
+existing ballot run until #302; `/preview/chat` remains sample data only.

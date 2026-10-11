@@ -5,6 +5,7 @@ import { FIRST_POLL_ID } from "./flow/route.js";
 import { AppShell } from "./components/AppShell.js";
 import { TopBanner } from "./components/TopBanner.js";
 import { useRoute } from "./hooks/use-route.js";
+import { Conversation } from "./screens/Conversation.js";
 import { ChatPreview } from "./screens/ChatPreview.js";
 import { Redeem } from "./screens/Redeem.js";
 import { Run } from "./screens/Run.js";
@@ -55,6 +56,8 @@ export function App({ api, route }: { api: PulseApi; route?: Route }) {
       );
     case "run":
       return <Run api={api} pollId={at.pollId} />;
+    case "conversation":
+      return <Conversation key={at.pollId} api={api} pollId={at.pollId} />;
     case "chatPreview":
       // Sample data only: the prototype never touches `api`.
       return <ChatPreview />;
