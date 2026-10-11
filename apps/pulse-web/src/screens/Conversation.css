@@ -141,3 +141,26 @@
     padding: var(--step) var(--gutter) calc(var(--step) * 2);
   }
 }
+
+/* Operator experiment: a small, non-modal vote tab at the desktop's top right. */
+@media (min-width: 1100px) {
+  .conversation__vote {
+    pointer-events: none;
+    position: fixed;
+    inset-block-start: calc(var(--gutter) * 2);
+    inset-inline-end: var(--gutter);
+    width: var(--dialog-w);
+    max-width: calc(100vw - var(--rail) - var(--gutter) * 2);
+  }
+  .conversation__vote > * {
+    pointer-events: auto;
+  }
+  .conversation__vote > button {
+    display: block;
+    margin-inline-start: auto;
+    box-shadow: var(--shadow-ballot);
+  }
+  .conversation__vote .vote-card {
+    max-height: calc(100dvh - var(--gutter) * 4);
+  }
+}

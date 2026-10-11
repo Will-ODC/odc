@@ -20,7 +20,9 @@ can be drawn by another interface.
 
 `/conversation` (or `/conversation?poll=ID`) is the live conversation vote page
 (#301), using the public Pulse API. Desktop has an Answered sidebar; phone and
-desktop keep the vote card above the disabled assistant composer. Select then
+desktop offer a small Show vote card tab. It expands above the disabled assistant
+composer on phone and at the top right on desktop (operator layout experiment).
+Close returns to the small tab. Select then
 Submit; results appear in the card, with Change my answer, Hide, Close, and Next
 where the selected answer opens another question. Approval votes submit every
 selection; equal-value navigation uses the lowest choice index (ADR-0021).

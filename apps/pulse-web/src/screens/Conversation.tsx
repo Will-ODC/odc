@@ -180,7 +180,7 @@ function LoadedQuestion({
           </ol>
           {answers.length === 0 && loaded.status === "ready" ? (
             <p className="conversation__empty">
-              Your answers will appear here. Start with the vote card below.
+              Your answers will appear here. Open the vote card to start.
             </p>
           ) : null}
         </div>
@@ -188,15 +188,17 @@ function LoadedQuestion({
       <div className="conversation__dock">
         <div className="conversation__column">
           {loaded.status === "ready" ? (
-            <LiveCard
-              key={loaded.value.id}
-              api={api}
-              poll={loaded.value}
-              {...(saved ? { saved } : {})}
-              onCounted={onCounted}
-              onBusy={onBusy}
-              onGo={onGo}
-            />
+            <div className="conversation__vote">
+              <LiveCard
+                key={loaded.value.id}
+                api={api}
+                poll={loaded.value}
+                {...(saved ? { saved } : {})}
+                onCounted={onCounted}
+                onBusy={onBusy}
+                onGo={onGo}
+              />
+            </div>
           ) : null}
           <label className="conversation__composer">
             Message
@@ -234,7 +236,7 @@ function LiveCard({
   const [picked, setPicked] = useState<number[]>(saved?.ballot ?? []);
   const [showSaved, setShowSaved] = useState(Boolean(saved));
   const [collapsed, setCollapsed] = useState(false);
-  const [visible, setVisible] = useState(true);
+  const [visible, setVisible] = useState(false);
   const show = useRef<HTMLButtonElement>(null);
   const wrapper = useRef<HTMLDivElement>(null);
   const wasVisible = useRef(true);

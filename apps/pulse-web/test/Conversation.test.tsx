@@ -32,8 +32,16 @@ function tally(p: Poll, ballot: Ballot) {
 function card() {
   return main().getByRole("region");
 }
+async function openCard() {
+  if (!main().queryByRole("region")) {
+    await userEvent.click(
+      main().getByRole("button", { name: "Show vote card" }),
+    );
+  }
+}
 async function answer(label = "Yes") {
   const user = userEvent.setup();
+  await openCard();
   await user.click(within(card()).getByRole("radio", { name: label }));
   await user.click(within(card()).getByRole("button", { name: "Submit" }));
   await main().findByText("Counted.");
@@ -50,6 +58,8 @@ it("loads a real question and keeps the assistant unavailable", async () => {
       .disabled,
   ).toBe(true);
   expect(screen.getByText(/Use the vote card to answer/)).toBeTruthy();
+  expect(main().queryByRole("region")).toBeNull();
+  expect(main().getByRole("button", { name: "Show vote card" })).toBeTruthy();
   expect(cast).not.toHaveBeenCalled();
 });
 it("shows loading, empty and errors with a working retry", async () => {
@@ -86,6 +96,7 @@ it("casts, changes, hides, closes and reopens results in the card", async () => 
   );
   render(<Conversation api={stubApi({ cast })} pollId={p.id} />);
   await main().findByRole("heading", { name: p.question, level: 1 });
+  await openCard();
   const user = await answer();
   expect(cast).toHaveBeenCalledWith(p.id, [1]);
   expect(
@@ -139,6 +150,7 @@ it("sends every approval pick, follows its lowest-index edge, and retains the co
     />,
   );
   await main().findByRole("heading", { name: p.question, level: 1 });
+  await openCard();
   const user = userEvent.setup();
   await user.click(within(card()).getByRole("checkbox", { name: "Library" }));
   await user.click(within(card()).getByRole("checkbox", { name: "Park" }));
@@ -153,6 +165,7 @@ it("sends every approval pick, follows its lowest-index edge, and retains the co
   expect(main().getByText("You picked Park and Library.")).toBeTruthy();
   await user.click(main().getByRole("button", { name: p.question }));
   await main().findByRole("heading", { name: p.question, level: 1 });
+  await openCard();
   expect(
     within(card()).getByRole("group", { name: "How people answered" }),
   ).toBeTruthy();
@@ -174,6 +187,7 @@ it("does not show Next when the steering choice ends the run", async () => {
     />,
   );
   await main().findByRole("heading", { name: p.question, level: 1 });
+  await openCard();
   await answer("No");
   expect(within(card()).queryByRole("button", { name: "Next" })).toBeNull();
 });
@@ -192,6 +206,7 @@ it("refuses a known closed poll and lets a non-voter read final results", async 
     />,
   );
   await main().findByRole("heading", { name: p.question, level: 1 });
+  await openCard();
   expect(within(card()).getByText("This one has closed.")).toBeTruthy();
   expect(within(card()).queryByRole("button", { name: "Submit" })).toBeNull();
   await userEvent.click(main().getByRole("button", { name: "See results" }));
@@ -206,6 +221,7 @@ it("handles a poll closing during submit without offering another cast", async (
   const cast = vi.fn(async () => ({ status: "closed" as const }));
   render(<Conversation api={stubApi({ cast })} pollId="ads-free" />);
   await main().findByRole("heading", { name: poll().question, level: 1 });
+  await openCard();
   const user = userEvent.setup();
   await user.click(within(card()).getByRole("radio", { name: "Yes" }));
   await user.click(within(card()).getByRole("button", { name: "Submit" }));
@@ -225,6 +241,7 @@ it("a failed send keeps the picks for retry", async () => {
     }));
   render(<Conversation api={stubApi({ cast })} pollId={p.id} />);
   await main().findByRole("heading", { name: p.question, level: 1 });
+  await openCard();
   const user = userEvent.setup();
   await user.click(within(card()).getByRole("radio", { name: "Yes" }));
   await user.click(within(card()).getByRole("button", { name: "Submit" }));
@@ -248,7 +265,10 @@ it("keyboard-only picking and confirmation casts exactly once", async () => {
   await main().findByRole("heading", { name: poll().question, level: 1 });
   const user = userEvent.setup();
   await user.tab();
-  await user.tab();
+  expect(document.activeElement).toBe(
+    main().getByRole("button", { name: "Show vote card" }),
+  );
+  await user.keyboard("{Enter}");
   await user.keyboard("2");
   await user.tab();
   await user.keyboard("{Enter}{Enter}");
@@ -277,6 +297,7 @@ it("retrying a failed replacement sends the new choice rather than the prior ans
     }));
   render(<Conversation api={stubApi({ cast })} pollId={p.id} />);
   await main().findByRole("heading", { name: p.question, level: 1 });
+  await openCard();
   const user = await answer("Yes");
   await user.click(
     within(card()).getByRole("button", { name: "Change my answer" }),

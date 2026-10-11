@@ -76,6 +76,7 @@ it("approval cast, replacement, network retry and closed results work over the r
       name: "Which improvements?",
       level: 1,
     });
+    await user.click(screen.getByRole("button", { name: "Show vote card" }));
     let card = within(screen.getByRole("region"));
     await user.click(card.getByRole("checkbox", { name: "Park" }));
     await user.click(card.getByRole("checkbox", { name: "Rink" }));
@@ -97,6 +98,8 @@ it("approval cast, replacement, network retry and closed results work over the r
     expect((await api.results("approval")).voters).toBe(1);
     view.unmount();
     render(<Conversation api={api} pollId="closed" />);
+    await screen.findByRole("heading", { name: "An ended question", level: 1 });
+    await user.click(screen.getByRole("button", { name: "Show vote card" }));
     await screen.findByText("This one has closed.");
     card = within(screen.getByRole("region"));
     expect(card.queryByRole("button", { name: "Submit" })).toBeNull();
