@@ -56,13 +56,18 @@ A subagent starts with nothing but the brief. Five sections, always:
    _do not run `git commit`, `git push`, `git checkout`, `git stash`, or
    `git reset`; leave changes in the working tree._ The orchestrator commits.
    Without this, parallel agents rewrite each other's index.
+   **Start every brief with its ticket number** (`#301`) and the branch,
+   `<area>/<issue>-<short>` (`odc-pipeline`). The ticket is how the operator,
+   the agent and its report refer to the work; a brief without one has no
+   handle.
 3. **What to read first** — name the files. `memory/INDEX.md` always, then the
    workstream entry, then the two or three documents the task actually needs.
    Do not tell an agent to "get up to speed"; that is how a 25 KB read becomes a
    80 KB read.
 4. **What "done" looks like** — the acceptance bullets, and which guard to run
    (`pnpm -s format:check`, `diff-size.sh`, the unit's own tests).
-5. **What to report back** — files created and why, files changed and why,
+5. **What to report back** — leading with the ticket and PR numbers
+   (`#299 → PR #307`), then files created and why, files changed and why,
    anything stale it found but did not fix, anything needing an operator
    decision. **The report is the only thing you see.** An agent that writes its
    findings to a file you never read has done nothing.
@@ -178,8 +183,9 @@ These held, or broke, and are now rules:
 
 - **Put the operator's answers in the brief.** Re-issuing a lead's card with the
   answers in it was cheaper than relaying them afterwards.
-- **Give each lead its branch numbers.** Both leads guessed "the next free
-  `pulse/N`" and could have collided.
+- **Give each lead its tickets, and branch on the ticket number.** Both leads
+  guessed "the next free `pulse/N`" and could have collided; a branch named for
+  its issue (`pulse/301-…`) cannot.
 - **Name `.claude/launch.json` in the brief if the lead needs the browser.** It
   sits outside a lead's folders. Its entries `cd` by relative path, so the
   preview starts the dev servers of the checkout the session was opened in, not
