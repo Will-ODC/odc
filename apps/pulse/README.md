@@ -2,65 +2,69 @@
 
 A community votes on something and sees the result.
 
-People vote by swiping and can change their answer until the poll closes. They
-sign in with a link sent to their email. Anyone with a working address can; the
-email's domain only decides which community, if any, they belong to (ADR-0030).
+You open a question and answer it. A two-answer question is a swipe on a phone
+or a click on a computer; any other question shows a list. You can change your answer until the poll
+closes. No account is needed to vote. Signing in, with a link sent to your
+email, lets pulse know who you are; anyone with a working address can sign in,
+and the address's domain only decides which community, if any, you belong to
+(ADR-0030).
 
-Pulse is exempt from the ODC charter. Read [CLAUDE.md](./CLAUDE.md) before
-changing anything here.
+Pulse is the first product built in the ODC repo. It is **exempt from the ODC
+charter** on purpose: no signatures and no hash chain, and votes are a plain
+record that can change. It never reads or writes the ODC core (`services/`,
+`contracts/`). Read [CLAUDE.md](./CLAUDE.md) before changing anything here.
 
-## Status
+| What                      | Where                                      |
+| ------------------------- | ------------------------------------------ |
+| This server               | `apps/pulse`, routes in [API.md](./API.md) |
+| The web app (all screens) | `apps/pulse-web`                           |
+| Current state, in detail  | `memory/pulse.md`                          |
+| Plans and open decisions  | `docs/plans/pulse.md`, GitHub issues       |
+| Screen designs            | `docs/mockups/pulse-screens/`              |
 
-- **Built:** sign-in by emailed link, voting (single-choice and approval), and
-  results. Routes are in [API.md](./API.md); screens are in `apps/pulse-web`.
-- **Storage:** Postgres when `PULSE_DATABASE_URL` is set, migrated on every
-  start; memory otherwise. The tests run every store against both.
-- **Identity:** a voter's address is a credential they hold (`voter_credential`),
-  not their key, and each voter records an assurance level — `none`, `link` or
-  `email`, ordered in `src/identity/assurance.ts` (ADR-0033). Everyone signs in
-  by email today, so everyone is `email`.
-- **Not built:** real email, creating polls, and the path to action.
+## Where it stands
 
-## Run it
+**Built:**
+
+- Voting: one-answer and pick-several polls, results, changing your answer.
+- Sign-in by emailed link, sent through Resend (ADR-0027).
+- Storage in Postgres, or in memory when no database is set.
+- A phone layout, and a desktop layout from 1100px wide.
+- Two Docker images that serve the whole thing (ADR-0028). CI builds both.
+
+**Not built:**
+
+- **Creating polls.** Today polls exist only as seed data or database inserts.
+  This waits on the moderation values in ADR-0024 (`docs/plans/pulse.md`, P6).
+- The explaining screens between questions, and the "what happens next" step
+  after a vote.
+- Poll photos and summaries (#296), and comments (#297).
+
+**Before a real launch** you also need a host, a domain, and that domain
+verified with Resend for sending email.
+
+## Run it on your computer
 
 ```bash
 pnpm --filter @odc/pulse dev       # API on http://127.0.0.1:8080
 pnpm --filter @odc/pulse-web dev   # app on http://localhost:5173
 ```
 
-Sign-in links print to the API's terminal instead of being emailed. The API
-seeds three linked polls and the community `demo-community`, which
-`@example.test` addresses belong to. Any other address signs in too, with no
-community. To change the demo, edit `src/dev-server.ts`.
+No email is sent: sign-in links print in the API's terminal. The API loads
+three linked demo polls (edit `src/dev-server.ts` to change them).
 
-To see the community picker, sign in as anyone `@both.example.test`: the seed lists
-that one domain under two communities, `demo-community` and `demo-neighbours`, so the
-sign-in screen asks which one. It is a separate domain so that `@example.test` signs
-in exactly as it always has. With a database, any domain gets the same question once
-two rows name it:
-`insert into allowed_domain (community, domain, include_subdomains) values ('other', 'example.test', false);`.
+- `@example.test` addresses join the community `demo-community`.
+- `@both.example.test` addresses are asked to pick between two communities.
+- Any other address signs in with no community.
 
-Without a database, everything is lost when the API stops. To keep it, start
-pulse's database (see [Test](#test)) and set `PULSE_DATABASE_URL` before `dev`.
-Set `PULSE_SESSION_SECRET` too: the ballot cookie is signed with it, so without
-it a restart signs everyone out and lets each browser vote again.
+Everything is kept in memory and lost when the API stops. To keep it, start
+the database (see [Test](#test)), then set `PULSE_DATABASE_URL` and
+`PULSE_SESSION_SECRET` before `dev`. Without the secret, a restart signs
+everyone out and lets each browser vote again. With a database, seed polls are
+written once and close three days later; for a fresh demo, run
+`docker compose -f apps/pulse/docker-compose.yml down`.
 
-Signing out advances a per-voter generation in the shared store, revoking prior
-session cookies across API instances even if their clocks differ. Existing
-session cookies require a new sign-in after this update; ballot cookies retain
-their format. Drain old API instances before serving the new version so all
-instances enforce the same revocation rule. Migration 004 (P8, identity as a
-credential) is the same kind of change: it drops `voter.email` and renames
-`pending_claim.email`, so an old API instance still running fails every sign-in
-once 004 has run. Drain old instances before it, too.
-
-With a database, the seed writes only polls that are not stored yet. Editing
-`src/dev-server.ts` does not change polls already there, and the seeded polls
-close three days after the start that first wrote them. For a fresh demo, empty
-the database with `docker compose -f apps/pulse/docker-compose.yml down`.
-
-`dev` refuses to start unless `NODE_ENV` is unset, `development`, or `test`. It
-is not a production server.
+`dev` refuses to start unless `NODE_ENV` is unset, `development` or `test`.
 
 | Variable               | Default                                       |
 | ---------------------- | --------------------------------------------- |
@@ -69,26 +73,6 @@ is not a production server.
 | `PULSE_WEB_ORIGIN`     | `http://localhost:5173`                       |
 | `PULSE_DATABASE_URL`   | unset: everything in memory                   |
 
-### Sending real email
-
-`dev` always prints the sign-in link to the terminal and never sends anything,
-which is what keeps the flow demonstrable with no provider account at all. A
-served pulse sends through Resend (ADR-0027), configured with:
-
-| Variable               | Meaning                                                  |
-| ---------------------- | -------------------------------------------------------- |
-| `PULSE_RESEND_API_KEY` | unset means no provider, so `ConsoleMailer` is used      |
-| `PULSE_MAIL_FROM`      | the From header, e.g. `pulse <sign-in@your-domain.org>`  |
-| `PULSE_MAIL_REPLY_TO`  | optional, when replies should not go to the From address |
-
-A key set without `PULSE_MAIL_FROM` refuses to start rather than failing at the
-first sign-in. Nothing is read from a bare `RESEND_API_KEY`, for the same reason
-a bare `DATABASE_URL` is not read.
-
-**Before any of this works you need a sending domain** verified with the
-provider, with its SPF and DKIM records published to DNS. That is the expensive
-half, and it is the same work whichever provider is used.
-
 ## Test
 
 ```bash
@@ -96,8 +80,8 @@ pnpm --filter @odc/pulse build   # tests run against dist/, so build first
 pnpm --filter @odc/pulse test
 ```
 
-The database tests skip unless you give them a Postgres. Start pulse's own, on
-port 5433 (see [docker-compose.yml](./docker-compose.yml) for why not 5432):
+Database tests skip unless you give them a Postgres. Pulse's own runs on port
+5433, so it never collides with a Postgres already on 5432:
 
 ```bash
 docker compose -f apps/pulse/docker-compose.yml up -d --wait
@@ -105,53 +89,38 @@ export PULSE_DATABASE_URL=postgres://pulse:pulse@127.0.0.1:5433/pulse_test
 export PULSE_REQUIRE_DATABASE=1   # fail instead of skip if the database is missing
 ```
 
-Stop it with `docker compose -f apps/pulse/docker-compose.yml down`. That command
-starts the database only — the served images are behind a profile, so testing
-does not build two images to get a Postgres.
-
-CI runs the same checks, with a database, on every PR.
+Stop it with `docker compose -f apps/pulse/docker-compose.yml down`. CI runs
+the same tests, with a database, on every PR.
 
 ## Serve it
 
-`pnpm dev` is for a laptop and refuses to run anywhere else. Serving pulse is a
-second entry point, `src/main.ts`, and two images (ADR-0028):
-
 ```bash
-just pulse-up      # or the docker compose line it wraps
+just pulse-up      # opens on http://127.0.0.1:8080; `just pulse-down` stops it
 ```
 
-**Two processes, one origin.** `web` serves the page and forwards `/api` to
-`api`, so the browser sees one website — which is what keeps the `SameSite=Lax`
-session cookie working without weakening it. It is the same shape `pnpm dev`
-already has, where vite proxies `/api` to port 8080.
+This runs `src/main.ts` and two images: `web` serves the page and passes
+`/api` to `api`, so the browser sees one website and the sign-in cookie works.
+**It sends real email**, so use `dev` to click through the flow.
 
-The API trusts one forwarded IP hop only when its direct peer has a private
-network address, as nginx does on the Compose network. Requests from other
-peers ignore `X-Forwarded-For`. Keep the API port unpublished; rate limits use
-the resulting client IP.
+`src/main.ts` refuses to start without these four, and names every missing one
+at once:
 
-`src/main.ts` **refuses to start** without the four values below, rather than
-inventing them the way `dev-server.ts` may. Everything missing is named in one
-message, so configuring a deployment is not a sequence of failed boots:
+| Variable               | Why it has no default                                  |
+| ---------------------- | ------------------------------------------------------ |
+| `PULSE_SESSION_SECRET` | a generated one signs everyone out on every restart    |
+| `PULSE_DATABASE_URL`   | memory would lose every vote on redeploy               |
+| `PULSE_RESEND_API_KEY` | without it, sign-in links would be printed in the logs |
+| `PULSE_WEB_ORIGIN`     | a guessed one would email everyone a link to localhost |
 
-| Variable               | Why it has no default                                   |
-| ---------------------- | ------------------------------------------------------- |
-| `PULSE_SESSION_SECRET` | a generated one signs everyone out on every restart     |
-| `PULSE_DATABASE_URL`   | the in-memory fallback would lose every vote on deploy  |
-| `PULSE_RESEND_API_KEY` | `ConsoleMailer` would print sign-in links into the logs |
-| `PULSE_WEB_ORIGIN`     | a guessed default mails everyone a link to localhost    |
+Also: `PULSE_MAIL_FROM` (required with the key, e.g.
+`pulse <sign-in@your-domain.org>`), and optionally `PULSE_MAIL_REPLY_TO`,
+`PULSE_PORT` (8080), `PULSE_HOST` (`0.0.0.0`) and `PULSE_DATABASE_SCHEMA`.
+Bare `RESEND_API_KEY` and `DATABASE_URL` are never read.
 
-Optional: `PULSE_PORT` (8080), `PULSE_HOST` (`0.0.0.0`, because loopback is
-unreachable from outside a container), `PULSE_MAIL_REPLY_TO`, and
-`PULSE_DATABASE_SCHEMA` for deploying pulse beside something else in one
-database.
+Keep the API port private. The API trusts one forwarded IP hop, and only from a
+private network address such as nginx's, so rate limits see the real client.
 
-**A served pulse sends real email.** There is no console mailer in this path, so
-`just pulse-up` with a live Resend key mails whoever signs in. Use `pnpm dev`
-to click through the flow.
-
-**One thing this does not give you yet:** there are no polls, because poll
-authoring is not built (`docs/plans/pulse.md` P6); today they are inserts.
-Sign-in needs no setup: anyone with a working address can sign in, and a row in
-`allowed_domain` only names the community an email domain belongs to
-(ADR-0030).
+**Upgrading:** stop every old API instance before starting the new version.
+Database migrations run on start, and some (003, 004) change how sign-in and
+sign-out work, so an old instance left running would fail sign-ins or ignore
+sign-outs.
