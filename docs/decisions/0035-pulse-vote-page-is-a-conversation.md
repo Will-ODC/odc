@@ -40,10 +40,13 @@ open questions, 2026-10-11:
 
 And two rules that follow from the design:
 
-- **Typing never casts a vote.** Text that reads as an answer only preselects
-  it in the card; the person presses Submit. A misread vote is the risk this
-  rule exists to prevent. Until an assistant exists, a small pure reader
-  matches numbers, exact answers and yes/no (#300).
+- **Voting by typing goes through an AI app, not a text matcher.** The
+  operator's direction (2026-10-11): any AI chat app, and later pulse's own
+  assistant, fetches the poll and submits the answer through pulse's MCP
+  server or HTTP API (#300). Pulse does no text matching of its own. **Who is
+  voting from an AI app, and what confirms a vote before it counts, are open
+  decisions in #300.** The mockup's "typing only preselects, you always
+  confirm" is a recommendation drawn as a proposal, not a decision.
 - **Picking and casting are separate presses** on the card. ADR-0022's
   one-press exception was for the swipe ballot; when #302 retires that ballot,
   no pulse screen uses the exception. ADR-0022 still governs any future
@@ -52,8 +55,9 @@ And two rules that follow from the design:
 
 ## Consequences
 
-- Work is the epic #303: the vote card (#299, which also fixes #205 for
-  approval polls), the typed-answer reader (#300), the page (#301), then the
+- Work is the epic #303: the vote card (#299, which takes over
+  #205's approval selection), AI-app voting through MCP and the API (#300),
+  the page (#301, which sends approval ballots to the API), then the
   switch and the removal of `SwipeBallot`, `ChoiceBallot` and `Run` (#302).
 - Parts that wait on other work are labelled gaps on the page, not fakes:
   photo and summary (#296, needs P6), comments (#297, needs ADR-0024's
@@ -61,7 +65,7 @@ And two rules that follow from the design:
   browse (#259/#260), and how a person knows their vote counted (under
   discussion).
 - The conversation area has nothing to say until an assistant exists. It
-  ships with a plain empty state and the typed-answer reader.
+  ships with a plain empty state; the card is how to vote until then.
 - The #228 prototype's pop-up and the new docked card share one card
   component, so `/preview/chat` keeps working.
 - Screen 08 stays in the deck as the alternative, recorded in the odc-design
