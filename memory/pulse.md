@@ -70,6 +70,15 @@ branch per change (`pulse/<n>-<short>`), and the same CI runs.
 
 ## Next / not built
 
+- **NEXT: the vote page becomes a conversation (epic #303, ADR-0035, decided
+  2026-10-11).** Design of record: `docs/mockups/pulse-screens/09-chat-vote.html`
+  (#298); 08 (three columns) is the kept alternative. Order: #299 vote card
+  (also fixes #205) and #300 typed-answer reader in parallel, then #301 the
+  page, then #302 the switch, which retires `SwipeBallot`, `ChoiceBallot` and
+  `Run`. Typing only ever preselects; Submit casts. Photo/summary (#296),
+  comments (#297), the assistant (#280-#284), browse (#259/#260) and vote
+  validity are labelled gaps until their own work lands.
+
 - P6 poll authoring, once (1) above has values. `polls.community` and
   `created_by` go in **migration 005 or later**, because 001-004 are taken.
   Authorship cannot be backfilled, only defaulted.
@@ -92,6 +101,11 @@ branch per change (`pulse/<n>-<short>`), and the same CI runs.
   answered with one choice; needs a decision about ADR-0022's one-press cast).
 
 ## Open decisions (operator)
+
+- **Vote validity: should pulse show how a vote is counted?** The rule "counting
+  is never the subject" (`apps/pulse/CLAUDE.md:33`) was written by an agent in
+  #79, not by the operator, who is reconsidering it (2026-10-11). The chat page
+  keeps a labelled slot; nothing is designed.
 
 - **P2: should a later community pick move a returning voter?** Today it does
   not (ADR-0030 writes community once). `claim.test.ts` pins the current answer.
