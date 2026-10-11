@@ -73,9 +73,12 @@ branch per change (`pulse/<n>-<short>`), and the same CI runs.
 - **NEXT: the vote page becomes a conversation (epic #303, ADR-0035, decided
   2026-10-11).** Design of record: `docs/mockups/pulse-screens/09-chat-vote.html`
   (#298); 08 (three columns) is the kept alternative. Order: #299 vote card
-  (also fixes #205) and #300 typed-answer reader in parallel, then #301 the
-  page, then #302 the switch, which retires `SwipeBallot`, `ChoiceBallot` and
-  `Run`. Typing only ever preselects; Submit casts. Photo/summary (#296),
+  (takes #205's approval selection), then #301 the page (sends approval
+  ballots), then #302 the switch, which retires `SwipeBallot`, `ChoiceBallot`
+  and `Run`. **#300 runs in parallel: voting from any AI chat app through a
+  pulse MCP server or the HTTP API** — pulse does no text matching. Its open
+  decisions (who is voting without a ballot cookie, what confirms a vote) are
+  the operator's; nothing that casts is built before he answers. Photo/summary (#296),
   comments (#297), the assistant (#280-#284), browse (#259/#260) and vote
   validity are labelled gaps until their own work lands.
 
@@ -97,8 +100,8 @@ branch per change (`pulse/<n>-<short>`), and the same CI runs.
   limit. This is the first thing that breaks when pulse scales out.
   (`trustProxy: 1` is a different fix.)
 - Open feature issues: #186 (a closed first question leaves nothing to press;
-  deferred until polls can be created) and #205 (approval polls can only be
-  answered with one choice; needs a decision about ADR-0022's one-press cast).
+  deferred until polls can be created). #205 (approval polls answered with one
+  choice) is closed into #299 (selection) and #301 (sending the ballot).
 
 ## Open decisions (operator)
 
