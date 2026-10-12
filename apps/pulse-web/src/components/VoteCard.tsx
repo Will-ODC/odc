@@ -156,8 +156,13 @@ export function VoteCard({
         <button type="button" data-expand onClick={() => onCollapse(false)}>
           Vote
         </button>
-        <button type="button" onClick={onClose}>
-          Close
+        <button
+          type="button"
+          className="vote-card__close"
+          aria-label="Close"
+          onClick={onClose}
+        >
+          <span aria-hidden="true">×</span>
         </button>
       </section>
     );
@@ -181,12 +186,14 @@ export function VoteCard({
     >
       <header className="vote-card__top">
         <span className="vote-card__heading">DECISION</span>
-        {/* ResultsPanel provides the answered card's single Close button. */}
-        {status.kind !== "answered" ? (
-          <button type="button" onClick={onClose}>
-            Close
-          </button>
-        ) : null}
+        <button
+          type="button"
+          className="vote-card__close"
+          aria-label="Close"
+          onClick={onClose}
+        >
+          <span aria-hidden="true">×</span>
+        </button>
       </header>
       <h2 id={`${id}-question`} className="vote-card__question">
         {question}
@@ -202,7 +209,6 @@ export function VoteCard({
           <ResultsPanel
             results={status.results}
             yourChoices={picked}
-            onClose={onClose}
             panelRef={panel}
           />
           <div className="vote-card__actions">

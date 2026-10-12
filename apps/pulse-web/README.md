@@ -22,7 +22,8 @@ can be drawn by another interface.
 (#301/#302). Existing `/conversation` and `/conversation?poll=ID` links remain supported, using the public Pulse API. Desktop has an Answered sidebar; phone and
 desktop offer a small Vote tab. It expands above the disabled assistant
 composer on phone and at the top right on desktop (operator layout experiment).
-Close returns to the small tab. Select then
+The top-right × closes decision and result cards and returns to the small tab;
+its accessible name remains Close. Select then
 Submit; results appear in the card, with Change my answer, Close, and Next
 where the selected answer opens another question. Approval votes submit every
 selection; equal-value navigation uses the lowest choice index (ADR-0021).

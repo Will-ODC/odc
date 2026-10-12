@@ -47,15 +47,20 @@ export function ClosedResults({
       ref={panelRef}
       tabIndex={-1}
     >
+      <button
+        type="button"
+        className="results__close"
+        aria-label="Close"
+        onClick={onClose}
+      >
+        <span aria-hidden="true">×</span>
+      </button>
       <ViewState data={data}>{() => null}</ViewState>
       {data.status === "error" ? (
-        <button type="button" className="results__close" onClick={onRetry}>
+        <button type="button" className="results__retry" onClick={onRetry}>
           Try again
         </button>
       ) : null}
-      <button type="button" className="results__close" onClick={onClose}>
-        Close
-      </button>
     </div>
   );
 }
