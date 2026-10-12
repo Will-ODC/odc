@@ -142,18 +142,36 @@ Also owed by this item and not by #148: **there is no `GET /api/polls`.** Every
 route is `/api/polls/:id/...`, so a browsing screen needs a listing endpoint
 that does not exist.
 
-## P5 — Pillar 3, the path to action · BLOCKED ON A DECISION
+## P5 — Pillar 3, the path to action · UI DIRECTION SET; RECORDS AND NOTIFICATION RULES PENDING
 
-The third MVP pillar, in any form: soliciting ideas, volunteer time or
-donations, and the proof-of-what-happened email. `proofEmailsOptIn` is collected
-at sign-in today and **leads nowhere.**
+Operator direction, 2026-10-11:
 
-**Blocked on:** the whole shape. Nothing about this is designed. Donations in
-particular reach payments, identity and obligations the product has never had.
+- The desktop has substantial unused space in the left and right columns around
+  the main poll/questions/decisions. Improve the centre's layout and hierarchy;
+  later use the surrounding columns for related polls and documented action
+  outcomes from related polls (#331). Related polls use ADR-0025; Next remains
+  the answer-selected graph path.
+- Once a poll is closed, its final results belong in the centre, alongside any
+  action planned because of it. Show subsequent action/progress and documented
+  outcomes there too (#332), with evidence and distinct planned, reported and
+  reviewed states. Poll closure alone does not prove action happened.
+- Publishing a documented poll-linked action outcome triggers email to eligible
+  people who opted in, linking back to those results and action records (#333).
+  Mere closure or a plan is not the outcome-notification trigger.
 
-ADR-0022 justified the retired one-press ballot through reversibility. The
-current conversation ballot uses pick-then-Submit (ADR-0035); donations and
-volunteer commitments also require confirmation.
+Reuse the action record work (#246), contributions/claimed results (#247), and
+reviewed evidence (#248), rather than introducing duplicate records. Related
+poll reads and action read APIs are dependencies, not shipped features.
+
+**Still to settle before implementation:** publishing authority and action record
+rules from #246–#248; which recipients are associated with which poll; whether
+existing `proofEmailsOptIn` covers these messages; consent withdrawal, opt-out
+and delivery rules. The preference is collected at sign-in but no outcome mail
+is sent today. Soliciting donations/volunteers and funding remain separate work;
+no payments or automatic claims of impact are introduced by this UI direction.
+
+The conversation ballot uses pick-then-Submit (ADR-0035); donations and volunteer
+commitments also require confirmation.
 
 ## P6 — Poll authoring under ADR-0024 · BLOCKED ON VALUES, NOT RULES; the operator's stated next work after storage
 

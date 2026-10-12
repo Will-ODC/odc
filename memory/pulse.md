@@ -321,3 +321,15 @@ PR #313 has merged; #302 / PR #322 is now open.
   explicitly deferred. No demo ports or frontend edits.
 - Latest shared usage checkpoint:47% five-hour,20% weekly used. Finish these
   checkpoints before starting further protected voting or check-page scope.
+
+## Future desktop and poll-to-action direction — 2026-10-11
+
+Will requested improved central poll/decision layout and useful desktop side
+columns for related polls and documented outcomes (#331). Closed-poll final
+results, planned action and later documented action progress/outcomes belong in
+the centre (#332). Documented outcome publication should trigger email to eligible
+opted-in recipients (#333), linking back to the record; closure/planning alone
+is not that trigger. Reuse #246–#248 action/evidence work. These are planned,
+not built. Recipient/poll association, consent coverage/withdrawal and publication
+rules remain open; details and dependencies live in docs/plans/pulse.md P5 and
+those tickets. Larger implementation remains deferred at Will's request.
