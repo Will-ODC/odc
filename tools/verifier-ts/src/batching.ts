@@ -1,14 +1,16 @@
-// Ballot publication discipline (event-types.md v11): ET-23 (quantized ballot
-// `ts`), ET-24 (minimum batch size, with its line attribution) and ET-24a (a
-// batch, once left, is closed), from the section "Ballot publication
-// discipline". ET-25 (order within a batch) is declared unverifiable by the
-// contract (ET-25, EV-15) and has no check here, by design.
+// Ballot publication discipline (event-types.md v12): ET-23 (quantized ballot
+// `ts`), ET-24 (minimum batch size, with its line attribution), ET-24a (a
+// batch, once left, is closed) and ET-24b (how ET-24 and ET-24a are decided
+// beside opaque ballots, ADR-0034). ET-25 (order within a batch) is declared
+// unverifiable by the contract (ET-25, EV-15) and has no check here, by design.
 //
-// All three are Stage B (EV-15: "every rule of event-types.md (ET-*)"), so
-// only REGISTERED `vote_cast` events that have passed every other Stage B check
-// are fed to the tracker. A well-formed `vote_cast` at an unregistered version
-// is PARTIAL (EV-8): its payload is never read, so it has no issue_id this
-// verifier may rely on and joins no batch.
+// All four are Stage B (EV-15). Only REGISTERED `vote_cast` events whose issue
+// is registered and that have passed every other Stage B check are admitted.
+// An OPAQUE ballot — a `vote_cast` at a version this verifier does not
+// register that passed Stage A and ES-15–ES-17 — is recorded by its envelope
+// `seq` and `ts` alone; its payload is never read (ET-24a "Which ballots
+// count", ET-24b). A registered ballot of an unregistered `issue_created`
+// (ET-18b) is neither: it never reaches this module.
 
 /**
  * ET-23's offset: milliseconds since `1970-01-01T00:00:00.000Z` on the
@@ -67,90 +69,226 @@ export function isQuantized(ms: number, intervalMs: number): boolean {
   return ms % intervalMs === 0;
 }
 
-/** Which ballot-publication rule a ballot breaks, if any. */
-export type BatchFault = "ET-24" | "ET-24a";
+/**
+ * The outcome of ET-24/ET-24a at one registered ballot, decided by ET-24b:
+ * "ET-24" / "ET-24a" are DEFINITE failures (INVALID at this line); "unresolved"
+ * is neither a failure nor a pass (the line is enumerated in PARTIAL, EV-7);
+ * "resolved" passes.
+ */
+export type BatchOutcome = "resolved" | "unresolved" | "ET-24" | "ET-24a";
 
-/** Per-issue state for ET-24 and ET-24a. */
+/**
+ * Candidate summary for every registered issue sharing one interval Δ, which
+ * answers ET-24b item 4(b)'s question "is there a candidate with `seq > a`
+ * whose `ts` differs from x?" in O(1).
+ *
+ * Invariant: `lastSeq` is the largest `seq` among the candidates so far and
+ * `lastMs` its instant; `prevRunLastSeq` is the largest `seq` among candidates
+ * whose instant differs from `lastMs` (0 if none). It is maintained exactly:
+ * a new candidate at a DIFFERENT instant makes the old last candidate the
+ * largest one not at the new `lastMs` (every later-than-it candidate is the
+ * new one), so `prevRunLastSeq` becomes the old `lastSeq`; a new candidate at
+ * the SAME instant leaves the set of candidates at other instants unchanged.
+ *
+ * Hence "some candidate with `seq > a` and `ts ≠ x`" holds iff `lastSeq > a`
+ * and (`lastMs ≠ x` — the last candidate itself qualifies — or
+ * `prevRunLastSeq > a` — the latest candidate not at `lastMs = x` does). A
+ * candidate's `seq` is always below the ballot being admitted, so no upper
+ * bound is needed.
+ *
+ * One summary serves every issue at Δ although their c differ: candidacy
+ * (item 1) is the multiple test plus `seq > c`, and every query's lower bound
+ * `a` (c, `seq(P(L))` or `seq(f)`) is ≥ that issue's c, so candidates at or
+ * before c are excluded by the query itself.
+ */
+interface IntervalGroup {
+  delta: number;
+  /** `seq` of the latest candidate; 0 when there is none (seqs start at 1). */
+  lastSeq: number;
+  /** Its instant (epoch ms). Meaningless while `lastSeq` is 0. */
+  lastMs: number;
+  /** `seq` of the latest candidate whose instant differs from `lastMs`; 0 if none. */
+  prevRunLastSeq: number;
+}
+
+/** Per registered issue: its parameters and its KNOWN state (ET-24b item 2). */
 interface IssueRun {
+  /** `seq` of the issue's `issue_created` (ET-24b's c). */
+  c: number;
   batchMin: number;
-  /** Batch instant (epoch ms) of the issue's previous ballot; null before its first. */
+  group: IntervalGroup;
+  /** `seq` of the issue's previous registered ballot, P(L); 0 before its first. */
+  prevSeq: number;
+  /** Instant (epoch ms) of the current known run; null before the first ballot. */
   current: number | null;
-  /** Ballots in the current batch so far. */
+  /** |R|: registered ballots in the current known run. */
   count: number;
-  /** Instants of batches this issue has LEFT. Equality lookups only — never ordered. */
+  /** `seq` of the current run's first ballot, f. */
+  firstSeq: number;
+  /** ET-24b's w for the current run: `seq(P(f))`, or c when P(f) does not exist. */
+  w: number;
+  /** Instants of known runs this issue has LEFT. Equality lookups only. */
   left: Set<number>;
 }
 
 /**
- * ET-24 / ET-24a, checked ballot by ballot in file (= `seq`) order.
+ * ET-24 / ET-24a, decided ballot by ballot in file (= `seq`) order under
+ * ET-24b, in one pass.
  *
- * ET-24 (event-types.md v11) defines a batch as "a maximal run" of one issue's
- * registered `(vote_cast, 1)` events, in `seq` order, "that share one `ts`".
- * A run ends at the issue's next registered ballot whose `ts` differs, so both
- * rules are decided AT that ballot's line, with no end-of-scan pass:
+ * Known terms (ET-24b item 2) are v11's rules over the registered ballots
+ * alone: a run ends at the issue's next registered ballot whose `ts` differs
+ * (a "run start" L), which has a known ET-24 failure if the run it ends is
+ * under-size and a known ET-24a failure if it returns to an instant the issue
+ * has left. A known ET-24a failure is always definite; a known ET-24 failure
+ * is definite iff |R| + F < m, F counting the candidates at the run's instant
+ * t with w < seq < seq(L) (item 3). Otherwise item 4 decides whether the check
+ * is unresolved.
  *
- *   - ET-24: a run that ends holding fewer than the issue's `ballot_batch_min`
- *     ballots was not the last, and the fatal line is "the registered
- *     `(vote_cast, 1)` of that issue that ends the under-size batch". A run
- *     that never ends holds the issue's highest-`seq` registered ballot: the
- *     last batch, which may be under-size. This holds "on every chain,
- *     including one that also breaks ET-24a": at T1, T1, T2, T2, T2, T1 with
- *     minimum 3 the fatal line is the first T2, not the returning T1.
- *   - ET-24a: "No two batches of one issue may share a `ts`" — a ballot that
- *     starts a run at an instant its issue has already left is rejected "at
- *     the line of the returning ballot".
+ * Every query reads only lines before L, so each line's outcome is final when
+ * the scan reaches it (EX-16's prefix property). `ts` values are compared for
+ * equality only, plus ET-23's multiple test (ES-21).
  *
- * A ballot can break both at once (it ends an under-size run AND returns);
- * the line is the same and the reason is advisory ("One line, two rules").
- *
- * Both checks are per issue; other events and other issues' ballots between
- * one batch's members change nothing. `ts` values are compared for equality
- * only (ES-21 v5). Cost: one Map lookup, one Set lookup and at most one Set
- * insert per ballot — linear in the export whatever a hostile export does,
- * since no earlier ballot or batch is ever rescanned.
- *
- * Only registered, otherwise-accepted `(vote_cast, 1)` events are fed in: an
- * unregistered version's payload is never read, so it "joins no batch, ends
- * none, and proves none not-last" (ET-24a, "Which ballots count").
+ * Cost: a registered ballot is O(log k) (a binary search over the opaque
+ * ballots sharing one instant) plus O(1) Map/Set work. An opaque ballot costs
+ * one modulus per DISTINCT interval among the registered issues so far, since
+ * which issues it is a candidate of depends on each interval; it updates a
+ * per-interval O(1) summary, not each issue. Worst case O(opaque × distinct
+ * intervals), which ET-24b's own one-pass sketch ("each opaque ballot updates
+ * every issue it is a candidate of") shares.
  */
 export class BallotBatches {
   private readonly issues = new Map<string, IssueRun>();
+  private readonly groups = new Map<number, IntervalGroup>();
+  /** Every opaque ballot's `seq`, by instant, ascending (file order). */
+  private readonly opaqueAt = new Map<number, number[]>();
 
-  /** Register an issue (at its `issue_created`) with its ET-14b minimum. */
-  openIssue(issueId: string, batchMin: number): void {
+  /**
+   * Register an issue at its `issue_created` (seq `c`) with its ET-14b
+   * interval and minimum, which ET-22a makes final.
+   */
+  openIssue(
+    issueId: string,
+    c: number,
+    intervalMs: number,
+    batchMin: number,
+  ): void {
+    let group = this.groups.get(intervalMs);
+    if (group === undefined) {
+      group = { delta: intervalMs, lastSeq: 0, lastMs: 0, prevRunLastSeq: 0 };
+      this.groups.set(intervalMs, group);
+    }
     this.issues.set(issueId, {
+      c,
       batchMin,
+      group,
+      prevSeq: 0,
       current: null,
       count: 0,
+      firstSeq: 0,
+      w: c,
       left: new Set(),
     });
   }
 
   /**
-   * Admit one ballot of `issueId` at batch instant `ms`. Returns the rule the
-   * ballot breaks (the caller reports INVALID at this ballot's line), or null
-   * after recording it. The issue MUST have been opened (ET-18 checked first).
+   * Record one opaque ballot: its envelope `seq` and its `ts` in epoch ms,
+   * nothing else (ET-24b). It is a candidate of every issue already opened
+   * (so `seq > c`) whose interval its instant is a multiple of (item 1).
    */
-  admit(issueId: string, ms: number): BatchFault | null {
+  opaque(seq: number, ms: number): void {
+    for (const g of this.groups.values()) {
+      if (!isQuantized(ms, g.delta)) continue;
+      if (g.lastSeq !== 0 && ms !== g.lastMs) g.prevRunLastSeq = g.lastSeq;
+      g.lastSeq = seq;
+      g.lastMs = ms;
+    }
+    const at = this.opaqueAt.get(ms);
+    if (at === undefined) this.opaqueAt.set(ms, [seq]);
+    else at.push(seq);
+  }
+
+  /**
+   * Is there a candidate of `g` with `seq` in (a, now) whose instant is not
+   * `x`? The latest candidate answers it unless it sits at `x`; then the
+   * latest candidate at another instant does.
+   */
+  private otherInstantSince(g: IntervalGroup, a: number, x: number): boolean {
+    if (g.lastSeq <= a) return false;
+    return g.lastMs !== x || g.prevRunLastSeq > a;
+  }
+
+  /**
+   * How many opaque ballots at instant `ms` have `seq > a`? (All recorded ones
+   * precede the ballot being admitted.) An opaque ballot at an instant that is
+   * a multiple of Δ is a candidate of every issue at Δ opened before it, and
+   * `ms` here is always a run instant of an issue at Δ, which passed ET-23.
+   */
+  private opaqueCountSince(ms: number, a: number): number {
+    const at = this.opaqueAt.get(ms);
+    if (at === undefined) return 0;
+    let lo = 0;
+    let hi = at.length;
+    while (lo < hi) {
+      const mid = (lo + hi) >>> 1;
+      if ((at[mid] as number) <= a) lo = mid + 1;
+      else hi = mid;
+    }
+    return at.length - lo;
+  }
+
+  /**
+   * Admit one registered ballot of `issueId` with envelope `seq`, at batch
+   * instant `ms` (it has passed ET-23). The issue MUST have been opened.
+   * Returns the ET-24b outcome; on a definite failure the caller reports
+   * INVALID at this line and the state is not used again.
+   */
+  admit(issueId: string, seq: number, ms: number): BatchOutcome {
     const run = this.issues.get(issueId);
     if (run === undefined) throw new Error("admit: unknown issue");
-    if (run.current === null) {
-      run.current = ms;
-      run.count = 1;
-      return null;
+
+    if (run.current === null || ms === run.current) {
+      // Not a run start: the issue's first ballot, or one continuing the
+      // current run. Item 4(b): unresolved iff a candidate since P(L) (since
+      // c when there is no P(L)) sits at another instant.
+      const since = run.current === null ? run.c : run.prevSeq;
+      const unresolved = this.otherInstantSince(run.group, since, ms);
+      if (run.current === null) {
+        run.current = ms;
+        run.count = 1;
+        run.firstSeq = seq;
+        run.w = run.c;
+      } else {
+        run.count++;
+      }
+      run.prevSeq = seq;
+      return unresolved ? "unresolved" : "resolved";
     }
-    if (ms === run.current) {
-      run.count++;
-      return null;
+
+    // A run start: L ends the known run R (at t = run.current) and begins a new
+    // one. Either definite failure makes THIS the fatal line; which one is
+    // named is advisory (ET-24a "One line, two rules"; EV-17).
+    if (run.left.has(ms)) return "ET-24a"; // item 3: always definite
+    let outcome: BatchOutcome = "resolved";
+    if (run.count < run.batchMin) {
+      // Known ET-24 failure; definite iff |R| + F < m (item 3).
+      const f = this.opaqueCountSince(run.current, run.w);
+      if (run.count + f < run.batchMin) return "ET-24";
+      outcome = "unresolved"; // item 4(a)
+    } else if (
+      // Item 4(b), run start: a candidate at ts(L) (seq > c is implied for a
+      // candidate; checked against the global record here), or one after f at
+      // an instant other than t.
+      this.opaqueCountSince(ms, run.c) > 0 ||
+      this.otherInstantSince(run.group, run.firstSeq, run.current)
+    ) {
+      outcome = "unresolved";
     }
-    // This ballot ends the current run and starts a new one. Either fault
-    // makes THIS the fatal line; which one is named is advisory (ET-24a "One
-    // line, two rules"; EV-17).
-    if (run.left.has(ms)) return "ET-24a";
-    if (run.count < run.batchMin) return "ET-24";
     run.left.add(run.current);
+    run.w = run.prevSeq;
     run.current = ms;
     run.count = 1;
-    return null;
+    run.firstSeq = seq;
+    run.prevSeq = seq;
+    return outcome;
   }
 }
