@@ -21,11 +21,11 @@ Format (newest first, one entry per merged contracts change):
 
 ## fixtures/README.md v15 — 2026-10-11 — ADR-0034 vectors (#321)
 
-- Seventeen vectors, `116`–`132`, for ET-18b, ET-22a and ET-24b: ADR-0034's eight
+- Nineteen vectors, `116`–`134`, for ET-18b, ET-22a and ET-24b: ADR-0034's eight
   cases, a ballot of an unregistered issue version, five more shapes the ADR
-  lists, EV-16 on an opaque ballot, and a run start the rule must not
-  over-report, and an unregistered non-ballot that is no candidate. 132 vectors
-  in all (21 `VALID`, 13 `PARTIAL`, 98 `INVALID`). Each ET-24b vector is one on which the conservative
+  lists, EV-16 on an opaque ballot, a run start the rule must not over-report,
+  an unregistered non-ballot that is no candidate, and the two clauses F's w and
+  ts(U) = ts(L). 134 vectors in all (21 `VALID`, 14 `PARTIAL`, 99 `INVALID`). Each ET-24b vector is one on which the conservative
   and exact rules agree, shown by `docs/security/attacks/check-adr-0034-agreement.py`.
   Golden data is added, nothing edited.
 

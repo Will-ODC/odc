@@ -212,14 +212,15 @@ export const opaqueBatchingVectors: Vector[] = [
       c.vote(a.hash, 0, { minutes: T1 });
       c.vote(b.hash, 0, { minutes: T1 });
       opaque(c, a.hash, T1);
+      opaque(c, b.hash, T1);
       c.vote(a.hash, 1, { minutes: T1 });
       c.vote(b.hash, 1, { minutes: T1 });
       c.vote(a.hash, 0, { minutes: T2 });
       c.vote(b.hash, 0, { minutes: T2 });
     }),
-    [6, 9, 10],
+    [6, 7, 10, 11],
     ["ET-24", "ET-24b"],
-    "A and B both hold two ballots at T1, and one opaque ballot at T1 is a candidate of both. It counts in each issue's F, so both first-T2 ballots (lines 9 and 10) are unresolved — a ballot can fill at most one batch, but each issue's check alone cannot tell which.",
+    "A and B both hold two ballots at T1, and two opaque ballots at T1 are candidates of both. Each counts in each issue's F, so both first-T2 ballots (lines 10 and 11) are unresolved. Two opaque ballots are needed: with one, every assignment leaves A or B short, which only a search over assignments could prove (INVALID) — the over-reporting ADR-0034 keeps out of vectors.",
   ),
   bad(
     "128-opaque-off-one-issues-interval",
@@ -305,5 +306,34 @@ export const opaqueBatchingVectors: Vector[] = [
     7,
     ["ET-22a", "ET-24", "ET-24b", "EV-17"],
     "The 116 shape with an unregistered participant_registered where the opaque ballot was. Only vote_cast carries ballots (ET-22a), so it is no candidate: the two-ballot T1 batch is a definite ET-24 failure at line 7, and INVALID outranks the PARTIAL its own line would give. A verifier that treats every unregistered event as a possible ballot reports PARTIAL 6, 7 instead.",
+  ),
+  bad(
+    "133-candidate-before-the-runs-window",
+    lines(
+      chain((c) => {
+        const a = c.issue("Batch A", 2);
+        c.issue("Batch B", 2);
+        opaque(c, a.hash, T2);
+        votes(c, a.hash, T1, 3);
+        votes(c, a.hash, T2, 2);
+        votes(c, a.hash, 12, 1);
+      }),
+    ),
+    10,
+    ["ET-24", "ET-24b"],
+    "The opaque ballot at T2 (line 4) comes before the T1 run, so it lies before w = seq(P(f)) = 7 for the T2 run and is not counted in its F. The two-ballot T2 run is a definite ET-24 failure at line 10, and INVALID outranks the earlier unresolved lines. Measuring F from c instead of w would count it and report PARTIAL.",
+  ),
+  partial(
+    "134-candidate-at-a-run-starts-instant",
+    chain((c) => {
+      const a = c.issue("Batch A", 2);
+      c.issue("Batch B", 2);
+      opaque(c, a.hash, T2);
+      votes(c, a.hash, T1, 3);
+      votes(c, a.hash, T2, 1);
+    }),
+    [4, 5, 8],
+    ["ET-24a", "ET-24b"],
+    "An opaque ballot at T2 before A's full T1 run. If it is A's, A left T2 before T1, so the ballot at T2 (line 8) returns to a closed instant; if not, line 8 starts a fresh batch. ET-24b's run-start clause ts(U) = ts(L) leaves line 8 unresolved; line 5 is unresolved because the opaque ballot could end a batch before it.",
   ),
 ];

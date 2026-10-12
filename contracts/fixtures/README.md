@@ -4,7 +4,7 @@
 **Status:** DRAFTING (Phase 0 · T5, T5j, ADR-0009, ADR-0010, ADR-0011). Not
 frozen.
 
-**132 vectors** — 21 `VALID`, 13 `PARTIAL`, 98 `INVALID`. They are numbered in
+**134 vectors** — 21 `VALID`, 14 `PARTIAL`, 99 `INVALID`. They are numbered in
 category order: `VALID` (`001`–`007`), `PARTIAL` (`008`–`011`), then `INVALID` —
 the envelope and Stage A checks (`012`–`042`), the export framing and canonical
 line form (`043`–`052`), `--head` (`053`–`054`), the Stage B type semantics
@@ -35,7 +35,7 @@ wrong `--head`, still `INVALID` at the last line (EX-19). No vector gives both
 inputs wrong, or a wrong `--chain` on an export already `INVALID` elsewhere: the
 spec does not say which line wins there.
 
-`116`–`130` cover batch checks beside ballots a verifier cannot read
+`116`–`134` cover batch checks beside ballots a verifier cannot read
 (`event-types.md` ET-18b, ET-22a, ET-24b; ADR-0034). An opaque ballot is
 `vote_cast` at version 1000000, which EV-19 reserves. `116`–`123` are ADR-0034's
 eight cases: an opaque ballot that could complete a batch leaves the check
@@ -55,12 +55,14 @@ own line, never `PARTIAL`. `131` pins the other direction: an opaque ballot
 before a full run leaves only the boundary it could split unresolved, and the
 next run start (line 11) is resolved and not listed. `132` pins ET-22a's "only
 `vote_cast` carries ballots": an unregistered `participant_registered` inside a
-short run is no candidate, so the run fails definitely (`INVALID` 7).
+short run is no candidate, so the run fails definitely (`INVALID` 7). `133`
+pins that F counts only after w = seq(P(f)) (an earlier candidate is not
+counted, so `INVALID` 10), and `134` the run-start clause ts(U) = ts(L).
 
 **These vectors pin only cases where the conservative rule and the exact
 all-assignments rule agree** (ADR-0034 decision 7), so ET-24b can be tightened
 later without contradicting a frozen vector. `docs/security/attacks/check-adr-0034-agreement.py`
-reads `116`–`129`, `131` and `132` from this directory and evaluates both rules on each; every
+reads `116`–`129` and `131`–`134` from this directory and evaluates the conservative rule, the exact rule as ET-24b states it, and a chain-wide reading of the exact rule on each; every
 vector must report `ok`. The conservative rule's over-reporting is covered by
 verifier unit tests, never here.
 

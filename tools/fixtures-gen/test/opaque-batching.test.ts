@@ -8,9 +8,11 @@ import { vectors } from "../src/vectors/index.js";
 
 // ADR-0034's vectors. The verdicts are declared from ET-18b/ET-24b and checked
 // for agreement with the exact rule by docs/security/attacks/
-// check-adr-0034-agreement.py; this file pins the shapes that make each vector
-// test what its note says, so an edit to the builder cannot quietly turn one
-// into a different test.
+// check-adr-0034-agreement.py. The first test below is only a change detector
+// (it restates the declarations, so it proves nothing about their truth); the
+// shape tests after it are the substance: they pin what makes each vector test
+// what its note says, so an edit to the builder cannot quietly turn one into a
+// different test.
 const expected = [
   ["116-opaque-member", "PARTIAL", [6, 7]],
   ["117-opaque-payload-names-other-issue", "PARTIAL", [6, 7]],
@@ -23,12 +25,14 @@ const expected = [
   ["124-ballot-of-unreadable-issue", "PARTIAL", [3, 4]],
   ["125-two-opaque-ballots-fill-a-batch", "PARTIAL", [5, 6, 7]],
   ["126-opaque-before-first-ballot", "PARTIAL", [4, 7]],
-  ["127-issues-share-an-instant", "PARTIAL", [6, 9, 10]],
+  ["127-issues-share-an-instant", "PARTIAL", [6, 7, 10, 11]],
   ["128-opaque-off-one-issues-interval", "INVALID", 7],
   ["129-opaque-before-the-issue", "INVALID", 7],
   ["130-opaque-ballot-malformed-payload", "INVALID", 6],
   ["131-opaque-in-an-earlier-run", "PARTIAL", [7, 8]],
   ["132-unregistered-non-ballot-is-no-candidate", "INVALID", 7],
+  ["133-candidate-before-the-runs-window", "INVALID", 10],
+  ["134-candidate-at-a-run-starts-instant", "PARTIAL", [4, 5, 8]],
 ] as const;
 
 const fixtures = resolve(

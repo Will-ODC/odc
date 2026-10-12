@@ -158,8 +158,13 @@ def conservative(chain):
     return verdict(definite, unresolved, opaque_lines(chain))
 
 
-def exact(chain, allow_none, at_or_before):
-    """The all-assignments rule, by exhaustive search."""
+def exact(chain, allow_none, at_or_before, chain_level=False):
+    """The all-assignments rule, by exhaustive search.
+
+    chain_level: a failure is proved at L when every assignment breaks ET-24 or
+    ET-24a somewhere on the chain (any issue) at or before L, not only in L's
+    own issue. It can prove an INVALID the per-issue reading cannot.
+    """
     issues = issues_of(chain)
     us = [e for e in chain if e["kind"] == "U"]
     choices = []
@@ -184,6 +189,12 @@ def exact(chain, allow_none, at_or_before):
         outcomes.append((fails, by_issue))
     definite = set(et23_failures(chain, issues))
     unresolved = set(et18b_lines(chain))
+    if chain_level:
+        reg_lines = {e["line"] for e in registered}
+        for L in sorted(reg_lines):
+            if all(any(x <= L and x in reg_lines for x in fails) for fails, _ in outcomes):
+                definite.add(L)
+                break
     for L in registered:
         name = L["issue"]
         if at_or_before:
@@ -191,6 +202,8 @@ def exact(chain, allow_none, at_or_before):
             mine = [L["line"] in fails for fails, _ in outcomes]
         else:
             each = mine = [L["line"] in fails for fails, _ in outcomes]
+        # any(mine): the proved failure is attributed to a line that itself fails
+        # under some assignment, so INVALID never names a line that always passes.
         if all(each) and any(mine):
             definite.add(L["line"])
         elif len(set(mine)) > 1:
@@ -203,7 +216,7 @@ OTHER_REGISTERED = {("participant_registered", 1)}
 # The ET-24b vectors of tools/fixtures-gen/src/vectors/opaque-batching.ts. 130
 # is left out on purpose: its malformed payload is an EV-16 Stage A failure
 # that no batch rule reaches.
-VECTOR_IDS = [f"{n}-" for n in [*range(116, 130), 131, 132]]
+VECTOR_IDS = [f"{n}-" for n in [*range(116, 130), 131, 132, 133, 134]]
 
 
 def ms(ts):
@@ -253,14 +266,19 @@ def main():
         )
         cons = conservative(chain)
         canonical = exact(chain, allow_none=True, at_or_before=True)
+        chain_wide = exact(chain, allow_none=True, at_or_before=True, chain_level=True)
         others = {
             "per-line": exact(chain, allow_none=True, at_or_before=False),
             "must-pick": exact(chain, allow_none=False, at_or_before=True),
         }
-        ok = cons == canonical == declared
+        # Decision 7 is read strictly: the vector must agree with the per-issue
+        # exact rule the spec states AND with the chain-wide reading, so a later
+        # tightening in either direction cannot contradict it.
+        ok = cons == canonical == chain_wide == declared
         bad += not ok
         note = "".join(f" [{k} reading: {r}]" for k, r in others.items() if r != canonical)
-        print(f"{'ok ' if ok else 'BAD'} {v['id']}: conservative={cons} exact={canonical} declared={declared}{note}")
+        wide = "" if chain_wide == canonical else f" chain-wide={chain_wide}"
+        print(f"{'ok ' if ok else 'BAD'} {v['id']}: conservative={cons} exact={canonical}{wide} declared={declared}{note}")
     print(f"{len(picked) - bad} agree, {bad} disagree ({len(picked)} vectors)")
     return int(bad > 0)
 
