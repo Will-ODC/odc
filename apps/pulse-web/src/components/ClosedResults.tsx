@@ -7,7 +7,7 @@ import { ViewState } from "./ViewState.js";
 /**
  * A closed question's results, in place of the question, once asked for.
  *
- * Unlike `<AfterVote>`, the counts are not already in hand - they are fetched
+ * Unlike `<VoteCard>`, the counts are not already in hand - they are fetched
  * when "See results" is pressed - so this owes the other states too: loading,
  * and a failure with a way to try again. The empty state is the panel's own:
  * nobody answering is said in `<ResultsPanel>`, which keeps its way out.

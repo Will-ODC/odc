@@ -15,21 +15,21 @@ belong to `services/web` only.
 
 | Surface          | What it is                                      | Status                                 |
 | ---------------- | ----------------------------------------------- | -------------------------------------- |
-| `apps/pulse-web` | Pulse's story client, charter-EXEMPT            | **Live** — where UI work happens today |
+| `apps/pulse-web` | Pulse's conversation client, charter-EXEMPT     | **Live** — where UI work happens today |
 | `services/web`   | The charter-governed human client               | Phase 2, not started                   |
 | `docs/mockups/`  | Hand-authored HTML decks — the design of record | See `odc-design`                       |
 
 ## The stack you are writing against (`apps/pulse-web`)
 
-React 19 · Vite 7 · TypeScript · vitest 3. Three modules already exist, are
+React 19 · Vite 7 · TypeScript · vitest 4. The modules already exist, are
 pure and tested, and decide things the screens only render:
 
-| Module              | What it gives you                                                                   |
-| ------------------- | ----------------------------------------------------------------------------------- |
-| `src/flow/route.ts` | `Route` union and `routeFrom` / `pathOf` — which of the three places a URL names    |
-| `src/flow/swipe.ts` | `isSwipeable`, and the gesture maths behind the two-choice ballot                   |
-| `src/api/types.ts`  | `Poll`, `Ballot = number[]`, `Results`, `CastOutcome`, `Me`, `PulseApi`, `ApiError` |
-| `src/api/http.ts`   | `HttpPulseApi` — since #118 the only implementation of `PulseApi`                   |
+| Module                     | What it gives you                                                                   |
+| -------------------------- | ----------------------------------------------------------------------------------- |
+| `src/flow/route.ts`        | `Route` union and `routeFrom` / `pathOf` — which of the three places a URL names    |
+| `src/flow/conversation.ts` | Conversation state, saved answers and next-question decisions                       |
+| `src/api/types.ts`         | `Poll`, `Ballot = number[]`, `Results`, `CastOutcome`, `Me`, `PulseApi`, `ApiError` |
+| `src/api/http.ts`          | `HttpPulseApi` — since #118 the only implementation of `PulseApi`                   |
 
 Facts that will bite you if you assume otherwise:
 
@@ -56,7 +56,7 @@ Facts that will bite you if you assume otherwise:
 src/
   main.tsx          entry — mounts <App>, nothing else
   App.tsx           picks the screen for the current Step; owns no screen markup
-  screens/          one file per place: SignIn, Redeem, Run, and the two ballots
+  screens/          one file per place: SignIn, Redeem, Conversation, ChatPreview
   components/       reusable, screen-agnostic pieces
   hooks/            state + effects (use-poll.ts, use-cast-vote.ts)
   api/  flow/       already exist — pure, no React
@@ -75,9 +75,7 @@ imports from `api/`.
    returns markup. It does not fetch, does not touch `PulseApi`, does not read
    global state. Data enters at the screen, which gets it from a hook.
 3. **No logic in JSX.** Past a single ternary, it moves — pure decisions to
-   `flow/`, stateful ones to a hook. `swipe.ts` is the precedent: it decides
-   which ballot a poll needs and where a drag landed, and the screen only
-   renders that.
+   `flow/`, stateful ones to a hook. `conversation.ts` decides history and navigation; the screen renders it.
 4. **Name for what it is, not where it sits.** `<ChoiceRow>`, never
    `<VoteScreenChoiceRow>` — a screen-specific name is a promise that you will
    copy it next time instead of reusing it.
@@ -98,16 +96,16 @@ imports from `api/`.
 The seven pulse screens share these seams; build them as components the first
 time a second screen needs one, and check here before inventing a new name:
 
-| Component       | Used by                                      |
-| --------------- | -------------------------------------------- |
-| `ScreenFrame`   | every screen — the phone-sized pane          |
-| `Chip`          | "Official Ballot · Closes Friday", "Counted" |
-| `PrimaryButton` | Continue / Cast / Change it                  |
-| `ChoiceRow`     | vote, already-voted, closed states           |
-| `ResultBar`     | results (count · %)                          |
-| `StatPair`      | bite 2, results                              |
-| `SwipeDeck`     | the left/right vote container                |
-| `FinePrint`     | "reactions are opinion, not a vote"          |
+| Component       | Used by                                           |
+| --------------- | ------------------------------------------------- |
+| `ScreenFrame`   | every screen — the phone-sized pane               |
+| `Chip`          | "Official Ballot · Closes Friday", "Counted"      |
+| `PrimaryButton` | Continue / Cast / Change it                       |
+| `ChoiceRow`     | vote, already-voted, closed states                |
+| `ResultBar`     | results (count · %)                               |
+| `StatPair`      | bite 2, results                                   |
+| `VoteCard`      | controlled selection, submit and in-place results |
+| `FinePrint`     | "reactions are opinion, not a vote"               |
 
 ## Every view owes four states — no exceptions
 
@@ -140,11 +138,9 @@ before building screens in a palette that isn't decided.
 - Disable submit while pending; never let a double-tap cast twice.
 - **Always confirm a destructive or binding action** — "You're voting YES
   on… — confirm?" Picking and casting are separate presses.
-  **One scoped exception, `docs/decisions/0022-one-press-casts-and-says-so.md`:**
-  a pulse ballot casts on one press, because the answer is changeable until the
-  poll closes — and it must then say so on screen, which is what stands in for
-  the confirming press. Reversibility is what buys the exception; anything not
-  reversible, in pulse or anywhere else, still confirms.
+  Pulse's current card uses pick-then-Submit (ADR-0035). ADR-0022's one-press
+  exception described the retired swipe ballot; do not apply it to the
+  conversation card or AI-app voting.
 - A vote is changeable until close: `changed` is a normal outcome, not an
   error, and the UI says so plainly rather than treating it as a correction.
 
@@ -155,8 +151,7 @@ keyboard operability. **Keyboard-only pass before merging any interactive
 component** — no exceptions for "it's just a card".
 
 Gestures are an addition, never the only path: every swipe or drag has an
-equivalent tap target and an arrow-key path (`01-claim.html` already wires
-pointer drag, tap-a-half, and ←/→). Animation respects
+equivalent tap target and an arrow-key path (the current card supports numbered keys and ordinary form controls). Animation respects
 `prefers-reduced-motion`.
 
 ## Testing UI
