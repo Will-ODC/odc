@@ -27,7 +27,7 @@ export function Conversation({
   /** Runs once the server has signed this person out everywhere. */
   onSignedOut?: () => void;
 }) {
-  const { session, progress, signOut } = useSession(api, onSignedOut);
+  const { session, progress, signOut, dismiss } = useSession(api, onSignedOut);
   const [at, setAt] = useState(pollId);
   const [answers, setAnswers] = useState<Answer[]>([]);
   const [busy, setBusy] = useState(false);
@@ -45,7 +45,12 @@ export function Conversation({
   return (
     <div className="conversation">
       <header className="conversation__banner">
-        <Banner session={session} progress={progress} onSignOut={signOut} />
+        <Banner
+          session={session}
+          progress={progress}
+          onSignOut={signOut}
+          onCancel={dismiss}
+        />
       </header>
       <aside className="conversation__sidebar">
         <nav aria-label="Answered">
@@ -93,10 +98,12 @@ function Banner({
   session,
   progress,
   onSignOut,
+  onCancel,
 }: {
   session: Session;
   progress: SignOutProgress;
   onSignOut: () => void;
+  onCancel: () => void;
 }) {
   switch (session.status) {
     case "loading":
@@ -109,6 +116,7 @@ function Banner({
               email={session.me.email}
               progress={progress}
               onSignOut={onSignOut}
+              onCancel={onCancel}
             />
           }
         />

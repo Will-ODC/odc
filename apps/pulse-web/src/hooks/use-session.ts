@@ -1,5 +1,6 @@
-import { useCallback, useEffect, useState } from "react";
+import { useCallback, useEffect, useRef, useState } from "react";
 import type { Me, PulseApi } from "../api/types.js";
+import type { SignOutStatus } from "../components/SignedIn.js";
 
 /**
  * Who is signed in, as far as the bar across the top needs to know.
@@ -14,11 +15,8 @@ export type Session =
   | { status: "signedIn"; me: Me }
   | { status: "unknown" };
 
-/** How far a sign-out has got. */
-export type SignOutProgress =
-  | { status: "idle" }
-  | { status: "sending" }
-  | { status: "failed"; message: string };
+/** How far a sign-out has got: the shape `SignedIn` renders. */
+export type SignOutProgress = SignOutStatus;
 
 /**
  * Ask once who is signed in, and sign them out on request.
@@ -38,6 +36,8 @@ export function useSession(
   session: Session;
   progress: SignOutProgress;
   signOut: () => void;
+  /** Forget a failure once the person has put the question away. */
+  dismiss: () => void;
 } {
   const [session, setSession] = useState<Session>({ status: "loading" });
   const [progress, setProgress] = useState<SignOutProgress>({
@@ -60,22 +60,34 @@ export function useSession(
     };
   }, [api]);
 
+  // The hook's own guard, not only the button's: one request at a time.
+  const sending = useRef(false);
+
   const signOut = useCallback(() => {
+    if (sending.current) return;
+    sending.current = true;
     setProgress({ status: "sending" });
     api.signOut().then(
       () => {
+        sending.current = false;
         setProgress({ status: "idle" });
         setSession({ status: "signedOut" });
         onSignedOut?.();
       },
-      () =>
+      () => {
+        sending.current = false;
         setProgress({
           status: "failed",
           message:
             "You are still signed in. Check your connection and try again.",
-        }),
+        });
+      },
     );
   }, [api, onSignedOut]);
 
-  return { session, progress, signOut };
+  const dismiss = useCallback(() => {
+    if (!sending.current) setProgress({ status: "idle" });
+  }, []);
+
+  return { session, progress, signOut, dismiss };
 }

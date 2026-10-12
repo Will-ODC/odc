@@ -36,7 +36,7 @@
   cursor: pointer;
 }
 
-.signed-in__action:hover:not(:disabled) {
+.signed-in__action:hover:not(:disabled):not([aria-disabled="true"]) {
   color: var(--ballot-ink);
 }
 
@@ -45,7 +45,8 @@
   outline-offset: 2px;
 }
 
-.signed-in__action:disabled {
+.signed-in__action:disabled,
+.signed-in__action[aria-disabled="true"] {
   cursor: default;
   text-decoration: none;
 }

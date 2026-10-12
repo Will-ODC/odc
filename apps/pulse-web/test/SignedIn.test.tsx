@@ -15,6 +15,7 @@ describe("who is signed in, and the way out", () => {
         email="voter@example.org"
         progress={idle}
         onSignOut={vi.fn()}
+        onCancel={vi.fn()}
       />,
     );
     expect(screen.getByText("voter@example.org")).toBeTruthy();
@@ -33,6 +34,7 @@ describe("who is signed in, and the way out", () => {
         email="voter@example.org"
         progress={idle}
         onSignOut={onSignOut}
+        onCancel={vi.fn()}
       />,
     );
     await user.click(screen.getByRole("button", { name: "Sign out" }));
@@ -52,6 +54,7 @@ describe("who is signed in, and the way out", () => {
         email="voter@example.org"
         progress={idle}
         onSignOut={onSignOut}
+        onCancel={vi.fn()}
       />,
     );
     await user.click(screen.getByRole("button", { name: "Sign out" }));
@@ -68,6 +71,7 @@ describe("who is signed in, and the way out", () => {
         email="voter@example.org"
         progress={idle}
         onSignOut={onSignOut}
+        onCancel={vi.fn()}
       />,
     );
     await user.tab();
@@ -95,6 +99,7 @@ describe("who is signed in, and the way out", () => {
         email="voter@example.org"
         progress={idle}
         onSignOut={vi.fn()}
+        onCancel={vi.fn()}
       />,
     );
     await user.click(screen.getByRole("button", { name: "Sign out" }));
@@ -103,10 +108,12 @@ describe("who is signed in, and the way out", () => {
         email="voter@example.org"
         progress={{ status: "sending" }}
         onSignOut={vi.fn()}
+        onCancel={vi.fn()}
       />,
     );
+    // aria-disabled, not disabled: focus must not fall off to the page.
     const confirm = screen.getByRole("button", { name: "Signing out…" });
-    expect((confirm as HTMLButtonElement).disabled).toBe(true);
+    expect(confirm.getAttribute("aria-disabled")).toBe("true");
   });
 
   it("says plainly when signing out failed", async () => {
@@ -116,6 +123,7 @@ describe("who is signed in, and the way out", () => {
         email="voter@example.org"
         progress={idle}
         onSignOut={vi.fn()}
+        onCancel={vi.fn()}
       />,
     );
     await user.click(screen.getByRole("button", { name: "Sign out" }));
@@ -124,6 +132,7 @@ describe("who is signed in, and the way out", () => {
         email="voter@example.org"
         progress={{ status: "failed", message: "You are still signed in." }}
         onSignOut={vi.fn()}
+        onCancel={vi.fn()}
       />,
     );
     expect(screen.getByRole("alert").textContent).toBe(
@@ -132,5 +141,43 @@ describe("who is signed in, and the way out", () => {
     expect(
       screen.getByRole("button", { name: "Sign out everywhere" }),
     ).toBeTruthy();
+  });
+
+  /*
+   * The sentence is the whole point of the second press, so it must reach a
+   * screen reader, which lands on the button rather than reading the page.
+   */
+  it("tells a screen reader what signing out costs", async () => {
+    const user = userEvent.setup();
+    render(
+      <SignedIn
+        email="voter@example.org"
+        progress={idle}
+        onSignOut={vi.fn()}
+        onCancel={vi.fn()}
+      />,
+    );
+    await user.click(screen.getByRole("button", { name: "Sign out" }));
+    const confirm = screen.getByRole("button", { name: "Sign out everywhere" });
+    const describedBy = confirm.getAttribute("aria-describedby") ?? "";
+    expect(document.getElementById(describedBy)?.textContent).toMatch(
+      /every device/,
+    );
+  });
+
+  it("tells the parent when the question is put away", async () => {
+    const onCancel = vi.fn();
+    const user = userEvent.setup();
+    render(
+      <SignedIn
+        email="voter@example.org"
+        progress={idle}
+        onSignOut={vi.fn()}
+        onCancel={onCancel}
+      />,
+    );
+    await user.click(screen.getByRole("button", { name: "Sign out" }));
+    await user.click(screen.getByRole("button", { name: "Cancel" }));
+    expect(onCancel).toHaveBeenCalledTimes(1);
   });
 });

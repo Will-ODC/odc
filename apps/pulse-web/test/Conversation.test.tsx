@@ -378,3 +378,52 @@ it("stays signed in, and says so, when signing out fails", async () => {
     banner().getByRole("button", { name: "Sign out everywhere" }),
   ).toBeTruthy();
 });
+
+it("sends one sign-out at a time, and hands off only once it is done", async () => {
+  let finish: () => void = () => {};
+  const signOut = vi.fn(
+    () =>
+      new Promise<void>((resolve) => {
+        finish = resolve;
+      }),
+  );
+  const onSignedOut = vi.fn();
+  const user = userEvent.setup();
+  render(
+    <Conversation
+      api={stubApi({ me: () => Promise.resolve(voter), signOut })}
+      pollId="ads-free"
+      onSignedOut={onSignedOut}
+    />,
+  );
+  await user.click(await banner().findByRole("button", { name: "Sign out" }));
+  await user.click(
+    banner().getByRole("button", { name: "Sign out everywhere" }),
+  );
+  const pending = banner().getByRole("button", { name: "Signing out…" });
+  expect(pending.getAttribute("aria-disabled")).toBe("true");
+  await user.click(pending);
+  expect(signOut).toHaveBeenCalledTimes(1);
+  expect(onSignedOut).not.toHaveBeenCalled();
+  finish();
+  await waitFor(() => expect(onSignedOut).toHaveBeenCalledTimes(1));
+});
+
+it("does not show an old failure when the question is asked again", async () => {
+  const signOut = vi.fn(() => Promise.reject(new ApiError(503, "down")));
+  const user = userEvent.setup();
+  render(
+    <Conversation
+      api={stubApi({ me: () => Promise.resolve(voter), signOut })}
+      pollId="ads-free"
+    />,
+  );
+  await user.click(await banner().findByRole("button", { name: "Sign out" }));
+  await user.click(
+    banner().getByRole("button", { name: "Sign out everywhere" }),
+  );
+  await banner().findByRole("alert");
+  await user.click(banner().getByRole("button", { name: "Cancel" }));
+  await user.click(banner().getByRole("button", { name: "Sign out" }));
+  expect(banner().queryByRole("alert")).toBeNull();
+});
