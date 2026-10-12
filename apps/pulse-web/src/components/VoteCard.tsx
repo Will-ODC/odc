@@ -154,7 +154,7 @@ export function VoteCard({
       >
         <span className="vote-card__summary">{question}</span>
         <button type="button" data-expand onClick={() => onCollapse(false)}>
-          Show vote card
+          Vote
         </button>
         <button type="button" onClick={onClose}>
           Close
@@ -216,9 +216,6 @@ export function VoteCard({
                 Next
               </button>
             ) : null}
-            <button type="button" onClick={() => onCollapse(true)}>
-              Hide
-            </button>
           </div>
           <p className="vote-card__note">{privacyNote}</p>
         </>

@@ -169,3 +169,15 @@ describe("the two directions agree", () => {
     });
   }
 });
+
+it("opens and round-trips the separate live conversation route", () => {
+  expect(routeFrom("/Conversation/?poll=pay-for-it")).toEqual({
+    kind: "conversation",
+    pollId: "pay-for-it",
+  });
+  for (const pollId of [FIRST_POLL_ID, "a/b?x=1"]) {
+    const route = { kind: "conversation" as const, pollId };
+    expect(routeFrom(pathOf(route))).toEqual(route);
+  }
+  expect(routeFrom("/").kind).toBe("run");
+});

@@ -1,0 +1,112 @@
+// @vitest-environment jsdom
+import { cleanup, render, screen, within } from "@testing-library/react";
+import userEvent from "@testing-library/user-event";
+import { afterEach, expect, it } from "vitest";
+import { createServer } from "../../pulse/src/http/server.js";
+import { SessionSigner } from "../../pulse/src/http/session.js";
+import { ClaimService } from "../../pulse/src/identity/claim.js";
+import {
+  DomainAllowlist,
+  StaticDomainSource,
+} from "../../pulse/src/identity/allowlist.js";
+import { ConsoleMailer } from "../../pulse/src/identity/mailer.js";
+import {
+  InMemoryClaimStore,
+  InMemoryVoterStore,
+} from "../../pulse/src/identity/store.js";
+import { InMemoryVotingStore } from "../../pulse/src/voting/store.js";
+import { InMemorySuggestionStore } from "../../pulse/src/voting/suggestions.js";
+import { HttpPulseApi } from "../src/api/http.js";
+import { Conversation } from "../src/screens/Conversation.js";
+
+afterEach(cleanup);
+it("approval cast, replacement, network retry and closed results work over the real HTTP API", async () => {
+  const voters = new InMemoryVoterStore();
+  const votes = new InMemoryVotingStore();
+  await votes.createPoll({
+    id: "approval",
+    question: "Which improvements?",
+    choices: ["Park", "Library", "Rink"],
+    method: "approval",
+    next: [null, null, null],
+  });
+  await votes.createPoll({
+    id: "closed",
+    question: "An ended question",
+    choices: ["No", "Yes"],
+    method: "single",
+    closesAt: new Date(Date.now() - 1000),
+  });
+  const app = await createServer({
+    voters,
+    votes,
+    suggestions: new InMemorySuggestionStore(),
+    signer: new SessionSigner("conversation-test-secret-long-enough"),
+    secureCookies: false,
+    claims: new ClaimService({
+      membership: new DomainAllowlist(new StaticDomainSource([])),
+      voters,
+      claims: new InMemoryClaimStore(),
+      mailer: new ConsoleMailer(() => {}),
+      linkFor: (token) => `http://localhost/sign-in?token=${token}`,
+    }),
+  });
+  await app.listen({ port: 0, host: "127.0.0.1" });
+  const address = app.server.address();
+  if (!address || typeof address === "string") throw new Error("No port");
+  let cookie = "";
+  let fail = false;
+  const request: typeof fetch = async (input, init) => {
+    if (fail && init?.method === "POST") {
+      fail = false;
+      throw new Error("Network unavailable");
+    }
+    const headers = new Headers(init?.headers);
+    if (cookie) headers.set("cookie", cookie);
+    const response = await fetch(input, { ...init, headers });
+    const set = response.headers.getSetCookie();
+    if (set.length) cookie = set.map((value) => value.split(";")[0]).join("; ");
+    return response;
+  };
+  const api = new HttpPulseApi(`http://127.0.0.1:${address.port}/api`, request);
+  try {
+    const view = render(<Conversation api={api} pollId="approval" />);
+    const user = userEvent.setup();
+    await screen.findByRole("heading", {
+      name: "Which improvements?",
+      level: 1,
+    });
+    await user.click(screen.getByRole("button", { name: "Vote" }));
+    let card = within(screen.getByRole("region"));
+    await user.click(card.getByRole("checkbox", { name: "Park" }));
+    await user.click(card.getByRole("checkbox", { name: "Rink" }));
+    await user.click(card.getByRole("button", { name: "Submit" }));
+    await screen.findByText("Counted.");
+    expect(await api.myBallot("approval")).toEqual([0, 2]);
+    expect(card.getAllByText("yours")).toHaveLength(2);
+    await user.click(card.getByRole("button", { name: "Change my answer" }));
+    await user.click(card.getByRole("checkbox", { name: "Park" }));
+    fail = true;
+    await user.click(card.getByRole("button", { name: "Submit" }));
+    expect(await screen.findByRole("alert")).toHaveProperty(
+      "textContent",
+      expect.stringContaining("Check your connection"),
+    );
+    await user.click(card.getByRole("button", { name: "Try again" }));
+    await screen.findByText("That replaces your earlier answer.");
+    expect(await api.myBallot("approval")).toEqual([2]);
+    expect((await api.results("approval")).voters).toBe(1);
+    view.unmount();
+    render(<Conversation api={api} pollId="closed" />);
+    await screen.findByRole("heading", { name: "An ended question", level: 1 });
+    await user.click(screen.getByRole("button", { name: "Vote" }));
+    await screen.findByText("This one has closed.");
+    card = within(screen.getByRole("region"));
+    expect(card.queryByRole("button", { name: "Submit" })).toBeNull();
+    await user.click(screen.getByRole("button", { name: "See results" }));
+    await screen.findByText("Nobody answered this one.");
+  } finally {
+    cleanup();
+    await app.close();
+  }
+});

@@ -23,7 +23,9 @@ export type Route =
    * The chat-voting prototype (#228). Sample data, no server calls; reachable
    * only by typing the path, so nobody arrives in it by accident.
    */
-  | { kind: "chatPreview" };
+  | { kind: "chatPreview" }
+  /** Live conversation page (#301); the default switch is #302. */
+  | { kind: "conversation"; pollId: string };
 
 /**
  * Where a run begins when the URL does not say.
@@ -65,6 +67,12 @@ export function routeFrom(href: string): Route {
     return token ? { kind: "redeem", token } : { kind: "signIn" };
   }
 
+  if (path === "/conversation")
+    return {
+      kind: "conversation",
+      pollId: url.searchParams.get("poll") || FIRST_POLL_ID,
+    };
+
   if (path === CHAT_PREVIEW_PATH) return { kind: "chatPreview" };
 
   // `?poll=` so a run can be started anywhere in the graph without a rebuild.
@@ -80,6 +88,10 @@ export function pathOf(route: Route): string {
       return `${SIGN_IN_PATH}?token=${encodeURIComponent(route.token)}`;
     case "chatPreview":
       return CHAT_PREVIEW_PATH;
+    case "conversation":
+      return route.pollId === FIRST_POLL_ID
+        ? "/conversation"
+        : `/conversation?poll=${encodeURIComponent(route.pollId)}`;
     case "run":
       // The default start is the bare path, so the common URL stays clean and
       // shareable rather than carrying a parameter that changes nothing.
