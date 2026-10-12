@@ -213,11 +213,23 @@ Rule ET-24b is conservative by design: it may list a line that no reading of
 the opaque ballots would change, and never reports an `INVALID` that only a
 search over every reading could prove.
 
-Cost: per opaque ballot, one multiple test per distinct issue interval plus a
-constant-time update per issue it is a candidate of (the update ET-24b's "One
-pass" note describes); per registered ballot, a constant number of map
-operations plus a pass over the candidate instants seen since its issue's
-previous registered ballot.
+Cost. **Memory** is linear in the export: each opaque ballot is stored once,
+as its `seq` in a chain-wide list for its instant; each registered issue keeps
+a fixed handful of numbers plus the instants its own registered ballots used
+(which ET-24a needs anyway); and each distinct issue interval keeps a
+fixed-size summary. Nothing is kept per pair of issue and opaque ballot.
+**Time**: recording an opaque ballot is constant (amortised) whatever the
+number of issues; a registered ballot costs a constant number of map
+operations and one binary search. The interval summaries are brought up to
+date lazily, testing each opaque ballot once against each interval that a
+registered ballot later asks about. That is one integer remainder per (opaque
+ballot, distinct interval) pair, with no allocation, so the worst case is
+that product, reached only when issues declare many distinct intervals.
+Measured on a chain of *n* issues, *n* opaque ballots at distinct instants
+and one ballot per issue: 1.2 MB, 3.6 MB and 7.2 MB exports (*n* = 1000,
+3000, 6000) took 0.14 s, 0.42 s and 0.83 s and allocated 16, 50 and 100 MB,
+almost all of it line parsing and signature checks. The same *n* = 3000 shape
+with 3000 distinct intervals takes the same time and memory.
 
 **A ballot of an issue this verifier cannot read (ET-18b).** An
 `issue_created` at an unregistered version is listed in `PARTIAL` and is still

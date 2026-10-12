@@ -1,5 +1,7 @@
 package verify
 
+import "sort"
+
 // Ballot publication discipline (event-types.md v12: ET-23, ET-24, ET-24a,
 // and ET-24b beside ballots the verifier cannot read).
 //
@@ -30,60 +32,23 @@ type issueInfo struct {
 	b issueBatches
 }
 
-// issueBatches is the one-pass state of ET-24b's informative "One pass"
-// paragraph, per registered issue. Every field is decided from lines already
-// scanned, so each line's outcome is fixed when the scan reaches it (EX-16).
+// issueBatches is the per-issue state of ET-24/ET-24a over the issue's
+// registered ballots alone: O(1) fields plus the set of instants its
+// registered ballots used (which ET-24a needs anyway). Nothing here grows
+// with opaque ballots: every ET-24b question about candidates is asked of the
+// chain-wide ballotState when a registered ballot of this issue arrives.
 //
 // ts values are keyed by their millisecond offset; ES-20 fixes one textual
 // form per instant, so offset equality is ts equality, and nothing here ever
 // orders two ts values (ES-21).
 type issueBatches struct {
-	// Registered ballots.
-	have    bool               // a registered ballot of I exists (so P(L) exists for the next L)
-	used    map[int64]struct{} // instants of I's registered ballots (ET-24a)
-	runTS   int64              // t: instant of the current known run
-	runSize int64              // |R| of the current known run
-
-	// Candidates.
-	runF    int64              // F for the current run: candidates with w < seq(U), ts(U) = runTS
-	runDiff bool               // a candidate with seq(U) > seq(f) and ts(U) != runTS has been seen
-	sinceP  map[int64]int64    // candidate ts -> count, since I's last registered ballot (or c)
-	candTS  map[int64]struct{} // every candidate instant of I since c
-}
-
-// candidate records an opaque ballot at tsMS that is a candidate of this issue
-// (the caller has checked seq(U) > c and Δ | tsMS). One opaque ballot may be a
-// candidate of several issues and counts in each (ET-24b item 1).
-func (b *issueBatches) candidate(tsMS int64) {
-	if b.sinceP == nil {
-		b.sinceP = map[int64]int64{}
-	}
-	b.sinceP[tsMS]++
-	if b.candTS == nil {
-		b.candTS = map[int64]struct{}{}
-	}
-	b.candTS[tsMS] = struct{}{}
-	if b.have {
-		// seq(U) > seq(f) > w, since the current run's first ballot is
-		// already scanned.
-		if tsMS == b.runTS {
-			b.runF++
-		} else {
-			b.runDiff = true
-		}
-	}
-}
-
-// candidateSincePOtherThan reports whether a candidate with ts != tsMS has
-// been seen since P(L) (or since c when P(L) does not exist): ET-24b item
-// 4(b), first case.
-func (b *issueBatches) candidateSincePOtherThan(tsMS int64) bool {
-	for ts := range b.sinceP {
-		if ts != tsMS {
-			return true
-		}
-	}
-	return false
+	have     bool               // a registered ballot of I exists, so P(L) exists for the next L
+	lastSeq  int64              // seq(P(L)) for the next registered ballot L
+	used     map[int64]struct{} // instants of I's registered ballots (ET-24a)
+	runTS    int64              // t: instant of the current known run R
+	runSize  int64              // |R|
+	runFirst int64              // seq(f), f the first ballot of R
+	runW     int64              // w: seq(P(f)), or c when P(f) does not exist
 }
 
 // batchOutcome is the result of ET-24/ET-24a/ET-24b at one registered ballot.
@@ -96,105 +61,168 @@ const (
 )
 
 // observe decides ET-24 and ET-24a, as qualified by ET-24b, for the registered
-// ballot L of this issue at tsMS, and then records L. Every test reads only
-// what lines before L left behind.
+// ballot L of this issue at seq/tsMS, and then records L. Every test reads
+// only what lines before L left behind, so each line's outcome is fixed when
+// the scan reaches it (EX-16). The caller has checked ET-23, so Δ | ts(L) and
+// Δ | t for every known run.
 //
 // ET-24 (v12): a batch is a maximal run, in seq order among the issue's
 // registered ballots, sharing one ts. L is a run start when P(L) exists and
 // ts(P(L)) != ts(L); only a run start can fail. A known ET-24a failure (L
 // returns to an instant a registered ballot of I already used) is definite.
 // A known ET-24 failure (|R| < m) is definite iff |R| + F < m.
-func (iss *issueInfo) observe(tsMS int64) (batchOutcome, string) {
+func (iss *issueInfo) observe(s *ballotState, seq, tsMS int64) (batchOutcome, string) {
 	b := &iss.b
+	c := iss.seq
+	view := s.view(iss.intervalMS)
 	out, reason := batchPass, ""
-	switch {
-	case !b.have || tsMS == b.runTS:
+	if !b.have || tsMS == b.runTS {
 		// Not a run start: no known failure is possible. Item 4(b), first
-		// case: a candidate since P(L) (or since c) at another instant
-		// could have ended the run L extends, or opened a batch L's first
-		// ballot ends.
-		if b.candidateSincePOtherThan(tsMS) {
+		// case: a candidate after P(L) (or after c) at another instant.
+		after := c
+		if b.have {
+			after = b.lastSeq
+		}
+		if view.candidateAfterNotAt(after, tsMS) {
 			out = batchUnresolved
 		}
-	default:
+	} else {
 		// L is a run start; R is the current run, ending at P(L).
 		if _, ok := b.used[tsMS]; ok {
 			return batchFail, "ballot returns to a batch instant its issue has already left (ET-24a)"
 		}
 		if b.runSize < iss.batchMin {
-			if b.runSize+b.runF < iss.batchMin {
+			// F: candidates U with w < seq(U) < seq(L) and ts(U) = t. Every
+			// opaque ballot recorded so far is before L; ts(U) = t makes U a
+			// multiple of Δ, and w >= c makes seq(U) > c.
+			f := s.countAtAfter(b.runTS, b.runW)
+			if b.runSize+f < iss.batchMin {
 				return batchFail, "an earlier batch of this issue is under ballot_batch_min, and no ballot this verifier cannot read could fill it; this ballot proves it was not the issue's last (ET-24, ET-24b)"
 			}
 			out = batchUnresolved // item 4(a)
-		} else {
-			// Item 4(b), second case.
-			_, atL := b.candTS[tsMS]
-			if atL || b.runDiff {
-				out = batchUnresolved
-			}
+		} else if s.latestAt(tsMS) > c || view.candidateAfterNotAt(b.runFirst, b.runTS) {
+			// Item 4(b), second case: a candidate at ts(L) (Δ | ts(L), so
+			// any opaque ballot there after c is one), or one after f at an
+			// instant other than t.
+			out = batchUnresolved
 		}
 	}
 
-	// Record L. If it begins a known run (a run start, or I's first
-	// registered ballot), F for that run starts at the candidates at ts(L)
-	// seen since P(L), or since c.
+	// Record L. A ballot that begins a known run (a run start, or I's first
+	// registered ballot) fixes that run's f and w.
 	if !b.have || tsMS != b.runTS {
 		if b.used == nil {
 			b.used = map[int64]struct{}{}
 		}
 		b.used[tsMS] = struct{}{}
-		b.runTS, b.runSize = tsMS, 1
-		b.runF = b.sinceP[tsMS]
-		b.runDiff = false
+		b.runW = c
+		if b.have {
+			b.runW = b.lastSeq
+		}
+		b.runTS, b.runSize, b.runFirst = tsMS, 1, seq
 		b.have = true
 	} else {
 		b.runSize++
 	}
-	if len(b.sinceP) > 0 {
-		b.sinceP = nil
-	}
+	b.lastSeq = seq
 	return out, reason
 }
 
-// ballotState tracks the registered issues for ET-24b's candidacy test,
-// grouped by interval so that an opaque ballot's multiple test (ET-23's
-// computation) runs once per distinct interval, then updates every issue
-// sharing it. Cost per opaque ballot is one multiple test per distinct
-// interval plus one update per issue it is a candidate of — the update
-// ET-24b's "One pass" paragraph describes. A registered ballot costs a
-// constant number of map operations plus one pass over the candidate
-// instants seen since its issue's previous registered ballot.
+// ballotState is the chain-wide record of opaque ballots that ET-24b's
+// questions are answered from. Its size is linear in the number of opaque
+// ballots plus the number of distinct issue intervals; nothing is kept per
+// (issue, opaque ballot) pair, and recording an opaque ballot is O(1)
+// amortised whatever the number of issues.
+//
+// The questions, for a registered issue I (created at c, interval Δ):
+//   - "how many opaque ballots at instant t after seq a?" (F, with a >= c):
+//     atTS[t] holds the seqs at t, ascending, so it is one binary search;
+//   - "is there an opaque ballot at instant x after c?": the last seq in
+//     atTS[x];
+//   - "is there a candidate of I after seq a (a >= c) at an instant other
+//     than x?": answered by the interval view of Δ, below.
 type ballotState struct {
-	byInterval map[int64][]*issueInfo
-	intervals  []int64 // distinct intervals, in first-seen order
+	opaque []opaqueRec        // every opaque ballot, in seq order
+	atTS   map[int64][]int64  // ts -> seqs of the opaque ballots at ts, ascending
+	views  map[int64]*ivlView // Δ -> view, created on first use
+}
+
+type opaqueRec struct{ seq, ts int64 }
+
+// ivlView summarises the opaque ballots whose ts is a multiple of one
+// interval Δ: the latest such ballot, and the latest such ballot at an
+// instant other than the latest one's. That is enough to answer "a multiple
+// of Δ after seq a at an instant other than x" for any a and x. It folds in
+// opaque ballots lazily, from a cursor into ballotState.opaque, so each
+// opaque ballot is tested against Δ at most once, and only for intervals a
+// registered ballot has asked about.
+type ivlView struct {
+	cursor    int
+	have      bool
+	latestTS  int64
+	latestSeq int64
+	otherSeq  int64 // 0 when no such ballot (every seq is >= 2)
 }
 
 func newBallotState() ballotState {
-	return ballotState{byInterval: map[int64][]*issueInfo{}}
+	return ballotState{atTS: map[int64][]int64{}, views: map[int64]*ivlView{}}
 }
 
-// addIssue registers an accepted issue_created for candidacy.
-func (s *ballotState) addIssue(iss *issueInfo) {
-	if _, ok := s.byInterval[iss.intervalMS]; !ok {
-		s.intervals = append(s.intervals, iss.intervalMS)
-	}
-	s.byInterval[iss.intervalMS] = append(s.byInterval[iss.intervalMS], iss)
-}
-
-// opaqueBallot records an opaque ballot at seq with ts offset tsMS as a
-// candidate of every registered issue it is one of (ET-24b item 1). Its
-// payload is never consulted.
+// opaqueBallot records an opaque ballot. Of it only its envelope seq and ts
+// are used; its payload is never consulted ("Which ballots count", ET-24b).
 func (s *ballotState) opaqueBallot(seq, tsMS int64) {
-	for _, d := range s.intervals {
-		if tsMS%d != 0 {
+	s.opaque = append(s.opaque, opaqueRec{seq, tsMS})
+	s.atTS[tsMS] = append(s.atTS[tsMS], seq)
+}
+
+// countAtAfter counts the opaque ballots at instant ts with seq > after.
+func (s *ballotState) countAtAfter(ts, after int64) int64 {
+	seqs := s.atTS[ts]
+	i := sort.Search(len(seqs), func(i int) bool { return seqs[i] > after })
+	return int64(len(seqs) - i)
+}
+
+// latestAt is the highest seq of an opaque ballot at instant ts, or 0.
+func (s *ballotState) latestAt(ts int64) int64 {
+	seqs := s.atTS[ts]
+	if len(seqs) == 0 {
+		return 0
+	}
+	return seqs[len(seqs)-1]
+}
+
+// view returns Δ's interval view, brought up to date with every opaque ballot
+// recorded so far. The multiple test is ET-23's (ET-24b item 1).
+func (s *ballotState) view(d int64) *ivlView {
+	v := s.views[d]
+	if v == nil {
+		v = &ivlView{}
+		s.views[d] = v
+	}
+	for ; v.cursor < len(s.opaque); v.cursor++ {
+		o := s.opaque[v.cursor]
+		if o.ts%d != 0 {
 			continue
 		}
-		for _, iss := range s.byInterval[d] {
-			if seq > iss.seq {
-				iss.b.candidate(tsMS)
-			}
+		if v.have && o.ts != v.latestTS {
+			v.otherSeq = v.latestSeq
 		}
+		v.have, v.latestTS, v.latestSeq = true, o.ts, o.seq
 	}
+	return v
+}
+
+// candidateAfterNotAt reports whether an opaque ballot with seq > after, ts a
+// multiple of Δ, and ts != x has been recorded. With after >= c that is a
+// candidate of the issue (ET-24b item 1).
+func (v *ivlView) candidateAfterNotAt(after, x int64) bool {
+	if !v.have {
+		return false
+	}
+	if v.latestTS != x {
+		return v.latestSeq > after
+	}
+	return v.otherSeq > after
 }
 
 // tsMillis converts an ES-20-valid ts to milliseconds since

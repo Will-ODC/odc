@@ -4,6 +4,8 @@ import (
 	"crypto/ed25519"
 	"fmt"
 	"math/rand"
+	"regexp"
+	"runtime"
 	"sort"
 	"strings"
 	"testing"
@@ -120,11 +122,15 @@ func buildEntries(tt *testing.T, es []entry) []byte {
 		}
 		if e.kind != eRaw {
 			prev = parseLineOrFail(tt, l).hash
+		} else if m := rawHashRE.FindSubmatch(l); m != nil {
+			prev = string(m[1])
 		}
 		lines = append(lines, l)
 	}
 	return joinLines(lines)
 }
+
+var rawHashRE = regexp.MustCompile(`"hash":"([0-9a-f]{64})"}$`)
 
 func assertPartial(t *testing.T, res Result, want []int) {
 	t.Helper()
@@ -270,6 +276,11 @@ func TestET24bMoreCases(t *testing.T) {
 		// (the candidate might be A's, making L a return). A full T1 batch,
 		// U@T3, then A at T2, A at T3. Line 7 is open too: U, if A's, would
 		// be a one-ballot batch at T3 that A@T2 ends.
+		// Per-run state must restart at each run start: U (line 6) is after
+		// the T1 run's first ballot at another instant, so the T2 run start
+		// (line 7) is open; it is before the T2 run's first ballot, so the
+		// T4 run start (line 10) is resolved.
+		{name: "run_state_resets_at_run_start", es: ents(one, bals(0, 3, T1), opq(T3), bals(0, 3, T2), bal(0, T4)), lines: []int{6, 7}},
 		{name: "run_start_at_candidate_instant", es: ents(one, bals(0, 3, T1), opq(T3), bals(0, 3, T2), bals(0, 3, T3)), lines: []int{6, 7, 10}},
 	})
 }
@@ -297,20 +308,41 @@ func TestET24bCandidacyByInterval(t *testing.T) {
 
 // EV-16: an opaque ballot whose payload is not flat is INVALID at its line,
 // never PARTIAL, and is never an opaque ballot (ET-24b needs ES-15-ES-17).
+//
+// Isolating EV-16 from HA-14. HA-7 defines no encoding for a nested or float
+// value, so no conforming hash exists for such a line, and a dummy hash would
+// let a verifier missing EV-16 still reject the line at HA-14. Instead each
+// line carries the hash THIS verifier's preimage code computes when handed
+// the non-flat payload (its encoder, reached only if EV-16 were skipped,
+// writes such a value as an empty string), and the next line links to that
+// hash. So with the EV-16 check removed the line passes HA-14, the chain
+// links, and the verdict becomes PARTIAL: only EV-16 makes it INVALID at 5.
+// That is implementation-specific by necessity, and says nothing about any
+// other verifier's hashing of an un-hashable line.
 func TestET24bMalformedOpaquePayload(t *testing.T) {
-	nested := func(seq int64, prev string) []byte {
-		return []byte(fmt.Sprintf(`{"seq":%d,"type":"vote_cast","version":1000000,"payload":{"choice":{"x":1}},"ts":%q,"prev_hash":%q,"hash":%q}`,
-			seq, T1, prev, strings.Repeat("ab", 32)))
+	mk := func(payload string) func(seq int64, prev string) []byte {
+		return func(seq int64, prev string) []byte {
+			draft := []byte(fmt.Sprintf(`{"seq":%d,"type":"vote_cast","version":1000000,"payload":%s,"ts":%q,"prev_hash":%q,"hash":%q}`,
+				seq, payload, T1, prev, strings.Repeat("0", 64)))
+			obj, ok := parseObjectLine(draft)
+			if !ok {
+				t.Fatalf("draft does not parse: %s", draft)
+			}
+			payV := obj.vals[3]
+			e := &event{seq: seq, typ: "vote_cast", version: 1000000, payload: payV.obj, ts: T1, prevHash: prev}
+			h := hashHex(preimage(e, ""))
+			return []byte(strings.Replace(string(draft), strings.Repeat("0", 64)+`"}`, h+`"}`, 1))
+		}
 	}
-	float := func(seq int64, prev string) []byte {
-		return []byte(fmt.Sprintf(`{"seq":%d,"type":"vote_cast","version":1000000,"payload":{"choice":1.5},"ts":%q,"prev_hash":%q,"hash":%q}`,
-			seq, T1, prev, strings.Repeat("ab", 32)))
-	}
-	for name, raw := range map[string]func(int64, string) []byte{"nested": nested, "float": float} {
+	for name, payload := range map[string]string{"nested": `{"choice":{"x":1}}`, "float": `{"choice":1.5}`} {
 		t.Run(name, func(t *testing.T) {
-			res := Verify(buildEntries(t, ents(iss(60000, 3), bals(0, 2, T1), entry{kind: eRaw, raw: raw}, bal(0, T1))), nil)
+			es := ents(iss(60000, 3), bals(0, 2, T1), entry{kind: eRaw, raw: mk(payload)}, bal(0, T1))
+			res := Verify(buildEntries(t, es), nil)
 			if res.Verdict != INVALID || res.Line != 5 {
 				t.Fatalf("got %s at %d (%v; %s), want INVALID at line 5", res.Verdict, res.Line, res.Lines, res.Reason)
+			}
+			if citesRule(res.Reason, "HA-14") {
+				t.Fatalf("rejected at HA-14, not EV-16: %s", res.Reason)
 			}
 		})
 	}
@@ -457,24 +489,32 @@ func oracle(gl []genLine) (Verdict, int, []int) {
 // 60000 or 120000 ms interval, min 3 or 4, or opaque), registered ballots that
 // tend to stay at their issue's last instant, opaque ballots, and now and
 // then an unquantized ts.
+//
+// Half the chains are "long": up to 30 lines, one or two issues, fewer opaque
+// ballots and stickier instants, so that an issue often has two or more full
+// runs followed by a further run start — the shape where per-run state that
+// is not reset at a run start shows up.
 func genChain(r *rand.Rand) []genLine {
 	var gl []genLine
 	var issues []int // positions
 	last := map[int]int64{}
-	n := 4 + r.Intn(14)
+	n, maxIssues, opaquePct, changePct, offOne := 4+r.Intn(14), 3, 30, 35, 40
+	if r.Intn(2) == 0 {
+		n, maxIssues, opaquePct, changePct, offOne = 12+r.Intn(19), 1+r.Intn(2), 18, 22, 90
+	}
 	opaqueOK := r.Intn(4) != 0 // a quarter of chains carry no opaque lines
 	instant := func() int64 { return baseMS + int64(r.Intn(5))*60000 }
 	for len(gl) < n {
 		x := r.Intn(100)
 		switch {
-		case len(issues) == 0 || (x < 10 && len(issues) < 3):
+		case len(issues) == 0 || (x < 10 && len(issues) < maxIssues):
 			if opaqueOK && r.Intn(5) == 0 {
 				gl = append(gl, genLine{kind: eOpaqueIssue})
 			} else {
 				gl = append(gl, genLine{kind: eIssue, interval: []int64{60000, 120000}[r.Intn(2)], min: 3 + int64(r.Intn(2))})
 			}
 			issues = append(issues, len(gl)-1)
-		case opaqueOK && x < 30:
+		case opaqueOK && x < opaquePct:
 			ts := instant()
 			if r.Intn(15) == 0 {
 				ts++
@@ -483,14 +523,14 @@ func genChain(r *rand.Rand) []genLine {
 		default:
 			k := r.Intn(len(issues))
 			ts, ok := last[k]
-			if !ok || r.Intn(100) < 35 {
+			if !ok || r.Intn(100) < changePct {
 				ts = instant()
 				if gl[issues[k]].kind == eIssue {
 					// keep most ballots quantized for their issue
 					ts -= (ts - baseMS) % gl[issues[k]].interval
 				}
 			}
-			if r.Intn(40) == 0 {
+			if r.Intn(offOne) == 0 {
 				ts++
 			}
 			last[k] = ts
@@ -707,4 +747,53 @@ func exactFailures(gl []genLine, issuePos []int, assign map[int]int) map[int]boo
 		}
 	}
 	return out
+}
+
+// Cost: a hostile chain of n registered issues and n opaque ballots at
+// distinct instants, every one a candidate of every issue, then one ballot per
+// issue so every issue asks its ET-24b questions. Memory must stay roughly
+// linear in the export. The v12 implementation first shipped kept a candidate
+// set per issue and was measured at about 877 MB allocated for n = 3000;
+// the bound below is far under that.
+func TestET24bHostileCost(t *testing.T) {
+	if testing.Short() {
+		t.Skip("large chain")
+	}
+	const n = 3000
+	var es []entry
+	for i := 0; i < n; i++ {
+		es = append(es, iss(60000, 3))
+	}
+	for i := 0; i < n; i++ {
+		es = append(es, opq(msToTS(baseMS+int64(i+10)*60000)))
+	}
+	for i := 0; i < n; i++ {
+		es = append(es, bal(i, T1))
+	}
+	data := buildEntries(t, es)
+
+	runtime.GC()
+	var before, after runtime.MemStats
+	runtime.ReadMemStats(&before)
+	start := time.Now()
+	res := Verify(data, nil)
+	elapsed := time.Since(start)
+	runtime.ReadMemStats(&after)
+	alloc := after.TotalAlloc - before.TotalAlloc
+
+	// Lines: issues 2..n+1, opaque n+2..2n+1, ballots 2n+2..3n+1. Every
+	// ballot is its issue's first and has candidates at another instant
+	// after c: all opaque lines and all ballot lines are listed.
+	if res.Verdict != PARTIAL || len(res.Lines) != 2*n || res.Lines[0] != n+2 || res.Lines[len(res.Lines)-1] != 3*n+1 {
+		t.Fatalf("got %s with %d lines", res.Verdict, len(res.Lines))
+	}
+	t.Logf("n=%d: export %d bytes, verified in %s, %d MB allocated", n, len(data), elapsed, alloc>>20)
+	// About 14x the export today, almost all of it parsing; the old
+	// per-issue sets were about 240x.
+	if alloc > 24*uint64(len(data)) {
+		t.Errorf("allocated %d MB verifying a %d-byte export; want under 24x the export", alloc>>20, len(data))
+	}
+	if elapsed > 10*time.Second {
+		t.Errorf("took %s", elapsed)
+	}
 }

@@ -125,7 +125,7 @@ type vstate struct {
 	regPK   []byte                // genesis registrar_pk, decoded (ET-17)
 	haveKey bool                  // genesis keys captured
 	issues  map[string]*issueInfo // issue_created hash -> tracked facts (ID-7/ET-18a/ET-14b)
-	ballots ballotState           // registered issues, for ET-24b candidacy
+	ballots ballotState           // opaque ballots, for ET-24b
 
 	// opaqueIssues holds the hash of every issue_created at an unregistered
 	// version: still a prior issue_created for ID-8/ET-18 (ET-18b). Only its
@@ -285,7 +285,7 @@ func VerifyWith(data []byte, opts Options) Result {
 
 	if len(partial) > 0 {
 		return Result{Verdict: PARTIAL, Lines: partial,
-			Reason: "unregistered (type, version), Stage B not run; or a registered ballot check left unresolved by them (ET-18b, ET-24b)"}
+			Reason: "these lines could not be fully checked: each is an event at a (type, version) this verifier does not register, or a ballot whose checks depend on such an event (EV-7, ET-18b, ET-24b)"}
 	}
 	return Result{Verdict: VALID}
 }
@@ -525,10 +525,8 @@ func stageBIssue(st *vstate, e *event) (string, bool) {
 	}
 	// ID-7: issue_id is this event's hash; record with its choice_count
 	// (ET-18a) and the ET-14b batching parameters ET-23/ET-24 read.
-	iss := &issueInfo{choiceCount: ccV.ival,
+	st.issues[e.hash] = &issueInfo{choiceCount: ccV.ival,
 		intervalMS: intervalV.ival, batchMin: minV.ival, seq: e.seq}
-	st.issues[e.hash] = iss
-	st.ballots.addIssue(iss)
 	return "", true
 }
 
@@ -593,7 +591,7 @@ func stageBVote(st *vstate, e *event) (string, bool) {
 	// previous run for good (ET-24a), so an under-size run is proven not-last
 	// exactly here (ET-24) unless candidates could have filled it, and a ts
 	// equal to an instant this issue already used is a return (ET-24a).
-	switch out, reason := iss.observe(tsMS); out {
+	switch out, reason := iss.observe(&st.ballots, e.seq, tsMS); out {
 	case batchFail:
 		return reason, false
 	case batchUnresolved:
