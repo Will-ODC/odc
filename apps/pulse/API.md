@@ -596,3 +596,121 @@ on a throwaway port. Custom upstreams require HTTPS, except loopback HTTP.
 A deployment must supply its public origin before advertising browser links;
 this slice does not add production environment wiring. The adapter reads only
 public HTTP routes, without store/core imports. See ADR-0036.
+
+## Planned — not served: poll creation (ADR-0037)
+
+These routes are design contracts, not runtime endpoints. They require the
+current signed-in account; session generation/expiry checks match `/api/me`.
+Creation never accesses the caller's ballot cookie. Mutations with bodies require JSON
+and an `Origin` exactly matching the configured web origin; missing/foreign
+origins are refused, including for non-browser callers. Bodyless DELETE needs no
+Content-Type but retains the same Origin check. Origin configuration
+comes from trusted server setup, not Host or forwarded headers.
+
+### `GET /api/poll-creation/context`
+
+Authenticated, read-only, no side effects. Returns:
+
+```json
+{
+  "community": { "id": "pulse-general", "label": "General" },
+  "canPostUnlimited": false,
+  "purposeVersion": "community-purpose-v1",
+  "purposeAcknowledged": false
+}
+```
+
+Community is derived from the stored account; non-General labels initially use
+existing community IDs. Permission is a server result, never a request setting.
+401 `signed_out`; 503 `creation_unavailable` for unavailable storage. The form
+computes its one-week default for display; omitting the close time below makes
+the server authoritative. First posts require the approved statement and promise.
+
+### `POST /api/polls`
+
+Required `Idempotency-Key`: client-generated UUID, scoped to this account.
+JSON body (unknown properties refused):
+
+```json
+{
+  "question": "Should we open a community garden?",
+  "choices": ["Yes", "No"],
+  "method": "single",
+  "attribution": { "kind": "anonymous" },
+  "purposeAcknowledgement": "community-purpose-v1"
+}
+```
+
+- `question`: trimmed non-empty string, at most 1,000 Unicode code points.
+- `choices`: 2–25 trimmed distinct non-empty strings, each at most 200 code
+  points; equality is exact after trim, preserving existing domain rules.
+- `method`: required `single` or `approval`.
+- `closesAt`: optional UTC ISO timestamp with milliseconds, strictly after
+  creation time. Omitted means creation time plus 604,800,000 milliseconds.
+  Null is refused; no indefinitely open newly authored poll in this slice.
+- `attribution`: optional, defaults to `{ "kind": "anonymous" }`. Named is
+  `{ "kind": "named", "name": "Ada" }`, with a trimmed non-empty plain-text
+  name of at most 80 code points. Anonymous names/extra fields are refused.
+  Names are self-selected, not proof of identity, and never copied from email.
+- `purposeAcknowledgement`: optional exact version string. Required unless v1
+  is already recorded for this account; invalid versions are always refused.
+- `id`, `community`, `createdBy`, `next`, `acceptsSuggestions`, owner/permission
+  fields, photos and summaries are not writable inputs. Suggestions are false,
+  all next entries null, ID is server-generated.
+- Maximum body: 32 KiB UTF-8. These are bounded resource checks, not quality
+  judgements about a question's content.
+
+201 on first publication; 200 on replay: `{ "poll": <public poll>, "replayed":
+false | true }`. Public poll is the existing GET poll shape plus `community`
+(the object above) and `attribution`. Named attribution contains only `kind`
+and `name`; anonymous contains only `kind`. Never return account ID, email,
+credentials, internal metadata or idempotency key. Legacy polls may omit these
+new public fields; no author is fabricated. GET poll and MCP projections must
+use the same allow-listed public representation when implemented.
+
+Canonical replay input consists of trimmed strings, ordered choices, method,
+normalised attribution, explicit/omitted close time and the acknowledgement
+field. Omitted close time stays a sentinel, not recalculated. Replay is checked
+before expiry/default-time and quota checks, so a valid saved request still
+replays after its poll closes. Changed input with the same key returns 409.
+Records remain durable for the poll's lifetime. Replays require a valid session
+for the same account and return only its original public creation representation.
+
+Successful creations count toward five in the preceding rolling 60 minutes
+(`createdAt > now - 60 minutes`); exactly at the boundary they expire. Quota,
+acknowledgement, idempotency, metadata, poll and choices share one transaction
+and per-account concurrency guard. A refusal/rollback/replay consumes no slot.
+Unlimited grants bypass this quota, not resource checks or authentication.
+
+| Status | Error                  | Meaning                                                                   |
+| ------ | ---------------------- | ------------------------------------------------------------------------- |
+| 400    | `bad_request`          | Malformed/unknown fields, invalid key, shape, field length or future time |
+| 401    | `signed_out`           | Invalid, absent, expired or revoked session                               |
+| 403    | `origin_not_allowed`   | Missing or foreign Origin                                                 |
+| 409    | `idempotency_conflict` | Key already used for different canonical input                            |
+| 413    | `body_too_large`       | Body exceeds 32 KiB                                                       |
+| 422    | `purpose_required`     | First post needs the v1 promise                                           |
+| 429    | `posting_limit`        | Five creations in the rolling hour; integer Retry-After seconds           |
+| 503    | `creation_unavailable` | Required storage unavailable; nothing partially committed                 |
+| 500    | `server_error`         | Unexpected fault; safe message, no private diagnostics                    |
+
+Each uses the existing `{ error, message }` envelope. Auth/origin precede all
+account-bound lookups. Retry the same key and input after an uncertain result;
+use a new key for an intentionally different question. Do not log request bodies,
+keys, author IDs, account emails or credentials in creation diagnostics.
+
+### `PUT /api/posting-permissions/:voterId` and `DELETE /api/posting-permissions/:voterId`
+
+Planned owner-only grant/revoke of unlimited posting for an existing account.
+PUT body is `{ "permission": "unlimited_posting" }`; DELETE has no body.
+Repeated desired state is a no-op (204); preserve grant/revoke audit records.
+No owner assignment, full-power grants or moderation permission in these routes.
+Initial owner uses trusted `PULSE_OWNER_EMAIL`, matched to the signed-in account's
+verified email credential; unset grants nobody, malformed configuration fails
+startup. Public displays and clients cannot bootstrap an owner.
+
+Errors: 400 `bad_request`, 401 `signed_out`, 403 `origin_not_allowed`,
+403 `owner_required`, 404 `not_found` (only after owner authorisation),
+503 `creation_unavailable`, 500 `server_error`. All changes are atomic and
+attributed to the owner. Context exposes only the caller's effective posting
+permission. No public grant listing or author/account inspection is introduced.

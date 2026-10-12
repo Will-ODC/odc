@@ -68,6 +68,13 @@ the same CI runs.
    auto-hide threshold and a manual-removal authority.
 2. **A host and a domain.** These are operator decisions, and none is chosen.
 3. **A sending domain verified with Resend** (SPF/DKIM). This is DNS work, not code.
+4. **Security leftovers from #315** (`docs/security/scans-2026-10-11.md`, #335):
+   a sign-out control (the API and `signOut()` exist, no screen calls them;
+   cookies last 30 days); a container-image scan in `pulse-images.yml` before the
+   first deploy (deferred by the operator, 2026-10-11); Dependabot alerts are off
+   (a repo setting). Sign-out is #344, shown only to a signed-in person: someone
+   who voted **without** signing in still has no way to clear `pulse_ballot` on a
+   shared browser, though `POST /api/sign-out` would clear it. Undecided.
 
 ## UI options and implementation checkpoint
 
@@ -175,6 +182,9 @@ entry records the checked state above, not a claim that open work has merged.
 - **Signing out clears the ballot cookie**, so a person who votes, signs out,
   signs back in and votes again is counted twice. That cost is accepted. Tying a
   ballot to a voter is unscoped. See `pulse-development.md` (#214's options).
+- **How long `pending_claim` rows are kept, and what a mail-provider error may
+  write to logs.** Both from #315; filed in `memory/OPEN-QUESTIONS.md` under
+  "Pulse sign-in data: retention and logging (2026-10-11)".
 - `polls` is the only plural table, inherited from ADR-0021. Renaming it needs a
   new migration, never an edit to `001`. No decision has been taken.
 - `diff-size.sh` says the 400-line WARN "still fires for pulse", but it excludes
