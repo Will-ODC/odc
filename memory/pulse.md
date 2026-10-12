@@ -69,12 +69,13 @@ the same CI runs.
 2. **A host and a domain.** These are operator decisions, and none is chosen.
 3. **A sending domain verified with Resend** (SPF/DKIM). This is DNS work, not code.
 4. **Security leftovers from #315** (`docs/security/scans-2026-10-11.md`, #335):
-   a sign-out control (the API and `signOut()` exist, no screen calls them;
-   cookies last 30 days); a container-image scan in `pulse-images.yml` before the
-   first deploy (deferred by the operator, 2026-10-11); Dependabot alerts are off
-   (a repo setting). Sign-out is #344, shown only to a signed-in person: someone
-   who voted **without** signing in still has no way to clear `pulse_ballot` on a
-   shared browser, though `POST /api/sign-out` would clear it. Undecided.
+   a container-image scan in `pulse-images.yml` before the first deploy
+   (deferred by the operator, 2026-10-11); Dependabot alerts are off (a repo
+   setting). **Sign-out is built** (#344, 2026-10-12): the bar across the top
+   shows a signed-in person's address and a two-press "Sign out everywhere".
+   It is shown only to a signed-in person: someone who voted **without** signing
+   in still has no way to clear `pulse_ballot` on a shared browser, though
+   `POST /api/sign-out` would clear it. Undecided.
 
 ## UI options and implementation checkpoint
 
