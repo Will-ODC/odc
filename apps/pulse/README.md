@@ -35,7 +35,9 @@ record that can change. It never reads or writes the ODC core (`services/`,
 **Not built:**
 
 - **Creating polls.** Today polls exist only as seed data or database inserts.
-  This waits on the moderation values in ADR-0024 (`docs/plans/pulse.md`, P6).
+  The creation design is ADR-0037 and the explicitly planned interface in
+  [API.md](./API.md#planned--not-served-poll-creation-adr-0037); implementation
+  follows the merge-gated steps in `docs/plans/pulse.md` P6.
 - The explaining screens between questions, and the "what happens next" step
   after a vote.
 - Poll photos and summaries (#296), and comments (#297).

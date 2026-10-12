@@ -173,52 +173,39 @@ no payments or automatic claims of impact are introduced by this UI direction.
 The conversation ballot uses pick-then-Submit (ADR-0035); donations and volunteer
 commitments also require confirmation.
 
-## P6 — Poll authoring under ADR-0024 · BLOCKED ON VALUES, NOT RULES; the operator's stated next work after storage
+## P6 — Poll authoring · DESIGN CONTRACT IN REVIEW (#338)
 
-> **Corrected 2026-10-09.** The three rules listed below as open were settled
-> by the operator on 2026-09-11 and are recorded in **ADR-0024 §3** (3a
-> duplicates warn, 3b removal hides, 3c flagging plus manual removal, 3d post
-> to your community). What remains is ADR-0024 §5's values, grouped by what
-> each unblocks in issue **#217**: a first "post a question" slice needs only
-> §5.4, the default `closesAt` and `acceptsSuggestions`. The paragraphs below
-> predate ADR-0024 and are kept for their reasoning; ADR-0024 wins where they
-> disagree.
+ADR-0037 records the operator's 2026-10-11 choices: one-week editable close,
+suggestions off (#336), signed-in posting, community or General destination,
+anonymous public attribution by default, optional naming, five creations per
+rolling hour, and Owner/granular unlimited-posting grants. The approved purpose
+statement and first-post acknowledgement ship with creation. The planned
+interfaces are in `apps/pulse/API.md`; no creation route is served yet.
 
-**How polls come to exist.** ADR-0024 chooses crowdsourced posting with computed
-navigation, and this is the item that builds it. Today polls and their entire
-`next` graph are the `SEED` literal in `dev-server.ts`; there is no
-`POST /api/polls`, no admin surface and no seed job, and **a deployed pulse has
-nothing to vote on.**
+Build in merge-gated steps:
 
-Read ADR-0024 in full before starting — its consequences are this item's scope,
-and the summary below is not a substitute for them.
+1. Design contract (#338): ADR, API, this plan; independent review, pushed PR,
+   required green CI, then William's merge before dependent implementation.
+2. Pulse storage and posting permissions: keyed communities, legacy backfill,
+   author/visibility metadata, grants, acknowledgement, replay records and shared
+   quota transaction. In-memory/Postgres conformance and meaningful race tests.
+3. Creation HTTP boundary: authenticated context/create and owner grant/revoke,
+   origin checks, bounded input, retry contract and safe public projections.
+   Real HTTP with disposable Postgres, all documented error cases and privacy tests.
+4. Creation screen and attribution: first-post promise, anonymous/named choice,
+   secondary closing-time control, published conversation link, recoverable
+   errors, keyboard and actual phone/desktop checks. No ballot side effects.
 
-**Blocked on three rules the operator named as open when choosing B:**
+Each step receives fresh review (substantive fixes reviewed again), package checks,
+push/PR and all required green CI before moving on. No agent approval or merge.
+Use the next unused migration number from current master; never alter 001–004.
+Do not invent authors or membership for existing data.
 
-- **Filtering.** What a posted question has to pass. `createPoll` validates
-  shape only — non-empty question, 2–25 distinct non-empty choices — and cannot
-  tell a real question from noise. Whether the duplicate machinery in
-  `suggestions.ts` (`keywords()`, `overlap()`, `SAME_IDEA = 0.6`) is reused for
-  questions, or duplicates are allowed and merged later, is open.
-- **Who can post where.** Follows from P2: the community picked at sign-in
-  decides where a question can be posted. **Posting requires a session; voting
-  does not** — that asymmetry is deliberate under ADR-0024.
-- **Moderation.** No moderator role exists anywhere in pulse. Post-moderation
-  needs someone who can remove a question; pre-moderation needs a queue and
-  kills the volume that is the whole point of crowdsourcing. The fork is open.
-
-**Ready and waiting behind those, once decided** — all from ADR-0024's
-consequences: a new migration adding the community and author columns to `polls`
-(the next free number, since ADR-0030 decision 4 took ADR-0024's 002 and
-001–004 are applied; author **cannot** be backfilled later, only defaulted); a removed/hidden state,
-because `on delete cascade` means deleting a question destroys the votes cast on
-it; server-minted poll ids, because `polls.id` is caller-supplied text today; a
-rate limit keyed on the voter and backed by a shared store, since
-`@fastify/rate-limit` is in-memory and ADR-0020 expects many processes; and
-deciding who fills `closesAt` and `acceptsSuggestions` on a posted question.
-
-**Depends on** the storage work landing first — that is the operator's stated
-ordering — and on P2 for the community half.
+Reporting/review (#233–#236), duplicate warnings (#261), suggestions (#336),
+photos/summary (#296), comments (#297) and browse (#259/#260) remain separate.
+Broad public posting launch waits for reporting/review and the automatic-hide
+threshold design. ADR-0024's hide-not-delete and automatic-hide direction remain.
+Account penalties and appeals do not arrive implicitly with creation.
 
 ## The identity work — P8 to P11, and why it is four items
 
