@@ -27,13 +27,20 @@ answered in the specs as ADR-0013 to ADR-0018 (#98). Only a **fresh re-audit**
 clears T9. Nothing may be implemented in `services/` until T9 and T9a. The ledger
 is unstarted.
 
-**Spec versions on master (2026-10-10; read the `Version:` lines, not prose):**
-`event-schema.md` v5, `event-types.md` v11, `evolution.md` v6,
-`export-format.md` **v5** (#224, ADR-0032), `hashing.md` v2, `ids.md` v1,
-`read-api.md` v1, `fixtures/README.md` v14. `contracts/` is **DRAFTING**.
+**Spec versions on master (2026-10-11; read the `Version:` lines, not prose):**
+`event-schema.md` **v6**, `event-types.md` **v12**, `evolution.md` **v7** (all
+three ADR-0034, #294), `export-format.md` v5 (#224, ADR-0032), `hashing.md` v2,
+`ids.md` v1, `read-api.md` v1, `fixtures/README.md` v14 (**v15** in PR #327).
+`contracts/` is **DRAFTING**.
 
-**Conformance phases 1 to 4 are merged.** The corpus is **115 vectors** (VALID 21,
-PARTIAL 4, INVALID 90). Phase 3 batching vectors `099`-`108` came in #202; phase 4
+**Conformance phases 1 to 4 are merged. ADR-0034 is built, reviewed and awaiting
+merge.** Master's corpus is 115 vectors; with #327 it is **132** (VALID 21,
+PARTIAL 13, INVALID 98). ADR-0034 (mixed-version ballot batching: ET-18b, ET-22a,
+ET-24b) is in both verifiers — Go #319 → PR #324, TS #320 → PR #325, each built in
+an isolated sparse worktree and approved (with nits, fixed) by an isolated
+fresh reviewer — with vectors `116`-`132` in #321 → PR #327. **Merge #324 and
+#325 before #327**, which is stacked on both. All 132 vectors pass both verifiers;
+the agreement proof is `docs/security/attacks/check-adr-0034-agreement.py`. Phase 3 batching vectors `099`-`108` came in #202; phase 4
 (`--chain` and genesis/head reporting, EX-21 to EX-24) came in #220 (Go), #221 (TS)
 and #222 (vectors `109`-`115`). #203 reconciled EV-15's stage map. #219 made a TS
 internal error exit 3, not 1. #223 is the security checkpoint
@@ -43,27 +50,19 @@ internal error exit 3, not 1. #223 is the security checkpoint
 
 In this order. Passing CI or a checkpoint does not clear T9.
 
-1. **Merge #241 (Go + TS): both verifiers conform to `export-format.md`
-   v5 EX-24.** stderr becomes `genesis hash (stored claim): …` /
-   `head hash (stored claim): …`; strict UTF-8, last repeated `hash` wins,
-   `\u` escapes decode. 504-run black-box parity. stdout is unchanged, so no
-   vectors are needed (EX-24 is not conformance surface, EV-17). The decoding
-   gaps are in `memory/OPEN-QUESTIONS.md` → "EX-24 claim decoding".
-2. **Decide mixed-version ballot batching.** The proposal
-   (`docs/plans/hash-chain-unknown-ballot-batching.md`, #225) is **PROPOSED, not
-   ratified**. Its one-event/one-ballot evolution constraint, its uncertainty
-   algorithm and its wider PARTIAL attribution all need an operator decision
-   before anyone builds them. → `memory/OPEN-QUESTIONS.md`, "Future `vote_cast`
-   versions and ballot batching".
-3. **Decide the four open `contracts/` contradictions** (see Blockers).
-4. Verifier implementations of what (2) and (3) decide, built in isolation. Then
-   the fixtures.
-5. **Fresh T9 re-audit** by a context that did not write `audit-phase-0.md`.
+1. **Decide the four open `contracts/` contradictions** (see Blockers). They are
+   the operator's; nothing else in Phase 0 waits on a session.
+2. Verifier implementations of what (1) decides, built in isolation, then the
+   fixtures.
+3. **Fresh T9 re-audit** by a context that did not write `audit-phase-0.md`.
    Acceptance is APPROVE.
-6. **T9a: release candidate.** Flip `contracts/README.md` from DRAFTING to RELEASE
+4. **T9a: release candidate.** Flip `contracts/README.md` from DRAFTING to RELEASE
    CANDIDATE, reconcile implementation/charter/service guidance, and move this
    file to Phase 1 (ledger, verifier, identity). **Do not create a `contracts-v1`
    tag.** The T10 freeze and its re-audit stay deferred until real use (ADR-0007).
+
+Optional, from ADR-0034 owed item 4: `docs/security/attacks/check-unknown-batching-proposal.py`'s
+`proposed` mode now matches the ratified expectations and could join required CI.
 
 **Owed with no ticket:**
 
@@ -106,6 +105,10 @@ In this order. Passing CI or a checkpoint does not clear T9.
   #177/#181 Go, #178 TS, vectors in #202. #201 fixed the rehearsal judge.
 - Phase 4 (`--chain` and reporting): #220, #221, #222 and #203. #219 handles the
   TS exit code. #223 checkpoint, #224 `export-format.md` v5 (ADR-0032).
+- EX-24 stored-claim reporting in both verifiers: #241 (`export-format.md` v5).
+- ADR-0034 mixed-version batching: contract #294; Go #319 (PR #324), TS #320
+  (PR #325), vectors `116`-`132` #321 (PR #327) — open, awaiting merge. TS
+  sub-quadratic cost is follow-up #326.
 - Memory index and `memory-index` CI guard (#117, #121).
 
 ## Standing decisions — one line each

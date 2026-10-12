@@ -12,17 +12,16 @@ is decided, and delete it when it becomes moot. Pulse's open decisions are in
 
 **Still open:**
 
-| Question                                                                                            | Where                                                          |
-| --------------------------------------------------------------------------------------------------- | -------------------------------------------------------------- |
-| **Future `vote_cast` versions and ballot batching**: settle before the RC freezes ET-24's wording   | "Future `vote_cast` versions and ballot batching (2026-10-09)" |
-| **Q-F**: the registrar's signature as a subliminal channel                                          | "Q-F — What mitigates the registrar's signature…"              |
-| **Anchor contents and cadence** (Q-A item 4, which ADR-0013 and ADR-0032 left open)                 | "Anchor contents and cadence"                                  |
-| **EX-24 claim decoding**: invalid UTF-8, BOM, `\u` escapes, nesting depth (2026-10-10)              | "EX-24 claim decoding (2026-10-10)"                            |
-| Does `read-api.md` (RA-1 to RA-13, **zero** conformance coverage) need vectors before Phase 1?      | "Read-API conformance coverage"                                |
-| **⚠️ Ballot expressiveness vs receipt-freeness**: a live contradiction between charter §5 and ET-22 | **Archive file**. Read it before writing ceiling ADR part B.   |
-| Registrar key custody and the no-receipt discipline in Phase 1 identity                             | Archive file: "Registrar-side ballot privacy"                  |
-| `RETIRED.md` valve; EV-5's fixture breadth; an HA-2 fixture                                         | Archive file, three adjacent bullets                           |
-| Sanction/negative events; money/attestation/capability events (Phase 2+)                            | Archive file, deferred, and **not** freeze blockers            |
+| Question                                                                                            | Where                                                        |
+| --------------------------------------------------------------------------------------------------- | ------------------------------------------------------------ |
+| **Q-F**: the registrar's signature as a subliminal channel                                          | "Q-F — What mitigates the registrar's signature…"            |
+| **Anchor contents and cadence** (Q-A item 4, which ADR-0013 and ADR-0032 left open)                 | "Anchor contents and cadence"                                |
+| **EX-24 claim decoding**: invalid UTF-8, BOM, `\u` escapes, nesting depth (2026-10-10)              | "EX-24 claim decoding (2026-10-10)"                          |
+| Does `read-api.md` (RA-1 to RA-13, **zero** conformance coverage) need vectors before Phase 1?      | "Read-API conformance coverage"                              |
+| **⚠️ Ballot expressiveness vs receipt-freeness**: a live contradiction between charter §5 and ET-22 | **Archive file**. Read it before writing ceiling ADR part B. |
+| Registrar key custody and the no-receipt discipline in Phase 1 identity                             | Archive file: "Registrar-side ballot privacy"                |
+| `RETIRED.md` valve; EV-5's fixture breadth; an HA-2 fixture                                         | Archive file, three adjacent bullets                         |
+| Sanction/negative events; money/attestation/capability events (Phase 2+)                            | Archive file, deferred, and **not** freeze blockers          |
 
 The four `contracts/` contradictions awaiting an operator decision are listed in
 `memory/STATE.md` → Blockers.
@@ -79,45 +78,6 @@ normalising); `\u` escapes in the `hash` value or key; nesting depth (Go gives
 up past 10,000 levels, JS differs). Both verifiers (#241) chose: strict
 UTF-8, BOM → `unavailable`, escapes decode (an escape decoding to uppercase
 stays `unavailable`). If `contracts/` pins this, both must follow.
-
-## Future `vote_cast` versions and ballot batching (2026-10-09)
-
-**Open. Settle before T9a (RC).** It was raised as finding 2 of the
-fresh-context review of #176 (ADR-0029). The operator chose on 2026-10-09 to log
-it here rather than decide it in #176/#180.
-
-`event-types.md` ET-24/ET-24a (v11) count only the registered `(vote_cast, 1)`:
-"Which ballots count" says an unregistered version's payload is not read (EV-8),
-so it joins no batch, ends none, and proves none not-last. That is coherent today,
-but it would freeze two problems once a `vote_cast` v2 exists:
-
-- **The EV-8 problem.** A chain has v1, v1 and a registered v2 ballot at T1, then
-  three v1 ballots at T2. A verifier that registers v2 (and counts it) says
-  `VALID`. A v11 verifier says `INVALID` at the first T2, solely because it cannot
-  see the v2 ballot. EV-8 forbids `INVALID` solely for an unregistered event.
-- **The permanence problem.** If a future contract does not also amend ET-24, v2
-  ballots escape the minimum batch size entirely, yet ET-14b and ADR-0014 call
-  the batching mechanism permanent (it is in ET-22's register).
-
-Options the review named:
-
-- **(a)** Reword to "every registered `vote_cast` version (in v11: only version
-  1)", and add an ET-22-style permanent constraint that every future `vote_cast`
-  version carries `issue_id` and is batched.
-- **(b)** Make an old verifier report `PARTIAL`, not `INVALID`, for an ET-24
-  finding when an unregistered `vote_cast` falls between the under-size run and
-  the ballot that ends it. Its `issue_id` is unknown, so it may belong to that
-  issue.
-
-These are not exclusive: (a) fixes permanence, and (b) fixes what an old verifier
-says.
-
-**Update 2026-10-10:** #225 merged a proposal,
-`docs/plans/hash-chain-unknown-ballot-batching.md`, which is **PROPOSED, not
-ratified**. Its one-event/one-ballot evolution constraint, its uncertainty
-algorithm and its wider PARTIAL attribution all still need an operator decision.
-Merging the proposal settled nothing. Whatever is chosen needs both verifiers updated in isolation and vectors
-with an unregistered `vote_cast` inside a batch.
 
 ## Archive
 
