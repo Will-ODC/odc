@@ -7,7 +7,7 @@ import { ViewState } from "./ViewState.js";
 /**
  * A closed question's results, in place of the question, once asked for.
  *
- * Unlike `<AfterVote>`, the counts are not already in hand - they are fetched
+ * Unlike `<VoteCard>`, the counts are not already in hand - they are fetched
  * when "See results" is pressed - so this owes the other states too: loading,
  * and a failure with a way to try again. The empty state is the panel's own:
  * nobody answering is said in `<ResultsPanel>`, which keeps its way out.
@@ -47,15 +47,20 @@ export function ClosedResults({
       ref={panelRef}
       tabIndex={-1}
     >
+      <button
+        type="button"
+        className="results__close"
+        aria-label="Close"
+        onClick={onClose}
+      >
+        <span aria-hidden="true">×</span>
+      </button>
       <ViewState data={data}>{() => null}</ViewState>
       {data.status === "error" ? (
-        <button type="button" className="results__close" onClick={onRetry}>
+        <button type="button" className="results__retry" onClick={onRetry}>
           Try again
         </button>
       ) : null}
-      <button type="button" className="results__close" onClick={onClose}>
-        Close
-      </button>
     </div>
   );
 }

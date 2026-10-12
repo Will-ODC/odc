@@ -44,7 +44,7 @@ export interface ClosedResults {
  * strict sense: if it will not load, the results show without "yours" rather
  * than the whole panel failing over a mark.
  *
- * Focus follows the same pattern as `<AfterVote>`: into the panel on open,
+ * Focus follows the same pattern as `<VoteCard>`: into the panel on open,
  * back to the trigger on close, and nowhere on first render.
  */
 export function useClosedResults(api: PulseApi, pollId: string): ClosedResults {
