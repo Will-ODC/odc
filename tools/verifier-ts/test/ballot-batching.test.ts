@@ -622,21 +622,47 @@ test("BallotBatches stays linear under a hostile pattern (200k instants, one iss
   assert.ok(ms < 2000, `took ${ms} ms`);
 });
 
-test("BallotBatches: opaque ballots cost stays within the current O(opaque x distinct intervals) bound", () => {
+test("BallotBatches: opaque-ballot cost grows linearly in opaque ballots (the current O(opaque x distinct intervals) bound)", () => {
   // An opaque ballot is tested against every DISTINCT interval among the
-  // registered issues (ET-24b item 1), so 10k intervals x 10k opaque ballots
-  // is 1e8 modulus tests: ~0.2 s when measured. This pins that bound, with
-  // headroom against CI noise, so a regression to per-issue or per-ballot
-  // rescans is caught. Sub-quadratic candidacy is an open follow-up.
-  const t = new BallotBatches();
-  const k = 10000;
-  for (let i = 0; i < k; i++) t.openIssue(`i${i}`, i + 2, 60000 * (i + 1), 3);
-  const start = process.hrtime.bigint();
-  for (let j = 0; j < k; j++) t.opaque(k + 2 + j, 60000 * (j % 7));
-  const ms = Number(process.hrtime.bigint() - start) / 1e6;
-  assert.ok(ms < 2000, `took ${ms} ms`);
-  // The summaries are live: issue i0 (interval 60000) sees a candidate.
-  assert.equal(t.admit("i0", 2 * k + 3, 60000 * 100), "unresolved");
+  // registered issues (ET-24b item 1). Machine speed varies ~10x between a
+  // laptop and a loaded CI runner (a 2 s absolute limit flaked at 2.09 s), so
+  // this compares two runs on the same machine instead: 1k intervals with 60k
+  // opaque ballots against 1k intervals with 6k. At the current bound the
+  // ratio is ~10 (measured 9.0-14.0 idle and with two full suites running
+  // alongside). A cost that grows with the number of earlier opaque ballots
+  // breaks it: a mutant rescanning every recorded opaque ballot measured 44.
+  // The band, ratio < 25, sits between the two. (With 10k intervals the
+  // interval term hides that mutant: 11.9.) Each side is the minimum of three
+  // runs, after a warm-up, to shed GC and JIT noise; a 30 s absolute backstop
+  // catches only a gross regression. Sub-quadratic candidacy is an open
+  // follow-up.
+  const intervals = 1000;
+  const run = (opaque: number): number => {
+    const t = new BallotBatches();
+    for (let i = 0; i < intervals; i++)
+      t.openIssue(`i${i}`, i + 2, 60000 * (i + 1), 3);
+    const start = process.hrtime.bigint();
+    for (let j = 0; j < opaque; j++)
+      t.opaque(intervals + 2 + j, 60000 * (j % 7));
+    const ms = Number(process.hrtime.bigint() - start) / 1e6;
+    // The summaries are live: issue i0 (interval 60000) sees a candidate.
+    assert.equal(
+      t.admit("i0", intervals + opaque + 3, 60000 * 100),
+      "unresolved",
+    );
+    return ms;
+  };
+  run(6000); // warm-up
+  const best = (opaque: number): number =>
+    Math.min(run(opaque), run(opaque), run(opaque));
+  const small = best(6000);
+  const large = best(60000);
+  const ratio = large / small;
+  assert.ok(
+    ratio < 25,
+    `60k/6k opaque ratio ${ratio.toFixed(1)} (${large.toFixed(0)} ms / ${small.toFixed(0)} ms)`,
+  );
+  assert.ok(large < 30000, `took ${large} ms`);
 });
 
 test("BallotBatches: the leaving ballot reports ET-24 when the batch it leaves is under-size", () => {

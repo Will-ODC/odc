@@ -181,7 +181,9 @@ Two stages, per `evolution.md` EV-6/EV-15:
   summary per interval, not each issue), so the worst case is
   O(opaque ballots × distinct intervals): about 0.2 s at 10k × 10k, 1.7 s at
   30k × 30k, and roughly 20 s at 100k × 100k, measured on that step alone.
-  `test/ballot-batching.test.ts` pins the 10k × 10k case under 2 s. A
+  `test/ballot-batching.test.ts` pins that growth as a ratio (60k against 6k
+  opaque ballots over 1k intervals must stay under 25×, ~10× today), which
+  does not depend on machine speed. A
   sub-quadratic candidacy test is an **open follow-up**.
 
   _Which ballots count_ (v12): ET-24 and ET-24a read only registered

@@ -374,6 +374,32 @@ test("ET-24b: a non-definite known failure does not stop the known state (a late
   assert.equal(c.verdict(), "INVALID at line 10");
 });
 
+// --- the per-interval summary and the first run's w --------------------------------
+
+test("ET-24b: two candidates at one instant do not count as a candidate at another instant", () => {
+  // U@T3 (4), A@T1 x3 (5-7), U@T1 x2 (8, 9), A@T2 (10). At the run start 10,
+  // item 4(b) asks for a candidate after f = 5 at an instant other than
+  // t = T1. U@T3 is the only candidate at another instant, and it precedes f,
+  // so line 10 is resolved; the two T1 candidates must not stand in for it.
+  // (Line 5 is unresolved: U@T3 falls after c at another instant.)
+  const { c, a } = twoIssues();
+  c.vote(a, T3, UNREG);
+  c.votes(a, T1, 3);
+  c.votes(a, T1, 2, UNREG);
+  c.vote(a, T2);
+  assert.equal(c.verdict(), "PARTIAL at lines 4,5,8,9");
+});
+
+test("ET-24b: the first run's F counts a candidate between c and f", () => {
+  // U@T1 (4), A@T1 x2 (5, 6), A@T2 (7). The first run has no P(f), so w = c =
+  // 2 and U at 4 counts: |R| + F = 3, not definite, so line 7 is unresolved.
+  const { c, a } = twoIssues();
+  c.vote(a, T1, UNREG);
+  c.votes(a, T1, 2);
+  c.vote(a, T2);
+  assert.equal(c.verdict(), "PARTIAL at lines 4,7");
+});
+
 // --- ET-22a: only vote_cast carries ballots --------------------------------------
 
 for (const [type, version] of [
