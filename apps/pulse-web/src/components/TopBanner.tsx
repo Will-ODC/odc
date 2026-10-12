@@ -15,6 +15,7 @@ import "./TopBanner.css";
 export function TopBanner({
   signInHref,
   identity,
+  aside,
 }: {
   /**
    * Where "Sign in" goes. Left out on the sign-in screens themselves, where
@@ -31,6 +32,11 @@ export function TopBanner({
    * offers the way in.
    */
   identity?: ReactNode;
+  /**
+   * Something to offer beside the way in, for someone who is not signed in —
+   * today only "Forget my votes here". Ignored once `identity` is given.
+   */
+  aside?: ReactNode;
 }) {
   return (
     <div className="banner">
@@ -39,12 +45,16 @@ export function TopBanner({
         pulse
       </span>
 
-      {identity ??
-        (signInHref ? (
-          <a className="banner__sign-in" href={signInHref}>
-            Sign in
-          </a>
-        ) : null)}
+      {identity ?? (
+        <span className="banner__end">
+          {aside}
+          {signInHref ? (
+            <a className="banner__sign-in" href={signInHref}>
+              Sign in
+            </a>
+          ) : null}
+        </span>
+      )}
     </div>
   );
 }

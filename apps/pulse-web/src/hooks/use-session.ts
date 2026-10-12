@@ -1,6 +1,6 @@
 import { useCallback, useEffect, useRef, useState } from "react";
 import type { Me, PulseApi } from "../api/types.js";
-import type { SignOutStatus } from "../components/SignedIn.js";
+import type { TwoPressProgress } from "../components/TwoPress.js";
 
 /**
  * Who is signed in, as far as the bar across the top needs to know.
@@ -15,8 +15,8 @@ export type Session =
   | { status: "signedIn"; me: Me }
   | { status: "unknown" };
 
-/** How far a sign-out has got: the shape `SignedIn` renders. */
-export type SignOutProgress = SignOutStatus;
+/** How far a sign-out has got: the shape `TwoPress` renders. */
+export type SignOutProgress = TwoPressProgress;
 
 /**
  * Ask once who is signed in, and sign them out on request.
@@ -25,13 +25,17 @@ export type SignOutProgress = SignOutStatus;
  * `POST /api/sign-out`; until this hook nothing on screen called it, so a
  * person on a shared browser had no way to stop the next one being them.
  *
- * `onSignedOut` runs only after the server has answered: sign-out is "every
- * session, everywhere", and saying it happened before it did would be the one
- * lie this control could tell.
+ * The same request serves someone who is not signed in: `POST /api/sign-out`
+ * also clears the ballot cookie, which is how "Forget my votes here" works.
+ * Which of the two it was decides what runs after: `onSignedOut` for a
+ * signed-in person, `onForgotten` for anyone else.
+ *
+ * Both run only after the server has answered: saying it happened before it
+ * did would be the one lie this control could tell.
  */
 export function useSession(
   api: PulseApi,
-  onSignedOut?: () => void,
+  after: { onSignedOut?: () => void; onForgotten?: () => void } = {},
 ): {
   session: Session;
   progress: SignOutProgress;
@@ -62,6 +66,8 @@ export function useSession(
 
   // The hook's own guard, not only the button's: one request at a time.
   const sending = useRef(false);
+  const { onSignedOut, onForgotten } = after;
+  const signedIn = session.status === "signedIn";
 
   const signOut = useCallback(() => {
     if (sending.current) return;
@@ -72,18 +78,20 @@ export function useSession(
         sending.current = false;
         setProgress({ status: "idle" });
         setSession({ status: "signedOut" });
-        onSignedOut?.();
+        if (signedIn) onSignedOut?.();
+        else onForgotten?.();
       },
       () => {
         sending.current = false;
         setProgress({
           status: "failed",
-          message:
-            "You are still signed in. Check your connection and try again.",
+          message: signedIn
+            ? "You are still signed in. Check your connection and try again."
+            : "This browser still has your votes. Check your connection and try again.",
         });
       },
     );
-  }, [api, onSignedOut]);
+  }, [api, signedIn, onSignedOut, onForgotten]);
 
   const dismiss = useCallback(() => {
     if (!sending.current) setProgress({ status: "idle" });
