@@ -85,7 +85,7 @@ options; the older charter-side ODC candidates are separate.
   `docs/mockups/pulse-screens/09-chat-vote.html` (#298) is the design of record
   for epic #303 / ADR-0035. A run of questions is one conversation, with a
   desktop left column. The reusable vote card (#299, PR #307) is merged.
-- **Compact top-right vote panel:** #301 / open, unmerged
+- **Compact top-right vote panel:** #301 / merged
   [PR #313](https://github.com/Will-ODC/odc/pull/313) implements the conversation
   page with an operator-requested placement experiment. A small **Vote** tab
   opens a narrow top-right panel on desktop; phone opens above the composer.
@@ -97,9 +97,10 @@ options; the older charter-side ODC candidates are separate.
   in-memory API on 8081, in `~/Desktop/odc-conversation`, branch
   `pulse/301-conversation-page`. It does not change the 5173/8080 stack. Local
   processes may need restarting; demo URLs are not deployed services. Voting
-  uses the real local API; the assistant is disabled, not implemented. PR #313
-  has 428 passing tests plus type, lint, format, build and browser checks; it
-  waits on Will, with no agent approval or merge.
+  uses the real local API; the assistant is disabled, not implemented. PR #313 merged as `c26127d`; its final 428 tests, package checks, browser
+  checks and six CI checks passed after fresh review. #302 is now implemented
+  in open PR #322, with 283 remaining tests after retiring old screens; the
+  default switch is not merged yet. No agent approved or merged it.
 - **Browser extension:** [issue #314](https://github.com/Will-ODC/odc/issues/314)
   tracks a possible client with small expandable assistant and voting tabs on
   other websites. Idea only, not built or selected as a replacement. The first
@@ -122,8 +123,7 @@ entry records the checked state above, not a claim that open work has merged.
   2026-10-11).** Design of record: `docs/mockups/pulse-screens/09-chat-vote.html`
   (#298); 08 (three columns) is the kept alternative. **#299 is DONE** (PR #307:
   `VoteCard`, used by `DecisionDialog`; it also made `useCastVote.cast` take a
-  whole ballot, so approval polls send every pick). **#301 is implemented in
-  open PR #313**, awaiting fresh-review completion and Will's merge. Then #302
+  whole ballot, so approval polls send every pick). **#301 merged in PR #313**. #302 is implemented in open PR #322 and
   switches the default and retires `SwipeBallot`, `ChoiceBallot` and `Run`.
   **#300 runs in parallel: voting from any AI chat app through MCP/API**; no
   local text matching. Will selected OAuth via magic-link sign-in, one stable
@@ -134,9 +134,9 @@ entry records the checked state above, not a claim that open work has merged.
   plus separate traffic protection; atomic account/poll deduplication prevents
   duplicate AI ballots, quotas do not. Multiple accounts and browser/AI double
   counting remain gaps. **PR #309 is merged; ADR-0036 records these choices but remains marked
-  proposed.** Read implementation waits for explicit go in that
-  session and design acceptance; later storage/auth scope and the optional
-  Pulse answer-check page require coordination. No runtime MCP voting is built. Photo/summary (#296),
+  proposed.** Will gave implementation go in the #300 session; the public read slice is
+  pushed in open PR #323, fresh review/pipeline pending; later storage/auth scope and the optional
+  Pulse answer-check page require coordination. No runtime MCP casting is built. Photo/summary (#296),
   comments (#297), the assistant (#280-#284), browse (#259/#260) and vote
   validity are labelled gaps until their own work lands.
 
@@ -288,8 +288,9 @@ entry records the checked state above, not a claim that open work has merged.
   “Design AI app pulse voting” owns #300 / PR #309 and MCP/API work. Separate
   worktrees; agree optional answer-check page interfaces before #300 touches
   pulse-web. This session owns epic memory/candidate tracking.
-- PR #313 has all six GitHub checks passing; fresh review returned APPROVE with no remaining findings. #302
-  waits on Will's merge, with no stacked PR.
+- PR #313 merged after fresh review and six passing checks. #302 / PR #322
+  is pushed with fresh review and local checks passed; its pipeline is running.
+  It branched from master after #313 landed, without stacking.
 - Operator choices for #300 are recorded in merged PR #309; later persistence/auth
   scope and the optional check page need coordination. Neither #301 nor MCP
   read tools implement the assistant.
@@ -300,6 +301,23 @@ entry records the checked state above, not a claim that open work has merged.
 ### Design merge checkpoint
 
 PR #309 merged as `c618450` on 2026-10-11. ADR-0036 still says proposed and
-explicitly requires Will's implementation go; merging the design is not proof
-that MCP or voting code exists. The #300 session has been notified. PR #313
-remains open, reviewed and green; #302 still waits on its merge.
+requires an explicit implementation go; Will subsequently gave that go in
+the #300 session. Public read tools are pushed in open PR #323, not merged.
+PR #313 has merged; #302 / PR #322 is now open.
+
+### Implementation checkpoint
+
+- #302 / PR #322: `pulse/302-conversation-default`, `/private/tmp/odc-302-default`.
+  Default URL and sign-in landing become Conversation; `/conversation` aliases
+  and sample `/preview/chat` survive. Removed retired screens and exclusive
+  helpers/tests; suggestions API survives but its old form/preview rail retire.
+  283 tests in 21 files, type/lint/format/build and browser1440/390 pass; fresh
+  review APPROVE. Pushed/unmerged, CI pending. Demo5183 proxies isolated8081.
+- #300 read slice / PR #323: `pulse/300-mcp-reads`, `~/Desktop/odc-ai-voting`.
+  `get_poll`/`get_results` at `/api/mcp`, no casting/auth/own-answer tools. Author
+  reports416 fresh tests with required disposable Postgres, zero skips, plus
+  package gates. Pushed/unmerged, fresh review and CI underway. Existing `?poll`
+  link compatibility still needs Will's answer; production origin wiring is
+  explicitly deferred. No demo ports or frontend edits.
+- Latest shared usage checkpoint:47% five-hour,20% weekly used. Finish these
+  checkpoints before starting further protected voting or check-page scope.

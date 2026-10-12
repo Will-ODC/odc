@@ -12,7 +12,7 @@ options from the charter-side ODC candidates below. Checked 2026-10-11.
 | Existing swipe UI | `pulse-screens/01-claim.html`; current Run/ballot screens | Current default, demo 5173; retirement waits on #302. |
 | Three-column desktop | `pulse-screens/08-desktop-vote.html`, #298 | Kept alternative. |
 | Conversation, vote above composer | `pulse-screens/09-chat-vote.html`, #298; epic #303 / ADR-0035 | Chosen design of record; reusable card merged in PR #307. |
-| Conversation, compact top-right Vote panel | [PR #313](https://github.com/Will-ODC/odc/pull/313), #301 | Operator-requested layout experiment; open/unmerged, waits on Will. Local demo 5182, isolated in-memory API 8081; phone expands above composer. One Close button, Vote tab reopens. |
+| Conversation, compact top-right Vote panel | [PR #313](https://github.com/Will-ODC/odc/pull/313), #301 | Operator-requested layout experiment; merged in PR #313; default switch is open PR #322, waiting on Will. Local demo 5182, isolated in-memory API 8081; phone expands above composer. One Close button, Vote tab reopens. |
 | Browser extension with assistant/voting tabs | [Issue #314](https://github.com/Will-ODC/odc/issues/314) | Idea only; sample-data prototype proposed, browser/access decisions pending. |
 
 The top-right variant does not supersede mockup 09 or change the default route.
