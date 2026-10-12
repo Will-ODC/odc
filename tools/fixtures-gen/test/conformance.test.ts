@@ -168,22 +168,53 @@ test("every unregistered (type, version) in a PARTIAL vector is reserved (EV-18,
   }
 });
 
-test("a PARTIAL vector names exactly the lines that are unregistered (EV-7, EV-17)", () => {
+test("a PARTIAL vector names every unregistered line, and only ballots besides (EV-7, EV-17)", () => {
   // The other half of what EV-17 makes conformance-checkable. A verdict token
   // with the wrong line numbers is still a wrong fixture: every CORRECT verifier
   // would fail against it, and after the freeze contracts-guard makes it
   // uneditable. Nothing else in this file or the suite reads expect.lines, so
   // without this a typo in the declared list ships silently.
+  //
+  // Since evolution.md v7 (ADR-0034) PARTIAL also names registered ballots whose
+  // batch checks ET-18b or ET-24b leave unresolved, so the declared set is the
+  // unregistered lines PLUS such ballots — never anything else, and never
+  // unless the chain holds an opaque ballot or an unregistered issue. Which
+  // ballots exactly is checked against both batching rules by
+  // docs/security/attacks/check-adr-0034-agreement.py.
   for (const vec of vectors) {
     if (vec.expect.verdict !== "PARTIAL") continue;
-    const unregistered = refsOf(vec.id, vec.bytes)
-      .filter(isUnregistered)
-      .map((ref) => ref.line);
+    const refs = refsOf(vec.id, vec.bytes);
+    const unregistered = refs.filter(isUnregistered).map((ref) => ref.line);
+    const declared = vec.expect.lines;
     assert.deepEqual(
-      vec.expect.lines,
-      unregistered,
-      `${vec.id} declares PARTIAL on lines [${vec.expect.lines.join(", ")}] but the unregistered (type, version) lines are [${unregistered.join(", ")}]`,
+      declared,
+      [...new Set(declared)].sort((x, y) => x - y),
+      `${vec.id} declares PARTIAL lines out of order or repeated (EV-17)`,
     );
+    for (const line of unregistered) {
+      assert.ok(
+        declared.includes(line),
+        `${vec.id} omits unregistered line ${String(line)} from PARTIAL [${declared.join(", ")}]`,
+      );
+    }
+    const extra = declared.filter((line) => !unregistered.includes(line));
+    if (extra.length === 0) continue;
+    const opaqueBatching = refs.some(
+      (ref) =>
+        isUnregistered(ref) &&
+        (ref.type === "vote_cast" || ref.type === "issue_created"),
+    );
+    assert.ok(
+      opaqueBatching,
+      `${vec.id} names registered lines [${extra.join(", ")}] in PARTIAL with no opaque ballot or unregistered issue on the chain`,
+    );
+    for (const line of extra) {
+      const ref = refs.find((r) => r.line === line);
+      assert.ok(
+        ref?.type === "vote_cast" && !isUnregistered(ref),
+        `${vec.id} names line ${String(line)} in PARTIAL, which is neither unregistered nor a registered ballot (ET-18b, ET-24b)`,
+      );
+    }
   }
 });
 

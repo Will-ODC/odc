@@ -1489,6 +1489,305 @@
         "EX-22"
       ],
       "note": "Chain 002 run with the correct --chain and a wrong --head — chain B's head, a real head of another chain under the same operator key. The --chain check passes, so the --head check must still run and still reject, and EX-19 still attributes a --head mismatch to the last line (4), not to line 1. A verifier that stops checking once --chain matches, or that blames line 1 for any identity input, fails here."
+    },
+    {
+      "id": "116-opaque-member",
+      "export": "vectors/116-opaque-member.ndjson",
+      "expect": {
+        "verdict": "PARTIAL",
+        "lines": [
+          6,
+          7
+        ]
+      },
+      "cites": [
+        "ET-22a",
+        "ET-24",
+        "ET-24b",
+        "EV-7",
+        "EV-8",
+        "EV-17"
+      ],
+      "note": "Two A ballots and an opaque ballot at T1, then three A ballots at T2. The opaque ballot could be A's third T1 ballot, so the check at the first T2 (line 7) is unresolved, not INVALID: |R| + F = 2 + 1 meets the minimum. PARTIAL names the opaque line and the unresolved line."
+    },
+    {
+      "id": "117-opaque-payload-names-other-issue",
+      "export": "vectors/117-opaque-payload-names-other-issue.ndjson",
+      "expect": {
+        "verdict": "PARTIAL",
+        "lines": [
+          6,
+          7
+        ]
+      },
+      "cites": [
+        "ET-24",
+        "ET-24b",
+        "EV-8",
+        "EV-19"
+      ],
+      "note": "Byte-for-byte 116 except that the opaque ballot's payload names issue B. A verifier MUST NOT read an unregistered version's payload for batch membership, so the verdict and lines equal 116's."
+    },
+    {
+      "id": "118-opaque-insufficient-even-optimistically",
+      "export": "vectors/118-opaque-insufficient-even-optimistically.ndjson",
+      "expect": {
+        "verdict": "INVALID",
+        "line": 6
+      },
+      "cites": [
+        "ET-24",
+        "ET-24b",
+        "ET-22a"
+      ],
+      "note": "One A ballot and one opaque ballot at T1, then T2. Even if the opaque ballot is A's, the T1 batch holds two against a minimum of three: |R| + F = 1 + 1 < 3, a definite failure at the first T2 (line 6). The one-ballot bound (ET-22a) is what makes F a bound."
+    },
+    {
+      "id": "119-opaque-closure",
+      "export": "vectors/119-opaque-closure.ndjson",
+      "expect": {
+        "verdict": "PARTIAL",
+        "lines": [
+          7,
+          8
+        ]
+      },
+      "cites": [
+        "ET-24a",
+        "ET-24b",
+        "EV-7",
+        "EV-17"
+      ],
+      "note": "A full T1 batch, an opaque ballot at T2, then an A ballot at T1. If the opaque ballot is A's, A has left T1 and line 8 returns to it (ET-24a); if not, line 8 extends the T1 batch. Unresolved, so PARTIAL names lines 7 and 8."
+    },
+    {
+      "id": "120-definite-resumed-instant",
+      "export": "vectors/120-definite-resumed-instant.ndjson",
+      "expect": {
+        "verdict": "INVALID",
+        "line": 11
+      },
+      "cites": [
+        "ET-24a",
+        "ET-24b"
+      ],
+      "note": "Full batches at T1 and T2 are known, so A has definitely left T1. The opaque ballot cannot reopen a known closed instant: the A ballot at T1 is a definite ET-24a failure at line 11. Uncertainty never erases known batch history."
+    },
+    {
+      "id": "121-opaque-after-full-batch",
+      "export": "vectors/121-opaque-after-full-batch.ndjson",
+      "expect": {
+        "verdict": "PARTIAL",
+        "lines": [
+          7
+        ]
+      },
+      "cites": [
+        "ET-24",
+        "ET-24b",
+        "EV-7"
+      ],
+      "note": "The T1 batch is already full, so the opaque ballot at T1 changes no check. An opaque line that affects nothing is still listed, and only it."
+    },
+    {
+      "id": "122-known-only-control",
+      "export": "vectors/122-known-only-control.ndjson",
+      "expect": {
+        "verdict": "INVALID",
+        "line": 6
+      },
+      "cites": [
+        "ET-24",
+        "ET-24b"
+      ],
+      "note": "The 116 shape without its opaque ballot. With no candidate, F is 0 and ET-24b reduces exactly to ET-24: the two-ballot T1 batch fails at line 6."
+    },
+    {
+      "id": "123-opaque-cannot-excuse-off-interval",
+      "export": "vectors/123-opaque-cannot-excuse-off-interval.ndjson",
+      "expect": {
+        "verdict": "INVALID",
+        "line": 5
+      },
+      "cites": [
+        "ET-23",
+        "ET-24b"
+      ],
+      "note": "A known ballot off its issue's two-minute interval is a definite ET-23 failure at line 5, whatever the opaque ballot before it is. ADR-0034's case writes it as T1 + 1 ms; an odd minute against a 120000 ms interval is the same failure built from whole-minute timestamps."
+    },
+    {
+      "id": "124-ballot-of-unreadable-issue",
+      "export": "vectors/124-ballot-of-unreadable-issue.ndjson",
+      "expect": {
+        "verdict": "PARTIAL",
+        "lines": [
+          3,
+          4
+        ]
+      },
+      "cites": [
+        "ET-18",
+        "ET-18b",
+        "EV-7",
+        "EV-17"
+      ],
+      "note": "A registered ballot names an issue_created at an unregistered version. It passes ET-18, and its ET-18a/ET-23/ET-24/ET-24a checks are unresolved, so PARTIAL names the issue's line and the ballot's."
+    },
+    {
+      "id": "125-two-opaque-ballots-fill-a-batch",
+      "export": "vectors/125-two-opaque-ballots-fill-a-batch.ndjson",
+      "expect": {
+        "verdict": "PARTIAL",
+        "lines": [
+          5,
+          6,
+          7
+        ]
+      },
+      "cites": [
+        "ET-22a",
+        "ET-24",
+        "ET-24b"
+      ],
+      "note": "One A ballot and two opaque ballots at T1: |R| + F = 1 + 2 meets the minimum, so the first T2 (line 7) is unresolved. Both opaque lines are listed."
+    },
+    {
+      "id": "126-opaque-before-first-ballot",
+      "export": "vectors/126-opaque-before-first-ballot.ndjson",
+      "expect": {
+        "verdict": "PARTIAL",
+        "lines": [
+          4,
+          7
+        ]
+      },
+      "cites": [
+        "ET-24",
+        "ET-24b"
+      ],
+      "note": "The opaque ballot comes before A's first registered ballot. With no P(f), w is the issue's own line, so the opaque ballot still counts toward the T1 batch and line 7 is unresolved."
+    },
+    {
+      "id": "127-issues-share-an-instant",
+      "export": "vectors/127-issues-share-an-instant.ndjson",
+      "expect": {
+        "verdict": "PARTIAL",
+        "lines": [
+          6,
+          7,
+          10,
+          11
+        ]
+      },
+      "cites": [
+        "ET-24",
+        "ET-24b"
+      ],
+      "note": "A and B both hold two ballots at T1, and two opaque ballots at T1 are candidates of both. Each counts in each issue's F, so both first-T2 ballots (lines 10 and 11) are unresolved. Two opaque ballots are needed: with one, every assignment leaves A or B short, which only a search over assignments could prove (INVALID) — the over-reporting ADR-0034 keeps out of vectors."
+    },
+    {
+      "id": "128-opaque-off-one-issues-interval",
+      "export": "vectors/128-opaque-off-one-issues-interval.ndjson",
+      "expect": {
+        "verdict": "INVALID",
+        "line": 7
+      },
+      "cites": [
+        "ET-23",
+        "ET-24",
+        "ET-24b"
+      ],
+      "note": "The opaque ballot's minute 11 is a multiple of A's one-minute interval but not of B's two-minute one, so it is no candidate of B whatever its payload says. B's two-ballot batch at minute 10 is a definite ET-24 failure at line 7."
+    },
+    {
+      "id": "129-opaque-before-the-issue",
+      "export": "vectors/129-opaque-before-the-issue.ndjson",
+      "expect": {
+        "verdict": "INVALID",
+        "line": 7
+      },
+      "cites": [
+        "ET-24",
+        "ET-24b"
+      ],
+      "note": "An opaque ballot made before issue B is created is no candidate of B (seq(U) > c fails). B's two-ballot batch at T1 is a definite ET-24 failure at line 7."
+    },
+    {
+      "id": "130-opaque-ballot-malformed-payload",
+      "export": "vectors/130-opaque-ballot-malformed-payload.ndjson",
+      "expect": {
+        "verdict": "INVALID",
+        "line": 6
+      },
+      "cites": [
+        "ES-16",
+        "EV-16",
+        "ET-24b"
+      ],
+      "note": "The 116 shape, but the opaque ballot's payload holds a float. ET-24b's opaque ballot must pass Stage A and ES-15 to ES-17; this one has no computable preimage, so it is INVALID at its own line (EV-16), never PARTIAL. Its stored hash is the pre-mutation digest, so the line is also HA-14-mismatched; both failures are on line 6."
+    },
+    {
+      "id": "131-opaque-in-an-earlier-run",
+      "export": "vectors/131-opaque-in-an-earlier-run.ndjson",
+      "expect": {
+        "verdict": "PARTIAL",
+        "lines": [
+          7,
+          8
+        ]
+      },
+      "cites": [
+        "ET-24",
+        "ET-24a",
+        "ET-24b",
+        "EV-17"
+      ],
+      "note": "A full T1 batch, an opaque ballot at minute 12, a full T2 batch, then a ballot at minute 5. The opaque ballot could split the T1-to-T2 boundary, so line 8 is unresolved. It lies before T2's first ballot, so it cannot touch the run that line 11 ends: line 11 is resolved and NOT listed. Pins against over-reporting that carries an earlier run's state into a later run start."
+    },
+    {
+      "id": "132-unregistered-non-ballot-is-no-candidate",
+      "export": "vectors/132-unregistered-non-ballot-is-no-candidate.ndjson",
+      "expect": {
+        "verdict": "INVALID",
+        "line": 7
+      },
+      "cites": [
+        "ET-22a",
+        "ET-24",
+        "ET-24b",
+        "EV-17"
+      ],
+      "note": "The 116 shape with an unregistered participant_registered where the opaque ballot was. Only vote_cast carries ballots (ET-22a), so it is no candidate: the two-ballot T1 batch is a definite ET-24 failure at line 7, and INVALID outranks the PARTIAL its own line would give. A verifier that treats every unregistered event as a possible ballot reports PARTIAL 6, 7 instead."
+    },
+    {
+      "id": "133-candidate-before-the-runs-window",
+      "export": "vectors/133-candidate-before-the-runs-window.ndjson",
+      "expect": {
+        "verdict": "INVALID",
+        "line": 10
+      },
+      "cites": [
+        "ET-24",
+        "ET-24b"
+      ],
+      "note": "The opaque ballot at T2 (line 4) comes before the T1 run, so it lies before w = seq(P(f)) = 7 for the T2 run and is not counted in its F. The two-ballot T2 run is a definite ET-24 failure at line 10, and INVALID outranks the earlier unresolved lines. Measuring F from c instead of w would count it and report PARTIAL."
+    },
+    {
+      "id": "134-candidate-at-a-run-starts-instant",
+      "export": "vectors/134-candidate-at-a-run-starts-instant.ndjson",
+      "expect": {
+        "verdict": "PARTIAL",
+        "lines": [
+          4,
+          5,
+          8
+        ]
+      },
+      "cites": [
+        "ET-24a",
+        "ET-24b"
+      ],
+      "note": "An opaque ballot at T2 before A's full T1 run. If it is A's, A left T2 before T1, so the ballot at T2 (line 8) returns to a closed instant; if not, line 8 starts a fresh batch. ET-24b's run-start clause ts(U) = ts(L) leaves line 8 unresolved; line 5 is unresolved because the opaque ballot could end a batch before it."
     }
   ]
 }
