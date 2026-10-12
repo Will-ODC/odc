@@ -37,8 +37,8 @@ three ADR-0034, #294), `export-format.md` v5 (#224, ADR-0032), `hashing.md` v2,
 ADR-0034 (mixed-version ballot batching: ET-18b, ET-22a, ET-24b) merged as Go
 #324 (#319) and TS #325 (#320), each built in an isolated sparse worktree and
 approved (with nits, fixed) by an isolated fresh reviewer. Its vectors
-`116`-`132` are #321 → PR #327; with them the corpus is **132** (VALID 21,
-PARTIAL 13, INVALID 98), and all 132 pass both verifiers. The agreement proof is
+`116`-`134` are #321 → PR #327; with them the corpus is **134** (VALID 21,
+PARTIAL 14, INVALID 99), and all 134 pass both verifiers. The agreement proof is
 `docs/security/attacks/check-adr-0034-agreement.py`. Phase 3 batching vectors `099`-`108` came in #202; phase 4
 (`--chain` and genesis/head reporting, EX-21 to EX-24) came in #220 (Go), #221 (TS)
 and #222 (vectors `109`-`115`). #203 reconciled EV-15's stage map. #219 made a TS
@@ -106,7 +106,7 @@ Optional, from ADR-0034 owed item 4: `docs/security/attacks/check-unknown-batchi
   TS exit code. #223 checkpoint, #224 `export-format.md` v5 (ADR-0032).
 - EX-24 stored-claim reporting in both verifiers: #241 (`export-format.md` v5).
 - ADR-0034 mixed-version batching: contract #294; Go #324 (#319), TS #325
-  (#320); vectors `116`-`132` in #327 (#321). TS sub-quadratic cost is
+  (#320); vectors `116`-`134` in #327 (#321). TS sub-quadratic cost is
   follow-up #326.
 - Memory index and `memory-index` CI guard (#117, #121).
 

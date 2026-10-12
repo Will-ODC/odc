@@ -21,7 +21,7 @@ are named in the live file's index.
   ET-24b leaves a check beside an opaque ballot unresolved (`PARTIAL`) unless a
   failure holds whatever the opaque ballots are; ET-18b covers a ballot of an
   unreadable issue. Built in both verifiers by #319/#320 (PRs #324/#325), with
-  vectors 116-132 (#321, PR #327) pinned only where the conservative and exact
+  vectors 116-134 (#321, PR #327) pinned only where the conservative and exact
   rules agree.
 - ~~Canonical JSON serialization~~ → DECIDED: fixed-field-order byte
   construction, strict rejection (D3/D5 in docs/plans/phase-0.md; ADR in T3).
