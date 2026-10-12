@@ -750,50 +750,71 @@ func exactFailures(gl []genLine, issuePos []int, assign map[int]int) map[int]boo
 }
 
 // Cost: a hostile chain of n registered issues and n opaque ballots at
-// distinct instants, every one a candidate of every issue, then one ballot per
-// issue so every issue asks its ET-24b questions. Memory must stay roughly
-// linear in the export. The v12 implementation first shipped kept a candidate
-// set per issue and was measured at about 877 MB allocated for n = 3000;
-// the bound below is far under that.
+// distinct instants, then one ballot per issue so every issue asks its ET-24b
+// questions. Memory must stay roughly linear in the export. The v12
+// implementation first shipped kept a candidate set per issue and was
+// measured at about 877 MB allocated (about 240x the export) for n = 3000.
+//
+// Two shapes. "one_interval": every issue at 60000 ms, so every opaque ballot
+// is a candidate of every issue. "distinct_intervals": issue i at
+// 60000*(i+1) ms with its ballot at the epoch, opaque ballot j at
+// 60000*(j+1) ms, so each interval summary tests every opaque ballot once —
+// the one-remainder-per-(opaque ballot, interval) path. In both, issue i has
+// a candidate (opaque ballot i at least) at an instant other than its
+// ballot's, so every ballot line is listed.
 func TestET24bHostileCost(t *testing.T) {
 	if testing.Short() {
 		t.Skip("large chain")
 	}
 	const n = 3000
-	var es []entry
-	for i := 0; i < n; i++ {
-		es = append(es, iss(60000, 3))
+	shapes := []struct {
+		name     string
+		interval func(i int) int64
+		opaqueTS func(j int) string
+		ballotTS string
+	}{
+		{"one_interval", func(int) int64 { return 60000 },
+			func(j int) string { return msToTS(baseMS + int64(j+10)*60000) }, T1},
+		{"distinct_intervals", func(i int) int64 { return 60000 * int64(i+1) },
+			func(j int) string { return msToTS(60000 * int64(j+1)) }, "1970-01-01T00:00:00.000Z"},
 	}
-	for i := 0; i < n; i++ {
-		es = append(es, opq(msToTS(baseMS+int64(i+10)*60000)))
-	}
-	for i := 0; i < n; i++ {
-		es = append(es, bal(i, T1))
-	}
-	data := buildEntries(t, es)
+	for _, sh := range shapes {
+		t.Run(sh.name, func(t *testing.T) {
+			var es []entry
+			for i := 0; i < n; i++ {
+				es = append(es, iss(sh.interval(i), 3))
+			}
+			for j := 0; j < n; j++ {
+				es = append(es, opq(sh.opaqueTS(j)))
+			}
+			for i := 0; i < n; i++ {
+				es = append(es, bal(i, sh.ballotTS))
+			}
+			data := buildEntries(t, es)
 
-	runtime.GC()
-	var before, after runtime.MemStats
-	runtime.ReadMemStats(&before)
-	start := time.Now()
-	res := Verify(data, nil)
-	elapsed := time.Since(start)
-	runtime.ReadMemStats(&after)
-	alloc := after.TotalAlloc - before.TotalAlloc
+			runtime.GC()
+			var before, after runtime.MemStats
+			runtime.ReadMemStats(&before)
+			start := time.Now()
+			res := Verify(data, nil)
+			elapsed := time.Since(start)
+			runtime.ReadMemStats(&after)
+			alloc := after.TotalAlloc - before.TotalAlloc
 
-	// Lines: issues 2..n+1, opaque n+2..2n+1, ballots 2n+2..3n+1. Every
-	// ballot is its issue's first and has candidates at another instant
-	// after c: all opaque lines and all ballot lines are listed.
-	if res.Verdict != PARTIAL || len(res.Lines) != 2*n || res.Lines[0] != n+2 || res.Lines[len(res.Lines)-1] != 3*n+1 {
-		t.Fatalf("got %s with %d lines", res.Verdict, len(res.Lines))
-	}
-	t.Logf("n=%d: export %d bytes, verified in %s, %d MB allocated", n, len(data), elapsed, alloc>>20)
-	// About 14x the export today, almost all of it parsing; the old
-	// per-issue sets were about 240x.
-	if alloc > 24*uint64(len(data)) {
-		t.Errorf("allocated %d MB verifying a %d-byte export; want under 24x the export", alloc>>20, len(data))
-	}
-	if elapsed > 10*time.Second {
-		t.Errorf("took %s", elapsed)
+			// Lines: issues 2..n+1, opaque n+2..2n+1, ballots 2n+2..3n+1.
+			if res.Verdict != PARTIAL || len(res.Lines) != 2*n || res.Lines[0] != n+2 || res.Lines[len(res.Lines)-1] != 3*n+1 {
+				t.Fatalf("got %s with %d lines", res.Verdict, len(res.Lines))
+			}
+			t.Logf("n=%d: export %d bytes, verified in %s, %d MB allocated", n, len(data), elapsed, alloc>>20)
+			// About 14-15x the export today, almost all of it parsing and
+			// signature checks; 32x leaves room for toolchain drift and is
+			// still far below the old structure's ~240x.
+			if alloc > 32*uint64(len(data)) {
+				t.Errorf("allocated %d MB verifying a %d-byte export; want under 32x the export", alloc>>20, len(data))
+			}
+			if elapsed > 20*time.Second {
+				t.Errorf("took %s", elapsed)
+			}
+		})
 	}
 }

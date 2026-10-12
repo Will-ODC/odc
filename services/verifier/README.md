@@ -142,7 +142,8 @@ otherwise identical chain moves the verdict in the direction the rule names.
   second test checks that reading against the exact all-assignments meaning
   ET-24b's informative paragraph states (a definite failure fails under every
   assignment; a resolved check passes under every one). A cost test verifies
-  a hostile chain (3000 issues, 3000 opaque ballots at distinct instants) and
+  hostile chains (3000 issues, 3000 opaque ballots at distinct instants; one
+  shared interval, and 3000 distinct intervals) and
   bounds its allocation to a small multiple of the export size.
 - **`internal/verify/parse_dupkeys_test.go`** covers HA-6 duplicate-key
   detection across the parser's linear-scan/set threshold, with the duplicate
