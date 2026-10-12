@@ -72,7 +72,9 @@ the same CI runs.
    a sign-out control (the API and `signOut()` exist, no screen calls them;
    cookies last 30 days); a container-image scan in `pulse-images.yml` before the
    first deploy (deferred by the operator, 2026-10-11); Dependabot alerts are off
-   (a repo setting).
+   (a repo setting). Sign-out is #344, shown only to a signed-in person: someone
+   who voted **without** signing in still has no way to clear `pulse_ballot` on a
+   shared browser, though `POST /api/sign-out` would clear it. Undecided.
 
 ## UI options and implementation checkpoint
 
