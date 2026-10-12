@@ -202,7 +202,7 @@ REGISTERED = {("issue_created", 1), ("vote_cast", 1)}
 # The ET-24b vectors of tools/fixtures-gen/src/vectors/opaque-batching.ts. 130
 # is left out on purpose: its malformed payload is an EV-16 Stage A failure
 # that no batch rule reaches.
-VECTOR_IDS = [f"{n}-" for n in range(116, 130)]
+VECTOR_IDS = [f"{n}-" for n in [*range(116, 130), 131]]
 
 
 def ms(ts):

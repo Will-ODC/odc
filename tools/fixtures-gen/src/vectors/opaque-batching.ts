@@ -271,4 +271,18 @@ export const opaqueBatchingVectors: Vector[] = [
     ["ES-16", "EV-16", "ET-24b"],
     "The 116 shape, but the opaque ballot's payload holds a float. ET-24b's opaque ballot must pass Stage A and ES-15 to ES-17; this one has no computable preimage, so it is INVALID at its own line (EV-16), never PARTIAL. Its stored hash is the pre-mutation digest, so the line is also HA-14-mismatched; both failures are on line 6.",
   ),
+  partial(
+    "131-opaque-in-an-earlier-run",
+    chain((c) => {
+      const a = c.issue("Batch A", 2);
+      c.issue("Batch B", 2);
+      votes(c, a.hash, T1, 3);
+      opaque(c, a.hash, 12);
+      votes(c, a.hash, T2, 3);
+      votes(c, a.hash, 5, 1);
+    }),
+    [7, 8],
+    ["ET-24", "ET-24a", "ET-24b", "EV-17"],
+    "A full T1 batch, an opaque ballot at minute 12, a full T2 batch, then a ballot at minute 5. The opaque ballot could split the T1-to-T2 boundary, so line 8 is unresolved. It lies before T2's first ballot, so it cannot touch the run that line 11 ends: line 11 is resolved and NOT listed. Pins against over-reporting that carries an earlier run's state into a later run start.",
+  ),
 ];

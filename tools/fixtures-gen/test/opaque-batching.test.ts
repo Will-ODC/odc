@@ -27,6 +27,7 @@ const expected = [
   ["128-opaque-off-one-issues-interval", "INVALID", 7],
   ["129-opaque-before-the-issue", "INVALID", 7],
   ["130-opaque-ballot-malformed-payload", "INVALID", 6],
+  ["131-opaque-in-an-earlier-run", "PARTIAL", [7, 8]],
 ] as const;
 
 const fixtures = resolve(
