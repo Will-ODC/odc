@@ -73,6 +73,15 @@ polls were both listed here as in flight and have since landed (#150, #156, #157
 
 ---
 
+## Conversation default (#302)
+
+The live conversation page (#301) becomes the default at `/` and `?poll=ID`,
+including sign-in landing. `/conversation` links remain supported; the old
+Run/SwipeBallot/ChoiceBallot screens are retired. ADR-0035 uses pick-then-Submit
+and in-place results. The assistant is disabled until its own work lands; MCP
+read/voting work (#300) is separate. The old suggestion form and next-question
+preview rail are retired too; the suggestion API remains available.
+
 ## P2 — The sign-in community picker · BUILT 2026-10-09; one question left
 
 **Built and merged** (#215, after its base #213). When an
@@ -142,10 +151,9 @@ at sign-in today and **leads nowhere.**
 **Blocked on:** the whole shape. Nothing about this is designed. Donations in
 particular reach payments, identity and obligations the product has never had.
 
-The one thing already decided about it, from ADR-0022: pulse's one-press cast is
-bought with **reversibility, not speed**, and pillar 3's donations and volunteer
-commitments are not reversible and therefore **do** confirm. Do not read pulse's
-ballot as a precedent for how this pillar's actions are taken.
+ADR-0022 justified the retired one-press ballot through reversibility. The
+current conversation ballot uses pick-then-Submit (ADR-0035); donations and
+volunteer commitments also require confirmation.
 
 ## P6 — Poll authoring under ADR-0024 · BLOCKED ON VALUES, NOT RULES; the operator's stated next work after storage
 
@@ -227,8 +235,8 @@ than demanded at the door.
    voter.
 3. **A stamp describes the answer currently standing.** Signing in does **not**
    re-stamp votes nobody re-cast; but re-casting is a fresh act and is stamped
-   afresh. This keeps ADR-0022 whole: a vote stays changeable, so the one-press
-   cast keeps the justification it depends on.
+   afresh. A vote remains changeable until close; the conversation card uses
+   pick-then-Submit (ADR-0035).
 4. **Anonymous voting stays** — `community NULL, assurance 'none'`.
 5. **Signing in upgrades the person, never their past votes.** A guest who
    verifies keeps their identity and gains the credential — unless the address

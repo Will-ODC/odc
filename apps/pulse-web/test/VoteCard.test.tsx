@@ -236,7 +236,7 @@ describe("status", () => {
     await userEvent.click(button("Try again"));
     expect(submit).toHaveBeenCalledExactlyOnceWith([2]);
   });
-  it("shows results in place, marks all picks, and offers change, next, hide and close", async () => {
+  it("shows results in place, marks all picks, and offers change, next and one close", async () => {
     const change = vi.fn(),
       next = vi.fn(),
       close = vi.fn();
@@ -273,17 +273,7 @@ describe("status", () => {
     expect(change).toHaveBeenCalledOnce();
     await user.click(button("Next"));
     expect(next).toHaveBeenCalledOnce();
-    await user.click(button("Hide"));
-    expect(
-      screen.queryByRole("group", { name: "How people answered" }),
-    ).toBeNull();
-    expect(document.activeElement).toBe(button("Show vote card"));
-    await user.keyboard("{Enter}");
-    await waitFor(() =>
-      expect(document.activeElement).toBe(
-        screen.getByRole("group", { name: "How people answered" }),
-      ),
-    );
+    expect(screen.queryByRole("button", { name: "Hide" })).toBeNull();
     await user.click(button("Close"));
     expect(close).toHaveBeenCalledOnce();
   });
@@ -343,4 +333,22 @@ describe("status", () => {
       screen.getByRole("radio", { name: "Library" }),
     );
   });
+});
+
+it("expands an externally collapsed card from the Vote tab", async () => {
+  render(
+    <Harness
+      collapsed
+      status={{ kind: "answered", changed: false, results: results() }}
+    />,
+  );
+  expect(
+    screen.queryByRole("group", { name: "How people answered" }),
+  ).toBeNull();
+  await userEvent.click(button("Vote"));
+  await waitFor(() =>
+    expect(document.activeElement).toBe(
+      screen.getByRole("group", { name: "How people answered" }),
+    ),
+  );
 });

@@ -304,7 +304,7 @@ function LinkSent({
    * The form that was focused has just unmounted, so without this focus falls
    * to `document.body`: a keyboard user has to tab from the top of the page to
    * reach "Use a different email", and a screen reader announces nothing at
-   * all. Same reason `AfterVote` and `ResultsPanel` move focus deliberately.
+   * all. Same reason `VoteCard` and `ResultsPanel` move focus deliberately.
    */
   useEffect(() => heading.current?.focus(), []);
 

@@ -1,0 +1,166 @@
+/* One page at both sizes. Only the answered rail is desktop furniture. */
+.conversation {
+  min-height: 100dvh;
+  height: 100dvh;
+  display: grid;
+  grid-template-rows: auto minmax(0, 1fr);
+  color: var(--ballot-ink);
+  background: var(--ballot-page);
+}
+.conversation__banner {
+  grid-column: 1 / -1;
+}
+.conversation__sidebar {
+  display: none;
+}
+.conversation__main {
+  min-width: 0;
+  min-height: 0;
+  display: flex;
+  flex-direction: column;
+}
+.conversation__scroll {
+  flex: 1;
+  min-height: 0;
+  overflow-y: auto;
+  padding: var(--gutter);
+}
+.conversation__column {
+  width: 100%;
+  max-width: calc(var(--rail) * 3);
+  margin-inline: auto;
+}
+.conversation__hero h1 {
+  font-size: var(--t-hero);
+  line-height: 1.2;
+  margin: var(--step) 0 var(--gutter);
+  overflow-wrap: anywhere;
+}
+.conversation__hero > p,
+.conversation__note,
+.conversation__empty,
+.conversation__sidebar p,
+.conversation__thread small {
+  font-size: var(--t-small);
+  color: var(--ballot-ink-muted);
+  line-height: 1.5;
+}
+.conversation__thread {
+  list-style: none;
+  padding: 0;
+  margin: 0;
+  display: flex;
+  flex-direction: column;
+  gap: var(--gutter);
+}
+.conversation__thread li {
+  padding: calc(var(--step) * 2);
+  background: var(--surface-rest);
+  border-radius: var(--r-card);
+  overflow-wrap: anywhere;
+}
+.conversation__thread p {
+  font-size: var(--t-body);
+}
+.conversation__dock {
+  padding: var(--step) calc(var(--step) * 1.5);
+  border-top: var(--hairline) solid var(--ballot-line);
+}
+.conversation__dock .vote-card {
+  max-height: 60dvh;
+  overflow-y: auto;
+}
+.conversation__composer {
+  display: block;
+  margin-top: var(--step);
+  font-size: var(--t-small);
+  color: var(--ballot-ink-muted);
+}
+.conversation__composer textarea {
+  box-sizing: border-box;
+  width: 100%;
+  resize: none;
+  padding: calc(var(--step) * 1.5);
+  margin-top: var(--step);
+  border: var(--hairline) solid var(--control-line);
+  border-radius: var(--r-control);
+  background: var(--surface-rest);
+  color: var(--ballot-ink-muted);
+  font: inherit;
+}
+.conversation__composer textarea::placeholder {
+  color: var(--ballot-ink-muted);
+  opacity: 1;
+}
+.conversation__note {
+  margin: var(--step) 0 0;
+}
+.conversation button {
+  font: inherit;
+  font-size: var(--t-small);
+  color: var(--ballot-ink);
+  background: var(--surface-hover);
+  border: var(--hairline) solid var(--control-line);
+  border-radius: var(--r-control);
+  padding: var(--step) calc(var(--step) * 1.5);
+  cursor: pointer;
+}
+.conversation button:disabled {
+  cursor: default;
+  opacity: 0.55;
+}
+.conversation button:focus-visible {
+  outline: calc(var(--hairline) * 2) solid var(--focus-ring);
+  outline-offset: calc(var(--hairline) * 2);
+}
+.conversation__sidebar button {
+  display: block;
+  text-align: left;
+  width: 100%;
+  margin-bottom: var(--step);
+}
+.conversation__sidebar button[aria-current] {
+  border-color: rgb(var(--side-b));
+}
+@media (min-width: 1100px) {
+  .conversation {
+    grid-template-columns: var(--rail) minmax(0, 1fr);
+  }
+  .conversation__sidebar {
+    display: flex;
+    flex-direction: column;
+    padding: calc(var(--step) * 2);
+    border-right: var(--hairline) solid var(--ballot-line);
+    overflow-y: auto;
+    min-height: 0;
+  }
+  .conversation__sidebar h2 {
+    font-size: var(--t-small);
+  }
+  .conversation__dock {
+    padding: var(--step) var(--gutter) calc(var(--step) * 2);
+  }
+}
+
+/* Operator experiment: a small, non-modal vote tab at the desktop's top right. */
+@media (min-width: 1100px) {
+  .conversation__vote {
+    pointer-events: none;
+    position: fixed;
+    inset-block-start: calc(var(--gutter) * 2);
+    inset-inline-end: var(--gutter);
+    width: var(--dialog-w);
+    max-width: calc(100vw - var(--rail) - var(--gutter) * 2);
+  }
+  .conversation__vote > * {
+    pointer-events: auto;
+  }
+  .conversation__vote > button {
+    display: block;
+    margin-inline-start: auto;
+    box-shadow: var(--shadow-ballot);
+  }
+  .conversation__vote .vote-card {
+    max-height: calc(100dvh - var(--gutter) * 4);
+  }
+}

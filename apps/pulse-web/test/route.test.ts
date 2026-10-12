@@ -3,12 +3,15 @@ import { FIRST_POLL_ID, pathOf, routeFrom } from "../src/flow/route.js";
 
 describe("reading a URL", () => {
   it("opens the first question when the path says nothing", () => {
-    expect(routeFrom("/")).toEqual({ kind: "run", pollId: FIRST_POLL_ID });
+    expect(routeFrom("/")).toEqual({
+      kind: "conversation",
+      pollId: FIRST_POLL_ID,
+    });
   });
 
-  it("starts the run wherever ?poll= says", () => {
+  it("starts the conversation wherever ?poll= says", () => {
     expect(routeFrom("/?poll=pay-for-it")).toEqual({
-      kind: "run",
+      kind: "conversation",
       pollId: "pay-for-it",
     });
   });
@@ -86,7 +89,7 @@ describe("reading a URL", () => {
 
   it("opens the first question for a path nothing claims", () => {
     expect(routeFrom("/somewhere-else")).toEqual({
-      kind: "run",
+      kind: "conversation",
       pollId: FIRST_POLL_ID,
     });
   });
@@ -106,30 +109,30 @@ describe("reading a URL", () => {
 
   it("does not open the preview for a path that only starts like it", () => {
     expect(routeFrom("/preview")).toEqual({
-      kind: "run",
+      kind: "conversation",
       pollId: FIRST_POLL_ID,
     });
     expect(routeFrom("/preview/chatter")).toEqual({
-      kind: "run",
+      kind: "conversation",
       pollId: FIRST_POLL_ID,
     });
   });
 
   it("opens the first question when ?poll= is empty", () => {
     expect(routeFrom("/?poll=")).toEqual({
-      kind: "run",
+      kind: "conversation",
       pollId: FIRST_POLL_ID,
     });
   });
 });
 
 describe("writing a URL", () => {
-  it("leaves the default run at the bare path", () => {
-    expect(pathOf({ kind: "run", pollId: FIRST_POLL_ID })).toBe("/");
+  it("leaves the default conversation at the bare path", () => {
+    expect(pathOf({ kind: "conversation", pollId: FIRST_POLL_ID })).toBe("/");
   });
 
   it("names any other starting question", () => {
-    expect(pathOf({ kind: "run", pollId: "pay-for-it" })).toBe(
+    expect(pathOf({ kind: "conversation", pollId: "pay-for-it" })).toBe(
       "/?poll=pay-for-it",
     );
   });
@@ -155,8 +158,8 @@ describe("writing a URL", () => {
  */
 describe("the two directions agree", () => {
   const routes = [
-    { kind: "run", pollId: FIRST_POLL_ID },
-    { kind: "run", pollId: "pay-for-it" },
+    { kind: "conversation", pollId: FIRST_POLL_ID },
+    { kind: "conversation", pollId: "pay-for-it" },
     { kind: "signIn" },
     { kind: "redeem", token: "abc123" },
     { kind: "redeem", token: "a+b/c=d" },
@@ -168,4 +171,16 @@ describe("the two directions agree", () => {
       expect(routeFrom(pathOf(route))).toEqual(route);
     });
   }
+});
+
+it("opens and round-trips the existing conversation alias", () => {
+  expect(routeFrom("/Conversation/?poll=pay-for-it")).toEqual({
+    kind: "conversation",
+    pollId: "pay-for-it",
+  });
+  for (const pollId of [FIRST_POLL_ID, "a/b?x=1"]) {
+    const route = { kind: "conversation" as const, pollId };
+    expect(routeFrom(pathOf(route))).toEqual(route);
+  }
+  expect(routeFrom("/").kind).toBe("conversation");
 });
