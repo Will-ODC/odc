@@ -1,7 +1,7 @@
 /**
  * Which part of pulse a URL points at.
  *
- * Pure on purpose, like `story.ts` and `swipe.ts`: reading a URL is a decision
+ * Pure on purpose: reading a URL is a decision
  * with edge cases worth testing exhaustively, and none of them need React.
  *
  * There are three places to be, plus one prototype (#228), and the emailed
@@ -13,8 +13,6 @@
  * nobody had clicked anything.
  */
 export type Route =
-  /** Walking the graph of questions, starting at `pollId`. */
-  | { kind: "run"; pollId: string }
   /** Asking for a sign-in link. */
   | { kind: "signIn" }
   /** Arrived from the emailed link, holding a token to spend. */
@@ -24,7 +22,7 @@ export type Route =
    * only by typing the path, so nobody arrives in it by accident.
    */
   | { kind: "chatPreview" }
-  /** Live conversation page (#301); the default switch is #302. */
+  /** Live conversation page, the default since #302. */
   | { kind: "conversation"; pollId: string };
 
 /**
@@ -67,16 +65,13 @@ export function routeFrom(href: string): Route {
     return token ? { kind: "redeem", token } : { kind: "signIn" };
   }
 
-  if (path === "/conversation")
-    return {
-      kind: "conversation",
-      pollId: url.searchParams.get("poll") || FIRST_POLL_ID,
-    };
-
   if (path === CHAT_PREVIEW_PATH) return { kind: "chatPreview" };
 
-  // `?poll=` so a run can be started anywhere in the graph without a rebuild.
-  return { kind: "run", pollId: url.searchParams.get("poll") || FIRST_POLL_ID };
+  // `?poll=` so a conversation can be started anywhere in the graph without a rebuild.
+  return {
+    kind: "conversation",
+    pollId: url.searchParams.get("poll") || FIRST_POLL_ID,
+  };
 }
 
 /** The URL a route should show. The inverse of `routeFrom` for every route. */
@@ -89,10 +84,6 @@ export function pathOf(route: Route): string {
     case "chatPreview":
       return CHAT_PREVIEW_PATH;
     case "conversation":
-      return route.pollId === FIRST_POLL_ID
-        ? "/conversation"
-        : `/conversation?poll=${encodeURIComponent(route.pollId)}`;
-    case "run":
       // The default start is the bare path, so the common URL stays clean and
       // shareable rather than carrying a parameter that changes nothing.
       return route.pollId === FIRST_POLL_ID

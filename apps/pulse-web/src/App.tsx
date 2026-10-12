@@ -8,7 +8,6 @@ import { useRoute } from "./hooks/use-route.js";
 import { Conversation } from "./screens/Conversation.js";
 import { ChatPreview } from "./screens/ChatPreview.js";
 import { Redeem } from "./screens/Redeem.js";
-import { Run } from "./screens/Run.js";
 import { SignIn } from "./screens/SignIn.js";
 import "./styles/tokens.css";
 import "./App.css";
@@ -48,14 +47,12 @@ export function App({ api, route }: { api: PulseApi; route?: Route }) {
              * button a link that can now only answer "already used".
              */
             onSignedIn={() =>
-              browser.replace({ kind: "run", pollId: LANDS_ON })
+              browser.replace({ kind: "conversation", pollId: LANDS_ON })
             }
             onAskAgain={() => browser.replace({ kind: "signIn" })}
           />
         </SignInPage>
       );
-    case "run":
-      return <Run api={api} pollId={at.pollId} />;
     case "conversation":
       return <Conversation key={at.pollId} api={api} pollId={at.pollId} />;
     case "chatPreview":

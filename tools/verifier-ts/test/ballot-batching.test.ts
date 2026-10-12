@@ -1,6 +1,7 @@
 // ET-23 (quantized ballot `ts`), ET-24 (minimum batch size and its blamed line)
-// and ET-24a (a batch, once left, is closed), event-types.md v11 "Ballot
-// publication discipline".
+// and ET-24a (a batch, once left, is closed), event-types.md "Ballot
+// publication discipline" (written at v11; the unregistered-version section is
+// re-read under v12's ET-24b, whose own suite is opaque-ballots.test.ts).
 //
 // WHAT THIS FILE IS, AND WHAT IT IS NOT. When this file was written no vector in
 // `contracts/fixtures/` cited ET-23, and no vector had an issue whose ballots
@@ -21,7 +22,6 @@
 
 import { test } from "node:test";
 import assert from "node:assert/strict";
-import { createHash } from "node:crypto";
 import { spawnSync } from "node:child_process";
 import { mkdtempSync, writeFileSync } from "node:fs";
 import { tmpdir } from "node:os";
@@ -29,155 +29,11 @@ import { dirname, join, resolve } from "node:path";
 import { fileURLToPath } from "node:url";
 import { verifyExport } from "../src/verify.js";
 import { BallotBatches, epochMs, isQuantized } from "../src/batching.js";
-import {
-  ZERO64,
-  distinctKeypair,
-  keypair,
-  signedEventLine,
-  tokenAndLine,
-  type KeyPair,
-} from "./genesis-builder.js";
+import { tokenAndLine } from "./genesis-builder.js";
+import { Chain, T1, T2, T3, T4, UNREG } from "./chain-builder.js";
 
 const here = dirname(fileURLToPath(import.meta.url));
 const cliPath = resolve(here, "../src/cli.js"); // dist/test -> dist/src/cli.js
-
-// Batch instants used throughout: whole minutes of one day, so each is a
-// multiple of the 60000 ms floor interval.
-const T0 = "2026-07-21T00:00:00.000Z";
-const T1 = "2026-07-21T00:01:00.000Z";
-const T2 = "2026-07-21T00:02:00.000Z";
-const T3 = "2026-07-21T00:03:00.000Z";
-const T4 = "2026-07-21T00:04:00.000Z";
-
-/**
- * Builds a v1 chain line by line. `lines.length` after an append is that
- * event's 1-based LINE number, which is what every assertion below names.
- */
-class Chain {
-  readonly op: KeyPair = keypair();
-  readonly reg: KeyPair = distinctKeypair(this.op.hex);
-  private readonly lines: string[] = [];
-  private prev = ZERO64;
-
-  constructor() {
-    this.push("genesis", {
-      strings: {
-        chain_id: createHash("sha256").update(this.op.rawPub).digest("hex"),
-        contracts: "contracts-v1",
-        operator_pk: this.op.hex,
-        registrar_pk: this.reg.hex,
-      },
-      ints: {},
-      ts: T0,
-      signer: this.op,
-    });
-  }
-
-  private push(
-    type: string,
-    e: {
-      strings: Record<string, string>;
-      ints: Record<string, number>;
-      ts: string;
-      signer: KeyPair | null;
-      version?: number;
-    },
-  ): { line: number; hash: string } {
-    const built = signedEventLine({
-      seq: this.lines.length + 1,
-      type,
-      prevHash: this.prev,
-      ...e,
-    });
-    this.lines.push(built.line);
-    this.prev = built.hash;
-    return { line: this.lines.length, hash: built.hash };
-  }
-
-  /** Append an issue_created; returns its issue_id (its hash, ID-7). */
-  issue(opts: { intervalMs?: number; min?: number } = {}): string {
-    return this.push("issue_created", {
-      strings: { title: "Issue" },
-      ints: {
-        ballot_batch_interval_ms: opts.intervalMs ?? 60000,
-        ballot_batch_min: opts.min ?? 3,
-        choice_count: 2,
-      },
-      ts: T0,
-      signer: this.op,
-    }).hash;
-  }
-
-  /** Append one registrar-signed ballot; returns its line number. */
-  vote(issueId: string, ts: string, version = 1, signer?: KeyPair): number {
-    return this.push("vote_cast", {
-      version,
-      strings: { issue_id: issueId },
-      ints: { choice: 0 },
-      ts,
-      // An unregistered version never reaches Stage B, so it needs no signature.
-      signer: signer ?? (version === 1 ? this.reg : null),
-    }).line;
-  }
-
-  /** `n` ballots of one issue at one instant; returns their line numbers. */
-  votes(issueId: string, ts: string, n: number): number[] {
-    const out: number[] = [];
-    for (let i = 0; i < n; i++) out.push(this.vote(issueId, ts));
-    return out;
-  }
-
-  /** A non-ballot line between ballots (a self-signed participant). */
-  participant(): number {
-    const p = keypair();
-    return this.push("participant_registered", {
-      strings: { pubkey: p.hex },
-      ints: {},
-      ts: T0,
-      signer: p,
-    }).line;
-  }
-
-  /** A line that fails Stage A: its stored hash is wrong (HA-14). */
-  corruptLine(): number {
-    const { line } = this.push("participant_registered", {
-      strings: { pubkey: keypair().hex },
-      ints: {},
-      ts: T0,
-      signer: null,
-    });
-    // Rewrite the stored hash; prev stays the real one, so only this line fails.
-    const idx = line - 1;
-    this.lines[idx] = (this.lines[idx] as string).replace(
-      /"hash":"[0-9a-f]{64}"/,
-      `"hash":"${"e".repeat(64)}"`,
-    );
-    return line;
-  }
-
-  /** The export cut after its first `n` lines (end-truncation, EX-16). */
-  prefixBytes(n: number): Buffer {
-    return Buffer.from(
-      this.lines
-        .slice(0, n)
-        .map((l) => l + "\n")
-        .join(""),
-      "utf8",
-    );
-  }
-
-  head(): string {
-    return this.prev;
-  }
-
-  bytes(): Buffer {
-    return Buffer.from(this.lines.map((l) => l + "\n").join(""), "utf8");
-  }
-
-  verdict(head?: string): string {
-    return tokenAndLine(verifyExport(this.bytes(), head));
-  }
-}
 
 /** Independent oracle for `epochMs`: `Date` with `setUTCFullYear`, which (unlike
  * `Date.UTC`) does not remap years 0–99. Exact over the ES-20 range. */
@@ -686,61 +542,64 @@ test("ET-24 / EX-16: truncation that makes a mid-chain under-size batch last hid
   );
 });
 
-// --- ET-24 / ET-24a and unregistered vote_cast versions -----------------------
+// --- ET-24 / ET-24a beside unregistered vote_cast versions (v12, ET-24b) ------
+//
+// Up to v11 these chains asserted that an unregistered ballot "joins no batch,
+// ends none, and proves none not-last". v12 (ADR-0034) reverses that: such a
+// ballot is opaque, may be a member of a batch this verifier checks, and ET-24b
+// decides which registered checks it leaves unresolved. The full ET-24b suite
+// is test/opaque-ballots.test.ts; these are the v11 chains re-read under v12.
 
-test("ET-24a: an unregistered vote_cast at another instant closes no batch", () => {
-  // 00:01 x3, a vote_cast v1000000 at 00:02, then 00:01 again. The unregistered
-  // line is not read, so a's run never left 00:01 and the last ballot is no
-  // return: PARTIAL (the unregistered line), not INVALID.
+test("ET-24b: an opaque ballot at another instant inside a run leaves the next ballot unresolved", () => {
+  // 00:01 x3, an opaque ballot at 00:02, then 00:01 again. The opaque ballot
+  // may have been a's, closing 00:01, so the returning 00:01 is unresolved.
   const c = new Chain();
   const a = c.issue();
   c.votes(a, T1, 3);
-  const unreg = c.vote(a, T2, 1000000);
-  c.vote(a, T1);
-  assert.equal(c.verdict(), `PARTIAL at lines ${unreg}`);
+  const unreg = c.vote(a, T2, UNREG);
+  const back = c.vote(a, T1);
+  assert.equal(c.verdict(), `PARTIAL at lines ${unreg},${back}`);
 });
 
-test("ET-24a: an unregistered vote_cast at a left instant is not a return", () => {
+test("ET-24b: an opaque ballot at a left instant, then the current run continues: unresolved", () => {
   const c = new Chain();
   const a = c.issue();
   c.votes(a, T1, 3);
   c.votes(a, T2, 3);
-  const unreg = c.vote(a, T1, 1000000);
-  c.votes(a, T2, 1);
-  assert.equal(c.verdict(), `PARTIAL at lines ${unreg}`);
+  const unreg = c.vote(a, T1, UNREG);
+  const next = c.vote(a, T2);
+  assert.equal(c.verdict(), `PARTIAL at lines ${unreg},${next}`);
 });
 
-test("ET-24: an unregistered vote_cast between an under-size batch's members does not split it", () => {
-  // 00:01, unregistered@00:02, 00:01, 00:01: the v1 batch at 00:01 has 3.
+test("ET-24b: an opaque ballot between one run's members leaves both affected ballots unresolved", () => {
+  // 00:01, opaque@00:02, 00:01, 00:01, then 00:02 x3. The second 00:01 may
+  // follow a closed batch; the first 00:02 may return to the opaque instant.
   const c = new Chain();
   const a = c.issue();
   c.vote(a, T1);
-  const unreg = c.vote(a, T2, 1000000);
-  c.votes(a, T1, 2);
-  c.votes(a, T2, 3);
-  assert.equal(c.verdict(), `PARTIAL at lines ${unreg}`);
+  const unreg = c.vote(a, T2, UNREG);
+  const [second] = c.votes(a, T1, 2);
+  const [firstT2] = c.votes(a, T2, 3);
+  assert.equal(c.verdict(), `PARTIAL at lines ${unreg},${second},${firstT2}`);
 });
 
-// --- ET-24 and unregistered vote_cast versions (EV-8) --------------------------
-
-test("ET-24: an unregistered vote_cast version joins no batch (its payload is never read)", () => {
-  // Two v1 ballots at 00:01, one vote_cast v1000000 naming the same issue and
-  // instant, then a v1 batch at 00:02. Counted, the 00:01 batch would reach 3;
-  // it is not counted, so the v1 batch is under-size and not last.
+test("ET-24b: an opaque ballot that could complete an under-size run makes its end unresolved", () => {
+  // Two v1 ballots at 00:01, one opaque at 00:01, then a v1 batch at 00:02:
+  // |R| + F = 2 + 1 = 3, not < 3, so the known ET-24 failure is not definite.
   const c = new Chain();
   const a = c.issue();
   c.votes(a, T1, 2);
-  c.vote(a, T1, 1000000);
-  const [blamed] = c.votes(a, T2, 3);
-  assert.equal(c.verdict(), `INVALID at line ${blamed}`);
+  const unreg = c.vote(a, T1, UNREG);
+  const [firstT2] = c.votes(a, T2, 3);
+  assert.equal(c.verdict(), `PARTIAL at lines ${unreg},${firstT2}`);
 });
 
-test("ET-24: an unregistered vote_cast after an under-size batch does not prove it was not last", () => {
+test("ET-24b: an opaque ballot after an under-size batch proves nothing: PARTIAL on its own line", () => {
   const c = new Chain();
   const a = c.issue();
   c.votes(a, T1, 3);
   c.votes(a, T2, 1);
-  const unreg = c.vote(a, T3, 1000000);
+  const unreg = c.vote(a, T3, UNREG);
   assert.equal(c.verdict(), `PARTIAL at lines ${unreg}`);
 });
 
@@ -752,32 +611,76 @@ test("BallotBatches stays linear under a hostile pattern (200k instants, one iss
   // implementation that rescans the earlier ballots or instants per ballot is
   // O(n^2) — ~2e10 steps here; this one does one Set lookup per ballot.
   const t = new BallotBatches();
-  t.openIssue("a", 1); // below the ET-14b floor on purpose: no ET-24 stop
+  t.openIssue("a", 1, 60000, 1); // below the ET-14b floor on purpose: no ET-24 stop
   const n = 200000;
   const start = process.hrtime.bigint();
-  for (let i = 0; i < n; i++) assert.equal(t.admit("a", i * 60000), null);
-  const back = t.admit("a", 0); // return to the very first instant
+  for (let i = 0; i < n; i++)
+    assert.equal(t.admit("a", i + 2, i * 60000), "resolved");
+  const back = t.admit("a", n + 2, 0); // return to the very first instant
   const ms = Number(process.hrtime.bigint() - start) / 1e6;
   assert.equal(back, "ET-24a");
   assert.ok(ms < 2000, `took ${ms} ms`);
 });
 
+test("BallotBatches: opaque-ballot cost grows linearly in opaque ballots (the current O(opaque x distinct intervals) bound)", () => {
+  // An opaque ballot is tested against every DISTINCT interval among the
+  // registered issues (ET-24b item 1). Machine speed varies ~10x between a
+  // laptop and a loaded CI runner (a 2 s absolute limit flaked at 2.09 s), so
+  // this compares two runs on the same machine instead: 1k intervals with 60k
+  // opaque ballots against 1k intervals with 6k. At the current bound the
+  // ratio is ~10 (measured 9.0-14.0 idle and with two full suites running
+  // alongside). A cost that grows with the number of earlier opaque ballots
+  // breaks it: a mutant rescanning every recorded opaque ballot measured 44.
+  // The band, ratio < 25, sits between the two. (With 10k intervals the
+  // interval term hides that mutant: 11.9.) Each side is the minimum of three
+  // runs, after a warm-up, to shed GC and JIT noise; a 30 s absolute backstop
+  // catches only a gross regression. Sub-quadratic candidacy is an open
+  // follow-up.
+  const intervals = 1000;
+  const run = (opaque: number): number => {
+    const t = new BallotBatches();
+    for (let i = 0; i < intervals; i++)
+      t.openIssue(`i${i}`, i + 2, 60000 * (i + 1), 3);
+    const start = process.hrtime.bigint();
+    for (let j = 0; j < opaque; j++)
+      t.opaque(intervals + 2 + j, 60000 * (j % 7));
+    const ms = Number(process.hrtime.bigint() - start) / 1e6;
+    // The summaries are live: issue i0 (interval 60000) sees a candidate.
+    assert.equal(
+      t.admit("i0", intervals + opaque + 3, 60000 * 100),
+      "unresolved",
+    );
+    return ms;
+  };
+  run(6000); // warm-up
+  const best = (opaque: number): number =>
+    Math.min(run(opaque), run(opaque), run(opaque));
+  const small = best(6000);
+  const large = best(60000);
+  const ratio = large / small;
+  assert.ok(
+    ratio < 25,
+    `60k/6k opaque ratio ${ratio.toFixed(1)} (${large.toFixed(0)} ms / ${small.toFixed(0)} ms)`,
+  );
+  assert.ok(large < 30000, `took ${large} ms`);
+});
+
 test("BallotBatches: the leaving ballot reports ET-24 when the batch it leaves is under-size", () => {
   const t = new BallotBatches();
-  t.openIssue("a", 3);
-  t.openIssue("b", 3);
-  assert.equal(t.admit("a", 0), null);
-  assert.equal(t.admit("b", 60000), null); // other issue: no effect on a
-  assert.equal(t.admit("a", 0), null);
-  assert.equal(t.admit("a", 60000), "ET-24"); // a@0 holds 2 < 3
+  t.openIssue("a", 1, 60000, 3);
+  t.openIssue("b", 2, 60000, 3);
+  assert.equal(t.admit("a", 3, 0), "resolved");
+  assert.equal(t.admit("b", 4, 60000), "resolved"); // other issue: no effect on a
+  assert.equal(t.admit("a", 5, 0), "resolved");
+  assert.equal(t.admit("a", 6, 60000), "ET-24"); // a@0 holds 2 < 3
 });
 
 test("BallotBatches: a batch left at the minimum is closed; returning to it is ET-24a", () => {
   const t = new BallotBatches();
-  t.openIssue("a", 3);
-  for (let i = 0; i < 3; i++) assert.equal(t.admit("a", 0), null);
-  assert.equal(t.admit("a", 60000), null);
-  assert.equal(t.admit("a", 0), "ET-24a");
+  t.openIssue("a", 1, 60000, 3);
+  for (let i = 0; i < 3; i++) assert.equal(t.admit("a", i + 2, 0), "resolved");
+  assert.equal(t.admit("a", 5, 60000), "resolved");
+  assert.equal(t.admit("a", 6, 0), "ET-24a");
 });
 
 // --- the CLI: one verdict line and the exit status ----------------------------

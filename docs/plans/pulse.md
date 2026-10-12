@@ -73,6 +73,15 @@ polls were both listed here as in flight and have since landed (#150, #156, #157
 
 ---
 
+## Conversation default (#302)
+
+The live conversation page (#301) becomes the default at `/` and `?poll=ID`,
+including sign-in landing. `/conversation` links remain supported; the old
+Run/SwipeBallot/ChoiceBallot screens are retired. ADR-0035 uses pick-then-Submit
+and in-place results. The assistant is disabled until its own work lands; MCP
+read/voting work (#300) is separate. The old suggestion form and next-question
+preview rail are retired too; the suggestion API remains available.
+
 ## P2 — The sign-in community picker · BUILT 2026-10-09; one question left
 
 **Built and merged** (#215, after its base #213). When an
@@ -133,19 +142,36 @@ Also owed by this item and not by #148: **there is no `GET /api/polls`.** Every
 route is `/api/polls/:id/...`, so a browsing screen needs a listing endpoint
 that does not exist.
 
-## P5 — Pillar 3, the path to action · BLOCKED ON A DECISION
+## P5 — Pillar 3, the path to action · UI DIRECTION SET; RECORDS AND NOTIFICATION RULES PENDING
 
-The third MVP pillar, in any form: soliciting ideas, volunteer time or
-donations, and the proof-of-what-happened email. `proofEmailsOptIn` is collected
-at sign-in today and **leads nowhere.**
+Operator direction, 2026-10-11:
 
-**Blocked on:** the whole shape. Nothing about this is designed. Donations in
-particular reach payments, identity and obligations the product has never had.
+- The desktop has substantial unused space in the left and right columns around
+  the main poll/questions/decisions. Improve the centre's layout and hierarchy;
+  later use the surrounding columns for related polls and documented action
+  outcomes from related polls (#331). Related polls use ADR-0025; Next remains
+  the answer-selected graph path.
+- Once a poll is closed, its final results belong in the centre, alongside any
+  action planned because of it. Show subsequent action/progress and documented
+  outcomes there too (#332), with evidence and distinct planned, reported and
+  reviewed states. Poll closure alone does not prove action happened.
+- Publishing a documented poll-linked action outcome triggers email to eligible
+  people who opted in, linking back to those results and action records (#333).
+  Mere closure or a plan is not the outcome-notification trigger.
 
-The one thing already decided about it, from ADR-0022: pulse's one-press cast is
-bought with **reversibility, not speed**, and pillar 3's donations and volunteer
-commitments are not reversible and therefore **do** confirm. Do not read pulse's
-ballot as a precedent for how this pillar's actions are taken.
+Reuse the action record work (#246), contributions/claimed results (#247), and
+reviewed evidence (#248), rather than introducing duplicate records. Related
+poll reads and action read APIs are dependencies, not shipped features.
+
+**Still to settle before implementation:** publishing authority and action record
+rules from #246–#248; which recipients are associated with which poll; whether
+existing `proofEmailsOptIn` covers these messages; consent withdrawal, opt-out
+and delivery rules. The preference is collected at sign-in but no outcome mail
+is sent today. Soliciting donations/volunteers and funding remain separate work;
+no payments or automatic claims of impact are introduced by this UI direction.
+
+The conversation ballot uses pick-then-Submit (ADR-0035); donations and volunteer
+commitments also require confirmation.
 
 ## P6 — Poll authoring under ADR-0024 · BLOCKED ON VALUES, NOT RULES; the operator's stated next work after storage
 
@@ -227,8 +253,8 @@ than demanded at the door.
    voter.
 3. **A stamp describes the answer currently standing.** Signing in does **not**
    re-stamp votes nobody re-cast; but re-casting is a fresh act and is stamped
-   afresh. This keeps ADR-0022 whole: a vote stays changeable, so the one-press
-   cast keeps the justification it depends on.
+   afresh. A vote remains changeable until close; the conversation card uses
+   pick-then-Submit (ADR-0035).
 4. **Anonymous voting stays** — `community NULL, assurance 'none'`.
 5. **Signing in upgrades the person, never their past votes.** A guest who
    verifies keeps their identity and gains the credential — unless the address

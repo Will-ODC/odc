@@ -6,32 +6,6 @@ import type {
   Suggestion,
 } from "../src/api/types.js";
 
-/**
- * jsdom has no `PointerEvent`, and without one testing-library falls back to a
- * plain `Event` that carries no coordinates - every drag would arrive as a drag
- * of zero pixels and the gesture tests would pass without testing the gesture.
- * `MouseEvent` already carries clientX, so it is the whole of what is needed.
- */
-class TestPointerEvent extends MouseEvent {
-  readonly pointerId: number;
-  /**
-   * Carried because the ballot reads it: a mouse that drifts a few pixels
-   * between press and release is clicking, and a fingertip that does the same
-   * is swiping. A stub that dropped this reported every press as neither, so
-   * a test could set `pointerType` and change nothing.
-   */
-  readonly pointerType: string;
-  constructor(type: string, init: PointerEventInit = {}) {
-    super(type, init);
-    this.pointerId = init.pointerId ?? 1;
-    this.pointerType = init.pointerType ?? "";
-  }
-}
-
-export function installPointerEvents(): void {
-  globalThis.PointerEvent = TestPointerEvent as unknown as typeof PointerEvent;
-}
-
 export function poll(over: Partial<Poll> = {}): Poll {
   return {
     id: "ads-free",

@@ -181,6 +181,9 @@ test("every issue_created in the corpus declares both batch parameters at or abo
       .toString("utf8")
       .split("\n")) {
       if (!/"type"\s*:\s*"issue_created"/.test(line)) continue;
+      // ET-14b binds the registered version. An issue_created at an
+      // unregistered version (124, ET-18b) has an opaque payload by design.
+      if (!/"version"\s*:\s*1\s*[,}]/.test(line)) continue;
       seen += 1;
       const interval = /"ballot_batch_interval_ms"\s*:\s*(\d+)/.exec(line);
       const min = /"ballot_batch_min"\s*:\s*(\d+)/.exec(line);

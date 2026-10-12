@@ -16,6 +16,7 @@ import { forkAncestryVectors } from "./fork-ancestry.js";
 import { genesisRegistrationVectors } from "./genesis-registration.js";
 import { batchingVectors } from "./batching.js";
 import { chainIdentityVectors } from "./chain-identity.js";
+import { opaqueBatchingVectors } from "./opaque-batching.js";
 import type { Vector } from "./shared.js";
 
 export { GENESIS_EVENT, a3 as ISSUE_EVENT } from "./shared.js";
@@ -34,4 +35,5 @@ export const vectors: Vector[] = [
   ...genesisRegistrationVectors,
   ...batchingVectors,
   ...chainIdentityVectors,
+  ...opaqueBatchingVectors,
 ];
