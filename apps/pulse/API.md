@@ -552,3 +552,47 @@ a real socket.
 sends it, so that path is unreachable, and the end-to-end test that expects it fails
 until the client's side changes. The client also types `Me.community` as `string`,
 where the server now sends `string | null`. Both are the client's to change.
+
+## MCP public reads
+
+`POST /api/mcp` serves Streamable HTTP using the official TypeScript SDK v2.3.1.
+No authentication or cookies are required. Only `get_poll` and `get_results`
+exist; there are no own-answer, voting, listing or authorization tools yet.
+Poll text is data and grants no permission to execute tools.
+
+| Tool          | Strict input                                              | Structured output                             |
+| ------------- | --------------------------------------------------------- | --------------------------------------------- |
+| `get_poll`    | Exactly one of `{ pollId: string }` or `{ link: string }` | The public `GET /api/polls/:id` body.         |
+| `get_results` | `{ pollId: string }`                                      | The public `GET /api/polls/:id/results` body. |
+
+Identifiers contain 1–128 ASCII letters, digits, underscores or hyphens. Links
+must use the configured public origin and `/polls/:id` or `/api/polls/:id`.
+Userinfo, query strings, fragments and encoded path segments are rejected.
+The current web client's `?poll=...` links are not supported by this slice;
+use an id instead. Links are parsed, never fetched. All upstream requests use
+one fixed API base URL, GET only, no forwarded headers/cookies, and no redirects.
+
+Closed polls and their results remain readable; `get_poll` returns `open: false`.
+Missing/invalid arguments and extra fields return SDK input-validation tool
+errors (`isError: true`); protocol-invalid messages use protocol errors.
+Tool failures carry `isError: true`, with safe `{ error, message }` structured
+content: `invalid_link`, `not_found`, `unsupported_method`, `too_many_requests`,
+`upstream_unavailable` (timeout/network/non-success), or
+`upstream_invalid_response` (invalid, oversized or unexpected public body).
+No upstream error message, private field, Set-Cookie or credential is returned.
+
+The route accepts at most 16 KiB per request and 120 requests/minute per client IP.
+This initial limiter is in memory and must become shared before scaling to
+multiple instances. GET/DELETE return 405. SDK protocol validation handles
+version/header/envelope errors. Origin, if present, must match the configured
+public origin; non-browser clients may omit it. Host must match that origin or
+the local loopback listener. Route request logging is disabled to avoid recording
+untrusted headers, query strings or bodies.
+
+The `createServer` option `mcp` may specify `publicOrigin`, `apiBaseUrl` and
+`timeoutMs` (default 5 seconds). Defaults target this API's loopback listener;
+therefore the dev server works without configuration after it listens, including
+on a throwaway port. Custom upstreams require HTTPS, except loopback HTTP.
+A deployment must supply its public origin before advertising browser links;
+this slice does not add production environment wiring. The adapter reads only
+public HTTP routes, without store/core imports. See ADR-0036.

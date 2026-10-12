@@ -140,3 +140,13 @@
 .vote-card--collapsed {
   flex-wrap: nowrap;
 }
+
+.vote-card button.vote-card__close {
+  flex: 0 0 auto;
+  margin-inline-start: auto;
+  min-inline-size: calc(var(--step) * 5.5);
+  min-block-size: calc(var(--step) * 5.5);
+  padding: var(--step);
+  font-size: var(--t-body);
+  line-height: 1;
+}

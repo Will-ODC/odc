@@ -425,30 +425,30 @@ func TestET24aPerIssueRuns(t *testing.T) {
 	})
 }
 
-// "Which ballots count": a vote_cast at an unregistered version "joins no
-// batch, ends none, and proves none not-last". The chains below are PARTIAL
-// at the unregistered line and nothing else.
-func TestET24UnregisteredVoteVersionCountsForNothing(t *testing.T) {
+// "Which ballots count" (v12): a vote_cast at an unregistered version is never
+// opened, but it is not disregarded either — under ET-22a it is one ballot of
+// one issue, and ET-24b decides which registered checks it leaves unresolved.
+// Up to v11 these same chains were PARTIAL at the unregistered line alone.
+func TestET24UnregisteredVoteVersionUnderET24b(t *testing.T) {
 	one := []issueSpec{defaultIssue}
 	cases := []struct {
 		name  string
 		votes []vote
-		line  int
+		lines []int
 	}{
-		// Does not prove A's under-size T1 batch not-last.
-		{"proves_none_not_last", cat(votesAt(0, 2, T1), []vote{unregBallot(0, T2)}), 5},
-		// Does not end T1: the v1 ballot at line 6 rejoins the same run,
-		// making T1 = {3, 4, 6} — neither a return nor an under-size close.
-		{"ends_none", cat(votesAt(0, 2, T1), []vote{unregBallot(0, T2)}, votesAt(0, 1, T1), votesAt(0, 1, T2)), 5},
-		// Does not join a batch: at an instant A has left, it is no return,
-		// and it does not interrupt A's open T2 run.
-		{"joins_none", cat(votesAt(0, 3, T1), votesAt(0, 2, T2), []vote{unregBallot(0, T1)}, votesAt(0, 1, T2), votesAt(0, 1, T3)), 8},
+		// Nothing registered follows it, so no check is left open.
+		{"no_later_registered_ballot", cat(votesAt(0, 2, T1), []vote{unregBallot(0, T2)}), []int{5}},
+		// It may have ended the T1 run (line 6 open) and opened T2's batch
+		// (line 7 open).
+		{"may_end_a_run", cat(votesAt(0, 2, T1), []vote{unregBallot(0, T2)}, votesAt(0, 1, T1), votesAt(0, 1, T2)), []int{5, 6, 7}},
+		// At an instant A has left it may be a return or end A's T2 run.
+		{"may_return", cat(votesAt(0, 3, T1), votesAt(0, 2, T2), []vote{unregBallot(0, T1)}, votesAt(0, 1, T2), votesAt(0, 1, T3)), []int{8, 9, 10}},
 	}
 	for _, c := range cases {
 		t.Run(c.name, func(t *testing.T) {
 			res := Verify(ballotChain(t, one, c.votes), nil)
-			if res.Verdict != PARTIAL || len(res.Lines) != 1 || res.Lines[0] != c.line {
-				t.Fatalf("got %s %v (line %d, %s), want PARTIAL at lines %d", res.Verdict, res.Lines, res.Line, res.Reason, c.line)
+			if res.Verdict != PARTIAL || fmt.Sprint(res.Lines) != fmt.Sprint(c.lines) {
+				t.Fatalf("got %s %v (line %d, %s), want PARTIAL at lines %v", res.Verdict, res.Lines, res.Line, res.Reason, c.lines)
 			}
 		})
 	}
@@ -565,6 +565,9 @@ func TestBallotRulesCLISurface(t *testing.T) {
 		{"et24", cat(votesAt(0, 2, T1), votesAt(0, 1, T2)), regexp.MustCompile(`^INVALID at line 5: [^\n]*\n$`), 1},
 		{"et23", votesAt(0, 1, "2026-01-01T00:02:00.001Z"), regexp.MustCompile(`^INVALID at line 3: [^\n]*\n$`), 1},
 		{"et24a", cat(votesAt(0, 3, T1), votesAt(0, 3, T2), votesAt(0, 1, T1)), regexp.MustCompile(`^INVALID at line 9: [^\n]*\n$`), 1},
+		// ET-24b: an opaque ballot may fill the under-size T1 run, so line 6
+		// is unresolved and listed beside the opaque line 5.
+		{"et24b_partial", cat(votesAt(0, 2, T1), []vote{unregBallot(0, T1)}, votesAt(0, 1, T2)), regexp.MustCompile(`^PARTIAL at lines 5, 6\n$`), 2},
 	}
 	for _, c := range cases {
 		t.Run(c.name, func(t *testing.T) {

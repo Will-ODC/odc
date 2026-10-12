@@ -1,0 +1,15 @@
+.closed-notice {
+  display: flex;
+  flex-direction: column;
+  gap: var(--step);
+  margin-block: var(--step);
+}
+.closed-notice > b {
+  font-size: var(--t-body);
+  color: var(--ballot-ink);
+}
+.closed-notice > span {
+  font-size: var(--t-small);
+  line-height: 1.5;
+  color: var(--ballot-ink-soft);
+}

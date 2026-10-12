@@ -17,12 +17,21 @@ import {
 import { InMemoryVotingStore } from "../../pulse/src/voting/store.js";
 import { InMemorySuggestionStore } from "../../pulse/src/voting/suggestions.js";
 import { HttpPulseApi } from "../src/api/http.js";
-import { Conversation } from "../src/screens/Conversation.js";
+import { App } from "../src/App.js";
 
-afterEach(cleanup);
+afterEach(() => {
+  cleanup();
+  globalThis.history.replaceState(null, "", "/");
+});
 it("approval cast, replacement, network retry and closed results work over the real HTTP API", async () => {
   const voters = new InMemoryVoterStore();
   const votes = new InMemoryVotingStore();
+  await votes.createPoll({
+    id: "ads-free",
+    question: "Stay free of ads?",
+    choices: ["No", "Yes"],
+    method: "single",
+  });
   await votes.createPoll({
     id: "approval",
     question: "Which improvements?",
@@ -70,8 +79,18 @@ it("approval cast, replacement, network retry and closed results work over the r
   };
   const api = new HttpPulseApi(`http://127.0.0.1:${address.port}/api`, request);
   try {
-    const view = render(<Conversation api={api} pollId="approval" />);
+    globalThis.history.replaceState(null, "", "/");
+    const first = render(<App api={api} />);
     const user = userEvent.setup();
+    await screen.findByRole("heading", { name: "Stay free of ads?", level: 1 });
+    await user.click(screen.getByRole("button", { name: "Vote" }));
+    await user.click(screen.getByRole("radio", { name: "Yes" }));
+    await user.click(screen.getByRole("button", { name: "Submit" }));
+    await screen.findByText("Counted.");
+    expect(await api.myBallot("ads-free")).toEqual([1]);
+    first.unmount();
+    globalThis.history.replaceState(null, "", "/?poll=approval");
+    const view = render(<App api={api} />);
     await screen.findByRole("heading", {
       name: "Which improvements?",
       level: 1,
@@ -97,7 +116,8 @@ it("approval cast, replacement, network retry and closed results work over the r
     expect(await api.myBallot("approval")).toEqual([2]);
     expect((await api.results("approval")).voters).toBe(1);
     view.unmount();
-    render(<Conversation api={api} pollId="closed" />);
+    globalThis.history.replaceState(null, "", "/?poll=closed");
+    render(<App api={api} />);
     await screen.findByRole("heading", { name: "An ended question", level: 1 });
     await user.click(screen.getByRole("button", { name: "Vote" }));
     await screen.findByText("This one has closed.");

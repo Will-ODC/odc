@@ -2,16 +2,9 @@ import { useCallback, useState } from "react";
 import type { Ballot, PulseApi, Results } from "../api/types.js";
 import { ApiError } from "../api/types.js";
 
-/**
- * Casting a complete ballot.
- *
- * `ballot` retains every choice; `choice` is the first submitted index for the
- * legacy single-choice screens only. Those screens still send one-element arrays.
- * By choice position, not by side: a swipe and a list are two ways of picking
- * the same thing, and only the swipe has sides. The chosen position is carried
- * through `casting` and into `counted` so a screen can keep showing what was
- * picked while the request is in flight, rather than snapping back and then
- * forward again.
+/** Keeps the whole ballot through sending, results and retries.
+ * `choice` remains first-choice metadata for existing hook consumers; card
+ * selection and approval submission use `ballot`.
  */
 export type CastState =
   | { status: "idle" }

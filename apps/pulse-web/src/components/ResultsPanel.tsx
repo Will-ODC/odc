@@ -40,7 +40,8 @@ export function ResultsPanel({
    * promise more answers to come on a question that can take no more.
    */
   ended?: boolean | undefined;
-  onClose: () => void;
+  /** Omit when the containing card already supplies its close control. */
+  onClose?: () => void;
   /**
    * Focus lands here when the panel opens. The control that was pressed is
    * unmounted by the same render, so without this focus falls to the document
@@ -64,6 +65,16 @@ export function ResultsPanel({
       ref={panelRef}
       tabIndex={-1}
     >
+      {onClose ? (
+        <button
+          type="button"
+          className="results__close"
+          aria-label="Close"
+          onClick={onClose}
+        >
+          <span aria-hidden="true">×</span>
+        </button>
+      ) : null}
       <p className="ballot__eyebrow">WHERE IT STANDS</p>
       <p className="results__count">{howMany(results.voters, ended)}</p>
 
@@ -72,15 +83,6 @@ export function ResultsPanel({
         under it would only say it again, worse. The way out stays.
       */}
       {results.voters > 0 ? <Counts results={results} yours={yours} /> : null}
-
-      {/*
-        Not "Back": the chrome's own back control is on screen at the same time
-        and abandons the question entirely. Two controls both starting with the
-        same word, doing opposite things, is how someone loses their place.
-      */}
-      <button type="button" className="results__close" onClick={onClose}>
-        Close
-      </button>
     </div>
   );
 }

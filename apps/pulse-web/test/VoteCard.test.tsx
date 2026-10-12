@@ -352,3 +352,27 @@ it("expands an externally collapsed card from the Vote tab", async () => {
     ),
   );
 });
+
+it.each([false, true])(
+  "decision and result cards expose one keyboard-operable × (%s)",
+  async (answered) => {
+    const onClose = vi.fn();
+    render(
+      <VoteCard
+        {...base}
+        onClose={onClose}
+        status={
+          answered
+            ? { kind: "answered", results: results(), changed: false }
+            : { kind: "answerable" }
+        }
+      />,
+    );
+    const close = button("Close");
+    expect(screen.getAllByRole("button", { name: "Close" })).toHaveLength(1);
+    expect(close.textContent).toBe("×");
+    close.focus();
+    await userEvent.setup().keyboard("{Enter}");
+    expect(onClose).toHaveBeenCalledOnce();
+  },
+);
