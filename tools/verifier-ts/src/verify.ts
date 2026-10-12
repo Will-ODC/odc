@@ -2,7 +2,9 @@
 // (evolution.md EV-6/EV-15), and the three-verdict report surface (EV-7/EV-17).
 //
 // Verdict precedence: INVALID > PARTIAL > VALID. INVALID names the first fatal
-// line in file order; PARTIAL enumerates the unregistered-but-well-formed lines.
+// line in file order; PARTIAL enumerates the unregistered-but-well-formed lines
+// and the registered `vote_cast` lines with a check that event-types.md ET-18b
+// or ET-24b leaves unresolved (EV-7, EV-17 v7).
 
 import { createHash } from "node:crypto";
 import {
@@ -65,7 +67,14 @@ interface ChainState {
   operatorPk: Buffer | null; // raw 32 bytes, validated at genesis
   registrarPk: Buffer | null; // raw 32 bytes, validated at genesis
   issues: Map<string, IssueParams>; // issue_id (hash) -> its declared parameters
-  batches: BallotBatches; // ET-24 / ET-24a per-issue batch runs
+  // ET-18b: hashes of `issue_created` events at a version this verifier does
+  // not register. Still prior issue_created events for ID-8/ET-18; only their
+  // envelope (`type`, `version`, `seq`, `hash`) is read, never the payload.
+  unregisteredIssues: Set<string>;
+  batches: BallotBatches; // ET-24 / ET-24a / ET-24b per-issue batch runs
+  // Set by stageB when the line passed but a check on it is UNRESOLVED
+  // (ET-18b, ET-24b): not failed, and the line is enumerated in PARTIAL.
+  unresolved: boolean;
   // Advisory reason for the rule a failing Stage B line broke, where it is more
   // specific than the generic one (set for ET-24 / ET-24a only).
   stageBReason: string | null;
@@ -287,7 +296,7 @@ function stageB(ev: ParsedEvent, state: ChainState): boolean {
       // impossible on a chain that passed HA-14 and ES-25, so `set` never
       // overwrites a live issue.
       state.issues.set(ev.hash, { choiceCount, batchIntervalMs });
-      state.batches.openIssue(ev.hash, batchMin);
+      state.batches.openIssue(ev.hash, ev.seq, batchIntervalMs, batchMin);
       return true;
     }
 
@@ -301,7 +310,23 @@ function stageB(ev: ParsedEvent, state: ChainState): boolean {
       if (sigHex === null || !HEX128.test(sigHex)) return false;
       // ET-18/ID-8: must reference a prior issue_created (strictly lower seq).
       const issue = state.issues.get(issueId);
-      if (issue === undefined) return false;
+      if (issue === undefined) {
+        // ET-18b: an issue_created at a version this verifier does not
+        // register is still a prior issue_created, so this is not an ET-18
+        // failure. Its choice_count, interval and minimum are unreadable, so
+        // ET-18a, ET-23, ET-24 and ET-24a are UNRESOLVED; every other check
+        // (ES-18 above, ET-19's integer above, ET-17 here) applies as usual.
+        // The ballot is not a registered ballot of any issue for ET-24b and
+        // not a candidate either, so it never reaches `batches`.
+        if (!state.unregisteredIssues.has(issueId)) return false; // ET-18
+        const sig = Buffer.from(sigHex, "hex");
+        const reg = state.registrarPk;
+        if (reg === null) return false;
+        if (!isCanonicalSigEncoding(sig)) return false; // ET-4a
+        if (!ed25519Verify(signingPreimage(ev), sig, reg)) return false; // ET-17
+        state.unresolved = true;
+        return true;
+      }
       if (choice < 0 || choice >= issue.choiceCount) return false; // ET-18a
       // ET-23: ts (already calendar-valid, ES-20) must be an exact multiple of
       // the issue's declared interval, in epoch ms. The value is checked; it
@@ -317,12 +342,18 @@ function stageB(ev: ParsedEvent, state: ChainState): boolean {
       if (reg === null) return false;
       if (!isCanonicalSigEncoding(sig)) return false; // ET-4a
       if (!ed25519Verify(signingPreimage(ev), sig, reg)) return false; // ET-17
-      // ET-24 / ET-24a (event-types.md v11). Both are decided at THIS ballot:
-      // it is either the ballot that ends an under-size batch (ET-24's fatal
-      // line) or a ballot returning to an instant its issue has left (ET-24a:
-      // "at the line of the returning ballot"). Run last, so a ballot failing
-      // any other check never touches the batch state.
-      const batchFault = state.batches.admit(issueId, instant);
+      // ET-24 / ET-24a, decided under ET-24b (event-types.md v12). A definite
+      // failure is decided at THIS ballot: it is either the ballot that ends
+      // an under-size batch (ET-24's fatal line) or a ballot returning to an
+      // instant its issue has left (ET-24a: "at the line of the returning
+      // ballot"). An unresolved check is not a failure; the line goes into
+      // PARTIAL. Run last, so a ballot failing any other check never touches
+      // the batch state.
+      const batchFault = state.batches.admit(issueId, ev.seq, instant);
+      if (batchFault === "unresolved") {
+        state.unresolved = true;
+        return true;
+      }
       if (batchFault === "ET-24") {
         state.stageBReason =
           "ET-24: this ballot ends an earlier batch of its issue that holds fewer than the issue's ballot_batch_min ballots";
@@ -441,7 +472,9 @@ export function verifyExport(
     operatorPk: null,
     registrarPk: null,
     issues: new Map(),
+    unregisteredIssues: new Set(),
     batches: new BallotBatches(),
+    unresolved: false,
     stageBReason: null,
   };
 
@@ -514,6 +547,7 @@ export function verifyExport(
 
     // Stage B — only for registered (type, version) pairs (EV-6).
     if (isRegistered(ev.type, ev.version)) {
+      state.unresolved = false;
       if (!stageB(ev, state)) {
         contentFault = {
           line: lineNo,
@@ -526,6 +560,8 @@ export function verifyExport(
         };
         break;
       }
+      // ET-18b / ET-24b: passed, but with a check left unresolved (EV-7).
+      if (state.unresolved) partialLines.push(lineNo);
     } else if (isFirst) {
       // EV-20, the SOLE exception to EV-8: the chain's genesis MUST carry a
       // (type, version) this verifier registers, or the chain is INVALID at
@@ -541,6 +577,15 @@ export function verifyExport(
     } else {
       // Well-formed but unregistered: Stage A passed, semantics unchecked.
       // (A malformed payload would already have failed parse — EV-16.)
+      // Two unregistered types still matter to registered checks, by their
+      // ENVELOPE only, never their payload:
+      if (ev.type === "issue_created") {
+        // ET-18b: a ballot may name it; its hash is its issue_id (ID-7).
+        state.unregisteredIssues.add(ev.hash);
+      } else if (ev.type === "vote_cast") {
+        // ET-24b: an opaque ballot — its `seq` and `ts`, nothing else.
+        state.batches.opaque(ev.seq, epochMs(ev.ts));
+      }
       partialLines.push(lineNo);
     }
 
@@ -592,7 +637,8 @@ export function verifyExport(
     return { verdict: "INVALID", line: first.line, reason: first.reason };
   }
   if (partialLines.length > 0) {
-    // Ascending by construction (pushed in file order).
+    // Ascending and duplicate-free by construction: pushed in file order, at
+    // most once per line (a line is either unregistered or registered).
     return { verdict: "PARTIAL", lines: partialLines };
   }
   return { verdict: "VALID" };

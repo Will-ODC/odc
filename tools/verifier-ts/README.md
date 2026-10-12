@@ -133,13 +133,14 @@ Two stages, per `evolution.md` EV-6/EV-15:
   primitive), title/`choice_count`/`choice` bounds, the `ballot_batch_interval_ms`
   and `ballot_batch_min` floors an `issue_created` declares (ET-14b), `issue_id`
   back-references, and the ballot publication discipline of `event-types.md`
-  v11 (`src/batching.ts`):
+  v12 (`src/batching.ts`):
   - **ET-23** — a `vote_cast`'s `ts`, converted exactly to epoch milliseconds
     (proleptic Gregorian, no leap seconds; exact in a JS number over all of
     ES-20's range), is a multiple of its issue's declared interval (zero and
     negative multiples count); rejected at that ballot.
   - **ET-24** — a batch is a maximal run, in `seq` order among one issue's
-    registered `(vote_cast, 1)` events, sharing one `ts`. Every batch holds at
+    registered `vote_cast` events (every registered version; in v12 that is
+    version 1 alone, ET-22a), sharing one `ts`. Every batch holds at
     least the issue's declared minimum, except the issue's last batch. An
     under-size batch is blamed on the ballot that ends it (the issue's next
     registered ballot at a different `ts`) on every chain. Example: T1, T1, T2,
@@ -149,14 +150,52 @@ Two stages, per `evolution.md` EV-6/EV-15:
     instant that issue has already left; rejected at the returning ballot. Per issue
     only — other events and other issues' ballots may fall between one batch's
     members.
+  - **ET-24b** — how ET-24 and ET-24a are decided beside **opaque ballots**
+    (a `vote_cast` at a version this verifier does not register; ADR-0034).
+    Of an opaque ballot only its envelope `seq` and `ts` are used — its payload
+    is never read, even if it names an issue. It is a **candidate** of every
+    registered issue created before it (`seq > c`) whose interval its `ts` is
+    a multiple of. ET-24 and ET-24a are first evaluated over the registered
+    ballots alone (the v11 "known" result). A known ET-24a failure is definite;
+    a known ET-24 failure is definite only if `|R| + F < m`, where F counts the
+    candidates at the under-size run's instant since the ballot before that run.
+    A definite failure is `INVALID` at that ballot. Otherwise the ballot's batch
+    check is **unresolved** when it has a non-definite known failure, or when a
+    candidate could have changed it (item 4(b): one at another instant inside
+    its run, or, at a run start, one at its own instant, or one at another
+    instant since the run it ends began). An unresolved check is not a failure:
+    the line is listed in `PARTIAL` and the scan goes on.
+  - **ET-18b** — a registered ballot whose `issue_id` names an `issue_created`
+    at a version this verifier does not register passes ET-18. Its ET-18a,
+    ET-23, ET-24 and ET-24a checks are unresolved, so its line is listed in
+    `PARTIAL`, never `INVALID` on that ground; its signature (ET-17), key set
+    (ES-18) and integer `choice` (ET-19) are checked as usual. It is neither a
+    registered ballot of any issue nor a candidate for ET-24b.
 
-  Since a batch ends at the ballot that changes instant, both batching rules
-  are decided at that ballot, in file order:
-  one Map and one Set lookup per ballot, so cost stays linear and there is no
-  end-of-scan pass. `ts` values are compared for equality only (ES-21 v5).
-  Only registered `(vote_cast, 1)` ballots count; an unregistered `vote_cast`
-  joins no batch, ends none and proves none not-last (ET-24a, "Which ballots
-  count"). ET-25 is unverifiable by the contract's own statement and
+  Every definite failure is decided at the ballot that ends a run or returns,
+  in file order, from earlier lines only, so EX-16's prefix property holds and
+  there is no end-of-scan pass. `ts` values are compared for equality and
+  ET-23's multiple test only (ES-21). Cost: a registered ballot is a few
+  Map/Set lookups plus one binary search; an opaque ballot costs one modulus
+  per **distinct** interval among the registered issues (it updates an O(1)
+  summary per interval, not each issue), so the worst case is
+  O(opaque ballots × distinct intervals): about 0.2 s at 10k × 10k, 1.7 s at
+  30k × 30k, and roughly 20 s at 100k × 100k, measured on that step alone.
+  `test/ballot-batching.test.ts` pins that growth as a ratio (60k against 6k
+  opaque ballots over 1k intervals must stay under 25×, ~10× today), which
+  does not depend on machine speed. A
+  sub-quadratic candidacy test is an **open follow-up**.
+
+  _Which ballots count_ (v12): ET-24 and ET-24a read only registered
+  ballots of registered issues. An opaque ballot joins no _known_ run, but it
+  is no longer disregarded as it was up to v11 ("joins no batch, ends none,
+  proves none not-last"): under ET-22a it is one ballot of one issue, so where
+  it could change a registered ballot's batch check, that check is unresolved.
+  `PARTIAL` lists every unregistered line and every unresolved registered
+  `vote_cast` line, ascending and each once (EV-7, EV-17). Wherever EX-15 and
+  EX-22 require every registered event's checks to have passed, an unresolved
+  check counts as not failed, so `--head` and `--chain` are still compared on
+  such a chain. ET-25 is unverifiable by the contract's own statement and
   has no check. A well-formed but unregistered `(type, version)` yields
   `PARTIAL` for that line, never `INVALID` (EV-8) — **except at line 1**, where
   an unregistered `genesis` is `INVALID at line 1` (EV-20, the sole exception),
@@ -169,7 +208,7 @@ Two stages, per `evolution.md` EV-6/EV-15:
 pnpm --filter @odc/verifier-ts test
 ```
 
-Eleven files (ten suites and one shared builder), and the split between them is
+Fourteen files (twelve suites and two shared builders), and the split between them is
 deliberate — **`contracts/fixtures/` is the sole oracle for what a given input
 verifies to.** `fixtures.test.ts` is the conformance suite; `robustness.test.ts`,
 `extreme-values.test.ts` and `report-shape.test.ts` assert only that a verdict
@@ -177,8 +216,9 @@ of the right _shape_ came back at all, and `cli-exit-codes.test.ts` only the
 exit status. `genesis-ancestry.test.ts` and `genesis-key-distinctness.test.ts`
 are exceptions and say so in their own headers: they assert verdict values for
 rules the fixture corpus does not yet cover, from synthetic chains, and are
-superseded by a fixture the day one lands; `ballot-batching.test.ts` is another
-such exception, on the same terms, and `chain-and-report.test.ts` asserts the
+superseded by a fixture the day one lands; `ballot-batching.test.ts`,
+`opaque-ballots.test.ts` and `opaque-bruteforce.test.ts` are further such
+exceptions, on the same terms, and `chain-and-report.test.ts` asserts the
 anchor-precedence verdicts EX-15/EX-22/EX-23 fix on byte-level edits of golden
 exports. Anything else that froze an expected verdict outside the fixture corpus
 would be inventing conformance in a file no reviewer treats as normative.
@@ -209,23 +249,47 @@ would be inventing conformance in a file no reviewer treats as normative.
   file's header states plainly. They are a harness, not an oracle: a fixture
   for these rules supersedes them the day one exists.
 - **`test/ballot-batching.test.ts`** — ET-23, ET-24 and ET-24a
-  (`event-types.md` v11). When written, no fixture cited ET-23 or ET-24a and
+  (`event-types.md` v11; its unregistered-version chains re-read under v12's
+  ET-24b). When written, no fixture cited ET-23 or ET-24a and
   none had an issue whose ballots span more than one batch, so the conformance
   suite could not tell whether any of the three exists. Synthetic,
-  self-consistent chains (built with `genesis-builder.ts`'s `signedEventLine`),
+  self-consistent chains (built with `chain-builder.ts`),
   asserting verdict and blamed line in both directions: off-by-one-millisecond
   `ts`, declared (not floor) interval and minimum, a batch exactly at the
   minimum, the legal under-size final batch, interleaved issues, lastness by
   `seq` rather than `ts`, a ballot returning to a left instant (mid-chain, at
   the very end, two batches back, after an under-size batch), other issues'
-  ballots and other events between one batch's members, unregistered
-  `vote_cast` versions in between, ET-24 winning over ET-24a on the contract's
+  ballots and other events between one batch's members, opaque `vote_cast`
+  versions in between (now `PARTIAL` with the unresolved lines), ET-24 winning over ET-24a on the contract's
   own T1, T1, T2, T2, T2, T1 example, three batches at exactly the minimum
   (the per-batch counter reset), the EX-16 truncation residual with and
   without `--head`, interaction with other faults and `--head`,
-  a linear-cost budget, and the CLI's line and exit status. `epochMs` is
+  a linear-cost budget, the opaque-ballot cost bound, and the CLI's line and exit status. `epochMs` is
   checked against `Date` (via `setUTCFullYear`, which unlike `Date.UTC` does
   not remap years 0–99) over every year of ES-20's range.
+- **`test/chain-builder.ts`** — not a suite: the `Chain` builder the three
+  ballot suites share (genesis, issues at any version, interval and minimum,
+  ballots at any version and `ts`), built on `signedEventLine`.
+- **`test/opaque-ballots.test.ts`** — ET-24b and ET-18b (`event-types.md` v12,
+  ADR-0034): ADR-0034's eight-case table verbatim, then ET-18b (both lines in
+  `PARTIAL`, ET-17/ES-18 still `INVALID`, an unquantized `ts` or out-of-range
+  `choice` unresolved, not a candidate), and ET-24b shapes: several opaque
+  ballots adding up in F, F counting only after w, opaque ballots before an
+  issue's first ballot and before the issue itself (`seq ≤ c`), issues sharing
+  instants, a `ts` that is a multiple of one issue's interval and not another's,
+  an unquantized opaque `ts`, a malformed opaque payload (EV-16), a definite
+  failure after an unresolved line, an unregistered event that is not a
+  `vote_cast` (an `x_` type, `participant_registered` at an unregistered
+  version) never being a candidate (ET-22a), run-start state reset per run,
+  `--head` on a `PARTIAL` chain, every prefix
+  of one chain (EX-16), and the CLI's `PARTIAL` line and exit 2.
+- **`test/opaque-bruteforce.test.ts`** — a differential test: 3000 random
+  chains of up to 30 events (sfc32 PRNG, fixed seed), with opaque ballots and
+  non-ballot unregistered events placed at an issue's current, next or left
+  instants, compared with a deliberately naive, quadratic
+  reading of ET-18b/ET-23/ET-24/ET-24a/ET-24b written in the test itself. It
+  prints the verdict distribution and fails if any class (`VALID`, `INVALID`,
+  `PARTIAL` with and without unresolved registered lines) is under 5%.
 - **`test/chain-and-report.test.ts`** — `--chain` (EX-22/EX-23) and the v5
   anchor precedence: both anchors wrong on an eligible (VALID or PARTIAL) file
   blames line 1, PARTIAL does not block either comparison, and an earlier

@@ -223,7 +223,9 @@ describe("showing where a question stands", () => {
 
   it("gives a way out that is not called Back", () => {
     const { onClose } = show();
-    fireEvent.click(screen.getByRole("button", { name: "Close" }));
+    const close = screen.getByRole("button", { name: "Close" });
+    expect(close.textContent).toBe("×");
+    fireEvent.click(close);
     expect(onClose).toHaveBeenCalledTimes(1);
   });
 
