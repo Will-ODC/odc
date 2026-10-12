@@ -443,9 +443,6 @@ test(
         assert.deepEqual(await tablesIn(pool, schema), [
           "a",
           "c",
-          "posting_permission",
-          "posting_permission_change",
-          "publication_acknowledgement",
           "schema_migrations",
         ]);
         const { rows } = await pool.query<{ version: string }>(
@@ -503,11 +500,19 @@ test(
       await migrate(pool, { clock: () => AT });
       assert.deepEqual(await indexesIn(pool, schema), [
         "allowed_domain_pkey",
+        "community_pkey",
         "pending_claim_kind_subject_idx",
         "pending_claim_pkey",
         "poll_choice_pkey",
         "poll_choice_poll_id_position_key",
+        "poll_creation_replay_pkey",
+        "poll_creation_replay_poll_id_key",
+        "polls_author_created_idx",
+        "polls_id_author_unique",
         "polls_pkey",
+        "posting_permission_change_pkey",
+        "posting_permission_pkey",
+        "publication_acknowledgement_pkey",
         "schema_migrations_pkey",
         "suggestion_pkey",
         "suggestion_poll_id_idx",
