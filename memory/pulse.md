@@ -135,7 +135,7 @@ entry records the checked state above, not a claim that open work has merged.
   duplicate AI ballots, quotas do not. Multiple accounts and browser/AI double
   counting remain gaps. **PR #309 is merged; ADR-0036 records these choices but remains marked
   proposed.** Will gave implementation go in the #300 session; the public read slice is
-  pushed in open PR #323, fresh review/pipeline pending; later storage/auth scope and the optional
+  pushed in open PR #323, fresh review APPROVE, pipeline pending; later storage/auth scope and the optional
   Pulse answer-check page require coordination. No runtime MCP casting is built. Photo/summary (#296),
   comments (#297), the assistant (#280-#284), browse (#259/#260) and vote
   validity are labelled gaps until their own work lands.
@@ -316,7 +316,7 @@ PR #313 has merged; #302 / PR #322 is now open.
 - #300 read slice / PR #323: `pulse/300-mcp-reads`, `~/Desktop/odc-ai-voting`.
   `get_poll`/`get_results` at `/api/mcp`, no casting/auth/own-answer tools. Author
   reports416 fresh tests with required disposable Postgres, zero skips, plus
-  package gates. Pushed/unmerged, fresh review and CI underway. Existing `?poll`
+  package gates. Pushed/unmerged, fresh review APPROVE; CI underway. Existing `?poll`
   link compatibility still needs Will's answer; production origin wiring is
   explicitly deferred. No demo ports or frontend edits.
 - Latest shared usage checkpoint:47% five-hour,20% weekly used. Finish these
