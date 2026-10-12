@@ -54,7 +54,16 @@ export function App({ api, route }: { api: PulseApi; route?: Route }) {
         </SignInPage>
       );
     case "conversation":
-      return <Conversation key={at.pollId} api={api} pollId={at.pollId} />;
+      return (
+        <Conversation
+          key={at.pollId}
+          api={api}
+          pollId={at.pollId}
+          // Replaced, so the back button does not return to a page that
+          // still believes someone is signed in.
+          onSignedOut={() => browser.replace({ kind: "signIn" })}
+        />
+      );
     case "chatPreview":
       // Sample data only: the prototype never touches `api`.
       return <ChatPreview />;
