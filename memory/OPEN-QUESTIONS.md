@@ -18,6 +18,8 @@ is decided, and delete it when it becomes moot. Pulse's open decisions are in
 | **Q-F**: the registrar's signature as a subliminal channel                                          | "Q-F — What mitigates the registrar's signature…"              |
 | **Anchor contents and cadence** (Q-A item 4, which ADR-0013 and ADR-0032 left open)                 | "Anchor contents and cadence"                                  |
 | **EX-24 claim decoding**: invalid UTF-8, BOM, `\u` escapes, nesting depth (2026-10-10)              | "EX-24 claim decoding (2026-10-10)"                            |
+| **Pulse: how long `pending_claim` rows are kept** (2026-10-11, #315)                                | "Pulse sign-in data: retention and logging (2026-10-11)"       |
+| **Pulse: what an email-provider error may write to logs** (2026-10-11, #315)                        | "Pulse sign-in data: retention and logging (2026-10-11)"       |
 | Does `read-api.md` (RA-1 to RA-13, **zero** conformance coverage) need vectors before Phase 1?      | "Read-API conformance coverage"                                |
 | **⚠️ Ballot expressiveness vs receipt-freeness**: a live contradiction between charter §5 and ET-22 | **Archive file**. Read it before writing ceiling ADR part B.   |
 | Registrar key custody and the no-receipt discipline in Phase 1 identity                             | Archive file: "Registrar-side ballot privacy"                  |
@@ -118,6 +120,24 @@ ratified**. Its one-event/one-ballot evolution constraint, its uncertainty
 algorithm and its wider PARTIAL attribution all still need an operator decision.
 Merging the proposal settled nothing. Whatever is chosen needs both verifiers updated in isolation and vectors
 with an unregistered `vote_cast` inside a batch.
+
+## Pulse sign-in data: retention and logging (2026-10-11)
+
+Pulse is charter-exempt; these sit here because #315 asked for them here. Both
+are operator decisions, not confirmed leaks. Source:
+`docs/security/scans-2026-10-11.md`, items 5 and 6.
+
+- **How long are `pending_claim` rows kept?** Each row holds an email address
+  and a token digest. Server code deletes a row only when an unused link is
+  discarded (`apps/pulse/src/identity/pg-store.ts`, `discard`). Spent and
+  expired rows stay forever. Options: purge on a schedule after expiry, purge
+  spent rows at once, or keep them and say why in the README.
+- **What may an email-provider error write to logs?**
+  `apps/pulse/src/identity/resend-mailer.ts` puts up to 500 characters of the
+  provider's error body into the error that reaches the operator log. If the
+  provider echoes the recipient or the message, the address or sign-in link
+  lands in the log. Options: log status code only, log a redacted body, or
+  keep it and treat the log as personal data.
 
 ## Archive
 

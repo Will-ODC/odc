@@ -8,6 +8,7 @@ Threat models, posture reviews, and phase-gate audit reports for ODC.
 | ------------------------------------- | -------------------------------------------------------------------------------- |
 | `audit-phase-0.md`                    | The T9 phase-gate audit of `contracts/`, fixtures and both verifiers, 2026-08-14 |
 | `hash-chain-checkpoint-2026-10-09.md` | A later progress checkpoint, not the T9 re-audit; read it after the audit        |
+| `scans-2026-10-11.md`                 | Dependency checks and the 2026-10-09 audit's leftovers, re-checked on `c26127d`  |
 | `attacks/`                            | Retained adversarial inputs and probe scripts, so a re-auditor can re-run them   |
 
 Whether the T9 gate is open or closed is status, and lives in `memory/STATE.md`.
