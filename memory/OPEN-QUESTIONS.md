@@ -1,6 +1,7 @@
 # Open Questions
 
-Unresolved design questions for the **ODC core**. Move each one to an ADR when it
+Unresolved design questions for the **ODC core** (plus one pulse entry #315
+asked for, marked as such). Move each one to an ADR when it
 is decided, and delete it when it becomes moot. Pulse's open decisions are in
 `memory/pulse.md` and `memory/pulse-development.md`.
 
@@ -127,8 +128,8 @@ Pulse is charter-exempt; these sit here because #315 asked for them here. Both
 are operator decisions, not confirmed leaks. Source:
 `docs/security/scans-2026-10-11.md`, items 5 and 6.
 
-- **How long are `pending_claim` rows kept?** Each row holds an email address
-  and a token digest. Server code deletes a row only when an unused link is
+- **How long are `pending_claim` rows kept?** Each row holds a `subject` (today,
+  an email address) and a token digest. Server code deletes a row only when an unused link is
   discarded (`apps/pulse/src/identity/pg-store.ts`, `discard`). Spent and
   expired rows stay forever. Options: purge on a schedule after expiry, purge
   spent rows at once, or keep them and say why in the README.
