@@ -27,7 +27,7 @@ answered in the specs as ADR-0013 to ADR-0018 (#98). Only a **fresh re-audit**
 clears T9. Nothing may be implemented in `services/` until T9 and T9a. The ledger
 is unstarted.
 
-**Spec versions on master (2026-10-11; read the `Version:` lines, not prose):**
+**Spec versions on master (2026-10-12; read the `Version:` lines, not prose):**
 `event-schema.md` **v6**, `event-types.md` **v12**, `evolution.md` **v7** (all
 three ADR-0034, #294), `export-format.md` v5 (#224, ADR-0032), `hashing.md` v2,
 `ids.md` v1, `read-api.md` v1, `fixtures/README.md` v14 (**v15** in PR #327).
@@ -106,7 +106,7 @@ Optional, from ADR-0034 owed item 4: `docs/security/attacks/check-unknown-batchi
   TS exit code. #223 checkpoint, #224 `export-format.md` v5 (ADR-0032).
 - EX-24 stored-claim reporting in both verifiers: #241 (`export-format.md` v5).
 - ADR-0034 mixed-version batching: contract #294; Go #324 (#319), TS #325
-  (#320); vectors `116`-`134` in #327 (#321). TS sub-quadratic cost is
+  (#320); vectors `116`-`134` in #327 (#321, open until it merges). TS sub-quadratic cost is
   follow-up #326.
 - Memory index and `memory-index` CI guard (#117, #121).
 
