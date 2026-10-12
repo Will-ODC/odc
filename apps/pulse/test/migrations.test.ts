@@ -24,12 +24,12 @@ test("migrations_are_numbered_uniquely_and_load_oldest_first", () => {
 });
 
 /**
- * The known column defaults: `method_params` and `vote_choice.value`, and
- * nothing else. Adding to this list is how you declare a new one deliberately.
+ * The known column defaults: method params, vote choice value and
+ * the explicit non-hidden state of a newly inserted poll (ADR-0037). Adding to this list is how you declare a new one deliberately.
  */
-const DEFAULTS = ["'{}'::jsonb", "1"];
+const DEFAULTS = ["'{}'::jsonb", "1", "false"];
 
-test("the_only_column_defaults_are_the_two_constants_we_chose", () => {
+test("the_only_column_defaults_are_the_constants_we_chose", () => {
   // ADR-0020: a clock is constructor-injected in five places and every HTTP
   // test runs on a frozen one. A database default bypasses all of it while
   // most tests keep passing, which is what makes it dangerous rather than
@@ -42,7 +42,7 @@ test("the_only_column_defaults_are_the_two_constants_we_chose", () => {
   // the next migration anyone writes. A guard that has to enumerate every way
   // of saying `now` is a guard that will be got past.
   const found = [...schema.matchAll(/\bdefault\s+(.+?)\s*,?\s*$/gim)].map(
-    (match) => match[1],
+    (match) => match[1]?.replace(/;$/, ""),
   );
   assert.deepEqual(
     [...new Set(found)].sort(),
