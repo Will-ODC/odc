@@ -162,8 +162,9 @@ def exact(chain, allow_none, at_or_before, chain_level=False):
     """The all-assignments rule, by exhaustive search.
 
     chain_level: a failure is proved at L when every assignment breaks ET-24 or
-    ET-24a somewhere on the chain (any issue) at or before L, not only in L's
-    own issue. It can prove an INVALID the per-issue reading cannot.
+    ET-24a at some REGISTERED line of any issue at or before L, not only in L's
+    own issue. Breaks at opaque lines are not counted: a verifier can never
+    blame an opaque line. It can prove an INVALID the per-issue reading cannot.
     """
     issues = issues_of(chain)
     us = [e for e in chain if e["kind"] == "U"]
