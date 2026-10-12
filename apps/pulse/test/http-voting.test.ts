@@ -242,6 +242,20 @@ test("reading_a_ballot_never_mints_a_ballot_cookie", async () => {
   );
 });
 
+test("reading_with_a_forged_ballot_cookie_mints_nothing_either", async () => {
+  const { app } = await setup();
+  const reply = await app.inject({
+    url: "/api/polls/p1/ballot",
+    headers: { cookie: "pulse_ballot=garbage" },
+  });
+  assert.equal(reply.statusCode, 200);
+  assert.equal(reply.json().ballot, null);
+  assert.equal(
+    reply.cookies.find((c) => c.name === "pulse_ballot"),
+    undefined,
+  );
+});
+
 test("old_format_ballot_cookie_still_reads_its_stored_ballot", async () => {
   const { app, votes } = await setup();
   const ballotId = "b:legacy-browser";

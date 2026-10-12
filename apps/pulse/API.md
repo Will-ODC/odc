@@ -396,8 +396,8 @@ legitimately **sum to more than 100** — that is correct and is not normalised 
 
 This browser's own current ballot, so the UI can show what was picked. **No session
 required** — the ballot cookie is the identity. Reading **never mints** one: a browser
-with no ballot cookie gets `{ "ballot": null }` and no cookie. Only casting a vote
-mints it (#349 — the client reads this on every page view).
+with no valid ballot cookie gets `{ "ballot": null }` and no cookie. Only casting a vote
+mints it.
 
 ```json
 { "ballot": [0, 2] }

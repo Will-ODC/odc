@@ -581,4 +581,63 @@ it("hides the offer when it cannot tell whether a ballot is held", async () => {
   expect(
     banner().queryByRole("button", { name: "Forget my votes here" }),
   ).toBeNull();
+  // The fallback the screen promises: answering here still shows it.
+  await answer();
+  expect(
+    banner().getByRole("button", { name: "Forget my votes here" }),
+  ).toBeTruthy();
+});
+
+it("asks about the ballot of each question it moves to", async () => {
+  const first = poll({ next: ["second", "second"] });
+  const second = poll({ id: "second", question: "Where should it go?" });
+  const myBallot = vi.fn(async () => null);
+  render(
+    <Conversation
+      api={stubApi({ poll: graph([first, second]), myBallot })}
+      pollId={first.id}
+    />,
+  );
+  await main().findByRole("heading", { name: first.question, level: 1 });
+  const user = await answer();
+  await user.click(within(card()).getByRole("button", { name: "Next" }));
+  await main().findByRole("heading", { name: second.question, level: 1 });
+  await waitFor(() => expect(myBallot).toHaveBeenCalledWith("second"));
+});
+
+/*
+ * A check sent before forgetting carries the old cookie. If it answers late,
+ * it must not bring the offer back on a browser that now holds nothing.
+ */
+it("ignores a ballot check that answers after the votes were forgotten", async () => {
+  let late: (ballot: number[] | null) => void = () => {};
+  let calls = 0;
+  const myBallot = vi.fn(() => {
+    calls += 1;
+    return calls === 1
+      ? new Promise<number[] | null>((resolve) => {
+          late = resolve;
+        })
+      : Promise.resolve(null);
+  });
+  const signOut = vi.fn(async () => {});
+  render(
+    <Conversation api={stubApi({ myBallot, signOut })} pollId="ads-free" />,
+  );
+  await main().findByRole("heading", { name: poll().question, level: 1 });
+  const user = await answer();
+  await user.click(
+    banner().getByRole("button", { name: "Forget my votes here" }),
+  );
+  await user.click(banner().getByRole("button", { name: "Forget them" }));
+  await waitFor(() =>
+    expect(
+      banner().queryByRole("button", { name: "Forget my votes here" }),
+    ).toBeNull(),
+  );
+  late([1]);
+  await new Promise((resolve) => setTimeout(resolve, 0));
+  expect(
+    banner().queryByRole("button", { name: "Forget my votes here" }),
+  ).toBeNull();
 });
