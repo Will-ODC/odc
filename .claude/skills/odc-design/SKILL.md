@@ -12,20 +12,20 @@ supposed to look like, and where that decision is written down.
 
 ## What is reference, and what is not
 
-| Deck                                                           | Surface                            | Standing                                                                     |
-| -------------------------------------------------------------- | ---------------------------------- | ---------------------------------------------------------------------------- |
-| `pulse-screens/01-…07-*.html`                                  | Pulse story client, seven screens  | **Current reference for pulse**                                              |
-| `pulse-screens/09-chat-vote.html`                              | Pulse vote page as a conversation  | **Chosen direction** (operator 2026-10-11): to become the default; not built |
-| `pulse-screens/08-desktop-vote.html`                           | Pulse vote page, three columns     | Option, not chosen — kept for reference (ballot A halves / B pop-up)         |
-| `pulse-vote-states-v1.html`                                    | The vote screen's six states       | Reference — states 1–6 are all required                                      |
-| `pulse-story-mobile-v1.html`                                   | The original single-file story     | v1 archive; superseded by the split                                          |
-| `odc-community-mobile-v1.html`                                 | Charter-side mobile feed           | Pending primary candidate (`services/web`)                                   |
-| `odc-ballot-voting-mobile-v1.html`                             | Charter-side mobile ballot flow    | Pending primary candidate                                                    |
-| `odc-ballot-voting-desktop-v1-light.html`                      | Charter-side desktop workspace     | Pending primary candidate                                                    |
-| `governance-modern-v1.html`                                    | Alternate that names "Civic Glass" | Exploration only                                                             |
-| `hub-feed-v2.html`, `hub-feed-v3.html`, `hub-feed-mockup.html` | Hub feed explorations              | **NOT a reference for pulse.** Post-MVP                                      |
+| Deck                                                           | Surface                            | Standing                                                                                                                     |
+| -------------------------------------------------------------- | ---------------------------------- | ---------------------------------------------------------------------------------------------------------------------------- |
+| `pulse-screens/01-…07-*.html`                                  | Pulse story client, seven screens  | Earlier story reference; vote page superseded by 09                                                                          |
+| `pulse-screens/09-chat-vote.html`                              | Pulse conversation vote page       | **Current design of record** (ADR-0035); compact top-right desktop Vote panel is the operator experiment in #301, one Close. |
+| `pulse-screens/08-desktop-vote.html`                           | Three-column desktop ballot        | Kept alternative, not current default.                                                                                       |
+| `pulse-vote-states-v1.html`                                    | The vote screen's six states       | Reference — states 1–6 are all required                                                                                      |
+| `pulse-story-mobile-v1.html`                                   | The original single-file story     | v1 archive; superseded by the split                                                                                          |
+| `odc-community-mobile-v1.html`                                 | Charter-side mobile feed           | Pending primary candidate (`services/web`)                                                                                   |
+| `odc-ballot-voting-mobile-v1.html`                             | Charter-side mobile ballot flow    | Pending primary candidate                                                                                                    |
+| `odc-ballot-voting-desktop-v1-light.html`                      | Charter-side desktop workspace     | Pending primary candidate                                                                                                    |
+| `governance-modern-v1.html`                                    | Alternate that names "Civic Glass" | Exploration only                                                                                                             |
+| `hub-feed-v2.html`, `hub-feed-v3.html`, `hub-feed-mockup.html` | Hub feed explorations              | **NOT a reference for pulse.** Post-MVP                                                                                      |
 
-`docs/mockups/CANDIDATE_CONTEXT.md` is the curator index for the charter-side
+`docs/mockups/CANDIDATE_CONTEXT.md` indexes Pulse options and the separate charter-side
 candidates and records why each is what it is. Update it in the same change
 that changes a candidate's standing — a deck whose status moved and whose row
 did not is the failure mode this file exists to prevent.
@@ -40,7 +40,7 @@ negative letter-spacing on headings; layered soft shadows. The canonical
 `:root` block is `docs/mockups/pulse-screens/_screens.css` — read the values
 from there, never from memory or from this file.
 
-**The dark swipe ballot** — `01-claim.html` only. Near-black `#0a0b0e`,
+**The retired dark swipe ballot** — `01-claim.html` only. Near-black `#0a0b0e`,
 cardless, question as hero in a black top third, full-height No=red / Yes=green
 layers fading up into it, muted edge chevrons as the swipe affordance, an
 incognito motif meaning "your vote is private". It carries its own page chrome
@@ -50,10 +50,8 @@ override the dark screen floats on a light page and looks broken.
 **Screens 2–7 are still light.** Whether the whole deck goes dark is not
 recorded anywhere in the repo. Do not settle it by building: put the question
 in `memory/pulse.md` → "Open decisions (operator)" (per `memory/INDEX.md` →
-"Where new information goes"), get an answer, then build. Same
-for the swipe graph's up/down axis — left/right is the vote, and what up/down
-navigates to (comments, alternate next-votes, or both) is undecided; only
-left/right is wired today.
+"Where new information goes"), get an answer, then build. The swipe graph's up/down exploration is historical; the current conversation
+card uses explicit selection and Submit.
 
 ## Authoring a mockup
 

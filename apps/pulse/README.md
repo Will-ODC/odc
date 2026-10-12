@@ -124,3 +124,18 @@ private network address such as nginx's, so rate limits see the real client.
 Database migrations run on start, and some (003, 004) change how sign-in and
 sign-out work, so an old instance left running would fail sign-ins or ignore
 sign-outs.
+
+## Public MCP reads
+
+The API also serves `POST /api/mcp`, with `get_poll` and `get_results` only.
+Run `pnpm dev` as above; connect a Streamable HTTP MCP client to
+`http://127.0.0.1:8080/api/mcp` and ask for poll id `ads-free`. Closed polls stay
+readable. No sign-in, own-answer, voting or listing tools are implemented yet.
+The official SDK integration tests use throwaway loopback ports against the dev
+API and test current and legacy protocol behavior.
+
+See [API.md](./API.md#mcp-public-reads) for inputs, supported links, errors,
+origin configuration and limits. The default link origin is the API's loopback
+listener, not the Vite frontend; use poll ids for current `?poll=...` web links.
+Configure `createServer({ ..., mcp: { publicOrigin } })` before advertising a
+public deployment. Environment wiring and AI voting remain later slices.

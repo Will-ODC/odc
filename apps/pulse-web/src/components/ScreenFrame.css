@@ -1,19 +1,4 @@
-/*
- * The phone-sized pane every screen that is not a ballot sits in.
- *
- * Dark, to match the ballot: a person moving between signing in and answering
- * should not feel the app change under them, and the page behind it is dark
- * already (App.css).
- *
- * The ballots carry their own copy of the `.screen` frame rules in
- * SwipeBallot.css and ChoiceBallot.css. That duplication is deliberate and
- * temporary — adopting this class there means editing two merged, tested
- * screens, which belongs with the extraction work that gives the ballot a
- * second home. The rules below are byte-for-byte the ones in
- * `.ballot` / `.ballot__brand`; a review found the mark had already drifted on
- * six properties, so the shared values now live in tokens.css and BOTH files
- * read them. Change a brand value there, never here.
- */
+/* Shared frame for sign-in and sample preview screens. Values live in tokens.css. */
 .screen {
   position: relative;
   display: flex;
@@ -37,7 +22,7 @@
   padding: var(--gutter) var(--gutter) 0;
 }
 
-/* Declaration for declaration, `.ballot__brand` in SwipeBallot.css. */
+/* Shared brand values also used by the top banner. */
 .screen__brand {
   display: var(--screen-brand-display);
   align-items: center;

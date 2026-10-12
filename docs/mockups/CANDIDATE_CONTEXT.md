@@ -1,14 +1,33 @@
 # ODC mockup candidate context
 
-Updated: 2026-07-30
+Updated: 2026-10-11
 
-## Pending primary candidates
+## Pulse candidates
+
+Current Pulse status lives in `memory/pulse.md`; this index separates the five
+options from the charter-side ODC candidates below. Checked 2026-10-11.
+
+| Option | Record | Status |
+| --- | --- | --- |
+| Existing swipe UI | `pulse-screens/01-claim.html`; current Run/ballot screens | Current default, demo 5173; retirement waits on #302. |
+| Three-column desktop | `pulse-screens/08-desktop-vote.html`, #298 | Kept alternative. |
+| Conversation, vote above composer | `pulse-screens/09-chat-vote.html`, #298; epic #303 / ADR-0035 | Chosen design of record; reusable card merged in PR #307. |
+| Conversation, compact top-right Vote panel | [PR #313](https://github.com/Will-ODC/odc/pull/313), #301 | Operator-requested layout experiment; merged in PR #313; default switch is open PR #322, waiting on Will. Local demo 5182, isolated in-memory API 8081; phone expands above composer. One Close button, Vote tab reopens. |
+| Browser extension with assistant/voting tabs | [Issue #314](https://github.com/Will-ODC/odc/issues/314) | Idea only; sample-data prototype proposed, browser/access decisions pending. |
+
+The top-right variant does not supersede mockup 09 or change the default route.
+Its assistant is disabled; voting uses a real disposable local API. Local demo
+ports are session conveniences, not deployed services. The extension would be
+another client, with explicit content-to-poll association; no live assistant
+or official votes are part of its first prototype.
+
+## Charter-side ODC: pending primary candidates
 
 - Mobile community: `odc-community-mobile-v1.html`
 - Mobile ballot: `odc-ballot-voting-mobile-v1.html`
 - Desktop: `odc-ballot-voting-desktop-v1-light.html`
 
-Treat these three light-theme files as the current design baselines and the first mockups to update or review in follow-up work.
+Treat these three light-theme files as the charter-side design baselines and the first mockups to update or review in follow-up work.
 
 ## Status
 
