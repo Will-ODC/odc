@@ -18,7 +18,9 @@ EV-7/EV-17:
 - `INVALID at line N` — the first fatal line, scanning in file order. Exit `1`.
 - `PARTIAL at lines …` — Stage A passed for the whole chain and no registered
   event failed Stage B, but one or more events carry a well-formed but
-  unregistered `(type, version)` whose semantics could not be checked. Exit `2`.
+  unregistered `(type, version)` whose semantics could not be checked. The
+  lines listed are those events plus every registered ballot whose batch or
+  issue checks they leave unresolved (ET-18b, ET-24b). Exit `2`.
 
 Tool-level failures (bad usage, unreadable file) exit `3` and are never a chain
 verdict. The reason text after a verdict is **advisory only** and is not part of
@@ -63,12 +65,13 @@ internal/verify/
   crypto.go                 Ed25519 canonical + prime-order key checks (ET-4a/b/c)
   verify.go                 two-stage driver, verdict + precedence
   report.go                 EX-24 stored-claim report (candidates + claims)
-  ballot.go                 ballot ts quantization + batch runs (ET-23/ET-24/ET-24a)
+  ballot.go                 ballot ts quantization + batch runs (ET-23/ET-24/ET-24a/ET-24b)
   verify_test.go            fixture-driven conformance tests
   genesis_ancestry_test.go  ET-9e/ET-9f/ES-34 key set, EV-20/EV-21 (synthetic)
   genesis_keys_test.go      ET-9d, the two genesis keys are distinct (synthetic)
   issue_title_test.go       ET-14 title bounds, counted in scalars (synthetic)
   ballot_test.go            ET-23, ET-24, ET-24a + blamed lines (synthetic)
+  ballot_opaque_test.go     ET-24b, ET-18b + a brute-force oracle (synthetic)
   parse_dupkeys_test.go     HA-6 duplicate keys across the parser's threshold
   report_test.go            EX-24 candidate-record splitting
 chain_report_test.go        --chain/--head precedence and the EX-24 report (CLI)
@@ -94,8 +97,8 @@ else. Each vector asserts only its verdict token and line number(s). The suite
 also pins the byte-exact preimage construction against
 `contracts/fixtures/preimages/`.
 
-Five other suites sit alongside them and assert deliberately less. The first
-three are **synthetic**: `contracts/fixtures/` ships no vector for the rules they
+Eight other suites sit alongside them and assert deliberately less. The first
+five are **synthetic**: `contracts/fixtures/` ships no vector for the rules they
 cover, their chains are built by the same hashing and signing code the assertions
 run against, and they are therefore self-consistent by construction and pin no
 preimage shape. What each case demonstrates is differential — one edit to an
@@ -118,9 +121,8 @@ otherwise identical chain moves the verdict in the direction the rule names.
   string in BYTES, so the accept cases are titles of 200 three-byte and 200
   four-byte scalars, which a byte-length bound would reject.
 - **`internal/verify/ballot_test.go`** (synthetic) covers ET-23, ET-24 and
-  ET-24a (`contracts/event-types.md` v11). No committed vector has ballots
-  spanning more than one batch or cites ET-23/ET-24a, so this is the only
-  coverage of these rules until vectors land. It asserts the blamed line on
+  ET-24a (`contracts/event-types.md` v12), alongside vectors `099`-`108`
+  (ADR-0029) and the ADR-0034 vectors from `116`. It asserts the blamed line on
   every rejection: a batch (a maximal run of one issue's registered ballots
   sharing a `ts`) exactly at the minimum, the one legal under-size batch, an
   under-size batch ended by a later ballot of its issue — including the
@@ -131,6 +133,18 @@ otherwise identical chain moves the verdict in the direction the rule names.
   millisecond off, lastness by `seq` rather than `ts`, the interaction with
   other faults, the truncation residual with `--head`, and the CLI's exit
   status and single output line on a built binary.
+- **`internal/verify/ballot_opaque_test.go`** (synthetic) covers ET-24b and
+  ET-18b (ADR-0034): ADR-0034's eight-case table, candidacy by interval and by
+  `seq`, issues sharing instants, malformed opaque payloads (EV-16), and
+  `--head` on an unresolved chain. A brute-force test compares the verifier
+  with a separately written, deliberately quadratic reading of ET-24b over
+  thousands of random small chains and logs the verdict distribution; a
+  second test checks that reading against the exact all-assignments meaning
+  ET-24b's informative paragraph states (a definite failure fails under every
+  assignment; a resolved check passes under every one). A cost test verifies
+  hostile chains (3000 issues, 3000 opaque ballots at distinct instants; one
+  shared interval, and 3000 distinct intervals) and
+  bounds its allocation to a small multiple of the export size.
 - **`internal/verify/parse_dupkeys_test.go`** covers HA-6 duplicate-key
   detection across the parser's linear-scan/set threshold, with the duplicate
   placed both before and after the crossing. It is not synthetic in the sense

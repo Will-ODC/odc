@@ -125,7 +125,17 @@ type vstate struct {
 	regPK   []byte                // genesis registrar_pk, decoded (ET-17)
 	haveKey bool                  // genesis keys captured
 	issues  map[string]*issueInfo // issue_created hash -> tracked facts (ID-7/ET-18a/ET-14b)
-	ballots ballotState           // ET-24/ET-24a batch instants already left
+	ballots ballotState           // opaque ballots, for ET-24b
+
+	// opaqueIssues holds the hash of every issue_created at an unregistered
+	// version: still a prior issue_created for ID-8/ET-18 (ET-18b). Only its
+	// envelope is read, never its payload (EV-15).
+	opaqueIssues map[string]struct{}
+
+	// unresolved is set by Stage B on a registered vote_cast with a check
+	// ET-18b or ET-24b leaves unresolved: not failed, but the line is
+	// enumerated in PARTIAL (EV-7, EV-17).
+	unresolved bool
 }
 
 // Options carries the optional out-of-band expectations a run may be given.
@@ -145,7 +155,8 @@ func Verify(data []byte, head *string) Result {
 // `--head` (EX-15) and `--chain` (EX-22) expectations.
 func VerifyWith(data []byte, opts Options) Result {
 	head, chain := opts.Head, opts.Chain
-	st := &vstate{issues: map[string]*issueInfo{}, ballots: newBallotState()}
+	st := &vstate{issues: map[string]*issueInfo{}, ballots: newBallotState(),
+		opaqueIssues: map[string]struct{}{}}
 	lines, faults := frame(data)
 
 	// An empty export verified as a chain is INVALID at line 1: it has no
@@ -223,13 +234,29 @@ func VerifyWith(data []byte, opts Options) Result {
 				// chain on which nothing was ever authenticated.
 				return invalid(1, unregisteredGenesisReason(e.version))
 			}
+			// Envelope-only facts later registered checks depend on (EV-15:
+			// ET-18b and ET-24b read the envelope of an unregistered event,
+			// never its payload, and never make it INVALID).
+			switch e.typ {
+			case "issue_created":
+				st.opaqueIssues[e.hash] = struct{}{} // ET-18b
+			case "vote_cast":
+				st.ballots.opaqueBallot(e.seq, tsMillis(e.ts)) // ET-24b item 1
+			}
 			partial = append(partial, ln)
 			prev = e
 			continue
 		}
 
+		st.unresolved = false
 		if reason, ok := stageB(st, e); !ok {
 			return invalid(ln, reason)
+		}
+		if st.unresolved {
+			// EV-17: every registered vote_cast line with a check ET-18b or
+			// ET-24b leaves unresolved. Lines are visited once, in order, so
+			// the list stays ascending without duplicates.
+			partial = append(partial, ln)
 		}
 		prev = e
 	}
@@ -258,7 +285,7 @@ func VerifyWith(data []byte, opts Options) Result {
 
 	if len(partial) > 0 {
 		return Result{Verdict: PARTIAL, Lines: partial,
-			Reason: "unregistered (type, version); Stage B not run"}
+			Reason: "these lines could not be fully checked: each is an event at a (type, version) this verifier does not register, or a ballot whose checks depend on such an event (EV-7, ET-18b, ET-24b)"}
 	}
 	return Result{Verdict: VALID}
 }
@@ -499,7 +526,7 @@ func stageBIssue(st *vstate, e *event) (string, bool) {
 	// ID-7: issue_id is this event's hash; record with its choice_count
 	// (ET-18a) and the ET-14b batching parameters ET-23/ET-24 read.
 	st.issues[e.hash] = &issueInfo{choiceCount: ccV.ival,
-		intervalMS: intervalV.ival, batchMin: minV.ival}
+		intervalMS: intervalV.ival, batchMin: minV.ival, seq: e.seq}
 	return "", true
 }
 
@@ -518,11 +545,29 @@ func stageBVote(st *vstate, e *event) (string, bool) {
 		return "issue_id not 64 lowercase hex (ID-8)", false
 	}
 	iss, known := st.issues[issueID]
-	if !known {
+	_, opaqueIssue := st.opaqueIssues[issueID]
+	if !known && !opaqueIssue {
 		return "vote references unknown or forward issue (ET-18/ID-8)", false
 	}
 	if choiceV.kind != kInt {
 		return "choice must be an integer (ET-19)", false
+	}
+	if opaqueIssue {
+		// ET-18b: the issue_created is at a version this verifier does not
+		// register. It is still a prior issue_created, so ET-18 passes;
+		// choice_count and both batching parameters are unreadable, so
+		// ET-18a, ET-23, ET-24 and ET-24a are unresolved — never INVALID on
+		// that ground. Every other check (ES-18 above, ET-19 above, ET-17
+		// below) applies as usual. The ballot is no registered ballot of any
+		// issue for ET-24b, and no candidate either: it is not opaque.
+		if !isHex128(sig) {
+			return "sig not 128 lowercase hex (ES-31)", false
+		}
+		if !verifyEd25519(st.regPK, hexToBytes(sig), preimage(e, "sig")) {
+			return "vote signature invalid under registrar_pk (ET-17)", false
+		}
+		st.unresolved = true
+		return "", true
 	}
 	if choiceV.ival < 0 || choiceV.ival >= iss.choiceCount {
 		return "choice out of [0, choice_count) (ET-18a)", false
@@ -541,13 +586,16 @@ func stageBVote(st *vstate, e *event) (string, bool) {
 	if tsMS%iss.intervalMS != 0 {
 		return "ts is not a multiple of the issue's ballot_batch_interval_ms (ET-23)", false
 	}
-	// ET-24 / ET-24a: place the ballot in its issue's batch sequence. Both
-	// rules are decided at this ballot's own line (event-types.md v11): a
-	// change of ts closes the previous batch for good (ET-24a), so an
-	// under-size batch is proven not-last exactly here (ET-24), and a ts equal
-	// to an instant this issue has already left is a return (ET-24a).
-	if reason, ok := st.ballots.observe(iss, tsMS); !ok {
+	// ET-24 / ET-24a, as ET-24b qualifies them beside opaque ballots: both
+	// rules are decided at this ballot's own line. A change of ts closes the
+	// previous run for good (ET-24a), so an under-size run is proven not-last
+	// exactly here (ET-24) unless candidates could have filled it, and a ts
+	// equal to an instant this issue already used is a return (ET-24a).
+	switch out, reason := iss.observe(&st.ballots, e.seq, tsMS); out {
+	case batchFail:
 		return reason, false
+	case batchUnresolved:
+		st.unresolved = true
 	}
 	return "", true
 }
