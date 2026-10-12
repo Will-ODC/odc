@@ -78,6 +78,11 @@ Optional, from ADR-0034 owed item 4: `docs/security/attacks/check-unknown-batchi
   Its old default ("one-choice until argued otherwise") was withdrawn on
   2026-08-19, so the ceiling is deliberately open. v1 is unchanged. Read the
   ET-22 warning in `memory/OPEN-QUESTIONS-archive.md` before drafting it.
+- **Verifier dependency updates** (from `docs/security/scans-2026-10-11.md`,
+  #335): govulncheck found nothing the verifier calls, but `filippo.io/edwards25519`
+  v1.1.0 has GO-2026-4503 (fixed in v1.1.1), and CI builds with `go 1.24`, which
+  no longer gets security fixes. Bump the module and raise the `go` directive or
+  add a `toolchain` line, in the verifier's own isolated context.
 - **`odc-verifier-builder`'s role definition says Go only**, but it was also used
   for the TS verifier. Either add a TS builder role or scope this one to "either
   verifier, never both".
