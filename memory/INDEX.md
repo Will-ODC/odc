@@ -27,7 +27,7 @@ Do not apply charter rules to `apps/**`, and do not relax them anywhere else.
 
 - **ODC core:** Phase 0. The T9 gate is **closed**. Conformance phases 1-4 are
   merged, and ADR-0034 (mixed-version batching, spec #294) is in both verifiers
-  (#324 Go, #325 TS); its vectors `116`-`134` are PR #327. Next:
+  (#324 Go, #325 TS); its vectors `116`-`134` are in (#327). Next:
   the operator decides four `contracts/` contradictions, then a fresh T9
   re-audit, then the RC. The ledger is unstarted. → `memory/STATE.md`
 - **Pulse:** identity, the ballot run, storage, mail and serving are built.
