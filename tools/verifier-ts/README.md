@@ -179,7 +179,10 @@ Two stages, per `evolution.md` EV-6/EV-15:
   Map/Set lookups plus one binary search; an opaque ballot costs one modulus
   per **distinct** interval among the registered issues (it updates an O(1)
   summary per interval, not each issue), so the worst case is
-  O(opaque ballots × distinct intervals).
+  O(opaque ballots × distinct intervals): about 0.2 s at 10k × 10k, 1.7 s at
+  30k × 30k, and roughly 20 s at 100k × 100k, measured on that step alone.
+  `test/ballot-batching.test.ts` pins the 10k × 10k case under 2 s. A
+  sub-quadratic candidacy test is an **open follow-up**.
 
   _Which ballots count_ (v12): ET-24 and ET-24a read only registered
   ballots of registered issues. An opaque ballot joins no _known_ run, but it
@@ -259,7 +262,7 @@ would be inventing conformance in a file no reviewer treats as normative.
   own T1, T1, T2, T2, T2, T1 example, three batches at exactly the minimum
   (the per-batch counter reset), the EX-16 truncation residual with and
   without `--head`, interaction with other faults and `--head`,
-  a linear-cost budget, and the CLI's line and exit status. `epochMs` is
+  a linear-cost budget, the opaque-ballot cost bound, and the CLI's line and exit status. `epochMs` is
   checked against `Date` (via `setUTCFullYear`, which unlike `Date.UTC` does
   not remap years 0–99) over every year of ES-20's range.
 - **`test/chain-builder.ts`** — not a suite: the `Chain` builder the three
@@ -273,10 +276,15 @@ would be inventing conformance in a file no reviewer treats as normative.
   issue's first ballot and before the issue itself (`seq ≤ c`), issues sharing
   instants, a `ts` that is a multiple of one issue's interval and not another's,
   an unquantized opaque `ts`, a malformed opaque payload (EV-16), a definite
-  failure after an unresolved line, `--head` on a `PARTIAL` chain, every prefix
+  failure after an unresolved line, an unregistered event that is not a
+  `vote_cast` (an `x_` type, `participant_registered` at an unregistered
+  version) never being a candidate (ET-22a), run-start state reset per run,
+  `--head` on a `PARTIAL` chain, every prefix
   of one chain (EX-16), and the CLI's `PARTIAL` line and exit 2.
-- **`test/opaque-bruteforce.test.ts`** — a differential test: 3000 small random
-  chains (sfc32 PRNG, fixed seed) compared with a deliberately naive, quadratic
+- **`test/opaque-bruteforce.test.ts`** — a differential test: 3000 random
+  chains of up to 30 events (sfc32 PRNG, fixed seed), with opaque ballots and
+  non-ballot unregistered events placed at an issue's current, next or left
+  instants, compared with a deliberately naive, quadratic
   reading of ET-18b/ET-23/ET-24/ET-24a/ET-24b written in the test itself. It
   prints the verdict distribution and fails if any class (`VALID`, `INVALID`,
   `PARTIAL` with and without unresolved registered lines) is under 5%.

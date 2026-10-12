@@ -61,7 +61,14 @@ function sfc32(seed: number): () => number {
 type Ev =
   | { k: "issue"; reg: boolean; delta: number; min: number }
   | { k: "vote"; issue: number; ms: number } // a registered (v1) ballot
-  | { k: "opaque"; ms: number; names: number }; // vote_cast v1000000
+  | { k: "opaque"; ms: number; names: number } // vote_cast v1000000
+  // An unregistered event that is NOT a vote_cast: never a ballot (ET-22a),
+  // never a candidate (ET-24b), only a PARTIAL line of its own.
+  | {
+      k: "other";
+      ms: number;
+      type: "x_ballot_like" | "participant_registered";
+    };
 
 // 2026-07-21T00:00:00.000Z: a day boundary, so a multiple of every interval used.
 const BASE = Date.UTC(2026, 6, 21);
@@ -73,18 +80,38 @@ function generate(rnd: () => number): Ev[] {
   // Per-chain rates, so that some chains carry no opaque ballot or no
   // unregistered issue at all (the only way to reach VALID).
   const opaqueRate = pick([0, 0.12, 0.3]);
+  const otherRate = pick([0, 0, 0.08]);
   const unregIssueRate = pick([0, 0, 0.25]);
+  // Long chains reach three or more runs of one issue, where w, f and c
+  // differ — the ground M5/E/J-style mistakes live on.
+  const n = 4 + Math.floor(rnd() * (rnd() < 0.5 ? 13 : 27));
   const evs: Ev[] = [];
   const issues: { delta: number }[] = [];
   const lastMs = new Map<number, number>(); // issue ordinal -> last ballot ms
+  const used = new Map<number, number[]>(); // issue ordinal -> instants used
   const instant = (delta: number): number => {
     const ms = BASE + Math.floor(rnd() * 6) * (rnd() < 0.85 ? delta : 60000);
     return rnd() < 0.03 ? ms + 1 : ms; // rare unquantized ts (ET-23)
   };
-  const n = 4 + Math.floor(rnd() * 13);
+  const next = (prev: number, delta: number): number =>
+    prev - (prev % delta) + delta * (rnd() < 0.8 ? 1 : 2);
+  // Where an opaque (or other unregistered) event lands. Besides a random
+  // instant and an issue's current one, it may land on an issue's NEXT
+  // instant (so it precedes the run there, between c and P(f)) or on an
+  // instant the issue has LEFT.
+  const unregInstant = (): number => {
+    const issue = Math.floor(rnd() * Math.max(1, issues.length));
+    const prev = lastMs.get(issue);
+    const delta = issues[issue]?.delta ?? 60000;
+    const r = rnd();
+    if (prev === undefined || r < 0.2) return instant(60000);
+    if (r < 0.45) return prev;
+    if (r < 0.8) return next(prev, delta);
+    return pick(used.get(issue) ?? [prev]);
+  };
   for (let i = 0; i < n; i++) {
     const r = rnd();
-    if (issues.length === 0 ? r < 0.75 : r < 0.08 && issues.length < 3) {
+    if (issues.length === 0 ? r < 0.75 : r < 0.06 && issues.length < 3) {
       const delta = pick(DELTAS);
       evs.push({
         k: "issue",
@@ -93,23 +120,31 @@ function generate(rnd: () => number): Ev[] {
         min: rnd() < 0.75 ? 3 : 4,
       });
       issues.push({ delta });
+    } else if (rnd() < otherRate) {
+      evs.push({
+        k: "other",
+        ms: unregInstant(),
+        type: rnd() < 0.5 ? "x_ballot_like" : "participant_registered",
+      });
     } else if (issues.length > 0 && rnd() >= opaqueRate) {
       const issue = Math.floor(rnd() * issues.length);
       const { delta } = issues[issue] as { delta: number };
       const prev = lastMs.get(issue);
       let ms: number;
-      if (prev !== undefined && rnd() < 0.75)
+      if (prev !== undefined && rnd() < 0.72)
         ms = prev; // stay in the run
-      else if (prev !== undefined && rnd() < 0.7)
-        ms = prev - (prev % delta) + delta * (1 + Math.floor(rnd() * 2)); // move on
+      else if (prev !== undefined && rnd() < 0.75)
+        ms = next(prev, delta); // move on
       else ms = instant(delta);
       lastMs.set(issue, ms);
+      used.set(issue, [...(used.get(issue) ?? []), ms]);
       evs.push({ k: "vote", issue, ms });
     } else {
-      const sticky = [...lastMs.values()];
-      const ms =
-        sticky.length > 0 && rnd() < 0.5 ? pick(sticky) : instant(60000);
-      evs.push({ k: "opaque", ms, names: Math.floor(rnd() * 4) });
+      evs.push({
+        k: "opaque",
+        ms: unregInstant(),
+        names: Math.floor(rnd() * 4),
+      });
     }
   }
   return evs;
@@ -129,8 +164,8 @@ function oracle(evs: Ev[]): string {
       if (!e.reg) partial.push(seqOf(i)); // unregistered issue_created
       continue;
     }
-    if (e.k === "opaque") {
-      partial.push(seqOf(i)); // unregistered vote_cast
+    if (e.k === "opaque" || e.k === "other") {
+      partial.push(seqOf(i)); // an unregistered (type, version)
       continue;
     }
     const issueIdx = issueAt[e.issue] as number;
@@ -214,6 +249,10 @@ function build(evs: Ev[]): Buffer {
       );
     } else if (e.k === "vote") {
       c.vote(ids[e.issue] as string, new Date(e.ms).toISOString());
+    } else if (e.k === "other") {
+      // Its payload names the first issue, as a ballot's would; still no ballot.
+      const named = ids[0] ?? "9".repeat(64);
+      c.unregistered(e.type, UNREG, new Date(e.ms).toISOString(), named);
     } else {
       // The opaque payload names an issue (or junk); it must make no difference.
       const named = ids[e.names] ?? "9".repeat(64);
@@ -232,6 +271,7 @@ test("brute force: the one-pass ET-24b/ET-18b implementation agrees with the nai
     PARTIAL_opaque_only: 0,
     PARTIAL_with_unresolved: 0,
     INVALID_with_opaque_before: 0,
+    with_non_ballot_unregistered: 0,
   };
   for (let n = 0; n < cases; n++) {
     const evs = generate(rnd);
@@ -239,6 +279,7 @@ test("brute force: the one-pass ET-24b/ET-18b implementation agrees with the nai
     const got = tokenAndLine(verifyExport(build(evs)));
     assert.equal(got, want, `case ${n}: ${JSON.stringify(evs)}`);
 
+    if (evs.some((e) => e.k === "other")) dist.with_non_ballot_unregistered++;
     if (want === "VALID") dist.VALID++;
     else if (want.startsWith("INVALID")) {
       dist.INVALID++;

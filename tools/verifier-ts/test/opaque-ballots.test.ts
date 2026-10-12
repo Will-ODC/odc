@@ -223,6 +223,18 @@ test("ET-24b: a candidate at another instant still counts when a later candidate
   assert.equal(c.verdict(), "PARTIAL at lines 5,6,7");
 });
 
+test("ET-24b: F counts a candidate between w and f (just before the run begins)", () => {
+  // A@T1 x3 (4-6), U@T2 (7), A@T2 x2 (8, 9), A@T3 (10). The run {8, 9} has
+  // w = 6, and U at 7 is at its instant t = T2: |R| + F = 3, not definite.
+  // Line 8 is also unresolved (a candidate at its own instant precedes it).
+  const { c, a } = twoIssues();
+  c.votes(a, T1, 3);
+  c.vote(a, T2, UNREG);
+  c.votes(a, T2, 2);
+  c.vote(a, T3);
+  assert.equal(c.verdict(), "PARTIAL at lines 7,8,10");
+});
+
 test("ET-24b: an opaque ballot before an issue's first registered ballot, at another instant: unresolved", () => {
   const { c, a } = twoIssues();
   const u = c.vote(a, T2, UNREG);
@@ -360,6 +372,46 @@ test("ET-24b: a non-definite known failure does not stop the known state (a late
   c.votes(a, T2, 3);
   c.vote(a, T1);
   assert.equal(c.verdict(), "INVALID at line 10");
+});
+
+// --- ET-22a: only vote_cast carries ballots --------------------------------------
+
+for (const [type, version] of [
+  ["x_ballot_like", 1],
+  ["participant_registered", UNREG],
+] as const) {
+  test(`ET-22a / ET-24b: an unregistered ${type} v${version} at a quantized ts is not a candidate`, () => {
+    // A@T1 x2 (4, 5), the unregistered event @T1 naming A (6), A@T2 x3 (7-9).
+    // Not a vote_cast, so not an opaque ballot (ET-24b) and never a ballot
+    // (ET-22a): F = 0 and line 7's known ET-24 failure is definite.
+    const { c, a } = twoIssues();
+    c.votes(a, T1, 2);
+    c.unregistered(type, version, T1, a);
+    c.votes(a, T2, 3);
+    assert.equal(c.verdict(), "INVALID at line 7");
+  });
+
+  test(`ET-22a / ET-24b: an unregistered ${type} v${version} at another instant inside a run leaves nothing unresolved`, () => {
+    const { c, a } = twoIssues();
+    c.votes(a, T1, 3);
+    const x = c.unregistered(type, version, T2, a);
+    c.vote(a, T1);
+    assert.equal(c.verdict(), `PARTIAL at lines ${x}`);
+  });
+}
+
+// --- run-start state is per run ---------------------------------------------------
+
+test("ET-24b: a candidate from an earlier run does not leave a later run start unresolved", () => {
+  // A@T1 x3 (4-6), U@T3 (7), A@T2 x3 (8-10), A@T4 (11). Line 8 is unresolved
+  // (U falls after f = 4 at an instant other than T1). Line 11 is not: its
+  // run began at 8, after U, and no candidate sits at T4.
+  const { c, a } = twoIssues();
+  c.votes(a, T1, 3);
+  c.vote(a, T3, UNREG);
+  c.votes(a, T2, 3);
+  c.vote(a, T4);
+  assert.equal(c.verdict(), "PARTIAL at lines 7,8");
 });
 
 // --- EX-15 / EX-22: an unresolved check counts as not failed --------------------

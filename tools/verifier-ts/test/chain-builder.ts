@@ -128,6 +128,28 @@ export class Chain {
     }).line;
   }
 
+  /**
+   * Append a well-formed event at an unregistered `(type, version)` that is
+   * NOT a `vote_cast` (e.g. an `x_` type, or `participant_registered` at
+   * EV-19's reserved version). Stage B never runs on it, so it is unsigned.
+   * Its payload deliberately names `issueId`, as a ballot's would. Returns
+   * its line.
+   */
+  unregistered(
+    type: string,
+    version: number,
+    ts: string,
+    issueId: string,
+  ): number {
+    return this.push(type, {
+      version,
+      strings: { issue_id: issueId },
+      ints: { choice: 0 },
+      ts,
+      signer: null,
+    }).line;
+  }
+
   /** `n` ballots of one issue at one instant; returns their line numbers. */
   votes(issueId: string, ts: string, n: number, version = 1): number[] {
     const out: number[] = [];

@@ -78,12 +78,28 @@ export function isQuantized(ms: number, intervalMs: number): boolean {
 export type BatchOutcome = "resolved" | "unresolved" | "ET-24" | "ET-24a";
 
 /**
- * Candidate summary for every registered issue sharing one interval Δ. All
- * such issues have the same candidates except for ET-24b item 1's `seq > c`,
- * and every query below asks about a `seq` range whose lower bound is ≥ c, so
- * one summary serves them all. It holds exactly enough to answer "is there a
- * candidate with `seq` in (a, now) whose `ts` differs from x" in O(1):
- * the last candidate, and the last candidate at a different instant from it.
+ * Candidate summary for every registered issue sharing one interval Δ, which
+ * answers ET-24b item 4(b)'s question "is there a candidate with `seq > a`
+ * whose `ts` differs from x?" in O(1).
+ *
+ * Invariant: `lastSeq` is the largest `seq` among the candidates so far and
+ * `lastMs` its instant; `prevRunLastSeq` is the largest `seq` among candidates
+ * whose instant differs from `lastMs` (0 if none). It is maintained exactly:
+ * a new candidate at a DIFFERENT instant makes the old last candidate the
+ * largest one not at the new `lastMs` (every later-than-it candidate is the
+ * new one), so `prevRunLastSeq` becomes the old `lastSeq`; a new candidate at
+ * the SAME instant leaves the set of candidates at other instants unchanged.
+ *
+ * Hence "some candidate with `seq > a` and `ts ≠ x`" holds iff `lastSeq > a`
+ * and (`lastMs ≠ x` — the last candidate itself qualifies — or
+ * `prevRunLastSeq > a` — the latest candidate not at `lastMs = x` does). A
+ * candidate's `seq` is always below the ballot being admitted, so no upper
+ * bound is needed.
+ *
+ * One summary serves every issue at Δ although their c differ: candidacy
+ * (item 1) is the multiple test plus `seq > c`, and every query's lower bound
+ * `a` (c, `seq(P(L))` or `seq(f)`) is ≥ that issue's c, so candidates at or
+ * before c are excluded by the query itself.
  */
 interface IntervalGroup {
   delta: number;

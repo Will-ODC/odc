@@ -622,6 +622,23 @@ test("BallotBatches stays linear under a hostile pattern (200k instants, one iss
   assert.ok(ms < 2000, `took ${ms} ms`);
 });
 
+test("BallotBatches: opaque ballots cost stays within the current O(opaque x distinct intervals) bound", () => {
+  // An opaque ballot is tested against every DISTINCT interval among the
+  // registered issues (ET-24b item 1), so 10k intervals x 10k opaque ballots
+  // is 1e8 modulus tests: ~0.2 s when measured. This pins that bound, with
+  // headroom against CI noise, so a regression to per-issue or per-ballot
+  // rescans is caught. Sub-quadratic candidacy is an open follow-up.
+  const t = new BallotBatches();
+  const k = 10000;
+  for (let i = 0; i < k; i++) t.openIssue(`i${i}`, i + 2, 60000 * (i + 1), 3);
+  const start = process.hrtime.bigint();
+  for (let j = 0; j < k; j++) t.opaque(k + 2 + j, 60000 * (j % 7));
+  const ms = Number(process.hrtime.bigint() - start) / 1e6;
+  assert.ok(ms < 2000, `took ${ms} ms`);
+  // The summaries are live: issue i0 (interval 60000) sees a candidate.
+  assert.equal(t.admit("i0", 2 * k + 3, 60000 * 100), "unresolved");
+});
+
 test("BallotBatches: the leaving ballot reports ET-24 when the batch it leaves is under-size", () => {
   const t = new BallotBatches();
   t.openIssue("a", 1, 60000, 3);
