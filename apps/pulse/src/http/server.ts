@@ -210,8 +210,9 @@ export async function createServer(deps: ServerDeps): Promise<FastifyInstance> {
 
   /**
    * The identity this ballot is filed under, minting one if this browser has
-   * not voted before. Called only by the two routes that read or write a
-   * ballot, so nothing else in the product hands out this cookie.
+   * not voted before. Called only when a ballot is cast, so nothing else in
+   * the product hands out this cookie — reading a ballot never does (see the
+   * ballot route).
    */
   const ballotIdentity = (
     request: FastifyRequest,
@@ -432,10 +433,13 @@ export async function createServer(deps: ServerDeps): Promise<FastifyInstance> {
   app.get("/api/polls/:id/ballot", async (request, reply) => {
     const poll = await deps.votes.getPoll(pollId(request));
     if (!poll) return notFoundPoll(reply);
-    const vote = await deps.votes.voteOf(
-      poll.id,
-      ballotIdentity(request, reply),
-    );
+    // A browser with no ballot cookie has no ballot, and asking must not give
+    // it one: the client asks on every page view (to offer "Forget my votes
+    // here"), and minting here would hand every visitor a 30-day identity
+    // and race their first cast for which cookie wins.
+    const held = deps.signer.verify(request.cookies[BALLOT_COOKIE]);
+    if (!held) return reply.send({ ballot: null });
+    const vote = await deps.votes.voteOf(poll.id, held.voterId);
     return reply.send({ ballot: vote ? vote.choices : null });
   });
 

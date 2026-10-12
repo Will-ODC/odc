@@ -30,8 +30,9 @@ export function Conversation({
 }) {
   const [at, setAt] = useState(pollId);
   const [answers, setAnswers] = useState<Answer[]>([]);
-  // Whether this browser held a ballot before this visit. The ballot cookie
-  // cannot be read from script, so the first question's ballot stands in.
+  // Whether this browser holds a ballot from before this visit. The cookie
+  // cannot be read from script, so each question shown is asked in turn; a
+  // ballot on a poll this visit never reaches stays unseen until it does.
   const [heldBefore, setHeldBefore] = useState(false);
   // Bumped when the votes are forgotten, so the question starts over.
   const [round, setRound] = useState(0);
@@ -45,18 +46,23 @@ export function Conversation({
     ...(onSignedOut ? { onSignedOut } : {}),
     onForgotten: forgotten,
   });
+  // `round` is a dependency so forgetting cancels a check still in flight:
+  // that answer was asked with the old cookie and must not bring the button
+  // back. Reading never mints a cookie (API.md), so asking is free.
   useEffect(() => {
     let live = true;
-    api.myBallot(pollId).then(
+    api.myBallot(at).then(
       (ballot) => {
-        if (live) setHeldBefore(ballot !== null);
+        if (live && ballot !== null) setHeldBefore(true);
       },
+      // Cannot tell: hide the offer rather than guess. Answering here still
+      // shows it, and the next page view asks again.
       () => {},
     );
     return () => {
       live = false;
     };
-  }, [api, pollId]);
+  }, [api, at, round]);
   const [busy, setBusy] = useState(false);
   const counted = useCallback((answer: Answer) => {
     setAnswers((old) =>
@@ -152,8 +158,11 @@ function Banner({
           }
         />
       );
-    case "signedOut":
     case "unknown":
+      // Perhaps signed in after all, and the same request would then sign
+      // them out everywhere — more than "forget my votes" says. Only the way in.
+      return <TopBanner signInHref={pathOf({ kind: "signIn" })} />;
+    case "signedOut":
       return (
         <TopBanner
           signInHref={pathOf({ kind: "signIn" })}

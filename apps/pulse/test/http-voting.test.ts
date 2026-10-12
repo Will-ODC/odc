@@ -225,6 +225,23 @@ test("the_ballot_route_reports_this_browsers_current_ballot_or_null", async () =
   assert.deepEqual(after.json().ballot, [0, 2]);
 });
 
+/*
+ * The client asks this on every page view, to offer "Forget my votes here".
+ * Minting a cookie on that read would give every visitor a 30-day ballot
+ * identity they never asked for, and race their first cast for which cookie
+ * the browser ends up holding.
+ */
+test("reading_a_ballot_never_mints_a_ballot_cookie", async () => {
+  const { app } = await setup();
+  const reply = await app.inject({ url: "/api/polls/p1/ballot" });
+  assert.equal(reply.statusCode, 200);
+  assert.equal(reply.json().ballot, null);
+  assert.equal(
+    reply.cookies.find((c) => c.name === "pulse_ballot"),
+    undefined,
+  );
+});
+
 test("old_format_ballot_cookie_still_reads_its_stored_ballot", async () => {
   const { app, votes } = await setup();
   const ballotId = "b:legacy-browser";

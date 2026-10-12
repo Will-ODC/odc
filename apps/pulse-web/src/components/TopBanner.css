@@ -48,4 +48,5 @@
   justify-content: flex-end;
   gap: var(--gutter);
   min-width: 0;
+  font-size: var(--t-small);
 }

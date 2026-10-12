@@ -264,7 +264,7 @@ opens. Answering is also navigating.
 ### The ballot cookie, and why voting needs no session
 
 `pulse_ballot`, `HttpOnly`, `SameSite=Lax`, `Secure` (off only in local development),
-path `/`, 30 days. It is minted the first time this browser reads or casts a ballot.
+path `/`, 30 days. It is minted the first time this browser casts a ballot; reading one never mints it.
 
 **A vote is filed under this cookie and under nothing else**, whether or not the
 person has ever given an address. Two consequences, both deliberate:
@@ -395,8 +395,9 @@ legitimately **sum to more than 100** — that is correct and is not normalised 
 ### `GET /api/polls/:id/ballot`
 
 This browser's own current ballot, so the UI can show what was picked. **No session
-required** — the ballot cookie is the identity, and one is minted if this browser has
-none yet.
+required** — the ballot cookie is the identity. Reading **never mints** one: a browser
+with no ballot cookie gets `{ "ballot": null }` and no cookie. Only casting a vote
+mints it (#349 — the client reads this on every page view).
 
 ```json
 { "ballot": [0, 2] }

@@ -443,12 +443,19 @@ it("offers nothing to forget when this browser holds no votes", async () => {
  * their answers. The way to forget them is the same request as signing out.
  */
 it("lets someone who never signed in forget this browser's votes", async () => {
-  const signOut = vi.fn(() => Promise.resolve());
+  // Like the server: once the cookie is cleared, there is no ballot to read.
+  let cookie = true;
+  const signOut = vi.fn(async () => {
+    cookie = false;
+  });
   const onSignedOut = vi.fn();
+  const myBallot = vi.fn(async (id: string) =>
+    cookie && id === "ads-free" ? [1] : null,
+  );
   const user = userEvent.setup();
   render(
     <Conversation
-      api={stubApi({ myBallot: async () => [1], signOut })}
+      api={stubApi({ myBallot, signOut })}
       pollId="ads-free"
       onSignedOut={onSignedOut}
     />,
@@ -456,6 +463,7 @@ it("lets someone who never signed in forget this browser's votes", async () => {
   await user.click(
     await banner().findByRole("button", { name: "Forget my votes here" }),
   );
+  expect(myBallot).toHaveBeenCalledWith("ads-free");
   const confirm = banner().getByRole("button", { name: "Forget them" });
   const describedBy = confirm.getAttribute("aria-describedby") ?? "";
   expect(document.getElementById(describedBy)?.textContent).toMatch(
@@ -535,6 +543,41 @@ it("does not offer to forget to someone who is signed in", async () => {
     />,
   );
   await banner().findByText(voter.email);
+  expect(
+    banner().queryByRole("button", { name: "Forget my votes here" }),
+  ).toBeNull();
+});
+
+/*
+ * `unknown` means asking who is signed in failed, so they may be. The same
+ * request would sign them out everywhere, which "forget my votes" does not
+ * say, so only the way in is offered.
+ */
+it("does not offer to forget when it cannot tell who is signed in", async () => {
+  render(
+    <Conversation
+      api={stubApi({
+        me: () => Promise.reject(new Error("offline")),
+        myBallot: async () => [1],
+      })}
+      pollId="ads-free"
+    />,
+  );
+  await banner().findByRole("link", { name: "Sign in" });
+  await waitFor(() => expect(main().queryByRole("heading")).toBeTruthy());
+  expect(
+    banner().queryByRole("button", { name: "Forget my votes here" }),
+  ).toBeNull();
+});
+
+it("hides the offer when it cannot tell whether a ballot is held", async () => {
+  render(
+    <Conversation
+      api={stubApi({ myBallot: () => Promise.reject(new Error("offline")) })}
+      pollId="ads-free"
+    />,
+  );
+  await main().findByRole("heading", { name: poll().question, level: 1 });
   expect(
     banner().queryByRole("button", { name: "Forget my votes here" }),
   ).toBeNull();
