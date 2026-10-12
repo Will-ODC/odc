@@ -601,9 +601,10 @@ public HTTP routes, without store/core imports. See ADR-0036.
 
 These routes are design contracts, not runtime endpoints. They require the
 current signed-in account; session generation/expiry checks match `/api/me`.
-Creation never accesses the caller's ballot cookie. All mutations require JSON
+Creation never accesses the caller's ballot cookie. Mutations with bodies require JSON
 and an `Origin` exactly matching the configured web origin; missing/foreign
-origins are refused, including for non-browser callers. Origin configuration
+origins are refused, including for non-browser callers. Bodyless DELETE needs no
+Content-Type but retains the same Origin check. Origin configuration
 comes from trusted server setup, not Host or forwarded headers.
 
 ### `GET /api/poll-creation/context`
@@ -681,17 +682,17 @@ acknowledgement, idempotency, metadata, poll and choices share one transaction
 and per-account concurrency guard. A refusal/rollback/replay consumes no slot.
 Unlimited grants bypass this quota, not resource checks or authentication.
 
-| Status | Error                  | Meaning                                                           |
-| ------ | ---------------------- | ----------------------------------------------------------------- |
-| 400    | `bad_request`          | Malformed/unknown fields, invalid key, shape, size or future time |
-| 401    | `signed_out`           | Invalid, absent, expired or revoked session                       |
-| 403    | `origin_not_allowed`   | Missing or foreign Origin                                         |
-| 409    | `idempotency_conflict` | Key already used for different canonical input                    |
-| 413    | `body_too_large`       | Body exceeds 32 KiB                                               |
-| 422    | `purpose_required`     | First post needs the v1 promise                                   |
-| 429    | `posting_limit`        | Five creations in the rolling hour; integer Retry-After seconds   |
-| 503    | `creation_unavailable` | Required storage unavailable; nothing partially committed         |
-| 500    | `server_error`         | Unexpected fault; safe message, no private diagnostics            |
+| Status | Error                  | Meaning                                                                   |
+| ------ | ---------------------- | ------------------------------------------------------------------------- |
+| 400    | `bad_request`          | Malformed/unknown fields, invalid key, shape, field length or future time |
+| 401    | `signed_out`           | Invalid, absent, expired or revoked session                               |
+| 403    | `origin_not_allowed`   | Missing or foreign Origin                                                 |
+| 409    | `idempotency_conflict` | Key already used for different canonical input                            |
+| 413    | `body_too_large`       | Body exceeds 32 KiB                                                       |
+| 422    | `purpose_required`     | First post needs the v1 promise                                           |
+| 429    | `posting_limit`        | Five creations in the rolling hour; integer Retry-After seconds           |
+| 503    | `creation_unavailable` | Required storage unavailable; nothing partially committed                 |
+| 500    | `server_error`         | Unexpected fault; safe message, no private diagnostics                    |
 
 Each uses the existing `{ error, message }` envelope. Auth/origin precede all
 account-bound lookups. Retry the same key and input after an uncertain result;
