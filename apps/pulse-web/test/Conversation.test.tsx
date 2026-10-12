@@ -315,3 +315,115 @@ it("retrying a failed replacement sends the new choice rather than the prior ans
   expect(cast).toHaveBeenLastCalledWith(p.id, [0]);
   expect(main().getByText("You picked No.")).toBeTruthy();
 });
+
+const voter = { id: "v1", community: null, email: "voter@example.org" };
+const banner = () => within(screen.getByRole("banner"));
+
+it("offers the way in when nobody is signed in", async () => {
+  render(<Conversation api={stubApi()} pollId="ads-free" />);
+  expect(await banner().findByRole("link", { name: "Sign in" })).toBeTruthy();
+  expect(banner().queryByRole("button", { name: "Sign out" })).toBeNull();
+});
+
+it("offers the way in when it cannot tell who is signed in", async () => {
+  const me = () => Promise.reject(new Error("offline"));
+  render(<Conversation api={stubApi({ me })} pollId="ads-free" />);
+  expect(await banner().findByRole("link", { name: "Sign in" })).toBeTruthy();
+});
+
+it("signs out everywhere only after asking, then hands off", async () => {
+  const signOut = vi.fn(() => Promise.resolve());
+  const onSignedOut = vi.fn();
+  const user = userEvent.setup();
+  render(
+    <Conversation
+      api={stubApi({ me: () => Promise.resolve(voter), signOut })}
+      pollId="ads-free"
+      onSignedOut={onSignedOut}
+    />,
+  );
+  expect(await banner().findByText(voter.email)).toBeTruthy();
+  expect(banner().queryByRole("link", { name: "Sign in" })).toBeNull();
+  await user.click(banner().getByRole("button", { name: "Sign out" }));
+  expect(signOut).not.toHaveBeenCalled();
+  await user.click(
+    banner().getByRole("button", { name: "Sign out everywhere" }),
+  );
+  await waitFor(() => expect(onSignedOut).toHaveBeenCalledTimes(1));
+  expect(signOut).toHaveBeenCalledTimes(1);
+  expect(await banner().findByRole("link", { name: "Sign in" })).toBeTruthy();
+});
+
+it("stays signed in, and says so, when signing out fails", async () => {
+  const signOut = vi.fn(() => Promise.reject(new ApiError(503, "down")));
+  const onSignedOut = vi.fn();
+  const user = userEvent.setup();
+  render(
+    <Conversation
+      api={stubApi({ me: () => Promise.resolve(voter), signOut })}
+      pollId="ads-free"
+      onSignedOut={onSignedOut}
+    />,
+  );
+  await user.click(await banner().findByRole("button", { name: "Sign out" }));
+  await user.click(
+    banner().getByRole("button", { name: "Sign out everywhere" }),
+  );
+  expect((await banner().findByRole("alert")).textContent).toMatch(
+    /still signed in/,
+  );
+  expect(onSignedOut).not.toHaveBeenCalled();
+  expect(banner().queryByRole("link", { name: "Sign in" })).toBeNull();
+  expect(
+    banner().getByRole("button", { name: "Sign out everywhere" }),
+  ).toBeTruthy();
+});
+
+it("sends one sign-out at a time, and hands off only once it is done", async () => {
+  let finish: () => void = () => {};
+  const signOut = vi.fn(
+    () =>
+      new Promise<void>((resolve) => {
+        finish = resolve;
+      }),
+  );
+  const onSignedOut = vi.fn();
+  const user = userEvent.setup();
+  render(
+    <Conversation
+      api={stubApi({ me: () => Promise.resolve(voter), signOut })}
+      pollId="ads-free"
+      onSignedOut={onSignedOut}
+    />,
+  );
+  await user.click(await banner().findByRole("button", { name: "Sign out" }));
+  await user.click(
+    banner().getByRole("button", { name: "Sign out everywhere" }),
+  );
+  const pending = banner().getByRole("button", { name: "Signing out…" });
+  expect(pending.getAttribute("aria-disabled")).toBe("true");
+  await user.click(pending);
+  expect(signOut).toHaveBeenCalledTimes(1);
+  expect(onSignedOut).not.toHaveBeenCalled();
+  finish();
+  await waitFor(() => expect(onSignedOut).toHaveBeenCalledTimes(1));
+});
+
+it("does not show an old failure when the question is asked again", async () => {
+  const signOut = vi.fn(() => Promise.reject(new ApiError(503, "down")));
+  const user = userEvent.setup();
+  render(
+    <Conversation
+      api={stubApi({ me: () => Promise.resolve(voter), signOut })}
+      pollId="ads-free"
+    />,
+  );
+  await user.click(await banner().findByRole("button", { name: "Sign out" }));
+  await user.click(
+    banner().getByRole("button", { name: "Sign out everywhere" }),
+  );
+  await banner().findByRole("alert");
+  await user.click(banner().getByRole("button", { name: "Cancel" }));
+  await user.click(banner().getByRole("button", { name: "Sign out" }));
+  expect(banner().queryByRole("alert")).toBeNull();
+});

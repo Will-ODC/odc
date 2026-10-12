@@ -9,6 +9,9 @@ import { VoteCard } from "../components/VoteCard.js";
 import { ClosedResults } from "../components/ClosedResults.js";
 import { ViewState } from "../components/ViewState.js";
 import { TopBanner } from "../components/TopBanner.js";
+import { SignedIn } from "../components/SignedIn.js";
+import { useSession } from "../hooks/use-session.js";
+import type { Session, SignOutProgress } from "../hooks/use-session.js";
 import "./Conversation.css";
 
 type Answer = { poll: Poll; ballot: number[]; results: Results };
@@ -17,10 +20,14 @@ type Answer = { poll: Poll; ballot: number[]; results: Results };
 export function Conversation({
   api,
   pollId,
+  onSignedOut,
 }: {
   api: PulseApi;
   pollId: string;
+  /** Runs once the server has signed this person out everywhere. */
+  onSignedOut?: () => void;
 }) {
+  const { session, progress, signOut, dismiss } = useSession(api, onSignedOut);
   const [at, setAt] = useState(pollId);
   const [answers, setAnswers] = useState<Answer[]>([]);
   const [busy, setBusy] = useState(false);
@@ -38,7 +45,12 @@ export function Conversation({
   return (
     <div className="conversation">
       <header className="conversation__banner">
-        <TopBanner signInHref={pathOf({ kind: "signIn" })} />
+        <Banner
+          session={session}
+          progress={progress}
+          onSignOut={signOut}
+          onCancel={dismiss}
+        />
       </header>
       <aside className="conversation__sidebar">
         <nav aria-label="Answered">
@@ -73,6 +85,46 @@ export function Conversation({
       </main>
     </div>
   );
+}
+
+/**
+ * The bar across the top, for whoever is (or is not) signed in.
+ *
+ * Nothing on the right while asking: a "Sign in" link that turns into an
+ * address a moment later is the flicker this avoids. When the answer is
+ * unknown, the way in is offered, because signing in again is harmless.
+ */
+function Banner({
+  session,
+  progress,
+  onSignOut,
+  onCancel,
+}: {
+  session: Session;
+  progress: SignOutProgress;
+  onSignOut: () => void;
+  onCancel: () => void;
+}) {
+  switch (session.status) {
+    case "loading":
+      return <TopBanner />;
+    case "signedIn":
+      return (
+        <TopBanner
+          identity={
+            <SignedIn
+              email={session.me.email}
+              progress={progress}
+              onSignOut={onSignOut}
+              onCancel={onCancel}
+            />
+          }
+        />
+      );
+    case "signedOut":
+    case "unknown":
+      return <TopBanner signInHref={pathOf({ kind: "signIn" })} />;
+  }
 }
 
 function Question({

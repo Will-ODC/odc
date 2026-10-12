@@ -1,0 +1,52 @@
+/* Sits in TopBanner's identity slot; reads the banner's tokens, no literals. */
+.signed-in {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: center;
+  justify-content: flex-end;
+  gap: var(--step);
+  min-width: 0;
+  font-size: var(--t-small);
+  color: var(--ballot-ink-muted);
+}
+
+.signed-in__who {
+  min-width: 0;
+  overflow-wrap: anywhere;
+}
+
+.signed-in__question,
+.signed-in__error {
+  flex-basis: 100%;
+  margin: 0;
+  text-align: end;
+}
+
+.signed-in__error {
+  color: var(--ballot-ink);
+}
+
+.signed-in__action {
+  font: inherit;
+  color: var(--ballot-ink-muted);
+  background: none;
+  border: 0;
+  padding: 0;
+  text-decoration: underline;
+  cursor: pointer;
+}
+
+.signed-in__action:hover:not(:disabled):not([aria-disabled="true"]) {
+  color: var(--ballot-ink);
+}
+
+.signed-in__action:focus-visible {
+  outline: 2px solid var(--ballot-ink);
+  outline-offset: 2px;
+}
+
+.signed-in__action:disabled,
+.signed-in__action[aria-disabled="true"] {
+  cursor: default;
+  text-decoration: none;
+}

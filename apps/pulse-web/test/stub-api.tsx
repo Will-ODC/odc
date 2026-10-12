@@ -69,7 +69,9 @@ export function counted(choice: number, of: Results) {
 /**
  * A plain object is enough: `PulseApi` is structural, so a stub does not have
  * to extend anything. Anything a test has not said the screen may call rejects
- * loudly rather than quietly answering.
+ * loudly rather than quietly answering — except `me`, which answers "nobody
+ * signed in". Every conversation asks it for the bar across the top, and a
+ * browser with no session is the ordinary case, not a mistake to flag.
  */
 export function stubApi(over: Partial<PulseApi> = {}): PulseApi {
   const unused = (name: string) => () =>
@@ -91,7 +93,8 @@ export function stubApi(over: Partial<PulseApi> = {}): PulseApi {
       } satisfies SuggestResult),
     requestLink: unused("requestLink"),
     redeem: unused("redeem"),
-    me: unused("me"),
+    // Nobody signed in: what the server says to a browser with no session.
+    me: () => Promise.resolve(null),
     signOut: unused("signOut"),
     myBallot: unused("myBallot"),
     results: unused("results"),
