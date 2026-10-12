@@ -22,6 +22,7 @@ import {
   type Suggestion,
   type SuggestionStore,
 } from "../voting/suggestions.js";
+import { registerMcpReads, type McpReadOptions } from "./mcp/route.js";
 import { SESSION_COOKIE, SessionSigner } from "./session.js";
 
 /**
@@ -52,6 +53,8 @@ privateProxies.addSubnet("192.168.0.0", 16);
 privateProxies.addSubnet("fc00::", 7, "ipv6");
 
 export interface ServerDeps {
+  /** Public-only MCP reads; defaults to this API’s loopback listener. */
+  mcp?: McpReadOptions;
   claims: ClaimService;
   voters: VoterStore;
   votes: VotingStore;
@@ -563,6 +566,7 @@ export async function createServer(deps: ServerDeps): Promise<FastifyInstance> {
     },
   );
 
+  registerMcpReads(app, deps.mcp);
   return app;
 }
 

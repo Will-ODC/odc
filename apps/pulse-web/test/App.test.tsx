@@ -1,19 +1,10 @@
 // @vitest-environment jsdom
 import { cleanup, render, screen, within } from "@testing-library/react";
 import userEvent from "@testing-library/user-event";
-import {
-  afterEach,
-  beforeAll,
-  beforeEach,
-  describe,
-  expect,
-  it,
-  vi,
-} from "vitest";
+import { afterEach, beforeEach, describe, expect, it, vi } from "vitest";
 import { App } from "../src/App.js";
-import { installPointerEvents, poll, stubApi } from "./stub-api.js";
+import { poll, stubApi } from "./stub-api.js";
 
-beforeAll(installPointerEvents);
 afterEach(cleanup);
 beforeEach(() => globalThis.history.replaceState(null, "", "/"));
 
@@ -46,7 +37,7 @@ describe("what the URL opens", () => {
     expect(await screen.findByLabelText("Your email")).toBeTruthy();
   });
 
-  it("opens the run at the bare path", async () => {
+  it("opens the conversation at the bare path", async () => {
     render(<App api={stubApi()} />);
     /*
      * In the ballot, not on the page: the left rail lists the questions
@@ -58,9 +49,11 @@ describe("what the URL opens", () => {
     expect(
       await within(screen.getByRole("main")).findByText(poll().question),
     ).toBeTruthy();
+    expect(screen.getByLabelText("Message")).toHaveProperty("disabled", true);
+    expect(screen.getByRole("button", { name: "Vote" })).toBeTruthy();
   });
 
-  it("starts the run wherever ?poll= says", async () => {
+  it("opens the conversation wherever ?poll= says", async () => {
     const listed = poll({
       id: "pay-for-it",
       question: "How do we pay for it?",
@@ -72,6 +65,7 @@ describe("what the URL opens", () => {
 
     expect(await screen.findByText("How do we pay for it?")).toBeTruthy();
     expect(byId).toHaveBeenCalledWith("pay-for-it");
+    expect(screen.getByLabelText("Message")).toHaveProperty("disabled", true);
   });
 });
 
@@ -118,6 +112,7 @@ describe("after the link is spent", () => {
       await within(screen.getByRole("main")).findByText(poll().question),
     ).toBeTruthy();
     expect(globalThis.location.pathname + globalThis.location.search).toBe("/");
+    expect(screen.getByLabelText("Message")).toHaveProperty("disabled", true);
     /*
      * The length, not the address. Pushing lands on "/" too, so asserting the
      * URL alone is a test that cannot fail — it passed with `go` in place of
@@ -231,7 +226,12 @@ describe("the sign-in screens on the page", () => {
 describe("a route handed in directly", () => {
   it("wins over the URL", async () => {
     globalThis.history.replaceState(null, "", "/sign-in");
-    render(<App api={stubApi()} route={{ kind: "run", pollId: "ads-free" }} />);
+    render(
+      <App
+        api={stubApi()}
+        route={{ kind: "conversation", pollId: "ads-free" }}
+      />,
+    );
     /*
      * In the ballot, not on the page: the left rail lists the questions
      * answered so far, so the run's question is legitimately on screen twice

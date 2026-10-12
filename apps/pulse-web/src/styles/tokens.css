@@ -113,8 +113,7 @@
    * On a wide screen AppShell.css redefines these five on `.shell` and the
    * frame dissolves into a page — same markup, same components, a different
    * room. They are tokens for the same reason the brand values are: the frame
-   * is written out in both SwipeBallot.css and ScreenFrame.css, and two
-   * copies of a literal is how the two screens drifted apart last time.
+   * and brand stay consistent between sign-in, preview and conversation screens.
    */
   --frame-w: min(390px, 100vw);
   --frame-h: min(844px, 100dvh);
