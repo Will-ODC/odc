@@ -33,14 +33,13 @@ three ADR-0034, #294), `export-format.md` v5 (#224, ADR-0032), `hashing.md` v2,
 `ids.md` v1, `read-api.md` v1, `fixtures/README.md` v14 (**v15** in PR #327).
 `contracts/` is **DRAFTING**.
 
-**Conformance phases 1 to 4 are merged. ADR-0034 is built, reviewed and awaiting
-merge.** Master's corpus is 115 vectors; with #327 it is **132** (VALID 21,
-PARTIAL 13, INVALID 98). ADR-0034 (mixed-version ballot batching: ET-18b, ET-22a,
-ET-24b) is in both verifiers — Go #319 → PR #324, TS #320 → PR #325, each built in
-an isolated sparse worktree and approved (with nits, fixed) by an isolated
-fresh reviewer — with vectors `116`-`132` in #321 → PR #327. **Merge #324 and
-#325 before #327**, which is stacked on both. All 132 vectors pass both verifiers;
-the agreement proof is `docs/security/attacks/check-adr-0034-agreement.py`. Phase 3 batching vectors `099`-`108` came in #202; phase 4
+**Conformance phases 1 to 4 are merged, and ADR-0034 is in both verifiers.**
+ADR-0034 (mixed-version ballot batching: ET-18b, ET-22a, ET-24b) merged as Go
+#324 (#319) and TS #325 (#320), each built in an isolated sparse worktree and
+approved (with nits, fixed) by an isolated fresh reviewer. Its vectors
+`116`-`132` are #321 → PR #327; with them the corpus is **132** (VALID 21,
+PARTIAL 13, INVALID 98), and all 132 pass both verifiers. The agreement proof is
+`docs/security/attacks/check-adr-0034-agreement.py`. Phase 3 batching vectors `099`-`108` came in #202; phase 4
 (`--chain` and genesis/head reporting, EX-21 to EX-24) came in #220 (Go), #221 (TS)
 and #222 (vectors `109`-`115`). #203 reconciled EV-15's stage map. #219 made a TS
 internal error exit 3, not 1. #223 is the security checkpoint
@@ -106,9 +105,9 @@ Optional, from ADR-0034 owed item 4: `docs/security/attacks/check-unknown-batchi
 - Phase 4 (`--chain` and reporting): #220, #221, #222 and #203. #219 handles the
   TS exit code. #223 checkpoint, #224 `export-format.md` v5 (ADR-0032).
 - EX-24 stored-claim reporting in both verifiers: #241 (`export-format.md` v5).
-- ADR-0034 mixed-version batching: contract #294; Go #319 (PR #324), TS #320
-  (PR #325), vectors `116`-`132` #321 (PR #327) — open, awaiting merge. TS
-  sub-quadratic cost is follow-up #326.
+- ADR-0034 mixed-version batching: contract #294; Go #324 (#319), TS #325
+  (#320); vectors `116`-`132` in #327 (#321). TS sub-quadratic cost is
+  follow-up #326.
 - Memory index and `memory-index` CI guard (#117, #121).
 
 ## Standing decisions — one line each
