@@ -1742,6 +1742,21 @@
         "EV-17"
       ],
       "note": "A full T1 batch, an opaque ballot at minute 12, a full T2 batch, then a ballot at minute 5. The opaque ballot could split the T1-to-T2 boundary, so line 8 is unresolved. It lies before T2's first ballot, so it cannot touch the run that line 11 ends: line 11 is resolved and NOT listed. Pins against over-reporting that carries an earlier run's state into a later run start."
+    },
+    {
+      "id": "132-unregistered-non-ballot-is-no-candidate",
+      "export": "vectors/132-unregistered-non-ballot-is-no-candidate.ndjson",
+      "expect": {
+        "verdict": "INVALID",
+        "line": 7
+      },
+      "cites": [
+        "ET-22a",
+        "ET-24",
+        "ET-24b",
+        "EV-17"
+      ],
+      "note": "The 116 shape with an unregistered participant_registered where the opaque ballot was. Only vote_cast carries ballots (ET-22a), so it is no candidate: the two-ballot T1 batch is a definite ET-24 failure at line 7, and INVALID outranks the PARTIAL its own line would give. A verifier that treats every unregistered event as a possible ballot reports PARTIAL 6, 7 instead."
     }
   ]
 }

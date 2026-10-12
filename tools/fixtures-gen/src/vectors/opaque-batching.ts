@@ -15,6 +15,7 @@
 // register it and contradict these verdicts.
 import { REGISTRAR, type ChainBuilder } from "../chain.js";
 import { editLine } from "../tamper.js";
+import { keypairFromSeed, seedOf } from "../encode.js";
 import { RESERVED_VERSION } from "./unregistered.js";
 import { bad, chain, lines, partial, type Vector } from "./shared.js";
 
@@ -284,5 +285,25 @@ export const opaqueBatchingVectors: Vector[] = [
     [7, 8],
     ["ET-24", "ET-24a", "ET-24b", "EV-17"],
     "A full T1 batch, an opaque ballot at minute 12, a full T2 batch, then a ballot at minute 5. The opaque ballot could split the T1-to-T2 boundary, so line 8 is unresolved. It lies before T2's first ballot, so it cannot touch the run that line 11 ends: line 11 is resolved and NOT listed. Pins against over-reporting that carries an earlier run's state into a later run start.",
+  ),
+  bad(
+    "132-unregistered-non-ballot-is-no-candidate",
+    lines(
+      chain((c) => {
+        const a = c.issue("Batch A", 2);
+        c.issue("Batch B", 2);
+        votes(c, a.hash, T1, 2);
+        c.custom(
+          "participant_registered",
+          RESERVED_VERSION,
+          { pubkey: keypairFromSeed(seedOf(0x05)).publicKeyHex },
+          { minutes: T1 },
+        );
+        votes(c, a.hash, T2, 3);
+      }),
+    ),
+    7,
+    ["ET-22a", "ET-24", "ET-24b", "EV-17"],
+    "The 116 shape with an unregistered participant_registered where the opaque ballot was. Only vote_cast carries ballots (ET-22a), so it is no candidate: the two-ballot T1 batch is a definite ET-24 failure at line 7, and INVALID outranks the PARTIAL its own line would give. A verifier that treats every unregistered event as a possible ballot reports PARTIAL 6, 7 instead.",
   ),
 ];

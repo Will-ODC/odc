@@ -4,7 +4,7 @@
 **Status:** DRAFTING (Phase 0 · T5, T5j, ADR-0009, ADR-0010, ADR-0011). Not
 frozen.
 
-**131 vectors** — 21 `VALID`, 13 `PARTIAL`, 97 `INVALID`. They are numbered in
+**132 vectors** — 21 `VALID`, 13 `PARTIAL`, 98 `INVALID`. They are numbered in
 category order: `VALID` (`001`–`007`), `PARTIAL` (`008`–`011`), then `INVALID` —
 the envelope and Stage A checks (`012`–`042`), the export framing and canonical
 line form (`043`–`052`), `--head` (`053`–`054`), the Stage B type semantics
@@ -53,12 +53,14 @@ interval, and one made before its issue exists (no candidate, so `INVALID`).
 `130` is EV-16: an opaque ballot whose payload holds a float is `INVALID` at its
 own line, never `PARTIAL`. `131` pins the other direction: an opaque ballot
 before a full run leaves only the boundary it could split unresolved, and the
-next run start (line 11) is resolved and not listed.
+next run start (line 11) is resolved and not listed. `132` pins ET-22a's "only
+`vote_cast` carries ballots": an unregistered `participant_registered` inside a
+short run is no candidate, so the run fails definitely (`INVALID` 7).
 
 **These vectors pin only cases where the conservative rule and the exact
 all-assignments rule agree** (ADR-0034 decision 7), so ET-24b can be tightened
 later without contradicting a frozen vector. `docs/security/attacks/check-adr-0034-agreement.py`
-reads `116`–`129` and `131` from this directory and evaluates both rules on each; every
+reads `116`–`129`, `131` and `132` from this directory and evaluates both rules on each; every
 vector must report `ok`. The conservative rule's over-reporting is covered by
 verifier unit tests, never here.
 

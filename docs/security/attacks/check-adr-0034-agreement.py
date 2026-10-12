@@ -88,7 +88,7 @@ def v11_failures(members, minimum):
 
 
 def opaque_lines(chain):
-    return {e["line"] for e in chain if e["kind"] in ("U", "opaque_issue")}
+    return {e["line"] for e in chain if e["kind"] in ("U", "opaque_issue", "unregistered")}
 
 
 def et18b_lines(chain):
@@ -199,10 +199,11 @@ def exact(chain, allow_none, at_or_before):
 
 
 REGISTERED = {("issue_created", 1), ("vote_cast", 1)}
+OTHER_REGISTERED = {("participant_registered", 1)}
 # The ET-24b vectors of tools/fixtures-gen/src/vectors/opaque-batching.ts. 130
 # is left out on purpose: its malformed payload is an EV-16 Stage A failure
 # that no batch rule reaches.
-VECTOR_IDS = [f"{n}-" for n in [*range(116, 130), 131]]
+VECTOR_IDS = [f"{n}-" for n in [*range(116, 130), 131, 132]]
 
 
 def ms(ts):
@@ -228,8 +229,11 @@ def shape(path):
             events.append({"kind": "vote", "issue": names.get(payload["issue_id"], "?"), "ts": ms(e["ts"])})
         elif kind == "vote_cast":
             events.append({"kind": "U", "ts": ms(e["ts"])})  # payload deliberately unread
-        else:
+        elif (kind, version) in REGISTERED or (kind, version) in OTHER_REGISTERED:
             events.append({"kind": "other"})
+        else:
+            # Listed in PARTIAL (EV-7) but never a candidate: only vote_cast carries ballots (ET-22a).
+            events.append({"kind": "unregistered"})
     return events
 
 
