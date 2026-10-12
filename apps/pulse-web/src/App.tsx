@@ -9,6 +9,7 @@ import { Conversation } from "./screens/Conversation.js";
 import { ChatPreview } from "./screens/ChatPreview.js";
 import { Redeem } from "./screens/Redeem.js";
 import { SignIn } from "./screens/SignIn.js";
+import { Welcome } from "./screens/Welcome.js";
 import "./styles/tokens.css";
 import "./App.css";
 
@@ -24,11 +25,30 @@ import "./App.css";
  * browser's history. Left out, the URL decides, which is what the real app
  * wants and what the link depends on.
  */
-export function App({ api, route }: { api: PulseApi; route?: Route }) {
+export function App({
+  api,
+  route,
+  firstPollId,
+}: {
+  api: PulseApi;
+  route?: Route;
+  firstPollId?: string;
+}) {
   const browser = useRoute();
   const at = route ?? browser.route;
 
   switch (at.kind) {
+    case "welcome": {
+      const first = firstPollId?.trim();
+      return (
+        <Welcome
+          ready={Boolean(first)}
+          onStart={() => {
+            if (first) browser.go({ kind: "conversation", pollId: first });
+          }}
+        />
+      );
+    }
     case "signIn":
       return (
         <SignInPage>

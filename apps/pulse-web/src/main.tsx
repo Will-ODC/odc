@@ -17,6 +17,11 @@ if (!root) throw new Error("index.html is missing #root");
 
 createRoot(root).render(
   <StrictMode>
-    <App api={new HttpPulseApi()} />
+    <App
+      api={new HttpPulseApi()}
+      {...(import.meta.env.VITE_PULSE_FIRST_POLL_ID
+        ? { firstPollId: import.meta.env.VITE_PULSE_FIRST_POLL_ID }
+        : {})}
+    />
   </StrictMode>,
 );

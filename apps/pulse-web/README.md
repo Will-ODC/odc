@@ -18,7 +18,22 @@ makes no API calls; the default conversation page uses the live API. The decisio
 itself (`src/flow/decision.ts`) carries no presentation, so the same question
 can be drawn by another interface.
 
-`/` (or `/?poll=ID`) is the default live conversation vote page
+`/` is the static welcome page (#341): a short concept explanation, three
+numbered steps and Start voting. Set `VITE_PULSE_FIRST_POLL_ID` at client build
+time to the reviewed, published first poll. Without it the button is disabled
+and the page explains that the first vote is being prepared; it never falls
+back to a demo question. The landing makes no API requests and has no video
+placeholder or working-comments claim. Video and comments are separate work.
+At standard text size the complete welcome fits one screen on phone and desktop;
+scrolling remains available for zoom, larger text and unusually short windows.
+
+For a container build, pass `--build-arg VITE_PULSE_FIRST_POLL_ID=<published-id>`.
+This value is public client configuration, not a credential. Changing it requires
+a rebuild. `/conversation` without a poll keeps the existing development start;
+sign-in redemption still returns there through an explicit poll link. Starting
+from the welcome adds a history entry so Back returns to the introduction.
+
+`/?poll=ID` is a direct live conversation vote link
 (#301/#302). Existing `/conversation` and `/conversation?poll=ID` links remain supported, using the public Pulse API. Desktop has an Answered sidebar; phone and
 desktop offer a small Vote tab. It expands above the disabled assistant
 composer on phone and at the top right on desktop (operator layout experiment).
