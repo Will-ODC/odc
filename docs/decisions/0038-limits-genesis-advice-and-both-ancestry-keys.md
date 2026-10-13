@@ -1,7 +1,7 @@
 # ADR-0038: Verifier limits, honest `genesis` advice, and both ancestry keys
 
 - **Status:** accepted (operator decisions, 2026-10-11/12; the line-length value
-  is proposed, operator to confirm)
+  of 65536 bytes confirmed by the operator 2026-10-12)
 - **Date:** 2026-10-12
 - **Phase:** 0
 - **Supersedes:** in part ADR-0019 (the `ancestor_chain`-alone asymmetry).
@@ -41,26 +41,38 @@ here the cheap way to pin them is to cap the one writer and set a floor that
 every verifier must meet.
 
 - **EV-23, the minimums.** Line length (bytes, not counting the `LF`)
-  **65536**. Nesting depth **64** (the outermost value is depth 1; a conforming
-  event's line is depth 2). An input is within the minimums when every
-  `LF`-separated line meets both. Exceeding a minimum is **not** a validity rule:
+  **65536**. Nesting depth **64**, defined over the line's bytes so it is
+  defined for malformed lines too: the most `{` or `[` bytes open at once,
+  outside strings, where an unescaped `"` starts or ends a string, `\` inside a
+  string skips the next byte, and a string left open at the end of the line
+  ends the scan. On a parseable line this equals the usual JSON depth (the
+  outermost value is depth 1; a conforming event's line is depth 2). An input
+  is within the minimums when every `LF`-separated line meets both, however
+  many lines it has. Exceeding a minimum is **not** a validity rule:
   a verifier MUST NOT report `INVALID` for it.
 - **EV-24, verifier limits.** A verifier MAY set any limit on things inside one
   line (length, depth, key count, string or number-token length) as long as no
   input within the minimums can reach it. On every such input it MUST reach the
-  verdict the specs require. Limits on the size of the whole input (line count,
-  memory, time) have no minimum. When a verifier reaches a limit before it has
+  verdict the specs require. A verifier MUST NOT impose a fixed limit on the
+  number of lines or the size of the input. The only exemption is running out
+  of a host resource it does not choose (memory, time), which is treated as a
+  reached limit. When a verifier reaches a limit before it has
   established the verdict, it MUST report a tool-level failure (exit 3 or above
   under EV-17's CLI note), MUST NOT report any verdict, and MUST NOT crash. A
   verifier that establishes the required verdict first (for example, ES-17 at
-  depth 3) has reached no limit. Golden fixtures MUST stay within the minimums.
+  depth 3) has reached no limit. Reaching a nesting-depth limit above 2
+  establishes an ES-17 failure on that line, so a verifier MAY report `INVALID`
+  there, which makes the Go verifier's existing depth bound checkable. A limit
+  reached only while recovering an EX-24 endpoint claim makes that claim
+  `unavailable`, not a tool-level failure. Golden fixtures MUST stay within the
+  minimums.
 - **EV-25, the ledger's cap.** A ledger MUST NOT append an event whose canonical
   line exceeds either value. Later `(type, version)`s MUST bound their values
-  to fit. **Neither value may ever change**: lowering one lets a conforming
+  so that no conforming line exceeds either. **Neither value may ever change**: lowering one lets a conforming
   verifier refuse a line the ledger was allowed to write, and raising one lets a
   chain outgrow the old verifiers EV-8 promises still work.
 
-**Line length 65536 bytes: proposed value, operator to confirm.** The longest
+**Line length 65536 bytes, confirmed by the operator 2026-10-12.** The longest
 line any v1 event can produce, apart from the unbounded `contracts` string
 below, is **1302 bytes**: an `issue_created` with `seq`, the batch interval and
 the batch minimum all at 2^53 − 1, `choice_count` 64, and a 200-character title
@@ -78,10 +90,11 @@ memory.
 far more than any valid input needs. It matches the Go verifier's existing
 bound, which now has a spec behind it.
 
-**No separate key-count bound.** The line-length minimum already bounds it. The
-shortest object member with a distinct key is about six bytes, so a line within
-65536 bytes holds at most about eleven thousand keys, which no verifier finds
-expensive. A separate number would add a third permanent value with nothing to
+**No separate key-count bound.** The line-length minimum already bounds it. A
+verifier must parse duplicates before EX-10 can reject them, so the bound is
+whatever 65536 bytes can hold, duplicates included: about 13,107 object
+members (`"":0,` is 5 bytes) or about 32,767 array elements (`0,`). No verifier
+finds that expensive. A separate number would add a third permanent value with nothing to
 protect. EV-24 already covers a verifier's own key-count limit: like any
 within-line limit, it must not bite within the minimums.
 
@@ -93,7 +106,8 @@ write it. This is consistent, but it leaves a type-level gap (see Consequences).
 
 **EX-24 needs no change.** It already says a claim the verifier "cannot recover"
 is reported `unavailable`, and that a tool-level failure with no verdict has no
-report obligation. Both cases cover a limit being reached.
+report obligation. EV-24 states the link explicitly: a limit reached only while
+recovering a claim makes that claim `unavailable`.
 
 ### 2. EV-21: `genesis` has no version but 1
 
@@ -192,7 +206,8 @@ under 65536 bytes.
      correction to `expect` is allowed (ADR-0008: "corrections must land before
      the tag"). No `RETIRED.md` mechanism exists, and none is needed before the
      tag. Ids never change, and the name still describes the vector.
-   - **Rewrite the notes of `084`, `088` and `090`**, and add replacements that
+   - **Rewrite the notes of `084`, `088`, `090`, `089` and `091`** (the last two
+     rely on 088/090 to isolate the `ancestor_chain` faults), and add replacements that
      isolate one fault each: `ancestor_chain` as the 64-zero anchor with a legal
      `ancestor_head`, and `ancestor_chain` in uppercase with a legal
      `ancestor_head`. Without them, nothing tests the zero bar or the
@@ -208,7 +223,9 @@ under 65536 bytes.
    - `tools/fixtures-gen/src/chain.ts` has a presence guard that declares
      head-without-chain a violation (around its line 241). It must also treat
      chain-without-head as an ET-9f violation, or the generator will refuse or
-     mislabel the new vectors.
+     mislabel the new vectors. Also update the declared `violates` of `088` and
+     `090` in `src/vectors/fork-ancestry.ts`; they will compute as
+     `["ET-9e", "ET-9f"]`.
 5. **Rehearsal judge check.** EV-21 changes verifier stderr. `conformanceVerdict`
    in `tools/rehearsal` matches with a regex and has aborted on unexpected
    output four times. The rehearsal chain is `VALID`, so the EV-21 message never
@@ -240,9 +257,9 @@ under 65536 bytes.
 - **`memory/OPEN-QUESTIONS-archive.md`**: **checked, no change.** Its F4 and
   phase-2 entries record the old asymmetry as history. The "EX-24 claim
   decoding" entry in `memory/OPEN-QUESTIONS.md` mentions nesting depth for
-  report output only. EV-24 now settles that a reached limit is `unavailable`
-  or a tool-level failure, so the depth part of that entry can be closed at
-  merge.
+  report output only. EV-24 now settles that a limit reached while recovering
+  a claim makes it `unavailable`, so the depth part of that entry can be closed
+  at merge.
 - **`docs/security/hash-chain-checkpoint-2026-10-09.md`**: **checked, no
   change.** It is the dated report that listed these four issues as open.
 - **`docs/charter.md`**: **checked, no change.** §4's "together" and §8's fork

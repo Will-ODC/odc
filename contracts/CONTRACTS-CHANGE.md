@@ -24,10 +24,15 @@ Format (newest first, one entry per merged contracts change):
 The operator decided the four contradictions recorded in `memory/STATE.md`.
 
 - **Limits** (`evolution.md` §7, new). **EV-23**: every verifier accepts lines
-  up to **65536** bytes and nesting depth **64**; exceeding either is not a
-  validity rule. **EV-24**: a verifier's own limits must not bite within those
-  minimums (whole-input size is exempt); past a limit it reports a tool-level
-  failure, never a verdict, and never crashes. **EV-25**: a ledger never writes
+  up to **65536** bytes (confirmed by the operator 2026-10-12) and nesting depth
+  **64**, depth defined over the line's bytes so it holds for malformed lines;
+  exceeding either is not a validity rule. **EV-24**: a verifier's own limits
+  must not bite within those minimums, and it may set no fixed limit on line
+  count or input size (only running out of memory or time is exempt); past a
+  limit it reports a tool-level failure, never a verdict, and never crashes. A
+  depth limit above 2 establishes ES-17, so `INVALID` there is allowed, and a
+  limit hit only while recovering an EX-24 claim makes that claim
+  `unavailable`. **EV-25**: a ledger never writes
   a line past either value, later types must fit, and neither value may ever
   change. EV-15 places EV-23 to EV-25 outside the stage split; EV-17's CLI note
   lists a reached limit as a tool-level failure.

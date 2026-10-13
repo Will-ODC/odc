@@ -398,16 +398,24 @@ the same verdict on everything the writer may produce.
 - **EV-23.** **The two minimums.** Two measures of an export line are bounded:
   - **Line length**: the number of bytes in the line, not counting the `LF`
     that ends it (`export-format.md` EX-4). The minimum is **65536** bytes.
-  - **Nesting depth**: the line's outermost JSON value is at depth 1, and an
-    object or array that is a value inside one at depth _d_ is at depth _d_ + 1.
-    The minimum is **64**. A conforming event's line is at depth 2: the
-    envelope object and its `payload` object (`event-schema.md` ES-15, ES-17).
+  - **Nesting depth**: the greatest number of `{` or `[` bytes open at any
+    point while scanning the line's bytes from the first. The minimum is
+    **64**. The scan keeps a count, starting at 0, and a flag saying whether
+    it is inside a string, starting unset. Outside a string, `"` (0x22) sets
+    the flag, `{` (0x7B) or `[` (0x5B) adds one to the count, `}` (0x7D) or `]`
+    (0x5D) takes one away unless the count is 0, and every other byte changes
+    nothing. Inside a string, `\` (0x5C) causes the next byte, whatever it
+    is, to be skipped, `"` clears the flag, and every other byte changes
+    nothing. A string still open at the end of the line simply ends the scan,
+    so a bracket inside it is never counted. On a line that parses as JSON,
+    this count equals the usual depth, where the outermost value is at depth 1.
+    A conforming event's line is at depth 2: the envelope object and its
+    `payload` object (`event-schema.md` ES-15, ES-17).
 
   A line here is each record the input splits into at `LF`, split as EX-24
   splits it, whether or not the record is a conforming event. An input is
   **within the minimums** when every one of its lines is at most 65536 bytes
-  long and at most 64 deep. No minimum is set on the number of lines or on the
-  size of the file.
+  long and at most 64 deep, however many lines it has.
 
   The minimums are not a validity rule. A verifier MUST NOT report `INVALID`
   because a line exceeds one of them. Past them, the verdict these specs require
@@ -416,12 +424,12 @@ the same verdict on everything the writer may produce.
 - **EV-24.** **Verifier limits.** A verifier MAY impose implementation limits.
   A limit on anything within one line, such as its length, its nesting depth,
   the number of keys in an object, or the length of a string or a number token,
-  MUST be one that no input within the minimums (EV-23) can reach. A limit on
-  the size of the whole input (its number of lines, or the memory or time it
-  needs) has no minimum under EV-23, and is exempt from that requirement. On
-  every input within the minimums, a verifier MUST reach the verdict and line
-  numbers these specs require (EV-17), unless it first reaches a limit on the
-  size of the whole input.
+  MUST be one that no input within the minimums (EV-23) can reach. A verifier
+  MUST NOT impose a fixed limit on the number of lines or on the size of the
+  input. On every input within the minimums, a verifier MUST reach the verdict
+  and line numbers these specs require (EV-17). The one exemption is running
+  out of a host resource the verifier does not choose, such as memory or time:
+  that is treated as a reached limit, as below.
 
   When a verifier reaches one of its limits before it has established the
   verdict these specs require, it MUST stop and report a **tool-level failure**,
@@ -433,6 +441,14 @@ the same verdict on everything the writer may produce.
   verdict: for example, one that rejects a line at depth 3 under ES-17 (EV-16)
   without parsing deeper. A tool-level failure has no EX-24 report obligation.
 
+  Reaching a nesting-depth limit greater than 2 establishes an ES-17 failure on
+  that line, because every line deeper than 2 is `INVALID` whatever else it
+  holds (ES-15, ES-17, EV-16). A verifier that has found no fatal earlier line
+  MAY therefore report `INVALID` at that line instead of a tool-level failure.
+  A limit reached only while recovering an EX-24 endpoint claim makes that
+  claim `unavailable` (`export-format.md` EX-24); it is not a tool-level
+  failure.
+
   Every golden fixture MUST be within the minimums, because beyond them no
   verifier is required to reach a verdict.
 
@@ -441,12 +457,11 @@ the same verdict on everything the writer may produce.
   deeper than 64, and an export of a ledger's log MUST NOT contain such a
   line. In v1 the only value with no bound of its own is `genesis`'s
   `contracts` (`event-types.md` ET-9), and this cap is what bounds it for a
-  ledger. Every
-  other v1 value is bounded: the longest such line is 1302 bytes (an
-  `issue_created` with `seq` and both batch parameters at 2^53 − 1 and a title of
-  200 four-byte characters). Every `(type, version)` a later contracts version
+  ledger. Every other v1 value is bounded: the longest such line is 1302
+  bytes (an `issue_created` with `seq` and both batch parameters at 2^53 − 1
+  and a title of 200 four-byte characters). Every `(type, version)` a later contracts version
   registers MUST bound its values so that none of its conforming events has a
-  canonical line longer than 65536 bytes.
+  canonical line longer than 65536 bytes or deeper than 64.
 
   **Both values are permanent.** No contracts version, v1 or any successor, MAY
   change either value. Lowering one would let a conforming verifier refuse a
@@ -503,8 +518,9 @@ line 1 rather than walking a chain they cannot authenticate to `PARTIAL`
 (EV-20), and both say that the chain is corrupt, hostile or not an ODC chain,
 never that the reader should fetch a newer verifier, since `genesis` has no
 version but 1 (EV-21). Run on an export whose every line is at most 65536 bytes
-and at most 64 deep, both reach the verdict the specs require; run on one
-with a longer or deeper line, each either reaches that verdict or reports a
+and at most 64 deep, both reach the verdict the specs require however many
+lines it has, unless the host runs out of memory or time; run on one with a
+longer or deeper line, each either reaches that verdict or reports a
 tool-level failure, and neither reports a verdict the specs do not require
 (EV-23, EV-24). Run on a pure-v1
 chain, both report `VALID | INVALID` identically (EV-10). Given the same future
