@@ -19,9 +19,10 @@ Format (newest first, one entry per merged contracts change):
 
 ---
 
-## event-types.md v13 · evolution.md v8 · event-schema.md v7 — 2026-10-12 — four contradictions resolved (ADR-0038, #355)
+## event-types.md v13 · evolution.md v8 · event-schema.md v7 — 2026-10-12 — four contradictions resolved, `contracts` capped (ADR-0038, #359)
 
-The operator decided the four contradictions recorded in `memory/STATE.md`.
+The operator decided the four contradictions recorded in `memory/STATE.md`, and
+then capped `genesis.contracts`.
 
 - **Limits** (`evolution.md` §7, new). **EV-23**: every verifier accepts lines
   up to **65536** bytes (confirmed by the operator 2026-10-12) and nesting depth
@@ -46,6 +47,12 @@ The operator decided the four contradictions recorded in `memory/STATE.md`.
   v13 (committed vector `086` flips; fixtures follow the verifiers). ET-7a,
   ET-9e, the `genesis` table rows, the rule index, the acid-test walkthrough and
   **ES-34** are aligned with it.
+- **ET-9** (operator, 2026-10-12): `contracts` MUST be at most **64 bytes**,
+  counted as the UTF-8 encoding of the decoded string (after unescaping), not
+  the escaped line bytes; empty or longer is `INVALID` at line 1. This closes
+  the gap where a `genesis` over 64 KiB was `VALID` by the type rules yet
+  unwritable by a ledger (EV-25 now says every v1 value is bounded). No
+  committed vector changes: the longest committed `contracts` is 12 bytes.
 - **Superseded, not edited:** the ADR-0019 entries below state the old
   asymmetry and stay as written; this entry is the pointer.
 

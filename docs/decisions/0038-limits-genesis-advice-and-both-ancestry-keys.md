@@ -73,8 +73,7 @@ every verifier must meet.
   chain outgrow the old verifiers EV-8 promises still work.
 
 **Line length 65536 bytes, confirmed by the operator 2026-10-12.** The longest
-line any v1 event can produce, apart from the unbounded `contracts` string
-below, is **1302 bytes**: an `issue_created` with `seq`, the batch interval and
+line any v1 event can produce is **1302 bytes**: an `issue_created` with `seq`, the batch interval and
 the batch minimum all at 2^53 − 1, `choice_count` 64, and a 200-character title
 of four-byte characters (worked out by serializing that event; the longest line
 in the committed corpus is 1264 bytes, `073`). 65536 is about 50 times that. A
@@ -98,11 +97,8 @@ finds that expensive. A separate number would add a third permanent value with n
 protect. EV-24 already covers a verifier's own key-count limit: like any
 within-line limit, it must not bite within the minimums.
 
-**The `contracts` string.** ET-9 requires only that `genesis.contracts` is
-non-empty. It is the one v1 value with no bound of its own, so a v1 `genesis`
-longer than 65536 bytes is `VALID` by the type rules. Under EV-23/24 a verifier
-may report a tool-level failure on it instead, and under EV-25 a ledger may not
-write it. This is consistent, but it leaves a type-level gap (see Consequences).
+**The `contracts` string** was the one v1 value with no bound of its own (ET-9
+required only that it be non-empty). Decision 5 closes that gap.
 
 **EX-24 needs no change.** It already says a claim the verifier "cannot recover"
 is reported `unavailable`, and that a tool-level failure with no verdict has no
@@ -150,12 +146,43 @@ contract is still DRAFTING (ADR-0007), so changing a rule is allowed, and the
 `genesis` key set is unchanged, so ADR-0019's bar on additions after the tag is
 untouched.
 
+### 5. `genesis.contracts` is at most 64 bytes (ET-9; operator, 2026-10-12)
+
+ET-9 now requires `contracts` to be a non-empty string of at most 64 bytes,
+counted as the UTF-8 encoding of the decoded string: the value after JSON
+unescaping, the same value `hashing.md` HA-2 hashes, never the escaped bytes on
+the line. An empty or longer value is `INVALID` at line 1.
+
+**Why.** Before this rule, `contracts` was the only v1 value with no bound. A
+`genesis` longer than 65536 bytes was `VALID` by the type rules, yet EV-25
+forbade a ledger to write it, and EV-24 let a verifier refuse it with a
+tool-level failure. That was consistent but untidy: a verdict the type rules
+promised that no ledger could produce, and no verifier had to reach. With the
+cap, every v1 value is bounded by its own type rule, and EV-25 can say no
+conforming v1 event can reach the line cap.
+
+**Why bytes, not scalar values.** ET-14 counts `title` in Unicode scalar values,
+because a title is text for people to read. This bound exists to bound the line,
+and decoded UTF-8 bytes are what every implementation counts without a Unicode
+table. Counting the decoded value, not the escaped line bytes, matches HA-2 and
+EX-9's decoded-value stance. A control character escaped as `\u0001` counts as
+one byte. The worst case therefore grows the escaped line by at most 6 × 64 =
+384 bytes, and the longest `genesis` line, with both ancestry keys, stays under
+1302 bytes.
+
+**64** leaves plenty of room for a version label: `contracts-v1` is 12 bytes,
+and that is the longest `contracts` value in the committed corpus. **No
+committed vector exceeds 64 bytes**, so no committed verdict changes.
+
 ## Consequences
 
-**Spec versions:** `event-types.md` v12 → **v13** (ET-7a, ET-9e, ET-9f, the two
-`genesis` table rows, the rule index, the acid-test walkthrough);
+**Spec versions:** `event-types.md` v12 → **v13** (ET-7a, ET-9, ET-9e, ET-9f,
+three `genesis` table rows, the rule index, the acid-test walkthrough; ET-9's
+cap shares the one bump, because this PR is unmerged and its entry in
+`CONTRACTS-CHANGE.md` covers both);
 `event-schema.md` v6 → **v7** (ES-34's presence sentence); `evolution.md` v7 →
-**v8** (EV-21 rewritten; EV-23, EV-24, EV-25 added in a new §7; EV-15 places
+**v8** (EV-21 rewritten; EV-23, EV-24, EV-25 added in a new §7, and EV-25
+names ET-9's cap; EV-15 places
 them outside the stage split; EV-17's CLI note; rule index; acid-test
 walkthrough). `export-format.md`, `hashing.md`, `ids.md` and `read-api.md` are
 unchanged. `contracts/CONTRACTS-CHANGE.md` has the entry.
@@ -179,7 +206,8 @@ All other ancestry vectors (`085`, `087`, `089`, `091`, `092`, `093`) carry both
 keys and are unaffected. `097` carries neither key. **The limits change no
 committed verdict**: the longest committed line is 1264 bytes and the deepest
 is depth 3 (`027`, already `INVALID` under ES-17). **The EV-21 change is reason
-text only**, so `095` and `096` are unaffected.
+text only**, so `095` and `096` are unaffected. **The ET-9 cap changes no
+committed verdict**: the longest committed `contracts` is 12 bytes.
 
 **The rehearsal chain** (`tools/rehearsal`) carries no ancestry key, so it has
 no fork with one key, and ET-9f cannot change its verdict. Its lines are far
@@ -191,15 +219,17 @@ under 65536 bytes.
    with `odc-verifier-builder`: ET-9f both-or-neither; EV-23/EV-24 (accept up to
    65536 bytes and depth 64; past its own limits, a tool-level failure with exit
    3 or above, never a verdict, never a panic; confirm the existing depth-64
-   bound meets this); EV-21 reason text if Go prints the old advice.
+   bound meets this); ET-9's 64-byte cap on decoded `contracts`, `INVALID` at
+   line 1; EV-21 reason text if Go prints the old advice.
 2. **TypeScript verifier** (`tools/verifier-ts`), separately and in isolation:
-   the same three changes. The EV-21 message fix is known to be owed here.
+   the same four changes. The EV-21 message fix is known to be owed here.
 3. **ET-9f makes a committed vector flip, so (1), (2) and the vector fix (4)
    must land together**, or required CI goes red in between. A verifier that
    enforces both-or-neither fails `086` as it stands, and `086` flipped first
    fails both current verifiers. This is the deadlock the coupling rule in
    `memory/STATE.md` describes. The limits and EV-21 parts are no-ops on the
-   corpus and can land alone.
+   corpus and can land alone, and so can the ET-9 cap, since no committed
+   vector's `contracts` exceeds 64 bytes.
 4. **Fixtures** (`tools/fixtures-gen`, after or alongside the verifiers):
    - **`086`**: change its declared verdict to `INVALID` line 1 in place, and
      rewrite its note and `cites`. `contracts/` is DRAFTING, so a pre-tag
@@ -214,11 +244,16 @@ under 65536 bytes.
      lowercase rule on `ancestor_chain`.
    - Both-keys `VALID` is already pinned (`085`, `087`, `092`, `093`), and
      head-alone `INVALID` already exists (`084`).
+   - **ET-9 vectors:** `contracts` of exactly 64 bytes (`VALID`), of 65 bytes
+     (`INVALID` at line 1), and a multi-byte case at the boundary: for example
+     64 bytes made of 16 four-byte characters (`VALID`, though only 16 scalar
+     values), and one more multi-byte character pushing it over (`INVALID` at
+     line 1). An escaped control character case also pins that the count is
+     taken after unescaping.
    - **Limits vectors, within the minimums only** (EV-24): a line of exactly
-     65536 bytes that is `VALID` (for example a `genesis` whose `contracts`
-     string pads the line to that length) or `PARTIAL` (an `x_` type with a long
-     string value); and a line at depth 64 that is `INVALID` at its own line
-     (ES-17, EV-16). No vector may go beyond a minimum, because beyond them no
+     65536 bytes, which must be `PARTIAL` (an `x_` type with a long string
+     value), because ET-9 now makes every registered v1 line far shorter; and a
+     line at depth 64 that is `INVALID` at its own line (ES-17, EV-16). No vector may go beyond a minimum, because beyond them no
      verdict is required.
    - `tools/fixtures-gen/src/chain.ts` has a presence guard that declares
      head-without-chain a violation (around its line 241). It must also treat

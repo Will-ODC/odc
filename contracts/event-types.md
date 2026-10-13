@@ -162,7 +162,7 @@ declares the operator key that later `issue_created` events are signed with.
 | key              | type   | constraint                                                          |
 | ---------------- | ------ | ------------------------------------------------------------------- |
 | `chain_id`       | string | `^[0-9a-f]{64}$` — a restatement of `operator_pk`, NOT the chain's identity (ET-7, ET-7a) |
-| `contracts`      | string | the frozen contracts version this chain runs, e.g. `"contracts-v1"` |
+| `contracts`      | string | the frozen contracts version this chain runs, e.g. `"contracts-v1"`; 1–64 bytes in UTF-8 (ET-9) |
 | `operator_pk`    | string | `^[0-9a-f]{64}$` — operator Ed25519 public key (32 bytes, hex)       |
 | `registrar_pk`   | string | `^[0-9a-f]{64}$` — registrar Ed25519 public key; MUST differ from `operator_pk` (ET-9d) |
 | `ancestor_chain` | string | **OPTIONAL** (ES-34) — `^[0-9a-f]{64}$`, never the 64-zero anchor; the **genesis hash** of the chain this one was forked from — that chain's identity, the key that names it. MUST NOT appear without `ancestor_head` (ET-7a, ET-9e, ET-9f) |
@@ -205,9 +205,19 @@ declares the operator key that later `issue_created` events are signed with.
 - **ET-8.** The `genesis` signing key is `operator_pk` (the event is
   self-signed by the key it declares). A verifier MUST reject a `genesis` whose
   `sig` does not verify under its own `operator_pk`.
-- **ET-9.** `contracts` MUST be a non-empty string; it is advisory provenance
-  and is covered by `hash` but places no further constraint on verification in
-  v1.
+- **ET-9.** `contracts` MUST be a non-empty string of **at most 64 bytes**,
+  counted as the bytes of the decoded string's UTF-8 encoding: the value after
+  JSON unescaping, the same decoded value `hashing.md` HA-2 hashes, never the
+  escaped bytes on the line (EX-9). A `genesis` whose `contracts` is empty or
+  longer than 64 bytes MUST be rejected: `INVALID` at the `genesis` line. The
+  unit is bytes, not the Unicode scalar values ET-14 counts for `title`,
+  because this bound exists to bound the line (`evolution.md` EV-25), and the
+  decoded byte count is the one measure every implementation reaches without a
+  Unicode table. Otherwise `contracts` is advisory provenance: it is covered by
+  `hash` but places no further constraint on verification in v1. (The 64-byte
+  bound was added in v13, ADR-0038. Before it, a `genesis` longer than any
+  verifier's line minimum was `VALID` by the type rules yet unwritable by a
+  ledger.)
 - **ET-9a.** `registrar_pk` declares the key under which `vote_cast` events on
   this chain are signed (ET-17). It MUST differ from `operator_pk` (ET-9d). The
   registrar key is held only by the identity service (which admits ballots), and
@@ -803,6 +813,7 @@ when the chain also holds ballots at a `vote_cast` version it does not register.
 | Canonical verification-key encoding (`A < p`)  | ET-4b             |
 | Prime-order verification key (`[L]A==𝒪`, `A!=𝒪`) | ET-4c           |
 | Genesis fields, seq/prev_hash, self-signing    | ET-6, ET-7, ET-8  |
+| `contracts` length (1–64 UTF-8 bytes)          | ET-9              |
 | `chain_id` derivation (operator key only)      | ET-7              |
 | What identifies a chain (the genesis hash)     | ET-7a             |
 | Two genesis keys: operator vs registrar        | ET-9a             |
@@ -838,7 +849,9 @@ Given the same four events, two implementations agree on: the legal type set
 `operator_pk` for genesis/issue, own `pubkey` for participant, `registrar_pk`
 for vote (ET-8/10/13/17); that the chain they just verified is named by its
 `genesis` hash and **not** by `chain_id`, so two chains under one operator key
-are two chains (ET-7/ET-7a); that a `sig` whose decoded `R`/`S`, or a verification
+are two chains (ET-7/ET-7a); that a `genesis` whose `contracts` decodes to more
+than 64 UTF-8 bytes is rejected at line 1, counted after unescaping (ET-9); that
+a `sig` whose decoded `R`/`S`, or a verification
 key whose decoded bytes, are non-canonically encoded is rejected on the raw
 bytes before verification (ET-4a/ET-4b), and that a verification key which is
 canonically encoded but small-order or mixed-order — so it passes ET-4b and even
