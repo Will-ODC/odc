@@ -139,7 +139,8 @@ export class PostgresCreationStore {
           const retry = Math.max(
             1,
             Math.ceil(
-              ((recent.rows[0]?.created_at.getTime() ?? now.getTime()) +
+              ((recent.rows[recent.rows.length - 5]?.created_at.getTime() ??
+                now.getTime()) +
                 HOUR_MS -
                 now.getTime()) /
                 1000,

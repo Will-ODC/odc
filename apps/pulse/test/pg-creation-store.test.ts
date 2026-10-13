@@ -364,3 +364,27 @@ test("grant_audit_failure_rolls_back_effective_permission", opt, async (t) => {
     0,
   );
 });
+
+test(
+  "revoked_unlimited_grant_waits_until_enough_recent_slots_expire",
+  opt,
+  async (t) => {
+    const { store, setTime } = await fresh(t);
+    await store.setUnlimited(owner, member.voterId, true);
+    for (let i = 0; i < 6; i++) {
+      setTime(new Date(AT.getTime() + i * 1000));
+      await store.publish(member, randomUUID(), body);
+    }
+    await store.setUnlimited(owner, member.voterId, false);
+    await assert.rejects(
+      store.publish(member, randomUUID(), body),
+      (error: unknown) => {
+        assert.ok(error instanceof Error && "retryAfter" in error);
+        assert.equal(error.retryAfter, 3596);
+        return true;
+      },
+    );
+    setTime(new Date(AT.getTime() + HOUR_MS + 1000));
+    await store.publish(member, randomUUID(), body);
+  },
+);
