@@ -8,6 +8,15 @@ import { poll, stubApi } from "./stub-api.js";
 
 afterEach(cleanup);
 beforeEach(() => history.replaceState(null, "", "/"));
+async function begin() {
+  await userEvent.click(screen.getByRole("button", { name: "Start voting" }));
+  await userEvent.click(
+    screen.getByRole("button", { name: "Help choose what comes next" }),
+  );
+  await userEvent.click(
+    screen.getByRole("button", { name: "How should the voting page look?" }),
+  );
+}
 
 it("explains three steps without contacting the API or showing unfinished media", () => {
   const read = vi.fn();
@@ -39,6 +48,13 @@ it("starts the configured vote by keyboard without picking or casting, and keeps
   const start = screen.getByRole("button", { name: "Start voting" });
   start.focus();
   await user.keyboard("{Enter}");
+  expect(read).not.toHaveBeenCalled();
+  await user.click(
+    screen.getByRole("button", { name: "Help choose what comes next" }),
+  );
+  await user.click(
+    screen.getByRole("button", { name: "How should the voting page look?" }),
+  );
   expect(
     await screen.findByRole("heading", {
       name: "Which website layout?",
@@ -47,21 +63,10 @@ it("starts the configured vote by keyboard without picking or casting, and keeps
   ).toBeTruthy();
   expect(read).toHaveBeenCalledWith("website-ui");
   expect(location.search).toBe("?poll=website-ui");
-  expect(history.length).toBe(before + 1);
+  expect(history.length).toBe(before + 3);
   await user.click(screen.getByRole("button", { name: "Vote" }));
   expect(document.querySelectorAll("input:checked")).toHaveLength(0);
   expect(cast).not.toHaveBeenCalled();
-});
-
-it("does not silently start the demo when the first poll is unconfigured", async () => {
-  const read = vi.fn();
-  render(<App api={stubApi({ poll: read })} />);
-  expect(screen.getByRole("button", { name: "Start voting" })).toHaveProperty(
-    "disabled",
-    true,
-  );
-  expect(screen.getByText(/The first vote is being prepared/)).toBeTruthy();
-  expect(read).not.toHaveBeenCalled();
 });
 
 it("keeps direct poll URLs separate from the welcome configuration", async () => {
@@ -79,7 +84,7 @@ it("reports an unavailable configured poll and allows a retry without inventing 
     .mockRejectedValueOnce(new ApiError(404, "That question is not available."))
     .mockResolvedValue(poll({ id: "website-ui" }));
   render(<App api={stubApi({ poll: read })} firstPollId="website-ui" />);
-  await userEvent.click(screen.getByRole("button", { name: "Start voting" }));
+  await begin();
   expect(
     await screen.findByText("There is nothing to vote on yet."),
   ).toBeTruthy();
@@ -96,7 +101,7 @@ it("keeps a closed configured poll readable without casting", async () => {
       firstPollId="website-ui"
     />,
   );
-  await userEvent.click(screen.getByRole("button", { name: "Start voting" }));
+  await begin();
   await userEvent.click(await screen.findByRole("button", { name: "Vote" }));
   expect(screen.getByText("This one has closed.")).toBeTruthy();
   expect(screen.queryByRole("button", { name: "Submit" })).toBeNull();

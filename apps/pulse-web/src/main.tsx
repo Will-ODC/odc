@@ -22,6 +22,17 @@ createRoot(root).render(
       {...(import.meta.env.VITE_PULSE_FIRST_POLL_ID
         ? { firstPollId: import.meta.env.VITE_PULSE_FIRST_POLL_ID }
         : {})}
+      relatedPollIds={{
+        ...(import.meta.env.VITE_PULSE_DATA_POLL_ID
+          ? { data: import.meta.env.VITE_PULSE_DATA_POLL_ID }
+          : {}),
+        ...(import.meta.env.VITE_PULSE_FUNDING_POLL_ID
+          ? { funding: import.meta.env.VITE_PULSE_FUNDING_POLL_ID }
+          : {}),
+        ...(import.meta.env.VITE_PULSE_REVOTE_POLL_ID
+          ? { revote: import.meta.env.VITE_PULSE_REVOTE_POLL_ID }
+          : {}),
+      }}
     />
   </StrictMode>,
 );

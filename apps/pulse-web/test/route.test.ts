@@ -155,6 +155,8 @@ describe("writing a URL", () => {
 describe("the two directions agree", () => {
   const routes = [
     { kind: "welcome" },
+    { kind: "progress" },
+    { kind: "questions" },
     { kind: "conversation", pollId: FIRST_POLL_ID },
     { kind: "conversation", pollId: "pay-for-it" },
     { kind: "signIn" },

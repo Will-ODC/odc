@@ -14,6 +14,8 @@
  */
 export type Route =
   | { kind: "welcome" }
+  | { kind: "progress" }
+  | { kind: "questions" }
   /** Asking for a sign-in link. */
   | { kind: "signIn" }
   /** Arrived from the emailed link, holding a token to spend. */
@@ -67,6 +69,8 @@ export function routeFrom(href: string): Route {
   }
 
   if (path === CHAT_PREVIEW_PATH) return { kind: "chatPreview" };
+  if (path === "/start") return { kind: "progress" };
+  if (path === "/questions") return { kind: "questions" };
 
   if (path === "/" && !url.searchParams.get("poll")) return { kind: "welcome" };
 
@@ -82,6 +86,10 @@ export function pathOf(route: Route): string {
   switch (route.kind) {
     case "welcome":
       return "/";
+    case "progress":
+      return "/start";
+    case "questions":
+      return "/questions";
     case "signIn":
       return SIGN_IN_PATH;
     case "redeem":
