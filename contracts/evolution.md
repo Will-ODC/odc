@@ -429,7 +429,8 @@ the same verdict on everything the writer may produce.
   input. On every input within the minimums, a verifier MUST reach the verdict
   and line numbers these specs require (EV-17). The one exemption is running
   out of a host resource the verifier does not choose, such as memory or time:
-  that is treated as a reached limit, as below.
+  that is treated as a reached limit, as below, as far as the host lets the
+  verifier report at all.
 
   When a verifier reaches one of its limits before it has established the
   verdict these specs require, it MUST stop and report a **tool-level failure**,
@@ -441,9 +442,10 @@ the same verdict on everything the writer may produce.
   verdict: for example, one that rejects a line at depth 3 under ES-17 (EV-16)
   without parsing deeper. A tool-level failure has no EX-24 report obligation.
 
-  Reaching a nesting-depth limit greater than 2 establishes an ES-17 failure on
-  that line, because every line deeper than 2 is `INVALID` whatever else it
-  holds (ES-15, ES-17, EV-16). A verifier that has found no fatal earlier line
+  Reaching a nesting-depth limit greater than 2 establishes that the line is
+  `INVALID`, because every line deeper than 2 is `INVALID` whatever else it
+  holds: under ES-17 when the depth is inside `payload`, and under the
+  envelope's field types or EX-7 elsewhere (ES-15, EV-16). A verifier that has found no fatal earlier line
   MAY therefore report `INVALID` at that line instead of a tool-level failure.
   A limit reached only while recovering an EX-24 endpoint claim makes that
   claim `unavailable` (`export-format.md` EX-24); it is not a tool-level
