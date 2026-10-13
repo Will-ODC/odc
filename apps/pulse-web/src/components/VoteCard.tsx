@@ -38,6 +38,12 @@ export interface VoteCardProps {
   onClose: () => void;
   onChangeAnswer?: () => void;
   onNext?: () => void;
+  /**
+   * Where "Why you can trust your vote" points (#351). Shown only once a vote
+   * is counted, and opened in a new tab so the conversation, whose history is
+   * local to this page, is still there to come back to.
+   */
+  trustHref?: string;
 }
 
 /** Controlled and presentational: the caller owns picks, sending and navigation. */
@@ -57,6 +63,7 @@ export function VoteCard({
   onClose,
   onChangeAnswer,
   onNext,
+  trustHref,
 }: VoteCardProps) {
   const id = useId();
   const card = useRef<HTMLElement>(null);
@@ -224,6 +231,18 @@ export function VoteCard({
             ) : null}
           </div>
           <p className="vote-card__note">{privacyNote}</p>
+          {trustHref ? (
+            <p className="vote-card__note">
+              <a
+                className="vote-card__link"
+                href={trustHref}
+                target="_blank"
+                rel="noopener"
+              >
+                Why you can trust your vote (opens in a new tab)
+              </a>
+            </p>
+          ) : null}
         </>
       ) : (
         <>

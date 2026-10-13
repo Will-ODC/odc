@@ -120,6 +120,18 @@ describe("reading a URL", () => {
   });
 });
 
+describe("reading the trust page's address (#351)", () => {
+  it("opens the trust page at /trust, with a trailing slash or another case", () => {
+    for (const path of ["/trust", "/trust/", "/Trust"]) {
+      expect(routeFrom(path)).toEqual({ kind: "trust" });
+    }
+  });
+
+  it("does not open the trust page for a path that only starts like it", () => {
+    expect(routeFrom("/trustworthy").kind).toBe("conversation");
+  });
+});
+
 describe("writing a URL", () => {
   it("names the default conversation explicitly", () => {
     expect(pathOf({ kind: "conversation", pollId: FIRST_POLL_ID })).toBe(
@@ -135,6 +147,10 @@ describe("writing a URL", () => {
 
   it("points at the sign-in form", () => {
     expect(pathOf({ kind: "signIn" })).toBe("/sign-in");
+  });
+
+  it("points at the trust page", () => {
+    expect(pathOf({ kind: "trust" })).toBe("/trust");
   });
 
   it("points at the chat preview", () => {
@@ -163,6 +179,7 @@ describe("the two directions agree", () => {
     { kind: "redeem", token: "abc123" },
     { kind: "redeem", token: "a+b/c=d" },
     { kind: "chatPreview" },
+    { kind: "trust" },
   ] as const;
 
   for (const route of routes) {

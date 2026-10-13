@@ -25,6 +25,8 @@ export type Route =
    * only by typing the path, so nobody arrives in it by accident.
    */
   | { kind: "chatPreview" }
+  /** "Why you can trust your vote" (#351). Static copy, no server calls. */
+  | { kind: "trust" }
   /** Live conversation page; explicit poll links bypass the welcome. */
   | { kind: "conversation"; pollId: string };
 
@@ -39,6 +41,7 @@ export const FIRST_POLL_ID = "ads-free";
 
 const SIGN_IN_PATH = "/sign-in";
 const CHAT_PREVIEW_PATH = "/preview/chat";
+export const TRUST_PATH = "/trust";
 
 /**
  * A base for parsing, never for navigating.
@@ -69,6 +72,7 @@ export function routeFrom(href: string): Route {
   }
 
   if (path === CHAT_PREVIEW_PATH) return { kind: "chatPreview" };
+  if (path === TRUST_PATH) return { kind: "trust" };
   if (path === "/start") return { kind: "progress" };
   if (path === "/questions") return { kind: "questions" };
 
@@ -96,6 +100,8 @@ export function pathOf(route: Route): string {
       return `${SIGN_IN_PATH}?token=${encodeURIComponent(route.token)}`;
     case "chatPreview":
       return CHAT_PREVIEW_PATH;
+    case "trust":
+      return TRUST_PATH;
     case "conversation":
       return `/?poll=${encodeURIComponent(route.pollId)}`;
   }

@@ -185,10 +185,13 @@ Keys are generated, stored and used invisibly: "Sign up" creates a keypair,
 itself is signed by the registrar, never by the voter's key (ADR-0004;
 `services/ledger/CLAUDE.md`).
 
-**Pulse goes further, not less far.** Its rule is that the counting is never
-the subject at all — it does not translate "hash chain" into "tamper-proof
-record", it never raises the topic. Do not port the trust affordances or the
-"check the record yourself" link into pulse: there is no verifier there and
+**Pulse explains, and never claims more than is built.** Since 2026-10-12
+(ADR-0039) pulse may explain how votes are counted, in plain language, on its
+"Why you can trust your vote" page (`/trust`), where each term such as "hash"
+is explained in a sentence where it first appears. What it must never do is say
+or imply that pulse votes are on a hash chain or ledger before they are. Do not
+port the trust affordances or the "check the record yourself" link into pulse
+until pulse votes are on the ledger: today there is nothing to check, and
 saying otherwise would be a lie. See `apps/pulse/CLAUDE.md`.
 
 ## Trust affordances (`services/web` only — product requirements, not decoration)
@@ -222,6 +225,6 @@ saying otherwise would be a lie. See `apps/pulse/CLAUDE.md`.
 - [ ] Logic lives in `flow/` or a hook; JSX renders.
 - [ ] Keyboard-only pass done; gestures have a key and tap equivalent.
 - [ ] Binding actions confirm; submit disables while pending.
-- [ ] Copy passes the dictionary (`services/web`) or never mentions counting
-      machinery (pulse).
+- [ ] Copy passes the dictionary (`services/web`) or never claims a hash
+      chain, ledger or check that pulse does not have yet (pulse).
 - [ ] Tests per `odc-testing`: behavior, four states, keyboard path.

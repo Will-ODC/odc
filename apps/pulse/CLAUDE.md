@@ -30,10 +30,13 @@ Three MVP pillars, in build order:
 
 ## Rules that do apply here
 
-- **Votes are counted and shown, and the counting is never the subject.** No UI
-  copy about hashes, chains, verification, or how a tally is computed. People
-  do not care; saying it makes the product about the machinery instead of the
-  vote.
+- **Pulse may explain how votes are counted, and never claims more than is
+  built.** Plain-language copy about how votes are counted and why the count
+  can be trusted is welcome; it lives on the "Why you can trust your vote"
+  page (`/trust`, #351), linked from the vote card. No copy may say or imply
+  that pulse votes are on a hash chain or ledger before they are: today they
+  are not. Operator decision of 2026-10-12, ADR-0039; it replaces an
+  agent-written rule (#79) that kept counting off the screen entirely.
 - **No reads or writes across into `services/` or `contracts/`.** Pulse owns
   its own storage and stands alone. If pulse ever publishes to the ODC ledger,
   it does so through the ledger's public API and nothing else — that is a

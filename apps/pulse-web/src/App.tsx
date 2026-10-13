@@ -15,6 +15,7 @@ import {
   FoundationQuestions,
   type RelatedPollIds,
 } from "./screens/FoundationQuestions.js";
+import { Trust } from "./screens/Trust.js";
 import "./styles/tokens.css";
 import "./App.css";
 
@@ -95,6 +96,9 @@ export function App({
     case "chatPreview":
       // Sample data only: the prototype never touches `api`.
       return <ChatPreview />;
+    case "trust":
+      // Static copy: like the prototype, it never touches `api`.
+      return <Trust />;
   }
 }
 

@@ -34,8 +34,9 @@ is load-bearing context that a fresh session reads as current.
 
 Pulse is **charter-exempt** (`apps/pulse/CLAUDE.md`). Nothing in this file is
 held to `docs/charter.md`, and the two boundaries that survive the exemption —
-no reads or writes into `services/` or `contracts/`, and the counting is never
-the subject — apply to every item below without being restated in each one.
+no reads or writes into `services/` or `contracts/`, and no copy that claims a
+hash chain, ledger or check pulse does not have yet (ADR-0039) — apply to every
+item below without being restated in each one.
 
 ## Required reading, per session
 
