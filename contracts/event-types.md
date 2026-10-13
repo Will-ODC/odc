@@ -1,6 +1,6 @@
 # Event Types — contracts/event-types.md
 
-**Version:** 13
+**Version:** 14
 **Status:** DRAFTING (Phase 0 · T3, amended T4a, T5i, T5j, ADR-0009, ADR-0010,
 ADR-0011, T9a/ADR-0013, ADR-0014, ADR-0016, ADR-0018, ADR-0019, ADR-0029 with its
 review fixes, ADR-0034, and ADR-0038). Not frozen.
@@ -215,7 +215,7 @@ declares the operator key that later `issue_created` events are signed with.
   decoded byte count is the one measure every implementation reaches without a
   Unicode table. Otherwise `contracts` is advisory provenance: it is covered by
   `hash` but places no further constraint on verification in v1. (The 64-byte
-  bound was added in v13, ADR-0038. Before it, a `genesis` longer than any
+  bound was added in v14, ADR-0038. Before it, a `genesis` longer than any
   verifier's line minimum was `VALID` by the type rules yet unwritable by a
   ledger.)
 - **ET-9a.** `registrar_pk` declares the key under which `vote_cast` events on

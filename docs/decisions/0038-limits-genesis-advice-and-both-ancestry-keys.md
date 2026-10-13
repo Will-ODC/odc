@@ -1,7 +1,10 @@
 # ADR-0038: Verifier limits, honest `genesis` advice, and both ancestry keys
 
 - **Status:** accepted (operator decisions, 2026-10-11/12; the line-length value
-  of 65536 bytes confirmed by the operator 2026-10-12)
+  of 65536 bytes confirmed by the operator 2026-10-12). Decision 5 (the
+  64-byte cap on `genesis.contracts`) was added by the operator on 2026-10-12
+  after the first four merged in PR #359; it lands as `event-types.md` v14 and
+  `evolution.md` v9.
 - **Date:** 2026-10-12
 - **Phase:** 0
 - **Supersedes:** in part ADR-0019 (the `ancestor_chain`-alone asymmetry).
@@ -176,15 +179,14 @@ committed vector exceeds 64 bytes**, so no committed verdict changes.
 ## Consequences
 
 **Spec versions:** `event-types.md` v12 → **v13** (ET-7a, ET-9, ET-9e, ET-9f,
-three `genesis` table rows, the rule index, the acid-test walkthrough; ET-9's
-cap shares the one bump, because this PR is unmerged and its entry in
-`CONTRACTS-CHANGE.md` covers both);
+three `genesis` table rows, the rule index, the acid-test walkthrough), then
+**v14** for ET-9's cap (decision 5, added after PR #359 merged, with its own
+`CONTRACTS-CHANGE.md` entry);
 `event-schema.md` v6 → **v7** (ES-34's presence sentence); `evolution.md` v7 →
-**v8** (EV-21 rewritten; EV-23, EV-24, EV-25 added in a new §7, and EV-25
-names ET-9's cap; EV-15 places
+**v8** (EV-21 rewritten; EV-23, EV-24, EV-25 added in a new §7; EV-15 places
 them outside the stage split; EV-17's CLI note; rule index; acid-test
-walkthrough). `export-format.md`, `hashing.md`, `ids.md` and `read-api.md` are
-unchanged. `contracts/CONTRACTS-CHANGE.md` has the entry.
+walkthrough), then **v9** (EV-25 names ET-9's cap). `export-format.md`, `hashing.md`, `ids.md` and `read-api.md` are
+unchanged. `contracts/CONTRACTS-CHANGE.md` has an entry for each.
 
 **Committed vectors whose verdict changes:** exactly one.
 
