@@ -20,12 +20,15 @@ export function ClosedResults({
   onRetry,
   onClose,
   panelRef,
+  explainHref,
 }: {
   data: ViewData<Standing>;
   onRetry: () => void;
   onClose: () => void;
   /** Focus lands here on open, and on each change of state while open. */
   panelRef: RefObject<HTMLDivElement | null>;
+  /** Where "What does this mean?" points (`/trust`); omit to leave it out. */
+  explainHref?: string;
 }) {
   if (data.status === "ready") {
     return (
@@ -35,6 +38,7 @@ export function ClosedResults({
         ended
         onClose={onClose}
         panelRef={panelRef}
+        explainHref={explainHref}
       />
     );
   }

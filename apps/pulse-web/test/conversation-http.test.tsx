@@ -93,7 +93,7 @@ it("approval cast, replacement, network retry and closed results work over the r
     await user.click(screen.getByRole("button", { name: "Vote" }));
     await user.click(screen.getByRole("radio", { name: "Yes" }));
     await user.click(screen.getByRole("button", { name: "Submit" }));
-    await screen.findByText("Counted.");
+    await screen.findByText("Counted");
     expect(await api.myBallot("ads-free")).toEqual([1]);
     first.unmount();
     globalThis.history.replaceState(null, "", "/?poll=approval");
@@ -107,7 +107,7 @@ it("approval cast, replacement, network retry and closed results work over the r
     await user.click(card.getByRole("checkbox", { name: "Park" }));
     await user.click(card.getByRole("checkbox", { name: "Rink" }));
     await user.click(card.getByRole("button", { name: "Submit" }));
-    await screen.findByText("Counted.");
+    await screen.findByText("Counted");
     expect(await api.myBallot("approval")).toEqual([0, 2]);
     expect(card.getAllByText("yours")).toHaveLength(2);
     await user.click(card.getByRole("button", { name: "Change my answer" }));
@@ -119,7 +119,7 @@ it("approval cast, replacement, network retry and closed results work over the r
       expect.stringContaining("Check your connection"),
     );
     await user.click(card.getByRole("button", { name: "Try again" }));
-    await screen.findByText("That replaces your earlier answer.");
+    await screen.findByText("Counted. That replaces your earlier answer.");
     expect(await api.myBallot("approval")).toEqual([2]);
     expect((await api.results("approval")).voters).toBe(1);
     view.unmount();

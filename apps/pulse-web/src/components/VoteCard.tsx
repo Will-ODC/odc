@@ -2,10 +2,12 @@ import { useEffect, useId, useRef } from "react";
 import type { KeyboardEvent, ReactNode } from "react";
 import type { PollMethod, Results } from "../api/types.js";
 import {
+  countedNote,
   numberedChoice,
   pickChoice,
   validCardBallot,
 } from "../flow/vote-card.js";
+import type { Confirmation } from "../flow/vote-card.js";
 import { ClosedNotice } from "./ClosedNotice.js";
 import { ResultsPanel } from "./ResultsPanel.js";
 import "./VoteCard.css";
@@ -44,6 +46,22 @@ export interface VoteCardProps {
    * local to this page, is still there to come back to.
    */
   trustHref?: string;
+  /**
+   * Whether the counted vote is confirmed by email (#353). Left out, the card
+   * says only "Counted" and offers nothing.
+   */
+  confirmation?: Confirmation;
+  /**
+   * Where "Confirm with your email" points, shown only while `confirmation` is
+   * `offer`. Opened in a new tab, so this card is still here, and updates,
+   * once the person has signed in.
+   */
+  confirmHref?: string;
+  /**
+   * Fresh results were asked for and did not come. The card keeps the vote's
+   * status, and shows this in place of the numbers, with a way to ask again.
+   */
+  resultsProblem?: { message: string; onRetry: () => void };
 }
 
 /** Controlled and presentational: the caller owns picks, sending and navigation. */
@@ -64,6 +82,9 @@ export function VoteCard({
   onChangeAnswer,
   onNext,
   trustHref,
+  confirmation = "unknown",
+  confirmHref,
+  resultsProblem,
 }: VoteCardProps) {
   const id = useId();
   const card = useRef<HTMLElement>(null);
@@ -122,6 +143,20 @@ export function VoteCard({
       )?.focus();
     }
   }, [status.kind, collapsed, editable]);
+
+  // "Try again" on fresh results unmounts itself, and so does the panel the
+  // failure replaces: when focus was on either, keep it on the results area
+  // rather than let it fall to the page. Focus elsewhere is left alone.
+  const problem = Boolean(resultsProblem);
+  const hadProblem = useRef(problem);
+  useEffect(() => {
+    if (hadProblem.current === problem) return;
+    hadProblem.current = problem;
+    const active = document.activeElement;
+    const lost = active === null || active === document.body;
+    if (!collapsed && status.kind === "answered" && lost)
+      panel.current?.focus();
+  }, [problem, collapsed, status.kind]);
 
   function onKeyDown(event: KeyboardEvent<HTMLElement>) {
     if (
@@ -211,13 +246,47 @@ export function VoteCard({
       {status.kind === "answered" ? (
         <>
           <p role="status" className="vote-card__note">
-            {status.changed ? "That replaces your earlier answer." : "Counted."}
+            {countedNote(status.changed, confirmation)}
           </p>
-          <ResultsPanel
-            results={status.results}
-            yourChoices={picked}
-            panelRef={panel}
-          />
+          {confirmation === "offer" && confirmHref ? (
+            <p className="vote-card__note">
+              <a
+                className="vote-card__link"
+                href={confirmHref}
+                target="_blank"
+                rel="noopener"
+              >
+                Confirm with your email (opens in a new tab)
+              </a>
+            </p>
+          ) : null}
+          {resultsProblem ? (
+            <div
+              className="results"
+              role="group"
+              aria-label="How people answered"
+              ref={panel}
+              tabIndex={-1}
+            >
+              <p className="vote-card__problem" role="alert">
+                {resultsProblem.message}
+              </p>
+              <button
+                type="button"
+                className="results__retry"
+                onClick={resultsProblem.onRetry}
+              >
+                Try again
+              </button>
+            </div>
+          ) : (
+            <ResultsPanel
+              results={status.results}
+              yourChoices={picked}
+              panelRef={panel}
+              explainHref={trustHref}
+            />
+          )}
           <div className="vote-card__actions">
             {onChangeAnswer ? (
               <button type="button" onClick={onChangeAnswer}>

@@ -3,6 +3,7 @@ import type { CommunityChoice, PulseApi } from "../api/types.js";
 import { ApiError } from "../api/types.js";
 import { ScreenFrame } from "../components/ScreenFrame.js";
 import { looksLikeEmail } from "../flow/email.js";
+import { browserStore, rememberReturn } from "../flow/sign-in-return.js";
 import "./SignIn.css";
 
 /**
@@ -45,7 +46,19 @@ type Asking =
 
 const COULD_NOT_SEND = "We could not send the link. Try again in a moment.";
 
-export function SignIn({ api }: { api: PulseApi }) {
+export function SignIn({
+  api,
+  returnTo,
+}: {
+  api: PulseApi;
+  /**
+   * The question to land on once the emailed link is clicked (#353), from
+   * `/sign-in?poll=`. Remembered in this browser on arrival, because the
+   * emailed link itself cannot carry it.
+   */
+  returnTo?: string;
+}) {
+  useEffect(() => rememberReturn(returnTo, browserStore()), [returnTo]);
   const [email, setEmail] = useState("");
   const [optIn, setOptIn] = useState(false);
   const [asking, setAsking] = useState<Asking>({ status: "idle" });

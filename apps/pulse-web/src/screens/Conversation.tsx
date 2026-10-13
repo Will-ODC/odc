@@ -5,6 +5,8 @@ import { pathOf } from "../flow/route.js";
 import { usePoll } from "../hooks/use-poll.js";
 import { useCastVote } from "../hooks/use-cast-vote.js";
 import { useClosedResults } from "../hooks/use-closed-results.js";
+import { useFreshResults } from "../hooks/use-fresh-results.js";
+import type { Confirmation } from "../flow/vote-card.js";
 import { VoteCard } from "../components/VoteCard.js";
 import { ClosedResults } from "../components/ClosedResults.js";
 import { ViewState } from "../components/ViewState.js";
@@ -15,7 +17,30 @@ import { useSession } from "../hooks/use-session.js";
 import type { Session, SignOutProgress } from "../hooks/use-session.js";
 import "./Conversation.css";
 
-type Answer = { poll: Poll; ballot: number[]; results: Results };
+/**
+ * `stale` when someone signed in after these results were fetched: the vote
+ * is now confirmed (ADR-0040) and the confirmed number shown with it is not.
+ * Revisiting the question asks for fresh ones.
+ */
+type Answer = {
+  poll: Poll;
+  ballot: number[];
+  results: Results;
+  stale?: boolean;
+};
+
+/** What the vote card can say about confirmation, from who is signed in. */
+function confirmationOf(session: Session): Confirmation {
+  switch (session.status) {
+    case "signedIn":
+      return "confirmed";
+    case "signedOut":
+    case "unknown":
+      return "offer";
+    case "loading":
+      return "unknown";
+  }
+}
 
 /** A whole run stays in one conversation; only its active card changes. */
 export function Conversation({
@@ -68,6 +93,15 @@ export function Conversation({
   const go = (id: string) => {
     if (!busy) setAt(id);
   };
+  const confirmation = confirmationOf(session);
+  // Signing in confirms every vote already given here, so every result already
+  // shown is missing it from the confirmed number.
+  const before = useRef(confirmation);
+  useEffect(() => {
+    if (before.current === "offer" && confirmation === "confirmed")
+      setAnswers((old) => old.map((one) => ({ ...one, stale: true })));
+    before.current = confirmation;
+  }, [confirmation]);
   const saved = answers.find((one) => one.poll.id === at);
   return (
     <div className="conversation">
@@ -106,6 +140,7 @@ export function Conversation({
           answers={answers}
           {...(saved ? { saved } : {})}
           busy={busy}
+          confirmation={confirmation}
           onCounted={counted}
           onBusy={setBusy}
           onGo={go}
@@ -179,6 +214,7 @@ function Question({
   answers,
   saved,
   busy,
+  confirmation,
   onCounted,
   onBusy,
   onGo,
@@ -188,6 +224,7 @@ function Question({
   answers: readonly Answer[];
   saved?: Answer;
   busy: boolean;
+  confirmation: Confirmation;
   onCounted: (answer: Answer) => void;
   onBusy: (busy: boolean) => void;
   onGo: (id: string) => void;
@@ -202,6 +239,7 @@ function Question({
       answers={answers}
       {...(saved ? { saved } : {})}
       busy={busy}
+      confirmation={confirmation}
       onCounted={onCounted}
       onBusy={onBusy}
       onGo={onGo}
@@ -216,6 +254,7 @@ function LoadedQuestion({
   answers,
   saved,
   busy,
+  confirmation,
   onCounted,
   onBusy,
   onGo,
@@ -226,6 +265,7 @@ function LoadedQuestion({
   answers: readonly Answer[];
   saved?: Answer;
   busy: boolean;
+  confirmation: Confirmation;
   onCounted: (answer: Answer) => void;
   onBusy: (busy: boolean) => void;
   onGo: (id: string) => void;
@@ -292,6 +332,7 @@ function LoadedQuestion({
                 api={api}
                 poll={loaded.value}
                 {...(saved ? { saved } : {})}
+                confirmation={confirmation}
                 onCounted={onCounted}
                 onBusy={onBusy}
                 onGo={onGo}
@@ -319,6 +360,7 @@ function LiveCard({
   api,
   poll,
   saved,
+  confirmation,
   onCounted,
   onBusy,
   onGo,
@@ -326,6 +368,7 @@ function LiveCard({
   api: PulseApi;
   poll: Poll;
   saved?: Answer;
+  confirmation: Confirmation;
   onCounted: (answer: Answer) => void;
   onBusy: (busy: boolean) => void;
   onGo: (id: string) => void;
@@ -362,15 +405,39 @@ function LiveCard({
     wasVisible.current = visible;
   }, [visible]);
   const status = cardStatus(poll, state);
-  const showing =
+  const ballot = state.status === "counted" ? state.ballot : picked;
+  const fresh = useFreshResults(api, poll.id, (results) =>
+    onCounted({ poll, ballot, results }),
+  );
+  const { refresh: refreshResults } = fresh;
+  const answered =
+    status.kind === "answered" || (status.kind === "answerable" && showSaved);
+  // Signed in while this card shows a counted vote: the vote is confirmed
+  // now, and the numbers on screen do not include it yet.
+  const was = useRef(confirmation);
+  useEffect(() => {
+    if (was.current === "offer" && confirmation === "confirmed" && answered)
+      refreshResults();
+    was.current = confirmation;
+  }, [confirmation, answered, refreshResults]);
+  // A saved answer from before someone signed in, revisited.
+  const staleOnArrival = useRef(Boolean(saved?.stale && showSaved));
+  useEffect(() => {
+    if (staleOnArrival.current) refreshResults();
+  }, [refreshResults]);
+  const savedShowing =
     status.kind === "answerable" && showSaved && saved
       ? { kind: "answered" as const, results: saved.results, changed: false }
       : status;
-  const ballot = state.status === "counted" ? state.ballot : picked;
+  const showing =
+    savedShowing.kind === "answered" && fresh.results
+      ? { ...savedShowing, results: fresh.results }
+      : savedShowing;
   const next = showing.kind === "answered" ? nextFor(poll, ballot) : null;
   const shut = status.kind === "closed";
   function change() {
     setShowSaved(false);
+    fresh.clear();
     reset();
     setCollapsed(false);
   }
@@ -394,6 +461,7 @@ function LiveCard({
             close();
           }}
           panelRef={closed.panelRef}
+          explainHref={pathOf({ kind: "trust" })}
         />
       </div>
     );
@@ -412,6 +480,16 @@ function LiveCard({
         status={showing}
         privacyNote="Your answer is private."
         trustHref={pathOf({ kind: "trust" })}
+        confirmation={confirmation}
+        confirmHref={pathOf({ kind: "signIn", pollId: poll.id })}
+        {...(fresh.problem
+          ? {
+              resultsProblem: {
+                message: fresh.problem,
+                onRetry: fresh.refresh,
+              },
+            }
+          : {})}
         collapsed={collapsed}
         onPick={setPicked}
         onSubmit={(ballot) => {

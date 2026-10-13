@@ -1,4 +1,5 @@
 import type {
+  ChoiceResult,
   Poll,
   PulseApi,
   Results,
@@ -28,20 +29,35 @@ export function poll(over: Partial<Poll> = {}): Poll {
  * would have thrown on `results.choices`. A stub that cannot be rendered is a
  * test that is not testing the thing.
  */
-export function results(over: Partial<Results> = {}): Results {
+/**
+ * A choice's confirmed figures default to none (ADR-0040): most tests are
+ * about the full count, and nobody having confirmed is the server's own
+ * answer when nobody has.
+ */
+type ChoiceOver = Omit<ChoiceResult, "confirmedCount" | "confirmedShare"> &
+  Partial<Pick<ChoiceResult, "confirmedCount" | "confirmedShare">>;
+
+export function results(
+  over: Partial<Omit<Results, "choices">> & { choices?: ChoiceOver[] } = {},
+): Results {
   const base = poll();
+  const { choices, ...rest } = over;
   return {
     pollId: base.id,
     question: base.question,
     method: base.method,
     voters: 0,
-    choices: base.choices.map((label, index) => ({
-      index,
-      label,
-      count: 0,
-      share: 0,
-    })),
-    ...over,
+    confirmedVoters: 0,
+    ...rest,
+    choices: (
+      choices ??
+      base.choices.map((label, index) => ({
+        index,
+        label,
+        count: 0,
+        share: 0,
+      }))
+    ).map((choice) => ({ confirmedCount: 0, confirmedShare: 0, ...choice })),
   };
 }
 
