@@ -39,6 +39,18 @@ transactional quota/grant operations follow in the store slice. No creation
 endpoint is served yet. Legacy polls keep unknown authors and community; General
 is a posting destination and does not replace null account membership.
 
+The internal `PostgresCreationStore` implements transactional publication,
+account-scoped replay, rolling-hour quota and owner-only narrow posting grants
+(ADR-0037, #350). It rechecks session generation under the same account locks as
+publication and grant changes. Owner configuration is a trusted constructor
+option, not yet a production environment setting. All public results are built
+from allow-listed poll fields, without author account IDs or ballot linkage.
+
+This store is not wired into HTTP or startup. Its memory adapter, identity-label
+foreign-key rollout, HTTP boundary and creation screen remain separate steps;
+there is still no served creation endpoint. Do not launch public creation from
+this internal store alone or advertise moderation controls that are absent.
+
 **Not built:**
 
 - **Creating polls.** Today polls exist only as seed data or database inserts.
