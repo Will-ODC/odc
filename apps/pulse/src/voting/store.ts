@@ -225,17 +225,20 @@ export class InMemoryVotingStore implements VotingStore {
     codeFor: (pollId: string) => string,
   ): Promise<number> {
     const now = this.#clock();
-    let confirmed = 0;
+    // Every code is made and checked before any is written, so a bad one
+    // leaves nothing half-confirmed — all or nothing, as Postgres's
+    // transaction is.
+    const writes: [string, string][] = [];
     for (const [key, vote] of this.#votes) {
       if (vote.voterId !== voterId) continue;
       const poll = this.#polls.get(vote.pollId);
       if (!poll || !isOpen(poll, now)) continue;
       const code = codeFor(vote.pollId);
       assertConfirmation(code);
-      this.#confirmations.set(key, code);
-      confirmed++;
+      writes.push([key, code]);
     }
-    return confirmed;
+    for (const [key, code] of writes) this.#confirmations.set(key, code);
+    return writes.length;
   }
 
   async voteOf(pollId: string, voterId: string): Promise<Vote | undefined> {

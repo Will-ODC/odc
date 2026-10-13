@@ -292,9 +292,14 @@ person has ever given an address. Two consequences, both deliberate:
     differ between polls, so they do not link one person's votes across polls.
   - A vote nobody confirmed stores nothing of the kind.
 
-It is signed by the session signer, which is safe both ways round: presented as a
-session it names a voter that does not exist, and a session cookie presented as this
-one names the same person it already named.
+It is signed by the session signer, and each cookie is refused in the other's place.
+Presented as a session, a ballot cookie names a voter that does not exist, so it signs
+nobody in. Presented as a ballot, a session cookie is **ignored**: every ballot identity
+has started with `b:` since the cookie was introduced and carries no session
+generation, and a value without the prefix or with a generation is treated as no
+ballot. The browser is minted a fresh ballot, as if it had none, and sign-in confirms
+nothing for it. So copying a session into `pulse_ballot` can never file a vote under an
+account id.
 
 Deduplication is therefore per browser, which is weak on its own. That is the accepted
 trade for counting a vote before anyone has been asked for anything.

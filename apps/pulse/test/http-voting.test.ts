@@ -848,3 +848,55 @@ test("the_code_the_account_id_and_the_key_never_reach_a_response_or_a_log_line",
     );
   }
 });
+
+test("a_session_copied_into_the_ballot_cookie_is_not_a_ballot_and_files_nothing_under_the_account", async () => {
+  // A session cookie is validly signed by the same signer. Taken as a ballot,
+  // it would file the vote under the account id — beside the answer, which
+  // ADR-0040 promises never happens. It is ignored and a ballot is minted.
+  const { app, signIn, votes } = await setup(undefined, undefined, {
+    newBallotId: () => "fresh",
+  });
+  const session = await signIn("ada@student.ubc.ca");
+  const me = await app.inject({ url: "/api/me", headers: { cookie: session } });
+  const voterId = me.json().voter.id as string;
+  const sessionValue = session.slice(session.indexOf("=") + 1);
+
+  const cast = await app.inject({
+    method: "POST",
+    url: "/api/polls/p1/votes",
+    headers: { cookie: `pulse_ballot=${sessionValue}` },
+    payload: { ballot: [0] },
+  });
+  assert.equal(cast.statusCode, 200);
+  assert.equal(cast.json().status, "counted");
+  const minted = cast.cookies.find((c) => c.name === "pulse_ballot");
+  assert.ok(minted, "a fresh ballot cookie is minted");
+  assert.notEqual(minted.value, sessionValue);
+  assert.equal(await votes.voteOf("p1", voterId), undefined);
+  assert.deepEqual((await votes.voteOf("p1", "b:fresh"))?.choices, [0]);
+});
+
+test("signing_in_with_a_session_in_the_ballot_cookie_confirms_nothing", async () => {
+  // The redeem side of the same guard: a vote somehow filed under the account
+  // id (planted here directly) is not confirmed by presenting a session as
+  // the ballot.
+  const { app, signIn, votes, browser, signInOn } = await setup();
+  const session = await signIn("ada@student.ubc.ca");
+  const me = await app.inject({ url: "/api/me", headers: { cookie: session } });
+  const voterId = me.json().voter.id as string;
+  await votes.castVote("p1", voterId, [0]);
+
+  const visit = browser();
+  const sessionValue = session.slice(session.indexOf("=") + 1);
+  await signInOn(
+    (options) =>
+      visit({
+        ...options,
+        headers: { ...options.headers, cookie: `pulse_ballot=${sessionValue}` },
+      }),
+    "ada@student.ubc.ca",
+  );
+  const results = (await app.inject({ url: "/api/polls/p1/results" })).json();
+  assert.equal(results.voters, 1);
+  assert.equal(results.confirmedVoters, 0);
+});

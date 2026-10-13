@@ -238,9 +238,11 @@ test(
     // in whatever order Postgres picks, rather than one after another as real
     // requests usually run. Every one lands (three ballots in the totals) and
     // exactly one counts as confirmed: at the same millisecond the tie goes to
-    // the greatest ballot identity, b:3, whatever order they committed in.
+    // the greatest ballot identity, b:3, whatever order they committed in. The
+    // vote written before the barrier, b:0, is the tie's loser, so a store
+    // that kept the first row it found would pick it.
     const { pool, store } = await fresh(t);
-    await store.castVote("p1", "b:3", [1]);
+    await store.castVote("p1", "b:0", [0]);
     const barrier = await pool.connect();
     try {
       await barrier.query("begin");
@@ -248,8 +250,8 @@ test(
       const barrierPid = await backendPid(barrier);
       const racing = Promise.all([
         store.castVote("p1", "b:1", [0], { confirmation: ADA }),
-        store.castVote("p1", "b:2", [0], { confirmation: ADA }),
-        store.confirmVotes("b:3", () => ADA),
+        store.castVote("p1", "b:3", [1], { confirmation: ADA }),
+        store.confirmVotes("b:0", () => ADA),
       ]);
       await until(async () => (await blockedBy(pool, barrierPid)) >= 3);
       await barrier.query("commit");
