@@ -36,9 +36,12 @@ import { SESSION_COOKIE, SessionSigner } from "./session.js";
  * is not how their vote is found. A verified vote carries a one-way keyed code
  * (ADR-0040), never the account id or the address.
  *
- * Signed by the session signer, which is safe in both directions: this cookie
- * presented as a session names a voter the store does not have, and a session
- * cookie presented as this one names the same person it already named.
+ * Signed by the session signer, so each cookie is refused in the other's
+ * place. This one presented as a session names a voter the store does not
+ * have. A session presented as this one is ignored (`heldBallot`): it carries
+ * a generation, which no ballot ever has, and its id lacks the `b:` prefix
+ * every ballot has had since the cookie was introduced (#128). Accepting it
+ * would file a vote under the account id, beside the answer.
  */
 const BALLOT_COOKIE = "pulse_ballot";
 
@@ -221,6 +224,19 @@ export async function createServer(deps: ServerDeps): Promise<FastifyInstance> {
   };
 
   /**
+   * The ballot identity this browser holds, or undefined. A validly signed
+   * value that is not a ballot — a session copied into `pulse_ballot`, which
+   * carries a generation and no `b:` prefix — is treated as no ballot at all,
+   * so a vote is never filed under an account id.
+   */
+  const heldBallot = (request: FastifyRequest): string | undefined => {
+    const held = deps.signer.verify(request.cookies[BALLOT_COOKIE]);
+    if (!held || held.generation !== undefined) return undefined;
+    if (!held.voterId.startsWith(BALLOT_PREFIX)) return undefined;
+    return held.voterId;
+  };
+
+  /**
    * The identity this ballot is filed under, minting one if this browser has
    * not voted before. Called only by the two routes that read or write a
    * ballot, so nothing else in the product hands out this cookie.
@@ -229,8 +245,8 @@ export async function createServer(deps: ServerDeps): Promise<FastifyInstance> {
     request: FastifyRequest,
     reply: FastifyReply,
   ): string => {
-    const held = deps.signer.verify(request.cookies[BALLOT_COOKIE]);
-    if (held) return held.voterId;
+    const held = heldBallot(request);
+    if (held !== undefined) return held;
 
     const minted = `${BALLOT_PREFIX}${(deps.newBallotId ?? randomUUID)()}`;
     reply.setCookie(BALLOT_COOKIE, deps.signer.sign(minted), {
@@ -377,11 +393,11 @@ export async function createServer(deps: ServerDeps): Promise<FastifyInstance> {
     // already holds — none is minted here — and the store is handed one-way
     // codes, never the account id. Before the cookie is set, so a failure is
     // the ordinary 500 rather than a signed-in reply hiding it.
-    const ballot = deps.signer.verify(request.cookies[BALLOT_COOKIE]);
+    const ballot = heldBallot(request);
     const key = deps.confirmationKey;
-    if (ballot && key) {
+    if (ballot !== undefined && key) {
       const accountId = result.voter.id;
-      await deps.votes.confirmVotes(ballot.voterId, (poll) =>
+      await deps.votes.confirmVotes(ballot, (poll) =>
         key.codeFor(accountId, poll),
       );
     }

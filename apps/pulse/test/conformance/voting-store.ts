@@ -548,6 +548,45 @@ export function votingStoreConformance(
         );
       });
 
+      test("the_same_millisecond_tie_goes_to_the_greater_ballot_whichever_is_written_first", async (t) => {
+        // The mirror of the test above. Together they pin the tie-break
+        // itself: a store that keeps the first or the last row written, or
+        // whatever order its rows happen to sit in, fails one of the two.
+        const store = await storeAt(t);
+        await pollWith(store);
+        await store.castVote("p1", "b:1", [0], { confirmation: ADA });
+        await store.castVote("p1", "b:2", [1], { confirmation: ADA });
+
+        assert.deepEqual(
+          (await store.results("p1")).choices.map((c) => c.confirmedCount),
+          [0, 1],
+        );
+      });
+
+      test("confirming_a_browser_is_all_or_nothing_when_one_code_is_refused", async (t) => {
+        // One good code and one bad: nothing may be left half-confirmed.
+        const store = await storeAt(t);
+        await pollWith(store);
+        await store.createPoll({
+          id: "p2",
+          question: "When?",
+          choices: ["Fri", "Sat"],
+          method: "single",
+        });
+        await store.castVote("p1", "b:1", [0]);
+        await store.castVote("p2", "b:1", [1]);
+
+        await assert.rejects(
+          () =>
+            store.confirmVotes("b:1", (poll) =>
+              poll === "p2" ? "voter-123" : ADA,
+            ),
+          TypeError,
+        );
+        assert.equal((await store.results("p1")).confirmedVoters, 0);
+        assert.equal((await store.results("p2")).confirmedVoters, 0);
+      });
+
       test("one_code_on_two_polls_is_counted_on_each_poll_separately", async (t) => {
         const store = await storeAt(t);
         await pollWith(store);

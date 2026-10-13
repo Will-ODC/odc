@@ -1,7 +1,11 @@
 # ADR-0040: Pulse confirmed votes are stored with a one-way keyed code
 
 - **Status:** accepted (operator decisions, 2026-10-12: show both numbers;
-  option C for the link)
+  option C for the link; one confirmed vote per person per poll, the most
+  recent). Two rules are the implementer's choice, awaiting operator
+  confirmation, and are marked so below: what "most recent" is measured by
+  (decision 5), and that closed polls are not confirmed at sign-in
+  (decision 3).
 - **Date:** 2026-10-12
 - **Phase:** 0 (pulse workstream, charter-exempt; issue #352)
 
@@ -46,8 +50,9 @@ a confirmation were weighed by the operator:
    (the cast route reads the session for this, and only this), or when the
    browser holding its ballot cookie signs in afterwards
    (`POST /api/sign-in/redeem` confirms every vote under that ballot on a poll
-   still open). A closed poll's votes are not confirmed afterwards, so its
-   results stop changing when it closes.
+   still open). **Implementer's choice, awaiting operator confirmation:** a
+   closed poll's votes are not confirmed afterwards, so its results stop
+   changing when it closes.
 4. **Changing an answer keeps the confirmation**, signed in or not. A cast
    while signed in as a different person replaces the code with theirs.
    **Signing out does not remove it.** Nothing ever clears the column.
@@ -56,7 +61,9 @@ a confirmation were weighed by the operator:
    that share a code, the one with the latest `cast_at` is that person's
    confirmed vote; a tie in the same millisecond goes to the greater ballot
    identity (byte order), the same in both stores. The others still count in
-   the totals. Confirming an older vote by signing in later does not make it
+   the totals. **Implementer's choice, awaiting operator confirmation:**
+   "most recent" is measured by when the vote was _cast_, not when it was
+   confirmed. Confirming an older vote by signing in later does not make it
    the most recent: the cast time decides, so the confirmed vote is the
    person's latest expressed answer.
 6. **"Most recent wins" is derived when results are read, not stored.** There
@@ -101,9 +108,6 @@ a confirmation were weighed by the operator:
 - `ServerDeps.confirmationKey` is optional so that test clients embedding the
   server need not care; without it nothing is confirmed. Every entry point
   that serves people passes one.
-- **Migration number.** `006` was free when this was written; poll creation
-  (#350) may land a migration first, in which case this file is renumbered
-  before merge (the runner refuses an out-of-order file).
 
 ### Documents reconciled
 
