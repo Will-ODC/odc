@@ -32,6 +32,13 @@ record that can change. It never reads or writes the ODC core (`services/`,
 - A phone layout, and a desktop layout from 1100px wide.
 - Two Docker images that serve the whole thing (ADR-0028). CI builds both.
 
+Migration 005 adds the authored-poll storage foundation (ADR-0037): keyed
+communities, private author metadata, publication acknowledgement, replay records
+and posting-grant state/audit. Existing identity-label foreign keys and
+transactional quota/grant operations follow in the store slice. No creation
+endpoint is served yet. Legacy polls keep unknown authors and community; General
+is a posting destination and does not replace null account membership.
+
 **Not built:**
 
 - **Creating polls.** Today polls exist only as seed data or database inserts.

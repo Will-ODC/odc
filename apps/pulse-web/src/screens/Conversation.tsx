@@ -10,6 +10,7 @@ import { ClosedResults } from "../components/ClosedResults.js";
 import { ViewState } from "../components/ViewState.js";
 import { TopBanner } from "../components/TopBanner.js";
 import { SignedIn } from "../components/SignedIn.js";
+import { ForgetVotes } from "../components/ForgetVotes.js";
 import { useSession } from "../hooks/use-session.js";
 import type { Session, SignOutProgress } from "../hooks/use-session.js";
 import "./Conversation.css";
@@ -27,9 +28,35 @@ export function Conversation({
   /** Runs once the server has signed this person out everywhere. */
   onSignedOut?: () => void;
 }) {
-  const { session, progress, signOut, dismiss } = useSession(api, onSignedOut);
   const [at, setAt] = useState(pollId);
   const [answers, setAnswers] = useState<Answer[]>([]);
+  // Whether this browser held a ballot before this visit. The ballot cookie
+  // cannot be read from script, so the first question's ballot stands in.
+  const [heldBefore, setHeldBefore] = useState(false);
+  // Bumped when the votes are forgotten, so the question starts over.
+  const [round, setRound] = useState(0);
+  const forgotten = useCallback(() => {
+    setAnswers([]);
+    setHeldBefore(false);
+    setAt(pollId);
+    setRound((n) => n + 1);
+  }, [pollId]);
+  const { session, progress, signOut, dismiss } = useSession(api, {
+    ...(onSignedOut ? { onSignedOut } : {}),
+    onForgotten: forgotten,
+  });
+  useEffect(() => {
+    let live = true;
+    api.myBallot(pollId).then(
+      (ballot) => {
+        if (live) setHeldBefore(ballot !== null);
+      },
+      () => {},
+    );
+    return () => {
+      live = false;
+    };
+  }, [api, pollId]);
   const [busy, setBusy] = useState(false);
   const counted = useCallback((answer: Answer) => {
     setAnswers((old) =>
@@ -48,6 +75,7 @@ export function Conversation({
         <Banner
           session={session}
           progress={progress}
+          holdsVotes={heldBefore || answers.length > 0}
           onSignOut={signOut}
           onCancel={dismiss}
         />
@@ -72,7 +100,7 @@ export function Conversation({
       </aside>
       <main className="conversation__main">
         <Question
-          key={at}
+          key={`${round}:${at}`}
           api={api}
           pollId={at}
           answers={answers}
@@ -97,11 +125,14 @@ export function Conversation({
 function Banner({
   session,
   progress,
+  holdsVotes,
   onSignOut,
   onCancel,
 }: {
   session: Session;
   progress: SignOutProgress;
+  /** Whether this browser holds votes someone could forget. */
+  holdsVotes: boolean;
   onSignOut: () => void;
   onCancel: () => void;
 }) {
@@ -123,7 +154,22 @@ function Banner({
       );
     case "signedOut":
     case "unknown":
-      return <TopBanner signInHref={pathOf({ kind: "signIn" })} />;
+      return (
+        <TopBanner
+          signInHref={pathOf({ kind: "signIn" })}
+          {...(holdsVotes
+            ? {
+                aside: (
+                  <ForgetVotes
+                    progress={progress}
+                    onForget={onSignOut}
+                    onCancel={onCancel}
+                  />
+                ),
+              }
+            : {})}
+        />
+      );
   }
 }
 

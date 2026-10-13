@@ -317,7 +317,8 @@ it("retrying a failed replacement sends the new choice rather than the prior ans
 });
 
 const voter = { id: "v1", community: null, email: "voter@example.org" };
-const banner = () => within(screen.getByRole("banner"));
+// The page's own bar comes first; an answered card can carry a header too.
+const banner = () => within(screen.getAllByRole("banner")[0]!);
 
 it("offers the way in when nobody is signed in", async () => {
   render(<Conversation api={stubApi()} pollId="ads-free" />);
@@ -426,4 +427,115 @@ it("does not show an old failure when the question is asked again", async () => 
   await user.click(banner().getByRole("button", { name: "Cancel" }));
   await user.click(banner().getByRole("button", { name: "Sign out" }));
   expect(banner().queryByRole("alert")).toBeNull();
+});
+
+it("offers nothing to forget when this browser holds no votes", async () => {
+  render(<Conversation api={stubApi()} pollId="ads-free" />);
+  await banner().findByRole("link", { name: "Sign in" });
+  expect(
+    banner().queryByRole("button", { name: "Forget my votes here" }),
+  ).toBeNull();
+});
+
+/*
+ * A shared computer: someone voted without signing in and walked away. The
+ * ballot cookie is still here, so the next person would see and replace
+ * their answers. The way to forget them is the same request as signing out.
+ */
+it("lets someone who never signed in forget this browser's votes", async () => {
+  const signOut = vi.fn(() => Promise.resolve());
+  const onSignedOut = vi.fn();
+  const user = userEvent.setup();
+  render(
+    <Conversation
+      api={stubApi({ myBallot: async () => [1], signOut })}
+      pollId="ads-free"
+      onSignedOut={onSignedOut}
+    />,
+  );
+  await user.click(
+    await banner().findByRole("button", { name: "Forget my votes here" }),
+  );
+  const confirm = banner().getByRole("button", { name: "Forget them" });
+  const describedBy = confirm.getAttribute("aria-describedby") ?? "";
+  expect(document.getElementById(describedBy)?.textContent).toMatch(
+    /still count/,
+  );
+  expect(signOut).not.toHaveBeenCalled();
+  await user.click(confirm);
+  await waitFor(() =>
+    expect(
+      banner().queryByRole("button", { name: "Forget my votes here" }),
+    ).toBeNull(),
+  );
+  expect(signOut).toHaveBeenCalledTimes(1);
+  // Nobody was signed in, so nothing to hand off to.
+  expect(onSignedOut).not.toHaveBeenCalled();
+  expect(banner().getByRole("link", { name: "Sign in" })).toBeTruthy();
+});
+
+it("offers to forget once someone has answered here", async () => {
+  render(<Conversation api={stubApi()} pollId="ads-free" />);
+  await main().findByRole("heading", { name: poll().question, level: 1 });
+  expect(
+    banner().queryByRole("button", { name: "Forget my votes here" }),
+  ).toBeNull();
+  await answer();
+  expect(
+    banner().getByRole("button", { name: "Forget my votes here" }),
+  ).toBeTruthy();
+});
+
+it("forgetting clears the answers shown on this page", async () => {
+  const signOut = vi.fn(() => Promise.resolve());
+  render(<Conversation api={stubApi({ signOut })} pollId="ads-free" />);
+  await main().findByRole("heading", { name: poll().question, level: 1 });
+  const user = await answer();
+  await user.click(
+    banner().getByRole("button", { name: "Forget my votes here" }),
+  );
+  await user.click(banner().getByRole("button", { name: "Forget them" }));
+  await waitFor(() =>
+    expect(screen.getByRole("navigation", { name: "Answered" })).toBeTruthy(),
+  );
+  expect(
+    within(screen.getByRole("navigation", { name: "Answered" })).getByText(
+      "No answers yet.",
+    ),
+  ).toBeTruthy();
+  expect(main().queryByText("Counted.")).toBeNull();
+});
+
+it("says plainly when forgetting failed", async () => {
+  const signOut = vi.fn(() => Promise.reject(new ApiError(503, "down")));
+  const user = userEvent.setup();
+  render(
+    <Conversation
+      api={stubApi({ myBallot: async () => [1], signOut })}
+      pollId="ads-free"
+    />,
+  );
+  await user.click(
+    await banner().findByRole("button", { name: "Forget my votes here" }),
+  );
+  await user.click(banner().getByRole("button", { name: "Forget them" }));
+  expect((await banner().findByRole("alert")).textContent).toMatch(
+    /still has your votes/,
+  );
+});
+
+it("does not offer to forget to someone who is signed in", async () => {
+  render(
+    <Conversation
+      api={stubApi({
+        me: () => Promise.resolve(voter),
+        myBallot: async () => [1],
+      })}
+      pollId="ads-free"
+    />,
+  );
+  await banner().findByText(voter.email);
+  expect(
+    banner().queryByRole("button", { name: "Forget my votes here" }),
+  ).toBeNull();
 });
