@@ -295,6 +295,9 @@ test(
     // row typed by hand must work the same as one written through it.
     const pool = await migratedSchema(t);
     await pool.query(
+      "insert into community (id, label) values ('ubc-students', 'ubc-students')",
+    );
+    await pool.query(
       "insert into allowed_domain (community, domain, include_subdomains)" +
         " values ('ubc-students', $1, false)",
       ["\t Student.UBC.ca \n"],

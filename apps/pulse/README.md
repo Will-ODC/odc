@@ -34,8 +34,11 @@ record that can change. It never reads or writes the ODC core (`services/`,
 
 Migration 005 adds the authored-poll storage foundation (ADR-0037): keyed
 communities, private author metadata, publication acknowledgement, replay records
-and posting-grant state/audit. Existing identity-label foreign keys and
-transactional quota/grant operations follow in the store slice. No creation
+and posting-grant state/audit. Migration 006 completes the foreign keys for
+voter, pending-claim and domain community labels. Identity store writes register
+new labels atomically, preserving existing display names and null membership.
+Direct SQL inserts must create the community row first; `pulse-general` is
+reserved for posting and cannot label an account, claim or domain. No creation
 endpoint is served yet. Legacy polls keep unknown authors and community; General
 is a posting destination and does not replace null account membership.
 
@@ -46,9 +49,9 @@ publication and grant changes. Owner configuration is a trusted constructor
 option, not yet a production environment setting. All public results are built
 from allow-listed poll fields, without author account IDs or ballot linkage.
 
-This store is not wired into HTTP or startup. Its memory adapter, identity-label
-foreign-key rollout, HTTP boundary and creation screen remain separate steps;
-there is still no served creation endpoint. Do not launch public creation from
+This store is not wired into HTTP or startup. Its memory adapter, HTTP boundary
+and creation screen remain separate steps; there is still no served creation
+endpoint. Do not launch public creation from
 this internal store alone or advertise moderation controls that are absent.
 
 **Not built:**
@@ -142,9 +145,10 @@ Keep the API port private. The API trusts one forwarded IP hop, and only from a
 private network address such as nginx's, so rate limits see the real client.
 
 **Upgrading:** stop every old API instance before starting the new version.
-Database migrations run on start, and some (003, 004) change how sign-in and
+Database migrations run on start, and some (003, 004, 006) change how sign-in and
 sign-out work, so an old instance left running would fail sign-ins or ignore
-sign-outs.
+sign-outs. Migration 006 also requires old instances to be drained: old writes
+do not register new community labels and would fail the new foreign keys.
 
 ## Public MCP reads
 
