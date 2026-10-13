@@ -1,6 +1,7 @@
 # ADR-0019: Fork ancestry names a chain **and** a position
 
-- **Status:** accepted
+- **Status:** accepted — superseded in part by ADR-0038 (ET-9f now requires
+  both ancestry keys or neither; `ancestor_chain` alone is `INVALID`)
 - **Date:** 2026-08-20
 - **Phase:** 0
 - **Amends:** in part ADR-0013 and ADR-0016

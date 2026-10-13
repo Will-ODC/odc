@@ -1,9 +1,9 @@
 # Event Types — contracts/event-types.md
 
-**Version:** 12
+**Version:** 13
 **Status:** DRAFTING (Phase 0 · T3, amended T4a, T5i, T5j, ADR-0009, ADR-0010,
 ADR-0011, T9a/ADR-0013, ADR-0014, ADR-0016, ADR-0018, ADR-0019, ADR-0029 with its
-review fixes, and ADR-0034). Not frozen.
+review fixes, ADR-0034, and ADR-0038). Not frozen.
 **Companion specs:** `event-schema.md` (envelope), `ids.md` (identifiers),
 `hashing.md` (preimage — T4).
 
@@ -165,7 +165,7 @@ declares the operator key that later `issue_created` events are signed with.
 | `contracts`      | string | the frozen contracts version this chain runs, e.g. `"contracts-v1"` |
 | `operator_pk`    | string | `^[0-9a-f]{64}$` — operator Ed25519 public key (32 bytes, hex)       |
 | `registrar_pk`   | string | `^[0-9a-f]{64}$` — registrar Ed25519 public key; MUST differ from `operator_pk` (ET-9d) |
-| `ancestor_chain` | string | **OPTIONAL** (ES-34) — `^[0-9a-f]{64}$`, never the 64-zero anchor; the **genesis hash** of the chain this one was forked from — that chain's identity, the key that names it (ET-7a, ET-9e) |
+| `ancestor_chain` | string | **OPTIONAL** (ES-34) — `^[0-9a-f]{64}$`, never the 64-zero anchor; the **genesis hash** of the chain this one was forked from — that chain's identity, the key that names it. MUST NOT appear without `ancestor_head` (ET-7a, ET-9e, ET-9f) |
 | `ancestor_head`  | string | **OPTIONAL** (ES-34) — `^[0-9a-f]{64}$`, never the 64-zero anchor; the **head at the fork** of the chain this one was forked from (EX-14) — a position *on* the chain `ancestor_chain` names. MUST NOT appear without `ancestor_chain` (ET-9e, ET-9f) |
 | `sig`            | string | `^[0-9a-f]{128}$` — Ed25519 signature (ET-4)                         |
 
@@ -199,7 +199,9 @@ declares the operator key that later `issue_created` events are signed with.
   anchoring the head alone cannot deliver charter §4's non-equivocation
   (ADR-0013). The same holds inside a `genesis` payload: an `ancestor_head`
   carried without an `ancestor_chain` would name a position on an unnamed chain
-  — the head-alone form charter §4 rejects — which is why ET-9f bars it.
+  — the head-alone form charter §4 rejects. ET-9f therefore requires the two
+  together: a fork that records its parent records both halves of §4's pair, or
+  neither.
 - **ET-8.** The `genesis` signing key is `operator_pk` (the event is
   self-signed by the key it declares). A verifier MUST reject a `genesis` whose
   `sig` does not verify under its own `operator_pk`.
@@ -286,8 +288,8 @@ declares the operator key that later `issue_created` events are signed with.
   anchor. A chain with no recorded ancestor **omits both** (ES-34), so there is
   exactly one way to say "no ancestor" and the 64-zero string keeps its single
   meaning as `prev_hash`'s anchor (ES-24). Absence is not a claim that no ancestor
-  exists — only that none is recorded. `ancestor_head` MUST NOT appear without
-  `ancestor_chain` (ET-9f).
+  exists — only that none is recorded. A `genesis` that records an ancestor
+  carries **both** keys; either one without the other is rejected (ET-9f).
 
   **Why a name and a position, rather than either alone.** Charter §8 grants the
   fork right in the words "re-declare genesis **anchored** to the old chain's
@@ -297,11 +299,13 @@ declares the operator key that later `issue_created` events are signed with.
   lets an operator run two chains and anchor only one. A fork's `genesis` **is**
   an anchoring record for its parent: it publishes a fact about that chain,
   hash-committed, at `seq` 1, where the parent's operator cannot rewrite it. So it
-  carries §4's pair — a name and a position. Read what the pairing settles and
-  what it does not: it makes the **identity** the half that may never be omitted,
-  because without it the other names nothing; it does not by itself make the
-  **position** mandatory. That is exactly the asymmetry **ET-9f** fixes — a head
-  without a chain is barred, a chain without a head is not.
+  carries §4's pair — a name and a position, **together**, as §4 publishes them.
+  Neither half may be omitted. Without the name, the position names nothing.
+  Without the position, the record says less than the forker knows: a fork is
+  made from the parent's export, and whoever holds an export holds its head
+  (EX-14), so a real fork always has the position to record. Recording both
+  makes every ancestry claim checkable in full, by the two comparisons below.
+  **ET-9f** enforces the pairing.
 
   A fork's own structure is unchanged by either key: `seq` is still `1` and
   `prev_hash` is still the 64-zero anchor (ET-6, ES-24), exactly as on an original
@@ -320,8 +324,9 @@ declares the operator key that later `issue_created` events are signed with.
   the claim in two comparisons — the ancestor export's first-line `hash` against
   `ancestor_chain` (EX-21), and some line's `hash` on that same export against
   `ancestor_head` — which is why recording the pair is worth anything, and why the
-  pair is what makes the claim checkable at all: with the head alone the reader
-  would not know which export to open. That comparison is the reader's act,
+  pair is what makes the claim checkable in full: with the head alone the reader
+  would not know which export to open, and with the chain alone the reader could
+  not tell which fork point was claimed. That comparison is the reader's act,
   outside this contract.
 
   Why the keys exist: charter §8 states as a **right** that a community "can
@@ -336,24 +341,31 @@ declares the operator key that later `issue_created` events are signed with.
   further genesis key is addable by any mechanism once the tag exists (ADR-0016,
   amended in part by ADR-0019).
 
-- **ET-9f.** _`ancestor_head` requires `ancestor_chain`._ A `genesis` payload that
-  carries `ancestor_head` MUST also carry `ancestor_chain`. A `genesis` carrying
-  `ancestor_head` alone MUST be rejected — `INVALID` at the `genesis` line. This
-  is a single **key-presence** test over the payload the parser already holds: no
-  key material, no decoding, no hashing, no curve arithmetic.
+- **ET-9f.** _Both ancestry keys, or neither._ A `genesis` payload that carries
+  either `ancestor_chain` or `ancestor_head` MUST carry both. A `genesis` carrying
+  exactly one of them — `ancestor_head` alone, or `ancestor_chain` alone — MUST
+  be rejected: `INVALID` at the `genesis` line. A `genesis` carrying neither
+  records no ancestor (ET-9e, ES-34), and this rule does not apply to it. This
+  is a single **key-presence** test over the payload the parser already holds:
+  no key material, no decoding, no hashing, no curve arithmetic.
 
-  **The converse is deliberately not required — `ancestor_chain` MAY appear
-  alone**, and this asymmetry is the rule rather than an oversight; it MUST NOT be
-  "tidied" into a both-or-neither pair. `ancestor_chain` alone is the weaker but
-  coherent claim *"this chain was forked from chain X, fork point unrecorded"*: a
-  named chain, no position. `ancestor_head` alone is the defective form ET-7a
-  describes: a position on an **unnamed** chain, which is exactly the head-alone
-  anchoring charter §4 rejects, and which no reader can check because nothing in
-  the payload says which export to open. ET-9f bars that one form and permits the
-  other.
+  The two one-key forms fail for different reasons. `ancestor_head` alone is a
+  position on an **unnamed** chain, which is the head-alone anchoring charter §4
+  rejects (ET-7a): no reader can check it, because nothing in the payload says
+  which export to open. `ancestor_chain` alone names the parent but withholds a
+  position the forker always holds (ET-9e), so the claim can be checked only
+  halfway. Requiring both makes every recorded ancestry claim checkable in full
+  and keeps it the pair §4 publishes.
+
+  **This is the both-or-neither form, adopted on purpose.** Up to v12 this rule
+  barred only `ancestor_head` alone, permitted `ancestor_chain` alone, and said
+  the asymmetry must not be tidied into both-or-neither. v13 reverses that
+  (ADR-0038): a `genesis` carrying `ancestor_chain` alone, `VALID` under v12, is
+  `INVALID` under v13.
 
   A `genesis` may of course break ET-9f and another genesis rule at the same time
-  — a malformed `ancestor_head` carried alone, say. **No precedence between them
+  — a malformed `ancestor_head` carried alone, say, or the 64-zero anchor as
+  `ancestor_chain` carried alone. **No precedence between them
   is needed or defined:** both faults sit on the same line, and conformance is the
   verdict token and the line number only (`evolution.md` EV-17), so two conforming
   verifiers report the same thing whichever fault they notice first.
@@ -798,7 +810,7 @@ when the chain also holds ballots at a `vote_cast` version it does not register.
 | Genesis keys MUST be distinct                  | ET-9d             |
 | Genesis key validation timing (at declaration) | ET-9c             |
 | Fork ancestry: name + position, claim not link | ET-9e             |
-| `ancestor_head` requires `ancestor_chain`      | ET-9f             |
+| Ancestry keys: both or neither                 | ET-9f             |
 | participant self-signing + id derivation       | ET-10, ET-11      |
 | Title length + forbidden characters            | ET-14             |
 | `choice_count` range                           | ET-14a            |
@@ -844,8 +856,8 @@ recording its ancestry carries a **name** and a **position** — `ancestor_chain
 the parent's genesis hash, and `ancestor_head`, that chain's head at the fork —
 each checked for format and **not** for resolvability, so a fork verifies
 identically whether or not the reader holds its ancestor (ET-9e), and that a
-`genesis` carrying `ancestor_head` with no `ancestor_chain` is rejected at line 1
-while `ancestor_chain` alone is accepted (ET-9f); that a `title`
+`genesis` carrying either ancestry key without the other is rejected at line 1
+(ET-9f); that a `title`
 over 200 scalars or with a control character is rejected (ET-14); that an `issue_created` with `choice_count`
 outside 2–64 is rejected (ET-14a); that an `issue_created` declaring a batch
 interval under 60000 ms or a batch minimum under 3 is rejected (ET-14b); that a

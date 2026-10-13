@@ -19,6 +19,33 @@ Format (newest first, one entry per merged contracts change):
 
 ---
 
+## event-types.md v13 · evolution.md v8 · event-schema.md v7 — 2026-10-12 — four contradictions resolved (ADR-0038, #355)
+
+The operator decided the four contradictions recorded in `memory/STATE.md`.
+
+- **Limits** (`evolution.md` §7, new). **EV-23**: every verifier accepts lines
+  up to **65536** bytes and nesting depth **64**; exceeding either is not a
+  validity rule. **EV-24**: a verifier's own limits must not bite within those
+  minimums (whole-input size is exempt); past a limit it reports a tool-level
+  failure, never a verdict, and never crashes. **EV-25**: a ledger never writes
+  a line past either value, later types must fit, and neither value may ever
+  change. EV-15 places EV-23 to EV-25 outside the stage split; EV-17's CLI note
+  lists a reached limit as a tool-level failure.
+- **EV-21** rewritten: `genesis` has no version but 1 (ET-6), so a `genesis` at
+  any other version means a corrupt, hostile or non-ODC chain, and the reason
+  text names the version found and does not advise fetching a newer verifier.
+  Advisory text only; no verdict changes.
+- **ET-9f** now requires **both** ancestry keys or neither; either alone is
+  `INVALID` at line 1. This reverses ADR-0019's deliberate asymmetry: a
+  `genesis` with `ancestor_chain` alone, `VALID` under v12, is `INVALID` under
+  v13 (committed vector `086` flips; fixtures follow the verifiers). ET-7a,
+  ET-9e, the `genesis` table rows, the rule index, the acid-test walkthrough and
+  **ES-34** are aligned with it.
+- **Superseded, not edited:** the ADR-0019 entries below state the old
+  asymmetry and stay as written; this entry is the pointer.
+
+---
+
 ## fixtures/README.md v15 — 2026-10-11 — ADR-0034 vectors (#321)
 
 - Nineteen vectors, `116`–`134`, for ET-18b, ET-22a and ET-24b: ADR-0034's eight
