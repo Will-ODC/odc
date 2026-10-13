@@ -19,7 +19,7 @@ Format (newest first, one entry per merged contracts change):
 
 ---
 
-## event-types.md v13 · evolution.md v8 · event-schema.md v7 — 2026-10-12 — four contradictions resolved, `contracts` capped (ADR-0038, #359)
+## event-types.md v13 · evolution.md v8 · event-schema.md v7 — 2026-10-12 — four contradictions resolved, `contracts` capped (ADR-0038, #355, PR #359)
 
 The operator decided the four contradictions recorded in `memory/STATE.md`, and
 then capped `genesis.contracts`.

@@ -457,7 +457,7 @@ the same verdict on everything the writer may produce.
 - **EV-25.** **The ledger's cap.** A ledger MUST NOT append an event whose
   canonical line (`export-format.md` EX-7 to EX-9) is longer than 65536 bytes or
   deeper than 64, and an export of a ledger's log MUST NOT contain such a
-  line. Every v1 value is bounded by its own type rule (`genesis`'s
+  line. Every v1 value is bounded by its own rule (`genesis`'s
   `contracts` at 64 bytes, `event-types.md` ET-9), so no conforming v1 event
   can reach the cap: the longest such line is 1302 bytes (an `issue_created`
   with `seq` and both batch parameters at 2^53 − 1 and a title of 200 four-byte

@@ -166,9 +166,8 @@ because a title is text for people to read. This bound exists to bound the line,
 and decoded UTF-8 bytes are what every implementation counts without a Unicode
 table. Counting the decoded value, not the escaped line bytes, matches HA-2 and
 EX-9's decoded-value stance. A control character escaped as `\u0001` counts as
-one byte. The worst case therefore grows the escaped line by at most 6 × 64 =
-384 bytes, and the longest `genesis` line, with both ancestry keys, stays under
-1302 bytes.
+one byte. In the worst case the escaped value is at most 6 × 64 = 384 bytes,
+and the longest `genesis` line, with both ancestry keys, is 1179 bytes, under 1302.
 
 **64** leaves plenty of room for a version label: `contracts-v1` is 12 bytes,
 and that is the longest `contracts` value in the committed corpus. **No
