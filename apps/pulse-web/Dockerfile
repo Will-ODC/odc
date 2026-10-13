@@ -26,6 +26,14 @@ COPY apps/pulse-web/package.json apps/pulse-web/
 RUN pnpm install --frozen-lockfile --filter @odc/pulse-web...
 
 COPY apps/pulse-web apps/pulse-web
+ARG VITE_PULSE_FIRST_POLL_ID=""
+ENV VITE_PULSE_FIRST_POLL_ID=$VITE_PULSE_FIRST_POLL_ID
+ARG VITE_PULSE_DATA_POLL_ID=""
+ARG VITE_PULSE_FUNDING_POLL_ID=""
+ARG VITE_PULSE_REVOTE_POLL_ID=""
+ENV VITE_PULSE_DATA_POLL_ID=$VITE_PULSE_DATA_POLL_ID \
+    VITE_PULSE_FUNDING_POLL_ID=$VITE_PULSE_FUNDING_POLL_ID \
+    VITE_PULSE_REVOTE_POLL_ID=$VITE_PULSE_REVOTE_POLL_ID
 # Not `pnpm build`: that runs `tsc -p tsconfig.json`, whose `include` covers
 # `test/**`, and `test/end-to-end.test.ts` imports `apps/pulse`'s source on
 # purpose — it is the one thing holding client and server to one contract. This

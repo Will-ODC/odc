@@ -2,11 +2,8 @@ import { describe, expect, it } from "vitest";
 import { FIRST_POLL_ID, pathOf, routeFrom } from "../src/flow/route.js";
 
 describe("reading a URL", () => {
-  it("opens the first question when the path says nothing", () => {
-    expect(routeFrom("/")).toEqual({
-      kind: "conversation",
-      pollId: FIRST_POLL_ID,
-    });
+  it("opens the welcome when the path says nothing", () => {
+    expect(routeFrom("/")).toEqual({ kind: "welcome" });
   });
 
   it("starts the conversation wherever ?poll= says", () => {
@@ -118,17 +115,16 @@ describe("reading a URL", () => {
     });
   });
 
-  it("opens the first question when ?poll= is empty", () => {
-    expect(routeFrom("/?poll=")).toEqual({
-      kind: "conversation",
-      pollId: FIRST_POLL_ID,
-    });
+  it("opens the welcome when ?poll= is empty", () => {
+    expect(routeFrom("/?poll=")).toEqual({ kind: "welcome" });
   });
 });
 
 describe("writing a URL", () => {
-  it("leaves the default conversation at the bare path", () => {
-    expect(pathOf({ kind: "conversation", pollId: FIRST_POLL_ID })).toBe("/");
+  it("names the default conversation explicitly", () => {
+    expect(pathOf({ kind: "conversation", pollId: FIRST_POLL_ID })).toBe(
+      "/?poll=ads-free",
+    );
   });
 
   it("names any other starting question", () => {
@@ -158,6 +154,9 @@ describe("writing a URL", () => {
  */
 describe("the two directions agree", () => {
   const routes = [
+    { kind: "welcome" },
+    { kind: "progress" },
+    { kind: "questions" },
     { kind: "conversation", pollId: FIRST_POLL_ID },
     { kind: "conversation", pollId: "pay-for-it" },
     { kind: "signIn" },
@@ -182,5 +181,5 @@ it("opens and round-trips the existing conversation alias", () => {
     const route = { kind: "conversation" as const, pollId };
     expect(routeFrom(pathOf(route))).toEqual(route);
   }
-  expect(routeFrom("/").kind).toBe("conversation");
+  expect(routeFrom("/").kind).toBe("welcome");
 });

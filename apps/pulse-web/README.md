@@ -18,7 +18,31 @@ makes no API calls; the default conversation page uses the live API. The decisio
 itself (`src/flow/decision.ts`) carries no presentation, so the same question
 can be drawn by another interface.
 
-`/` (or `/?poll=ID`) is the default live conversation vote page
+`/` is the static welcome page (#341): a short concept explanation, three
+numbered steps and Start voting. That button opens `/start`, a one-screen
+dated progress snapshot and ODC purpose explanation; its CTA opens `/questions`.
+The four foundational questions are independently accessible, not conditional
+Next edges. All three introductory screens make no API requests and have no video
+placeholder or working-comments claim. Video and comments are separate work.
+At standard text size the complete welcome fits one screen on phone and desktop;
+scrolling remains available for zoom, larger text and unusually short windows.
+
+For a container build, pass `--build-arg VITE_PULSE_FIRST_POLL_ID=<published-id>`.
+That configures the design question; `VITE_PULSE_DATA_POLL_ID`,
+`VITE_PULSE_FUNDING_POLL_ID` and `VITE_PULSE_REVOTE_POLL_ID` configure the other
+three. The same names are Docker build arguments. Unset/blank IDs leave the
+corresponding question disabled and marked Coming soon; no demo fallback.
+This value is public client configuration, not a credential. Changing it requires
+a rebuild. `/conversation` without a poll keeps the existing development start;
+sign-in redemption still returns there through an explicit poll link. Starting
+from the welcome adds a history entry so Back returns to the introduction.
+The progress snapshot is editorial static content with a fixed date range and
+links to merged work. Updating it needs a content change; it is not a live
+weekly feed or a claim that merged code has been deployed. Data control, optional
+verification and pooled democratic resources are explicitly ODC goals; this
+does not change Pulse identity, ballot or data-use policies.
+
+`/?poll=ID` is a direct live conversation vote link
 (#301/#302). Existing `/conversation` and `/conversation?poll=ID` links remain supported, using the public Pulse API. Desktop has an Answered sidebar; phone and
 desktop offer a small Vote tab. It expands above the disabled assistant
 composer on phone and at the top right on desktop (operator layout experiment).

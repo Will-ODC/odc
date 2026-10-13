@@ -9,6 +9,12 @@ import { Conversation } from "./screens/Conversation.js";
 import { ChatPreview } from "./screens/ChatPreview.js";
 import { Redeem } from "./screens/Redeem.js";
 import { SignIn } from "./screens/SignIn.js";
+import { Welcome } from "./screens/Welcome.js";
+import { Progress } from "./screens/Progress.js";
+import {
+  FoundationQuestions,
+  type RelatedPollIds,
+} from "./screens/FoundationQuestions.js";
 import "./styles/tokens.css";
 import "./App.css";
 
@@ -24,11 +30,33 @@ import "./App.css";
  * browser's history. Left out, the URL decides, which is what the real app
  * wants and what the link depends on.
  */
-export function App({ api, route }: { api: PulseApi; route?: Route }) {
+export function App({
+  api,
+  route,
+  firstPollId,
+  relatedPollIds,
+}: {
+  api: PulseApi;
+  route?: Route;
+  firstPollId?: string;
+  relatedPollIds?: RelatedPollIds;
+}) {
   const browser = useRoute();
   const at = route ?? browser.route;
 
   switch (at.kind) {
+    case "welcome":
+      return <Welcome onStart={() => browser.go({ kind: "progress" })} />;
+    case "progress":
+      return <Progress onContinue={() => browser.go({ kind: "questions" })} />;
+    case "questions":
+      return (
+        <FoundationQuestions
+          {...(firstPollId ? { firstPollId } : {})}
+          {...(relatedPollIds ? { relatedPollIds } : {})}
+          onChoose={(id) => browser.go({ kind: "conversation", pollId: id })}
+        />
+      );
     case "signIn":
       return (
         <SignInPage>

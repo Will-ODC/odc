@@ -37,7 +37,8 @@ describe("what the URL opens", () => {
     expect(await screen.findByLabelText("Your email")).toBeTruthy();
   });
 
-  it("opens the conversation at the bare path", async () => {
+  it("opens the conversation at an explicit default-poll link", async () => {
+    globalThis.history.replaceState(null, "", "/?poll=ads-free");
     render(<App api={stubApi()} />);
     /*
      * In the ballot, not on the page: the left rail lists the questions
@@ -111,7 +112,9 @@ describe("after the link is spent", () => {
     expect(
       await within(screen.getByRole("main")).findByText(poll().question),
     ).toBeTruthy();
-    expect(globalThis.location.pathname + globalThis.location.search).toBe("/");
+    expect(globalThis.location.pathname + globalThis.location.search).toBe(
+      "/?poll=ads-free",
+    );
     expect(screen.getByLabelText("Message")).toHaveProperty("disabled", true);
     /*
      * The length, not the address. Pushing lands on "/" too, so asserting the
@@ -171,6 +174,7 @@ describe("after the link is spent", () => {
  */
 describe("following the browser's own navigation", () => {
   it("re-reads the URL when the browser moves", async () => {
+    globalThis.history.replaceState(null, "", "/?poll=ads-free");
     render(<App api={stubApi()} />);
     await screen.findByText(poll().question);
 

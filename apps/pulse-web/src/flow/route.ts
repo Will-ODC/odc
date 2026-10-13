@@ -13,6 +13,9 @@
  * nobody had clicked anything.
  */
 export type Route =
+  | { kind: "welcome" }
+  | { kind: "progress" }
+  | { kind: "questions" }
   /** Asking for a sign-in link. */
   | { kind: "signIn" }
   /** Arrived from the emailed link, holding a token to spend. */
@@ -22,7 +25,7 @@ export type Route =
    * only by typing the path, so nobody arrives in it by accident.
    */
   | { kind: "chatPreview" }
-  /** Live conversation page, the default since #302. */
+  /** Live conversation page; explicit poll links bypass the welcome. */
   | { kind: "conversation"; pollId: string };
 
 /**
@@ -66,6 +69,10 @@ export function routeFrom(href: string): Route {
   }
 
   if (path === CHAT_PREVIEW_PATH) return { kind: "chatPreview" };
+  if (path === "/start") return { kind: "progress" };
+  if (path === "/questions") return { kind: "questions" };
+
+  if (path === "/" && !url.searchParams.get("poll")) return { kind: "welcome" };
 
   // `?poll=` so a conversation can be started anywhere in the graph without a rebuild.
   return {
@@ -77,6 +84,12 @@ export function routeFrom(href: string): Route {
 /** The URL a route should show. The inverse of `routeFrom` for every route. */
 export function pathOf(route: Route): string {
   switch (route.kind) {
+    case "welcome":
+      return "/";
+    case "progress":
+      return "/start";
+    case "questions":
+      return "/questions";
     case "signIn":
       return SIGN_IN_PATH;
     case "redeem":
@@ -84,10 +97,6 @@ export function pathOf(route: Route): string {
     case "chatPreview":
       return CHAT_PREVIEW_PATH;
     case "conversation":
-      // The default start is the bare path, so the common URL stays clean and
-      // shareable rather than carrying a parameter that changes nothing.
-      return route.pollId === FIRST_POLL_ID
-        ? "/"
-        : `/?poll=${encodeURIComponent(route.pollId)}`;
+      return `/?poll=${encodeURIComponent(route.pollId)}`;
   }
 }

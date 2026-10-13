@@ -4,6 +4,12 @@
   "tasks": {
     "build": {
       "dependsOn": ["^build"],
+      "env": [
+        "VITE_PULSE_FIRST_POLL_ID",
+        "VITE_PULSE_DATA_POLL_ID",
+        "VITE_PULSE_FUNDING_POLL_ID",
+        "VITE_PULSE_REVOTE_POLL_ID"
+      ],
       "outputs": ["dist/**"]
     },
     "test": {
