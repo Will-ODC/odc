@@ -1,0 +1,94 @@
+/*
+ * "Why you can trust your vote" — a page of running text on the ballot's dark
+ * ground, so opening it from a vote card does not change the app's colour.
+ * Values are tokens only (tokens.css).
+ */
+.trust {
+  box-sizing: border-box;
+  width: 100%;
+  max-inline-size: var(--prose-measure);
+  margin-inline: auto;
+  padding: var(--gutter);
+  color: var(--ballot-ink);
+  background: var(--ballot-bg);
+  text-align: left;
+}
+
+.trust__title {
+  margin: 0 0 calc(var(--step) * 2);
+  font-size: var(--t-hero);
+  font-weight: 800;
+  letter-spacing: -0.03em;
+  line-height: 1.2;
+}
+
+.trust__lede,
+.trust__text,
+.trust__list,
+.trust__plan {
+  margin: 0 0 calc(var(--step) * 1.5);
+  font-size: var(--t-body);
+  line-height: 1.6;
+  color: var(--ballot-ink-soft);
+}
+
+.trust__lede {
+  color: var(--ballot-ink-muted);
+}
+
+.trust__list,
+.trust__plan {
+  display: grid;
+  gap: var(--step);
+  padding-inline-start: calc(var(--step) * 2.5);
+}
+
+.trust__list strong {
+  color: var(--ballot-ink);
+}
+
+.trust__part {
+  margin-top: calc(var(--step) * 4);
+  padding-top: calc(var(--step) * 2);
+  border-top: var(--hairline) solid var(--ballot-line);
+}
+
+.trust__heading {
+  margin: 0 0 calc(var(--step) * 1.5);
+  font-size: calc(var(--t-hero) * 0.75);
+  font-weight: 800;
+  letter-spacing: -0.02em;
+  line-height: 1.2;
+}
+
+.trust__basic {
+  margin-top: calc(var(--step) * 2.5);
+}
+
+.trust__term {
+  margin: 0 0 var(--step);
+  font-size: var(--t-body);
+  font-weight: 700;
+  color: var(--ballot-ink);
+}
+
+.trust__state {
+  font-weight: 700;
+  color: rgb(var(--side-b));
+}
+
+.trust__link {
+  color: var(--ballot-ink);
+  text-decoration: underline;
+  text-underline-offset: 0.2em;
+}
+
+.trust__link:hover {
+  color: var(--ballot-ink-max);
+}
+
+.trust__link:focus-visible {
+  outline: calc(var(--hairline) * 2) solid var(--focus-ring);
+  outline-offset: calc(var(--hairline) * 2);
+  border-radius: calc(var(--step) / 2);
+}
