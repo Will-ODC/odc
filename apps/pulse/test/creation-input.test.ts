@@ -54,3 +54,25 @@ test("UUID_keys_are_case_normalized_but_not_trimmed_or_guessed", () => {
   );
   assert.throws(() => requestKey("not-a-key"), { message: "bad_request" });
 });
+
+for (const [field, patch] of [
+  ["question", { question: "Q\u0000" }],
+  ["choices", { choices: ["A\ud800", "B"] }],
+  ["name", { attribution: { kind: "named", name: "Ada\udfff" } }],
+] as const)
+  test(`invalid_Unicode_in_${field}_is_bad_request`, () => {
+    assert.throws(() => normalizeCreation({ ...body, ...patch }), {
+      message: "bad_request",
+    });
+  });
+test("valid_astral_Unicode_is_preserved_in_questions_choices_and_names", () => {
+  const result = normalizeCreation({
+    ...body,
+    question: "Garden 🌱?",
+    choices: ["🌱", "🌳"],
+    attribution: { kind: "named", name: "Ada 🌞" },
+  });
+  assert.equal(result.question, "Garden 🌱?");
+  assert.deepEqual(result.choices, ["🌱", "🌳"]);
+  assert.deepEqual(result.attribution, { kind: "named", name: "Ada 🌞" });
+});

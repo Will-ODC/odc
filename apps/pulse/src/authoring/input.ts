@@ -48,6 +48,10 @@ function object(
 function text(value: unknown, limit: number): string {
   if (typeof value !== "string") throw new CreationError("bad_request");
   const normalized = value.trim();
+  // Unicode mode treats valid surrogate pairs as one astral code point.
+  if (normalized.includes("\u0000") || /[\uD800-\uDFFF]/u.test(normalized))
+    throw new CreationError("bad_request");
+
   if (!normalized || [...normalized].length > limit)
     throw new CreationError("bad_request");
   return normalized;

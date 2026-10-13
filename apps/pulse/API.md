@@ -657,6 +657,8 @@ JSON body (unknown properties refused):
 - `id`, `community`, `createdBy`, `next`, `acceptsSuggestions`, owner/permission
   fields, photos and summaries are not writable inputs. Suggestions are false,
   all next entries null, ID is server-generated.
+- All text must be valid Unicode without NUL characters. Invalid encodings
+  return `bad_request`; valid astral characters (including emoji) are allowed.
 - Maximum body: 32 KiB UTF-8. These are bounded resource checks, not quality
   judgements about a question's content.
 
