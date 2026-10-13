@@ -41,14 +41,18 @@ export function Trust() {
               the old one. It does not add a second vote.
             </li>
             <li>
-              If you vote without signing in, your vote is tied to this browser.
-              The site stores a small file in it (a cookie) to remember you.
-              Another browser or another device counts as someone new.
+              Your vote is tied to this browser, whether or not you sign in. The
+              site keeps a small file in it (a cookie) to remember you. Another
+              browser or device counts as someone new.
             </li>
             <li>
-              Signing in ties you to an email address. That still does not prove
-              one vote per person, because one person can have more than one
-              address.
+              Clearing your cookies, pressing &ldquo;Forget my votes
+              here&rdquo;, or the cookie running out after 30 days also makes
+              you someone new.
+            </li>
+            <li>
+              Signing in shows you can read mail at an email address. Pulse does
+              not use that address to stop someone voting twice &mdash; yet.
             </li>
             <li>
               Pulse does not store your email address next to your answer.
@@ -71,9 +75,11 @@ export function Trust() {
 
         <Part id={`${id}-basics`} title="The basics">
           <p className="trust__text">
-            These are the ideas the ODC ledger is built on. A ledger is a record
-            that is only ever added to: nothing in it is changed or removed. The
-            ledger is not built yet, and pulse votes are not on it.
+            ODC is the open project pulse is part of: public tools for
+            communities to discuss, vote and act together. These are the ideas
+            the ODC ledger is designed around. A ledger is a record that is only
+            ever added to: nothing in it is changed or removed. The ledger is
+            not built yet, and pulse votes are not on it.
           </p>
           {BASICS.map((basic) => (
             <section key={basic.term} className="trust__basic">
@@ -197,7 +203,7 @@ const BASICS: readonly { term: string; text: readonly string[] }[] = [
     term: "Votes written in groups",
     text: [
       "If each vote were written down the moment it was cast, someone watching could match a vote to the person they saw voting.",
-      "So the ledger rounds each vote's time to a set step of at least one minute, and writes votes in groups of at least three that share that time.",
+      "So the ledger rounds each vote's time to a set step of at least one minute, and writes votes in groups of at least three that share that time. Only the last group, when voting closes, may be smaller.",
       "That makes it hard to tell which vote in a group belongs to whom.",
     ],
   },
@@ -226,7 +232,15 @@ const PLAN: readonly { state: StepState; text: string }[] = [
   },
   {
     state: "next",
+    text: "Write the decided changes into the rules and update both checkers to match.",
+  },
+  {
+    state: "later",
     text: "A fresh security review of the rules.",
+  },
+  {
+    state: "later",
+    text: "The rules are released as a candidate for final approval.",
   },
   {
     state: "later",

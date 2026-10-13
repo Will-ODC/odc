@@ -68,9 +68,10 @@ are on no chain and no ledger, and the ledger is not built.
 - `apps/pulse-web/src/components/ResultsPanel.tsx` and
   `apps/pulse-web/test/ResultsPanel.test.tsx` — comments that cited the rule are
   rewritten, in this PR.
-- `.claude/skills/odc-design/SKILL.md` still has the checklist line "no
-  counting machinery in pulse". It is outside this PR's scope and is flagged
-  for a follow-up; read it as "no claim of machinery pulse does not have".
+- `.claude/skills/odc-design/SKILL.md` — its checklist line "no counting
+  machinery in pulse" is rewritten, in this PR.
+- `docs/plans/pulse.md` — the standing boundary "the counting is never the
+  subject" is rewritten to the new rule, in this PR.
 - `apps/pulse/CLAUDE.md` still calls publishing to the ledger "a future option,
   not a current dependency". That remains accurate (nothing depends on it yet)
   and is left as it is.

@@ -99,6 +99,27 @@ describe("what the page says", () => {
     ).toContain("The ledger is not built yet, and pulse votes are not on it.");
   });
 
+  /*
+   * A vote is filed under the browser's ballot cookie and nothing else,
+   * signed in or not (apps/pulse/API.md, "The ballot cookie"), so signing in
+   * must never be described as what stops a second vote.
+   */
+  it("ties the vote to the browser and does not claim signing in stops double votes", () => {
+    render(<Trust />);
+    const today = (
+      screen.getByRole("region", { name: "Today" }).textContent ?? ""
+    ).replace(/\s+/g, " ");
+    expect(today).toContain(
+      "Your vote is tied to this browser, whether or not you sign in.",
+    );
+    expect(today).toContain(
+      "Pulse does not use that address to stop someone voting twice",
+    );
+    expect(today.toLowerCase()).not.toMatch(
+      /sign(ing)? in (ties|links|stops|prevents|proves)/,
+    );
+  });
+
   it("never says pulse votes are on a chain or ledger now", () => {
     render(<Trust />);
     const text = (document.body.textContent ?? "").toLowerCase();
@@ -123,6 +144,8 @@ describe("what the page says", () => {
       "Done",
       "Done",
       "Next",
+      "After that",
+      "After that",
       "After that",
       "After that",
     ]);
