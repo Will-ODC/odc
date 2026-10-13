@@ -2,7 +2,7 @@ import { useId } from "react";
 import type { ReactNode } from "react";
 import { AppShell } from "../components/AppShell.js";
 import { TopBanner } from "../components/TopBanner.js";
-import { FIRST_POLL_ID, pathOf } from "../flow/route.js";
+import { pathOf } from "../flow/route.js";
 import "./Trust.css";
 
 /**
@@ -130,10 +130,7 @@ export function Trust() {
         </Part>
 
         <p className="trust__text">
-          <a
-            className="trust__link"
-            href={pathOf({ kind: "conversation", pollId: FIRST_POLL_ID })}
-          >
+          <a className="trust__link" href={pathOf({ kind: "questions" })}>
             Go to the questions
           </a>
         </p>

@@ -179,7 +179,7 @@ describe("how to help", () => {
       screen
         .getByRole("link", { name: "Go to the questions" })
         .getAttribute("href"),
-    ).toBe("/");
+    ).toBe("/questions");
   });
 });
 
