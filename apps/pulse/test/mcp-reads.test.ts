@@ -297,6 +297,54 @@ test("results expose only aggregate fields and reject invalid shapes", async (t)
   );
 });
 
+test("results carry the confirmed numbers and refuse more confirmed than voted", async (t) => {
+  // ADR-0040: aggregates, passed through like the totals beside them.
+  const expected = {
+    pollId: "p1",
+    question: "Q",
+    method: "single",
+    voters: 2,
+    confirmedVoters: 1,
+    choices: [
+      {
+        index: 0,
+        label: "A",
+        count: 2,
+        share: 100,
+        confirmedCount: 1,
+        confirmedShare: 100,
+      },
+    ],
+  };
+  const source = await upstream(t, 200, expected);
+  const { client } = await adapter(t, source.url);
+  assert.deepEqual(
+    (
+      await client.callTool({
+        name: "get_results",
+        arguments: { pollId: "p1" },
+      })
+    ).structuredContent,
+    expected,
+  );
+  for (const bad of [
+    { ...expected, confirmedVoters: 3 },
+    {
+      ...expected,
+      choices: [{ ...expected.choices[0], confirmedCount: 2 }],
+    },
+  ]) {
+    const other = await adapter(t, (await upstream(t, 200, bad)).url);
+    errorCode(
+      await other.client.callTool({
+        name: "get_results",
+        arguments: { pollId: "p1" },
+      }),
+      "upstream_invalid_response",
+    );
+  }
+});
+
 test("route refuses foreign origins, hosts, wrong methods and oversized bodies without logging secrets", async (t) => {
   const source = await upstream(t);
   const logs: string[] = [];

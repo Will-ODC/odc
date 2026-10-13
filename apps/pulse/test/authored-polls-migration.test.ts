@@ -62,10 +62,20 @@ test(
       choices: ["A", "B"],
       method: "single",
     });
-    await store.castVote("legacy", "private-browser", [1]);
+    // Written as rows, not through the store: the store is today's, and it
+    // writes and reads columns that migrations after 005 add (007's
+    // `vote.confirmation`), which this pre-005 schema does not have yet.
+    await pool.query(
+      "insert into vote (id, poll_id, voter_id, cast_at) values ($1, 'legacy', 'private-browser', $2)",
+      [randomUUID(), AT],
+    );
+    await pool.query(
+      "insert into vote_choice (vote_id, choice_id) select v.id, c.id from vote v join poll_choice c on c.poll_id = v.poll_id where v.voter_id = 'private-browser' and c.position = 1",
+    );
     const ballot = await store.voteOf("legacy", "private-browser");
-    const results = await store.results("legacy");
-    assert.deepEqual((await migrate(pool)).applied, ["005", "006"]);
+    assert.deepEqual(ballot?.choices, [1]);
+    // 005 and whatever was numbered after it; 005 is the one under test here.
+    assert.equal((await migrate(pool)).applied[0], "005");
     assert.deepEqual(
       (await pool.query("select id, label from community order by id")).rows,
       [
@@ -97,7 +107,12 @@ test(
       ],
     );
     assert.deepEqual(await store.voteOf("legacy", "private-browser"), ballot);
-    assert.deepEqual(await store.results("legacy"), results);
+    const results = await store.results("legacy");
+    assert.equal(results.voters, 1);
+    assert.deepEqual(
+      results.choices.map((c) => c.count),
+      [0, 1],
+    );
     // Existing seed/store insert shape stays usable after the upgrade.
     await store.createPoll({
       id: "seed",

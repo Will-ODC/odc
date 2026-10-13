@@ -1,5 +1,5 @@
 import { randomUUID } from "node:crypto";
-import type { Pool } from "pg";
+import type { Pool, PoolClient } from "pg";
 import { inTransaction } from "../db/transaction.js";
 import {
   createPoll,
@@ -10,8 +10,10 @@ import {
 } from "./poll.js";
 import {
   UnknownPollError,
+  assertConfirmation,
   resultsFor,
   validateBallot,
+  type CastOptions,
   type CastResult,
   type Results,
   type Vote,
@@ -119,10 +121,12 @@ export class PostgresVotingStore implements VotingStore {
     pollId: string,
     voterId: string,
     ballot: readonly number[],
+    options: CastOptions = {},
   ): Promise<CastResult> {
     const poll = await this.#requirePoll(pollId);
     if (voterId.trim() === "") throw new TypeError("voterId must not be empty");
     validateBallot(poll, ballot);
+    assertConfirmation(options.confirmation);
 
     const now = this.#clock();
     // Checked before anything is written, so a late cast replaces nothing.
@@ -135,13 +139,18 @@ export class PostgresVotingStore implements VotingStore {
       // row this statement inserted, which keeps "counted" and "changed" right
       // when two casts from one browser race — the second waits on the row
       // lock and then updates.
+      //
+      // A confirmation given replaces the one held; none given keeps it, so
+      // changing an answer while signed out keeps the vote confirmed
+      // (ADR-0040). Never cleared here.
       const { rows } = await client.query<{ id: string; inserted: boolean }>(
-        "insert into vote (id, poll_id, voter_id, cast_at)" +
-          " values ($1, $2, $3, $4)" +
+        "insert into vote (id, poll_id, voter_id, cast_at, confirmation)" +
+          " values ($1, $2, $3, $4, $5)" +
           " on conflict (poll_id, voter_id)" +
-          " do update set cast_at = excluded.cast_at" +
+          " do update set cast_at = excluded.cast_at," +
+          "   confirmation = coalesce(excluded.confirmation, vote.confirmation)" +
           " returning id, (xmax = 0) as inserted",
-        [this.#newId(), pollId, voterId, now],
+        [this.#newId(), pollId, voterId, now, options.confirmation ?? null],
       );
       const vote = only(rows);
       await client.query("delete from vote_choice where vote_id = $1", [
@@ -160,6 +169,36 @@ export class PostgresVotingStore implements VotingStore {
 
     const vote: Vote = { pollId, voterId, choices, castAt: now };
     return { status: inserted ? "counted" : "changed", vote };
+  }
+
+  async confirmVotes(
+    voterId: string,
+    codeFor: (pollId: string) => string,
+  ): Promise<number> {
+    const now = this.#clock();
+    return inTransaction(this.#pool, async (client) => {
+      // Open polls only, by the injected clock: a closed poll's results stop
+      // changing when it closes. `for update` holds these rows so a cast from
+      // this same browser cannot slip between the read and the write.
+      const { rows } = await client.query<{ id: string; poll_id: string }>(
+        "select v.id, v.poll_id from vote v" +
+          " join polls p on p.id = v.poll_id" +
+          " where v.voter_id = $1" +
+          "   and (p.closes_at is null or p.closes_at > $2)" +
+          " order by v.id" +
+          " for update of v",
+        [voterId, now],
+      );
+      for (const row of rows) {
+        const code = codeFor(row.poll_id);
+        assertConfirmation(code);
+        await client.query("update vote set confirmation = $2 where id = $1", [
+          row.id,
+          code,
+        ]);
+      }
+      return rows.length;
+    });
   }
 
   async voteOf(pollId: string, voterId: string): Promise<Vote | undefined> {
@@ -191,9 +230,9 @@ export class PostgresVotingStore implements VotingStore {
 
   async results(pollId: string): Promise<Results> {
     const poll = await this.#requirePoll(pollId);
-    // One snapshot for both numbers, or a cast landing between them could
+    // One snapshot for every number, or a cast landing between them could
     // report more choices picked than people who voted.
-    const { voters, counts } = await inTransaction(
+    const { voters, counts, confirmed } = await inTransaction(
       this.#pool,
       async (client) => {
         const people = await client.query<{ voters: number }>(
@@ -210,11 +249,15 @@ export class PostgresVotingStore implements VotingStore {
         );
         const counts = new Array<number>(poll.choices.length).fill(0);
         for (const row of picked.rows) counts[row.position] = row.count;
-        return { voters: only(people.rows).voters, counts };
+        return {
+          voters: only(people.rows).voters,
+          counts,
+          confirmed: await confirmedTally(client, poll),
+        };
       },
       "begin isolation level repeatable read read only",
     );
-    return resultsFor(poll, voters, counts);
+    return resultsFor(poll, voters, counts, confirmed.voters, confirmed.counts);
   }
 
   async #requirePoll(pollId: string): Promise<Poll> {
@@ -236,6 +279,40 @@ interface PollRow {
 interface ChoiceRow {
   label: string;
   next_poll_id: string | null;
+}
+
+/**
+ * The confirmed half of a poll's results (ADR-0040), read on the caller's
+ * connection so it shares `results()`'s snapshot.
+ *
+ * One confirmed vote per code — per person per poll — and it is that person's
+ * most recently cast vote. The tie-break on equal times is `moreRecent`'s in
+ * store.ts, byte order (`collate "C"`), so both stores pick the same vote.
+ */
+async function confirmedTally(
+  client: PoolClient,
+  poll: Poll,
+): Promise<{ voters: number; counts: number[] }> {
+  const latest =
+    "select distinct on (confirmation) id from vote" +
+    " where poll_id = $1 and confirmation is not null" +
+    ' order by confirmation, cast_at desc, voter_id collate "C" desc';
+  const people = await client.query<{ n: number }>(
+    `select count(*)::int as n from (${latest}) as latest`,
+    [poll.id],
+  );
+  const picked = await client.query<{ position: number; count: number }>(
+    `with latest as (${latest})` +
+      " select c.position, count(*)::int as count from vote_choice vc" +
+      " join latest on latest.id = vc.vote_id" +
+      " join poll_choice c on c.id = vc.choice_id" +
+      " where c.poll_id = $1" +
+      " group by c.position",
+    [poll.id],
+  );
+  const counts = new Array<number>(poll.choices.length).fill(0);
+  for (const row of picked.rows) counts[row.position] = row.count;
+  return { voters: only(people.rows).n, counts };
 }
 
 /** For statements that always return exactly one row. */

@@ -51,7 +51,7 @@ services:
       # Here they are the same address, because the client proxies /api.
       PULSE_WEB_ORIGIN: http://127.0.0.1:8080
       # Passed through, never defaulted and never invented. `src/main.ts` is
-      # what refuses when one is missing, and it names all four at once.
+      # what refuses when one is missing, and it names all five at once.
       #
       # `:-` and NOT `:?`, which would be the obvious choice: compose
       # interpolates the WHOLE file before profiles filter anything, so a `:?`
@@ -63,6 +63,7 @@ services:
       # `PULSE_RESEND_API_KEY` being real means real email really is sent:
       # there is no console mailer in this path.
       PULSE_SESSION_SECRET: ${PULSE_SESSION_SECRET:-}
+      PULSE_CONFIRMATION_KEY: ${PULSE_CONFIRMATION_KEY:-}
       PULSE_RESEND_API_KEY: ${PULSE_RESEND_API_KEY:-}
       PULSE_MAIL_FROM: ${PULSE_MAIL_FROM:-}
     depends_on:

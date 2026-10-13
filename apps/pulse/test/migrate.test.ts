@@ -92,6 +92,7 @@ test("applies_a_fresh_schema", { skip }, async () => {
       "004",
       "005",
       "006",
+      "007",
     ]);
     assert.deepEqual(await tablesIn(pool, schema), TABLES);
   });
@@ -526,6 +527,7 @@ test(
         "vote_choice_choice_id_idx",
         "vote_choice_pkey",
         "vote_pkey",
+        "vote_poll_confirmation_idx",
         "vote_poll_id_voter_id_key",
         "voter_credential_pkey",
         "voter_credential_voter_id_idx",

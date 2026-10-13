@@ -10,6 +10,7 @@ import Fastify, {
 } from "fastify";
 import type { ClaimService } from "../identity/claim.js";
 import type { Voter, VoterStore } from "../identity/store.js";
+import type { ConfirmationKey } from "../voting/confirmation.js";
 import { isOpen, type Poll } from "../voting/poll.js";
 import {
   BallotError,
@@ -32,7 +33,8 @@ import { SESSION_COOKIE, SessionSigner } from "./session.js";
  * else, whether or not the person has ever given an address, which is what lets
  * a vote count the moment it is cast and what keeps the record from holding a
  * connection between an address and an answer. Signing in verifies a person; it
- * is not how their vote is found.
+ * is not how their vote is found. A verified vote carries a one-way keyed code
+ * (ADR-0040), never the account id or the address.
  *
  * Signed by the session signer, which is safe in both directions: this cookie
  * presented as a session names a voter the store does not have, and a session
@@ -60,6 +62,16 @@ export interface ServerDeps {
   votes: VotingStore;
   suggestions: SuggestionStore;
   signer: SessionSigner;
+  /**
+   * Makes the one-way code a confirmed vote is stored with (ADR-0040).
+   *
+   * Optional only so that a test, or a client test embedding this server,
+   * need not care about confirmation: without one, **no vote is ever
+   * confirmed** and every confirmed number reads 0. `main.ts` refuses to
+   * start without `PULSE_CONFIRMATION_KEY`, and `dev-server.ts` always passes
+   * one, so nothing that serves people runs without it.
+   */
+  confirmationKey?: ConfirmationKey;
   /** Cookies go out secure everywhere except local development. */
   secureCookies?: boolean;
   /** Sign-in attempts allowed per client per window. */
@@ -360,6 +372,20 @@ export async function createServer(deps: ServerDeps): Promise<FastifyInstance> {
     const result = await deps.claims.redeem(token);
     if (result.status !== "signed_in") return gone(reply, result.status);
 
+    // The browser that voted before signing in now has a person behind its
+    // votes, so they become confirmed (ADR-0040). Only a ballot this browser
+    // already holds — none is minted here — and the store is handed one-way
+    // codes, never the account id. Before the cookie is set, so a failure is
+    // the ordinary 500 rather than a signed-in reply hiding it.
+    const ballot = deps.signer.verify(request.cookies[BALLOT_COOKIE]);
+    const key = deps.confirmationKey;
+    if (ballot && key) {
+      const accountId = result.voter.id;
+      await deps.votes.confirmVotes(ballot.voterId, (poll) =>
+        key.codeFor(accountId, poll),
+      );
+    }
+
     reply.setCookie(
       SESSION_COOKIE,
       deps.signer.sign(result.voter.id, result.voter.sessionGeneration ?? 0),
@@ -442,6 +468,10 @@ export async function createServer(deps: ServerDeps): Promise<FastifyInstance> {
   /**
    * Casting needs no session, on purpose. A vote counts the moment it is made;
    * the address someone gives later verifies that vote, and never gates it.
+   *
+   * A session, when there is one, makes the vote confirmed (ADR-0040): the
+   * store is given the one-way code for this account and poll, never the
+   * account id. With no session the vote keeps whatever confirmation it had.
    */
   app.post("/api/polls/:id/votes", async (request, reply) => {
     const ballot = (request.body as { ballot?: unknown } | undefined)?.ballot;
@@ -455,10 +485,15 @@ export async function createServer(deps: ServerDeps): Promise<FastifyInstance> {
     }
 
     try {
+      const key = deps.confirmationKey;
+      const voter = key ? await currentVoter(request) : undefined;
       const outcome = await deps.votes.castVote(
         pollId(request),
         ballotIdentity(request, reply),
         ballot as number[],
+        key && voter
+          ? { confirmation: key.codeFor(voter.id, pollId(request)) }
+          : {},
       );
       if (outcome.status === "closed") {
         return reply.send({ status: "closed" });
