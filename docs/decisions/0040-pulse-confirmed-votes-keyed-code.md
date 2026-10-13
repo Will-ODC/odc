@@ -2,8 +2,8 @@
 
 - **Status:** accepted (operator decisions, 2026-10-12: show both numbers;
   option C for the link; one confirmed vote per person per poll, the most
-  recent). Two rules are the implementer's choice, awaiting operator
-  confirmation, and are marked so below: what "most recent" is measured by
+  recent). Two rules were proposed by the implementer and **confirmed by
+  the operator on 2026-10-12**: what "most recent" is measured by
   (decision 5), and that closed polls are not confirmed at sign-in
   (decision 3).
 - **Date:** 2026-10-12
@@ -50,7 +50,7 @@ a confirmation were weighed by the operator:
    (the cast route reads the session for this, and only this), or when the
    browser holding its ballot cookie signs in afterwards
    (`POST /api/sign-in/redeem` confirms every vote under that ballot on a poll
-   still open). **Implementer's choice, awaiting operator confirmation:** a
+   still open). **Confirmed by the operator, 2026-10-12:** a
    closed poll's votes are not confirmed afterwards, so its results stop
    changing when it closes.
 4. **Changing an answer keeps the confirmation**, signed in or not. A cast
@@ -61,7 +61,7 @@ a confirmation were weighed by the operator:
    that share a code, the one with the latest `cast_at` is that person's
    confirmed vote; a tie in the same millisecond goes to the greater ballot
    identity (byte order), the same in both stores. The others still count in
-   the totals. **Implementer's choice, awaiting operator confirmation:**
+   the totals. **Confirmed by the operator, 2026-10-12:**
    "most recent" is measured by when the vote was _cast_, not when it was
    confirmed. Confirming an older vote by signing in later does not make it
    the most recent: the cast time decides, so the confirmed vote is the
