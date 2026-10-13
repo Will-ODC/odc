@@ -117,7 +117,7 @@ test(
       (await pool.query("select count(*)::int as n from vote")).rows[0].n,
       0,
     );
-    const voting = new PostgresVotingStore(pool);
+    const voting = new PostgresVotingStore(pool, () => AT);
     assert.equal((await voting.getPoll(result.poll.id))?.question, "Q");
     assert.equal(
       (await voting.castVote(result.poll.id, "independent-ballot", [1])).status,
