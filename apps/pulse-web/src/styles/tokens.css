@@ -132,6 +132,12 @@
   --screen-measure: none;
 
   /*
+   * How wide a page of running text may run (the trust page, #351). Long
+   * lines are hard to read back along; this holds at any window width.
+   */
+  --prose-measure: 64ch;
+
+  /*
    * Whether a screen shows its own wordmark.
    *
    * It does on a phone, where the screen is the whole app. On a wide screen

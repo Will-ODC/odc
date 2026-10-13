@@ -118,5 +118,6 @@ working shape for this deck, not a big-bang deck drop.
 - [ ] Palette matches a decided direction, or the decision is now recorded.
 - [ ] All required states drawn (the vote screen owes six; every view owes
       loading / empty / error / content per `odc-ui`).
-- [ ] No free-text-MVP claims, no counting machinery in pulse, no real data.
+- [ ] No free-text-MVP claims, no claim that pulse votes are on a chain or
+      ledger before they are (ADR-0039), no real data.
 - [ ] `CANDIDATE_CONTEXT.md` updated if a candidate's standing moved.

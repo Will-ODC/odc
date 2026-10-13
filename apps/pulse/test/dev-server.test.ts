@@ -416,6 +416,9 @@ test(
       devConfig({ PULSE_DATABASE_URL: url, PULSE_SESSION_SECRET: SECRET }),
     );
     await pool.query(
+      "insert into community (id, label) values ('elsewhere', 'elsewhere')",
+    );
+    await pool.query(
       "insert into allowed_domain (community, domain, include_subdomains)" +
         " values ('elsewhere', 'other.test', false)",
     );

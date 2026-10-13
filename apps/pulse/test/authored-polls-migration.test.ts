@@ -65,7 +65,7 @@ test(
     await store.castVote("legacy", "private-browser", [1]);
     const ballot = await store.voteOf("legacy", "private-browser");
     const results = await store.results("legacy");
-    assert.deepEqual((await migrate(pool)).applied, ["005"]);
+    assert.deepEqual((await migrate(pool)).applied, ["005", "006"]);
     assert.deepEqual(
       (await pool.query("select id, label from community order by id")).rows,
       [

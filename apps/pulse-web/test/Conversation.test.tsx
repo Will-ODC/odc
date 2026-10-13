@@ -45,6 +45,20 @@ async function answer(label = "Yes") {
   await main().findByText("Counted.");
   return user;
 }
+it("links a counted vote to the trust page (#351)", async () => {
+  render(<Conversation api={stubApi()} pollId="ads-free" />);
+  await main().findByRole("heading", { name: poll().question, level: 1 });
+  await openCard();
+  expect(
+    within(card()).queryByRole("link", { name: /trust your vote/ }),
+  ).toBeNull();
+  await answer();
+  expect(
+    within(card())
+      .getByRole("link", { name: /Why you can trust your vote/ })
+      .getAttribute("href"),
+  ).toBe("/trust");
+});
 it("loads a real question and keeps the assistant unavailable", async () => {
   const cast = vi.fn();
   render(<Conversation api={stubApi({ cast })} pollId="ads-free" />);

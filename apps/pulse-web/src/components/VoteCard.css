@@ -125,6 +125,18 @@
   outline: calc(var(--hairline) * 2) solid var(--focus-ring);
   outline-offset: calc(var(--hairline) * 2);
 }
+.vote-card__link {
+  color: var(--ballot-ink-soft);
+  text-decoration: underline;
+  text-underline-offset: 0.2em;
+}
+.vote-card__link:hover {
+  color: var(--ballot-ink);
+}
+.vote-card__link:focus-visible {
+  outline: calc(var(--hairline) * 2) solid var(--focus-ring);
+  outline-offset: calc(var(--hairline) * 2);
+}
 .vote-card__summary {
   flex: 1;
   min-width: 0;

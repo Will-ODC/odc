@@ -18,6 +18,14 @@ makes no API calls; the default conversation page uses the live API. The decisio
 itself (`src/flow/decision.ts`) carries no presentation, so the same question
 can be drawn by another interface.
 
+`/trust` is "Why you can trust your vote" (#351, ADR-0039): static,
+plain-language copy in four parts (Today, The basics, The plan, How to help).
+It needs no sign-in and makes no API calls. Once a vote is counted, the vote
+card links to it in a new tab, so the conversation's local history survives.
+It must never say or imply that pulse votes are on a hash chain or ledger
+before they are; today they are not. Update its plan steps as the ledger work
+moves.
+
 `/` is the static welcome page (#341): a short concept explanation, three
 numbered steps and Start voting. That button opens `/start`, a one-screen
 dated progress snapshot and ODC purpose explanation; its CTA opens `/questions`.

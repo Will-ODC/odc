@@ -230,14 +230,16 @@ describe("showing where a question stands", () => {
   });
 
   /**
-   * The counting is never the subject - see apps/pulse/CLAUDE.md.
+   * The panel stays about the answers. How counting works is the trust
+   * page's job (ADR-0039), and the panel must never claim a public record or
+   * a check pulse does not have yet - see apps/pulse/CLAUDE.md.
    *
    * Both methods, because they draw different copy: only `approval` renders
    * the note explaining shares that pass a hundred, so a `single`-only scan
    * would let anything written there through.
    */
   it.each(["single", "approval"] as const)(
-    "never mentions how the counting works (%s)",
+    "keeps to the answers and claims no record or check (%s)",
     (method) => {
       show({ results: results({ ...COUNTED, method }) });
       const text = document.body.textContent ?? "";

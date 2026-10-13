@@ -1,4 +1,4 @@
-import type { Pool } from "pg";
+import type { Pool, PoolClient } from "pg";
 import { inTransaction } from "../db/transaction.js";
 import type { AllowedDomain, AllowedDomainSource } from "./allowlist.js";
 import { parseAssurance, type CredentialKind } from "./assurance.js";
@@ -70,6 +70,7 @@ export class PostgresVoterStore implements VoterStore {
       // behind as a voter with none. Nothing creates one of those on purpose
       // yet (ADR-0033), so one appearing here would be this method's fault.
       await inTransaction(this.#pool, async (client) => {
+        await registerCommunity(client, voter.community);
         await client.query(
           `insert into voter (${VOTER_ROW_COLUMNS})` +
             " values ($1, $2, $3, $4, $5, $6, $7)",
@@ -150,20 +151,23 @@ export class PostgresClaimStore implements ClaimStore {
   }
 
   async put(claim: PendingClaim): Promise<void> {
-    await this.#pool.query(
-      `insert into pending_claim (${CLAIM_COLUMNS})` +
-        " values ($1, $2, $3, $4, $5, $6, $7, $8)",
-      [
-        claim.tokenHash,
-        claim.kind,
-        claim.subject,
-        claim.community,
-        claim.proofEmailsOptIn,
-        claim.createdAt,
-        claim.expiresAt,
-        claim.usedAt ?? null,
-      ],
-    );
+    await inTransaction(this.#pool, async (client) => {
+      await registerCommunity(client, claim.community);
+      await client.query(
+        `insert into pending_claim (${CLAIM_COLUMNS})` +
+          " values ($1, $2, $3, $4, $5, $6, $7, $8)",
+        [
+          claim.tokenHash,
+          claim.kind,
+          claim.subject,
+          claim.community,
+          claim.proofEmailsOptIn,
+          claim.createdAt,
+          claim.expiresAt,
+          claim.usedAt ?? null,
+        ],
+      );
+    });
   }
 
   async byTokenHash(tokenHash: string): Promise<PendingClaim | undefined> {
@@ -256,16 +260,33 @@ export async function allowDomain(
   pool: Pool,
   row: AllowedDomain,
 ): Promise<void> {
-  await pool.query(
-    "insert into allowed_domain (community, domain, include_subdomains)" +
-      " values ($1, $2, $3)" +
-      " on conflict (community, domain)" +
-      " do update set include_subdomains = excluded.include_subdomains",
-    [
-      row.community,
-      row.domain.trim().toLowerCase(),
-      row.includeSubdomains === true,
-    ],
+  await inTransaction(pool, async (client) => {
+    await registerCommunity(client, row.community);
+    await client.query(
+      "insert into allowed_domain (community, domain, include_subdomains)" +
+        " values ($1, $2, $3)" +
+        " on conflict (community, domain)" +
+        " do update set include_subdomains = excluded.include_subdomains",
+      [
+        row.community,
+        row.domain.trim().toLowerCase(),
+        row.includeSubdomains === true,
+      ],
+    );
+  });
+}
+
+/** Register a legacy label with its write, preserving an existing display name. */
+async function registerCommunity(
+  client: PoolClient,
+  community: string | null,
+): Promise<void> {
+  if (community === null) return;
+  if (community === "pulse-general")
+    throw new Error("General is a posting destination, not membership");
+  await client.query(
+    "insert into community (id, label) values ($1, $1) on conflict (id) do nothing",
+    [community],
   );
 }
 

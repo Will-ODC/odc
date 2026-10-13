@@ -291,6 +291,40 @@ describe("status", () => {
       screen.queryByRole("button", { name: "Change my answer" }),
     ).toBeNull();
   });
+  it("links to the trust page once a vote is counted, in a new tab", () => {
+    render(
+      <VoteCard
+        {...base}
+        trustHref="/trust"
+        status={{ kind: "answered", changed: false, results: results() }}
+      />,
+    );
+    const link = screen.getByRole("link", {
+      name: "Why you can trust your vote (opens in a new tab)",
+    });
+    expect(link.getAttribute("href")).toBe("/trust");
+    expect(link.getAttribute("target")).toBe("_blank");
+    expect(link.getAttribute("rel")).toContain("noopener");
+  });
+  it("offers no trust link before a vote is counted", () => {
+    render(<VoteCard {...base} trustHref="/trust" />);
+    expect(screen.queryByRole("link")).toBeNull();
+  });
+  it("reaches the trust link by keyboard after the result actions", async () => {
+    const user = userEvent.setup();
+    render(
+      <VoteCard
+        {...base}
+        trustHref="/trust"
+        status={{ kind: "answered", changed: false, results: results() }}
+        onChangeAnswer={vi.fn()}
+        onNext={vi.fn()}
+      />,
+    );
+    button("Next").focus();
+    await user.tab();
+    expect(document.activeElement).toBe(screen.getByRole("link"));
+  });
   it("moves focus to the pending status when Submit becomes disabled", () => {
     const { rerender } = render(<VoteCard {...base} picked={[2]} />);
     button("Submit").focus();

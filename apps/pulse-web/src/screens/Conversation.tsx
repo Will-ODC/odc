@@ -411,6 +411,7 @@ function LiveCard({
         picked={picked}
         status={showing}
         privacyNote="Your answer is private."
+        trustHref={pathOf({ kind: "trust" })}
         collapsed={collapsed}
         onPick={setPicked}
         onSubmit={(ballot) => {
