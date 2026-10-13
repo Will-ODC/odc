@@ -21,6 +21,9 @@ export const resultsSchema = z
     question: z.string(),
     method,
     voters: z.number().int().nonnegative(),
+    // Confirmed numbers (ADR-0040). Optional, so an upstream from before them
+    // still reads; when present they are aggregates like the rest.
+    confirmedVoters: z.number().int().nonnegative().optional(),
     choices: z.array(
       z
         .object({
@@ -28,6 +31,8 @@ export const resultsSchema = z
           label: z.string(),
           count: z.number().int().nonnegative(),
           share: z.number().min(0).max(100),
+          confirmedCount: z.number().int().nonnegative().optional(),
+          confirmedShare: z.number().min(0).max(100).optional(),
         })
         .strip(),
     ),
@@ -35,6 +40,13 @@ export const resultsSchema = z
   .strip()
   .refine((r) =>
     r.choices.every((c, i) => c.index === i && c.count <= r.voters),
+  )
+  .refine(
+    (r) =>
+      (r.confirmedVoters ?? 0) <= r.voters &&
+      r.choices.every(
+        (c) => (c.confirmedCount ?? 0) <= (r.confirmedVoters ?? 0),
+      ),
   );
 
 const messages = {

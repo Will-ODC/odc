@@ -15,6 +15,7 @@ import {
   PostgresVoterStore,
 } from "./identity/pg-store.js";
 import { ResendMailer, resendConfig } from "./identity/resend-mailer.js";
+import { ConfirmationKey } from "./voting/confirmation.js";
 import { PostgresVotingStore } from "./voting/pg-store.js";
 import { PostgresSuggestionStore } from "./voting/pg-suggestions.js";
 
@@ -52,6 +53,13 @@ export interface ServeConfig {
   host: string;
   /** Signs the session and ballot cookies. Never generated here. */
   secret: string;
+  /**
+   * The key behind a confirmed vote's one-way code (ADR-0040). Never
+   * generated here and never derived from `secret`: a new one on every start
+   * would stop recognising the people who already confirmed, so one person
+   * could be counted as confirmed again after each restart.
+   */
+  confirmationKey: string;
   databaseUrl: string;
   /** Origin of the client, which is where an emailed sign-in link must land. */
   webOrigin: string;
@@ -82,6 +90,10 @@ export interface ServeConfig {
  *   both useless (nobody reads your logs) and a sign-in link in a log file.
  * - **No web origin** — the emailed link has to point somewhere real, and a
  *   guessed default would mail everyone a link to localhost.
+ * - **No confirmation key** — `dev-server` invents one per run. Served, a new
+ *   key on every restart would make every earlier confirmation unrecognisable,
+ *   and one person confirming again after a restart would count twice as
+ *   confirmed (ADR-0040).
  */
 export function serveConfig(env: NodeJS.ProcessEnv = process.env): ServeConfig {
   const missing: string[] = [];
@@ -96,6 +108,10 @@ export function serveConfig(env: NodeJS.ProcessEnv = process.env): ServeConfig {
   const webOrigin = env.PULSE_WEB_ORIGIN?.trim();
   if (webOrigin === undefined || webOrigin === "")
     missing.push("PULSE_WEB_ORIGIN");
+
+  const confirmationKey = env.PULSE_CONFIRMATION_KEY?.trim();
+  if (confirmationKey === undefined || confirmationKey === "")
+    missing.push("PULSE_CONFIRMATION_KEY");
 
   // Read before the check below so a missing key joins the same list, rather
   // than being a second error someone only sees after fixing the first.
@@ -117,15 +133,31 @@ export function serveConfig(env: NodeJS.ProcessEnv = process.env): ServeConfig {
     secret: secret as string,
     url: url as string,
     webOrigin: webOrigin as string,
+    confirmationKey: confirmationKey as string,
   };
 
   assertOrigin(checked.webOrigin);
+  // Two separate secrets, so rotating or leaking one is not the other. The
+  // same value in both would be the "derived from the session secret" the
+  // operator ruled out (ADR-0040). Neither value is put in the message.
+  if (checked.confirmationKey === checked.secret) {
+    throw new Error(
+      "PULSE_CONFIRMATION_KEY must not be the same as PULSE_SESSION_SECRET",
+    );
+  }
+  // Its own length rule, refused here at boot rather than on the first vote.
+  try {
+    new ConfirmationKey(checked.confirmationKey);
+  } catch (error) {
+    throw new Error(`PULSE_CONFIRMATION_KEY: ${(error as Error).message}`);
+  }
 
   const schema = env.PULSE_DATABASE_SCHEMA?.trim();
   return {
     port: port(env.PULSE_PORT),
     host: env.PULSE_HOST?.trim() || DEFAULT_HOST,
     secret: checked.secret,
+    confirmationKey: checked.confirmationKey,
     databaseUrl: checked.url,
     webOrigin: checked.webOrigin,
     mailer: new ResendMailer(resend as NonNullable<typeof resend>),
@@ -256,6 +288,7 @@ export async function buildServer(
       votes: new PostgresVotingStore(pool),
       suggestions: new PostgresSuggestionStore(pool),
       signer: new SessionSigner(config.secret),
+      confirmationKey: new ConfirmationKey(config.confirmationKey),
       // Not passed at all, so the default holds. `secureCookies` defaults to
       // true and `dev-server` is the only thing that sets it false; naming it
       // here would put the insecure value one edit away from the served path.
