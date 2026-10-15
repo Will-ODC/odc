@@ -27,6 +27,7 @@ import {
   type ClaimStore,
   type VoterStore,
 } from "./identity/store.js";
+import { ConfirmationKey } from "./voting/confirmation.js";
 import { PostgresVotingStore } from "./voting/pg-store.js";
 import { PostgresSuggestionStore } from "./voting/pg-suggestions.js";
 import type { NewPoll } from "./voting/poll.js";
@@ -176,6 +177,10 @@ export interface DevConfig {
   secret: string;
   /** Where the secret came from, so the process can say so out loud. */
   secretSource: "env" | "generated";
+  /** The key behind a confirmed vote's one-way code (ADR-0040). */
+  confirmationKey: string;
+  /** Where that key came from — generated separately, never from `secret`. */
+  confirmationKeySource: "env" | "generated";
   /** Origin of the client the emailed link should land on. */
   webOrigin: string;
   /** Where to keep what it is given. Absent means in memory, lost on exit. */
@@ -185,15 +190,16 @@ export interface DevConfig {
 /**
  * Read the environment into a configuration.
  *
- * Four variables, and each one is something a developer's machine genuinely
- * decides: which port is free, whether sessions should survive a restart,
- * where the client is being served, and whether to keep anything at all. The
- * seed data is not among them.
+ * Five variables, and each one is something a developer's machine genuinely
+ * decides: which port is free, whether sessions and confirmations should
+ * survive a restart, where the client is being served, and whether to keep
+ * anything at all. The seed data is not among them.
  */
 export function devConfig(env: NodeJS.ProcessEnv): DevConfig {
   assertDevelopment(env);
 
   const secretFromEnv = env.PULSE_SESSION_SECRET;
+  const keyFromEnv = env.PULSE_CONFIRMATION_KEY;
   // Read by the one function that decides what "unset" means (src/db/config.ts).
   const url = databaseUrl(env);
   return {
@@ -201,6 +207,10 @@ export function devConfig(env: NodeJS.ProcessEnv): DevConfig {
     // Never a hardcoded fallback: a default secret is a secret everyone has.
     secret: secretFromEnv ?? randomBytes(32).toString("base64url"),
     secretSource: secretFromEnv === undefined ? "generated" : "env",
+    // Its own random bytes, never the session secret's: two secrets, so one
+    // leaking is not the other (ADR-0040).
+    confirmationKey: keyFromEnv ?? randomBytes(32).toString("base64url"),
+    confirmationKeySource: keyFromEnv === undefined ? "generated" : "env",
     webOrigin: env.PULSE_WEB_ORIGIN ?? "http://localhost:5173",
     ...(url === undefined ? {} : { databaseUrl: url }),
   };
@@ -271,6 +281,19 @@ export async function buildDevServer(
         "again; set PULSE_SESSION_SECRET to keep ballots across restarts.",
     );
   }
+  if (
+    config.databaseUrl !== undefined &&
+    config.confirmationKeySource === "generated"
+  ) {
+    // A new key makes every stored confirmation unrecognisable, so one person
+    // confirming again after a restart counts twice as confirmed.
+    log(
+      "pulse: PULSE_DATABASE_URL is set but PULSE_CONFIRMATION_KEY is not. " +
+        "After a restart, someone who confirms again is counted as a second " +
+        "confirmed voter; set PULSE_CONFIRMATION_KEY to keep confirmations " +
+        "across restarts.",
+    );
+  }
   const storage =
     config.databaseUrl === undefined
       ? inMemory()
@@ -302,6 +325,7 @@ export async function buildDevServer(
       votes: storage.votes,
       suggestions: storage.suggestions,
       signer: new SessionSigner(config.secret),
+      confirmationKey: new ConfirmationKey(config.confirmationKey),
       // Local development is http://, and a Secure cookie would never be
       // stored. Safe only because of the guard above — see DEV_ENVIRONMENTS.
       secureCookies: false,
@@ -408,6 +432,9 @@ async function main(): Promise<void> {
       config.secretSource === "generated"
         ? "  session secret: generated for this run — everyone is signed out when it stops"
         : "  session secret: from PULSE_SESSION_SECRET",
+      config.confirmationKeySource === "generated"
+        ? "  confirmation key: generated for this run"
+        : "  confirmation key: from PULSE_CONFIRMATION_KEY",
       config.databaseUrl === undefined
         ? "  storage: in memory — everything is lost when it stops"
         : "  storage: Postgres (PULSE_DATABASE_URL) — kept across restarts",

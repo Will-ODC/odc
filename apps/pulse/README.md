@@ -27,6 +27,10 @@ record that can change. It never reads or writes the ODC core (`services/`,
 **Built:**
 
 - Voting: one-answer and pick-several polls, results, changing your answer.
+- Confirmed votes (ADR-0040): a vote cast while signed in, or by a browser that
+  signs in afterwards, is confirmed. Results show all votes and, beside them,
+  confirmed votes counted once per person. A confirmed vote stores a one-way
+  keyed code, never the account id or the address (migration 007).
 - Sign-in by emailed link, sent through Resend (ADR-0027).
 - Storage in Postgres, or in memory when no database is set.
 - A phone layout, and a desktop layout from 1100px wide.
@@ -82,20 +86,22 @@ three linked demo polls (edit `src/dev-server.ts` to change them).
 - Any other address signs in with no community.
 
 Everything is kept in memory and lost when the API stops. To keep it, start
-the database (see [Test](#test)), then set `PULSE_DATABASE_URL` and
-`PULSE_SESSION_SECRET` before `dev`. Without the secret, a restart signs
-everyone out and lets each browser vote again. With a database, seed polls are
+the database (see [Test](#test)), then set `PULSE_DATABASE_URL`,
+`PULSE_SESSION_SECRET` and `PULSE_CONFIRMATION_KEY` before `dev`. Without the
+secret, a restart signs everyone out and lets each browser vote again; without
+the key, someone who confirms again after a restart counts twice as confirmed. With a database, seed polls are
 written once and close three days later; for a fresh demo, run
 `docker compose -f apps/pulse/docker-compose.yml down`.
 
 `dev` refuses to start unless `NODE_ENV` is unset, `development` or `test`.
 
-| Variable               | Default                                       |
-| ---------------------- | --------------------------------------------- |
-| `PULSE_PORT`           | `8080`                                        |
-| `PULSE_SESSION_SECRET` | new each run, so a restart signs everyone out |
-| `PULSE_WEB_ORIGIN`     | `http://localhost:5173`                       |
-| `PULSE_DATABASE_URL`   | unset: everything in memory                   |
+| Variable                 | Default                                          |
+| ------------------------ | ------------------------------------------------ |
+| `PULSE_PORT`             | `8080`                                           |
+| `PULSE_SESSION_SECRET`   | new each run, so a restart signs everyone out    |
+| `PULSE_CONFIRMATION_KEY` | new each run, so a restart forgets who confirmed |
+| `PULSE_WEB_ORIGIN`       | `http://localhost:5173`                          |
+| `PULSE_DATABASE_URL`     | unset: everything in memory                      |
 
 ## Test
 
@@ -126,15 +132,23 @@ This runs `src/main.ts` and two images: `web` serves the page and passes
 `/api` to `api`, so the browser sees one website and the sign-in cookie works.
 **It sends real email**, so use `dev` to click through the flow.
 
-`src/main.ts` refuses to start without these four, and names every missing one
+`src/main.ts` refuses to start without these five, and names every missing one
 at once:
 
-| Variable               | Why it has no default                                  |
-| ---------------------- | ------------------------------------------------------ |
-| `PULSE_SESSION_SECRET` | a generated one signs everyone out on every restart    |
-| `PULSE_DATABASE_URL`   | memory would lose every vote on redeploy               |
-| `PULSE_RESEND_API_KEY` | without it, sign-in links would be printed in the logs |
-| `PULSE_WEB_ORIGIN`     | a guessed one would email everyone a link to localhost |
+| Variable                 | Why it has no default                                  |
+| ------------------------ | ------------------------------------------------------ |
+| `PULSE_SESSION_SECRET`   | a generated one signs everyone out on every restart    |
+| `PULSE_DATABASE_URL`     | memory would lose every vote on redeploy               |
+| `PULSE_RESEND_API_KEY`   | without it, sign-in links would be printed in the logs |
+| `PULSE_WEB_ORIGIN`       | a guessed one would email everyone a link to localhost |
+| `PULSE_CONFIRMATION_KEY` | a generated one forgets who confirmed on every restart |
+
+`PULSE_CONFIRMATION_KEY` is the key behind a confirmed vote's one-way code
+(ADR-0040). Make it at least 32 characters (`openssl rand -base64 32`), and not
+the same value as `PULSE_SESSION_SECRET`; `src/main.ts` refuses either. Keep it
+as secret as the database: anyone holding both can work out who voted what.
+Changing it makes every earlier confirmation unrecognisable, so a person who
+confirms again afterwards is counted as a second confirmed voter.
 
 Also: `PULSE_MAIL_FROM` (required with the key, e.g.
 `pulse <sign-in@your-domain.org>`), and optionally `PULSE_MAIL_REPLY_TO`,
@@ -149,6 +163,8 @@ Database migrations run on start, and some (003, 004, 006) change how sign-in an
 sign-out work, so an old instance left running would fail sign-ins or ignore
 sign-outs. Migration 006 also requires old instances to be drained: old writes
 do not register new community labels and would fail the new foreign keys.
+007 only adds a column, but an old instance would record votes with
+no confirmation and report results without the confirmed numbers.
 
 ## Public MCP reads
 

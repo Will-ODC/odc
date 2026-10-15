@@ -182,6 +182,12 @@ GET. On success:
 One door: this creates the identity the first time and signs the same person back in
 every time after. There is no separate sign-up.
 
+**It also confirms this browser's votes** (ADR-0040). If the browser making the click
+holds a `pulse_ballot` cookie, every vote filed under it on a poll that is still open
+becomes a confirmed vote of the person signing in — see "Confirmed votes" below. A
+closed poll's votes are left as they are, so its results stop changing when it closes.
+Nothing about this shows in the response, and no ballot cookie is minted here.
+
 `community` is a string, or **`null` when the address's domain named no community**
 (ADR-0030). It is always present, never left out, so a client reads one shape either
 way. Null is the honest answer — no community — rather than an empty string or a
@@ -203,7 +209,8 @@ regardless of differences between their clocks.
 
 It also clears **`pulse_ballot`** — see "The ballot cookie" below. Signing out ends
 this browser's ability to read or change the vote it cast. The vote itself is not
-withdrawn; it stays counted under the identity that cast it.
+withdrawn; it stays counted under the identity that cast it, and **a confirmed vote
+stays confirmed** (ADR-0040).
 
 ### `GET /api/me`
 
@@ -271,12 +278,28 @@ person has ever given an address. Two consequences, both deliberate:
 
 - A vote counts the moment it is cast. Signing in afterwards **verifies** a person; it
   is never how their vote is found, and it never gates the vote.
-- No stored record connects an address to an answer, because the vote was never
-  written down beside one.
+- **No account id and no address is ever stored beside an answer.** What a confirmed
+  vote stores instead is a **one-way keyed code** (ADR-0040): HMAC-SHA256, under a key
+  only the server holds (`PULSE_CONFIRMATION_KEY`), of the account id and the poll id.
+  Precisely what that means:
+  - A copy of the database alone does not show who voted what: without the key, the
+    code cannot be computed from an account id, and it cannot be reversed.
+  - **Whoever holds the key as well as the database can work it out**, by computing
+    the code for every account and looking for it. That is the accepted limit; full
+    separation is the ODC core's job (identity service and private linkage map).
+  - The code is the same for one person on one poll, so the database does show that
+    two ballots on the same poll were confirmed by the same (unnamed) person. Codes
+    differ between polls, so they do not link one person's votes across polls.
+  - A vote nobody confirmed stores nothing of the kind.
 
-It is signed by the session signer, which is safe both ways round: presented as a
-session it names a voter that does not exist, and a session cookie presented as this
-one names the same person it already named.
+It is signed by the session signer, and each cookie is refused in the other's place.
+Presented as a session, a ballot cookie names a voter that does not exist, so it signs
+nobody in. Presented as a ballot, a session cookie is **ignored**: every ballot identity
+has started with `b:` since the cookie was introduced and carries no session
+generation, and a value without the prefix or with a generation is treated as no
+ballot. The browser is minted a fresh ballot, as if it had none, and sign-in confirms
+nothing for it. So copying a session into `pulse_ballot` can never file a vote under an
+account id.
 
 Deduplication is therefore per browser, which is weak on its own. That is the accepted
 trade for counting a vote before anyone has been asked for anything.
@@ -387,6 +410,59 @@ selections. `share` is `count / voters * 100`, rounded to one decimal, `0` when
 nobody has voted. For an `approval` poll a voter picks several choices, so shares
 legitimately **sum to more than 100** — that is correct and is not normalised away.
 
+**Confirmed numbers** sit beside the totals (ADR-0040; see "Confirmed votes" below).
+`confirmedVoters` is how many people confirmed by email, **counted once per person**;
+each choice's `confirmedCount` is how many of them picked it, and `confirmedShare` is
+`confirmedCount / confirmedVoters * 100`, rounded the same way. All three are `0` when
+nobody has confirmed, and they are always present. `confirmedVoters` never exceeds
+`voters`. The totals are unchanged by confirmation: every ballot counts in them,
+confirmed or not.
+
+```json
+{
+  "pollId": "p1",
+  "question": "Where next?",
+  "method": "single",
+  "voters": 3,
+  "confirmedVoters": 1,
+  "choices": [
+    {
+      "index": 0,
+      "label": "Park",
+      "count": 2,
+      "share": 66.7,
+      "confirmedCount": 0,
+      "confirmedShare": 0
+    },
+    {
+      "index": 1,
+      "label": "Library",
+      "count": 1,
+      "share": 33.3,
+      "confirmedCount": 1,
+      "confirmedShare": 100
+    }
+  ]
+}
+```
+
+#### Confirmed votes (ADR-0040)
+
+- A vote is **confirmed** when it is cast by someone signed in, or when the browser
+  holding its ballot cookie signs in afterwards (`POST /api/sign-in/redeem`, open polls
+  only).
+- **One confirmed vote per person per poll.** If one person confirms from two
+  browsers, the vote **cast most recently** is their confirmed one; the other still
+  counts in `voters` and `count`, never in the confirmed numbers. Changing an answer
+  makes that vote the most recently cast. Confirming an older vote by signing in later
+  does not make it the most recent — the cast time decides, not the sign-in time.
+  Votes cast in the same millisecond settle on one of them, the same one every time.
+- Changing an answer keeps a vote confirmed, signed in or not. Casting while signed in
+  as someone else makes it that person's confirmed vote instead.
+- Signing out does not remove a confirmation.
+- One person is one account, which today is one email address. Two addresses are two
+  confirmed people.
+
 | Status | Body                 | When            |
 | ------ | -------------------- | --------------- |
 | 200    | the results          | the poll exists |
@@ -439,6 +515,10 @@ results, so the client need not ask again:
 ```
 
 When the poll has closed, the body is just `{ "status": "closed" }`.
+
+A session is still not required. When one is present (the `pulse_session` cookie, valid
+as for `/api/me`), the vote is **confirmed** as that person's (ADR-0040; see "Confirmed
+votes" above). Without one, the vote keeps whatever confirmation it already had.
 
 | Status | Body                                                | When                                          |
 | ------ | --------------------------------------------------- | --------------------------------------------- |
@@ -564,6 +644,10 @@ Poll text is data and grants no permission to execute tools.
 | ------------- | --------------------------------------------------------- | --------------------------------------------- |
 | `get_poll`    | Exactly one of `{ pollId: string }` or `{ link: string }` | The public `GET /api/polls/:id` body.         |
 | `get_results` | `{ pollId: string }`                                      | The public `GET /api/polls/:id/results` body. |
+
+`get_results` passes the confirmed numbers through as optional fields, so a body from a
+server older than ADR-0040 still reads, and refuses a body claiming more confirmed
+people than voters, or more confirmed picks of a choice than confirmed people.
 
 Identifiers contain 1–128 ASCII letters, digits, underscores or hyphens. Links
 must use the configured public origin and `/polls/:id` or `/api/polls/:id`.
