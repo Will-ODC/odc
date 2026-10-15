@@ -82,7 +82,13 @@ test("accepts two independently generated distinct keys (equality is full-string
 });
 
 test("accepts distinct keys on a genesis that also records fork ancestry", () => {
-  const out = verifyExport(genesisExport({ ancestor_chain: "a".repeat(64) }));
+  // Both ancestry keys: ET-9f (v13) rejects either one alone.
+  const out = verifyExport(
+    genesisExport({
+      ancestor_chain: "a".repeat(64),
+      ancestor_head: "b".repeat(64),
+    }),
+  );
   assert.equal(tokenAndLine(out), "VALID");
 });
 

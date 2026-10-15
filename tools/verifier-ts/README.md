@@ -174,7 +174,8 @@ Two stages, per `evolution.md` EV-6/EV-15:
   key order.
 - **Stage B (per registered `(type, version)`):** payload key-set (including
   `genesis`'s two OPTIONAL ancestry keys `ancestor_chain` / `ancestor_head` and
-  the ET-9f presence rule between them — format-checked, never resolved), the
+  the ET-9f presence rule between them, both or neither since v13 —
+  format-checked, never resolved), the
   ET-9 bound on `genesis.contracts` (1 to 64 bytes of the decoded value's
   UTF-8 encoding, not escaped line bytes and not UTF-16 `.length`), the
   ET-9d distinctness of the two `genesis` keys, Ed25519
@@ -296,11 +297,15 @@ would be inventing conformance in a file no reviewer treats as normative.
   payload whose value has the wrong TYPE (`{"ancestor_chain":1}`) — correct
   order, hash and signature, so only the schema's own type rule can reject it.
 - **`test/genesis-ancestry.test.ts`** — ET-9e/ET-9f (the two optional `genesis`
-  ancestry keys) and EV-20. The fixture corpus carries **no** vector for these
-  rules yet, so this file builds its own chains; they are synthetic and
-  self-consistent (hashed and signed by the functions under test), which the
-  file's header states plainly. They are a harness, not an oracle: a fixture
-  for these rules supersedes them the day one exists.
+  ancestry keys: both or neither, so each alone is `INVALID` at line 1, and
+  the format-gate cases carry both so only the gate can reject) and EV-20.
+  Committed vector `086-ancestor-chain-alone` still declares `VALID` (v12's
+  rule) and fails `fixtures.test.ts` until the corpus follows v13; vectors
+  088 and 090 carry `ancestor_chain` alone, so under v13 they no longer
+  isolate the ET-9e format gate they cite. This file builds its own chains;
+  they are synthetic and self-consistent (hashed and signed by the functions
+  under test), which the file's header states plainly. They are a harness,
+  not an oracle: where a fixture covers the same rule, the fixture wins.
 - **`test/ballot-batching.test.ts`** — ET-23, ET-24 and ET-24a
   (`event-types.md` v11; its unregistered-version chains re-read under v12's
   ET-24b). When written, no fixture cited ET-23 or ET-24a and
