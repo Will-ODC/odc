@@ -58,6 +58,6 @@ export const unregisteredVectors: Vector[] = [
     ESC,
     [2],
     ["EX-9", "HA-2"],
-    "Every EX-9 branch in one string: all five short escapes (\\t \\n \\b \\f \\r), \\u001f in lowercase hex, escaped quote and backslash, literal solidus, literal non-ASCII. The \\r is inside a string value, which EX-9 governs independently of EX-3's ban on a raw CR between lines. No v1 type may carry a control character, so an x_ type is the only way to pin the control-character branches.",
+    "Every EX-9 branch in one string: all five short escapes (\\t \\n \\b \\f \\r), \\u001f in lowercase hex, escaped quote and backslash, literal solidus, literal non-ASCII. The \\r is inside a string value, which EX-9 governs independently of EX-3's ban on a raw CR between lines. No v1 title may carry a control character (ET-14). genesis.contracts may, since ET-9 bounds only its length (141/142 carry \\u0001 there); this vector puts the escapes in an x_ event instead, where no other rule weighs the string.",
   ),
 ];

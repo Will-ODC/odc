@@ -5,7 +5,8 @@
 // then (EX-24, non-empty input) the STORED genesis-hash and head claims, one
 // line each, on stderr (format in report.ts / README), and exits:
 //   0 VALID, 1 INVALID, 2 PARTIAL, >=3 tool-level error (bad args, unreadable
-//   file, internal error). The work and the exit-code scheme live in run.ts.
+//   file, internal error, or a limit reached under evolution.md EV-24). The
+//   work and the exit-code scheme live in run.ts.
 
 import { run } from "./run.js";
 

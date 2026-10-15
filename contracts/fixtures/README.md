@@ -1,10 +1,10 @@
 # contracts/fixtures/ — golden vectors
 
-**Version:** 15
-**Status:** DRAFTING (Phase 0 · T5, T5j, ADR-0009, ADR-0010, ADR-0011). Not
-frozen.
+**Version:** 16
+**Status:** DRAFTING (Phase 0 · T5, T5j, ADR-0009, ADR-0010, ADR-0011,
+ADR-0038). Not frozen.
 
-**134 vectors** — 21 `VALID`, 14 `PARTIAL`, 99 `INVALID`. They are numbered in
+**145 vectors** — 23 `VALID`, 15 `PARTIAL`, 107 `INVALID`. They are numbered in
 category order: `VALID` (`001`–`007`), `PARTIAL` (`008`–`011`), then `INVALID` —
 the envelope and Stage A checks (`012`–`042`), the export framing and canonical
 line form (`043`–`052`), `--head` (`053`–`054`), the Stage B type semantics
@@ -58,6 +58,26 @@ next run start (line 11) is resolved and not listed. `132` pins ET-22a's "only
 short run is no candidate, so the run fails definitely (`INVALID` 7). `133`
 pins that F counts only after w = seq(P(f)) (an earlier candidate is not
 counted, so `INVALID` 10), and `134` the run-start clause ts(U) = ts(L).
+
+`135`–`145` follow ADR-0038 (`event-types.md` v13/v14, `evolution.md` v8/v9).
+ET-9f now requires both ancestry keys or neither, so **`086-ancestor-chain-alone`
+changed from `VALID` to `INVALID` at line 1**, corrected in place before the tag
+(ADR-0008); its id, name and bytes are unchanged. `088` and `090` carry
+`ancestor_chain` alone, so each now has two faults on line 1 and no longer
+isolates its value rule. `135` (the 64-zero anchor) and `136` (uppercase) put the
+same faulty `ancestor_chain` beside a legal `ancestor_head`, so the value is the
+only fault again. `137`–`142` pin ET-9's 64-byte cap on `genesis.contracts`,
+counted as the UTF-8 bytes of the decoded value: 64 and 65 ASCII bytes; 16 and
+17 four-byte characters (64 and 68 bytes, but only 16 and 17 scalar values, so a
+verifier counting scalar values or UTF-16 code units reports `140` `VALID`); and a
+`\u0001` escape plus 63 or 64 ASCII bytes (64 and 65 bytes decoded, 69 and 70 on
+the line, so a verifier counting the escaped bytes rejects `141`). `143` and `144`
+sit exactly on the EV-23 minimums and no further, as EV-24 requires of every
+fixture: a 65536-byte `x_` line (`PARTIAL` at 2) and an `x_` line at depth 64
+(`INVALID` at 2 under ES-17 and EV-16). Each has a valid line after it, so a
+verifier that drops, truncates or skips the long or deep line names the wrong
+line. `145` pins ET-9's lower bound: an empty `contracts` is `INVALID` at line 1,
+the only fault on an otherwise well-formed, signed genesis.
 
 **These vectors pin only cases where the conservative rule and the exact
 all-assignments rule agree** (ADR-0034 decision 7), so ET-24b can be tightened

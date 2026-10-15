@@ -507,3 +507,98 @@ test("U+001F, the top of the C0 block, is forbidden in a title (ET-14)", () => {
   // U+0020 is the first legal character above the block.
   assert.doesNotThrow(() => newChain().issue("Adopt the charter", 3));
 });
+
+// --- genesis legality (ET-9, ET-9e, ET-9f) ---------------------------------
+//
+// The literals below are the spec's numbers, never CONTRACTS_MAX_BYTES: a test
+// that imported the builder's own constant would move with it.
+
+/** Two well-formed 64-hex values, distinct and neither the 64-zero anchor. */
+const ANC_CHAIN = "ab".repeat(32);
+const ANC_HEAD = "cd".repeat(32);
+
+test("ET-9f is both-or-neither: either ancestry key alone is an undeclared violation", () => {
+  // Up to event-types.md v12 the guard checked head-alone only, so a
+  // chain-alone genesis built with no declaration passed as legal. v13
+  // (ADR-0038) bars both one-key forms.
+  assert.throws(
+    () => new ChainBuilder().genesis({ ancestorChain: ANC_CHAIN }),
+    /violates ET-9f/,
+    "ancestor_chain alone",
+  );
+  assert.throws(
+    () => new ChainBuilder().genesis({ ancestorHead: ANC_HEAD }),
+    /violates ET-9f/,
+    "ancestor_head alone",
+  );
+  assert.doesNotThrow(() =>
+    new ChainBuilder().genesis({
+      ancestorChain: ANC_CHAIN,
+      ancestorHead: ANC_HEAD,
+    }),
+  );
+  assert.doesNotThrow(() => new ChainBuilder().genesis({}));
+  assert.doesNotThrow(() =>
+    new ChainBuilder().genesis({
+      ancestorChain: ANC_CHAIN,
+      violates: ["ET-9f"],
+    }),
+  );
+});
+
+test("a bad ancestor_chain carried alone is two faults, ET-9e and ET-9f", () => {
+  // This is why 088 and 090 stopped isolating their value rule, and why 135
+  // and 136 carry a legal ancestor_head.
+  assert.throws(
+    () =>
+      new ChainBuilder().genesis({
+        ancestorChain: GENESIS_PREV_HASH,
+        violates: ["ET-9e"],
+      }),
+    /actually violates ET-9e, ET-9f/,
+  );
+  assert.doesNotThrow(() =>
+    new ChainBuilder().genesis({
+      ancestorChain: GENESIS_PREV_HASH,
+      ancestorHead: ANC_HEAD,
+      violates: ["ET-9e"],
+    }),
+  );
+  assert.doesNotThrow(() =>
+    new ChainBuilder().genesis({
+      ancestorChain: ANC_CHAIN.toUpperCase(),
+      ancestorHead: ANC_HEAD,
+      violates: ["ET-9e"],
+    }),
+  );
+});
+
+test("ET-9 caps contracts at 64 bytes of decoded UTF-8, and requires it non-empty", () => {
+  const g = (contracts: string): unknown =>
+    new ChainBuilder().genesis({ contracts });
+  const clef = "\u{1d11e}"; // 4 UTF-8 bytes, 2 UTF-16 units, 1 scalar value
+  assert.doesNotThrow(() => g("c".repeat(64)), "64 ASCII bytes");
+  assert.throws(() => g("c".repeat(65)), /violates ET-9\b/, "65 ASCII bytes");
+  assert.throws(() => g(""), /violates ET-9\b/, "empty");
+  assert.doesNotThrow(() => g("c"), "one byte is the legal minimum");
+  assert.doesNotThrow(() => g(clef.repeat(16)), "64 bytes, 16 scalars");
+  assert.throws(
+    () => g(clef.repeat(17)),
+    /violates ET-9\b/,
+    "68 bytes, though only 17 scalars and 34 UTF-16 code units",
+  );
+  // A control character counts as one byte decoded, not the six bytes of its
+  // \u0001 escape on the line (EX-9, HA-2).
+  assert.doesNotThrow(() => g(`\u0001${"c".repeat(63)}`), "64 decoded bytes");
+  assert.throws(
+    () => g(`\u0001${"c".repeat(64)}`),
+    /violates ET-9\b/,
+    "65 decoded bytes",
+  );
+  assert.doesNotThrow(() =>
+    new ChainBuilder().genesis({
+      contracts: "c".repeat(65),
+      violates: ["ET-9"],
+    }),
+  );
+});

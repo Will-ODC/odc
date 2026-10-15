@@ -23,7 +23,7 @@
 import { test } from "node:test";
 import assert from "node:assert/strict";
 import { spawnSync } from "node:child_process";
-import { mkdtempSync, writeFileSync } from "node:fs";
+import { mkdtempSync, rmSync, writeFileSync } from "node:fs";
 import { tmpdir } from "node:os";
 import { dirname, join, resolve } from "node:path";
 import { fileURLToPath } from "node:url";
@@ -688,11 +688,15 @@ test("BallotBatches: a batch left at the minimum is closed; returning to it is E
 function runCli(bytes: Buffer): { status: number | null; stdout: string } {
   const dir = mkdtempSync(join(tmpdir(), "odc-batching-"));
   const file = join(dir, "export.ndjson");
-  writeFileSync(file, bytes);
-  const r = spawnSync(process.execPath, [cliPath, "verify", file], {
-    encoding: "utf8",
-  });
-  return { status: r.status, stdout: r.stdout };
+  try {
+    writeFileSync(file, bytes);
+    const r = spawnSync(process.execPath, [cliPath, "verify", file], {
+      encoding: "utf8",
+    });
+    return { status: r.status, stdout: r.stdout };
+  } finally {
+    rmSync(dir, { recursive: true, force: true });
+  }
 }
 
 test("CLI: an ET-24 violation prints one INVALID line naming the blamed line and exits 1", () => {

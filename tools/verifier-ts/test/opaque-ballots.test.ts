@@ -14,7 +14,7 @@
 import { test } from "node:test";
 import assert from "node:assert/strict";
 import { spawnSync } from "node:child_process";
-import { mkdtempSync, writeFileSync } from "node:fs";
+import { mkdtempSync, rmSync, writeFileSync } from "node:fs";
 import { tmpdir } from "node:os";
 import { dirname, join, resolve } from "node:path";
 import { fileURLToPath } from "node:url";
@@ -487,6 +487,7 @@ test("CLI: unresolved lines print as one PARTIAL line, ascending, and exit 2", (
   const r = spawnSync(process.execPath, [cliPath, "verify", file], {
     encoding: "utf8",
   });
+  rmSync(dir, { recursive: true, force: true });
   assert.equal(r.status, 2);
   assert.equal(r.stdout, "PARTIAL at lines 6, 7\n");
 });

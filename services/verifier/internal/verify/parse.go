@@ -36,47 +36,65 @@ type jobject struct {
 }
 
 type parser struct {
-	b     []byte
-	pos   int
-	err   bool
-	depth int // current nesting depth; guarded by maxParseDepth
+	b       []byte
+	pos     int
+	err     bool
+	depth   int  // current nesting depth; guarded by maxParseDepth
+	tooDeep bool // the parse stopped at maxParseDepth (EV-24)
 }
 
 // maxParseDepth bounds the nesting this recursive-descent parser will descend
-// into. Beyond it the line is rejected as non-canonical.
+// into: it is this verifier's one within-line limit (evolution.md EV-24).
 //
-// This is verdict-preserving, and that is the only reason it may exist. The
-// deepest structure any conforming export line can hold is TWO levels: the
-// line object itself, and its `payload` object. Payload values are flat
-// integers and strings only (ES-16/ES-17), so a third level of nesting is
-// already INVALID at that line under EV-16 — and INVALID regardless of whether
-// the (type, version) is registered, since HA-7 defines no encoding for it and
-// the event therefore has no computable preimage. Refusing to descend past 64
-// levels reports the same verdict at the same line as walking the whole
-// structure and rejecting it for flatness; 64 is 32x the deepest legal line.
+// EV-23 sets the nesting-depth MINIMUM every verifier must accept at 64, and
+// EV-24 requires that a within-line limit be one no input within the minimums
+// can reach. The parser counts exactly EV-23's depth: it increments on every
+// `{` or `[` it opens outside a string and decrements on the matching close,
+// with the outermost value at depth 1, and the bytes inside a string are
+// consumed by parseString and never counted. A line at depth 64 therefore
+// parses in full and reaches its verdict; the limit is first reached when a
+// 65th level opens. It MUST NOT be lowered below 64.
+//
+// What happens past it is also fixed by EV-24. A verifier that reaches its
+// limit before establishing the required verdict MUST report a tool-level
+// failure — but "reaching a nesting-depth limit greater than 2 establishes
+// that the line is INVALID", since every line deeper than 2 is INVALID
+// whatever else it holds (ES-17 inside `payload`, ES-15/EX-7 outside it;
+// EV-16), and a verifier that has found no fatal earlier line MAY report
+// INVALID at that line instead. This verifier scans lines in file order and
+// returns at the first fatal one, so when it parses a line at all no earlier
+// line was fatal: it takes that option and reports INVALID at the line.
 //
 // Without the bound the parser is unbounded recursion over attacker-controlled
 // input, and Go does not merely panic there: a stack overflow is a runtime
 // FATAL error, so recover() cannot turn it back into a verdict. The process
 // dies printing nothing to stdout and exits with status 2 — which is this
-// CLI's PARTIAL code. A consumer reading exit status alone would read a crash
-// as "chain verified, some semantics unchecked". Measured on the pre-fix
-// binary, a single line nesting objects 1.5M deep (a 7.5 MB export) was enough.
+// CLI's PARTIAL code, and EV-24 forbids ending without a report. Measured on a
+// binary without the bound, a single line nesting objects 1.5M deep (a 7.5 MB
+// export) was enough.
 const maxParseDepth = 64
 
 // parseObjectLine parses exactly one JSON object occupying the whole input,
 // with no leading, trailing, or interior whitespace. It returns ok=false for
 // any structural or canonical-form violation.
 func parseObjectLine(b []byte) (*jobject, bool) {
+	obj, ok, _ := parseLine(b)
+	return obj, ok
+}
+
+// parseLine is parseObjectLine that also reports whether the parse stopped
+// because the line opened more than maxParseDepth levels (EV-24). tooDeep is
+// meaningful only when ok is false.
+func parseLine(b []byte) (obj *jobject, ok, tooDeep bool) {
 	if len(b) == 0 || b[0] != '{' {
-		return nil, false
+		return nil, false, false
 	}
 	p := &parser{b: b}
 	v := p.parseValue()
 	if p.err || p.pos != len(b) || v.kind != kObject {
-		return nil, false
+		return nil, false, p.tooDeep
 	}
-	return v.obj, true
+	return v.obj, true, false
 }
 
 func (p *parser) parseValue() jvalue {
@@ -89,6 +107,7 @@ func (p *parser) parseValue() jvalue {
 	case c == '{', c == '[':
 		if p.depth >= maxParseDepth {
 			p.err = true
+			p.tooDeep = true
 			return jvalue{}
 		}
 		p.depth++
