@@ -27,9 +27,9 @@ answered in the specs as ADR-0013 to ADR-0018 (#98). Only a **fresh re-audit**
 clears T9. Nothing may be implemented in `services/` until T9 and T9a. The ledger
 is unstarted.
 
-**Spec versions on master (2026-10-12; read the `Version:` lines, not prose):**
-`event-schema.md` **v6**, `event-types.md` **v12**, `evolution.md` **v7** (all
-three ADR-0034, #294), `export-format.md` v5 (#224, ADR-0032), `hashing.md` v2,
+**Spec versions on master (2026-10-14; read the `Version:` lines, not prose):**
+`event-schema.md` **v7**, `event-types.md` **v14**, `evolution.md` **v9** (all
+ADR-0038, #355: PRs #359 and #361), `export-format.md` v5 (#224, ADR-0032), `hashing.md` v2,
 `ids.md` v1, `read-api.md` v1, `fixtures/README.md` **v15** (#327).
 `contracts/` is **DRAFTING**.
 
@@ -45,17 +45,25 @@ and #222 (vectors `109`-`115`). #203 reconciled EV-15's stage map. #219 made a T
 internal error exit 3, not 1. #223 is the security checkpoint
 (`docs/security/hash-chain-checkpoint-2026-10-09.md`).
 
+**The four `contracts/` contradictions are decided** (ADR-0038, #355 → PRs #359,
+#361): verifier limits (EV-23 to EV-25: lines up to 65536 bytes and depth 64,
+past a verifier's own limits a tool-level failure, never a verdict), honest
+EV-21 advice for `genesis`, ET-9f now **both ancestry keys or neither**, and
+`genesis.contracts` at most 64 bytes (ET-9). **Neither verifier implements
+them yet**, and vector `086` still declares the old `VALID`.
+
 ## Next
 
 In this order. Passing CI or a checkpoint does not clear T9.
 
-1. **Decide the four open `contracts/` contradictions** (see Blockers). They are
-   the operator's; nothing else in Phase 0 waits on a session.
-2. Verifier implementations of what (1) decides, built in isolation, then the
-   fixtures.
-3. **Fresh T9 re-audit** by a context that did not write `audit-phase-0.md`.
+1. **ADR-0038 in both verifiers, then the vectors:** #364 (Go) and #365 (TS),
+   each in its own isolated sparse worktree, then #366 (vectors). Each verifier
+   ticket lands its no-op parts (limits, the ET-9 cap, EV-21 text) alone; the
+   **ET-9f change and the `086` flip land together in #366's PR**, or required
+   CI goes red (coupling rule below). ADR-0038's "Owed" list is the checklist.
+2. **Fresh T9 re-audit** by a context that did not write `audit-phase-0.md`.
    Acceptance is APPROVE.
-4. **T9a: release candidate.** Flip `contracts/README.md` from DRAFTING to RELEASE
+3. **T9a: release candidate.** Flip `contracts/README.md` from DRAFTING to RELEASE
    CANDIDATE, reconcile implementation/charter/service guidance, and move this
    file to Phase 1 (ledger, verifier, identity). **Do not create a `contracts-v1`
    tag.** The T10 freeze and its re-audit stay deferred until real use (ADR-0007).
@@ -83,9 +91,6 @@ Optional, from ADR-0034 owed item 4: `docs/security/attacks/check-unknown-batchi
   v1.1.0 has GO-2026-4503 (fixed in v1.1.1), and CI builds with `go 1.24`, which
   no longer gets security fixes. Bump the module and raise the `go` directive or
   add a `toolchain` line, in the verifier's own isolated context.
-- **`odc-verifier-builder`'s role definition says Go only**, but it was also used
-  for the TS verifier. Either add a TS builder role or scope this one to "either
-  verifier, never both".
 
 ## Done — one line each, detail in the squash commit
 
@@ -113,6 +118,8 @@ Optional, from ADR-0034 owed item 4: `docs/security/attacks/check-unknown-batchi
 - ADR-0034 mixed-version batching: contract #294; Go #324 (#319), TS #325
   (#320); vectors `116`-`134` in #327 (#321). TS sub-quadratic cost is
   follow-up #326.
+- ADR-0038 (the four contradictions, #355): contract #359, `genesis.contracts`
+  cap #361. Verifiers and vectors owed: #364, #365, #366.
 - Memory index and `memory-index` CI guard (#117, #121).
 
 ## Standing decisions — one line each
@@ -137,8 +144,12 @@ Optional, from ADR-0034 owed item 4: `docs/security/attacks/check-unknown-batchi
   `min_turnout` is NOT implemented, deliberately**: it addresses tally arithmetic
   (five votes at 3-2 with four known reveal the fifth), not timing. It can be
   added as an `issue_created` v2. The interim measure is a warning before casting.
-- **ADR-0016/0019:** nothing may be added to `genesis` after the tag. The
-  `ancestor_chain`-alone asymmetry (ET-9f) is deliberate.
+- **ADR-0016/0019/0038:** nothing may be added to `genesis` after the tag.
+  ET-9f is **both ancestry keys or neither** (ADR-0038 reversed ADR-0019's
+  `ancestor_chain`-alone permission).
+- **ADR-0038 limits are permanent** (EV-25): 65536-byte lines and depth 64
+  never change. Exceeding one is never by itself a reason for `INVALID`, and no
+  vector may go past them.
 - **ADR-0029:** a ballot batch is a maximal run. Once left, it is closed.
 - **ADR-0032:** existing file errors (structural and semantic) come before anchor
   mismatches. Endpoint reports are stored claims or unavailable.
@@ -148,20 +159,6 @@ Optional, from ADR-0034 owed item 4: `docs/security/attacks/check-unknown-batchi
 
 ## Blockers & live cautions
 
-- **Four `contracts/` contradictions need an operator decision.** None changes a
-  committed verdict, so nothing automated will catch them.
-  1. **`contracts/` bounds nothing.** No sentence limits nesting depth, line
-     length or key count, or says what a verifier does past its limits. The Go
-     verifier's depth-64 bound has no spec behind it. Proposed `evolution.md`
-     text: a verifier MAY impose limits that cannot change a verdict, and MUST
-     report a verdict or a tool error (exit ≥ 3) instead of crashing.
-  2. **EV-21's advice is unreachable for `genesis`.** ET-6 pins it at version 1,
-     yet the TS verifier tells users to "fetch a newer verifier".
-  3. **ET-7a reads as both-or-neither** for the ancestry keys, which is the tidy
-     version ET-9f forbids.
-  4. **ET-9f's stated justification does not select its rule.** The real
-     criterion is naming: a name without a position is coherent, but a position
-     without a name refers to nothing.
 - **The root ODC stack is a stub.** Root `docker-compose.yml` is `services: {}`,
   and `just smoke`/`just verify` are TODOs. Pulse's images are separate.
 - **Never open `services/verifier/` and ledger source in one context.** Build each
