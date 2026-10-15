@@ -53,9 +53,19 @@ publication and grant changes. Owner configuration is a trusted constructor
 option, not yet a production environment setting. All public results are built
 from allow-listed poll fields, without author account IDs or ballot linkage.
 
-This store is not wired into HTTP or startup. Its memory adapter, HTTP boundary
-and creation screen remain separate steps; there is still no served creation
-endpoint. Do not launch public creation from
+`InMemoryCreationStore` is the temporary development equivalent. Construct it
+with the same `InMemoryVoterStore` and `InMemoryVotingStore` used for sign-in and
+voting; adapters sharing that pair share quota, acknowledgement, replay and grant
+state. Identity mutations and authoring serialize through one in-process queue,
+so sign-out cannot overtake an in-flight publication. Trusted `communityLabels`
+may supply display labels (otherwise existing IDs are used; General is fixed).
+Pass the same application clock to authoring and voting. Public results are
+copies; private authorship and grant audit stay internal. State disappears on
+restart; multiple deployed processes still require Postgres. Both adapters run
+one creation conformance suite, alongside database-only lock/rollback tests.
+
+Neither store is wired into HTTP or startup. The HTTP boundary and creation
+screen remain separate steps; there is still no served creation endpoint. Do not launch public creation from
 this internal store alone or advertise moderation controls that are absent.
 
 **Not built:**
