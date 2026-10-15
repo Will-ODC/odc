@@ -1,5 +1,10 @@
 // The two OPTIONAL fork-ancestry keys on `genesis` (event-types.md ET-9e,
-// ET-9f; event-schema.md ES-34), landed by ADR-0019.
+// ET-9f; event-schema.md ES-34), landed by ADR-0019. ET-9f became
+// both-or-neither in event-types.md v13 (ADR-0038): 086 flipped to INVALID in
+// place, and 088/090 — which carry ancestor_chain alone — gained a second fault
+// and stopped isolating the value rule they were written for. The two vectors
+// in `forkAncestryIsolationVectors` (135, 136) isolate those faults again; they
+// are appended at the end of the table because ids never change once shipped.
 //
 // Why this module exists at all: ET-9e, ET-9f and ES-34 were implemented by
 // BOTH verifiers and cited by NO vector. EV-17 makes fixtures the sole
@@ -62,7 +67,7 @@ export const forkAncestryVectors: Vector[] = [
     lines(forked({ ancestorHead: PARENT_HEAD, violates: ["ET-9f"] })),
     1,
     ["ET-9f", "ET-9e", "ES-34", "ET-7a"],
-    "A genesis carrying ancestor_head with no ancestor_chain — the one presence combination ET-9f bars, and the head-alone anchoring charter §4 rejects: a position on an UNNAMED chain, which no reader can check because nothing in the payload says which export to open. The value itself is legal (it is 002's true head) and every other rule holds — chain_id derives, the self-signature verifies, the hash covers the payload and matches — so the only fault is the missing companion key. This vector goes first in the ancestry set on purpose: it is the ONLY one that fails against a verifier still implementing the pre-ADR-0019 ET-9e, where ancestor_head stood alone and carried the head. It is the single fixture proving ADR-0019 landed.",
+    "A genesis carrying ancestor_head with no ancestor_chain — one of the two one-key forms ET-9f bars (since v13 it requires both keys or neither; 086 is the other form), and the head-alone anchoring charter §4 rejects: a position on an UNNAMED chain, which no reader can check because nothing in the payload says which export to open (ET-7a). The value itself is legal (it is 002's true head) and every other rule holds — chain_id derives, the self-signature verifies, the hash covers the payload and matches — so the only fault is the missing companion key. A verifier that checks the formats of the ancestry keys but not their presence together reports VALID here. So does one still implementing ADR-0016's ET-9e, under which ancestor_head was the only ancestry key and stood alone.",
   ),
   ok(
     "085-ancestor-chain-and-head",
@@ -70,11 +75,12 @@ export const forkAncestryVectors: Vector[] = [
     ["ET-9e", "ES-34", "HA-7", "HA-8", "EX-8", "EX-14", "EX-21"],
     "The complete ancestry record: a name and a position, the pair charter §4 requires of an anchoring record. Both values are computed from the chain 002-four-types ships — ancestor_chain is its genesis hash (its identity, ET-7a/EX-21), ancestor_head its last event hash (EX-14). This is the corpus's FIRST seven-key genesis payload, so it is also the first real exercise of HA-7's leading key count U64(7) and of HA-8's ordering: both new keys sort ahead of chain_id, so a payload encoder that emits keys in declaration order rather than byte order produces a different preimage and a hash that does not match.",
   ),
-  ok(
+  bad(
     "086-ancestor-chain-alone",
-    forked({ ancestorChain: PARENT_CHAIN }),
-    ["ET-9f", "ET-9e", "ES-34"],
-    "ancestor_chain with no ancestor_head — LEGAL, and the asymmetry is the rule rather than an oversight. It is the weaker but coherent claim 'forked from chain X, fork point unrecorded': a named chain, no position. The pair 084/086 is what pins the asymmetry in both directions, and a verifier that 'tidied' ET-9f into a both-or-neither pair passes 084 and fails here.",
+    lines(forked({ ancestorChain: PARENT_CHAIN, violates: ["ET-9f"] })),
+    1,
+    ["ET-9f", "ET-9e", "ES-34", "ET-7a"],
+    "ancestor_chain with no ancestor_head — INVALID at line 1 under ET-9f, which since event-types.md v13 (ADR-0038) requires both ancestry keys or neither. Up to v12 these same bytes were VALID: ET-9f barred only ancestor_head alone, and this vector pinned that asymmetry. ADR-0038 reversed it, and the verdict was corrected in place before the tag (ADR-0008); the id and the name still describe the bytes. Why chain-alone is rejected: a fork is made from the parent's export, and whoever holds an export holds its head (EX-14), so a real fork always has the position to record, and a fork from a parent that holds only its genesis records the same value twice (087). With both keys a reader holding the parent export can check the whole claim (ET-9e); with the name alone it can never check the position. The value is legal (it is 002's genesis hash) and every other rule holds — chain_id derives, the self-signature verifies over the payload carrying the key, the hash matches — so the missing ancestor_head is the only fault. With 084 this pins both one-key forms: a verifier that kept the v12 rule (head-alone barred, chain-alone allowed) passes 084 and reports VALID here.",
   ),
   ok(
     "087-ancestor-chain-equals-head",
@@ -84,10 +90,15 @@ export const forkAncestryVectors: Vector[] = [
   ),
   bad(
     "088-ancestor-chain-zero",
-    lines(forked({ ancestorChain: GENESIS_PREV_HASH, violates: ["ET-9e"] })),
+    lines(
+      forked({
+        ancestorChain: GENESIS_PREV_HASH,
+        violates: ["ET-9e", "ET-9f"],
+      }),
+    ),
     1,
-    ["ET-9e", "ES-24", "ES-34"],
-    "ancestor_chain as the 64-zero anchor, which ET-9e bars explicitly. A chain with no recorded ancestor omits both keys (ES-34), so there is exactly one way to say 'no ancestor' and the 64-zero string keeps its single meaning as prev_hash's anchor (ES-24). This vector is the one that catches the plausible wrong reading — that 64 zeros is how a fork says it has no parent — which would give that string two meanings and make absence and the placeholder indistinguishable.",
+    ["ET-9e", "ET-9f", "ES-24", "ES-34"],
+    "ancestor_chain as the 64-zero anchor, which ET-9e bars, carried ALONE. Since event-types.md v13 (ADR-0038) ET-9f requires both ancestry keys or neither, so this genesis has two faults on one line: the zero value and the missing ancestor_head. It is still INVALID at line 1, but it no longer isolates the zero bar: a verifier that skips the 64-zero check on ancestor_chain still rejects it through ET-9f. 135 is the isolated case (the same zero value beside a legal ancestor_head). What the vector still records about the rule: a chain with no recorded ancestor omits both keys (ES-34), so 64 zeros is never how a fork says it has no parent, and the string keeps its single meaning as prev_hash's anchor (ES-24).",
   ),
   bad(
     "089-ancestor-head-zero",
@@ -100,19 +111,19 @@ export const forkAncestryVectors: Vector[] = [
     ),
     1,
     ["ET-9e", "ES-24", "ES-34"],
-    "The same 64-zero bar on the OTHER ancestry key, with a legal ancestor_chain alongside it so ET-9f is satisfied and the zero value is the only fault. One vector per key rather than one for both, for the reason 076/077 exist: ancestor_head is the key an implementation is likelier to check less carefully, since ET-9f already forces it to think about ancestor_chain's presence and nothing forces the same attention here.",
+    "The 64-zero bar on ancestor_head, with a legal ancestor_chain alongside it so ET-9f is satisfied and the zero value is the only fault. A verifier that skips the 64-zero check on ancestor_head reports VALID here. 135 is the same bar on ancestor_chain; 088 was, until ET-9f v13 (ADR-0038) gave it a second fault by making ancestor_chain alone INVALID. One vector per key rather than one for both, for the reason 076/077 exist: a verifier can check one key's value and not the other's, and a vector carrying both faults would not show which.",
   ),
   bad(
     "090-ancestor-chain-uppercase",
     lines(
       forked({
         ancestorChain: PARENT_CHAIN.toUpperCase(),
-        violates: ["ET-9e"],
+        violates: ["ET-9e", "ET-9f"],
       }),
     ),
     1,
-    ["ET-9e", "ID-2", "ES-34"],
-    "ancestor_chain in UPPERCASE hex. ET-9e requires ^[0-9a-f]{64}$, and the isolation is the same one 033/036/076 have for their fields: the uppercase string names the same 32 bytes, so a verifier that lowercases before comparing would resolve it to the very chain 002 ships and see nothing wrong. Rejected, never lowercased to conform (D5).",
+    ["ET-9e", "ET-9f", "ID-2", "ES-34"],
+    "ancestor_chain in UPPERCASE hex, carried ALONE. ET-9e requires ^[0-9a-f]{64}$; since event-types.md v13 (ADR-0038) ET-9f also requires ancestor_head beside it, so this genesis has two faults on one line. It is still INVALID at line 1, but it no longer isolates the case rule: a verifier that lowercases ancestor_chain before checking it (the uppercase string names the same 32 bytes as 002's genesis hash) still rejects it through ET-9f. 136 is the isolated case (the same uppercase value beside a legal ancestor_head). The rule itself is unchanged: rejected, never lowercased to conform (D5).",
   ),
   bad(
     "091-ancestor-head-truncated",
@@ -125,7 +136,7 @@ export const forkAncestryVectors: Vector[] = [
     ),
     1,
     ["ET-9e", "ES-34"],
-    "ancestor_head 63 characters long: the legal alphabet, the wrong length. Pairs with 090 to pin both halves of ^[0-9a-f]{64}$ — alphabet and length — on the two different keys, so neither is checked by a regex that got one half right. ancestor_chain is present and legal, so ET-9f holds and the length is the only fault.",
+    "ancestor_head 63 characters long: the legal alphabet, the wrong length. ancestor_chain is present and legal, so ET-9f holds and the length is the only fault. Pairs with 136 (uppercase ancestor_chain beside a legal ancestor_head) to pin both halves of ^[0-9a-f]{64}$ — alphabet and length — on the two different keys, so a regex that got one half right fails one of them. Its first partner was 090, which since ET-9f v13 (ADR-0038) also lacks ancestor_head and so no longer isolates the alphabet.",
   ),
   ok(
     "092-ancestor-unresolvable",
@@ -145,5 +156,43 @@ export const forkAncestryVectors: Vector[] = [
     }),
     ["ET-9e", "ET-6", "ES-24", "ES-33", "ET-13", "ET-17"],
     "A fork that goes on to have a life: the same ancestry-bearing genesis as 085, followed by one event of each remaining v1 type. It pins the sentence in ET-9e that says a fork's own structure is unchanged by either key — seq is still 1 and prev_hash is still the 64-zero anchor at the genesis (ET-6, ES-24, ES-33), exactly as on an original chain, and every later event links and verifies normally under the keys this genesis declares. The failure it catches is a verifier that treats a recorded ancestor as a reason to expect continuation — a non-zero prev_hash at line 1, or a seq continuing the parent's — which would make every real fork INVALID.",
+  ),
+];
+
+/**
+ * Appended after ET-9f became both-or-neither (event-types.md v13, ADR-0038).
+ * 088 and 090 carry `ancestor_chain` alone, so each now fails ET-9f as well as
+ * the value rule it was written for, and a verifier that skips that value rule
+ * on `ancestor_chain` still passes both. These two put the same faulty value
+ * beside a LEGAL `ancestor_head`, so the value is the only fault again. They are
+ * a separate export because index.ts concatenates the modules in id order and
+ * 135/136 come after every other module's ids.
+ */
+export const forkAncestryIsolationVectors: Vector[] = [
+  bad(
+    "135-ancestor-chain-zero-with-head",
+    lines(
+      forked({
+        ancestorChain: GENESIS_PREV_HASH,
+        ancestorHead: PARENT_HEAD,
+        violates: ["ET-9e"],
+      }),
+    ),
+    1,
+    ["ET-9e", "ET-9f", "ES-24", "ES-34"],
+    "ancestor_chain as the 64-zero anchor, which ET-9e bars, beside a legal ancestor_head (002's true head). Both keys are present, so ET-9f holds and the zero value is the only fault; chain_id derives, the self-signature verifies over the faulty payload, and the hash matches. A verifier that skips the 64-zero check on ancestor_chain reports VALID here. 088 cannot catch that verifier any more: it carries ancestor_chain alone, which ET-9f rejects since v13 (ADR-0038). With 089 (the same bar on ancestor_head) this pins the zero bar on each key separately.",
+  ),
+  bad(
+    "136-ancestor-chain-uppercase-with-head",
+    lines(
+      forked({
+        ancestorChain: PARENT_CHAIN.toUpperCase(),
+        ancestorHead: PARENT_HEAD,
+        violates: ["ET-9e"],
+      }),
+    ),
+    1,
+    ["ET-9e", "ET-9f", "ID-2", "ES-34"],
+    "ancestor_chain in UPPERCASE hex beside a legal ancestor_head (002's true head). Both keys are present, so ET-9f holds and the case is the only fault. ET-9e requires ^[0-9a-f]{64}$, and the isolation is the one 033/036/076 have for their fields: the uppercase string names the same 32 bytes as 002's genesis hash, so a verifier that lowercases before checking sees nothing wrong and reports VALID. Rejected, never lowercased to conform (D5). 090 cannot catch that verifier any more: it carries ancestor_chain alone, which ET-9f rejects since v13 (ADR-0038). Pairs with 091 (ancestor_head one character short) to pin both halves of the pattern, alphabet and length.",
   ),
 ];
