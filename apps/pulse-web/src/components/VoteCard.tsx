@@ -160,7 +160,12 @@ export function VoteCard({
         aria-label={question}
       >
         <span className="vote-card__summary">{question}</span>
-        <button type="button" data-expand onClick={() => onCollapse(false)}>
+        <button
+          type="button"
+          data-guide="open"
+          data-expand
+          onClick={() => onCollapse(false)}
+        >
           Vote
         </button>
         <button

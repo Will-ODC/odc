@@ -1,53 +1,78 @@
 .welcome {
   min-height: 100dvh;
+  display: flex;
+  flex-direction: column;
   color: var(--ballot-ink);
   background: var(--ballot-page);
 }
 .welcome__main {
   box-sizing: border-box;
   width: 100%;
-  max-width: calc(var(--rail) * 4);
+  max-width: calc(var(--rail) * 3.5);
   padding: calc(var(--step) * 2) var(--gutter);
-  margin-inline: auto;
+  margin: auto;
 }
 .welcome h1 {
   font-size: var(--welcome-hero);
   line-height: 1.1;
   letter-spacing: -0.03em;
   max-width: 18ch;
-  margin: var(--step) 0 calc(var(--step) * 2);
+  margin: 0 auto calc(var(--step) * 2);
+  text-align: center;
+  text-wrap: balance;
   overflow-wrap: anywhere;
 }
 .welcome__lede,
 .welcome__first {
-  max-width: 58ch;
+  max-width: 54ch;
+  margin: 0 auto;
+  text-align: center;
+  text-wrap: pretty;
   font-size: var(--t-body);
-  line-height: 1.6;
+  line-height: 1.5;
   color: var(--ballot-ink-soft);
 }
 .welcome__steps {
   display: grid;
-  gap: calc(var(--step) * 2);
-  padding-inline-start: calc(var(--step) * 3);
-  margin-block: var(--gutter);
+  gap: var(--step);
+  padding: 0;
+  margin-block: calc(var(--step) * 2);
+  list-style: none;
+  counter-reset: intro-step;
 }
 .welcome__steps li {
-  padding-inline-start: var(--step);
+  counter-increment: intro-step;
+  display: grid;
+  grid-template-columns: calc(var(--step) * 4) minmax(0, 1fr);
+  column-gap: calc(var(--step) * 1.5);
+  padding: calc(var(--step) * 1.5);
+  border: var(--hairline) solid var(--ballot-line);
+  border-radius: var(--r-control);
+  background: var(--surface-rest);
 }
-.welcome__steps li::marker {
-  font-size: var(--t-word);
-  font-weight: 700;
+.welcome__steps li::before {
+  content: counter(intro-step) / "";
+  grid-row: span 2;
+  display: grid;
+  place-items: center;
+  align-self: start;
+  aspect-ratio: 1;
+  border: var(--hairline) solid var(--control-line);
+  border-radius: var(--r-pill);
   color: rgb(var(--side-b));
+  background: var(--surface-hover);
+  font-size: var(--t-body);
+  font-weight: 700;
 }
 .welcome__steps strong {
   font-size: var(--t-body);
-  margin-inline-end: var(--step);
+  line-height: 1.4;
 }
 .welcome__steps p {
-  display: inline;
-  font-size: var(--t-body);
+  font-size: var(--t-small);
   line-height: 1.5;
-  margin: 0;
+  color: var(--ballot-ink-soft);
+  margin: calc(var(--step) / 2) 0 0;
 }
 .welcome__steps small,
 .welcome__note {
@@ -57,13 +82,15 @@
 }
 .welcome__note {
   max-width: 48ch;
+  margin-inline: auto;
+  text-align: center;
 }
 .welcome__start {
   display: block;
   width: 100%;
   max-width: var(--frame-w);
   padding: calc(var(--step) * 2);
-  margin-top: var(--gutter);
+  margin: calc(var(--step) * 2) auto 0;
   font: inherit;
   font-size: var(--t-body);
   font-weight: 700;
@@ -83,16 +110,32 @@
 }
 @media (min-width: 700px) {
   .welcome__main {
-    padding-block: calc(var(--gutter) * 3);
+    padding-block: calc(var(--gutter) * 2);
   }
   .welcome__steps {
     grid-template-columns: repeat(3, minmax(0, 1fr));
-    gap: calc(var(--gutter) * 2);
+    gap: calc(var(--step) * 2);
+    margin-block: calc(var(--gutter) * 1.5);
+  }
+  .welcome__steps li {
+    display: flex;
+    flex-direction: column;
+    align-items: center;
+    padding: var(--gutter) calc(var(--step) * 2);
+    text-align: center;
+    border-radius: var(--r-card);
+  }
+  .welcome__steps li::before {
+    align-self: center;
+    width: calc(var(--step) * 5);
+    margin-bottom: calc(var(--step) * 2);
   }
   .welcome__steps p {
-    display: block;
     margin-top: var(--step);
   }
+}
+.welcome--compact .welcome__main {
+  max-width: calc(var(--rail) * 2.75);
 }
 
 .welcome--compact h1 {
@@ -100,8 +143,10 @@
   max-width: none;
 }
 .welcome__section {
-  font-size: var(--t-body);
+  font-size: var(--t-small);
   margin: calc(var(--step) * 2) 0 var(--step);
+  text-align: center;
+  color: var(--ballot-ink-soft);
 }
 .welcome__progress,
 .welcome__purpose {
@@ -111,14 +156,25 @@
 }
 .welcome__progress {
   margin: 0;
+  padding: calc(var(--step) * 1.5) calc(var(--step) * 1.5)
+    calc(var(--step) * 1.5) calc(var(--step) * 3.5);
+  border: var(--hairline) solid var(--ballot-line);
+  border-radius: var(--r-control);
+  background: var(--surface-rest);
 }
 .welcome__progress a {
   color: var(--ballot-ink-soft);
 }
 .welcome__purpose {
   display: grid;
-  gap: var(--step);
+  list-style: none;
+  padding: 0;
+  gap: calc(var(--step) * 1.5);
   margin: 0;
+}
+.welcome__purpose li {
+  padding-inline-start: calc(var(--step) * 1.5);
+  border-inline-start: calc(var(--hairline) * 2) solid var(--control-line);
 }
 .welcome__questions {
   list-style: none;
@@ -131,6 +187,7 @@
   gap: calc(var(--step) / 2);
 }
 .welcome__questions small {
+  justify-self: center;
   color: var(--ballot-ink-soft);
   font-size: var(--t-small);
 }
@@ -153,4 +210,9 @@
 .welcome__progress a:focus-visible {
   outline: calc(var(--hairline) * 2) solid var(--focus-ring);
   outline-offset: calc(var(--hairline) * 2);
+}
+
+/* Headings receive route focus for announcements, without a control outline. */
+.welcome h1:focus {
+  outline: none;
 }

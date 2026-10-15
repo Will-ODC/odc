@@ -144,10 +144,13 @@
 
 /* Operator experiment: a small, non-modal vote tab at the desktop's top right. */
 @media (min-width: 1100px) {
+  .conversation__main {
+    position: relative;
+  }
   .conversation__vote {
     pointer-events: none;
-    position: fixed;
-    inset-block-start: calc(var(--gutter) * 2);
+    position: absolute;
+    inset-block-start: calc(var(--step) * 2);
     inset-inline-end: var(--gutter);
     width: var(--dialog-w);
     max-width: calc(100vw - var(--rail) - var(--gutter) * 2);
@@ -160,7 +163,13 @@
     margin-inline-start: auto;
     box-shadow: var(--shadow-ballot);
   }
-  .conversation__vote .vote-card {
-    max-height: calc(100dvh - var(--gutter) * 4);
-  }
+}
+
+.conversation__help {
+  display: flex;
+  gap: var(--step);
+  justify-content: flex-end;
+}
+.conversation__vote > div > button {
+  margin-bottom: var(--step);
 }

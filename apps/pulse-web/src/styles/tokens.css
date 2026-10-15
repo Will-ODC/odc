@@ -86,7 +86,7 @@
   --r-pill: 999px;
 
   --t-hero: 23px;
-  --welcome-hero: clamp(28px, 5vw, 60px);
+  --welcome-hero: clamp(28px, 4vw, 48px);
   --t-word: 28px;
   --t-body: 15px;
   --t-small: 13px;
