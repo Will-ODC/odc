@@ -278,8 +278,10 @@ parent chain's genesis hash — the value that **names** a chain (ET-7a) — and
 `ancestor_head`, the parent's head at the fork, a **position on** the chain that
 name identifies. The verifier checks the format of each key present
 (`^[0-9a-f]{64}$`, never the 64-zero anchor) and one presence rule:
-`ancestor_head` MUST NOT appear without `ancestor_chain`, while `ancestor_chain`
-MAY appear alone. That asymmetry is deliberate. The two values may be equal —
+`ancestor_head` MUST NOT appear without `ancestor_chain`. The current spec
+(ET-9f, `event-types.md` v13 and later) requires **both keys or neither**; this
+build still accepts `ancestor_chain` alone until the ET-9f change lands with
+the flip of vector `086` (#366). The two values may be equal —
 that is what a fork from a parent holding only its genesis produces — and
 neither is resolved: both are a recorded claim, not a verified link, and being
 unable to resolve one is never a defect.

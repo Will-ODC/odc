@@ -110,8 +110,8 @@ func TestCLIPanicIsToolFailure(t *testing.T) {
 			stdout, _ := os.ReadFile(filepath.Join(dir, "out"))
 			stderr, _ := os.ReadFile(filepath.Join(dir, "err"))
 
-			if code < 3 {
-				t.Fatalf("exit %d, want >= 3 (a tool-level failure, never a verdict code)", code)
+			if code != 4 {
+				t.Fatalf("exit %d, want 4 (API.md: an internal failure that reached no verdict, EV-24)", code)
 			}
 			if len(stdout) != 0 {
 				t.Fatalf("stdout must be empty on a tool-level failure, got %q", stdout)
