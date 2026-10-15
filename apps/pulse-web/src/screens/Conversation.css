@@ -164,3 +164,12 @@
     max-height: calc(100dvh - var(--gutter) * 4);
   }
 }
+
+.conversation__help {
+  display: flex;
+  gap: var(--step);
+  justify-content: flex-end;
+}
+.conversation__vote > div > button {
+  margin-bottom: var(--step);
+}

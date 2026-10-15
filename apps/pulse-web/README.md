@@ -34,6 +34,9 @@ Next edges. All three introductory screens make no API requests and have no vide
 placeholder or working-comments claim. Video and comments are separate work.
 At standard text size the complete welcome fits one screen on phone and desktop;
 scrolling remains available for zoom, larger text and unusually short windows.
+The intro uses a centred heading, reading column and primary action. Numbered
+steps share the conversation card surfaces: three columns on desktop and compact
+rows on phones. All existing intro copy and routes are retained.
 
 For a container build, pass `--build-arg VITE_PULSE_FIRST_POLL_ID=<published-id>`.
 That configures the design question; `VITE_PULSE_DATA_POLL_ID`,
@@ -70,3 +73,14 @@ The swipe and old run screens are retired; `/preview/chat` remains sample data o
 The old choice screen's suggestion form and next-question preview rail are also
 retired; poll suggestions remain supported by the public API, without a form
 on this conversation page.
+
+Optional **Show me how** (#342) on an open question adds one small help callout
+and a visual spotlight around the real Vote, choices, Submit and results
+controls. It follows the current card state, including sending, failure/retry,
+closure and saved answers. Help never picks or submits. Skip/Done or Escape
+removes it and restores focus to Show me how; replay retains current choices.
+The guide is nonmodal: normal controls and keyboard navigation remain available.
+It adds no tracking or persistent completion state, and uses no animation.
+Loading, missing and initially closed questions do not offer coaching. Next is
+explained only when a real answer-dependent destination exists; the foundation
+question list remains independent. No API or permissions change.
