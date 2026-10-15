@@ -4,7 +4,8 @@
 // at 2^23 entries and a pushed array at 2^26 elements, so every collection
 // that grows with the line count is sharded or chunked. These tests check the
 // wrappers behave as the built-ins do across shard and chunk boundaries, that
-// one real ShardedMap passes 2^23 entries, and that the verifier actually uses
+// one real ShardedMap passes 2^23 entries (without asserting where a plain
+// Map stops, which differs between engine versions), and that the verifier actually uses
 // the wrappers with the caps it is given: with tiny caps every growing
 // collection must span several shards and every verdict must be unchanged.
 //
@@ -13,7 +14,13 @@
 
 import { test } from "node:test";
 import assert from "node:assert/strict";
-import { ChunkedList, ShardedMap, ShardedSet } from "../src/collections.js";
+import {
+  CHUNK_SHIFT,
+  ChunkedList,
+  SHARD_CAP,
+  ShardedMap,
+  ShardedSet,
+} from "../src/collections.js";
 import { ExportVerifier, verifyExport } from "../src/verify.js";
 import { recordsOf } from "../src/input.js";
 import { BallotBatches } from "../src/batching.js";
@@ -72,22 +79,39 @@ test("ChunkedList: push, at, slice, iteration and join across chunks", () => {
   assert.equal(new ChunkedList(2).join(","), "");
 });
 
-test("a ShardedMap holds more than V8's 2^23-entry Map cap", () => {
-  const cap = 2 ** 23;
-  // The built-in really stops there; if V8 ever lifts it, this says so.
-  const plain = new Map<number, number>();
-  assert.throws(() => {
-    for (let i = 0; i <= cap; i++) plain.set(i, i);
-  }, RangeError);
-  plain.clear();
-
+test("a ShardedMap filled past 2^23 keys stays correct at every boundary", () => {
+  // V8's Map/Set cap differs by version (Node 24 throws at 2^23 entries,
+  // Node 20 does not), so this never asserts where a plain Map stops. What
+  // it pins is engine-independent: the shard size is at most 2^22, below
+  // every cap we know of (2^23 on Node 24, larger on Node 20), and a
+  // ShardedMap of the default size holds more keys than the lowest of those
+  // caps, with each shard a real Map filled to SHARD_CAP — so SHARD_CAP
+  // entries fit in one built-in Map on the engine running the test.
+  assert.ok(SHARD_CAP <= 2 ** 22, `SHARD_CAP ${SHARD_CAP}`);
+  const n = 2 ** 23 + 1000;
   const m = new ShardedMap<number, number>();
-  const n = cap + 1000;
   for (let i = 0; i < n; i++) m.set(i, i);
   assert.equal(m.size, n);
-  assert.ok(m.shardCount >= 3);
-  for (const k of [0, 1, cap - 1, cap, n - 1]) assert.equal(m.get(k), k);
+  assert.equal(m.shardCount, Math.ceil(n / SHARD_CAP));
+  for (const k of [0, SHARD_CAP - 1, SHARD_CAP, 2 ** 23 - 1, 2 ** 23, n - 1])
+    assert.equal(m.get(k), k);
   assert.equal(m.has(n), false);
+  m.set(SHARD_CAP - 1, -1); // an update in the first, full shard
+  assert.equal(m.get(SHARD_CAP - 1), -1);
+  assert.equal(m.size, n);
+});
+
+test("a default ChunkedList crosses its real chunk boundary, far below any array cap", () => {
+  // Arrays grown by push stop at 2^26 elements on Node 24 (more on some
+  // other versions); a chunk is 2^20.
+  assert.ok(CHUNK_SHIFT <= 20, `CHUNK_SHIFT ${CHUNK_SHIFT}`);
+  const size = 2 ** CHUNK_SHIFT;
+  const l = new ChunkedList();
+  for (let i = 0; i < 2 * size + 3; i++) l.push(i);
+  assert.equal(l.chunkCount, 3);
+  for (const i of [0, size - 1, size, 2 * size, 2 * size + 2])
+    assert.equal(l.at(i), i);
+  assert.deepEqual(l.slice(size - 1, size + 1), [size - 1, size]);
 });
 
 /**
