@@ -22,6 +22,13 @@ import {
 } from "./crypto.js";
 import { BallotBatches, epochMs, isQuantized } from "./batching.js";
 import {
+  CHUNK_SHIFT,
+  ChunkedList,
+  SHARD_CAP,
+  ShardedMap,
+  ShardedSet,
+} from "./collections.js";
+import {
   LimitReached,
   MAX_LINE_BYTES,
   recordsOf,
@@ -31,7 +38,18 @@ import {
 export type Verdict =
   | { verdict: "VALID" }
   | { verdict: "INVALID"; line: number; reason?: string }
-  | { verdict: "PARTIAL"; lines: number[] };
+  | { verdict: "PARTIAL"; lines: LineNumbers };
+
+/**
+ * PARTIAL's affected lines, ascending. A plain array satisfies it, and so does
+ * the verifier's ChunkedList, which has no length cap: EV-24 forbids a fixed
+ * limit on the number of lines, and an array stops at 2^26 elements.
+ */
+export interface LineNumbers extends Iterable<number> {
+  readonly length: number;
+  slice(start: number, end: number): number[];
+  join(sep: string): string;
+}
 
 const GENESIS_PREV = "0".repeat(64);
 const HEX64 = /^[0-9a-f]{64}$/;
@@ -65,11 +83,11 @@ const GENESIS_OPTIONAL_KEYS = ["ancestor_chain", "ancestor_head"] as const;
 interface ChainState {
   operatorPk: Buffer | null; // raw 32 bytes, validated at genesis
   registrarPk: Buffer | null; // raw 32 bytes, validated at genesis
-  issues: Map<string, IssueParams>; // issue_id (hash) -> its declared parameters
+  issues: ShardedMap<string, IssueParams>; // issue_id (hash) -> its declared parameters
   // ET-18b: hashes of `issue_created` events at a version this verifier does
   // not register. Still prior issue_created events for ID-8/ET-18; only their
   // envelope (`type`, `version`, `seq`, `hash`) is read, never the payload.
-  unregisteredIssues: Set<string>;
+  unregisteredIssues: ShardedSet<string>;
   batches: BallotBatches; // ET-24 / ET-24a / ET-24b per-issue batch runs
   // Set by stageB when the line passed but a check on it is UNRESOLVED
   // (ET-18b, ET-24b): not failed, and the line is enumerated in PARTIAL.
@@ -411,30 +429,56 @@ interface Fault {
  * chain state, so the first line with any failed check is EV-17's fatal line
  * and verification stops there: nothing later can change an established
  * INVALID (the anchors are compared only when no file check failed, EX-15 /
- * EX-22). Nothing about the export is held but that state, so the number of
- * lines and the size of the input are bounded only by memory and time
- * (EV-24).
+ * EX-22). Nothing about the export is held but that state, and every part of
+ * the state that grows with the number of lines — the issue maps, the PARTIAL
+ * list and BallotBatches' collections — is a ShardedMap, ShardedSet or
+ * ChunkedList (collections.ts), which V8's Map/Set/array caps do not bound.
+ * So the number of lines and the size of the input are bounded only by
+ * memory and time (EV-24).
  */
 export class ExportVerifier {
   private fault: Fault | null = null;
   private lineNo = 0;
-  private readonly partialLines: number[] = [];
-  private readonly state: ChainState = {
-    operatorPk: null,
-    registrarPk: null,
-    issues: new Map(),
-    unregisteredIssues: new Set(),
-    batches: new BallotBatches(),
-    unresolved: false,
-    stageBReason: null,
-  };
+  private readonly partialLines: ChunkedList;
+  private readonly state: ChainState;
   private prevHash: string | null = null;
   private genesisHash: string | null = null; // EX-21: line 1's hash, once it passed
 
+  /** `caps` lowers the collections' shard and chunk sizes, for tests only. */
   constructor(
     private readonly head?: string,
     private readonly chain?: string,
-  ) {}
+    caps: { shardCap: number; chunkShift: number } = {
+      shardCap: SHARD_CAP,
+      chunkShift: CHUNK_SHIFT,
+    },
+  ) {
+    this.partialLines = new ChunkedList(caps.chunkShift);
+    this.state = {
+      operatorPk: null,
+      registrarPk: null,
+      issues: new ShardedMap(caps.shardCap),
+      unregisteredIssues: new ShardedSet(caps.shardCap),
+      batches: new BallotBatches(caps.shardCap, caps.chunkShift),
+      unresolved: false,
+      stageBReason: null,
+    };
+  }
+
+  /** How many built-ins hold each growing collection; for tests. */
+  shardCounts(): {
+    issues: number;
+    unregisteredIssues: number;
+    partialLines: number;
+    batches: ReturnType<BallotBatches["shardCounts"]>;
+  } {
+    return {
+      issues: this.state.issues.shardCount,
+      unregisteredIssues: this.state.unregisteredIssues.shardCount,
+      partialLines: this.partialLines.chunkCount,
+      batches: this.state.batches.shardCounts(),
+    };
+  }
 
   /** True once a fatal line is found; later records cannot change the verdict. */
   get decided(): boolean {

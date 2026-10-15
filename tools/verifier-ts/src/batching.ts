@@ -11,6 +11,19 @@
 // `seq` and `ts` alone; its payload is never read (ET-24a "Which ballots
 // count", ET-24b). A registered ballot of an unregistered `issue_created`
 // (ET-18b) is neither: it never reaches this module.
+//
+// Every per-issue, per-interval and per-instant collection is a ShardedMap,
+// ShardedSet or ChunkedList (collections.ts): each grows with the number of
+// lines, and V8's own Map/Set/array caps would be a fixed line-count limit,
+// which evolution.md EV-24 forbids.
+
+import {
+  CHUNK_SHIFT,
+  ChunkedList,
+  SHARD_CAP,
+  ShardedMap,
+  ShardedSet,
+} from "./collections.js";
 
 /**
  * ET-23's offset: milliseconds since `1970-01-01T00:00:00.000Z` on the
@@ -128,7 +141,7 @@ interface IssueRun {
   /** ET-24b's w for the current run: `seq(P(f))`, or c when P(f) does not exist. */
   w: number;
   /** Instants of known runs this issue has LEFT. Equality lookups only. */
-  left: Set<number>;
+  left: ShardedSet<number>;
 }
 
 /**
@@ -157,10 +170,47 @@ interface IssueRun {
  * every issue it is a candidate of") shares.
  */
 export class BallotBatches {
-  private readonly issues = new Map<string, IssueRun>();
-  private readonly groups = new Map<number, IntervalGroup>();
+  private readonly issues: ShardedMap<string, IssueRun>;
+  private readonly groups: ShardedMap<number, IntervalGroup>;
   /** Every opaque ballot's `seq`, by instant, ascending (file order). */
-  private readonly opaqueAt = new Map<number, number[]>();
+  private readonly opaqueAt: ShardedMap<number, ChunkedList>;
+
+  /** `shardCap` and `chunkShift` are parameters for tests only. */
+  constructor(
+    private readonly shardCap: number = SHARD_CAP,
+    private readonly chunkShift: number = CHUNK_SHIFT,
+  ) {
+    this.issues = new ShardedMap(shardCap);
+    this.groups = new ShardedMap(shardCap);
+    this.opaqueAt = new ShardedMap(shardCap);
+  }
+
+  /**
+   * How many built-in Maps/Sets/arrays hold each collection, at most over
+   * issues for `left` and over instants for `opaqueAt`'s lists. For tests:
+   * it shows the caps are applied, so state past V8's limits stays possible.
+   */
+  shardCounts(): {
+    issues: number;
+    groups: number;
+    opaqueAt: number;
+    left: number;
+    opaqueList: number;
+  } {
+    let left = 0;
+    for (const r of this.issues.values())
+      left = Math.max(left, r.left.shardCount);
+    let opaqueList = 0;
+    for (const l of this.opaqueAt.values())
+      opaqueList = Math.max(opaqueList, l.chunkCount);
+    return {
+      issues: this.issues.shardCount,
+      groups: this.groups.shardCount,
+      opaqueAt: this.opaqueAt.shardCount,
+      left,
+      opaqueList,
+    };
+  }
 
   /**
    * Register an issue at its `issue_created` (seq `c`) with its ET-14b
@@ -186,7 +236,7 @@ export class BallotBatches {
       count: 0,
       firstSeq: 0,
       w: c,
-      left: new Set(),
+      left: new ShardedSet(this.shardCap),
     });
   }
 
@@ -202,9 +252,12 @@ export class BallotBatches {
       g.lastSeq = seq;
       g.lastMs = ms;
     }
-    const at = this.opaqueAt.get(ms);
-    if (at === undefined) this.opaqueAt.set(ms, [seq]);
-    else at.push(seq);
+    let at = this.opaqueAt.get(ms);
+    if (at === undefined) {
+      at = new ChunkedList(this.chunkShift);
+      this.opaqueAt.set(ms, at);
+    }
+    at.push(seq);
   }
 
   /**
@@ -230,7 +283,7 @@ export class BallotBatches {
     let hi = at.length;
     while (lo < hi) {
       const mid = (lo + hi) >>> 1;
-      if ((at[mid] as number) <= a) lo = mid + 1;
+      if ((at.at(mid) as number) <= a) lo = mid + 1;
       else hi = mid;
     }
     return at.length - lo;
