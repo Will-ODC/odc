@@ -60,6 +60,16 @@ the size of the input. This verifier (`src/input.ts`):
 - **Bounds claim recovery** at the same 64 MiB and at depth 1024
   (`CLAIM_MAX_DEPTH`, by EV-23's byte scan) before `JSON.parse` sees a
   candidate. Past either, that claim is `unavailable`.
+- **Keeps no per-line state in a capped built-in.** V8 caps a `Map` or `Set`
+  at 2^23 (8,388,608) entries and a pushed array at 2^26 elements, so each of
+  these would be a fixed line-count limit. The issue maps, the PARTIAL list
+  and every `BallotBatches` collection (issues, intervals, opaque ballots by
+  instant and each instant's list, each issue's left instants) are instead a
+  `ShardedMap`, `ShardedSet` or `ChunkedList` (`src/collections.ts`), split
+  across built-ins kept under their caps. Checked by hand: fixture 001's
+  genesis then 8,388,700 opaque `vote_cast` lines at distinct instants is
+  `PARTIAL` naming all 8,388,700, at about 3.9 GB resident (97 s); before
+  this it was exit 3, `Map maximum size exceeded`.
 - **Renders a PARTIAL line in pieces**, so a list of line numbers longer than
   V8's longest string still prints. Line numbers are JS numbers, exact to
   2^53 − 1.
@@ -251,7 +261,7 @@ Two stages, per `evolution.md` EV-6/EV-15:
 pnpm --filter @odc/verifier-ts test
 ```
 
-Sixteen files (fourteen suites and two shared builders), and the split between them is
+Seventeen files (fifteen suites and two shared builders), and the split between them is
 deliberate — **`contracts/fixtures/` is the sole oracle for what a given input
 verifies to.** `fixtures.test.ts` is the conformance suite; `robustness.test.ts`,
 `extreme-values.test.ts` and `report-shape.test.ts` assert only that a verdict
@@ -351,13 +361,21 @@ would be inventing conformance in a file no reviewer treats as normative.
   Synthetic chains, on the same terms as `genesis-ancestry.test.ts`.
 - **`test/limits.test.ts`** — EV-23/EV-24: a line of exactly 65536 bytes
   reaching its verdict (library and CLI, with its claim), lines past the limit
-  (a tool-level failure, exit 3, no report; or an earlier `INVALID` kept with
-  the endpoint `unavailable`), a 1 MiB line reaching a verdict, depth 3, 64,
+  (a tool-level failure, exit 3, no report, including after a line that is
+  only `PARTIAL`, since `PARTIAL` is settled only at the end; or an earlier
+  `INVALID` kept with the endpoint `unavailable`), a 1 MiB line reaching a verdict, depth 3, 64,
   65, 100000 and 1000000 (`INVALID` at the line, no throw), the EV-23 depth
   scan, claim recovery at and past `CLAIM_MAX_DEPTH`, 300,000 lines all listed
   in `PARTIAL`, the PARTIAL line rendered in pieces, the chunked reader against
   the in-memory split at chunk sizes down to one byte, and a directory as an
-  unreadable file.
+  unreadable file. Its temporary files (several over 64 MiB) are removed
+  after the run, as are every other suite's.
+- **`test/collections.test.ts`** — the uncapped collections: `ShardedMap`,
+  `ShardedSet` and `ChunkedList` against the built-ins' behaviour across shard
+  and chunk boundaries, one real `ShardedMap` past 2^23 entries, and the
+  verifier and `BallotBatches` run with tiny caps — every growing collection
+  must span several shards and every prefix of a busy chain must reach the
+  same verdict as under the default caps.
 - **`test/cli-exit-codes.test.ts`** — issue #194: a throw inside the CLI's work
   (forced in-process through `run`'s injectable verify) exits 3 with one
   stderr line and empty stdout, never 1; usage errors exit 3 with `usage:`.

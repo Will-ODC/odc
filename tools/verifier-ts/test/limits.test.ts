@@ -14,7 +14,7 @@
 //   - No fixed limit on the number of lines or on the input's size: the file
 //     is read in chunks, and a PARTIAL line is rendered in pieces.
 
-import { test } from "node:test";
+import { after, test } from "node:test";
 import assert from "node:assert/strict";
 import { spawnSync } from "node:child_process";
 import {
@@ -22,6 +22,7 @@ import {
   mkdtempSync,
   openSync,
   readFileSync,
+  rmSync,
   writeFileSync,
 } from "node:fs";
 import { tmpdir } from "node:os";
@@ -52,6 +53,8 @@ const here = dirname(fileURLToPath(import.meta.url));
 const cliPath = resolve(here, "../src/cli.js"); // dist/test -> dist/src/cli.js
 const vectors = resolve(here, "../../../../contracts/fixtures/vectors");
 const scratch = mkdtempSync(join(tmpdir(), "verifier-ts-limits-"));
+// Several files here are over 64 MiB; never leave them behind.
+after(() => rmSync(scratch, { recursive: true, force: true }));
 
 // Fixture 001: a one-line chain the corpus declares VALID.
 const GENESIS = readFileSync(resolve(vectors, "001-genesis-only.ndjson"));
@@ -191,6 +194,35 @@ test("a line past the limit after an earlier fatal line keeps that verdict", () 
     tokenAndLine(verifyExport(bytes, undefined, undefined, 65536)),
     "INVALID at line 2",
   );
+});
+
+test("a line past the limit after a PARTIAL-only line is a tool-level failure", () => {
+  // PARTIAL is not settled until the last line (a later line may be INVALID),
+  // so the over-limit line is reached before the verdict is established.
+  const x = xLine(2, GENESIS_HASH, 1000);
+  const over = "a".repeat(70000);
+  assert.equal(
+    tokenAndLine(verifyExport(exportOf([x.line]), undefined, undefined, 65536)),
+    "PARTIAL at lines 2",
+  );
+  assert.throws(
+    () => verifyExport(exportOf([x.line, over]), undefined, undefined, 65536),
+    LimitReached,
+  );
+});
+
+test("the CLI on a line past 64 MiB after a PARTIAL-only line: exit 3, no verdict", () => {
+  const x = xLine(2, GENESIS_HASH, 1000);
+  const file = writeScratch(
+    "len-over-after-partial.ndjson",
+    Buffer.concat([
+      GENESIS,
+      Buffer.from(x.line + "\n"),
+      Buffer.alloc(MAX_LINE_BYTES + 1, 0x61),
+      Buffer.from("\n"),
+    ]),
+  );
+  assertToolFailure(cli(file));
 });
 
 test("a 1 MiB line after a valid genesis reaches its verdict (both kinds)", () => {
@@ -340,8 +372,8 @@ test("300,000 lines: every one listed in PARTIAL, through the library and the CL
   assert.equal(v.verdict, "PARTIAL");
   const listed = v.verdict === "PARTIAL" ? v.lines : [];
   assert.equal(listed.length, n - 1);
-  assert.equal(listed[0], 2);
-  assert.equal(listed[listed.length - 1], n);
+  assert.deepEqual(listed.slice(0, 1), [2]);
+  assert.deepEqual(listed.slice(listed.length - 1, listed.length), [n]);
 
   const r = cli(writeScratch("many.ndjson", bytes));
   assert.equal(r.status, 2);
