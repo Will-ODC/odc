@@ -22,9 +22,13 @@ EV-7/EV-17:
   lines listed are those events plus every registered ballot whose batch or
   issue checks they leave unresolved (ET-18b, ET-24b). Exit `2`.
 
-Tool-level failures (bad usage, unreadable file) exit `3` and are never a chain
-verdict. The reason text after a verdict is **advisory only** and is not part of
-conformance (EV-17); conformance is the verdict token and line number(s) alone.
+Tool-level failures (bad usage, unreadable file) exit `3`, and an internal
+failure that reached no verdict exits `4` (EV-24); neither is ever a chain
+verdict. Every line within the EV-23 minimums (65536 bytes, depth 64) reaches
+its verdict; there is no limit on line length, line count or input size, and a
+line deeper than 64 is `INVALID` at that line as EV-24 permits (`API.md`,
+"Implementation limits"). The reason text after a verdict is **advisory
+only** and is not part of conformance (EV-17); conformance is the verdict token and line number(s) alone.
 
 `--chain` pins which chain (its genesis hash, EX-22; mismatch is `INVALID at
 line 1`), `--head` pins how much of it (EX-15). Either mismatch can only turn a
@@ -70,11 +74,13 @@ internal/verify/
   genesis_ancestry_test.go  ET-9e/ET-9f/ES-34 key set, EV-20/EV-21 (synthetic)
   genesis_keys_test.go      ET-9d, the two genesis keys are distinct (synthetic)
   issue_title_test.go       ET-14 title bounds, counted in scalars (synthetic)
+  limits_test.go            ET-9 contracts bound; EV-23/EV-24 length, depth, line count (synthetic)
   ballot_test.go            ET-23, ET-24, ET-24a + blamed lines (synthetic)
   ballot_opaque_test.go     ET-24b, ET-18b + a brute-force oracle (synthetic)
   parse_dupkeys_test.go     HA-6 duplicate keys across the parser's threshold
   report_test.go            EX-24 candidate-record splitting
 chain_report_test.go        --chain/--head precedence and the EX-24 report (CLI)
+limits_cli_test.go          EV-23/EV-24 at the CLI: long and deep lines, panic -> exit 4
 ```
 
 ## Dependencies
@@ -97,8 +103,8 @@ else. Each vector asserts only its verdict token and line number(s). The suite
 also pins the byte-exact preimage construction against
 `contracts/fixtures/preimages/`.
 
-Eight other suites sit alongside them and assert deliberately less. The first
-five are **synthetic**: `contracts/fixtures/` ships no vector for the rules they
+Ten other suites sit alongside them and assert deliberately less. The first
+six are **synthetic**: `contracts/fixtures/` ships no vector for the rules they
 cover, their chains are built by the same hashing and signing code the assertions
 run against, and they are therefore self-consistent by construction and pin no
 preimage shape. What each case demonstrates is differential — one edit to an
@@ -145,6 +151,18 @@ otherwise identical chain moves the verdict in the direction the rule names.
   hostile chains (3000 issues, 3000 opaque ballots at distinct instants; one
   shared interval, and 3000 distinct intervals) and
   bounds its allocation to a small multiple of the export size.
+- **`internal/verify/limits_test.go`** (synthetic) covers ADR-0038 as the specs
+  state it. ET-9's `contracts` bound on both sides of 64 bytes: ASCII, three-
+  and four-byte characters (16 four-byte characters are accepted, 65 bytes in
+  20 characters are not, so the count is bytes, not scalars), and escapes
+  counted once after decoding (`\u0001` plus 63 bytes is accepted though 69
+  bytes on the line; 64 `\u001f` escapes, 384 bytes on the line, are
+  accepted). EV-23/EV-24: a conforming unregistered line of 65535, 65536,
+  65537 bytes, 1 MiB and 4 MiB each reaches `PARTIAL`, and a fatal line after
+  it is still found; the parser parses depth 64 in full and stops at 65, with
+  depth measured by a separate transcription of EV-23's byte scan; brackets
+  inside strings are not depth; the depth limit never displaces an earlier
+  fatal line; and a 200000-line chain reaches its verdict.
 - **`internal/verify/parse_dupkeys_test.go`** covers HA-6 duplicate-key
   detection across the parser's linear-scan/set threshold, with the duplicate
   placed both before and after the crossing. It is not synthetic in the sense
@@ -173,3 +191,9 @@ otherwise identical chain moves the verdict in the direction the rule names.
   runtime fatal error rather than a panic — `recover()` cannot turn it back
   into a verdict — and because its exit status is 2, which collides with
   `PARTIAL`; the suite judges stdout first for exactly that reason.
+- **`limits_cli_test.go`** drives the same limits through the CLI, so a line
+  buffer in the read path (a `bufio.Scanner` at its 64 KiB default is the
+  classic one) would be caught: vector `001` plus a fatal line 2 of 65535,
+  65536, 65537 bytes and 1 MiB must print `INVALID at line 2`, exit `1`; lines
+  at depth 64, 65 and 1000000 print the same; and a panic injected into the
+  verdict or the EX-24 report exits `4` with empty stdout and no report.

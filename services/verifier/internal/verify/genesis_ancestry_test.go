@@ -5,7 +5,6 @@ import (
 	"crypto/sha256"
 	"encoding/hex"
 	"fmt"
-	"math"
 	"sort"
 	"strings"
 	"testing"
@@ -64,6 +63,8 @@ func bytes32(fill byte) []byte {
 // quietly produce.
 func jsonScalar(v any) string {
 	switch t := v.(type) {
+	case rawJSON:
+		return string(t)
 	case string:
 		if !utf8.ValidString(t) {
 			panic("test harness: string is not valid UTF-8 and has no canonical rendering")
@@ -81,6 +82,12 @@ func jsonScalar(v any) string {
 	}
 	panic("test harness: unsupported scalar")
 }
+
+// rawJSON is an already-rendered JSON token that jsonScalar emits verbatim.
+// It exists for the cases that need an escaped string (EX-9) on the line, such
+// as ET-9's "counted after unescaping" boundary; the test that uses it writes
+// the escapes by hand and owns their canonical form.
+type rawJSON string
 
 // renderLine emits one canonical event line: the seven envelope fields in
 // fixed order (ES-1/EX-7) with the payload keys sorted ascending (EX-8).
@@ -465,60 +472,34 @@ func TestUnregisteredGenesisVersionIsInvalidAtLineOne(t *testing.T) {
 	}
 }
 
-// The EV-21 message names the genesis versions this verifier registers, and
-// that list is the whole point of the message: it is what lets a reader decide
-// between "my verifier is out of date" and "this chain is corrupt". A list
-// maintained separately from the registry that decides the verdict would go
-// stale exactly when a new version is registered — the moment the message
-// matters — and would then send readers to settle the question against a
-// falsehood. These assertions pin the two directions of that agreement.
-func TestEV21VersionListAgreesWithTheRegistry(t *testing.T) {
-	list := registeredVersions("genesis")
-	if len(list) == 0 {
-		t.Fatal("no registered genesis versions; the EV-21 message would name none")
-	}
-
-	// Direction 1: everything the message names is genuinely registered.
-	named := map[int64]bool{}
-	for _, v := range list {
-		if !registered("genesis", v) {
-			t.Errorf("EV-21 names genesis version %d, which registered() rejects", v)
-		}
-		named[v] = true
-	}
-
-	// Direction 2: nothing registered is missing from the message. Probed
-	// rather than proved — the version space is int64 — over the range a
-	// registration would plausibly land in, plus the values the specs single
-	// out (EV-19's reserved 1000000, ES-5's 2^53-1 ceiling) and the edges.
-	probes := []int64{-1, 0, math.MinInt64, math.MaxInt64, 1 << 53, (1 << 53) - 1, 1_000_000}
-	for v := int64(1); v <= 2000; v++ {
-		probes = append(probes, v)
-	}
-	for _, v := range probes {
-		if registered("genesis", v) && !named[v] {
-			t.Errorf("genesis version %d is registered but the EV-21 message does not name it", v)
-		}
-	}
-
-	// And the message actually renders every one of them.
-	reason := unregisteredGenesisReason(1_000_000)
-	for _, v := range list {
-		if !strings.Contains(reason, fmt.Sprintf("%d", v)) {
-			t.Errorf("EV-21 message omits registered genesis version %d: %s", v, reason)
-		}
-	}
-}
-
-// EV-21 is advisory guidance, never conformance (EV-17), so this asserts only
-// that the guidance was followed at all — that the message names the version
-// seen, the versions registered, and BOTH readings. It is not a conformance
+// EV-21 (evolution.md v8) is advisory guidance, never conformance (EV-17), so
+// this asserts only that the guidance was followed: the message names the
+// version found, says the chain is corrupt, hostile or not an ODC chain (ET-6),
+// and does NOT advise fetching a newer verifier — ET-6 pins genesis at version
+// 1 forever, so no newer verifier registers another. It is not a conformance
 // assertion and no fixture backs it.
 func TestUnregisteredGenesisReasonFollowsEV21Guidance(t *testing.T) {
-	res := Verify(genesisExport(t, 1000000, nil), nil)
-	for _, want := range []string{"1000000", "out of date", "hostile"} {
-		if !strings.Contains(res.Reason, want) {
-			t.Errorf("EV-21 reason text missing %q; got: %s", want, res.Reason)
-		}
+	for _, version := range []int64{2, 1000000} {
+		t.Run(fmt.Sprintf("version_%d", version), func(t *testing.T) {
+			res := Verify(genesisExport(t, version, nil), nil)
+			if res.Verdict != INVALID || res.Line != 1 {
+				t.Fatalf("verdict = %s line %d, want INVALID line 1", res.Verdict, res.Line)
+			}
+			for _, want := range []string{
+				fmt.Sprintf("version %d", version), "corrupt", "hostile", "not an ODC chain", "ET-6", "EV-21",
+			} {
+				if !strings.Contains(res.Reason, want) {
+					t.Errorf("EV-21 reason text missing %q; got: %s", want, res.Reason)
+				}
+			}
+			// The v7 wording this replaces offered "this verifier may be out
+			// of date" as an equal reading; EV-21 v8 says not to.
+			lower := strings.ToLower(res.Reason)
+			for _, banned := range []string{"out of date", "newer verifier", "update", "upgrade"} {
+				if strings.Contains(lower, banned) {
+					t.Errorf("EV-21 reason text must not advise a newer verifier, but contains %q: %s", banned, res.Reason)
+				}
+			}
+		})
 	}
 }
