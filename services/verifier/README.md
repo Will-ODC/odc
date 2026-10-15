@@ -111,7 +111,8 @@ preimage shape. What each case demonstrates is differential — one edit to an
 otherwise identical chain moves the verdict in the direction the rule names.
 
 - **`internal/verify/genesis_ancestry_test.go`** (synthetic) covers the two
-  OPTIONAL `genesis` fork-ancestry keys (ET-9e/ET-9f), the REQUIRED half of the
+  OPTIONAL `genesis` fork-ancestry keys (ET-9e, and ET-9f's both-or-neither
+  rule of `event-types.md` v13), the REQUIRED half of the
   ES-18/ES-34 key set, and the unregistered-`genesis` rule (EV-20/EV-21). Every
   rejection case asserts the advisory reason as well as the verdict and line —
   not as conformance (EV-17 forbids that), but because "INVALID at line 1" is
