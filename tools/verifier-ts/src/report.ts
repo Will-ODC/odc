@@ -1,9 +1,10 @@
 // Rendering a Verdict as the CLI's stdout line.
 //
 // This lives in its own module rather than in cli.ts so tests can import it
-// without executing cli.ts, whose last statement calls process.exit().
+// without executing cli.ts, which runs the CLI on import.
 
 import type { Verdict } from "./verify.js";
+import { MAX_LINE_BYTES, type Candidates } from "./input.js";
 
 /**
  * Ceiling on ONE piece of interpolated, attacker-controlled text (`excerpt`).
@@ -14,9 +15,10 @@ const EXCERPT_MAX = 64;
 
 /**
  * Backstop ceiling on a whole rendered reason (`oneLine`). Generous enough for
- * the longest reason this verifier writes on purpose — EV-21's, which must name
- * the version encountered AND the versions registered, ~250 characters — and
- * small enough that no reason can ever be an output-size problem.
+ * the longest reason this verifier writes on purpose — EV-21's, which names
+ * the version found and says what a genesis at that version means, ~170
+ * characters — and small enough that no reason can ever be an output-size
+ * problem.
  */
 const REASON_MAX = 512;
 
@@ -80,19 +82,44 @@ export function excerpt(s: string): string {
   return oneLine(s, EXCERPT_MAX);
 }
 
-/** Render a verdict as the single stdout line, WITHOUT its trailing newline. */
-export function verdictLine(result: Verdict): string {
+/** How many line numbers one piece of a rendered PARTIAL line holds. */
+const PARTIAL_PIECE = 65536;
+
+/**
+ * Render a verdict as the single stdout line, WITHOUT its trailing newline, in
+ * pieces whose concatenation is that line. Written piece by piece, because a
+ * PARTIAL line lists every affected line number (EV-7, EV-17) and EV-24 sets
+ * no limit on how many there are: past roughly 60 million of them the joined
+ * line would be longer than the longest string V8 can build (~2^29 code
+ * units), and `join` would throw. Each piece is bounded.
+ */
+export function verdictPieces(
+  result: Verdict,
+  pieceSize: number = PARTIAL_PIECE,
+): string[] {
   switch (result.verdict) {
     case "VALID":
-      return "VALID";
+      return ["VALID"];
     case "INVALID": {
       const head = `INVALID at line ${result.line}`;
       const reason = result.reason === undefined ? "" : oneLine(result.reason);
-      return reason.length === 0 ? head : `${head}: ${reason}`;
+      return [reason.length === 0 ? head : `${head}: ${reason}`];
     }
-    case "PARTIAL":
-      return `PARTIAL at line${result.lines.length > 1 ? "s" : ""} ${result.lines.join(", ")}`;
+    case "PARTIAL": {
+      const lines = result.lines;
+      const pieces = [`PARTIAL at line${lines.length > 1 ? "s" : ""} `];
+      for (let i = 0; i < lines.length; i += pieceSize) {
+        const sep = i === 0 ? "" : ", ";
+        pieces.push(sep + lines.slice(i, i + pieceSize).join(", "));
+      }
+      return pieces;
+    }
   }
+}
+
+/** The verdict line as one string; for tests and short verdicts. */
+export function verdictLine(result: Verdict): string {
+  return verdictPieces(result).join("");
 }
 
 const HEX64 = /^[0-9a-f]{64}$/;
@@ -126,6 +153,13 @@ const UTF8 = new TextDecoder("utf-8", { fatal: true, ignoreBOM: true });
  * its claim, and nothing here recomputes a hash.
  */
 export function storedHashClaim(candidate: Uint8Array): string {
+  // EV-24: a limit reached only while recovering a claim makes that claim
+  // `unavailable`, never a tool-level failure. Both limits sit far above
+  // EV-23's minimums (65536 bytes, depth 64), so every candidate within them
+  // is still recovered. The depth limit is explicit so that no candidate,
+  // however deep, depends on JSON.parse's own handling of deep input.
+  if (candidate.length > MAX_LINE_BYTES) return UNAVAILABLE;
+  if (nestingDepthExceeds(candidate, CLAIM_MAX_DEPTH)) return UNAVAILABLE;
   try {
     const v: unknown = JSON.parse(UTF8.decode(candidate));
     if (
@@ -141,6 +175,35 @@ export function storedHashClaim(candidate: Uint8Array): string {
     // fall through: not UTF-8, not JSON, or too large to decode
   }
   return UNAVAILABLE;
+}
+
+/** Nesting depth past which a claim is not recovered (EV-24); EV-23 asks 64. */
+export const CLAIM_MAX_DEPTH = 1024;
+
+/**
+ * True if the line's nesting depth, as EV-23 defines it over the line's BYTES,
+ * goes past `max`. Outside a string, `"` opens one, `{`/`[` add one and
+ * `}`/`]` take one away unless the count is 0; inside a string, `\` skips the
+ * next byte and `"` closes it. A string still open at the end ends the scan.
+ * A single loop with a counter: no recursion, whatever the depth.
+ */
+export function nestingDepthExceeds(line: Uint8Array, max: number): boolean {
+  let depth = 0;
+  let inString = false;
+  for (let i = 0; i < line.length; i++) {
+    const c = line[i] as number;
+    if (inString) {
+      if (c === 0x5c) i++;
+      else if (c === 0x22) inString = false;
+    } else if (c === 0x22) {
+      inString = true;
+    } else if (c === 0x7b || c === 0x5b) {
+      if (++depth > max) return true;
+    } else if ((c === 0x7d || c === 0x5d) && depth > 0) {
+      depth--;
+    }
+  }
+  return false;
 }
 
 /** The two EX-24 endpoint claims, each 64 lowercase hex or "unavailable". */
@@ -201,7 +264,23 @@ export const HEAD_CLAIM_LABEL = "head hash (stored claim)";
  * Tool output, not conformance surface (EV-17, EX-24): no fixture asserts it.
  */
 export function storedClaimLines(bytes: Uint8Array): string | null {
-  const c = storedClaims(bytes);
+  return claimLines(storedClaims(bytes));
+}
+
+/**
+ * The same report from the candidates a streaming read kept (input.ts). A
+ * `null` candidate passed the line limit and was never held, so its claim is
+ * `unavailable` (EV-24). `undefined`: an empty input, no report.
+ */
+export function candidateClaimLines(c: Candidates | undefined): string | null {
+  if (c === undefined) return null;
+  return claimLines({
+    genesis: c.first === null ? UNAVAILABLE : storedHashClaim(c.first),
+    head: c.last === null ? UNAVAILABLE : storedHashClaim(c.last),
+  });
+}
+
+function claimLines(c: StoredClaims | null): string | null {
   if (c === null) return null;
   return `${GENESIS_CLAIM_LABEL}: ${c.genesis}\n${HEAD_CLAIM_LABEL}: ${c.head}\n`;
 }
