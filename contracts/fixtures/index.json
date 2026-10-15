@@ -1913,7 +1913,7 @@
         "EV-7",
         "EV-18"
       ],
-      "note": "Line 2 is exactly 65536 bytes, not counting its LF: the line-length minimum of EV-23. It is an x_ event (EV-18) whose one payload value is a long ASCII string, so it is well-formed and hash-checkable and its semantics go unchecked: PARTIAL with line 2 listed. Line 3 is a registered event whose prev_hash is line 2's hash, so a verifier that silently skips the long line fails the link at line 3, and one that truncates it no longer holds a line that parses. Every registered v1 line is far shorter (ET-9 and the other value bounds keep every one at or under 1302 bytes, EV-25), so only an unregistered type can reach this length. EV-24 requires every verifier to reach the verdict on this input. A verifier whose line limit is below 65536 bytes, or that counts the LF against it (for example a reader with a 65536-byte buffer that must also hold the LF), reports a tool-level failure or the wrong verdict here."
+      "note": "Line 2 is exactly 65536 bytes, not counting its LF: the line-length minimum of EV-23. It is an x_ event (EV-18) whose one payload value is a long ASCII string, so it is well-formed and hash-checkable and its semantics go unchecked: PARTIAL with line 2 listed. Line 3 is a registered event whose prev_hash is line 2's hash, so a verifier that silently skips the long line fails the link at line 3, and one that truncates it no longer holds a line that parses. Every conforming registered v1 line is at most 1302 bytes (ET-9 and the other value bounds, EV-25), so only an unregistered type can reach this length without being INVALID. EV-24 requires every verifier to reach the verdict on this input. A verifier whose line limit is below 65536 bytes, or that counts the LF against it (for example a reader with a 65536-byte buffer that must also hold the LF), reports a tool-level failure or the wrong verdict here."
     },
     {
       "id": "144-depth-64",
@@ -1929,6 +1929,18 @@
         "EV-16"
       ],
       "note": "Line 2 is at nesting depth exactly 64, the EV-23 minimum: the envelope object (1), payload (2) and 62 nested arrays in one payload value. A nested payload breaks ES-17, and EV-16 makes that INVALID at its own line even on an x_ type, so the verdict is INVALID at line 2, never PARTIAL. The line has no HA-7 preimage, so its stored hash is the one sealed before the arrays were added; that mismatch is on line 2 as well. Line 3 is a valid event linked to that stored hash. EV-24 requires a verifier to reach this verdict. It catches a verifier that reports a tool-level failure, crashes, reports PARTIAL because the type is unregistered, or skips the line and blames line 3. It cannot catch a depth limit below 64 that reports INVALID at line 2 when reached: EV-24 forbids such a limit, but allows INVALID on reaching any depth limit above 2, so the verdict is the same. The payload also holds the string \"[[[[\": EV-23's scan does not count brackets inside a string, so the depth is 64, while a scan that ignores strings measures 68; a verifier that refuses the line with a tool-level failure on that count refuses an input within the minimums."
+    },
+    {
+      "id": "145-contracts-empty",
+      "export": "vectors/145-contracts-empty.ndjson",
+      "expect": {
+        "verdict": "INVALID",
+        "line": 1
+      },
+      "cites": [
+        "ET-9"
+      ],
+      "note": "A genesis whose contracts value is the empty string: INVALID at the genesis line, because ET-9 requires a non-empty string and says a genesis whose contracts is empty or longer than 64 bytes MUST be rejected. The genesis is signed over this payload and hashed over that signature, so chain_id derives, the self-signature verifies and the hash matches: the empty value is the only fault. It pins ET-9's lower bound, which 137-142 do not reach. A verifier that checks only the upper bound, or only that the key is present with a string value (ES-18), reports VALID."
     }
   ]
 }

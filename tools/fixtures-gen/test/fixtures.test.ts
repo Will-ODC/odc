@@ -751,3 +751,24 @@ test("ET-9f: 086 carries ancestor_chain alone and is INVALID; 135/136 isolate wh
     assert.deepEqual(expectOf(id), { verdict: "INVALID", line: 1 }, id);
   }
 });
+
+test("145 pins ET-9's lower bound: an empty contracts, and nothing else wrong", () => {
+  const events = eventsOf("145-contracts-empty");
+  assert.equal(events.length, 1, "a bare genesis");
+  const g = events[0] as Event;
+  assert.equal(g.payload["contracts"], "", "contracts is the empty string");
+  // Single fault: the four-key genesis of 001 in every other value.
+  const base = (eventsOf("001-genesis-only")[0] as Event).payload;
+  for (const key of ["chain_id", "operator_pk", "registrar_pk"]) {
+    assert.equal(g.payload[key], base[key], key);
+  }
+  assert.deepEqual(
+    Object.keys(g.payload).sort(),
+    Object.keys(base).sort(),
+    "no ancestry or other key",
+  );
+  assert.deepEqual(expectOf("145-contracts-empty"), {
+    verdict: "INVALID",
+    line: 1,
+  });
+});
