@@ -1,25 +1,27 @@
 // The CLI's work, separated from process wiring (cli.ts) so tests can call it
 // in-process with an injected verify. Returns the exit code:
 //   0 VALID, 1 INVALID, 2 PARTIAL, >=3 tool-level error (bad args, unreadable
-//   file, or an internal error — any throw — inside the verifier itself).
+//   file, a limit reached under evolution.md EV-24, or an internal error — any
+//   throw — inside the verifier itself).
 // Per evolution.md EV-17 the exit code and reason text are NOT
 // conformance-checked — only the verdict token and line number(s) are — but
 // the non-normative CLI note pins this scheme so two verifiers do not diverge.
 
-import { readFileSync } from "node:fs";
-import { verifyExport } from "./verify.js";
-import { oneLine, storedClaimLines, verdictLine } from "./report.js";
+import { closeSync, openSync } from "node:fs";
+import { verifyRecords, type Verdict } from "./verify.js";
+import { FileRecords, LimitReached } from "./input.js";
+import { candidateClaimLines, oneLine, verdictPieces } from "./report.js";
 
 const HEX64 = /^[0-9a-f]{64}$/;
 
 export interface CliDeps {
-  verify: typeof verifyExport;
+  verify: typeof verifyRecords;
   out: (s: string) => void;
   err: (s: string) => void;
 }
 
 const defaultDeps: CliDeps = {
-  verify: verifyExport,
+  verify: verifyRecords,
   out: (s) => process.stdout.write(s),
   err: (s) => process.stderr.write(s),
 };
@@ -81,26 +83,62 @@ function main(argv: string[], deps: CliDeps): number {
     return 3;
   }
 
-  let bytes: Buffer;
+  // The file is read in chunks, never whole (input.ts): EV-24 forbids a fixed
+  // limit on the input's size, and readFileSync refuses anything over 2 GiB.
+  let fd: number;
   try {
-    bytes = readFileSync(file);
+    fd = openSync(file, "r");
   } catch {
     deps.err(`error: cannot read file: ${file}\n`);
     return 3;
   }
+  try {
+    return verifyFile(fd, file, head, chain, deps);
+  } finally {
+    closeSync(fd);
+  }
+}
 
-  const result = deps.verify(bytes, head, chain);
+function verifyFile(
+  fd: number,
+  file: string,
+  head: string | undefined,
+  chain: string | undefined,
+  deps: CliDeps,
+): number {
+  const records = new FileRecords(fd);
+  let result: Verdict;
+  let claims: string | null;
+  try {
+    result = deps.verify(records, head, chain);
+    // EX-24 needs the LAST candidate even when an early line decided the
+    // verdict, so read the rest of the input (without verifying it).
+    records.drain();
+    // EX-24: the STORED genesis-hash and head claims (never recomputed
+    // values), on STDERR only — stdout stays the one verdict line — after
+    // the verdict, on every run that produced a chain verdict over non-empty
+    // input, whatever that verdict is. null for an empty input, which has no
+    // endpoints. Tool output, not conformance surface (EV-17).
+    claims = candidateClaimLines(records.candidates());
+  } catch (e) {
+    if (e instanceof LimitReached) {
+      // EV-24: a limit reached before the verdict was established is a
+      // tool-level failure — no verdict line, no EX-24 report, exit >= 3.
+      deps.err(`odc-verify-ts: limit reached: ${oneLine(e.message)}\n`);
+      return 3;
+    }
+    if (isReadError(e)) {
+      deps.err(`error: cannot read file: ${file}\n`);
+      return 3;
+    }
+    throw e;
+  }
   // Render BOTH outputs before writing either, so a throw while rendering
   // reaches run()'s catch with stdout still empty (#194: exit 3, one stderr
   // line, no verdict, and therefore no EX-24 report either).
-  const line = verdictLine(result) + "\n";
-  // EX-24: the STORED genesis-hash and head claims (never recomputed values),
-  // on STDERR only — stdout stays the one verdict line — after the verdict, on
-  // every run that produced a chain verdict over non-empty input, whatever
-  // that verdict is. null for an empty input, which has no endpoints. Tool
-  // output, not conformance surface (EV-17).
-  const claims = storedClaimLines(bytes);
-  deps.out(line);
+  const pieces = verdictPieces(result);
+  pieces.push("\n");
+  for (const p of pieces) deps.out(p);
   if (claims !== null) deps.err(claims);
   switch (result.verdict) {
     case "VALID":
@@ -110,4 +148,14 @@ function main(argv: string[], deps: CliDeps): number {
     case "PARTIAL":
       return 2;
   }
+}
+
+// An error from the file system while reading (EISDIR, EIO, ...), as opposed
+// to a bug: it carries a string `code` and a `syscall`.
+function isReadError(e: unknown): boolean {
+  return (
+    typeof e === "object" &&
+    e !== null &&
+    typeof (e as { syscall?: unknown }).syscall === "string"
+  );
 }

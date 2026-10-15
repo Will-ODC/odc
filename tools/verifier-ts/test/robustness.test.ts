@@ -13,8 +13,8 @@ import { verifyExport } from "../src/verify.js";
 import { parseEventLine } from "../src/parse.js";
 
 test("verifyExport on ~200000 blank lines returns INVALID at line 1 and does not throw", () => {
-  // Every blank line is a framing fault (EX-5); frame() pushes one fault per
-  // line, so this previously built an invalidLines array far past the
+  // Every blank line is a framing fault (EX-5); the old frame() pushed one
+  // fault per line, so this previously built an invalidLines array far past the
   // argument-spread limit and crashed Math.min(...invalidLines) with an
   // uncaught RangeError instead of returning a verdict (violating EV-17: a
   // verifier must return exactly one of the three verdicts).
@@ -27,8 +27,9 @@ test("verifyExport on ~200000 blank lines returns INVALID at line 1 and does not
 });
 
 test("the canonical line parser accepts a syntactically valid line with a ~200000-char payload string", () => {
-  // The spec places no length bound on string values (ET-9 requires
-  // `contracts` only non-empty; ES-19 only well-formed UTF-8), so a long
+  // The spec bounds few string values (ET-9 caps `contracts` at 64 bytes and
+  // ET-14 caps `title`, but ES-19 asks only well-formed UTF-8 of the rest, and
+  // an unregistered type's strings are unbounded), so a long
   // payload value must still parse. Previously, String.fromCodePoint(...cps)
   // threw once the decoded string exceeded ~130k code points, and
   // parseEventLine's catch-all swallowed that RangeError as if the line were
