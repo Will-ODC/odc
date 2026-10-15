@@ -101,12 +101,12 @@ func run(args []string, stdout, stderr *os.File) int {
 		return 3
 	}
 
-	res, claims, ok := evaluate(data, verify.Options{Head: head, Chain: chain})
-	if !ok {
+	res, claims, failure := evaluate(data, verify.Options{Head: head, Chain: chain})
+	if failure != nil {
 		// EV-24: an internal failure is reported as a tool-level failure —
 		// never a chain verdict, and never a bare panic, whose Go exit status
 		// (2) would read as PARTIAL. Nothing has been written to stdout yet.
-		fmt.Fprintln(stderr, "error: internal failure; no verdict was reached (EV-24)")
+		fmt.Fprintf(stderr, "error: internal failure; no verdict was reached (EV-24): %v\n", failure)
 		return 4
 	}
 	var code int
@@ -157,22 +157,23 @@ var (
 )
 
 // evaluate computes the verdict AND the EX-24 report before either is printed,
-// and turns a panic anywhere in them into ok=false. EV-24 forbids ending
+// and turns a panic anywhere in them into a non-nil failure (the recovered
+// value, for the error message). EV-24 forbids ending
 // without a report "as a panic … would"; computing both first means a failure
 // can never leave a verdict line on stdout followed by a tool-level exit
 // status. (A Go runtime FATAL error — stack overflow, out of memory — is not a
 // panic and cannot be recovered; the parser's depth bound is what keeps the
 // first from happening, and the second is the host-resource exemption of
 // EV-24, reported only as far as the Go runtime lets the process report.)
-func evaluate(data []byte, opts verify.Options) (res verify.Result, claims endpointClaims, ok bool) {
+func evaluate(data []byte, opts verify.Options) (res verify.Result, claims endpointClaims, failure any) {
 	defer func() {
 		if r := recover(); r != nil {
-			ok = false
+			failure = r
 		}
 	}()
 	res = verifyWith(data, opts)
 	claims.genesis, claims.head, claims.ok = reportClaims(data)
-	return res, claims, true
+	return res, claims, nil
 }
 
 // EX-24 report labels (stderr). "stored claim" is the EX-24 distinction: the

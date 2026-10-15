@@ -242,6 +242,51 @@ func TestParserDepthLimitIsTheEV23Minimum(t *testing.T) {
 	}
 }
 
+// Depth is the number of levels open at once, not the number of brackets on
+// the line: closing a level must give it back. These lines are WIDE — many
+// sibling arrays — so a parser that never decremented would count them as
+// deep. Each must parse in full, and the separate EV-23 scan must agree on
+// the depth.
+func TestParserDepthIsNotBracketCount(t *testing.T) {
+	siblings := func(n int) string {
+		var b strings.Builder
+		for i := 0; i < n; i++ {
+			if i > 0 {
+				b.WriteByte(',')
+			}
+			fmt.Fprintf(&b, `"k%04d":[1]`, i)
+		}
+		return b.String()
+	}
+	wide := func(payload string) []byte {
+		return []byte(fmt.Sprintf(
+			`{"seq":2,"type":"x_wide","version":1,"payload":{%s},"ts":"2026-01-01T00:00:01.000Z","prev_hash":"%s","hash":"%s"}`,
+			payload, zeros64, strings.Repeat("1", 64)))
+	}
+	cases := []struct {
+		name  string
+		line  []byte
+		depth int
+	}{
+		{"63_siblings_at_depth_3", wide(siblings(63)), 3},
+		{"100_siblings_at_depth_3", wide(siblings(100)), 3},
+		{"100_siblings_then_depth_64_chain", wide(siblings(100) +
+			`,"z":` + strings.Repeat("[", 62) + "1" + strings.Repeat("]", 62)), 64},
+	}
+	for _, c := range cases {
+		t.Run(c.name, func(t *testing.T) {
+			if d := ev23Depth(c.line); d != c.depth {
+				t.Fatalf("EV-23 depth %d, want %d", d, c.depth)
+			}
+			_, ok, tooDeep := parseLine(c.line)
+			if tooDeep || !ok {
+				t.Fatalf("ok = %v, tooDeep = %v at EV-23 depth %d: the line is within the minimum and must parse in full",
+					ok, tooDeep, c.depth)
+			}
+		})
+	}
+}
+
 // On both sides of the boundary the required verdict is INVALID at the line
 // (ES-17): at 64 the verifier reaches it by parsing the line in full and
 // rejecting its shape, and at 65 by EV-24's rule that a depth limit above 2

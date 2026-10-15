@@ -116,6 +116,9 @@ func TestCLIPanicIsToolFailure(t *testing.T) {
 			if len(stdout) != 0 {
 				t.Fatalf("stdout must be empty on a tool-level failure, got %q", stdout)
 			}
+			if !strings.Contains(string(stderr), "internal failure") || !strings.Contains(string(stderr), "boom") {
+				t.Fatalf("stderr must name the failure and the recovered panic value, got %q", stderr)
+			}
 			if hasReport(string(stderr)) {
 				t.Fatalf("no EX-24 report on a tool-level failure, got %q", stderr)
 			}
