@@ -139,13 +139,13 @@ test("seeds a run of polls and one domain, so the flow works the moment it start
   // sides. A third choice would leave that screen with nowhere to put it.
   assert.equal(poll.json().method, "single");
   // The graph, not a lone poll: each answer names the question it opens.
-  assert.deepEqual(poll.json().next, ["ads-allowed", "pay-for-it"]);
+  assert.deepEqual(poll.json().next, ["pay-for-it", "ads-allowed"]);
   for (const id of poll.json().next) {
     const onward = await app.inject({ method: "GET", url: `/api/polls/${id}` });
     assert.equal(onward.statusCode, 200, `${id} should exist`);
     assert.equal(onward.json().acceptsSuggestions, true);
   }
-  assert.deepEqual(poll.json().choices, ["No", "Yes"]);
+  assert.deepEqual(poll.json().choices, ["Yes", "No"]);
   // Open when it starts, whenever that is — a seed that had gone stale would
   // open the demo on a poll nobody can answer.
   assert.equal(poll.json().open, true);

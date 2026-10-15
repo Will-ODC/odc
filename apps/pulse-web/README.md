@@ -56,7 +56,10 @@ does not change Pulse identity, ballot or data-use policies.
 `/?poll=ID` is a direct live conversation vote link
 (#301/#302). Existing `/conversation` and `/conversation?poll=ID` links remain supported, using the public Pulse API. Desktop has an Answered sidebar; phone and
 desktop offer a small Vote tab. It expands above the disabled assistant
-composer on phone and at the top right on desktop (operator layout experiment).
+composer on phone and at the top right below the banner on desktop (operator
+layout experiment). Desktop positioning follows the banner’s actual height,
+including the extra guest-vote cleanup control; cards keep the phone’s viewport
+height cap and scroll internally.
 The top-right × closes decision and result cards and returns to the small tab;
 its accessible name remains Close. Select then
 Submit; results appear in the card, with Change my answer, Close, and Next
@@ -84,3 +87,8 @@ It adds no tracking or persistent completion state, and uses no animation.
 Loading, missing and initially closed questions do not offer coaching. Next is
 explained only when a real answer-dependent destination exists; the foundation
 question list remains independent. No API or permissions change.
+
+Banner-spacing regression check: at 1440×900, compare the banner’s bottom edge
+with the top of both Vote and Show me how, before voting and after a guest vote
+adds Forget my votes here. Both controls must clear the banner by at least 8px.
+Also check the expanded card and 375×667 phone layout.

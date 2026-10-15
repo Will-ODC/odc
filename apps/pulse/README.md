@@ -80,6 +80,8 @@ pnpm --filter @odc/pulse-web dev   # app on http://localhost:5173
 
 No email is sent: sign-in links print in the API's terminal. The API loads
 three linked demo polls (edit `src/dev-server.ts` to change them).
+The opening sample lists Yes before No: Yes leads to funding, No to allowed ads.
+Existing database seed rows are retained; this ordering applies to fresh demos.
 
 - `@example.test` addresses join the community `demo-community`.
 - `@both.example.test` addresses are asked to pick between two communities.
