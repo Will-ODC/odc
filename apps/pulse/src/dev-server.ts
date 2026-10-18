@@ -81,11 +81,10 @@ const SEED = {
     {
       id: "ads-free",
       question: "Should the ODC stay free of paid ads?",
-      // Two choices, in the order the ballot shows them: the opening screen is
-      // a left/right swipe, and a third choice would have no side to land on.
-      choices: ["No", "Yes"],
+      // Yes appears first in the conversation demo; keep destinations aligned.
+      choices: ["Yes", "No"],
       method: "single",
-      next: ["ads-allowed", "pay-for-it"],
+      next: ["pay-for-it", "ads-allowed"],
       closesAt: new Date(Date.now() + THREE_DAYS_MS),
     },
     {

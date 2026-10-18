@@ -7,10 +7,10 @@
 // output, not conformance surface (EV-17), so they are asserted here and never
 // in fixtures.test.ts.
 
-import { test } from "node:test";
+import { after, test } from "node:test";
 import assert from "node:assert/strict";
 import { spawnSync } from "node:child_process";
-import { mkdtempSync, readFileSync, writeFileSync } from "node:fs";
+import { mkdtempSync, readFileSync, rmSync, writeFileSync } from "node:fs";
 import { tmpdir } from "node:os";
 import { dirname, join, resolve } from "node:path";
 import { fileURLToPath } from "node:url";
@@ -25,6 +25,7 @@ const here = dirname(fileURLToPath(import.meta.url));
 const cliPath = resolve(here, "../src/cli.js"); // dist/test -> dist/src/cli.js
 const vectors = resolve(here, "../../../../contracts/fixtures/vectors");
 const scratch = mkdtempSync(join(tmpdir(), "verifier-ts-chain-"));
+after(() => rmSync(scratch, { recursive: true, force: true }));
 
 const VALID4 = resolve(vectors, "002-four-types.ndjson"); // VALID, 4 lines
 const PARTIAL5 = resolve(vectors, "008-unregistered-type.ndjson"); // PARTIAL [5]

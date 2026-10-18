@@ -9,7 +9,6 @@ import (
 	"crypto/sha256"
 	"encoding/hex"
 	"fmt"
-	"strings"
 )
 
 // Verdict is the chain verdict token (EV-7/EV-17).
@@ -48,15 +47,8 @@ func invalid(line int, reason string) Result {
 }
 
 // registry is the contracts-v1 (type, version) registry (ET-1/ET-2): the four
-// v1 types, each registered only at version 1.
-//
-// It is the SINGLE source of truth, and deliberately so. Both the accept/reject
-// decision (registered) and the EV-21 advisory text (unregisteredGenesisReason)
-// read this one table, so the versions a reader is TOLD this verifier registers
-// cannot drift from the versions it actually does. A second hand-maintained list
-// would go stale exactly when it matters most — the moment a new genesis version
-// is registered — and EV-21's whole purpose is that the list is what lets the
-// reader go and settle the question.
+// v1 types, each registered only at version 1. It is the single source of
+// truth for the accept/reject decision (registered).
 var registry = map[string][]int64{
 	"genesis":                {1},
 	"participant_registered": {1},
@@ -64,40 +56,24 @@ var registry = map[string][]int64{
 	"vote_cast":              {1},
 }
 
-// registeredVersions returns the versions registered for typ, ascending, or nil
-// for an unregistered type. The returned slice is the registry's own and MUST
-// NOT be mutated by callers.
-func registeredVersions(typ string) []int64 {
-	return registry[typ]
-}
-
 // unregisteredGenesisReason builds the advisory reason text for an EV-20
 // rejection. Reason text is never conformance-checked (EV-17) — conformance
-// here is the token INVALID and the line number 1, and nothing else. EV-21 is
-// guidance, and its point is honesty: the log alone CANNOT distinguish
+// here is the token INVALID and the line number 1, and nothing else.
 //
-//	(a) "this verifier does not register (genesis, N) — it may be out of date
-//	    for this chain", from
-//	(b) "this chain's genesis is corrupt or hostile",
-//
-// and the two ask opposite things of the reader. A verifier that picks one
-// sends someone hunting for tampering when the remedy may be to fetch a newer
-// verifier, and teaches readers to treat a legitimate newer chain as an attack.
-// So we name both, name the version encountered, and name the genesis versions
-// we do register, which is what lets the reader go and settle it.
+// EV-21 (evolution.md v8) is the guidance followed here. `genesis` has no
+// version but 1, in this contracts version and every later one (ET-6 pins it;
+// ET-9e records that nothing reopens the genesis payload). So a genesis at any
+// other version is never a legitimate chain newer than this verifier, and a
+// newer verifier would reject it the same way. The text therefore names the
+// version found, says the chain is corrupt, hostile or not an ODC chain, and
+// deliberately does NOT suggest fetching a newer verifier: no newer verifier
+// registers another genesis version, so that advice would send the reader
+// looking for a remedy that does not exist.
 func unregisteredGenesisReason(version int64) string {
-	var have strings.Builder
-	for i, v := range registeredVersions("genesis") {
-		if i > 0 {
-			have.WriteString(", ")
-		}
-		fmt.Fprintf(&have, "%d", v)
-	}
 	return fmt.Sprintf(
-		"genesis at unregistered version %d (EV-20); this verifier registers genesis version %s. "+
-			"From the log alone these are indistinguishable: this verifier may be out of date for "+
-			"this chain, or this chain's genesis may be corrupt or hostile (EV-21)",
-		version, have.String())
+		"genesis at version %d (EV-20); genesis has no version but 1 (ET-6), "+
+			"so this chain is corrupt, hostile, or not an ODC chain (EV-21)",
+		version)
 }
 
 // registered reports whether (typ, version) is in the contracts-v1 registry
@@ -110,6 +86,10 @@ func registered(typ string, version int64) bool {
 	}
 	return false
 }
+
+// maxContractsBytes is ET-9's bound on `genesis.contracts`, in bytes of the
+// decoded string's UTF-8 encoding (event-types.md v14).
+const maxContractsBytes = 64
 
 // Permanent floors on the issue_created ballot batching parameters (ET-14b).
 // The values above the floors are per-issue and votable; that a floor exists is
@@ -177,7 +157,15 @@ func VerifyWith(data []byte, opts Options) Result {
 			return invalid(ln, "framing: "+reason)
 		}
 
-		obj, ok := parseObjectLine(lines[i])
+		obj, ok, tooDeep := parseLine(lines[i])
+		if tooDeep {
+			// EV-24: this verifier's depth limit (64, the EV-23 minimum) was
+			// reached. A limit above 2 establishes INVALID at this line, and
+			// no earlier line was fatal or we would have returned already.
+			return invalid(ln, fmt.Sprintf(
+				"nesting deeper than %d, this verifier's limit (EV-23/EV-24); "+
+					"any line deeper than 2 is INVALID (ES-15/ES-17, EV-16)", maxParseDepth))
+		}
 		if !ok {
 			return invalid(ln, "non-canonical line form (EX-7..EX-10)")
 		}
@@ -317,7 +305,6 @@ func stageBGenesis(st *vstate, e *event) (string, bool) {
 		return "genesis payload key set (ES-18/ES-34)", false
 	}
 	chainID := mustStr(e.payload, "chain_id")
-	contracts := mustStr(e.payload, "contracts")
 	operatorPK := mustStr(e.payload, "operator_pk")
 	registrarPK := mustStr(e.payload, "registrar_pk")
 	sig := mustStr(e.payload, "sig")
@@ -356,8 +343,21 @@ func stageBGenesis(st *vstate, e *event) (string, bool) {
 	if !isHex64(chainID) {
 		return "chain_id not 64 lowercase hex (ET-6)", false
 	}
-	if contracts == "" {
+	// ET-9 — `contracts` is a non-empty string of at most 64 bytes, counted
+	// on the UTF-8 encoding of the DECODED value: the string after JSON
+	// unescaping, the same value HA-2 hashes, never the escaped bytes on the
+	// line (EX-9). The parser has already unescaped it and checked it is valid
+	// UTF-8, so len() of the decoded Go string is exactly that count — an
+	// escaped control character such as `\u0001` (six bytes on the line) counts
+	// as one, and a four-byte scalar counts as four (bytes, not scalars: ET-9
+	// is not ET-14). The bound exists to bound the line (EV-25).
+	if v, _ := payloadGet(e.payload, "contracts"); v.kind != kString {
+		return "contracts is not a string (ET-9)", false
+	} else if len(v.str) == 0 {
 		return "contracts must be non-empty (ET-9)", false
+	} else if len(v.str) > maxContractsBytes {
+		return fmt.Sprintf("contracts is %d bytes decoded; at most %d allowed (ET-9)",
+			len(v.str), maxContractsBytes), false
 	}
 	if !isHex128(sig) {
 		return "sig not 128 lowercase hex (ES-31)", false

@@ -34,6 +34,9 @@ Next edges. All three introductory screens make no API requests and have no vide
 placeholder or working-comments claim. Video and comments are separate work.
 At standard text size the complete welcome fits one screen on phone and desktop;
 scrolling remains available for zoom, larger text and unusually short windows.
+The intro uses a centred heading, reading column and primary action. Numbered
+steps share the conversation card surfaces: three columns on desktop and compact
+rows on phones. All existing intro copy and routes are retained.
 
 For a container build, pass `--build-arg VITE_PULSE_FIRST_POLL_ID=<published-id>`.
 That configures the design question; `VITE_PULSE_DATA_POLL_ID`,
@@ -53,7 +56,10 @@ does not change Pulse identity, ballot or data-use policies.
 `/?poll=ID` is a direct live conversation vote link
 (#301/#302). Existing `/conversation` and `/conversation?poll=ID` links remain supported, using the public Pulse API. Desktop has an Answered sidebar; phone and
 desktop offer a small Vote tab. It expands above the disabled assistant
-composer on phone and at the top right on desktop (operator layout experiment).
+composer on phone and at the top right below the banner on desktop (operator
+layout experiment). Desktop positioning follows the banner’s actual height,
+including the extra guest-vote cleanup control; cards keep the phone’s viewport
+height cap and scroll internally.
 The top-right × closes decision and result cards and returns to the small tab;
 its accessible name remains Close. Select then
 Submit; results appear in the card, with Change my answer, Close, and Next
@@ -70,3 +76,19 @@ The swipe and old run screens are retired; `/preview/chat` remains sample data o
 The old choice screen's suggestion form and next-question preview rail are also
 retired; poll suggestions remain supported by the public API, without a form
 on this conversation page.
+
+Optional **Show me how** (#342) on an open question adds one small help callout
+and a visual spotlight around the real Vote, choices, Submit and results
+controls. It follows the current card state, including sending, failure/retry,
+closure and saved answers. Help never picks or submits. Skip/Done or Escape
+removes it and restores focus to Show me how; replay retains current choices.
+The guide is nonmodal: normal controls and keyboard navigation remain available.
+It adds no tracking or persistent completion state, and uses no animation.
+Loading, missing and initially closed questions do not offer coaching. Next is
+explained only when a real answer-dependent destination exists; the foundation
+question list remains independent. No API or permissions change.
+
+Banner-spacing regression check: at 1440×900, compare the banner’s bottom edge
+with the top of both Vote and Show me how, before voting and after a guest vote
+adds Forget my votes here. Both controls must clear the banner by at least 8px.
+Also check the expanded card and 375×667 phone layout.

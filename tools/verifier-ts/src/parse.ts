@@ -91,8 +91,21 @@ const TYPE_RE = /^[a-z][a-z0-9_]*$/;
 
 function parseString(r: Reader): { value: string; bytes: Buffer } {
   r.expect(0x22); // opening quote
+  // Code points are gathered in a bounded batch and flushed into `value`:
+  // `String.fromCodePoint(...cps)` over the whole string blows the call stack
+  // (`RangeError: Maximum call stack size exceeded`) once cps passes ~130k
+  // entries, and one array per string would cost 8 bytes per character. A
+  // string value may be as long as the line (ET-9 and ET-14 bound only
+  // `contracts` and `title`; ES-19 asks only well-formed UTF-8), and the line
+  // may be far longer than EV-23's 65536-byte minimum, up to this verifier's
+  // own limit (input.ts).
   const cps: number[] = [];
+  let value = "";
   for (;;) {
+    if (cps.length >= 8192) {
+      value += String.fromCodePoint(...cps);
+      cps.length = 0;
+    }
     const c = r.next();
     if (c === 0x22) break; // closing quote
     if (c === 0x5c) {
@@ -190,15 +203,7 @@ function parseString(r: Reader): { value: string; bytes: Buffer } {
     if (cp > 0x10ffff) throw new ParseFail("UTF-8 out of range");
     cps.push(cp);
   }
-  // Build the string in chunks: String.fromCodePoint(...cps) blows the call
-  // stack (`RangeError: Maximum call stack size exceeded`) once cps exceeds
-  // ~130k entries. The spec places no length bound on string values (ET-9
-  // requires `contracts` only non-empty; ES-19 only well-formed UTF-8), so a
-  // long-but-valid payload must still parse.
-  let value = "";
-  for (let i = 0; i < cps.length; i += 8192) {
-    value += String.fromCodePoint(...cps.slice(i, i + 8192));
-  }
+  value += String.fromCodePoint(...cps);
   return { value, bytes: Buffer.from(value, "utf8") };
 }
 
