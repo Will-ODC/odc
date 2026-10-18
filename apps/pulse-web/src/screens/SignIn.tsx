@@ -204,7 +204,7 @@ export function SignIn({ api }: { api: PulseApi }) {
 
   return (
     <ScreenFrame>
-      <h1 className="signin__title">Your campus is deciding something.</h1>
+      <h1 className="signin__title">Sign in with your email</h1>
       <p className="signin__lede">
         Enter your email and we will send you a link. There is no password to
         make up.

@@ -18,6 +18,14 @@
   margin: var(--step) 0 calc(var(--step) * 2);
   overflow-wrap: anywhere;
 }
+/*
+ * The heading takes focus on arrival so a screen reader starts here. It is not
+ * a control and Tab never reaches it, so the browser's ring around it marks
+ * nothing anyone can operate: it only read as a stray box around the title.
+ */
+.welcome h1:focus {
+  outline: none;
+}
 .welcome__lede,
 .welcome__first {
   max-width: 58ch;
