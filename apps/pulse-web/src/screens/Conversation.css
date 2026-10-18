@@ -36,6 +36,10 @@
   margin: var(--step) 0 var(--gutter);
   overflow-wrap: anywhere;
 }
+/* Focused on arrival for screen readers only; see `.welcome h1:focus`. */
+.conversation__hero h1:focus {
+  outline: none;
+}
 .conversation__hero > p,
 .conversation__note,
 .conversation__empty,
