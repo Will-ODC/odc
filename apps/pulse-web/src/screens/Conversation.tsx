@@ -1,10 +1,12 @@
 import { useCallback, useEffect, useRef, useState } from "react";
 import type { Poll, PulseApi, Results } from "../api/types.js";
 import { cardStatus, closingNote, nextFor } from "../flow/conversation.js";
+import { guideFor } from "../flow/vote-help.js";
 import { pathOf } from "../flow/route.js";
 import { usePoll } from "../hooks/use-poll.js";
 import { useCastVote } from "../hooks/use-cast-vote.js";
 import { useClosedResults } from "../hooks/use-closed-results.js";
+import { ControlGuide } from "../components/ControlGuide.js";
 import { VoteCard } from "../components/VoteCard.js";
 import { ClosedResults } from "../components/ClosedResults.js";
 import { ViewState } from "../components/ViewState.js";
@@ -335,6 +337,9 @@ function LiveCard({
   const [showSaved, setShowSaved] = useState(Boolean(saved));
   const [collapsed, setCollapsed] = useState(false);
   const [visible, setVisible] = useState(false);
+  const [helping, setHelping] = useState(false);
+  const help = useRef<HTMLButtonElement>(null);
+  const guideRoot = useRef<HTMLDivElement>(null);
   const show = useRef<HTMLButtonElement>(null);
   const wrapper = useRef<HTMLDivElement>(null);
   const wasVisible = useRef(true);
@@ -377,11 +382,51 @@ function LiveCard({
   function close() {
     setVisible(false);
   }
+  const guide = guideFor(
+    visible,
+    collapsed,
+    showing.kind,
+    picked.length > 0,
+    Boolean(next),
+  );
+  const dismissHelp = () => {
+    setHelping(false);
+    help.current?.focus();
+  };
+  const helpButton = poll.open ? (
+    <button
+      type="button"
+      ref={help}
+      onClick={() => {
+        setHelping(true);
+      }}
+    >
+      Show me how
+    </button>
+  ) : null;
+  const coach = helping ? (
+    <ControlGuide
+      root={guideRoot}
+      selector={guide.selector}
+      text={guide.text}
+      finished={guide.finished}
+      onDismiss={dismissHelp}
+    />
+  ) : null;
   if (!visible)
     return (
-      <button type="button" ref={show} onClick={() => setVisible(true)}>
-        Vote
-      </button>
+      <div ref={guideRoot} className="conversation__help">
+        <button
+          type="button"
+          data-guide="open"
+          ref={show}
+          onClick={() => setVisible(true)}
+        >
+          Vote
+        </button>
+        {helpButton}
+        {coach}
+      </div>
     );
   if (shut && closed.showing)
     return (
@@ -398,33 +443,37 @@ function LiveCard({
       </div>
     );
   return (
-    <div ref={wrapper}>
-      <VoteCard
-        question={poll.question}
-        why={closingNote({ ...poll, open: !shut })}
-        method={poll.method}
-        choices={poll.choices.map((label, index) => ({
-          index,
-          label,
-          ...(poll.next[index] ? { detail: "Opens another question" } : {}),
-        }))}
-        picked={picked}
-        status={showing}
-        privacyNote="Your answer is private."
-        trustHref={pathOf({ kind: "trust" })}
-        collapsed={collapsed}
-        onPick={setPicked}
-        onSubmit={(ballot) => {
-          onBusy(true);
-          cast(ballot);
-        }}
-        onCollapse={setCollapsed}
-        onClose={close}
-        {...(showing.kind === "answered" && poll.open
-          ? { onChangeAnswer: change }
-          : {})}
-        {...(next ? { onNext: () => onGo(next) } : {})}
-      />
+    <div ref={guideRoot}>
+      {helpButton}
+      {coach}
+      <div ref={wrapper}>
+        <VoteCard
+          question={poll.question}
+          why={closingNote({ ...poll, open: !shut })}
+          method={poll.method}
+          choices={poll.choices.map((label, index) => ({
+            index,
+            label,
+            ...(poll.next[index] ? { detail: "Opens another question" } : {}),
+          }))}
+          picked={picked}
+          status={showing}
+          privacyNote="Your answer is private."
+          trustHref={pathOf({ kind: "trust" })}
+          collapsed={collapsed}
+          onPick={setPicked}
+          onSubmit={(ballot) => {
+            onBusy(true);
+            cast(ballot);
+          }}
+          onCollapse={setCollapsed}
+          onClose={close}
+          {...(showing.kind === "answered" && poll.open
+            ? { onChangeAnswer: change }
+            : {})}
+          {...(next ? { onNext: () => onGo(next) } : {})}
+        />
+      </div>
       {shut ? (
         <button type="button" ref={closed.triggerRef} onClick={closed.open}>
           See results

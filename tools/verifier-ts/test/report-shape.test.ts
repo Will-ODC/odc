@@ -16,7 +16,7 @@
 import { test } from "node:test";
 import assert from "node:assert/strict";
 import { execFileSync } from "node:child_process";
-import { mkdtempSync, readFileSync, writeFileSync } from "node:fs";
+import { mkdtempSync, readFileSync, rmSync, writeFileSync } from "node:fs";
 import { tmpdir } from "node:os";
 import { fileURLToPath } from "node:url";
 import { dirname, join, resolve } from "node:path";
@@ -135,6 +135,8 @@ function runCli(bytes: Buffer): { stdout: string; status: number } {
   } catch (e) {
     const err = e as { stdout?: string; status?: number };
     return { stdout: err.stdout ?? "", status: err.status ?? -1 };
+  } finally {
+    rmSync(dir, { recursive: true, force: true });
   }
 }
 

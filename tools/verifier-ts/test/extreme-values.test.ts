@@ -198,7 +198,10 @@ function assertWellFormedVerdict(v: Verdict, name: string): void {
       assert.ok(v.line >= 1, `${name}: line number must be 1-based`);
       return;
     case "PARTIAL":
-      assert.ok(Array.isArray(v.lines), `${name}: PARTIAL must name lines`);
+      assert.ok(
+        [...v.lines].every((n) => Number.isInteger(n) && n >= 1),
+        `${name}: PARTIAL must name 1-based line numbers`,
+      );
       assert.ok(v.lines.length > 0, `${name}: PARTIAL needs at least one line`);
       return;
     default:

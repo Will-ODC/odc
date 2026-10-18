@@ -30,7 +30,52 @@ alone — but the CLI note fixes this scheme so the two verifiers agree, and
 | tool error (any cause) | one line on stderr              | ≥ 3  |
 
 On a verdict over a non-empty input, stderr also carries the two EX-24
-stored-claim lines (below); a tool error never does.
+stored-claim lines (below); a tool error never does. A tool error is an
+unreadable file, bad usage, a malformed anchor, an internal error, or a limit
+reached under EV-24 (below).
+
+## Limits (EV-23, EV-24)
+
+`evolution.md` §7 fixes two minimums every verifier accepts — a line of
+**65536** bytes (without its LF) and a nesting depth of **64**, depth counted
+over the line's bytes — and forbids any fixed limit on the number of lines or
+the size of the input. This verifier (`src/input.ts`):
+
+- **Reads the file in 1 MiB chunks**, never whole, and verifies one record at
+  a time. `readFileSync` refuses files over 2 GiB, which would be a fixed limit
+  on input size. After a fatal line it stops verifying but keeps reading, only
+  to find EX-24's last candidate.
+- **Has one within-line limit: 64 MiB per line** (`MAX_LINE_BYTES`, 1024 × the
+  minimum). A longer line, when no earlier line has decided the verdict, is a
+  tool-level failure: exit 3, `odc-verify-ts: limit reached: …` on stderr, no
+  verdict line and no EX-24 report. After an earlier fatal line, it changes
+  nothing: that `INVALID` stands, and if the long line is an endpoint its claim
+  is `unavailable` (EV-24 allows that for a limit reached only while
+  recovering a claim). The limit exists so a line far past any conforming one
+  is refused on purpose, rather than by V8's string-length cap.
+- **Needs no depth limit for verification.** The line parser is one
+  non-recursive pass that rejects the first `{` or `[` opening a third level
+  (ES-17, EV-16), so any line deeper than 2 is `INVALID` at that line before
+  depth could matter — the verdict EV-24 says is established before any limit.
+- **Bounds claim recovery** at the same 64 MiB and at depth 1024
+  (`CLAIM_MAX_DEPTH`, by EV-23's byte scan) before `JSON.parse` sees a
+  candidate. Past either, that claim is `unavailable`.
+- **Keeps no per-line state in a capped built-in.** V8 caps a `Map` or `Set`
+  at 2^23 (8,388,608) entries and a pushed array at 2^26 elements, so each of
+  these would be a fixed line-count limit. The issue maps, the PARTIAL list
+  and every `BallotBatches` collection (issues, intervals, opaque ballots by
+  instant and each instant's list, each issue's left instants) are instead a
+  `ShardedMap`, `ShardedSet` or `ChunkedList` (`src/collections.ts`), split
+  across built-ins kept under their caps. Checked by hand: fixture 001's
+  genesis then 8,388,700 opaque `vote_cast` lines at distinct instants is
+  `PARTIAL` naming all 8,388,700, at about 3.9 GB resident (97 s); before
+  this it was exit 3, `Map maximum size exceeded`.
+- **Renders a PARTIAL line in pieces**, so a list of line numbers longer than
+  V8's longest string still prints. Line numbers are JS numbers, exact to
+  2^53 − 1.
+
+Running out of memory is EV-24's host-resource exemption; V8 aborts the
+process and no report is possible.
 
 **The verdict is exactly ONE line**, and any advisory reason (EV-17, EV-21) sits
 after a colon on that same line — never on a second line. Consumers parse the
@@ -105,7 +150,10 @@ chain anchors. Read them with the verdict and an independently trusted
   yields its claim.
 - **When.** Not for an empty input (no endpoints), and not on a tool error,
   where no verdict was produced: an unreadable file, bad usage, a malformed
-  anchor, or an internal error (#194: exit 3, one stderr line, empty stdout).
+  anchor, an internal error (#194: exit 3, one stderr line, empty stdout), or
+  an EV-24 limit.
+- **Limits.** A candidate longer than 64 MiB or deeper than 1024 is
+  `unavailable` (EV-24; see Limits above).
 
 stdout stays exactly the one verdict line. These lines are **tool output, not
 conformance surface**: EV-17 judges conformance on the verdict token and line
@@ -127,6 +175,8 @@ Two stages, per `evolution.md` EV-6/EV-15:
 - **Stage B (per registered `(type, version)`):** payload key-set (including
   `genesis`'s two OPTIONAL ancestry keys `ancestor_chain` / `ancestor_head` and
   the ET-9f presence rule between them — format-checked, never resolved), the
+  ET-9 bound on `genesis.contracts` (1 to 64 bytes of the decoded value's
+  UTF-8 encoding, not escaped line bytes and not UTF-16 `.length`), the
   ET-9d distinctness of the two `genesis` keys, Ed25519
   signatures under the type's named key (with the ET-4a/ET-4b canonical-encoding
   and ET-4c prime-order checks run on the raw bytes _before_ the verify
@@ -200,7 +250,10 @@ Two stages, per `evolution.md` EV-6/EV-15:
   `PARTIAL` for that line, never `INVALID` (EV-8) — **except at line 1**, where
   an unregistered `genesis` is `INVALID at line 1` (EV-20, the sole exception),
   because an unreadable `genesis` payload leaves every later signature
-  uncheckable.
+  uncheckable. Its reason text follows EV-21 (v8): it names the version found
+  and says that, since ET-6 pins `genesis.version` at 1, the chain is corrupt,
+  hostile or not an ODC chain. It does not suggest a newer verifier: none
+  registers another `genesis` version.
 
 ## Tests
 
@@ -208,13 +261,13 @@ Two stages, per `evolution.md` EV-6/EV-15:
 pnpm --filter @odc/verifier-ts test
 ```
 
-Fourteen files (twelve suites and two shared builders), and the split between them is
+Seventeen files (fifteen suites and two shared builders), and the split between them is
 deliberate — **`contracts/fixtures/` is the sole oracle for what a given input
 verifies to.** `fixtures.test.ts` is the conformance suite; `robustness.test.ts`,
 `extreme-values.test.ts` and `report-shape.test.ts` assert only that a verdict
 of the right _shape_ came back at all, and `cli-exit-codes.test.ts` only the
-exit status. `genesis-ancestry.test.ts` and `genesis-key-distinctness.test.ts`
-are exceptions and say so in their own headers: they assert verdict values for
+exit status. `genesis-ancestry.test.ts`, `genesis-key-distinctness.test.ts` and
+`genesis-contracts.test.ts` are exceptions and say so in their own headers: they assert verdict values for
 rules the fixture corpus does not yet cover, from synthetic chains, and are
 superseded by a fixture the day one lands; `ballot-batching.test.ts`,
 `opaque-ballots.test.ts` and `opaque-bruteforce.test.ts` are further such
@@ -299,6 +352,30 @@ would be inventing conformance in a file no reviewer treats as normative.
   availability (last repeated `hash`, no normalisation, strict UTF-8, BOM,
   non-objects, nested keys), each endpoint independent of the other, and no
   report on empty input or any tool error.
+- **`test/genesis-contracts.test.ts`** — ET-9's 64-byte bound on
+  `genesis.contracts`, both sides of the boundary in each unit where bytes,
+  UTF-16 length and escaped line length differ: ASCII, two-, three- and
+  four-byte characters, `\u0001` and short escapes counted once, surrogate-pair
+  escapes (non-canonical under EX-9 whatever their length), empty and integer
+  values. Also EV-21's reason text for a `genesis` at version 2 and 1000000.
+  Synthetic chains, on the same terms as `genesis-ancestry.test.ts`.
+- **`test/limits.test.ts`** — EV-23/EV-24: a line of exactly 65536 bytes
+  reaching its verdict (library and CLI, with its claim), lines past the limit
+  (a tool-level failure, exit 3, no report, including after a line that is
+  only `PARTIAL`, since `PARTIAL` is settled only at the end; or an earlier
+  `INVALID` kept with the endpoint `unavailable`), a 1 MiB line reaching a verdict, depth 3, 64,
+  65, 100000 and 1000000 (`INVALID` at the line, no throw), the EV-23 depth
+  scan, claim recovery at and past `CLAIM_MAX_DEPTH`, 300,000 lines all listed
+  in `PARTIAL`, the PARTIAL line rendered in pieces, the chunked reader against
+  the in-memory split at chunk sizes down to one byte, and a directory as an
+  unreadable file. Its temporary files (several over 64 MiB) are removed
+  after the run, as are every other suite's.
+- **`test/collections.test.ts`** — the uncapped collections: `ShardedMap`,
+  `ShardedSet` and `ChunkedList` against the built-ins' behaviour across shard
+  and chunk boundaries, one real `ShardedMap` past 2^23 entries, and the
+  verifier and `BallotBatches` run with tiny caps — every growing collection
+  must span several shards and every prefix of a busy chain must reach the
+  same verdict as under the default caps.
 - **`test/cli-exit-codes.test.ts`** — issue #194: a throw inside the CLI's work
   (forced in-process through `run`'s injectable verify) exits 3 with one
   stderr line and empty stdout, never 1; usage errors exit 3 with `usage:`.

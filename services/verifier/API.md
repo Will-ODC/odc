@@ -118,12 +118,18 @@ labels, order and formatting free. No fixture asserts them.
 | `VALID`                        | 0    |
 | `INVALID`                      | 1    |
 | `PARTIAL`                      | 2    |
-| Tool-level error (usage, I/O)  | ≥ 3  |
+| Tool-level error (usage, I/O)  | 3    |
+| Internal failure, no verdict (EV-24) | 4 |
 
 Exit codes follow the non-normative CLI note of EV-17; they are pinned for
 cross-implementation consistency but are not themselves conformance-checked. A
 tool-level error (bad usage, unreadable file, malformed `--head` or `--chain`) is never a
-chain verdict.
+chain verdict. Exit `4` is an internal failure that reached no verdict: the
+verdict and the EX-24 report are both computed before anything is printed, and
+a panic in either is caught and reported this way, with nothing on stdout and
+no EX-24 lines, rather than dying with Go's panic status `2`, which would read
+as `PARTIAL` (EV-24). A Go runtime fatal error (stack overflow, out of memory)
+is not a panic and cannot be caught; see "Implementation limits".
 
 ## What is checked
 
@@ -145,7 +151,10 @@ Two stages (EV-6):
   keys and their presence rule (ES-34, ET-9e/ET-9f), key formats (ET-9b, ID-3),
   the distinctness of the two `genesis` keys (ET-9d),
   `chain_id` derivation
-  (ET-7), title bounds and forbidden characters (ET-14), `choice_count` range
+  (ET-7), the `genesis.contracts` bound (ET-9: a string of 1 to 64 bytes,
+  counted on the UTF-8 encoding of the decoded value, after unescaping — so
+  `\u0001` on the line counts as one byte and a four-byte character as four),
+  title bounds and forbidden characters (ET-14), `choice_count` range
   (ET-14a), the ballot batching parameters and their floors (ET-14b),
   `issue_id` back-reference (ET-18/ID-8, including ET-18b), `choice` range
   (ET-18a), and the ballot publication discipline of `contracts/event-types.md`
@@ -250,10 +259,17 @@ The v1 registry is the four types `genesis`, `participant_registered`,
 unregistered `(type, version)` yields `PARTIAL` for that line, never `INVALID`
 (EV-8/EV-9) — with the single exception of `genesis`, which MUST be registered:
 a chain whose first line carries a `(genesis, version)` this verifier does not
-register is `INVALID` at line 1 (EV-20). The reason text there names the version
-seen and the `genesis` versions registered, and says plainly that "this verifier
-is out of date" and "this genesis is corrupt or hostile" are indistinguishable
-from the log alone — advisory guidance (EV-21), not conformance.
+register is `INVALID` at line 1 (EV-20). `genesis` has no version but 1, in
+this contracts version and every later one (ET-6), so the reason text there
+names the version found and says the chain is corrupt, hostile, or not an ODC
+chain; it does not suggest fetching a newer verifier, because no newer verifier
+registers another `genesis` version. For a `genesis` at version 2:
+
+```
+INVALID at line 1: genesis at version 2 (EV-20); genesis has no version but 1 (ET-6), so this chain is corrupt, hostile, or not an ODC chain (EV-21)
+```
+
+That text is advisory guidance (EV-21), not conformance.
 
 ### Fork ancestry on `genesis` (ET-9e/ET-9f)
 
@@ -262,8 +278,43 @@ parent chain's genesis hash — the value that **names** a chain (ET-7a) — and
 `ancestor_head`, the parent's head at the fork, a **position on** the chain that
 name identifies. The verifier checks the format of each key present
 (`^[0-9a-f]{64}$`, never the 64-zero anchor) and one presence rule:
-`ancestor_head` MUST NOT appear without `ancestor_chain`, while `ancestor_chain`
-MAY appear alone. That asymmetry is deliberate. The two values may be equal —
+`ancestor_head` MUST NOT appear without `ancestor_chain`. The current spec
+(ET-9f, `event-types.md` v13 and later) requires **both keys or neither**; this
+build still accepts `ancestor_chain` alone until the ET-9f change lands with
+the flip of vector `086` (#366). The two values may be equal —
 that is what a fork from a parent holding only its genesis produces — and
 neither is resolved: both are a recorded claim, not a verified link, and being
 unable to resolve one is never a defect.
+
+## Implementation limits (EV-23, EV-24)
+
+`contracts/evolution.md` §7 sets two minimums every verifier must accept on
+every line: **65536 bytes** (the LF excluded) and **nesting depth 64**, depth
+counted over the line's bytes as EV-23 defines it (brackets inside strings do
+not count). On any input within them this verifier reaches the verdict the
+specs require. It sets no limit on the number of lines or the size of the input
+(EV-24); the file is read whole, so memory is the only bound.
+
+- **Line length:** no limit. There is no line buffer of fixed size anywhere in
+  the read path; a line of any length reaches its verdict.
+- **Nesting depth:** the parser's one within-line limit is depth **64**, the
+  EV-23 minimum: a line at depth 64 is parsed in full, and the limit is first
+  reached when a 65th level opens. Every line deeper than 2 is `INVALID`
+  whatever else it holds (ES-15/ES-17, EV-16), so EV-24 lets a verifier that
+  reaches a depth limit above 2, with no fatal earlier line, report `INVALID`
+  at that line instead of a tool-level failure. This verifier does: it scans in
+  file order and stops at the first fatal line, so it only parses a line when no
+  earlier one was fatal. The output is, for example,
+
+  ```
+  INVALID at line 2: nesting deeper than 64, this verifier's limit (EV-23/EV-24); any line deeper than 2 is INVALID (ES-15/ES-17, EV-16)
+  ```
+
+  with exit `1` and the usual EX-24 report on stderr.
+- **EX-24 claims** are recovered by a separate, lenient JSON decode with its
+  own depth bound (10000); reaching it makes that claim `unavailable`, never a
+  tool-level failure (EV-24).
+- **Host resources:** running out of memory or time is EV-24's one exemption.
+  Go reports out-of-memory as a runtime fatal error, which exits with status 2
+  and prints no verdict; a consumer must treat status 2 **without** a
+  `PARTIAL` line on stdout as a failure, never as `PARTIAL`.

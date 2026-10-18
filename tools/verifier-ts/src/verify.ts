@@ -21,16 +21,39 @@ import {
   isPrimeOrderKey,
 } from "./crypto.js";
 import { BallotBatches, epochMs, isQuantized } from "./batching.js";
+import {
+  CHUNK_SHIFT,
+  ChunkedList,
+  SHARD_CAP,
+  ShardedMap,
+  ShardedSet,
+} from "./collections.js";
+import {
+  LimitReached,
+  MAX_LINE_BYTES,
+  recordsOf,
+  type InputRecord,
+} from "./input.js";
 
 export type Verdict =
   | { verdict: "VALID" }
   | { verdict: "INVALID"; line: number; reason?: string }
-  | { verdict: "PARTIAL"; lines: number[] };
+  | { verdict: "PARTIAL"; lines: LineNumbers };
+
+/**
+ * PARTIAL's affected lines, ascending. A plain array satisfies it, and so does
+ * the verifier's ChunkedList, which has no length cap: EV-24 forbids a fixed
+ * limit on the number of lines, and an array stops at 2^26 elements.
+ */
+export interface LineNumbers extends Iterable<number> {
+  readonly length: number;
+  slice(start: number, end: number): number[];
+  join(sep: string): string;
+}
 
 const GENESIS_PREV = "0".repeat(64);
 const HEX64 = /^[0-9a-f]{64}$/;
 const HEX128 = /^[0-9a-f]{128}$/;
-const LF = 0x0a;
 const CR = 0x0d;
 
 // The v1 registry: only these (type, version) pairs get Stage B (EV-6).
@@ -43,12 +66,6 @@ const REGISTERED = new Map<string, number>([
 
 function isRegistered(type: string, version: number): boolean {
   return REGISTERED.get(type) === version;
-}
-
-// The `genesis` versions this verifier registers, for EV-21's reason text.
-function registeredVersionsOf(type: string): number[] {
-  const v = REGISTERED.get(type);
-  return v === undefined ? [] : [v];
 }
 
 // `genesis` payload keys (event-types.md §genesis table, ES-18 / ES-34).
@@ -66,11 +83,11 @@ const GENESIS_OPTIONAL_KEYS = ["ancestor_chain", "ancestor_head"] as const;
 interface ChainState {
   operatorPk: Buffer | null; // raw 32 bytes, validated at genesis
   registrarPk: Buffer | null; // raw 32 bytes, validated at genesis
-  issues: Map<string, IssueParams>; // issue_id (hash) -> its declared parameters
+  issues: ShardedMap<string, IssueParams>; // issue_id (hash) -> its declared parameters
   // ET-18b: hashes of `issue_created` events at a version this verifier does
   // not register. Still prior issue_created events for ID-8/ET-18; only their
   // envelope (`type`, `version`, `seq`, `hash`) is read, never the payload.
-  unregisteredIssues: Set<string>;
+  unregisteredIssues: ShardedSet<string>;
   batches: BallotBatches; // ET-24 / ET-24a / ET-24b per-issue batch runs
   // Set by stageB when the line passed but a check on it is UNRESOLVED
   // (ET-18b, ET-24b): not failed, and the line is enumerated in PARTIAL.
@@ -144,6 +161,24 @@ function intField(ev: ParsedEvent, key: string): number | null {
   return f.val.value;
 }
 
+/**
+ * ET-9 (event-types.md v14): `contracts` is 1 to 64 BYTES, counted as the
+ * UTF-8 encoding of the DECODED value — after JSON unescaping, the value HA-2
+ * hashes — never the escaped bytes on the line. So `\u0001` (six line bytes)
+ * counts once, and so does `\n`; a four-byte character counts four.
+ *
+ * `Buffer.byteLength(_, "utf8")`, not `.length`: a JS string is UTF-16, so
+ * `.length` counts code units — 2 for a four-byte character, 1 for a
+ * three-byte one — and would let a 64-character string of 4-byte characters
+ * (256 bytes) through. The value came out of the strict UTF-8 parser, which
+ * admits no lone surrogate, so the UTF-8 re-encoding is exact.
+ */
+const CONTRACTS_MAX_BYTES = 64;
+function contractsOk(contracts: string): boolean {
+  const n = Buffer.byteLength(contracts, "utf8");
+  return n >= 1 && n <= CONTRACTS_MAX_BYTES;
+}
+
 function titleOk(title: string): boolean {
   // Iterating a string yields Unicode scalar values (NOT UTF-16 code units), so
   // an astral character counts as one — ET-14 counts scalar values (fixtures
@@ -200,7 +235,7 @@ function stageB(ev: ParsedEvent, state: ChainState): boolean {
       const regHex = strField(ev, "registrar_pk");
       const sigHex = strField(ev, "sig");
       if (chainId === null || !HEX64.test(chainId)) return false;
-      if (contracts === null || contracts.length === 0) return false; // ET-9
+      if (contracts === null || !contractsOk(contracts)) return false; // ET-9
       if (opHex === null || !HEX64.test(opHex)) return false; // ET-9b
       if (regHex === null || !HEX64.test(regHex)) return false; // ET-9b
 
@@ -387,193 +422,217 @@ interface Fault {
   reason: string;
 }
 
-// Split the raw file into content-line buffers (without their LF terminators),
-// and surface framing faults with their 1-based line numbers (EX-2..EX-5, EX-20).
-interface Framing {
-  lines: Buffer[];
-  faults: Fault[]; // lines that are framing-INVALID
-}
-
-function frame(bytes: Buffer): Framing {
-  const faults: Fault[] = [];
-
-  // EX-2: a byte-order mark (or leading garbage) is attributed to line 1.
-  if (
-    bytes.length >= 3 &&
-    bytes[0] === 0xef &&
-    bytes[1] === 0xbb &&
-    bytes[2] === 0xbf
-  ) {
-    faults.push({
-      line: 1,
-      reason: "EX-2: export begins with a byte-order mark",
-    });
-  }
-
-  const lines: Buffer[] = [];
-  let start = 0;
-  for (let i = 0; i < bytes.length; i++) {
-    if (bytes[i] === LF) {
-      lines.push(bytes.subarray(start, i));
-      start = i + 1;
-    }
-  }
-  const endsWithLF = bytes.length > 0 && bytes[bytes.length - 1] === LF;
-  if (!endsWithLF) {
-    // Remaining bytes form the last line, which lacks its terminator (EX-4).
-    lines.push(bytes.subarray(start));
-    faults.push({
-      line: lines.length, // attributed to the last line
-      reason: "EX-4: final line is not terminated by LF",
-    });
-  }
-
-  // EX-5: a blank (empty) content line is INVALID at that line.
-  // EX-3: a CR anywhere is INVALID at the first line containing one.
-  for (let i = 0; i < lines.length; i++) {
-    const ln = lines[i] as Buffer;
-    if (ln.length === 0) {
-      faults.push({ line: i + 1, reason: "EX-5: blank content line" });
-    }
-    if (ln.includes(CR)) {
-      faults.push({ line: i + 1, reason: "EX-3: carriage return in export" });
-      break; // first line with a CR (EX-20)
-    }
-  }
-
-  return { lines, faults };
-}
-
 /**
- * Verify a whole export.
- * @param bytes  raw file bytes (read as bytes, never as decoded text)
- * @param head   optional expected head (64 lowercase hex), EX-15
- * @param chain  optional expected genesis hash (64 lowercase hex), EX-22
+ * Verifies an export one record at a time, in file order.
+ *
+ * Every check on line N reads only line N and what earlier lines left in the
+ * chain state, so the first line with any failed check is EV-17's fatal line
+ * and verification stops there: nothing later can change an established
+ * INVALID (the anchors are compared only when no file check failed, EX-15 /
+ * EX-22). Nothing about the export is held but that state, and every part of
+ * the state that grows with the number of lines — the issue maps, the PARTIAL
+ * list and BallotBatches' collections — is a ShardedMap, ShardedSet or
+ * ChunkedList (collections.ts), which V8's Map/Set/array caps do not bound.
+ * So the number of lines and the size of the input are bounded only by
+ * memory and time (EV-24).
  */
-export function verifyExport(
-  bytes: Buffer,
-  head?: string,
-  chain?: string,
-): Verdict {
-  // EX-6/EX-18: an empty export is a well-formed export but NOT a valid chain;
-  // the missing genesis is attributed to line 1.
-  if (bytes.length === 0)
-    return {
-      verdict: "INVALID",
-      line: 1,
-      reason: "EX-6/EX-18: empty export — no genesis event",
+export class ExportVerifier {
+  private fault: Fault | null = null;
+  private lineNo = 0;
+  private readonly partialLines: ChunkedList;
+  private readonly state: ChainState;
+  private prevHash: string | null = null;
+  private genesisHash: string | null = null; // EX-21: line 1's hash, once it passed
+
+  /** `caps` lowers the collections' shard and chunk sizes, for tests only. */
+  constructor(
+    private readonly head?: string,
+    private readonly chain?: string,
+    caps: { shardCap: number; chunkShift: number } = {
+      shardCap: SHARD_CAP,
+      chunkShift: CHUNK_SHIFT,
+    },
+  ) {
+    this.partialLines = new ChunkedList(caps.chunkShift);
+    this.state = {
+      operatorPk: null,
+      registrarPk: null,
+      issues: new ShardedMap(caps.shardCap),
+      unregisteredIssues: new ShardedSet(caps.shardCap),
+      batches: new BallotBatches(caps.shardCap, caps.chunkShift),
+      unresolved: false,
+      stageBReason: null,
     };
+  }
 
-  const { lines, faults } = frame(bytes);
+  /** How many built-ins hold each growing collection; for tests. */
+  shardCounts(): {
+    issues: number;
+    unregisteredIssues: number;
+    partialLines: number;
+    batches: ReturnType<BallotBatches["shardCounts"]>;
+  } {
+    return {
+      issues: this.state.issues.shardCount,
+      unregisteredIssues: this.state.unregisteredIssues.shardCount,
+      partialLines: this.partialLines.chunkCount,
+      batches: this.state.batches.shardCounts(),
+    };
+  }
 
-  const invalid: Fault[] = [...faults];
-  const partialLines: number[] = [];
-  const state: ChainState = {
-    operatorPk: null,
-    registrarPk: null,
-    issues: new Map(),
-    unregisteredIssues: new Set(),
-    batches: new BallotBatches(),
-    unresolved: false,
-    stageBReason: null,
-  };
+  /** True once a fatal line is found; later records cannot change the verdict. */
+  get decided(): boolean {
+    return this.fault !== null;
+  }
 
-  let prevHash: string | null = null;
-  let expectedSeq = 1;
-  let lastHash: string | null = null;
-  let genesisHash: string | null = null; // EX-21: line 1's hash, once it passed
-  let contentFault: Fault | null = null;
+  /**
+   * Take the next record. Throws `LimitReached` for a record past this
+   * verifier's line limit when no earlier line has decided the verdict: that
+   * is EV-24's tool-level failure, never a chain verdict.
+   */
+  push(rec: InputRecord): void {
+    if (this.fault !== null) return;
+    this.lineNo++;
+    if (rec.overLimit) {
+      throw new LimitReached(
+        `EV-24: line ${this.lineNo} is longer than this verifier's limit of ${MAX_LINE_BYTES} bytes, ` +
+          "and no earlier line decided the verdict",
+      );
+    }
+    const reason = this.check(rec.bytes, rec.terminated);
+    if (reason !== null) this.fault = { line: this.lineNo, reason };
+  }
 
-  for (let i = 0; i < lines.length; i++) {
-    const lineNo = i + 1;
-    const ev = parseEventLine(lines[i] as Buffer);
-    if (ev === null) {
-      // Stage A single-line failure (canonical byte form, envelope, ts, ...).
-      contentFault = {
-        line: lineNo,
-        reason: "ES-1..ES-26/EX-7..EX-10: line is not a canonical ODC event",
+  /** The chain verdict, once every record has been pushed (or one decided it). */
+  finish(): Verdict {
+    if (this.fault !== null) {
+      return {
+        verdict: "INVALID",
+        line: this.fault.line,
+        reason: this.fault.reason,
       };
-      break;
+    }
+    // EX-6/EX-18: an empty export is a well-formed export but NOT a valid
+    // chain; the missing genesis is attributed to line 1.
+    if (this.lineNo === 0) {
+      return {
+        verdict: "INVALID",
+        line: 1,
+        reason: "EX-6/EX-18: empty export — no genesis event",
+      };
+    }
+
+    // EX-22/EX-23 (--chain) and EX-15/EX-19 (--head), export-format.md v5: the
+    // two out-of-band anchors are compared at the SAME point and under the
+    // SAME condition — only after every other file-validity check has passed
+    // (framing, each event's structural checks and every registered event's
+    // semantic checks, EV-6), i.e. only here, with no fault found. Unknown
+    // events yielding PARTIAL do not prevent the comparison, so either anchor
+    // can turn a VALID or a PARTIAL verdict into INVALID (INVALID outranks
+    // PARTIAL, EV-17). Neither can replace an INVALID a file check already
+    // established: that verdict keeps its original line (EX-15, EX-22), and
+    // returned above.
+    //
+    // Both mismatch: EX-23 requires the chain mismatch at line 1, not the head
+    // mismatch at the last line, so --chain is compared first.
+    if (this.chain !== undefined && this.genesisHash !== this.chain) {
+      return {
+        verdict: "INVALID",
+        line: 1,
+        reason:
+          "EX-22/EX-23: genesis hash does not match the --chain value supplied out of band",
+      };
+    }
+    if (this.head !== undefined && this.prevHash !== this.head) {
+      return {
+        verdict: "INVALID",
+        line: this.lineNo,
+        reason:
+          "EX-15/EX-19: chain head does not match the --head value supplied out of band",
+      };
+    }
+    if (this.partialLines.length > 0) {
+      // Ascending and duplicate-free by construction: pushed in file order, at
+      // most once per line (a line is either unregistered or registered).
+      return { verdict: "PARTIAL", lines: this.partialLines };
+    }
+    return { verdict: "VALID" };
+  }
+
+  /** Every check on one line; the reason for the first failure, or null. */
+  private check(line: Buffer, terminated: boolean): string | null {
+    const lineNo = this.lineNo;
+    const isFirst = lineNo === 1;
+    const state = this.state;
+
+    // Framing (EX-2..EX-5, EX-20).
+    if (
+      isFirst &&
+      line.length >= 3 &&
+      line[0] === 0xef &&
+      line[1] === 0xbb &&
+      line[2] === 0xbf
+    ) {
+      return "EX-2: export begins with a byte-order mark";
+    }
+    if (!terminated) return "EX-4: final line is not terminated by LF";
+    if (line.length === 0) return "EX-5: blank content line";
+    if (line.includes(CR)) return "EX-3: carriage return in export";
+
+    const ev = parseEventLine(line);
+    // Stage A single-line failure (canonical byte form, envelope, ts, ...).
+    if (ev === null) {
+      return "ES-1..ES-26/EX-7..EX-10: line is not a canonical ODC event";
     }
 
     // Stage A cross-line checks (type-agnostic).
-    if (ev.seq !== expectedSeq) {
-      contentFault = {
-        line: lineNo,
-        reason: `ES-6/ES-7: seq ${ev.seq} breaks contiguity (expected ${expectedSeq})`,
-      };
-      break;
+    if (ev.seq !== lineNo) {
+      return `ES-6/ES-7: seq ${ev.seq} breaks contiguity (expected ${lineNo})`;
     }
-    const isFirst = lineNo === 1;
     // ES-33: genesis exactly at seq 1, and seq 1 is always genesis.
     if (isFirst && ev.type !== "genesis") {
-      contentFault = {
-        line: lineNo,
-        // `excerpt`: ES-10 constrains the charset of `type` but NOT its
-        // length, so this value is attacker-controlled and unbounded.
-        reason: `ES-33: first event is "${excerpt(ev.type)}", not "genesis"`,
-      };
-      break;
+      // `excerpt`: ES-10 constrains the charset of `type` but NOT its length,
+      // so this value is attacker-controlled and unbounded.
+      return `ES-33: first event is "${excerpt(ev.type)}", not "genesis"`;
     }
     if (!isFirst && ev.type === "genesis") {
-      contentFault = {
-        line: lineNo,
-        reason: "ES-33: a second genesis event after line 1",
-      };
-      break;
+      return "ES-33: a second genesis event after line 1";
     }
     if (isFirst) {
       if (ev.prevHash !== GENESIS_PREV) {
-        contentFault = {
-          line: lineNo,
-          reason: "ES-24: genesis prev_hash is not the 64-zero anchor",
-        };
-        break;
+        return "ES-24: genesis prev_hash is not the 64-zero anchor";
       }
-    } else if (ev.prevHash !== prevHash) {
-      contentFault = {
-        line: lineNo,
-        reason: "ES-25: prev_hash does not match the previous event's hash",
-      };
-      break;
+    } else if (ev.prevHash !== this.prevHash) {
+      return "ES-25: prev_hash does not match the previous event's hash";
     }
     if (computeHash(ev) !== ev.hash) {
-      contentFault = {
-        line: lineNo,
-        reason: "HA-14: recomputed hash does not match the stored hash",
-      };
-      break;
+      return "HA-14: recomputed hash does not match the stored hash";
     }
 
     // Stage B — only for registered (type, version) pairs (EV-6).
     if (isRegistered(ev.type, ev.version)) {
       state.unresolved = false;
+      state.stageBReason = null;
       if (!stageB(ev, state)) {
-        contentFault = {
-          line: lineNo,
-          // `ev.type` is one of the four registered names on this branch, so
-          // `excerpt` cannot bite here; it is applied anyway so that no
-          // interpolation of a value read out of the export goes unclipped.
-          reason:
-            state.stageBReason ??
-            `Stage B: ${excerpt(ev.type)} v${ev.version} fails a type-specific check (event-types.md)`,
-        };
-        break;
+        // `ev.type` is one of the four registered names on this branch, so
+        // `excerpt` cannot bite here; it is applied anyway so that no
+        // interpolation of a value read out of the export goes unclipped.
+        return (
+          state.stageBReason ??
+          `Stage B: ${excerpt(ev.type)} v${ev.version} fails a type-specific check (event-types.md)`
+        );
       }
       // ET-18b / ET-24b: passed, but with a check left unresolved (EV-7).
-      if (state.unresolved) partialLines.push(lineNo);
+      if (state.unresolved) this.partialLines.push(lineNo);
     } else if (isFirst) {
       // EV-20, the SOLE exception to EV-8: the chain's genesis MUST carry a
       // (type, version) this verifier registers, or the chain is INVALID at
-      // line 1 and we do not proceed to a chain-level VALID or PARTIAL. With an
-      // unregistered genesis, operator_pk and registrar_pk cannot be read at
-      // all (reading them is Stage B, EV-15), so every later signature is
-      // uncheckable — PARTIAL here would announce "integrity confirmed, some
-      // semantics unchecked" over a chain on which nothing was authenticated.
-      // ES-33 above has already fixed ev.type === "genesis" on line 1, so the
-      // unregistered half of the key is always the version.
-      contentFault = { line: lineNo, reason: unregisteredGenesisReason(ev) };
-      break;
+      // line 1 and we do not proceed to a chain-level VALID or PARTIAL. With
+      // an unregistered genesis, operator_pk and registrar_pk cannot be read
+      // at all (reading them is Stage B, EV-15), so every later signature is
+      // uncheckable. ES-33 above has already fixed ev.type === "genesis" on
+      // line 1, so the unregistered half of the key is always the version.
+      return unregisteredGenesisReason(ev);
     } else {
       // Well-formed but unregistered: Stage A passed, semantics unchecked.
       // (A malformed payload would already have failed parse — EV-16.)
@@ -586,87 +645,66 @@ export function verifyExport(
         // ET-24b: an opaque ballot — its `seq` and `ts`, nothing else.
         state.batches.opaque(ev.seq, epochMs(ev.ts));
       }
-      partialLines.push(lineNo);
+      this.partialLines.push(lineNo);
     }
 
-    if (isFirst) genesisHash = ev.hash;
-    prevHash = ev.hash;
-    lastHash = ev.hash;
-    expectedSeq++;
+    if (isFirst) this.genesisHash = ev.hash;
+    this.prevHash = ev.hash;
+    return null;
   }
+}
 
-  if (contentFault !== null) invalid.push(contentFault);
+/**
+ * Verify a stream of records. Stops pulling records once the verdict is
+ * decided, WITHOUT closing the iterator (a `for…of` with `break` would), so a
+ * caller can still read the rest of the input for EX-24's last candidate.
+ * Throws `LimitReached` under EV-24 (see `ExportVerifier.push`).
+ */
+export function verifyRecords(
+  records: Iterable<InputRecord>,
+  head?: string,
+  chain?: string,
+): Verdict {
+  const v = new ExportVerifier(head, chain);
+  const it = records[Symbol.iterator]();
+  while (!v.decided) {
+    const r = it.next();
+    if (r.done === true) break;
+    v.push(r.value);
+  }
+  return v.finish();
+}
 
-  // EX-22/EX-23 (--chain) and EX-15/EX-19 (--head), export-format.md v5: the
-  // two out-of-band anchors are compared at the SAME point and under the SAME
-  // condition — only after every other file-validity check has passed
-  // (framing, each event's structural checks and every registered event's
-  // semantic checks, EV-6), i.e. only when `invalid` is still empty here.
-  // Unknown events yielding PARTIAL do not prevent the comparison, so either
-  // anchor can turn a VALID or a PARTIAL verdict into INVALID (INVALID
-  // outranks PARTIAL, EV-17). Neither can replace an INVALID a file check
-  // already established: that verdict keeps its original line (EX-15, EX-22).
-  //
-  // Both mismatch on an eligible file: EX-23 requires the chain mismatch at
-  // line 1, not the head mismatch at the last line. The fold below keeps the
-  // lowest line, and the --chain fault is pushed first so that on a one-line
-  // export (both at line 1) its reason is the one reported, too.
-  if (invalid.length === 0) {
-    if (chain !== undefined && genesisHash !== chain) {
-      invalid.push({
-        line: 1,
-        reason:
-          "EX-22/EX-23: genesis hash does not match the --chain value supplied out of band",
-      });
-    }
-    if (head !== undefined && (lastHash === null || lastHash !== head)) {
-      invalid.push({
-        line: lines.length,
-        reason:
-          "EX-15/EX-19: chain head does not match the --head value supplied out of band",
-      });
-    }
-  }
-
-  if (invalid.length > 0) {
-    // Fold instead of Math.min(...invalid.map(...)): `invalid` gets one entry
-    // per framing fault (e.g. every blank line, EX-5), so a large export can
-    // push far more entries than the ~130k argument-spread limit, which would
-    // throw an uncaught RangeError instead of returning a verdict (EV-17).
-    const first = invalid.reduce((a, b) => (b.line < a.line ? b : a));
-    return { verdict: "INVALID", line: first.line, reason: first.reason };
-  }
-  if (partialLines.length > 0) {
-    // Ascending and duplicate-free by construction: pushed in file order, at
-    // most once per line (a line is either unregistered or registered).
-    return { verdict: "PARTIAL", lines: partialLines };
-  }
-  return { verdict: "VALID" };
+/**
+ * Verify a whole export held in memory.
+ * @param bytes  raw file bytes (read as bytes, never as decoded text)
+ * @param head   optional expected head (64 lowercase hex), EX-15
+ * @param chain  optional expected genesis hash (64 lowercase hex), EX-22
+ * @param maxLine this verifier's line limit; a parameter for tests only
+ */
+export function verifyExport(
+  bytes: Buffer,
+  head?: string,
+  chain?: string,
+  maxLine: number = MAX_LINE_BYTES,
+): Verdict {
+  return verifyRecords(recordsOf(bytes, maxLine), head, chain);
 }
 
 /**
  * EV-21's advisory reason for an EV-20 rejection. Conformance for EV-20 is the
- * token INVALID and the line number 1 and nothing else, but the bare token
- * sends a reader hunting for tampering when the remedy may be to fetch a newer
- * verifier. EV-21 asks for a message that names the version encountered and the
- * genesis versions this verifier registers, and that says plainly that the two
- * situations it could be are indistinguishable from the log alone.
+ * token INVALID and the line number 1 and nothing else (no fixture asserts
+ * this text). EV-21 (evolution.md v8) asks the text to name the version found,
+ * to say that a `genesis` at any version other than 1 means the chain is
+ * corrupt, hostile or not an ODC chain (ET-6), and NOT to advise fetching a
+ * newer verifier: ET-6 pins `genesis.version` at 1 in every contracts version,
+ * so no newer verifier registers another one.
  *
- * Single-line by construction: every interpolated value is a number.
+ * Single-line by construction: the one interpolated value is a number.
  */
 function unregisteredGenesisReason(ev: ParsedEvent): string {
-  const known = registeredVersionsOf("genesis");
-  // The empty branch is UNREACHABLE while `genesis` sits in REGISTERED, which
-  // ES-33 requires of every chain. It is kept as a total case rather than a
-  // non-null assertion: a registry edit that dropped `genesis` would otherwise
-  // render "it registers genesis v" here.
-  const knownText =
-    known.length === 0
-      ? "no genesis version at all"
-      : `genesis v${known.join(", v")}`;
   return (
-    `EV-20: this verifier does not register (genesis, ${ev.version}) — it registers ${knownText}. ` +
-    "From the log alone this verifier cannot distinguish a chain newer than itself " +
-    "(fetch a newer verifier) from a corrupt or hostile genesis (EV-21)."
+    `EV-20: genesis at version ${ev.version}; ET-6 pins genesis.version at 1 in every contracts version, ` +
+    "so this chain is corrupt, hostile, or not an ODC chain (EV-21)"
   );
 }
