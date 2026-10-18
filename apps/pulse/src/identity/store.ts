@@ -141,6 +141,16 @@ export class InMemoryVoterStore implements VoterStore {
   /** voter id -> the address of their email credential. */
   readonly #email = new Map<string, string>();
 
+  #pending: Promise<unknown> = Promise.resolve();
+
+  /** In-process transaction boundary shared with authoring and sign-out.
+   * Work may read this store, but must not call a mutation or nest exclusive(). */
+  exclusive<T>(work: () => Promise<T>): Promise<T> {
+    const result = this.#pending.then(work);
+    this.#pending = result.catch(() => undefined);
+    return result;
+  }
+
   async byCredential(
     kind: CredentialKind,
     value: string,
@@ -154,39 +164,45 @@ export class InMemoryVoterStore implements VoterStore {
   }
 
   async create(voter: NewVoter, credential: Credential): Promise<Voter> {
-    // Both checks before either write, so a refusal leaves nothing behind.
-    const key = credentialKey(credential.kind, credential.value);
-    if (this.#holder.has(key)) {
-      throw new CredentialTakenError(credential.kind);
-    }
-    // The id is the voter everywhere else: a second voter under it would
-    // leave the first address signing in as someone else.
-    if (this.#byId.has(voter.id)) {
-      throw new Error(`a voter already has the id ${voter.id}`);
-    }
-    const row = voter;
-    this.#byId.set(voter.id, row);
-    this.#holder.set(key, voter.id);
-    const email = emailOf(credential);
-    if (email !== null) this.#email.set(voter.id, email);
-    return { ...row, email };
+    return this.exclusive(async () => {
+      // Both checks before either write, so a refusal leaves nothing behind.
+      const key = credentialKey(credential.kind, credential.value);
+      if (this.#holder.has(key)) {
+        throw new CredentialTakenError(credential.kind);
+      }
+      // The id is the voter everywhere else: a second voter under it would
+      // leave the first address signing in as someone else.
+      if (this.#byId.has(voter.id)) {
+        throw new Error(`a voter already has the id ${voter.id}`);
+      }
+      const row = voter;
+      this.#byId.set(voter.id, row);
+      this.#holder.set(key, voter.id);
+      const email = emailOf(credential);
+      if (email !== null) this.#email.set(voter.id, email);
+      return { ...row, email };
+    });
   }
 
   async setProofEmails(id: string, optIn: boolean): Promise<Voter | undefined> {
-    const voter = this.#byId.get(id);
-    if (!voter) return undefined;
-    this.#byId.set(id, { ...voter, proofEmailsOptIn: optIn });
-    return this.#read(id);
+    return this.exclusive(async () => {
+      const voter = this.#byId.get(id);
+      if (!voter) return undefined;
+      this.#byId.set(id, { ...voter, proofEmailsOptIn: optIn });
+      return this.#read(id);
+    });
   }
 
   async advanceSessionGeneration(id: string): Promise<Voter | undefined> {
-    const voter = this.#byId.get(id);
-    if (!voter) return undefined;
-    this.#byId.set(id, {
-      ...voter,
-      sessionGeneration: (voter.sessionGeneration ?? 0) + 1,
+    return this.exclusive(async () => {
+      const voter = this.#byId.get(id);
+      if (!voter) return undefined;
+      this.#byId.set(id, {
+        ...voter,
+        sessionGeneration: (voter.sessionGeneration ?? 0) + 1,
+      });
+      return this.#read(id);
     });
-    return this.#read(id);
   }
 
   #read(id: string): Voter | undefined {

@@ -17,7 +17,7 @@ is decided, and delete it when it becomes moot. Pulse's open decisions are in
 | --------------------------------------------------------------------------------------------------- | ------------------------------------------------------------ |
 | **Q-F**: the registrar's signature as a subliminal channel                                          | "Q-F — What mitigates the registrar's signature…"            |
 | **Anchor contents and cadence** (Q-A item 4, which ADR-0013 and ADR-0032 left open)                 | "Anchor contents and cadence"                                |
-| **EX-24 claim decoding**: invalid UTF-8, BOM, `\u` escapes, nesting depth (2026-10-10)              | "EX-24 claim decoding (2026-10-10)"                          |
+| **EX-24 claim decoding**: invalid UTF-8, BOM, `\u` escapes (2026-10-10)                             | "EX-24 claim decoding (2026-10-10)"                          |
 | **Pulse: how long `pending_claim` rows are kept** (2026-10-11, #315)                                | "Pulse sign-in data: retention and logging (2026-10-11)"     |
 | **Pulse: what an email-provider error may write to logs** (2026-10-11, #315)                        | "Pulse sign-in data: retention and logging (2026-10-11)"     |
 | Does `read-api.md` (RA-1 to RA-13, **zero** conformance coverage) need vectors before Phase 1?      | "Read-API conformance coverage"                              |
@@ -26,8 +26,8 @@ is decided, and delete it when it becomes moot. Pulse's open decisions are in
 | `RETIRED.md` valve; EV-5's fixture breadth; an HA-2 fixture                                         | Archive file, three adjacent bullets                         |
 | Sanction/negative events; money/attestation/capability events (Phase 2+)                            | Archive file, deferred, and **not** freeze blockers          |
 
-The four `contracts/` contradictions awaiting an operator decision are listed in
-`memory/STATE.md` → Blockers.
+The four `contracts/` contradictions once listed in `memory/STATE.md` were
+decided in ADR-0038 (#355).
 
 **Settled, kept for the reasoning (archive file):** the six T9 findings F1-F6,
 which became ADR-0013 to ADR-0018. Also archived: the operator-confirmed batch
@@ -77,10 +77,11 @@ archive with a one-line pointer to the ADR or PR that settled it.
 **Open; report output only, not conformance.** EX-24 says a claim is available
 if the candidate "decodes as a JSON object" but does not settle: bytes that are
 not valid UTF-8; a leading BOM (RFC 8259 lets parsers ignore it, EX-24 forbids
-normalising); `\u` escapes in the `hash` value or key; nesting depth (Go gives
-up past 10,000 levels, JS differs). Both verifiers (#241) chose: strict
-UTF-8, BOM → `unavailable`, escapes decode (an escape decoding to uppercase
-stays `unavailable`). If `contracts/` pins this, both must follow.
+normalising); `\u` escapes in the `hash` value or key. Both verifiers (#241)
+chose: strict UTF-8, BOM → `unavailable`, escapes decode (an escape decoding
+to uppercase stays `unavailable`). If `contracts/` pins this, both must follow.
+Nesting depth is **settled** by ADR-0038's EV-24: a limit reached while
+recovering a claim makes it `unavailable`.
 
 ## Pulse sign-in data: retention and logging (2026-10-11)
 

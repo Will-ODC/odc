@@ -2,7 +2,7 @@ import { randomUUID } from "node:crypto";
 import type { Pool, PoolClient } from "pg";
 import { inTransaction } from "../db/transaction.js";
 import { parseEmail } from "../identity/email.js";
-import { createPoll, type PollMethod } from "../voting/poll.js";
+import { createPoll } from "../voting/poll.js";
 import {
   CreationError,
   HOUR_MS,
@@ -10,53 +10,35 @@ import {
   WEEK_MS,
   normalizeCreation,
   requestKey,
-  type Attribution,
 } from "./input.js";
 
-export interface PublicationActor {
-  voterId: string;
-  sessionGeneration: number;
-}
-export interface PublicationPoll {
-  id: string;
-  question: string;
-  choices: readonly string[];
-  method: PollMethod;
-  next: readonly null[];
-  acceptsSuggestions: false;
-  closesAt: string;
-  open: true;
-  community: { id: string; label: string };
-  attribution: Attribution;
-}
-export interface PublicationResult {
-  poll: PublicationPoll;
-  replayed: boolean;
-}
-export interface CreationContext {
-  community: { id: string; label: string };
-  canPostUnlimited: boolean;
-  purposeVersion: string;
-  purposeAcknowledged: boolean;
-}
+export type {
+  PublicationActor,
+  PublicationPoll,
+  PublicationResult,
+  CreationContext,
+} from "./store.js";
+import type {
+  CreationStore,
+  CreationOptions,
+  PublicationActor,
+  PublicationPoll,
+  PublicationResult,
+  CreationContext,
+} from "./store.js";
+
 interface AccountRow {
   id: string;
   community: string | null;
   session_generation: string;
 }
-interface Options {
-  ownerEmail?: string;
-  clock?: () => Date;
-  newId?: () => string;
-}
-
 /** Internal store only. HTTP must validate expiry/origin before passing an actor. */
-export class PostgresCreationStore {
+export class PostgresCreationStore implements CreationStore {
   readonly #pool: Pool;
   readonly #ownerEmail: string | null;
   readonly #clock: () => Date;
   readonly #newId: () => string;
-  constructor(pool: Pool, options: Options = {}) {
+  constructor(pool: Pool, options: CreationOptions = {}) {
     this.#pool = pool;
     try {
       this.#ownerEmail =

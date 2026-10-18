@@ -90,6 +90,9 @@ it("approval cast, replacement, network retry and closed results work over the r
       screen.getByRole("button", { name: "How should the voting page look?" }),
     );
     await screen.findByRole("heading", { name: "Stay free of ads?", level: 1 });
+    await user.click(
+      await screen.findByRole("button", { name: "Show me how" }),
+    );
     await user.click(screen.getByRole("button", { name: "Vote" }));
     await user.click(screen.getByRole("radio", { name: "Yes" }));
     await user.click(screen.getByRole("button", { name: "Submit" }));
