@@ -374,18 +374,21 @@ func stageBGenesis(st *vstate, e *event) (string, bool) {
 	ancChain, haveChain := payloadGet(e.payload, "ancestor_chain")
 	ancHead, haveHead := payloadGet(e.payload, "ancestor_head")
 
-	// The asymmetry below is the rule, not an oversight, and MUST NOT be
-	// "tidied" into a both-or-neither pair (ET-9f):
-	//   - `ancestor_head` alone is barred. It names a position on an UNNAMED
-	//     chain — the head-alone anchoring charter §4 rejects (ET-7a) — and no
-	//     reader can check it, because nothing in the payload says which export
-	//     to open.
-	//   - `ancestor_chain` alone is ACCEPTED. It is the weaker but coherent
-	//     claim "forked from chain X, fork point unrecorded": a named chain, no
-	//     position. Nothing below rejects it.
-	//   - Both absent is the ordinary no-recorded-ancestor form (ES-34).
+	// ET-9f (event-types.md v13): both keys, or neither. A genesis carrying
+	// exactly one of them is INVALID at its line:
+	//   - `ancestor_head` alone names a position on an UNNAMED chain — the
+	//     head-alone anchoring charter §4 rejects (ET-7a) — and no reader can
+	//     check it, because nothing in the payload says which export to open.
+	//   - `ancestor_chain` alone names the parent but withholds a position the
+	//     forker always holds (ET-9e), so the claim is checkable only halfway.
+	//     (Up to v12 this form was accepted; v13 reverses that.)
+	//   - Both absent is the ordinary no-recorded-ancestor form (ES-34), to
+	//     which ET-9f does not apply.
 	if haveHead && !haveChain {
 		return "ancestor_head present without ancestor_chain (ET-9f)", false
+	}
+	if haveChain && !haveHead {
+		return "ancestor_chain present without ancestor_head (ET-9f)", false
 	}
 	if haveChain {
 		if ancChain.kind != kString || !isHex64(ancChain.str) {

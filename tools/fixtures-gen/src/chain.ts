@@ -129,6 +129,7 @@ type RawSigner = (content: EventContent) => string;
 
 /** The rule ids the builder knows how to check. */
 export type BuilderRule =
+  | "ET-9"
   | "ET-9d"
   | "ET-9e"
   | "ET-9f"
@@ -194,25 +195,40 @@ function hasForbiddenChar(title: string): boolean {
   return false;
 }
 
+/**
+ * ET-9 (v14, ADR-0038): `contracts` is 1 to 64 bytes, counted as the UTF-8
+ * encoding of the DECODED string — the value HA-2 hashes, never the escaped
+ * bytes on the line. A JS string here is already the decoded value, so its
+ * UTF-8 byte length is the unit ET-9 names: not `.length` (UTF-16 code units),
+ * and not the scalar-value count ET-14 uses for `title`.
+ */
+export const CONTRACTS_MAX_BYTES = 64;
+
 /** ET-9b/ET-9e: 64 lowercase hex. The one shape every key-ish genesis value takes. */
 const HEX64 = /^[0-9a-f]{64}$/;
 
 /**
- * Which of ET-9d / ET-9e / ET-9f a `genesis` payload actually breaks.
+ * Which of ET-9 / ET-9d / ET-9e / ET-9f a `genesis` payload actually breaks.
  *
- * The ancestry keys are OPTIONAL (ES-34), so absence is never a fault here —
- * only a present value with an illegal shape, and the one presence combination
- * ET-9f bars. ET-9d is a string equality on the two declared keys, which is all
- * the rule asks for: the comparison is on the 64-character lowercase-hex
- * strings, no decoding and no curve arithmetic.
+ * The ancestry keys are OPTIONAL (ES-34), so absence of BOTH is never a fault
+ * here — only a present value with an illegal shape, and the two presence
+ * combinations ET-9f bars (v13, ADR-0038: either key without the other). ET-9d
+ * is a string equality on the two declared keys, which is all the rule asks
+ * for: the comparison is on the 64-character lowercase-hex strings, no decoding
+ * and no curve arithmetic.
  */
 function genesisViolations(
+  contracts: string,
   operatorPk: string,
   registrarPk: string,
   ancestorChain: string | undefined,
   ancestorHead: string | undefined,
 ): BuilderRule[] {
   const out: BuilderRule[] = [];
+  const contractsBytes = Buffer.byteLength(contracts, "utf8");
+  if (contractsBytes < 1 || contractsBytes > CONTRACTS_MAX_BYTES) {
+    out.push("ET-9");
+  }
   if (operatorPk === registrarPk) out.push("ET-9d");
   // One ET-9e for the whole payload however many ancestry values are malformed:
   // both faults sit on the same line, and conformance is the verdict token and
@@ -238,7 +254,10 @@ function genesisViolations(
     );
   }
   if (illegalCount > 0) out.push("ET-9e");
-  if (ancestorHead !== undefined && ancestorChain === undefined) {
+  // ET-9f is both-or-neither since v13 (ADR-0038). Up to v12 only the head
+  // alone was barred, and this guard checked that one direction — so a
+  // chain-alone genesis built with no declaration passed reconcile as legal.
+  if ((ancestorChain === undefined) !== (ancestorHead === undefined)) {
     out.push("ET-9f");
   }
   return out;
@@ -423,7 +442,7 @@ export class ChainBuilder {
    * from the signature rather than present and empty: presence and absence
    * produce different preimages, because HA-7 leads with the key count.
    *
-   * Enforces ET-9d / ET-9e / ET-9f unless `opts.violates` declares the breach,
+   * Enforces ET-9 / ET-9d / ET-9e / ET-9f unless `opts.violates` declares the breach,
    * the same reconcile discipline `issue()` and `vote()` use. The point is that
    * a genesis illegal BY ACCIDENT cannot ship a declared verdict: the ancestry
    * values are 64-character hex strings that no reader eyeballs, so a typo in
@@ -453,9 +472,11 @@ export class ChainBuilder {
   ): Event {
     const operator = opts.operator ?? OPERATOR;
     const registrar = opts.registrar ?? REGISTRAR;
+    const contracts = opts.contracts ?? "contracts-v1";
     reconcile(
       "genesis(...)",
       genesisViolations(
+        contracts,
         operator.publicKeyHex,
         registrar.publicKeyHex,
         opts.ancestorChain,
@@ -467,7 +488,7 @@ export class ChainBuilder {
     this.registrarKey = registrar;
     const payload: Payload = {
       chain_id: chainId(operator.publicKeyHex),
-      contracts: opts.contracts ?? "contracts-v1",
+      contracts,
       operator_pk: operator.publicKeyHex,
       registrar_pk: registrar.publicKeyHex,
     };

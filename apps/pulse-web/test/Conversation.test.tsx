@@ -127,7 +127,8 @@ it("casts, changes, closes and reopens results in the card", async () => {
     await main().findByText("That replaces your earlier answer."),
   ).toBeTruthy();
   expect(cast).toHaveBeenLastCalledWith(p.id, [0]);
-  expect(main().getByText("You picked No.")).toBeTruthy();
+  // The transcript line catches up after the card; wait for it (raced on CI).
+  expect(await main().findByText("You picked No.")).toBeTruthy();
   await user.click(within(card()).getByRole("button", { name: "Close" }));
   expect(main().queryByRole("region")).toBeNull();
   expect(document.activeElement).toBe(
@@ -327,7 +328,8 @@ it("retrying a failed replacement sends the new choice rather than the prior ans
   await user.keyboard("{Enter}");
   await main().findByText("That replaces your earlier answer.");
   expect(cast).toHaveBeenLastCalledWith(p.id, [0]);
-  expect(main().getByText("You picked No.")).toBeTruthy();
+  // The transcript line catches up after the card; wait for it (raced on CI).
+  expect(await main().findByText("You picked No.")).toBeTruthy();
 });
 
 const voter = { id: "v1", community: null, email: "voter@example.org" };

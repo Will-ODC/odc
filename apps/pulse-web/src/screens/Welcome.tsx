@@ -8,7 +8,7 @@ export function Welcome({ onStart }: { onStart: () => void }) {
         A place where people discuss ideas, decide together and work toward
         action.
       </p>
-      <ol className="welcome__steps">
+      <ol className="welcome__steps" role="list">
         <li>
           <strong>Understand</strong>
           <p>Read the short explanation and the question.</p>

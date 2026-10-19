@@ -211,13 +211,12 @@ func TestGenesisAncestryPresenceCombinations(t *testing.T) {
 			verdict: VALID,
 		},
 		{
-			// The half of ET-9f's asymmetry that is deliberately PERMITTED:
-			// "forked from chain X, fork point unrecorded". A suite that only
-			// asserted rejections would still pass with this key dropped on
-			// the floor, so this case is the one that proves it is not.
-			name:    "ancestor_chain_alone_is_accepted",
-			extra:   map[string]any{"ancestor_chain": someHash},
-			verdict: VALID,
+			// ET-9f v13: both or neither. The name without the position is
+			// checkable only halfway, and is rejected. (VALID up to v12.)
+			name:       "ancestor_chain_alone_is_rejected",
+			extra:      map[string]any{"ancestor_chain": someHash},
+			verdict:    INVALID,
+			wantReason: "ancestor_chain present without ancestor_head (ET-9f)",
 		},
 		{
 			// Charter §4's pair: a name and a position, published together.
@@ -229,11 +228,11 @@ func TestGenesisAncestryPresenceCombinations(t *testing.T) {
 			verdict: VALID,
 		},
 		{
-			// The one form ET-9f bars: a position on an UNNAMED chain.
+			// A position on an UNNAMED chain.
 			name:       "ancestor_head_alone_is_rejected",
 			extra:      map[string]any{"ancestor_head": otherHash},
 			verdict:    INVALID,
-			wantReason: "ET-9f",
+			wantReason: "ancestor_head present without ancestor_chain (ET-9f)",
 		},
 	}
 	for _, c := range cases {
@@ -300,12 +299,12 @@ func TestGenesisAncestryValueFormats(t *testing.T) {
 		extra      map[string]any
 		wantReason string
 	}{
-		{"ancestor_chain_uppercase_hex", map[string]any{"ancestor_chain": upper}, chainFormat},
-		{"ancestor_chain_too_short", map[string]any{"ancestor_chain": someHash[:63]}, chainFormat},
-		{"ancestor_chain_too_long", map[string]any{"ancestor_chain": someHash + "a"}, chainFormat},
-		{"ancestor_chain_non_hex", map[string]any{"ancestor_chain": strings.Repeat("z", 64)}, chainFormat},
-		{"ancestor_chain_integer_value", map[string]any{"ancestor_chain": int64(1)}, chainFormat},
-		{"ancestor_chain_zero_anchor", map[string]any{"ancestor_chain": zeros64}, chainAnchor},
+		{"ancestor_chain_uppercase_hex", map[string]any{"ancestor_chain": upper, "ancestor_head": otherHash}, chainFormat},
+		{"ancestor_chain_too_short", map[string]any{"ancestor_chain": someHash[:63], "ancestor_head": otherHash}, chainFormat},
+		{"ancestor_chain_too_long", map[string]any{"ancestor_chain": someHash + "a", "ancestor_head": otherHash}, chainFormat},
+		{"ancestor_chain_non_hex", map[string]any{"ancestor_chain": strings.Repeat("z", 64), "ancestor_head": otherHash}, chainFormat},
+		{"ancestor_chain_integer_value", map[string]any{"ancestor_chain": int64(1), "ancestor_head": otherHash}, chainFormat},
+		{"ancestor_chain_zero_anchor", map[string]any{"ancestor_chain": zeros64, "ancestor_head": otherHash}, chainAnchor},
 
 		{"ancestor_head_uppercase_hex", map[string]any{"ancestor_chain": someHash, "ancestor_head": upper}, headFormat},
 		{"ancestor_head_too_short", map[string]any{"ancestor_chain": someHash, "ancestor_head": otherHash[:63]}, headFormat},
@@ -356,8 +355,8 @@ func TestGenesisRejectsUndefinedPayloadKey(t *testing.T) {
 // what makes the loop load-bearing.
 
 // genesisExportOmitting builds a one-line genesis with `omit` (a required key)
-// dropped, and the OPTIONAL `ancestor_chain` added to hold the key COUNT inside
-// the 5..7 the length guard permits. omit == "" builds the unmangled control.
+// dropped, and the two OPTIONAL ancestry keys added (both, as ET-9f requires)
+// to hold the key COUNT inside the 5..7 the length guard permits. omit == "" builds the unmangled control.
 // Everything else — hash, signature, key formats — is correct, so the key set
 // is the only thing wrong with the result.
 func genesisExportOmitting(t *testing.T, omit string) []byte {
@@ -373,6 +372,7 @@ func genesisExportOmitting(t *testing.T, omit string) []byte {
 		"operator_pk":    hex.EncodeToString(opPub),
 		"registrar_pk":   hex.EncodeToString(regPub),
 		"ancestor_chain": someHash,
+		"ancestor_head":  otherHash,
 	}
 	const ts = "2026-01-01T00:00:00.000Z"
 
@@ -389,7 +389,7 @@ func genesisExportOmitting(t *testing.T, omit string) []byte {
 func TestGenesisMissingRequiredPayloadKey(t *testing.T) {
 	required := []string{"chain_id", "contracts", "operator_pk", "registrar_pk", "sig"}
 
-	// The control: the same builder with nothing omitted. Six keys, all legal,
+	// The control: the same builder with nothing omitted. Seven keys, all legal,
 	// and VALID — so a failure in the cases below is the missing key and not
 	// the builder.
 	t.Run("control_nothing_omitted", func(t *testing.T) {

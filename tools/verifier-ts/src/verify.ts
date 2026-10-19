@@ -210,12 +210,13 @@ function stageB(ev: ParsedEvent, state: ChainState): boolean {
       const hasAncestorChain = field(ev, "ancestor_chain") !== undefined;
       const hasAncestorHead = field(ev, "ancestor_head") !== undefined;
 
-      // ET-9f: a head without a chain names a position on an UNNAMED chain —
-      // the head-alone anchoring charter §4 rejects (ET-7a). The converse is
-      // deliberately permitted: `ancestor_chain` alone is the weaker but
-      // coherent claim "forked from chain X, fork point unrecorded". This
-      // asymmetry is the rule; it MUST NOT be tidied into both-or-neither.
-      if (hasAncestorHead && !hasAncestorChain) return false; // ET-9f
+      // ET-9f (event-types.md v13, ADR-0038): both ancestry keys, or neither.
+      // A head without a chain names a position on an UNNAMED chain — the
+      // head-alone anchoring charter §4 rejects (ET-7a); a chain without a
+      // head withholds a position the forker always holds (ET-9e), so the
+      // claim is checkable only halfway. Up to v12 the chain-alone form was
+      // permitted; v13 reverses that on purpose.
+      if (hasAncestorHead !== hasAncestorChain) return false; // ET-9f
 
       if (hasAncestorChain) {
         if (!ancestorValueOk(strField(ev, "ancestor_chain"))) return false;

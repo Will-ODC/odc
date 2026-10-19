@@ -587,3 +587,188 @@ test("every --chain value is the intended chain's genesis hash, or provably not 
     (b[b.length - 1] as Event).hash,
   );
 });
+
+// --- ADR-0038: limits, the contracts cap, both ancestry keys ---------------
+//
+// Every number below is the spec's literal (EV-23's 65536 and 64, ET-9's 64),
+// never a constant imported from the generator, so the vectors cannot drift
+// together with the code that built them.
+
+/** The raw bytes of each line of a committed vector, split at LF (EV-23). */
+const rawLines = (id: string): Buffer[] => {
+  const bytes = read(`vectors/${id}.ndjson`);
+  const out: Buffer[] = [];
+  let start = 0;
+  for (let i = 0; i < bytes.length; i++) {
+    if (bytes[i] === 0x0a) {
+      out.push(bytes.subarray(start, i));
+      start = i + 1;
+    }
+  }
+  if (start < bytes.length) out.push(bytes.subarray(start));
+  return out;
+};
+
+/** EV-23's nesting-depth scan, transcribed byte for byte from the rule. */
+function ev23Depth(line: Buffer): number {
+  let depth = 0;
+  let max = 0;
+  let inString = false;
+  for (let i = 0; i < line.length; i++) {
+    const b = line[i] as number;
+    if (inString) {
+      if (b === 0x5c) i += 1;
+      else if (b === 0x22) inString = false;
+    } else if (b === 0x22) inString = true;
+    else if (b === 0x7b || b === 0x5b) max = Math.max(max, ++depth);
+    else if ((b === 0x7d || b === 0x5d) && depth > 0) depth -= 1;
+  }
+  return max;
+}
+
+/** The wrong scan 144 is built to catch: brackets counted inside strings too. */
+function naiveDepth(line: Buffer): number {
+  let depth = 0;
+  let max = 0;
+  for (const b of line) {
+    if (b === 0x7b || b === 0x5b) max = Math.max(max, ++depth);
+    else if ((b === 0x7d || b === 0x5d) && depth > 0) depth -= 1;
+  }
+  return max;
+}
+
+const expectOf = (id: string): Expect | undefined =>
+  vectors.find((v) => v.id === id)?.expect;
+
+test("every vector is within the EV-23 minimums (EV-24: golden fixtures MUST be)", () => {
+  // Past a minimum no verifier is required to reach a verdict, so a vector
+  // there would freeze a verdict the spec does not require.
+  for (const vec of vectors) {
+    rawLines(vec.id).forEach((line, i) => {
+      assert.ok(
+        line.length <= 65536,
+        `${vec.id} line ${String(i + 1)} is ${String(line.length)} bytes, over EV-23's 65536`,
+      );
+      assert.ok(
+        ev23Depth(line) <= 64,
+        `${vec.id} line ${String(i + 1)} is ${String(ev23Depth(line))} deep, over EV-23's 64`,
+      );
+    });
+  }
+});
+
+test("143 sits exactly on the line-length minimum, and 144 exactly on the depth minimum", () => {
+  const long = rawLines("143-line-65536-bytes");
+  assert.equal(long.length, 3);
+  assert.equal(long[1]?.length, 65536, "line 2 is 65536 bytes, LF excluded");
+  assert.match(String(long[1]?.subarray(0, 40)), /"type":"x_/);
+  assert.deepEqual(expectOf("143-line-65536-bytes"), {
+    verdict: "PARTIAL",
+    lines: [2],
+  });
+
+  const deep = rawLines("144-depth-64");
+  assert.equal(deep.length, 3);
+  assert.equal(ev23Depth(deep[1] as Buffer), 64, "line 2 is depth 64");
+  assert.ok(
+    naiveDepth(deep[1] as Buffer) > 64,
+    "a scan that counts brackets inside strings must see more than 64, or 144 stops catching it",
+  );
+  assert.equal(ev23Depth(deep[0] as Buffer), 2);
+  assert.equal(ev23Depth(deep[2] as Buffer), 2);
+  assert.match(String(deep[1]?.subarray(0, 40)), /"type":"x_/);
+  assert.deepEqual(expectOf("144-depth-64"), { verdict: "INVALID", line: 2 });
+});
+
+test("the ET-9 vectors straddle 64 bytes of DECODED UTF-8, not scalars, code units or escaped bytes", () => {
+  const cases: [string, number, number, number, Expect][] = [
+    // id, decoded UTF-8 bytes, scalar values, UTF-16 code units, verdict
+    ["137-contracts-64-bytes", 64, 64, 64, { verdict: "VALID" }],
+    ["138-contracts-65-bytes", 65, 65, 65, { verdict: "INVALID", line: 1 }],
+    ["139-contracts-16-four-byte", 64, 16, 32, { verdict: "VALID" }],
+    ["140-contracts-17-four-byte", 68, 17, 34, { verdict: "INVALID", line: 1 }],
+    ["141-contracts-escaped-control-64", 64, 64, 64, { verdict: "VALID" }],
+    [
+      "142-contracts-escaped-control-65",
+      65,
+      65,
+      65,
+      { verdict: "INVALID", line: 1 },
+    ],
+  ];
+  for (const [id, bytes, scalars, units, expect] of cases) {
+    const [genesis, ...rest] = eventsOf(id);
+    assert.equal(rest.length, 0, `${id} is a bare genesis`);
+    const contracts = String(genesis?.payload["contracts"]);
+    assert.equal(Buffer.byteLength(contracts, "utf8"), bytes, `${id} bytes`);
+    assert.equal([...contracts].length, scalars, `${id} scalar values`);
+    assert.equal(contracts.length, units, `${id} UTF-16 code units`);
+    assert.deepEqual(expectOf(id), expect, id);
+  }
+  // 141/142 carry the control character as EX-9's six-byte escape, so the
+  // value is longer on the line than decoded — the gap 141 exists to test.
+  for (const id of [
+    "141-contracts-escaped-control-64",
+    "142-contracts-escaped-control-65",
+  ]) {
+    const line = String(rawLines(id)[0]);
+    assert.equal(line.split("\\u0001").length - 1, 1, `${id}: one \\u0001`);
+    assert.ok(
+      (/"contracts":"([^"]*)"/.exec(line)?.[1]?.length ?? 0) > 64,
+      `${id}: the escaped form on the line is over 64 bytes`,
+    );
+  }
+});
+
+test("ET-9f: 086 carries ancestor_chain alone and is INVALID; 135/136 isolate what 088/090 no longer do", () => {
+  const genesisOf = (id: string): Record<string, unknown> =>
+    (eventsOf(id)[0] as Event).payload;
+  for (const id of [
+    "086-ancestor-chain-alone",
+    "088-ancestor-chain-zero",
+    "090-ancestor-chain-uppercase",
+  ]) {
+    const p = genesisOf(id);
+    assert.ok("ancestor_chain" in p && !("ancestor_head" in p), id);
+    assert.deepEqual(expectOf(id), { verdict: "INVALID", line: 1 }, id);
+  }
+  const hex64 = /^[0-9a-f]{64}$/;
+  const zero = "0".repeat(64);
+  const p135 = genesisOf("135-ancestor-chain-zero-with-head");
+  const p136 = genesisOf("136-ancestor-chain-uppercase-with-head");
+  for (const p of [p135, p136]) {
+    const head = String(p["ancestor_head"]);
+    assert.ok(hex64.test(head) && head !== zero, "a legal ancestor_head");
+  }
+  assert.equal(p135["ancestor_chain"], zero);
+  const upper = String(p136["ancestor_chain"]);
+  assert.ok(/^[0-9A-F]{64}$/.test(upper) && /[A-F]/.test(upper));
+  assert.ok(hex64.test(upper.toLowerCase()) && upper.toLowerCase() !== zero);
+  for (const id of [
+    "135-ancestor-chain-zero-with-head",
+    "136-ancestor-chain-uppercase-with-head",
+  ]) {
+    assert.deepEqual(expectOf(id), { verdict: "INVALID", line: 1 }, id);
+  }
+});
+
+test("145 pins ET-9's lower bound: an empty contracts, and nothing else wrong", () => {
+  const events = eventsOf("145-contracts-empty");
+  assert.equal(events.length, 1, "a bare genesis");
+  const g = events[0] as Event;
+  assert.equal(g.payload["contracts"], "", "contracts is the empty string");
+  // Single fault: the four-key genesis of 001 in every other value.
+  const base = (eventsOf("001-genesis-only")[0] as Event).payload;
+  for (const key of ["chain_id", "operator_pk", "registrar_pk"]) {
+    assert.equal(g.payload[key], base[key], key);
+  }
+  assert.deepEqual(
+    Object.keys(g.payload).sort(),
+    Object.keys(base).sort(),
+    "no ancestry or other key",
+  );
+  assert.deepEqual(expectOf("145-contracts-empty"), {
+    verdict: "INVALID",
+    line: 1,
+  });
+});

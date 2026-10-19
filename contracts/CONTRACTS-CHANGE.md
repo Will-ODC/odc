@@ -19,6 +19,22 @@ Format (newest first, one entry per merged contracts change):
 
 ---
 
+## fixtures/README.md v16 — 2026-10-14 — ADR-0038 vectors (#366)
+
+- **`086-ancestor-chain-alone`** `VALID` → **`INVALID` at line 1** (ET-9f v13),
+  corrected in place before the tag (ADR-0008); bytes, id and name unchanged.
+  Notes rewritten for `084`, `086`, `088`–`091` (088/090 now carry two faults)
+  and `095` (EV-21 v8 advice); `011`'s note no longer says no v1 type may
+  carry a control character (`genesis.contracts` may). `cites` changed too:
+  ET-7a added to `086`, ET-9f added to `088` and `090`.
+- Eleven vectors appended, `135`–`145`: `135`/`136` isolate the zero and uppercase
+  `ancestor_chain` faults beside a legal `ancestor_head`; `137`–`142` pin
+  ET-9's 64-byte cap on decoded `contracts` (ASCII, four-byte characters, an
+  escaped control character); `143` is a 65536-byte line (`PARTIAL`) and `144`
+  a depth-64 line (`INVALID` at 2), both exactly on the EV-23 minimums; `145`
+  is an empty `contracts` (`INVALID` at 1), ET-9's lower bound. 145 vectors in
+  all (23 `VALID`, 15 `PARTIAL`, 107 `INVALID`).
+
 ## event-types.md v14 · evolution.md v9 — 2026-10-12 — `genesis.contracts` capped at 64 bytes (ADR-0038 decision 5, #355)
 
 - **ET-9** (operator, 2026-10-12): `contracts` MUST be at most **64 bytes**,
