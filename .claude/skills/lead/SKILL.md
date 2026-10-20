@@ -22,6 +22,6 @@ skill is the way in; it adds no rules of its own.
      offering leads" and write one brief per lead from "The lead's brief".
      If the work is one feature, or the features share files, say so and stay
      flat instead of starting leads.
-3. Every green lead PR gets a fresh-context review, which the orchestrator
-   starts; a lead never reviews its own work. Merging stays the operator's
-   call.
+3. The orchestrator has every green lead PR reviewed, per "Review every green
+   lead PR" in the Leads section (operator, 2026-10-20). Merging stays the
+   operator's call.
