@@ -455,6 +455,45 @@ describe("posting, confirmed in place", () => {
     expect(createPoll.mock.calls[2]?.[0]).toBe("key-2");
   });
 
+  /*
+   * The routes' other refusals (#389): the server's message is safe to show,
+   * and the two 429s (per-client `too_many_requests`, hourly `posting_limit`)
+   * share a status, so nothing here may branch on it. Each keeps the ask up
+   * with the same key, so trying again later cannot post twice.
+   */
+  it.each([
+    [413, "body_too_large", "That question is too long to send."],
+    [
+      429,
+      "too_many_requests",
+      "Too many tries just now. Try again in a minute.",
+    ],
+    [429, "posting_limit", "You have posted five questions this hour."],
+  ])(
+    "shows the server's words for %i %s, and can try again",
+    async (status, code, message) => {
+      const user = userEvent.setup();
+      const createPoll = vi
+        .fn<Create>()
+        .mockRejectedValueOnce(new ApiError(status, message, code))
+        .mockResolvedValue(poll({ id: "new-1" }));
+      const { onPosted } = show({
+        context: () => Promise.resolve(LATER),
+        createPoll,
+      });
+      await fill(user);
+      await user.click(button("Post question"));
+      await user.click(await screen.findByRole("button", { name: "Post it" }));
+      expect((await screen.findByRole("alert")).textContent).toBe(message);
+      await user.click(button("Post it"));
+      await waitFor(() => expect(onPosted).toHaveBeenCalledOnce());
+      expect(createPoll.mock.calls.map(([key]) => key)).toEqual([
+        "key-1",
+        "key-1",
+      ]);
+    },
+  );
+
   it("asks for the promise when the server says it is needed after all", async () => {
     const user = userEvent.setup();
     const createPoll = vi
