@@ -8,11 +8,31 @@ description: Rules for creating services, adding endpoints, consuming other serv
 ## The `apps/**` boundary
 
 `apps/pulse` and `apps/pulse-web` are a separate, charter-exempt workstream.
-**Nothing in `apps/**` may read or write into `services/**` or `contracts/**`** —
-no imports, no shared types, no shared storage. Pulse owns its storage and stands
-alone. If it ever publishes to the ledger it does so through the ledger's public
+**Nothing in `apps/**` may read or write into `services/**`, `contracts/**` or
+`tools/**`** — no imports, no shared types, no shared storage. Pulse owns its
+storage and stands alone. If it ever publishes to the ledger it does so through the ledger's public
 HTTP API like any other outside client. This runs in both directions: nothing in
-`services/**` may depend on `apps/**` either.
+`services/**` or `tools/**` may depend on `apps/**` either.
+
+The repository's import-boundary lint enforces the source-import portion of
+this rule. It resolves static imports, re-exports, literal dynamic imports,
+`require` calls and import-type forms, including supported TypeScript path
+aliases and workspace package names. Computed module expressions in governed
+areas are diagnosed because their destination cannot be established statically.
+The only cross-app source-import exception is `tests/pulse-integration/`, which
+may import both Pulse apps for test setup and assertions. That exception grants
+no permission to production code and no access to core `services/**`,
+`contracts/**` or `tools/**`. Run `pnpm test:boundaries` for the focused
+regression suite; the existing root and package lint commands also run the rule.
+
+This is a static import check, not a sandbox or a complete architecture
+proof. It cannot guarantee against arbitrary filesystem or network access,
+`eval`, aliases of `require`, or alternate runtime loaders. Bundler-only aliases
+must also be declared in TypeScript configuration for this resolver. It does not
+enforce Go imports; the Go
+verifier remains outside ESLint. The check covers import destinations described
+here, not every architectural invariant. The policy and its scope are recorded
+in [ADR-0042](../../../docs/decisions/0042-import-boundary-enforcement.md).
 
 ## Every service ships
 

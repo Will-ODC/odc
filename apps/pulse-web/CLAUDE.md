@@ -13,6 +13,12 @@ implemented.
 - `apps/pulse` owns server behavior and storage. The browser communicates through
   the public HTTP API documented in `apps/pulse/API.md`; it does not import server
   code or access storage.
+- Static import lint enforces the sibling-app source boundary. The
+  `tests/pulse-integration/` workspace may import both apps for test setup and
+  assertions; the exception does not apply to production client code. See the
+  [service-boundaries skill](../../.claude/skills/odc-service-boundaries/SKILL.md)
+  and [ADR-0042](../../docs/decisions/0042-import-boundary-enforcement.md) for
+  its scope and limitations.
 - Production serves the client and API on one origin, with nginx forwarding
   `/api`; see [ADR-0028](../../docs/decisions/0028-pulse-is-served-as-two-images-on-one-origin.md)
   and the API guide's origin checks.
