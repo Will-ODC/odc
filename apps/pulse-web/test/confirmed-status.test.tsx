@@ -12,6 +12,7 @@ import { afterEach, describe, expect, it, vi } from "vitest";
 import { VoteCard } from "../src/components/VoteCard.js";
 import type { VoteCardProps } from "../src/components/VoteCard.js";
 import { countedNote } from "../src/flow/vote-card.js";
+import { SIGNED_IN_KEY } from "../src/flow/sign-in-return.js";
 import { Conversation } from "../src/screens/Conversation.js";
 import type { Me, Results } from "../src/api/types.js";
 import { poll, results, stubApi } from "./stub-api.js";
@@ -198,6 +199,35 @@ describe("signing in while a counted vote is on screen", () => {
     expect(main.queryByRole("link", { name: /Confirm with your email/ })).toBe(
       null,
     );
+  });
+
+  it("turns confirmed when another tab announces a sign-in, without focus", async () => {
+    let me: Me | null = null;
+    render(
+      <Conversation
+        api={stubApi({
+          cast,
+          me: () => Promise.resolve(me),
+          results: () => Promise.resolve(counts(1)),
+        })}
+        pollId={p.id}
+      />,
+    );
+    const main = await vote();
+    me = ME;
+    // Some other key changing says nothing about signing in.
+    act(() => {
+      window.dispatchEvent(new StorageEvent("storage", { key: "other" }));
+    });
+    await new Promise((done) => setTimeout(done, 20));
+    expect(main.getByRole("status").textContent).toBe("Counted");
+    act(() => {
+      window.dispatchEvent(new StorageEvent("storage", { key: SIGNED_IN_KEY }));
+    });
+    expect(await main.findByText("Counted · confirmed by email")).toBeTruthy();
+    expect(
+      await main.findByText("1 vote so far · 1 confirmed by email"),
+    ).toBeTruthy();
   });
 
   it("keeps the status and says so when the new numbers fail", async () => {

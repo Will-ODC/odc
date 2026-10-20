@@ -92,3 +92,24 @@ export function takeReturn(
     return null;
   }
 }
+
+/**
+ * Written by the tab that spends an emailed link, so other pulse tabs in this
+ * browser hear that someone signed in (#353). A `storage` event reaches every
+ * other same-origin tab at once, which a tab switch alone does not: two
+ * windows side by side never lose focus to each other. What is written is a
+ * time, nothing about the person.
+ */
+export const SIGNED_IN_KEY = "pulse.signedIn";
+
+export function announceSignIn(
+  store: ReturnStore | null,
+  now: number = Date.now(),
+): void {
+  if (!store) return;
+  try {
+    store.setItem(SIGNED_IN_KEY, String(now));
+  } catch {
+    // Storage refused: other tabs catch up when they are next looked at.
+  }
+}

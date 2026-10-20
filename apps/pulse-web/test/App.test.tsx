@@ -154,6 +154,8 @@ describe("after the link is spent", () => {
       await within(screen.getByRole("main")).findByText("Q parks"),
     ).toBeTruthy();
     expect(globalThis.location.search).toBe("?poll=parks");
+    // Other tabs in this browser hear about it (#353).
+    expect(globalThis.localStorage.getItem("pulse.signedIn")).toMatch(/^\d+$/);
   });
 
   it("lands where it always has when sign-in named no question", async () => {

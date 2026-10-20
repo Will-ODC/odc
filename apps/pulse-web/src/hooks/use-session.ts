@@ -1,6 +1,7 @@
 import { useCallback, useEffect, useRef, useState } from "react";
 import type { Me, PulseApi } from "../api/types.js";
 import type { TwoPressProgress } from "../components/TwoPress.js";
+import { SIGNED_IN_KEY } from "../flow/sign-in-return.js";
 
 /**
  * Who is signed in, as far as the bar across the top needs to know.
@@ -71,7 +72,9 @@ export function useSession(
    * page shares, but nothing tells this page. Coming back to it - the window
    * regaining focus, or the tab becoming visible - is the moment the answer
    * may have changed and the moment someone will look, so the vote card can
-   * say "confirmed by email" without a reload.
+   * say "confirmed by email" without a reload. The tab that spends the link
+   * also announces it through storage (`announceSignIn`), which reaches this
+   * page even when it never lost focus, as with two windows side by side.
    *
    * Only upgrades: a failed or signed-out answer leaves the session as it
    * was, so a dropped connection never shows a signed-in person as signed out.
@@ -90,11 +93,16 @@ export function useSession(
         () => {},
       );
     };
+    const announced = (event: StorageEvent) => {
+      if (event.key === SIGNED_IN_KEY) ask();
+    };
     window.addEventListener("focus", ask);
+    window.addEventListener("storage", announced);
     document.addEventListener("visibilitychange", ask);
     return () => {
       live = false;
       window.removeEventListener("focus", ask);
+      window.removeEventListener("storage", announced);
       document.removeEventListener("visibilitychange", ask);
     };
   }, [api, settled]);
