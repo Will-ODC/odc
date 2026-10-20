@@ -13,6 +13,7 @@ import type {
 } from "../../src/authoring/store.js";
 import type { VoterStore } from "../../src/identity/store.js";
 import type { VotingStore } from "../../src/voting/store.js";
+import { publicPoll } from "../../src/voting/public-poll.js";
 
 export const AT = new Date("2026-10-14T12:00:00.123Z");
 export const member: PublicationActor = {
@@ -84,6 +85,55 @@ export function creationConformance(
         [0, 1],
       );
       assert.equal(await voting.voteOf(poll.id, member.voterId), undefined);
+    },
+  );
+
+  check(
+    "the_voting_store_reads_back_the_same_public_projection_and_no_author",
+    async ({ store, voting }) => {
+      // What GET /api/polls/:id serves is `publicPoll(getPoll(id))`. It must
+      // equal the creation response exactly — same attribution, same
+      // community label — for both kinds, from either store.
+      const named = await store.publish(member, randomUUID(), {
+        ...body,
+        attribution: { kind: "named", name: " Ada " },
+      });
+      const anonymous = await store.publish(guest, randomUUID(), body);
+      for (const { poll } of [named, anonymous]) {
+        const stored = await voting.getPoll(poll.id);
+        assert.ok(stored);
+        const read = publicPoll(stored, AT);
+        assert.deepEqual(read, poll);
+        assert.doesNotMatch(
+          JSON.stringify(stored) + JSON.stringify(read),
+          /member-private|guest-account|example\.test|created_?[bB]y|voterId|request_?[kK]ey/,
+        );
+      }
+      const readNamed = publicPoll((await voting.getPoll(named.poll.id))!, AT);
+      assert.deepEqual(readNamed.attribution, { kind: "named", name: "Ada" });
+      assert.deepEqual(readNamed.community, { id: "campus", label: "Campus" });
+      const readAnonymous = publicPoll(
+        (await voting.getPoll(anonymous.poll.id))!,
+        AT,
+      );
+      assert.deepEqual(readAnonymous.attribution, { kind: "anonymous" });
+      assert.deepEqual(readAnonymous.community, {
+        id: "pulse-general",
+        label: "General",
+      });
+
+      // A poll that never went through creation has neither key — absent,
+      // not null — and no author is invented for it.
+      await voting.createPoll({
+        id: "seed-poll",
+        question: "Seed",
+        choices: ["A", "B"],
+        method: "single",
+      });
+      const seed = publicPoll((await voting.getPoll("seed-poll"))!, AT);
+      assert.equal("community" in seed, false);
+      assert.equal("attribution" in seed, false);
+      assert.equal((await voting.getPoll("seed-poll"))?.publication, undefined);
     },
   );
 

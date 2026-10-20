@@ -11,7 +11,7 @@ import Fastify, {
 import type { ClaimService } from "../identity/claim.js";
 import type { Voter, VoterStore } from "../identity/store.js";
 import type { ConfirmationKey } from "../voting/confirmation.js";
-import { isOpen, type Poll } from "../voting/poll.js";
+import { publicPoll } from "../voting/public-poll.js";
 import {
   BallotError,
   UnknownPollError,
@@ -462,7 +462,9 @@ export async function createServer(deps: ServerDeps): Promise<FastifyInstance> {
   app.get("/api/polls/:id", async (request, reply) => {
     const poll = await deps.votes.getPoll(pollId(request));
     if (!poll) return notFoundPoll(reply);
-    return reply.send(pollBody(poll, now()));
+    // The one allow-listed projection; an authored poll's attribution says
+    // anonymous or the chosen name, never who the author's account is.
+    return reply.send(publicPoll(poll, now()));
   });
 
   app.get("/api/polls/:id/results", async (request, reply) => {
@@ -639,20 +641,6 @@ function notFoundPoll(reply: FastifyReply) {
   return reply
     .code(404)
     .send({ error: "not_found", message: "There is no such poll." });
-}
-
-/** A poll in the client's wire shape: dates as ISO strings, openness resolved. */
-function pollBody(poll: Poll, now: Date) {
-  return {
-    id: poll.id,
-    question: poll.question,
-    choices: [...poll.choices],
-    method: poll.method,
-    next: [...poll.next],
-    acceptsSuggestions: poll.acceptsSuggestions,
-    closesAt: poll.closesAt ? poll.closesAt.toISOString() : null,
-    open: isOpen(poll, now),
-  };
 }
 
 /**
