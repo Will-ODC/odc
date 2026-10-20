@@ -11,7 +11,10 @@ import type {
 import { ANONYMITY_NOTE, NewPoll } from "../src/screens/NewPoll.js";
 import { poll, stubApi } from "./stub-api.js";
 
-afterEach(cleanup);
+afterEach(() => {
+  cleanup();
+  globalThis.localStorage.clear();
+});
 
 const FIRST: CreationContext = {
   community: { id: "pulse-general", label: "General" },
@@ -28,10 +31,12 @@ function show({
   context = () => Promise.resolve(FIRST),
   createPoll = vi.fn<Create>(() => Promise.resolve(poll({ id: "new-1" }))),
   keys = ["key-1", "key-2", "key-3"],
+  now = () => NOW,
 }: {
   context?: () => Promise<CreationContext>;
   createPoll?: Create;
   keys?: string[];
+  now?: () => number;
 } = {}) {
   const onPosted = vi.fn();
   const queue = [...keys];
@@ -41,7 +46,7 @@ function show({
       signInHref="/sign-in?next=new"
       onPosted={onPosted}
       newKey={() => queue.shift() ?? "spare"}
-      now={() => NOW}
+      now={now}
     />,
   );
   return { onPosted, createPoll };
@@ -494,6 +499,81 @@ describe("posting, confirmed in place", () => {
     },
   );
 
+  /* #393 review: an edit mid-post would drop the key and the answer. */
+  it("holds every field still while posting, so a failure is shown and retried with the same key", async () => {
+    const user = userEvent.setup();
+    let fail: ((err: unknown) => void) | undefined;
+    const createPoll = vi
+      .fn<Create>()
+      .mockImplementationOnce(
+        () =>
+          new Promise<Poll>((_, reject) => {
+            fail = reject;
+          }),
+      )
+      .mockResolvedValue(poll({ id: "new-1" }));
+    const { onPosted } = show({
+      context: () => Promise.resolve(LATER),
+      createPoll,
+    });
+    await fill(user);
+    await user.click(button("Post question"));
+    await user.click(await screen.findByRole("button", { name: "Post it" }));
+    const choice = field("Choice 2") as HTMLInputElement;
+    // Disabled by the fieldset around them, which the property does not show.
+    expect(choice.matches(":disabled")).toBe(true);
+    expect(button("Add a choice").matches(":disabled")).toBe(true);
+    await user.type(choice, " typo");
+    expect(choice.value).toBe("No");
+    act(() => fail?.(new ApiError(0, "Couldn't reach pulse.")));
+    expect((await screen.findByRole("alert")).textContent).toContain(
+      "it will not be posted twice",
+    );
+    expect(choice.matches(":disabled")).toBe(false);
+    await user.click(button("Post it"));
+    await waitFor(() => expect(onPosted).toHaveBeenCalledOnce());
+    expect(createPoll.mock.calls.map(([key]) => key)).toEqual([
+      "key-1",
+      "key-1",
+    ]);
+  });
+
+  it("says when posting opens again after the hourly limit", async () => {
+    const user = userEvent.setup();
+    show({
+      context: () => Promise.resolve(LATER),
+      createPoll: () =>
+        Promise.reject(
+          new ApiError(
+            429,
+            "You have posted five questions this hour.",
+            "posting_limit",
+            1500,
+          ),
+        ),
+    });
+    await fill(user);
+    await user.click(button("Post question"));
+    await user.click(await screen.findByRole("button", { name: "Post it" }));
+    expect((await screen.findByRole("alert")).textContent).toBe(
+      "You have posted five questions this hour. You can post again in about 25 minutes.",
+    );
+  });
+
+  it("says the closing date from the time it is read, not when the form opened", async () => {
+    let clock = NOW;
+    const user = userEvent.setup();
+    show({ context: () => Promise.resolve(LATER), now: () => clock });
+    expect(
+      await screen.findByText(/^Closes in seven days, on Oct 27, 2026/),
+    ).toBeTruthy();
+    clock = NOW + 2 * 24 * 60 * 60 * 1000;
+    await user.type(field("Your question"), "x");
+    expect(
+      screen.getByText(/^Closes in seven days, on Oct 29, 2026/),
+    ).toBeTruthy();
+  });
+
   it("asks for the promise when the server says it is needed after all", async () => {
     const user = userEvent.setup();
     const createPoll = vi
@@ -521,7 +601,7 @@ describe("posting, confirmed in place", () => {
     expect((field("Choice 1") as HTMLInputElement).value).toBe("Yes");
   });
 
-  it("offers sign-in again when the session ended before posting", async () => {
+  it("offers sign-in again when the session ended, keeping what was written", async () => {
     const user = userEvent.setup();
     show({
       context: () => Promise.resolve(LATER),
@@ -533,5 +613,31 @@ describe("posting, confirmed in place", () => {
     expect(
       await screen.findByRole("link", { name: "Sign in to post" }),
     ).toBeTruthy();
+    expect(
+      screen.getByText(/Your question was not posted. What you wrote is kept/),
+    ).toBeTruthy();
+    cleanup();
+
+    // Back from signing in: the same words, and kept only once.
+    show({ context: () => Promise.resolve(LATER) });
+    expect(
+      ((await screen.findByLabelText("Your question")) as HTMLTextAreaElement)
+        .value,
+    ).toBe("Should we open a community garden?");
+    expect((field("Choice 2") as HTMLInputElement).value).toBe("No");
+    cleanup();
+    show({ context: () => Promise.resolve(LATER) });
+    expect(
+      ((await screen.findByLabelText("Your question")) as HTMLTextAreaElement)
+        .value,
+    ).toBe("");
+  });
+
+  it("says nothing was kept when nothing was", async () => {
+    show({
+      context: () => Promise.reject(new ApiError(401, "Sign in first.")),
+    });
+    await screen.findByRole("link", { name: "Sign in to post" });
+    expect(screen.queryByText(/What you wrote is kept/)).toBeNull();
   });
 });

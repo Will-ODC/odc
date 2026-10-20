@@ -25,6 +25,8 @@ import {
 } from "../flow/new-poll.js";
 import type { Draft, Problems } from "../flow/new-poll.js";
 import { useCreationContext } from "../hooks/use-creation-context.js";
+import { browserStore } from "../flow/sign-in-return.js";
+import { forgetDraft, keepDraft, readDraft } from "../flow/draft-store.js";
 import "./SignIn.css";
 import "./NewPoll.css";
 
@@ -63,7 +65,10 @@ export function NewPoll({
     <AppShell banner={<TopBanner />}>
       <article className="post">
         {state.status === "signedOut" ? (
-          <SignedOut href={signInHref} />
+          <SignedOut
+            href={signInHref}
+            kept={readDraft(browserStore(), now()) !== null}
+          />
         ) : (
           <>
             <ViewState data={state}>
@@ -91,7 +96,7 @@ export function NewPoll({
   );
 }
 
-function SignedOut({ href }: { href: string }) {
+function SignedOut({ href, kept }: { href: string; kept: boolean }) {
   return (
     <>
       <h1 className="signin__title">Post a question</h1>
@@ -99,6 +104,12 @@ function SignedOut({ href }: { href: string }) {
         Sign in with your email to post a question. You come back here after.
         Anyone can vote without signing in.
       </p>
+      {kept ? (
+        <p className="signin__lede" role="status">
+          Your question was not posted. What you wrote is kept in this browser
+          for an hour, and will be here after you sign in.
+        </p>
+      ) : null}
       <a className="signin__go post__link-button" href={href}>
         Sign in to post
       </a>
@@ -123,7 +134,11 @@ function PostForm({
   onNeedPromise: () => void;
   onSignedOut: () => void;
 }) {
-  const [draft, setDraft] = useState<Draft>(emptyDraft);
+  // What was typed before a sign-in the post needed, if this browser kept it.
+  const [draft, setDraft] = useState<Draft>(
+    () => readDraft(browserStore(), now()) ?? emptyDraft(),
+  );
+  useEffect(() => forgetDraft(browserStore()), []);
   const [shown, setShown] = useState<Problems>({ choices: [] });
   const [sending, setSending] = useState<TwoPressProgress>({ status: "idle" });
   /**
@@ -140,7 +155,11 @@ function PostForm({
     closing: false,
     attribution: false,
   });
-  const [opened] = useState(now);
+  /**
+   * The press's own guard, not only the button's: two presses inside one
+   * render both find the button enabled. Also stops edits mid-post.
+   */
+  const inFlight = useRef(false);
   const needsPromise = !context.purposeAcknowledged;
   const id = useId();
   const choiceRefs = useRef<(HTMLInputElement | null)[]>([]);
@@ -167,6 +186,10 @@ function PostForm({
   useEffect(() => heading.current?.focus(), []);
 
   function edit(change: (old: Draft) => Draft) {
+    // Nothing changes while a post is on its way: the fields are disabled,
+    // and this is the guard behind them. An edit then would drop the key
+    // and the answer, and a second press could post the question twice.
+    if (inFlight.current) return;
     setDraft(change);
     if (key.current !== null || sending.status === "failed") {
       key.current = null;
@@ -189,11 +212,6 @@ function PostForm({
     return true;
   }
 
-  /**
-   * The press's own guard, not only the button's: two presses inside one
-   * render both find the button enabled.
-   */
-  const inFlight = useRef(false);
   async function post() {
     if (inFlight.current || key.current === null) return;
     inFlight.current = true;
@@ -204,6 +222,8 @@ function PostForm({
       );
     } catch (err) {
       if (err instanceof ApiError && err.status === 401) {
+        // Kept for the way back from signing in, which opens a new tab.
+        keepDraft(draft, browserStore(), now());
         onSignedOut();
         return;
       }
@@ -219,13 +239,7 @@ function PostForm({
         focusProblem.current = true;
         return;
       }
-      setSending({
-        status: "failed",
-        message:
-          err instanceof ApiError && err.status !== 0
-            ? err.message
-            : "We could not reach pulse. Press Post it to try again; it will not be posted twice.",
-      });
+      setSending({ status: "failed", message: failureOf(err) });
     } finally {
       inFlight.current = false;
     }
@@ -255,375 +269,381 @@ function PostForm({
         Posting in <b>{context.community.label}</b>.
       </p>
 
-      <Field
-        id={`${id}-question`}
-        label="Your question"
-        problem={shown.question}
-      >
-        {(described) => (
-          <textarea
-            id={`${id}-question`}
-            className="signin__field post__question"
-            rows={3}
-            value={draft.question}
-            aria-invalid={shown.question !== undefined}
-            {...described}
-            onChange={(event) => {
-              const question = event.target.value;
-              edit((old) => ({ ...old, question }));
-              if (shown.question)
-                setShown((old) => withoutField(old, "question"));
-            }}
-            onBlur={() => {
-              if (draft.question.trim() === "") return;
-              const question = questionProblem(draft.question);
-              setShown((old) =>
-                question ? { ...old, question } : withoutField(old, "question"),
-              );
-            }}
-          />
-        )}
-      </Field>
+      <fieldset className="post__lock" disabled={sending.status === "sending"}>
+        <Field
+          id={`${id}-question`}
+          label="Your question"
+          problem={shown.question}
+        >
+          {(described) => (
+            <textarea
+              id={`${id}-question`}
+              className="signin__field post__question"
+              rows={3}
+              value={draft.question}
+              aria-invalid={shown.question !== undefined}
+              {...described}
+              onChange={(event) => {
+                const question = event.target.value;
+                edit((old) => ({ ...old, question }));
+                if (shown.question)
+                  setShown((old) => withoutField(old, "question"));
+              }}
+              onBlur={() => {
+                if (draft.question.trim() === "") return;
+                const question = questionProblem(draft.question);
+                setShown((old) =>
+                  question
+                    ? { ...old, question }
+                    : withoutField(old, "question"),
+                );
+              }}
+            />
+          )}
+        </Field>
 
-      {/* #296 adds an optional context paragraph, links and a photo here. */}
+        {/* #296 adds an optional context paragraph, links and a photo here. */}
 
-      <fieldset className="post__group">
-        <legend className="signin__label">Choices</legend>
-        <ol className="post__choices">
-          {draft.choices.map((choice, index) => {
-            const problem = choiceShown(index);
-            const inputId = `${id}-choice-${index}`;
-            return (
-              <li key={index} className="post__choice">
-                <label className="post__visually-hidden" htmlFor={inputId}>
-                  Choice {index + 1}
-                </label>
-                <span className="post__number" aria-hidden="true">
-                  {index + 1}
-                </span>
-                <input
-                  id={inputId}
-                  ref={(node) => {
-                    choiceRefs.current[index] = node;
-                  }}
-                  className="signin__field"
-                  value={choice}
-                  aria-invalid={problem !== undefined}
-                  {...(problem
-                    ? { "aria-describedby": `${inputId}-problem` }
-                    : {})}
-                  onChange={(event) => {
-                    const text = event.target.value;
-                    edit((old) => ({
-                      ...old,
-                      choices: old.choices.map((one, at) =>
-                        at === index ? text : one,
-                      ),
-                    }));
-                    if (problem)
-                      setShown((old) => ({
-                        ...old,
-                        choices: old.choices.map((one, at) =>
-                          at === index ? undefined : one,
-                        ),
-                      }));
-                  }}
-                  onBlur={() => {
-                    if (draft.choices[index]?.trim() === "") return;
-                    const found = choiceProblems(draft.choices)[index];
-                    setShown((old) => {
-                      const choices = [...old.choices];
-                      choices[index] = found;
-                      return { ...old, choices };
-                    });
-                  }}
-                />
-                {canRemove ? (
-                  <button
-                    type="button"
-                    className="post__remove"
-                    aria-label={`Remove choice ${index + 1}`}
-                    onClick={() => {
+        <fieldset className="post__group">
+          <legend className="signin__label">Choices</legend>
+          <ol className="post__choices">
+            {draft.choices.map((choice, index) => {
+              const problem = choiceShown(index);
+              const inputId = `${id}-choice-${index}`;
+              return (
+                <li key={index} className="post__choice">
+                  <label className="post__visually-hidden" htmlFor={inputId}>
+                    Choice {index + 1}
+                  </label>
+                  <span className="post__number" aria-hidden="true">
+                    {index + 1}
+                  </span>
+                  <input
+                    id={inputId}
+                    ref={(node) => {
+                      choiceRefs.current[index] = node;
+                    }}
+                    className="signin__field"
+                    value={choice}
+                    aria-invalid={problem !== undefined}
+                    {...(problem
+                      ? { "aria-describedby": `${inputId}-problem` }
+                      : {})}
+                    onChange={(event) => {
+                      const text = event.target.value;
                       edit((old) => ({
                         ...old,
-                        choices: old.choices.filter((_, at) => at !== index),
+                        choices: old.choices.map((one, at) =>
+                          at === index ? text : one,
+                        ),
                       }));
-                      setShown((old) => ({
-                        ...old,
-                        choices: old.choices.filter((_, at) => at !== index),
-                      }));
-                      // The choice that took its place, or the last one left.
-                      focusChoice.current = Math.min(
-                        index,
-                        draft.choices.length - 2,
-                      );
+                      if (problem)
+                        setShown((old) => ({
+                          ...old,
+                          choices: old.choices.map((one, at) =>
+                            at === index ? undefined : one,
+                          ),
+                        }));
                     }}
-                  >
-                    Remove
-                  </button>
-                ) : null}
-                {problem ? (
-                  <p
-                    className="signin__problem post__problem"
-                    id={`${inputId}-problem`}
-                  >
-                    {problem}
-                  </p>
-                ) : null}
-              </li>
-            );
-          })}
-        </ol>
-        <button
-          type="button"
-          ref={addButton}
-          className="signin__again post__add"
-          disabled={!canAdd}
-          onClick={() => {
-            edit((old) => ({ ...old, choices: [...old.choices, ""] }));
-            focusChoice.current = draft.choices.length;
-          }}
-        >
-          Add a choice
-        </button>
-        {canAdd ? null : (
-          <p className="post__hint">
-            {LIMITS.maxChoices} choices is the most a question can have.
+                    onBlur={() => {
+                      if (draft.choices[index]?.trim() === "") return;
+                      const found = choiceProblems(draft.choices)[index];
+                      setShown((old) => {
+                        const choices = [...old.choices];
+                        choices[index] = found;
+                        return { ...old, choices };
+                      });
+                    }}
+                  />
+                  {canRemove ? (
+                    <button
+                      type="button"
+                      className="post__remove"
+                      aria-label={`Remove choice ${index + 1}`}
+                      onClick={() => {
+                        edit((old) => ({
+                          ...old,
+                          choices: old.choices.filter((_, at) => at !== index),
+                        }));
+                        setShown((old) => ({
+                          ...old,
+                          choices: old.choices.filter((_, at) => at !== index),
+                        }));
+                        // The choice that took its place, or the last one left.
+                        focusChoice.current = Math.min(
+                          index,
+                          draft.choices.length - 2,
+                        );
+                      }}
+                    >
+                      Remove
+                    </button>
+                  ) : null}
+                  {problem ? (
+                    <p
+                      className="signin__problem post__problem"
+                      id={`${inputId}-problem`}
+                    >
+                      {problem}
+                    </p>
+                  ) : null}
+                </li>
+              );
+            })}
+          </ol>
+          <button
+            type="button"
+            ref={addButton}
+            className="signin__again post__add"
+            disabled={!canAdd}
+            onClick={() => {
+              edit((old) => ({ ...old, choices: [...old.choices, ""] }));
+              focusChoice.current = draft.choices.length;
+            }}
+          >
+            Add a choice
+          </button>
+          {canAdd ? null : (
+            <p className="post__hint">
+              {LIMITS.maxChoices} choices is the most a question can have.
+            </p>
+          )}
+        </fieldset>
+
+        <div className="post__settings">
+          <Setting
+            summary={methodSummary(draft)}
+            label="how people answer"
+            open={open.method}
+            onOpen={() => setOpen((old) => ({ ...old, method: true }))}
+          >
+            <fieldset className="post__group">
+              <legend className="signin__label">How people answer</legend>
+              <div className="signin__choices">
+                <Option
+                  name={`${id}-method`}
+                  checked={draft.method === "single"}
+                  onPick={() => edit((old) => ({ ...old, method: "single" }))}
+                >
+                  One choice
+                </Option>
+                <Option
+                  name={`${id}-method`}
+                  checked={draft.method === "approval"}
+                  onPick={() => edit((old) => ({ ...old, method: "approval" }))}
+                >
+                  Any number of choices
+                </Option>
+              </div>
+            </fieldset>
+          </Setting>
+
+          <Setting
+            summary={closingSummary(draft, now())}
+            label="when it closes"
+            open={open.closing}
+            onOpen={() => setOpen((old) => ({ ...old, closing: true }))}
+          >
+            <fieldset className="post__group">
+              <legend className="signin__label">When it closes</legend>
+              <div className="signin__choices">
+                <Option
+                  name={`${id}-closing`}
+                  checked={draft.closing.kind === "default"}
+                  onPick={() => {
+                    edit((old) => ({ ...old, closing: { kind: "default" } }));
+                    setShown((old) => withoutField(old, "closing"));
+                  }}
+                >
+                  {defaultCloseNote(now())}
+                </Option>
+                <Option
+                  name={`${id}-closing`}
+                  checked={draft.closing.kind === "chosen"}
+                  onPick={() =>
+                    edit((old) =>
+                      old.closing.kind === "chosen"
+                        ? old
+                        : { ...old, closing: { kind: "chosen", local: "" } },
+                    )
+                  }
+                >
+                  At a time I pick
+                </Option>
+              </div>
+              {draft.closing.kind === "chosen" ? (
+                <Field
+                  id={`${id}-closes`}
+                  label="Closing time"
+                  problem={shown.closing}
+                >
+                  {(described) => (
+                    <input
+                      id={`${id}-closes`}
+                      type="datetime-local"
+                      className="signin__field"
+                      min={pickerMin(now())}
+                      value={
+                        draft.closing.kind === "chosen"
+                          ? draft.closing.local
+                          : ""
+                      }
+                      aria-invalid={shown.closing !== undefined}
+                      {...described}
+                      onChange={(event) => {
+                        const local = event.target.value;
+                        edit((old) => ({
+                          ...old,
+                          closing: { kind: "chosen", local },
+                        }));
+                        if (shown.closing)
+                          setShown((old) => withoutField(old, "closing"));
+                      }}
+                      onBlur={() => {
+                        const closing = closingProblem(draft, now());
+                        setShown((old) =>
+                          closing
+                            ? { ...old, closing }
+                            : withoutField(old, "closing"),
+                        );
+                      }}
+                    />
+                  )}
+                </Field>
+              ) : null}
+            </fieldset>
+          </Setting>
+
+          <Setting
+            summary={postedAsSummary(draft)}
+            label="who readers see as the poster"
+            open={open.attribution}
+            onOpen={() => setOpen((old) => ({ ...old, attribution: true }))}
+            describedBy={`${id}-anonymity`}
+          >
+            <fieldset
+              className="post__group"
+              aria-describedby={`${id}-anonymity`}
+            >
+              <legend className="signin__label">
+                Who readers see as the poster
+              </legend>
+              <div className="signin__choices">
+                <Option
+                  name={`${id}-attribution`}
+                  checked={draft.attribution.kind === "anonymous"}
+                  onPick={() => {
+                    edit((old) => ({
+                      ...old,
+                      attribution: { ...old.attribution, kind: "anonymous" },
+                    }));
+                    setShown((old) => withoutField(old, "name"));
+                  }}
+                >
+                  Nobody: post anonymously
+                </Option>
+                <Option
+                  name={`${id}-attribution`}
+                  checked={draft.attribution.kind === "named"}
+                  onPick={() =>
+                    edit((old) => ({
+                      ...old,
+                      attribution: { ...old.attribution, kind: "named" },
+                    }))
+                  }
+                >
+                  A name I choose
+                </Option>
+              </div>
+              {draft.attribution.kind === "named" ? (
+                <Field
+                  id={`${id}-name`}
+                  label="Name to show"
+                  hint="Shown exactly as you type it. Pulse does not check it, so readers cannot tell whether it is your real name."
+                  problem={shown.name}
+                >
+                  {(described) => (
+                    <input
+                      id={`${id}-name`}
+                      className="signin__field"
+                      autoComplete="off"
+                      value={draft.attribution.name}
+                      aria-invalid={shown.name !== undefined}
+                      {...described}
+                      onChange={(event) => {
+                        const name = event.target.value;
+                        edit((old) => ({
+                          ...old,
+                          attribution: { kind: "named", name },
+                        }));
+                        if (shown.name)
+                          setShown((old) => withoutField(old, "name"));
+                      }}
+                      onBlur={() => {
+                        if (draft.attribution.name.trim() === "") return;
+                        const name = nameProblem(draft);
+                        setShown((old) =>
+                          name ? { ...old, name } : withoutField(old, "name"),
+                        );
+                      }}
+                    />
+                  )}
+                </Field>
+              ) : null}
+            </fieldset>
+          </Setting>
+          {/* Beside the anonymity control, open or not (ADR-0037). */}
+          <p className="post__hint" id={`${id}-anonymity`}>
+            {ANONYMITY_NOTE}
+          </p>
+        </div>
+
+        {needsPromise ? (
+          <section className="post__purpose" aria-labelledby={`${id}-purpose`}>
+            <h2 id={`${id}-purpose`} className="post__heading">
+              What this discussion is for
+            </h2>
+            <p className="post__text">
+              Comments help us turn ideas into action that improves our
+              community&rsquo;s wellbeing as much as possible. Be honest,
+              listen, and work together.
+            </p>
+            <p className="post__text">
+              When we disagree, say so respectfully. Decide on a compromise
+              together, or try different ways to solve the same problem. Keep
+              talking and share what works.
+            </p>
+            <label className="signin__optin post__promise">
+              <input
+                type="checkbox"
+                checked={draft.promised}
+                aria-invalid={shown.promise !== undefined}
+                {...(shown.promise
+                  ? { "aria-describedby": `${id}-promise-problem` }
+                  : {})}
+                onChange={(event) => {
+                  const promised = event.target.checked;
+                  edit((old) => ({ ...old, promised }));
+                  if (promised) setShown((old) => withoutField(old, "promise"));
+                }}
+              />
+              <b>
+                I will discuss ideas without attacking, harassing or threatening
+                people.
+              </b>
+            </label>
+            {shown.promise ? (
+              <p className="signin__problem" id={`${id}-promise-problem`}>
+                {shown.promise}
+              </p>
+            ) : null}
+          </section>
+        ) : (
+          <p className="post__reminder">
+            <b>Be honest. Respect people. Help us move forward.</b>
           </p>
         )}
       </fieldset>
-
-      <div className="post__settings">
-        <Setting
-          summary={methodSummary(draft)}
-          label="how people answer"
-          open={open.method}
-          onOpen={() => setOpen((old) => ({ ...old, method: true }))}
-        >
-          <fieldset className="post__group">
-            <legend className="signin__label">How people answer</legend>
-            <div className="signin__choices">
-              <Option
-                name={`${id}-method`}
-                checked={draft.method === "single"}
-                onPick={() => edit((old) => ({ ...old, method: "single" }))}
-              >
-                One choice
-              </Option>
-              <Option
-                name={`${id}-method`}
-                checked={draft.method === "approval"}
-                onPick={() => edit((old) => ({ ...old, method: "approval" }))}
-              >
-                Any number of choices
-              </Option>
-            </div>
-          </fieldset>
-        </Setting>
-
-        <Setting
-          summary={closingSummary(draft, opened)}
-          label="when it closes"
-          open={open.closing}
-          onOpen={() => setOpen((old) => ({ ...old, closing: true }))}
-        >
-          <fieldset className="post__group">
-            <legend className="signin__label">When it closes</legend>
-            <div className="signin__choices">
-              <Option
-                name={`${id}-closing`}
-                checked={draft.closing.kind === "default"}
-                onPick={() => {
-                  edit((old) => ({ ...old, closing: { kind: "default" } }));
-                  setShown((old) => withoutField(old, "closing"));
-                }}
-              >
-                {defaultCloseNote(opened)}
-              </Option>
-              <Option
-                name={`${id}-closing`}
-                checked={draft.closing.kind === "chosen"}
-                onPick={() =>
-                  edit((old) =>
-                    old.closing.kind === "chosen"
-                      ? old
-                      : { ...old, closing: { kind: "chosen", local: "" } },
-                  )
-                }
-              >
-                At a time I pick
-              </Option>
-            </div>
-            {draft.closing.kind === "chosen" ? (
-              <Field
-                id={`${id}-closes`}
-                label="Closing time"
-                problem={shown.closing}
-              >
-                {(described) => (
-                  <input
-                    id={`${id}-closes`}
-                    type="datetime-local"
-                    className="signin__field"
-                    min={pickerMin(opened)}
-                    value={
-                      draft.closing.kind === "chosen" ? draft.closing.local : ""
-                    }
-                    aria-invalid={shown.closing !== undefined}
-                    {...described}
-                    onChange={(event) => {
-                      const local = event.target.value;
-                      edit((old) => ({
-                        ...old,
-                        closing: { kind: "chosen", local },
-                      }));
-                      if (shown.closing)
-                        setShown((old) => withoutField(old, "closing"));
-                    }}
-                    onBlur={() => {
-                      const closing = closingProblem(draft, now());
-                      setShown((old) =>
-                        closing
-                          ? { ...old, closing }
-                          : withoutField(old, "closing"),
-                      );
-                    }}
-                  />
-                )}
-              </Field>
-            ) : null}
-          </fieldset>
-        </Setting>
-
-        <Setting
-          summary={postedAsSummary(draft)}
-          label="who readers see as the poster"
-          open={open.attribution}
-          onOpen={() => setOpen((old) => ({ ...old, attribution: true }))}
-          describedBy={`${id}-anonymity`}
-        >
-          <fieldset
-            className="post__group"
-            aria-describedby={`${id}-anonymity`}
-          >
-            <legend className="signin__label">
-              Who readers see as the poster
-            </legend>
-            <div className="signin__choices">
-              <Option
-                name={`${id}-attribution`}
-                checked={draft.attribution.kind === "anonymous"}
-                onPick={() => {
-                  edit((old) => ({
-                    ...old,
-                    attribution: { ...old.attribution, kind: "anonymous" },
-                  }));
-                  setShown((old) => withoutField(old, "name"));
-                }}
-              >
-                Nobody: post anonymously
-              </Option>
-              <Option
-                name={`${id}-attribution`}
-                checked={draft.attribution.kind === "named"}
-                onPick={() =>
-                  edit((old) => ({
-                    ...old,
-                    attribution: { ...old.attribution, kind: "named" },
-                  }))
-                }
-              >
-                A name I choose
-              </Option>
-            </div>
-            {draft.attribution.kind === "named" ? (
-              <Field
-                id={`${id}-name`}
-                label="Name to show"
-                hint="Shown exactly as you type it. Pulse does not check it, so readers cannot tell whether it is your real name."
-                problem={shown.name}
-              >
-                {(described) => (
-                  <input
-                    id={`${id}-name`}
-                    className="signin__field"
-                    autoComplete="off"
-                    value={draft.attribution.name}
-                    aria-invalid={shown.name !== undefined}
-                    {...described}
-                    onChange={(event) => {
-                      const name = event.target.value;
-                      edit((old) => ({
-                        ...old,
-                        attribution: { kind: "named", name },
-                      }));
-                      if (shown.name)
-                        setShown((old) => withoutField(old, "name"));
-                    }}
-                    onBlur={() => {
-                      if (draft.attribution.name.trim() === "") return;
-                      const name = nameProblem(draft);
-                      setShown((old) =>
-                        name ? { ...old, name } : withoutField(old, "name"),
-                      );
-                    }}
-                  />
-                )}
-              </Field>
-            ) : null}
-          </fieldset>
-        </Setting>
-        {/* Beside the anonymity control, open or not (ADR-0037). */}
-        <p className="post__hint" id={`${id}-anonymity`}>
-          {ANONYMITY_NOTE}
-        </p>
-      </div>
-
-      {needsPromise ? (
-        <section className="post__purpose" aria-labelledby={`${id}-purpose`}>
-          <h2 id={`${id}-purpose`} className="post__heading">
-            What this discussion is for
-          </h2>
-          <p className="post__text">
-            Comments help us turn ideas into action that improves our
-            community&rsquo;s wellbeing as much as possible. Be honest, listen,
-            and work together.
-          </p>
-          <p className="post__text">
-            When we disagree, say so respectfully. Decide on a compromise
-            together, or try different ways to solve the same problem. Keep
-            talking and share what works.
-          </p>
-          <label className="signin__optin post__promise">
-            <input
-              type="checkbox"
-              checked={draft.promised}
-              aria-invalid={shown.promise !== undefined}
-              {...(shown.promise
-                ? { "aria-describedby": `${id}-promise-problem` }
-                : {})}
-              onChange={(event) => {
-                const promised = event.target.checked;
-                edit((old) => ({ ...old, promised }));
-                if (promised) setShown((old) => withoutField(old, "promise"));
-              }}
-            />
-            <b>
-              I will discuss ideas without attacking, harassing or threatening
-              people.
-            </b>
-          </label>
-          {shown.promise ? (
-            <p className="signin__problem" id={`${id}-promise-problem`}>
-              {shown.promise}
-            </p>
-          ) : null}
-        </section>
-      ) : (
-        <p className="post__reminder">
-          <b>Be honest. Respect people. Help us move forward.</b>
-        </p>
-      )}
 
       <TwoPress
         key={asked}
@@ -749,6 +769,17 @@ function Option({
       <span>{children}</span>
     </label>
   );
+}
+
+/** What to say when a post did not go through, in the server's words. */
+function failureOf(err: unknown): string {
+  if (!(err instanceof ApiError) || err.status === 0)
+    return "We could not reach pulse. Press Post it to try again; it will not be posted twice.";
+  if (err.code === "posting_limit" && err.retryAfter !== undefined) {
+    const minutes = Math.max(1, Math.ceil(err.retryAfter / 60));
+    return `${err.message} You can post again in about ${minutes} minute${minutes === 1 ? "" : "s"}.`;
+  }
+  return err.message;
 }
 
 function withoutField(

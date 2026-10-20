@@ -190,6 +190,7 @@ export class HttpPulseApi implements PulseApi {
         response.status,
         messageFrom(parsed) ?? fallbackMessage(response.status),
         stringField(parsed, "error"),
+        retryAfter(response),
       );
     }
     // A 2xx carrying something that isn't JSON — a proxy's HTML error page, say —
@@ -203,6 +204,13 @@ export class HttpPulseApi implements PulseApi {
     }
     return parsed as T;
   }
+}
+
+/** `Retry-After` as whole seconds; the date form is not sent by pulse. */
+function retryAfter(response: Response): number | undefined {
+  const value = response.headers?.get("retry-after");
+  if (!value || !/^\d+$/.test(value)) return undefined;
+  return Number(value);
 }
 
 function safeJson(text: string): unknown {

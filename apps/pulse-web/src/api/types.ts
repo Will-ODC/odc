@@ -240,11 +240,19 @@ export class ApiError extends Error {
    * other refusal without matching on a sentence.
    */
   readonly code: string | undefined;
+  /** Seconds the server asked to wait (`Retry-After`), when it said. */
+  readonly retryAfter: number | undefined;
 
-  constructor(status: number, message: string, code?: string) {
+  constructor(
+    status: number,
+    message: string,
+    code?: string,
+    retryAfter?: number,
+  ) {
     super(message);
     this.name = "ApiError";
     this.status = status;
     this.code = code;
+    this.retryAfter = retryAfter;
   }
 }

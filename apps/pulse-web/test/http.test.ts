@@ -418,3 +418,29 @@ describe("posting a question (ADR-0037)", () => {
     expect((err as ApiError).message).toBe("Make the promise first.");
   });
 });
+
+describe("being told to wait", () => {
+  it("carries Retry-After seconds on a refusal", async () => {
+    vi.stubGlobal("fetch", async () => ({
+      ok: false,
+      status: 429,
+      headers: new Headers({ "retry-after": "1500" }),
+      text: async () =>
+        JSON.stringify({ error: "posting_limit", message: "Five this hour." }),
+    }));
+    const err = await new HttpPulseApi().me().catch((e: unknown) => e);
+    expect((err as ApiError).retryAfter).toBe(1500);
+    expect((err as ApiError).code).toBe("posting_limit");
+  });
+
+  it("ignores a Retry-After that is not whole seconds", async () => {
+    vi.stubGlobal("fetch", async () => ({
+      ok: false,
+      status: 429,
+      headers: new Headers({ "retry-after": "Wed, 21 Oct 2026 07:28:00 GMT" }),
+      text: async () => JSON.stringify({ message: "Wait." }),
+    }));
+    const err = await new HttpPulseApi().me().catch((e: unknown) => e);
+    expect((err as ApiError).retryAfter).toBeUndefined();
+  });
+});
