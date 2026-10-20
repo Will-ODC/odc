@@ -2,7 +2,8 @@ import { randomUUID } from "node:crypto";
 import { parseEmail } from "../identity/email.js";
 import { InMemoryVoterStore, type Voter } from "../identity/store.js";
 import { InMemoryVotingStore } from "../voting/store.js";
-import { createPoll } from "../voting/poll.js";
+import { createPoll, type Publication } from "../voting/poll.js";
+import { publicPoll as projectPoll } from "../voting/public-poll.js";
 import {
   CreationError,
   HOUR_MS,
@@ -148,21 +149,20 @@ export class InMemoryCreationStore implements CreationStore {
         },
         now,
       );
-      const publicPoll: PublicationPoll = {
-        id: poll.id,
-        question: poll.question,
-        choices: [...poll.choices],
-        method: poll.method,
-        next: poll.choices.map(() => null),
-        acceptsSuggestions: false,
-        closesAt: closesAt.toISOString(),
-        open: true,
+      const publication: Publication = {
         community: this.#community(account),
         attribution: input.attribution,
       };
+      // The same projection GET /api/polls/:id serves, so the two cannot drift.
+      const publicPoll: PublicationPoll = projectPoll(
+        { ...poll, publication },
+        now,
+      );
       // The only fallible write precedes all authoring state changes. It either
       // inserts the validated poll or rejects without inserting. No ballot is read.
-      await this.#voting.createPoll(poll);
+      // The voting store keeps the public facts beside the poll, as the
+      // Postgres row's columns do; the author's account stays here.
+      await this.#voting.createPoll(poll, publication);
       this.#state.publications.set(poll.id, {
         authorId: account.id,
         createdAt: now.getTime(),

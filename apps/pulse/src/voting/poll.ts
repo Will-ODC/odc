@@ -8,6 +8,30 @@ export type PollMethod = "single" | "approval";
 
 const METHODS: readonly PollMethod[] = ["single", "approval"];
 
+/**
+ * How an authored poll is credited in public (ADR-0037). Anonymous carries
+ * nothing else; named carries only the poster's own per-post display name,
+ * which is a self-description, not a verified identity.
+ */
+export type Attribution =
+  { kind: "anonymous" } | { kind: "named"; name: string };
+
+/** Where an authored poll was posted: a community id and its display label. */
+export interface PollCommunity {
+  id: string;
+  label: string;
+}
+
+/**
+ * The public facts of a poll published through creation, and nothing more.
+ * The internal author reference is never part of it: it stays in the creation
+ * store's own records and is never read back onto a `Poll`.
+ */
+export interface Publication {
+  community: PollCommunity;
+  attribution: Attribution;
+}
+
 /** A question with a fixed set of choices. Choices are ordered and stable. */
 export interface Poll {
   id: string;
@@ -30,6 +54,11 @@ export interface Poll {
   closesAt?: Date;
   /** Whether people may add options of their own. */
   acceptsSuggestions: boolean;
+  /**
+   * Present only on a poll published through creation (ADR-0037). Seed and
+   * legacy polls have none, and none is ever invented for them.
+   */
+  publication?: Publication;
 }
 
 export interface NewPoll {

@@ -31,10 +31,17 @@ See `.claude/skills/odc-design` for design workflow and
   that pulse votes are on a hash chain or ledger before they are: today they
   are not. Operator decision of 2026-10-12, ADR-0039; it replaces an
   agent-written rule (#79) that kept counting off the screen entirely.
-- **No reads or writes across into `services/` or `contracts/`.** Pulse owns
+- **No reads or writes across into `services/`, `contracts/` or `tools/`.** Pulse owns
   its own storage and stands alone. If pulse ever publishes to the ODC ledger,
   it does so through the ledger's public API and nothing else — that is a
   future option, not a current dependency.
+- The static import-boundary lint checks this source boundary and the sibling
+  app boundary. `tests/pulse-integration/` may import both apps for test setup
+  and assertions; this exception grants no production permission. Run
+  `pnpm test:boundaries` for focused regression coverage. See the
+  [service-boundaries skill](../../.claude/skills/odc-service-boundaries/SKILL.md)
+  and [ADR-0042](../../docs/decisions/0042-import-boundary-enforcement.md)
+  for the check's scope and limitations.
 - Tests ship with the change, not after (`.claude/skills/odc-testing` still
   applies to how we work, even though the charter does not).
 - One small branch per change, named for its ticket: `pulse/<issue>-<short-description>`

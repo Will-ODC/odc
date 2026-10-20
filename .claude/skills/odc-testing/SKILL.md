@@ -21,6 +21,10 @@ with `pnpm --filter @odc/pulse-integration test`,
 `pnpm --filter @odc/pulse-integration lint`. Root Turbo test commands include
 it, while normal app builds remain independent.
 See [ADR-0041](../../../docs/decisions/0041-pulse-integration-test-workspace.md).
+The import-boundary regression suite is `pnpm test:boundaries`; its limited
+static enforcement scope and the integration workspace exception are described
+in [the service-boundaries skill](../odc-service-boundaries/SKILL.md) and
+[ADR-0042](../../../docs/decisions/0042-import-boundary-enforcement.md).
 
 ## The pyramid, per service or app
 

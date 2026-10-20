@@ -2,6 +2,24 @@ import { z } from "zod";
 
 export const pollIdSchema = z.string().regex(/^[A-Za-z0-9_-]{1,128}$/);
 const method = z.enum(["single", "approval"]);
+/**
+ * Public authorship (ADR-0037), passed on only in its exact public shapes.
+ * Unlike the outer poll, whose unknown keys are stripped, these inner objects
+ * are strict: an upstream that puts anything else inside an attribution or a
+ * community — an account id, an email — is answering with something other
+ * than the public projection, so the whole body is refused as
+ * `upstream_invalid_response` rather than quietly trimmed and trusted.
+ */
+const authorName = z
+  .string()
+  .refine((name) => name.trim() !== "" && [...name].length <= 80);
+const attributionSchema = z.discriminatedUnion("kind", [
+  z.object({ kind: z.literal("anonymous") }).strict(),
+  z.object({ kind: z.literal("named"), name: authorName }).strict(),
+]);
+const communitySchema = z
+  .object({ id: z.string().min(1), label: z.string().min(1) })
+  .strict();
 export const pollSchema = z
   .object({
     id: pollIdSchema,
@@ -12,6 +30,10 @@ export const pollSchema = z
     acceptsSuggestions: z.boolean(),
     closesAt: z.iso.datetime().nullable(),
     open: z.boolean(),
+    // Optional: seed and legacy polls, and servers from before ADR-0037,
+    // send neither.
+    community: communitySchema.optional(),
+    attribution: attributionSchema.optional(),
   })
   .strip()
   .refine((p) => p.next.length === p.choices.length);

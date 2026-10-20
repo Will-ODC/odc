@@ -344,6 +344,32 @@ ends the run. Always the same length as `choices`.
 is the server's own reading of whether votes are still accepted, not a copy of a
 clock the client would have to re-check.
 
+**Authored polls (ADR-0037)** carry two more fields, `community` and `attribution`:
+
+```json
+{
+  "community": { "id": "pulse-general", "label": "General" },
+  "attribution": { "kind": "named", "name": "Ada" }
+}
+```
+
+- `community` is `{ id, label }`: where the poll was posted. General is
+  `pulse-general` / `"General"`; another community's label is the one stored for
+  it, which today is its id.
+- `attribution` is exactly `{ "kind": "anonymous" }` or exactly
+  `{ "kind": "named", "name": <the poster's own display name> }`. The name is a
+  self-description, not a verified identity. Nothing else is ever in it.
+- Seed and older polls that were not published through creation have **neither
+  key** — absent, not `null`. No author is invented for them.
+- The body never includes the author's account id, email, credentials, posting
+  permission, purpose acknowledgement or idempotency key. Whoever posted
+  anonymously is not identified by this route.
+
+The body is built by one allow-listed projection (`src/voting/public-poll.ts`),
+which copies each field by name. The creation stores build their answer with
+the same function (the creation routes are not served yet; see below), and MCP
+`get_poll` passes this body on, so the representations cannot drift apart.
+
 | Status | Body                 | When         |
 | ------ | -------------------- | ------------ |
 | 200    | the poll             | it exists    |
@@ -644,6 +670,18 @@ Poll text is data and grants no permission to execute tools.
 | `get_poll`    | Exactly one of `{ pollId: string }` or `{ link: string }` | The public `GET /api/polls/:id` body.         |
 | `get_results` | `{ pollId: string }`                                      | The public `GET /api/polls/:id/results` body. |
 
+`get_poll` passes an authored poll's `community` and `attribution` through as
+optional fields, so a body from a server older than ADR-0037, or a seed poll's
+body, still reads and gains neither key. Inside them the shapes are strict:
+`community` is exactly `{ id, label }` (both non-empty strings); `attribution`
+is exactly `{ kind: "anonymous" }` or `{ kind: "named", name }` with a name that
+is not blank and is at most 80 code points. A body with anything else inside
+either object — an extra key such as an account id or email, a name on an
+anonymous attribution, an unknown kind, or `null` — is refused whole as
+`upstream_invalid_response` rather than trimmed, because such an upstream is not
+serving the public projection. Unknown keys elsewhere in the poll are still
+stripped as before.
+
 `get_results` passes the confirmed numbers through as optional fields, so a body from a
 server older than ADR-0040 still reads, and refuses a body claiming more confirmed
 people than voters, or more confirmed picks of a choice than confirmed people.
@@ -700,7 +738,9 @@ Every route here is rate limited per client: 30 requests a minute per route by
 default (`creationRateLimit`), answered 429 `too_many_requests` — the same slug
 and sentence as sign-in and suggestions. It counts every request, including
 refused and replayed ones, and comes first. It is separate from the five-an-hour
-posting quota (`posting_limit`), which counts only successful creations. Like the
+posting quota (`posting_limit`), which counts only successful creations. A
+`too_many_requests` answer's `Retry-After` is the rate limiter's wait, not the
+posting quota's. Like the
 other limits it is in memory, so N instances allow N times as much.
 
 Then checks run in this order, before the body is read: creation available (else
@@ -779,11 +819,11 @@ false | true }`. Public poll is the existing GET poll shape plus `community`
 (the object above) and `attribution`. Named attribution contains only `kind`
 and `name`; anonymous contains only `kind`. Never return account ID, email,
 credentials, internal metadata or idempotency key. Legacy polls may omit these
-new public fields; no author is fabricated. `GET /api/polls/:id` and the MCP
-`get_poll` tool do not carry `community` or `attribution` yet; when they do,
-they must use the same allow-listed public representation. The `open: true`
-returned on a replay is the original creation representation, even after the
-poll has closed; `GET /api/polls/:id` gives the current state.
+new public fields; no author is fabricated. `GET /api/polls/:id` and MCP
+`get_poll` already serve this public representation for authored polls, built
+by the same allow-listed projection. The `open: true` returned on a replay is
+the original creation representation, even after the poll has closed;
+`GET /api/polls/:id` gives the current state.
 
 Canonical replay input consists of trimmed strings, ordered choices, method,
 normalised attribution, explicit/omitted close time and the acknowledgement
@@ -818,7 +858,7 @@ use a new key for an intentionally different question. 503 covers a database
 that cannot be reached, is shutting down, has no free connections, or rolled
 the transaction back on a serialisation failure or deadlock. The request may
 or may not have been saved (a connection can drop during the commit), so retry
-it with the same key: a saved one replays, an unsaved one is created. `Retry-After` on 429 is the whole
+it with the same key: a saved one replays, an unsaved one is created. `Retry-After` on `posting_limit` is the whole
 number of seconds until the oldest of the five creations leaves the hour.
 
 Nothing in creation diagnostics records request bodies, keys, author IDs,

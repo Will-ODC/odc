@@ -1,10 +1,13 @@
-import { createPoll, type PollMethod } from "../voting/poll.js";
+import {
+  createPoll,
+  type Attribution,
+  type PollMethod,
+} from "../voting/poll.js";
 
+export type { Attribution };
 export const PURPOSE_VERSION = "community-purpose-v1";
 export const WEEK_MS = 604_800_000;
 export const HOUR_MS = 3_600_000;
-export type Attribution =
-  { kind: "anonymous" } | { kind: "named"; name: string };
 export interface CreationInput {
   question: string;
   choices: string[];

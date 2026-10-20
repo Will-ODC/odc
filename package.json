@@ -5,10 +5,11 @@
   "scripts": {
     "build": "turbo run build",
     "test": "turbo run test",
-    "lint": "turbo run lint",
+    "lint": "eslint .github/scripts/*.mjs eslint.config.mjs && turbo run lint",
     "typecheck": "turbo run typecheck",
     "format": "prettier --write .",
-    "format:check": "prettier --check ."
+    "format:check": "prettier --check .",
+    "test:boundaries": "node --test .github/scripts/import-boundaries.test.mjs"
   },
   "devDependencies": {
     "@eslint/js": "^9.9.0",

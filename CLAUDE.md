@@ -79,6 +79,14 @@ there when you start a workstream it does not list.
 6. The private linkage map (identity) never appears in any API response, log line, or export.
 7. Ballot events and sentiment events never share a store or a pipe.
 
+Root and package lint also enforce the static import boundaries. The
+`tests/pulse-integration/` workspace is the sole Pulse cross-app source-import
+exception; it does not grant production code access to either app's sibling
+source, core services, tools, or contracts. Run `pnpm test:boundaries` for the
+focused regression suite. See the [service-boundaries skill](.claude/skills/odc-service-boundaries/SKILL.md)
+and [ADR-0042](docs/decisions/0042-import-boundary-enforcement.md) for scope
+and limitations.
+
 ## Model routing
 
 The operator's standing instruction, verbatim: **"using opus as an orchestrator

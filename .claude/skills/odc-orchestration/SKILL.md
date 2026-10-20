@@ -155,19 +155,21 @@ is the go-ahead. Each lead works in its own worktree. The two sessions talk with
 1. **Fetch first.** `git fetch origin`, and branch every lead's worktree from
    `origin/master`, not the local `master`. The skills a session loads come
    from its own checkout; a stale checkout hands the lead stale rules.
-2. **Get the tickets.** One issue per lead, or per PR the lead will open. The
-   branch is `<area>/<issue>-<short>`; two leads that guess "the next free
-   number" can collide, a branch named for its issue cannot.
-3. **Ask the operator's questions now,** and put the answers in the brief.
-   Re-issuing a lead's card with the answers in it is cheaper than relaying
-   them afterwards.
+2. **Name the branches.** Issues are for new features only (operator,
+   2026-10-20): a step already planned in memory or an ADR gets no ticket. A
+   feature with an issue uses `<area>/<issue>-<short>`; a planned step uses
+   `<area>/<short>` named for the work. Never guess "the next free number".
+3. **Ask the operator's questions now,** as multiple-choice popups
+   (`AskUserQuestion`, recommended option first), and put the answers in the
+   brief. Re-issuing a lead's card with the answers in it is cheaper than
+   relaying them afterwards.
 
 ### The lead's brief
 
 The five sections above, plus:
 
 - the goal in the operator's words, and every answer the operator has given;
-- its tickets and branch names;
+- its tickets, if any, and branch names;
 - the folders it owns, and the folders other leads own right now;
 - **how a go reaches it** — the operator answering in the lead's own session,
   or the orchestrator relaying a go that quotes the operator. Name one or both.
@@ -180,9 +182,10 @@ The five sections above, plus:
 ### What a lead does, in order
 
 1. **Read** what the brief names, then **send a synopsis and stop.** It is for
-   the operator, so it is short and in plain words, no jargon: what will be
-   built, what a user will notice, which folders change, how the work will split
-   into PRs, and any decision the lead needs, with the option it recommends.
+   the operator, so it is a few lines in plain words, no jargon: what will be
+   built, what a user will notice, which folders change, and how the work will
+   split into PRs. Write each decision as one sentence of context plus two or
+   three options, the recommended one first, so it can be asked as a popup.
    Show it in the lead's own session and send it to the orchestrator. **Build
    nothing until a go arrives by the channel the brief names. Silence is not a
    yes:** never write "my pick goes ahead unless told otherwise".
@@ -202,9 +205,9 @@ The five sections above, plus:
    Everything else there holds: a PR that does not need another branches off
    `master`, and only a PR that needs an unmerged one stacks on it, two or
    three deep at most. Push; get CI green.
-5. **Report to the orchestrator and stop:** the tickets and PRs
-   (`#301 → PR #307`), how they fit together, anything stale it saw, any
-   decision it needs.
+5. **Report to the orchestrator and stop,** in a few lines: the PRs
+   (`#301 → PR #307`), how they fit together, anything stale it saw, and any
+   decision, written as options the way step 1 says.
 
 **What a lead never does:** merge anything, or start a reviewer or auditor.
 Every review is the operator's call. A lead also stops and sends the question up
@@ -216,6 +219,10 @@ restart it re-reads its brief and does not go past it.
 
 - **After offering `spawn_task` cards, check every one is still pending.** A new
   card can silently push an older one off the list.
+- **Relay short, ask in popups** (operator, 2026-10-20: "faster and simpler").
+  Cut each synopsis or report to two or three lines and put every decision into
+  `AskUserQuestion` — up to four per popup, across leads, recommended option
+  first. Do not paste a lead's full text or a prose list of decisions.
 - **Keep one list of open questions.** The operator may answer inside a lead's
   session; update the list from what leads report as answered.
 - **Do not wait for a message.** A lead with no commits may have built
