@@ -1,5 +1,6 @@
 // @vitest-environment jsdom
 import {
+  act,
   cleanup,
   render,
   screen,
@@ -334,6 +335,20 @@ describe("review, then post", () => {
         expect.objectContaining({ id: "new-1" }),
       ),
     );
+  });
+
+  it("posts once when pressed twice before the page redraws", async () => {
+    const user = userEvent.setup();
+    const createPoll = vi.fn<Create>(() => new Promise<Poll>(() => {}));
+    show({ context: () => Promise.resolve(LATER), createPoll });
+    await fill(user);
+    await user.click(button("Review"));
+    const post = await screen.findByRole("button", { name: "Post question" });
+    act(() => {
+      post.click();
+      post.click();
+    });
+    expect(createPoll).toHaveBeenCalledOnce();
   });
 
   it("retries an uncertain failure with the same key, and an edited question with a new one", async () => {

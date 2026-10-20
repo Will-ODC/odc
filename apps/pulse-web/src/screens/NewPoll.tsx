@@ -175,7 +175,7 @@ function PostForm({
       focusProblem.current = true;
       return;
     }
-    key.current ??= newKey();
+    key.current = newKey();
     setSending({ status: "idle" });
     setReviewing(true);
   }
@@ -186,8 +186,14 @@ function PostForm({
     setReviewing(false);
   }
 
+  /**
+   * The press's own guard, not only the button's: two presses inside one
+   * render both find the button enabled.
+   */
+  const inFlight = useRef(false);
   async function post() {
-    if (sending.status === "sending" || key.current === null) return;
+    if (inFlight.current || key.current === null) return;
+    inFlight.current = true;
     setSending({ status: "sending" });
     try {
       onPosted(
@@ -216,6 +222,8 @@ function PostForm({
             ? err.message
             : "We could not reach pulse. Press Post question to try again; it will not be posted twice.",
       });
+    } finally {
+      inFlight.current = false;
     }
   }
 
