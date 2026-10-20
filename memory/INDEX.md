@@ -25,17 +25,15 @@ Do not apply charter rules to `apps/**`, and do not relax them anywhere else.
 > entry, the entry wins — and fix the line.** You read this file first and it is
 > smaller, so on a divergence you would otherwise trust the wrong one.
 
-- **ODC core:** Phase 0. The T9 gate is **closed**. Conformance phases 1-4 are
-  merged, and ADR-0034 (mixed-version batching, spec #294) is in both verifiers
-  (#324 Go, #325 TS); its vectors `116`-`134` are in (#327). The four
-  `contracts/` contradictions are decided (ADR-0038, #355). Next: ADR-0038 in
-  both verifiers and the vectors (#364, #365, #366), then a fresh T9 re-audit,
-  then the RC. The ledger is unstarted. → `memory/STATE.md`
-- **Pulse:** identity, the ballot run, storage, mail and serving are built.
-  P2 picker (#215) and P8 slice 1 (#213) are merged. A deploy is blocked on poll
-  creation (P6, ADR-0024 values), a host/domain, and a Resend domain. The story's
-  middle and pillar 3 are not built. **Next: the vote page becomes a
-  conversation** (epic #303, ADR-0035). → `memory/pulse.md`
+- **ODC core:** Phase 0. The T9 gate is **closed**. Conformance phases 1-4,
+  ADR-0034 and ADR-0038 are in both verifiers, and the corpus is 145 vectors
+  (#372, 2026-10-19). Next: a fresh T9 re-audit, then the RC. The ledger is
+  unstarted. → `memory/STATE.md`
+- **Pulse:** sign-in, voting, confirmed votes, storage, mail and serving are
+  built. The conversation vote page, welcome, tutorial and trust page are merged.
+  Poll creation has its storage but no HTTP route or form. **Next: the
+  poll-creation routes (ADR-0037), and #353.** A deploy also needs a host, a
+  domain and a Resend domain. → `memory/pulse.md`
 
 ## Load order
 

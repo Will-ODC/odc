@@ -27,18 +27,17 @@ answered in the specs as ADR-0013 to ADR-0018 (#98). Only a **fresh re-audit**
 clears T9. Nothing may be implemented in `services/` until T9 and T9a. The ledger
 is unstarted.
 
-**Spec versions on master (2026-10-14; read the `Version:` lines, not prose):**
+**Spec versions on master (2026-10-20; read the `Version:` lines, not prose):**
 `event-schema.md` **v7**, `event-types.md` **v14**, `evolution.md` **v9** (all
 ADR-0038, #355: PRs #359 and #361), `export-format.md` v5 (#224, ADR-0032), `hashing.md` v2,
-`ids.md` v1, `read-api.md` v1, `fixtures/README.md` **v15** (#327).
+`ids.md` v1, `read-api.md` v1, `fixtures/README.md` **v16** (#372).
 `contracts/` is **DRAFTING**.
 
 **Conformance phases 1 to 4 are merged, and ADR-0034 is in both verifiers.**
 ADR-0034 (mixed-version ballot batching: ET-18b, ET-22a, ET-24b) merged as Go
 #324 (#319) and TS #325 (#320), each built in an isolated sparse worktree and
 approved (with nits, fixed) by an isolated fresh reviewer. Its vectors
-`116`-`134` merged in #327 (#321); the corpus is **134** (VALID 21,
-PARTIAL 14, INVALID 99), and all 134 pass both verifiers. The agreement proof is
+`116`-`134` merged in #327 (#321). The agreement proof is
 `docs/security/attacks/check-adr-0034-agreement.py`. Phase 3 batching vectors `099`-`108` came in #202; phase 4
 (`--chain` and genesis/head reporting, EX-21 to EX-24) came in #220 (Go), #221 (TS)
 and #222 (vectors `109`-`115`). #203 reconciled EV-15's stage map. #219 made a TS
@@ -49,27 +48,28 @@ internal error exit 3, not 1. #223 is the security checkpoint
 #361): verifier limits (EV-23 to EV-25: lines up to 65536 bytes and depth 64,
 past a verifier's own limits a tool-level failure, never a verdict), honest
 EV-21 advice for `genesis`, ET-9f now **both ancestry keys or neither**, and
-`genesis.contracts` at most 64 bytes (ET-9). **Neither verifier implements
-them yet**, and vector `086` still declares the old `VALID`.
+`genesis.contracts` at most 64 bytes (ET-9). **Both verifiers implement all of
+it** (Go #370, TS #371, ET-9f in both via #372). #372 also flipped `086` to
+INVALID and added vectors `135`-`145`: the corpus is **145** (VALID 23,
+PARTIAL 15, INVALID 107), and all pass both verifiers.
 
 ## Next
 
 In this order. Passing CI or a checkpoint does not clear T9.
 
-1. **ADR-0038 in both verifiers, then the vectors:** #364 (Go) and #365 (TS),
-   each in its own isolated sparse worktree, then #366 (vectors). Each verifier
-   ticket lands its no-op parts (limits, the ET-9 cap, EV-21 text) alone; the
-   **ET-9f change and the `086` flip land together in #366's PR**, or required
-   CI goes red (coupling rule below). ADR-0038's "Owed" list is the checklist.
-2. **Fresh T9 re-audit** by a context that did not write `audit-phase-0.md`.
+1. **Fresh T9 re-audit** by a context that did not write `audit-phase-0.md`.
    Acceptance is APPROVE.
-3. **T9a: release candidate.** Flip `contracts/README.md` from DRAFTING to RELEASE
+2. **T9a: release candidate.** Flip `contracts/README.md` from DRAFTING to RELEASE
    CANDIDATE, reconcile implementation/charter/service guidance, and move this
    file to Phase 1 (ledger, verifier, identity). **Do not create a `contracts-v1`
    tag.** The T10 freeze and its re-audit stay deferred until real use (ADR-0007).
 
 Optional, from ADR-0034 owed item 4: `docs/security/attacks/check-unknown-batching-proposal.py`'s
 `proposed` mode now matches the ratified expectations and could join required CI.
+
+**Owed with a ticket:** #369 (Go verifier memory grows far past the input on a
+hostile export; found in #370's review). #326 (TS ET-24b worst-case cost).
+Issues #364 and #365 are still open although #372 completed them; close them.
 
 **Owed with no ticket:**
 
@@ -119,7 +119,8 @@ Optional, from ADR-0034 owed item 4: `docs/security/attacks/check-unknown-batchi
   (#320); vectors `116`-`134` in #327 (#321). TS sub-quadratic cost is
   follow-up #326.
 - ADR-0038 (the four contradictions, #355): contract #359, `genesis.contracts`
-  cap #361. Verifiers and vectors owed: #364, #365, #366.
+  cap #361. Go #370 (#364), TS #371 (#365), then ET-9f in both verifiers with
+  the `086` flip and vectors `135`-`145` in #372 (#366), merged 2026-10-19.
 - Memory index and `memory-index` CI guard (#117, #121).
 
 ## Standing decisions — one line each
