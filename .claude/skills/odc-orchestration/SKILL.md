@@ -209,8 +209,8 @@ The five sections above, plus:
    (`#301 → PR #307`), how they fit together, anything stale it saw, and any
    decision, written as options the way step 1 says.
 
-**What a lead never does:** merge anything, or start a reviewer or auditor.
-Every review is the operator's call. A lead also stops and sends the question up
+**What a lead never does:** merge anything, or start a reviewer or auditor
+for its own work; the orchestrator starts the review (below). A lead also stops and sends the question up
 — rather than deciding — on a charter conflict, any change under `contracts/`,
 a file in another lead's folders, or anything the operator owns. After a
 restart it re-reads its brief and does not go past it.
@@ -233,9 +233,20 @@ restart it re-reads its brief and does not go past it.
   files, and say it is one-off.
 - **After any lead restarts, re-check the open PRs for overlap.** A restarted
   lead in the pilot edited a plan file beyond what was approved.
+- **Review every green lead PR** (operator, 2026-10-20: "confirm you have
+  been doing code review on all PRs?", then "do it"). Once a PR's CI is green,
+  start a fresh-context `odc-reviewer` on it, routed by the table above, in
+  its own review worktree with the PR's diff at the root as `REVIEW.diff`.
+  For either verifier the review worktree is sparse, holding only `contracts/`,
+  that verifier, `docs/charter.md` and `.claude/` (the TS one also `.github/`,
+  installed before narrowing), so the reviewer never sees the ledger or the
+  other verifier. Send each finding to the lead that owns the PR, and review
+  the fix again. A PR the orchestrator wrote itself needs a reviewer that did
+  not write it either.
 - **When the leads report,** check their PRs do not collide — settle a clash
-  between two leads by message — and tell the operator which PRs are ready for
-  review, in what order.
+  between two leads by message — and tell the operator which PRs are ready to
+  merge, in what order, with each review's verdict. Merging stays the
+  operator's call.
 
 Diff size: `apps/pulse*` is exempt from the `diff-size.sh` ceiling (the script
 lists every exemption), so a pulse feature can arrive as large PRs.
