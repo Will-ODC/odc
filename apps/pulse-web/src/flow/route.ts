@@ -16,8 +16,12 @@ export type Route =
   | { kind: "welcome" }
   | { kind: "progress" }
   | { kind: "questions" }
-  /** Asking for a sign-in link. */
-  | { kind: "signIn" }
+  /**
+   * Asking for a sign-in link. `pollId` is the question to come back to once
+   * the emailed link is clicked: "Confirm with your email" on a vote card
+   * names its own question (#353). Left out, sign-in lands where it always has.
+   */
+  | { kind: "signIn"; pollId?: string }
   /** Arrived from the emailed link, holding a token to spend. */
   | { kind: "redeem"; token: string }
   /**
@@ -68,7 +72,9 @@ export function routeFrom(href: string): Route {
     // An empty `?token=` is not a token. Treating it as one would send an
     // obviously-doomed request and answer with the server's "that link is
     // incomplete" where "ask for a link" is the useful screen.
-    return token ? { kind: "redeem", token } : { kind: "signIn" };
+    if (token) return { kind: "redeem", token };
+    const pollId = url.searchParams.get("poll");
+    return pollId ? { kind: "signIn", pollId } : { kind: "signIn" };
   }
 
   if (path === CHAT_PREVIEW_PATH) return { kind: "chatPreview" };
@@ -95,7 +101,9 @@ export function pathOf(route: Route): string {
     case "questions":
       return "/questions";
     case "signIn":
-      return SIGN_IN_PATH;
+      return route.pollId
+        ? `${SIGN_IN_PATH}?poll=${encodeURIComponent(route.pollId)}`
+        : SIGN_IN_PATH;
     case "redeem":
       return `${SIGN_IN_PATH}?token=${encodeURIComponent(route.token)}`;
     case "chatPreview":

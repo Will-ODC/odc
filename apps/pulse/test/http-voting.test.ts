@@ -1,4 +1,5 @@
 import assert from "node:assert/strict";
+import { randomUUID } from "node:crypto";
 import { test } from "node:test";
 import type { InjectOptions, LightMyRequestResponse } from "fastify";
 import {
@@ -19,6 +20,8 @@ import {
 } from "../src/voting/suggestions.js";
 import { ConfirmationKey } from "../src/voting/confirmation.js";
 import { InMemoryVotingStore, UnknownPollError } from "../src/voting/store.js";
+import type { Publication } from "../src/voting/poll.js";
+import { InMemoryCreationStore } from "../src/authoring/memory-store.js";
 
 const SECRET = "test-secret-that-is-long-enough";
 /** The confirmation key every server here is given (ADR-0040). */
@@ -163,7 +166,7 @@ async function setup(
     return { voterId: redeemed.json().voter.id as string };
   }
 
-  return { app, signIn, signInOn, browser, votes };
+  return { app, signIn, signInOn, browser, votes, voters, clock };
 }
 
 test("reads_a_poll_in_the_clients_wire_shape_without_a_session", async () => {
@@ -188,6 +191,142 @@ test("a_poll_with_no_closing_time_serialises_closesAt_as_null", async () => {
   const reply = await app.inject({ url: "/api/polls/p1" });
   assert.equal(reply.json().closesAt, null);
   assert.equal(reply.json().open, true);
+});
+
+// Public attribution (ADR-0037). Polls are published through the in-memory
+// creation store, which shares the voting store as its database, exactly as
+// the Postgres creation store writes the poll row GET then reads.
+
+const AUTHOR_ID = "author-account-5c1e";
+const AUTHOR_EMAIL = "author-5c1e@student.ubc.ca";
+
+async function publishAs(
+  context: Awaited<ReturnType<typeof setup>>,
+  attribution?: unknown,
+) {
+  const { voters, votes, clock } = context;
+  if (!(await voters.byId(AUTHOR_ID)))
+    await voters.create(
+      {
+        id: AUTHOR_ID,
+        community: "ubc-students",
+        assurance: "email",
+        claimedAt: START,
+        proofEmailsOptIn: false,
+      },
+      { kind: "email", value: AUTHOR_EMAIL, verifiedAt: START },
+    );
+  const creation = new InMemoryCreationStore(voters, votes, {
+    clock,
+    communityLabels: new Map([["ubc-students", "UBC students"]]),
+  });
+  const { poll } = await creation.publish(
+    { voterId: AUTHOR_ID, sessionGeneration: 0 },
+    randomUUID(),
+    {
+      question: "Open a community garden?",
+      choices: ["Yes", "No"],
+      method: "single",
+      purposeAcknowledgement: "community-purpose-v1",
+      ...(attribution === undefined ? {} : { attribution }),
+    },
+  );
+  return poll;
+}
+
+test("an_anonymous_authored_poll_reads_with_kind_alone_and_its_community", async () => {
+  const context = await setup();
+  const published = await publishAs(context);
+  const reply = await context.app.inject({ url: `/api/polls/${published.id}` });
+  assert.equal(reply.statusCode, 200);
+  assert.deepEqual(reply.json(), {
+    id: published.id,
+    question: "Open a community garden?",
+    choices: ["Yes", "No"],
+    method: "single",
+    next: [null, null],
+    acceptsSuggestions: false,
+    closesAt: new Date(START.getTime() + 604_800_000).toISOString(),
+    open: true,
+    community: { id: "ubc-students", label: "UBC students" },
+    attribution: { kind: "anonymous" },
+  });
+  // The creation response and the public read are one representation.
+  assert.deepEqual(reply.json(), published);
+  // Nothing beside the kind: no account, no name, no handle.
+  assert.deepEqual(Object.keys(reply.json().attribution), ["kind"]);
+  assert.doesNotMatch(reply.body, new RegExp(`${AUTHOR_ID}|${AUTHOR_EMAIL}`));
+});
+
+test("a_named_authored_poll_reads_with_exactly_kind_and_name", async () => {
+  const context = await setup();
+  const published = await publishAs(context, { kind: "named", name: " Ada " });
+  const reply = await context.app.inject({ url: `/api/polls/${published.id}` });
+  assert.equal(reply.statusCode, 200);
+  assert.deepEqual(reply.json().attribution, { kind: "named", name: "Ada" });
+  assert.deepEqual(reply.json().community, {
+    id: "ubc-students",
+    label: "UBC students",
+  });
+  assert.deepEqual(reply.json(), published);
+  assert.doesNotMatch(
+    reply.body,
+    new RegExp(`${AUTHOR_ID}|${AUTHOR_EMAIL}|created_?[bB]y|voterId|email`),
+  );
+});
+
+test("a_seed_poll_has_no_community_or_attribution_key_at_all", async () => {
+  const { app } = await setup();
+  const reply = await app.inject({ url: "/api/polls/p1" });
+  assert.equal(reply.statusCode, 200);
+  // Absent, not null: no author is invented for a poll that never had one.
+  assert.equal("community" in reply.json(), false);
+  assert.equal("attribution" in reply.json(), false);
+  assert.doesNotMatch(reply.body, /community|attribution/);
+});
+
+test("the_public_read_copies_only_the_allow_listed_attribution_fields", async () => {
+  // Whatever a store hands back, the projection copies kind and name by
+  // name. A stored attribution carrying anything else — here, the author's
+  // account and address — never reaches the wire.
+  const { app, votes } = await setup();
+  await votes.createPoll(
+    { id: "smuggled", question: "Q", choices: ["A", "B"], method: "single" },
+    {
+      community: {
+        id: "ubc-students",
+        label: "UBC students",
+        createdBy: AUTHOR_ID,
+      },
+      attribution: {
+        kind: "named",
+        name: "Ada",
+        voterId: AUTHOR_ID,
+        email: AUTHOR_EMAIL,
+      },
+    } as unknown as Publication,
+  );
+  const reply = await app.inject({ url: "/api/polls/smuggled" });
+  assert.deepEqual(reply.json().attribution, { kind: "named", name: "Ada" });
+  assert.deepEqual(reply.json().community, {
+    id: "ubc-students",
+    label: "UBC students",
+  });
+  assert.doesNotMatch(reply.body, new RegExp(`${AUTHOR_ID}|${AUTHOR_EMAIL}`));
+});
+
+test("an_anonymous_attribution_never_carries_a_stored_name", async () => {
+  const { app, votes } = await setup();
+  await votes.createPoll(
+    { id: "anon-name", question: "Q", choices: ["A", "B"], method: "single" },
+    {
+      community: { id: "pulse-general", label: "General" },
+      attribution: { kind: "anonymous", name: "Ada" },
+    } as unknown as Publication,
+  );
+  const reply = await app.inject({ url: "/api/polls/anon-name" });
+  assert.deepEqual(reply.json().attribution, { kind: "anonymous" });
+  assert.doesNotMatch(reply.body, /Ada/);
 });
 
 test("an_unknown_poll_is_a_404_in_the_standard_shape", async () => {

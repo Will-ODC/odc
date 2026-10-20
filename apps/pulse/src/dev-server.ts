@@ -2,10 +2,15 @@ import { randomBytes } from "node:crypto";
 import { pathToFileURL } from "node:url";
 import type { FastifyInstance } from "fastify";
 import type { Pool } from "pg";
+import { InMemoryCreationStore } from "./authoring/memory-store.js";
+import { ownerEmail } from "./authoring/owner.js";
+import { PostgresCreationStore } from "./authoring/pg-store.js";
+import type { CreationStore } from "./authoring/store.js";
 import { databaseUrl } from "./db/config.js";
 import { migrate } from "./db/migrate.js";
 import { createPool } from "./db/pool.js";
 import { createServer } from "./http/server.js";
+import { assertOrigin } from "./main.js";
 import { SessionSigner } from "./http/session.js";
 import {
   DomainAllowlist,
@@ -184,6 +189,8 @@ export interface DevConfig {
   webOrigin: string;
   /** Where to keep what it is given. Absent means in memory, lost on exit. */
   databaseUrl?: string;
+  /** `PULSE_OWNER_EMAIL`, normalised: who may grant unlimited posting. */
+  ownerEmail?: string;
 }
 
 /**
@@ -201,6 +208,12 @@ export function devConfig(env: NodeJS.ProcessEnv): DevConfig {
   const keyFromEnv = env.PULSE_CONFIRMATION_KEY;
   // Read by the one function that decides what "unset" means (src/db/config.ts).
   const url = databaseUrl(env);
+  // Optional here as when served; a malformed one is refused the same way.
+  const owner = ownerEmail(env);
+  // Checked as when served: the creation routes compare `Origin` with it
+  // exactly, so a trailing slash would refuse every post.
+  const webOrigin = env.PULSE_WEB_ORIGIN ?? "http://localhost:5173";
+  assertOrigin(webOrigin);
   return {
     port: port(env.PULSE_PORT),
     // Never a hardcoded fallback: a default secret is a secret everyone has.
@@ -210,8 +223,9 @@ export function devConfig(env: NodeJS.ProcessEnv): DevConfig {
     // leaking is not the other (ADR-0040).
     confirmationKey: keyFromEnv ?? randomBytes(32).toString("base64url"),
     confirmationKeySource: keyFromEnv === undefined ? "generated" : "env",
-    webOrigin: env.PULSE_WEB_ORIGIN ?? "http://localhost:5173",
+    webOrigin,
     ...(url === undefined ? {} : { databaseUrl: url }),
+    ...(owner === undefined ? {} : { ownerEmail: owner }),
   };
 }
 
@@ -239,6 +253,7 @@ interface Storage {
   suggestions: SuggestionStore;
   claims: ClaimStore;
   domains: AllowedDomainSource;
+  creation: CreationStore;
   /** Only when the rows are in Postgres. */
   pool?: Pool;
 }
@@ -293,10 +308,12 @@ export async function buildDevServer(
         "across restarts.",
     );
   }
+  const creationOptions =
+    config.ownerEmail === undefined ? {} : { ownerEmail: config.ownerEmail };
   const storage =
     config.databaseUrl === undefined
-      ? inMemory()
-      : await inPostgres(config.databaseUrl, log);
+      ? inMemory(creationOptions)
+      : await inPostgres(config.databaseUrl, log, creationOptions);
 
   const { pool } = storage;
   try {
@@ -325,6 +342,9 @@ export async function buildDevServer(
       suggestions: storage.suggestions,
       signer: new SessionSigner(config.secret),
       confirmationKey: new ConfirmationKey(config.confirmationKey),
+      creation: storage.creation,
+      // The client's origin, which is where creation requests come from.
+      webOrigin: config.webOrigin,
       // Local development is http://, and a Secure cookie would never be
       // stored. Safe only because of the guard above — see DEV_ENVIRONMENTS.
       secureCookies: false,
@@ -348,20 +368,26 @@ export async function buildDevServer(
   }
 }
 
-function inMemory(): Storage {
+function inMemory(creation: { ownerEmail?: string }): Storage {
+  // One voter store and one voting store, shared with the creation store:
+  // a question someone posts is a poll the voting routes can read.
+  const voters = new InMemoryVoterStore();
+  const votes = new InMemoryVotingStore();
   return {
     kind: "memory",
-    voters: new InMemoryVoterStore(),
-    votes: new InMemoryVotingStore(),
+    voters,
+    votes,
     suggestions: new InMemorySuggestionStore(),
     claims: new InMemoryClaimStore(),
     domains: new StaticDomainSource(SEED_DOMAINS),
+    creation: new InMemoryCreationStore(voters, votes, creation),
   };
 }
 
 async function inPostgres(
   url: string,
   log: (message: string) => void,
+  creation: { ownerEmail?: string },
 ): Promise<Storage> {
   const pool = createPool({ connectionString: url });
   // An idle connection that fails — the database restarting, say — emits
@@ -389,6 +415,7 @@ async function inPostgres(
     suggestions: new PostgresSuggestionStore(pool),
     claims: new PostgresClaimStore(pool),
     domains: new PostgresDomainSource(pool),
+    creation: new PostgresCreationStore(pool, creation),
     pool,
   };
 }

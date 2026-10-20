@@ -77,6 +77,10 @@ export interface ChoiceResult {
   count: number;
   /** Percentage. For `approval` these do not sum to 100, and shouldn't. */
   share: number;
+  /** How many of the people who confirmed by email picked this (ADR-0040). */
+  confirmedCount: number;
+  /** `confirmedCount / confirmedVoters`, as a percentage; 0 when nobody confirmed. */
+  confirmedShare: number;
 }
 
 export interface Results {
@@ -84,8 +88,14 @@ export interface Results {
   question: string;
   method: PollMethod;
   choices: ChoiceResult[];
-  /** People who voted — not the number of selections made. */
+  /** Votes cast, one per browser — not the number of selections made. */
   voters: number;
+  /**
+   * People who confirmed by email, counted once per person (ADR-0040). Always
+   * present, `0` when nobody has, and never more than `voters`. An email
+   * address is not a person: two addresses are two confirmed people.
+   */
+  confirmedVoters: number;
 }
 
 export type CastOutcome =

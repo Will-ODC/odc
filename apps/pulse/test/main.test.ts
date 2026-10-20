@@ -524,3 +524,142 @@ test(
     assert.equal(asked.json().error, "send_failed");
   },
 );
+
+test("the_owner_email_is_optional_normalised_and_never_guessed", () => {
+  // ADR-0037: unset or blank grants nobody; a set address is the owner.
+  assert.equal(serveConfig(COMPLETE).ownerEmail, undefined);
+  assert.equal(
+    serveConfig({ ...COMPLETE, PULSE_OWNER_EMAIL: "   " }).ownerEmail,
+    undefined,
+  );
+  assert.equal(
+    serveConfig({ ...COMPLETE, PULSE_OWNER_EMAIL: "  Owner@Example.ORG " })
+      .ownerEmail,
+    "owner@example.org",
+  );
+});
+
+test("a_malformed_owner_email_refuses_the_start_without_repeating_it", () => {
+  // Running with no owner because of a typo would look like a working
+  // configuration until the owner tried to use it.
+  for (const value of [
+    "zq-typo",
+    "zq-typo@",
+    "@zq-typo.example",
+    "z q@zq-typo.example",
+  ]) {
+    assert.throws(
+      () => serveConfig({ ...COMPLETE, PULSE_OWNER_EMAIL: value }),
+      (error: unknown) =>
+        error instanceof Error &&
+        /PULSE_OWNER_EMAIL/.test(error.message) &&
+        !error.message.includes(value),
+      `"${value}" must be refused`,
+    );
+  }
+});
+
+test("the_served_log_never_writes_down_whose_permission_changed", () => {
+  // A posting-permission path carries the account id it changes, and account
+  // ids stay out of logs (ADR-0037).
+  for (const url of [
+    "/api/posting-permissions/acct-123",
+    "/api/posting-permissions/acct-123?x=1",
+    "/API/Posting-Permissions/acct-123",
+  ]) {
+    const logged = SERVED_LOGGER.serializers.req({ method: "PUT", url });
+    assert.equal(logged.url, "/api/posting-permissions/:voterId");
+    assert.doesNotMatch(JSON.stringify(logged), /acct-123/);
+  }
+  // Other paths are untouched.
+  assert.equal(
+    SERVED_LOGGER.serializers.req({ method: "GET", url: "/api/polls/p1" }).url,
+    "/api/polls/p1",
+  );
+});
+
+test(
+  "the_served_wiring_publishes_from_its_web_origin_and_knows_its_owner",
+  { skip: databaseSkip },
+  async (t) => {
+    const { schema } = await throwawaySchema(t);
+    const sent: string[] = [];
+    const config: ServeConfig = {
+      ...servedConfig(schema),
+      ownerEmail: "owner@example.org",
+      mailer: {
+        sendClaimLink: async (_to, link) => {
+          sent.push(link);
+        },
+        sendProofOfAction: async () => undefined,
+      },
+    };
+    const { app } = await buildServer(config, { log: () => undefined });
+    t.after(async () => {
+      await app.close();
+    });
+
+    const signIn = async (email: string) => {
+      await app.inject({
+        method: "POST",
+        url: "/api/sign-in",
+        payload: { email },
+      });
+      const token = new URL(sent.at(-1) as string).searchParams.get("token");
+      const redeemed = await app.inject({
+        method: "POST",
+        url: "/api/sign-in/redeem",
+        payload: { token },
+      });
+      const session = redeemed.cookies.find((c) => c.name === "pulse_session");
+      return {
+        cookie: `pulse_session=${session?.value as string}`,
+        id: redeemed.json().voter.id as string,
+      };
+    };
+    const owner = await signIn("owner@example.org");
+    const guest = await signIn("guest@example.org");
+
+    const context = await app.inject({
+      url: "/api/poll-creation/context",
+      headers: { cookie: owner.cookie },
+    });
+    assert.equal(context.statusCode, 200);
+    assert.equal(context.json().canPostUnlimited, true);
+
+    const publish = (origin: string) =>
+      app.inject({
+        method: "POST",
+        url: "/api/polls",
+        headers: {
+          cookie: guest.cookie,
+          origin,
+          "content-type": "application/json",
+          "idempotency-key": "6f9d3c1e-8a2b-4c5d-9e0f-112233445566",
+        },
+        payload: {
+          question: "Served?",
+          choices: ["Yes", "No"],
+          method: "single",
+          purposeAcknowledgement: "community-purpose-v1",
+        },
+      });
+    // The origin is the configured web origin, not whatever the request says.
+    assert.equal((await publish("https://evil.example")).statusCode, 403);
+    const created = await publish("https://pulse.example.org");
+    assert.equal(created.statusCode, 201, created.body);
+    assert.equal(created.json().poll.community.id, "pulse-general");
+
+    const granted = await app.inject({
+      method: "PUT",
+      url: `/api/posting-permissions/${guest.id}`,
+      headers: {
+        cookie: owner.cookie,
+        origin: "https://pulse.example.org",
+        "content-type": "application/json",
+      },
+      payload: { permission: "unlimited_posting" },
+    });
+    assert.equal(granted.statusCode, 204);
+  },
+);

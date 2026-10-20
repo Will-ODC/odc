@@ -226,16 +226,21 @@ Two stages, per `evolution.md` EV-6/EV-15:
   Every definite failure is decided at the ballot that ends a run or returns,
   in file order, from earlier lines only, so EX-16's prefix property holds and
   there is no end-of-scan pass. `ts` values are compared for equality and
-  ET-23's multiple test only (ES-21). Cost: a registered ballot is a few
-  Map/Set lookups plus one binary search; an opaque ballot costs one modulus
-  per **distinct** interval among the registered issues (it updates an O(1)
-  summary per interval, not each issue), so the worst case is
-  O(opaque ballots × distinct intervals): about 0.2 s at 10k × 10k, 1.7 s at
-  30k × 30k, and roughly 20 s at 100k × 100k, measured on that step alone.
-  `test/ballot-batching.test.ts` pins that growth as a ratio (60k against 6k
-  opaque ballots over 1k intervals must stay under 25×, ~10× today), which
-  does not depend on machine speed. A
-  sub-quadratic candidacy test is an **open follow-up**.
+  ET-23's multiple test only (ES-21). Cost: an opaque ballot is O(1) — it
+  records its instant and moves it to the front of one recency list, with no
+  per-interval work. A registered ballot is a few Map/Set lookups and one
+  binary search, plus a refresh of its interval's cached top two candidate
+  instants, which walks only the instants touched since that interval last
+  looked; so each interval's total walk is bounded by the opaque ballots after
+  it. 100k intervals × 100k opaque ballots, ~205 s under the old per-interval
+  loop, now takes milliseconds. `test/ballot-batching.test.ts` pins both
+  properties as ratios of two runs on the same machine (cost independent of
+  the number of intervals; total walk linear under interleaved queries), with
+  the mutant measurements in the comments. **Known limit, not fixed:** many
+  opaque ballots at many distinct instants that are multiples of no interval,
+  followed by a registered ballot on every interval, still costs
+  O(distinct intervals × distinct opaque instants); removing it would need
+  factoring instants inside the verifier.
 
   _Which ballots count_ (v12): ET-24 and ET-24a read only registered
   ballots of registered issues. An opaque ballot joins no _known_ run, but it
