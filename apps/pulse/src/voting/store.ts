@@ -4,6 +4,7 @@ import {
   type NewPoll,
   type Poll,
   type PollMethod,
+  type Publication,
 } from "./poll.js";
 
 /**
@@ -174,10 +175,23 @@ export class InMemoryVotingStore implements VotingStore {
     this.#clock = clock;
   }
 
-  async createPoll(input: NewPoll): Promise<Poll> {
+  /**
+   * `publication` is for the in-memory creation store only, which shares this
+   * store as its database (ADR-0037): it is the in-memory equivalent of the
+   * `community`, `attribution_kind` and `author_name` columns that the
+   * Postgres creation store writes on the poll row. It takes the public facts
+   * alone — the author's account stays in the creation store — and is copied,
+   * so the caller cannot change it afterwards. Not on `VotingStore`: seed
+   * polls have no author and none is invented for them.
+   */
+  async createPoll(input: NewPoll, publication?: Publication): Promise<Poll> {
     if (this.#polls.has(input.id))
       throw new TypeError(`poll already exists: ${input.id}`);
-    const poll = createPoll(input, this.#clock());
+    const created = createPoll(input, this.#clock());
+    const poll: Poll =
+      publication === undefined
+        ? created
+        : { ...created, publication: structuredClone(publication) };
     this.#polls.set(poll.id, poll);
     return poll;
   }
