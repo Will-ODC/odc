@@ -497,8 +497,9 @@ it("offers to forget once someone has answered here", async () => {
     banner().queryByRole("button", { name: "Forget my votes here" }),
   ).toBeNull();
   await answer();
+  // The offer waits for the session lookup as well as the answer.
   expect(
-    banner().getByRole("button", { name: "Forget my votes here" }),
+    await banner().findByRole("button", { name: "Forget my votes here" }),
   ).toBeTruthy();
 });
 
@@ -507,7 +508,7 @@ it("forgetting clears the answers shown on this page", async () => {
   render(<Conversation api={stubApi({ signOut })} pollId="ads-free" />);
   await main().findByRole("heading", { name: poll().question, level: 1 });
   const user = await answer();
-  // The offer appears only once the vote is saved, so wait for it.
+  // The offer waits for the session lookup as well as the answer.
   await user.click(
     await banner().findByRole("button", { name: "Forget my votes here" }),
   );
