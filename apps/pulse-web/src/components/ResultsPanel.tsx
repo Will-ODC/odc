@@ -98,7 +98,7 @@ export function ResultsPanel({
             className="results__link"
             href={explainHref}
             target="_blank"
-            rel="noopener"
+            rel="noopener noreferrer"
           >
             What does this mean? (opens in a new tab)
           </a>

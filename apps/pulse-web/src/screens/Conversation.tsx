@@ -37,11 +37,18 @@ function confirmationOf(session: Session): Confirmation {
     case "signedIn":
       return "confirmed";
     case "signedOut":
-    case "unknown":
       return "offer";
+    // The server could not say: offer nothing rather than a sign-in that may
+    // be unnecessary. Coming back to the page asks again (`useSession`).
+    case "unknown":
     case "loading":
       return "unknown";
   }
+}
+
+/** Whether a poll's closing time has passed, by this browser's clock. */
+function hasClosed(poll: Poll): boolean {
+  return poll.closesAt !== null && Date.parse(poll.closesAt) <= Date.now();
 }
 
 /** A whole run stays in one conversation; only its active card changes. */
@@ -100,7 +107,7 @@ export function Conversation({
   // shown is missing it from the confirmed number.
   const before = useRef(confirmation);
   useEffect(() => {
-    if (before.current === "offer" && confirmation === "confirmed")
+    if (before.current !== "confirmed" && confirmation === "confirmed")
       setAnswers((old) => old.map((one) => ({ ...one, stale: true })));
     before.current = confirmation;
   }, [confirmation]);
@@ -421,10 +428,29 @@ function LiveCard({
   // now, and the numbers on screen do not include it yet.
   const was = useRef(confirmation);
   useEffect(() => {
-    if (was.current === "offer" && confirmation === "confirmed" && answered)
+    if (
+      was.current !== "confirmed" &&
+      confirmation === "confirmed" &&
+      answered &&
+      !hasClosed(poll)
+    )
       refreshResults();
     was.current = confirmation;
-  }, [confirmation, answered, refreshResults]);
+  }, [confirmation, answered, refreshResults, poll]);
+  /*
+   * Signing in after the question closed confirms nothing (ADR-0040), so the
+   * card stops offering and does not claim it either. Decided while
+   * rendering, not in an effect, so "confirmed by email" is never drawn even
+   * for one frame.
+   */
+  const [seen, setSeen] = useState(confirmation);
+  const [lateSignIn, setLateSignIn] = useState(false);
+  if (seen !== confirmation) {
+    setSeen(confirmation);
+    if (seen !== "confirmed" && confirmation === "confirmed" && answered)
+      if (hasClosed(poll)) setLateSignIn(true);
+  }
+  const cardConfirmation: Confirmation = lateSignIn ? "unknown" : confirmation;
   // A saved answer from before someone signed in, revisited.
   const staleOnArrival = useRef(Boolean(saved?.stale && showSaved));
   useEffect(() => {
@@ -528,7 +554,7 @@ function LiveCard({
           status={showing}
           privacyNote="Your answer is private."
           trustHref={pathOf({ kind: "trust" })}
-          confirmation={confirmation}
+          confirmation={cardConfirmation}
           confirmHref={pathOf({ kind: "signIn", pollId: poll.id })}
           {...(fresh.problem
             ? {

@@ -46,7 +46,8 @@ const base: VoteCardProps = {
   onCollapse: vi.fn(),
   onClose: vi.fn(),
 };
-const note = () => screen.getByRole("status").textContent;
+/** The note saying what became of the vote (the card's first status). */
+const note = () => screen.getAllByRole("status")[0]?.textContent;
 const confirmLink = () =>
   screen.queryByRole("link", { name: /Confirm with your email/ });
 
@@ -76,7 +77,7 @@ describe("what the card says about a counted vote", () => {
     const link = confirmLink();
     expect(link?.getAttribute("href")).toBe("/sign-in?poll=p");
     expect(link?.getAttribute("target")).toBe("_blank");
-    expect(link?.getAttribute("rel")).toBe("noopener");
+    expect(link?.getAttribute("rel")).toBe("noopener noreferrer");
   });
 
   it("says confirmed by email, with nothing to press, when signed in", () => {
@@ -89,6 +90,51 @@ describe("what the card says about a counted vote", () => {
     );
     expect(note()).toBe("Counted · confirmed by email");
     expect(confirmLink()).toBeNull();
+  });
+
+  it("keeps focus on the card when the Confirm link goes", async () => {
+    const { rerender } = render(
+      <VoteCard {...base} confirmation="offer" confirmHref="/sign-in?poll=p" />,
+    );
+    confirmLink()?.focus();
+    expect(document.activeElement).toBe(confirmLink());
+    rerender(
+      <VoteCard
+        {...base}
+        confirmation="confirmed"
+        confirmHref="/sign-in?poll=p"
+      />,
+    );
+    await waitFor(() =>
+      expect(document.activeElement?.textContent).toBe(
+        "Counted · confirmed by email",
+      ),
+    );
+  });
+
+  it("leaves focus alone when it was somewhere else", () => {
+    const { rerender } = render(
+      <>
+        <button type="button">elsewhere</button>
+        <VoteCard
+          {...base}
+          confirmation="offer"
+          confirmHref="/sign-in?poll=p"
+        />
+      </>,
+    );
+    screen.getByRole("button", { name: "elsewhere" }).focus();
+    rerender(
+      <>
+        <button type="button">elsewhere</button>
+        <VoteCard
+          {...base}
+          confirmation="confirmed"
+          confirmHref="/sign-in?poll=p"
+        />
+      </>,
+    );
+    expect(document.activeElement?.textContent).toBe("elsewhere");
   });
 
   it("never says verified", () => {
@@ -118,7 +164,9 @@ describe("what the card says about a counted vote", () => {
       />,
     );
     expect(note()).toBe("Counted · confirmed by email");
-    expect(screen.getByRole("alert").textContent).toBe(
+    // Said the way every failed view says it (ViewState), inside the results.
+    const results = screen.getByRole("group", { name: "How people answered" });
+    expect(within(results).getByRole("status").textContent).toBe(
       "We could not load the results.",
     );
     expect(screen.queryByText(/votes so far/)).toBeNull();
@@ -254,17 +302,129 @@ describe("signing in while a counted vote is on screen", () => {
     act(() => {
       window.dispatchEvent(new Event("focus"));
     });
-    expect((await main.findByRole("alert")).textContent).toBe(
-      "Results are not available.",
-    );
-    expect(main.getByRole("status").textContent).toBe(
+    expect(await main.findByText("Results are not available.")).toBeTruthy();
+    expect(main.getAllByRole("status")[0]?.textContent).toBe(
       "Counted · confirmed by email",
     );
     await userEvent.click(main.getByRole("button", { name: "Try again" }));
     expect(
       await main.findByText("1 vote so far · 1 confirmed by email"),
     ).toBeTruthy();
-    expect(main.queryByRole("alert")).toBeNull();
+    expect(main.queryByText("Results are not available.")).toBeNull();
+  });
+
+  /*
+   * Signing in confirms every vote already given on this page, not only the
+   * one on screen: a question answered earlier shows fresh numbers when it is
+   * revisited (the stale mark and `staleOnArrival`).
+   */
+  it("refreshes an earlier question's numbers when it is revisited after signing in", async () => {
+    const first = poll({ next: ["second", "second"] });
+    const second = poll({
+      id: "second",
+      question: "And then?",
+      next: [null, null],
+    });
+    let me: Me | null = null;
+    const fetched = vi.fn((id: string) =>
+      Promise.resolve(id === first.id ? counts(1) : counts(0)),
+    );
+    const castAny = vi.fn(async (id: string) => ({
+      status: "counted" as const,
+      ballot: [1],
+      results: id === first.id ? counts(0) : counts(0),
+    }));
+    render(
+      <Conversation
+        api={stubApi({
+          poll: (id) => Promise.resolve(id === first.id ? first : second),
+          cast: castAny,
+          me: () => Promise.resolve(me),
+          results: fetched,
+        })}
+        pollId={first.id}
+      />,
+    );
+    const main = await vote();
+    expect(main.getByText("1 vote so far · 0 confirmed by email")).toBeTruthy();
+    await userEvent.click(main.getByRole("button", { name: "Next" }));
+    await main.findByRole("heading", { name: "And then?", level: 1 });
+    // Signed in elsewhere while the second question is showing, unanswered.
+    me = ME;
+    act(() => {
+      window.dispatchEvent(new Event("focus"));
+    });
+    await waitFor(() =>
+      expect(screen.queryByRole("link", { name: "Sign in" })).toBeNull(),
+    );
+    expect(fetched).not.toHaveBeenCalled();
+    await userEvent.click(
+      within(screen.getByRole("navigation", { name: "Answered" })).getByRole(
+        "button",
+        { name: first.question },
+      ),
+    );
+    await main.findByRole("heading", { name: first.question, level: 1 });
+    await userEvent.click(main.getByRole("button", { name: "Vote" }));
+    expect(
+      await main.findByText("1 vote so far · 1 confirmed by email"),
+    ).toBeTruthy();
+    expect(fetched).toHaveBeenCalledWith(first.id);
+  });
+
+  it("offers nothing when the server could not say who is signed in", async () => {
+    render(
+      <Conversation
+        api={stubApi({
+          cast,
+          me: () => Promise.reject(new Error("offline")),
+        })}
+        pollId={p.id}
+      />,
+    );
+    const main = await vote();
+    expect(main.getAllByRole("status")[0]?.textContent).toBe("Counted");
+    expect(main.queryByRole("link", { name: /Confirm with your email/ })).toBe(
+      null,
+    );
+  });
+
+  /* ADR-0040: signing in after a question closed confirms nothing there. */
+  it("does not claim confirmed when signing in after the question closed", async () => {
+    vi.useFakeTimers({ shouldAdvanceTime: true, toFake: ["Date"] });
+    try {
+      const soon = new Date(Date.now() + 60_000).toISOString();
+      const closing = poll({ closesAt: soon });
+      let me: Me | null = null;
+      const fetched = vi.fn(() => Promise.resolve(counts(1)));
+      render(
+        <Conversation
+          api={stubApi({
+            poll: () => Promise.resolve(closing),
+            cast,
+            me: () => Promise.resolve(me),
+            results: fetched,
+          })}
+          pollId={closing.id}
+        />,
+      );
+      const main = await vote();
+      vi.setSystemTime(Date.now() + 120_000);
+      me = ME;
+      act(() => {
+        window.dispatchEvent(new Event("focus"));
+      });
+      await waitFor(() =>
+        expect(screen.queryByRole("link", { name: "Sign in" })).toBeNull(),
+      );
+      expect(main.getAllByRole("status")[0]?.textContent).toBe("Counted");
+      expect(
+        main.queryByRole("link", { name: /Confirm with your email/ }),
+      ).toBeNull();
+      expect(fetched).not.toHaveBeenCalled();
+    } finally {
+      vi.useRealTimers();
+    }
   });
 
   it("does not ask again once someone is signed in", async () => {

@@ -363,7 +363,7 @@ describe("confirmed by email (#353)", () => {
     });
     expect(link.getAttribute("href")).toBe("/trust");
     expect(link.getAttribute("target")).toBe("_blank");
-    expect(link.getAttribute("rel")).toBe("noopener");
+    expect(link.getAttribute("rel")).toBe("noopener noreferrer");
   });
 
   it("has no explanation link unless given somewhere to point it", () => {

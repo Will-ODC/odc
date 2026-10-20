@@ -10,6 +10,7 @@ import {
 import type { Confirmation } from "../flow/vote-card.js";
 import { ClosedNotice } from "./ClosedNotice.js";
 import { ResultsPanel } from "./ResultsPanel.js";
+import { ViewState } from "./ViewState.js";
 import "./VoteCard.css";
 
 export interface CardChoice {
@@ -158,6 +159,20 @@ export function VoteCard({
       panel.current?.focus();
   }, [problem, collapsed, status.kind]);
 
+  // "Confirm with your email" goes once the vote is confirmed. When focus was
+  // on it, it would fall to the page; the note that now says "confirmed by
+  // email" takes it instead. Focus elsewhere is left alone.
+  const counted = useRef<HTMLParagraphElement>(null);
+  const wasOffer = useRef(confirmation === "offer");
+  useEffect(() => {
+    const offer = confirmation === "offer";
+    if (wasOffer.current === offer) return;
+    wasOffer.current = offer;
+    const active = document.activeElement;
+    if (!offer && (active === null || active === document.body))
+      counted.current?.focus();
+  }, [confirmation]);
+
   function onKeyDown(event: KeyboardEvent<HTMLElement>) {
     if (
       !editable ||
@@ -250,7 +265,12 @@ export function VoteCard({
       </p>
       {status.kind === "answered" ? (
         <>
-          <p role="status" className="vote-card__note">
+          <p
+            role="status"
+            className="vote-card__note"
+            ref={counted}
+            tabIndex={-1}
+          >
             {countedNote(status.changed, confirmation)}
           </p>
           {confirmation === "offer" && confirmHref ? (
@@ -259,7 +279,7 @@ export function VoteCard({
                 className="vote-card__link"
                 href={confirmHref}
                 target="_blank"
-                rel="noopener"
+                rel="noopener noreferrer"
               >
                 Confirm with your email (opens in a new tab)
               </a>
@@ -273,9 +293,11 @@ export function VoteCard({
               ref={panel}
               tabIndex={-1}
             >
-              <p className="vote-card__problem" role="alert">
-                {resultsProblem.message}
-              </p>
+              <ViewState
+                data={{ status: "error", message: resultsProblem.message }}
+              >
+                {() => null}
+              </ViewState>
               <button
                 type="button"
                 className="results__retry"
