@@ -6,27 +6,21 @@ charter's democratic-legitimacy machinery and is not held to it: no keypairs,
 no signatures, no linkage-map privacy model, no independent verifier, no hash
 chain. Do not "fix" this. Do not flag it as a charter conflict.
 
-## What pulse is
+## Product and roadmap
 
-A community votes on something and sees the result. Someone claims an identity
-with an email link, watches a short guided story, votes, and is told what action
-follows. That is the whole product.
+Pulse is a charter-exempt community voting product. Its roadmap is grouped into
+three pillars: email magic-link identity, the guided vote experience, and a path
+from votes to action. This is roadmap structure, not a claim that every planned
+feature is built. The vote page follows the conversation design chosen in
+ADR-0035. Read
+[`memory/pulse.md`](../../memory/pulse.md) for current implementation status and
+next work.
 
-Three MVP pillars, in build order:
-
-1. **Email magic-link identity** — an email link claims an id, and anyone
-   with a working address may claim one (ADR-0030). The email's domain decides
-   only which community, if any, the person belongs to; an unlisted domain
-   means no community (`null`), never a refusal. Domain allowlists are **rows
-   in a table**, never code: adding a community's domain is an insert, not a
-   deploy.
-2. **One-screen story UI** — one screen, guided, media-and-information bites
-   with the vote embedded. The design of record is `docs/mockups/pulse-screens/`
-   — translucent "Civic Glass" for screens 2–7, dark swipe ballot for screen 1,
-   and `hub-feed-v*.html` is NOT the reference. See
-   `.claude/skills/odc-design`; build it per `.claude/skills/odc-ui`.
-3. **Path to action** — every story solicits ideas, volunteer time, or
-   donations, and emails proof of what happened unless the person opted out.
+ADR-0035 names the conversation as the vote page's design of record. Use the
+[mockup index](../../docs/mockups/CANDIDATE_CONTEXT.md) to find the current
+conversation design and distinguish it from historical decks and alternatives.
+See `.claude/skills/odc-design` for design workflow and
+`.claude/skills/odc-ui` for implementation guidance.
 
 ## Rules that do apply here
 
@@ -46,12 +40,27 @@ Three MVP pillars, in build order:
 - One small branch per change, named for its ticket: `pulse/<issue>-<short-description>`
   (the GitHub issue number, not a running count — see `.claude/skills/odc-pipeline`).
 
+## Product status and references
+
+`memory/pulse.md` is the current product and implementation status; the plans
+and ADRs describe intended direction. A planned API or roadmap item is not a
+built feature. Use `apps/pulse/API.md` for the served interface and its explicit
+planned sections. Follow ADR-0039: describe only behavior that exists today.
+
 ## Layout
 
 ```
 src/voting/     polls, votes, results — the core domain, storage-agnostic
 src/identity/   email, domain allowlist, magic-link claims, voter store
 src/http/       the Fastify surface and the signed session cookie
-src/dev-server  the runnable dev entry: seeds a community and a poll, listens
+src/authoring/  poll publication rules and storage
+src/db/         database connection and migration runner
+migrations/     versioned SQL migrations
+src/dev-server.ts development entry: seeds a community and poll, then listens
+src/main.ts     production entry point
 test/           node:test, run against dist/ after `pnpm build`
 ```
+
+Run `pnpm --filter @odc/pulse build` before `pnpm --filter @odc/pulse test`;
+the tests execute compiled files in `dist/`. Other package commands are
+`pnpm --filter @odc/pulse lint` and `pnpm --filter @odc/pulse typecheck`.

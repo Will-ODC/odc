@@ -42,8 +42,9 @@ item below without being restated in each one.
 
 `CLAUDE.md` → `memory/INDEX.md` → `memory/pulse.md` in full → this file (your
 item at minimum) → `apps/pulse/CLAUDE.md` and `apps/pulse/API.md` before
-touching the server, `.claude/skills/odc-ui` before touching a screen,
-`.claude/skills/odc-testing` before writing any code at all.
+touching the server, `apps/pulse-web/CLAUDE.md` and `.claude/skills/odc-ui`
+before touching a screen, `.claude/skills/odc-testing` before writing any code
+at all.
 
 ## Status vocabulary
 
@@ -73,15 +74,6 @@ polls were both listed here as in flight and have since landed (#150, #156, #157
 #158, #159, #160; and ADR-0025 via #148).
 
 ---
-
-## Conversation default (#302)
-
-The live conversation page (#301) becomes the default at `/` and `?poll=ID`,
-including sign-in landing. `/conversation` links remain supported; the old
-Run/SwipeBallot/ChoiceBallot screens are retired. ADR-0035 uses pick-then-Submit
-and in-place results. The assistant is disabled until its own work lands; MCP
-read/voting work (#300) is separate. The old suggestion form and next-question
-preview rail are retired too; the suggestion API remains available.
 
 ## P2 — The sign-in community picker · BUILT 2026-10-09; one question left
 
@@ -174,7 +166,7 @@ no payments or automatic claims of impact are introduced by this UI direction.
 The conversation ballot uses pick-then-Submit (ADR-0035); donations and volunteer
 commitments also require confirmation.
 
-## P6 — Poll authoring · DESIGN CONTRACT IN REVIEW (#338)
+## P6 — Poll authoring · HTTP AND FORM READY TO BUILD
 
 ADR-0037 records the operator's 2026-10-11 choices: one-week editable close,
 suggestions off (#336), signed-in posting, community or General destination,
@@ -183,23 +175,20 @@ rolling hour, and Owner/granular unlimited-posting grants. The approved purpose
 statement and first-post acknowledgement ship with creation. The planned
 interfaces are in `apps/pulse/API.md`; no creation route is served yet.
 
-Build in merge-gated steps:
+The design and storage foundations are merged; see `memory/pulse.md` for the
+completed slices. Remaining work proceeds in merge-gated steps:
 
-1. Design contract (#338): ADR, API, this plan; independent review, pushed PR,
-   required green CI, then William's merge before dependent implementation.
-2. Pulse storage and posting permissions: keyed communities, legacy backfill,
-   author/visibility metadata, grants, acknowledgement, replay records and shared
-   quota transaction. In-memory/Postgres conformance and meaningful race tests.
-3. Creation HTTP boundary: authenticated context/create and owner grant/revoke,
+1. Creation HTTP boundary: authenticated context/create and owner grant/revoke,
    origin checks, bounded input, retry contract and safe public projections.
    Real HTTP with disposable Postgres, all documented error cases and privacy tests.
-4. Creation screen and attribution: first-post promise, anonymous/named choice,
+2. Creation screen and attribution: first-post promise, anonymous/named choice,
    secondary closing-time control, published conversation link, recoverable
    errors, keyboard and actual phone/desktop checks. No ballot side effects.
 
 Each step receives fresh review (substantive fixes reviewed again), package checks,
 push/PR and all required green CI before moving on. No agent approval or merge.
-Use the next unused migration number from current master; never alter 001–004.
+Use the next unused migration number from current master; never edit an applied
+migration.
 Do not invent authors or membership for existing data.
 
 Reporting/review (#233–#236), duplicate warnings (#261), suggestions (#336),
@@ -451,30 +440,26 @@ proven by a domain.
 Chosen by the operator over a throwaway script. **Two items point at this and it
 had no entry**, which is what this file exists to prevent.
 
-Needed by P10 (minting links, setting `min_assurance`) and by P6 (poll
-authoring). Nothing of it exists: `src/http/server.ts` serves eleven routes and
-none is administrative, there is no admin concept, no admin sign-in, and no
-permission rules.
+Needed by P10 for minting links and setting `min_assurance`. P6 now has its own
+accepted Owner and narrow posting-grant rules (ADR-0037), implemented in internal
+storage; its HTTP routes and form remain unbuilt. Those permissions do not settle
+P10's broader administration policy, and P6 does not wait for this decision.
 
 **Undecided, and all of it is "what is an admin?":** what makes someone one; how
 they sign in; whether one admin acts for any community or only their own; and
 whether this is a screen in `apps/pulse-web` or a separate surface. Read P6
-before starting — one surface should serve links, polls and gates rather than
-growing two.
+before starting and reuse its established posting authority where applicable;
+do not silently broaden those permissions to links or assurance gates.
 
 ---
 
 ## Not in this file
 
-- **Infrastructure and a Docker dev environment that resembles production.**
-  Recorded at length in `memory/pulse.md` with eight things such an environment
-  must cover, most of which are now items above or in-flight storage work.
-  Whoever takes it reads that section first — and reads the caution with it:
-  every document says the story is settled (`justfile`, ADR-0001), and
-  `docker-compose.yml` is `services: {}` with **no Dockerfile anywhere in the
-  repository, on any branch, in its entire history.** `just up` starts nothing
-  and exits 0. Check for a Dockerfile; do not cite the ADR as evidence one
-  exists.
+- **Infrastructure and deployment status.** Pulse has two Docker images and a
+  Compose serving profile (`apps/pulse/docker-compose.yml`, ADR-0028), started
+  with `just pulse-up`. See the app READMEs for commands and `memory/pulse.md`
+  for remaining deployment prerequisites. The root `docker-compose.yml` and
+  `just up` are separate ODC core scaffolding, not the Pulse runtime.
 - **Anything already built.** `memory/pulse.md` is the record of what landed and
   is the only place that answers "does this exist already". Three of the
   operator's earlier requests were satisfied by work that shipped afterwards, and

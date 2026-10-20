@@ -2,6 +2,11 @@
 
 The web page people use to sign in and vote in Pulse.
 
+See the [web contributor guide](./CLAUDE.md) before changing this package and
+the [shared Pulse guide](../pulse/CLAUDE.md) for product boundaries and rules.
+The [mockup index](../../docs/mockups/CANDIDATE_CONTEXT.md) is the canonical
+screen-design reference.
+
 ## Run it
 
 ```sh
@@ -26,6 +31,10 @@ container, so the page and the API share one address.
 
 Only the vote page and sign-in call the API. On the vote page, **Show me how**
 walks through the real controls; it never picks or submits an answer.
+
+The client uses the served routes in [`../pulse/API.md`](../pulse/API.md).
+Roadmap and planned API sections describe future work, not current client
+behavior.
 
 ## Settings
 

@@ -23,8 +23,8 @@ services/        # charter-governed core
   web/           # human client (Phase 2, not started)
   mcp/           # thin protocol wrapper (Phase 3)
 apps/            # charter-EXEMPT product workstream
-  pulse/         # server: magic-link identity + voting core
-  pulse-web/     # one-screen story client
+  pulse/         # API server: identity, voting, authoring, storage
+  pulse-web/     # React conversation client; nginx fronts the API
 tools/           # fixtures-gen, rehearsal, verifier-ts (second verifier)
 docs/            # charter.md, implementation-plan.md, plans/, mockups/,
                  # decisions/ (ADRs), security/
@@ -50,7 +50,10 @@ memory/          # INDEX.md (read first), STATE.md, pulse.md, OPEN-QUESTIONS(-ar
    GitHub issue (the work queue) and its design detail in
    `docs/plans/<workstream>.md` (`phase-0.md` for core tickets, `pulse.md` for
    pulse); then any ADR in `docs/decisions/` that the issue or plan cites.
-4. Before touching any service or app: its `README.md`, `API.md`, and `CLAUDE.md`.
+4. Before touching any service or app: its `README.md`, `CLAUDE.md`, and
+   `API.md` if present. Pulse server work starts in `apps/pulse/CLAUDE.md`;
+   client work starts in `apps/pulse-web/CLAUDE.md` and consumes the public
+   interface documented in `apps/pulse/API.md`.
 5. Skills auto-trigger by description; when in doubt, `odc-service-boundaries`
    before writing any endpoint and `odc-testing` before writing any code.
 

@@ -26,7 +26,7 @@ pure and tested, and decide things the screens only render:
 
 | Module                     | What it gives you                                                                   |
 | -------------------------- | ----------------------------------------------------------------------------------- |
-| `src/flow/route.ts`        | `Route` union and `routeFrom` / `pathOf` — which of the three places a URL names    |
+| `src/flow/route.ts`        | `Route` union and `routeFrom` / `pathOf` — current URL routing                      |
 | `src/flow/conversation.ts` | Conversation state, saved answers and next-question decisions                       |
 | `src/api/types.ts`         | `Poll`, `Ballot = number[]`, `Results`, `CastOutcome`, `Me`, `PulseApi`, `ApiError` |
 | `src/api/http.ts`          | `HttpPulseApi` — since #118 the only implementation of `PulseApi`                   |
@@ -55,16 +55,16 @@ Facts that will bite you if you assume otherwise:
 ```
 src/
   main.tsx          entry — mounts <App>, nothing else
-  App.tsx           picks the screen for the current Step; owns no screen markup
-  screens/          one file per place: SignIn, Redeem, Conversation, ChatPreview
+  App.tsx           picks the screen for the current Route; owns no screen markup
+  screens/          one file per screen; route.ts defines the current routes
   components/       reusable, screen-agnostic pieces
   hooks/            state + effects (use-poll.ts, use-cast-vote.ts)
   api/  flow/       already exist — pure, no React
   styles/tokens.css the one token file
 ```
 
-Names: components `PascalCase.tsx`, hooks `use-kebab-case.ts`, tests beside
-the unit as `Thing.test.tsx`. Direction of imports is one-way: screens import
+Names: components `PascalCase.tsx`, hooks `use-kebab-case.ts`; tests live in
+`apps/pulse-web/test/` as `Thing.test.tsx` or `thing.test.ts`. Direction of imports is one-way: screens import
 components; **components never import screens**, and nothing in `components/`
 imports from `api/`.
 
@@ -93,19 +93,9 @@ imports from `api/`.
    candidate, not a component — do not abstract a shape you have seen once.
    Two uses is a component, and the second use is what proves the prop API.
 
-The seven pulse screens share these seams; build them as components the first
-time a second screen needs one, and check here before inventing a new name:
-
-| Component       | Used by                                           |
-| --------------- | ------------------------------------------------- |
-| `ScreenFrame`   | every screen — the phone-sized pane               |
-| `Chip`          | "Official Ballot · Closes Friday", "Counted"      |
-| `PrimaryButton` | Continue / Cast / Change it                       |
-| `ChoiceRow`     | vote, already-voted, closed states                |
-| `ResultBar`     | results (count · %)                               |
-| `StatPair`      | bite 2, results                                   |
-| `VoteCard`      | controlled selection, submit and in-place results |
-| `FinePrint`     | "reactions are opinion, not a vote"               |
+Inspect `src/components/` before adding a shared piece. Existing components
+include `ScreenFrame`, `ViewState`, `VoteCard` and `ResultsPanel`; the historical
+seven-screen mockup deck is not an inventory of implemented components.
 
 ## Every view owes four states — no exceptions
 
@@ -120,16 +110,14 @@ exists to prevent. A component PR without all four states is incomplete.
 
 ## Design tokens
 
-One file, `src/styles/tokens.css`, seeded once from the `:root` block in
-`docs/mockups/pulse-screens/_screens.css` (colors, radii, shadow, type scale)
-and thereafter the source for the app. Components reference `var(--…)` only.
-Changing a value is a token edit, never a component edit.
+`src/styles/tokens.css` is the app's token source. Components reference
+`var(--…)` only. Changing a value is a token edit, never a component edit.
 
-The palette question is genuinely open: mockup screen 1 (`01-claim.html`) is
-dark and carries its own page chrome, screens 2–7 are the light Civic Glass
-set from `_screens.css`, and nothing in the repo records whether the whole deck
-goes dark. Do not silently pick one — see `odc-design`, and record the answer
-before building screens in a palette that isn't decided.
+For visual direction, read `docs/mockups/CANDIDATE_CONTEXT.md` and `odc-design`.
+The historical story deck's dark swipe ballot and light screens do not establish
+an unresolved palette choice for the current conversation client. Mockup tokens
+live in `docs/mockups/pulse-screens/_screens.css`; do not assume the archive is
+a current implementation inventory.
 
 ## Forms and binding actions
 

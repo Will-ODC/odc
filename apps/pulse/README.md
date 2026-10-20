@@ -11,17 +11,20 @@ Pulse is **exempt from the ODC charter**: votes are plain records that can
 change, with no signatures or hash chain. It never touches `services/` or
 `contracts/`. Read [CLAUDE.md](./CLAUDE.md) before changing anything here.
 
-| What                           | Where                                |
-| ------------------------------ | ------------------------------------ |
-| API routes                     | [API.md](./API.md)                   |
-| Web app                        | `apps/pulse-web`                     |
-| What is built and what is next | `memory/pulse.md`                    |
-| Plans                          | `docs/plans/pulse.md`, GitHub issues |
-| Screen designs                 | `docs/mockups/pulse-screens/`        |
+| What                           | Where                                                   |
+| ------------------------------ | ------------------------------------------------------- |
+| API routes                     | [API.md](./API.md)                                      |
+| Web app                        | `apps/pulse-web`                                        |
+| What is built and what is next | `memory/pulse.md`                                       |
+| Plans                          | `docs/plans/pulse.md`, GitHub issues                    |
+| Screen designs                 | [Mockup index](../../docs/mockups/CANDIDATE_CONTEXT.md) |
 
 **Creating polls is not served yet.** The storage for it exists (ADR-0037), in
 Postgres and in memory, but no HTTP route or screen uses it. Polls come from
 seed data or database inserts.
+
+For contributors, see the [Pulse agent guide](./CLAUDE.md). The API reference
+marks planned interfaces separately from routes that are served today.
 
 ## Run it on your computer
 
