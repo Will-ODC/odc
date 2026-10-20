@@ -49,7 +49,9 @@ Opus dispatch is some tokens.
 ## Writing a brief that actually works
 
 A subagent starts with nothing but the brief. **Start it with the ticket
-number** (`#301`) and the branch, `<area>/<issue>-<short>` (`odc-pipeline`).
+number** (`#301`) and the branch, `<area>/<issue>-<short>` (`odc-pipeline`);
+for a planned step with no ticket, the step's name and where it is written,
+and a branch `<area>/<short>`.
 The ticket is how the operator, the agent and its report refer to the work; a
 brief without one has no handle. Then five sections, always:
 
@@ -66,7 +68,7 @@ brief without one has no handle. Then five sections, always:
    80 KB read.
 4. **What "done" looks like** — the acceptance bullets, and which guard to run
    (`pnpm -s format:check`, `diff-size.sh`, the unit's own tests).
-5. **What to report back** — leading with the ticket and PR numbers
+5. **What to report back** — leading with the ticket (or planned step) and PR numbers
    (`#299 → PR #307`), then files created and why, files changed and why,
    anything stale it found but did not fix, anything needing an operator
    decision. **The report is the only thing you see.** An agent that writes its
@@ -155,10 +157,10 @@ is the go-ahead. Each lead works in its own worktree. The two sessions talk with
 1. **Fetch first.** `git fetch origin`, and branch every lead's worktree from
    `origin/master`, not the local `master`. The skills a session loads come
    from its own checkout; a stale checkout hands the lead stale rules.
-2. **Name the branches.** Issues are for new features only (operator,
-   2026-10-20): a step already planned in memory or an ADR gets no ticket. A
-   feature with an issue uses `<area>/<issue>-<short>`; a planned step uses
-   `<area>/<short>` named for the work. Never guess "the next free number".
+2. **Name the branches.** A new feature has an issue and uses
+   `<area>/<issue>-<short>`; a step already planned in memory or an ADR gets no
+   ticket and uses `<area>/<short>` (`odc-pipeline`, "Planned steps get no
+   ticket"). Never guess "the next free number".
 3. **Ask the operator's questions now,** as multiple-choice popups
    (`AskUserQuestion`, recommended option first), and put the answers in the
    brief. Re-issuing a lead's card with the answers in it is cheaper than

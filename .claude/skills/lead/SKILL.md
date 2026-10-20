@@ -14,12 +14,14 @@ skill is the way in; it adds no rules of its own.
    (`git show origin/master:.claude/skills/odc-orchestration/SKILL.md`) — the
    copy on disk may be stale.
 2. Work out which role this session has:
-   - **The session has a lead's brief** (a goal, owned folders, tickets, and an
+   - **The session has a lead's brief** (a goal, owned folders, tickets if any, and an
      orchestrator to report to): you are a **lead**. Follow "What a lead does,
      in order", starting with the synopsis, and build nothing before the go.
    - **Otherwise** you are the **orchestrator**. If the operator has not named
      the initiative, ask what it is. Then follow "The orchestrator, before
      offering leads" and write one brief per lead from "The lead's brief".
+     Relay each lead's synopsis in a few lines and ask every decision as a
+     multiple-choice popup ("The orchestrator, while leads run").
      If the work is one feature, or the features share files, say so and stay
      flat instead of starting leads.
 3. Neither role merges or starts a review. Both are the operator's call.
