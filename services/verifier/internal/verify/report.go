@@ -23,30 +23,39 @@ const Unavailable = "unavailable"
 // file check — it applies even when framing fails — and never uses the strict
 // canonical parser.
 func ReportClaims(data []byte) (genesis, head string, ok bool) {
-	cands := candidates(data)
-	if len(cands) == 0 {
+	first, last, ok := endpoints(data)
+	if !ok {
 		return "", "", false
 	}
-	return claim(cands[0]), claim(cands[len(cands)-1]), true
+	return claim(first), claim(last), true
 }
 
-// candidates splits the input into EX-24 candidate records: split at LF; one
-// terminal LF ends the last record and does not add an empty candidate, while
-// any additional trailing blank record IS a candidate; without a final LF the
-// final fragment is the last candidate. An empty input has no candidates.
+// endpoints returns the first and last EX-24 candidate records of the input.
+// Candidates are split at LF; one terminal LF ends the last record and does
+// not add an empty candidate, while any additional trailing blank record IS a
+// candidate; without a final LF the final fragment is the last candidate. An
+// empty input has no candidates (ok is false).
 //
 //	"A\n"    -> ["A"]
 //	"A"      -> ["A"]
 //	"A\n\n"  -> ["A", ""]
 //	"\n"     -> [""]
-func candidates(data []byte) [][]byte {
+//
+// Only the two endpoints are located, so the input is never split whole
+// (#369).
+func endpoints(data []byte) (first, last []byte, ok bool) {
 	if len(data) == 0 {
-		return nil
+		return nil, nil, false
 	}
 	if data[len(data)-1] == '\n' {
 		data = data[:len(data)-1] // the one terminal framing LF
 	}
-	return bytes.Split(data, []byte{'\n'})
+	first, last = data, data
+	if i := bytes.IndexByte(data, '\n'); i >= 0 {
+		first = data[:i]
+		last = data[bytes.LastIndexByte(data, '\n')+1:]
+	}
+	return first, last, true
 }
 
 // claim recovers one endpoint's stored claim from its candidate record. The

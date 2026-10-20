@@ -449,10 +449,10 @@ func TestExtremeEscapeHeavyStrings(t *testing.T) {
 	}
 }
 
-// Very large line counts, well-formed and faulting. frame() walks the whole
-// file regardless of where the per-line driver stops, so these size the
-// framing pass; the driver's own loop short-circuits at the first fatal line,
-// which is stated here rather than pretended away.
+// Very large line counts, well-formed and faulting. Framing is checked line by
+// line as the driver walks the file, and the driver short-circuits at the
+// first fatal line, so a faulting case stops early; the well-formed case walks
+// every line. This is stated here rather than pretended away.
 func TestExtremeLineCounts(t *testing.T) {
 	wellFormed := line("1", "1", `{"p":"v"}`)
 	cases := map[string]string{
