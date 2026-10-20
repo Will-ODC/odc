@@ -13,9 +13,10 @@ import "./ResultsPanel.css";
  * answer, so it is open to anyone - voted or not - as the record of how the
  * question ended (operator decision, 2026-10-09).
  *
- * What people chose, never how the choosing is counted - that boundary is the
- * one thing this component must not cross. No wording about tallies, records
- * or verification belongs here (`apps/pulse/CLAUDE.md`).
+ * What people chose. How votes are counted, and why the count can be trusted,
+ * is explained on its own page (`/trust`, ADR-0039), linked from the vote
+ * card; this panel stays about the answers, and must never claim a public
+ * record or a check that pulse does not have yet (`apps/pulse/CLAUDE.md`).
  */
 export function ResultsPanel({
   results,
@@ -40,7 +41,8 @@ export function ResultsPanel({
    * promise more answers to come on a question that can take no more.
    */
   ended?: boolean | undefined;
-  onClose: () => void;
+  /** Omit when the containing card already supplies its close control. */
+  onClose?: () => void;
   /**
    * Focus lands here when the panel opens. The control that was pressed is
    * unmounted by the same render, so without this focus falls to the document
@@ -64,6 +66,16 @@ export function ResultsPanel({
       ref={panelRef}
       tabIndex={-1}
     >
+      {onClose ? (
+        <button
+          type="button"
+          className="results__close"
+          aria-label="Close"
+          onClick={onClose}
+        >
+          <span aria-hidden="true">×</span>
+        </button>
+      ) : null}
       <p className="ballot__eyebrow">WHERE IT STANDS</p>
       <p className="results__count">{howMany(results.voters, ended)}</p>
 
@@ -72,15 +84,6 @@ export function ResultsPanel({
         under it would only say it again, worse. The way out stays.
       */}
       {results.voters > 0 ? <Counts results={results} yours={yours} /> : null}
-
-      {/*
-        Not "Back": the chrome's own back control is on screen at the same time
-        and abandons the question entirely. Two controls both starting with the
-        same word, doing opposite things, is how someone loses their place.
-      */}
-      <button type="button" className="results__close" onClick={onClose}>
-        Close
-      </button>
     </div>
   );
 }

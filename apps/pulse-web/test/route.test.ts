@@ -2,13 +2,13 @@ import { describe, expect, it } from "vitest";
 import { FIRST_POLL_ID, pathOf, routeFrom } from "../src/flow/route.js";
 
 describe("reading a URL", () => {
-  it("opens the first question when the path says nothing", () => {
-    expect(routeFrom("/")).toEqual({ kind: "run", pollId: FIRST_POLL_ID });
+  it("opens the welcome when the path says nothing", () => {
+    expect(routeFrom("/")).toEqual({ kind: "welcome" });
   });
 
-  it("starts the run wherever ?poll= says", () => {
+  it("starts the conversation wherever ?poll= says", () => {
     expect(routeFrom("/?poll=pay-for-it")).toEqual({
-      kind: "run",
+      kind: "conversation",
       pollId: "pay-for-it",
     });
   });
@@ -86,7 +86,7 @@ describe("reading a URL", () => {
 
   it("opens the first question for a path nothing claims", () => {
     expect(routeFrom("/somewhere-else")).toEqual({
-      kind: "run",
+      kind: "conversation",
       pollId: FIRST_POLL_ID,
     });
   });
@@ -106,36 +106,51 @@ describe("reading a URL", () => {
 
   it("does not open the preview for a path that only starts like it", () => {
     expect(routeFrom("/preview")).toEqual({
-      kind: "run",
+      kind: "conversation",
       pollId: FIRST_POLL_ID,
     });
     expect(routeFrom("/preview/chatter")).toEqual({
-      kind: "run",
+      kind: "conversation",
       pollId: FIRST_POLL_ID,
     });
   });
 
-  it("opens the first question when ?poll= is empty", () => {
-    expect(routeFrom("/?poll=")).toEqual({
-      kind: "run",
-      pollId: FIRST_POLL_ID,
-    });
+  it("opens the welcome when ?poll= is empty", () => {
+    expect(routeFrom("/?poll=")).toEqual({ kind: "welcome" });
+  });
+});
+
+describe("reading the trust page's address (#351)", () => {
+  it("opens the trust page at /trust, with a trailing slash or another case", () => {
+    for (const path of ["/trust", "/trust/", "/Trust"]) {
+      expect(routeFrom(path)).toEqual({ kind: "trust" });
+    }
+  });
+
+  it("does not open the trust page for a path that only starts like it", () => {
+    expect(routeFrom("/trustworthy").kind).toBe("conversation");
   });
 });
 
 describe("writing a URL", () => {
-  it("leaves the default run at the bare path", () => {
-    expect(pathOf({ kind: "run", pollId: FIRST_POLL_ID })).toBe("/");
+  it("names the default conversation explicitly", () => {
+    expect(pathOf({ kind: "conversation", pollId: FIRST_POLL_ID })).toBe(
+      "/?poll=ads-free",
+    );
   });
 
   it("names any other starting question", () => {
-    expect(pathOf({ kind: "run", pollId: "pay-for-it" })).toBe(
+    expect(pathOf({ kind: "conversation", pollId: "pay-for-it" })).toBe(
       "/?poll=pay-for-it",
     );
   });
 
   it("points at the sign-in form", () => {
     expect(pathOf({ kind: "signIn" })).toBe("/sign-in");
+  });
+
+  it("points at the trust page", () => {
+    expect(pathOf({ kind: "trust" })).toBe("/trust");
   });
 
   it("points at the chat preview", () => {
@@ -155,12 +170,16 @@ describe("writing a URL", () => {
  */
 describe("the two directions agree", () => {
   const routes = [
-    { kind: "run", pollId: FIRST_POLL_ID },
-    { kind: "run", pollId: "pay-for-it" },
+    { kind: "welcome" },
+    { kind: "progress" },
+    { kind: "questions" },
+    { kind: "conversation", pollId: FIRST_POLL_ID },
+    { kind: "conversation", pollId: "pay-for-it" },
     { kind: "signIn" },
     { kind: "redeem", token: "abc123" },
     { kind: "redeem", token: "a+b/c=d" },
     { kind: "chatPreview" },
+    { kind: "trust" },
   ] as const;
 
   for (const route of routes) {
@@ -168,4 +187,16 @@ describe("the two directions agree", () => {
       expect(routeFrom(pathOf(route))).toEqual(route);
     });
   }
+});
+
+it("opens and round-trips the existing conversation alias", () => {
+  expect(routeFrom("/Conversation/?poll=pay-for-it")).toEqual({
+    kind: "conversation",
+    pollId: "pay-for-it",
+  });
+  for (const pollId of [FIRST_POLL_ID, "a/b?x=1"]) {
+    const route = { kind: "conversation" as const, pollId };
+    expect(routeFrom(pathOf(route))).toEqual(route);
+  }
+  expect(routeFrom("/").kind).toBe("welcome");
 });

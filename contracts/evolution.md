@@ -1,8 +1,8 @@
 # Evolution — contracts/evolution.md
 
-**Version:** 7
+**Version:** 9
 **Status:** DRAFTING (Phase 0 · T5f, amended T9a/ADR-0014, ADR-0015,
-ADR-0017, ADR-0034). Not frozen.
+ADR-0017, ADR-0034, ADR-0038). Not frozen.
 **Companion specs:** `event-schema.md`, `event-types.md`, `hashing.md`,
 `export-format.md`, `read-api.md`.
 **Governing ADRs:** ADR-0006 (verifier scope & forward compatibility),
@@ -207,7 +207,8 @@ the surface has to live here.
   constraints on the verifier itself, rather than per-event checks; they are
   outside this split and belong to neither stage. EX-24 is likewise outside
   the split: it requires tool output on every non-empty run and does not change
-  the chain verdict. So are, in `event-types.md`,
+  the chain verdict. So are EV-23 to EV-25, which bound the verifier and the
+  ledger rather than check an event. So are, in `event-types.md`,
   the boundary statements ET-20 and ET-21 and the evolution constraints ET-22
   and ET-22a (which describe what the log does not enforce, and what a future
   version may not do or must be), and **ET-25**, which is a producer
@@ -257,9 +258,10 @@ the surface has to live here.
   _Non-normative CLI note (not a conformance requirement, and deliberately
   fixture-free so it stays revisable): a command-line verifier exits `0` for
   `VALID`, `1` for `INVALID`, `2` for `PARTIAL`, and `3` or above for tool-level
-  failures such as an unreadable file or bad usage — which are never a chain
-  verdict. This is pinned here only so two independent implementations do not
-  invent conflicting schemes; it constrains the CLI, not the protocol._
+  failures such as an unreadable file, bad usage, or a limit reached under
+  EV-24 — which are never a chain verdict. This is pinned here only so two
+  independent implementations do not invent conflicting schemes; it constrains
+  the CLI, not the protocol._
 
 - **EV-18.** **Reserved type-name prefix.** No contracts version — v1 or any
   successor — MAY register an event `type` beginning `x_`, and a conformance
@@ -317,20 +319,21 @@ the surface has to live here.
 - **EV-21.** **What a verifier should say when it rejects under EV-20.** Reason
   text is advisory (EV-17), so this is **guidance, not a conformance
   requirement**: conformance for EV-20 is the token `INVALID` and the line number
-  `1`, and nothing else is asserted by any fixture. A verifier SHOULD nonetheless
-  distinguish, in its reason text, the two situations that produce that one
-  verdict, because they ask opposite things of the reader:
+  `1`, and nothing else is asserted by any fixture.
 
-  - **"this verifier does not register `(genesis, <version>)` — it may be out of
-    date for this chain"**, and
-  - **"this chain's genesis is corrupt or hostile"**.
+  The only `genesis` version is 1, in this contracts version and every later
+  one: `event-types.md` ET-6 pins `genesis.version` at `1`, and ET-9e records
+  that no mechanism reopens the `genesis` payload once the tag exists. So a first
+  line of type `genesis` at any other version is never a legitimate chain that
+  is newer than the verifier. A newer verifier would reject it in the same way.
+  A verifier's reason text SHOULD name the `version` it found, SHOULD say that a
+  `genesis` at any version other than 1 means the chain is corrupt, hostile, or
+  not an ODC chain (ET-6), and SHOULD NOT advise the reader to fetch a newer
+  verifier, because no newer verifier registers another `genesis` version.
 
-  From the log alone the two are **indistinguishable**, and an honest message says
-  so rather than picking one: naming the version encountered and the `genesis`
-  versions the verifier does register lets the reader go and settle it. A verifier
-  that reports the bare token here sends someone hunting for tampering when the
-  remedy may be to fetch a newer verifier — and, worse, teaches readers to treat a
-  legitimate newer chain as an attack.
+  (Changed in v8, ADR-0038. Up to v7 this rule told a verifier to present an
+  out-of-date registry and a hostile `genesis` as equally possible. ET-6 makes
+  the first impossible.)
 
 ## 6. What may never be registered on this chain (added in v4)
 
@@ -382,6 +385,92 @@ ballot), and the sentiment plane, whose bar was missing.
   should not try. That is a governance and moderation matter, which the charter
   already makes a public event (§9).
 
+## 7. Implementation limits (added in v8)
+
+RFC 8259 §9 lets a JSON parser limit the texts it accepts: their size, their
+nesting depth, the length of a string or a number. Up to v7 these specs bounded
+none of these. A verifier could set any limit and still claim to conform, and
+nothing said what it must do when an input went past one. This chain has one
+writer and many verifiers, so these rules cap the writer and set a floor for
+every verifier. Any two verifiers that accept everything up to the floor reach
+the same verdict on everything the writer may produce.
+
+- **EV-23.** **The two minimums.** Two measures of an export line are bounded:
+  - **Line length**: the number of bytes in the line, not counting the `LF`
+    that ends it (`export-format.md` EX-4). The minimum is **65536** bytes.
+  - **Nesting depth**: the greatest number of `{` or `[` bytes open at any
+    point while scanning the line's bytes from the first. The minimum is
+    **64**. The scan keeps a count, starting at 0, and a flag saying whether
+    it is inside a string, starting unset. Outside a string, `"` (0x22) sets
+    the flag, `{` (0x7B) or `[` (0x5B) adds one to the count, `}` (0x7D) or `]`
+    (0x5D) takes one away unless the count is 0, and every other byte changes
+    nothing. Inside a string, `\` (0x5C) causes the next byte, whatever it
+    is, to be skipped, `"` clears the flag, and every other byte changes
+    nothing. A string still open at the end of the line simply ends the scan,
+    so a bracket inside it is never counted. On a line that parses as JSON,
+    this count equals the usual depth, where the outermost value is at depth 1.
+    A conforming event's line is at depth 2: the envelope object and its
+    `payload` object (`event-schema.md` ES-15, ES-17).
+
+  A line here is each record the input splits into at `LF`, split as EX-24
+  splits it, whether or not the record is a conforming event. An input is
+  **within the minimums** when every one of its lines is at most 65536 bytes
+  long and at most 64 deep, however many lines it has.
+
+  The minimums are not a validity rule. A verifier MUST NOT report `INVALID`
+  because a line exceeds one of them. Past them, the verdict these specs require
+  is unchanged; EV-24 says only what a verifier may do instead of reaching it.
+
+- **EV-24.** **Verifier limits.** A verifier MAY impose implementation limits.
+  A limit on anything within one line, such as its length, its nesting depth,
+  the number of keys in an object, or the length of a string or a number token,
+  MUST be one that no input within the minimums (EV-23) can reach. A verifier
+  MUST NOT impose a fixed limit on the number of lines or on the size of the
+  input. On every input within the minimums, a verifier MUST reach the verdict
+  and line numbers these specs require (EV-17). The one exemption is running
+  out of a host resource the verifier does not choose, such as memory or time:
+  that is treated as a reached limit, as below, as far as the host lets the
+  verifier report at all.
+
+  When a verifier reaches one of its limits before it has established the
+  verdict these specs require, it MUST stop and report a **tool-level failure**,
+  which is never a chain verdict (EV-17; a command-line verifier exits `3` or
+  above under EV-17's CLI note). It MUST NOT then report `VALID`, `INVALID` or
+  `PARTIAL`, and it MUST NOT end without a report, as a panic, an unhandled
+  exception or a stack overflow would. A verifier that establishes the required
+  verdict before it reaches any limit has reached none, and reports that
+  verdict: for example, one that rejects a line at depth 3 under ES-17 (EV-16)
+  without parsing deeper. A tool-level failure has no EX-24 report obligation.
+
+  Reaching a nesting-depth limit greater than 2 establishes that the line is
+  `INVALID`, because every line deeper than 2 is `INVALID` whatever else it
+  holds: under ES-17 when the depth is inside `payload`, and under the
+  envelope's field types or EX-7 elsewhere (ES-15, EV-16). A verifier that has found no fatal earlier line
+  MAY therefore report `INVALID` at that line instead of a tool-level failure.
+  A limit reached only while recovering an EX-24 endpoint claim makes that
+  claim `unavailable` (`export-format.md` EX-24); it is not a tool-level
+  failure.
+
+  Every golden fixture MUST be within the minimums, because beyond them no
+  verifier is required to reach a verdict.
+
+- **EV-25.** **The ledger's cap.** A ledger MUST NOT append an event whose
+  canonical line (`export-format.md` EX-7 to EX-9) is longer than 65536 bytes or
+  deeper than 64, and an export of a ledger's log MUST NOT contain such a
+  line. Every v1 value is bounded by its own rule (`genesis`'s
+  `contracts` at 64 bytes, `event-types.md` ET-9), so no conforming v1 event
+  can reach the cap: the longest such line is 1302 bytes (an `issue_created`
+  with `seq` and both batch parameters at 2^53 − 1 and a title of 200 four-byte
+  characters). Every `(type, version)` a later contracts version registers
+  MUST bound its values so that none of its conforming events has a canonical
+  line longer than 65536 bytes or deeper than 64.
+
+  **Both values are permanent.** No contracts version, v1 or any successor, MAY
+  change either value. Lowering one would let a conforming verifier refuse a
+  line a ledger was allowed to write. Raising one would let a chain carry lines
+  that a verifier built earlier may refuse, which breaks EV-8's promise that an
+  old verifier still checks a newer chain.
+
 ---
 
 ## Degrees of freedom closed (acid-test checklist)
@@ -410,6 +499,9 @@ ballot), and the sentiment plane, whose bar was missing.
 | What that rejection should tell the reader            | EV-21          |
 | Sentiment/monetizable types: permanently barred       | EV-22          |
 | Which sentiment commitments remain permitted          | EV-22          |
+| Line length and nesting depth every verifier accepts  | EV-23          |
+| What a verifier does past its own limits              | EV-24          |
+| Longest line a ledger may write; permanence           | EV-25          |
 
 ## Acid-test walkthrough
 
@@ -425,8 +517,14 @@ newer ballot's line; a batch failure that holds whatever the newer ballot is
 stays `INVALID` at the same line for both (EV-8, EV-17). Run on a chain
 whose **`genesis`** is at a version neither registers, both report `INVALID` at
 line 1 rather than walking a chain they cannot authenticate to `PARTIAL`
-(EV-20), and both say which of "my registry is old" and "this genesis is
-hostile" they cannot tell apart (EV-21). Run on a pure-v1
+(EV-20), and both say that the chain is corrupt, hostile or not an ODC chain,
+never that the reader should fetch a newer verifier, since `genesis` has no
+version but 1 (EV-21). Run on an export whose every line is at most 65536 bytes
+and at most 64 deep, both reach the verdict the specs require however many
+lines it has, unless the host runs out of memory or time; run on one with a
+longer or deeper line, each either reaches that verdict or reports a
+tool-level failure, and neither reports a verdict the specs do not require
+(EV-23, EV-24). Run on a pure-v1
 chain, both report `VALID | INVALID` identically (EV-10). Given the same future
 `delegation` fixtures with a `supersedes` chain, two interpreters resolve the
 same surviving events by `max(seq)` transitivity (EV-12). Given a proposed future

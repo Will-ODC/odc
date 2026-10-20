@@ -40,12 +40,13 @@ function actualToExpectShape(v: Verdict): unknown {
     case "INVALID":
       return { verdict: "INVALID", line: v.line };
     case "PARTIAL":
-      return { verdict: "PARTIAL", lines: v.lines };
+      // The verifier returns a ChunkedList (no length cap); compare as an array.
+      return { verdict: "PARTIAL", lines: [...v.lines] };
   }
 }
 
 test(`fixtures index has all vectors`, () => {
-  assert.equal(index.vectors.length, 115);
+  assert.equal(index.vectors.length, 145);
 });
 
 for (const vec of index.vectors) {

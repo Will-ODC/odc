@@ -1,11 +1,12 @@
 // ET-9e / ET-9f (the two OPTIONAL `genesis` ancestry keys) and EV-20 (an
 // unregistered `genesis` version).
 //
-// WHAT THIS FILE IS, AND WHAT IT IS NOT. `contracts/fixtures/` carries no
-// vector for ET-9e, ET-9f or EV-20 — the corpus is behind `event-types.md` v9
-// / `evolution.md` v4 on exactly this area (no vector cites ET-9d, ET-9e,
-// ET-9f, ES-34 or EV-20). Until it does, these behaviours have no fixture
-// oracle, so this file builds its own chains. Every chain here is SYNTHETIC
+// WHAT THIS FILE IS, AND WHAT IT IS NOT. When written, `contracts/fixtures/`
+// carried no vector for ET-9e, ET-9f or EV-20; vectors 084-097 now do, but
+// 086 (`ancestor_chain` alone, declared VALID) predates ET-9f's v13
+// both-or-neither rule, and 088/090 carry `ancestor_chain` alone, so under
+// v13 they no longer isolate the format gate. So this file builds its own
+// chains. Every chain here is SYNTHETIC
 // AND SELF-CONSISTENT: it is hashed by `hashing.ts` and signed over a preimage
 // that same module produces, i.e. by the functions under test. That makes it
 // worthless as evidence about the preimage — a preimage bug would be invisible
@@ -41,16 +42,9 @@ test("harness: a genesis with neither ancestry key verifies (calibration only)",
 
 // --- ET-9e / ET-9f: what MUST be accepted ------------------------------------
 
-test("accepts a genesis carrying ancestor_chain alone (ET-9f permits the chain-only form)", () => {
-  // The load-bearing acceptance case. ET-9f's asymmetry is deliberate: a named
-  // chain with no recorded fork point is the weaker but coherent claim. If the
-  // optional key were rejected, or the key-set check still demanded exactly
-  // five keys, this is what fails.
-  const out = verifyExport(genesisExport({ ancestor_chain: A_CHAIN }));
-  assert.equal(tokenAndLine(out), "VALID");
-});
-
 test("accepts a genesis carrying both ancestor_chain and ancestor_head", () => {
+  // The load-bearing acceptance case: if either optional key were rejected,
+  // or the key-set check still demanded exactly five keys, this is what fails.
   const out = verifyExport(
     genesisExport({ ancestor_chain: A_CHAIN, ancestor_head: A_HEAD }),
   );
@@ -71,35 +65,81 @@ test("accepts an unresolvable ancestor_chain — the verifier resolves nothing (
   // The value names no chain this verifier holds and cannot be checked against
   // anything. ET-9e: a verifier MUST NOT report INVALID because it cannot
   // resolve the value, and MUST NOT treat unresolvability as a defect.
-  const out = verifyExport(genesisExport({ ancestor_chain: "f".repeat(64) }));
+  const out = verifyExport(
+    genesisExport({
+      ancestor_chain: "f".repeat(64),
+      ancestor_head: "e".repeat(64),
+    }),
+  );
   assert.equal(tokenAndLine(out), "VALID");
 });
 
-// --- ET-9f: the one form that MUST be rejected -------------------------------
+// --- ET-9f: both keys, or neither (event-types.md v13, ADR-0038) ------------
 
 test("rejects a genesis carrying ancestor_head without ancestor_chain (ET-9f)", () => {
   // A position on an unnamed chain — the head-alone anchoring charter §4
-  // rejects (ET-7a). This is the ONLY presence combination ET-9f bars.
+  // rejects (ET-7a).
   const out = verifyExport(genesisExport({ ancestor_head: A_HEAD }));
   assert.equal(tokenAndLine(out), "INVALID at line 1");
 });
 
+test("rejects a genesis carrying ancestor_chain without ancestor_head (ET-9f, v13)", () => {
+  // VALID up to v12, which barred only the head-alone form; v13 requires the
+  // pair, because a real fork always holds the position (ET-9e).
+  const out = verifyExport(genesisExport({ ancestor_chain: A_CHAIN }));
+  assert.equal(tokenAndLine(out), "INVALID at line 1");
+});
+
+test("rejects either key alone even when its value is well-formed and nonzero", () => {
+  for (const v of [A_CHAIN, A_HEAD, "f".repeat(64)]) {
+    assert.equal(
+      tokenAndLine(verifyExport(genesisExport({ ancestor_chain: v }))),
+      "INVALID at line 1",
+    );
+    assert.equal(
+      tokenAndLine(verifyExport(genesisExport({ ancestor_head: v }))),
+      "INVALID at line 1",
+    );
+  }
+});
+
+test("ET-9f does not apply to a genesis with neither key, or with both", () => {
+  assert.equal(tokenAndLine(verifyExport(genesisExport({}))), "VALID");
+  assert.equal(
+    tokenAndLine(
+      verifyExport(
+        genesisExport({ ancestor_chain: A_CHAIN, ancestor_head: A_HEAD }),
+      ),
+    ),
+    "VALID",
+  );
+});
+
 // --- ET-9e: the format gate on each present key ------------------------------
+//
+// Each case carries BOTH keys, so ET-9f is satisfied and only the format gate
+// can be what rejects.
 
 test("rejects an uppercase-hex ancestor_chain (ET-9e format gate; never lowercased)", () => {
-  const out = verifyExport(genesisExport({ ancestor_chain: "A".repeat(64) }));
+  const out = verifyExport(
+    genesisExport({ ancestor_chain: "A".repeat(64), ancestor_head: A_HEAD }),
+  );
   assert.equal(tokenAndLine(out), "INVALID at line 1");
 });
 
 test("rejects a short ancestor_chain", () => {
-  const out = verifyExport(genesisExport({ ancestor_chain: "a".repeat(63) }));
+  const out = verifyExport(
+    genesisExport({ ancestor_chain: "a".repeat(63), ancestor_head: A_HEAD }),
+  );
   assert.equal(tokenAndLine(out), "INVALID at line 1");
 });
 
 test("rejects the 64-zero anchor as ancestor_chain (ET-9e bars the placeholder form)", () => {
   // Absence is the one way to say "no ancestor" (ES-34); the 64-zero string
   // keeps its single meaning as prev_hash's anchor (ES-24).
-  const out = verifyExport(genesisExport({ ancestor_chain: ZERO64 }));
+  const out = verifyExport(
+    genesisExport({ ancestor_chain: ZERO64, ancestor_head: A_HEAD }),
+  );
   assert.equal(tokenAndLine(out), "INVALID at line 1");
 });
 
@@ -129,7 +169,10 @@ test("rejects a malformed ancestor_head carried without ancestor_chain (two faul
 
 test("rejects an integer ancestor_chain — ET-9e's value is a hex STRING", () => {
   const out = verifyExport(
-    genesisExport({}, { rawExtra: { ancestor_chain: "1" } }),
+    genesisExport(
+      { ancestor_head: A_HEAD },
+      { rawExtra: { ancestor_chain: "1" } },
+    ),
   );
   assert.equal(tokenAndLine(out), "INVALID at line 1");
 });

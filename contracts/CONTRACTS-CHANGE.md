@@ -19,6 +19,74 @@ Format (newest first, one entry per merged contracts change):
 
 ---
 
+## fixtures/README.md v16 — 2026-10-14 — ADR-0038 vectors (#366)
+
+- **`086-ancestor-chain-alone`** `VALID` → **`INVALID` at line 1** (ET-9f v13),
+  corrected in place before the tag (ADR-0008); bytes, id and name unchanged.
+  Notes rewritten for `084`, `086`, `088`–`091` (088/090 now carry two faults)
+  and `095` (EV-21 v8 advice); `011`'s note no longer says no v1 type may
+  carry a control character (`genesis.contracts` may). `cites` changed too:
+  ET-7a added to `086`, ET-9f added to `088` and `090`.
+- Eleven vectors appended, `135`–`145`: `135`/`136` isolate the zero and uppercase
+  `ancestor_chain` faults beside a legal `ancestor_head`; `137`–`142` pin
+  ET-9's 64-byte cap on decoded `contracts` (ASCII, four-byte characters, an
+  escaped control character); `143` is a 65536-byte line (`PARTIAL`) and `144`
+  a depth-64 line (`INVALID` at 2), both exactly on the EV-23 minimums; `145`
+  is an empty `contracts` (`INVALID` at 1), ET-9's lower bound. 145 vectors in
+  all (23 `VALID`, 15 `PARTIAL`, 107 `INVALID`).
+
+## event-types.md v14 · evolution.md v9 — 2026-10-12 — `genesis.contracts` capped at 64 bytes (ADR-0038 decision 5, #355)
+
+- **ET-9** (operator, 2026-10-12): `contracts` MUST be at most **64 bytes**,
+  counted as the UTF-8 encoding of the decoded string (after unescaping), not
+  the escaped line bytes; empty or longer is `INVALID` at line 1. This closes
+  the gap where a `genesis` over 64 KiB was `VALID` by the type rules yet
+  unwritable by a ledger. **EV-25** now says every v1 value is bounded by its
+  own rule. No committed vector changes: the longest committed `contracts` is
+  12 bytes. Both verifiers owe the check (ADR-0038, owed list).
+
+## event-types.md v13 · evolution.md v8 · event-schema.md v7 — 2026-10-12 — four contradictions resolved (ADR-0038, #355)
+
+The operator decided the four contradictions recorded in `memory/STATE.md`.
+
+- **Limits** (`evolution.md` §7, new). **EV-23**: every verifier accepts lines
+  up to **65536** bytes (confirmed by the operator 2026-10-12) and nesting depth
+  **64**, depth defined over the line's bytes so it holds for malformed lines;
+  exceeding either is not a validity rule. **EV-24**: a verifier's own limits
+  must not bite within those minimums, and it may set no fixed limit on line
+  count or input size (only running out of memory or time is exempt); past a
+  limit it reports a tool-level failure, never a verdict, and never crashes. A
+  depth limit above 2 establishes ES-17, so `INVALID` there is allowed, and a
+  limit hit only while recovering an EX-24 claim makes that claim
+  `unavailable`. **EV-25**: a ledger never writes
+  a line past either value, later types must fit, and neither value may ever
+  change. EV-15 places EV-23 to EV-25 outside the stage split; EV-17's CLI note
+  lists a reached limit as a tool-level failure.
+- **EV-21** rewritten: `genesis` has no version but 1 (ET-6), so a `genesis` at
+  any other version means a corrupt, hostile or non-ODC chain, and the reason
+  text names the version found and does not advise fetching a newer verifier.
+  Advisory text only; no verdict changes.
+- **ET-9f** now requires **both** ancestry keys or neither; either alone is
+  `INVALID` at line 1. This reverses ADR-0019's deliberate asymmetry: a
+  `genesis` with `ancestor_chain` alone, `VALID` under v12, is `INVALID` under
+  v13 (committed vector `086` flips; fixtures follow the verifiers). ET-7a,
+  ET-9e, the `genesis` table rows, the rule index, the acid-test walkthrough and
+  **ES-34** are aligned with it.
+- **Superseded, not edited:** the ADR-0019 entries below state the old
+  asymmetry and stay as written; this entry is the pointer.
+
+---
+
+## fixtures/README.md v15 — 2026-10-11 — ADR-0034 vectors (#321)
+
+- Nineteen vectors, `116`–`134`, for ET-18b, ET-22a and ET-24b: ADR-0034's eight
+  cases, a ballot of an unregistered issue version, five more shapes the ADR
+  lists, EV-16 on an opaque ballot, a run start the rule must not over-report,
+  an unregistered non-ballot that is no candidate, and two vectors for F's lower bound w and the
+  run-start clause ts(U) = ts(L). 134 vectors in all (21 `VALID`, 14 `PARTIAL`, 99 `INVALID`). Each ET-24b vector is one on which the conservative
+  and exact rules agree, shown by `docs/security/attacks/check-adr-0034-agreement.py`.
+  Golden data is added, nothing edited.
+
 ## event-types.md v12 · evolution.md v7 · event-schema.md v6 — 2026-10-10 — mixed-version ballot batching (ADR-0034)
 
 **The defect.** ET-24/ET-24a counted only the registered `(vote_cast, 1)`, and

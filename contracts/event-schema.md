@@ -1,8 +1,8 @@
 # Event Schema — contracts/event-schema.md
 
-**Version:** 6
+**Version:** 7
 **Status:** DRAFTING (Phase 0 · T3, amended T4a, T9a/ADR-0014, ADR-0016,
-ADR-0019, ADR-0029, and ADR-0034). Not frozen.
+ADR-0019, ADR-0029, ADR-0034, and ADR-0038). Not frozen.
 **Companion specs:** `event-types.md` (payloads), `ids.md` (identifiers),
 `hashing.md` (byte-exact preimage — T4), `export-format.md` (NDJSON — T4).
 
@@ -216,8 +216,7 @@ Some event types are **signed**; which ones, and the exact signing rule, are in
 
   v1 defines **two** optional keys, both on `genesis`: `ancestor_chain` and
   `ancestor_head` (`event-types.md` ET-9e). Their presence is **not
-  independent** — `ancestor_head` MUST NOT appear without `ancestor_chain`
-  (ET-9f).
+  independent**: each MUST appear with the other or not at all (ET-9f).
 
   That is the general shape, not a special case for one type. A type's payload
   table in `event-types.md` fixes **which** of its keys are optional; that type's

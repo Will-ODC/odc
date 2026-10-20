@@ -29,6 +29,50 @@ test("generates a session secret in development and says it did", () => {
   assert.notEqual(devConfig({}).secret, config.secret);
 });
 
+test("generates_a_confirmation_key_of_its_own_never_the_session_secret", () => {
+  // ADR-0040: a second secret. Invented here as the session secret is, but
+  // from its own random bytes, so the two are never the same value.
+  const config = devConfig({});
+  assert.equal(config.confirmationKeySource, "generated");
+  assert.ok(config.confirmationKey.length >= 32);
+  assert.notEqual(config.confirmationKey, config.secret);
+  assert.notEqual(devConfig({}).confirmationKey, config.confirmationKey);
+
+  const given = devConfig({
+    PULSE_SESSION_SECRET: "a-secret-long-enough",
+    PULSE_CONFIRMATION_KEY: "a-confirmation-key-long-enough-0123456789",
+  });
+  assert.equal(
+    given.confirmationKey,
+    "a-confirmation-key-long-enough-0123456789",
+  );
+  assert.equal(given.confirmationKeySource, "env");
+});
+
+test("its_server_confirms_a_vote_cast_while_signed_in", async () => {
+  const { app, mailer } = await buildDevServer(devConfig({}));
+  await app.inject({
+    method: "POST",
+    url: "/api/sign-in",
+    payload: { email: "jo@example.test" },
+  });
+  const token = new URL(mailer.sent[0]?.body ?? "").searchParams.get("token");
+  const redeemed = await app.inject({
+    method: "POST",
+    url: "/api/sign-in/redeem",
+    payload: { token },
+  });
+  const session = redeemed.cookies.find((c) => c.name === "pulse_session");
+  const cast = await app.inject({
+    method: "POST",
+    url: "/api/polls/ads-free/votes",
+    headers: { cookie: `pulse_session=${session?.value as string}` },
+    payload: { ballot: [1] },
+  });
+  assert.equal(cast.json().results.confirmedVoters, 1);
+  await app.close();
+});
+
 test("refuses to start anywhere but development, secret or no secret", () => {
   // Not only "production, and only when the secret is missing": a real secret
   // would not make the cookie Secure, and staging is not development either.
@@ -95,13 +139,13 @@ test("seeds a run of polls and one domain, so the flow works the moment it start
   // sides. A third choice would leave that screen with nowhere to put it.
   assert.equal(poll.json().method, "single");
   // The graph, not a lone poll: each answer names the question it opens.
-  assert.deepEqual(poll.json().next, ["ads-allowed", "pay-for-it"]);
+  assert.deepEqual(poll.json().next, ["pay-for-it", "ads-allowed"]);
   for (const id of poll.json().next) {
     const onward = await app.inject({ method: "GET", url: `/api/polls/${id}` });
     assert.equal(onward.statusCode, 200, `${id} should exist`);
     assert.equal(onward.json().acceptsSuggestions, true);
   }
-  assert.deepEqual(poll.json().choices, ["No", "Yes"]);
+  assert.deepEqual(poll.json().choices, ["Yes", "No"]);
   // Open when it starts, whenever that is — a seed that had gone stale would
   // open the demo on a poll nobody can answer.
   assert.equal(poll.json().open, true);
@@ -198,6 +242,7 @@ async function databaseFor(
 }
 
 const SECRET = "a-dev-secret-long-enough-for-anyone";
+const CONFIRMATION_KEY = "a-dev-confirmation-key-long-enough-0123456789";
 
 function tokenIn(body: string | undefined): string {
   return new URL(body ?? "").searchParams.get("token") ?? "";
@@ -362,12 +407,34 @@ test(
 
     const quiet: string[] = [];
     const given = await buildDevServer(
-      devConfig({ PULSE_DATABASE_URL: url, PULSE_SESSION_SECRET: SECRET }),
+      devConfig({
+        PULSE_DATABASE_URL: url,
+        PULSE_SESSION_SECRET: SECRET,
+        PULSE_CONFIRMATION_KEY: CONFIRMATION_KEY,
+      }),
       {},
       { log: (message) => quiet.push(message) },
     );
     await given.app.close();
     assert.deepEqual(quiet, []);
+  },
+);
+
+test(
+  "with_a_database_and_no_confirmation_key_it_warns_that_restarts_recount_confirmations",
+  { skip: databaseSkip },
+  async (t) => {
+    const { url } = await databaseFor(t);
+    const warned: string[] = [];
+    const generated = await buildDevServer(
+      devConfig({ PULSE_DATABASE_URL: url, PULSE_SESSION_SECRET: SECRET }),
+      {},
+      { log: (message) => warned.push(message) },
+    );
+    await generated.app.close();
+    assert.match(warned.join("\n"), /PULSE_CONFIRMATION_KEY/);
+    // The secret was given, so that warning is not among them.
+    assert.doesNotMatch(warned.join("\n"), /PULSE_SESSION_SECRET is not/);
   },
 );
 
@@ -414,6 +481,9 @@ test(
     const { url, pool } = await databaseFor(t);
     const { app, mailer } = await buildDevServer(
       devConfig({ PULSE_DATABASE_URL: url, PULSE_SESSION_SECRET: SECRET }),
+    );
+    await pool.query(
+      "insert into community (id, label) values ('elsewhere', 'elsewhere')",
     );
     await pool.query(
       "insert into allowed_domain (community, domain, include_subdomains)" +

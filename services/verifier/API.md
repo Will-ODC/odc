@@ -48,7 +48,9 @@ One verdict line on stdout:
 
 - `VALID`
 - `INVALID at line N: <advisory reason>`
-- `PARTIAL at lines N, M, …`
+- `PARTIAL at lines N, M, …` — ascending, each line once: every line whose
+  `(type, version)` is unregistered, and every registered `vote_cast` line with
+  a check that ET-18b or ET-24b leaves unresolved (EV-7/EV-17).
 
 The reason text and the specific normative-sentence identifiers in it are
 **advisory** (EV-17). Conformance is judged on the verdict token and the line
@@ -116,12 +118,18 @@ labels, order and formatting free. No fixture asserts them.
 | `VALID`                        | 0    |
 | `INVALID`                      | 1    |
 | `PARTIAL`                      | 2    |
-| Tool-level error (usage, I/O)  | ≥ 3  |
+| Tool-level error (usage, I/O)  | 3    |
+| Internal failure, no verdict (EV-24) | 4 |
 
 Exit codes follow the non-normative CLI note of EV-17; they are pinned for
 cross-implementation consistency but are not themselves conformance-checked. A
 tool-level error (bad usage, unreadable file, malformed `--head` or `--chain`) is never a
-chain verdict.
+chain verdict. Exit `4` is an internal failure that reached no verdict: the
+verdict and the EX-24 report are both computed before anything is printed, and
+a panic in either is caught and reported this way, with nothing on stdout and
+no EX-24 lines, rather than dying with Go's panic status `2`, which would read
+as `PARTIAL` (EV-24). A Go runtime fatal error (stack overflow, out of memory)
+is not a panic and cannot be caught; see "Implementation limits".
 
 ## What is checked
 
@@ -143,55 +151,125 @@ Two stages (EV-6):
   keys and their presence rule (ES-34, ET-9e/ET-9f), key formats (ET-9b, ID-3),
   the distinctness of the two `genesis` keys (ET-9d),
   `chain_id` derivation
-  (ET-7), title bounds and forbidden characters (ET-14), `choice_count` range
+  (ET-7), the `genesis.contracts` bound (ET-9: a string of 1 to 64 bytes,
+  counted on the UTF-8 encoding of the decoded value, after unescaping — so
+  `\u0001` on the line counts as one byte and a four-byte character as four),
+  title bounds and forbidden characters (ET-14), `choice_count` range
   (ET-14a), the ballot batching parameters and their floors (ET-14b),
-  `issue_id` back-reference (ET-18/ID-8), `choice` range (ET-18a), and the
-  ballot publication discipline of `contracts/event-types.md` v11: ballot `ts`
-  quantized to the issue's declared interval (ET-23), a minimum batch size
-  (ET-24), and no return to a batch instant already left (ET-24a). ET-25
-  (order within a batch) is unverifiable by the contract's own statement and
-  is not checked.
+  `issue_id` back-reference (ET-18/ID-8, including ET-18b), `choice` range
+  (ET-18a), and the ballot publication discipline of `contracts/event-types.md`
+  v12: ballot `ts` quantized to the issue's declared interval (ET-23), a
+  minimum batch size (ET-24), no return to a batch instant already left
+  (ET-24a), and how those two are decided beside ballots this verifier cannot
+  read (ET-24b). ET-25 (order within a batch) is unverifiable by the
+  contract's own statement and is not checked.
 
-### Ballot batches (ET-23, ET-24, ET-24a — event-types.md v11)
+### Ballot batches (ET-23, ET-24, ET-24a, ET-24b, ET-18b — event-types.md v12)
 
 A `vote_cast`'s `ts`, as milliseconds since `1970-01-01T00:00:00.000Z`
 (proleptic Gregorian, no leap seconds), must be an exact multiple of its issue's
 `ballot_batch_interval_ms`; zero and negative multiples (instants at or before
 the epoch) count. Otherwise the ballot's own line is `INVALID` (ET-23).
 
-Take one issue's registered `(vote_cast, 1)` events in `seq` order. A batch is
-a **maximal run** of them sharing one `ts` (ET-24); other events, including
-other issues' ballots, may sit between its members. A ballot whose `ts` differs
-from its issue's previous registered ballot ends that batch and starts a new
-one, and then:
+**Registered ballots.** Take one issue's registered ballots — `vote_cast` at
+every version this verifier registers (ET-22a; version 1 alone today) — in
+`seq` order. A batch is a **maximal run** of them sharing one `ts` (ET-24);
+other events, including other issues' ballots, may sit between its members. A
+ballot whose `ts` differs from its issue's previous registered ballot is a
+**run start**: it ends that run and starts a new one, and then
 
-- if the batch it ends holds fewer than the issue's `ballot_batch_min` ballots,
-  the chain is `INVALID` at this ballot's line (ET-24: the ballot that ends the
-  under-size batch);
-- if this ballot's `ts` equals that of any earlier batch of the issue, the
-  chain is `INVALID` at this ballot's line (ET-24a: the returning ballot, which
-  starts a new batch and never rejoins the old one).
+- if the run it ends holds fewer than the issue's `ballot_batch_min` ballots,
+  ET-24 fails at this ballot's line (the ballot that ends the under-size batch);
+- if its `ts` equals that of any earlier registered ballot of the issue,
+  ET-24a fails at this ballot's line (the returning ballot, which never rejoins
+  the old batch).
 
 Both can name the same line; either reason is correct (ET-24a, "One line, two
-rules"). So with `ballot_batch_min` 3 and one issue's ballots at T1, T1, T2,
-T2, T2, T1, the chain is `INVALID` at the first T2, where the under-size run of
-two T1 ballots ends. The batch still open at the end of the chain holds the
-issue's highest-`seq` registered ballot and may be under-size (ET-24). `ts`
-values are compared for equality only, never ordered (ES-21 v5). A `vote_cast`
-at an unregistered version joins no batch, ends none and proves none not-last
-(ET-24a, "Which ballots count").
-Each ballot costs one map lookup and at most one insert: linear. End-truncation
-can hide an ET-24 violation (EX-16); run with `--head`.
+rules"). With `ballot_batch_min` 3 and ballots at T1, T1, T2, T2, T2, T1, the
+chain is `INVALID` at the first T2. The run still open at the end of the chain
+may be under-size (ET-24). `ts` values are compared for equality only, never
+ordered (ES-21). End-truncation can hide an ET-24 violation (EX-16); run with
+`--head`.
+
+**Opaque ballots (ET-24b).** A `vote_cast` at a version this verifier does not
+register (that passed Stage A, so its payload is flat, EV-16) is an **opaque
+ballot**. Its line is always listed in `PARTIAL`. Its payload is **never read**
+— not even an `issue_id` that looks familiar. Only its envelope `seq` and `ts`
+are used: for each registered issue *I* (created at `seq` *c*, interval *Δ*,
+minimum *m*) it is a **candidate** of *I* iff its `seq` is greater than *c* and
+its `ts` is a multiple of *Δ*. One opaque ballot can be a candidate of several
+issues and counts in each. At each registered ballot *L* of *I*:
+
+- *Definite failures* are `INVALID` at *L*: an ET-24a return (always), and an
+  ET-24 under-size run *R* when `|R| + F < m`, where *F* counts the candidates
+  at *R*'s instant after the registered ballot before *R* (or after *c*) and
+  before *L* — the run is too small even if every such candidate belonged to it.
+- *Unresolved* — *L* listed in `PARTIAL`, not `INVALID`: an ET-24 under-size run
+  that the candidates could fill; or, with no known failure, a candidate before
+  *L* that could have changed *L*'s check. For a ballot that is not a run start
+  that is a candidate after the issue's previous registered ballot (or after
+  *c*) at another instant; for a run start, a candidate at *L*'s own instant,
+  or one after *R*'s first ballot at an instant other than *R*'s.
+- Otherwise the check is resolved and passes.
+
+Every test at *L* reads only earlier lines, so the scan is one pass and a
+prefix's verdict never changes when lines are appended (EX-16). With no
+candidates the result is exactly ET-24/ET-24a. Examples, `ballot_batch_min` 3,
+two registered issues, ballots from line 4, U opaque: A@T1, A@T1, U@T1,
+A@T2×3 is `PARTIAL at lines 6, 7`; A@T1, U@T1, A@T2×3 is `INVALID at line 6`;
+A@T1×3, U@T1, A@T2×3 is `PARTIAL at lines 7` (the full batch is unaffected).
+Rule ET-24b is conservative by design: it may list a line that no reading of
+the opaque ballots would change, and never reports an `INVALID` that only a
+search over every reading could prove.
+
+Cost. **Memory** is linear in the export: each opaque ballot is stored once,
+as its `seq` in a chain-wide list for its instant; each registered issue keeps
+a fixed handful of numbers plus the instants its own registered ballots used
+(which ET-24a needs anyway); and each distinct issue interval keeps a
+fixed-size summary. Nothing is kept per pair of issue and opaque ballot.
+**Time**: recording an opaque ballot is constant (amortised) whatever the
+number of issues; a registered ballot costs a constant number of map
+operations and one binary search. The interval summaries are brought up to
+date lazily, testing each opaque ballot once against each interval that a
+registered ballot later asks about. That is one integer remainder per (opaque
+ballot, distinct interval) pair, with no allocation, so the worst case is
+that product, reached only when issues declare many distinct intervals.
+Measured on a chain of *n* issues, *n* opaque ballots at distinct instants
+and one ballot per issue: 1.2 MB, 3.6 MB and 7.2 MB exports (*n* = 1000,
+3000, 6000) took 0.14 s, 0.42 s and 0.83 s and allocated 16, 50 and 100 MB,
+almost all of it line parsing and signature checks. The same *n* = 3000 shape
+with 3000 distinct intervals takes the same time and memory.
+
+**A ballot of an issue this verifier cannot read (ET-18b).** An
+`issue_created` at an unregistered version is listed in `PARTIAL` and is still
+a prior `issue_created` for ET-18, by its envelope `hash` alone. A registered
+ballot naming it passes ET-18; its signature (ET-17), payload key set (ES-18)
+and `choice` type (ET-19) are checked as usual and fail `INVALID` as usual; its
+ET-18a, ET-23, ET-24 and ET-24a checks are unresolved, so its line is listed
+in `PARTIAL`. It joins no batch of any issue and is no candidate (it is not
+opaque). An `issue_id` naming any other event, or nothing prior, is still
+`INVALID` under ET-18.
+
+An unresolved check counts as not failed wherever a rule needs every
+registered event's semantic checks to pass: `--head` and `--chain` still
+compare on such a chain (EX-15, EX-22).
 
 The v1 registry is the four types `genesis`, `participant_registered`,
 `issue_created`, `vote_cast`, each at `version` 1 (ET-1/ET-2). A well-formed but
 unregistered `(type, version)` yields `PARTIAL` for that line, never `INVALID`
 (EV-8/EV-9) — with the single exception of `genesis`, which MUST be registered:
 a chain whose first line carries a `(genesis, version)` this verifier does not
-register is `INVALID` at line 1 (EV-20). The reason text there names the version
-seen and the `genesis` versions registered, and says plainly that "this verifier
-is out of date" and "this genesis is corrupt or hostile" are indistinguishable
-from the log alone — advisory guidance (EV-21), not conformance.
+register is `INVALID` at line 1 (EV-20). `genesis` has no version but 1, in
+this contracts version and every later one (ET-6), so the reason text there
+names the version found and says the chain is corrupt, hostile, or not an ODC
+chain; it does not suggest fetching a newer verifier, because no newer verifier
+registers another `genesis` version. For a `genesis` at version 2:
+
+```
+INVALID at line 1: genesis at version 2 (EV-20); genesis has no version but 1 (ET-6), so this chain is corrupt, hostile, or not an ODC chain (EV-21)
+```
+
+That text is advisory guidance (EV-21), not conformance.
 
 ### Fork ancestry on `genesis` (ET-9e/ET-9f)
 
@@ -199,9 +277,44 @@ The `genesis` payload may carry two OPTIONAL keys (ES-34): `ancestor_chain`, the
 parent chain's genesis hash — the value that **names** a chain (ET-7a) — and
 `ancestor_head`, the parent's head at the fork, a **position on** the chain that
 name identifies. The verifier checks the format of each key present
-(`^[0-9a-f]{64}$`, never the 64-zero anchor) and one presence rule:
-`ancestor_head` MUST NOT appear without `ancestor_chain`, while `ancestor_chain`
-MAY appear alone. That asymmetry is deliberate. The two values may be equal —
+(`^[0-9a-f]{64}$`, never the 64-zero anchor) and one presence rule, ET-9f
+(`event-types.md` v13): **both keys or neither**. A `genesis` carrying exactly
+one of them — either one — is `INVALID` at line 1; carrying neither records no
+ancestor. (Up to v12, `ancestor_chain` alone was accepted; v13 reverses that.)
+The two values may be equal —
 that is what a fork from a parent holding only its genesis produces — and
 neither is resolved: both are a recorded claim, not a verified link, and being
 unable to resolve one is never a defect.
+
+## Implementation limits (EV-23, EV-24)
+
+`contracts/evolution.md` §7 sets two minimums every verifier must accept on
+every line: **65536 bytes** (the LF excluded) and **nesting depth 64**, depth
+counted over the line's bytes as EV-23 defines it (brackets inside strings do
+not count). On any input within them this verifier reaches the verdict the
+specs require. It sets no limit on the number of lines or the size of the input
+(EV-24); the file is read whole, so memory is the only bound.
+
+- **Line length:** no limit. There is no line buffer of fixed size anywhere in
+  the read path; a line of any length reaches its verdict.
+- **Nesting depth:** the parser's one within-line limit is depth **64**, the
+  EV-23 minimum: a line at depth 64 is parsed in full, and the limit is first
+  reached when a 65th level opens. Every line deeper than 2 is `INVALID`
+  whatever else it holds (ES-15/ES-17, EV-16), so EV-24 lets a verifier that
+  reaches a depth limit above 2, with no fatal earlier line, report `INVALID`
+  at that line instead of a tool-level failure. This verifier does: it scans in
+  file order and stops at the first fatal line, so it only parses a line when no
+  earlier one was fatal. The output is, for example,
+
+  ```
+  INVALID at line 2: nesting deeper than 64, this verifier's limit (EV-23/EV-24); any line deeper than 2 is INVALID (ES-15/ES-17, EV-16)
+  ```
+
+  with exit `1` and the usual EX-24 report on stderr.
+- **EX-24 claims** are recovered by a separate, lenient JSON decode with its
+  own depth bound (10000); reaching it makes that claim `unavailable`, never a
+  tool-level failure (EV-24).
+- **Host resources:** running out of memory or time is EV-24's one exemption.
+  Go reports out-of-memory as a runtime fatal error, which exits with status 2
+  and prints no verdict; a consumer must treat status 2 **without** a
+  `PARTIAL` line on stdout as a failure, never as `PARTIAL`.

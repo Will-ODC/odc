@@ -204,7 +204,7 @@ export function SignIn({ api }: { api: PulseApi }) {
 
   return (
     <ScreenFrame>
-      <h1 className="signin__title">Your campus is deciding something.</h1>
+      <h1 className="signin__title">Sign in with your email</h1>
       <p className="signin__lede">
         Enter your email and we will send you a link. There is no password to
         make up.
@@ -304,7 +304,7 @@ function LinkSent({
    * The form that was focused has just unmounted, so without this focus falls
    * to `document.body`: a keyboard user has to tab from the top of the page to
    * reach "Use a different email", and a screen reader announces nothing at
-   * all. Same reason `AfterVote` and `ResultsPanel` move focus deliberately.
+   * all. Same reason `VoteCard` and `ResultsPanel` move focus deliberately.
    */
   useEffect(() => heading.current?.focus(), []);
 

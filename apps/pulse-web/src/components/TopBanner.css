@@ -39,3 +39,13 @@
   outline: 2px solid var(--ballot-ink);
   outline-offset: 2px;
 }
+
+/* The way in, and anything offered beside it. */
+.banner__end {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: center;
+  justify-content: flex-end;
+  gap: var(--gutter);
+  min-width: 0;
+}

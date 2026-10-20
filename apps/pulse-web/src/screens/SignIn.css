@@ -16,6 +16,10 @@
   line-height: 1.2;
   color: var(--ballot-ink);
 }
+/* Focused on arrival for screen readers only; see `.welcome h1:focus`. */
+.signin__title:focus {
+  outline: none;
+}
 
 .signin__lede {
   margin: 0;

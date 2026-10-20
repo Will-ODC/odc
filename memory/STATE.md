@@ -27,43 +27,49 @@ answered in the specs as ADR-0013 to ADR-0018 (#98). Only a **fresh re-audit**
 clears T9. Nothing may be implemented in `services/` until T9 and T9a. The ledger
 is unstarted.
 
-**Spec versions on master (2026-10-10; read the `Version:` lines, not prose):**
-`event-schema.md` v5, `event-types.md` v11, `evolution.md` v6,
-`export-format.md` **v5** (#224, ADR-0032), `hashing.md` v2, `ids.md` v1,
-`read-api.md` v1, `fixtures/README.md` v14. `contracts/` is **DRAFTING**.
+**Spec versions on master (2026-10-20; read the `Version:` lines, not prose):**
+`event-schema.md` **v7**, `event-types.md` **v14**, `evolution.md` **v9** (all
+ADR-0038, #355: PRs #359 and #361), `export-format.md` v5 (#224, ADR-0032), `hashing.md` v2,
+`ids.md` v1, `read-api.md` v1, `fixtures/README.md` **v16** (#372).
+`contracts/` is **DRAFTING**.
 
-**Conformance phases 1 to 4 are merged.** The corpus is **115 vectors** (VALID 21,
-PARTIAL 4, INVALID 90). Phase 3 batching vectors `099`-`108` came in #202; phase 4
+**Conformance phases 1 to 4 are merged, and ADR-0034 is in both verifiers.**
+ADR-0034 (mixed-version ballot batching: ET-18b, ET-22a, ET-24b) merged as Go
+#324 (#319) and TS #325 (#320), each built in an isolated sparse worktree and
+approved (with nits, fixed) by an isolated fresh reviewer. Its vectors
+`116`-`134` merged in #327 (#321). The agreement proof is
+`docs/security/attacks/check-adr-0034-agreement.py`. Phase 3 batching vectors `099`-`108` came in #202; phase 4
 (`--chain` and genesis/head reporting, EX-21 to EX-24) came in #220 (Go), #221 (TS)
 and #222 (vectors `109`-`115`). #203 reconciled EV-15's stage map. #219 made a TS
 internal error exit 3, not 1. #223 is the security checkpoint
 (`docs/security/hash-chain-checkpoint-2026-10-09.md`).
 
+**The four `contracts/` contradictions are decided** (ADR-0038, #355 → PRs #359,
+#361): verifier limits (EV-23 to EV-25: lines up to 65536 bytes and depth 64,
+past a verifier's own limits a tool-level failure, never a verdict), honest
+EV-21 advice for `genesis`, ET-9f now **both ancestry keys or neither**, and
+`genesis.contracts` at most 64 bytes (ET-9). **Both verifiers implement all of
+it** (Go #370, TS #371, ET-9f in both via #372). #372 also flipped `086` to
+INVALID and added vectors `135`-`145`: the corpus is **145** (VALID 23,
+PARTIAL 15, INVALID 107), and all pass both verifiers.
+
 ## Next
 
 In this order. Passing CI or a checkpoint does not clear T9.
 
-1. **Merge #241 (Go + TS): both verifiers conform to `export-format.md`
-   v5 EX-24.** stderr becomes `genesis hash (stored claim): …` /
-   `head hash (stored claim): …`; strict UTF-8, last repeated `hash` wins,
-   `\u` escapes decode. 504-run black-box parity. stdout is unchanged, so no
-   vectors are needed (EX-24 is not conformance surface, EV-17). The decoding
-   gaps are in `memory/OPEN-QUESTIONS.md` → "EX-24 claim decoding".
-2. **Decide mixed-version ballot batching.** The proposal
-   (`docs/plans/hash-chain-unknown-ballot-batching.md`, #225) is **PROPOSED, not
-   ratified**. Its one-event/one-ballot evolution constraint, its uncertainty
-   algorithm and its wider PARTIAL attribution all need an operator decision
-   before anyone builds them. → `memory/OPEN-QUESTIONS.md`, "Future `vote_cast`
-   versions and ballot batching".
-3. **Decide the four open `contracts/` contradictions** (see Blockers).
-4. Verifier implementations of what (2) and (3) decide, built in isolation. Then
-   the fixtures.
-5. **Fresh T9 re-audit** by a context that did not write `audit-phase-0.md`.
+1. **Fresh T9 re-audit** by a context that did not write `audit-phase-0.md`.
    Acceptance is APPROVE.
-6. **T9a: release candidate.** Flip `contracts/README.md` from DRAFTING to RELEASE
+2. **T9a: release candidate.** Flip `contracts/README.md` from DRAFTING to RELEASE
    CANDIDATE, reconcile implementation/charter/service guidance, and move this
    file to Phase 1 (ledger, verifier, identity). **Do not create a `contracts-v1`
    tag.** The T10 freeze and its re-audit stay deferred until real use (ADR-0007).
+
+Optional, from ADR-0034 owed item 4: `docs/security/attacks/check-unknown-batching-proposal.py`'s
+`proposed` mode now matches the ratified expectations and could join required CI.
+
+**Owed with a ticket:** #369 (Go verifier memory grows far past the input on a
+hostile export; found in #370's review). #326 (TS ET-24b worst-case cost).
+Issues #364 and #365 are still open although #372 completed them; close them.
 
 **Owed with no ticket:**
 
@@ -80,9 +86,11 @@ In this order. Passing CI or a checkpoint does not clear T9.
   Its old default ("one-choice until argued otherwise") was withdrawn on
   2026-08-19, so the ceiling is deliberately open. v1 is unchanged. Read the
   ET-22 warning in `memory/OPEN-QUESTIONS-archive.md` before drafting it.
-- **`odc-verifier-builder`'s role definition says Go only**, but it was also used
-  for the TS verifier. Either add a TS builder role or scope this one to "either
-  verifier, never both".
+- **Verifier dependency updates** (from `docs/security/scans-2026-10-11.md`,
+  #335): govulncheck found nothing the verifier calls, but `filippo.io/edwards25519`
+  v1.1.0 has GO-2026-4503 (fixed in v1.1.1), and CI builds with `go 1.24`, which
+  no longer gets security fixes. Bump the module and raise the `go` directive or
+  add a `toolchain` line, in the verifier's own isolated context.
 
 ## Done — one line each, detail in the squash commit
 
@@ -106,6 +114,13 @@ In this order. Passing CI or a checkpoint does not clear T9.
   #177/#181 Go, #178 TS, vectors in #202. #201 fixed the rehearsal judge.
 - Phase 4 (`--chain` and reporting): #220, #221, #222 and #203. #219 handles the
   TS exit code. #223 checkpoint, #224 `export-format.md` v5 (ADR-0032).
+- EX-24 stored-claim reporting in both verifiers: #241 (`export-format.md` v5).
+- ADR-0034 mixed-version batching: contract #294; Go #324 (#319), TS #325
+  (#320); vectors `116`-`134` in #327 (#321). TS sub-quadratic cost is
+  follow-up #326.
+- ADR-0038 (the four contradictions, #355): contract #359, `genesis.contracts`
+  cap #361. Go #370 (#364), TS #371 (#365), then ET-9f in both verifiers with
+  the `086` flip and vectors `135`-`145` in #372 (#366), merged 2026-10-19.
 - Memory index and `memory-index` CI guard (#117, #121).
 
 ## Standing decisions — one line each
@@ -130,8 +145,12 @@ In this order. Passing CI or a checkpoint does not clear T9.
   `min_turnout` is NOT implemented, deliberately**: it addresses tally arithmetic
   (five votes at 3-2 with four known reveal the fifth), not timing. It can be
   added as an `issue_created` v2. The interim measure is a warning before casting.
-- **ADR-0016/0019:** nothing may be added to `genesis` after the tag. The
-  `ancestor_chain`-alone asymmetry (ET-9f) is deliberate.
+- **ADR-0016/0019/0038:** nothing may be added to `genesis` after the tag.
+  ET-9f is **both ancestry keys or neither** (ADR-0038 reversed ADR-0019's
+  `ancestor_chain`-alone permission).
+- **ADR-0038 limits are permanent** (EV-25): 65536-byte lines and depth 64
+  never change. Exceeding one is never by itself a reason for `INVALID`, and no
+  vector may go past them.
 - **ADR-0029:** a ballot batch is a maximal run. Once left, it is closed.
 - **ADR-0032:** existing file errors (structural and semantic) come before anchor
   mismatches. Endpoint reports are stored claims or unavailable.
@@ -141,20 +160,6 @@ In this order. Passing CI or a checkpoint does not clear T9.
 
 ## Blockers & live cautions
 
-- **Four `contracts/` contradictions need an operator decision.** None changes a
-  committed verdict, so nothing automated will catch them.
-  1. **`contracts/` bounds nothing.** No sentence limits nesting depth, line
-     length or key count, or says what a verifier does past its limits. The Go
-     verifier's depth-64 bound has no spec behind it. Proposed `evolution.md`
-     text: a verifier MAY impose limits that cannot change a verdict, and MUST
-     report a verdict or a tool error (exit ≥ 3) instead of crashing.
-  2. **EV-21's advice is unreachable for `genesis`.** ET-6 pins it at version 1,
-     yet the TS verifier tells users to "fetch a newer verifier".
-  3. **ET-7a reads as both-or-neither** for the ancestry keys, which is the tidy
-     version ET-9f forbids.
-  4. **ET-9f's stated justification does not select its rule.** The real
-     criterion is naming: a name without a position is coherent, but a position
-     without a name refers to nothing.
 - **The root ODC stack is a stub.** Root `docker-compose.yml` is `services: {}`,
   and `just smoke`/`just verify` are TODOs. Pulse's images are separate.
 - **Never open `services/verifier/` and ledger source in one context.** Build each

@@ -41,6 +41,12 @@ export interface Results {
   choices: readonly ChoiceResult[];
   /** Distinct people who voted — not the number of selections made. */
   voters: number;
+  /**
+   * People who confirmed by email, counted once each (ADR-0040). A person who
+   * confirmed from two browsers is one here and two in `voters`. Always at
+   * most `voters`; 0 when nobody has confirmed.
+   */
+  confirmedVoters: number;
 }
 
 export interface ChoiceResult {
@@ -53,6 +59,23 @@ export interface ChoiceResult {
    * more than 100. That is correct and must not be normalised away.
    */
   share: number;
+  /** How many confirmed voters picked this choice (see `confirmedVoters`). */
+  confirmedCount: number;
+  /** `confirmedCount / confirmedVoters * 100`, as `share` is; 0 when none. */
+  confirmedShare: number;
+}
+
+/**
+ * How a cast relates to confirmation (ADR-0040).
+ *
+ * `confirmation` is the one-way code from `ConfirmationKey.codeFor` for the
+ * signed-in account and this poll. The store never sees the account id or the
+ * address, only this code. Given, it replaces whatever code the vote held;
+ * left out (nobody signed in), the vote keeps the code it had, so changing an
+ * answer keeps it confirmed.
+ */
+export interface CastOptions {
+  confirmation?: string;
 }
 
 export interface VotingStore {
@@ -62,7 +85,19 @@ export interface VotingStore {
     pollId: string,
     voterId: string,
     ballot: readonly number[],
+    options?: CastOptions,
   ): Promise<CastResult>;
+  /**
+   * Confirm every vote filed under this ballot identity on a poll that is
+   * still open, with the code `codeFor(pollId)` gives for each — what signing
+   * in does for a browser that voted first (ADR-0040). A closed poll's votes
+   * are left alone, so its results stop changing when it closes. Returns how
+   * many votes were confirmed.
+   */
+  confirmVotes(
+    voterId: string,
+    codeFor: (pollId: string) => string,
+  ): Promise<number>;
   /** The voter's own ballot, so the UI can show what they picked. */
   voteOf(pollId: string, voterId: string): Promise<Vote | undefined>;
   results(pollId: string): Promise<Results>;
@@ -127,6 +162,12 @@ export class InMemoryVotingStore implements VotingStore {
   readonly #polls = new Map<string, Poll>();
   /** `voteKey(pollId, voterId)` → vote. One row per voter per poll. */
   readonly #votes = new Map<string, Vote>();
+  /**
+   * `voteKey(pollId, voterId)` → the vote's confirmation code (ADR-0040).
+   * Beside `#votes` rather than on `Vote`, so the code is never handed out
+   * with a ballot.
+   */
+  readonly #confirmations = new Map<string, string>();
   readonly #clock: () => Date;
 
   constructor(clock: () => Date = () => new Date()) {
@@ -149,10 +190,12 @@ export class InMemoryVotingStore implements VotingStore {
     pollId: string,
     voterId: string,
     ballot: readonly number[],
+    options: CastOptions = {},
   ): Promise<CastResult> {
     const poll = this.#requirePoll(pollId);
     if (voterId.trim() === "") throw new TypeError("voterId must not be empty");
     validateBallot(poll, ballot);
+    assertConfirmation(options.confirmation);
 
     const now = this.#clock();
     // Checked before the replacement so a late cast reads as "closed", which is
@@ -169,7 +212,33 @@ export class InMemoryVotingStore implements VotingStore {
     const choices = [...ballot].sort((a, b) => a - b);
     const vote: Vote = { pollId, voterId, choices, castAt: now };
     this.#votes.set(key, vote);
+    // Left out means "keep what it had", never "unconfirm": changing an answer
+    // keeps it confirmed.
+    if (options.confirmation !== undefined) {
+      this.#confirmations.set(key, options.confirmation);
+    }
     return { status: replacing ? "changed" : "counted", vote };
+  }
+
+  async confirmVotes(
+    voterId: string,
+    codeFor: (pollId: string) => string,
+  ): Promise<number> {
+    const now = this.#clock();
+    // Every code is made and checked before any is written, so a bad one
+    // leaves nothing half-confirmed — all or nothing, as Postgres's
+    // transaction is.
+    const writes: [string, string][] = [];
+    for (const [key, vote] of this.#votes) {
+      if (vote.voterId !== voterId) continue;
+      const poll = this.#polls.get(vote.pollId);
+      if (!poll || !isOpen(poll, now)) continue;
+      const code = codeFor(vote.pollId);
+      assertConfirmation(code);
+      writes.push([key, code]);
+    }
+    for (const [key, code] of writes) this.#confirmations.set(key, code);
+    return writes.length;
   }
 
   async voteOf(pollId: string, voterId: string): Promise<Vote | undefined> {
@@ -180,16 +249,30 @@ export class InMemoryVotingStore implements VotingStore {
     const poll = this.#requirePoll(pollId);
     const counts = new Array<number>(poll.choices.length).fill(0);
     let voters = 0;
-    for (const vote of this.#votes.values()) {
+    /** Code → that person's most recent vote on this poll. */
+    const latest = new Map<string, Vote>();
+    for (const [key, vote] of this.#votes) {
       if (vote.pollId !== pollId) continue;
       // One person, counted once, however many choices their ballot names.
       voters++;
       for (const choice of vote.choices) {
         counts[choice] = (counts[choice] ?? 0) + 1;
       }
+      const code = this.#confirmations.get(key);
+      if (code === undefined) continue;
+      const held = latest.get(code);
+      if (held === undefined || moreRecent(vote, held)) latest.set(code, vote);
     }
 
-    return resultsFor(poll, voters, counts);
+    // One confirmed vote per code, which is one per person per poll.
+    const confirmedCounts = new Array<number>(poll.choices.length).fill(0);
+    for (const vote of latest.values()) {
+      for (const choice of vote.choices) {
+        confirmedCounts[choice] = (confirmedCounts[choice] ?? 0) + 1;
+      }
+    }
+
+    return resultsFor(poll, voters, counts, latest.size, confirmedCounts);
   }
 
   #requirePoll(pollId: string): Poll {
@@ -213,31 +296,72 @@ function voteKey(pollId: string, voterId: string): string {
 }
 
 /**
+ * Which of two votes carrying one person's confirmation code is the confirmed
+ * one: the most recently cast (ADR-0040). A tie in time — the same
+ * millisecond — goes to the greater ballot identity, compared by code unit;
+ * arbitrary, but the same in every store (Postgres sorts it `collate "C"`),
+ * so the in-memory and database stores can never disagree about which vote
+ * counts.
+ */
+export function moreRecent(a: Vote, b: Vote): boolean {
+  const at = a.castAt.getTime() - b.castAt.getTime();
+  if (at !== 0) return at > 0;
+  return a.voterId > b.voterId;
+}
+
+/**
+ * What a confirmation code looks like: the 64 lowercase hex digits of an
+ * HMAC-SHA256. Checked by every store (and by a constraint in Postgres) so an
+ * account id or an address can never be stored in its place by mistake —
+ * which would put the very connection ADR-0040 keeps out of the database
+ * right beside the answer.
+ */
+export const CONFIRMATION_CODE = /^[0-9a-f]{64}$/;
+
+/** Every store's check of a code before writing it. */
+export function assertConfirmation(code: string | undefined): void {
+  if (code !== undefined && !CONFIRMATION_CODE.test(code)) {
+    // The value is never part of the message.
+    throw new TypeError("a confirmation must be a keyed code");
+  }
+}
+
+/**
  * A poll's results from how many people voted and how many picked each choice
- * (indexed by position). Every store builds its results here, so the share
- * arithmetic — of voters, not of selections, rounded to one decimal — cannot
- * differ between them.
+ * (indexed by position), and the same two numbers for confirmed votes only.
+ * Every store builds its results here, so the share arithmetic — of voters,
+ * not of selections, rounded to one decimal — cannot differ between them.
  */
 export function resultsFor(
   poll: Poll,
   voters: number,
   counts: readonly number[],
+  confirmedVoters: number,
+  confirmedCounts: readonly number[],
 ): Results {
   return {
     pollId: poll.id,
     question: poll.question,
     method: poll.method,
     voters,
+    confirmedVoters,
     choices: poll.choices.map((label, index) => {
       const count = counts[index] ?? 0;
+      const confirmedCount = confirmedCounts[index] ?? 0;
       return {
         index,
         label,
         count,
-        share: voters === 0 ? 0 : round1((count / voters) * 100),
+        share: shareOf(count, voters),
+        confirmedCount,
+        confirmedShare: shareOf(confirmedCount, confirmedVoters),
       };
     }),
   };
+}
+
+function shareOf(count: number, of: number): number {
+  return of === 0 ? 0 : round1((count / of) * 100);
 }
 
 function round1(n: number): number {

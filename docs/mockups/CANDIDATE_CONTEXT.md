@@ -1,14 +1,36 @@
 # ODC mockup candidate context
 
-Updated: 2026-07-30
+Updated: 2026-10-20
 
-## Pending primary candidates
+## Pulse design of record and alternatives
+
+Current build status lives in `memory/pulse.md`. This is the canonical index of
+mockup standing; a historical deck is not a description of the running app.
+
+| Record | Standing |
+| --- | --- |
+| `pulse-screens/09-chat-vote.html`; ADR-0035 | **Current conversation design of record.** The reusable vote card merged in PR #307. |
+| [PR #313](https://github.com/Will-ODC/odc/pull/313), #301; [PR #322](https://github.com/Will-ODC/odc/pull/322), #302 | **Built conversation layout.** Compact Vote panel at the top right on desktop, expanding above the composer on phone; one Close button and a Vote tab to reopen. #313 built it; #322 made conversation the default and retired `Run`, `SwipeBallot` and `ChoiceBallot`. |
+| `pulse-screens/08-desktop-vote.html`, #298 | Retained three-column desktop alternative, not the current default. |
+| `pulse-screens/01-claim.html` through `07-action.html` | Historical split story deck, including the retired dark swipe ballot. Useful for earlier design intent, not the current screen inventory. |
+| `pulse-vote-states-v1.html` | Historical layout, retained six-state coverage reference: nothing picked, selection, confirming, many options, already voted, closed without voting. Apply current reversible pick-then-Submit behavior (ADR-0035), not the deck's original irreversible-vote wording. |
+| `pulse-story-mobile-v1.html` | Historical original single-file story reference, superseded by the split deck and then the conversation. |
+| [Issue #314](https://github.com/Will-ODC/odc/issues/314) | Browser extension idea only; sample-data prototype proposed, browser/access decisions pending. |
+
+Mockup 09 records the chosen conversation direction; the merged top-right panel
+is its implemented layout. The assistant remains disabled. Welcome now lives at
+`/` (#341/PR #347); explicit `/?poll=ID` and `/conversation?poll=ID` links open
+the conversation. `/start` and `/questions` are the welcome flow's next pages.
+The extension would be another client, with explicit content-to-poll association;
+no live assistant or official votes are part of its first prototype.
+
+## Charter-side ODC: pending primary candidates
 
 - Mobile community: `odc-community-mobile-v1.html`
 - Mobile ballot: `odc-ballot-voting-mobile-v1.html`
 - Desktop: `odc-ballot-voting-desktop-v1-light.html`
 
-Treat these three light-theme files as the current design baselines and the first mockups to update or review in follow-up work.
+Treat these three light-theme files as the charter-side design baselines and the first mockups to update or review in follow-up work.
 
 ## Status
 
@@ -57,19 +79,22 @@ Treat these three light-theme files as the current design baselines and the firs
 
 ## Other explorations (not primary candidates)
 
-Three additional decks explore alternate visual directions; none of these
-supersede the primary candidates above.
+The following charter-side explorations do not supersede the primary candidates
+above and are not references for Pulse.
 
 - Governance/privacy flow: `governance-modern-v1.html` — a "Civic Glass"
   translucent treatment applied to a five-item constitutional/binding ballot
   agenda, with a community-home and ballot-detail screen.
+- Original hub feed: `hub-feed-mockup.html` — historical feed exploration.
 - Hub feed, import-ready: `hub-feed-v2.html` — feed, ballot, confirm sheet,
   discussion, and a dedicated loading/empty/error states screen.
 - Hub feed, app style: `hub-feed-v3.html` — feed, ballot, confirm, discussion,
   and a dark-mode feed variant.
 
 Both hub-feed decks depict a `discussion` surface with free-text positions and
-threaded replies. That is a **post-MVP surface** — `CLAUDE.md` rule 5 (no
-free-text content in the event log, MVP) and the current implementation plan
-scope this out of Phase 0/1. Treat the discussion screens as forward-looking
-illustration, not a claim about what ships first.
+threaded replies. For these charter-side decks, that is a **post-MVP
+surface** — `CLAUDE.md` rule 5 (no free-text content in the event log, MVP) and
+the current implementation plan scope this out of Phase 0/1. Pulse is
+charter-exempt; its unbuilt comments are tracked separately in #297. Treat the
+discussion screens as forward-looking illustration, not a claim about what ships
+first.

@@ -38,6 +38,12 @@ export interface VoteCardProps {
   onClose: () => void;
   onChangeAnswer?: () => void;
   onNext?: () => void;
+  /**
+   * Where "Why you can trust your vote" points (#351). Shown only once a vote
+   * is counted, and opened in a new tab so the conversation, whose history is
+   * local to this page, is still there to come back to.
+   */
+  trustHref?: string;
 }
 
 /** Controlled and presentational: the caller owns picks, sending and navigation. */
@@ -57,6 +63,7 @@ export function VoteCard({
   onClose,
   onChangeAnswer,
   onNext,
+  trustHref,
 }: VoteCardProps) {
   const id = useId();
   const card = useRef<HTMLElement>(null);
@@ -153,11 +160,21 @@ export function VoteCard({
         aria-label={question}
       >
         <span className="vote-card__summary">{question}</span>
-        <button type="button" data-expand onClick={() => onCollapse(false)}>
-          Show vote card
+        <button
+          type="button"
+          data-guide="open"
+          data-expand
+          onClick={() => onCollapse(false)}
+        >
+          Vote
         </button>
-        <button type="button" onClick={onClose}>
-          Close
+        <button
+          type="button"
+          className="vote-card__close"
+          aria-label="Close"
+          onClick={onClose}
+        >
+          <span aria-hidden="true">×</span>
         </button>
       </section>
     );
@@ -181,12 +198,14 @@ export function VoteCard({
     >
       <header className="vote-card__top">
         <span className="vote-card__heading">DECISION</span>
-        {/* ResultsPanel provides the answered card's single Close button. */}
-        {status.kind !== "answered" ? (
-          <button type="button" onClick={onClose}>
-            Close
-          </button>
-        ) : null}
+        <button
+          type="button"
+          className="vote-card__close"
+          aria-label="Close"
+          onClick={onClose}
+        >
+          <span aria-hidden="true">×</span>
+        </button>
       </header>
       <h2 id={`${id}-question`} className="vote-card__question">
         {question}
@@ -202,7 +221,6 @@ export function VoteCard({
           <ResultsPanel
             results={status.results}
             yourChoices={picked}
-            onClose={onClose}
             panelRef={panel}
           />
           <div className="vote-card__actions">
@@ -216,11 +234,20 @@ export function VoteCard({
                 Next
               </button>
             ) : null}
-            <button type="button" onClick={() => onCollapse(true)}>
-              Hide
-            </button>
           </div>
           <p className="vote-card__note">{privacyNote}</p>
+          {trustHref ? (
+            <p className="vote-card__note">
+              <a
+                className="vote-card__link"
+                href={trustHref}
+                target="_blank"
+                rel="noopener"
+              >
+                Why you can trust your vote (opens in a new tab)
+              </a>
+            </p>
+          ) : null}
         </>
       ) : (
         <>

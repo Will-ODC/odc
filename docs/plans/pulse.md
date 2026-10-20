@@ -34,15 +34,17 @@ is load-bearing context that a fresh session reads as current.
 
 Pulse is **charter-exempt** (`apps/pulse/CLAUDE.md`). Nothing in this file is
 held to `docs/charter.md`, and the two boundaries that survive the exemption —
-no reads or writes into `services/` or `contracts/`, and the counting is never
-the subject — apply to every item below without being restated in each one.
+no reads or writes into `services/` or `contracts/`, and no copy that claims a
+hash chain, ledger or check pulse does not have yet (ADR-0039) — apply to every
+item below without being restated in each one.
 
 ## Required reading, per session
 
 `CLAUDE.md` → `memory/INDEX.md` → `memory/pulse.md` in full → this file (your
 item at minimum) → `apps/pulse/CLAUDE.md` and `apps/pulse/API.md` before
-touching the server, `.claude/skills/odc-ui` before touching a screen,
-`.claude/skills/odc-testing` before writing any code at all.
+touching the server, `apps/pulse-web/CLAUDE.md` and `.claude/skills/odc-ui`
+before touching a screen, `.claude/skills/odc-testing` before writing any code
+at all.
 
 ## Status vocabulary
 
@@ -133,66 +135,67 @@ Also owed by this item and not by #148: **there is no `GET /api/polls`.** Every
 route is `/api/polls/:id/...`, so a browsing screen needs a listing endpoint
 that does not exist.
 
-## P5 — Pillar 3, the path to action · BLOCKED ON A DECISION
+## P5 — Pillar 3, the path to action · UI DIRECTION SET; RECORDS AND NOTIFICATION RULES PENDING
 
-The third MVP pillar, in any form: soliciting ideas, volunteer time or
-donations, and the proof-of-what-happened email. `proofEmailsOptIn` is collected
-at sign-in today and **leads nowhere.**
+Operator direction, 2026-10-11:
 
-**Blocked on:** the whole shape. Nothing about this is designed. Donations in
-particular reach payments, identity and obligations the product has never had.
+- The desktop has substantial unused space in the left and right columns around
+  the main poll/questions/decisions. Improve the centre's layout and hierarchy;
+  later use the surrounding columns for related polls and documented action
+  outcomes from related polls (#331). Related polls use ADR-0025; Next remains
+  the answer-selected graph path.
+- Once a poll is closed, its final results belong in the centre, alongside any
+  action planned because of it. Show subsequent action/progress and documented
+  outcomes there too (#332), with evidence and distinct planned, reported and
+  reviewed states. Poll closure alone does not prove action happened.
+- Publishing a documented poll-linked action outcome triggers email to eligible
+  people who opted in, linking back to those results and action records (#333).
+  Mere closure or a plan is not the outcome-notification trigger.
 
-The one thing already decided about it, from ADR-0022: pulse's one-press cast is
-bought with **reversibility, not speed**, and pillar 3's donations and volunteer
-commitments are not reversible and therefore **do** confirm. Do not read pulse's
-ballot as a precedent for how this pillar's actions are taken.
+Reuse the action record work (#246), contributions/claimed results (#247), and
+reviewed evidence (#248), rather than introducing duplicate records. Related
+poll reads and action read APIs are dependencies, not shipped features.
 
-## P6 — Poll authoring under ADR-0024 · BLOCKED ON VALUES, NOT RULES; the operator's stated next work after storage
+**Still to settle before implementation:** publishing authority and action record
+rules from #246–#248; which recipients are associated with which poll; whether
+existing `proofEmailsOptIn` covers these messages; consent withdrawal, opt-out
+and delivery rules. The preference is collected at sign-in but no outcome mail
+is sent today. Soliciting donations/volunteers and funding remain separate work;
+no payments or automatic claims of impact are introduced by this UI direction.
 
-> **Corrected 2026-10-09.** The three rules listed below as open were settled
-> by the operator on 2026-09-11 and are recorded in **ADR-0024 §3** (3a
-> duplicates warn, 3b removal hides, 3c flagging plus manual removal, 3d post
-> to your community). What remains is ADR-0024 §5's values, grouped by what
-> each unblocks in issue **#217**: a first "post a question" slice needs only
-> §5.4, the default `closesAt` and `acceptsSuggestions`. The paragraphs below
-> predate ADR-0024 and are kept for their reasoning; ADR-0024 wins where they
-> disagree.
+The conversation ballot uses pick-then-Submit (ADR-0035); donations and volunteer
+commitments also require confirmation.
 
-**How polls come to exist.** ADR-0024 chooses crowdsourced posting with computed
-navigation, and this is the item that builds it. Today polls and their entire
-`next` graph are the `SEED` literal in `dev-server.ts`; there is no
-`POST /api/polls`, no admin surface and no seed job, and **a deployed pulse has
-nothing to vote on.**
+## P6 — Poll authoring · HTTP AND FORM READY TO BUILD
 
-Read ADR-0024 in full before starting — its consequences are this item's scope,
-and the summary below is not a substitute for them.
+ADR-0037 records the operator's 2026-10-11 choices: one-week editable close,
+suggestions off (#336), signed-in posting, community or General destination,
+anonymous public attribution by default, optional naming, five creations per
+rolling hour, and Owner/granular unlimited-posting grants. The approved purpose
+statement and first-post acknowledgement ship with creation. The planned
+interfaces are in `apps/pulse/API.md`; no creation route is served yet.
 
-**Blocked on three rules the operator named as open when choosing B:**
+The design and storage foundations are merged; see `memory/pulse.md` for the
+completed slices. Remaining work proceeds in merge-gated steps:
 
-- **Filtering.** What a posted question has to pass. `createPoll` validates
-  shape only — non-empty question, 2–25 distinct non-empty choices — and cannot
-  tell a real question from noise. Whether the duplicate machinery in
-  `suggestions.ts` (`keywords()`, `overlap()`, `SAME_IDEA = 0.6`) is reused for
-  questions, or duplicates are allowed and merged later, is open.
-- **Who can post where.** Follows from P2: the community picked at sign-in
-  decides where a question can be posted. **Posting requires a session; voting
-  does not** — that asymmetry is deliberate under ADR-0024.
-- **Moderation.** No moderator role exists anywhere in pulse. Post-moderation
-  needs someone who can remove a question; pre-moderation needs a queue and
-  kills the volume that is the whole point of crowdsourcing. The fork is open.
+1. Creation HTTP boundary: authenticated context/create and owner grant/revoke,
+   origin checks, bounded input, retry contract and safe public projections.
+   Real HTTP with disposable Postgres, all documented error cases and privacy tests.
+2. Creation screen and attribution: first-post promise, anonymous/named choice,
+   secondary closing-time control, published conversation link, recoverable
+   errors, keyboard and actual phone/desktop checks. No ballot side effects.
 
-**Ready and waiting behind those, once decided** — all from ADR-0024's
-consequences: a new migration adding the community and author columns to `polls`
-(the next free number, since ADR-0030 decision 4 took ADR-0024's 002 and
-001–004 are applied; author **cannot** be backfilled later, only defaulted); a removed/hidden state,
-because `on delete cascade` means deleting a question destroys the votes cast on
-it; server-minted poll ids, because `polls.id` is caller-supplied text today; a
-rate limit keyed on the voter and backed by a shared store, since
-`@fastify/rate-limit` is in-memory and ADR-0020 expects many processes; and
-deciding who fills `closesAt` and `acceptsSuggestions` on a posted question.
+Each step receives fresh review (substantive fixes reviewed again), package checks,
+push/PR and all required green CI before moving on. No agent approval or merge.
+Use the next unused migration number from current master; never edit an applied
+migration.
+Do not invent authors or membership for existing data.
 
-**Depends on** the storage work landing first — that is the operator's stated
-ordering — and on P2 for the community half.
+Reporting/review (#233–#236), duplicate warnings (#261), suggestions (#336),
+photos/summary (#296), comments (#297) and browse (#259/#260) remain separate.
+Broad public posting launch waits for reporting/review and the automatic-hide
+threshold design. ADR-0024's hide-not-delete and automatic-hide direction remain.
+Account penalties and appeals do not arrive implicitly with creation.
 
 ## The identity work — P8 to P11, and why it is four items
 
@@ -227,8 +230,8 @@ than demanded at the door.
    voter.
 3. **A stamp describes the answer currently standing.** Signing in does **not**
    re-stamp votes nobody re-cast; but re-casting is a fresh act and is stamped
-   afresh. This keeps ADR-0022 whole: a vote stays changeable, so the one-press
-   cast keeps the justification it depends on.
+   afresh. A vote remains changeable until close; the conversation card uses
+   pick-then-Submit (ADR-0035).
 4. **Anonymous voting stays** — `community NULL, assurance 'none'`.
 5. **Signing in upgrades the person, never their past votes.** A guest who
    verifies keeps their identity and gains the credential — unless the address
@@ -437,30 +440,26 @@ proven by a domain.
 Chosen by the operator over a throwaway script. **Two items point at this and it
 had no entry**, which is what this file exists to prevent.
 
-Needed by P10 (minting links, setting `min_assurance`) and by P6 (poll
-authoring). Nothing of it exists: `src/http/server.ts` serves eleven routes and
-none is administrative, there is no admin concept, no admin sign-in, and no
-permission rules.
+Needed by P10 for minting links and setting `min_assurance`. P6 now has its own
+accepted Owner and narrow posting-grant rules (ADR-0037), implemented in internal
+storage; its HTTP routes and form remain unbuilt. Those permissions do not settle
+P10's broader administration policy, and P6 does not wait for this decision.
 
 **Undecided, and all of it is "what is an admin?":** what makes someone one; how
 they sign in; whether one admin acts for any community or only their own; and
 whether this is a screen in `apps/pulse-web` or a separate surface. Read P6
-before starting — one surface should serve links, polls and gates rather than
-growing two.
+before starting and reuse its established posting authority where applicable;
+do not silently broaden those permissions to links or assurance gates.
 
 ---
 
 ## Not in this file
 
-- **Infrastructure and a Docker dev environment that resembles production.**
-  Recorded at length in `memory/pulse.md` with eight things such an environment
-  must cover, most of which are now items above or in-flight storage work.
-  Whoever takes it reads that section first — and reads the caution with it:
-  every document says the story is settled (`justfile`, ADR-0001), and
-  `docker-compose.yml` is `services: {}` with **no Dockerfile anywhere in the
-  repository, on any branch, in its entire history.** `just up` starts nothing
-  and exits 0. Check for a Dockerfile; do not cite the ADR as evidence one
-  exists.
+- **Infrastructure and deployment status.** Pulse has two Docker images and a
+  Compose serving profile (`apps/pulse/docker-compose.yml`, ADR-0028), started
+  with `just pulse-up`. See the app READMEs for commands and `memory/pulse.md`
+  for remaining deployment prerequisites. The root `docker-compose.yml` and
+  `just up` are separate ODC core scaffolding, not the Pulse runtime.
 - **Anything already built.** `memory/pulse.md` is the record of what landed and
   is the only place that answers "does this exist already". Three of the
   operator's earlier requests were satisfied by work that shipped afterwards, and

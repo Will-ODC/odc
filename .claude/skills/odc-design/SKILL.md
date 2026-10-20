@@ -12,25 +12,13 @@ supposed to look like, and where that decision is written down.
 
 ## What is reference, and what is not
 
-| Deck                                                           | Surface                            | Standing                                                                     |
-| -------------------------------------------------------------- | ---------------------------------- | ---------------------------------------------------------------------------- |
-| `pulse-screens/01-…07-*.html`                                  | Pulse story client, seven screens  | **Current reference for pulse**                                              |
-| `pulse-screens/09-chat-vote.html`                              | Pulse vote page as a conversation  | **Chosen direction** (operator 2026-10-11): to become the default; not built |
-| `pulse-screens/08-desktop-vote.html`                           | Pulse vote page, three columns     | Option, not chosen — kept for reference (ballot A halves / B pop-up)         |
-| `pulse-vote-states-v1.html`                                    | The vote screen's six states       | Reference — states 1–6 are all required                                      |
-| `pulse-story-mobile-v1.html`                                   | The original single-file story     | v1 archive; superseded by the split                                          |
-| `odc-community-mobile-v1.html`                                 | Charter-side mobile feed           | Pending primary candidate (`services/web`)                                   |
-| `odc-ballot-voting-mobile-v1.html`                             | Charter-side mobile ballot flow    | Pending primary candidate                                                    |
-| `odc-ballot-voting-desktop-v1-light.html`                      | Charter-side desktop workspace     | Pending primary candidate                                                    |
-| `governance-modern-v1.html`                                    | Alternate that names "Civic Glass" | Exploration only                                                             |
-| `hub-feed-v2.html`, `hub-feed-v3.html`, `hub-feed-mockup.html` | Hub feed explorations              | **NOT a reference for pulse.** Post-MVP                                      |
+[`docs/mockups/CANDIDATE_CONTEXT.md`](../../../docs/mockups/CANDIDATE_CONTEXT.md)
+is the canonical index of current references, retained alternatives and historical
+decks for Pulse and the separate charter-side ODC candidates. Read it before
+choosing a deck. Update it in the same change that changes a candidate's standing;
+do not duplicate its status table here.
 
-`docs/mockups/CANDIDATE_CONTEXT.md` is the curator index for the charter-side
-candidates and records why each is what it is. Update it in the same change
-that changes a candidate's standing — a deck whose status moved and whose row
-did not is the failure mode this file exists to prevent.
-
-## The two visual languages, and the open question
+## The visual languages in the mockup archive
 
 **Civic Glass** — translucent, light. Canvas `#dfe5ec` under soft radial blue
 and teal washes; `--glass` white at 66% with `backdrop-filter: blur(18px)`;
@@ -40,20 +28,18 @@ negative letter-spacing on headings; layered soft shadows. The canonical
 `:root` block is `docs/mockups/pulse-screens/_screens.css` — read the values
 from there, never from memory or from this file.
 
-**The dark swipe ballot** — `01-claim.html` only. Near-black `#0a0b0e`,
+**The retired dark swipe ballot** — `01-claim.html` only. Near-black `#0a0b0e`,
 cardless, question as hero in a black top third, full-height No=red / Yes=green
 layers fading up into it, muted edge chevrons as the swipe affordance, an
 incognito motif meaning "your vote is private". It carries its own page chrome
 and `@import`s Inter because `_screens.css`'s page is light — without that
 override the dark screen floats on a light page and looks broken.
 
-**Screens 2–7 are still light.** Whether the whole deck goes dark is not
-recorded anywhere in the repo. Do not settle it by building: put the question
-in `memory/pulse.md` → "Open decisions (operator)" (per `memory/INDEX.md` →
-"Where new information goes"), get an answer, then build. Same
-for the swipe graph's up/down axis — left/right is the vote, and what up/down
-navigates to (comments, alternate next-votes, or both) is undecided; only
-left/right is wired today.
+**Historical screens 2–7 are light.** The archive's mixed palette does not
+reopen the current conversation design. Use the canonical index for current
+standing and the app's tokens for implementation (`odc-ui`). The swipe graph's
+up/down exploration is historical; the current conversation card uses explicit
+selection and Submit (ADR-0035).
 
 ## Authoring a mockup
 
@@ -73,11 +59,14 @@ left/right is wired today.
 
 The mockups run ahead of the build on purpose, but not past these lines:
 
-- **No free-text content surfaces as MVP.** The hub-feed decks show threaded
-  discussion; repo rule 5 scopes free text out of Phase 0/1. Treat those
-  screens as forward-looking illustration, never as a claim about what ships.
-- **Pulse never depicts the counting.** No hashes, chains, verification, or
-  how a tally is computed — in copy, in labels, or in a diagram.
+- **Charter-side MVP: no free-text content in the event log.** The hub-feed
+  decks' threaded discussion is forward-looking illustration, not a claim about
+  what ships in Phase 0/1. Pulse is charter-exempt; its comments are separate
+  planned work (#297), not a shipped surface.
+- **Pulse may explain counting, and never claims more than is built**
+  (ADR-0039). The explanation lives at `/trust`, in plain language with each
+  technical term explained where it first appears. No mockup may imply Pulse
+  votes are on a hash chain or ledger before they are.
 - **Charter-side keeps the taxonomy**: Ballots / Opinions / Actions, "Online
   Democratic Community", "verified humans". Ballot and Opinion are never drawn
   so they could be mistaken for each other.
@@ -118,7 +107,10 @@ working shape for this deck, not a big-bang deck drop.
 - [ ] The deck is openable standalone and walkable via `_nav.js`.
 - [ ] Tokens changed in `_screens.css`, not inline in a screen.
 - [ ] Palette matches a decided direction, or the decision is now recorded.
-- [ ] All required states drawn (the vote screen owes six; every view owes
-      loading / empty / error / content per `odc-ui`).
-- [ ] No free-text-MVP claims, no counting machinery in pulse, no real data.
+- [ ] The vote's six scenarios remain covered per the canonical index, using
+      current behavior; every view owes loading / empty / error / content
+      per `odc-ui`.
+- [ ] No claim of free-text content in the charter-side MVP event log; no
+      claim that Pulse votes are on a chain or ledger before they are
+      (ADR-0039); no real data.
 - [ ] `CANDIDATE_CONTEXT.md` updated if a candidate's standing moved.

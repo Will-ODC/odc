@@ -223,19 +223,23 @@ describe("showing where a question stands", () => {
 
   it("gives a way out that is not called Back", () => {
     const { onClose } = show();
-    fireEvent.click(screen.getByRole("button", { name: "Close" }));
+    const close = screen.getByRole("button", { name: "Close" });
+    expect(close.textContent).toBe("×");
+    fireEvent.click(close);
     expect(onClose).toHaveBeenCalledTimes(1);
   });
 
   /**
-   * The counting is never the subject - see apps/pulse/CLAUDE.md.
+   * The panel stays about the answers. How counting works is the trust
+   * page's job (ADR-0039), and the panel must never claim a public record or
+   * a check pulse does not have yet - see apps/pulse/CLAUDE.md.
    *
    * Both methods, because they draw different copy: only `approval` renders
    * the note explaining shares that pass a hundred, so a `single`-only scan
    * would let anything written there through.
    */
   it.each(["single", "approval"] as const)(
-    "never mentions how the counting works (%s)",
+    "keeps to the answers and claims no record or check (%s)",
     (method) => {
       show({ results: results({ ...COUNTED, method }) });
       const text = document.body.textContent ?? "";

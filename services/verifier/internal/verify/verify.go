@@ -9,7 +9,6 @@ import (
 	"crypto/sha256"
 	"encoding/hex"
 	"fmt"
-	"strings"
 )
 
 // Verdict is the chain verdict token (EV-7/EV-17).
@@ -48,15 +47,8 @@ func invalid(line int, reason string) Result {
 }
 
 // registry is the contracts-v1 (type, version) registry (ET-1/ET-2): the four
-// v1 types, each registered only at version 1.
-//
-// It is the SINGLE source of truth, and deliberately so. Both the accept/reject
-// decision (registered) and the EV-21 advisory text (unregisteredGenesisReason)
-// read this one table, so the versions a reader is TOLD this verifier registers
-// cannot drift from the versions it actually does. A second hand-maintained list
-// would go stale exactly when it matters most — the moment a new genesis version
-// is registered — and EV-21's whole purpose is that the list is what lets the
-// reader go and settle the question.
+// v1 types, each registered only at version 1. It is the single source of
+// truth for the accept/reject decision (registered).
 var registry = map[string][]int64{
 	"genesis":                {1},
 	"participant_registered": {1},
@@ -64,40 +56,24 @@ var registry = map[string][]int64{
 	"vote_cast":              {1},
 }
 
-// registeredVersions returns the versions registered for typ, ascending, or nil
-// for an unregistered type. The returned slice is the registry's own and MUST
-// NOT be mutated by callers.
-func registeredVersions(typ string) []int64 {
-	return registry[typ]
-}
-
 // unregisteredGenesisReason builds the advisory reason text for an EV-20
 // rejection. Reason text is never conformance-checked (EV-17) — conformance
-// here is the token INVALID and the line number 1, and nothing else. EV-21 is
-// guidance, and its point is honesty: the log alone CANNOT distinguish
+// here is the token INVALID and the line number 1, and nothing else.
 //
-//	(a) "this verifier does not register (genesis, N) — it may be out of date
-//	    for this chain", from
-//	(b) "this chain's genesis is corrupt or hostile",
-//
-// and the two ask opposite things of the reader. A verifier that picks one
-// sends someone hunting for tampering when the remedy may be to fetch a newer
-// verifier, and teaches readers to treat a legitimate newer chain as an attack.
-// So we name both, name the version encountered, and name the genesis versions
-// we do register, which is what lets the reader go and settle it.
+// EV-21 (evolution.md v8) is the guidance followed here. `genesis` has no
+// version but 1, in this contracts version and every later one (ET-6 pins it;
+// ET-9e records that nothing reopens the genesis payload). So a genesis at any
+// other version is never a legitimate chain newer than this verifier, and a
+// newer verifier would reject it the same way. The text therefore names the
+// version found, says the chain is corrupt, hostile or not an ODC chain, and
+// deliberately does NOT suggest fetching a newer verifier: no newer verifier
+// registers another genesis version, so that advice would send the reader
+// looking for a remedy that does not exist.
 func unregisteredGenesisReason(version int64) string {
-	var have strings.Builder
-	for i, v := range registeredVersions("genesis") {
-		if i > 0 {
-			have.WriteString(", ")
-		}
-		fmt.Fprintf(&have, "%d", v)
-	}
 	return fmt.Sprintf(
-		"genesis at unregistered version %d (EV-20); this verifier registers genesis version %s. "+
-			"From the log alone these are indistinguishable: this verifier may be out of date for "+
-			"this chain, or this chain's genesis may be corrupt or hostile (EV-21)",
-		version, have.String())
+		"genesis at version %d (EV-20); genesis has no version but 1 (ET-6), "+
+			"so this chain is corrupt, hostile, or not an ODC chain (EV-21)",
+		version)
 }
 
 // registered reports whether (typ, version) is in the contracts-v1 registry
@@ -110,6 +86,10 @@ func registered(typ string, version int64) bool {
 	}
 	return false
 }
+
+// maxContractsBytes is ET-9's bound on `genesis.contracts`, in bytes of the
+// decoded string's UTF-8 encoding (event-types.md v14).
+const maxContractsBytes = 64
 
 // Permanent floors on the issue_created ballot batching parameters (ET-14b).
 // The values above the floors are per-issue and votable; that a floor exists is
@@ -125,7 +105,17 @@ type vstate struct {
 	regPK   []byte                // genesis registrar_pk, decoded (ET-17)
 	haveKey bool                  // genesis keys captured
 	issues  map[string]*issueInfo // issue_created hash -> tracked facts (ID-7/ET-18a/ET-14b)
-	ballots ballotState           // ET-24/ET-24a batch instants already left
+	ballots ballotState           // opaque ballots, for ET-24b
+
+	// opaqueIssues holds the hash of every issue_created at an unregistered
+	// version: still a prior issue_created for ID-8/ET-18 (ET-18b). Only its
+	// envelope is read, never its payload (EV-15).
+	opaqueIssues map[string]struct{}
+
+	// unresolved is set by Stage B on a registered vote_cast with a check
+	// ET-18b or ET-24b leaves unresolved: not failed, but the line is
+	// enumerated in PARTIAL (EV-7, EV-17).
+	unresolved bool
 }
 
 // Options carries the optional out-of-band expectations a run may be given.
@@ -145,7 +135,8 @@ func Verify(data []byte, head *string) Result {
 // `--head` (EX-15) and `--chain` (EX-22) expectations.
 func VerifyWith(data []byte, opts Options) Result {
 	head, chain := opts.Head, opts.Chain
-	st := &vstate{issues: map[string]*issueInfo{}, ballots: newBallotState()}
+	st := &vstate{issues: map[string]*issueInfo{}, ballots: newBallotState(),
+		opaqueIssues: map[string]struct{}{}}
 	lines, faults := frame(data)
 
 	// An empty export verified as a chain is INVALID at line 1: it has no
@@ -166,7 +157,15 @@ func VerifyWith(data []byte, opts Options) Result {
 			return invalid(ln, "framing: "+reason)
 		}
 
-		obj, ok := parseObjectLine(lines[i])
+		obj, ok, tooDeep := parseLine(lines[i])
+		if tooDeep {
+			// EV-24: this verifier's depth limit (64, the EV-23 minimum) was
+			// reached. A limit above 2 establishes INVALID at this line, and
+			// no earlier line was fatal or we would have returned already.
+			return invalid(ln, fmt.Sprintf(
+				"nesting deeper than %d, this verifier's limit (EV-23/EV-24); "+
+					"any line deeper than 2 is INVALID (ES-15/ES-17, EV-16)", maxParseDepth))
+		}
 		if !ok {
 			return invalid(ln, "non-canonical line form (EX-7..EX-10)")
 		}
@@ -223,13 +222,29 @@ func VerifyWith(data []byte, opts Options) Result {
 				// chain on which nothing was ever authenticated.
 				return invalid(1, unregisteredGenesisReason(e.version))
 			}
+			// Envelope-only facts later registered checks depend on (EV-15:
+			// ET-18b and ET-24b read the envelope of an unregistered event,
+			// never its payload, and never make it INVALID).
+			switch e.typ {
+			case "issue_created":
+				st.opaqueIssues[e.hash] = struct{}{} // ET-18b
+			case "vote_cast":
+				st.ballots.opaqueBallot(e.seq, tsMillis(e.ts)) // ET-24b item 1
+			}
 			partial = append(partial, ln)
 			prev = e
 			continue
 		}
 
+		st.unresolved = false
 		if reason, ok := stageB(st, e); !ok {
 			return invalid(ln, reason)
+		}
+		if st.unresolved {
+			// EV-17: every registered vote_cast line with a check ET-18b or
+			// ET-24b leaves unresolved. Lines are visited once, in order, so
+			// the list stays ascending without duplicates.
+			partial = append(partial, ln)
 		}
 		prev = e
 	}
@@ -258,7 +273,7 @@ func VerifyWith(data []byte, opts Options) Result {
 
 	if len(partial) > 0 {
 		return Result{Verdict: PARTIAL, Lines: partial,
-			Reason: "unregistered (type, version); Stage B not run"}
+			Reason: "these lines could not be fully checked: each is an event at a (type, version) this verifier does not register, or a ballot whose checks depend on such an event (EV-7, ET-18b, ET-24b)"}
 	}
 	return Result{Verdict: VALID}
 }
@@ -290,7 +305,6 @@ func stageBGenesis(st *vstate, e *event) (string, bool) {
 		return "genesis payload key set (ES-18/ES-34)", false
 	}
 	chainID := mustStr(e.payload, "chain_id")
-	contracts := mustStr(e.payload, "contracts")
 	operatorPK := mustStr(e.payload, "operator_pk")
 	registrarPK := mustStr(e.payload, "registrar_pk")
 	sig := mustStr(e.payload, "sig")
@@ -329,8 +343,21 @@ func stageBGenesis(st *vstate, e *event) (string, bool) {
 	if !isHex64(chainID) {
 		return "chain_id not 64 lowercase hex (ET-6)", false
 	}
-	if contracts == "" {
+	// ET-9 — `contracts` is a non-empty string of at most 64 bytes, counted
+	// on the UTF-8 encoding of the DECODED value: the string after JSON
+	// unescaping, the same value HA-2 hashes, never the escaped bytes on the
+	// line (EX-9). The parser has already unescaped it and checked it is valid
+	// UTF-8, so len() of the decoded Go string is exactly that count — an
+	// escaped control character such as `\u0001` (six bytes on the line) counts
+	// as one, and a four-byte scalar counts as four (bytes, not scalars: ET-9
+	// is not ET-14). The bound exists to bound the line (EV-25).
+	if v, _ := payloadGet(e.payload, "contracts"); v.kind != kString {
+		return "contracts is not a string (ET-9)", false
+	} else if len(v.str) == 0 {
 		return "contracts must be non-empty (ET-9)", false
+	} else if len(v.str) > maxContractsBytes {
+		return fmt.Sprintf("contracts is %d bytes decoded; at most %d allowed (ET-9)",
+			len(v.str), maxContractsBytes), false
 	}
 	if !isHex128(sig) {
 		return "sig not 128 lowercase hex (ES-31)", false
@@ -347,18 +374,21 @@ func stageBGenesis(st *vstate, e *event) (string, bool) {
 	ancChain, haveChain := payloadGet(e.payload, "ancestor_chain")
 	ancHead, haveHead := payloadGet(e.payload, "ancestor_head")
 
-	// The asymmetry below is the rule, not an oversight, and MUST NOT be
-	// "tidied" into a both-or-neither pair (ET-9f):
-	//   - `ancestor_head` alone is barred. It names a position on an UNNAMED
-	//     chain — the head-alone anchoring charter §4 rejects (ET-7a) — and no
-	//     reader can check it, because nothing in the payload says which export
-	//     to open.
-	//   - `ancestor_chain` alone is ACCEPTED. It is the weaker but coherent
-	//     claim "forked from chain X, fork point unrecorded": a named chain, no
-	//     position. Nothing below rejects it.
-	//   - Both absent is the ordinary no-recorded-ancestor form (ES-34).
+	// ET-9f (event-types.md v13): both keys, or neither. A genesis carrying
+	// exactly one of them is INVALID at its line:
+	//   - `ancestor_head` alone names a position on an UNNAMED chain — the
+	//     head-alone anchoring charter §4 rejects (ET-7a) — and no reader can
+	//     check it, because nothing in the payload says which export to open.
+	//   - `ancestor_chain` alone names the parent but withholds a position the
+	//     forker always holds (ET-9e), so the claim is checkable only halfway.
+	//     (Up to v12 this form was accepted; v13 reverses that.)
+	//   - Both absent is the ordinary no-recorded-ancestor form (ES-34), to
+	//     which ET-9f does not apply.
 	if haveHead && !haveChain {
 		return "ancestor_head present without ancestor_chain (ET-9f)", false
+	}
+	if haveChain && !haveHead {
+		return "ancestor_chain present without ancestor_head (ET-9f)", false
 	}
 	if haveChain {
 		if ancChain.kind != kString || !isHex64(ancChain.str) {
@@ -499,7 +529,7 @@ func stageBIssue(st *vstate, e *event) (string, bool) {
 	// ID-7: issue_id is this event's hash; record with its choice_count
 	// (ET-18a) and the ET-14b batching parameters ET-23/ET-24 read.
 	st.issues[e.hash] = &issueInfo{choiceCount: ccV.ival,
-		intervalMS: intervalV.ival, batchMin: minV.ival}
+		intervalMS: intervalV.ival, batchMin: minV.ival, seq: e.seq}
 	return "", true
 }
 
@@ -518,11 +548,29 @@ func stageBVote(st *vstate, e *event) (string, bool) {
 		return "issue_id not 64 lowercase hex (ID-8)", false
 	}
 	iss, known := st.issues[issueID]
-	if !known {
+	_, opaqueIssue := st.opaqueIssues[issueID]
+	if !known && !opaqueIssue {
 		return "vote references unknown or forward issue (ET-18/ID-8)", false
 	}
 	if choiceV.kind != kInt {
 		return "choice must be an integer (ET-19)", false
+	}
+	if opaqueIssue {
+		// ET-18b: the issue_created is at a version this verifier does not
+		// register. It is still a prior issue_created, so ET-18 passes;
+		// choice_count and both batching parameters are unreadable, so
+		// ET-18a, ET-23, ET-24 and ET-24a are unresolved — never INVALID on
+		// that ground. Every other check (ES-18 above, ET-19 above, ET-17
+		// below) applies as usual. The ballot is no registered ballot of any
+		// issue for ET-24b, and no candidate either: it is not opaque.
+		if !isHex128(sig) {
+			return "sig not 128 lowercase hex (ES-31)", false
+		}
+		if !verifyEd25519(st.regPK, hexToBytes(sig), preimage(e, "sig")) {
+			return "vote signature invalid under registrar_pk (ET-17)", false
+		}
+		st.unresolved = true
+		return "", true
 	}
 	if choiceV.ival < 0 || choiceV.ival >= iss.choiceCount {
 		return "choice out of [0, choice_count) (ET-18a)", false
@@ -541,13 +589,16 @@ func stageBVote(st *vstate, e *event) (string, bool) {
 	if tsMS%iss.intervalMS != 0 {
 		return "ts is not a multiple of the issue's ballot_batch_interval_ms (ET-23)", false
 	}
-	// ET-24 / ET-24a: place the ballot in its issue's batch sequence. Both
-	// rules are decided at this ballot's own line (event-types.md v11): a
-	// change of ts closes the previous batch for good (ET-24a), so an
-	// under-size batch is proven not-last exactly here (ET-24), and a ts equal
-	// to an instant this issue has already left is a return (ET-24a).
-	if reason, ok := st.ballots.observe(iss, tsMS); !ok {
+	// ET-24 / ET-24a, as ET-24b qualifies them beside opaque ballots: both
+	// rules are decided at this ballot's own line. A change of ts closes the
+	// previous run for good (ET-24a), so an under-size run is proven not-last
+	// exactly here (ET-24) unless candidates could have filled it, and a ts
+	// equal to an instant this issue already used is a return (ET-24a).
+	switch out, reason := iss.observe(&st.ballots, e.seq, tsMS); out {
+	case batchFail:
 		return reason, false
+	case batchUnresolved:
+		st.unresolved = true
 	}
 	return "", true
 }

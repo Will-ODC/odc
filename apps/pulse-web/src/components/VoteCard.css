@@ -125,6 +125,18 @@
   outline: calc(var(--hairline) * 2) solid var(--focus-ring);
   outline-offset: calc(var(--hairline) * 2);
 }
+.vote-card__link {
+  color: var(--ballot-ink-soft);
+  text-decoration: underline;
+  text-underline-offset: 0.2em;
+}
+.vote-card__link:hover {
+  color: var(--ballot-ink);
+}
+.vote-card__link:focus-visible {
+  outline: calc(var(--hairline) * 2) solid var(--focus-ring);
+  outline-offset: calc(var(--hairline) * 2);
+}
 .vote-card__summary {
   flex: 1;
   min-width: 0;
@@ -139,4 +151,14 @@
 
 .vote-card--collapsed {
   flex-wrap: nowrap;
+}
+
+.vote-card button.vote-card__close {
+  flex: 0 0 auto;
+  margin-inline-start: auto;
+  min-inline-size: calc(var(--step) * 5.5);
+  min-block-size: calc(var(--step) * 5.5);
+  padding: var(--step);
+  font-size: var(--t-body);
+  line-height: 1;
 }

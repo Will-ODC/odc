@@ -1,0 +1,16 @@
+/* Sits in TopBanner's identity slot; reads the banner's tokens, no literals. */
+.signed-in {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: center;
+  justify-content: flex-end;
+  gap: var(--step);
+  min-width: 0;
+  font-size: var(--t-small);
+  color: var(--ballot-ink-muted);
+}
+
+.signed-in__who {
+  min-width: 0;
+  overflow-wrap: anywhere;
+}

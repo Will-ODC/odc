@@ -14,10 +14,8 @@ import { pathOf, routeFrom } from "../flow/route.js";
  * The href is kept as a string rather than a `Route` because a `Route` is a
  * fresh object every render and would never compare equal to itself.
  *
- * There is deliberately no `go` — no push. Every move this app makes today is
- * away from a sign-in URL that must not come back, and a `go` that nothing
- * called was a method whose history entry no test could exercise. Add it with
- * the first screen that genuinely wants a way back.
+ * Welcome navigation pushes so Back can return to the introduction. Token
+ * redemption still replaces the spent URL.
  */
 export function useRoute(): {
   route: Route;
@@ -29,6 +27,7 @@ export function useRoute(): {
    * that can only answer "already used".
    */
   replace: (to: Route) => void;
+  go: (to: Route) => void;
 } {
   const [href, setHref] = useState(() => globalThis.location.href);
 
@@ -43,5 +42,10 @@ export function useRoute(): {
     setHref(globalThis.location.href);
   }, []);
 
-  return { route: useMemo(() => routeFrom(href), [href]), replace };
+  const go = useCallback((to: Route) => {
+    globalThis.history.pushState(null, "", pathOf(to));
+    setHref(globalThis.location.href);
+  }, []);
+
+  return { route: useMemo(() => routeFrom(href), [href]), replace, go };
 }

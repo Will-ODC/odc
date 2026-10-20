@@ -12,11 +12,14 @@ import {
 import { MailSendError } from "../src/identity/mailer.js";
 import { ResendMailer } from "../src/identity/resend-mailer.js";
 import { allowDomain } from "../src/identity/pg-store.js";
+import { ConfirmationKey } from "../src/voting/confirmation.js";
+import { PostgresVotingStore } from "../src/voting/pg-store.js";
 import { databaseSkip, throwawaySchema } from "./support/database.js";
 
 /** Everything a served pulse refuses to start without. */
 const COMPLETE: NodeJS.ProcessEnv = {
   PULSE_SESSION_SECRET: "a-secret-that-is-long-enough",
+  PULSE_CONFIRMATION_KEY: "a-confirmation-key-that-is-long-enough-1234",
   PULSE_DATABASE_URL: "postgres://pulse:pulse@127.0.0.1:5433/pulse_test",
   PULSE_WEB_ORIGIN: "https://pulse.example.org",
   PULSE_RESEND_API_KEY: "re_test_key",
@@ -51,6 +54,7 @@ test("every_value_the_dev_server_may_invent_is_refused_here", () => {
     "PULSE_DATABASE_URL",
     "PULSE_WEB_ORIGIN",
     "PULSE_RESEND_API_KEY",
+    "PULSE_CONFIRMATION_KEY",
   ]) {
     assert.throws(
       () => serveConfig(without(name)),
@@ -68,6 +72,7 @@ test("an_empty_value_is_as_missing_as_an_unset_one", () => {
     "PULSE_DATABASE_URL",
     "PULSE_WEB_ORIGIN",
     "PULSE_RESEND_API_KEY",
+    "PULSE_CONFIRMATION_KEY",
   ]) {
     assert.throws(
       () => serveConfig({ ...COMPLETE, [name]: "   " }),
@@ -93,9 +98,42 @@ test("everything_missing_is_named_at_once_rather_than_one_per_restart", () => {
     "PULSE_DATABASE_URL",
     "PULSE_WEB_ORIGIN",
     "PULSE_RESEND_API_KEY",
+    "PULSE_CONFIRMATION_KEY",
   ]) {
     assert.match(error.message, new RegExp(name));
   }
+});
+
+test("the_confirmation_key_is_read_and_is_not_the_session_secret", () => {
+  // ADR-0040: a second secret, never derived from the first. The same value in
+  // both is refused, and so is one too short to keep the code one-way — and
+  // neither refusal prints the value it refused.
+  assert.equal(
+    serveConfig(COMPLETE).confirmationKey,
+    COMPLETE["PULSE_CONFIRMATION_KEY"],
+  );
+
+  const same = "the-same-value-for-both-of-them-0123456789";
+  assert.throws(
+    () =>
+      serveConfig({
+        ...COMPLETE,
+        PULSE_SESSION_SECRET: same,
+        PULSE_CONFIRMATION_KEY: same,
+      }),
+    (error: Error) =>
+      /PULSE_CONFIRMATION_KEY/.test(error.message) &&
+      !error.message.includes(same),
+  );
+
+  const short = "short-key-0123456789";
+  assert.throws(
+    () => serveConfig({ ...COMPLETE, PULSE_CONFIRMATION_KEY: short }),
+    (error: Error) =>
+      /PULSE_CONFIRMATION_KEY/.test(error.message) &&
+      /at least 32/.test(error.message) &&
+      !error.message.includes(short),
+  );
 });
 
 test("a_mail_key_without_a_sender_is_still_the_mailers_own_refusal", () => {
@@ -246,6 +284,7 @@ function servedConfig(schema: string): ServeConfig {
     port: 0,
     host: "127.0.0.1",
     secret: "a-secret-that-is-long-enough",
+    confirmationKey: "a-confirmation-key-that-is-long-enough-1234",
     databaseUrl: process.env["PULSE_DATABASE_URL"] as string,
     webOrigin: "https://pulse.example.org",
     schema,
@@ -277,6 +316,7 @@ test(
       port: 0,
       host: "127.0.0.1",
       secret: "a-secret-that-is-long-enough",
+      confirmationKey: "a-confirmation-key-that-is-long-enough-1234",
       databaseUrl: process.env["PULSE_DATABASE_URL"] as string,
       webOrigin: "https://pulse.example.org",
       schema,
@@ -352,6 +392,34 @@ test(
     const header = Array.isArray(cookie) ? cookie.join(";") : String(cookie);
     assert.match(header, /Secure/);
     assert.match(header, /HttpOnly/);
+
+    // The served wiring confirms a signed-in vote with the configured key
+    // (ADR-0040): the stored code is that key's code for this account and
+    // poll, and no account id sits beside the answer.
+    await new PostgresVotingStore(pool).createPoll({
+      id: "served",
+      question: "Q",
+      choices: ["A", "B"],
+      method: "single",
+    });
+    const session = clicked.cookies.find((c) => c.name === "pulse_session");
+    const cast = await app.inject({
+      method: "POST",
+      url: "/api/polls/served/votes",
+      headers: { cookie: `pulse_session=${session?.value as string}` },
+      payload: { ballot: [1] },
+    });
+    assert.equal(cast.statusCode, 200);
+    assert.equal(cast.json().results.confirmedVoters, 1);
+    const stored = await pool.query<{ voter_id: string; confirmation: string }>(
+      "select voter_id, confirmation from vote where poll_id = 'served'",
+    );
+    const voterId = clicked.json().voter.id as string;
+    assert.equal(
+      stored.rows[0]?.confirmation,
+      new ConfirmationKey(config.confirmationKey).codeFor(voterId, "served"),
+    );
+    assert.notEqual(stored.rows[0]?.voter_id, voterId);
   },
 );
 
@@ -426,6 +494,7 @@ test(
       port: 0,
       host: "127.0.0.1",
       secret: "a-secret-that-is-long-enough",
+      confirmationKey: "a-confirmation-key-that-is-long-enough-1234",
       databaseUrl: process.env["PULSE_DATABASE_URL"] as string,
       webOrigin: "https://pulse.example.org",
       schema,

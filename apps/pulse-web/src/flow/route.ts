@@ -1,7 +1,7 @@
 /**
  * Which part of pulse a URL points at.
  *
- * Pure on purpose, like `story.ts` and `swipe.ts`: reading a URL is a decision
+ * Pure on purpose: reading a URL is a decision
  * with edge cases worth testing exhaustively, and none of them need React.
  *
  * There are three places to be, plus one prototype (#228), and the emailed
@@ -13,8 +13,9 @@
  * nobody had clicked anything.
  */
 export type Route =
-  /** Walking the graph of questions, starting at `pollId`. */
-  | { kind: "run"; pollId: string }
+  | { kind: "welcome" }
+  | { kind: "progress" }
+  | { kind: "questions" }
   /** Asking for a sign-in link. */
   | { kind: "signIn" }
   /** Arrived from the emailed link, holding a token to spend. */
@@ -23,7 +24,11 @@ export type Route =
    * The chat-voting prototype (#228). Sample data, no server calls; reachable
    * only by typing the path, so nobody arrives in it by accident.
    */
-  | { kind: "chatPreview" };
+  | { kind: "chatPreview" }
+  /** "Why you can trust your vote" (#351). Static copy, no server calls. */
+  | { kind: "trust" }
+  /** Live conversation page; explicit poll links bypass the welcome. */
+  | { kind: "conversation"; pollId: string };
 
 /**
  * Where a run begins when the URL does not say.
@@ -36,6 +41,7 @@ export const FIRST_POLL_ID = "ads-free";
 
 const SIGN_IN_PATH = "/sign-in";
 const CHAT_PREVIEW_PATH = "/preview/chat";
+export const TRUST_PATH = "/trust";
 
 /**
  * A base for parsing, never for navigating.
@@ -66,25 +72,37 @@ export function routeFrom(href: string): Route {
   }
 
   if (path === CHAT_PREVIEW_PATH) return { kind: "chatPreview" };
+  if (path === TRUST_PATH) return { kind: "trust" };
+  if (path === "/start") return { kind: "progress" };
+  if (path === "/questions") return { kind: "questions" };
 
-  // `?poll=` so a run can be started anywhere in the graph without a rebuild.
-  return { kind: "run", pollId: url.searchParams.get("poll") || FIRST_POLL_ID };
+  if (path === "/" && !url.searchParams.get("poll")) return { kind: "welcome" };
+
+  // `?poll=` so a conversation can be started anywhere in the graph without a rebuild.
+  return {
+    kind: "conversation",
+    pollId: url.searchParams.get("poll") || FIRST_POLL_ID,
+  };
 }
 
 /** The URL a route should show. The inverse of `routeFrom` for every route. */
 export function pathOf(route: Route): string {
   switch (route.kind) {
+    case "welcome":
+      return "/";
+    case "progress":
+      return "/start";
+    case "questions":
+      return "/questions";
     case "signIn":
       return SIGN_IN_PATH;
     case "redeem":
       return `${SIGN_IN_PATH}?token=${encodeURIComponent(route.token)}`;
     case "chatPreview":
       return CHAT_PREVIEW_PATH;
-    case "run":
-      // The default start is the bare path, so the common URL stays clean and
-      // shareable rather than carrying a parameter that changes nothing.
-      return route.pollId === FIRST_POLL_ID
-        ? "/"
-        : `/?poll=${encodeURIComponent(route.pollId)}`;
+    case "trust":
+      return TRUST_PATH;
+    case "conversation":
+      return `/?poll=${encodeURIComponent(route.pollId)}`;
   }
 }

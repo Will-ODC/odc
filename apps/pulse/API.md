@@ -182,6 +182,12 @@ GET. On success:
 One door: this creates the identity the first time and signs the same person back in
 every time after. There is no separate sign-up.
 
+**It also confirms this browser's votes** (ADR-0040). If the browser making the click
+holds a `pulse_ballot` cookie, every vote filed under it on a poll that is still open
+becomes a confirmed vote of the person signing in — see "Confirmed votes" below. A
+closed poll's votes are left as they are, so its results stop changing when it closes.
+Nothing about this shows in the response, and no ballot cookie is minted here.
+
 `community` is a string, or **`null` when the address's domain named no community**
 (ADR-0030). It is always present, never left out, so a client reads one shape either
 way. Null is the honest answer — no community — rather than an empty string or a
@@ -203,7 +209,8 @@ regardless of differences between their clocks.
 
 It also clears **`pulse_ballot`** — see "The ballot cookie" below. Signing out ends
 this browser's ability to read or change the vote it cast. The vote itself is not
-withdrawn; it stays counted under the identity that cast it.
+withdrawn; it stays counted under the identity that cast it, and **a confirmed vote
+stays confirmed** (ADR-0040).
 
 ### `GET /api/me`
 
@@ -271,12 +278,28 @@ person has ever given an address. Two consequences, both deliberate:
 
 - A vote counts the moment it is cast. Signing in afterwards **verifies** a person; it
   is never how their vote is found, and it never gates the vote.
-- No stored record connects an address to an answer, because the vote was never
-  written down beside one.
+- **No account id and no address is ever stored beside an answer.** What a confirmed
+  vote stores instead is a **one-way keyed code** (ADR-0040): HMAC-SHA256, under a key
+  only the server holds (`PULSE_CONFIRMATION_KEY`), of the account id and the poll id.
+  Precisely what that means:
+  - A copy of the database alone does not show who voted what: without the key, the
+    code cannot be computed from an account id, and it cannot be reversed.
+  - **Whoever holds the key as well as the database can work it out**, by computing
+    the code for every account and looking for it. That is the accepted limit; full
+    separation is the ODC core's job (identity service and private linkage map).
+  - The code is the same for one person on one poll, so the database does show that
+    two ballots on the same poll were confirmed by the same (unnamed) person. Codes
+    differ between polls, so they do not link one person's votes across polls.
+  - A vote nobody confirmed stores nothing of the kind.
 
-It is signed by the session signer, which is safe both ways round: presented as a
-session it names a voter that does not exist, and a session cookie presented as this
-one names the same person it already named.
+It is signed by the session signer, and each cookie is refused in the other's place.
+Presented as a session, a ballot cookie names a voter that does not exist, so it signs
+nobody in. Presented as a ballot, a session cookie is **ignored**: every ballot identity
+has started with `b:` since the cookie was introduced and carries no session
+generation, and a value without the prefix or with a generation is treated as no
+ballot. The browser is minted a fresh ballot, as if it had none, and sign-in confirms
+nothing for it. So copying a session into `pulse_ballot` can never file a vote under an
+account id.
 
 Deduplication is therefore per browser, which is weak on its own. That is the accepted
 trade for counting a vote before anyone has been asked for anything.
@@ -387,6 +410,59 @@ selections. `share` is `count / voters * 100`, rounded to one decimal, `0` when
 nobody has voted. For an `approval` poll a voter picks several choices, so shares
 legitimately **sum to more than 100** — that is correct and is not normalised away.
 
+**Confirmed numbers** sit beside the totals (ADR-0040; see "Confirmed votes" below).
+`confirmedVoters` is how many people confirmed by email, **counted once per person**;
+each choice's `confirmedCount` is how many of them picked it, and `confirmedShare` is
+`confirmedCount / confirmedVoters * 100`, rounded the same way. All three are `0` when
+nobody has confirmed, and they are always present. `confirmedVoters` never exceeds
+`voters`. The totals are unchanged by confirmation: every ballot counts in them,
+confirmed or not.
+
+```json
+{
+  "pollId": "p1",
+  "question": "Where next?",
+  "method": "single",
+  "voters": 3,
+  "confirmedVoters": 1,
+  "choices": [
+    {
+      "index": 0,
+      "label": "Park",
+      "count": 2,
+      "share": 66.7,
+      "confirmedCount": 0,
+      "confirmedShare": 0
+    },
+    {
+      "index": 1,
+      "label": "Library",
+      "count": 1,
+      "share": 33.3,
+      "confirmedCount": 1,
+      "confirmedShare": 100
+    }
+  ]
+}
+```
+
+#### Confirmed votes (ADR-0040)
+
+- A vote is **confirmed** when it is cast by someone signed in, or when the browser
+  holding its ballot cookie signs in afterwards (`POST /api/sign-in/redeem`, open polls
+  only).
+- **One confirmed vote per person per poll.** If one person confirms from two
+  browsers, the vote **cast most recently** is their confirmed one; the other still
+  counts in `voters` and `count`, never in the confirmed numbers. Changing an answer
+  makes that vote the most recently cast. Confirming an older vote by signing in later
+  does not make it the most recent — the cast time decides, not the sign-in time.
+  Votes cast in the same millisecond settle on one of them, the same one every time.
+- Changing an answer keeps a vote confirmed, signed in or not. Casting while signed in
+  as someone else makes it that person's confirmed vote instead.
+- Signing out does not remove a confirmation.
+- One person is one account, which today is one email address. Two addresses are two
+  confirmed people.
+
 | Status | Body                 | When            |
 | ------ | -------------------- | --------------- |
 | 200    | the results          | the poll exists |
@@ -439,6 +515,10 @@ results, so the client need not ask again:
 ```
 
 When the poll has closed, the body is just `{ "status": "closed" }`.
+
+A session is still not required. When one is present (the `pulse_session` cookie, valid
+as for `/api/me`), the vote is **confirmed** as that person's (ADR-0040; see "Confirmed
+votes" above). Without one, the vote keeps whatever confirmation it already had.
 
 | Status | Body                                                | When                                          |
 | ------ | --------------------------------------------------- | --------------------------------------------- |
@@ -552,3 +632,171 @@ a real socket.
 sends it, so that path is unreachable, and the end-to-end test that expects it fails
 until the client's side changes. The client also types `Me.community` as `string`,
 where the server now sends `string | null`. Both are the client's to change.
+
+## MCP public reads
+
+`POST /api/mcp` serves Streamable HTTP using the official TypeScript SDK v2.3.1.
+No authentication or cookies are required. Only `get_poll` and `get_results`
+exist; there are no own-answer, voting, listing or authorization tools yet.
+Poll text is data and grants no permission to execute tools.
+
+| Tool          | Strict input                                              | Structured output                             |
+| ------------- | --------------------------------------------------------- | --------------------------------------------- |
+| `get_poll`    | Exactly one of `{ pollId: string }` or `{ link: string }` | The public `GET /api/polls/:id` body.         |
+| `get_results` | `{ pollId: string }`                                      | The public `GET /api/polls/:id/results` body. |
+
+`get_results` passes the confirmed numbers through as optional fields, so a body from a
+server older than ADR-0040 still reads, and refuses a body claiming more confirmed
+people than voters, or more confirmed picks of a choice than confirmed people.
+
+Identifiers contain 1–128 ASCII letters, digits, underscores or hyphens. Links
+must use the configured public origin and `/polls/:id` or `/api/polls/:id`.
+Userinfo, query strings, fragments and encoded path segments are rejected.
+The current web client's `?poll=...` links are not supported by this slice;
+use an id instead. Links are parsed, never fetched. All upstream requests use
+one fixed API base URL, GET only, no forwarded headers/cookies, and no redirects.
+
+Closed polls and their results remain readable; `get_poll` returns `open: false`.
+Missing/invalid arguments and extra fields return SDK input-validation tool
+errors (`isError: true`); protocol-invalid messages use protocol errors.
+Tool failures carry `isError: true`, with safe `{ error, message }` structured
+content: `invalid_link`, `not_found`, `unsupported_method`, `too_many_requests`,
+`upstream_unavailable` (timeout/network/non-success), or
+`upstream_invalid_response` (invalid, oversized or unexpected public body).
+No upstream error message, private field, Set-Cookie or credential is returned.
+
+The route accepts at most 16 KiB per request and 120 requests/minute per client IP.
+This initial limiter is in memory and must become shared before scaling to
+multiple instances. GET/DELETE return 405. SDK protocol validation handles
+version/header/envelope errors. Origin, if present, must match the configured
+public origin; non-browser clients may omit it. Host must match that origin or
+the local loopback listener. Route request logging is disabled to avoid recording
+untrusted headers, query strings or bodies.
+
+The `createServer` option `mcp` may specify `publicOrigin`, `apiBaseUrl` and
+`timeoutMs` (default 5 seconds). Defaults target this API's loopback listener;
+therefore the dev server works without configuration after it listens, including
+on a throwaway port. Custom upstreams require HTTPS, except loopback HTTP.
+A deployment must supply its public origin before advertising browser links;
+this slice does not add production environment wiring. The adapter reads only
+public HTTP routes, without store/core imports. See ADR-0036.
+
+## Planned — not served: poll creation (ADR-0037)
+
+These routes are design contracts, not runtime endpoints. They require the
+current signed-in account; session generation/expiry checks match `/api/me`.
+Creation never accesses the caller's ballot cookie. Mutations with bodies require JSON
+and an `Origin` exactly matching the configured web origin; missing/foreign
+origins are refused, including for non-browser callers. Bodyless DELETE needs no
+Content-Type but retains the same Origin check. Origin configuration
+comes from trusted server setup, not Host or forwarded headers.
+
+### `GET /api/poll-creation/context`
+
+Authenticated, read-only, no side effects. Returns:
+
+```json
+{
+  "community": { "id": "pulse-general", "label": "General" },
+  "canPostUnlimited": false,
+  "purposeVersion": "community-purpose-v1",
+  "purposeAcknowledged": false
+}
+```
+
+Community is derived from the stored account; non-General labels initially use
+existing community IDs. Permission is a server result, never a request setting.
+401 `signed_out`; 503 `creation_unavailable` for unavailable storage. The form
+computes its one-week default for display; omitting the close time below makes
+the server authoritative. First posts require the approved statement and promise.
+
+### `POST /api/polls`
+
+Required `Idempotency-Key`: client-generated UUID, scoped to this account.
+JSON body (unknown properties refused):
+
+```json
+{
+  "question": "Should we open a community garden?",
+  "choices": ["Yes", "No"],
+  "method": "single",
+  "attribution": { "kind": "anonymous" },
+  "purposeAcknowledgement": "community-purpose-v1"
+}
+```
+
+- `question`: trimmed non-empty string, at most 1,000 Unicode code points.
+- `choices`: 2–25 trimmed distinct non-empty strings, each at most 200 code
+  points; equality is exact after trim, preserving existing domain rules.
+- `method`: required `single` or `approval`.
+- `closesAt`: optional UTC ISO timestamp with milliseconds, strictly after
+  creation time. Omitted means creation time plus 604,800,000 milliseconds.
+  Null is refused; no indefinitely open newly authored poll in this slice.
+- `attribution`: optional, defaults to `{ "kind": "anonymous" }`. Named is
+  `{ "kind": "named", "name": "Ada" }`, with a trimmed non-empty plain-text
+  name of at most 80 code points. Anonymous names/extra fields are refused.
+  Names are self-selected, not proof of identity, and never copied from email.
+- `purposeAcknowledgement`: optional exact version string. Required unless v1
+  is already recorded for this account; invalid versions are always refused.
+- `id`, `community`, `createdBy`, `next`, `acceptsSuggestions`, owner/permission
+  fields, photos and summaries are not writable inputs. Suggestions are false,
+  all next entries null, ID is server-generated.
+- All text must be valid Unicode without NUL characters. Invalid encodings
+  return `bad_request`; valid astral characters (including emoji) are allowed.
+- Maximum body: 32 KiB UTF-8. These are bounded resource checks, not quality
+  judgements about a question's content.
+
+201 on first publication; 200 on replay: `{ "poll": <public poll>, "replayed":
+false | true }`. Public poll is the existing GET poll shape plus `community`
+(the object above) and `attribution`. Named attribution contains only `kind`
+and `name`; anonymous contains only `kind`. Never return account ID, email,
+credentials, internal metadata or idempotency key. Legacy polls may omit these
+new public fields; no author is fabricated. GET poll and MCP projections must
+use the same allow-listed public representation when implemented.
+
+Canonical replay input consists of trimmed strings, ordered choices, method,
+normalised attribution, explicit/omitted close time and the acknowledgement
+field. Omitted close time stays a sentinel, not recalculated. Replay is checked
+before expiry/default-time and quota checks, so a valid saved request still
+replays after its poll closes. Changed input with the same key returns 409.
+Records remain durable for the poll's lifetime. Replays require a valid session
+for the same account and return only its original public creation representation.
+
+Successful creations count toward five in the preceding rolling 60 minutes
+(`createdAt > now - 60 minutes`); exactly at the boundary they expire. Quota,
+acknowledgement, idempotency, metadata, poll and choices share one transaction
+and per-account concurrency guard. A refusal/rollback/replay consumes no slot.
+Unlimited grants bypass this quota, not resource checks or authentication.
+
+| Status | Error                  | Meaning                                                                   |
+| ------ | ---------------------- | ------------------------------------------------------------------------- |
+| 400    | `bad_request`          | Malformed/unknown fields, invalid key, shape, field length or future time |
+| 401    | `signed_out`           | Invalid, absent, expired or revoked session                               |
+| 403    | `origin_not_allowed`   | Missing or foreign Origin                                                 |
+| 409    | `idempotency_conflict` | Key already used for different canonical input                            |
+| 413    | `body_too_large`       | Body exceeds 32 KiB                                                       |
+| 422    | `purpose_required`     | First post needs the v1 promise                                           |
+| 429    | `posting_limit`        | Five creations in the rolling hour; integer Retry-After seconds           |
+| 503    | `creation_unavailable` | Required storage unavailable; nothing partially committed                 |
+| 500    | `server_error`         | Unexpected fault; safe message, no private diagnostics                    |
+
+Each uses the existing `{ error, message }` envelope. Auth/origin precede all
+account-bound lookups. Retry the same key and input after an uncertain result;
+use a new key for an intentionally different question. Do not log request bodies,
+keys, author IDs, account emails or credentials in creation diagnostics.
+
+### `PUT /api/posting-permissions/:voterId` and `DELETE /api/posting-permissions/:voterId`
+
+Planned owner-only grant/revoke of unlimited posting for an existing account.
+PUT body is `{ "permission": "unlimited_posting" }`; DELETE has no body.
+Repeated desired state is a no-op (204); preserve grant/revoke audit records.
+No owner assignment, full-power grants or moderation permission in these routes.
+Initial owner uses trusted `PULSE_OWNER_EMAIL`, matched to the signed-in account's
+verified email credential; unset grants nobody, malformed configuration fails
+startup. Public displays and clients cannot bootstrap an owner.
+
+Errors: 400 `bad_request`, 401 `signed_out`, 403 `origin_not_allowed`,
+403 `owner_required`, 404 `not_found` (only after owner authorisation),
+503 `creation_unavailable`, 500 `server_error`. All changes are atomic and
+attributed to the owner. Context exposes only the caller's effective posting
+permission. No public grant listing or author/account inspection is introduced.

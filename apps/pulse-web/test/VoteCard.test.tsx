@@ -236,7 +236,7 @@ describe("status", () => {
     await userEvent.click(button("Try again"));
     expect(submit).toHaveBeenCalledExactlyOnceWith([2]);
   });
-  it("shows results in place, marks all picks, and offers change, next, hide and close", async () => {
+  it("shows results in place, marks all picks, and offers change, next and one close", async () => {
     const change = vi.fn(),
       next = vi.fn(),
       close = vi.fn();
@@ -273,17 +273,7 @@ describe("status", () => {
     expect(change).toHaveBeenCalledOnce();
     await user.click(button("Next"));
     expect(next).toHaveBeenCalledOnce();
-    await user.click(button("Hide"));
-    expect(
-      screen.queryByRole("group", { name: "How people answered" }),
-    ).toBeNull();
-    expect(document.activeElement).toBe(button("Show vote card"));
-    await user.keyboard("{Enter}");
-    await waitFor(() =>
-      expect(document.activeElement).toBe(
-        screen.getByRole("group", { name: "How people answered" }),
-      ),
-    );
+    expect(screen.queryByRole("button", { name: "Hide" })).toBeNull();
     await user.click(button("Close"));
     expect(close).toHaveBeenCalledOnce();
   });
@@ -300,6 +290,40 @@ describe("status", () => {
     expect(
       screen.queryByRole("button", { name: "Change my answer" }),
     ).toBeNull();
+  });
+  it("links to the trust page once a vote is counted, in a new tab", () => {
+    render(
+      <VoteCard
+        {...base}
+        trustHref="/trust"
+        status={{ kind: "answered", changed: false, results: results() }}
+      />,
+    );
+    const link = screen.getByRole("link", {
+      name: "Why you can trust your vote (opens in a new tab)",
+    });
+    expect(link.getAttribute("href")).toBe("/trust");
+    expect(link.getAttribute("target")).toBe("_blank");
+    expect(link.getAttribute("rel")).toContain("noopener");
+  });
+  it("offers no trust link before a vote is counted", () => {
+    render(<VoteCard {...base} trustHref="/trust" />);
+    expect(screen.queryByRole("link")).toBeNull();
+  });
+  it("reaches the trust link by keyboard after the result actions", async () => {
+    const user = userEvent.setup();
+    render(
+      <VoteCard
+        {...base}
+        trustHref="/trust"
+        status={{ kind: "answered", changed: false, results: results() }}
+        onChangeAnswer={vi.fn()}
+        onNext={vi.fn()}
+      />,
+    );
+    button("Next").focus();
+    await user.tab();
+    expect(document.activeElement).toBe(screen.getByRole("link"));
   });
   it("moves focus to the pending status when Submit becomes disabled", () => {
     const { rerender } = render(<VoteCard {...base} picked={[2]} />);
@@ -344,3 +368,45 @@ describe("status", () => {
     );
   });
 });
+
+it("expands an externally collapsed card from the Vote tab", async () => {
+  render(
+    <Harness
+      collapsed
+      status={{ kind: "answered", changed: false, results: results() }}
+    />,
+  );
+  expect(
+    screen.queryByRole("group", { name: "How people answered" }),
+  ).toBeNull();
+  await userEvent.click(button("Vote"));
+  await waitFor(() =>
+    expect(document.activeElement).toBe(
+      screen.getByRole("group", { name: "How people answered" }),
+    ),
+  );
+});
+
+it.each([false, true])(
+  "decision and result cards expose one keyboard-operable × (%s)",
+  async (answered) => {
+    const onClose = vi.fn();
+    render(
+      <VoteCard
+        {...base}
+        onClose={onClose}
+        status={
+          answered
+            ? { kind: "answered", results: results(), changed: false }
+            : { kind: "answerable" }
+        }
+      />,
+    );
+    const close = button("Close");
+    expect(screen.getAllByRole("button", { name: "Close" })).toHaveLength(1);
+    expect(close.textContent).toBe("×");
+    close.focus();
+    await userEvent.setup().keyboard("{Enter}");
+    expect(onClose).toHaveBeenCalledOnce();
+  },
+);

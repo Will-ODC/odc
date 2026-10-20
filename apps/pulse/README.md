@@ -1,47 +1,30 @@
 # pulse
 
-A community votes on something and sees the result.
+The Pulse server. A community votes on a question and sees the result.
 
-You open a question and answer it. A two-answer question is a swipe on a phone
-or a click on a computer; any other question shows a list. You can change your answer until the poll
-closes. No account is needed to vote. Signing in, with a link sent to your
-email, lets pulse know who you are; anyone with a working address can sign in,
-and the address's domain only decides which community, if any, you belong to
-(ADR-0030).
+Anyone can vote without an account. Signing in uses a link sent by email. The
+email's domain decides which community, if any, you belong to (ADR-0030). A
+vote made while signed in is **confirmed**. Results show all votes and, beside
+them, confirmed votes counted once per person (ADR-0040).
 
-Pulse is the first product built in the ODC repo. It is **exempt from the ODC
-charter** on purpose: no signatures and no hash chain, and votes are a plain
-record that can change. It never reads or writes the ODC core (`services/`,
-`contracts/`). Read [CLAUDE.md](./CLAUDE.md) before changing anything here.
+Pulse is **exempt from the ODC charter**: votes are plain records that can
+change, with no signatures or hash chain. It never touches `services/` or
+`contracts/`. Read [CLAUDE.md](./CLAUDE.md) before changing anything here.
 
-| What                      | Where                                      |
-| ------------------------- | ------------------------------------------ |
-| This server               | `apps/pulse`, routes in [API.md](./API.md) |
-| The web app (all screens) | `apps/pulse-web`                           |
-| Current state, in detail  | `memory/pulse.md`                          |
-| Plans and open decisions  | `docs/plans/pulse.md`, GitHub issues       |
-| Screen designs            | `docs/mockups/pulse-screens/`              |
+| What                           | Where                                                   |
+| ------------------------------ | ------------------------------------------------------- |
+| API routes                     | [API.md](./API.md)                                      |
+| Web app                        | `apps/pulse-web`                                        |
+| What is built and what is next | `memory/pulse.md`                                       |
+| Plans                          | `docs/plans/pulse.md`, GitHub issues                    |
+| Screen designs                 | [Mockup index](../../docs/mockups/CANDIDATE_CONTEXT.md) |
 
-## Where it stands
+**Creating polls is not served yet.** The storage for it exists (ADR-0037), in
+Postgres and in memory, but no HTTP route or screen uses it. Polls come from
+seed data or database inserts.
 
-**Built:**
-
-- Voting: one-answer and pick-several polls, results, changing your answer.
-- Sign-in by emailed link, sent through Resend (ADR-0027).
-- Storage in Postgres, or in memory when no database is set.
-- A phone layout, and a desktop layout from 1100px wide.
-- Two Docker images that serve the whole thing (ADR-0028). CI builds both.
-
-**Not built:**
-
-- **Creating polls.** Today polls exist only as seed data or database inserts.
-  This waits on the moderation values in ADR-0024 (`docs/plans/pulse.md`, P6).
-- The explaining screens between questions, and the "what happens next" step
-  after a vote.
-- Poll photos and summaries (#296), and comments (#297).
-
-**Before a real launch** you also need a host, a domain, and that domain
-verified with Resend for sending email.
+For contributors, see the [Pulse agent guide](./CLAUDE.md). The API reference
+marks planned interfaces separately from routes that are served today.
 
 ## Run it on your computer
 
@@ -50,28 +33,22 @@ pnpm --filter @odc/pulse dev       # API on http://127.0.0.1:8080
 pnpm --filter @odc/pulse-web dev   # app on http://localhost:5173
 ```
 
-No email is sent: sign-in links print in the API's terminal. The API loads
-three linked demo polls (edit `src/dev-server.ts` to change them).
+- No email is sent. Sign-in links print in the API's terminal.
+- Three demo polls load from `src/dev-server.ts`.
+- `@example.test` emails join `demo-community`. `@both.example.test` emails pick
+  between two communities. Other emails get no community.
+- Data is kept in memory and lost on stop. To keep it, start the test database
+  (below) and set `PULSE_DATABASE_URL`, `PULSE_SESSION_SECRET` and
+  `PULSE_CONFIRMATION_KEY`.
+- `dev` only runs when `NODE_ENV` is unset, `development` or `test`.
 
-- `@example.test` addresses join the community `demo-community`.
-- `@both.example.test` addresses are asked to pick between two communities.
-- Any other address signs in with no community.
-
-Everything is kept in memory and lost when the API stops. To keep it, start
-the database (see [Test](#test)), then set `PULSE_DATABASE_URL` and
-`PULSE_SESSION_SECRET` before `dev`. Without the secret, a restart signs
-everyone out and lets each browser vote again. With a database, seed polls are
-written once and close three days later; for a fresh demo, run
-`docker compose -f apps/pulse/docker-compose.yml down`.
-
-`dev` refuses to start unless `NODE_ENV` is unset, `development` or `test`.
-
-| Variable               | Default                                       |
-| ---------------------- | --------------------------------------------- |
-| `PULSE_PORT`           | `8080`                                        |
-| `PULSE_SESSION_SECRET` | new each run, so a restart signs everyone out |
-| `PULSE_WEB_ORIGIN`     | `http://localhost:5173`                       |
-| `PULSE_DATABASE_URL`   | unset: everything in memory                   |
+| Variable                 | Default                                          |
+| ------------------------ | ------------------------------------------------ |
+| `PULSE_PORT`             | `8080`                                           |
+| `PULSE_SESSION_SECRET`   | new each run, so a restart signs everyone out    |
+| `PULSE_CONFIRMATION_KEY` | new each run, so a restart forgets who confirmed |
+| `PULSE_WEB_ORIGIN`       | `http://localhost:5173`                          |
+| `PULSE_DATABASE_URL`     | unset, so data is kept in memory                 |
 
 ## Test
 
@@ -80,47 +57,55 @@ pnpm --filter @odc/pulse build   # tests run against dist/, so build first
 pnpm --filter @odc/pulse test
 ```
 
-Database tests skip unless you give them a Postgres. Pulse's own runs on port
-5433, so it never collides with a Postgres already on 5432:
+Database tests skip unless a Postgres is set. To run them:
 
 ```bash
-docker compose -f apps/pulse/docker-compose.yml up -d --wait
+docker compose -f apps/pulse/docker-compose.yml up -d --wait   # Postgres on port 5433
 export PULSE_DATABASE_URL=postgres://pulse:pulse@127.0.0.1:5433/pulse_test
 export PULSE_REQUIRE_DATABASE=1   # fail instead of skip if the database is missing
 ```
 
-Stop it with `docker compose -f apps/pulse/docker-compose.yml down`. CI runs
-the same tests, with a database, on every PR.
+Stop it with `docker compose -f apps/pulse/docker-compose.yml down`. That also
+resets the demo polls. CI runs these tests with a database on every PR.
 
 ## Serve it
 
 ```bash
-just pulse-up      # opens on http://127.0.0.1:8080; `just pulse-down` stops it
+just pulse-up      # http://127.0.0.1:8080; `just pulse-down` stops it
 ```
 
-This runs `src/main.ts` and two images: `web` serves the page and passes
-`/api` to `api`, so the browser sees one website and the sign-in cookie works.
-**It sends real email**, so use `dev` to click through the flow.
+This runs two Docker images. `web` serves the page and sends `/api` to `api`.
+**It sends real email.** Use `dev` to try the sign-in flow.
 
-`src/main.ts` refuses to start without these four, and names every missing one
-at once:
+The server will not start without these:
 
-| Variable               | Why it has no default                                  |
-| ---------------------- | ------------------------------------------------------ |
-| `PULSE_SESSION_SECRET` | a generated one signs everyone out on every restart    |
-| `PULSE_DATABASE_URL`   | memory would lose every vote on redeploy               |
-| `PULSE_RESEND_API_KEY` | without it, sign-in links would be printed in the logs |
-| `PULSE_WEB_ORIGIN`     | a guessed one would email everyone a link to localhost |
+| Variable                 | Why it has no default                                  |
+| ------------------------ | ------------------------------------------------------ |
+| `PULSE_SESSION_SECRET`   | a new one each start would sign everyone out           |
+| `PULSE_CONFIRMATION_KEY` | a new one each start would forget who confirmed        |
+| `PULSE_DATABASE_URL`     | memory would lose every vote on redeploy               |
+| `PULSE_RESEND_API_KEY`   | without it, sign-in links would be printed in the logs |
+| `PULSE_WEB_ORIGIN`       | a guess would email everyone a link to localhost       |
+| `PULSE_MAIL_FROM`        | the sender, e.g. `pulse <sign-in@your-domain.org>`     |
 
-Also: `PULSE_MAIL_FROM` (required with the key, e.g.
-`pulse <sign-in@your-domain.org>`), and optionally `PULSE_MAIL_REPLY_TO`,
-`PULSE_PORT` (8080), `PULSE_HOST` (`0.0.0.0`) and `PULSE_DATABASE_SCHEMA`.
-Bare `RESEND_API_KEY` and `DATABASE_URL` are never read.
+Optional: `PULSE_MAIL_REPLY_TO`, `PULSE_PORT` (8080), `PULSE_HOST` (`0.0.0.0`),
+`PULSE_DATABASE_SCHEMA`. Plain `RESEND_API_KEY` and `DATABASE_URL` are ignored.
 
-Keep the API port private. The API trusts one forwarded IP hop, and only from a
-private network address such as nginx's, so rate limits see the real client.
+**`PULSE_CONFIRMATION_KEY` is as secret as the database.** Anyone with both can
+work out who voted what. Make it at least 32 characters
+(`openssl rand -base64 32`) and different from `PULSE_SESSION_SECRET`; the
+server refuses otherwise. Changing it means anyone who confirms again is
+counted as a new confirmed voter.
 
-**Upgrading:** stop every old API instance before starting the new version.
-Database migrations run on start, and some (003, 004) change how sign-in and
-sign-out work, so an old instance left running would fail sign-ins or ignore
-sign-outs.
+Keep the API port private. The API trusts the client IP only when it comes
+from a private address, such as nginx's.
+
+**Upgrading:** stop every old API instance before starting the new one.
+Migrations run on start. An old instance left running can break sign-in and
+sign-out, fail on new community labels, or record votes without confirmation.
+
+## MCP
+
+`POST /api/mcp` offers two read-only tools: `get_poll` and `get_results`. With
+`dev` running, point an MCP client at `http://127.0.0.1:8080/api/mcp` and ask
+for poll `ads-free`. Details are in [API.md](./API.md#mcp-public-reads).

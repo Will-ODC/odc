@@ -1,6 +1,6 @@
 import assert from "node:assert/strict";
 import { test } from "node:test";
-import type { InjectOptions } from "fastify";
+import type { InjectOptions, LightMyRequestResponse } from "fastify";
 import {
   DomainAllowlist,
   StaticDomainSource,
@@ -17,18 +17,29 @@ import {
   InMemorySuggestionStore,
   type SuggestionStore,
 } from "../src/voting/suggestions.js";
+import { ConfirmationKey } from "../src/voting/confirmation.js";
 import { InMemoryVotingStore, UnknownPollError } from "../src/voting/store.js";
 
 const SECRET = "test-secret-that-is-long-enough";
+/** The confirmation key every server here is given (ADR-0040). */
+const CONFIRMATION_KEY = "a-confirmation-key-for-tests-0123456789";
 const START = new Date("2026-08-09T12:00:00.000Z");
 
 async function setup(
   pollCloses?: Date,
   suggestions?: SuggestionStore,
-  overrides: Partial<ServerDeps> = {},
+  {
+    withoutConfirmationKey = false,
+    ...overrides
+  }: Partial<ServerDeps> & {
+    /** Build the server as a test client embedding it might: with no key. */
+    withoutConfirmationKey?: boolean;
+  } = {},
 ) {
   const now = START;
-  const clock = () => now;
+  // A test that needs time to pass hands in its own clock; every part of the
+  // server — stores, signer, routes — then reads that one.
+  const clock = overrides.clock ?? (() => now);
   const mailer = new ConsoleMailer(() => {});
   const voters = new InMemoryVoterStore();
   const votes = new InMemoryVotingStore(clock);
@@ -57,6 +68,9 @@ async function setup(
     signer,
     clock,
     secureCookies: false,
+    ...(withoutConfirmationKey
+      ? {}
+      : { confirmationKey: new ConfirmationKey(CONFIRMATION_KEY) }),
     ...overrides,
   });
 
@@ -124,7 +138,32 @@ async function setup(
     ...(pollCloses ? { closesAt: pollCloses } : {}),
   });
 
-  return { app, signIn, browser, votes };
+  /**
+   * Sign in on one browser: the link is asked for anywhere, but the click is
+   * made by `visit`, so the server sees that browser's ballot cookie and the
+   * session lands in its jar — as when a person who voted then signs in.
+   */
+  async function signInOn(
+    visit: ReturnType<typeof browser>,
+    email: string,
+  ): Promise<{ voterId: string }> {
+    await app.inject({
+      method: "POST",
+      url: "/api/sign-in",
+      payload: { email },
+    });
+    const link = mailer.lastTo(email.toLowerCase())?.body as string;
+    const token = new URL(link).searchParams.get("token") as string;
+    const redeemed = await visit({
+      method: "POST",
+      url: "/api/sign-in/redeem",
+      payload: { token },
+    });
+    assert.equal(redeemed.statusCode, 200);
+    return { voterId: redeemed.json().voter.id as string };
+  }
+
+  return { app, signIn, signInOn, browser, votes };
 }
 
 test("reads_a_poll_in_the_clients_wire_shape_without_a_session", async () => {
@@ -557,4 +596,307 @@ test("an_unplanned_fault_reaches_the_logger_it_was_given", async () => {
     message: "Something went wrong. Try again.",
   });
   assert.equal(logged.length, 1);
+});
+
+// Confirmed votes (ADR-0040, #352).
+
+/** A clock a test moves by hand. */
+function movableClock() {
+  let now = START;
+  return {
+    clock: () => now,
+    advance(seconds: number) {
+      now = new Date(now.getTime() + seconds * 1000);
+    },
+  };
+}
+
+/** A ballot id factory that counts, so tie-breaks and lookups are readable. */
+function countingBallots() {
+  let n = 0;
+  return () => `browser-${++n}`;
+}
+
+const castOn = (
+  visit: (o: InjectOptions) => Promise<LightMyRequestResponse>,
+  ballot: number[],
+) => visit({ method: "POST", url: "/api/polls/p1/votes", payload: { ballot } });
+
+test("results_carry_confirmed_numbers_and_they_are_zero_before_anyone_confirms", async () => {
+  const { app, browser } = await setup();
+  const empty = await app.inject({ url: "/api/polls/p1/results" });
+  assert.equal(empty.json().confirmedVoters, 0);
+  assert.deepEqual(
+    empty
+      .json()
+      .choices.map((c: { confirmedCount: number; confirmedShare: number }) => [
+        c.confirmedCount,
+        c.confirmedShare,
+      ]),
+    [
+      [0, 0],
+      [0, 0],
+      [0, 0],
+    ],
+  );
+
+  // A vote with nobody signed in counts in the totals only.
+  const cast = await castOn(browser(), [0]);
+  assert.equal(cast.json().results.voters, 1);
+  assert.equal(cast.json().results.confirmedVoters, 0);
+});
+
+test("a_vote_cast_while_signed_in_is_confirmed", async () => {
+  const { browser, signInOn } = await setup();
+  const visit = browser();
+  await signInOn(visit, "ada@student.ubc.ca");
+
+  const cast = await castOn(visit, [0, 2]);
+  assert.equal(cast.json().status, "counted");
+  const results = cast.json().results;
+  assert.equal(results.voters, 1);
+  assert.equal(results.confirmedVoters, 1);
+  assert.deepEqual(
+    results.choices.map((c: { confirmedCount: number }) => c.confirmedCount),
+    [1, 0, 1],
+  );
+  assert.deepEqual(
+    results.choices.map((c: { confirmedShare: number }) => c.confirmedShare),
+    [100, 0, 100],
+  );
+});
+
+test("a_vote_becomes_confirmed_when_its_browser_signs_in_afterwards", async () => {
+  const { app, browser, signInOn } = await setup();
+  const visit = browser();
+  await castOn(visit, [1]);
+  assert.equal(
+    (await app.inject({ url: "/api/polls/p1/results" })).json().confirmedVoters,
+    0,
+  );
+
+  await signInOn(visit, "ada@student.ubc.ca");
+  const after = (await app.inject({ url: "/api/polls/p1/results" })).json();
+  assert.equal(after.voters, 1);
+  assert.equal(after.confirmedVoters, 1);
+  assert.equal(after.choices[1].confirmedCount, 1);
+});
+
+test("signing_in_on_another_browser_does_not_confirm_this_ones_vote", async () => {
+  // Only the ballot the clicking browser holds is confirmed.
+  const { app, browser, signInOn } = await setup();
+  await castOn(browser(), [1]);
+  await signInOn(browser(), "ada@student.ubc.ca");
+  assert.equal(
+    (await app.inject({ url: "/api/polls/p1/results" })).json().confirmedVoters,
+    0,
+  );
+});
+
+test("one_person_on_two_browsers_counts_once_as_confirmed_and_their_latest_vote_is_the_one", async () => {
+  const time = movableClock();
+  const { app, browser, signInOn } = await setup(undefined, undefined, {
+    clock: time.clock,
+    newBallotId: countingBallots(),
+  });
+  const phone = browser();
+  const laptop = browser();
+
+  // The phone votes, then signs in: confirmed.
+  await castOn(phone, [0]);
+  await signInOn(phone, "ada@student.ubc.ca");
+
+  // A minute later the same person votes differently on the laptop, signed in.
+  time.advance(60);
+  await signInOn(laptop, "ada@student.ubc.ca");
+  const second = (await castOn(laptop, [1])).json().results;
+  assert.equal(second.voters, 2);
+  assert.equal(second.confirmedVoters, 1);
+  assert.deepEqual(
+    second.choices.map((c: { count: number }) => c.count),
+    [1, 1, 0],
+  );
+  assert.deepEqual(
+    second.choices.map((c: { confirmedCount: number }) => c.confirmedCount),
+    [0, 1, 0],
+  );
+
+  // Then they change the phone's answer: it is their latest, so it is the
+  // confirmed one now, and still one confirmed voter.
+  time.advance(60);
+  const third = (await castOn(phone, [2])).json();
+  assert.equal(third.status, "changed");
+  assert.equal(third.results.voters, 2);
+  assert.equal(third.results.confirmedVoters, 1);
+  assert.deepEqual(
+    third.results.choices.map(
+      (c: { confirmedCount: number }) => c.confirmedCount,
+    ),
+    [0, 0, 1],
+  );
+
+  const read = (await app.inject({ url: "/api/polls/p1/results" })).json();
+  assert.deepEqual(read, third.results);
+});
+
+test("signing_out_does_not_remove_a_confirmation", async () => {
+  const { app, browser, signInOn } = await setup();
+  const visit = browser();
+  await signInOn(visit, "ada@student.ubc.ca");
+  await castOn(visit, [0]);
+
+  const out = await visit({ method: "POST", url: "/api/sign-out" });
+  assert.equal(out.statusCode, 200);
+
+  const results = (await app.inject({ url: "/api/polls/p1/results" })).json();
+  assert.equal(results.voters, 1);
+  assert.equal(results.confirmedVoters, 1);
+});
+
+test("two_different_people_signed_in_are_two_confirmed_voters", async () => {
+  const { browser, signInOn } = await setup();
+  const ada = browser();
+  const bo = browser();
+  await signInOn(ada, "ada@student.ubc.ca");
+  await signInOn(bo, "bo@example.org");
+  await castOn(ada, [0]);
+  const results = (await castOn(bo, [0])).json().results;
+  assert.equal(results.voters, 2);
+  assert.equal(results.confirmedVoters, 2);
+  assert.equal(results.choices[0].confirmedCount, 2);
+});
+
+test("without_a_confirmation_key_no_vote_is_confirmed", async () => {
+  // Only tests and embedding test clients leave the key out; `main.ts` refuses
+  // to start without one. What it means is documented: confirmed reads 0.
+  const { browser, signInOn } = await setup(undefined, undefined, {
+    withoutConfirmationKey: true,
+  });
+  const visit = browser();
+  await castOn(visit, [0]);
+  await signInOn(visit, "ada@student.ubc.ca");
+  const results = (await castOn(visit, [1])).json().results;
+  assert.equal(results.voters, 1);
+  assert.equal(results.confirmedVoters, 0);
+});
+
+test("the_code_the_account_id_and_the_key_never_reach_a_response_or_a_log_line", async () => {
+  // ADR-0040 keeps the account id away from the answer and the code and key
+  // inside the server. Every request of the flow is captured — status,
+  // headers and body — and so is every line the logger writes, at its most
+  // talkative level.
+  const lines: string[] = [];
+  const { app, browser, signInOn } = await setup(undefined, undefined, {
+    logger: {
+      level: "trace",
+      stream: { write: (line: string) => void lines.push(line) },
+    },
+  });
+  const replies: { url: string; text: string }[] = [];
+  const raw = browser();
+  const visit = async (options: InjectOptions) => {
+    const reply = await raw(options);
+    replies.push({
+      url: String(options.url),
+      text: JSON.stringify(reply.headers) + reply.body,
+    });
+    return reply;
+  };
+
+  await castOn(visit, [0]);
+  const { voterId } = await signInOn(visit, "ada@student.ubc.ca");
+  await castOn(visit, [1]);
+  await visit({ url: "/api/polls/p1/ballot" });
+  await visit({ url: "/api/polls/p1/results" });
+  await visit({ url: "/api/me" });
+  await visit({ method: "POST", url: "/api/sign-out" });
+  await visit({ url: "/api/polls/p1/results" });
+
+  const code = new ConfirmationKey(CONFIRMATION_KEY).codeFor(voterId, "p1");
+  // Proof the capture is real: the flow was logged, and the vote confirmed.
+  assert.ok(lines.length > 0, "the logger captured nothing");
+  assert.equal(
+    (await app.inject({ url: "/api/polls/p1/results" })).json().confirmedVoters,
+    1,
+  );
+
+  for (const line of lines) {
+    assert.ok(!line.includes(code), `a log line carries the code: ${line}`);
+    assert.ok(!line.includes(CONFIRMATION_KEY), "a log line carries the key");
+    assert.ok(
+      !line.includes(voterId),
+      `a log line carries the account id: ${line}`,
+    );
+  }
+  for (const reply of replies) {
+    assert.ok(
+      !reply.text.includes(code),
+      `${reply.url} answered with the code`,
+    );
+    assert.ok(
+      !reply.text.includes(CONFIRMATION_KEY),
+      `${reply.url} answered with the key`,
+    );
+  }
+  // The account id is in exactly the answers that are about the account —
+  // the sign-in click (its body and session cookie) and `/api/me` — and in
+  // no answer about a poll, a ballot or a result.
+  for (const reply of replies.filter((r) => r.url.startsWith("/api/polls/"))) {
+    assert.ok(
+      !reply.text.includes(voterId),
+      `${reply.url} answered with the account id`,
+    );
+  }
+});
+
+test("a_session_copied_into_the_ballot_cookie_is_not_a_ballot_and_files_nothing_under_the_account", async () => {
+  // A session cookie is validly signed by the same signer. Taken as a ballot,
+  // it would file the vote under the account id — beside the answer, which
+  // ADR-0040 promises never happens. It is ignored and a ballot is minted.
+  const { app, signIn, votes } = await setup(undefined, undefined, {
+    newBallotId: () => "fresh",
+  });
+  const session = await signIn("ada@student.ubc.ca");
+  const me = await app.inject({ url: "/api/me", headers: { cookie: session } });
+  const voterId = me.json().voter.id as string;
+  const sessionValue = session.slice(session.indexOf("=") + 1);
+
+  const cast = await app.inject({
+    method: "POST",
+    url: "/api/polls/p1/votes",
+    headers: { cookie: `pulse_ballot=${sessionValue}` },
+    payload: { ballot: [0] },
+  });
+  assert.equal(cast.statusCode, 200);
+  assert.equal(cast.json().status, "counted");
+  const minted = cast.cookies.find((c) => c.name === "pulse_ballot");
+  assert.ok(minted, "a fresh ballot cookie is minted");
+  assert.notEqual(minted.value, sessionValue);
+  assert.equal(await votes.voteOf("p1", voterId), undefined);
+  assert.deepEqual((await votes.voteOf("p1", "b:fresh"))?.choices, [0]);
+});
+
+test("signing_in_with_a_session_in_the_ballot_cookie_confirms_nothing", async () => {
+  // The redeem side of the same guard: a vote somehow filed under the account
+  // id (planted here directly) is not confirmed by presenting a session as
+  // the ballot.
+  const { app, signIn, votes, browser, signInOn } = await setup();
+  const session = await signIn("ada@student.ubc.ca");
+  const me = await app.inject({ url: "/api/me", headers: { cookie: session } });
+  const voterId = me.json().voter.id as string;
+  await votes.castVote("p1", voterId, [0]);
+
+  const visit = browser();
+  const sessionValue = session.slice(session.indexOf("=") + 1);
+  await signInOn(
+    (options) =>
+      visit({
+        ...options,
+        headers: { ...options.headers, cookie: `pulse_ballot=${sessionValue}` },
+      }),
+    "ada@student.ubc.ca",
+  );
+  const results = (await app.inject({ url: "/api/polls/p1/results" })).json();
+  assert.equal(results.voters, 1);
+  assert.equal(results.confirmedVoters, 0);
 });

@@ -5,10 +5,17 @@ import { FIRST_POLL_ID } from "./flow/route.js";
 import { AppShell } from "./components/AppShell.js";
 import { TopBanner } from "./components/TopBanner.js";
 import { useRoute } from "./hooks/use-route.js";
+import { Conversation } from "./screens/Conversation.js";
 import { ChatPreview } from "./screens/ChatPreview.js";
 import { Redeem } from "./screens/Redeem.js";
-import { Run } from "./screens/Run.js";
 import { SignIn } from "./screens/SignIn.js";
+import { Welcome } from "./screens/Welcome.js";
+import { Progress } from "./screens/Progress.js";
+import {
+  FoundationQuestions,
+  type RelatedPollIds,
+} from "./screens/FoundationQuestions.js";
+import { Trust } from "./screens/Trust.js";
 import "./styles/tokens.css";
 import "./App.css";
 
@@ -24,11 +31,33 @@ import "./App.css";
  * browser's history. Left out, the URL decides, which is what the real app
  * wants and what the link depends on.
  */
-export function App({ api, route }: { api: PulseApi; route?: Route }) {
+export function App({
+  api,
+  route,
+  firstPollId,
+  relatedPollIds,
+}: {
+  api: PulseApi;
+  route?: Route;
+  firstPollId?: string;
+  relatedPollIds?: RelatedPollIds;
+}) {
   const browser = useRoute();
   const at = route ?? browser.route;
 
   switch (at.kind) {
+    case "welcome":
+      return <Welcome onStart={() => browser.go({ kind: "progress" })} />;
+    case "progress":
+      return <Progress onContinue={() => browser.go({ kind: "questions" })} />;
+    case "questions":
+      return (
+        <FoundationQuestions
+          {...(firstPollId ? { firstPollId } : {})}
+          {...(relatedPollIds ? { relatedPollIds } : {})}
+          onChoose={(id) => browser.go({ kind: "conversation", pollId: id })}
+        />
+      );
     case "signIn":
       return (
         <SignInPage>
@@ -47,17 +76,29 @@ export function App({ api, route }: { api: PulseApi; route?: Route }) {
              * button a link that can now only answer "already used".
              */
             onSignedIn={() =>
-              browser.replace({ kind: "run", pollId: LANDS_ON })
+              browser.replace({ kind: "conversation", pollId: LANDS_ON })
             }
             onAskAgain={() => browser.replace({ kind: "signIn" })}
           />
         </SignInPage>
       );
-    case "run":
-      return <Run api={api} pollId={at.pollId} />;
+    case "conversation":
+      return (
+        <Conversation
+          key={at.pollId}
+          api={api}
+          pollId={at.pollId}
+          // Replaced, so the back button does not return to a page that
+          // still believes someone is signed in.
+          onSignedOut={() => browser.replace({ kind: "signIn" })}
+        />
+      );
     case "chatPreview":
       // Sample data only: the prototype never touches `api`.
       return <ChatPreview />;
+    case "trust":
+      // Static copy: like the prototype, it never touches `api`.
+      return <Trust />;
   }
 }
 

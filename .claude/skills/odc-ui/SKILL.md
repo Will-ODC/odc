@@ -15,21 +15,21 @@ belong to `services/web` only.
 
 | Surface          | What it is                                      | Status                                 |
 | ---------------- | ----------------------------------------------- | -------------------------------------- |
-| `apps/pulse-web` | Pulse's story client, charter-EXEMPT            | **Live** — where UI work happens today |
+| `apps/pulse-web` | Pulse's conversation client, charter-EXEMPT     | **Live** — where UI work happens today |
 | `services/web`   | The charter-governed human client               | Phase 2, not started                   |
 | `docs/mockups/`  | Hand-authored HTML decks — the design of record | See `odc-design`                       |
 
 ## The stack you are writing against (`apps/pulse-web`)
 
-React 19 · Vite 7 · TypeScript · vitest 3. Three modules already exist, are
+React 19 · Vite 7 · TypeScript · vitest 4. The modules already exist, are
 pure and tested, and decide things the screens only render:
 
-| Module              | What it gives you                                                                   |
-| ------------------- | ----------------------------------------------------------------------------------- |
-| `src/flow/route.ts` | `Route` union and `routeFrom` / `pathOf` — which of the three places a URL names    |
-| `src/flow/swipe.ts` | `isSwipeable`, and the gesture maths behind the two-choice ballot                   |
-| `src/api/types.ts`  | `Poll`, `Ballot = number[]`, `Results`, `CastOutcome`, `Me`, `PulseApi`, `ApiError` |
-| `src/api/http.ts`   | `HttpPulseApi` — since #118 the only implementation of `PulseApi`                   |
+| Module                     | What it gives you                                                                   |
+| -------------------------- | ----------------------------------------------------------------------------------- |
+| `src/flow/route.ts`        | `Route` union and `routeFrom` / `pathOf` — current URL routing                      |
+| `src/flow/conversation.ts` | Conversation state, saved answers and next-question decisions                       |
+| `src/api/types.ts`         | `Poll`, `Ballot = number[]`, `Results`, `CastOutcome`, `Me`, `PulseApi`, `ApiError` |
+| `src/api/http.ts`          | `HttpPulseApi` — since #118 the only implementation of `PulseApi`                   |
 
 Facts that will bite you if you assume otherwise:
 
@@ -55,16 +55,16 @@ Facts that will bite you if you assume otherwise:
 ```
 src/
   main.tsx          entry — mounts <App>, nothing else
-  App.tsx           picks the screen for the current Step; owns no screen markup
-  screens/          one file per place: SignIn, Redeem, Run, and the two ballots
+  App.tsx           picks the screen for the current Route; owns no screen markup
+  screens/          one file per screen; route.ts defines the current routes
   components/       reusable, screen-agnostic pieces
   hooks/            state + effects (use-poll.ts, use-cast-vote.ts)
   api/  flow/       already exist — pure, no React
   styles/tokens.css the one token file
 ```
 
-Names: components `PascalCase.tsx`, hooks `use-kebab-case.ts`, tests beside
-the unit as `Thing.test.tsx`. Direction of imports is one-way: screens import
+Names: components `PascalCase.tsx`, hooks `use-kebab-case.ts`; tests live in
+`apps/pulse-web/test/` as `Thing.test.tsx` or `thing.test.ts`. Direction of imports is one-way: screens import
 components; **components never import screens**, and nothing in `components/`
 imports from `api/`.
 
@@ -75,9 +75,7 @@ imports from `api/`.
    returns markup. It does not fetch, does not touch `PulseApi`, does not read
    global state. Data enters at the screen, which gets it from a hook.
 3. **No logic in JSX.** Past a single ternary, it moves — pure decisions to
-   `flow/`, stateful ones to a hook. `swipe.ts` is the precedent: it decides
-   which ballot a poll needs and where a drag landed, and the screen only
-   renders that.
+   `flow/`, stateful ones to a hook. `conversation.ts` decides history and navigation; the screen renders it.
 4. **Name for what it is, not where it sits.** `<ChoiceRow>`, never
    `<VoteScreenChoiceRow>` — a screen-specific name is a promise that you will
    copy it next time instead of reusing it.
@@ -95,19 +93,9 @@ imports from `api/`.
    candidate, not a component — do not abstract a shape you have seen once.
    Two uses is a component, and the second use is what proves the prop API.
 
-The seven pulse screens share these seams; build them as components the first
-time a second screen needs one, and check here before inventing a new name:
-
-| Component       | Used by                                      |
-| --------------- | -------------------------------------------- |
-| `ScreenFrame`   | every screen — the phone-sized pane          |
-| `Chip`          | "Official Ballot · Closes Friday", "Counted" |
-| `PrimaryButton` | Continue / Cast / Change it                  |
-| `ChoiceRow`     | vote, already-voted, closed states           |
-| `ResultBar`     | results (count · %)                          |
-| `StatPair`      | bite 2, results                              |
-| `SwipeDeck`     | the left/right vote container                |
-| `FinePrint`     | "reactions are opinion, not a vote"          |
+Inspect `src/components/` before adding a shared piece. Existing components
+include `ScreenFrame`, `ViewState`, `VoteCard` and `ResultsPanel`; the historical
+seven-screen mockup deck is not an inventory of implemented components.
 
 ## Every view owes four states — no exceptions
 
@@ -122,16 +110,14 @@ exists to prevent. A component PR without all four states is incomplete.
 
 ## Design tokens
 
-One file, `src/styles/tokens.css`, seeded once from the `:root` block in
-`docs/mockups/pulse-screens/_screens.css` (colors, radii, shadow, type scale)
-and thereafter the source for the app. Components reference `var(--…)` only.
-Changing a value is a token edit, never a component edit.
+`src/styles/tokens.css` is the app's token source. Components reference
+`var(--…)` only. Changing a value is a token edit, never a component edit.
 
-The palette question is genuinely open: mockup screen 1 (`01-claim.html`) is
-dark and carries its own page chrome, screens 2–7 are the light Civic Glass
-set from `_screens.css`, and nothing in the repo records whether the whole deck
-goes dark. Do not silently pick one — see `odc-design`, and record the answer
-before building screens in a palette that isn't decided.
+For visual direction, read `docs/mockups/CANDIDATE_CONTEXT.md` and `odc-design`.
+The historical story deck's dark swipe ballot and light screens do not establish
+an unresolved palette choice for the current conversation client. Mockup tokens
+live in `docs/mockups/pulse-screens/_screens.css`; do not assume the archive is
+a current implementation inventory.
 
 ## Forms and binding actions
 
@@ -140,11 +126,9 @@ before building screens in a palette that isn't decided.
 - Disable submit while pending; never let a double-tap cast twice.
 - **Always confirm a destructive or binding action** — "You're voting YES
   on… — confirm?" Picking and casting are separate presses.
-  **One scoped exception, `docs/decisions/0022-one-press-casts-and-says-so.md`:**
-  a pulse ballot casts on one press, because the answer is changeable until the
-  poll closes — and it must then say so on screen, which is what stands in for
-  the confirming press. Reversibility is what buys the exception; anything not
-  reversible, in pulse or anywhere else, still confirms.
+  Pulse's current card uses pick-then-Submit (ADR-0035). ADR-0022's one-press
+  exception described the retired swipe ballot; do not apply it to the
+  conversation card or AI-app voting.
 - A vote is changeable until close: `changed` is a normal outcome, not an
   error, and the UI says so plainly rather than treating it as a correction.
 
@@ -155,8 +139,7 @@ keyboard operability. **Keyboard-only pass before merging any interactive
 component** — no exceptions for "it's just a card".
 
 Gestures are an addition, never the only path: every swipe or drag has an
-equivalent tap target and an arrow-key path (`01-claim.html` already wires
-pointer drag, tap-a-half, and ←/→). Animation respects
+equivalent tap target and an arrow-key path (the current card supports numbered keys and ordinary form controls). Animation respects
 `prefers-reduced-motion`.
 
 ## Testing UI
@@ -190,10 +173,13 @@ Keys are generated, stored and used invisibly: "Sign up" creates a keypair,
 itself is signed by the registrar, never by the voter's key (ADR-0004;
 `services/ledger/CLAUDE.md`).
 
-**Pulse goes further, not less far.** Its rule is that the counting is never
-the subject at all — it does not translate "hash chain" into "tamper-proof
-record", it never raises the topic. Do not port the trust affordances or the
-"check the record yourself" link into pulse: there is no verifier there and
+**Pulse explains, and never claims more than is built.** Since 2026-10-12
+(ADR-0039) pulse may explain how votes are counted, in plain language, on its
+"Why you can trust your vote" page (`/trust`), where each term such as "hash"
+is explained in a sentence where it first appears. What it must never do is say
+or imply that pulse votes are on a hash chain or ledger before they are. Do not
+port the trust affordances or the "check the record yourself" link into pulse
+until pulse votes are on the ledger: today there is nothing to check, and
 saying otherwise would be a lie. See `apps/pulse/CLAUDE.md`.
 
 ## Trust affordances (`services/web` only — product requirements, not decoration)
@@ -227,6 +213,6 @@ saying otherwise would be a lie. See `apps/pulse/CLAUDE.md`.
 - [ ] Logic lives in `flow/` or a hook; JSX renders.
 - [ ] Keyboard-only pass done; gestures have a key and tap equivalent.
 - [ ] Binding actions confirm; submit disables while pending.
-- [ ] Copy passes the dictionary (`services/web`) or never mentions counting
-      machinery (pulse).
+- [ ] Copy passes the dictionary (`services/web`) or never claims a hash
+      chain, ledger or check that pulse does not have yet (pulse).
 - [ ] Tests per `odc-testing`: behavior, four states, keyboard path.

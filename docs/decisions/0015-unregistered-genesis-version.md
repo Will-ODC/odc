@@ -1,6 +1,7 @@
 # ADR-0015: An unregistered `genesis` version is `INVALID` at line 1
 
-- **Status:** accepted
+- **Status:** accepted — amended in part by ADR-0038 (EV-21's advice: a
+  `genesis` at a version other than 1 is never a newer chain, ET-6)
 - **Date:** 2026-08-15
 - **Phase:** 0
 
