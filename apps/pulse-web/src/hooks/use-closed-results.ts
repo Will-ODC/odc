@@ -81,7 +81,7 @@ export function useClosedResults(api: PulseApi, pollId: string): ClosedResults {
       },
       (err: unknown) => {
         if (request === latest.current) {
-          setData({ status: "error", message: reason(err) });
+          setData({ status: "error", message: resultsFailure(err) });
         }
       },
     );
@@ -113,7 +113,12 @@ export function useClosedResults(api: PulseApi, pollId: string): ClosedResults {
   return { showing, data, open, retry: load, close, triggerRef, panelRef };
 }
 
-function reason(err: unknown): string {
+/**
+ * The sentence to show when results will not load: the server's own where it
+ * sent one. Shared with the vote card's fresh results (#353), so the two
+ * places say the same thing about the same failure.
+ */
+export function resultsFailure(err: unknown): string {
   if (err instanceof ApiError) return err.message;
   return "We could not load the results. Check your connection and try again.";
 }
