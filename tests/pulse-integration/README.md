@@ -11,6 +11,13 @@ Both apps are explicit workspace development dependencies. Deep source imports
 are test setup only; the browser app uses the public HTTP API. This package is
 not part of either production image. See
 [ADR-0041](../../docs/decisions/0041-pulse-integration-test-workspace.md).
+The import-boundary lint permits this workspace to import either app for test
+setup and assertions, but it does not permit imports from core `services/**`,
+`tools/**` or `contracts/**`. This exception does not authorize production app
+imports. Run
+`pnpm test:boundaries` for focused regression coverage; the static check's
+limits are documented in the [service-boundaries skill](../../.claude/skills/odc-service-boundaries/SKILL.md)
+and [ADR-0042](../../docs/decisions/0042-import-boundary-enforcement.md).
 
 Run from the repository root:
 

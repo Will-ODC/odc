@@ -25,12 +25,17 @@ func TestEX24Candidates(t *testing.T) {
 		{"A\r\nB\r\n", []string{"A\r", "B\r"}}, // split at LF only
 	}
 	for _, c := range cases {
-		var got []string
-		for _, b := range candidates([]byte(c.in)) {
-			got = append(got, string(b))
+		// Only the first and last candidates are reported (EX-24), so those
+		// are what endpoints locates.
+		var got, want []string
+		if first, last, ok := endpoints([]byte(c.in)); ok {
+			got = []string{string(first), string(last)}
 		}
-		if !reflect.DeepEqual(got, c.want) {
-			t.Errorf("candidates(%q) = %q, want %q", c.in, got, c.want)
+		if len(c.want) > 0 {
+			want = []string{c.want[0], c.want[len(c.want)-1]}
+		}
+		if !reflect.DeepEqual(got, want) {
+			t.Errorf("endpoints(%q) = %q, want %q", c.in, got, want)
 		}
 	}
 }

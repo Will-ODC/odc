@@ -1,5 +1,6 @@
 import js from "@eslint/js";
 import tseslint from "typescript-eslint";
+import boundaries from "./.github/scripts/import-boundaries.mjs";
 
 // Root flat config, and the ONLY one the hooks consult: flat config does not
 // cascade, and lefthook runs `eslint` from the repo root, so a per-service
@@ -23,6 +24,10 @@ export default tseslint.config(
       // Matches .prettierignore so the two tools agree on the boundary.
       "contracts/**",
     ],
+  },
+  {
+    plugins: { boundaries },
+    rules: { "boundaries/imports": "error" },
   },
   js.configs.recommended,
   ...tseslint.configs.recommended,

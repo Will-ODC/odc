@@ -64,6 +64,7 @@ jobs:
       # services land.
       - run: pnpm run format:check
       - run: pnpm run lint
+      - run: pnpm run test:boundaries
       - run: pnpm run typecheck
       # Added with the first package that has tests (T5a). Passed trivially
       # before that, exactly as the three above did.
