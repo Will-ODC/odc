@@ -2,22 +2,22 @@
 import { cleanup, render, screen, within } from "@testing-library/react";
 import userEvent from "@testing-library/user-event";
 import { afterEach, expect, it } from "vitest";
-import { createServer } from "../../pulse/src/http/server.js";
-import { SessionSigner } from "../../pulse/src/http/session.js";
-import { ClaimService } from "../../pulse/src/identity/claim.js";
+import { createServer } from "../../../apps/pulse/src/http/server.js";
+import { SessionSigner } from "../../../apps/pulse/src/http/session.js";
+import { ClaimService } from "../../../apps/pulse/src/identity/claim.js";
 import {
   DomainAllowlist,
   StaticDomainSource,
-} from "../../pulse/src/identity/allowlist.js";
-import { ConsoleMailer } from "../../pulse/src/identity/mailer.js";
+} from "../../../apps/pulse/src/identity/allowlist.js";
+import { ConsoleMailer } from "../../../apps/pulse/src/identity/mailer.js";
 import {
   InMemoryClaimStore,
   InMemoryVoterStore,
-} from "../../pulse/src/identity/store.js";
-import { InMemoryVotingStore } from "../../pulse/src/voting/store.js";
-import { InMemorySuggestionStore } from "../../pulse/src/voting/suggestions.js";
-import { HttpPulseApi } from "../src/api/http.js";
-import { App } from "../src/App.js";
+} from "../../../apps/pulse/src/identity/store.js";
+import { InMemoryVotingStore } from "../../../apps/pulse/src/voting/store.js";
+import { InMemorySuggestionStore } from "../../../apps/pulse/src/voting/suggestions.js";
+import { HttpPulseApi } from "../../../apps/pulse-web/src/api/http.js";
+import { App } from "../../../apps/pulse-web/src/App.js";
 
 afterEach(() => {
   cleanup();

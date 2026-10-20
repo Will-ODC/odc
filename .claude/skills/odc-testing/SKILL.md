@@ -5,10 +5,22 @@ description: Testing requirements for all ODC code — services/, tools/, and ap
 
 # ODC Testing Requirements
 
-Applies to everything in the repo, `apps/pulse` and `apps/pulse-web`
-included — the charter exemption covers what pulse must guarantee, never how we
-work. The "ODC-specific required tests" below are charter-side and apply to
-`services/` only; the pyramid and the rules apply everywhere.
+Applies to everything in the repo, `apps/pulse`, `apps/pulse-web`, and the
+`@odc/pulse-integration` test workspace included — the charter exemption covers
+what pulse must guarantee, never how we work. The "ODC-specific required
+tests" below are charter-side and apply to `services/` only; the pyramid and
+the rules apply everywhere.
+
+Pulse's two real-HTTP cross-package suites belong in
+`tests/pulse-integration/test/`, not either app's test directory. That test-only
+workspace declares both apps as development dependencies; it does not change
+production import permissions or app build ownership. Browser unit and
+component tests remain with `apps/pulse-web`. Run the integration workspace
+with `pnpm --filter @odc/pulse-integration test`,
+`pnpm --filter @odc/pulse-integration typecheck`, or
+`pnpm --filter @odc/pulse-integration lint`. Root Turbo test commands include
+it, while normal app builds remain independent.
+See [ADR-0041](../../../docs/decisions/0041-pulse-integration-test-workspace.md).
 
 ## The pyramid, per service or app
 

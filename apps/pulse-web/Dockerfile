@@ -34,14 +34,9 @@ ARG VITE_PULSE_REVOTE_POLL_ID=""
 ENV VITE_PULSE_DATA_POLL_ID=$VITE_PULSE_DATA_POLL_ID \
     VITE_PULSE_FUNDING_POLL_ID=$VITE_PULSE_FUNDING_POLL_ID \
     VITE_PULSE_REVOTE_POLL_ID=$VITE_PULSE_REVOTE_POLL_ID
-# Not `pnpm build`: that runs `tsc -p tsconfig.json`, whose `include` covers
-# `test/**`, and `test/end-to-end.test.ts` imports `apps/pulse`'s source on
-# purpose — it is the one thing holding client and server to one contract. This
-# image has only the client, so that config cannot resolve those imports.
-#
-# `tsconfig.build.json` is the same settings over `src/**` alone, so a type
-# error in the page still fails the image rather than shipping something that
-# was never checked. The tests keep their typecheck in CI.
+# Typecheck browser source only for this image. Browser tests use the full
+# tsconfig in CI; client/API integration tests live in tests/pulse-integration
+# and are not copied into either production image.
 RUN pnpm --filter @odc/pulse-web exec tsc -p tsconfig.build.json --noEmit \
     && pnpm --filter @odc/pulse-web exec vite build
 

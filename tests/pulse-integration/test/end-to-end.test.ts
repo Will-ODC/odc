@@ -1,25 +1,21 @@
 import { afterEach, beforeEach, describe, expect, it } from "vitest";
-// The server, imported by path rather than as a package: pulse is one epic in
-// two workspace packages, `@odc/pulse` publishes no build artefacts, and this
-// is the one place that needs both halves at once. Nothing in `src/` imports
-// across — only this proof does. The imports are deep because the package has
-// no public surface to import from; it needs one when it has a consumer that
-// is not a test.
+// Test setup imports both apps directly; this workspace declares both dependencies.
+// The production browser app uses only the public HTTP API.
 import {
   DomainAllowlist,
   StaticDomainSource,
-} from "../../pulse/src/identity/allowlist.js";
-import { ClaimService } from "../../pulse/src/identity/claim.js";
-import { ConsoleMailer } from "../../pulse/src/identity/mailer.js";
+} from "../../../apps/pulse/src/identity/allowlist.js";
+import { ClaimService } from "../../../apps/pulse/src/identity/claim.js";
+import { ConsoleMailer } from "../../../apps/pulse/src/identity/mailer.js";
 import {
   InMemoryClaimStore,
   InMemoryVoterStore,
-} from "../../pulse/src/identity/store.js";
-import { InMemorySuggestionStore } from "../../pulse/src/voting/suggestions.js";
-import { InMemoryVotingStore } from "../../pulse/src/voting/store.js";
-import { createServer } from "../../pulse/src/http/server.js";
-import { SessionSigner } from "../../pulse/src/http/session.js";
-import { HttpPulseApi } from "../src/api/http.js";
+} from "../../../apps/pulse/src/identity/store.js";
+import { InMemorySuggestionStore } from "../../../apps/pulse/src/voting/suggestions.js";
+import { InMemoryVotingStore } from "../../../apps/pulse/src/voting/store.js";
+import { createServer } from "../../../apps/pulse/src/http/server.js";
+import { SessionSigner } from "../../../apps/pulse/src/http/session.js";
+import { HttpPulseApi } from "../../../apps/pulse-web/src/api/http.js";
 
 /**
  * Fastify's own type, reached through `createServer` rather than by importing

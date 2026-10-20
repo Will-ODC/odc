@@ -22,6 +22,9 @@ share repository tooling, with separate runtime code and storage.
 are sibling workspace packages because each builds its own Docker image.
 The web image fronts the API on one origin, as recorded in
 [ADR-0028](docs/decisions/0028-pulse-is-served-as-two-images-on-one-origin.md).
+Pulse's two real-HTTP cross-package suites live in the dedicated
+[`@odc/pulse-integration` workspace](tests/pulse-integration/README.md),
+which depends on both apps for test setup. App builds remain independent.
 
 | You want                           | Read                                                               |
 | ---------------------------------- | ------------------------------------------------------------------ |
