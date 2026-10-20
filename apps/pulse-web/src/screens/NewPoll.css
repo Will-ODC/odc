@@ -181,9 +181,18 @@
   outline-offset: 2px;
 }
 
-/* Tucked under the "Posted anonymously" line it explains. */
-.post__anonymity {
-  margin-top: calc(var(--step) * -2.25);
+/*
+ * The three defaults read as one short list, closer together than the
+ * fields above them; a setting opened in place gets room of its own.
+ */
+.post__settings {
+  display: flex;
+  flex-direction: column;
+  gap: var(--step);
+}
+
+.post__settings > div:has(fieldset) {
+  margin-block: var(--step);
 }
 
 .post__link-button {

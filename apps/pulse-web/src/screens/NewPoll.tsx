@@ -393,186 +393,191 @@ function PostForm({
         )}
       </fieldset>
 
-      <Setting
-        summary={methodSummary(draft)}
-        label="how people answer"
-        open={open.method}
-        onOpen={() => setOpen((old) => ({ ...old, method: true }))}
-      >
-        <fieldset className="post__group">
-          <legend className="signin__label">How people answer</legend>
-          <div className="signin__choices">
-            <Option
-              name={`${id}-method`}
-              checked={draft.method === "single"}
-              onPick={() => edit((old) => ({ ...old, method: "single" }))}
-            >
-              One choice
-            </Option>
-            <Option
-              name={`${id}-method`}
-              checked={draft.method === "approval"}
-              onPick={() => edit((old) => ({ ...old, method: "approval" }))}
-            >
-              Any number of choices
-            </Option>
-          </div>
-        </fieldset>
-      </Setting>
+      <div className="post__settings">
+        <Setting
+          summary={methodSummary(draft)}
+          label="how people answer"
+          open={open.method}
+          onOpen={() => setOpen((old) => ({ ...old, method: true }))}
+        >
+          <fieldset className="post__group">
+            <legend className="signin__label">How people answer</legend>
+            <div className="signin__choices">
+              <Option
+                name={`${id}-method`}
+                checked={draft.method === "single"}
+                onPick={() => edit((old) => ({ ...old, method: "single" }))}
+              >
+                One choice
+              </Option>
+              <Option
+                name={`${id}-method`}
+                checked={draft.method === "approval"}
+                onPick={() => edit((old) => ({ ...old, method: "approval" }))}
+              >
+                Any number of choices
+              </Option>
+            </div>
+          </fieldset>
+        </Setting>
 
-      <Setting
-        summary={closingSummary(draft, opened)}
-        label="when it closes"
-        open={open.closing}
-        onOpen={() => setOpen((old) => ({ ...old, closing: true }))}
-      >
-        <fieldset className="post__group">
-          <legend className="signin__label">When it closes</legend>
-          <div className="signin__choices">
-            <Option
-              name={`${id}-closing`}
-              checked={draft.closing.kind === "default"}
-              onPick={() => {
-                edit((old) => ({ ...old, closing: { kind: "default" } }));
-                setShown((old) => withoutField(old, "closing"));
-              }}
-            >
-              {defaultCloseNote(opened)}
-            </Option>
-            <Option
-              name={`${id}-closing`}
-              checked={draft.closing.kind === "chosen"}
-              onPick={() =>
-                edit((old) =>
-                  old.closing.kind === "chosen"
-                    ? old
-                    : { ...old, closing: { kind: "chosen", local: "" } },
-                )
-              }
-            >
-              At a time I pick
-            </Option>
-          </div>
-          {draft.closing.kind === "chosen" ? (
-            <Field
-              id={`${id}-closes`}
-              label="Closing time"
-              problem={shown.closing}
-            >
-              {(described) => (
-                <input
-                  id={`${id}-closes`}
-                  type="datetime-local"
-                  className="signin__field"
-                  min={pickerMin(opened)}
-                  value={
-                    draft.closing.kind === "chosen" ? draft.closing.local : ""
-                  }
-                  aria-invalid={shown.closing !== undefined}
-                  {...described}
-                  onChange={(event) => {
-                    const local = event.target.value;
-                    edit((old) => ({
-                      ...old,
-                      closing: { kind: "chosen", local },
-                    }));
-                    if (shown.closing)
-                      setShown((old) => withoutField(old, "closing"));
-                  }}
-                  onBlur={() => {
-                    const closing = closingProblem(draft, now());
-                    setShown((old) =>
-                      closing
-                        ? { ...old, closing }
-                        : withoutField(old, "closing"),
-                    );
-                  }}
-                />
-              )}
-            </Field>
-          ) : null}
-        </fieldset>
-      </Setting>
+        <Setting
+          summary={closingSummary(draft, opened)}
+          label="when it closes"
+          open={open.closing}
+          onOpen={() => setOpen((old) => ({ ...old, closing: true }))}
+        >
+          <fieldset className="post__group">
+            <legend className="signin__label">When it closes</legend>
+            <div className="signin__choices">
+              <Option
+                name={`${id}-closing`}
+                checked={draft.closing.kind === "default"}
+                onPick={() => {
+                  edit((old) => ({ ...old, closing: { kind: "default" } }));
+                  setShown((old) => withoutField(old, "closing"));
+                }}
+              >
+                {defaultCloseNote(opened)}
+              </Option>
+              <Option
+                name={`${id}-closing`}
+                checked={draft.closing.kind === "chosen"}
+                onPick={() =>
+                  edit((old) =>
+                    old.closing.kind === "chosen"
+                      ? old
+                      : { ...old, closing: { kind: "chosen", local: "" } },
+                  )
+                }
+              >
+                At a time I pick
+              </Option>
+            </div>
+            {draft.closing.kind === "chosen" ? (
+              <Field
+                id={`${id}-closes`}
+                label="Closing time"
+                problem={shown.closing}
+              >
+                {(described) => (
+                  <input
+                    id={`${id}-closes`}
+                    type="datetime-local"
+                    className="signin__field"
+                    min={pickerMin(opened)}
+                    value={
+                      draft.closing.kind === "chosen" ? draft.closing.local : ""
+                    }
+                    aria-invalid={shown.closing !== undefined}
+                    {...described}
+                    onChange={(event) => {
+                      const local = event.target.value;
+                      edit((old) => ({
+                        ...old,
+                        closing: { kind: "chosen", local },
+                      }));
+                      if (shown.closing)
+                        setShown((old) => withoutField(old, "closing"));
+                    }}
+                    onBlur={() => {
+                      const closing = closingProblem(draft, now());
+                      setShown((old) =>
+                        closing
+                          ? { ...old, closing }
+                          : withoutField(old, "closing"),
+                      );
+                    }}
+                  />
+                )}
+              </Field>
+            ) : null}
+          </fieldset>
+        </Setting>
 
-      <Setting
-        summary={postedAsSummary(draft)}
-        label="who readers see as the poster"
-        open={open.attribution}
-        onOpen={() => setOpen((old) => ({ ...old, attribution: true }))}
-        describedBy={`${id}-anonymity`}
-      >
-        <fieldset className="post__group" aria-describedby={`${id}-anonymity`}>
-          <legend className="signin__label">
-            Who readers see as the poster
-          </legend>
-          <div className="signin__choices">
-            <Option
-              name={`${id}-attribution`}
-              checked={draft.attribution.kind === "anonymous"}
-              onPick={() => {
-                edit((old) => ({
-                  ...old,
-                  attribution: { ...old.attribution, kind: "anonymous" },
-                }));
-                setShown((old) => withoutField(old, "name"));
-              }}
-            >
-              Nobody: post anonymously
-            </Option>
-            <Option
-              name={`${id}-attribution`}
-              checked={draft.attribution.kind === "named"}
-              onPick={() =>
-                edit((old) => ({
-                  ...old,
-                  attribution: { ...old.attribution, kind: "named" },
-                }))
-              }
-            >
-              A name I choose
-            </Option>
-          </div>
-          {draft.attribution.kind === "named" ? (
-            <Field
-              id={`${id}-name`}
-              label="Name to show"
-              hint="Shown exactly as you type it. Pulse does not check it, so readers cannot tell whether it is your real name."
-              problem={shown.name}
-            >
-              {(described) => (
-                <input
-                  id={`${id}-name`}
-                  className="signin__field"
-                  autoComplete="off"
-                  value={draft.attribution.name}
-                  aria-invalid={shown.name !== undefined}
-                  {...described}
-                  onChange={(event) => {
-                    const name = event.target.value;
-                    edit((old) => ({
-                      ...old,
-                      attribution: { kind: "named", name },
-                    }));
-                    if (shown.name)
-                      setShown((old) => withoutField(old, "name"));
-                  }}
-                  onBlur={() => {
-                    if (draft.attribution.name.trim() === "") return;
-                    const name = nameProblem(draft);
-                    setShown((old) =>
-                      name ? { ...old, name } : withoutField(old, "name"),
-                    );
-                  }}
-                />
-              )}
-            </Field>
-          ) : null}
-        </fieldset>
-      </Setting>
-      {/* Beside the anonymity control, open or not (ADR-0037). */}
-      <p className="post__hint post__anonymity" id={`${id}-anonymity`}>
-        {ANONYMITY_NOTE}
-      </p>
+        <Setting
+          summary={postedAsSummary(draft)}
+          label="who readers see as the poster"
+          open={open.attribution}
+          onOpen={() => setOpen((old) => ({ ...old, attribution: true }))}
+          describedBy={`${id}-anonymity`}
+        >
+          <fieldset
+            className="post__group"
+            aria-describedby={`${id}-anonymity`}
+          >
+            <legend className="signin__label">
+              Who readers see as the poster
+            </legend>
+            <div className="signin__choices">
+              <Option
+                name={`${id}-attribution`}
+                checked={draft.attribution.kind === "anonymous"}
+                onPick={() => {
+                  edit((old) => ({
+                    ...old,
+                    attribution: { ...old.attribution, kind: "anonymous" },
+                  }));
+                  setShown((old) => withoutField(old, "name"));
+                }}
+              >
+                Nobody: post anonymously
+              </Option>
+              <Option
+                name={`${id}-attribution`}
+                checked={draft.attribution.kind === "named"}
+                onPick={() =>
+                  edit((old) => ({
+                    ...old,
+                    attribution: { ...old.attribution, kind: "named" },
+                  }))
+                }
+              >
+                A name I choose
+              </Option>
+            </div>
+            {draft.attribution.kind === "named" ? (
+              <Field
+                id={`${id}-name`}
+                label="Name to show"
+                hint="Shown exactly as you type it. Pulse does not check it, so readers cannot tell whether it is your real name."
+                problem={shown.name}
+              >
+                {(described) => (
+                  <input
+                    id={`${id}-name`}
+                    className="signin__field"
+                    autoComplete="off"
+                    value={draft.attribution.name}
+                    aria-invalid={shown.name !== undefined}
+                    {...described}
+                    onChange={(event) => {
+                      const name = event.target.value;
+                      edit((old) => ({
+                        ...old,
+                        attribution: { kind: "named", name },
+                      }));
+                      if (shown.name)
+                        setShown((old) => withoutField(old, "name"));
+                    }}
+                    onBlur={() => {
+                      if (draft.attribution.name.trim() === "") return;
+                      const name = nameProblem(draft);
+                      setShown((old) =>
+                        name ? { ...old, name } : withoutField(old, "name"),
+                      );
+                    }}
+                  />
+                )}
+              </Field>
+            ) : null}
+          </fieldset>
+        </Setting>
+        {/* Beside the anonymity control, open or not (ADR-0037). */}
+        <p className="post__hint" id={`${id}-anonymity`}>
+          {ANONYMITY_NOTE}
+        </p>
+      </div>
 
       {needsPromise ? (
         <section className="post__purpose" aria-labelledby={`${id}-purpose`}>
