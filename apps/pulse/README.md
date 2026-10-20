@@ -19,9 +19,9 @@ change, with no signatures or hash chain. It never touches `services/` or
 | Plans                          | `docs/plans/pulse.md`, GitHub issues                    |
 | Screen designs                 | [Mockup index](../../docs/mockups/CANDIDATE_CONTEXT.md) |
 
-**Creating polls is not served yet.** The storage for it exists (ADR-0037), in
-Postgres and in memory, but no HTTP route or screen uses it. Polls come from
-seed data or database inserts.
+**Signed-in people can publish polls over HTTP** (`POST /api/polls`,
+ADR-0037), five an hour unless the owner grants more. There is no screen for
+it yet. The owner is whoever signs in with `PULSE_OWNER_EMAIL`.
 
 For contributors, see the [Pulse agent guide](./CLAUDE.md). The API reference
 marks planned interfaces separately from routes that are served today.
@@ -49,6 +49,9 @@ pnpm --filter @odc/pulse-web dev   # app on http://localhost:5173
 | `PULSE_CONFIRMATION_KEY` | new each run, so a restart forgets who confirmed |
 | `PULSE_WEB_ORIGIN`       | `http://localhost:5173`                          |
 | `PULSE_DATABASE_URL`     | unset, so data is kept in memory                 |
+| `PULSE_OWNER_EMAIL`      | unset, so nobody is owner                        |
+
+`PULSE_WEB_ORIGIN` is also the only `Origin` that poll creation accepts.
 
 ## Test
 
@@ -97,7 +100,10 @@ The server will not start without these:
 | `PULSE_MAIL_FROM`        | the sender, e.g. `pulse <sign-in@your-domain.org>`     |
 
 Optional: `PULSE_MAIL_REPLY_TO`, `PULSE_PORT` (8080), `PULSE_HOST` (`0.0.0.0`),
-`PULSE_DATABASE_SCHEMA`. Plain `RESEND_API_KEY` and `DATABASE_URL` are ignored.
+`PULSE_DATABASE_SCHEMA`, `PULSE_OWNER_EMAIL` (the owner, who may grant
+unlimited posting; unset means nobody, and a value that is not an address
+stops the start). `PULSE_WEB_ORIGIN` is also the only `Origin` poll creation
+accepts. Plain `RESEND_API_KEY` and `DATABASE_URL` are ignored.
 
 **`PULSE_CONFIRMATION_KEY` is as secret as the database.** Anyone with both can
 work out who voted what. Make it at least 32 characters

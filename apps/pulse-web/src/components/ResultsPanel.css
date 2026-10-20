@@ -52,6 +52,14 @@
   gap: 4px 10px;
 }
 
+/* The confirmed figures sit on a third row, under the full ones (#353). */
+.results__row:has(.results__bar--confirmed) {
+  grid-template-areas:
+    "label label"
+    "bar figure"
+    "confirmed-bar confirmed-figure";
+}
+
 .results__label {
   grid-area: label;
   display: flex;
@@ -100,11 +108,50 @@
   background: rgba(var(--side-b), 0.85);
 }
 
+/*
+ * Thinner and quieter than the full bar, so the eye reads it as the second
+ * number about the same choice rather than another choice.
+ */
+.results__bar--confirmed {
+  grid-area: confirmed-bar;
+  height: calc(var(--step) / 2);
+}
+
+.results__bar--confirmed::after,
+.results__row[data-yours="true"] .results__bar--confirmed::after {
+  background: var(--ballot-ink-muted);
+}
+
 .results__figure {
   grid-area: figure;
   font-size: var(--t-small);
   font-variant-numeric: tabular-nums;
   color: var(--ballot-ink-muted);
+}
+
+.results__figure--confirmed {
+  grid-area: confirmed-figure;
+}
+
+.results__explain {
+  margin: 0;
+  font-size: var(--t-small);
+  line-height: 1.5;
+}
+
+.results__link {
+  color: var(--ballot-ink-soft);
+  text-decoration: underline;
+  text-underline-offset: 0.2em;
+}
+
+.results__link:hover {
+  color: var(--ballot-ink);
+}
+
+.results__link:focus-visible {
+  outline: calc(var(--hairline) * 2) solid var(--focus-ring);
+  outline-offset: calc(var(--hairline) * 2);
 }
 
 .results__fine {
