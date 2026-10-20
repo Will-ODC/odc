@@ -676,17 +676,18 @@ test("BallotBatches: an opaque ballot does no per-interval work (cost independen
 
 test("BallotBatches: each interval group walks only the opaque instants touched since it last looked", () => {
   // One issue, interval 2 minutes; every opaque ballot sits at a new odd
-  // minute (a multiple of no interval here). 400k such instants come first,
-  // then one registered ballot, then 20k (opaque, registered) pairs, so every
+  // minute (a multiple of no interval here). 4k such instants come first,
+  // then one registered ballot, then 2k (opaque, registered) pairs, so every
   // query must learn that the new instant is not a candidate. With the
-  // group's `seenSeq` the first query walks the 400k instants once and each
-  // later query walks only the one new instant: 420k steps in all. A mutant
-  // that rescans the whole recency list each query (ignoring `seenSeq`) walks
-  // every instant so far each time, ~8.2e9 steps. This counts steps instead
-  // of timing them: the earlier timed 40k/4k version read a ratio of 52 on a
-  // GitHub runner against ~12 locally, and its band was 50.
-  const pretouched = 400000;
-  const pairs = 20000;
+  // group's `seenSeq` the first query walks the 4k instants once and each
+  // later query walks only the one new instant. The step count is asserted
+  // after every query, so a mutant that rescans the whole recency list each
+  // query (ignoring `seenSeq`) fails at the first pair, with a clean
+  // assertion rather than a timeout. This counts steps instead of timing
+  // them: the earlier timed 40k/4k version read a ratio of 52 on a GitHub
+  // runner against ~12 locally, and its band was 50.
+  const pretouched = 4000;
+  const pairs = 2000;
   const t = new BallotBatches();
   t.openIssue("a", 1, 120000, 1);
   let seq = 2;
@@ -701,8 +702,8 @@ test("BallotBatches: each interval group walks only the opaque instants touched 
     t.opaque(seq++, 60000 * minute);
     minute += 2;
     assert.equal(t.admit("a", seq++, 0), "resolved");
+    assert.equal(t.walkSteps(), pretouched + j + 1);
   }
-  assert.equal(t.walkSteps(), pretouched + pairs);
 });
 
 // --- the lazy interval summary: refresh edge cases ------------------------------
