@@ -206,3 +206,23 @@ export function byline(attribution: Attribution | undefined): string | null {
     ? `Posted by ${attribution.name}`
     : "Posted anonymously";
 }
+
+/** The one-line summaries the form shows in place of each setting. */
+export function methodSummary(draft: Draft): string {
+  return draft.method === "single"
+    ? "People pick one choice"
+    : "People pick any number of choices";
+}
+
+export function closingSummary(draft: Draft, now: number): string {
+  if (draft.closing.kind === "default")
+    return `Closes in seven days, on ${readableClose(new Date(now + DEFAULT_OPEN_MS))}`;
+  const at = chosenClose(draft.closing.local);
+  return at ? `Closes ${readableClose(at)}` : "Closes at a time you pick";
+}
+
+export function postedAsSummary(draft: Draft): string {
+  if (draft.attribution.kind === "anonymous") return "Posted anonymously";
+  const name = draft.attribution.name.trim();
+  return name === "" ? "Posted under a name you choose" : `Posted by ${name}`;
+}

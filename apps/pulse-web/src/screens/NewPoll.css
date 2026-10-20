@@ -156,39 +156,34 @@
   line-height: 1.5;
 }
 
-.post__summary {
-  display: grid;
-  gap: calc(var(--step) * 0.5) calc(var(--step) * 2);
-  margin: calc(var(--step) * 2) 0;
-}
-
-.post__summary dt {
-  font-size: var(--t-small);
-  font-weight: 600;
-  color: var(--ballot-ink-muted);
-}
-
-.post__summary dd {
-  margin: 0 0 calc(var(--step) * 1.5);
+/* A default, said in one line, with the way to change it beside it. */
+.post__setting {
+  margin: 0;
   font-size: var(--t-body);
   line-height: 1.5;
+  color: var(--ballot-ink-soft);
+}
+
+.post__change {
+  padding: 0;
+  font: inherit;
+  font-weight: 600;
   color: var(--ballot-ink);
-  overflow-wrap: anywhere;
+  background: none;
+  border: 0;
+  text-decoration: underline;
+  text-underline-offset: 0.2em;
+  cursor: pointer;
 }
 
-.post__summary ol {
-  margin: 0;
-  padding-inline-start: calc(var(--step) * 2.5);
+.post__change:focus-visible {
+  outline: 2px solid rgb(var(--side-b));
+  outline-offset: 2px;
 }
 
-.post__actions {
-  display: flex;
-  flex-wrap: wrap;
-  gap: var(--step);
-}
-
-.post__actions > button {
-  margin-top: 0;
+/* Tucked under the "Posted anonymously" line it explains. */
+.post__anonymity {
+  margin-top: calc(var(--step) * -2.25);
 }
 
 .post__link-button {

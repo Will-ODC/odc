@@ -4,6 +4,9 @@ import {
   LIMITS,
   byline,
   choiceProblems,
+  closingSummary,
+  methodSummary,
+  postedAsSummary,
   emptyDraft,
   hasProblems,
   length,
@@ -143,5 +146,27 @@ describe("who posted it", () => {
     expect(byline({ kind: "anonymous" })).toBe("Posted anonymously");
     expect(byline({ kind: "named", name: "Ada" })).toBe("Posted by Ada");
     expect(byline(undefined)).toBeNull();
+  });
+});
+
+describe("the one-line summaries", () => {
+  it("says each default, and each change", () => {
+    expect(methodSummary(draft())).toBe("People pick one choice");
+    expect(methodSummary(draft({ method: "approval" }))).toBe(
+      "People pick any number of choices",
+    );
+    expect(closingSummary(draft(), NOW)).toMatch(
+      /^Closes in seven days, on Oct 27, 2026/,
+    );
+    expect(
+      closingSummary(draft({ closing: { kind: "chosen", local: "" } }), NOW),
+    ).toBe("Closes at a time you pick");
+    expect(postedAsSummary(draft())).toBe("Posted anonymously");
+    expect(
+      postedAsSummary(draft({ attribution: { kind: "named", name: " " } })),
+    ).toBe("Posted under a name you choose");
+    expect(
+      postedAsSummary(draft({ attribution: { kind: "named", name: " Ada " } })),
+    ).toBe("Posted by Ada");
   });
 });

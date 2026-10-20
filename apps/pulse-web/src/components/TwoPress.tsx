@@ -33,6 +33,8 @@ export function TwoPress({
   progress,
   onConfirm,
   onCancel,
+  onAsk,
+  variant = "link",
 }: {
   /** The first button, e.g. "Sign out". Also names the question's group. */
   label: string;
@@ -44,6 +46,16 @@ export function TwoPress({
   onConfirm: () => void;
   /** The question was put away; a failure from before it is now stale. */
   onCancel: () => void;
+  /**
+   * Asked on the first press: `false` keeps the question from showing, for
+   * an action that is not ready yet (a form with something to fix).
+   */
+  onAsk?: () => boolean;
+  /**
+   * `link` is the quiet text button the top bar uses; `primary` is a page's
+   * main action, full size.
+   */
+  variant?: "link" | "primary";
 }) {
   const [asking, setAsking] = useState(false);
   const questionId = useId();
@@ -62,14 +74,17 @@ export function TwoPress({
   }, [progress.status]);
 
   const sending = progress.status === "sending";
+  const action = `two-press__action two-press__action--${variant}`;
 
   if (!asking) {
     return (
       <button
         ref={start}
         type="button"
-        className="two-press__action"
-        onClick={() => setAsking(true)}
+        className={action}
+        onClick={() => {
+          if (onAsk?.() ?? true) setAsking(true);
+        }}
       >
         {label}
       </button>
@@ -77,14 +92,18 @@ export function TwoPress({
   }
 
   return (
-    <div className="two-press" role="group" aria-label={label}>
+    <div
+      className={`two-press two-press--${variant}`}
+      role="group"
+      aria-label={label}
+    >
       <p id={questionId} className="two-press__question">
         {question}
       </p>
       <button
         ref={confirm}
         type="button"
-        className="two-press__action"
+        className={action}
         aria-describedby={questionId}
         aria-disabled={sending}
         onClick={() => {
@@ -95,7 +114,7 @@ export function TwoPress({
       </button>
       <button
         type="button"
-        className="two-press__action"
+        className={`two-press__action two-press__action--${variant === "primary" ? "secondary" : "link"}`}
         disabled={sending}
         onClick={() => {
           setAsking(false);

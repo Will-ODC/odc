@@ -1,12 +1,5 @@
 // @vitest-environment jsdom
-import {
-  act,
-  cleanup,
-  render,
-  screen,
-  waitFor,
-  within,
-} from "@testing-library/react";
+import { act, cleanup, render, screen, waitFor } from "@testing-library/react";
 import userEvent from "@testing-library/user-event";
 import { afterEach, describe, expect, it, vi } from "vitest";
 import { ApiError } from "../src/api/types.js";
@@ -140,37 +133,94 @@ describe("the purpose promise (ADR-0037)", () => {
     expect(screen.queryByRole("checkbox")).toBeNull();
   });
 
-  it("will not review a first post until the promise is ticked", async () => {
+  it("will not ask to post a first post until the promise is ticked", async () => {
     const user = userEvent.setup();
     const { createPoll } = show();
     await fill(user);
-    await user.click(button("Review"));
+    await user.click(button("Post question"));
     expect(
       screen.getByText("Tick the promise to post your question."),
     ).toBeTruthy();
     expect(document.activeElement).toBe(screen.getByRole("checkbox"));
-    expect(screen.queryByText("Check your question")).toBeNull();
+    expect(screen.queryByText("Post it? It can't be changed.")).toBeNull();
     expect(createPoll).not.toHaveBeenCalled();
   });
 });
 
+/*
+ * As simple and fast as possible (operator): question, choices and Post are
+ * all that is open. Each default is one line until Change opens it in place.
+ */
+describe("one screen, defaults in one line", () => {
+  it("opens with only the question, the choices and Post", async () => {
+    show({ context: () => Promise.resolve(LATER) });
+    await screen.findByLabelText("Your question");
+    expect(screen.queryAllByRole("radio")).toHaveLength(0);
+    expect(screen.queryByLabelText("Closing time")).toBeNull();
+    expect(screen.queryByLabelText("Name to show")).toBeNull();
+    expect(screen.getByText("People pick one choice")).toBeTruthy();
+    expect(
+      screen.getByText(/^Closes in seven days, on Oct 27, 2026/),
+    ).toBeTruthy();
+    expect(screen.getByText("Posted anonymously")).toBeTruthy();
+    expect(button("Post question")).toBeTruthy();
+    // No separate review step.
+    expect(screen.queryByRole("button", { name: "Review" })).toBeNull();
+  });
+
+  it("opens each setting in place, with focus on its current choice", async () => {
+    const user = userEvent.setup();
+    show({ context: () => Promise.resolve(LATER) });
+    await screen.findByLabelText("Your question");
+    await user.click(button("Change how people answer"));
+    expect(document.activeElement).toBe(
+      screen.getByRole("radio", { name: "One choice" }),
+    );
+    await user.click(
+      screen.getByRole("radio", { name: "Any number of choices" }),
+    );
+    expect(
+      (
+        screen.getByRole("radio", {
+          name: "Any number of choices",
+        }) as HTMLInputElement
+      ).checked,
+    ).toBe(true);
+    await user.click(button("Change when it closes"));
+    expect(document.activeElement).toBe(
+      screen.getByRole("radio", { name: /^In seven days/ }),
+    );
+    expect(
+      screen.queryByRole("button", { name: "Change how people answer" }),
+    ).toBeNull();
+  });
+});
+
 describe("who readers see (ADR-0037)", () => {
-  it("is anonymous by default, with the interim wording beside the choice", async () => {
+  it("is anonymous by default, with the interim wording beside it", async () => {
     show();
-    const anonymous = (await screen.findByRole("radio", {
-      name: "Nobody: post anonymously",
-    })) as HTMLInputElement;
-    expect(anonymous.checked).toBe(true);
-    const group = screen.getByRole("group", {
-      name: "Who readers see as the poster",
+    const change = await screen.findByRole("button", {
+      name: "Change who readers see as the poster",
     });
-    expect(group.getAttribute("aria-describedby")).toBeTruthy();
-    expect(within(group).getByText(ANONYMITY_NOTE)).toBeTruthy();
+    const note = document.getElementById(
+      change.getAttribute("aria-describedby") ?? "",
+    );
+    expect(note?.textContent).toBe(ANONYMITY_NOTE);
     expect(ANONYMITY_NOTE).toBe(
       "Your name is hidden from other readers. Pulse keeps your account linked to this post to address abuse.",
     );
     // Not the moderator wording: no moderator access exists yet.
     expect(document.body.textContent).not.toMatch(/moderator/i);
+    await userEvent.click(change);
+    const anonymous = screen.getByRole("radio", {
+      name: "Nobody: post anonymously",
+    }) as HTMLInputElement;
+    expect(anonymous.checked).toBe(true);
+    const group = screen.getByRole("group", {
+      name: "Who readers see as the poster",
+    });
+    expect(group.getAttribute("aria-describedby")).toBe(note?.id);
+    expect(screen.getByText(ANONYMITY_NOTE)).toBeTruthy();
     expect(screen.queryByRole("textbox", { name: "Name to show" })).toBeNull();
   });
 
@@ -178,18 +228,19 @@ describe("who readers see (ADR-0037)", () => {
     const user = userEvent.setup();
     const { createPoll } = show({ context: () => Promise.resolve(LATER) });
     await fill(user);
+    await user.click(button("Change who readers see as the poster"));
     await user.click(screen.getByRole("radio", { name: "A name I choose" }));
     expect(screen.getByText(/Pulse does not check it/).textContent).toContain(
       "readers cannot tell whether it is your real name",
     );
-    await user.click(button("Review"));
+    await user.click(button("Post question"));
     expect(
       screen.getByText("Write the name to show, or post anonymously."),
     ).toBeTruthy();
+    expect(document.activeElement).toBe(field("Name to show"));
     await user.type(field("Name to show"), " Ada ");
-    await user.click(button("Review"));
-    expect(await screen.findByText("Posted by Ada")).toBeTruthy();
     await user.click(button("Post question"));
+    await user.click(await screen.findByRole("button", { name: "Post it" }));
     await waitFor(() => expect(createPoll).toHaveBeenCalledOnce());
     expect(vi.mocked(createPoll).mock.calls[0]?.[1].attribution).toEqual({
       kind: "named",
@@ -247,29 +298,20 @@ describe("choices", () => {
 });
 
 describe("closing time", () => {
-  it("defaults to seven days, said as a date", async () => {
-    show();
-    const seven = (await screen.findByRole("radio", {
-      name: /^In seven days, on Oct 27, 2026/,
-    })) as HTMLInputElement;
-    expect(seven.checked).toBe(true);
-    expect(screen.queryByLabelText("Closing time")).toBeNull();
-  });
-
-  it("takes a picked future time and sends it in UTC", async () => {
+  it("takes a picked future time, says it, and sends it in UTC", async () => {
     const user = userEvent.setup();
     const { createPoll } = show({ context: () => Promise.resolve(LATER) });
     await fill(user);
+    await user.click(button("Change when it closes"));
     await user.click(screen.getByRole("radio", { name: "At a time I pick" }));
     const picker = screen.getByLabelText("Closing time") as HTMLInputElement;
     expect(picker.min).toBe("2026-10-20T12:01");
-    await user.click(button("Review"));
+    await user.click(button("Post question"));
     expect(screen.getByText("Pick a date and time.")).toBeTruthy();
+    expect(document.activeElement).toBe(picker);
     await user.type(picker, "2026-11-02T09:30");
-    await user.click(button("Review"));
-    await user.click(
-      await screen.findByRole("button", { name: "Post question" }),
-    );
+    await user.click(button("Post question"));
+    await user.click(await screen.findByRole("button", { name: "Post it" }));
     await waitFor(() => expect(createPoll).toHaveBeenCalledOnce());
     expect(vi.mocked(createPoll).mock.calls[0]?.[1].closesAt).toBe(
       new Date(2026, 10, 2, 9, 30).toISOString(),
@@ -277,21 +319,22 @@ describe("closing time", () => {
   });
 });
 
-describe("review, then post", () => {
+describe("posting, confirmed in place", () => {
   it("shows every problem at once and focuses the first", async () => {
     const user = userEvent.setup();
     const { createPoll } = show();
     await screen.findByLabelText("Your question");
-    await user.click(button("Review"));
+    await user.click(button("Post question"));
     expect(screen.getByText("Write the question.")).toBeTruthy();
     expect(
       screen.getAllByText("Write this choice, or remove it."),
     ).toHaveLength(2);
     expect(document.activeElement).toBe(field("Your question"));
+    expect(screen.queryByText("Post it? It can't be changed.")).toBeNull();
     expect(createPoll).not.toHaveBeenCalled();
   });
 
-  it("goes the whole way by keyboard, and posts once", async () => {
+  it("goes the whole way by keyboard, asks once, and posts once", async () => {
     const user = userEvent.setup();
     let finish: ((poll: Poll) => void) | undefined;
     const createPoll = vi.fn<Create>(
@@ -302,25 +345,20 @@ describe("review, then post", () => {
     );
     const { onPosted } = show({ createPoll });
     await fill(user);
-    // Tab past "Add a choice" and the radio groups to the promise.
+    // Past "Add a choice" and the three Change links to the promise.
     const promise = screen.getByRole("checkbox");
     while (document.activeElement !== promise) await user.tab();
     await user.keyboard(" ");
-    await user.keyboard("{Enter}");
-    const heading = await screen.findByRole("heading", {
-      name: "Check your question",
-    });
-    expect(document.activeElement).toBe(heading);
-    expect(screen.getByText("Should we open a community garden?")).toBeTruthy();
-    expect(screen.getByText("Posted anonymously")).toBeTruthy();
-    expect(
-      screen.getByText("It cannot be changed once it is posted."),
-    ).toBeTruthy();
     await user.tab();
     expect(document.activeElement).toBe(button("Post question"));
     await user.keyboard("{Enter}");
-    const sending = button("Posting…") as HTMLButtonElement;
-    expect(sending.disabled).toBe(true);
+    // Asked in place; nothing posted yet.
+    expect(screen.getByText("Post it? It can't be changed.")).toBeTruthy();
+    expect(document.activeElement).toBe(button("Post it"));
+    expect(createPoll).not.toHaveBeenCalled();
+    await user.keyboard("{Enter}");
+    const sending = button("Posting…");
+    expect(sending.getAttribute("aria-disabled")).toBe("true");
     await user.click(sending);
     expect(createPoll).toHaveBeenCalledExactlyOnceWith("key-1", {
       question: "Should we open a community garden?",
@@ -337,13 +375,23 @@ describe("review, then post", () => {
     );
   });
 
+  it("puts the question away on Cancel, posting nothing", async () => {
+    const user = userEvent.setup();
+    const { createPoll } = show({ context: () => Promise.resolve(LATER) });
+    await fill(user);
+    await user.click(button("Post question"));
+    await user.click(button("Cancel"));
+    expect(document.activeElement).toBe(button("Post question"));
+    expect(createPoll).not.toHaveBeenCalled();
+  });
+
   it("posts once when pressed twice before the page redraws", async () => {
     const user = userEvent.setup();
     const createPoll = vi.fn<Create>(() => new Promise<Poll>(() => {}));
     show({ context: () => Promise.resolve(LATER), createPoll });
     await fill(user);
-    await user.click(button("Review"));
-    const post = await screen.findByRole("button", { name: "Post question" });
+    await user.click(button("Post question"));
+    const post = await screen.findByRole("button", { name: "Post it" });
     act(() => {
       post.click();
       post.click();
@@ -364,14 +412,12 @@ describe("review, then post", () => {
       .mockResolvedValue(poll({ id: "new-1" }));
     show({ context: () => Promise.resolve(LATER), createPoll });
     await fill(user);
-    await user.click(button("Review"));
-    await user.click(
-      await screen.findByRole("button", { name: "Post question" }),
-    );
-    expect((await screen.findByRole("alert")).textContent).toBe(
-      "We could not reach pulse. Press Post question to try again; it will not be posted twice.",
-    );
     await user.click(button("Post question"));
+    await user.click(await screen.findByRole("button", { name: "Post it" }));
+    expect((await screen.findByRole("alert")).textContent).toBe(
+      "We could not reach pulse. Press Post it to try again; it will not be posted twice.",
+    );
+    await user.click(button("Post it"));
     expect((await screen.findByRole("alert")).textContent).toBe(
       "You have posted five questions this hour.",
     );
@@ -379,14 +425,11 @@ describe("review, then post", () => {
       "key-1",
       "key-1",
     ]);
-    await user.click(button("Edit"));
-    expect((field("Your question") as HTMLTextAreaElement).value).toBe(
-      "Should we open a community garden?",
-    );
-    await user.click(button("Review"));
-    await user.click(
-      await screen.findByRole("button", { name: "Post question" }),
-    );
+    // An edit is a different question: the ask is put away and a new key made.
+    await user.type(field("Choice 2"), "!");
+    expect(screen.queryByRole("button", { name: "Post it" })).toBeNull();
+    await user.click(button("Post question"));
+    await user.click(await screen.findByRole("button", { name: "Post it" }));
     await waitFor(() => expect(createPoll).toHaveBeenCalledTimes(3));
     expect(createPoll.mock.calls[2]?.[0]).toBe("key-2");
   });
@@ -400,10 +443,8 @@ describe("review, then post", () => {
       );
     show({ context: () => Promise.resolve(LATER), createPoll });
     await fill(user);
-    await user.click(button("Review"));
-    await user.click(
-      await screen.findByRole("button", { name: "Post question" }),
-    );
+    await user.click(button("Post question"));
+    await user.click(await screen.findByRole("button", { name: "Post it" }));
     expect(
       await screen.findByRole("heading", {
         name: "What this discussion is for",
@@ -412,6 +453,10 @@ describe("review, then post", () => {
     expect(
       screen.getByText("Tick the promise to post your question."),
     ).toBeTruthy();
+    await waitFor(() =>
+      expect(document.activeElement).toBe(screen.getByRole("checkbox")),
+    );
+    expect(screen.queryByRole("button", { name: "Post it" })).toBeNull();
     // What was typed survives.
     expect((field("Choice 1") as HTMLInputElement).value).toBe("Yes");
   });
@@ -423,10 +468,8 @@ describe("review, then post", () => {
       createPoll: () => Promise.reject(new ApiError(401, "Sign in first.")),
     });
     await fill(user);
-    await user.click(button("Review"));
-    await user.click(
-      await screen.findByRole("button", { name: "Post question" }),
-    );
+    await user.click(button("Post question"));
+    await user.click(await screen.findByRole("button", { name: "Post it" }));
     expect(
       await screen.findByRole("link", { name: "Sign in to post" }),
     ).toBeTruthy();
