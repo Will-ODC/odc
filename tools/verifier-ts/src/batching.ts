@@ -221,6 +221,8 @@ export class BallotBatches {
   private newest: Instant | null = null;
   /** `seq` of the latest opaque ballot; 0 before the first. */
   private latestOpaque = 0;
+  /** Instants visited by every refresh so far; read by tests (`walkSteps`). */
+  private walked = 0;
 
   /** `shardCap` and `chunkShift` are parameters for tests only. */
   constructor(
@@ -230,6 +232,15 @@ export class BallotBatches {
     this.issues = new ShardedMap(shardCap);
     this.groups = new ShardedMap(shardCap);
     this.opaqueAt = new ShardedMap(shardCap);
+  }
+
+  /**
+   * How many instants every refresh so far has visited, in total. For tests:
+   * it shows the walk is amortised (each group visits only instants touched
+   * since it last looked) without timing anything, so it cannot flake.
+   */
+  walkSteps(): number {
+    return this.walked;
   }
 
   /**
@@ -336,6 +347,7 @@ export class BallotBatches {
     let a: Instant | null = null;
     let b: Instant | null = null;
     for (let y = this.newest; y !== null && y.last > g.seenSeq; y = y.older) {
+      this.walked++;
       if (!isQuantized(y.ms, g.delta)) continue;
       if (a === null) a = y;
       else {

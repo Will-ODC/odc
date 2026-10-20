@@ -676,35 +676,33 @@ test("BallotBatches: an opaque ballot does no per-interval work (cost independen
 
 test("BallotBatches: each interval group walks only the opaque instants touched since it last looked", () => {
   // One issue, interval 2 minutes; every opaque ballot sits at a new odd
-  // minute (a multiple of no interval here), and a registered ballot follows
-  // each one. Every query must learn that the new instant is not a candidate.
-  // With the group's `seenSeq` it walks one instant per query: linear. A
-  // mutant that rescans the whole recency list from the front each query
-  // (ignoring `seenSeq`) walks every instant so far: quadratic. Ratio of 40k
-  // against 4k (opaque, registered) pairs: measured 11.4-12.8 idle and
-  // 12-25 with two full suites running alongside (one outlier of 83 in eight
-  // such runs, while those suites started), against 95-331 for that mutant
-  // (7.3-8.7 s against 26-76 ms). The band, ratio < 50, sits between them.
-  // Each side is the minimum of five runs after a warm-up.
-  const run = (n: number): number => {
-    const t = new BallotBatches();
-    t.openIssue("a", 1, 120000, 1);
-    let seq = 2;
-    const start = process.hrtime.bigint();
-    for (let j = 0; j < n; j++) {
-      t.opaque(seq++, 60000 * (2 * j + 1));
-      assert.equal(t.admit("a", seq++, 0), "resolved");
-    }
-    return Number(process.hrtime.bigint() - start) / 1e6;
-  };
-  const small = minOf(5, () => run(4000));
-  const large = minOf(5, () => run(40000));
-  const ratio = large / small;
-  assert.ok(
-    ratio < 50,
-    `40k/4k ratio ${ratio.toFixed(1)} (${large.toFixed(2)} ms / ${small.toFixed(2)} ms)`,
-  );
-  assert.ok(large < 30000, `took ${large} ms`);
+  // minute (a multiple of no interval here). 400k such instants come first,
+  // then one registered ballot, then 20k (opaque, registered) pairs, so every
+  // query must learn that the new instant is not a candidate. With the
+  // group's `seenSeq` the first query walks the 400k instants once and each
+  // later query walks only the one new instant: 420k steps in all. A mutant
+  // that rescans the whole recency list each query (ignoring `seenSeq`) walks
+  // every instant so far each time, ~8.2e9 steps. This counts steps instead
+  // of timing them: the earlier timed 40k/4k version read a ratio of 52 on a
+  // GitHub runner against ~12 locally, and its band was 50.
+  const pretouched = 400000;
+  const pairs = 20000;
+  const t = new BallotBatches();
+  t.openIssue("a", 1, 120000, 1);
+  let seq = 2;
+  let minute = 1;
+  for (let j = 0; j < pretouched; j++) {
+    t.opaque(seq++, 60000 * minute);
+    minute += 2;
+  }
+  assert.equal(t.admit("a", seq++, 0), "resolved");
+  assert.equal(t.walkSteps(), pretouched);
+  for (let j = 0; j < pairs; j++) {
+    t.opaque(seq++, 60000 * minute);
+    minute += 2;
+    assert.equal(t.admit("a", seq++, 0), "resolved");
+  }
+  assert.equal(t.walkSteps(), pretouched + pairs);
 });
 
 // --- the lazy interval summary: refresh edge cases ------------------------------
