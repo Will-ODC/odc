@@ -266,7 +266,7 @@ describe("status", () => {
     ).toBeTruthy();
     expect(screen.getAllByText("yours")).toHaveLength(2);
     expect(screen.getByRole("status").textContent).toBe(
-      "That replaces your earlier answer.",
+      "Counted. That replaces your earlier answer.",
     );
     expect(screen.queryByRole("checkbox")).toBeNull();
     await user.click(button("Change my answer"));
@@ -285,7 +285,7 @@ describe("status", () => {
       />,
     );
     expect(screen.getByText("Nobody has answered yet.")).toBeTruthy();
-    expect(screen.getByText("Counted.")).toBeTruthy();
+    expect(screen.getByText("Counted")).toBeTruthy();
     expect(screen.queryByRole("button", { name: "Next" })).toBeNull();
     expect(
       screen.queryByRole("button", { name: "Change my answer" }),

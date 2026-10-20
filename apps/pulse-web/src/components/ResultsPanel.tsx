@@ -17,6 +17,13 @@ import "./ResultsPanel.css";
  * is explained on its own page (`/trust`, ADR-0039), linked from the vote
  * card; this panel stays about the answers, and must never claim a public
  * record or a check that pulse does not have yet (`apps/pulse/CLAUDE.md`).
+ *
+ * Two numbers, side by side (#353, ADR-0040): every vote, one per browser,
+ * and the votes confirmed by email, one per person who signed in. The
+ * confirmed figures sit under each choice's full figures rather than in a
+ * second list, so the two can be read against each other on a phone without
+ * scrolling between them. "Confirmed by email" and never "verified": an email
+ * address is not a person, and nothing here proves one vote per human.
  */
 export function ResultsPanel({
   results,
@@ -24,6 +31,7 @@ export function ResultsPanel({
   ended = false,
   onClose,
   panelRef,
+  explainHref,
 }: {
   results: Results;
   /**
@@ -51,6 +59,12 @@ export function ResultsPanel({
    * contents, which is what a live region would have been standing in for.
    */
   panelRef?: RefObject<HTMLDivElement | null> | undefined;
+  /**
+   * Where "What does this mean?" points: the page that explains what a
+   * confirmed vote is (`/trust`). Opened in a new tab, like the card's own
+   * link, so the conversation's local history survives. Omit to leave it out.
+   */
+  explainHref?: string | undefined;
 }) {
   // In the order the results list them, so the words read down the list.
   // Right only while a ballot is unordered (`single`, `approval`): a ranked
@@ -77,7 +91,19 @@ export function ResultsPanel({
         </button>
       ) : null}
       <p className="ballot__eyebrow">WHERE IT STANDS</p>
-      <p className="results__count">{howMany(results.voters, ended)}</p>
+      <p className="results__count">{howMany(results, ended)}</p>
+      {explainHref && results.voters > 0 ? (
+        <p className="results__explain">
+          <a
+            className="results__link"
+            href={explainHref}
+            target="_blank"
+            rel="noopener noreferrer"
+          >
+            What does this mean? (opens in a new tab)
+          </a>
+        </p>
+      ) : null}
 
       {/*
         Nobody answered: the sentence above says so, and a list of empty bars
@@ -108,6 +134,15 @@ function Counts({
     (most, one) => Math.max(most, one.share),
     0,
   );
+  const widestConfirmed = results.choices.reduce(
+    (most, one) => Math.max(most, one.confirmedShare),
+    0,
+  );
+  /*
+   * Nobody confirmed: the count line already says "0 confirmed by email", and
+   * a "0 · 0% confirmed" under every choice would only say it again.
+   */
+  const anyConfirmed = results.confirmedVoters > 0;
 
   return (
     <>
@@ -140,6 +175,22 @@ function Counts({
             <span className="results__figure">
               {choice.count} · {choice.share}%
             </span>
+            {anyConfirmed ? (
+              <>
+                <span
+                  className="results__bar results__bar--confirmed"
+                  aria-hidden="true"
+                  style={
+                    {
+                      "--fill": `${scale(choice.confirmedShare, widestConfirmed)}%`,
+                    } as CSSProperties
+                  }
+                />
+                <span className="results__figure results__figure--confirmed">
+                  {choice.confirmedCount} · {choice.confirmedShare}% confirmed
+                </span>
+              </>
+            ) : null}
           </li>
         ))}
       </ul>
@@ -171,18 +222,24 @@ function separatorBefore(at: number, count: number): string {
 }
 
 /**
- * How many people answered, in words.
+ * How many votes there are, and how many of them are confirmed, in words.
  *
  * Nobody is a real answer now. After a vote it cannot happen - the vote just
  * given is in the count - but a closed question's results are open to people
  * who did not vote, and a question can close with nobody having answered it.
+ *
+ * "Votes", not "people": the full total counts browsers, and one person on
+ * two browsers is two votes (see `/trust`). Zero confirmed is said as zero -
+ * it is an ordinary answer, not a missing one.
  */
-function howMany(voters: number, ended: boolean): string {
+function howMany(results: Results, ended: boolean): string {
+  const { voters, confirmedVoters } = results;
   if (voters === 0) {
     return ended ? "Nobody answered this one." : "Nobody has answered yet.";
   }
-  const people = voters === 1 ? "1 person" : `${voters} people`;
-  return ended ? `${people} answered` : `${people} so far`;
+  const votes = voters === 1 ? "1 vote" : `${voters} votes`;
+  const total = ended ? votes : `${votes} so far`;
+  return `${total} · ${confirmedVoters} confirmed by email`;
 }
 
 /** A bar's width as a share of the widest one, never dividing by zero. */

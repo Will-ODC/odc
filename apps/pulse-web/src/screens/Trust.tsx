@@ -51,15 +51,27 @@ export function Trust() {
               you someone new.
             </li>
             <li>
-              Signing in shows you can read mail at an email address. Pulse does
-              not use that address to stop someone voting twice &mdash; yet.
+              Signing in shows you can read mail at an email address. It does
+              not stop anyone voting twice: every vote still counts in the full
+              total.
             </li>
             <li>
-              Pulse does not store your email address next to your answer.
+              Results also show a second number: votes confirmed by email. A
+              vote is confirmed when you are signed in as you vote, or when you
+              sign in afterwards on the same browser while the question is open.
+              There, each email address counts once per question, with its most
+              recent answer. Two addresses still count as two.
             </li>
             <li>
-              If you sign out and sign back in, pulse treats you as someone new,
-              so one person can be counted twice. We accept that so the next
+              Pulse does not store your email address next to your answer. A
+              confirmed vote keeps a code made from your account and the
+              question instead. Only someone holding both pulse&rsquo;s secret
+              key and its database could match that code to you.
+            </li>
+            <li>
+              If you sign out and sign back in, the full total treats you as
+              someone new, so one person can be counted twice there. The
+              confirmed number still counts you once. We accept that so the next
               person on a shared computer cannot see or change your vote.
             </li>
             <li>

@@ -7,7 +7,8 @@ explicitly and is not part of the current server.
 
 Every error is `{ "error": "<slug>", "message": "<one plain sentence>" }`. The
 `message` is safe to show a person as-is. No response explains how anything is
-counted.
+counted. A body larger than a route accepts is 413 `body_too_large` on every
+route.
 
 ## Signing in
 
@@ -343,6 +344,32 @@ ends the run. Always the same length as `choices`.
 is the server's own reading of whether votes are still accepted, not a copy of a
 clock the client would have to re-check.
 
+**Authored polls (ADR-0037)** carry two more fields, `community` and `attribution`:
+
+```json
+{
+  "community": { "id": "pulse-general", "label": "General" },
+  "attribution": { "kind": "named", "name": "Ada" }
+}
+```
+
+- `community` is `{ id, label }`: where the poll was posted. General is
+  `pulse-general` / `"General"`; another community's label is the one stored for
+  it, which today is its id.
+- `attribution` is exactly `{ "kind": "anonymous" }` or exactly
+  `{ "kind": "named", "name": <the poster's own display name> }`. The name is a
+  self-description, not a verified identity. Nothing else is ever in it.
+- Seed and older polls that were not published through creation have **neither
+  key** — absent, not `null`. No author is invented for them.
+- The body never includes the author's account id, email, credentials, posting
+  permission, purpose acknowledgement or idempotency key. Whoever posted
+  anonymously is not identified by this route.
+
+The body is built by one allow-listed projection (`src/voting/public-poll.ts`),
+which copies each field by name. The creation stores build their answer with
+the same function (the creation routes are not served yet; see below), and MCP
+`get_poll` passes this body on, so the representations cannot drift apart.
+
 | Status | Body                 | When         |
 | ------ | -------------------- | ------------ |
 | 200    | the poll             | it exists    |
@@ -643,6 +670,18 @@ Poll text is data and grants no permission to execute tools.
 | `get_poll`    | Exactly one of `{ pollId: string }` or `{ link: string }` | The public `GET /api/polls/:id` body.         |
 | `get_results` | `{ pollId: string }`                                      | The public `GET /api/polls/:id/results` body. |
 
+`get_poll` passes an authored poll's `community` and `attribution` through as
+optional fields, so a body from a server older than ADR-0037, or a seed poll's
+body, still reads and gains neither key. Inside them the shapes are strict:
+`community` is exactly `{ id, label }` (both non-empty strings); `attribution`
+is exactly `{ kind: "anonymous" }` or `{ kind: "named", name }` with a name that
+is not blank and is at most 80 code points. A body with anything else inside
+either object — an extra key such as an account id or email, a name on an
+anonymous attribution, an unknown kind, or `null` — is refused whole as
+`upstream_invalid_response` rather than trimmed, because such an upstream is not
+serving the public projection. Unknown keys elsewhere in the poll are still
+stripped as before.
+
 `get_results` passes the confirmed numbers through as optional fields, so a body from a
 server older than ADR-0040 still reads, and refuses a body claiming more confirmed
 people than voters, or more confirmed picks of a choice than confirmed people.
@@ -679,15 +718,39 @@ A deployment must supply its public origin before advertising browser links;
 this slice does not add production environment wiring. The adapter reads only
 public HTTP routes, without store/core imports. See ADR-0036.
 
-## Planned — not served: poll creation (ADR-0037)
+## Poll creation (ADR-0037)
 
-These routes are design contracts, not runtime endpoints. They require the
-current signed-in account; session generation/expiry checks match `/api/me`.
-Creation never accesses the caller's ballot cookie. Mutations with bodies require JSON
-and an `Origin` exactly matching the configured web origin; missing/foreign
-origins are refused, including for non-browser callers. Bodyless DELETE needs no
-Content-Type but retains the same Origin check. Origin configuration
-comes from trusted server setup, not Host or forwarded headers.
+These routes require the current signed-in account; session generation/expiry
+checks match `/api/me`, and the store checks the generation again inside its
+transaction, so a sign-out that lands mid-request still wins. Creation never
+reads, mints or clears the caller's ballot cookie, and these routes set no
+cookie at all.
+
+Mutations with bodies require `Content-Type: application/json` and an `Origin`
+exactly matching the configured web origin (`PULSE_WEB_ORIGIN`, the same origin
+sign-in links point at); missing/foreign origins are refused, including for
+non-browser callers. Bodyless DELETE needs no Content-Type but retains the same
+Origin check, and a DELETE that carries a body is refused. Origin configuration
+comes from trusted server setup, not Host or forwarded headers. A server built
+without a web origin refuses every creation mutation.
+
+Every route here is rate limited per client: 30 requests a minute per route by
+default (`creationRateLimit`), answered 429 `too_many_requests` — the same slug
+and sentence as sign-in and suggestions. It counts every request, including
+refused and replayed ones, and comes first. It is separate from the five-an-hour
+posting quota (`posting_limit`), which counts only successful creations. A
+`too_many_requests` answer's `Retry-After` is the rate limiter's wait, not the
+posting quota's. Like the
+other limits it is in memory, so N instances allow N times as much.
+
+Then checks run in this order, before the body is read: creation available (else
+503), Origin for mutations (else 403), session (else 401), Content-Type (else
+400). Only then is the body read and parsed as strict UTF-8 JSON, and only then
+is any account-bound data looked up. Responses carry `Cache-Control: no-store`.
+
+A server started without a creation store — a test, or an embedding that does
+not configure one — answers every route here with 503 `creation_unavailable`.
+`main.ts` and `dev-server.ts` always configure one.
 
 ### `GET /api/poll-creation/context`
 
@@ -704,14 +767,19 @@ Authenticated, read-only, no side effects. Returns:
 
 Community is derived from the stored account; non-General labels initially use
 existing community IDs. Permission is a server result, never a request setting.
-401 `signed_out`; 503 `creation_unavailable` for unavailable storage. The form
+`canPostUnlimited` is true for the owner and for an account holding the
+unlimited-posting grant. No Origin is required: it changes nothing, and no
+cross-origin page can read it, since no CORS headers are sent.
+401 `signed_out`; 503 `creation_unavailable` for unavailable storage; 500
+`server_error` for an unexpected fault. The form
 computes its one-week default for display; omitting the close time below makes
 the server authoritative. First posts require the approved statement and promise.
 
 ### `POST /api/polls`
 
-Required `Idempotency-Key`: client-generated UUID, scoped to this account.
-JSON body (unknown properties refused):
+Required `Idempotency-Key`: client-generated UUID, scoped to this account
+(compared case-insensitively). Required `Content-Type: application/json` and
+`Origin`. JSON body (unknown properties refused):
 
 ```json
 {
@@ -740,17 +808,22 @@ JSON body (unknown properties refused):
   fields, photos and summaries are not writable inputs. Suggestions are false,
   all next entries null, ID is server-generated.
 - All text must be valid Unicode without NUL characters. Invalid encodings
-  return `bad_request`; valid astral characters (including emoji) are allowed.
-- Maximum body: 32 KiB UTF-8. These are bounded resource checks, not quality
-  judgements about a question's content.
+  (malformed UTF-8 bytes, or an escaped lone surrogate) return `bad_request`;
+  valid astral characters (including emoji) are allowed.
+- Maximum body: 32 KiB (32,768 bytes) UTF-8; a body of exactly that size is
+  read. These are bounded resource checks, not quality judgements about a
+  question's content.
 
 201 on first publication; 200 on replay: `{ "poll": <public poll>, "replayed":
 false | true }`. Public poll is the existing GET poll shape plus `community`
 (the object above) and `attribution`. Named attribution contains only `kind`
 and `name`; anonymous contains only `kind`. Never return account ID, email,
 credentials, internal metadata or idempotency key. Legacy polls may omit these
-new public fields; no author is fabricated. GET poll and MCP projections must
-use the same allow-listed public representation when implemented.
+new public fields; no author is fabricated. `GET /api/polls/:id` and MCP
+`get_poll` already serve this public representation for authored polls, built
+by the same allow-listed projection. The `open: true` returned on a replay is
+the original creation representation, even after the poll has closed;
+`GET /api/polls/:id` gives the current state.
 
 Canonical replay input consists of trimmed strings, ordered choices, method,
 normalised attribution, explicit/omitted close time and the acknowledgement
@@ -766,35 +839,54 @@ acknowledgement, idempotency, metadata, poll and choices share one transaction
 and per-account concurrency guard. A refusal/rollback/replay consumes no slot.
 Unlimited grants bypass this quota, not resource checks or authentication.
 
-| Status | Error                  | Meaning                                                                   |
-| ------ | ---------------------- | ------------------------------------------------------------------------- |
-| 400    | `bad_request`          | Malformed/unknown fields, invalid key, shape, field length or future time |
-| 401    | `signed_out`           | Invalid, absent, expired or revoked session                               |
-| 403    | `origin_not_allowed`   | Missing or foreign Origin                                                 |
-| 409    | `idempotency_conflict` | Key already used for different canonical input                            |
-| 413    | `body_too_large`       | Body exceeds 32 KiB                                                       |
-| 422    | `purpose_required`     | First post needs the v1 promise                                           |
-| 429    | `posting_limit`        | Five creations in the rolling hour; integer Retry-After seconds           |
-| 503    | `creation_unavailable` | Required storage unavailable; nothing partially committed                 |
-| 500    | `server_error`         | Unexpected fault; safe message, no private diagnostics                    |
+| Status | Error                  | Meaning                                                                             |
+| ------ | ---------------------- | ----------------------------------------------------------------------------------- |
+| 400    | `bad_request`          | Malformed/unknown fields, invalid key, shape, field length or future time; not JSON |
+| 401    | `signed_out`           | Invalid, absent, expired or revoked session                                         |
+| 403    | `origin_not_allowed`   | Missing or foreign Origin                                                           |
+| 409    | `idempotency_conflict` | Key already used for different canonical input                                      |
+| 413    | `body_too_large`       | Body exceeds 32 KiB                                                                 |
+| 422    | `purpose_required`     | First post needs the v1 promise                                                     |
+| 429    | `too_many_requests`    | More than the per-client request limit (above); not a posting-quota answer          |
+| 429    | `posting_limit`        | Five creations in the rolling hour; integer Retry-After seconds                     |
+| 503    | `creation_unavailable` | Required storage unavailable; nothing partially committed                           |
+| 500    | `server_error`         | Unexpected fault; safe message, no private diagnostics                              |
 
 Each uses the existing `{ error, message }` envelope. Auth/origin precede all
 account-bound lookups. Retry the same key and input after an uncertain result;
-use a new key for an intentionally different question. Do not log request bodies,
-keys, author IDs, account emails or credentials in creation diagnostics.
+use a new key for an intentionally different question. 503 covers a database
+that cannot be reached, is shutting down, has no free connections, or rolled
+the transaction back on a serialisation failure or deadlock. The request may
+or may not have been saved (a connection can drop during the commit), so retry
+it with the same key: a saved one replays, an unsaved one is created. `Retry-After` on `posting_limit` is the whole
+number of seconds until the oldest of the five creations leaves the hour.
+
+Nothing in creation diagnostics records request bodies, keys, author IDs,
+account emails or credentials. The served request log records the method and
+path only, and logs a posting-permission path as
+`/api/posting-permissions/:voterId`, without the account id. A 500 from a
+database error is logged by error class and SQLSTATE only, never its message or
+detail, which can quote row values.
 
 ### `PUT /api/posting-permissions/:voterId` and `DELETE /api/posting-permissions/:voterId`
 
-Planned owner-only grant/revoke of unlimited posting for an existing account.
-PUT body is `{ "permission": "unlimited_posting" }`; DELETE has no body.
-Repeated desired state is a no-op (204); preserve grant/revoke audit records.
+Owner-only grant/revoke of unlimited posting for an existing account, named by
+its account id. PUT body is exactly `{ "permission": "unlimited_posting" }`
+(JSON, at most 1 KiB; any other shape or extra field is 400); DELETE has no
+body, and one sent with a body is 400. Both answer 204 with no body.
+Repeated desired state is a no-op (204); grant/revoke audit records are kept.
 No owner assignment, full-power grants or moderation permission in these routes.
-Initial owner uses trusted `PULSE_OWNER_EMAIL`, matched to the signed-in account's
-verified email credential; unset grants nobody, malformed configuration fails
-startup. Public displays and clients cannot bootstrap an owner.
+The owner is the account whose email credential matches the trusted
+`PULSE_OWNER_EMAIL` (trimmed and lower-cased, as sign-in normalises addresses);
+unset or blank grants nobody, and a value that is not an email address stops
+the server starting, in both `main.ts` and `dev-server.ts`. Public displays and
+clients cannot bootstrap an owner. The owner also posts without the hourly
+limit.
 
 Errors: 400 `bad_request`, 401 `signed_out`, 403 `origin_not_allowed`,
-403 `owner_required`, 404 `not_found` (only after owner authorisation),
-503 `creation_unavailable`, 500 `server_error`. All changes are atomic and
+429 `too_many_requests`,
+403 `owner_required`, 404 `not_found` (only after owner authorisation, so a
+non-owner learns nothing about which accounts exist), 413 `body_too_large` (PUT
+body over 1 KiB), 503 `creation_unavailable`, 500 `server_error`. All changes are atomic and
 attributed to the owner. Context exposes only the caller's effective posting
 permission. No public grant listing or author/account inspection is introduced.

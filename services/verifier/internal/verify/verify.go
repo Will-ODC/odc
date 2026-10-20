@@ -137,11 +137,11 @@ func VerifyWith(data []byte, opts Options) Result {
 	head, chain := opts.Head, opts.Chain
 	st := &vstate{issues: map[string]*issueInfo{}, ballots: newBallotState(),
 		opaqueIssues: map[string]struct{}{}}
-	lines, faults := frame(data)
+	lines := &lineReader{data: data}
 
 	// An empty export verified as a chain is INVALID at line 1: it has no
 	// genesis (EX-6/EX-18/ES-33).
-	if len(lines) == 0 {
+	if len(data) == 0 {
 		return invalid(1, "empty export: no genesis (EX-18)")
 	}
 
@@ -149,15 +149,19 @@ func VerifyWith(data []byte, opts Options) Result {
 	var genesisHash string // line 1's stored hash (EX-21), once line 1 parses
 	var partial []int
 
-	for i := range lines {
-		ln := i + 1
+	for {
+		seg, ln, fault, more := lines.next()
+		if !more {
+			break
+		}
+		i := ln - 1
 
 		// Framing violations are Stage A, attributed to this line (EX-20).
-		if reason, bad := faults[ln]; bad {
-			return invalid(ln, "framing: "+reason)
+		if fault != "" {
+			return invalid(ln, "framing: "+fault)
 		}
 
-		obj, ok, tooDeep := parseLine(lines[i])
+		obj, ok, tooDeep := parseLine(seg)
 		if tooDeep {
 			// EV-24: this verifier's depth limit (64, the EV-23 minimum) was
 			// reached. A limit above 2 establishes INVALID at this line, and
@@ -268,7 +272,7 @@ func VerifyWith(data []byte, opts Options) Result {
 
 	// --head: attributed to the last line (EX-19).
 	if head != nil && *head != prev.hash {
-		return invalid(len(lines), "head mismatch (EX-15/EX-19)")
+		return invalid(lines.ln, "head mismatch (EX-15/EX-19)")
 	}
 
 	if len(partial) > 0 {

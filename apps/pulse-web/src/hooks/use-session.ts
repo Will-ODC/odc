@@ -1,6 +1,7 @@
 import { useCallback, useEffect, useRef, useState } from "react";
 import type { Me, PulseApi } from "../api/types.js";
 import type { TwoPressProgress } from "../components/TwoPress.js";
+import { SIGNED_IN_KEY } from "../flow/sign-in-return.js";
 
 /**
  * Who is signed in, as far as the bar across the top needs to know.
@@ -63,6 +64,48 @@ export function useSession(
       live = false;
     };
   }, [api]);
+
+  /*
+   * Ask again when the person comes back to this page, while nobody is signed
+   * in here (#353). "Confirm with your email" opens sign-in in another tab,
+   * and the emailed link opens a third; signing in there sets the cookie this
+   * page shares, but nothing tells this page. Coming back to it - the window
+   * regaining focus, or the tab becoming visible - is the moment the answer
+   * may have changed and the moment someone will look, so the vote card can
+   * say "confirmed by email" without a reload. The tab that spends the link
+   * also announces it through storage (`announceSignIn`), which reaches this
+   * page even when it never lost focus, as with two windows side by side.
+   *
+   * Only upgrades: a failed or signed-out answer leaves the session as it
+   * was, so a dropped connection never shows a signed-in person as signed out.
+   */
+  const settled =
+    session.status === "signedOut" || session.status === "unknown";
+  useEffect(() => {
+    if (!settled) return;
+    let live = true;
+    const ask = () => {
+      if (document.visibilityState === "hidden") return;
+      api.me().then(
+        (me) => {
+          if (live && me) setSession({ status: "signedIn", me });
+        },
+        () => {},
+      );
+    };
+    const announced = (event: StorageEvent) => {
+      if (event.key === SIGNED_IN_KEY) ask();
+    };
+    window.addEventListener("focus", ask);
+    window.addEventListener("storage", announced);
+    document.addEventListener("visibilitychange", ask);
+    return () => {
+      live = false;
+      window.removeEventListener("focus", ask);
+      window.removeEventListener("storage", announced);
+      document.removeEventListener("visibilitychange", ask);
+    };
+  }, [api, settled]);
 
   // The hook's own guard, not only the button's: one request at a time.
   const sending = useRef(false);

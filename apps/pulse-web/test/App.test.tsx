@@ -6,7 +6,10 @@ import { App } from "../src/App.js";
 import { poll, stubApi } from "./stub-api.js";
 
 afterEach(cleanup);
-beforeEach(() => globalThis.history.replaceState(null, "", "/"));
+beforeEach(() => {
+  globalThis.history.replaceState(null, "", "/");
+  globalThis.localStorage.clear();
+});
 
 const ME = { id: "v1", email: "jo@student.ubc.ca", community: "ubc" };
 
@@ -123,6 +126,56 @@ describe("after the link is spent", () => {
      * spent link is still one press of Back away.
      */
     expect(globalThis.history.length).toBe(before);
+  });
+
+  /*
+   * "Confirm with your email" opens /sign-in?poll=<id>; the emailed link
+   * cannot carry the poll, so this browser remembers it (#353).
+   */
+  it("lands on the question 'Confirm with your email' was pressed on", async () => {
+    globalThis.history.replaceState(null, "", "/sign-in?poll=parks");
+    const first = render(<App api={stubApi()} />);
+    expect(await screen.findByLabelText("Your email")).toBeTruthy();
+    first.unmount();
+
+    globalThis.history.replaceState(null, "", "/sign-in?token=abc123");
+    render(
+      <App
+        api={stubApi({
+          redeem: () => Promise.resolve(ME),
+          poll: (id) => Promise.resolve(poll({ id, question: `Q ${id}` })),
+        })}
+      />,
+    );
+    await userEvent.click(
+      await screen.findByRole("button", { name: "Continue" }),
+    );
+    expect(
+      await within(screen.getByRole("main")).findByText("Q parks"),
+    ).toBeTruthy();
+    expect(globalThis.location.search).toBe("?poll=parks");
+    // Other tabs in this browser hear about it (#353).
+    expect(globalThis.localStorage.getItem("pulse.signedIn")).toMatch(/^\d+$/);
+  });
+
+  it("lands where it always has when sign-in named no question", async () => {
+    globalThis.history.replaceState(null, "", "/sign-in?poll=parks");
+    const first = render(<App api={stubApi()} />);
+    await screen.findByLabelText("Your email");
+    first.unmount();
+    // A later, plain sign-in forgets the older question.
+    globalThis.history.replaceState(null, "", "/sign-in");
+    const second = render(<App api={stubApi()} />);
+    await screen.findByLabelText("Your email");
+    second.unmount();
+
+    globalThis.history.replaceState(null, "", "/sign-in?token=abc123");
+    render(<App api={stubApi({ redeem: () => Promise.resolve(ME) })} />);
+    await userEvent.click(
+      await screen.findByRole("button", { name: "Continue" }),
+    );
+    await within(screen.getByRole("main")).findByText(poll().question);
+    expect(globalThis.location.search).toBe("?poll=ads-free");
   });
 
   it("goes back to the form when the link had run out", async () => {

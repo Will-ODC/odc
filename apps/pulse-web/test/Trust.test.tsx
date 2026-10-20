@@ -112,9 +112,10 @@ describe("what the page says", () => {
     expect(today).toContain(
       "Your vote is tied to this browser, whether or not you sign in.",
     );
-    expect(today).toContain(
-      "Pulse does not use that address to stop someone voting twice",
-    );
+    expect(today).toContain("It does not stop anyone voting twice");
+    // The confirmed number (ADR-0040) is per address, never per person.
+    expect(today).toContain("each email address counts once per question");
+    expect(today).toContain("Two addresses still count as two.");
     expect(today.toLowerCase()).not.toMatch(
       /sign(ing)? in (ties|links|stops|prevents|proves)/,
     );
