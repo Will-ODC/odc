@@ -1,4 +1,5 @@
 import assert from "node:assert/strict";
+import { randomUUID } from "node:crypto";
 import { test, type TestContext } from "node:test";
 import { Writable } from "node:stream";
 import Fastify from "fastify";
@@ -14,6 +15,8 @@ import {
 import { databaseUrl } from "../src/db/config.js";
 import { databaseSkip, throwawaySchema } from "./support/database.js";
 import { idFromLink, origin } from "../src/http/mcp/client.js";
+import { PostgresCreationStore } from "../src/authoring/pg-store.js";
+import { PostgresVoterStore } from "../src/identity/pg-store.js";
 
 async function connect(t: TestContext, url: string, modern = true) {
   const client = new Client(
@@ -166,6 +169,104 @@ test("closed polls and injection text remain data and extra upstream private fie
   assert.deepEqual(result.structuredContent, publicPoll);
   assert.equal((result.structuredContent as { open?: boolean })?.open, false);
   assert.deepEqual(source.requests, ["/api/polls/p1"]);
+});
+
+test("authored poll attribution and community pass through in their public shapes", async (t) => {
+  for (const authored of [
+    {
+      ...publicPoll,
+      community: { id: "pulse-general", label: "General" },
+      attribution: { kind: "anonymous" },
+    },
+    {
+      ...publicPoll,
+      community: { id: "campus", label: "Campus" },
+      attribution: { kind: "named", name: "Ada" },
+    },
+    {
+      ...publicPoll,
+      community: { id: "campus", label: "Campus" },
+      // 80 code points, most of them astral: the limit counts code points.
+      attribution: { kind: "named", name: "😀".repeat(79) + "A" },
+    },
+  ]) {
+    const source = await upstream(t, 200, authored);
+    const { client } = await adapter(t, source.url);
+    const result = await client.callTool({
+      name: "get_poll",
+      arguments: { pollId: "p1" },
+    });
+    assert.notEqual(result.isError, true);
+    assert.deepEqual(result.structuredContent, authored);
+  }
+});
+
+test("an_upstream_without_attribution_still_reads_and_gains_no_author", async (t) => {
+  const source = await upstream(t);
+  const { client } = await adapter(t, source.url);
+  const result = await client.callTool({
+    name: "get_poll",
+    arguments: { pollId: "p1" },
+  });
+  assert.deepEqual(result.structuredContent, publicPoll);
+  assert.equal("attribution" in (result.structuredContent ?? {}), false);
+  assert.equal("community" in (result.structuredContent ?? {}), false);
+});
+
+test("attribution or community with anything beyond the public shape is refused, not trimmed", async (t) => {
+  // Outer unknown keys are stripped (see above). Inside attribution and
+  // community the shapes are strict: an upstream putting an account id or an
+  // address there is not serving the public projection, so nothing it said
+  // is passed on.
+  const community = { id: "campus", label: "Campus" };
+  for (const body of [
+    {
+      ...publicPoll,
+      community,
+      attribution: { kind: "anonymous", voterId: "author-account-private" },
+    },
+    {
+      ...publicPoll,
+      community,
+      attribution: {
+        kind: "named",
+        name: "Ada",
+        email: "private@example.test",
+      },
+    },
+    {
+      ...publicPoll,
+      community,
+      attribution: { kind: "anonymous", name: "Ada" },
+    },
+    { ...publicPoll, community, attribution: { kind: "named" } },
+    { ...publicPoll, community, attribution: { kind: "named", name: "  " } },
+    {
+      ...publicPoll,
+      community,
+      attribution: { kind: "named", name: "A".repeat(81) },
+    },
+    { ...publicPoll, community, attribution: { kind: "verified" } },
+    { ...publicPoll, community, attribution: null },
+    {
+      ...publicPoll,
+      community: { ...community, createdBy: "author-account-private" },
+      attribution: { kind: "anonymous" },
+    },
+    { ...publicPoll, community: { id: "campus" } },
+  ]) {
+    const source = await upstream(t, 200, body);
+    const { client } = await adapter(t, source.url);
+    const result = await client.callTool({
+      name: "get_poll",
+      arguments: { pollId: "p1" },
+    });
+    errorCode(result, "upstream_invalid_response");
+    assert.doesNotMatch(
+      JSON.stringify(result),
+      /author-account-private|private@example|Ada|Campus/,
+    );
+  }
 });
 
 test("missing, malformed and additional tool arguments are refused before an upstream request", async (t) => {
@@ -497,5 +598,69 @@ test(
         await (await fetch(`${address}/api/polls/ads-free${suffix}`)).json(),
       );
     }
+  },
+);
+
+test(
+  "an_authored_poll_reads_the_same_through_MCP_and_GET_from_the_database",
+  { skip: databaseSkip },
+  async (t) => {
+    const { schema } = await throwawaySchema(t);
+    const url = new URL(databaseUrl()!);
+    url.searchParams.set("options", `-c search_path=${schema}`);
+    const { app, pool } = await buildDevServer(
+      devConfig({
+        PULSE_DATABASE_URL: url.href,
+        PULSE_SESSION_SECRET: "mcp-test-secret-long-enough",
+      }),
+      {},
+      { log: () => {} },
+    );
+    t.after(() => app.close());
+    assert.ok(pool);
+    const at = new Date();
+    await new PostgresVoterStore(pool).create(
+      {
+        id: "author-account-91d0",
+        community: null,
+        assurance: "email",
+        claimedAt: at,
+        proofEmailsOptIn: false,
+      },
+      { kind: "email", value: "author-91d0@example.test", verifiedAt: at },
+    );
+    const { poll } = await new PostgresCreationStore(pool).publish(
+      { voterId: "author-account-91d0", sessionGeneration: 0 },
+      randomUUID(),
+      {
+        question: "Open a community garden?",
+        choices: ["Yes", "No"],
+        method: "single",
+        attribution: { kind: "named", name: "Ada" },
+        purposeAcknowledgement: "community-purpose-v1",
+      },
+    );
+    const address = await app.listen({ host: "127.0.0.1", port: 0 });
+    const client = await connect(t, address);
+    const result = await client.callTool({
+      name: "get_poll",
+      arguments: { pollId: poll.id },
+    });
+    const direct = await fetch(`${address}/api/polls/${poll.id}`);
+    const raw = await direct.text();
+    assert.deepEqual(result.structuredContent, JSON.parse(raw));
+    assert.deepEqual(result.structuredContent, poll);
+    assert.deepEqual(JSON.parse(raw).attribution, {
+      kind: "named",
+      name: "Ada",
+    });
+    assert.deepEqual(JSON.parse(raw).community, {
+      id: "pulse-general",
+      label: "General",
+    });
+    assert.doesNotMatch(
+      raw + JSON.stringify(result),
+      /author-account-91d0|author-91d0@example\.test/,
+    );
   },
 );

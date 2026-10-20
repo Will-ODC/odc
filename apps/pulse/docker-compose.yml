@@ -66,6 +66,8 @@ services:
       PULSE_CONFIRMATION_KEY: ${PULSE_CONFIRMATION_KEY:-}
       PULSE_RESEND_API_KEY: ${PULSE_RESEND_API_KEY:-}
       PULSE_MAIL_FROM: ${PULSE_MAIL_FROM:-}
+      # Optional (ADR-0037): empty means nobody is owner.
+      PULSE_OWNER_EMAIL: ${PULSE_OWNER_EMAIL:-}
     depends_on:
       db:
         # Not just "started": the API migrates on boot, and a database still

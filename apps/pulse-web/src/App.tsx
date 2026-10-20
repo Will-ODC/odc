@@ -2,6 +2,7 @@ import type { ReactNode } from "react";
 import type { PulseApi } from "./api/types.js";
 import type { Route } from "./flow/route.js";
 import { FIRST_POLL_ID } from "./flow/route.js";
+import { browserStore, takeReturn } from "./flow/sign-in-return.js";
 import { AppShell } from "./components/AppShell.js";
 import { TopBanner } from "./components/TopBanner.js";
 import { useRoute } from "./hooks/use-route.js";
@@ -61,7 +62,7 @@ export function App({
     case "signIn":
       return (
         <SignInPage>
-          <SignIn api={api} />
+          <SignIn api={api} {...(at.pollId ? { returnTo: at.pollId } : {})} />
         </SignInPage>
       );
     case "redeem":
@@ -76,7 +77,12 @@ export function App({
              * button a link that can now only answer "already used".
              */
             onSignedIn={() =>
-              browser.replace({ kind: "conversation", pollId: LANDS_ON })
+              browser.replace({
+                kind: "conversation",
+                // The question "Confirm with your email" was pressed on, when
+                // this browser remembers one (#353).
+                pollId: takeReturn(browserStore()) ?? LANDS_ON,
+              })
             }
             onAskAgain={() => browser.replace({ kind: "signIn" })}
           />

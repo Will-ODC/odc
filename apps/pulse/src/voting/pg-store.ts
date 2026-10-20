@@ -7,6 +7,7 @@ import {
   type NewPoll,
   type Poll,
   type PollMethod,
+  type Publication,
 } from "./poll.js";
 import {
   UnknownPollError,
@@ -89,9 +90,15 @@ export class PostgresVotingStore implements VotingStore {
   }
 
   async getPoll(pollId: string): Promise<Poll | undefined> {
+    // The authored columns (ADR-0037) are read for their public facts only.
+    // `created_by` is deliberately not selected: the author's account never
+    // leaves the creation store, so no projection can copy it by mistake.
     const { rows } = await this.#pool.query<PollRow>(
-      "select id, question, method, created_at, closes_at, accepts_suggestions" +
-        " from polls where id = $1",
+      "select p.id, p.question, p.method, p.created_at, p.closes_at," +
+        " p.accepts_suggestions, p.attribution_kind, p.author_name," +
+        " c.id as community_id, c.label as community_label" +
+        " from polls p left join community c on c.id = p.community" +
+        " where p.id = $1",
       [pollId],
     );
     const row = rows[0];
@@ -113,8 +120,14 @@ export class PostgresVotingStore implements VotingStore {
       createdAt: row.created_at,
       acceptsSuggestions: row.accepts_suggestions,
     };
-    // No close time means no `closesAt` key, exactly as `createPoll` builds it.
-    return row.closes_at ? { ...poll, closesAt: row.closes_at } : poll;
+    const publication = publicationOf(row);
+    // No close time means no `closesAt` key, exactly as `createPoll` builds it;
+    // no authorship means no `publication` key, as the in-memory store has it.
+    return {
+      ...poll,
+      ...(row.closes_at ? { closesAt: row.closes_at } : {}),
+      ...(publication ? { publication } : {}),
+    };
   }
 
   async castVote(
@@ -274,6 +287,32 @@ interface PollRow {
   created_at: Date;
   closes_at: Date | null;
   accepts_suggestions: boolean;
+  attribution_kind: string | null;
+  author_name: string | null;
+  community_id: string | null;
+  community_label: string | null;
+}
+
+/**
+ * An authored poll's public facts from its row, or undefined for a seed or
+ * legacy poll. `polls_attribution_check` (005) guarantees an authored row has
+ * a community and a well-formed kind/name pair; the label is the community
+ * table's, the same row the Postgres creation store answers with. A row that
+ * breaks those guarantees is refused rather than published half-credited.
+ */
+function publicationOf(row: PollRow): Publication | undefined {
+  if (row.attribution_kind === null) return undefined;
+  if (row.community_id === null || row.community_label === null)
+    throw new Error("authored poll has no community");
+  const community = { id: row.community_id, label: row.community_label };
+  if (row.attribution_kind === "anonymous")
+    return { community, attribution: { kind: "anonymous" } };
+  if (row.attribution_kind === "named" && row.author_name !== null)
+    return {
+      community,
+      attribution: { kind: "named", name: row.author_name },
+    };
+  throw new Error("authored poll has an unknown attribution");
 }
 
 interface ChoiceRow {
