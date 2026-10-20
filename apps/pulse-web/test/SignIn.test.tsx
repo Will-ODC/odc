@@ -30,6 +30,16 @@ const SERVER_SENT = {
 };
 
 describe("asking for a link", () => {
+  // It used to read "Your campus is deciding something.", which named nothing
+  // this screen does.
+  it("says what the screen is for", () => {
+    render(<SignIn api={stubApi({})} />);
+
+    expect(
+      screen.getByRole("heading", { name: "Sign in with your email" }),
+    ).toBeTruthy();
+  });
+
   it("sends the address and the opt-in the person actually gave", async () => {
     const requestLink = vi.fn(() => Promise.resolve(SERVER_SENT));
     render(<SignIn api={stubApi({ requestLink })} />);
