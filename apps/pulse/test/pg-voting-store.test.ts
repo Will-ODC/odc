@@ -6,6 +6,7 @@ import path from "node:path";
 import { test, type TestContext } from "node:test";
 import type { Pool, PoolClient } from "pg";
 import { loadMigrations, migrate } from "../src/db/migrate.js";
+import { PostgresVoterStore } from "../src/identity/pg-store.js";
 import { PostgresVotingStore } from "../src/voting/pg-store.js";
 import { votingStoreConformance } from "./conformance/voting-store.js";
 import {
@@ -371,6 +372,96 @@ test(
     // And the browser that cast it can still have it confirmed by signing in.
     assert.equal(await store.confirmVotes("b:before", () => ADA), 1);
     assert.equal((await store.results("old")).confirmedVoters, 1);
+  },
+);
+
+// Public attribution (ADR-0037), read from rows the creation store writes.
+// Written here by hand, so these hold whatever writer produced the row.
+
+async function authoredRow(
+  pool: Pool,
+  id: string,
+  attribution: { kind: string; name: string | null },
+  community = "pulse-general",
+) {
+  const voters = new PostgresVoterStore(pool);
+  if (!(await voters.byId("author-account-7f3a")))
+    await voters.create(
+      {
+        id: "author-account-7f3a",
+        community: null,
+        assurance: "email",
+        claimedAt: AT,
+        proofEmailsOptIn: false,
+      },
+      { kind: "email", value: "author-7f3a@example.test", verifiedAt: AT },
+    );
+  await pool.query(
+    "insert into polls (id, question, method, created_at, closes_at," +
+      " accepts_suggestions, community, created_by, attribution_kind, author_name)" +
+      " values ($1, 'Q', 'single', $2, null, false, $3, 'author-account-7f3a', $4, $5)",
+    [id, AT, community, attribution.kind, attribution.name],
+  );
+  for (const [position, label] of ["a", "b"].entries())
+    await pool.query(
+      "insert into poll_choice (id, poll_id, position, label) values ($1, $2, $3, $4)",
+      [randomUUID(), id, position, label],
+    );
+}
+
+test(
+  "an_authored_row_reads_back_its_public_facts_and_never_its_author",
+  { skip: databaseSkip },
+  async (t) => {
+    const { pool, store } = await fresh(t);
+    await pool.query("insert into community values ('campus', 'Campus')");
+    await authoredRow(pool, "anon", { kind: "anonymous", name: null });
+    await authoredRow(pool, "named", { kind: "named", name: "Ada" }, "campus");
+
+    const anon = await store.getPoll("anon");
+    assert.deepEqual(anon?.publication, {
+      community: { id: "pulse-general", label: "General" },
+      attribution: { kind: "anonymous" },
+    });
+    const named = await store.getPoll("named");
+    assert.deepEqual(named?.publication, {
+      community: { id: "campus", label: "Campus" },
+      attribution: { kind: "named", name: "Ada" },
+    });
+    // The author's account is never read onto the poll at all.
+    for (const poll of [anon, named])
+      assert.doesNotMatch(
+        JSON.stringify(poll),
+        /author-account-7f3a|author-7f3a@example\.test/,
+      );
+
+    // The label is the community table's at read time, as the creation
+    // store's own answer is.
+    await pool.query(
+      "update community set label = 'Main campus' where id = 'campus'",
+    );
+    assert.deepEqual((await store.getPoll("named"))?.publication?.community, {
+      id: "campus",
+      label: "Main campus",
+    });
+  },
+);
+
+test(
+  "a_poll_with_a_community_but_no_author_has_no_publication",
+  { skip: databaseSkip },
+  async (t) => {
+    // 005 lets a legacy row carry a community without authorship. Nothing
+    // about an author is invented for it, and the community alone is not
+    // published: the two public fields travel together.
+    const { pool, store } = await fresh(t);
+    await pool.query(
+      "update polls set community = 'pulse-general' where id = 'p1'",
+    );
+    const poll = await store.getPoll("p1");
+    assert.ok(poll);
+    assert.equal("publication" in poll, false);
+    assert.equal((await store.getPoll("p2"))?.publication, undefined);
   },
 );
 

@@ -35,12 +35,18 @@ describe("showing where a question stands", () => {
     expect(screen.getByText("7 · 70%")).toBeTruthy();
   });
 
-  it("says how many people have answered", () => {
+  /*
+   * "Votes", not "people": the full total counts one vote per browser, and
+   * one person on two browsers is two votes (ADR-0040, /trust).
+   */
+  it("says how many votes there are and how many are confirmed", () => {
     show();
-    expect(screen.getByText("10 people so far")).toBeTruthy();
+    expect(
+      screen.getByText("10 votes so far · 0 confirmed by email"),
+    ).toBeTruthy();
   });
 
-  it("does not say 1 people", () => {
+  it("does not say 1 votes", () => {
     show({
       results: results({
         voters: 1,
@@ -48,7 +54,9 @@ describe("showing where a question stands", () => {
       }),
       yourChoices: [0],
     });
-    expect(screen.getByText("1 person so far")).toBeTruthy();
+    expect(
+      screen.getByText("1 vote so far · 0 confirmed by email"),
+    ).toBeTruthy();
   });
 
   it("marks which one was yours", () => {
@@ -195,7 +203,8 @@ describe("showing where a question stands", () => {
     });
     expect(screen.getByText("Nobody answered this one.")).toBeTruthy();
     expect(document.querySelector(".results__bar")).toBeNull();
-    expect(screen.queryByText(/0 people/)).toBeNull();
+    expect(screen.queryByText(/0 votes/)).toBeNull();
+    expect(screen.queryByText(/confirmed/)).toBeNull();
     // Still a way out.
     expect(screen.getByRole("button", { name: "Close" })).toBeTruthy();
   });
@@ -208,7 +217,7 @@ describe("showing where a question stands", () => {
 
   it("does not say 'so far' about a question that has closed", () => {
     show({ ended: true });
-    expect(screen.getByText("10 people answered")).toBeTruthy();
+    expect(screen.getByText("10 votes · 0 confirmed by email")).toBeTruthy();
     expect(screen.queryByText(/so far/)).toBeNull();
   });
 
@@ -262,5 +271,108 @@ describe("showing where a question stands", () => {
     panelRef.current?.focus();
     expect(document.activeElement).toBe(panelRef.current);
     expect(panelRef.current?.getAttribute("tabindex")).toBe("-1");
+  });
+});
+
+/*
+ * #353: both numbers. Every vote (one per browser) and the votes confirmed by
+ * email (one per person who signed in, ADR-0040), under each choice and in
+ * the count line.
+ */
+describe("confirmed by email (#353)", () => {
+  const CONFIRMED = results({
+    voters: 10,
+    confirmedVoters: 4,
+    choices: [
+      {
+        index: 0,
+        label: "No",
+        count: 3,
+        share: 30,
+        confirmedCount: 1,
+        confirmedShare: 25,
+      },
+      {
+        index: 1,
+        label: "Yes",
+        count: 7,
+        share: 70,
+        confirmedCount: 3,
+        confirmedShare: 75,
+      },
+    ],
+  });
+
+  it("shows both totals in one line", () => {
+    show({ results: CONFIRMED });
+    expect(
+      screen.getByText("10 votes so far · 4 confirmed by email"),
+    ).toBeTruthy();
+  });
+
+  it("shows both sets of choice counts, each under its own choice", () => {
+    show({ results: CONFIRMED });
+    const rows = [...document.querySelectorAll(".results__row")];
+    expect(rows[0]?.textContent).toContain("3 · 30%");
+    expect(rows[0]?.textContent).toContain("1 · 25% confirmed");
+    expect(rows[1]?.textContent).toContain("7 · 70%");
+    expect(rows[1]?.textContent).toContain("3 · 75% confirmed");
+  });
+
+  it("draws the confirmed bars against the widest confirmed share", () => {
+    show({ results: CONFIRMED });
+    const bars = [
+      ...document.querySelectorAll<HTMLElement>(".results__bar--confirmed"),
+    ];
+    expect(bars.map((bar) => bar.style.getPropertyValue("--fill"))).toEqual([
+      "33%",
+      "100%",
+    ]);
+  });
+
+  it("reads nobody confirmed as zero, with no confirmed rows and no error", () => {
+    show();
+    expect(
+      screen.getByText("10 votes so far · 0 confirmed by email"),
+    ).toBeTruthy();
+    expect(screen.queryByText(/% confirmed/)).toBeNull();
+    expect(document.querySelector(".results__bar--confirmed")).toBeNull();
+    expect(screen.queryByRole("alert")).toBeNull();
+    // The full figures are all still there.
+    expect(screen.getByText("7 · 70%")).toBeTruthy();
+  });
+
+  it("says the closed count without 'so far'", () => {
+    show({ results: CONFIRMED, ended: true });
+    expect(screen.getByText("10 votes · 4 confirmed by email")).toBeTruthy();
+  });
+
+  /* An email address is not a person: never claim more than an address. */
+  it("never calls a confirmed vote verified or a person's only vote", () => {
+    show({ results: CONFIRMED, explainHref: "/trust" });
+    const text = (document.body.textContent ?? "").toLowerCase();
+    for (const word of ["verif", "one per person", "unique", "human"]) {
+      expect(text).not.toContain(word);
+    }
+  });
+
+  it("links 'What does this mean?' to the trust page in a new tab", () => {
+    show({ results: CONFIRMED, explainHref: "/trust" });
+    const link = screen.getByRole("link", {
+      name: "What does this mean? (opens in a new tab)",
+    });
+    expect(link.getAttribute("href")).toBe("/trust");
+    expect(link.getAttribute("target")).toBe("_blank");
+    expect(link.getAttribute("rel")).toBe("noopener noreferrer");
+  });
+
+  it("has no explanation link unless given somewhere to point it", () => {
+    show({ results: CONFIRMED });
+    expect(screen.queryByRole("link")).toBeNull();
+  });
+
+  it("has nothing to explain when nobody has answered", () => {
+    show({ results: results({ voters: 0 }), explainHref: "/trust" });
+    expect(screen.queryByRole("link")).toBeNull();
   });
 });

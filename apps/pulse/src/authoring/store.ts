@@ -1,22 +1,15 @@
-import type { PollMethod } from "../voting/poll.js";
-import type { Attribution } from "./input.js";
+import type { PublishedPublicPoll } from "../voting/public-poll.js";
 
 export interface PublicationActor {
   voterId: string;
   sessionGeneration: number;
 }
-export interface PublicationPoll {
-  id: string;
-  question: string;
-  choices: readonly string[];
-  method: PollMethod;
-  next: readonly null[];
-  acceptsSuggestions: false;
-  closesAt: string;
-  open: true;
-  community: { id: string; label: string };
-  attribution: Attribution;
-}
+/**
+ * The creation response's poll: the same allow-listed projection that
+ * `GET /api/polls/:id` serves (`publicPoll`), with both public authorship
+ * fields present.
+ */
+export type PublicationPoll = PublishedPublicPoll;
 export interface PublicationResult {
   poll: PublicationPoll;
   replayed: boolean;

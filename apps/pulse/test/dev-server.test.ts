@@ -524,6 +524,101 @@ async function connectionsNamed(pool: Pool, appName: string): Promise<number> {
   return rows[0]?.n ?? 0;
 }
 
+test("reads_an_optional_owner_email_and_refuses_a_malformed_one", () => {
+  assert.equal(devConfig({}).ownerEmail, undefined);
+  assert.equal(devConfig({ PULSE_OWNER_EMAIL: "" }).ownerEmail, undefined);
+  assert.equal(
+    devConfig({ PULSE_OWNER_EMAIL: " Jo@Example.Test " }).ownerEmail,
+    "jo@example.test",
+  );
+  assert.throws(
+    () => devConfig({ PULSE_OWNER_EMAIL: "not-an-address" }),
+    /PULSE_OWNER_EMAIL/,
+  );
+});
+
+/** Sign `email` in on a dev server; the session cookie header. */
+async function devSignIn(
+  app: Awaited<ReturnType<typeof buildDevServer>>["app"],
+  mailer: Awaited<ReturnType<typeof buildDevServer>>["mailer"],
+  email: string,
+): Promise<string> {
+  await app.inject({ method: "POST", url: "/api/sign-in", payload: { email } });
+  const redeemed = await app.inject({
+    method: "POST",
+    url: "/api/sign-in/redeem",
+    payload: { token: tokenIn(mailer.lastTo(email)?.body) },
+  });
+  const session = redeemed.cookies.find((c) => c.name === "pulse_session");
+  assert.ok(session, `${email} did not sign in`);
+  return `pulse_session=${session.value}`;
+}
+
+async function devPublishes(url?: string): Promise<void> {
+  const config = devConfig({
+    PULSE_OWNER_EMAIL: "owner@example.test",
+    ...(url === undefined
+      ? {}
+      : { PULSE_DATABASE_URL: url, PULSE_SESSION_SECRET: SECRET }),
+  });
+  const { app, mailer } = await buildDevServer(
+    config,
+    {},
+    {
+      log: () => undefined,
+    },
+  );
+  try {
+    const owner = await devSignIn(app, mailer, "owner@example.test");
+    const member = await devSignIn(app, mailer, "jo@example.test");
+    const context = await app.inject({
+      url: "/api/poll-creation/context",
+      headers: { cookie: owner },
+    });
+    assert.equal(context.json().canPostUnlimited, true);
+    const created = await app.inject({
+      method: "POST",
+      url: "/api/polls",
+      headers: {
+        cookie: member,
+        // The client origin the dev server was told about (its default).
+        origin: config.webOrigin,
+        "content-type": "application/json",
+        "idempotency-key": "1b4e28ba-2fa1-41d2-883f-0016d3cca427",
+      },
+      payload: {
+        question: "Posted in development?",
+        choices: ["Yes", "No"],
+        method: "approval",
+        purposeAcknowledgement: "community-purpose-v1",
+      },
+    });
+    assert.equal(created.statusCode, 201, created.body);
+    assert.equal(created.json().poll.community.id, "demo-community");
+    // The voting routes read the same storage the creation store wrote.
+    const read = await app.inject({
+      url: `/api/polls/${created.json().poll.id as string}`,
+    });
+    assert.equal(read.statusCode, 200);
+    assert.equal(read.json().method, "approval");
+  } finally {
+    await app.close();
+  }
+}
+
+test("its_server_publishes_a_question_in_memory", async () => {
+  await devPublishes();
+});
+
+test(
+  "its_server_publishes_a_question_in_postgres",
+  { skip: databaseSkip },
+  async (t) => {
+    const { url } = await databaseFor(t);
+    await devPublishes(url);
+  },
+);
+
 async function until(ready: () => Promise<boolean>): Promise<void> {
   const deadline = Date.now() + 5_000;
   while (!(await ready())) {
@@ -531,3 +626,18 @@ async function until(ready: () => Promise<boolean>): Promise<void> {
     await new Promise((resolve) => setTimeout(resolve, 20));
   }
 }
+
+test("dev_config_refuses_a_web_origin_that_is_not_a_bare_origin", () => {
+  assert.throws(
+    () => devConfig({ PULSE_WEB_ORIGIN: "http://localhost:5173/" }),
+    /PULSE_WEB_ORIGIN/,
+  );
+  assert.throws(
+    () => devConfig({ PULSE_WEB_ORIGIN: "localhost:5173" }),
+    /PULSE_WEB_ORIGIN/,
+  );
+  assert.equal(
+    devConfig({ PULSE_WEB_ORIGIN: "http://localhost:4000" }).webOrigin,
+    "http://localhost:4000",
+  );
+});

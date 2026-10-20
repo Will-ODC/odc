@@ -3,6 +3,7 @@ import type { Pool, PoolClient } from "pg";
 import { inTransaction } from "../db/transaction.js";
 import { parseEmail } from "../identity/email.js";
 import { createPoll } from "../voting/poll.js";
+import { publicPoll as projectPoll } from "../voting/public-poll.js";
 import {
   CreationError,
   HOUR_MS,
@@ -161,18 +162,11 @@ export class PostgresCreationStore implements CreationStore {
           "insert into poll_choice (id, poll_id, position, label) values ($1, $2, $3, $4)",
           [this.#newId(), poll.id, position, label],
         );
-      const publicPoll: PublicationPoll = {
-        id: poll.id,
-        question: poll.question,
-        choices: [...poll.choices],
-        method: poll.method,
-        next: poll.choices.map(() => null),
-        acceptsSuggestions: false,
-        closesAt: closesAt.toISOString(),
-        open: true,
-        community,
-        attribution: input.attribution,
-      };
+      // The same projection GET /api/polls/:id serves, so the two cannot drift.
+      const publicPoll: PublicationPoll = projectPoll(
+        { ...poll, publication: { community, attribution: input.attribution } },
+        now,
+      );
       await client.query(
         "insert into publication_acknowledgement (voter_id, purpose_version, acknowledged_at) values ($1, $2, $3) on conflict (voter_id) do nothing",
         [account.id, PURPOSE_VERSION, now],

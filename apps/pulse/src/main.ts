@@ -1,6 +1,8 @@
 import { pathToFileURL } from "node:url";
 import type { FastifyInstance } from "fastify";
 import type { Pool } from "pg";
+import { ownerEmail } from "./authoring/owner.js";
+import { PostgresCreationStore } from "./authoring/pg-store.js";
 import { databaseUrl } from "./db/config.js";
 import { migrate } from "./db/migrate.js";
 import { createPool } from "./db/pool.js";
@@ -72,6 +74,14 @@ export interface ServeConfig {
    * Postgres where you get one database and not one per app.
    */
   schema?: string;
+  /**
+   * The owner's address (ADR-0037), already normalised. The account that
+   * holds this as its verified email credential may grant and revoke
+   * unlimited posting, and posts without the hourly limit. Absent means
+   * nobody is owner — the safe default, since nothing a client sends can
+   * make anyone one.
+   */
+  ownerEmail?: string;
 }
 
 /**
@@ -153,6 +163,7 @@ export function serveConfig(env: NodeJS.ProcessEnv = process.env): ServeConfig {
   }
 
   const schema = env.PULSE_DATABASE_SCHEMA?.trim();
+  const owner = ownerEmail(env);
   return {
     port: port(env.PULSE_PORT),
     host: env.PULSE_HOST?.trim() || DEFAULT_HOST,
@@ -162,6 +173,7 @@ export function serveConfig(env: NodeJS.ProcessEnv = process.env): ServeConfig {
     webOrigin: checked.webOrigin,
     mailer: new ResendMailer(resend as NonNullable<typeof resend>),
     ...(schema === undefined || schema === "" ? {} : { schema }),
+    ...(owner === undefined ? {} : { ownerEmail: owner }),
   };
 }
 
@@ -172,7 +184,7 @@ export function serveConfig(env: NodeJS.ProcessEnv = process.env): ServeConfig {
  * path produces a link that 404s — and the first person to find out is
  * somebody holding a link that does not work, with no way to report it.
  */
-function assertOrigin(value: string): void {
+export function assertOrigin(value: string): void {
   let parsed: URL;
   try {
     parsed = new URL(value);
@@ -223,15 +235,22 @@ function port(raw: string | undefined): number {
  * by another door — a sign-in link in a log file. nginx has the identical hole
  * in its default access log, and `apps/pulse-web/nginx.conf` closes it there.
  */
+const PERMISSION_PATH = /^\/api\/posting-permissions(\/|$)/i;
+
 export const SERVED_LOGGER = {
   serializers: {
     req(request: { method: string; url: string }) {
+      // The path only. `split` rather than `new URL`: this is a request
+      // target, not an absolute URL, and it must not be able to throw inside
+      // a log serializer.
+      const path = request.url.split("?")[0] ?? request.url;
       return {
         method: request.method,
-        // The path only. `split` rather than `new URL`: this is a request
-        // target, not an absolute URL, and it must not be able to throw inside
-        // a log serializer.
-        url: request.url.split("?")[0] ?? request.url,
+        // A posting-permission path names the account it changes. Account ids
+        // stay out of logs (ADR-0037), so the route is logged, not the id.
+        url: PERMISSION_PATH.test(path)
+          ? "/api/posting-permissions/:voterId"
+          : path,
       };
     },
   },
@@ -289,6 +308,15 @@ export async function buildServer(
       suggestions: new PostgresSuggestionStore(pool),
       signer: new SessionSigner(config.secret),
       confirmationKey: new ConfirmationKey(config.confirmationKey),
+      creation: new PostgresCreationStore(
+        pool,
+        config.ownerEmail === undefined
+          ? {}
+          : { ownerEmail: config.ownerEmail },
+      ),
+      // The only origin creation mutations are accepted from (ADR-0037):
+      // trusted configuration, the same origin sign-in links point at.
+      webOrigin: config.webOrigin,
       // Not passed at all, so the default holds. `secureCookies` defaults to
       // true and `dev-server` is the only thing that sets it false; naming it
       // here would put the insecure value one edit away from the served path.

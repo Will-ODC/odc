@@ -42,7 +42,7 @@ async function answer(label = "Yes") {
   await openCard();
   await user.click(within(card()).getByRole("radio", { name: label }));
   await user.click(within(card()).getByRole("button", { name: "Submit" }));
-  await main().findByText("Counted.");
+  await main().findByText("Counted");
   return user;
 }
 it("links a counted vote to the trust page (#351)", async () => {
@@ -124,7 +124,7 @@ it("casts, changes, closes and reopens results in the card", async () => {
   await user.click(within(card()).getByRole("radio", { name: "No" }));
   await user.click(within(card()).getByRole("button", { name: "Submit" }));
   expect(
-    await main().findByText("That replaces your earlier answer."),
+    await main().findByText("Counted. That replaces your earlier answer."),
   ).toBeTruthy();
   expect(cast).toHaveBeenLastCalledWith(p.id, [0]);
   // The transcript line catches up after the card; wait for it (raced on CI).
@@ -167,7 +167,7 @@ it("sends every approval pick, follows its lowest-index edge, and retains the co
   await user.click(within(card()).getByRole("checkbox", { name: "Library" }));
   await user.click(within(card()).getByRole("checkbox", { name: "Park" }));
   await user.click(within(card()).getByRole("button", { name: "Submit" }));
-  await main().findByText("Counted.");
+  await main().findByText("Counted");
   expect(cast).toHaveBeenCalledExactlyOnceWith(p.id, [1, 0]);
   expect(within(card()).getAllByText("yours")).toHaveLength(2);
   await user.click(within(card()).getByRole("button", { name: "Next" }));
@@ -265,7 +265,7 @@ it("a failed send keeps the picks for retry", async () => {
     "Try later.",
   );
   await user.click(within(card()).getByRole("button", { name: "Try again" }));
-  await main().findByText("Counted.");
+  await main().findByText("Counted");
   expect(cast).toHaveBeenLastCalledWith(p.id, [1]);
 });
 it("keyboard-only picking and confirmation casts exactly once", async () => {
@@ -292,7 +292,7 @@ it("keyboard-only picking and confirmation casts exactly once", async () => {
   );
   expect(document.activeElement?.textContent).toBe("Sending…");
   release?.({ status: "counted", ballot: [1], results: tally(poll(), [1]) });
-  await main().findByText("Counted.");
+  await main().findByText("Counted");
 });
 
 it("retrying a failed replacement sends the new choice rather than the prior answer", async () => {
@@ -326,7 +326,7 @@ it("retrying a failed replacement sends the new choice rather than the prior ans
       .checked,
   ).toBe(true);
   await user.keyboard("{Enter}");
-  await main().findByText("That replaces your earlier answer.");
+  await main().findByText("Counted. That replaces your earlier answer.");
   expect(cast).toHaveBeenLastCalledWith(p.id, [0]);
   // The transcript line catches up after the card; wait for it (raced on CI).
   expect(await main().findByText("You picked No.")).toBeTruthy();
@@ -519,7 +519,7 @@ it("forgetting clears the answers shown on this page", async () => {
       "No answers yet.",
     ),
   ).toBeTruthy();
-  expect(main().queryByText("Counted.")).toBeNull();
+  expect(main().queryByText("Counted")).toBeNull();
 });
 
 it("says plainly when forgetting failed", async () => {

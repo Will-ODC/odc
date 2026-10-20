@@ -8,10 +8,11 @@ import Fastify, {
   type FastifyRequest,
   type FastifyServerOptions,
 } from "fastify";
+import type { CreationStore } from "../authoring/store.js";
 import type { ClaimService } from "../identity/claim.js";
 import type { Voter, VoterStore } from "../identity/store.js";
 import type { ConfirmationKey } from "../voting/confirmation.js";
-import { isOpen, type Poll } from "../voting/poll.js";
+import { publicPoll } from "../voting/public-poll.js";
 import {
   BallotError,
   UnknownPollError,
@@ -23,6 +24,7 @@ import {
   type Suggestion,
   type SuggestionStore,
 } from "../voting/suggestions.js";
+import { registerCreationRoutes } from "./creation.js";
 import { registerMcpReads, type McpReadOptions } from "./mcp/route.js";
 import { SESSION_COOKIE, SessionSigner } from "./session.js";
 
@@ -66,6 +68,19 @@ export interface ServerDeps {
   suggestions: SuggestionStore;
   signer: SessionSigner;
   /**
+   * Poll creation and posting permission (ADR-0037). Optional so a test or a
+   * client test embedding this server need not care: without one, the
+   * creation routes answer 503 `creation_unavailable` and nothing is created.
+   */
+  creation?: CreationStore;
+  /**
+   * The web client's origin, exactly as a browser sends it in `Origin`. Every
+   * creation mutation must come from it. Trusted configuration only — never
+   * derived from `Host` or a forwarded header. Without it every creation
+   * mutation is refused, since no origin can match.
+   */
+  webOrigin?: string;
+  /**
    * Makes the one-way code a confirmed vote is stored with (ADR-0040).
    *
    * Optional only so that a test, or a client test embedding this server,
@@ -81,6 +96,8 @@ export interface ServerDeps {
   signInRateLimit?: { max: number; timeWindow: string };
   /** Suggestions allowed per client per window. */
   suggestRateLimit?: { max: number; timeWindow: string };
+  /** Poll-creation and posting-permission requests per client per window, per route. */
+  creationRateLimit?: { max: number; timeWindow: string };
   /** Overridable so tests get a ballot identity they can predict. */
   newBallotId?: () => string;
   /**
@@ -158,6 +175,12 @@ export async function createServer(deps: ServerDeps): Promise<FastifyInstance> {
     // status — the rate limiter's 429, a malformed JSON body's 400. Those are
     // answers, not faults, and must keep their status while taking our shape.
     const status = (error as { statusCode?: number }).statusCode ?? 500;
+    if (status === 413) {
+      return reply.code(413).send({
+        error: "body_too_large",
+        message: "That request is too large to send.",
+      });
+    }
     if (status === 429) {
       return reply.code(429).send({
         error: "too_many_requests",
@@ -462,7 +485,9 @@ export async function createServer(deps: ServerDeps): Promise<FastifyInstance> {
   app.get("/api/polls/:id", async (request, reply) => {
     const poll = await deps.votes.getPoll(pollId(request));
     if (!poll) return notFoundPoll(reply);
-    return reply.send(pollBody(poll, now()));
+    // The one allow-listed projection; an authored poll's attribution says
+    // anonymous or the chosen name, never who the author's account is.
+    return reply.send(publicPoll(poll, now()));
   });
 
   app.get("/api/polls/:id/results", async (request, reply) => {
@@ -617,6 +642,12 @@ export async function createServer(deps: ServerDeps): Promise<FastifyInstance> {
     },
   );
 
+  await registerCreationRoutes(app, {
+    creation: deps.creation,
+    webOrigin: deps.webOrigin,
+    currentVoter,
+    ...(deps.creationRateLimit ? { rateLimit: deps.creationRateLimit } : {}),
+  });
   registerMcpReads(app, deps.mcp);
   return app;
 }
@@ -639,20 +670,6 @@ function notFoundPoll(reply: FastifyReply) {
   return reply
     .code(404)
     .send({ error: "not_found", message: "There is no such poll." });
-}
-
-/** A poll in the client's wire shape: dates as ISO strings, openness resolved. */
-function pollBody(poll: Poll, now: Date) {
-  return {
-    id: poll.id,
-    question: poll.question,
-    choices: [...poll.choices],
-    method: poll.method,
-    next: [...poll.next],
-    acceptsSuggestions: poll.acceptsSuggestions,
-    closesAt: poll.closesAt ? poll.closesAt.toISOString() : null,
-    open: isOpen(poll, now),
-  };
 }
 
 /**

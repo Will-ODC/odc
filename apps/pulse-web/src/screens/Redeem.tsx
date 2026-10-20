@@ -3,6 +3,7 @@ import type { Me, PulseApi } from "../api/types.js";
 import { ScreenFrame } from "../components/ScreenFrame.js";
 import { ViewState } from "../components/ViewState.js";
 import { useRedeem } from "../hooks/use-redeem.js";
+import { announceSignIn, browserStore } from "../flow/sign-in-return.js";
 import "./SignIn.css";
 
 /**
@@ -28,6 +29,12 @@ export function Redeem({
   onAskAgain: () => void;
 }) {
   const { redeemed, retry } = useRedeem(api, token);
+  // Tell this browser's other pulse tabs, so a vote card waiting there says
+  // "confirmed by email" without a reload (#353).
+  const signedIn = redeemed.status === "ready";
+  useEffect(() => {
+    if (signedIn) announceSignIn(browserStore());
+  }, [signedIn]);
 
   /*
    * The link ran out: spent, expired, or not one of ours.

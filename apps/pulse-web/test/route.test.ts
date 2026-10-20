@@ -30,6 +30,23 @@ describe("reading a URL", () => {
     expect(routeFrom("/sign-in")).toEqual({ kind: "signIn" });
   });
 
+  /* "Confirm with your email" names the question to come back to (#353). */
+  it("keeps the question a sign-in was started from", () => {
+    expect(routeFrom("/sign-in?poll=parks")).toEqual({
+      kind: "signIn",
+      pollId: "parks",
+    });
+    expect(routeFrom("/sign-in?poll=")).toEqual({ kind: "signIn" });
+    // A token wins: the emailed link is the one to spend.
+    expect(routeFrom("/sign-in?token=abc&poll=parks")).toEqual({
+      kind: "redeem",
+      token: "abc",
+    });
+    const route = { kind: "signIn" as const, pollId: "a b&c" };
+    expect(pathOf(route)).toBe("/sign-in?poll=a%20b%26c");
+    expect(routeFrom(pathOf(route))).toEqual(route);
+  });
+
   /*
    * An empty token is not a token. Reading `""` as one would send a request
    * that can only come back "that link is incomplete", when the screen the
