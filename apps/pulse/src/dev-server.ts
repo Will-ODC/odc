@@ -10,6 +10,7 @@ import { databaseUrl } from "./db/config.js";
 import { migrate } from "./db/migrate.js";
 import { createPool } from "./db/pool.js";
 import { createServer } from "./http/server.js";
+import { assertOrigin } from "./main.js";
 import { SessionSigner } from "./http/session.js";
 import {
   DomainAllowlist,
@@ -209,6 +210,10 @@ export function devConfig(env: NodeJS.ProcessEnv): DevConfig {
   const url = databaseUrl(env);
   // Optional here as when served; a malformed one is refused the same way.
   const owner = ownerEmail(env);
+  // Checked as when served: the creation routes compare `Origin` with it
+  // exactly, so a trailing slash would refuse every post.
+  const webOrigin = env.PULSE_WEB_ORIGIN ?? "http://localhost:5173";
+  assertOrigin(webOrigin);
   return {
     port: port(env.PULSE_PORT),
     // Never a hardcoded fallback: a default secret is a secret everyone has.
@@ -218,7 +223,7 @@ export function devConfig(env: NodeJS.ProcessEnv): DevConfig {
     // leaking is not the other (ADR-0040).
     confirmationKey: keyFromEnv ?? randomBytes(32).toString("base64url"),
     confirmationKeySource: keyFromEnv === undefined ? "generated" : "env",
-    webOrigin: env.PULSE_WEB_ORIGIN ?? "http://localhost:5173",
+    webOrigin,
     ...(url === undefined ? {} : { databaseUrl: url }),
     ...(owner === undefined ? {} : { ownerEmail: owner }),
   };

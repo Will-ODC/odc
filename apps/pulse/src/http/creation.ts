@@ -30,6 +30,12 @@ export interface CreationRouteDeps {
   webOrigin: string | undefined;
   /** The signed-in voter for this request, or undefined. Checks expiry and generation. */
   currentVoter: (request: FastifyRequest) => Promise<Voter | undefined>;
+  /**
+   * Requests allowed per client per window, per route. Separate from the
+   * five-an-hour posting quota: this one counts every request, refused,
+   * replayed or not, because each costs an account lookup and a row lock.
+   */
+  rateLimit?: { max: number; timeWindow: string };
 }
 
 /** One refusal, in the `{ error, message }` envelope every route answers with. */
@@ -58,6 +64,12 @@ const FOREIGN_ORIGIN = () =>
     403,
     "origin_not_allowed",
     "That request did not come from Pulse.",
+  );
+const TOO_MANY = () =>
+  new Refusal(
+    429,
+    "too_many_requests",
+    "Too many tries just now. Try again a little later.",
   );
 const TOO_LARGE = () =>
   new Refusal(413, "body_too_large", "That request is too large to send.");
@@ -104,8 +116,10 @@ type WithActor = FastifyRequest & { [ACTOR]?: PublicationActor };
  * Registered in a scope of its own so that its JSON parser, its body limits
  * and its error handler apply to these routes and nothing else.
  *
- * Every request passes the same guards, in `onRequest` — before Fastify reads
- * a byte of the body — and in this order:
+ * Every request is first counted by the per-client rate limit (`onRequest`,
+ * 429 `too_many_requests`), so refused requests are limited too. Then it
+ * passes the same guards, in `preParsing` — before Fastify reads a byte of the
+ * body — and in this order:
  *
  * 1. creation configured at all, else 503;
  * 2. for a mutation, `Origin` exactly the configured web origin, else 403;
@@ -155,7 +169,11 @@ export async function registerCreationRoutes(
     );
 
     const guard = (kind: "read" | "json" | "bodyless") =>
-      async function creationGuard(request: FastifyRequest): Promise<void> {
+      async function creationGuard<T>(
+        request: FastifyRequest,
+        _reply: FastifyReply,
+        payload: T,
+      ): Promise<T> {
         if (!deps.creation) throw UNAVAILABLE();
         if (kind !== "read") {
           const origin = request.headers.origin;
@@ -170,11 +188,15 @@ export async function registerCreationRoutes(
         };
         if (kind === "json" && !isJson(request)) throw BAD_REQUEST();
         if (kind === "bodyless" && hasBody(request)) throw BAD_REQUEST();
+        return payload;
       };
+    const limit = {
+      rateLimit: deps.rateLimit ?? { max: 30, timeWindow: "1 minute" },
+    };
 
     scope.get(
       "/api/poll-creation/context",
-      { onRequest: guard("read") },
+      { preParsing: guard("read"), config: limit },
       async (request, reply) => {
         const context = await store(deps).context(actor(request));
         return reply.header("cache-control", "no-store").send({
@@ -191,7 +213,11 @@ export async function registerCreationRoutes(
 
     scope.post(
       "/api/polls",
-      { onRequest: guard("json"), bodyLimit: CREATION_BODY_LIMIT },
+      {
+        preParsing: guard("json"),
+        bodyLimit: CREATION_BODY_LIMIT,
+        config: limit,
+      },
       async (request, reply) => {
         const key = request.headers["idempotency-key"];
         const result = await store(deps).publish(
@@ -211,7 +237,11 @@ export async function registerCreationRoutes(
 
     scope.put(
       "/api/posting-permissions/:voterId",
-      { onRequest: guard("json"), bodyLimit: PERMISSION_BODY_LIMIT },
+      {
+        preParsing: guard("json"),
+        bodyLimit: PERMISSION_BODY_LIMIT,
+        config: limit,
+      },
       async (request, reply) => {
         const body = request.body;
         if (
@@ -229,7 +259,11 @@ export async function registerCreationRoutes(
 
     scope.delete(
       "/api/posting-permissions/:voterId",
-      { onRequest: guard("bodyless"), bodyLimit: PERMISSION_BODY_LIMIT },
+      {
+        preParsing: guard("bodyless"),
+        bodyLimit: PERMISSION_BODY_LIMIT,
+        config: limit,
+      },
       async (request, reply) => {
         await store(deps).setUnlimited(actor(request), target(request), false);
         return reply.code(204).send();
@@ -324,6 +358,7 @@ function classify(error: unknown): Refusal {
   if (isStorageUnavailable(error)) return UNAVAILABLE();
   const status = (error as Partial<FastifyError>).statusCode;
   if (status === 413) return TOO_LARGE();
+  if (status === 429) return TOO_MANY();
   // Fastify's own refusals while reading the body — malformed JSON, an empty
   // body, a bad Content-Length. All of them are the contract's one 400.
   if (typeof status === "number" && status >= 400 && status < 500)

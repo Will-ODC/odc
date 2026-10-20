@@ -1083,3 +1083,40 @@ test("a_forwarded_host_or_origin_header_does_not_stand_in_for_origin", async (t)
   assert.equal(response.statusCode, 403);
   assert.equal(response.json().error, "origin_not_allowed");
 });
+
+test("every_creation_route_is_rate_limited_per_client_and_refusals_count", async (t) => {
+  const h = await harness(t, "memory", {
+    creationRateLimit: { max: 3, timeWindow: "1 minute" },
+  });
+  // Refused requests are counted too: a signed-out caller and a foreign
+  // origin each use up the allowance before any account is looked up.
+  refused(await h.publish(undefined, question()), 401, "signed_out");
+  refused(
+    await h.publish("guest", question(), { origin: "https://evil.test" }),
+    403,
+    "origin_not_allowed",
+  );
+  const key = randomUUID();
+  assert.equal((await h.publish("guest", question(), { key })).statusCode, 201);
+  const limited = await h.publish("guest", question(), { key });
+  refused(limited, 429, "too_many_requests");
+  assert.notEqual(
+    limited.json().error,
+    "posting_limit",
+    "the request limit is not the posting quota",
+  );
+
+  for (let i = 0; i < 3; i += 1) await h.context(undefined);
+  refused(await h.context("guest"), 429, "too_many_requests");
+  for (let i = 0; i < 3; i += 1) await h.grant(undefined, ACCOUNTS.guest.id);
+  refused(await h.grant("owner", ACCOUNTS.guest.id), 429, "too_many_requests");
+  for (let i = 0; i < 3; i += 1) await h.revoke(undefined, ACCOUNTS.guest.id);
+  refused(await h.revoke("owner", ACCOUNTS.guest.id), 429, "too_many_requests");
+});
+
+test("the_default_request_limit_still_lets_the_posting_quota_answer", async (t) => {
+  const h = await harness(t, "memory");
+  for (let i = 0; i < 5; i += 1)
+    assert.equal((await h.publish("guest", question())).statusCode, 201);
+  refused(await h.publish("guest", question()), 429, "posting_limit");
+});

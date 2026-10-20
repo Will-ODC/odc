@@ -696,7 +696,14 @@ Origin check, and a DELETE that carries a body is refused. Origin configuration
 comes from trusted server setup, not Host or forwarded headers. A server built
 without a web origin refuses every creation mutation.
 
-Checks run in this order, before the body is read: creation available (else
+Every route here is rate limited per client: 30 requests a minute per route by
+default (`creationRateLimit`), answered 429 `too_many_requests` — the same slug
+and sentence as sign-in and suggestions. It counts every request, including
+refused and replayed ones, and comes first. It is separate from the five-an-hour
+posting quota (`posting_limit`), which counts only successful creations. Like the
+other limits it is in memory, so N instances allow N times as much.
+
+Then checks run in this order, before the body is read: creation available (else
 503), Origin for mutations (else 403), session (else 401), Content-Type (else
 400). Only then is the body read and parsed as strict UTF-8 JSON, and only then
 is any account-bound data looked up. Responses carry `Cache-Control: no-store`.
@@ -800,6 +807,7 @@ Unlimited grants bypass this quota, not resource checks or authentication.
 | 409    | `idempotency_conflict` | Key already used for different canonical input                                      |
 | 413    | `body_too_large`       | Body exceeds 32 KiB                                                                 |
 | 422    | `purpose_required`     | First post needs the v1 promise                                                     |
+| 429    | `too_many_requests`    | More than the per-client request limit (above); not a posting-quota answer          |
 | 429    | `posting_limit`        | Five creations in the rolling hour; integer Retry-After seconds                     |
 | 503    | `creation_unavailable` | Required storage unavailable; nothing partially committed                           |
 | 500    | `server_error`         | Unexpected fault; safe message, no private diagnostics                              |
@@ -808,8 +816,9 @@ Each uses the existing `{ error, message }` envelope. Auth/origin precede all
 account-bound lookups. Retry the same key and input after an uncertain result;
 use a new key for an intentionally different question. 503 covers a database
 that cannot be reached, is shutting down, has no free connections, or rolled
-the transaction back on a serialisation failure or deadlock; each committed
-nothing, so the same request can be retried. `Retry-After` on 429 is the whole
+the transaction back on a serialisation failure or deadlock. The request may
+or may not have been saved (a connection can drop during the commit), so retry
+it with the same key: a saved one replays, an unsaved one is created. `Retry-After` on 429 is the whole
 number of seconds until the oldest of the five creations leaves the hour.
 
 Nothing in creation diagnostics records request bodies, keys, author IDs,
@@ -835,6 +844,7 @@ clients cannot bootstrap an owner. The owner also posts without the hourly
 limit.
 
 Errors: 400 `bad_request`, 401 `signed_out`, 403 `origin_not_allowed`,
+429 `too_many_requests`,
 403 `owner_required`, 404 `not_found` (only after owner authorisation, so a
 non-owner learns nothing about which accounts exist), 413 `body_too_large` (PUT
 body over 1 KiB), 503 `creation_unavailable`, 500 `server_error`. All changes are atomic and

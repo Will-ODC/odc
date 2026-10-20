@@ -626,3 +626,18 @@ async function until(ready: () => Promise<boolean>): Promise<void> {
     await new Promise((resolve) => setTimeout(resolve, 20));
   }
 }
+
+test("dev_config_refuses_a_web_origin_that_is_not_a_bare_origin", () => {
+  assert.throws(
+    () => devConfig({ PULSE_WEB_ORIGIN: "http://localhost:5173/" }),
+    /PULSE_WEB_ORIGIN/,
+  );
+  assert.throws(
+    () => devConfig({ PULSE_WEB_ORIGIN: "localhost:5173" }),
+    /PULSE_WEB_ORIGIN/,
+  );
+  assert.equal(
+    devConfig({ PULSE_WEB_ORIGIN: "http://localhost:4000" }).webOrigin,
+    "http://localhost:4000",
+  );
+});

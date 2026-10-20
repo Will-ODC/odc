@@ -184,7 +184,7 @@ export function serveConfig(env: NodeJS.ProcessEnv = process.env): ServeConfig {
  * path produces a link that 404s — and the first person to find out is
  * somebody holding a link that does not work, with no way to report it.
  */
-function assertOrigin(value: string): void {
+export function assertOrigin(value: string): void {
   let parsed: URL;
   try {
     parsed = new URL(value);

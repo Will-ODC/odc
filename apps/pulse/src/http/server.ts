@@ -96,6 +96,8 @@ export interface ServerDeps {
   signInRateLimit?: { max: number; timeWindow: string };
   /** Suggestions allowed per client per window. */
   suggestRateLimit?: { max: number; timeWindow: string };
+  /** Poll-creation and posting-permission requests per client per window, per route. */
+  creationRateLimit?: { max: number; timeWindow: string };
   /** Overridable so tests get a ballot identity they can predict. */
   newBallotId?: () => string;
   /**
@@ -642,6 +644,7 @@ export async function createServer(deps: ServerDeps): Promise<FastifyInstance> {
     creation: deps.creation,
     webOrigin: deps.webOrigin,
     currentVoter,
+    ...(deps.creationRateLimit ? { rateLimit: deps.creationRateLimit } : {}),
   });
   registerMcpReads(app, deps.mcp);
   return app;
