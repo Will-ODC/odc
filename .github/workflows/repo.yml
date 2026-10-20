@@ -67,6 +67,7 @@ jobs:
       - run: pnpm run typecheck
       # Added with the first package that has tests (T5a). Passed trivially
       # before that, exactly as the three above did.
+      # Includes the dedicated Pulse integration workspace and app-local suites.
       - run: pnpm run test
       # The Go verifier judges the same immutable fixtures independently. Keep
       # this in the already-required repo job so a new fixture cannot land while

@@ -10,10 +10,10 @@ What goes in a GitHub issue, in memory, or in an ADR: see the table at the end.
 
 ## Two workstreams, different rules
 
-| Workstream                         | Lives in                            | Governed by                                  | Memory entry      |
-| ---------------------------------- | ----------------------------------- | -------------------------------------------- | ----------------- |
-| **ODC core** (deliberation ledger) | `contracts/`, `services/`, `tools/` | `docs/charter.md` — the charter wins, always | `memory/STATE.md` |
-| **Pulse** (community vote product) | `apps/pulse/`, `apps/pulse-web/`    | **Charter-exempt** by operator decision      | `memory/pulse.md` |
+| Workstream                         | Lives in                                                     | Governed by                                  | Memory entry      |
+| ---------------------------------- | ------------------------------------------------------------ | -------------------------------------------- | ----------------- |
+| **ODC core** (deliberation ledger) | `contracts/`, `services/`, `tools/`                          | `docs/charter.md` — the charter wins, always | `memory/STATE.md` |
+| **Pulse** (community vote product) | `apps/pulse/`, `apps/pulse-web/`, `tests/pulse-integration/` | **Charter-exempt** by operator decision      | `memory/pulse.md` |
 
 The exemption is real and deliberate, not an oversight: see `apps/pulse/CLAUDE.md`.
 Do not apply charter rules to `apps/**`, and do not relax them anywhere else.

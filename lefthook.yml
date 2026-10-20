@@ -18,7 +18,8 @@ pre-commit:
 pre-push:
   commands:
     unit:
-      # Only the services whose files changed relative to the default branch.
+      # Changed packages and their dependents, including Pulse integration tests,
+      # relative to the default branch.
       # TURBO_SCM_BASE is pinned to master because turbo's --affected default is
       # `main`; without this it would diff against a ref that does not exist here.
       # No packages / no changes → turbo runs nothing and exits clean.

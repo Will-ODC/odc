@@ -19,6 +19,9 @@
     "lint": {},
     "typecheck": {
       "dependsOn": ["^build"]
+    },
+    "@odc/pulse-integration#test": {
+      "dependsOn": ["^build"]
     }
   }
 }

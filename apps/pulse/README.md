@@ -55,7 +55,15 @@ pnpm --filter @odc/pulse-web dev   # app on http://localhost:5173
 ```bash
 pnpm --filter @odc/pulse build   # tests run against dist/, so build first
 pnpm --filter @odc/pulse test
+pnpm --filter @odc/pulse-integration test  # real-HTTP cross-package suites
 ```
+
+The integration workspace owns the two suites that exercise Pulse and its
+browser client together over real HTTP. Its checks are
+`pnpm --filter @odc/pulse-integration typecheck` and
+`pnpm --filter @odc/pulse-integration lint`. Root Turbo test commands include
+these suites; the Pulse and web builds remain independent. See
+[ADR-0041](../../docs/decisions/0041-pulse-integration-test-workspace.md).
 
 Database tests skip unless a Postgres is set. To run them:
 

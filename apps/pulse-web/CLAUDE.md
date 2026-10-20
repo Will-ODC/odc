@@ -26,10 +26,12 @@ implemented.
 `src/screens/` contains routed pages, `src/components/` reusable UI,
 `src/flow/` interaction logic, `src/hooks/` client state and data hooks, and
 `src/api/` HTTP calls and response types. `src/App.tsx` composes routes;
-`src/main.tsx` starts the browser app. Tests are in `test/`, using Vitest. Most
-test files exercise the client. `test/conversation-http.test.tsx` and
-`test/end-to-end.test.ts` are cross-package integration suites that import Pulse
-server code for test setup; production client code communicates through the API.
+`src/main.tsx` starts the browser app. Browser tests are in `test/`, using
+Vitest. The two real-HTTP cross-package suites live in the dedicated
+`@odc/pulse-integration` workspace, which declares both apps as development
+dependencies for test setup. Browser unit and component tests stay here;
+production client code communicates through the API. See
+[ADR-0041](../../docs/decisions/0041-pulse-integration-test-workspace.md).
 
 ```sh
 pnpm --filter @odc/pulse-web dev
@@ -38,6 +40,12 @@ pnpm --filter @odc/pulse-web lint
 pnpm --filter @odc/pulse-web typecheck
 pnpm --filter @odc/pulse-web build
 ```
+
+Run the cross-package integration suites with
+`pnpm --filter @odc/pulse-integration test`. The matching checks are
+`pnpm --filter @odc/pulse-integration typecheck` and
+`pnpm --filter @odc/pulse-integration lint`. Root Turbo test commands include
+these suites, while normal app builds remain independent.
 
 The canonical mockup status index is
 [`docs/mockups/CANDIDATE_CONTEXT.md`](../../docs/mockups/CANDIDATE_CONTEXT.md).

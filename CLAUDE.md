@@ -25,6 +25,8 @@ services/        # charter-governed core
 apps/            # charter-EXEMPT product workstream
   pulse/         # API server: identity, voting, authoring, storage
   pulse-web/     # React conversation client; nginx fronts the API
+tests/           # cross-package test workspaces (not runtime owners)
+  pulse-integration/ # real-HTTP suites for Pulse and its browser client
 tools/           # fixtures-gen, rehearsal, verifier-ts (second verifier)
 docs/            # charter.md, implementation-plan.md, plans/, mockups/,
                  # decisions/ (ADRs), security/
@@ -53,7 +55,9 @@ memory/          # INDEX.md (read first), STATE.md, pulse.md, OPEN-QUESTIONS(-ar
 4. Before touching any service or app: its `README.md`, `CLAUDE.md`, and
    `API.md` if present. Pulse server work starts in `apps/pulse/CLAUDE.md`;
    client work starts in `apps/pulse-web/CLAUDE.md` and consumes the public
-   interface documented in `apps/pulse/API.md`.
+   interface documented in `apps/pulse/API.md`. Cross-package Pulse tests are
+   owned by `tests/pulse-integration/`; read its `README.md` before changing
+   that workspace.
 5. Skills auto-trigger by description; when in doubt, `odc-service-boundaries`
    before writing any endpoint and `odc-testing` before writing any code.
 

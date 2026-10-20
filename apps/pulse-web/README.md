@@ -14,6 +14,14 @@ pnpm --filter @odc/pulse-web dev    # local dev; sends /api to the Pulse server 
 pnpm --filter @odc/pulse-web test
 ```
 
+Browser unit and component tests live in `test/`. The two real-HTTP suites
+that exercise the server and browser together live in the dedicated
+[`@odc/pulse-integration` workspace](../../docs/decisions/0041-pulse-integration-test-workspace.md):
+run them with `pnpm --filter @odc/pulse-integration test`. The matching checks
+are `pnpm --filter @odc/pulse-integration typecheck` and
+`pnpm --filter @odc/pulse-integration lint`. Root Turbo test commands include
+the integration suites; the browser app's build remains independent.
+
 In production, nginx serves the page on port 8080 and sends `/api` to the `api`
 container, so the page and the API share one address.
 

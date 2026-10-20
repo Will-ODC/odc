@@ -63,10 +63,13 @@ src/
   styles/tokens.css the one token file
 ```
 
-Names: components `PascalCase.tsx`, hooks `use-kebab-case.ts`; tests live in
-`apps/pulse-web/test/` as `Thing.test.tsx` or `thing.test.ts`. Direction of imports is one-way: screens import
-components; **components never import screens**, and nothing in `components/`
-imports from `api/`.
+Names: components `PascalCase.tsx`, hooks `use-kebab-case.ts`; browser unit and
+component tests live in `apps/pulse-web/test/` as `Thing.test.tsx` or
+`thing.test.ts`. The two cross-package real-HTTP suites live in
+`tests/pulse-integration/test/` and are run through `@odc/pulse-integration`;
+they do not grant production client code permission to import the server.
+Direction of imports is one-way: screens import components; **components never
+import screens**, and nothing in `components/` imports from `api/`.
 
 ## Reusable components — the rules
 

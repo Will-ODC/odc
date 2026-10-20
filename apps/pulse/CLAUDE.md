@@ -61,6 +61,13 @@ src/main.ts     production entry point
 test/           node:test, run against dist/ after `pnpm build`
 ```
 
+The `@odc/pulse-integration` workspace owns the two cross-package suites that
+start the real server and exercise the browser flow over HTTP. It declares
+both apps as development dependencies for test setup. This test-only
+dependency does not change production ownership or the apps' independent
+builds; browser unit and component tests stay in `apps/pulse-web/test/`.
+See [ADR-0041](../../docs/decisions/0041-pulse-integration-test-workspace.md).
+
 Run `pnpm --filter @odc/pulse build` before `pnpm --filter @odc/pulse test`;
 the tests execute compiled files in `dist/`. Other package commands are
 `pnpm --filter @odc/pulse lint` and `pnpm --filter @odc/pulse typecheck`.
