@@ -624,14 +624,12 @@ Note that `closed` is a _refusal_ here and a _success_ on a cast (`200 {"status"
 opt-in, the optional `community` pick and the 422 `choose_community` answer (which it
 returns as a result, not an error), the wrapped `{ voter }` bodies, and `id` as the
 voter's field name.
-`apps/pulse-web/test/end-to-end.test.ts` holds it that way by driving this server over
+`tests/pulse-integration/test/end-to-end.test.ts` holds it that way by driving this server over
 a real socket.
 
-**Two disagreements, owed to `apps/pulse-web` (ADR-0030).** The client still maps a
-403 `not_a_member` to `{ status: "not_eligible", message }`; the server no longer
-sends it, so that path is unreachable, and the end-to-end test that expects it fails
-until the client's side changes. The client also types `Me.community` as `string`,
-where the server now sends `string | null`. Both are the client's to change.
+The integration suite covers open sign-in with `community: null` and the
+`choose_community` response. The client represents `Me.community` as
+`string | null`, matching the server (ADR-0030).
 
 ## MCP public reads
 

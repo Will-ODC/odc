@@ -76,8 +76,8 @@ separate follow-up.
   status remain merge-time updates.
 - `lefthook.yml` and `.github/workflows/repo.yml`: existing affected/root test
   commands discover the new workspace; comments describe that coverage.
-- `apps/pulse/API.md`: checked; no HTTP contract changes or test-file ownership
-  instructions require revision.
+- `apps/pulse/API.md`: updates the integration-test path and removes resolved
+  client-disagreement notes. No HTTP contract changes.
 - ADR-0028: the two-image, one-origin decision remains unchanged; this ADR adds
   test ownership rather than rewriting its historical rationale.
 
