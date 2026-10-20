@@ -1,3 +1,4 @@
+import { useState } from "react";
 import type { ReactNode } from "react";
 import type { PulseApi } from "./api/types.js";
 import type { Route } from "./flow/route.js";
@@ -46,6 +47,12 @@ export function App({
 }) {
   const browser = useRoute();
   const at = route ?? browser.route;
+  /**
+   * Set only when the emailed link returns to the posting form: then, and
+   * only then, the form brings back a draft kept when its post needed a
+   * sign-in. Anyone opening /new any other way starts empty.
+   */
+  const [restoreDraft, setRestoreDraft] = useState(false);
 
   switch (at.kind) {
     case "welcome":
@@ -80,16 +87,13 @@ export function App({
              * redeemed, so leaving that URL in the history would hand the back
              * button a link that can now only answer "already used".
              */
-            onSignedIn={() =>
-              browser.replace(
-                // The question "Confirm with your email" was pressed on, or
-                // the posting form, when this browser remembers one (#353).
-                takeReturn(browserStore()) ?? {
-                  kind: "conversation",
-                  pollId: LANDS_ON,
-                },
-              )
-            }
+            onSignedIn={() => {
+              // The question "Confirm with your email" was pressed on, or
+              // the posting form, when this browser remembers one (#353).
+              const to = takeReturn(browserStore());
+              setRestoreDraft(to?.kind === "newPoll");
+              browser.replace(to ?? { kind: "conversation", pollId: LANDS_ON });
+            }}
             onAskAgain={() => browser.replace({ kind: "signIn" })}
           />
         </SignInPage>
@@ -122,6 +126,7 @@ export function App({
           onPosted={(poll) =>
             browser.go({ kind: "conversation", pollId: poll.id })
           }
+          restoreDraft={restoreDraft}
         />
       );
   }

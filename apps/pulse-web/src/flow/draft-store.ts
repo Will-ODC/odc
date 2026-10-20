@@ -11,6 +11,11 @@ import type { ReturnStore } from "./sign-in-return.js";
  * It holds only what the person typed for a public question. It is read
  * once, ignored after an hour like the sign-in return, and checked field by
  * field: anything this file did not write is dropped, never half-used.
+ *
+ * The purpose promise is never kept: on a shared device the next person to
+ * sign in must make it themselves, or Post would record it for their account.
+ * Who sees a kept draft is decided by the callers: only the way back from a
+ * sign-in started on the form restores it, and signing out forgets it.
  */
 const KEY = "pulse.newPollDraft";
 export const DRAFT_LIFETIME_MS = 60 * 60 * 1000;
@@ -19,12 +24,17 @@ export function keepDraft(
   draft: Draft,
   store: ReturnStore | null,
   now: number = Date.now(),
-): void {
-  if (!store) return;
+): boolean {
+  if (!store) return false;
   try {
-    store.setItem(KEY, JSON.stringify({ draft, at: now }));
+    store.setItem(
+      KEY,
+      JSON.stringify({ draft: { ...draft, promised: false }, at: now }),
+    );
+    return true;
   } catch {
     // Storage refused: the form says nothing was kept.
+    return false;
   }
 }
 
@@ -42,7 +52,7 @@ export function readDraft(
     const { draft, at } = kept as { draft?: unknown; at?: unknown };
     if (typeof at !== "number" || now - at > DRAFT_LIFETIME_MS || at > now)
       return null;
-    return isDraft(draft) ? draft : null;
+    return isDraft(draft) ? { ...draft, promised: false } : null;
   } catch {
     return null;
   }

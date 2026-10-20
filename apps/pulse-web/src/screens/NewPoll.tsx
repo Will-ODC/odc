@@ -50,8 +50,15 @@ export function NewPoll({
   onPosted,
   newKey = () => crypto.randomUUID(),
   now = () => Date.now(),
+  restoreDraft = false,
 }: {
   api: PulseApi;
+  /**
+   * Bring back a draft this browser kept when its post needed a sign-in.
+   * Only the way back from that sign-in sets it (App); otherwise the form
+   * starts empty and drops any kept draft.
+   */
+  restoreDraft?: boolean;
   /** Where a signed-out person signs in; it returns them here. */
   signInHref: string;
   onPosted: (poll: Poll) => void;
@@ -61,14 +68,13 @@ export function NewPoll({
   now?: () => number;
 }) {
   const { state, retry, needPromise, signedOut } = useCreationContext(api);
+  /** Whether this page just kept a draft, to say so on the way to sign in. */
+  const [kept, setKept] = useState(false);
   return (
     <AppShell banner={<TopBanner />}>
       <article className="post">
         {state.status === "signedOut" ? (
-          <SignedOut
-            href={signInHref}
-            kept={readDraft(browserStore(), now()) !== null}
-          />
+          <SignedOut href={signInHref} kept={kept} />
         ) : (
           <>
             <ViewState data={state}>
@@ -79,8 +85,12 @@ export function NewPoll({
                   newKey={newKey}
                   now={now}
                   onPosted={onPosted}
+                  restoreDraft={restoreDraft}
                   onNeedPromise={needPromise}
-                  onSignedOut={signedOut}
+                  onSignedOut={(keptDraft) => {
+                    setKept(keptDraft);
+                    signedOut();
+                  }}
                 />
               )}
             </ViewState>
@@ -123,6 +133,7 @@ function PostForm({
   newKey,
   now,
   onPosted,
+  restoreDraft,
   onNeedPromise,
   onSignedOut,
 }: {
@@ -131,12 +142,15 @@ function PostForm({
   newKey: () => string;
   now: () => number;
   onPosted: (poll: Poll) => void;
+  restoreDraft: boolean;
   onNeedPromise: () => void;
-  onSignedOut: () => void;
+  /** The session ended; `kept` says whether the draft was kept for after. */
+  onSignedOut: (kept: boolean) => void;
 }) {
-  // What was typed before a sign-in the post needed, if this browser kept it.
+  // What was typed before a sign-in the post needed, when coming back from it.
   const [draft, setDraft] = useState<Draft>(
-    () => readDraft(browserStore(), now()) ?? emptyDraft(),
+    () =>
+      (restoreDraft ? readDraft(browserStore(), now()) : null) ?? emptyDraft(),
   );
   useEffect(() => forgetDraft(browserStore()), []);
   const [shown, setShown] = useState<Problems>({ choices: [] });
@@ -223,8 +237,7 @@ function PostForm({
     } catch (err) {
       if (err instanceof ApiError && err.status === 401) {
         // Kept for the way back from signing in, which opens a new tab.
-        keepDraft(draft, browserStore(), now());
-        onSignedOut();
+        onSignedOut(keepDraft(draft, browserStore(), now()));
         return;
       }
       if (err instanceof ApiError && err.code === "purpose_required") {

@@ -33,6 +33,21 @@ describe("a draft kept across sign-in", () => {
     expect(readDraft(store, 2)).toBeNull();
   });
 
+  /* #393 review: on a shared device the next person makes the promise. */
+  it("never brings back a ticked promise, kept or written by hand", () => {
+    const store = memory();
+    keepDraft({ ...DRAFT, promised: true }, store, 0);
+    expect(readDraft(store, 1)?.promised).toBe(false);
+    expect(store.getItem("pulse.newPollDraft")).not.toContain(
+      '"promised":true',
+    );
+    store.setItem(
+      "pulse.newPollDraft",
+      JSON.stringify({ draft: { ...DRAFT, promised: true }, at: 0 }),
+    );
+    expect(readDraft(store, 1)?.promised).toBe(false);
+  });
+
   it("is ignored after an hour", () => {
     const store = memory();
     keepDraft(DRAFT, store, 0);

@@ -32,11 +32,13 @@ function show({
   createPoll = vi.fn<Create>(() => Promise.resolve(poll({ id: "new-1" }))),
   keys = ["key-1", "key-2", "key-3"],
   now = () => NOW,
+  restoreDraft = false,
 }: {
   context?: () => Promise<CreationContext>;
   createPoll?: Create;
   keys?: string[];
   now?: () => number;
+  restoreDraft?: boolean;
 } = {}) {
   const onPosted = vi.fn();
   const queue = [...keys];
@@ -47,6 +49,7 @@ function show({
       onPosted={onPosted}
       newKey={() => queue.shift() ?? "spare"}
       now={now}
+      restoreDraft={restoreDraft}
     />,
   );
   return { onPosted, createPoll };
@@ -604,10 +607,10 @@ describe("posting, confirmed in place", () => {
   it("offers sign-in again when the session ended, keeping what was written", async () => {
     const user = userEvent.setup();
     show({
-      context: () => Promise.resolve(LATER),
       createPoll: () => Promise.reject(new ApiError(401, "Sign in first.")),
     });
     await fill(user);
+    await user.click(screen.getByRole("checkbox"));
     await user.click(button("Post question"));
     await user.click(await screen.findByRole("button", { name: "Post it" }));
     expect(
@@ -618,19 +621,47 @@ describe("posting, confirmed in place", () => {
     ).toBeTruthy();
     cleanup();
 
-    // Back from signing in: the same words, and kept only once.
-    show({ context: () => Promise.resolve(LATER) });
+    // Back from that sign-in: the same words, kept only once, and the
+    // promise unticked, since whoever signed in has to make it themselves.
+    show({ restoreDraft: true });
     expect(
       ((await screen.findByLabelText("Your question")) as HTMLTextAreaElement)
         .value,
     ).toBe("Should we open a community garden?");
     expect((field("Choice 2") as HTMLInputElement).value).toBe("No");
+    expect((screen.getByRole("checkbox") as HTMLInputElement).checked).toBe(
+      false,
+    );
     cleanup();
+    show({ restoreDraft: true });
+    expect(
+      ((await screen.findByLabelText("Your question")) as HTMLTextAreaElement)
+        .value,
+    ).toBe("");
+  });
+
+  /* #393 review: a kept draft is not for whoever opens /new next. */
+  it("does not restore a kept draft on an ordinary visit, and drops it", async () => {
+    const user = userEvent.setup();
+    show({
+      context: () => Promise.resolve(LATER),
+      createPoll: () => Promise.reject(new ApiError(401, "Sign in first.")),
+    });
+    await fill(user);
+    await user.click(button("Post question"));
+    await user.click(await screen.findByRole("button", { name: "Post it" }));
+    await screen.findByRole("link", { name: "Sign in to post" });
+    cleanup();
+    expect(globalThis.localStorage.getItem("pulse.newPollDraft")).not.toBe(
+      null,
+    );
+
     show({ context: () => Promise.resolve(LATER) });
     expect(
       ((await screen.findByLabelText("Your question")) as HTMLTextAreaElement)
         .value,
     ).toBe("");
+    expect(globalThis.localStorage.getItem("pulse.newPollDraft")).toBe(null);
   });
 
   it("says nothing was kept when nothing was", async () => {
