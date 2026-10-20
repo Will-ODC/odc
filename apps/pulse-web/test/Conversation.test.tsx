@@ -507,8 +507,9 @@ it("forgetting clears the answers shown on this page", async () => {
   render(<Conversation api={stubApi({ signOut })} pollId="ads-free" />);
   await main().findByRole("heading", { name: poll().question, level: 1 });
   const user = await answer();
+  // The offer appears only once the vote is saved, so wait for it.
   await user.click(
-    banner().getByRole("button", { name: "Forget my votes here" }),
+    await banner().findByRole("button", { name: "Forget my votes here" }),
   );
   await user.click(banner().getByRole("button", { name: "Forget them" }));
   await waitFor(() =>
