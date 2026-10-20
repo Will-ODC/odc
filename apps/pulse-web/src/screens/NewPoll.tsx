@@ -128,8 +128,9 @@ function PostForm({
   const [sending, setSending] = useState<TwoPressProgress>({ status: "idle" });
   /**
    * One key per intended question: made when Post question is first pressed,
-   * kept across retries so an uncertain failure cannot post it twice, and
-   * dropped on any edit, because an edited question is a different one.
+   * kept across retries and Cancel so an uncertain failure cannot post it
+   * twice, and dropped on any edit, because an edited question is a
+   * different one.
    */
   const key = useRef<string | null>(null);
   /** Bumped to put "Post it?" away: after an edit, or a promise to make. */
@@ -182,7 +183,9 @@ function PostForm({
       focusProblem.current = true;
       return false;
     }
-    key.current = newKey();
+    // Kept from an earlier press of this same question: an uncertain failure,
+    // then Cancel, then Post question again must not post it twice.
+    key.current ??= newKey();
     return true;
   }
 
@@ -627,10 +630,7 @@ function PostForm({
         progress={sending}
         onAsk={ready}
         onConfirm={() => void post()}
-        onCancel={() => {
-          key.current = null;
-          setSending({ status: "idle" });
-        }}
+        onCancel={() => setSending({ status: "idle" })}
       />
     </form>
   );

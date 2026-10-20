@@ -385,6 +385,27 @@ describe("posting, confirmed in place", () => {
     expect(createPoll).not.toHaveBeenCalled();
   });
 
+  it("keeps the key through Cancel, so a retry after an uncertain failure posts once", async () => {
+    const user = userEvent.setup();
+    const createPoll = vi
+      .fn<Create>()
+      .mockRejectedValueOnce(new ApiError(0, "Couldn't reach pulse."))
+      .mockResolvedValue(poll({ id: "new-1" }));
+    show({ context: () => Promise.resolve(LATER), createPoll });
+    await fill(user);
+    await user.click(button("Post question"));
+    await user.click(await screen.findByRole("button", { name: "Post it" }));
+    await screen.findByRole("alert");
+    await user.click(button("Cancel"));
+    await user.click(button("Post question"));
+    await user.click(await screen.findByRole("button", { name: "Post it" }));
+    await waitFor(() => expect(createPoll).toHaveBeenCalledTimes(2));
+    expect(createPoll.mock.calls.map(([key]) => key)).toEqual([
+      "key-1",
+      "key-1",
+    ]);
+  });
+
   it("posts once when pressed twice before the page redraws", async () => {
     const user = userEvent.setup();
     const createPoll = vi.fn<Create>(() => new Promise<Poll>(() => {}));
