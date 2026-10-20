@@ -209,11 +209,12 @@ The five sections above, plus:
    (`#301 → PR #307`), how they fit together, anything stale it saw, and any
    decision, written as options the way step 1 says.
 
-**What a lead never does:** merge anything, or start a reviewer or auditor.
-The orchestrator starts reviews (below); audits stay the operator's call. A
-lead also stops and sends the question up — rather than deciding — on a charter conflict, any change under `contracts/`,
-a file in another lead's folders, or anything the operator owns. After a
-restart it re-reads its brief and does not go past it.
+**What a lead never does:** merge anything, or start a reviewer or auditor. The
+orchestrator starts reviews (below); audits stay the operator's call. A lead
+also stops and sends the question up — rather than deciding — on a charter
+conflict, any change under `contracts/`, a file in another lead's folders, or
+anything the operator owns. After a restart it re-reads its brief and does not
+go past it.
 
 ### The orchestrator, while leads run
 
@@ -233,18 +234,18 @@ restart it re-reads its brief and does not go past it.
   files, and say it is one-off.
 - **After any lead restarts, re-check the open PRs for overlap.** A restarted
   lead in the pilot edited a plan file beyond what was approved.
-- **Review every green lead PR** (operator, 2026-10-20: "confirm you have
-  been doing code review on all PRs?", then "do it"). Once a PR's CI is green,
-  start a fresh-context `odc-reviewer` on it, routed by the table above, in
-  its own review worktree with the PR's diff at the root as `REVIEW.diff`.
-  For a PR that touches either verifier, the review worktree is sparse: only
-  `contracts/`, that verifier, `docs/charter.md` and `.claude/`, so the
-  reviewer never sees `services/ledger/`, the other verifier, or (for the TS
-  one) `tools/fixtures-gen/` and `tools/rehearsal/`. For the TS verifier, run
+- **Review every green lead PR** (operator, 2026-10-20: "confirm you have been
+  doing code review on all PRs?", then "do it"). Once a PR's CI is green, start
+  a fresh-context `odc-reviewer` on it, routed by the table above, in its own
+  review worktree with the PR's diff at the root as `REVIEW.diff`. For a PR that
+  touches either verifier, the review worktree is sparse: only `contracts/`,
+  that verifier, `docs/charter.md` and `.claude/`, so the reviewer never sees
+  `services/ledger/`, the other verifier, or (for the TS one)
+  `tools/fixtures-gen/` and `tools/rehearsal/`. For the TS verifier, run
   `pnpm install` before narrowing so `node_modules` exists, and keep
-  `.github/`, because the eslint config imports `.github/scripts/`. Send each finding to the lead that owns the PR, and review
-  the fix again. A PR the orchestrator wrote itself needs a reviewer that did
-  not write it either.
+  `.github/`, because the eslint config imports `.github/scripts/`. Send each
+  finding to the lead that owns the PR, and review the fix again. A PR the
+  orchestrator wrote itself needs a reviewer that did not write it either.
 - **When the leads report,** check their PRs do not collide — settle a clash
   between two leads by message — and tell the operator which PRs are ready to
   merge, in what order, with each review's verdict. Merging stays the
