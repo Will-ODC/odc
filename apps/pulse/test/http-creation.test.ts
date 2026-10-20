@@ -1040,6 +1040,14 @@ test("without_a_creation_store_every_route_is_unavailable", async (t) => {
     503,
     "creation_unavailable",
   );
+  // Said first, before origin or session: there is nothing to sign in for,
+  // and no account is looked up for a feature that is switched off.
+  refused(await h.context(undefined), 503, "creation_unavailable");
+  refused(
+    await h.publish(undefined, question(), { origin: null }),
+    503,
+    "creation_unavailable",
+  );
 });
 
 test("without_a_configured_web_origin_every_mutation_is_refused", async (t) => {
