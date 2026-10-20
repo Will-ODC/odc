@@ -100,11 +100,12 @@ IS the ticket.
      features only). A step already written down in `memory/` or an ADR —
      say, the routes ADR-0037 plans — is built without an issue. Its branch
      is `<area>/<short>`, named for the work (`pulse/poll-creation-routes`);
-     its PR names that step and where it is written (`ADR-0037: creation
-routes`) instead of `Closes #N`. That name is its handle.
+     its PR and commits name that step and where it is written
+     (`ADR-0037 creation routes`) instead of `Closes #N`. That name is its
+     handle.
 4. **Review in a fresh context** per `odc-code-review`; **CI green** per this
-   skill; **squash-merge** so master reads as one commit per ticket, message
-   referencing the issue.
+   skill; **squash-merge** so master reads as one commit per ticket (or
+   planned step), message referencing it.
 5. Board columns = pipeline stages: Backlog → In progress (branch open) →
    Review (PR open) → Done (merged). GitHub Projects, nothing fancier.
 6. WIP limit: one active branch per service — an agent should never
