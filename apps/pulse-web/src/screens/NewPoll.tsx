@@ -144,7 +144,14 @@ function PostForm({
   const form = useRef<HTMLFormElement>(null);
   const heading = useRef<HTMLHeadingElement>(null);
 
+  /** Set by Review when something needs fixing; acted on once it is drawn. */
+  const focusProblem = useRef(false);
   useEffect(() => {
+    if (focusProblem.current) {
+      focusProblem.current = false;
+      // To the first field that needs attention, which says what to do.
+      form.current?.querySelector<HTMLElement>("[aria-invalid=true]")?.focus();
+    }
     if (focusChoice.current === null) return;
     const at = focusChoice.current;
     focusChoice.current = null;
@@ -165,8 +172,7 @@ function PostForm({
     const problems = problemsOf(draft, needsPromise, now());
     setShown(problems);
     if (hasProblems(problems)) {
-      // To the first field that needs attention, which says what to do.
-      form.current?.querySelector<HTMLElement>("[aria-invalid=true]")?.focus();
+      focusProblem.current = true;
       return;
     }
     key.current ??= newKey();

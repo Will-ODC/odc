@@ -344,3 +344,77 @@ describe("ballots", () => {
     expect(calls[0]?.init.body).toBe(JSON.stringify({ ballot: [0, 2] }));
   });
 });
+
+describe("posting a question (ADR-0037)", () => {
+  it("reads the form's context", async () => {
+    const context = {
+      community: { id: "pulse-general", label: "General" },
+      canPostUnlimited: false,
+      purposeVersion: "community-purpose-v1",
+      purposeAcknowledged: false,
+    };
+    const calls = stubFetch({ body: JSON.stringify(context) });
+    expect(await new HttpPulseApi().creationContext()).toEqual(context);
+    expect(calls[0]?.url).toBe("/api/poll-creation/context");
+    expect(calls[0]?.init.method).toBe("GET");
+  });
+
+  it("posts the request as JSON with the idempotency key, and returns the poll", async () => {
+    const calls = stubFetch({
+      status: 201,
+      body: JSON.stringify({ poll: { id: "p9" }, replayed: false }),
+    });
+    const request = {
+      question: "Q?",
+      choices: ["a", "b"],
+      method: "single" as const,
+      attribution: { kind: "anonymous" as const },
+    };
+    expect(await new HttpPulseApi().createPoll("k-1", request)).toEqual({
+      id: "p9",
+    });
+    expect(calls[0]?.url).toBe("/api/polls");
+    expect(calls[0]?.init.method).toBe("POST");
+    expect(calls[0]?.init.headers).toEqual({
+      "content-type": "application/json",
+      "idempotency-key": "k-1",
+    });
+    expect(calls[0]?.init.body).toBe(JSON.stringify(request));
+  });
+
+  it("treats a replay like the first answer", async () => {
+    stubFetch({
+      status: 200,
+      body: JSON.stringify({ poll: { id: "p9" }, replayed: true }),
+    });
+    expect(
+      await new HttpPulseApi().createPoll("k-1", {
+        question: "Q?",
+        choices: ["a", "b"],
+        method: "single",
+        attribution: { kind: "anonymous" },
+      }),
+    ).toEqual({ id: "p9" });
+  });
+
+  it("carries the server's refusal slug, so the form can tell them apart", async () => {
+    stubFetch({
+      status: 422,
+      body: JSON.stringify({
+        error: "purpose_required",
+        message: "Make the promise first.",
+      }),
+    });
+    const err = await new HttpPulseApi()
+      .createPoll("k-1", {
+        question: "Q?",
+        choices: ["a", "b"],
+        method: "single",
+        attribution: { kind: "anonymous" },
+      })
+      .catch((e: unknown) => e);
+    expect(err).toBeInstanceOf(ApiError);
+    expect((err as ApiError).code).toBe("purpose_required");
+    expect((err as ApiError).message).toBe("Make the promise first.");
+  });
+});

@@ -178,6 +178,34 @@ describe("after the link is spent", () => {
     expect(globalThis.location.search).toBe("?poll=ads-free");
   });
 
+  it("comes back to the posting form when sign-in started there", async () => {
+    globalThis.history.replaceState(null, "", "/sign-in?next=new");
+    const first = render(<App api={stubApi()} />);
+    await screen.findByLabelText("Your email");
+    first.unmount();
+
+    globalThis.history.replaceState(null, "", "/sign-in?token=abc123");
+    render(
+      <App
+        api={stubApi({
+          redeem: () => Promise.resolve(ME),
+          creationContext: () =>
+            Promise.resolve({
+              community: { id: "pulse-general", label: "General" },
+              canPostUnlimited: false,
+              purposeVersion: "community-purpose-v1",
+              purposeAcknowledged: true,
+            }),
+        })}
+      />,
+    );
+    await userEvent.click(
+      await screen.findByRole("button", { name: "Continue" }),
+    );
+    expect(await screen.findByLabelText("Your question")).toBeTruthy();
+    expect(globalThis.location.pathname).toBe("/new");
+  });
+
   it("goes back to the form when the link had run out", async () => {
     const { ApiError } = await import("../src/api/types.js");
     globalThis.history.replaceState(null, "", "/sign-in?token=stale");
