@@ -16,7 +16,9 @@
       "dependsOn": ["build"],
       "env": ["PULSE_DATABASE_URL", "PULSE_REQUIRE_DATABASE"]
     },
-    "lint": {},
+    "lint": {
+      "cache": false
+    },
     "typecheck": {
       "dependsOn": ["^build"]
     },

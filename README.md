@@ -25,6 +25,11 @@ The web image fronts the API on one origin, as recorded in
 Pulse's two real-HTTP cross-package suites live in the dedicated
 [`@odc/pulse-integration` workspace](tests/pulse-integration/README.md),
 which depends on both apps for test setup. App builds remain independent.
+Static import boundaries are checked by the root and package lint commands;
+the focused regression suite is `pnpm test:boundaries`. See the
+[boundary policy](.claude/skills/odc-service-boundaries/SKILL.md) and
+[ADR-0042](docs/decisions/0042-import-boundary-enforcement.md) for its scope
+and the integration-test exception.
 
 | You want                           | Read                                                               |
 | ---------------------------------- | ------------------------------------------------------------------ |

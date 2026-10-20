@@ -55,6 +55,12 @@ CI. This is the standing loop for every branch:
   changed, regenerate them and run `.github/scripts/fixtures-manifest.sh`. Note
   the guards diff `origin/master...HEAD`, so **commit first**, then run them.
 - The changed unit's own tests (`go test ./...`, `pnpm --filter <pkg> test`, etc.).
+- Import-boundary changes: `pnpm test:boundaries`. The root and package lint
+  commands are also required CI enforcement. Turbo does not cache lint: import
+  resolution depends on shared configs, workspace metadata and symlinks outside
+  a package. See [the boundary policy](../odc-service-boundaries/SKILL.md)
+  and [ADR-0042](../../../docs/decisions/0042-import-boundary-enforcement.md)
+  for the rule's exact limits.
 
 **Fresh-clone caveat (Claude Code on the web).** lefthook's hooks are NOT
 installed until `pnpm install` runs, so the pre-commit format/lint hook may not
