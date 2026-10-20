@@ -48,22 +48,24 @@ export function TopBanner({
         pulse
       </span>
 
-      {postHref ? (
-        <a className="banner__post" href={postHref}>
-          Post a question
-        </a>
-      ) : null}
+      <span className="banner__actions">
+        {postHref ? (
+          <a className="banner__post" href={postHref}>
+            Post a question
+          </a>
+        ) : null}
 
-      {identity ?? (
-        <span className="banner__end">
-          {aside}
-          {signInHref ? (
-            <a className="banner__sign-in" href={signInHref}>
-              Sign in
-            </a>
-          ) : null}
-        </span>
-      )}
+        {identity ?? (
+          <span className="banner__end">
+            {aside}
+            {signInHref ? (
+              <a className="banner__sign-in" href={signInHref}>
+                Sign in
+              </a>
+            ) : null}
+          </span>
+        )}
+      </span>
     </div>
   );
 }
