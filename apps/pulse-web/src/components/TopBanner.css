@@ -49,3 +49,21 @@
   gap: var(--gutter);
   min-width: 0;
 }
+
+/* Beside the way in, not centred between it and the brand. */
+.banner__post {
+  margin-inline-start: auto;
+  font-size: var(--t-small);
+  font-weight: 600;
+  color: var(--ballot-ink-soft);
+  white-space: nowrap;
+}
+
+.banner__post:hover {
+  color: var(--ballot-ink);
+}
+
+.banner__post:focus-visible {
+  outline: 2px solid var(--ballot-ink);
+  outline-offset: 2px;
+}

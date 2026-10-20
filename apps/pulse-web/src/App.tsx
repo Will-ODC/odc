@@ -1,7 +1,7 @@
 import type { ReactNode } from "react";
 import type { PulseApi } from "./api/types.js";
 import type { Route } from "./flow/route.js";
-import { FIRST_POLL_ID } from "./flow/route.js";
+import { FIRST_POLL_ID, pathOf } from "./flow/route.js";
 import { browserStore, takeReturn } from "./flow/sign-in-return.js";
 import { AppShell } from "./components/AppShell.js";
 import { TopBanner } from "./components/TopBanner.js";
@@ -17,6 +17,7 @@ import {
   type RelatedPollIds,
 } from "./screens/FoundationQuestions.js";
 import { Trust } from "./screens/Trust.js";
+import { NewPoll } from "./screens/NewPoll.js";
 import "./styles/tokens.css";
 import "./App.css";
 
@@ -62,7 +63,10 @@ export function App({
     case "signIn":
       return (
         <SignInPage>
-          <SignIn api={api} {...(at.pollId ? { returnTo: at.pollId } : {})} />
+          <SignIn
+            api={api}
+            {...(at.returnTo ? { returnTo: at.returnTo } : {})}
+          />
         </SignInPage>
       );
     case "redeem":
@@ -77,12 +81,14 @@ export function App({
              * button a link that can now only answer "already used".
              */
             onSignedIn={() =>
-              browser.replace({
-                kind: "conversation",
-                // The question "Confirm with your email" was pressed on, when
-                // this browser remembers one (#353).
-                pollId: takeReturn(browserStore()) ?? LANDS_ON,
-              })
+              browser.replace(
+                // The question "Confirm with your email" was pressed on, or
+                // the posting form, when this browser remembers one (#353).
+                takeReturn(browserStore()) ?? {
+                  kind: "conversation",
+                  pollId: LANDS_ON,
+                },
+              )
             }
             onAskAgain={() => browser.replace({ kind: "signIn" })}
           />
@@ -105,6 +111,19 @@ export function App({
     case "trust":
       // Static copy: like the prototype, it never touches `api`.
       return <Trust />;
+    case "newPoll":
+      return (
+        <NewPoll
+          api={api}
+          signInHref={pathOf({
+            kind: "signIn",
+            returnTo: { kind: "newPoll" },
+          })}
+          onPosted={(poll) =>
+            browser.go({ kind: "conversation", pollId: poll.id })
+          }
+        />
+      );
   }
 }
 

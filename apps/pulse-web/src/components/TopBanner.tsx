@@ -14,9 +14,12 @@ import "./TopBanner.css";
  */
 export function TopBanner({
   signInHref,
+  postHref,
   identity,
   aside,
 }: {
+  /** Where "Post a question" goes (ADR-0037). Left out where it would loop. */
+  postHref?: string;
   /**
    * Where "Sign in" goes. Left out on the sign-in screens themselves, where
    * the link would only reload the page the person is already on.
@@ -44,6 +47,12 @@ export function TopBanner({
         <i aria-hidden="true" />
         pulse
       </span>
+
+      {postHref ? (
+        <a className="banner__post" href={postHref}>
+          Post a question
+        </a>
+      ) : null}
 
       {identity ?? (
         <span className="banner__end">
