@@ -1941,6 +1941,71 @@
         "ET-9"
       ],
       "note": "A genesis whose contracts value is the empty string: INVALID at the genesis line, because ET-9 requires a non-empty string and says a genesis whose contracts is empty or longer than 64 bytes MUST be rejected. The genesis is signed over this payload and hashed over that signature, so chain_id derives, the self-signature verifies and the hash matches: the empty value is the only fault. It pins ET-9's lower bound, which 137-142 do not reach. A verifier that checks only the upper bound, or only that the key is present with a string value (ES-18), reports VALID."
+    },
+    {
+      "id": "146-utf8-raw-surrogate",
+      "export": "vectors/146-utf8-raw-surrogate.ndjson",
+      "expect": {
+        "verdict": "INVALID",
+        "line": 2
+      },
+      "cites": [
+        "HA-2",
+        "EX-2"
+      ],
+      "note": "A title holding the raw octets ed a0 80, the three-byte form of the surrogate U+D800. A surrogate is not a Unicode scalar value, so this is not well-formed UTF-8 and HA-2 requires rejection: INVALID at line 2. A decoder that accepts surrogates in three-byte form (CESU-8, WTF-8, Java's modified UTF-8) reads it as a lone U+D800. A lenient decoder reads three U+FFFD. Line 2 is hashed and signed over the title a lenient decoder sees, with each ill-formed sequence replaced by U+FFFD, and line 3 links to that hash. So a verifier that substitutes U+FFFD instead of rejecting finds the hash, the signature and the link all correct, and reports VALID. EX-2 also rejects these octets; the vector pins the verdict and the line, not which rule a verifier names."
+    },
+    {
+      "id": "147-utf8-escaped-surrogate",
+      "export": "vectors/147-utf8-escaped-surrogate.ndjson",
+      "expect": {
+        "verdict": "INVALID",
+        "line": 2
+      },
+      "cites": [
+        "HA-2",
+        "EX-9"
+      ],
+      "note": "A title holding the six characters \\ud800: an escape that decodes to the lone surrogate U+D800, which no UTF-8 can encode. HA-2 says the decoded value is what must be well-formed, so the escape is rejected even though every octet of the line is ASCII: INVALID at line 2. JavaScript's JSON.parse yields the lone surrogate, Buffer.from then encodes it as U+FFFD, and JSON.stringify writes it back as \\ud800, so a JavaScript verifier built from those three calls passes both the hash and the canonical-form check. Go's encoding/json decodes it to U+FFFD. Line 2 is hashed and signed over U+FFFD and line 3 links to that hash, so only rejecting the escape gives INVALID. EX-9 also rejects a \\u escape of a non-ASCII value, and no canonical line can carry this string at all; the vector pins the verdict and the line."
+    },
+    {
+      "id": "148-utf8-overlong",
+      "export": "vectors/148-utf8-overlong.ndjson",
+      "expect": {
+        "verdict": "INVALID",
+        "line": 2
+      },
+      "cites": [
+        "HA-2",
+        "EX-2"
+      ],
+      "note": "A title holding the raw octets c0 80, an overlong two-byte form of U+0000. UTF-8 allows only the shortest form of each scalar value, so c0 never begins a well-formed sequence: INVALID at line 2. Java's modified UTF-8 writes U+0000 exactly this way, and a decoder that computes the value from the bits without checking the form reads a NUL; a lenient decoder reads two U+FFFD. Line 2 is hashed and signed over the title a lenient decoder sees, with each ill-formed sequence replaced by U+FFFD, and line 3 links to that hash. So a verifier that substitutes U+FFFD instead of rejecting finds the hash, the signature and the link all correct, and reports VALID. EX-2 also rejects these octets."
+    },
+    {
+      "id": "149-utf8-above-max",
+      "export": "vectors/149-utf8-above-max.ndjson",
+      "expect": {
+        "verdict": "INVALID",
+        "line": 2
+      },
+      "cites": [
+        "HA-2",
+        "EX-2"
+      ],
+      "note": "A title holding the raw octets f5 80 80 80, a four-byte form of U+140000, above U+10FFFF, the last Unicode scalar value. f5 never begins a well-formed sequence: INVALID at line 2. A decoder that checks only the lead byte's bit pattern accepts it; a lenient decoder reads four U+FFFD. Line 2 is hashed and signed over the title a lenient decoder sees, with each ill-formed sequence replaced by U+FFFD, and line 3 links to that hash. So a verifier that substitutes U+FFFD instead of rejecting finds the hash, the signature and the link all correct, and reports VALID. EX-2 also rejects these octets."
+    },
+    {
+      "id": "150-utf8-truncated",
+      "export": "vectors/150-utf8-truncated.ndjson",
+      "expect": {
+        "verdict": "INVALID",
+        "line": 2
+      },
+      "cites": [
+        "HA-2",
+        "EX-2"
+      ],
+      "note": "A title holding the raw octets e2 82 followed by a space: the first two octets of the three-byte sequence for U+20AC, cut short, so the space arrives where a continuation octet is required: INVALID at line 2. A WHATWG decoder (JavaScript's TextDecoder and Buffer) reads one U+FFFD for the cut-short sequence, and line 2 is hashed and signed over that title, so a JavaScript verifier that substitutes instead of rejecting finds the hash, the signature and the link correct. Go's utf8 package substitutes one U+FFFD per octet, two here, so a lenient Go verifier fails the hash check instead, and still reports INVALID at line 2. EX-2 also rejects these octets."
     }
   ]
 }
