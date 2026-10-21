@@ -1,7 +1,8 @@
 import { useCallback, useEffect, useRef, useState } from "react";
 import type { Me, PulseApi } from "../api/types.js";
 import type { TwoPressProgress } from "../components/TwoPress.js";
-import { SIGNED_IN_KEY } from "../flow/sign-in-return.js";
+import { SIGNED_IN_KEY, browserStore } from "../flow/sign-in-return.js";
+import { forgetDraft } from "../flow/draft-store.js";
 
 /**
  * Who is signed in, as far as the bar across the top needs to know.
@@ -121,6 +122,8 @@ export function useSession(
         sending.current = false;
         setProgress({ status: "idle" });
         setSession({ status: "signedOut" });
+        // A posting draft kept in this browser is not for whoever is next.
+        forgetDraft(browserStore());
         if (signedIn) onSignedOut?.();
         else onForgotten?.();
       },

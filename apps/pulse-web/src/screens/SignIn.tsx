@@ -4,6 +4,7 @@ import { ApiError } from "../api/types.js";
 import { ScreenFrame } from "../components/ScreenFrame.js";
 import { looksLikeEmail } from "../flow/email.js";
 import { browserStore, rememberReturn } from "../flow/sign-in-return.js";
+import type { ReturnTo } from "../flow/route.js";
 import "./SignIn.css";
 
 /**
@@ -52,11 +53,11 @@ export function SignIn({
 }: {
   api: PulseApi;
   /**
-   * The question to land on once the emailed link is clicked (#353), from
-   * `/sign-in?poll=`. Remembered in this browser on arrival, because the
-   * emailed link itself cannot carry it.
+   * Where to land once the emailed link is clicked (#353), from
+   * `/sign-in?poll=` or `?next=new`. Remembered in this browser on arrival,
+   * because the emailed link itself cannot carry it.
    */
-  returnTo?: string;
+  returnTo?: ReturnTo;
 }) {
   useEffect(() => rememberReturn(returnTo, browserStore()), [returnTo]);
   const [email, setEmail] = useState("");
