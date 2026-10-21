@@ -71,7 +71,9 @@ by community, not a global or related-question feed. Shared
 `/browse?community=ID` links open that community. Signed-in visitors can also
 switch to their community. Open and closed questions link to the existing vote
 page; opening a question never casts a vote. Load more uses the API cursor and
-keeps existing questions on a failed request. Missing communities show an empty
+keeps existing questions on a failed request. The wide list has top navigation
+for home, starting questions, posting and communities; email-confirmed membership
+supplies the Your community link. Thumbnails/context previews remain future work. Missing communities show an empty
 state with links to the starting questions and posting form.
 
 ## Settings

@@ -1,7 +1,7 @@
 import { useEffect, useRef } from "react";
 import type { PulseApi } from "../api/types.js";
 import { pathOf } from "../flow/route.js";
-import { IntroPage } from "../components/IntroPage.js";
+import { SiteBanner } from "./SiteBanner.js";
 import { ViewState } from "../components/ViewState.js";
 import { usePollList } from "../hooks/use-poll-list.js";
 import { useSession } from "../hooks/use-session.js";
@@ -15,7 +15,11 @@ export function Browse({
   community: string;
 }) {
   const { data, more, loadMore, retry } = usePollList(api, community);
-  const { session } = useSession(api);
+  const { session, progress, signOut, dismiss } = useSession(api);
+  const heading = useRef<HTMLHeadingElement>(null);
+  useEffect(() => {
+    heading.current?.focus();
+  }, []);
   const list = useRef<HTMLUListElement>(null);
   const focusAt = useRef<number | null>(null);
   useEffect(() => {
@@ -31,67 +35,81 @@ export function Browse({
   }, [data, more]);
   const own = session.status === "signedIn" ? session.me.community : null;
   return (
-    <IntroPage title="Explore questions" compact>
-      <nav className="browse__nav" aria-label="Question communities">
-        <a
-          href={pathOf({ kind: "browse", community: "pulse-general" })}
-          aria-current={community === "pulse-general" ? "page" : undefined}
-        >
-          General
-        </a>
-        {own && own !== "pulse-general" ? (
+    <div className="welcome browse">
+      <header className="browse__header">
+        <SiteBanner
+          session={session}
+          progress={progress}
+          holdsVotes={false}
+          onSignOut={signOut}
+          onCancel={dismiss}
+        />
+        <nav className="browse__nav" aria-label="Browse navigation">
+          <a href={pathOf({ kind: "welcome" })}>Home</a>
+          <a href={pathOf({ kind: "questions" })}>Starting questions</a>
           <a
-            href={pathOf({ kind: "browse", community: own })}
-            aria-current={community === own ? "page" : undefined}
+            href={pathOf({ kind: "browse", community: "pulse-general" })}
+            aria-current={community === "pulse-general" ? "page" : undefined}
           >
-            Your community
+            General
           </a>
+          {own && own !== "pulse-general" ? (
+            <a
+              href={pathOf({ kind: "browse", community: own })}
+              aria-current={community === own ? "page" : undefined}
+            >
+              Your community
+            </a>
+          ) : null}
+        </nav>
+      </header>
+      <main className="welcome__main browse__main">
+        <h1 ref={heading} tabIndex={-1}>
+          Explore questions
+        </h1>
+        <p className="welcome__note">
+          {community === "pulse-general"
+            ? "General"
+            : `Community: ${community}`}{" "}
+          · Newest first · Open and closed questions
+        </p>
+        <ViewState data={data}>
+          {(page) => (
+            <ul ref={list} className="browse__list">
+              {page.polls.map((p) => (
+                <li key={p.id}>
+                  <a href={pathOf({ kind: "conversation", pollId: p.id })}>
+                    {p.question}
+                  </a>
+                  <span>{p.open ? "Open" : "Closed · View results"}</span>
+                </li>
+              ))}
+            </ul>
+          )}
+        </ViewState>
+        {data.status === "error" ? (
+          <button type="button" onClick={retry}>
+            Try again
+          </button>
         ) : null}
-      </nav>
-      <p className="welcome__note">
-        {community === "pulse-general" ? "General" : `Community: ${community}`}{" "}
-        · Newest first · Open and closed questions
-      </p>
-      <ViewState data={data}>
-        {(page) => (
-          <ul ref={list} className="browse__list">
-            {page.polls.map((p) => (
-              <li key={p.id}>
-                <a href={pathOf({ kind: "conversation", pollId: p.id })}>
-                  {p.question}
-                </a>
-                <span>{p.open ? "Open" : "Closed · View results"}</span>
-              </li>
-            ))}
-          </ul>
-        )}
-      </ViewState>
-      {data.status === "error" ? (
-        <button type="button" onClick={retry}>
-          Try again
-        </button>
-      ) : null}
-      {more.status === "error" ? <p role="alert">{more.message}</p> : null}
-      {data.status === "ready" && data.value.nextCursor ? (
-        <button
-          type="button"
-          disabled={more.status === "loading"}
-          onClick={() => {
-            focusAt.current = data.value.polls.length;
-            loadMore();
-          }}
-        >
-          {more.status === "loading"
-            ? "Loading more…"
-            : more.status === "error"
-              ? "Try loading more again"
-              : "Load more"}
-        </button>
-      ) : null}
-      <nav className="browse__nav" aria-label="More ways to participate">
-        <a href={pathOf({ kind: "questions" })}>Starting questions</a>
-        <a href={pathOf({ kind: "newPoll" })}>Post a question</a>
-      </nav>
-    </IntroPage>
+        {more.status === "error" ? <p role="alert">{more.message}</p> : null}
+        {data.status === "ready" && data.value.nextCursor ? (
+          <button
+            type="button"
+            disabled={more.status === "loading"}
+            onClick={() => {
+              focusAt.current = data.value.polls.length;
+              loadMore();
+            }}
+          >
+            {more.status === "loading"
+              ? "Loading more…"
+              : more.status === "error"
+                ? "Try loading more again"
+                : "Load more"}
+          </button>
+        ) : null}
+      </main>
+    </div>
   );
 }

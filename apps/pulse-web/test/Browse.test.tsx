@@ -164,7 +164,9 @@ it("offers the signed-in community without requiring it for public browsing", as
     ),
   ).toBe("/browse?community=campus");
   await waitFor(() => expect(listPolls).toHaveBeenCalledWith("pulse-general"));
-  expect(screen.queryByText("private@example.test")).toBeNull();
+  expect(screen.getByRole("main").textContent).not.toContain(
+    "private@example.test",
+  );
 });
 
 it("loads the final page by keyboard and focuses its first new question", async () => {
@@ -175,7 +177,6 @@ it("loads the final page by keyboard and focuses its first new question", async 
     .mockResolvedValueOnce(page([row("second")]));
   render(<Browse api={stubApi({ listPolls })} community="pulse-general" />);
   await screen.findByRole("button", { name: "Load more" });
-  await user.tab(); // General
   await user.tab(); // First question
   await user.tab(); // Load more
   expect(document.activeElement).toBe(
@@ -186,4 +187,22 @@ it("loads the final page by keyboard and focuses its first new question", async 
   await waitFor(() => expect(document.activeElement).toBe(next));
   expect(listPolls).toHaveBeenLastCalledWith("pulse-general", "next");
   expect(screen.queryByRole("button", { name: "Load more" })).toBeNull();
+});
+
+it("keeps home, guided questions and posting in the top navigation", async () => {
+  render(
+    <Browse
+      api={stubApi({ listPolls: async () => page([]) })}
+      community="pulse-general"
+    />,
+  );
+  const nav = screen.getByRole("navigation", { name: "Browse navigation" });
+  expect(nav.querySelector('a[href="/"]')?.textContent).toBe("Home");
+  expect(nav.querySelector('a[href="/questions"]')?.textContent).toBe(
+    "Starting questions",
+  );
+  expect(
+    screen.getByRole("link", { name: "Post a question" }).getAttribute("href"),
+  ).toBe("/new");
+  await screen.findByText(/No questions here yet/);
 });

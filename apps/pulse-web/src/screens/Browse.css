@@ -1,9 +1,10 @@
 .browse__nav {
   display: flex;
   flex-wrap: wrap;
-  justify-content: center;
+  justify-content: flex-start;
   gap: calc(var(--step) * 2);
-  margin-block: calc(var(--step) * 2);
+  margin: 0;
+  padding: var(--step) var(--gutter);
 }
 .browse__nav a,
 .browse__list a {
@@ -17,12 +18,12 @@
   list-style: none;
   padding: 0;
   display: grid;
-  gap: var(--step);
+  gap: 0;
 }
 .browse__list li {
   padding: calc(var(--step) * 2);
   border: var(--hairline) solid var(--control-line);
-  border-radius: var(--r-control);
+  border-radius: 0;
   background: var(--surface-rest);
 }
 .browse__list a {
@@ -32,7 +33,7 @@
 }
 .browse__list span {
   display: block;
-  margin-top: var(--step);
+  margin-top: calc(var(--step) / 2);
   color: var(--ballot-ink-soft);
   font-size: var(--t-small);
 }
@@ -40,4 +41,34 @@
 .browse__list a:focus-visible {
   outline: calc(var(--hairline) * 2) solid var(--focus-ring);
   outline-offset: calc(var(--hairline) * 2);
+}
+
+.browse__header {
+  border-bottom: var(--hairline) solid var(--control-line);
+  background: var(--surface-rest);
+}
+.browse .browse__main {
+  max-width: calc(var(--rail) * 6);
+  margin: 0 auto;
+  padding: calc(var(--step) * 3) var(--gutter);
+}
+.browse h1 {
+  max-width: none;
+  text-align: left;
+  font-size: var(--t-word);
+  margin: 0 0 var(--step);
+}
+.browse .welcome__note {
+  max-width: none;
+  text-align: left;
+  margin: 0;
+}
+.browse__list li + li {
+  border-top: none;
+}
+.browse__list li:first-child {
+  border-radius: var(--r-control) var(--r-control) 0 0;
+}
+.browse__list li:last-child {
+  border-radius: 0 0 var(--r-control) var(--r-control);
 }
