@@ -75,10 +75,11 @@ export function ControlGuide({
           className="control-guide__spotlight"
           aria-hidden="true"
           style={{
-            top: rect.top,
-            left: rect.left,
-            width: rect.width,
-            height: rect.height,
+            // Expand the overlay, not the controls, and keep every edge visible.
+            top: `max(0px, calc(${rect.top}px - var(--step)))`,
+            left: `max(0px, calc(${rect.left}px - var(--step)))`,
+            right: `max(0px, calc(100vw - ${rect.right}px - var(--step)))`,
+            bottom: `max(0px, calc(100vh - ${rect.bottom}px - var(--step)))`,
           }}
         />
       ) : null}

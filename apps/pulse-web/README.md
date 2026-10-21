@@ -39,6 +39,7 @@ container, so the page and the API share one address.
 
 Only the vote page and sign-in call the API. On the vote page, **Show me how**
 walks through the real controls; it never picks or submits an answer.
+Its highlight leaves space around the controls and stays inside the screen.
 
 The client uses the served routes in [`../pulse/API.md`](../pulse/API.md).
 Roadmap and planned API sections describe future work, not current client
