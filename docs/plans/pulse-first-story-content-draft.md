@@ -35,11 +35,12 @@ Use “Comments are coming soon” until #297 is available. Video #339 comes lat
 
 ### What we're building together
 
-**Built · 6–12 October 2026**
+**Built · 20 October 2026**
 
-- Conversation voting on phone and desktop.
-- Approval voting that saves all your choices.
-- A button to sign out.
+- Email-confirmed votes, with both result numbers.
+- Post a question, anonymous by default.
+- A shorter "How votes count" page.
+- Vote cards open when a question loads.
 
 **Why ODC?**
 
@@ -81,9 +82,11 @@ how allocation is decided. No action or data sharing is triggered by a vote.
 - Recent-work items must come from dated, merged changes, with source links
   available without cluttering the main text. Replace the period/items as the
   window advances; never label PR #347, comments or the tutorial as built yet.
-- Evidence for this sample window: merged PRs #313/#322 (conversation/mobile/
-  desktop/default and complete approval ballots) and #344 (sign-out), all
-  merged on 11 October in America/Vancouver. The sample is static, not a live
+- Evidence for this sample window: merged PRs #386 (confirmed votes, both
+  result numbers), #393 (posting a question, anonymous by default), #405
+  (shorter "How votes count") and #403 (vote cards open on load), all merged
+  on 20 October in America/Vancouver (earlier window: #313/#322/#344, 11
+  October). The sample is static, not a live
   changelog service. Merged code is not proof of a deployed website.
 - **Charter boundary:** anonymous ballots remain equal (charter §§3, 5, 8).
   Verification may improve confidence in contributed data; it must not imply
@@ -109,9 +112,10 @@ how allocation is decided. No action or data sharing is triggered by a vote.
 
 ## Source links
 
-- [Conversation page, PR #313](https://github.com/Will-ODC/odc/pull/313)
-- [Default conversation, PR #322](https://github.com/Will-ODC/odc/pull/322)
-- [Sign-out, PR #344](https://github.com/Will-ODC/odc/pull/344)
+- [Confirmed votes, PR #386](https://github.com/Will-ODC/odc/pull/386)
+- [Posting a question, PR #393](https://github.com/Will-ODC/odc/pull/393)
+- [How votes count, PR #405](https://github.com/Will-ODC/odc/pull/405)
+- [Vote cards open on load, PR #403](https://github.com/Will-ODC/odc/pull/403)
 - [Welcome PR #347](https://github.com/Will-ODC/odc/pull/347)
 - [Tutorial #342](https://github.com/Will-ODC/odc/issues/342)
 - [Comments #297](https://github.com/Will-ODC/odc/issues/297)

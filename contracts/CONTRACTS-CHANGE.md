@@ -19,6 +19,27 @@ Format (newest first, one entry per merged contracts change):
 
 ---
 
+## event-types.md v16 · evolution.md v11 · read-api.md v3 — 2026-10-21 — second T9 re-audit NS-1, NS-3, NS-4, NS-5 (#415)
+
+- **ET-25** (NS-1): a producer MUST NOT seal a batch below `ballot_batch_min`
+  unless it will admit no further ballot of that issue, and from that seal on
+  refuses every ballot of the issue before the registrar records the voter or
+  signs. Without it, EV-26 could strand admitted ballots behind an under-size
+  last batch. An issue has at most one unsealed batch at a time, each batch has
+  its own instant, and sealed batches are appended in seal order, each as one
+  run, so only the final batch can be under-size and it is appended last. (NS-5) A ballot admitted after a seal goes to an instant the issue
+  has not used (ET-24a), not "a later" one, which read as an order on `ts`.
+- **ET-21a** (new, NS-3): neither the ledger nor the registrar may single out
+  for a ballot's submitter which line or batch is theirs (by `seq`, `hash`,
+  `prev_hash`, `sig`, batch instant or otherwise; publishing the log is not
+  barred), nor give any third-party-verifiable statement
+  about the ballot (admitted, appended, or its `choice`); an unauthenticated
+  accepted/refused answer and the public log are allowed. EV-15 lists ET-21a
+  outside the stage split; **RA-13** points at it.
+- **ET-21** (NS-4): the registrar also sees each ballot's final line, because
+  its signature covers that line's `seq` and `prev_hash` (HA-15).
+- Producer-only: no verdict changes and no committed vector changes.
+
 ## evolution.md v10 · event-types.md v15 · read-api.md v2 · fixtures/README.md v17 — 2026-10-20 — T9 re-audit SHOULDs S-A, S-B, S-E (#408)
 
 - **EV-26** (new, `evolution.md` §8): a ledger MUST NOT append an event unless

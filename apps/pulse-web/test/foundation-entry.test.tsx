@@ -29,7 +29,18 @@ it("explains recent progress and purpose before offering independently accessibl
       name: "What we’re building together",
     }),
   ).toBeTruthy();
-  expect(screen.getByText(/6–12 October 2026/)).toBeTruthy();
+  expect(screen.getByText("Built · 20 October 2026")).toBeTruthy();
+  expect(screen.queryByText(/6–12 October/)).toBeNull();
+  expect(
+    screen
+      .getAllByRole("link")
+      .map((a) => a.getAttribute("href"))
+      .filter((href) => href?.startsWith("https://github.com/")),
+  ).toEqual(
+    [386, 393, 405, 403].map(
+      (n) => `https://github.com/Will-ODC/odc/pull/${n}`,
+    ),
+  );
   expect(screen.getByText(/Anonymity stays an option/)).toBeTruthy();
   expect(read).not.toHaveBeenCalled();
   expect(cast).not.toHaveBeenCalled();
@@ -79,4 +90,36 @@ it("supports direct progress/question-list entry and browser navigation without 
     await screen.findByRole("heading", { name: "What should we decide next?" }),
   ).toBeTruthy();
   expect(read).not.toHaveBeenCalled();
+});
+
+it("opens each starting question by the ids the dev environment sets", async () => {
+  const read = vi.fn(async (id: string) => poll({ id }));
+  const user = userEvent.setup();
+  history.replaceState(null, "", "/questions");
+  render(
+    <App
+      api={stubApi({ poll: read })}
+      firstPollId="launch-voting-page"
+      relatedPollIds={{
+        data: "launch-optional-data",
+        funding: "launch-costs",
+        revote: "launch-revote",
+      }}
+    />,
+  );
+  expect(screen.queryByText("Coming soon")).toBeNull();
+  expect(screen.queryByText(/being prepared/)).toBeNull();
+  expect(screen.getByText(/Opening a question does not submit/)).toBeTruthy();
+  expect(
+    screen
+      .getAllByRole("button")
+      .every((button) => !(button as HTMLButtonElement).disabled),
+  ).toBe(true);
+  await user.click(
+    screen.getByRole("button", {
+      name: "When should we vote on these rules again?",
+    }),
+  );
+  await screen.findByRole("region");
+  expect(read).toHaveBeenCalledWith("launch-revote");
 });

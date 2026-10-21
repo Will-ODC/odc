@@ -1,9 +1,9 @@
 # Event Types — contracts/event-types.md
 
-**Version:** 15
+**Version:** 16
 **Status:** DRAFTING (Phase 0 · T3, amended T4a, T5i, T5j, ADR-0009, ADR-0010,
 ADR-0011, T9a/ADR-0013, ADR-0014, ADR-0016, ADR-0018, ADR-0019, ADR-0029 with its
-review fixes, ADR-0034, ADR-0038, and the T9 re-audit (#408)). Not frozen.
+review fixes, ADR-0034, ADR-0038, and the T9 re-audits (#408, #415)). Not frozen.
 **Companion specs:** `event-schema.md` (envelope), `ids.md` (identifiers),
 `hashing.md` (preimage — T4).
 
@@ -530,7 +530,9 @@ off-log eligibility check.
   mine" is unfalsifiable, so it cannot be demanded or sold. Two votes by the
   same voter also share no field, so ballots are unlinkable to one another
   on-log. **Residuals (per ADR-0004):** the registrar necessarily sees
-  `{voter, issue, choice}` at admission time in v1 — trust-by-policy, removed by
+  `{voter, issue, choice}` at admission time in v1, and later the final line
+  each ballot lands on, because its `vote_cast` signature (ET-17) covers that
+  line's `seq` and `prev_hash` (`hashing.md` HA-15; ET-25) — trust-by-policy, removed by
   blind-signature credentials in identity v2 (charter §10 v2, §11); and there is
   deliberately **no voter-provable inclusion** proof, since any identity-bound
   inclusion proof would itself be a receipt. Phase-1 identity obligations are in
@@ -568,7 +570,33 @@ off-log eligibility check.
   90% sure of the person's choice without knowing their line. A unanimous batch
   is the extreme case, where the observer learns the choice outright. The bound holds only if the producer follows ET-25, which the log cannot
   show. The registrar is not such an observer: it sees each ballot at
-  admission (above).
+  admission, and each ballot's final line when it signs it (above). Whether it
+  can join the two is an open design question (`memory/OPEN-QUESTIONS.md`,
+  "The registrar signs each ballot's final log position").
+- **ET-21a.** _No receipt from the write path._ Neither the ledger nor the
+  registrar MAY give a ballot's submitter, or anyone acting for them, at any
+  time and by any channel:
+  1. anything that singles out the ballot's line, or its batch, from the rest of
+     the log: telling them which line or batch is theirs, whether by its `seq`,
+     `hash`, `prev_hash`, `sig` or batch instant (its `ts`, ET-23) or any other
+     way. Publishing the log to everyone (`read-api.md`) singles out no line,
+     and item 1 does not bar it; or
+  2. any statement about the ballot that a third party could verify came from
+     the ledger or the registrar, such as a signed one: not that the ballot was
+     admitted, not that it was appended, and not which `choice` it carries.
+
+  They MAY tell the submitter, without authentication a third party could
+  check, that the ballot was accepted or refused. Reading the public log
+  (`read-api.md`) is not a receipt and is open to everyone, the submitter
+  included, because no line in it is bound to the person who submitted it
+  (ET-21). _Why._ What item 1 bars proves nothing on its own, since anyone
+  can point at any line with the demanded `choice`, but handing it out marks
+  the line, and item 2 is a transferable receipt, which charter §5 and §8 forbid.
+  Like ET-25, this rule is an obligation on the ledger and registrar
+  implementations that the log cannot show, and it belongs to neither
+  verification stage (`evolution.md` EV-15). It does not reach what the
+  submitter can record on their own device, such as a coercer watching them
+  vote; that residual belongs to every remote ballot.
 - **ET-22.** _Permanent evolution constraint (binds `evolution.md`, T4)._ No
   future version of `vote_cast` MAY introduce a voter-held public key, a
   signature produced by a voter-held key, or an unbounded voter-chosen value
@@ -821,14 +849,46 @@ when the chain also holds ballots at a `vote_cast` version it does not register.
   its registrar, whose `vote_cast` signature (ET-17) covers them. So a sealed
   batch never holds a ballot that fails for a reason the producer did not cause, and never falls short of `ballot_batch_min` (ET-24)
   because a ballot in it is unappendable. A ballot of that issue
-  admitted after the seal goes to a later batch instant (ET-23), never to the
-  sealed batch's. Other events MAY still fall between a sealed batch's members
+  admitted after the seal goes to a batch instant (ET-23) that issue has not
+  used (ET-24a), and so never to the sealed batch's. Other events MAY still fall between a sealed batch's members
   (ET-24), but none of them can date a member's arrival, because every member
   had arrived before the first was appended. Without this paragraph, a producer
   could keep to the first sentence's letter by appending each ballot as it
   arrives, or in small shuffled groups, and a reader polling the tail
   (`read-api.md` RA-12), or reading the `ts` of the events around each ballot,
   would learn when each ballot arrived.
+
+  **An under-size batch is the issue's last.** A producer MUST NOT seal a batch
+  of fewer than the issue's `ballot_batch_min` ballots unless it will admit no
+  further ballot of that issue. From that seal on, it MUST refuse every ballot of
+  that issue, and it MUST refuse it before the registrar records the voter as
+  having voted (ET-20) or signs anything for it. ET-24 allows an under-size
+  batch only as the issue's last, so once one is appended, EV-26 forbids
+  appending any later ballot of that issue (it would end the batch and make the
+  export `INVALID`). Without this paragraph a producer could admit ballots it is
+  then barred from appending, and their voters, already recorded as having
+  voted, would lose their vote with nothing on the log to show it. The log has
+  no event that closes an issue, so the decision that a batch is the last is the
+  producer's alone, and readers learn of it only because no further ballot of
+  the issue appears.
+
+  **One open batch per issue.** Three rules keep every admitted ballot
+  appendable:
+  1. An issue MUST have at most one unsealed batch at a time: a producer MUST
+     NOT admit a ballot of an issue to a new batch until it has sealed that
+     issue's previous batch.
+  2. A producer MUST give each batch of an issue a batch instant that no other
+     batch of that issue, appended or not, has or had (ET-24a).
+  3. A producer MUST append an issue's sealed batches in the order it sealed
+     them, and MUST append each with no ballot of any other batch of that issue
+     between its members, so each batch is one run (ET-24).
+
+  With these, only the open batch can be under-size when admission to the issue
+  ends, and the paragraph above makes it the last batch sealed, so by rule 3 it
+  is the last appended, which ET-24 allows. Every earlier batch was sealed at
+  `ballot_batch_min` or more, no batch returns to a used instant, and no
+  appended batch ends an under-size one, so ET-24 and ET-24a never stop EV-26
+  from appending an admitted ballot.
 
   **This rule is not verifiable from the log.** A shuffled batch and an
   arrival-ordered batch are indistinguishable to every reader, and so are a
@@ -883,6 +943,8 @@ when the chain also holds ballots at a `vote_cast` version it does not register.
 | Order within a batch (producer-only, uncheckable) | ET-25          |
 | A batch is released whole, after it is sealed  | ET-25             |
 | What a timing observer can still learn         | ET-21             |
+| No receipt from the write path                 | ET-21a            |
+| An under-size batch closes the issue           | ET-25             |
 
 ## Acid-test walkthrough
 
