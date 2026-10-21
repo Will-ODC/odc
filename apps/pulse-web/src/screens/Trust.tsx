@@ -8,6 +8,7 @@ import "./Trust.css";
 /**
  * Static counting guide (#351, #402, ADR-0039): no sign-in or API calls.
  * Keep current voting limits separate from the unbuilt ledger's design.
+ * "Today" copy changes only after the code does.
  */
 export function Trust() {
   const id = useId();
@@ -76,8 +77,9 @@ export function Trust() {
             <li>
               <span className="trust__state">Later:</span> Build the ledger and
               connect Pulse through its public API (how programs talk). Checks
-              can expose changed records; they cannot prove votes were entered
-              or counted honestly.
+              can expose changed records; they cannot prove every vote was
+              entered honestly. Anyone will be able to recount from a public
+              copy.
             </li>
           </ol>
         </Part>
@@ -94,7 +96,7 @@ export function Trust() {
             </a>{" "}
             and{" "}
             <a className="trust__link" href={`${REPO}/issues`}>
-              issues
+              Issues
             </a>{" "}
             to ask questions or report problems.
           </p>

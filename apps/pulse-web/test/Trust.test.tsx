@@ -162,7 +162,10 @@ describe("what the page says", () => {
       /Build the ledger and connect Pulse through its public API/,
     );
     expect(steps[2]?.textContent).toMatch(
-      /cannot prove votes were entered or counted honestly/,
+      /cannot prove every vote was entered honestly/,
+    );
+    expect(steps[2]?.textContent).toMatch(
+      /Anyone will be able to recount from a public copy/,
     );
     expect(plan.textContent).not.toMatch(/\b20\d\d\b/);
   });
@@ -180,7 +183,7 @@ describe("how to help", () => {
     expect(hrefs).toEqual({
       Rules: `${REPO}/tree/master/contracts`,
       Project: REPO,
-      issues: `${REPO}/issues`,
+      Issues: `${REPO}/issues`,
     });
   });
 
