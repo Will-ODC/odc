@@ -91,8 +91,8 @@ Every normative sentence is numbered `RA-n`. RFC-2119 keywords are normative.
   may append is not: `evolution.md` EV-26 forbids appending any event that would
   leave the export short of `VALID`, EV-25 caps the line, and `event-types.md`
   ET-23 to ET-25 govern how ballots are batched. Nor is what it may tell a
-  ballot's submitter: `event-types.md` ET-21a forbids any value that identifies
-  the ballot's line and any statement about the ballot a third party could
+  ballot's submitter: `event-types.md` ET-21a forbids singling out which line
+  is theirs and any statement about the ballot a third party could
   verify. Reading this endpoint is not such a receipt (ET-21a). This spec defines no authentication
   because the read surface exposes only public log data.
 

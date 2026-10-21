@@ -576,8 +576,11 @@ off-log eligibility check.
 - **ET-21a.** _No receipt from the write path._ Neither the ledger nor the
   registrar MAY give a ballot's submitter, or anyone acting for them, at any
   time and by any channel:
-  1. any value that identifies the line the ballot was or will be appended at:
-     its `seq`, `hash`, `prev_hash`, `sig` or batch instant (its `ts`, ET-23); or
+  1. anything that singles out the ballot's line, or its batch, from the rest of
+     the log: telling them which line or batch is theirs, whether by its `seq`,
+     `hash`, `prev_hash`, `sig` or batch instant (its `ts`, ET-23) or any other
+     way. Publishing the log to everyone (`read-api.md`) singles out no line,
+     and item 1 does not bar it; or
   2. any statement about the ballot that a third party could verify came from
      the ledger or the registrar, such as a signed one: not that the ballot was
      admitted, not that it was appended, and not which `choice` it carries.
@@ -586,7 +589,7 @@ off-log eligibility check.
   check, that the ballot was accepted or refused. Reading the public log
   (`read-api.md`) is not a receipt and is open to everyone, the submitter
   included, because no line in it is bound to the person who submitted it
-  (ET-21). _Why._ A value from item 1 proves nothing on its own, since anyone
+  (ET-21). _Why._ What item 1 bars proves nothing on its own, since anyone
   can point at any line with the demanded `choice`, but handing it out marks
   the line, and item 2 is a transferable receipt, which charter §5 and §8 forbid.
   Like ET-25, this rule is an obligation on the ledger and registrar
@@ -868,6 +871,23 @@ when the chain also holds ballots at a `vote_cast` version it does not register.
   no event that closes an issue, so the decision that a batch is the last is the
   producer's alone, and readers learn of it only because no further ballot of
   the issue appears.
+
+  **Several batches of one issue.** Nothing above limits an issue to one open
+  batch at a time, so three more rules keep every admitted ballot appendable
+  when there are several:
+  1. Each batch of an issue has a batch instant that no other batch of that
+     issue, appended or not, has or had (ET-24a).
+  2. The ballots of one batch are appended with no ballot of any other batch of
+     the same issue between them, so each batch is one run (ET-24).
+  3. A producer MUST NOT seal a batch of fewer than `ballot_batch_min` ballots
+     while any other batch of that issue holds an admitted ballot not yet
+     appended. Together with the paragraph above, an under-size batch is then
+     the last batch of its issue to be appended, which ET-24 allows.
+
+  With these, every appended batch but the issue's last holds at least
+  `ballot_batch_min` ballots, no batch returns to a used instant, and no
+  appended batch ends an under-size one, so ET-24 and ET-24a never stop EV-26
+  from appending an admitted ballot. Full batches MAY be appended in any order.
 
   **This rule is not verifiable from the log.** A shuffled batch and an
   arrival-ordered batch are indistinguishable to every reader, and so are a

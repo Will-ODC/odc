@@ -25,11 +25,16 @@ Format (newest first, one entry per merged contracts change):
   unless it will admit no further ballot of that issue, and from that seal on
   refuses every ballot of the issue before the registrar records the voter or
   signs. Without it, EV-26 could strand admitted ballots behind an under-size
-  last batch. (NS-5) A ballot admitted after a seal goes to an instant the issue
+  last batch. With several batches of an issue open, each batch has its own
+  instant, a batch's ballots are appended with no ballot of another batch of the
+  issue between them, and no batch is sealed under-size while another batch of
+  the issue holds an unappended ballot, so the under-size batch is appended
+  last. (NS-5) A ballot admitted after a seal goes to an instant the issue
   has not used (ET-24a), not "a later" one, which read as an order on `ts`.
-- **ET-21a** (new, NS-3): neither the ledger nor the registrar may give a
-  ballot's submitter any value identifying its line (`seq`, `hash`,
-  `prev_hash`, `sig`, batch instant) or any third-party-verifiable statement
+- **ET-21a** (new, NS-3): neither the ledger nor the registrar may single out
+  for a ballot's submitter which line or batch is theirs (by `seq`, `hash`,
+  `prev_hash`, `sig`, batch instant or otherwise; publishing the log is not
+  barred), nor give any third-party-verifiable statement
   about the ballot (admitted, appended, or its `choice`); an unauthenticated
   accepted/refused answer and the public log are allowed. EV-15 lists ET-21a
   outside the stage split; **RA-13** points at it.
