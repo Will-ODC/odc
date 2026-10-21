@@ -1,16 +1,20 @@
+import type { ReturnTo } from "./route.js";
+
 /**
- * Which question to come back to after signing in (#353).
+ * Where to come back to after signing in (#353): a question, or the posting
+ * form.
  *
- * "Confirm with your email" on a vote card opens `/sign-in?poll=<id>`. The
- * emailed link that follows is `/sign-in?token=…` and carries no poll: the
- * server builds it, and nothing in the request says where to return. So the
- * sign-in screen remembers the poll in this browser, and the redeem screen
- * reads it back - the link is opened in the same browser for the sign-in to
+ * "Confirm with your email" on a vote card opens `/sign-in?poll=<id>`, and the
+ * posting form sends a signed-out person to `/sign-in?next=new`. The emailed
+ * link that follows is `/sign-in?token=…` and carries neither: the server
+ * builds it, and nothing in the request says where to return. So the sign-in
+ * screen remembers the place in this browser, and the redeem screen reads it
+ * back - the link is opened in the same browser for the sign-in to
  * mean anything here, since the session cookie lands in that browser.
  *
  * `localStorage`, not `sessionStorage`: the emailed link opens a new tab, which
- * starts with an empty session store. What is kept is a public poll id and a
- * time, nothing about the person. It is forgotten once read, and ignored after
+ * starts with an empty session store. What is kept is a public poll id (or
+ * "the form") and a time, nothing about the person. It is forgotten once read, and ignored after
  * an hour - a sign-in link lasts 15 minutes, so anything older belongs to a
  * sign-in that did not happen.
  *
@@ -38,19 +42,21 @@ export function browserStore(): ReturnStore | null {
 }
 
 /**
- * Remember `pollId` as where to return, or forget any earlier one when there
- * is none: a sign-in started without a question should not land on the
- * question an older, abandoned sign-in named.
+ * Remember where to return, or forget any earlier place when there is none:
+ * a sign-in started without one should not land where an older, abandoned
+ * sign-in pointed.
  */
 export function rememberReturn(
-  pollId: string | undefined,
+  to: ReturnTo | undefined,
   store: ReturnStore | null,
   now: number = Date.now(),
 ): void {
   if (!store) return;
   try {
-    if (pollId && pollId.length <= MAX_ID_LENGTH) {
-      store.setItem(KEY, JSON.stringify({ pollId, at: now }));
+    if (to?.kind === "newPoll") {
+      store.setItem(KEY, JSON.stringify({ newPoll: true, at: now }));
+    } else if (to && to.pollId.length <= MAX_ID_LENGTH) {
+      store.setItem(KEY, JSON.stringify({ pollId: to.pollId, at: now }));
     } else {
       store.removeItem(KEY);
     }
@@ -59,35 +65,32 @@ export function rememberReturn(
   }
 }
 
-/** Read and forget the question to return to, if one is still good. */
+/** Read and forget where to return, if it is still good. */
 export function takeReturn(
   store: ReturnStore | null,
   now: number = Date.now(),
-): string | null {
+): ReturnTo | null {
   if (!store) return null;
   try {
     const raw = store.getItem(KEY);
     store.removeItem(KEY);
     if (!raw) return null;
     const kept: unknown = JSON.parse(raw);
-    if (
-      typeof kept !== "object" ||
-      kept === null ||
-      !("pollId" in kept) ||
-      !("at" in kept)
-    )
+    if (typeof kept !== "object" || kept === null || !("at" in kept))
       return null;
-    const { pollId, at } = kept;
+    const { at } = kept;
+    if (typeof at !== "number" || now - at > RETURN_LIFETIME_MS || at > now)
+      return null;
+    if ("newPoll" in kept && kept.newPoll === true) return { kind: "newPoll" };
+    if (!("pollId" in kept)) return null;
+    const { pollId } = kept;
     if (
       typeof pollId !== "string" ||
       pollId.length === 0 ||
-      pollId.length > MAX_ID_LENGTH ||
-      typeof at !== "number" ||
-      now - at > RETURN_LIFETIME_MS ||
-      at > now
+      pollId.length > MAX_ID_LENGTH
     )
       return null;
-    return pollId;
+    return { kind: "conversation", pollId };
   } catch {
     return null;
   }
