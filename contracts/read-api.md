@@ -1,7 +1,7 @@
 # Read API — contracts/read-api.md
 
-**Version:** 2
-**Status:** DRAFTING (Phase 0 · T4, amended T9 re-audit #408). Not frozen.
+**Version:** 3
+**Status:** DRAFTING (Phase 0 · T4, amended T9 re-audits #408 and #415). Not frozen.
 **Companion specs:** `event-schema.md` (envelope), `hashing.md` (`hash`),
 `export-format.md` (the file form of the same events), `evolution.md`.
 
@@ -86,11 +86,14 @@ Every normative sentence is numbered `RA-n`. RFC-2119 keywords are normative.
   This lets a client poll the tail without special-casing "caught up".
 - **RA-13.** The endpoint is read-only. It MUST NOT accept `POST`/`PUT`/`DELETE`
   on `/events`; appends occur through the ledger's write path. That path's
-  interface (how an event is submitted, by whom, and what the submitter is
-  told) is a service concern outside `contracts/`, but what it may append is
-  not: `evolution.md` EV-26 forbids appending any event that would leave the
-  export short of `VALID`, EV-25 caps the line, and `event-types.md` ET-23 to
-  ET-25 govern how ballots are batched. This spec defines no authentication
+  interface (how an event is submitted, by whom, and in what form the
+  submitter is answered) is a service concern outside `contracts/`, but what it
+  may append is not: `evolution.md` EV-26 forbids appending any event that would
+  leave the export short of `VALID`, EV-25 caps the line, and `event-types.md`
+  ET-23 to ET-25 govern how ballots are batched. Nor is what it may tell a
+  ballot's submitter: `event-types.md` ET-21a forbids singling out which line
+  is theirs and any statement about the ballot a third party could
+  verify. Reading this endpoint is not such a receipt (ET-21a). This spec defines no authentication
   because the read surface exposes only public log data.
 
 ---

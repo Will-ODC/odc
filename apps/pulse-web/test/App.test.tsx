@@ -1,5 +1,11 @@
 // @vitest-environment jsdom
-import { cleanup, render, screen, within } from "@testing-library/react";
+import {
+  cleanup,
+  render,
+  screen,
+  waitFor,
+  within,
+} from "@testing-library/react";
 import userEvent from "@testing-library/user-event";
 import { afterEach, beforeEach, describe, expect, it, vi } from "vitest";
 import { App } from "../src/App.js";
@@ -30,8 +36,40 @@ describe("what the URL opens", () => {
 
     render(<App api={stubApi({ redeem })} />);
 
-    expect(await screen.findByText("You are in.")).toBeTruthy();
+    // Straight on to the question, with no screen to press through, and
+    // "Signed in" said by a status region that outlives the redeem screen.
+    expect(
+      await waitFor(() =>
+        within(screen.getByRole("main")).getByRole("heading", {
+          name: poll().question,
+          level: 1,
+        }),
+      ),
+    ).toBeTruthy();
     expect(redeem).toHaveBeenCalledWith("abc123");
+    expect(screen.getByText("Signed in").getAttribute("role")).toBe("status");
+    expect(screen.queryByRole("button", { name: "Continue" })).toBeNull();
+  });
+
+  it("stops saying 'Signed in' once someone signs out", async () => {
+    const user = userEvent.setup();
+    globalThis.history.replaceState(null, "", "/sign-in?token=abc123");
+    render(
+      <App
+        api={stubApi({
+          redeem: () => Promise.resolve(ME),
+          me: () => Promise.resolve(ME),
+          signOut: () => Promise.resolve(),
+        })}
+      />,
+    );
+    const status = await screen.findByText("Signed in");
+    const bar = within(screen.getAllByRole("banner")[0]!);
+    await user.click(await bar.findByRole("button", { name: "Account" }));
+    await user.click(bar.getByRole("button", { name: "Sign out" }));
+    await user.click(bar.getByRole("button", { name: "Sign out everywhere" }));
+    expect(await screen.findByLabelText("Your email")).toBeTruthy();
+    expect(status.textContent).toBe("");
   });
 
   it("asks for a link when /sign-in carries no token", async () => {
@@ -56,7 +94,13 @@ describe("what the URL opens", () => {
         level: 1,
       }),
     ).toBeTruthy();
-    expect(screen.getByLabelText("Message")).toHaveProperty("disabled", true);
+    // No "Message" box until an assistant exists (walkthrough, 2026-10-21).
+    expect(screen.queryByLabelText("Message")).toBeNull();
+    expect(
+      screen.queryByText("The assistant is not available yet.", {
+        exact: false,
+      }),
+    ).toBeNull();
     expect(screen.getByRole("region")).toBeTruthy();
   });
 
@@ -77,7 +121,6 @@ describe("what the URL opens", () => {
       }),
     ).toBeTruthy();
     expect(byId).toHaveBeenCalledWith("pay-for-it");
-    expect(screen.getByLabelText("Message")).toHaveProperty("disabled", true);
   });
 });
 
@@ -109,10 +152,6 @@ describe("after the link is spent", () => {
     render(<App api={stubApi({ redeem: () => Promise.resolve(ME) })} />);
     const before = globalThis.history.length;
 
-    await userEvent.click(
-      await screen.findByRole("button", { name: "Continue" }),
-    );
-
     /*
      * In the ballot, not on the page: the left rail lists the questions
      * answered so far, so the run's question is legitimately on screen twice
@@ -121,15 +160,16 @@ describe("after the link is spent", () => {
      * intermittent failure that gets misread as somebody else's flake.
      */
     expect(
-      await within(screen.getByRole("main")).findByRole("heading", {
-        name: poll().question,
-        level: 1,
-      }),
+      await waitFor(() =>
+        within(screen.getByRole("main")).getByRole("heading", {
+          name: poll().question,
+          level: 1,
+        }),
+      ),
     ).toBeTruthy();
     expect(globalThis.location.pathname + globalThis.location.search).toBe(
       "/?poll=ads-free",
     );
-    expect(screen.getByLabelText("Message")).toHaveProperty("disabled", true);
     /*
      * The length, not the address. Pushing lands on "/" too, so asserting the
      * URL alone is a test that cannot fail — it passed with `go` in place of
@@ -158,14 +198,13 @@ describe("after the link is spent", () => {
         })}
       />,
     );
-    await userEvent.click(
-      await screen.findByRole("button", { name: "Continue" }),
-    );
     expect(
-      await within(screen.getByRole("main")).findByRole("heading", {
-        name: "Q parks",
-        level: 1,
-      }),
+      await waitFor(() =>
+        within(screen.getByRole("main")).getByRole("heading", {
+          name: "Q parks",
+          level: 1,
+        }),
+      ),
     ).toBeTruthy();
     expect(globalThis.location.search).toBe("?poll=parks");
     // Other tabs in this browser hear about it (#353).
@@ -185,13 +224,12 @@ describe("after the link is spent", () => {
 
     globalThis.history.replaceState(null, "", "/sign-in?token=abc123");
     render(<App api={stubApi({ redeem: () => Promise.resolve(ME) })} />);
-    await userEvent.click(
-      await screen.findByRole("button", { name: "Continue" }),
+    await waitFor(() =>
+      within(screen.getByRole("main")).getByRole("heading", {
+        name: poll().question,
+        level: 1,
+      }),
     );
-    await within(screen.getByRole("main")).findByRole("heading", {
-      name: poll().question,
-      level: 1,
-    });
     expect(globalThis.location.search).toBe("?poll=ads-free");
   });
 
@@ -215,9 +253,6 @@ describe("after the link is spent", () => {
             }),
         })}
       />,
-    );
-    await userEvent.click(
-      await screen.findByRole("button", { name: "Continue" }),
     );
     expect(await screen.findByLabelText("Your question")).toBeTruthy();
     expect(globalThis.location.pathname).toBe("/new");
@@ -316,10 +351,10 @@ describe("the sign-in screens on the page", () => {
 
   it("puts what the emailed link opens in the page too", async () => {
     globalThis.history.replaceState(null, "", "/sign-in?token=abc123");
-    render(<App api={stubApi({ redeem: () => Promise.resolve(ME) })} />);
+    render(<App api={stubApi({ redeem: () => new Promise(() => {}) })} />);
 
     expect(
-      await within(screen.getByRole("main")).findByText("You are in."),
+      await within(screen.getByRole("main")).findByText("Loading…"),
     ).toBeTruthy();
     expect(screen.queryByRole("link", { name: "Sign in" })).toBeNull();
   });
@@ -362,4 +397,71 @@ it("opens live voting at /conversation while the prototype remains separate", as
   ).toBeTruthy();
   expect(byId).toHaveBeenCalledWith("ads-free");
   expect(screen.queryByText("Preview")).toBeNull();
+});
+
+/*
+ * Right after posting, the new question says it is live and offers its link
+ * (operator walkthrough, 2026-10-21). Only then: a later visit or a reload
+ * opens the question without it.
+ */
+describe("a question just posted", () => {
+  const CONTEXT = {
+    community: { id: "pulse-general", label: "General" },
+    canPostUnlimited: false,
+    purposeVersion: "community-purpose-v1",
+    purposeAcknowledged: true,
+  };
+  const posted = poll({ id: "garden", question: "Open a community garden?" });
+  const api = () =>
+    stubApi({
+      creationContext: () => Promise.resolve(CONTEXT),
+      createPoll: () => Promise.resolve(posted),
+      poll: () => Promise.resolve(posted),
+    });
+
+  async function post(user: ReturnType<typeof userEvent.setup>) {
+    globalThis.history.replaceState(null, "", "/new");
+    render(<App api={api()} />);
+    await user.click(await screen.findByLabelText("Your question"));
+    await user.keyboard("Open a community garden?");
+    await user.tab();
+    await user.keyboard("Yes");
+    await user.tab();
+    await user.keyboard("No");
+    await user.click(screen.getByRole("button", { name: "Post question" }));
+    await user.click(await screen.findByRole("button", { name: "Post it" }));
+  }
+
+  it("says it is live and copies its full address", async () => {
+    const user = userEvent.setup();
+    const writeText = vi.fn(() => Promise.resolve());
+    Object.defineProperty(globalThis.navigator, "clipboard", {
+      value: { writeText },
+      configurable: true,
+    });
+    await post(user);
+    expect(await screen.findByText(/Your question is live/)).toBeTruthy();
+    expect(globalThis.location.search).toBe("?poll=garden");
+
+    await user.click(screen.getByRole("button", { name: "Copy link" }));
+    expect(writeText).toHaveBeenCalledWith(
+      `${globalThis.location.origin}/?poll=garden`,
+    );
+    expect((await screen.findByText("Copied")).getAttribute("role")).toBe(
+      "status",
+    );
+
+    await user.click(screen.getByRole("button", { name: "Dismiss" }));
+    expect(screen.queryByText(/Your question is live/)).toBeNull();
+  });
+
+  it("is not shown on a later visit to the same question", async () => {
+    globalThis.history.replaceState(null, "", "/?poll=garden");
+    render(<App api={api()} />);
+    await within(screen.getByRole("main")).findByRole("heading", {
+      name: "Open a community garden?",
+      level: 1,
+    });
+    expect(screen.queryByText(/Your question is live/)).toBeNull();
+  });
 });

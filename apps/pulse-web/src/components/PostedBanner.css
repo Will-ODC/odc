@@ -1,0 +1,44 @@
+/* One line above a just-posted question. Tokens only. */
+.posted {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: center;
+  gap: var(--step);
+  padding: var(--step) var(--gutter);
+  border-bottom: var(--hairline) solid var(--ballot-line);
+  background: rgba(var(--side-b), var(--side-rest));
+  font-size: var(--t-small);
+  color: var(--ballot-ink);
+}
+
+.posted__line {
+  flex: 1;
+  margin: 0;
+}
+
+.conversation .posted__copy,
+.conversation .posted__dismiss {
+  padding: 0 var(--step);
+}
+
+.posted__copy {
+  text-decoration: underline;
+}
+
+.posted__field {
+  box-sizing: border-box;
+  flex-basis: 100%;
+  font: inherit;
+  padding: var(--step);
+  color: var(--ballot-ink);
+  background: var(--ballot-chip);
+  border: var(--hairline) solid var(--ballot-line);
+  border-radius: var(--r-control);
+}
+
+/* A live region, so always in the page; empty, it takes no height. */
+.posted__status {
+  flex-basis: 100%;
+  margin: 0;
+  color: var(--ballot-ink-muted);
+}

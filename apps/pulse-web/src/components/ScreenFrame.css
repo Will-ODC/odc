@@ -9,6 +9,8 @@
   border: var(--frame-border);
   border-radius: var(--frame-radius);
   box-shadow: var(--frame-shadow);
+  /* The border sits inside the frame's size, or a 375px phone scrolls 2px. */
+  box-sizing: border-box;
   width: var(--frame-w);
   height: var(--frame-h);
 }

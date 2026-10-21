@@ -316,22 +316,9 @@ export function VoteCard({
               results={status.results}
               yourChoices={picked}
               panelRef={panel}
-              explainHref={trustHref}
             />
           )}
-          <div className="vote-card__actions">
-            {onChangeAnswer ? (
-              <button type="button" onClick={onChangeAnswer}>
-                Change my answer
-              </button>
-            ) : null}
-            {onNext ? (
-              <button type="button" onClick={onNext}>
-                Next
-              </button>
-            ) : null}
-          </div>
-          <p className="vote-card__note">{privacyNote}</p>
+          {/* The one way to /trust, beside the counts it explains. */}
           {trustHref ? (
             <p className="vote-card__note">
               <a
@@ -345,6 +332,19 @@ export function VoteCard({
               </a>
             </p>
           ) : null}
+          <div className="vote-card__actions">
+            {onChangeAnswer ? (
+              <button type="button" onClick={onChangeAnswer}>
+                Change my answer
+              </button>
+            ) : null}
+            {onNext ? (
+              <button type="button" onClick={onNext}>
+                Next
+              </button>
+            ) : null}
+          </div>
+          <p className="vote-card__note">{privacyNote}</p>
         </>
       ) : (
         <>

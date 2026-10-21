@@ -32,7 +32,8 @@ Do not apply charter rules to `apps/**`, and do not relax them anywhere else.
 - **Pulse:** sign-in, voting, confirmed votes, storage, mail and serving are
   built. The conversation vote page, welcome, tutorial and trust page are merged.
   Confirmed-vote display, poll-creation HTTP and public attribution are merged.
-  **Next: review/check the creation form, PR #393 (ADR-0037).** A deploy also
+  The creation form and demo feedback are merged (#393/#403–#405).
+  **Next feature awaits operator selection.** A deploy also
   needs a host and a verified sending domain; `onlinedemocracy.org` is owned.
   → `memory/pulse.md`
 

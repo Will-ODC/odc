@@ -64,14 +64,20 @@ the same CI runs.
 - **MCP public reads are built** (#300 read slice, PR #323): `get_poll` and
   `get_results` at `/api/mcp`. ADR-0036 (voting from AI apps) is still marked
   proposed; no casting, sign-in or own-answer tools exist.
-- **Poll creation: storage and HTTP are built; form is in review.** ADR-0037
+- **Poll creation is built, including the form.** ADR-0037
   (#340) settles the policy and API. Built: migration 005 (#346), the Postgres publication store with
   quotas, safe retries and owner-only posting grants (#354), and an in-memory
   equivalent with one shared conformance suite (#367). PR #389 serves creation
   context, publication and owner posting-permission routes, with startup wiring
   and optional `PULSE_OWNER_EMAIL`. Public GET and MCP attribution merged in
-  #387; legacy polls gain no invented author. The creation form is open in
-  PR #393 and is not on master.
+  #387; legacy polls gain no invented author. PR #393 merged the creation form,
+  first-post purpose promise, date and attribution controls, explicit posting
+  confirmation and sign-in recovery. Ordinary visits clear abandoned drafts;
+  an expired recovered closing time opens and focuses its validation error.
+- **Demo feedback is merged:** #401 / PR #403 opens each question's vote card
+  by default; #400 / PR #404 adds space around tutorial highlights; #402 /
+  PR #405 shortens the trust link/title to "How votes count" and the page from
+  roughly 976 to 294 words. All three final PR CI runs passed.
 - **Pillar 3 (path to action) is not started.** `proofEmailsOptIn` is collected
   and leads nowhere. #331-#333 plan it.
 - **Infrastructure is built.** Postgres storage (ADR-0020, ADR-0021, ADR-0023),
@@ -80,9 +86,8 @@ the same CI runs.
 
 ## What stands between this and a usable deploy
 
-1. **The creation form is not merged** (PR #393); the publication API is served.
-   Reporting, review and the automatic-hide threshold are separate broad-launch
-   prerequisites.
+1. **Reporting, review and the automatic-hide threshold** remain broad-launch
+   prerequisites. Poll creation itself is merged, including the browser form.
 2. **Published starting questions** for `/questions`, and comments (#297).
    The explainer video (#339) comes later.
 3. **A host and a domain.** The domain is `onlinedemocracy.org` (owned); the
@@ -93,16 +98,9 @@ the same CI runs.
 
 ## Next / not built
 
-- **NEXT: finish review and checks for PR #393**, the ADR-0037 creation form:
-  purpose promise, date and anonymity controls, publication and attribution.
-  HTTP and public attribution dependencies (#389/#387) are merged. UI needs
-  phone, desktop and keyboard checks; William retains final merge authority.
-- **Demo feedback is implemented in independent, unmerged PRs** (2026-10-20):
-  #401 → PR #403 opens each question's vote card by default; #400 → PR #404
-  adds space around tutorial highlights; #402 → PR #405 shortens the trust
-  link/title to "How votes count" and the page from roughly 976 to 294 words.
-  Author checks pass; fresh reviews, browser checks and final CI are being
-  completed. These changes are not deployed or merged.
+- **The authoring and demo-feedback slices are complete** (#393/#403–#405).
+  No next feature is selected by this handoff; choose from the remaining work
+  below. A local demo is available, but there is no claim of a public deploy.
 - Open feature issues: #296 photo and summary, #297 comments, #336 suggestions in
   the conversation page, #331-#333 desktop side columns and action follow-through,
   #329 a "My votes" page, #314 browser-extension prototype (idea only), #186 a
@@ -116,9 +114,9 @@ the same CI runs.
   described it (2026-09-06) as "a home screen that browses all polls and batches
   of related polls, story-style". It is also ADR-0022's route back to a question
   from outside a run.
-- **No anonymity indicator exists** in the client. ADR-0037 requires accurate
-  interim anonymity wording until authorised moderator access exists; PR #393
-  supplies the creation disclosure and public byline.
+- **Authorised moderator access is not built.** The merged creation form and
+  public byline use ADR-0037's interim anonymity disclosure (#393); do not claim
+  the later moderator-access model exists.
 - **Core integration is deferred** by William (2026-10-20), tracked as bounded
   future epic #398. ADR-0039 chooses public core APIs, but no integration is
   built and no migration implementation is authorized now.
@@ -230,6 +228,15 @@ the same CI runs.
 
 **Client**
 
+- **Local demo handoff (2026-10-20):** API `http://127.0.0.1:8080`, web
+  `http://localhost:5173`, served from the attached
+  `repo-guidance-cleanup/odc` worktree, now detached at merged master. The old
+  local-only `codex/demo-ui-feedback` branch is an earlier combined preview,
+  not the canonical source. Data is in memory and lost on API stop. Console
+  mail prints sign-in links without sending email; request a fresh link for
+  `demo@example.test` when needed and never save tokens in memory. The
+  blue-halo pointer reported during the demo is from Codex browser control,
+  not a Pulse tutorial graphic.
 - **Never index `results.choices` by `yourChoice`.** Match on
   `ChoiceResult.index` (ADR-0021).
 - **Every way of casting must check `poll.open`** (through `locked` plus

@@ -3,7 +3,6 @@ import type { ReactNode } from "react";
 import type { CreationContext, Poll, PulseApi } from "../api/types.js";
 import { ApiError } from "../api/types.js";
 import { AppShell } from "../components/AppShell.js";
-import { TopBanner } from "../components/TopBanner.js";
 import { ViewState } from "../components/ViewState.js";
 import { TwoPress } from "../components/TwoPress.js";
 import type { TwoPressProgress } from "../components/TwoPress.js";
@@ -25,6 +24,8 @@ import {
 } from "../flow/new-poll.js";
 import type { Draft, Problems } from "../flow/new-poll.js";
 import { useCreationContext } from "../hooks/use-creation-context.js";
+import { useSession } from "../hooks/use-session.js";
+import { SiteBanner } from "./SiteBanner.js";
 import { browserStore } from "../flow/sign-in-return.js";
 import { forgetDraft, keepDraft, readDraft } from "../flow/draft-store.js";
 import "./SignIn.css";
@@ -75,39 +76,54 @@ export function NewPoll({
   }, [restoreDraft]);
   /** Whether this page just kept a draft, to say so on the way to sign in. */
   const [kept, setKept] = useState(false);
+  // The app's own bar, at every width, so a phone has a way home (operator
+  // walkthrough, 2026-10-21). Signing out there shows the way back in.
+  const bar = useSession(api, { onSignedOut: signedOut });
   return (
-    <AppShell banner={<TopBanner />}>
-      <article className="post">
-        {state.status === "signedOut" ? (
-          <SignedOut href={signInHref} kept={kept} />
-        ) : (
-          <>
-            <ViewState data={state}>
-              {(context) => (
-                <PostForm
-                  api={api}
-                  context={context}
-                  newKey={newKey}
-                  now={now}
-                  onPosted={onPosted}
-                  restoreDraft={restoreDraft}
-                  onNeedPromise={needPromise}
-                  onSignedOut={(keptDraft) => {
-                    setKept(keptDraft);
-                    signedOut();
-                  }}
-                />
-              )}
-            </ViewState>
-            {state.status === "error" ? (
-              <button type="button" className="signin__again" onClick={retry}>
-                Try again
-              </button>
-            ) : null}
-          </>
-        )}
-      </article>
-    </AppShell>
+    <div className="post-page">
+      <header className="post__bar">
+        <SiteBanner
+          session={bar.session}
+          progress={bar.progress}
+          holdsVotes={false}
+          onPostPage
+          onSignOut={bar.signOut}
+          onCancel={bar.dismiss}
+        />
+      </header>
+      <AppShell>
+        <article className="post">
+          {state.status === "signedOut" ? (
+            <SignedOut href={signInHref} kept={kept} />
+          ) : (
+            <>
+              <ViewState data={state}>
+                {(context) => (
+                  <PostForm
+                    api={api}
+                    context={context}
+                    newKey={newKey}
+                    now={now}
+                    onPosted={onPosted}
+                    restoreDraft={restoreDraft}
+                    onNeedPromise={needPromise}
+                    onSignedOut={(keptDraft) => {
+                      setKept(keptDraft);
+                      signedOut();
+                    }}
+                  />
+                )}
+              </ViewState>
+              {state.status === "error" ? (
+                <button type="button" className="signin__again" onClick={retry}>
+                  Try again
+                </button>
+              ) : null}
+            </>
+          )}
+        </article>
+      </AppShell>
+    </div>
   );
 }
 

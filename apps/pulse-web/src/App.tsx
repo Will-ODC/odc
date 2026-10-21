@@ -53,82 +53,127 @@ export function App({
    * sign-in. Anyone opening /new any other way starts empty.
    */
   const [restoreDraft, setRestoreDraft] = useState(false);
+  /**
+   * Said once, politely, by a status region that outlives the screens: the
+   * emailed link goes straight on to where the person was, so the screen
+   * that spent it is gone before anything on it could be read out.
+   */
+  const [announced, setAnnounced] = useState("");
+  /** The question this browser has just posted, until dismissed or left. */
+  const [justPosted, setJustPosted] = useState<string | null>(null);
+  if (
+    justPosted !== null &&
+    !(at.kind === "conversation" && at.pollId === justPosted)
+  )
+    setJustPosted(null);
 
-  switch (at.kind) {
-    case "welcome":
-      return <Welcome onStart={() => browser.go({ kind: "progress" })} />;
-    case "progress":
-      return <Progress onContinue={() => browser.go({ kind: "questions" })} />;
-    case "questions":
-      return (
-        <FoundationQuestions
-          {...(firstPollId ? { firstPollId } : {})}
-          {...(relatedPollIds ? { relatedPollIds } : {})}
-          onChoose={(id) => browser.go({ kind: "conversation", pollId: id })}
-        />
-      );
-    case "signIn":
-      return (
-        <SignInPage>
-          <SignIn
-            api={api}
-            {...(at.returnTo ? { returnTo: at.returnTo } : {})}
+  return (
+    <>
+      <p className="app__announce" role="status">
+        {announced}
+      </p>
+      {screenFor()}
+    </>
+  );
+
+  function screenFor() {
+    switch (at.kind) {
+      case "welcome":
+        return <Welcome onStart={() => browser.go({ kind: "progress" })} />;
+      case "progress":
+        return (
+          <Progress onContinue={() => browser.go({ kind: "questions" })} />
+        );
+      case "questions":
+        return (
+          <FoundationQuestions
+            {...(firstPollId ? { firstPollId } : {})}
+            {...(relatedPollIds ? { relatedPollIds } : {})}
+            onChoose={(id) => browser.go({ kind: "conversation", pollId: id })}
           />
-        </SignInPage>
-      );
-    case "redeem":
-      return (
-        <SignInPage>
-          <Redeem
+        );
+      case "signIn":
+        return (
+          <SignInPage>
+            <SignIn
+              api={api}
+              {...(at.returnTo ? { returnTo: at.returnTo } : {})}
+            />
+          </SignInPage>
+        );
+      case "redeem":
+        return (
+          <SignInPage>
+            <Redeem
+              api={api}
+              token={at.token}
+              /*
+               * Replaced, not pushed: the token is spent the moment it is
+               * redeemed, so leaving that URL in the history would hand the back
+               * button a link that can now only answer "already used".
+               */
+              onSignedIn={() => {
+                // The question "Confirm with your email" was pressed on, or
+                // the posting form, when this browser remembers one (#353).
+                const to = takeReturn(browserStore());
+                setRestoreDraft(to?.kind === "newPoll");
+                setAnnounced("Signed in");
+                browser.replace(
+                  to ?? { kind: "conversation", pollId: LANDS_ON },
+                );
+              }}
+              onAskAgain={() => browser.replace({ kind: "signIn" })}
+            />
+          </SignInPage>
+        );
+      case "conversation":
+        return (
+          <Conversation
+            key={at.pollId}
             api={api}
-            token={at.token}
-            /*
-             * Replaced, not pushed: the token is spent the moment it is
-             * redeemed, so leaving that URL in the history would hand the back
-             * button a link that can now only answer "already used".
-             */
-            onSignedIn={() => {
-              // The question "Confirm with your email" was pressed on, or
-              // the posting form, when this browser remembers one (#353).
-              const to = takeReturn(browserStore());
-              setRestoreDraft(to?.kind === "newPoll");
-              browser.replace(to ?? { kind: "conversation", pollId: LANDS_ON });
+            pollId={at.pollId}
+            // Replaced, so the back button does not return to a page that
+            // still believes someone is signed in.
+            onSignedOut={() => {
+              // "Signed in" is no longer true; leave nothing to read back.
+              setAnnounced("");
+              browser.replace({ kind: "signIn" });
             }}
-            onAskAgain={() => browser.replace({ kind: "signIn" })}
+            {...(justPosted === at.pollId
+              ? {
+                  posted: {
+                    url: new URL(
+                      pathOf({ kind: "conversation", pollId: at.pollId }),
+                      globalThis.location.origin,
+                    ).href,
+                    onDismiss: () => setJustPosted(null),
+                  },
+                }
+              : {})}
           />
-        </SignInPage>
-      );
-    case "conversation":
-      return (
-        <Conversation
-          key={at.pollId}
-          api={api}
-          pollId={at.pollId}
-          // Replaced, so the back button does not return to a page that
-          // still believes someone is signed in.
-          onSignedOut={() => browser.replace({ kind: "signIn" })}
-        />
-      );
-    case "chatPreview":
-      // Sample data only: the prototype never touches `api`.
-      return <ChatPreview />;
-    case "trust":
-      // Static copy: like the prototype, it never touches `api`.
-      return <Trust />;
-    case "newPoll":
-      return (
-        <NewPoll
-          api={api}
-          signInHref={pathOf({
-            kind: "signIn",
-            returnTo: { kind: "newPoll" },
-          })}
-          onPosted={(poll) =>
-            browser.go({ kind: "conversation", pollId: poll.id })
-          }
-          restoreDraft={restoreDraft}
-        />
-      );
+        );
+      case "chatPreview":
+        // Sample data only: the prototype never touches `api`.
+        return <ChatPreview />;
+      case "trust":
+        // Static copy: like the prototype, it never touches `api`.
+        return <Trust />;
+      case "newPoll":
+        return (
+          <NewPoll
+            api={api}
+            signInHref={pathOf({
+              kind: "signIn",
+              returnTo: { kind: "newPoll" },
+            })}
+            onPosted={(poll) => {
+              setJustPosted(poll.id);
+              browser.go({ kind: "conversation", pollId: poll.id });
+            }}
+            restoreDraft={restoreDraft}
+          />
+        );
+    }
   }
 }
 

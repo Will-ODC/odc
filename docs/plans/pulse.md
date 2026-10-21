@@ -166,7 +166,7 @@ no payments or automatic claims of impact are introduced by this UI direction.
 The conversation ballot uses pick-then-Submit (ADR-0035); donations and volunteer
 commitments also require confirmation.
 
-## P6 — Poll authoring · HTTP MERGED; FORM IN REVIEW
+## P6 — Poll authoring · CREATION BUILT
 
 ADR-0037 records the operator's 2026-10-11 choices: one-week editable close,
 suggestions off (#336), signed-in posting, community or General destination,
@@ -182,7 +182,7 @@ The design, storage, HTTP and public attribution foundations are merged; see
    authenticated context/create and owner grant/revoke,
    origin checks, bounded input, retry contract and safe public projections.
    Real HTTP with disposable Postgres, all documented error cases and privacy tests.
-2. **In review (PR #393):** creation screen and attribution: first-post promise, anonymous/named choice,
+2. **Merged (PR #393):** creation screen and attribution: first-post promise, anonymous/named choice,
    secondary closing-time control, published conversation link, recoverable
    errors, keyboard and actual phone/desktop checks. No ballot side effects.
 

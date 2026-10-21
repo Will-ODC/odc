@@ -311,20 +311,30 @@ describe("status", () => {
     render(<VoteCard {...base} trustHref="/trust" />);
     expect(screen.queryByRole("link")).toBeNull();
   });
-  it("reaches the trust link by keyboard after the result actions", async () => {
+  /*
+   * One link to /trust, beside the counts it explains, before the result
+   * actions (operator walkthrough, 2026-10-21; the results panel's own
+   * "What does this mean?" is not used on the card).
+   */
+  it("reaches the one trust link by keyboard between the counts and the result actions", async () => {
     const user = userEvent.setup();
     render(
       <VoteCard
         {...base}
         trustHref="/trust"
-        status={{ kind: "answered", changed: false, results: results() }}
+        status={{
+          kind: "answered",
+          changed: false,
+          results: results({ voters: 1 }),
+        }}
         onChangeAnswer={vi.fn()}
         onNext={vi.fn()}
       />,
     );
-    button("Next").focus();
+    expect(screen.getAllByRole("link")).toHaveLength(1);
+    screen.getByRole("link", { name: /How votes count/ }).focus();
     await user.tab();
-    expect(document.activeElement).toBe(screen.getByRole("link"));
+    expect(document.activeElement).toBe(button("Change my answer"));
   });
   it("moves focus to the pending status when Submit becomes disabled", () => {
     const { rerender } = render(<VoteCard {...base} picked={[2]} />);

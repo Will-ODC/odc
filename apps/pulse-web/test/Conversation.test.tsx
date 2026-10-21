@@ -10,6 +10,7 @@ import userEvent from "@testing-library/user-event";
 import { afterEach, expect, it, vi } from "vitest";
 import { ApiError } from "../src/api/types.js";
 import type { Ballot, CastOutcome, Poll } from "../src/api/types.js";
+import { closingNote } from "../src/flow/conversation.js";
 import { Conversation } from "../src/screens/Conversation.js";
 import { graph, poll, results, stubApi } from "./stub-api.js";
 
@@ -64,11 +65,9 @@ it("opens the first question expanded without selecting or sending an answer", a
   expect(
     await main().findByRole("heading", { name: poll().question, level: 1 }),
   ).toBeTruthy();
-  expect(
-    (screen.getByRole("textbox", { name: "Message" }) as HTMLTextAreaElement)
-      .disabled,
-  ).toBe(true);
-  expect(screen.getByText(/Use the vote card to answer/)).toBeTruthy();
+  // No "Message" box until an assistant exists (walkthrough, 2026-10-21).
+  expect(screen.queryByRole("textbox", { name: "Message" })).toBeNull();
+  expect(screen.queryByText(/assistant is not available/)).toBeNull();
   expect(within(card()).getByRole("group")).toBeTruthy();
   expect(
     within(card())
@@ -406,6 +405,10 @@ it("retrying a failed replacement sends the new choice rather than the prior ans
 const voter = { id: "v1", community: null, email: "voter@example.org" };
 // The page's own bar comes first; an answered card can carry a header too.
 const banner = () => within(screen.getAllByRole("banner")[0]!);
+/** The account's controls sit behind one button (walkthrough, 2026-10-21). */
+async function openAccount(user: ReturnType<typeof userEvent.setup>) {
+  await user.click(await banner().findByRole("button", { name: "Account" }));
+}
 
 it("offers the way in when nobody is signed in", async () => {
   render(<Conversation api={stubApi()} pollId="ads-free" />);
@@ -430,8 +433,12 @@ it("signs out everywhere only after asking, then hands off", async () => {
       onSignedOut={onSignedOut}
     />,
   );
-  expect(await banner().findByText(voter.email)).toBeTruthy();
+  // One account control in the bar; the address is not printed in it.
+  expect(await banner().findByRole("button", { name: "Account" })).toBeTruthy();
+  expect(banner().getByText(voter.email).closest("[hidden]")).not.toBeNull();
   expect(banner().queryByRole("link", { name: "Sign in" })).toBeNull();
+  await openAccount(user);
+  expect(banner().getByText(voter.email)).toBeTruthy();
   await user.click(banner().getByRole("button", { name: "Sign out" }));
   expect(signOut).not.toHaveBeenCalled();
   await user.click(
@@ -453,7 +460,8 @@ it("stays signed in, and says so, when signing out fails", async () => {
       onSignedOut={onSignedOut}
     />,
   );
-  await user.click(await banner().findByRole("button", { name: "Sign out" }));
+  await openAccount(user);
+  await user.click(banner().getByRole("button", { name: "Sign out" }));
   await user.click(
     banner().getByRole("button", { name: "Sign out everywhere" }),
   );
@@ -484,7 +492,8 @@ it("sends one sign-out at a time, and hands off only once it is done", async () 
       onSignedOut={onSignedOut}
     />,
   );
-  await user.click(await banner().findByRole("button", { name: "Sign out" }));
+  await openAccount(user);
+  await user.click(banner().getByRole("button", { name: "Sign out" }));
   await user.click(
     banner().getByRole("button", { name: "Sign out everywhere" }),
   );
@@ -506,7 +515,8 @@ it("does not show an old failure when the question is asked again", async () => 
       pollId="ads-free"
     />,
   );
-  await user.click(await banner().findByRole("button", { name: "Sign out" }));
+  await openAccount(user);
+  await user.click(banner().getByRole("button", { name: "Sign out" }));
   await user.click(
     banner().getByRole("button", { name: "Sign out everywhere" }),
   );
@@ -540,8 +550,12 @@ it("lets someone who never signed in forget this browser's votes", async () => {
       onSignedOut={onSignedOut}
     />,
   );
+  // "Sign in" is kept with it behind the one account button.
+  expect(banner().queryByRole("link", { name: "Sign in" })).toBeNull();
+  await openAccount(user);
+  expect(banner().getByRole("link", { name: "Sign in" })).toBeTruthy();
   await user.click(
-    await banner().findByRole("button", { name: "Forget my votes here" }),
+    banner().getByRole("button", { name: "Forget my votes here" }),
   );
   const confirm = banner().getByRole("button", { name: "Forget them" });
   const describedBy = confirm.getAttribute("aria-describedby") ?? "";
@@ -567,10 +581,12 @@ it("offers to forget once someone has answered here", async () => {
   expect(
     banner().queryByRole("button", { name: "Forget my votes here" }),
   ).toBeNull();
-  await answer();
+  expect(banner().queryByRole("button", { name: "Account" })).toBeNull();
+  const user = await answer();
   // The offer waits for the session lookup as well as the answer.
+  await openAccount(user);
   expect(
-    await banner().findByRole("button", { name: "Forget my votes here" }),
+    banner().getByRole("button", { name: "Forget my votes here" }),
   ).toBeTruthy();
 });
 
@@ -580,8 +596,9 @@ it("forgetting clears the answers shown on this page", async () => {
   await main().findByRole("heading", { name: poll().question, level: 1 });
   const user = await answer();
   // The offer waits for the session lookup as well as the answer.
+  await openAccount(user);
   await user.click(
-    await banner().findByRole("button", { name: "Forget my votes here" }),
+    banner().getByRole("button", { name: "Forget my votes here" }),
   );
   await user.click(banner().getByRole("button", { name: "Forget them" }));
   await waitFor(() =>
@@ -604,8 +621,9 @@ it("says plainly when forgetting failed", async () => {
       pollId="ads-free"
     />,
   );
+  await openAccount(user);
   await user.click(
-    await banner().findByRole("button", { name: "Forget my votes here" }),
+    banner().getByRole("button", { name: "Forget my votes here" }),
   );
   await user.click(banner().getByRole("button", { name: "Forget them" }));
   expect((await banner().findByRole("alert")).textContent).toMatch(
@@ -623,8 +641,98 @@ it("does not offer to forget to someone who is signed in", async () => {
       pollId="ads-free"
     />,
   );
-  await banner().findByText(voter.email);
+  await openAccount(userEvent.setup());
+  expect(banner().getByText(voter.email)).toBeTruthy();
   expect(
     banner().queryByRole("button", { name: "Forget my votes here" }),
   ).toBeNull();
+});
+
+/*
+ * Operator walkthrough, 2026-10-21: on a phone the question and its closing
+ * date were drawn twice, at the top of the page and in the card that is open
+ * on load. The card says them; the page heading stays for focus and screen
+ * readers, and is merged out of sight (`.conversation__hero--merged`) until
+ * the card is closed.
+ */
+it("says the question and closing date once while the card is open", async () => {
+  const p = poll({ closesAt: "2030-05-01T12:00:00.000Z" });
+  const user = userEvent.setup();
+  render(<Conversation api={stubApi({ poll: async () => p })} pollId={p.id} />);
+  const heading = await main().findByRole("heading", {
+    name: p.question,
+    level: 1,
+  });
+  await waitFor(() => expect(document.activeElement).toBe(heading));
+  expect(heading.closest(".conversation__hero--merged")).not.toBeNull();
+  expect(screen.getAllByText(closingNote(p))).toHaveLength(1);
+
+  await user.click(within(card()).getByRole("button", { name: "Close" }));
+  const shown = main().getByRole("heading", { name: p.question, level: 1 });
+  expect(shown.closest(".conversation__hero--merged")).toBeNull();
+  expect(screen.getAllByText(closingNote(p))).toHaveLength(1);
+  // The same heading node throughout, so focus on it is never dropped.
+  expect(shown).toBe(heading);
+});
+
+it("leaves out the 'Opens another question' hint under choices", async () => {
+  const p = poll({ next: ["parks", null] });
+  render(<Conversation api={stubApi({ poll: async () => p })} pollId={p.id} />);
+  await main().findByRole("heading", { name: p.question, level: 1 });
+  expect(within(card()).getByRole("radio", { name: "No" })).toBeTruthy();
+  expect(screen.queryByText("Opens another question")).toBeNull();
+});
+
+it("links to /trust once after voting, as 'How votes count'", async () => {
+  render(<Conversation api={stubApi()} pollId="ads-free" />);
+  await main().findByRole("heading", { name: poll().question, level: 1 });
+  await answer();
+  const links = within(card())
+    .getAllByRole("link")
+    .filter((link) => link.getAttribute("href") === "/trust");
+  expect(links).toHaveLength(1);
+  expect(links[0]?.textContent).toBe("How votes count");
+  expect(screen.queryByText(/What does this mean\?/)).toBeNull();
+});
+
+it("shows the just-posted line only when told the question was just posted", async () => {
+  const onDismiss = vi.fn();
+  const { unmount } = render(
+    <Conversation
+      api={stubApi()}
+      pollId="ads-free"
+      posted={{ url: "https://pulse.test/?poll=ads-free", onDismiss }}
+    />,
+  );
+  expect(await screen.findByText(/Your question is live/)).toBeTruthy();
+  await main().findByRole("heading", { name: poll().question, level: 1 });
+  await userEvent.click(screen.getByRole("button", { name: "Dismiss" }));
+  expect(onDismiss).toHaveBeenCalledTimes(1);
+  // Focus goes to the question the line sat over, not to the page.
+  expect(document.activeElement).toBe(
+    main().getByRole("heading", { name: poll().question, level: 1 }),
+  );
+  unmount();
+  render(<Conversation api={stubApi()} pollId="ads-free" />);
+  await main().findByRole("heading", { name: poll().question, level: 1 });
+  expect(screen.queryByText(/Your question is live/)).toBeNull();
+});
+
+it("ends the just-posted line when Next moves to another question", async () => {
+  const first = poll({ next: [null, "parks"] });
+  const parks = poll({ id: "parks", question: "More parks?" });
+  const onDismiss = vi.fn();
+  render(
+    <Conversation
+      api={stubApi({ poll: graph([first, parks]) })}
+      pollId={first.id}
+      posted={{ url: "https://pulse.test/?poll=ads-free", onDismiss }}
+    />,
+  );
+  await main().findByRole("heading", { name: first.question, level: 1 });
+  const user = await answer("Yes");
+  await user.click(within(card()).getByRole("button", { name: "Next" }));
+  await main().findByRole("heading", { name: "More parks?", level: 1 });
+  expect(screen.queryByText(/Your question is live/)).toBeNull();
+  expect(onDismiss).toHaveBeenCalledTimes(1);
 });

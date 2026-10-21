@@ -1,5 +1,6 @@
 import assert from "node:assert/strict";
 import { randomUUID } from "node:crypto";
+import { readFileSync } from "node:fs";
 import { test, type TestContext } from "node:test";
 import type { Pool } from "pg";
 import { databaseUrl } from "../src/db/config.js";
@@ -159,6 +160,28 @@ test("seeds a run of polls and one domain, so the flow works the moment it start
   assert.equal(signIn.statusCode, 200);
   assert.equal(mailer.sent.length, 1);
   assert.match(mailer.sent[0]?.body ?? "", /sign-in\?token=/);
+  await app.close();
+});
+
+test("seeds the four launch questions, and the web dev env points at exactly those ids", async () => {
+  const { app } = await buildDevServer(devConfig({}));
+  const envFile = readFileSync(
+    new URL("../../../pulse-web/.env.development", import.meta.url),
+    "utf8",
+  );
+  const wanted = {
+    VITE_PULSE_FIRST_POLL_ID: "launch-voting-page",
+    VITE_PULSE_DATA_POLL_ID: "launch-optional-data",
+    VITE_PULSE_FUNDING_POLL_ID: "launch-costs",
+    VITE_PULSE_REVOTE_POLL_ID: "launch-revote",
+  };
+  for (const [name, id] of Object.entries(wanted)) {
+    assert.match(envFile, new RegExp(`^${name}=${id}$`, "m"));
+    const res = await app.inject({ method: "GET", url: `/api/polls/${id}` });
+    assert.equal(res.statusCode, 200, `${id} should be seeded`);
+    assert.equal(res.json().method, "single");
+    assert.equal(res.json().open, true);
+  }
   await app.close();
 });
 
@@ -327,7 +350,15 @@ test(
     );
     assert.deepEqual(
       rows.map((row) => row.id),
-      ["ads-allowed", "ads-free", "pay-for-it"],
+      [
+        "ads-allowed",
+        "ads-free",
+        "launch-costs",
+        "launch-optional-data",
+        "launch-revote",
+        "launch-voting-page",
+        "pay-for-it",
+      ],
     );
   },
 );
