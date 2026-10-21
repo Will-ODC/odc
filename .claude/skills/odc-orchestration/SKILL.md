@@ -236,7 +236,7 @@ go past it.
   files, and say it is one-off.
 - **After any lead restarts, re-check the open PRs for overlap.** A restarted
   lead in the pilot edited a plan file beyond what was approved.
-- **Review every green lead PR** (operator, 2026-10-20: "confirm you have been
+- **Review every PR you recommend** (operator, 2026-10-20: "confirm you have been
   doing code review on all PRs?", then "do it"). Once a PR's CI is green, start
   a fresh-context `odc-reviewer` on it, routed by the table above, in its own
   review worktree with the PR's diff at the root as `REVIEW.diff`. For a PR that
@@ -248,6 +248,17 @@ go past it.
   `.github/`, because the eslint config imports `.github/scripts/`. Send each
   finding to the lead that owns the PR, and review the fix again. A PR the
   orchestrator wrote itself needs a reviewer that did not write it either.
+  **This covers every PR the orchestrator will recommend for merging,** not
+  only lead PRs: one from Codex or another session that lands during the run
+  is reviewed the same way (operator, 2026-10-20; #399 and #403–#406 were
+  reviewed only because the operator asked).
+- **Re-check a PR after `master` is merged into it.** Whoever merges `master`
+  in (the orchestrator, or the lead that owns the PR) runs the unit's tests,
+  lint, typecheck and `pnpm -s format:check` on the merged result before
+  pushing. If resolving the conflict changed code or tests, not only prose,
+  the orchestrator has a fresh `odc-reviewer` review that merge commit. In the
+  2026-10-20 run, merging `master` into an approved PR broke three tests from a
+  PR merged an hour earlier.
 - **When the leads report,** check their PRs do not collide — settle a clash
   between two leads by message — and tell the operator which PRs are ready to
   merge, in what order, with each review's verdict. Merging stays the
