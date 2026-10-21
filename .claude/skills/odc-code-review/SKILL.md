@@ -14,6 +14,9 @@ description: Code review procedure and checklist for ODC. Use this skill wheneve
    that alone is a blocking finding. Then read **the ticket it names**
    (`gh issue view N`) and check the diff's scope against it: work the ticket
    gives to another ticket, or a PR that names no ticket, is a `[SHOULD]`.
+   So is a ticket that is named but not linked: `gh pr view N --json
+closingIssuesReferences` must list it unless the PR is a `Part of` slice
+   (`odc-pipeline`, "Linking the issue").
    A planned step has no ticket by design (`odc-pipeline`, "Planned steps get
    no ticket"): check its scope against the plan or ADR step it names instead,
    and flag it only if it names neither.

@@ -92,7 +92,8 @@ IS the ticket.
      Pulse once used `pulse/<n>` as a counter, which is how `pulse/38-vote-card`
      came to mean #299.
    - **PR:** the title or first line names the ticket, and the body says
-     `Closes #N` (or `Part of #N` for one slice of a larger ticket).
+     `Closes #N` (or `Part of #N` for one slice of a larger ticket). See
+     "Linking the issue" below for what makes GitHub link and close it.
    - **Commits:** the message references the ticket.
    - **No ticket, no branch** — cut one first. Memory-only and docs-only
      housekeeping may go without, but still name the ticket they record.
@@ -166,11 +167,35 @@ IS the ticket.
   it targets. A reviewer should need nothing else to start. (The PR template
   in `.github/` mirrors these three fields.)
 
+## Linking the issue
+
+GitHub links a PR to the issues it will close, under **Development** on the
+PR, and closes them when the PR merges (operator, 2026-10-21: use it). It
+works only when:
+
+- **The keyword is in the PR body**, not only the title or a commit:
+  `Closes #N`. `Fixes` and `Resolves` work too; `Part of #N`, `#N` and
+  "see #N" do not link.
+- **Each issue has its own keyword:** `Closes #12, closes #13`.
+  `Closes #12, #13` closes only #12.
+- **The PR targets `master`.** A PR stacked on another branch links nothing
+  until it is retargeted to `master`, so check the link again after the PR
+  below it merges.
+- **A slice that must not close its issue** says `Part of #N` and is not
+  linked from the Development box either: an issue linked there by hand also
+  closes on merge.
+
+Check before review: `gh pr view N --json closingIssuesReferences` lists the
+issue. A planned step with no ticket lists nothing, by design.
+
 ## Merge checklist (owned by odc-navigator, on master)
 
 1. CI green, all required stages.
 2. Review verdict recorded (APPROVE or APPROVE WITH NITS, per `odc-code-review`).
-3. Squash-merge; message references the issue.
+3. Squash-merge; message references the issue. Afterwards confirm the linked
+   issue closed (`gh issue view N` shows CLOSED). If it did not, the keyword
+   was missing or the PR was stacked: close it by hand with a comment naming
+   the PR.
 4. Update the **workstream's** memory entry (done / next / blockers):
    `memory/STATE.md` for the ODC core, `memory/pulse.md` for pulse — see
    `memory/INDEX.md`. This happens HERE, on master at merge time, never on

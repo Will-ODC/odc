@@ -1,7 +1,16 @@
 <!--
-Keep it to these three sections. A reviewer should need nothing else to start
+Keep it to these four sections. A reviewer should need nothing else to start
 (odc-pipeline). One branch = one reviewable idea; target < 400 changed lines.
 -->
+
+## Issue
+
+<!-- `Closes #N` here links the issue under Development and closes it on
+     merge (one keyword per issue). `Part of #N` for a slice that must not
+     close it. A planned step with no ticket: name the step and where it is
+     written (odc-pipeline, "Linking the issue"). -->
+
+Closes #
 
 ## What changed
 
