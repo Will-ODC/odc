@@ -63,7 +63,51 @@ export const DEFAULT_PORT = 8080;
 const THREE_DAYS_MS = 3 * 24 * 60 * 60 * 1000;
 
 /**
- * The seed: one community, one domain that names it, and three polls. Any
+ * The four starting questions from the content draft, under stable ids so
+ * `apps/pulse-web/.env.development` can point `/questions` at them. On deploy
+ * day the owner posts the real ones through `/new` instead.
+ */
+const LAUNCH_QUESTIONS = [
+  {
+    id: "launch-voting-page",
+    question: "How should the voting page look?",
+    choices: ["Conversation", "Question with discussion below", "Compare both"],
+  },
+  {
+    id: "launch-optional-data",
+    question: "How should optional data be used?",
+    choices: [
+      "No extra collection",
+      "Ask separately for each use",
+      "Explain first",
+    ],
+  },
+  {
+    id: "launch-costs",
+    question: "How should the website cover its costs?",
+    choices: ["Donations", "Approved advertising", "Compare proposals"],
+  },
+  {
+    id: "launch-revote",
+    question: "When should we vote on these rules again?",
+    choices: ["Every three months", "Every year", "When a change is proposed"],
+  },
+] as const;
+
+const ONE_YEAR_MS = 365 * 24 * 60 * 60 * 1000;
+
+function launchQuestions(): NewPoll[] {
+  return LAUNCH_QUESTIONS.map((q) => ({
+    id: q.id,
+    question: q.question,
+    choices: q.choices,
+    method: "single",
+    closesAt: new Date(Date.now() + ONE_YEAR_MS),
+  }));
+}
+
+/**
+ * The seed: one community, one domain that names it, three demo polls and the four launch questions. Any
  * address can sign in; only `@example.test` ones are members of the community
  * (and `@both.example.test` ones, who pick — see `SHARED_DOMAIN` below).
  *
@@ -120,6 +164,7 @@ const SEED = {
       acceptsSuggestions: true,
       closesAt: new Date(Date.now() + THREE_DAYS_MS),
     },
+    ...launchQuestions(),
   ] satisfies NewPoll[],
 };
 

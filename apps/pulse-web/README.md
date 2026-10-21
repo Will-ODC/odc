@@ -67,6 +67,16 @@ Docker build arguments:
 A missing ID shows that question as Coming soon. These IDs are public, not
 secrets. Changing one needs a rebuild.
 
+## Publishing the starting questions
+
+Locally, `vite` dev reads `.env.development`, which points the four variables
+above at the dev server's seeded `launch-*` polls (Vite never loads it for
+`vite build`, and the Docker context excludes it). On deploy day the owner
+(`PULSE_OWNER_EMAIL`) signs in and posts each question through `/new` with the
+text in `docs/plans/pulse-first-story-content-draft.md`, copies each new poll's
+id from its URL, and sets the four `VITE_PULSE_*_POLL_ID` values for the web
+build.
+
 ## Keep these rules
 
 - **Sign-in tokens must not leak.** Sign-in links carry a secret token in the
