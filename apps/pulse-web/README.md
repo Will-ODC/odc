@@ -27,16 +27,16 @@ container, so the page and the API share one address.
 
 ## Pages
 
-| Path               | What it shows                                                          |
-| ------------------ | ---------------------------------------------------------------------- |
-| `/`                | Welcome page, then Start voting.                                       |
-| `/start`           | What has been done so far, and what ODC is for.                        |
-| `/questions`       | The four starting questions.                                           |
-| `/?poll=ID`        | The live vote page for one poll. Old `/conversation` links still work. |
-| `/new`             | Post a question after signing in, then open its vote page.             |
-| `/trust`           | "How votes count": a short guide to counting and its limits.           |
-| `/sign-in?token=…` | Where emailed sign-in links land.                                      |
-| `/preview/chat`    | A prototype with sample data only.                                     |
+| Path               | What it shows                                                           |
+| ------------------ | ----------------------------------------------------------------------- |
+| `/`                | Welcome page, then Start voting.                                        |
+| `/start`           | What has been done so far, and what ODC is for.                         |
+| `/questions`       | The four starting questions.                                            |
+| `/?poll=ID`        | The live vote page for one poll. Old `/conversation` links still work.  |
+| `/new`             | Post a question after signing in, then open its vote page.              |
+| `/trust`           | "How votes count": a short guide to counting and its limits.            |
+| `/sign-in?token=…` | Where emailed sign-in links land; goes straight back to where you were. |
+| `/preview/chat`    | A prototype with sample data only.                                      |
 
 The vote page, sign-in and question creation call the API. Each question opens
 with its vote card expanded. Choose an answer, then press Submit to save it.
@@ -44,6 +44,14 @@ You can close the card and reopen it with Vote. **Show me how** walks through
 the real controls; it never picks or submits an answer. Its highlight leaves
 space around the controls and stays inside the screen, so the space is smaller
 on a side where a control touches the screen edge.
+
+The vote page and `/new` share one bar across the top: the mark, "Post a
+question" (just "Post" on a narrow phone; left out on `/new`, where the mark
+links home) and one account control. That control is "Sign in", or an
+**Account** button that shows who is signed in and "Sign out", or "Sign in" and
+"Forget my votes here". After a vote, one "How votes count" link sits under the
+counts. Right after posting, the new question shows "Your question is live ·
+Copy link" once.
 
 Question creation keeps a draft in this browser for up to an hour after a
 sign-in-required posting failure. Only the explicit sign-in recovery path
