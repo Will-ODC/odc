@@ -872,22 +872,23 @@ when the chain also holds ballots at a `vote_cast` version it does not register.
   producer's alone, and readers learn of it only because no further ballot of
   the issue appears.
 
-  **Several batches of one issue.** Nothing above limits an issue to one open
-  batch at a time, so three more rules keep every admitted ballot appendable
-  when there are several:
-  1. Each batch of an issue has a batch instant that no other batch of that
-     issue, appended or not, has or had (ET-24a).
-  2. The ballots of one batch are appended with no ballot of any other batch of
-     the same issue between them, so each batch is one run (ET-24).
-  3. A producer MUST NOT seal a batch of fewer than `ballot_batch_min` ballots
-     while any other batch of that issue holds an admitted ballot not yet
-     appended. Together with the paragraph above, an under-size batch is then
-     the last batch of its issue to be appended, which ET-24 allows.
+  **One open batch per issue.** Three rules keep every admitted ballot
+  appendable:
+  1. An issue MUST have at most one unsealed batch at a time: a producer MUST
+     NOT admit a ballot of an issue to a new batch until it has sealed that
+     issue's previous batch.
+  2. A producer MUST give each batch of an issue a batch instant that no other
+     batch of that issue, appended or not, has or had (ET-24a).
+  3. A producer MUST append an issue's sealed batches in the order it sealed
+     them, and MUST append each with no ballot of any other batch of that issue
+     between its members, so each batch is one run (ET-24).
 
-  With these, every appended batch but the issue's last holds at least
-  `ballot_batch_min` ballots, no batch returns to a used instant, and no
+  With these, only the open batch can be under-size when admission to the issue
+  ends, and the paragraph above makes it the last batch sealed, so by rule 3 it
+  is the last appended, which ET-24 allows. Every earlier batch was sealed at
+  `ballot_batch_min` or more, no batch returns to a used instant, and no
   appended batch ends an under-size one, so ET-24 and ET-24a never stop EV-26
-  from appending an admitted ballot. Full batches MAY be appended in any order.
+  from appending an admitted ballot.
 
   **This rule is not verifiable from the log.** A shuffled batch and an
   arrival-ordered batch are indistinguishable to every reader, and so are a
