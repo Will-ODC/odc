@@ -165,25 +165,26 @@ IS the ticket.
   the ticket.
 - PR description: what changed, how it was tested, which contract version
   it targets. A reviewer should need nothing else to start. (The PR template
-  in `.github/` mirrors these three fields.)
+  in `.github/` mirrors these fields, with an Issue section first.)
 
 ## Linking the issue
 
 GitHub links a PR to the issues it will close, under **Development** on the
-PR, and closes them when the PR merges (operator, 2026-10-21: use it). It
+PR, and closes them when the PR merges (operator, 2026-10-20: use it). It
 works only when:
 
-- **The keyword is in the PR body**, not only the title or a commit:
-  `Closes #N`. `Fixes` and `Resolves` work too; `Part of #N`, `#N` and
-  "see #N" do not link.
+- **The keyword is in the PR body:** `Closes #N`. `Fixes` and `Resolves`
+  work too, in any case or tense; `Part of #N`, `#N` and "see #N" do not
+  link. A keyword in a commit message also closes the issue on merge, but the
+  PR is not shown as linked, so put it in the body.
 - **Each issue has its own keyword:** `Closes #12, closes #13`.
   `Closes #12, #13` closes only #12.
 - **The PR targets `master`.** A PR stacked on another branch links nothing
   until it is retargeted to `master`, so check the link again after the PR
   below it merges.
 - **A slice that must not close its issue** says `Part of #N` and is not
-  linked from the Development box either: an issue linked there by hand also
-  closes on merge.
+  linked from the Development box either, since a linked issue is expected to
+  close when the PR merges.
 
 Check before review: `gh pr view N --json closingIssuesReferences` lists the
 issue. A planned step with no ticket lists nothing, by design.
@@ -193,9 +194,9 @@ issue. A planned step with no ticket lists nothing, by design.
 1. CI green, all required stages.
 2. Review verdict recorded (APPROVE or APPROVE WITH NITS, per `odc-code-review`).
 3. Squash-merge; message references the issue. Afterwards confirm the linked
-   issue closed (`gh issue view N` shows CLOSED). If it did not, the keyword
-   was missing or the PR was stacked: close it by hand with a comment naming
-   the PR.
+   issue closed (`gh issue view N` shows CLOSED). If it did not, the PR body
+   lacked the keyword or the PR was stacked: close it by hand with a comment
+   naming the PR.
 4. Update the **workstream's** memory entry (done / next / blockers):
    `memory/STATE.md` for the ODC core, `memory/pulse.md` for pulse — see
    `memory/INDEX.md`. This happens HERE, on master at merge time, never on
