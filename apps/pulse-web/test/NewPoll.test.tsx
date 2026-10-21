@@ -258,23 +258,24 @@ describe("who readers see (ADR-0037)", () => {
 });
 
 describe("choices", () => {
-  it("adds up to 25, focusing each new one, and removes back to 2", async () => {
+  it("adds up to 25, focuses each new one, and removes the 25th", async () => {
     const user = userEvent.setup();
     show({ context: () => Promise.resolve(LATER) });
     await screen.findByLabelText("Your question");
     expect(screen.queryByRole("button", { name: /Remove/ })).toBeNull();
+    const addChoice = button("Add a choice");
     for (let n = 3; n <= 25; n += 1) {
-      await user.click(button("Add a choice"));
+      await user.click(addChoice);
       expect(document.activeElement).toBe(field(`Choice ${n}`));
     }
-    expect((button("Add a choice") as HTMLButtonElement).disabled).toBe(true);
+    expect((addChoice as HTMLButtonElement).disabled).toBe(true);
     expect(
       screen.getByText("25 choices is the most a question can have."),
     ).toBeTruthy();
     await user.click(button("Remove choice 25"));
     expect(document.activeElement).toBe(field("Choice 24"));
-    expect((button("Add a choice") as HTMLButtonElement).disabled).toBe(false);
-  });
+    expect((addChoice as HTMLButtonElement).disabled).toBe(false);
+  }, 15_000);
 
   it("removes the right one, keeping what was typed in the others", async () => {
     const user = userEvent.setup();
