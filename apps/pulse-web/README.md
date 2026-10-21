@@ -41,7 +41,9 @@ container, so the page and the API share one address.
 The vote page, sign-in and question creation call the API. Each question opens
 with its vote card expanded. Choose an answer, then press Submit to save it.
 You can close the card and reopen it with Vote. **Show me how** walks through
-the real controls; it never picks or submits an answer.
+the real controls; it never picks or submits an answer. Its highlight leaves
+space around the controls and stays inside the screen, so the space is smaller
+on a side where a control touches the screen edge.
 
 Question creation keeps a draft in this browser for up to an hour after a
 sign-in-required posting failure. Only the explicit sign-in recovery path

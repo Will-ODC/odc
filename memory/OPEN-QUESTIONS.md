@@ -17,6 +17,8 @@ is decided, and delete it when it becomes moot. Pulse's open decisions are in
 | --------------------------------------------------------------------------------------------------- | ------------------------------------------------------------ |
 | **Q-F**: the registrar's signature as a subliminal channel                                          | "Q-F — What mitigates the registrar's signature…"            |
 | **Anchor contents and cadence** (Q-A item 4, which ADR-0013 and ADR-0032 left open)                 | "Anchor contents and cadence"                                |
+| **The registrar signs each ballot's final log position** (T9 re-audit S-C, 2026-10-20)              | "Open entries from the T9 re-audit (2026-10-20)"             |
+| **Key rotation, compromise and the published test keys** (T9 re-audit S-G, 2026-10-20)              | "Open entries from the T9 re-audit (2026-10-20)"             |
 | **EX-24 claim decoding**: invalid UTF-8, BOM, `\u` escapes (2026-10-10)                             | "EX-24 claim decoding (2026-10-10)"                          |
 | **Pulse: how long `pending_claim` rows are kept** (2026-10-11, #315)                                | "Pulse sign-in data: retention and logging (2026-10-11)"     |
 | **Pulse: what an email-provider error may write to logs** (2026-10-11, #315)                        | "Pulse sign-in data: retention and logging (2026-10-11)"     |
@@ -63,6 +65,11 @@ archive with a one-line pointer to the ADR or PR that settled it.
   or regression in `seq` is itself an alarm**. The anchoring layer is a new
   artifact, not an event schema, so it can be added after the freeze. Full
   reasoning: the archive's Q-A entry.
+  **T9 re-audit S-D (2026-10-20):** still unspecified. The re-audit built a
+  common-prefix fork sharing chain A's genesis: `VALID` under `--chain`, caught
+  only by `--head`. Specify the anchor record (genesis hash, head, head `seq`,
+  how a run of anchors is shown consistent) before the ledger publishes its
+  first anchor (`docs/security/t9-reaudit-2026-10-20.md`, S-D).
 
 - **Read-API conformance coverage** (T9 orchestration inventory, 2026-08-15).
   At T9, 73 of 143 rule ids were cited by no vector. The uncovered half includes
@@ -71,6 +78,39 @@ archive with a one-line pointer to the ADR or PR that settled it.
   Open: does the read API need conformance vectors before Phase 1 builds against
   it, or is it out of scope for a fixture suite whose unit is an export line? An
   HTTP surface probably needs a different instrument from NDJSON vectors.
+  **Re-counted 2026-10-20 at 145 vectors:** 166 rule ids, 71 cited by none;
+  RA-1 to RA-13 are still all uncited (also T9 re-audit N-6).
+
+## Open entries from the T9 re-audit (2026-10-20)
+
+Both come from `docs/security/t9-reaudit-2026-10-20.md` (PR #407), which
+returned APPROVE WITH NITS. The operator chose to fix S-A, S-B and S-E first
+(#408) and to file these as questions.
+
+- **The registrar signs each ballot's final log position** (S-C). HA-15's
+  signing preimage covers `seq`, `ts` and `prev_hash`, and ET-17 makes the
+  registrar the signer of `vote_cast`. So the registrar can sign a ballot only
+  after the ledger has fixed its place in the log, and it sees each ballot's
+  exact line, not only `{who, issue, choice}` at admission (ET-21). The ET-25
+  shuffle then protects nothing against the registrar, and the identity
+  service, which also holds the linkage map, becomes a voter-to-log-line join.
+  It also conflicts with `services/ledger/CLAUDE.md`'s "no calls to other
+  services". Open: how Phase 1 keeps admission (which knows the voter) apart
+  from signing (which knows the position) — for example an unattributed pool of
+  `(issue, choice)` that the signer consumes — and how ledger and identity
+  coordinate appends. Design before the Phase 1 write path. Related: the
+  archive's "Registrar-side ballot privacy" and Q-F above. The additive ET-21
+  wording (state the residual honestly) can land any time.
+- **Key rotation, compromise and the published test keys** (S-G; gates the
+  freeze, not RC). ET-9e closed the `genesis` payload for good, so any rotation
+  must arrive as new versions of every signed type, signed under a key a new
+  event declares; a `contracts-v1` verifier would report `PARTIAL` from the
+  rotation on. No such design exists, and a leaked `registrar_pk` lets an
+  attacker forge ballots indistinguishable from real ones back to genesis. The
+  warning about the published `0x01…01` / `0x02…02` test seeds lives only in
+  `fixtures/derivations.json:24`. Open: the rotation and compromise model, and
+  whether the ledger refuses the test keys at genesis (one comparison per key).
+  Widens the archive's key-management entry (S5 / Q-G).
 
 ## EX-24 claim decoding (2026-10-10)
 
