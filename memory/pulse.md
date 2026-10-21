@@ -230,15 +230,6 @@ the same CI runs.
 
 **Client**
 
-- **Local demo handoff (2026-10-20):** API `http://127.0.0.1:8080`, web
-  `http://localhost:5173`, running from the attached
-  `repo-guidance-cleanup/odc` worktree on local-only branch
-  `codex/demo-ui-feedback`. It combines the form and feedback commits for
-  testing; PRs #403–#405 each target master independently. API data is in
-  memory and disappears on stop; console mail prints sign-in links and sends
-  no email. Use `demo@example.test`; request a fresh link when needed rather
-  than recording tokens in memory. The blue-halo pointer in the screenshot
-  belongs to Codex browser control, not a Pulse tutorial graphic.
 - **Never index `results.choices` by `yourChoice`.** Match on
   `ChoiceResult.index` (ADR-0021).
 - **Every way of casting must check `poll.open`** (through `locked` plus
