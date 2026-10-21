@@ -59,7 +59,7 @@ it("links a counted vote to the trust page (#351)", async () => {
       .getAttribute("href"),
   ).toBe("/trust");
 });
-it("loads a real question and keeps the assistant unavailable", async () => {
+it("opens the first question expanded without selecting or sending an answer", async () => {
   const cast = vi.fn();
   render(<Conversation api={stubApi({ cast })} pollId="ads-free" />);
   expect(
@@ -70,8 +70,36 @@ it("loads a real question and keeps the assistant unavailable", async () => {
       .disabled,
   ).toBe(true);
   expect(screen.getByText(/Use the vote card to answer/)).toBeTruthy();
+  expect(within(card()).getByRole("group")).toBeTruthy();
+  expect(
+    within(card())
+      .getAllByRole("radio")
+      .every((input) => !(input as HTMLInputElement).checked),
+  ).toBe(true);
+  expect(within(card()).getByRole("button", { name: "Submit" })).toHaveProperty(
+    "disabled",
+    true,
+  );
+  expect(main().queryByRole("button", { name: "Vote" })).toBeNull();
+  expect(cast).not.toHaveBeenCalled();
+});
+it("keeps a manually closed card closed and preserves its unsent pick on reopen", async () => {
+  const cast = vi.fn();
+  const user = userEvent.setup();
+  render(<Conversation api={stubApi({ cast })} pollId="ads-free" />);
+  await main().findByRole("heading", { name: poll().question, level: 1 });
+  await user.click(within(card()).getByRole("radio", { name: "Yes" }));
+  await user.click(within(card()).getByRole("button", { name: "Close" }));
+  await user.click(screen.getByRole("heading", { name: "Answered" }));
   expect(main().queryByRole("region")).toBeNull();
-  expect(main().getByRole("button", { name: "Vote" })).toBeTruthy();
+  await user.click(main().getByRole("button", { name: "Vote" }));
+  expect(within(card()).getByRole("radio", { name: "Yes" })).toHaveProperty(
+    "checked",
+    true,
+  );
+  expect(document.activeElement).toBe(
+    within(card()).getByRole("radio", { name: "Yes" }),
+  );
   expect(cast).not.toHaveBeenCalled();
 });
 it("shows loading, empty and errors with a working retry", async () => {
@@ -175,6 +203,17 @@ it("sends every approval pick, follows its lowest-index edge, and retains the co
     await main().findByRole("heading", { name: second.question, level: 1 }),
   ).toBeTruthy();
   expect(main().getByText("You picked Park and Library.")).toBeTruthy();
+  expect(within(card()).getByRole("group")).toBeTruthy();
+  expect(
+    within(card())
+      .getAllByRole("radio")
+      .every((input) => !(input as HTMLInputElement).checked),
+  ).toBe(true);
+  expect(within(card()).getByRole("button", { name: "Submit" })).toHaveProperty(
+    "disabled",
+    true,
+  );
+  expect(cast).toHaveBeenCalledOnce();
   await user.click(main().getByRole("button", { name: p.question }));
   await main().findByRole("heading", { name: p.question, level: 1 });
   await openCard();
@@ -281,9 +320,13 @@ it("keyboard-only picking and confirmation casts exactly once", async () => {
   const user = userEvent.setup();
   await user.tab();
   expect(document.activeElement).toBe(
-    main().getByRole("button", { name: "Vote" }),
+    main().getByRole("button", { name: "Show me how" }),
   );
-  await user.keyboard("{Enter}");
+  await user.tab(); // Close
+  await user.tab(); // First choice
+  expect(document.activeElement).toBe(
+    main().getByRole("radio", { name: "No" }),
+  );
   await user.keyboard("2");
   await user.tab();
   await user.keyboard("{Enter}{Enter}");

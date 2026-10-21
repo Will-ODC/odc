@@ -37,8 +37,10 @@ container, so the page and the API share one address.
 | `/sign-in?token=…` | Where emailed sign-in links land.                                      |
 | `/preview/chat`    | A prototype with sample data only.                                     |
 
-Only the vote page and sign-in call the API. On the vote page, **Show me how**
-walks through the real controls; it never picks or submits an answer.
+Only the vote page and sign-in call the API. Each question opens with its vote
+card expanded. Choose an answer, then press Submit to save it. You can close
+the card and reopen it with Vote. **Show me how** walks through the real
+controls; it never picks or submits an answer.
 
 The client uses the served routes in [`../pulse/API.md`](../pulse/API.md).
 Roadmap and planned API sections describe future work, not current client

@@ -64,7 +64,6 @@ it("starts the configured vote by keyboard without picking or casting, and keeps
   expect(read).toHaveBeenCalledWith("website-ui");
   expect(location.search).toBe("?poll=website-ui");
   expect(history.length).toBe(before + 3);
-  await user.click(screen.getByRole("button", { name: "Vote" }));
   expect(document.querySelectorAll("input:checked")).toHaveLength(0);
   expect(cast).not.toHaveBeenCalled();
 });
@@ -73,7 +72,7 @@ it("keeps direct poll URLs separate from the welcome configuration", async () =>
   history.replaceState(null, "", "/?poll=shared-poll");
   const read = vi.fn(async () => poll({ id: "shared-poll" }));
   render(<App api={stubApi({ poll: read })} firstPollId="website-ui" />);
-  await screen.findByRole("button", { name: "Vote" });
+  await screen.findByRole("region");
   expect(read).toHaveBeenCalledWith("shared-poll");
   expect(screen.queryByRole("button", { name: "Start voting" })).toBeNull();
 });
@@ -89,7 +88,7 @@ it("reports an unavailable configured poll and allows a retry without inventing 
     await screen.findByText("There is nothing to vote on yet."),
   ).toBeTruthy();
   await userEvent.click(screen.getByRole("button", { name: "Try again" }));
-  await screen.findByRole("button", { name: "Vote" });
+  await screen.findByRole("region");
   expect(read.mock.calls.every(([id]) => id === "website-ui")).toBe(true);
 });
 
@@ -102,7 +101,7 @@ it("keeps a closed configured poll readable without casting", async () => {
     />,
   );
   await begin();
-  await userEvent.click(await screen.findByRole("button", { name: "Vote" }));
+  await screen.findByText("This one has closed.");
   expect(screen.getByText("This one has closed.")).toBeTruthy();
   expect(screen.queryByRole("button", { name: "Submit" })).toBeNull();
   expect(screen.getByRole("button", { name: "See results" })).toBeTruthy();
