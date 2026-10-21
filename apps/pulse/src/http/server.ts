@@ -13,6 +13,7 @@ import type { ClaimService } from "../identity/claim.js";
 import type { Voter, VoterStore } from "../identity/store.js";
 import type { ConfirmationKey } from "../voting/confirmation.js";
 import { publicPoll } from "../voting/public-poll.js";
+import { parsePollListQuery, pollListPage } from "../voting/listing.js";
 import {
   BallotError,
   UnknownPollError,
@@ -482,6 +483,17 @@ export async function createServer(deps: ServerDeps): Promise<FastifyInstance> {
   // reads both while moving through the story, and neither reveals anything
   // about a person. Only the two routes that are *about* the signed-in voter —
   // their own ballot, and casting one — require a session.
+  app.get("/api/polls", async (request, reply) => {
+    const query = parsePollListQuery(request.query);
+    if (!query)
+      return reply.code(400).send({
+        error: "bad_request",
+        message: "Choose a community and a valid page of questions.",
+      });
+    const rows = await deps.votes.listPolls(query);
+    return reply.send(pollListPage(rows, query, now()));
+  });
+
   app.get("/api/polls/:id", async (request, reply) => {
     const poll = await deps.votes.getPoll(pollId(request));
     if (!poll) return notFoundPoll(reply);

@@ -130,6 +130,9 @@ export function createPoll(input: NewPoll, now: Date = new Date()): Poll {
   return input.closesAt ? { ...poll, closesAt: input.closesAt } : poll;
 }
 
-export function isOpen(poll: Poll, now: Date = new Date()): boolean {
+export function isOpen(
+  poll: Pick<Poll, "closesAt">,
+  now: Date = new Date(),
+): boolean {
   return poll.closesAt === undefined || poll.closesAt.getTime() > now.getTime();
 }

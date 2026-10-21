@@ -317,6 +317,50 @@ identity, so one person who votes, signs out, signs back in and votes again is c
 **twice**. Pulse is counted-not-verified and already deduplicates only per browser;
 being double-counted is a smaller harm than being read.
 
+### `GET /api/polls?community=ID&limit=20&cursor=…`
+
+Public browsing (#259), without a session or ballot cookie. `community` is
+required; anyone may read any community, including `pulse-general`. An unknown
+community returns an empty page. `limit` defaults to 20 and accepts integers
+from 1 to 100. Each query parameter may occur once; unknown parameters are refused.
+
+```json
+{
+  "polls": [
+    {
+      "id": "question-id",
+      "question": "Should we open a garden?",
+      "method": "single",
+      "createdAt": "2026-10-20T12:00:00.000Z",
+      "closesAt": null,
+      "open": true
+    }
+  ],
+  "nextCursor": null
+}
+```
+
+Lists open and closed polls in that community, excluding hidden polls and legacy
+polls without a community. No private author, account, ballot or vote data is
+returned. Fetch `GET /api/polls/:id` for choices and public attribution.
+Results are newest first by creation time, then descending UTF-8 poll ID bytes.
+Openness is evaluated at request time. Empty pages return `polls: []`.
+
+Pass `nextCursor` unchanged for the next page; null means no further page.
+Cursors are versioned, bound to the requested community, and contain only public
+ordering keys. They confer no access and may outlive the referenced poll.
+Pagination uses an exclusive creation-time/ID boundary, so unchanged polls are
+neither repeated nor skipped. New polls before that boundary require a fresh
+first page; deletion/hiding removes polls from subsequent pages. This is a live
+listing, not a snapshot: backdated insertions or visibility changes may alter
+later pages.
+
+400 `bad_request` means a missing/blank/overlong community (maximum 200 characters),
+invalid limit, repeated/unknown parameter, malformed cursor (maximum 2048
+characters), unsupported cursor version or cursor from another community.
+500 `server_error` uses the standard recoverable error body on storage failure.
+No cookies are created or renewed by this route.
+
 ### `GET /api/polls/:id`
 
 The poll, in the shape the client reads. No session required — a story viewer reads

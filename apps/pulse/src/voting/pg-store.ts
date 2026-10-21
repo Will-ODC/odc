@@ -1,6 +1,7 @@
 import { randomUUID } from "node:crypto";
 import type { Pool, PoolClient } from "pg";
 import { inTransaction } from "../db/transaction.js";
+import type { PollListQuery, PollSummary } from "./listing.js";
 import {
   createPoll,
   isOpen,
@@ -128,6 +129,35 @@ export class PostgresVotingStore implements VotingStore {
       ...(row.closes_at ? { closesAt: row.closes_at } : {}),
       ...(publication ? { publication } : {}),
     };
+  }
+
+  async listPolls(query: PollListQuery): Promise<PollSummary[]> {
+    const { rows } = await this.#pool.query<{
+      id: string;
+      question: string;
+      method: PollMethod;
+      created_at: Date;
+      closes_at: Date | null;
+    }>(
+      "select id, question, method, created_at, closes_at from polls" +
+        " where community = $1 and not hidden" +
+        ' and ($2::timestamptz is null or (created_at, id collate "C")' +
+        ' < ($2::timestamptz, $3::text collate "C"))' +
+        ' order by created_at desc, id collate "C" desc limit $4',
+      [
+        query.community,
+        query.before?.createdAt ?? null,
+        query.before?.id ?? null,
+        query.limit + 1,
+      ],
+    );
+    return rows.map((p) => ({
+      id: p.id,
+      question: p.question,
+      method: p.method,
+      createdAt: p.created_at,
+      ...(p.closes_at ? { closesAt: p.closes_at } : {}),
+    }));
   }
 
   async castVote(
