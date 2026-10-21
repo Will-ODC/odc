@@ -51,10 +51,13 @@ describe("what the URL opens", () => {
      * intermittent failure that gets misread as somebody else's flake.
      */
     expect(
-      await within(screen.getByRole("main")).findByText(poll().question),
+      await within(screen.getByRole("main")).findByRole("heading", {
+        name: poll().question,
+        level: 1,
+      }),
     ).toBeTruthy();
     expect(screen.getByLabelText("Message")).toHaveProperty("disabled", true);
-    expect(screen.getByRole("button", { name: "Vote" })).toBeTruthy();
+    expect(screen.getByRole("region")).toBeTruthy();
   });
 
   it("opens the conversation wherever ?poll= says", async () => {
@@ -67,7 +70,12 @@ describe("what the URL opens", () => {
 
     render(<App api={stubApi({ poll: byId })} />);
 
-    expect(await screen.findByText("How do we pay for it?")).toBeTruthy();
+    expect(
+      await screen.findByRole("heading", {
+        name: "How do we pay for it?",
+        level: 1,
+      }),
+    ).toBeTruthy();
     expect(byId).toHaveBeenCalledWith("pay-for-it");
     expect(screen.getByLabelText("Message")).toHaveProperty("disabled", true);
   });
@@ -113,7 +121,10 @@ describe("after the link is spent", () => {
      * intermittent failure that gets misread as somebody else's flake.
      */
     expect(
-      await within(screen.getByRole("main")).findByText(poll().question),
+      await within(screen.getByRole("main")).findByRole("heading", {
+        name: poll().question,
+        level: 1,
+      }),
     ).toBeTruthy();
     expect(globalThis.location.pathname + globalThis.location.search).toBe(
       "/?poll=ads-free",
@@ -151,7 +162,10 @@ describe("after the link is spent", () => {
       await screen.findByRole("button", { name: "Continue" }),
     );
     expect(
-      await within(screen.getByRole("main")).findByText("Q parks"),
+      await within(screen.getByRole("main")).findByRole("heading", {
+        name: "Q parks",
+        level: 1,
+      }),
     ).toBeTruthy();
     expect(globalThis.location.search).toBe("?poll=parks");
     // Other tabs in this browser hear about it (#353).
@@ -174,7 +188,10 @@ describe("after the link is spent", () => {
     await userEvent.click(
       await screen.findByRole("button", { name: "Continue" }),
     );
-    await within(screen.getByRole("main")).findByText(poll().question);
+    await within(screen.getByRole("main")).findByRole("heading", {
+      name: poll().question,
+      level: 1,
+    });
     expect(globalThis.location.search).toBe("?poll=ads-free");
   });
 
@@ -257,7 +274,7 @@ describe("following the browser's own navigation", () => {
   it("re-reads the URL when the browser moves", async () => {
     globalThis.history.replaceState(null, "", "/?poll=ads-free");
     render(<App api={stubApi()} />);
-    await screen.findByText(poll().question);
+    await screen.findByRole("heading", { name: poll().question, level: 1 });
 
     globalThis.history.replaceState(null, "", "/sign-in");
     globalThis.dispatchEvent(new PopStateEvent("popstate"));
@@ -325,7 +342,10 @@ describe("a route handed in directly", () => {
      * intermittent failure that gets misread as somebody else's flake.
      */
     expect(
-      await within(screen.getByRole("main")).findByText(poll().question),
+      await within(screen.getByRole("main")).findByRole("heading", {
+        name: poll().question,
+        level: 1,
+      }),
     ).toBeTruthy();
   });
 });

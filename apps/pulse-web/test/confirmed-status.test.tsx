@@ -195,7 +195,7 @@ describe("signing in while a counted vote is on screen", () => {
   async function vote() {
     const user = userEvent.setup();
     const main = within(await screen.findByRole("main"));
-    await user.click(await main.findByRole("button", { name: "Vote" }));
+    await main.findByRole("radio", { name: p.choices[1]! });
     await user.click(main.getByRole("radio", { name: p.choices[1]! }));
     await user.click(main.getByRole("button", { name: "Submit" }));
     await main.findByText(/^Counted/);
@@ -365,7 +365,6 @@ describe("signing in while a counted vote is on screen", () => {
       ),
     );
     await main.findByRole("heading", { name: first.question, level: 1 });
-    await userEvent.click(main.getByRole("button", { name: "Vote" }));
     expect(
       await main.findByText("1 vote so far · 1 confirmed by email"),
     ).toBeTruthy();

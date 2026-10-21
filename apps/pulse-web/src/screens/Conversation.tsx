@@ -335,7 +335,7 @@ function LoadedQuestion({
           </ol>
           {answers.length === 0 && loaded.status === "ready" ? (
             <p className="conversation__empty">
-              Your answers will appear here. Open the vote card to start.
+              Your answers will appear here after you submit.
             </p>
           ) : null}
         </div>
@@ -394,7 +394,7 @@ function LiveCard({
   const [picked, setPicked] = useState<number[]>(saved?.ballot ?? []);
   const [showSaved, setShowSaved] = useState(Boolean(saved));
   const [collapsed, setCollapsed] = useState(false);
-  const [visible, setVisible] = useState(false);
+  const [visible, setVisible] = useState(true);
   const [helping, setHelping] = useState(false);
   const help = useRef<HTMLButtonElement>(null);
   const guideRoot = useRef<HTMLDivElement>(null);

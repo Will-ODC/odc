@@ -43,7 +43,7 @@ it("explains recent progress and purpose before offering independently accessibl
   await user.click(
     screen.getByRole("button", { name: "How should optional data be used?" }),
   );
-  await screen.findByRole("button", { name: "Vote" });
+  await screen.findByRole("region");
   expect(read).toHaveBeenCalledWith("data-use");
   expect(read).not.toHaveBeenCalledWith("website-ui");
   expect(cast).not.toHaveBeenCalled();

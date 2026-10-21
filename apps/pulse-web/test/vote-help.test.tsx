@@ -13,19 +13,17 @@ it("guides real controls, skips with Escape, and replays without casting", async
   render(<Conversation api={stubApi({ cast })} pollId="ads-free" />);
   const help = await screen.findByRole("button", { name: "Show me how" });
   await user.click(help);
-  const opening = screen.getByText("Open the vote card.");
-  const vote = screen.getByRole("button", { name: "Vote" });
-  expect(vote.getAttribute("aria-describedby")).toContain(opening.id);
-  expect(document.activeElement).toBe(vote);
+  const choosing = screen.getByText("Choose your answer. Nothing is sent yet.");
+  const choices = screen.getByRole("group", { name: poll().question });
+  expect(choices.getAttribute("aria-describedby")).toContain(choosing.id);
+  expect(document.activeElement).toBe(
+    screen.getByRole("radio", { name: "No" }),
+  );
   await user.keyboard("{Escape}");
-  expect(screen.queryByText("Open the vote card.")).toBeNull();
+  expect(screen.queryByText(choosing.textContent!)).toBeNull();
   expect(document.activeElement).toBe(help);
-  expect(vote.hasAttribute("aria-describedby")).toBe(false);
+  expect(choices.getAttribute("aria-describedby")).not.toContain(choosing.id);
   await user.click(help);
-  await user.click(screen.getByRole("button", { name: "Vote" }));
-  expect(
-    screen.getByText("Choose your answer. Nothing is sent yet."),
-  ).toBeTruthy();
   await user.click(screen.getByRole("radio", { name: "Yes" }));
   expect(screen.getByText("Press Submit to save your answer.")).toBeTruthy();
   await user.click(screen.getByRole("button", { name: "Skip help" }));
@@ -42,7 +40,6 @@ it("waits for normal successful Submit, and explains only available actions", as
   const user = userEvent.setup();
   render(<Conversation api={stubApi({ cast })} pollId="ads-free" />);
   await user.click(await screen.findByRole("button", { name: "Show me how" }));
-  await user.click(screen.getByRole("button", { name: "Vote" }));
   await user.click(screen.getByRole("radio", { name: "Yes" }));
   await user.click(screen.getByRole("button", { name: "Submit" }));
   await screen.findByText(/Your answer is saved. Read results/);
@@ -59,7 +56,6 @@ it("keeps retry guidance honest and does not cast through help", async () => {
   const user = userEvent.setup();
   render(<Conversation api={stubApi({ cast })} pollId="ads-free" />);
   await user.click(await screen.findByRole("button", { name: "Show me how" }));
-  await user.click(screen.getByRole("button", { name: "Vote" }));
   await user.click(screen.getByRole("radio", { name: "Yes" }));
   await user.click(screen.getByRole("button", { name: "Submit" }));
   await screen.findByText(
@@ -88,7 +84,7 @@ it("offers no guide on loading or closed questions", async () => {
   await screen.findByRole("heading", { level: 1 });
   expect(screen.queryByRole("button", { name: "Show me how" })).toBeNull();
   expect(
-    within(screen.getByRole("main")).getByRole("button", { name: "Vote" }),
+    within(screen.getByRole("main")).getByText("This one has closed."),
   ).toBeTruthy();
 });
 
@@ -103,7 +99,6 @@ it("does not duplicate an in-flight vote and handles closure without success gui
   const user = userEvent.setup();
   render(<Conversation api={stubApi({ cast })} pollId="ads-free" />);
   await user.click(await screen.findByRole("button", { name: "Show me how" }));
-  await user.click(screen.getByRole("button", { name: "Vote" }));
   await user.click(screen.getByRole("radio", { name: "Yes" }));
   await user.click(screen.getByRole("button", { name: "Submit" }));
   expect(
@@ -145,7 +140,6 @@ it("does not offer help for a missing question and removes guidance on Next", as
     />,
   );
   await user.click(await screen.findByRole("button", { name: "Show me how" }));
-  await user.click(screen.getByRole("button", { name: "Vote" }));
   await user.click(screen.getByRole("radio", { name: "Yes" }));
   await user.click(screen.getByRole("button", { name: "Submit" }));
   await screen.findByText(/Next opens a linked question/);
@@ -153,4 +147,21 @@ it("does not offer help for a missing question and removes guidance on Next", as
   await screen.findByRole("heading", { name: "following", level: 1 });
   expect(screen.queryByLabelText("Voting help")).toBeNull();
   expect(cast).toHaveBeenCalledTimes(1);
+});
+
+it("guides reopening a card after the person closes it", async () => {
+  const cast = vi.fn();
+  const user = userEvent.setup();
+  render(<Conversation api={stubApi({ cast })} pollId="ads-free" />);
+  await user.click(await screen.findByRole("button", { name: "Close" }));
+  await user.click(screen.getByRole("button", { name: "Show me how" }));
+  const opening = screen.getByText("Open the vote card.");
+  const vote = screen.getByRole("button", { name: "Vote" });
+  expect(vote.getAttribute("aria-describedby")).toContain(opening.id);
+  expect(document.activeElement).toBe(vote);
+  await user.keyboard("{Enter}");
+  expect(
+    screen.getByText("Choose your answer. Nothing is sent yet."),
+  ).toBeTruthy();
+  expect(cast).not.toHaveBeenCalled();
 });

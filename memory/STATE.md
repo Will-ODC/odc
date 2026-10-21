@@ -67,9 +67,11 @@ In this order. Passing CI or a checkpoint does not clear T9.
 Optional, from ADR-0034 owed item 4: `docs/security/attacks/check-unknown-batching-proposal.py`'s
 `proposed` mode now matches the ratified expectations and could join required CI.
 
-**Owed with a ticket:** #369 (Go verifier memory grows far past the input on a
-hostile export; found in #370's review). #326 (TS ET-24b worst-case cost).
-Issues #364 and #365 are still open although #372 completed them; close them.
+**Recent hardening is merged:** Go input-proportional memory (#369, PR #385),
+dependency/toolchain updates (#382, PRs #383/#388), and lazy TS ET-24b candidacy
+(#326, PR #390). The TS change retains a documented worst-case cost of distinct
+intervals × distinct opaque instants; that limit was accepted by the operator.
+Issues #364 and #365 are closed. None of these changes clears T9.
 
 **Owed with no ticket:**
 
@@ -86,11 +88,6 @@ Issues #364 and #365 are still open although #372 completed them; close them.
   Its old default ("one-choice until argued otherwise") was withdrawn on
   2026-08-19, so the ceiling is deliberately open. v1 is unchanged. Read the
   ET-22 warning in `memory/OPEN-QUESTIONS-archive.md` before drafting it.
-- **Verifier dependency updates** (from `docs/security/scans-2026-10-11.md`,
-  #335): govulncheck found nothing the verifier calls, but `filippo.io/edwards25519`
-  v1.1.0 has GO-2026-4503 (fixed in v1.1.1), and CI builds with `go 1.24`, which
-  no longer gets security fixes. Bump the module and raise the `go` directive or
-  add a `toolchain` line, in the verifier's own isolated context.
 
 ## Done — one line each, detail in the squash commit
 
@@ -205,8 +202,10 @@ Issues #364 and #365 are still open although #372 completed them; close them.
   _created_ looks the same as one still running. Merging auto-deletes the head
   branch, so a later push creates a new branch with no PR. Agent sessions can
   delete remote branches.
-- **`turbo` caches `lint`.** Run `npx eslint` directly after moving files. turbo's
-  untracked root `AGENTS.md` is switched off by `agentGuidance: false` (#240).
+- **Turbo lint caching is disabled** (ADR-0042, #381), because import resolution
+  depends on workspace metadata, shared configuration and symlinks.
+- **The untracked root `AGENTS.md`** is switched off by `agentGuidance: false`
+  (#240).
 - **Tell dispatched agents to use the scratchpad for worktrees**, and commit
   before running a review or mutation agent, since reviewers edit and restore the
   tree.

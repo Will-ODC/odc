@@ -31,9 +31,10 @@ Do not apply charter rules to `apps/**`, and do not relax them anywhere else.
   unstarted. → `memory/STATE.md`
 - **Pulse:** sign-in, voting, confirmed votes, storage, mail and serving are
   built. The conversation vote page, welcome, tutorial and trust page are merged.
-  Poll creation has its storage but no HTTP route or form. **Next: the
-  poll-creation routes (ADR-0037), and #353.** A deploy also needs a host, a
-  domain and a Resend domain. → `memory/pulse.md`
+  Confirmed-vote display, poll-creation HTTP and public attribution are merged.
+  **Next: review/check the creation form, PR #393 (ADR-0037).** A deploy also
+  needs a host and a verified sending domain; `onlinedemocracy.org` is owned.
+  → `memory/pulse.md`
 
 ## Load order
 
