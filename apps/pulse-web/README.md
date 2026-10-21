@@ -73,7 +73,9 @@ Locally, `vite` dev reads `.env.development`, which points the four variables
 above at the dev server's seeded `launch-*` polls (Vite never loads it for
 `vite build`, and the Docker context excludes it). On deploy day the owner
 (`PULSE_OWNER_EMAIL`) signs in and posts each question through `/new` with the
-text in `docs/plans/pulse-first-story-content-draft.md`, copies each new poll's
+text in `docs/plans/pulse-first-story-content-draft.md`, using the form's
+"Change when it closes" to set a later close time (a year out, like the dev
+seed; the default is 7 days), copies each new poll's
 id from its URL, and sets the four `VITE_PULSE_*_POLL_ID` values for the web
 build.
 
