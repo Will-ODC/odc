@@ -123,6 +123,28 @@ the same CI runs.
    and published starting questions. Continue toward discussion, related votes
    and documented action through #303 and its linked tickets.
 
+## Browse handoff (2026-10-21, awaiting merge)
+
+- #260 is implemented in PR #426 on `pulse/260-browse`, not yet merged.
+  Welcome offers Explore questions alongside the unchanged guided Start voting
+  path. The public list supports communities, open/closed questions, cursor
+  pagination and recoverable failures; browsing never casts a vote.
+- Current layout: centered main column with space for columns on both sides
+  on desktop, full width on phones, and quiet top text navigation with subtle
+  separators. General is public; Your community uses the existing email-linked
+  community label, not a new membership or social-confirmation system.
+- Independent implementation and layout reviews returned APPROVE. The latest
+  local web suite has 490 passing tests; CI reruns after pushes. No merge or
+  public deployment has been performed by this chat.
+- Later browse thumbnails and a few context lines per entry are #427, dependent
+  on #296 image/context fields; #397 owns the richer mixed feed. Reuse these
+  issues rather than creating duplicates. Side-column contents remain #331.
+- **Next selected work remains poll-creation refinement**, with specific
+  changes still to be scoped. Longer work stays in its existing issues:
+  #422 bottom vote drawer, #297/#423 discussion, #424 opinion-diversity
+  prototype and #425 related-vote continuation. Invited-pilot prerequisites
+  remain the current plan above.
+
 ## Next / not built
 
 - **The authoring and demo-feedback slices are complete** (#393/#403–#405).
