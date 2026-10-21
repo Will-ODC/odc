@@ -40,25 +40,13 @@
   outline-offset: 2px;
 }
 
-/* The way in, and anything offered beside it. */
-.banner__end {
-  display: flex;
-  flex-wrap: wrap;
-  align-items: center;
-  justify-content: flex-end;
-  gap: var(--gutter);
-  min-width: 0;
-}
-
 /*
- * Everything after the brand, kept together at the end. On a narrow screen
- * there is no room for an address beside "Post a question", so the group
- * wraps and the second line stays at the end, rather than the address
- * breaking mid-word.
+ * Everything after the brand, kept together at the end and on ONE line: at
+ * most "Post a question" and one account control, which fit a 375px phone.
  */
 .banner__actions {
   display: flex;
-  flex-wrap: wrap;
+  flex-wrap: nowrap;
   align-items: center;
   justify-content: flex-end;
   gap: var(--step) var(--gutter);
@@ -70,6 +58,26 @@
   font-weight: 600;
   color: var(--ballot-ink-soft);
   white-space: nowrap;
+}
+
+/* "Post a question" is "Post" on a narrow phone. */
+@media (max-width: 399px) {
+  .banner__post-more {
+    display: none;
+  }
+}
+
+.banner__sign-in {
+  white-space: nowrap;
+}
+
+a.banner__brand {
+  text-decoration: none;
+}
+
+a.banner__brand:focus-visible {
+  outline: 2px solid var(--ballot-ink);
+  outline-offset: 2px;
 }
 
 .banner__post:hover {

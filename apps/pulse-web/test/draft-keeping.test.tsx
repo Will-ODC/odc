@@ -53,9 +53,7 @@ describe("a kept draft", () => {
         })}
       />,
     );
-    await userEvent.click(
-      await screen.findByRole("button", { name: "Continue" }),
-    );
+    // Straight back to the form; no "Continue" between (2026-10-21).
     expect(await question()).toBe("Kept question?");
   });
 
@@ -124,7 +122,6 @@ describe("a kept draft", () => {
         })}
       />,
     );
-    await user.click(await screen.findByRole("button", { name: "Continue" }));
     expect(await question()).toBe("");
     expect(globalThis.localStorage.getItem("pulse.newPollDraft")).toBeNull();
   });
@@ -164,7 +161,8 @@ describe("a kept draft", () => {
     );
     const user = userEvent.setup();
     const bar = within(await screen.findByRole("banner"));
-    await user.click(await bar.findByRole("button", { name: "Sign out" }));
+    await user.click(await bar.findByRole("button", { name: "Account" }));
+    await user.click(bar.getByRole("button", { name: "Sign out" }));
     await user.click(bar.getByRole("button", { name: "Sign out everywhere" }));
     await vi.waitFor(() => expect(signOut).toHaveBeenCalledOnce());
     await vi.waitFor(() =>

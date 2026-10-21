@@ -13,11 +13,10 @@ import type { Confirmation } from "../flow/vote-card.js";
 import { VoteCard } from "../components/VoteCard.js";
 import { ClosedResults } from "../components/ClosedResults.js";
 import { ViewState } from "../components/ViewState.js";
-import { TopBanner } from "../components/TopBanner.js";
-import { SignedIn } from "../components/SignedIn.js";
-import { ForgetVotes } from "../components/ForgetVotes.js";
+import { PostedBanner } from "../components/PostedBanner.js";
 import { useSession } from "../hooks/use-session.js";
-import type { Session, SignOutProgress } from "../hooks/use-session.js";
+import type { Session } from "../hooks/use-session.js";
+import { SiteBanner } from "./SiteBanner.js";
 import "./Conversation.css";
 
 /**
@@ -57,11 +56,17 @@ export function Conversation({
   api,
   pollId,
   onSignedOut,
+  posted,
 }: {
   api: PulseApi;
   pollId: string;
   /** Runs once the server has signed this person out everywhere. */
   onSignedOut?: () => void;
+  /**
+   * Set only right after this question was posted from this browser: shows
+   * "Your question is live · Copy link" until dismissed.
+   */
+  posted?: { url: string; onDismiss: () => void };
 }) {
   const [at, setAt] = useState(pollId);
   const [answers, setAnswers] = useState<Answer[]>([]);
@@ -116,7 +121,7 @@ export function Conversation({
   return (
     <div className="conversation">
       <header className="conversation__banner">
-        <Banner
+        <SiteBanner
           session={session}
           progress={progress}
           holdsVotes={heldBefore || answers.length > 0}
@@ -143,6 +148,9 @@ export function Conversation({
         <p>More questions will appear here as you answer.</p>
       </aside>
       <main className="conversation__main">
+        {posted ? (
+          <PostedBanner url={posted.url} onDismiss={posted.onDismiss} />
+        ) : null}
         <Question
           key={`${round}:${at}`}
           api={api}
@@ -159,67 +167,6 @@ export function Conversation({
     </div>
   );
 }
-
-/**
- * The bar across the top, for whoever is (or is not) signed in.
- *
- * Nothing on the right while asking: a "Sign in" link that turns into an
- * address a moment later is the flicker this avoids. When the answer is
- * unknown, the way in is offered, because signing in again is harmless.
- */
-function Banner({
-  session,
-  progress,
-  holdsVotes,
-  onSignOut,
-  onCancel,
-}: {
-  session: Session;
-  progress: SignOutProgress;
-  /** Whether this browser holds votes someone could forget. */
-  holdsVotes: boolean;
-  onSignOut: () => void;
-  onCancel: () => void;
-}) {
-  switch (session.status) {
-    case "loading":
-      return <TopBanner />;
-    case "signedIn":
-      return (
-        <TopBanner
-          postHref={pathOf({ kind: "newPoll" })}
-          identity={
-            <SignedIn
-              email={session.me.email}
-              progress={progress}
-              onSignOut={onSignOut}
-              onCancel={onCancel}
-            />
-          }
-        />
-      );
-    case "signedOut":
-    case "unknown":
-      return (
-        <TopBanner
-          postHref={pathOf({ kind: "newPoll" })}
-          signInHref={pathOf({ kind: "signIn" })}
-          {...(holdsVotes
-            ? {
-                aside: (
-                  <ForgetVotes
-                    progress={progress}
-                    onForget={onSignOut}
-                    onCancel={onCancel}
-                  />
-                ),
-              }
-            : {})}
-        />
-      );
-  }
-}
-
 function Question({
   api,
   pollId,
@@ -285,6 +232,13 @@ function LoadedQuestion({
 }) {
   const loaded = usePoll(api, pollId);
   const heading = useRef<HTMLHeadingElement>(null);
+  /*
+   * Whether the vote card is open and showing the question. Then the card
+   * says the question and closing date, and the page heading is kept for
+   * screen readers and focus but not drawn a second time (operator
+   * walkthrough, 2026-10-21; see `.conversation__hero--merged`).
+   */
+  const [cardOpen, setCardOpen] = useState(true);
   useEffect(() => {
     if (loaded.status === "ready") heading.current?.focus();
   }, [loaded.status]);
@@ -293,19 +247,27 @@ function LoadedQuestion({
       <div className="conversation__scroll">
         <div className="conversation__column">
           <ViewState data={loaded}>
-            {(poll) => (
-              <section className="conversation__hero">
-                <p>{closingNote(poll)}</p>
-                <h1 ref={heading} tabIndex={-1}>
-                  {poll.question}
-                </h1>
-                {byline(poll.attribution) ? (
-                  <p className="conversation__byline">
-                    {byline(poll.attribution)}
-                  </p>
-                ) : null}
-              </section>
-            )}
+            {(poll) =>
+              cardOpen ? (
+                <section className="conversation__hero conversation__hero--merged">
+                  <h1 ref={heading} tabIndex={-1}>
+                    {poll.question}
+                  </h1>
+                </section>
+              ) : (
+                <section className="conversation__hero">
+                  <p>{closingNote(poll)}</p>
+                  <h1 ref={heading} tabIndex={-1}>
+                    {poll.question}
+                  </h1>
+                  {byline(poll.attribution) ? (
+                    <p className="conversation__byline">
+                      {byline(poll.attribution)}
+                    </p>
+                  ) : null}
+                </section>
+              )
+            }
           </ViewState>
           {loaded.status === "error" || loaded.status === "empty" ? (
             <button type="button" onClick={onRetry}>
@@ -353,20 +315,10 @@ function LoadedQuestion({
                 onCounted={onCounted}
                 onBusy={onBusy}
                 onGo={onGo}
+                onCardOpen={setCardOpen}
               />
             </div>
           ) : null}
-          <label className="conversation__composer">
-            Message
-            <textarea
-              disabled
-              placeholder="The assistant is not available yet."
-              aria-describedby="conversation-assistant-note"
-            />
-          </label>
-          <p id="conversation-assistant-note" className="conversation__note">
-            The assistant is not available yet. Use the vote card to answer.
-          </p>
         </div>
       </div>
     </>
@@ -381,6 +333,7 @@ function LiveCard({
   onCounted,
   onBusy,
   onGo,
+  onCardOpen,
 }: {
   api: PulseApi;
   poll: Poll;
@@ -389,6 +342,8 @@ function LiveCard({
   onCounted: (answer: Answer) => void;
   onBusy: (busy: boolean) => void;
   onGo: (id: string) => void;
+  /** Whether the open card is showing the question, for the page heading. */
+  onCardOpen: (open: boolean) => void;
 }) {
   const { state, cast, reset } = useCastVote(api, poll.id);
   const [picked, setPicked] = useState<number[]>(saved?.ballot ?? []);
@@ -474,6 +429,9 @@ function LiveCard({
       : savedShowing;
   const next = showing.kind === "answered" ? nextFor(poll, ballot) : null;
   const shut = status.kind === "closed";
+  // The card, open or folded, names the question; closed results do not.
+  const showsQuestion = visible && !(shut && closed.showing);
+  useEffect(() => onCardOpen(showsQuestion), [onCardOpen, showsQuestion]);
   function change() {
     setShowSaved(false);
     fresh.clear();
@@ -556,11 +514,7 @@ function LiveCard({
             : {})}
           why={closingNote({ ...poll, open: !shut })}
           method={poll.method}
-          choices={poll.choices.map((label, index) => ({
-            index,
-            label,
-            ...(poll.next[index] ? { detail: "Opens another question" } : {}),
-          }))}
+          choices={poll.choices.map((label, index) => ({ index, label }))}
           picked={picked}
           status={showing}
           privacyNote="Your answer is private."

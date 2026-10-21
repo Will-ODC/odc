@@ -1,5 +1,6 @@
 // @vitest-environment jsdom
 import { cleanup, render, screen } from "@testing-library/react";
+import userEvent from "@testing-library/user-event";
 import { afterEach, describe, expect, it } from "vitest";
 import { TopBanner } from "../src/components/TopBanner.js";
 
@@ -14,13 +15,42 @@ describe("the bar across the top", () => {
   });
 
   /*
-   * The way in is replaced, not accompanied. Offering "Sign in" beside a mark
-   * saying you already are is the contradiction this rule exists to prevent.
+   * One account control (operator walkthrough, 2026-10-21): three controls
+   * side by side wrapped the bar onto two lines on a 375px phone. The
+   * account's controls replace "Sign in" with one button, and are hidden
+   * behind it until it is pressed.
    */
-  it("shows who is signed in instead of the way in", () => {
-    render(<TopBanner signInHref="/sign-in" identity={<span>you</span>} />);
-    expect(screen.getByText("you")).toBeTruthy();
+  it("shows one account button instead of the way in, its controls behind it", async () => {
+    const user = userEvent.setup();
+    render(
+      <TopBanner
+        postHref="/new"
+        signInHref="/sign-in"
+        account={<button type="button">Sign out</button>}
+      />,
+    );
     expect(screen.queryByRole("link", { name: "Sign in" })).toBeNull();
+    expect(screen.queryByRole("button", { name: "Sign out" })).toBeNull();
+    // Everything after the mark: the post link and ONE account control.
+    expect(screen.getAllByRole("link")).toHaveLength(1);
+    expect(screen.getAllByRole("button")).toHaveLength(1);
+    await user.click(screen.getByRole("button", { name: "Account" }));
+    expect(screen.getByRole("button", { name: "Sign out" })).toBeTruthy();
+  });
+
+  it("shortens 'Post a question' with a part a narrow phone hides", () => {
+    render(<TopBanner postHref="/new" />);
+    const link = screen.getByRole("link", { name: "Post a question" });
+    expect(link.querySelector(".banner__post-more")?.textContent).toBe(
+      " a question",
+    );
+  });
+
+  it("links the mark home when given somewhere to go", () => {
+    render(<TopBanner homeHref="/" />);
+    expect(
+      screen.getByRole("link", { name: "pulse" }).getAttribute("href"),
+    ).toBe("/");
   });
 
   /*

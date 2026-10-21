@@ -1,5 +1,6 @@
 // @vitest-environment jsdom
 import { cleanup, render, screen, within } from "@testing-library/react";
+import userEvent from "@testing-library/user-event";
 import { afterEach, describe, expect, it } from "vitest";
 import { TopBanner } from "../src/components/TopBanner.js";
 import { Conversation } from "../src/screens/Conversation.js";
@@ -26,9 +27,14 @@ async function open(attribution?: Parameters<typeof poll>[0]) {
 }
 
 describe("who posted it", () => {
-  it("says anonymously, at the top and on the card", async () => {
+  /*
+   * Once, on the card, while the card is open: the page heading is merged
+   * out of sight then, so the byline is not drawn twice (operator
+   * walkthrough, 2026-10-21). With the card closed it is at the top.
+   */
+  it("says anonymously, once, on the open card", async () => {
     const main = await open({ attribution: { kind: "anonymous" } });
-    expect(main.getAllByText("Posted anonymously")).toHaveLength(2);
+    expect(main.getAllByText("Posted anonymously")).toHaveLength(1);
     expect(
       within(main.getByRole("region")).getByText("Posted anonymously"),
     ).toBeTruthy();
@@ -38,13 +44,22 @@ describe("who posted it", () => {
     const main = await open({
       attribution: { kind: "named", name: "<b>Ada</b>" },
     });
-    expect(main.getAllByText("Posted by <b>Ada</b>")).toHaveLength(2);
+    expect(main.getAllByText("Posted by <b>Ada</b>")).toHaveLength(1);
     // Rendered as text: no element was made from the name.
     expect(
       [...document.querySelectorAll("main b")].some(
         (node) => node.textContent === "Ada",
       ),
     ).toBe(false);
+  });
+
+  it("says it at the top once the card is closed", async () => {
+    const main = await open({ attribution: { kind: "anonymous" } });
+    await userEvent.click(
+      within(main.getByRole("region")).getByRole("button", { name: "Close" }),
+    );
+    expect(main.getAllByText("Posted anonymously")).toHaveLength(1);
+    expect(main.queryByRole("region")).toBeNull();
   });
 
   it("says nothing for a poll from before posting existed", async () => {
