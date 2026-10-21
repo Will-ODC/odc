@@ -80,7 +80,7 @@ export function NewPoll({
   // walkthrough, 2026-10-21). Signing out there shows the way back in.
   const bar = useSession(api, { onSignedOut: signedOut });
   return (
-    <>
+    <div className="post-page">
       <header className="post__bar">
         <SiteBanner
           session={bar.session}
@@ -123,7 +123,7 @@ export function NewPoll({
           )}
         </article>
       </AppShell>
-    </>
+    </div>
   );
 }
 

@@ -3,7 +3,7 @@
   position: relative;
 }
 
-.account-menu__button {
+.banner .account-menu__button {
   font: inherit;
   font-size: var(--t-small);
   white-space: nowrap;
@@ -15,7 +15,7 @@
   cursor: pointer;
 }
 
-.account-menu__button:focus-visible {
+.banner .account-menu__button:focus-visible {
   outline: calc(var(--hairline) * 2) solid var(--focus-ring);
   outline-offset: calc(var(--hairline) * 2);
 }

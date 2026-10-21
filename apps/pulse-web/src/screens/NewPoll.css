@@ -3,6 +3,24 @@
  * laid out like /trust; fields, rows and buttons reuse SignIn.css so a form
  * looks like the one form people have already met. Tokens only.
  */
+/*
+ * The bar, then the form, from the top of the window down: without a page of
+ * its own the pair sat in the middle of a phone's height, under a centring
+ * body (App.css).
+ */
+.post-page {
+  display: flex;
+  flex-direction: column;
+  width: 100%;
+  min-height: 100dvh;
+}
+
+/* The bar already takes its share of the window above the shell. */
+.post-page > .shell {
+  flex: 1;
+  min-height: 0;
+}
+
 .post {
   box-sizing: border-box;
   width: 100%;
