@@ -91,37 +91,71 @@ export function isQuantized(ms: number, intervalMs: number): boolean {
 export type BatchOutcome = "resolved" | "unresolved" | "ET-24" | "ET-24a";
 
 /**
- * Candidate summary for every registered issue sharing one interval Δ, which
- * answers ET-24b item 4(b)'s question "is there a candidate with `seq > a`
- * whose `ts` differs from x?" in O(1).
+ * One distinct instant at which opaque ballots have appeared. `seqs` holds
+ * their `seq`s, ascending (file order); `last` is the largest, written T(y)
+ * below. Every instant is also a node of ONE recency list, ordered by T,
+ * largest first: an opaque ballot moves its instant to the front, which keeps
+ * the order because its `seq` exceeds every earlier one. The list is linked
+ * through object references, so no built-in collection grows with it.
+ */
+interface Instant {
+  ms: number;
+  seqs: ChunkedList;
+  /** T(y): `seq` of the latest opaque ballot at this instant. */
+  last: number;
+  /** Neighbour with the next larger T, or null at the front. */
+  newer: Instant | null;
+  /** Neighbour with the next smaller T, or null at the back. */
+  older: Instant | null;
+}
+
+/**
+ * Lazy candidate summary for every registered issue sharing one interval Δ,
+ * which answers ET-24b item 4(b)'s question "is there a candidate with
+ * `seq > a` whose `ts` differs from x?" (`otherInstantSince`).
  *
- * Invariant: `lastSeq` is the largest `seq` among the candidates so far and
- * `lastMs` its instant; `prevRunLastSeq` is the largest `seq` among candidates
- * whose instant differs from `lastMs` (0 if none). It is maintained exactly:
- * a new candidate at a DIFFERENT instant makes the old last candidate the
- * largest one not at the new `lastMs` (every later-than-it candidate is the
- * new one), so `prevRunLastSeq` becomes the old `lastSeq`; a new candidate at
- * the SAME instant leaves the set of candidates at other instants unchanged.
+ * Reduction. An opaque ballot at instant y is a candidate of an issue at Δ iff
+ * Δ | y and its `seq` exceeds that issue's c (item 1). Every query's lower
+ * bound `a` (c, `seq(P(L))` or `seq(f)`) is ≥ the asking issue's c, and every
+ * recorded opaque ballot precedes the ballot being admitted, so the question
+ * is: is there an instant y with Δ | y, y ≠ x and T(y) > a? (Some opaque
+ * ballot at y has `seq > a` iff the latest one does.) Let y1 and y2 be the two
+ * distinct instants with Δ | y and the largest T. If T(y1) ≤ a there is none.
+ * If y1 ≠ x, y1 answers yes. If y1 = x, the best instant other than x is y2,
+ * so the answer is T(y2) > a. This is the old `lastSeq`/`lastMs`/
+ * `prevRunLastSeq` summary exactly — `lastSeq` = T(y1), `lastMs` = y1,
+ * `prevRunLastSeq` = T(y2) — computed on demand rather than per opaque ballot.
  *
- * Hence "some candidate with `seq > a` and `ts ≠ x`" holds iff `lastSeq > a`
- * and (`lastMs ≠ x` — the last candidate itself qualifies — or
- * `prevRunLastSeq > a` — the latest candidate not at `lastMs = x` does). A
- * candidate's `seq` is always below the ballot being admitted, so no upper
- * bound is needed.
+ * Laziness. The group caches `top1`/`top2` (y1, y2 as of its last refresh)
+ * and `seenSeq`, the latest opaque `seq` at that refresh, and reads T live from
+ * the instants, never a stored copy. Invariant after every refresh: `top1`,
+ * `top2` are the two instants with Δ | y and the largest T among those with
+ * T(y) > c0 (c0 = the c of the issue that created the group; the rest can
+ * answer no query, since every issue at Δ has c ≥ c0 and every a ≥ c). It is
+ * restored at the next refresh as follows. The instants touched since the last
+ * refresh are exactly those with T(y) > `seenSeq`, and they sit at the front
+ * of the recency list, each with a larger T than every untouched instant.
+ * Walk them from the front, keeping those with Δ | y. If two are found, they
+ * are the top two outright. If k < 2 are found, the remaining 2 − k come from
+ * the untouched instants, whose T has not changed; their order among
+ * themselves is the order of the last refresh, so their best 2 − k are the
+ * cached instants that were not touched (a cached instant that was touched is
+ * among those just walked, so a merge that skips already-collected instants
+ * de-duplicates it, and reading T live ranks it correctly). At creation the
+ * cache is empty and `seenSeq` = c0, which satisfies the invariant: an
+ * instant with T ≤ c0 is outside it, and any instant later reaching T > c0 is
+ * touched after creation and so walked.
  *
- * One summary serves every issue at Δ although their c differ: candidacy
- * (item 1) is the multiple test plus `seq > c`, and every query's lower bound
- * `a` (c, `seq(P(L))` or `seq(f)`) is ≥ that issue's c, so candidates at or
- * before c are excluded by the query itself.
+ * One group serves every issue at Δ although their c differ, as above.
  */
 interface IntervalGroup {
   delta: number;
-  /** `seq` of the latest candidate; 0 when there is none (seqs start at 1). */
-  lastSeq: number;
-  /** Its instant (epoch ms). Meaningless while `lastSeq` is 0. */
-  lastMs: number;
-  /** `seq` of the latest candidate whose instant differs from `lastMs`; 0 if none. */
-  prevRunLastSeq: number;
+  /** Instant with the largest T among the multiples of Δ, at the last refresh. */
+  top1: Instant | null;
+  /** The one with the next largest T. */
+  top2: Instant | null;
+  /** Latest opaque `seq` at the last refresh (c0 before the first). */
+  seenSeq: number;
 }
 
 /** Per registered issue: its parameters and its KNOWN state (ET-24b item 2). */
@@ -161,19 +195,34 @@ interface IssueRun {
  * the scan reaches it (EX-16's prefix property). `ts` values are compared for
  * equality only, plus ET-23's multiple test (ES-21).
  *
- * Cost: a registered ballot is O(log k) (a binary search over the opaque
- * ballots sharing one instant) plus O(1) Map/Set work. An opaque ballot costs
- * one modulus per DISTINCT interval among the registered issues so far, since
- * which issues it is a candidate of depends on each interval; it updates a
- * per-interval O(1) summary, not each issue. Worst case O(opaque × distinct
- * intervals), which ET-24b's own one-pass sketch ("each opaque ballot updates
- * every issue it is a candidate of") shares.
+ * Cost: an opaque ballot is O(1) plus one Map lookup: it appends its `seq` to
+ * its instant and moves that instant to the front of the recency list, and
+ * does no per-interval or per-issue work. A registered ballot is O(log k) (a
+ * binary search over the opaque ballots sharing one instant) plus O(1)
+ * Map/Set work, plus the refresh of its interval group (`IntervalGroup`),
+ * which walks only the instants touched since that group last looked. So each
+ * group's total walk is bounded by the opaque ballots after it (plus one step
+ * per query), never worse than the earlier O(opaque × distinct intervals)
+ * bound, and usually far better: a walk stops at the second multiple of Δ.
+ *
+ * Known limit, not fixed: many opaque ballots at many DISTINCT instants that
+ * are multiples of no registered interval, followed by a registered ballot on
+ * every interval, still costs O(distinct intervals × distinct opaque
+ * instants), since each group must walk past every such instant once to learn
+ * that none is its multiple. Removing that would need factoring instants
+ * inside the verifier; it is not done.
  */
 export class BallotBatches {
   private readonly issues: ShardedMap<string, IssueRun>;
   private readonly groups: ShardedMap<number, IntervalGroup>;
-  /** Every opaque ballot's `seq`, by instant, ascending (file order). */
-  private readonly opaqueAt: ShardedMap<number, ChunkedList>;
+  /** Every distinct opaque instant, by epoch ms. */
+  private readonly opaqueAt: ShardedMap<number, Instant>;
+  /** Front of the recency list: the instant with the largest T. */
+  private newest: Instant | null = null;
+  /** `seq` of the latest opaque ballot; 0 before the first. */
+  private latestOpaque = 0;
+  /** Instants visited by every refresh so far; read by tests (`walkSteps`). */
+  private walked = 0;
 
   /** `shardCap` and `chunkShift` are parameters for tests only. */
   constructor(
@@ -183,6 +232,15 @@ export class BallotBatches {
     this.issues = new ShardedMap(shardCap);
     this.groups = new ShardedMap(shardCap);
     this.opaqueAt = new ShardedMap(shardCap);
+  }
+
+  /**
+   * How many instants every refresh so far has visited, in total. For tests:
+   * it shows the walk is amortised (each group visits only instants touched
+   * since it last looked) without timing anything, so it cannot flake.
+   */
+  walkSteps(): number {
+    return this.walked;
   }
 
   /**
@@ -201,8 +259,8 @@ export class BallotBatches {
     for (const r of this.issues.values())
       left = Math.max(left, r.left.shardCount);
     let opaqueList = 0;
-    for (const l of this.opaqueAt.values())
-      opaqueList = Math.max(opaqueList, l.chunkCount);
+    for (const y of this.opaqueAt.values())
+      opaqueList = Math.max(opaqueList, y.seqs.chunkCount);
     return {
       issues: this.issues.shardCount,
       groups: this.groups.shardCount,
@@ -224,7 +282,9 @@ export class BallotBatches {
   ): void {
     let group = this.groups.get(intervalMs);
     if (group === undefined) {
-      group = { delta: intervalMs, lastSeq: 0, lastMs: 0, prevRunLastSeq: 0 };
+      // seenSeq = c: no opaque ballot at or before c is a candidate of any
+      // issue at Δ (each has c' ≥ c), so none needs walking (IntervalGroup).
+      group = { delta: intervalMs, top1: null, top2: null, seenSeq: c };
       this.groups.set(intervalMs, group);
     }
     this.issues.set(issueId, {
@@ -243,31 +303,84 @@ export class BallotBatches {
   /**
    * Record one opaque ballot: its envelope `seq` and its `ts` in epoch ms,
    * nothing else (ET-24b). It is a candidate of every issue already opened
-   * (so `seq > c`) whose interval its instant is a multiple of (item 1).
+   * (so `seq > c`) whose interval its instant is a multiple of (item 1); which
+   * those are is worked out lazily, per interval, at the next query
+   * (`refresh`). O(1) here: no per-interval or per-issue work.
    */
   opaque(seq: number, ms: number): void {
-    for (const g of this.groups.values()) {
-      if (!isQuantized(ms, g.delta)) continue;
-      if (g.lastSeq !== 0 && ms !== g.lastMs) g.prevRunLastSeq = g.lastSeq;
-      g.lastSeq = seq;
-      g.lastMs = ms;
+    let y = this.opaqueAt.get(ms);
+    if (y === undefined) {
+      y = {
+        ms,
+        seqs: new ChunkedList(this.chunkShift),
+        last: seq,
+        newer: null,
+        older: null,
+      };
+      this.opaqueAt.set(ms, y);
+    } else if (y !== this.newest) {
+      // Unlink; it is not the front, so it has a newer neighbour.
+      (y.newer as Instant).older = y.older;
+      if (y.older !== null) y.older.newer = y.newer;
+      y.newer = null;
+      y.older = null;
     }
-    let at = this.opaqueAt.get(ms);
-    if (at === undefined) {
-      at = new ChunkedList(this.chunkShift);
-      this.opaqueAt.set(ms, at);
+    if (y !== this.newest) {
+      y.older = this.newest;
+      if (this.newest !== null) this.newest.newer = y;
+      this.newest = y;
     }
-    at.push(seq);
+    y.seqs.push(seq);
+    y.last = seq;
+    this.latestOpaque = seq;
+  }
+
+  /**
+   * Bring `g`'s cached top two up to date (the invariant and its proof are on
+   * `IntervalGroup`): walk the instants touched since `g.seenSeq`, newest
+   * first, keeping multiples of Δ, and stop at the second one found; if fewer
+   * are found, fill from the cached instants not already collected, ranked by
+   * their live T.
+   */
+  private refresh(g: IntervalGroup): void {
+    if (this.latestOpaque <= g.seenSeq) return;
+    let a: Instant | null = null;
+    let b: Instant | null = null;
+    for (let y = this.newest; y !== null && y.last > g.seenSeq; y = y.older) {
+      this.walked++;
+      if (!isQuantized(y.ms, g.delta)) continue;
+      if (a === null) a = y;
+      else {
+        b = y;
+        break;
+      }
+    }
+    if (b === null) {
+      // Merge the untouched cached instants; a touched one is already `a`.
+      for (const y of [g.top1, g.top2]) {
+        if (y === null || y === a || y === b) continue;
+        if (a === null || y.last > a.last) {
+          b = a;
+          a = y;
+        } else if (b === null || y.last > b.last) b = y;
+      }
+    }
+    g.top1 = a;
+    g.top2 = b;
+    g.seenSeq = this.latestOpaque;
   }
 
   /**
    * Is there a candidate of `g` with `seq` in (a, now) whose instant is not
-   * `x`? The latest candidate answers it unless it sits at `x`; then the
-   * latest candidate at another instant does.
+   * `x`? With y1, y2 the two multiples of Δ with the largest T: no if
+   * T(y1) ≤ a; yes if y1 ≠ x; otherwise iff T(y2) > a (`IntervalGroup`).
    */
   private otherInstantSince(g: IntervalGroup, a: number, x: number): boolean {
-    if (g.lastSeq <= a) return false;
-    return g.lastMs !== x || g.prevRunLastSeq > a;
+    this.refresh(g);
+    const y1 = g.top1;
+    if (y1 === null || y1.last <= a) return false;
+    if (y1.ms !== x) return true;
+    return g.top2 !== null && g.top2.last > a;
   }
 
   /**
@@ -277,7 +390,7 @@ export class BallotBatches {
    * `ms` here is always a run instant of an issue at Δ, which passed ET-23.
    */
   private opaqueCountSince(ms: number, a: number): number {
-    const at = this.opaqueAt.get(ms);
+    const at = this.opaqueAt.get(ms)?.seqs;
     if (at === undefined) return 0;
     let lo = 0;
     let hi = at.length;

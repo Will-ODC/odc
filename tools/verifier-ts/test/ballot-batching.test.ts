@@ -622,47 +622,183 @@ test("BallotBatches stays linear under a hostile pattern (200k instants, one iss
   assert.ok(ms < 2000, `took ${ms} ms`);
 });
 
-test("BallotBatches: opaque-ballot cost grows linearly in opaque ballots (the current O(opaque x distinct intervals) bound)", () => {
-  // An opaque ballot is tested against every DISTINCT interval among the
-  // registered issues (ET-24b item 1). Machine speed varies ~10x between a
-  // laptop and a loaded CI runner (a 2 s absolute limit flaked at 2.09 s), so
-  // this compares two runs on the same machine instead: 1k intervals with 60k
-  // opaque ballots against 1k intervals with 6k. At the current bound the
-  // ratio is ~10 (measured 9.0-14.0 idle and with two full suites running
-  // alongside). A cost that grows with the number of earlier opaque ballots
-  // breaks it: a mutant rescanning every recorded opaque ballot measured 44.
-  // The band, ratio < 25, sits between the two. (With 10k intervals the
-  // interval term hides that mutant: 11.9.) Each side is the minimum of three
-  // runs, after a warm-up, to shed GC and JIT noise; a 30 s absolute backstop
-  // catches only a gross regression. Sub-quadratic candidacy is an open
-  // follow-up.
-  const intervals = 1000;
-  const run = (opaque: number): number => {
+/** Minimum of `k` calls of `f`, after one warm-up call: sheds GC and JIT noise. */
+function minOf(k: number, f: () => number): number {
+  f();
+  let best = Infinity;
+  for (let i = 0; i < k; i++) best = Math.min(best, f());
+  return best;
+}
+
+test("BallotBatches: an opaque ballot does no per-interval work (cost independent of distinct intervals)", () => {
+  // ET-24b item 1 makes an opaque ballot a candidate of every issue whose
+  // interval its instant is a multiple of. Testing that per ballot against
+  // every DISTINCT interval cost O(opaque x distinct intervals): ~205 s at
+  // 100k intervals x 100k opaque. Now an opaque ballot only records its
+  // instant, and each interval group works out its candidates lazily at its
+  // next query. Machine speed varies ~10x between a laptop and a loaded CI
+  // runner (a 2 s absolute limit once flaked at 2.09 s), so the main check is
+  // a ratio of two runs on the same machine: the same 20k opaque ballots (the
+  // pattern below, then one registered ballot) beside 10k distinct intervals
+  // against beside 100. Measured: 1.04-1.15 idle with this implementation,
+  // 1.1-1.8 with two full suites running alongside; a mutant restoring the
+  // per-interval loop in opaque() measured 94-97 (3.3-3.6 s against 36-38
+  // ms). The band, ratio < 10, sits between the two. (A ratio over
+  // the number of OPAQUE ballots would not catch that mutant: it is linear in
+  // them too.) Each side is the minimum of five runs after a warm-up; the
+  // setup (opening the issues) is not timed.
+  const run = (intervals: number, opaque: number): number => {
     const t = new BallotBatches();
     for (let i = 0; i < intervals; i++)
       t.openIssue(`i${i}`, i + 2, 60000 * (i + 1), 3);
     const start = process.hrtime.bigint();
     for (let j = 0; j < opaque; j++)
       t.opaque(intervals + 2 + j, 60000 * (j % 7));
+    // The lazy summary is live: issue i0 (interval 60000) sees a candidate.
+    const out = t.admit("i0", intervals + opaque + 3, 60000 * 100);
     const ms = Number(process.hrtime.bigint() - start) / 1e6;
-    // The summaries are live: issue i0 (interval 60000) sees a candidate.
-    assert.equal(
-      t.admit("i0", intervals + opaque + 3, 60000 * 100),
-      "unresolved",
-    );
+    assert.equal(out, "unresolved");
     return ms;
   };
-  run(6000); // warm-up
-  const best = (opaque: number): number =>
-    Math.min(run(opaque), run(opaque), run(opaque));
-  const small = best(6000);
-  const large = best(60000);
-  const ratio = large / small;
+  const many = minOf(5, () => run(10000, 20000));
+  const few = minOf(5, () => run(100, 20000));
+  const ratio = many / few;
   assert.ok(
-    ratio < 25,
-    `60k/6k opaque ratio ${ratio.toFixed(1)} (${large.toFixed(0)} ms / ${small.toFixed(0)} ms)`,
+    ratio < 10,
+    `10k/100 intervals ratio ${ratio.toFixed(1)} (${many.toFixed(2)} ms / ${few.toFixed(2)} ms)`,
   );
-  assert.ok(large < 30000, `took ${large} ms`);
+  // The ticket's size, once: 100k intervals x 100k opaque took ~205 s before
+  // and ~2 ms now (Node 24, an idle laptop). A 10 s backstop catches only a
+  // gross regression; the ratio above is the real check.
+  const ticket = run(100000, 100000);
+  assert.ok(ticket < 10000, `100k x 100k took ${ticket} ms`);
+});
+
+test("BallotBatches: each interval group walks only the opaque instants touched since it last looked", () => {
+  // One issue, interval 2 minutes; every opaque ballot sits at a new odd
+  // minute (a multiple of no interval here). 4k such instants come first,
+  // then one registered ballot, then 2k (opaque, registered) pairs, so every
+  // query must learn that the new instant is not a candidate. With the
+  // group's `seenSeq` the first query walks the 4k instants once and each
+  // later query walks only the one new instant. The step count is asserted
+  // after every query, so a mutant that rescans the whole recency list each
+  // query (ignoring `seenSeq`) fails at the first pair, with a clean
+  // assertion rather than a timeout. This counts steps instead of timing
+  // them: the earlier timed 40k/4k version read a ratio of 52 on a GitHub
+  // runner against ~12 locally, and its band was 50.
+  const pretouched = 4000;
+  const pairs = 2000;
+  const t = new BallotBatches();
+  t.openIssue("a", 1, 120000, 1);
+  let seq = 2;
+  let minute = 1;
+  for (let j = 0; j < pretouched; j++) {
+    t.opaque(seq++, 60000 * minute);
+    minute += 2;
+  }
+  assert.equal(t.admit("a", seq++, 0), "resolved");
+  assert.equal(t.walkSteps(), pretouched);
+  for (let j = 0; j < pairs; j++) {
+    t.opaque(seq++, 60000 * minute);
+    minute += 2;
+    assert.equal(t.admit("a", seq++, 0), "resolved");
+    assert.equal(t.walkSteps(), pretouched + j + 1);
+  }
+});
+
+// --- the lazy interval summary: refresh edge cases ------------------------------
+//
+// `otherInstantSince` answers ET-24b item 4(b)'s "a candidate with seq > a at
+// an instant other than x" from a group's cached top two instants, refreshed
+// lazily. Each case below is decided by hand from item 1 and item 4(b).
+
+test("BallotBatches: a cached instant touched again is counted once (dedupe on refresh)", () => {
+  const t = new BallotBatches();
+  t.openIssue("a", 1, 60000, 3);
+  t.opaque(2, 0);
+  t.opaque(3, 60000);
+  // First ballot at 0: a candidate after c = 1 at 60000 ≠ 0. The group now
+  // caches 60000 (T = 3) and 0 (T = 2).
+  assert.equal(t.admit("a", 4, 0), "unresolved");
+  t.opaque(5, 0); // re-touches the cached instant 0
+  // Since P(L) = 4 the only candidate is seq 5, at 0 = ts(L): resolved. A
+  // refresh that kept 0 twice would rank 0 second as well and answer yes.
+  assert.equal(t.admit("a", 6, 0), "resolved");
+  // Nothing after P(L) = 6 (the group skips its refresh), and 60000 stays
+  // ranked: touched again, it is found ahead of 0.
+  assert.equal(t.admit("a", 7, 0), "resolved");
+  t.opaque(8, 60000);
+  assert.equal(t.admit("a", 9, 0), "unresolved"); // seq 8 at 60000 ≠ 0
+});
+
+test("BallotBatches: when the latest candidate instant is ts(L), the second one decides", () => {
+  const t = new BallotBatches();
+  t.openIssue("a", 1, 60000, 1);
+  t.opaque(2, 60000);
+  assert.equal(t.admit("a", 3, 0), "unresolved"); // seq 2 at 60000 ≠ 0
+  t.opaque(4, 0);
+  // Top instant 0 (T = 4) is ts(L); the second, 60000, has T = 2 ≤ P(L) = 3.
+  assert.equal(t.admit("a", 5, 0), "resolved");
+  t.opaque(6, 120000);
+  t.opaque(7, 0);
+  // Top instant 0 (T = 7) is ts(L); the second, 120000, has T = 6 > 5.
+  assert.equal(t.admit("a", 8, 0), "unresolved");
+});
+
+test("BallotBatches: an untouched cached instant still answers as the second after a refresh", () => {
+  const t = new BallotBatches();
+  t.openIssue("a", 1, 60000, 1);
+  t.openIssue("b", 2, 60000, 1); // same group
+  t.opaque(3, 60000);
+  t.opaque(4, 120000);
+  assert.equal(t.admit("a", 5, 0), "unresolved"); // caches 120000, then 60000
+  t.opaque(6, 120000); // only 120000 is touched since
+  // b's first ballot, at 120000, asks for a candidate after c = 2 at another
+  // instant. The walk finds 120000 alone; 60000 (seq 3) must come from the
+  // cache, untouched, and it answers yes.
+  assert.equal(t.admit("b", 7, 120000), "unresolved");
+});
+
+test("BallotBatches: opaque ballots before the group's issue are not candidates (item 1, seq(U) > c)", () => {
+  const t = new BallotBatches();
+  t.opaque(1, 60000);
+  t.opaque(2, 120000);
+  t.openIssue("a", 3, 60000, 1);
+  // Both opaque ballots are multiples of Δ, but seq ≤ c = 3.
+  assert.equal(t.admit("a", 4, 0), "resolved");
+  t.opaque(5, 120000); // the same instant again, now after c: a candidate
+  assert.equal(t.admit("a", 6, 0), "unresolved");
+});
+
+test("BallotBatches: a second issue joining an existing interval group later ignores candidates before its own c", () => {
+  const t = new BallotBatches();
+  t.openIssue("b", 1, 60000, 1);
+  t.opaque(2, 60000);
+  assert.equal(t.admit("b", 3, 0), "unresolved"); // refreshes the group
+  t.openIssue("a", 4, 60000, 1); // joins b's group; seq 2 < 4 is not a's
+  assert.equal(t.admit("a", 5, 0), "resolved");
+  t.opaque(6, 180000);
+  assert.equal(t.admit("a", 7, 0), "unresolved"); // seq 6 > 5, at 180000 ≠ 0
+  // b, at its own lower bound P(L) = 3, sees seq 6 too.
+  assert.equal(t.admit("b", 8, 0), "unresolved");
+});
+
+test("BallotBatches: instant 0 and negative multiples count; a negative non-multiple does not", () => {
+  const t = new BallotBatches();
+  t.openIssue("a", 1, 60000, 3);
+  t.opaque(2, -120000); // a negative multiple of Δ
+  assert.equal(t.admit("a", 3, 0), "unresolved");
+  t.opaque(4, -90000); // -90000 is not a multiple of 60000
+  assert.equal(t.admit("a", 5, 0), "resolved");
+  t.opaque(6, 0); // instant 0 = ts(L)
+  assert.equal(t.admit("a", 7, 0), "resolved");
+  // A run start at -60000 after a full run at 0: after f = 3, the only
+  // candidate at another instant than t = 0 would be -120000 (seq 2 < 3), so
+  // nothing; no candidate sits at -60000 either.
+  assert.equal(t.admit("a", 8, -60000), "resolved");
+  t.opaque(9, -150000); // a negative non-multiple again
+  t.opaque(10, -180000); // a negative multiple
+  assert.equal(t.admit("a", 11, -60000), "unresolved"); // seq 10 at -180000
 });
 
 test("BallotBatches: the leaving ballot reports ET-24 when the batch it leaves is under-size", () => {

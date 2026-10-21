@@ -96,9 +96,16 @@ IS the ticket.
    - **Commits:** the message references the ticket.
    - **No ticket, no branch** — cut one first. Memory-only and docs-only
      housekeeping may go without, but still name the ticket they record.
+   - **Planned steps get no ticket** (operator, 2026-10-20: issues are for new
+     features only). A step already written down in `memory/` or an ADR —
+     say, the routes ADR-0037 plans — is built without an issue. Its branch
+     is `<area>/<short>`, named for the work (`pulse/poll-creation-routes`);
+     its PR and commits name that step and where it is written
+     (`ADR-0037 creation routes`) instead of `Closes #N`. That name is its
+     handle.
 4. **Review in a fresh context** per `odc-code-review`; **CI green** per this
-   skill; **squash-merge** so master reads as one commit per ticket, message
-   referencing the issue.
+   skill; **squash-merge** so master reads as one commit per ticket (or
+   planned step), message referencing it.
 5. Board columns = pipeline stages: Backlog → In progress (branch open) →
    Review (PR open) → Done (merged). GitHub Projects, nothing fancier.
 6. WIP limit: one active branch per service — an agent should never
@@ -151,7 +158,8 @@ IS the ticket.
 
 - Branch names: `<area>/<issue>-<short-description>`, the issue number as in
   "The ticket number is the one handle" above (e.g. `ledger/14-insert-only-guard`,
-  `pulse/301-conversation-page`).
+  `pulse/301-conversation-page`); a planned step with no ticket uses
+  `<area>/<short-description>` (see "Planned steps get no ticket").
 - Commits: imperative subject ≤ 72 chars; body says WHY, not what, and names
   the ticket.
 - PR description: what changed, how it was tested, which contract version

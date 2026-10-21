@@ -14,12 +14,15 @@ description: Code review procedure and checklist for ODC. Use this skill wheneve
    that alone is a blocking finding. Then read **the ticket it names**
    (`gh issue view N`) and check the diff's scope against it: work the ticket
    gives to another ticket, or a PR that names no ticket, is a `[SHOULD]`.
+   A planned step has no ticket by design (`odc-pipeline`, "Planned steps get
+   no ticket"): check its scope against the plan or ADR step it names instead,
+   and flag it only if it names neither.
 3. Walk the checklist below, then read the diff once more top-to-bottom for
    anything the checklist missed.
 
 ## Output format
 
-Verdict first, with its handles: **PR #N (ticket #M) — APPROVE** /
+Verdict first, with its handles: **PR #N (ticket #M, or the planned step) — APPROVE** /
 **APPROVE WITH NITS** / **REQUEST CHANGES**.
 Then findings, each tagged:
 

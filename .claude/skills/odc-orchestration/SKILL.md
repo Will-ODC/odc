@@ -49,7 +49,9 @@ Opus dispatch is some tokens.
 ## Writing a brief that actually works
 
 A subagent starts with nothing but the brief. **Start it with the ticket
-number** (`#301`) and the branch, `<area>/<issue>-<short>` (`odc-pipeline`).
+number** (`#301`) and the branch, `<area>/<issue>-<short>` (`odc-pipeline`);
+for a planned step with no ticket, the step's name and where it is written,
+and a branch `<area>/<short>`.
 The ticket is how the operator, the agent and its report refer to the work; a
 brief without one has no handle. Then five sections, always:
 
@@ -66,7 +68,7 @@ brief without one has no handle. Then five sections, always:
    80 KB read.
 4. **What "done" looks like** — the acceptance bullets, and which guard to run
    (`pnpm -s format:check`, `diff-size.sh`, the unit's own tests).
-5. **What to report back** — leading with the ticket and PR numbers
+5. **What to report back** — leading with the ticket (or planned step) and PR numbers
    (`#299 → PR #307`), then files created and why, files changed and why,
    anything stale it found but did not fix, anything needing an operator
    decision. **The report is the only thing you see.** An agent that writes its
@@ -155,10 +157,10 @@ is the go-ahead. Each lead works in its own worktree. The two sessions talk with
 1. **Fetch first.** `git fetch origin`, and branch every lead's worktree from
    `origin/master`, not the local `master`. The skills a session loads come
    from its own checkout; a stale checkout hands the lead stale rules.
-2. **Name the branches.** Issues are for new features only (operator,
-   2026-10-20): a step already planned in memory or an ADR gets no ticket. A
-   feature with an issue uses `<area>/<issue>-<short>`; a planned step uses
-   `<area>/<short>` named for the work. Never guess "the next free number".
+2. **Name the branches.** A new feature has an issue and uses
+   `<area>/<issue>-<short>`; a step already planned in memory or an ADR gets no
+   ticket and uses `<area>/<short>` (`odc-pipeline`, "Planned steps get no
+   ticket"). Never guess "the next free number".
 3. **Ask the operator's questions now,** as multiple-choice popups
    (`AskUserQuestion`, recommended option first), and put the answers in the
    brief. Re-issuing a lead's card with the answers in it is cheaper than
@@ -209,11 +211,12 @@ The five sections above, plus:
    (`#301 → PR #307`), how they fit together, anything stale it saw, and any
    decision, written as options the way step 1 says.
 
-**What a lead never does:** merge anything, or start a reviewer or auditor.
-Every review is the operator's call. A lead also stops and sends the question up
-— rather than deciding — on a charter conflict, any change under `contracts/`,
-a file in another lead's folders, or anything the operator owns. After a
-restart it re-reads its brief and does not go past it.
+**What a lead never does:** merge anything, or start a reviewer or auditor. The
+orchestrator starts reviews (below); audits stay the operator's call. A lead
+also stops and sends the question up — rather than deciding — on a charter
+conflict, any change under `contracts/`, a file in another lead's folders, or
+anything the operator owns. After a restart it re-reads its brief and does not
+go past it.
 
 ### The orchestrator, while leads run
 
@@ -233,9 +236,22 @@ restart it re-reads its brief and does not go past it.
   files, and say it is one-off.
 - **After any lead restarts, re-check the open PRs for overlap.** A restarted
   lead in the pilot edited a plan file beyond what was approved.
+- **Review every green lead PR** (operator, 2026-10-20: "confirm you have been
+  doing code review on all PRs?", then "do it"). Once a PR's CI is green, start
+  a fresh-context `odc-reviewer` on it, routed by the table above, in its own
+  review worktree with the PR's diff at the root as `REVIEW.diff`. For a PR that
+  touches either verifier, the review worktree is sparse: only `contracts/`,
+  that verifier, `docs/charter.md` and `.claude/`, so the reviewer never sees
+  `services/ledger/`, the other verifier, or (for the TS one)
+  `tools/fixtures-gen/` and `tools/rehearsal/`. For the TS verifier, run
+  `pnpm install` before narrowing so `node_modules` exists, and keep
+  `.github/`, because the eslint config imports `.github/scripts/`. Send each
+  finding to the lead that owns the PR, and review the fix again. A PR the
+  orchestrator wrote itself needs a reviewer that did not write it either.
 - **When the leads report,** check their PRs do not collide — settle a clash
-  between two leads by message — and tell the operator which PRs are ready for
-  review, in what order.
+  between two leads by message — and tell the operator which PRs are ready to
+  merge, in what order, with each review's verdict. Merging stays the
+  operator's call.
 
 Diff size: `apps/pulse*` is exempt from the `diff-size.sh` ceiling (the script
 lists every exemption), so a pulse feature can arrive as large PRs.
