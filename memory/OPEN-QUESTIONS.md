@@ -17,7 +17,7 @@ is decided, and delete it when it becomes moot. Pulse's open decisions are in
 | --------------------------------------------------------------------------------------------------- | ------------------------------------------------------------ |
 | **Q-F**: the registrar's signature as a subliminal channel                                          | "Q-F — What mitigates the registrar's signature…"            |
 | **Anchor contents and cadence** (Q-A item 4, which ADR-0013 and ADR-0032 left open)                 | "Anchor contents and cadence"                                |
-| **The registrar signs each ballot's final log position** (T9 re-audit S-C, 2026-10-20)              | "Open entries from the T9 re-audit (2026-10-20)"             |
+| **The registrar signs each ballot's final log position**, with NS-2 (T9 re-audits S-C, NS-2)        | "Open entries from the T9 re-audit (2026-10-20)"             |
 | **Key rotation, compromise and the published test keys** (T9 re-audit S-G, 2026-10-20)              | "Open entries from the T9 re-audit (2026-10-20)"             |
 | **EX-24 claim decoding**: invalid UTF-8, BOM, `\u` escapes (2026-10-10)                             | "EX-24 claim decoding (2026-10-10)"                          |
 | **Pulse: how long `pending_claim` rows are kept** (2026-10-11, #315)                                | "Pulse sign-in data: retention and logging (2026-10-11)"     |
@@ -101,6 +101,21 @@ returned APPROVE WITH NITS. The operator chose to fix S-A, S-B and S-E first
   coordinate appends. Design before the Phase 1 write path. Related: the
   archive's "Registrar-side ballot privacy" and Q-F above. The additive ET-21
   wording (state the residual honestly) can land any time.
+  **Also decide here: NS-2** (second T9 re-audit, 2026-10-20, PR #414).
+  HA-15's preimage covers `seq`, `ts` and `prev_hash` for every signed event,
+  including the registrant's own `participant_registered` signature (ET-10).
+  With EV-26 refusing any event whose signature fails at its final position,
+  a registrant can sign only once the ledger has fixed the tail it extends.
+  The re-audit showed a registration signed for line 3 and appended at line 4
+  is `INVALID`. So a Phase 1 ledger must either hold a tail reservation across
+  a client round-trip (a slow or hostile registrant stalls the log, ballots
+  included) or reject and retry (livelock under load). The binding is what
+  stops a captured event being replayed at another line, so the fix is a
+  design choice: keep it with a reservation protocol and timeout, or sign a
+  position-free statement for registrations and accept duplicates (already
+  `VALID` under ET-12). The second option changes `hashing.md` or adds a new
+  `participant_registered` version, which is possible only before the freeze.
+  Decide before the ledger write path is coded and before the freeze.
 - **Key rotation, compromise and the published test keys** (S-G; gates the
   freeze, not RC). ET-9e closed the `genesis` payload for good, so any rotation
   must arrive as new versions of every signed type, signed under a key a new
