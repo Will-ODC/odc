@@ -89,3 +89,16 @@ it("clamps the right and bottom edges to clientWidth/clientHeight on resize", ()
     height: `${CLIENT_H - 492}px`,
   });
 });
+
+it("keeps a control scrolled fully off-screen as an empty box on the edge", () => {
+  const box = spotlight();
+  bounds = new DOMRect(40, CLIENT_H + 60, 200, 100);
+  act(() => document.dispatchEvent(new Event("scroll")));
+  // Nothing is drawn outside the screen and no size goes negative.
+  expect(box()).toEqual({
+    top: `${CLIENT_H}px`,
+    left: "32px",
+    width: "216px",
+    height: "0px",
+  });
+});
