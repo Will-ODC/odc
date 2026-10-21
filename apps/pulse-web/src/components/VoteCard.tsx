@@ -27,6 +27,9 @@ export type VoteCardStatus =
   | { kind: "answered"; results: Results; changed: boolean };
 export interface VoteCardProps {
   question: string;
+  /** Who posted it: "Posted anonymously" or "Posted by …". Left out for a
+   *  question from before posting existed. */
+  byline?: string;
   why: string;
   method: PollMethod;
   choices: readonly CardChoice[];
@@ -68,6 +71,7 @@ export interface VoteCardProps {
 /** Controlled and presentational: the caller owns picks, sending and navigation. */
 export function VoteCard({
   question,
+  byline,
   why,
   method,
   choices,
@@ -260,6 +264,7 @@ export function VoteCard({
       <h2 id={`${id}-question`} className="vote-card__question">
         {question}
       </h2>
+      {byline ? <p className="vote-card__why">{byline}</p> : null}
       <p id={`${id}-why`} className="vote-card__why">
         {why}
       </p>

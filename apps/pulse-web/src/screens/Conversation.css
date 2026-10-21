@@ -36,6 +36,10 @@
   margin: var(--step) 0 var(--gutter);
   overflow-wrap: anywhere;
 }
+/* Who posted it, tucked under the question it belongs to. */
+.conversation__hero > .conversation__byline {
+  margin-top: calc(var(--step) * -2);
+}
 /* Focused on arrival for screen readers only; see `.welcome h1:focus`. */
 .conversation__hero h1:focus {
   outline: none;
