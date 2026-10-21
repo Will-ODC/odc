@@ -97,6 +97,12 @@ the same CI runs.
   purpose promise, date and anonymity controls, publication and attribution.
   HTTP and public attribution dependencies (#389/#387) are merged. UI needs
   phone, desktop and keyboard checks; William retains final merge authority.
+- **Demo feedback is implemented in independent, unmerged PRs** (2026-10-20):
+  #401 → PR #403 opens each question's vote card by default; #400 → PR #404
+  adds space around tutorial highlights; #402 → PR #405 shortens the trust
+  link/title to "How votes count" and the page from roughly 976 to 294 words.
+  Author checks pass; fresh reviews, browser checks and final CI are being
+  completed. These changes are not deployed or merged.
 - Open feature issues: #296 photo and summary, #297 comments, #336 suggestions in
   the conversation page, #331-#333 desktop side columns and action follow-through,
   #329 a "My votes" page, #314 browser-extension prototype (idea only), #186 a
@@ -224,6 +230,15 @@ the same CI runs.
 
 **Client**
 
+- **Local demo handoff (2026-10-20):** API `http://127.0.0.1:8080`, web
+  `http://localhost:5173`, running from the attached
+  `repo-guidance-cleanup/odc` worktree on local-only branch
+  `codex/demo-ui-feedback`. It combines the form and feedback commits for
+  testing; PRs #403–#405 each target master independently. API data is in
+  memory and disappears on stop; console mail prints sign-in links and sends
+  no email. Use `demo@example.test`; request a fresh link when needed rather
+  than recording tokens in memory. The blue-halo pointer in the screenshot
+  belongs to Codex browser control, not a Pulse tutorial graphic.
 - **Never index `results.choices` by `yourChoice`.** Match on
   `ChoiceResult.index` (ADR-0021).
 - **Every way of casting must check `poll.open`** (through `locked` plus
