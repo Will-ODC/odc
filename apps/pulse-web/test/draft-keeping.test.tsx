@@ -3,6 +3,7 @@ import { cleanup, render, screen, within } from "@testing-library/react";
 import userEvent from "@testing-library/user-event";
 import { afterEach, beforeEach, describe, expect, it, vi } from "vitest";
 import { App } from "../src/App.js";
+import { ApiError } from "../src/api/types.js";
 import { keepDraft } from "../src/flow/draft-store.js";
 import { emptyDraft } from "../src/flow/new-poll.js";
 import { Conversation } from "../src/screens/Conversation.js";
@@ -69,6 +70,88 @@ describe("a kept draft", () => {
     expect(await question()).toBe("");
     expect(globalThis.localStorage.getItem("pulse.newPollDraft")).toBeNull();
   });
+
+  it("does not give a prior person's draft to someone signing in after an ordinary signed-out visit", async () => {
+    globalThis.history.replaceState(null, "", "/new");
+    const first = render(
+      <App
+        api={stubApi({
+          creationContext: () => Promise.resolve(CONTEXT),
+          createPoll: () => Promise.reject(new ApiError(401, "Sign in first.")),
+        })}
+      />,
+    );
+    const user = userEvent.setup();
+    await user.type(
+      await screen.findByLabelText("Your question"),
+      KEPT.question,
+    );
+    await user.type(screen.getByLabelText("Choice 1"), KEPT.choices[0]!);
+    await user.type(screen.getByLabelText("Choice 2"), KEPT.choices[1]!);
+    await user.click(screen.getByRole("button", { name: "Post question" }));
+    await user.click(await screen.findByRole("button", { name: "Post it" }));
+    await screen.findByText(
+      /Your question was not posted. What you wrote is kept/,
+    );
+    first.unmount();
+
+    // A fresh /new visit has no connection to the previous person's form.
+    const ordinary = render(
+      <App
+        api={stubApi({
+          creationContext: () =>
+            Promise.reject(new ApiError(401, "Sign in first.")),
+        })}
+      />,
+    );
+    const href = (
+      await screen.findByRole("link", { name: "Sign in to post" })
+    ).getAttribute("href")!;
+    ordinary.unmount();
+
+    globalThis.history.replaceState(null, "", href);
+    const signIn = render(<App api={stubApi()} />);
+    await screen.findByLabelText("Your email");
+    signIn.unmount();
+
+    globalThis.history.replaceState(null, "", "/sign-in?token=abc123");
+    render(
+      <App
+        api={stubApi({
+          redeem: () =>
+            Promise.resolve({ ...ME, id: "v2", email: "next@example.org" }),
+          creationContext: () => Promise.resolve(CONTEXT),
+        })}
+      />,
+    );
+    await user.click(await screen.findByRole("button", { name: "Continue" }));
+    expect(await question()).toBe("");
+    expect(globalThis.localStorage.getItem("pulse.newPollDraft")).toBeNull();
+  });
+
+  it.each(["loading", "error"])(
+    "forgets a prior draft while an ordinary visit is %s",
+    async (state) => {
+      keepDraft(KEPT, globalThis.localStorage);
+      globalThis.history.replaceState(null, "", "/new");
+      render(
+        <App
+          api={stubApi({
+            creationContext: () =>
+              state === "loading"
+                ? new Promise(() => {})
+                : Promise.reject(
+                    new ApiError(503, "Posting is not available right now."),
+                  ),
+          })}
+        />,
+      );
+      if (state === "loading")
+        expect(screen.getByText("Loading…")).toBeTruthy();
+      else await screen.findByText("Posting is not available right now.");
+      expect(globalThis.localStorage.getItem("pulse.newPollDraft")).toBeNull();
+    },
+  );
 
   it("is forgotten when someone signs out", async () => {
     keepDraft(KEPT, globalThis.localStorage);

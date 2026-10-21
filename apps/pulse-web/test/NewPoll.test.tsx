@@ -307,6 +307,34 @@ describe("choices", () => {
 });
 
 describe("closing time", () => {
+  it("shows and focuses a kept closing time that expired during sign-in", async () => {
+    const user = userEvent.setup();
+    show({
+      context: () => Promise.resolve(LATER),
+      createPoll: () => Promise.reject(new ApiError(401, "Sign in first.")),
+    });
+    await fill(user);
+    await user.click(button("Change when it closes"));
+    await user.click(screen.getByRole("radio", { name: "At a time I pick" }));
+    await user.type(screen.getByLabelText("Closing time"), "2026-10-20T12:01");
+    await user.click(button("Post question"));
+    await user.click(await screen.findByRole("button", { name: "Post it" }));
+    await screen.findByRole("link", { name: "Sign in to post" });
+    cleanup();
+
+    const { createPoll } = show({
+      context: () => Promise.resolve(LATER),
+      restoreDraft: true,
+      now: () => NOW + 2 * 60_000,
+    });
+    await screen.findByLabelText("Your question");
+    await user.click(button("Post question"));
+    expect(screen.getByText("Pick a time after now.")).toBeTruthy();
+    expect(document.activeElement).toBe(screen.getByLabelText("Closing time"));
+    expect(screen.queryByRole("button", { name: "Post it" })).toBeNull();
+    expect(createPoll).not.toHaveBeenCalled();
+  });
+
   it("takes a picked future time, says it, and sends it in UTC", async () => {
     const user = userEvent.setup();
     const { createPoll } = show({ context: () => Promise.resolve(LATER) });

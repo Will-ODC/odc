@@ -1,6 +1,6 @@
 # Pulse web
 
-The web page people use to sign in and vote in Pulse.
+The web page people use to sign in, post questions and vote in Pulse.
 
 See the [web contributor guide](./CLAUDE.md) before changing this package and
 the [shared Pulse guide](../pulse/CLAUDE.md) for product boundaries and rules.
@@ -14,7 +14,7 @@ pnpm --filter @odc/pulse-web dev    # local dev; sends /api to the Pulse server 
 pnpm --filter @odc/pulse-web test
 ```
 
-Browser unit and component tests live in `test/`. The two real-HTTP suites
+Browser unit and component tests live in `test/`. The real-HTTP suites
 that exercise the server and browser together live in the dedicated
 [`@odc/pulse-integration` workspace](../../docs/decisions/0041-pulse-integration-test-workspace.md):
 run them with `pnpm --filter @odc/pulse-integration test`. The matching checks
@@ -33,12 +33,19 @@ container, so the page and the API share one address.
 | `/start`           | What has been done so far, and what ODC is for.                        |
 | `/questions`       | The four starting questions.                                           |
 | `/?poll=ID`        | The live vote page for one poll. Old `/conversation` links still work. |
+| `/new`             | Post a question after signing in, then open its vote page.             |
 | `/trust`           | "Why you can trust your vote".                                         |
 | `/sign-in?token=…` | Where emailed sign-in links land.                                      |
 | `/preview/chat`    | A prototype with sample data only.                                     |
 
-Only the vote page and sign-in call the API. On the vote page, **Show me how**
-walks through the real controls; it never picks or submits an answer.
+The vote page, sign-in and question creation call the API. On the vote page,
+**Show me how** walks through the real controls; it never picks or submits an
+answer.
+
+Question creation keeps a draft in this browser for up to an hour after a
+sign-in-required posting failure. Only the explicit sign-in recovery path
+restores it once; an ordinary visit to `/new` or signing out clears it. The
+first-post purpose promise is never saved with the draft.
 
 The client uses the served routes in [`../pulse/API.md`](../pulse/API.md).
 Roadmap and planned API sections describe future work, not current client

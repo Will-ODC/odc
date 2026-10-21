@@ -68,6 +68,11 @@ export function NewPoll({
   now?: () => number;
 }) {
   const { state, retry, needPromise, signedOut } = useCreationContext(api);
+  // An ordinary visit must drop a previous person's draft even when the
+  // context is loading, signed out or unavailable and no form mounts.
+  useEffect(() => {
+    if (!restoreDraft) forgetDraft(browserStore());
+  }, [restoreDraft]);
   /** Whether this page just kept a draft, to say so on the way to sign in. */
   const [kept, setKept] = useState(false);
   return (
@@ -217,6 +222,9 @@ function PostForm({
     const problems = problemsOf(draft, needsPromise, now());
     setShown(problems);
     if (hasProblems(problems)) {
+      // A kept custom time can expire while signing in. Its field and
+      // problem must be visible before the focus moves there.
+      if (problems.closing) setOpen((old) => ({ ...old, closing: true }));
       focusProblem.current = true;
       return false;
     }
