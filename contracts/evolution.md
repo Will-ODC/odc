@@ -1,8 +1,8 @@
 # Evolution — contracts/evolution.md
 
-**Version:** 10
+**Version:** 11
 **Status:** DRAFTING (Phase 0 · T5f, amended T9a/ADR-0014, ADR-0015,
-ADR-0017, ADR-0034, ADR-0038, T9 re-audit #408). Not frozen.
+ADR-0017, ADR-0034, ADR-0038, T9 re-audits #408 and #415). Not frozen.
 **Companion specs:** `event-schema.md`, `event-types.md`, `hashing.md`,
 `export-format.md`, `read-api.md`.
 **Governing ADRs:** ADR-0006 (verifier scope & forward compatibility),
@@ -214,7 +214,8 @@ the surface has to live here.
   version may not do or must be), and **ET-25**, which is a producer
   obligation no reader can check — a shuffled batch and an arrival-ordered one
   are indistinguishable, so no verifier can report it and no stage contains it
-  (ADR-0014). **ET-18b** is Stage B; of the unregistered `issue_created` it
+  (ADR-0014) — and **ET-21a**, the same kind of obligation on what the ledger
+  and registrar tell a ballot's submitter. **ET-18b** is Stage B; of the unregistered `issue_created` it
   reads only the envelope (`type`, `version`, `seq` and `hash`), never the
   payload. **ET-24b** is Stage B, a check on registered ballots like ET-24 and
   ET-24a which it qualifies. It reads only the envelope `seq` and `ts` of the
