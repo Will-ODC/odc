@@ -1,7 +1,8 @@
 import crypto from "node:crypto";
-import { writeFileSync } from "node:fs";
+import { mkdirSync, writeFileSync } from "node:fs";
 import { Chain, genesis, OP, sha, isoMs } from "./odc.mjs";
 const out = process.argv[2];
+mkdirSync(out, { recursive: true });
 const u64 = (n) => {
   const b = Buffer.alloc(8);
   b.writeBigUInt64BE(BigInt(n));
