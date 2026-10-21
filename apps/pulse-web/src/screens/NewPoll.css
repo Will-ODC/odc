@@ -1,0 +1,227 @@
+/*
+ * Posting a question (ADR-0037). A page of fields on the ballot's dark ground,
+ * laid out like /trust; fields, rows and buttons reuse SignIn.css so a form
+ * looks like the one form people have already met. Tokens only.
+ */
+.post {
+  box-sizing: border-box;
+  width: 100%;
+  max-inline-size: var(--prose-measure);
+  margin-inline: auto;
+  padding: var(--gutter);
+  color: var(--ballot-ink);
+  background: var(--ballot-bg);
+  text-align: left;
+  display: flex;
+  flex-direction: column;
+  gap: calc(var(--step) * 1.5);
+}
+
+.post__form {
+  display: flex;
+  flex-direction: column;
+  gap: calc(var(--step) * 3);
+}
+
+.post__form > .signin__title,
+.post__form > .signin__lede {
+  margin-bottom: calc(var(--step) * -1.5);
+}
+
+/* Every field, as one group that is disabled while a post is on its way. */
+.post__lock {
+  display: flex;
+  flex-direction: column;
+  gap: calc(var(--step) * 3);
+  min-inline-size: 0;
+  margin: 0;
+  padding: 0;
+  border: none;
+}
+
+.post__field {
+  display: flex;
+  flex-direction: column;
+  gap: var(--step);
+}
+
+.post__question {
+  resize: vertical;
+  line-height: 1.5;
+}
+
+.post__group {
+  display: flex;
+  flex-direction: column;
+  gap: var(--step);
+  min-inline-size: 0;
+  margin: 0;
+  padding: 0;
+  border: none;
+}
+
+.post__group > legend {
+  margin-bottom: var(--step);
+  padding: 0;
+}
+
+.post__choices {
+  display: flex;
+  flex-direction: column;
+  gap: var(--step);
+  margin: 0;
+  padding: 0;
+  list-style: none;
+}
+
+.post__choice {
+  display: grid;
+  grid-template-columns: auto 1fr auto;
+  align-items: center;
+  gap: var(--step);
+}
+
+.post__choice .post__problem {
+  grid-column: 2 / -1;
+}
+
+.post__number {
+  min-inline-size: calc(var(--step) * 2.5);
+  font-size: var(--t-small);
+  font-weight: 600;
+  color: var(--ballot-ink-muted);
+  text-align: end;
+}
+
+.post__remove {
+  padding: var(--step) calc(var(--step) * 1.5);
+  font: inherit;
+  font-size: var(--t-small);
+  color: var(--ballot-ink-soft);
+  background: transparent;
+  border: var(--hairline) solid var(--ballot-line);
+  border-radius: var(--r-control);
+  cursor: pointer;
+}
+
+.post__remove:hover {
+  background: var(--surface-hover);
+}
+
+.post__remove:focus-visible {
+  outline: calc(var(--hairline) * 2) solid rgb(var(--side-b));
+  outline-offset: calc(var(--hairline) * 2);
+}
+
+.post__add {
+  align-self: flex-start;
+  margin-top: 0;
+}
+
+.post__hint {
+  margin: 0;
+  font-size: var(--t-small);
+  line-height: 1.45;
+  color: var(--ballot-ink-muted);
+}
+
+.post__purpose {
+  padding-top: calc(var(--step) * 2);
+  border-top: var(--hairline) solid var(--ballot-line);
+}
+
+.post__heading {
+  margin: 0 0 calc(var(--step) * 1.5);
+  font-size: calc(var(--t-hero) * 0.75);
+  font-weight: 800;
+  letter-spacing: -0.02em;
+  line-height: 1.2;
+}
+
+.post__text {
+  margin: 0 0 calc(var(--step) * 1.5);
+  font-size: var(--t-body);
+  line-height: 1.6;
+  color: var(--ballot-ink-soft);
+}
+
+.post__promise b,
+.post__reminder b {
+  color: var(--ballot-ink);
+  font-weight: 700;
+}
+
+.post__promise input[aria-invalid="true"] {
+  outline: calc(var(--hairline) * 2) solid rgb(var(--side-a));
+  outline-offset: calc(var(--hairline) * 2);
+}
+
+.post__promise input:focus-visible {
+  outline: calc(var(--hairline) * 2) solid rgb(var(--side-b));
+  outline-offset: calc(var(--hairline) * 2);
+}
+
+.post__reminder {
+  margin: 0;
+  font-size: var(--t-body);
+  line-height: 1.5;
+}
+
+/* A default, said in one line, with the way to change it beside it. */
+.post__setting {
+  margin: 0;
+  font-size: var(--t-body);
+  line-height: 1.5;
+  color: var(--ballot-ink-soft);
+}
+
+.post__change {
+  padding: 0;
+  font: inherit;
+  font-weight: 600;
+  color: var(--ballot-ink);
+  background: none;
+  border: 0;
+  text-decoration: underline;
+  text-underline-offset: 0.2em;
+  cursor: pointer;
+}
+
+.post__change:focus-visible {
+  outline: 2px solid rgb(var(--side-b));
+  outline-offset: 2px;
+}
+
+/*
+ * The three defaults read as one short list, closer together than the
+ * fields above them; a setting opened in place gets room of its own.
+ */
+.post__settings {
+  display: flex;
+  flex-direction: column;
+  gap: var(--step);
+}
+
+.post__settings > div:has(fieldset) {
+  margin-block: var(--step);
+}
+
+.post__link-button {
+  align-self: flex-start;
+  text-decoration: none;
+}
+
+.post__link-button:focus-visible {
+  outline: 2px solid rgb(var(--side-b));
+  outline-offset: 2px;
+}
+
+/* Named for a screen reader; the number beside the field says it visually. */
+.post__visually-hidden {
+  position: absolute;
+  width: 1px;
+  height: 1px;
+  overflow: hidden;
+  clip-path: inset(50%);
+  white-space: nowrap;
+}

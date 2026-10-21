@@ -49,3 +49,34 @@
   gap: var(--gutter);
   min-width: 0;
 }
+
+/*
+ * Everything after the brand, kept together at the end. On a narrow screen
+ * there is no room for an address beside "Post a question", so the group
+ * wraps and the second line stays at the end, rather than the address
+ * breaking mid-word.
+ */
+.banner__actions {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: center;
+  justify-content: flex-end;
+  gap: var(--step) var(--gutter);
+  min-width: 0;
+}
+
+.banner__post {
+  font-size: var(--t-small);
+  font-weight: 600;
+  color: var(--ballot-ink-soft);
+  white-space: nowrap;
+}
+
+.banner__post:hover {
+  color: var(--ballot-ink);
+}
+
+.banner__post:focus-visible {
+  outline: 2px solid var(--ballot-ink);
+  outline-offset: 2px;
+}

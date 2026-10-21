@@ -29,6 +29,47 @@ export interface Poll {
   /** ISO timestamp, or null when the poll has no closing time. */
   closesAt: string | null;
   open: boolean;
+  /**
+   * Who posted it, as they chose to be shown (ADR-0037). Absent on polls
+   * that predate posting: no author is invented for those.
+   */
+  attribution?: Attribution;
+  /** Where it was posted. Absent on polls that predate posting. */
+  community?: PostingCommunity;
+}
+
+/**
+ * How a poster is shown to readers. Anonymous by default; a name is what the
+ * poster typed for that one post, never proof of who they are.
+ */
+export type Attribution =
+  { kind: "anonymous" } | { kind: "named"; name: string };
+
+/** A posting destination. `pulse-general` is General, for anyone. */
+export interface PostingCommunity {
+  id: string;
+  label: string;
+}
+
+/** `GET /api/poll-creation/context`: what the form needs to know first. */
+export interface CreationContext {
+  community: PostingCommunity;
+  canPostUnlimited: boolean;
+  purposeVersion: string;
+  /** Whether this account has already made the purpose promise. */
+  purposeAcknowledged: boolean;
+}
+
+/** `POST /api/polls`: one new question, exactly as the server takes it. */
+export interface NewPollRequest {
+  question: string;
+  choices: string[];
+  method: PollMethod;
+  /** Left out for the server's seven-day default. */
+  closesAt?: string;
+  attribution: Attribution;
+  /** Sent only on a first post, when the promise was just made. */
+  purposeAcknowledgement?: string;
 }
 
 /**
@@ -146,6 +187,13 @@ export interface PulseApi {
   myBallot(pollId: string): Promise<Ballot | null>;
   results(pollId: string): Promise<Results>;
   cast(pollId: string, ballot: Ballot): Promise<CastOutcome>;
+  /** What the posting form needs for the signed-in account (ADR-0037). */
+  creationContext(): Promise<CreationContext>;
+  /**
+   * Publish a question. `key` is a fresh UUID per intended question, reused
+   * on a retry, so an uncertain failure never posts it twice.
+   */
+  createPoll(key: string, request: NewPollRequest): Promise<Poll>;
 }
 
 /** One community an address may sign in to. Mirrors the server's entry. */
@@ -192,11 +240,19 @@ export class ApiError extends Error {
    * other refusal without matching on a sentence.
    */
   readonly code: string | undefined;
+  /** Seconds the server asked to wait (`Retry-After`), when it said. */
+  readonly retryAfter: number | undefined;
 
-  constructor(status: number, message: string, code?: string) {
+  constructor(
+    status: number,
+    message: string,
+    code?: string,
+    retryAfter?: number,
+  ) {
     super(message);
     this.name = "ApiError";
     this.status = status;
     this.code = code;
+    this.retryAfter = retryAfter;
   }
 }

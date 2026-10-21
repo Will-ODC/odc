@@ -45,3 +45,57 @@
   cursor: default;
   text-decoration: none;
 }
+
+/*
+ * A page's main action, asked twice: full-size buttons, question above them,
+ * all at the start of the line. Values match the sign-in button's tokens.
+ */
+.two-press--primary {
+  justify-content: flex-start;
+  gap: var(--step);
+  font-size: var(--t-body);
+}
+
+.two-press--primary .two-press__question,
+.two-press--primary .two-press__error {
+  text-align: start;
+  color: var(--ballot-ink);
+  font-weight: 600;
+}
+
+.two-press__action--primary,
+.two-press__action--secondary {
+  padding: 15px 18px;
+  font: inherit;
+  font-size: var(--t-body);
+  font-weight: 700;
+  text-decoration: none;
+  border-radius: var(--r-control);
+}
+
+.two-press__action--primary {
+  color: var(--ballot-bg);
+  background: rgb(var(--side-b));
+  border: none;
+}
+
+.two-press__action--secondary {
+  color: var(--ballot-ink-soft);
+  background: transparent;
+  border: var(--hairline) solid var(--ballot-line);
+}
+
+.two-press__action--primary:hover:not(:disabled):not([aria-disabled="true"]) {
+  color: var(--ballot-bg);
+}
+
+.two-press__action--primary:focus-visible,
+.two-press__action--secondary:focus-visible {
+  outline: 2px solid rgb(var(--side-b));
+  outline-offset: 2px;
+}
+
+.two-press__action--primary[aria-disabled="true"],
+.two-press__action--secondary:disabled {
+  opacity: 0.55;
+}

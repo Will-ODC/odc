@@ -6,6 +6,8 @@ import {
 } from "../src/flow/sign-in-return.js";
 import type { ReturnStore } from "../src/flow/sign-in-return.js";
 
+const PARKS = { kind: "conversation", pollId: "parks" } as const;
+
 /** A plain map standing in for `localStorage`. */
 function memory(): ReturnStore & { size: () => number } {
   const map = new Map<string, string>();
@@ -20,35 +22,41 @@ function memory(): ReturnStore & { size: () => number } {
 describe("the question to come back to after signing in (#353)", () => {
   it("is read back once, then forgotten", () => {
     const store = memory();
-    rememberReturn("parks", store, 1_000);
-    expect(takeReturn(store, 2_000)).toBe("parks");
+    rememberReturn(PARKS, store, 1_000);
+    expect(takeReturn(store, 2_000)).toEqual(PARKS);
     expect(takeReturn(store, 2_000)).toBeNull();
     expect(store.size()).toBe(0);
   });
 
   it("is ignored after an hour, and forgotten anyway", () => {
     const store = memory();
-    rememberReturn("parks", store, 0);
+    rememberReturn(PARKS, store, 0);
     expect(takeReturn(store, RETURN_LIFETIME_MS + 1)).toBeNull();
     expect(store.size()).toBe(0);
   });
 
   it("is still good at exactly an hour", () => {
     const store = memory();
-    rememberReturn("parks", store, 0);
-    expect(takeReturn(store, RETURN_LIFETIME_MS)).toBe("parks");
+    rememberReturn(PARKS, store, 0);
+    expect(takeReturn(store, RETURN_LIFETIME_MS)).toEqual(PARKS);
+  });
+
+  it("can be the posting form", () => {
+    const store = memory();
+    rememberReturn({ kind: "newPoll" }, store, 0);
+    expect(takeReturn(store, 1)).toEqual({ kind: "newPoll" });
   });
 
   it("is dropped when a later sign-in names no question", () => {
     const store = memory();
-    rememberReturn("parks", store, 0);
+    rememberReturn(PARKS, store, 0);
     rememberReturn(undefined, store, 1);
     expect(takeReturn(store, 2)).toBeNull();
   });
 
   it("refuses an id longer than any poll id", () => {
     const store = memory();
-    rememberReturn("x".repeat(201), store, 0);
+    rememberReturn({ kind: "conversation", pollId: "x".repeat(201) }, store, 0);
     expect(takeReturn(store, 1)).toBeNull();
   });
 
@@ -63,6 +71,8 @@ describe("the question to come back to after signing in (#353)", () => {
       '{"pollId":"parks","at":"0"}',
       // From the future: a clock that moved back, or a hand-edited value.
       '{"pollId":"parks","at":5000}',
+      '{"newPoll":"yes","at":0}',
+      '{"at":0}',
     ]) {
       const store = memory();
       store.setItem("pulse.signInReturn", raw);
@@ -71,7 +81,7 @@ describe("the question to come back to after signing in (#353)", () => {
   });
 
   it("does nothing, and throws nothing, without storage", () => {
-    expect(() => rememberReturn("parks", null)).not.toThrow();
+    expect(() => rememberReturn(PARKS, null)).not.toThrow();
     expect(takeReturn(null)).toBeNull();
   });
 
@@ -87,7 +97,7 @@ describe("the question to come back to after signing in (#353)", () => {
         throw new Error("blocked");
       },
     };
-    expect(() => rememberReturn("parks", refusing)).not.toThrow();
+    expect(() => rememberReturn(PARKS, refusing)).not.toThrow();
     expect(takeReturn(refusing)).toBeNull();
   });
 });
