@@ -1,19 +1,36 @@
 // @vitest-environment jsdom
 import { createRef } from "react";
 import { act, cleanup, render } from "@testing-library/react";
-import { afterEach, expect, it, vi } from "vitest";
+import { afterEach, beforeEach, expect, it, vi } from "vitest";
 import { ControlGuide } from "../src/components/ControlGuide.js";
+
+// The layout viewport without scrollbars; deliberately not jsdom's 1024x768
+// window.innerWidth/innerHeight, so viewport units would give other numbers.
+const CLIENT_W = 375;
+const CLIENT_H = 640;
+let bounds = new DOMRect(30, 120, 250, 180);
+
+beforeEach(() => {
+  document.documentElement.style.setProperty("--step", "8px");
+  vi.spyOn(document.documentElement, "clientWidth", "get").mockReturnValue(
+    CLIENT_W,
+  );
+  vi.spyOn(document.documentElement, "clientHeight", "get").mockReturnValue(
+    CLIENT_H,
+  );
+  vi.spyOn(HTMLElement.prototype, "getBoundingClientRect").mockImplementation(
+    () => bounds,
+  );
+});
 
 afterEach(() => {
   cleanup();
   vi.restoreAllMocks();
+  document.documentElement.style.removeProperty("--step");
 });
 
-it("leaves token-sized room around results and follows their viewport bounds", () => {
-  let bounds = new DOMRect(30, 120, 250, 180);
-  vi.spyOn(HTMLElement.prototype, "getBoundingClientRect").mockImplementation(
-    () => bounds,
-  );
+function spotlight() {
+  bounds = new DOMRect(30, 120, 250, 180);
   const root = createRef<HTMLDivElement>();
   render(
     <div ref={root}>
@@ -29,31 +46,46 @@ it("leaves token-sized room around results and follows their viewport bounds", (
       onDismiss={() => {}}
     />,
   );
-  const spotlight = document.querySelector<HTMLElement>(
-    ".control-guide__spotlight",
-  )!;
-  // Fixed insets leave one spacing token outside the measured content, while
-  // max() keeps the border inside the viewport on a narrow phone.
-  expect(spotlight.style.top).toBe("max(0px, calc(120px - var(--step)))");
-  expect(spotlight.style.left).toBe("max(0px, calc(30px - var(--step)))");
-  expect(spotlight.style.right).toBe(
-    "max(0px, calc(100vw - 280px - var(--step)))",
-  );
-  expect(spotlight.style.bottom).toBe(
-    "max(0px, calc(100vh - 300px - var(--step)))",
-  );
+  const el = document.querySelector<HTMLElement>(".control-guide__spotlight")!;
+  return () => ({
+    top: el.style.top,
+    left: el.style.left,
+    width: el.style.width,
+    height: el.style.height,
+  });
+}
 
-  bounds = new DOMRect(4, 40, 312, 180);
+it("leaves one --step of room on every side of the control", () => {
+  const box = spotlight();
+  expect(box()).toEqual({
+    top: "112px",
+    left: "22px",
+    width: "266px",
+    height: "196px",
+  });
+});
+
+it("clamps the left and top edges to the screen on scroll", () => {
+  const box = spotlight();
+  bounds = new DOMRect(4, 3, 200, 100);
   act(() => document.dispatchEvent(new Event("scroll")));
-  expect(spotlight.style.top).toBe("max(0px, calc(40px - var(--step)))");
-  expect(spotlight.style.left).toBe("max(0px, calc(4px - var(--step)))");
+  // Only 4px and 3px of room exist before the edge; the far sides keep 8px.
+  expect(box()).toEqual({
+    top: "0px",
+    left: "0px",
+    width: "212px",
+    height: "111px",
+  });
+});
 
-  bounds = new DOMRect(12, 50, 360, 200);
+it("clamps the right and bottom edges to clientWidth/clientHeight on resize", () => {
+  const box = spotlight();
+  bounds = new DOMRect(20, 500, CLIENT_W - 24, CLIENT_H - 500 - 2);
   act(() => window.dispatchEvent(new Event("resize")));
-  expect(spotlight.style.right).toBe(
-    "max(0px, calc(100vw - 372px - var(--step)))",
-  );
-  expect(spotlight.style.bottom).toBe(
-    "max(0px, calc(100vh - 250px - var(--step)))",
-  );
+  expect(box()).toEqual({
+    top: "492px",
+    left: "12px",
+    width: `${CLIENT_W - 12}px`,
+    height: `${CLIENT_H - 492}px`,
+  });
 });
