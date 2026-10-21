@@ -27,16 +27,17 @@ container, so the page and the API share one address.
 
 ## Pages
 
-| Path               | What it shows                                                           |
-| ------------------ | ----------------------------------------------------------------------- |
-| `/`                | Welcome page, then Start voting.                                        |
-| `/start`           | What has been done so far, and what ODC is for.                         |
-| `/questions`       | The four starting questions.                                            |
-| `/?poll=ID`        | The live vote page for one poll. Old `/conversation` links still work.  |
-| `/new`             | Post a question after signing in, then open its vote page.              |
-| `/trust`           | "How votes count": a short guide to counting and its limits.            |
-| `/sign-in?token=…` | Where emailed sign-in links land; goes straight back to where you were. |
-| `/preview/chat`    | A prototype with sample data only.                                      |
+| Path                   | What it shows                                                           |
+| ---------------------- | ----------------------------------------------------------------------- |
+| `/`                    | Welcome page, then Start voting.                                        |
+| `/start`               | What has been done so far, and what ODC is for.                         |
+| `/browse?community=ID` | Community questions, newest first; General by default.                  |
+| `/questions`           | The four starting questions.                                            |
+| `/?poll=ID`            | The live vote page for one poll. Old `/conversation` links still work.  |
+| `/new`                 | Post a question after signing in, then open its vote page.              |
+| `/trust`               | "How votes count": a short guide to counting and its limits.            |
+| `/sign-in?token=…`     | Where emailed sign-in links land; goes straight back to where you were. |
+| `/preview/chat`        | A prototype with sample data only.                                      |
 
 The vote page, sign-in and question creation call the API. Each question opens
 with its vote card expanded. Choose an answer, then press Submit to save it.
@@ -61,6 +62,17 @@ first-post purpose promise is never saved with the draft.
 The client uses the served routes in [`../pulse/API.md`](../pulse/API.md).
 Roadmap and planned API sections describe future work, not current client
 behavior.
+
+## Browse questions (#260)
+
+Welcome keeps Start voting → /start → /questions and adds Explore questions →
+`/browse?community=pulse-general`. Browsing is public, newest first and scoped
+by community, not a global or related-question feed. Shared
+`/browse?community=ID` links open that community. Signed-in visitors can also
+switch to their community. Open and closed questions link to the existing vote
+page; opening a question never casts a vote. Load more uses the API cursor and
+keeps existing questions on a failed request. Missing communities show an empty
+state with links to the starting questions and posting form.
 
 ## Settings
 

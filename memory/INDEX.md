@@ -35,7 +35,7 @@ Do not apply charter rules to `apps/**`, and do not relax them anywhere else.
   The creation form and demo feedback are merged (#393/#403–#405).
   Public community-scoped poll listing is merged (#259 / PR #419); its browser
   and MCP discovery consumers remain unbuilt (#260/#291).
-  **Next feature awaits operator selection.** A deploy also
+  **Next: #260 browser list (selected; implementation in flight), then poll-creation refinement.** A deploy also
   needs a host and a verified sending domain; `onlinedemocracy.org` is owned.
   → `memory/pulse.md`
 

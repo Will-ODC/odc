@@ -106,11 +106,28 @@ the same CI runs.
 5. **A container-image scan** in `pulse-images.yml` before the first deploy
    (deferred by the operator, 2026-10-11; #315's other items are done).
 
+## Current operator plan (2026-10-21)
+
+1. Finish #260: welcome's Explore questions opens a public, community-scoped
+   browse list, while Start voting retains the existing guided introduction.
+   Show open/closed questions, newest first, with pagination and recoverable
+   errors. Implementation is in flight on `pulse/260-browse`; not merged.
+2. Refine poll creation next. The operator expects substantial improvement;
+   the particular form/content/workflow changes still need to be scoped.
+   Reuse the built creation flow rather than creating a second authoring system.
+3. Prepare a small invited pilot once browsing and the agreed creation
+   refinements are ready, with a chosen host, persistent database, verified
+   sending domain and the deferred container-image scan. This is a plan,
+   not a claim of deployment or authorisation to deploy.
+4. Broad launch still needs the recorded reporting/moderation prerequisites
+   and published starting questions. Continue toward discussion, related votes
+   and documented action through #303 and its linked tickets.
+
 ## Next / not built
 
 - **The authoring and demo-feedback slices are complete** (#393/#403–#405).
-  No next feature is selected by this handoff; choose from the remaining work
-  below. A local demo is available, but there is no claim of a public deploy.
+  The operator selected #260 browsing next, followed by poll-creation
+  refinement; see the current plan above. A local demo is available, but there is no claim of a public deploy.
 - Open feature issues: #296 photo and summary, #297 comments, #336 suggestions in
   the conversation page, #331-#333 desktop side columns and action follow-through,
   #329 a "My votes" page, #314 browser-extension prototype (idea only), #186 a

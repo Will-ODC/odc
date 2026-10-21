@@ -18,6 +18,7 @@ import {
   type RelatedPollIds,
 } from "./screens/FoundationQuestions.js";
 import { Trust } from "./screens/Trust.js";
+import { Browse } from "./screens/Browse.js";
 import { NewPoll } from "./screens/NewPoll.js";
 import "./styles/tokens.css";
 import "./App.css";
@@ -84,6 +85,8 @@ export function App({
         return (
           <Progress onContinue={() => browser.go({ kind: "questions" })} />
         );
+      case "browse":
+        return <Browse key={at.community} api={api} community={at.community} />;
       case "questions":
         return (
           <FoundationQuestions

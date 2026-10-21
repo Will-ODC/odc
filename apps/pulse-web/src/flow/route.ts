@@ -16,6 +16,7 @@ export type Route =
   | { kind: "welcome" }
   | { kind: "progress" }
   | { kind: "questions" }
+  | { kind: "browse"; community: string }
   /**
    * Asking for a sign-in link. `returnTo` is where to come back to once the
    * emailed link is clicked: "Confirm with your email" on a vote card names
@@ -93,6 +94,11 @@ export function routeFrom(href: string): Route {
   if (path === NEW_POLL_PATH) return { kind: "newPoll" };
   if (path === "/start") return { kind: "progress" };
   if (path === "/questions") return { kind: "questions" };
+  if (path === "/browse")
+    return {
+      kind: "browse",
+      community: url.searchParams.get("community")?.trim() || "pulse-general",
+    };
 
   if (path === "/" && !url.searchParams.get("poll")) return { kind: "welcome" };
 
@@ -112,6 +118,8 @@ export function pathOf(route: Route): string {
       return "/start";
     case "questions":
       return "/questions";
+    case "browse":
+      return `/browse?community=${encodeURIComponent(route.community)}`;
     case "signIn":
       switch (route.returnTo?.kind) {
         case undefined:

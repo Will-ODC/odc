@@ -167,6 +167,13 @@ describe("poll creation against the real server", () => {
       body.poll.id,
     );
 
+    // Public browse discovery reuses the server listing, without signing in or casting.
+    const guest = new HttpPulseApi(baseUrl, cookieJar().fetch);
+    const listing = await guest.listPolls("ubc-students");
+    expect(listing.polls.map((p) => p.id)).toEqual([body.poll.id]);
+    expect((await guest.listPolls("pulse-general")).polls).toEqual([]);
+    expect((await guest.results(body.poll.id)).voters).toBe(0);
+
     // It is an ordinary poll now: the client reads it and votes on it.
     const poll = await api.poll(body.poll.id);
     expect(poll.question).toBe("Where should the new bike racks go?");
