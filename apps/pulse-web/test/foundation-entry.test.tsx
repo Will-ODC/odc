@@ -108,6 +108,8 @@ it("opens each starting question by the ids the dev environment sets", async () 
     />,
   );
   expect(screen.queryByText("Coming soon")).toBeNull();
+  expect(screen.queryByText(/being prepared/)).toBeNull();
+  expect(screen.getByText(/Opening a question does not submit/)).toBeTruthy();
   expect(
     screen
       .getAllByRole("button")
