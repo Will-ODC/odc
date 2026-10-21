@@ -26,6 +26,8 @@ export function PostedBanner({
   }, [copy]);
 
   function copyLink() {
+    // Emptied first, so a second "Copied" is a change the status reads out.
+    setCopy("idle");
     const clipboard = navigator.clipboard as Clipboard | undefined;
     if (!clipboard) {
       setCopy("manual");

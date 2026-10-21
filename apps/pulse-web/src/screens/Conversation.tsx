@@ -118,6 +118,14 @@ export function Conversation({
     before.current = confirmation;
   }, [confirmation]);
   const saved = answers.find((one) => one.poll.id === at);
+  const main = useRef<HTMLElement>(null);
+  // "Your question is live" belongs to the question just posted. "Next"
+  // moves to another without a route change, so leaving it ends the line.
+  const leftPosted = posted !== undefined && at !== pollId;
+  const dismissPosted = posted?.onDismiss;
+  useEffect(() => {
+    if (leftPosted) dismissPosted?.();
+  }, [leftPosted, dismissPosted]);
   return (
     <div className="conversation">
       <header className="conversation__banner">
@@ -147,9 +155,16 @@ export function Conversation({
         </nav>
         <p>More questions will appear here as you answer.</p>
       </aside>
-      <main className="conversation__main">
-        {posted ? (
-          <PostedBanner url={posted.url} onDismiss={posted.onDismiss} />
+      <main className="conversation__main" ref={main}>
+        {posted && at === pollId ? (
+          <PostedBanner
+            url={posted.url}
+            onDismiss={() => {
+              // The line is gone; the question it sat over takes focus.
+              main.current?.querySelector<HTMLElement>("h1")?.focus();
+              posted.onDismiss();
+            }}
+          />
         ) : null}
         <Question
           key={`${round}:${at}`}
@@ -247,27 +262,27 @@ function LoadedQuestion({
       <div className="conversation__scroll">
         <div className="conversation__column">
           <ViewState data={loaded}>
-            {(poll) =>
-              cardOpen ? (
-                <section className="conversation__hero conversation__hero--merged">
-                  <h1 ref={heading} tabIndex={-1}>
-                    {poll.question}
-                  </h1>
-                </section>
-              ) : (
-                <section className="conversation__hero">
-                  <p>{closingNote(poll)}</p>
-                  <h1 ref={heading} tabIndex={-1}>
-                    {poll.question}
-                  </h1>
-                  {byline(poll.attribution) ? (
-                    <p className="conversation__byline">
-                      {byline(poll.attribution)}
-                    </p>
-                  ) : null}
-                </section>
-              )
-            }
+            {(poll) => (
+              // One heading node either way, so focus on it survives the
+              // card opening and closing.
+              <section
+                className={
+                  cardOpen
+                    ? "conversation__hero conversation__hero--merged"
+                    : "conversation__hero"
+                }
+              >
+                {cardOpen ? null : <p>{closingNote(poll)}</p>}
+                <h1 ref={heading} tabIndex={-1}>
+                  {poll.question}
+                </h1>
+                {!cardOpen && byline(poll.attribution) ? (
+                  <p className="conversation__byline">
+                    {byline(poll.attribution)}
+                  </p>
+                ) : null}
+              </section>
+            )}
           </ViewState>
           {loaded.status === "error" || loaded.status === "empty" ? (
             <button type="button" onClick={onRetry}>

@@ -25,6 +25,17 @@
   overflow-y: auto;
   padding: var(--gutter);
 }
+/*
+ * Below the wide layout the question is on the card, so the space above it
+ * holds only the answers so far: sized to them, not stretched to fill, so the
+ * card sits right under them rather than at the foot of a mostly empty phone.
+ * Still scrolls once the answers outgrow the room.
+ */
+@media (max-width: 1099px) {
+  .conversation__scroll {
+    flex: 0 1 auto;
+  }
+}
 .conversation__column {
   width: 100%;
   max-width: calc(var(--rail) * 3);

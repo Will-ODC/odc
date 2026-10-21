@@ -24,6 +24,22 @@ describe("fitting a phone", () => {
     );
   });
 
+  /*
+   * With the question on the card, the space above it held only "Your
+   * answers will appear here" and blank phone: it now takes its content's
+   * height, so the card sits under it (review of #420; card top measured at
+   * 127px instead of 501px on 375x812).
+   */
+  it("does not stretch the answers above the card on a phone", () => {
+    const css = readFileSync(
+      new URL("../src/screens/Conversation.css", import.meta.url),
+      "utf8",
+    );
+    expect(css).toMatch(
+      /@media \(max-width: 1099px\) \{\s*\.conversation__scroll \{\s*flex: 0 1 auto;/,
+    );
+  });
+
   it("keeps the top bar's controls on one line", () => {
     expect(rule("components/TopBanner.css", ".banner__actions")).toMatch(
       /flex-wrap:\s*nowrap/,

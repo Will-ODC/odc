@@ -95,6 +95,30 @@ describe("spending the token exactly once", () => {
     // send the second call to the default.
     expect(onSignedIn).toHaveBeenCalledTimes(1);
   });
+
+  /*
+   * The app hands in a fresh `onSignedIn` every time it draws, which reruns
+   * the effect. Going on twice would read the remembered place a second
+   * time, find it already forgotten, and replace it with the default.
+   */
+  it("goes on once even when handed a new callback after signing in", async () => {
+    const first = vi.fn();
+    const later = vi.fn();
+    const api = stubApi({ redeem: () => Promise.resolve(ME) });
+    const { rerender } = render(
+      <StrictMode>
+        <Redeem api={api} token="abc" onSignedIn={first} onAskAgain={noop} />
+      </StrictMode>,
+    );
+    await waitFor(() => expect(first).toHaveBeenCalledTimes(1));
+    rerender(
+      <StrictMode>
+        <Redeem api={api} token="abc" onSignedIn={later} onAskAgain={noop} />
+      </StrictMode>,
+    );
+    expect(later).not.toHaveBeenCalled();
+    expect(first).toHaveBeenCalledTimes(1);
+  });
 });
 
 describe("when the link has run out", () => {

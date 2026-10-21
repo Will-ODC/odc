@@ -435,7 +435,7 @@ it("signs out everywhere only after asking, then hands off", async () => {
   );
   // One account control in the bar; the address is not printed in it.
   expect(await banner().findByRole("button", { name: "Account" })).toBeTruthy();
-  expect(banner().queryByText(voter.email)).toBeNull();
+  expect(banner().getByText(voter.email).closest("[hidden]")).not.toBeNull();
   expect(banner().queryByRole("link", { name: "Sign in" })).toBeNull();
   await openAccount(user);
   expect(banner().getByText(voter.email)).toBeTruthy();
@@ -671,6 +671,8 @@ it("says the question and closing date once while the card is open", async () =>
   const shown = main().getByRole("heading", { name: p.question, level: 1 });
   expect(shown.closest(".conversation__hero--merged")).toBeNull();
   expect(screen.getAllByText(closingNote(p))).toHaveLength(1);
+  // The same heading node throughout, so focus on it is never dropped.
+  expect(shown).toBe(heading);
 });
 
 it("leaves out the 'Opens another question' hint under choices", async () => {
@@ -703,10 +705,34 @@ it("shows the just-posted line only when told the question was just posted", asy
     />,
   );
   expect(await screen.findByText(/Your question is live/)).toBeTruthy();
+  await main().findByRole("heading", { name: poll().question, level: 1 });
   await userEvent.click(screen.getByRole("button", { name: "Dismiss" }));
   expect(onDismiss).toHaveBeenCalledTimes(1);
+  // Focus goes to the question the line sat over, not to the page.
+  expect(document.activeElement).toBe(
+    main().getByRole("heading", { name: poll().question, level: 1 }),
+  );
   unmount();
   render(<Conversation api={stubApi()} pollId="ads-free" />);
   await main().findByRole("heading", { name: poll().question, level: 1 });
   expect(screen.queryByText(/Your question is live/)).toBeNull();
+});
+
+it("ends the just-posted line when Next moves to another question", async () => {
+  const first = poll({ next: [null, "parks"] });
+  const parks = poll({ id: "parks", question: "More parks?" });
+  const onDismiss = vi.fn();
+  render(
+    <Conversation
+      api={stubApi({ poll: graph([first, parks]) })}
+      pollId={first.id}
+      posted={{ url: "https://pulse.test/?poll=ads-free", onDismiss }}
+    />,
+  );
+  await main().findByRole("heading", { name: first.question, level: 1 });
+  const user = await answer("Yes");
+  await user.click(within(card()).getByRole("button", { name: "Next" }));
+  await main().findByRole("heading", { name: "More parks?", level: 1 });
+  expect(screen.queryByText(/Your question is live/)).toBeNull();
+  expect(onDismiss).toHaveBeenCalledTimes(1);
 });

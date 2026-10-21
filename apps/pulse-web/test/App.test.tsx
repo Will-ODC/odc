@@ -51,6 +51,27 @@ describe("what the URL opens", () => {
     expect(screen.queryByRole("button", { name: "Continue" })).toBeNull();
   });
 
+  it("stops saying 'Signed in' once someone signs out", async () => {
+    const user = userEvent.setup();
+    globalThis.history.replaceState(null, "", "/sign-in?token=abc123");
+    render(
+      <App
+        api={stubApi({
+          redeem: () => Promise.resolve(ME),
+          me: () => Promise.resolve(ME),
+          signOut: () => Promise.resolve(),
+        })}
+      />,
+    );
+    const status = await screen.findByText("Signed in");
+    const bar = within(screen.getAllByRole("banner")[0]!);
+    await user.click(await bar.findByRole("button", { name: "Account" }));
+    await user.click(bar.getByRole("button", { name: "Sign out" }));
+    await user.click(bar.getByRole("button", { name: "Sign out everywhere" }));
+    expect(await screen.findByLabelText("Your email")).toBeTruthy();
+    expect(status.textContent).toBe("");
+  });
+
   it("asks for a link when /sign-in carries no token", async () => {
     globalThis.history.replaceState(null, "", "/sign-in");
     render(<App api={stubApi()} />);

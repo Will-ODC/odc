@@ -1,5 +1,5 @@
 // @vitest-environment jsdom
-import { cleanup, render, screen, waitFor } from "@testing-library/react";
+import { act, cleanup, render, screen, waitFor } from "@testing-library/react";
 import userEvent from "@testing-library/user-event";
 import { afterEach, describe, expect, it, vi } from "vitest";
 import { PostedBanner } from "../src/components/PostedBanner.js";
@@ -27,6 +27,28 @@ describe("the line over a question just posted", () => {
     expect((await screen.findByText("Copied")).getAttribute("role")).toBe(
       "status",
     );
+  });
+
+  it("says Copied afresh on a second copy", async () => {
+    const user = userEvent.setup();
+    let finish: () => void = () => {};
+    const writeText = vi.fn(
+      () =>
+        new Promise<void>((resolve) => {
+          finish = resolve;
+        }),
+    );
+    useClipboard({ writeText });
+    render(<PostedBanner url={URL_} onDismiss={() => {}} />);
+    const status = screen.getByRole("status");
+    await user.click(screen.getByRole("button", { name: "Copy link" }));
+    await act(async () => finish());
+    expect(status.textContent).toBe("Copied");
+    await user.click(screen.getByRole("button", { name: "Copy link" }));
+    // Emptied while copying, so "Copied" is new text to read out again.
+    expect(status.textContent).toBe("");
+    await act(async () => finish());
+    expect(status.textContent).toBe("Copied");
   });
 
   it("selects the address in a read-only field when there is no clipboard", async () => {
