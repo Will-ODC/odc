@@ -1,6 +1,5 @@
 // @vitest-environment jsdom
 import { cleanup, render, screen, within } from "@testing-library/react";
-import userEvent from "@testing-library/user-event";
 import { afterEach, describe, expect, it } from "vitest";
 import { TopBanner } from "../src/components/TopBanner.js";
 import { Conversation } from "../src/screens/Conversation.js";
@@ -21,7 +20,8 @@ async function open(attribution?: Parameters<typeof poll>[0]) {
   );
   const main = within(screen.getByRole("main"));
   await main.findByRole("heading", { level: 1 });
-  await userEvent.click(main.getByRole("button", { name: "Vote" }));
+  // The card opens with the question (#401), so there is no Vote to press.
+  await main.findByRole("region");
   return main;
 }
 
