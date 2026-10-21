@@ -256,8 +256,9 @@ go past it.
   in (the orchestrator, or the lead that owns the PR) runs the unit's tests,
   lint, typecheck and `pnpm -s format:check` on the merged result before
   pushing. If resolving the conflict changed code or tests, not only prose,
-  the orchestrator has a fresh `odc-reviewer` review that merge commit. In the 2026-10-20 run, merging `master` into
-  an approved PR broke three tests from a PR merged an hour earlier.
+  the orchestrator has a fresh `odc-reviewer` review that merge commit. In the
+  2026-10-20 run, merging `master` into an approved PR broke three tests from a
+  PR merged an hour earlier.
 - **When the leads report,** check their PRs do not collide — settle a clash
   between two leads by message — and tell the operator which PRs are ready to
   merge, in what order, with each review's verdict. Merging stays the
