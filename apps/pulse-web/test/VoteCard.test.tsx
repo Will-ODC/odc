@@ -300,8 +300,9 @@ describe("status", () => {
       />,
     );
     const link = screen.getByRole("link", {
-      name: "Why you can trust your vote (opens in a new tab)",
+      name: "How votes count (opens in a new tab)",
     });
+    expect(link.textContent).toBe("How votes count");
     expect(link.getAttribute("href")).toBe("/trust");
     expect(link.getAttribute("target")).toBe("_blank");
     expect(link.getAttribute("rel")).toContain("noopener");

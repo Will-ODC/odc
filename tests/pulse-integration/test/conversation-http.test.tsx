@@ -28,6 +28,7 @@ it("approval cast, replacement, network retry and closed results work over the r
   const votes = new InMemoryVotingStore();
   await votes.createPoll({
     id: "ads-free",
+    next: [null, "approval"],
     question: "Stay free of ads?",
     choices: ["No", "Yes"],
     method: "single",
@@ -93,20 +94,21 @@ it("approval cast, replacement, network retry and closed results work over the r
     await user.click(
       await screen.findByRole("button", { name: "Show me how" }),
     );
-    await user.click(screen.getByRole("button", { name: "Vote" }));
     await user.click(screen.getByRole("radio", { name: "Yes" }));
     await user.click(screen.getByRole("button", { name: "Submit" }));
     await screen.findByText("Counted");
     expect(await api.myBallot("ads-free")).toEqual([1]);
-    first.unmount();
-    globalThis.history.replaceState(null, "", "/?poll=approval");
-    const view = render(<App api={api} />);
+    await user.click(screen.getByRole("button", { name: "Next" }));
     await screen.findByRole("heading", {
       name: "Which improvements?",
       level: 1,
     });
-    await user.click(screen.getByRole("button", { name: "Vote" }));
     let card = within(screen.getByRole("region"));
+    expect(card.getByRole("button", { name: "Submit" })).toHaveProperty(
+      "disabled",
+      true,
+    );
+    expect(await api.myBallot("approval")).toBeNull();
     await user.click(card.getByRole("checkbox", { name: "Park" }));
     await user.click(card.getByRole("checkbox", { name: "Rink" }));
     await user.click(card.getByRole("button", { name: "Submit" }));
@@ -125,11 +127,10 @@ it("approval cast, replacement, network retry and closed results work over the r
     await screen.findByText("Counted. That replaces your earlier answer.");
     expect(await api.myBallot("approval")).toEqual([2]);
     expect((await api.results("approval")).voters).toBe(1);
-    view.unmount();
+    first.unmount();
     globalThis.history.replaceState(null, "", "/?poll=closed");
     render(<App api={api} />);
     await screen.findByRole("heading", { name: "An ended question", level: 1 });
-    await user.click(screen.getByRole("button", { name: "Vote" }));
     await screen.findByText("This one has closed.");
     card = within(screen.getByRole("region"));
     expect(card.queryByRole("button", { name: "Submit" })).toBeNull();

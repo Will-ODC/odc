@@ -1,6 +1,7 @@
 import { useCallback, useEffect, useRef, useState } from "react";
 import type { Poll, PulseApi, Results } from "../api/types.js";
 import { cardStatus, closingNote, nextFor } from "../flow/conversation.js";
+import { byline } from "../flow/new-poll.js";
 import { guideFor } from "../flow/vote-help.js";
 import { pathOf } from "../flow/route.js";
 import { usePoll } from "../hooks/use-poll.js";
@@ -186,6 +187,7 @@ function Banner({
     case "signedIn":
       return (
         <TopBanner
+          postHref={pathOf({ kind: "newPoll" })}
           identity={
             <SignedIn
               email={session.me.email}
@@ -200,6 +202,7 @@ function Banner({
     case "unknown":
       return (
         <TopBanner
+          postHref={pathOf({ kind: "newPoll" })}
           signInHref={pathOf({ kind: "signIn" })}
           {...(holdsVotes
             ? {
@@ -296,6 +299,11 @@ function LoadedQuestion({
                 <h1 ref={heading} tabIndex={-1}>
                   {poll.question}
                 </h1>
+                {byline(poll.attribution) ? (
+                  <p className="conversation__byline">
+                    {byline(poll.attribution)}
+                  </p>
+                ) : null}
               </section>
             )}
           </ViewState>
@@ -327,7 +335,7 @@ function LoadedQuestion({
           </ol>
           {answers.length === 0 && loaded.status === "ready" ? (
             <p className="conversation__empty">
-              Your answers will appear here. Open the vote card to start.
+              Your answers will appear here after you submit.
             </p>
           ) : null}
         </div>
@@ -386,7 +394,7 @@ function LiveCard({
   const [picked, setPicked] = useState<number[]>(saved?.ballot ?? []);
   const [showSaved, setShowSaved] = useState(Boolean(saved));
   const [collapsed, setCollapsed] = useState(false);
-  const [visible, setVisible] = useState(false);
+  const [visible, setVisible] = useState(true);
   const [helping, setHelping] = useState(false);
   const help = useRef<HTMLButtonElement>(null);
   const guideRoot = useRef<HTMLDivElement>(null);
@@ -543,6 +551,9 @@ function LiveCard({
       <div ref={wrapper}>
         <VoteCard
           question={poll.question}
+          {...(byline(poll.attribution)
+            ? { byline: byline(poll.attribution) as string }
+            : {})}
           why={closingNote({ ...poll, open: !shut })}
           method={poll.method}
           choices={poll.choices.map((label, index) => ({
@@ -555,7 +566,10 @@ function LiveCard({
           privacyNote="Your answer is private."
           trustHref={pathOf({ kind: "trust" })}
           confirmation={cardConfirmation}
-          confirmHref={pathOf({ kind: "signIn", pollId: poll.id })}
+          confirmHref={pathOf({
+            kind: "signIn",
+            returnTo: { kind: "conversation", pollId: poll.id },
+          })}
           {...(fresh.problem
             ? {
                 resultsProblem: {

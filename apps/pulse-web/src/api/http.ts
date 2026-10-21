@@ -2,7 +2,9 @@ import { ApiError } from "./types.js";
 import type {
   Ballot,
   CastOutcome,
+  CreationContext,
   Me,
+  NewPollRequest,
   Poll,
   PulseApi,
   RequestLinkResult,
@@ -123,6 +125,21 @@ export class HttpPulseApi implements PulseApi {
     });
   }
 
+  async creationContext(): Promise<CreationContext> {
+    return this.#send("GET", "/poll-creation/context");
+  }
+
+  async createPoll(key: string, request: NewPollRequest): Promise<Poll> {
+    const body = await this.#send<{ poll: Poll }>(
+      "POST",
+      "/polls",
+      request,
+      undefined,
+      { "idempotency-key": key },
+    );
+    return body.poll;
+  }
+
   /**
    * `answer` is how a caller turns one particular refusal into a result: it
    * sees every non-2xx body and returns a value to resolve with, or undefined
@@ -133,6 +150,7 @@ export class HttpPulseApi implements PulseApi {
     path: string,
     body?: unknown,
     answer?: (status: number, parsed: unknown) => A | undefined,
+    headers: Record<string, string> = {},
   ): Promise<T | ([A] extends [never] ? never : Answered<A>)> {
     let response: Response;
     try {
@@ -140,9 +158,11 @@ export class HttpPulseApi implements PulseApi {
         method,
         credentials: "same-origin",
         ...(body === undefined
-          ? {}
+          ? Object.keys(headers).length > 0
+            ? { headers }
+            : {}
           : {
-              headers: { "content-type": "application/json" },
+              headers: { "content-type": "application/json", ...headers },
               body: JSON.stringify(body),
             }),
       });
@@ -170,6 +190,7 @@ export class HttpPulseApi implements PulseApi {
         response.status,
         messageFrom(parsed) ?? fallbackMessage(response.status),
         stringField(parsed, "error"),
+        retryAfter(response),
       );
     }
     // A 2xx carrying something that isn't JSON — a proxy's HTML error page, say —
@@ -183,6 +204,13 @@ export class HttpPulseApi implements PulseApi {
     }
     return parsed as T;
   }
+}
+
+/** `Retry-After` as whole seconds; the date form is not sent by pulse. */
+function retryAfter(response: Response): number | undefined {
+  const value = response.headers?.get("retry-after");
+  if (!value || !/^\d+$/.test(value)) return undefined;
+  return Number(value);
 }
 
 function safeJson(text: string): unknown {
