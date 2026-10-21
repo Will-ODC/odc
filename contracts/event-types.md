@@ -817,9 +817,9 @@ when the chain also holds ballots at a `vote_cast` version it does not register.
   EV-26 will apply to it that does not depend on where it lands in the log; a
   ballot that fails one is refused, never admitted. The checks that do depend on
   where it lands (its `seq`, its `prev_hash` and the signature over them,
-  `hashing.md` HA-15) are fixed by the producer itself when it appends the
-  batch. So a sealed batch never holds a ballot that fails for a reason the
-  producer did not cause, and never falls short of `ballot_batch_min` (ET-24)
+  `hashing.md` HA-15) are fixed when the batch is appended, by the producer and
+  its registrar, whose `vote_cast` signature (ET-17) covers them. So a sealed
+  batch never holds a ballot that fails for a reason the producer did not cause, and never falls short of `ballot_batch_min` (ET-24)
   because a ballot in it is unappendable. A ballot of that issue
   admitted after the seal goes to a later batch instant (ET-23), never to the
   sealed batch's. Other events MAY still fall between a sealed batch's members
