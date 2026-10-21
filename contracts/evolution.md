@@ -486,6 +486,19 @@ the same verdict on everything the writer may produce.
   It follows that a ledger never appends an event at a `(type, version)` it
   does not register: that export would be `PARTIAL`, not `VALID`.
 
+  Two consequences are stated rather than left to be discovered. First, on a
+  chain whose export is not already `VALID` under that verifier, EV-26 forbids
+  every further append, whatever the new event is. That covers a chain already
+  `INVALID`, which no append can repair (EV-7), and a chain holding
+  `(type, version)` pairs the ledger does not register, for example after the
+  ledger is rolled back to an earlier contracts version than the one that
+  wrote them, so that its export is `PARTIAL`. Second, EV-26 constrains the
+  result, not the method. A ledger need not re-verify the whole export before
+  each append. It satisfies the rule by keeping whatever state a verifier
+  carries forward from line to line (the previous `hash`, the declared keys, the
+  issues, and each issue's batches) and checking only the new line against it,
+  provided the verdict it reaches is the one a full verification would reach.
+
   This rule binds the producer only. It adds no check, changes no verdict and
   is never reported by a verifier, which cannot tell a ledger that checked
   before appending from one that was lucky.

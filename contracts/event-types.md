@@ -559,12 +559,14 @@ off-log eligibility check.
   tells that observer is which batch holds the person's ballot, never which line
   in it; the positional residual above is a separate matter. That batch
   holds at least the issue's `ballot_batch_min` ballots (ET-14b, ET-24), so
-  against such an observer the ballot is hidden among at least
-  `ballot_batch_min` ballots, and no more is promised. Two cases give less. The
-  issue's last batch may be smaller, down to a single ballot (ET-24). And
-  `choice` is in the clear, so if every ballot of the batch carries the same
-  `choice`, the observer learns the person's choice without learning their
-  line. The bound holds only if the producer follows ET-25, which the log cannot
+  against such an observer the ballot's line is hidden among at least
+  `ballot_batch_min` lines, and no more is promised. The issue's last batch may
+  be smaller, down to a single ballot (ET-24). The ballot's `choice` is hidden
+  less well than its line. Every `choice` is in the clear, so the observer reads
+  the batch's whole tally, and the person's choice is only as hidden as that
+  tally allows: in a batch of 10 with 9 ballots for one choice, the observer is
+  90% sure of the person's choice without knowing their line. A unanimous batch
+  is the extreme case, where the observer learns the choice outright. The bound holds only if the producer follows ET-25, which the log cannot
   show. The registrar is not such an observer: it sees each ballot at
   admission (above).
 - **ET-22.** _Permanent evolution constraint (binds `evolution.md`, T4)._ No
@@ -810,7 +812,15 @@ when the chain also holds ballots at a `vote_cast` version it does not register.
   **A batch is released whole.** A producer _seals_ a batch when it stops
   admitting ballots to it. No ballot of a batch is appended until the producer
   has sealed that batch. A sealed batch is then appended in full: every ballot
-  admitted to it, and no ballot admitted after the seal. A ballot of that issue
+  admitted to it, and no ballot admitted after the seal. A producer admits a
+  ballot to a batch only after the ballot passes every check `evolution.md`
+  EV-26 will apply to it that does not depend on where it lands in the log; a
+  ballot that fails one is refused, never admitted. The checks that do depend on
+  where it lands (its `seq`, its `prev_hash` and the signature over them,
+  `hashing.md` HA-15) are fixed by the producer itself when it appends the
+  batch. So a sealed batch never holds a ballot that fails for a reason the
+  producer did not cause, and never falls short of `ballot_batch_min` (ET-24)
+  because a ballot in it is unappendable. A ballot of that issue
   admitted after the seal goes to a later batch instant (ET-23), never to the
   sealed batch's. Other events MAY still fall between a sealed batch's members
   (ET-24), but none of them can date a member's arrival, because every member

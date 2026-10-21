@@ -28,13 +28,20 @@ Format (newest first, one entry per merged contracts change):
   unverified append taints the chain for good (EV-7), and any registrant can
   submit one (ET-10). **RA-13** now says the write path's interface is outside
   `contracts/` but what it may append is not (EV-25, EV-26, ET-23 to ET-25).
-  EV-15 lists EV-26 with EV-23 to EV-25 outside the stage split.
+  EV-15 lists EV-26 with EV-23 to EV-25 outside the stage split. EV-26 also
+  says that a chain not already `VALID` (one that is `INVALID`, or `PARTIAL`
+  after a rollback) takes no further append, and that checking each new line
+  against carried-forward state satisfies it.
 - **ET-25**: no ballot of a batch is appended until the producer has sealed the
   batch, and a sealed batch is appended in full; a ballot admitted after the
-  seal goes to a later instant. This closes the drip-feed reading of ET-25.
-  **ET-21** gains the residual: against a timing observer a ballot is hidden
-  among at least `ballot_batch_min` ballots, less in an issue's last batch, and
-  not at all for `choice` when the batch is unanimous. Producer-only; no
+  seal goes to a later instant. A ballot is admitted only after it passes
+  every EV-26 check that does not depend on its final position, so a sealed
+  batch cannot fall under `ballot_batch_min` through an unappendable ballot.
+  This closes the drip-feed reading of ET-25.
+  **ET-21** gains the residual: against a timing observer a ballot's
+  line is hidden among at least `ballot_batch_min` lines (fewer in an issue's
+  last batch), but its `choice` only as well as the batch's public tally
+  allows, with a unanimous batch the extreme case. Producer-only; no
   verdict changes and no committed vector changes.
 - Five vectors appended, `146`–`150`, for HA-2's ill-formed UTF-8 sentence, all
   `INVALID` at line 2: raw surrogate `ed a0 80`, escaped `\ud800`, overlong
