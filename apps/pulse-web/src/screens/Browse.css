@@ -48,7 +48,7 @@
   background: var(--surface-rest);
 }
 .browse .browse__main {
-  max-width: calc(var(--rail) * 6);
+  max-width: calc(var(--rail) * 4);
   margin: 0 auto;
   padding: calc(var(--step) * 3) var(--gutter);
 }
@@ -71,4 +71,10 @@
 }
 .browse__list li:last-child {
   border-radius: 0 0 var(--r-control) var(--r-control);
+}
+
+@media (min-width: 1100px) {
+  .browse .browse__main {
+    width: calc(100% - var(--rail) * 2);
+  }
 }
