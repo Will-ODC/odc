@@ -4,7 +4,7 @@
 > Read `memory/INDEX.md` first. Agent rules are in `apps/pulse/CLAUDE.md`, the
 > served API is in `apps/pulse/API.md`, and the work queue is GitHub
 > issues (design detail an issue links to is in `docs/plans/pulse.md`). This file holds current state only, and history is in
-> git. Slimmed 2026-10-10, refreshed 2026-10-20. The long ledger it replaced is in
+> git. Slimmed 2026-10-10, refreshed 2026-10-21. The long ledger it replaced is in
 > `git log -p -- memory/pulse.md`.
 >
 > The operator's development-feedback loop, the trust and reporting decisions,
@@ -37,7 +37,7 @@ Repo discipline still applies: tests ship with the change, there is one small
 branch per change, named for its ticket (`pulse/<issue>-<short>`, #310), and
 the same CI runs.
 
-## Where it stands (2026-10-20)
+## Where it stands (2026-10-21)
 
 - **Pillar 1 (identity) is built.** Magic-link sign-in and redeem (#81-#87,
   #116, #149). Open sign-up lets anyone sign in, and community is an optional
@@ -64,6 +64,16 @@ the same CI runs.
 - **MCP public reads are built** (#300 read slice, PR #323): `get_poll` and
   `get_results` at `/api/mcp`. ADR-0036 (voting from AI apps) is still marked
   proposed; no casting, sign-in or own-answer tools exist.
+- **Public poll listing is built** (#259 / PR #419, merged 2026-10-21).
+  `GET /api/polls?community=ID` needs no sign-in and returns open and closed
+  question summaries, excluding hidden polls and legacy polls without a
+  community. Newest-first creation time and UTF-8 poll ID ordering use
+  community-bound cursor pagination (20 by default, maximum 100).
+  Migration 008 adds the visible-community listing index. PR validation passed
+  606 API tests with PostgreSQL required and zero skips, independent review
+  returned APPROVE with no findings, and CI passed. **No browser list or MCP
+  discovery consumer is built yet** (#260/#291); existing MCP tools still read
+  individual polls/results only.
 - **Poll creation is built, including the form.** ADR-0037
   (#340) settles the policy and API. Built: migration 005 (#346), the Postgres publication store with
   quotas, safe retries and owner-only posting grants (#354), and an in-memory
@@ -114,6 +124,9 @@ the same CI runs.
   described it (2026-09-06) as "a home screen that browses all polls and batches
   of related polls, story-style". It is also ADR-0022's route back to a question
   from outside a run.
+  Its listing API prerequisite is now delivered (#259 / PR #419). The minimal
+  browser list (#260) still needs its layout and entry route accepted; MCP
+  discovery (#291) remains a separate consumer.
 - **Authorised moderator access is not built.** The merged creation form and
   public byline use ADR-0037's interim anonymity disclosure (#393); do not claim
   the later moderator-access model exists.

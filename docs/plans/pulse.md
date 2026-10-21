@@ -124,16 +124,20 @@ It has three jobs, and the third is new:
 3. **ADR-0024 makes it the primary way anyone reaches a second question at
    all**, because under crowdsourced posting `next` is mostly empty.
 
-**Blocked on:** whether this is a list, a feed, or a search, and how it relates
-to the graph a run walks. None of that is decided. Two pieces of it are decided
-or in flight and should be read first — ADR-0021 rules that **ordering is a
+**Initial screen scope:** a minimal list (#260), with its layout and entry route
+still awaiting acceptance. How browsing relates to the graph a run walks also
+remains undecided. Two related decisions should be read first — ADR-0021 rules that **ordering is a
 query, not stored data** (a curated group, a relevance ranking, and random are
 all resolved at request time), and ADR-0025 defines the related-poll edges (landed, #148)
 this screen would batch.
 
-Also owed by this item and not by #148: **there is no `GET /api/polls`.** Every
-route is `/api/polls/:id/...`, so a browsing screen needs a listing endpoint
-that does not exist.
+**Listing API built:** #259 / PR #419 merged `GET /api/polls?community=ID`
+on 2026-10-21. Public, community-scoped summaries include open and closed polls,
+exclude hidden and unscoped legacy polls, and paginate newest first by creation
+time and UTF-8 poll ID (migration 008). See `apps/pulse/API.md` for the served
+contract. The browser list (#260) and MCP discovery (#291) remain unbuilt; the
+browser layout and entry route still need acceptance. This API does not provide
+ADR-0025's related-poll links.
 
 ## P5 — Pillar 3, the path to action · UI DIRECTION SET; RECORDS AND NOTIFICATION RULES PENDING
 
@@ -193,7 +197,8 @@ migration.
 Do not invent authors or membership for existing data.
 
 Reporting/review (#233–#236), duplicate warnings (#261), suggestions (#336),
-photos/summary (#296), comments (#297) and browse (#259/#260) remain separate.
+photos/summary (#296), comments (#297) and the browsing UI (#260) remain separate.
+The browsing API (#259 / PR #419) is built; no browsing consumer is built yet.
 Broad public posting launch waits for reporting/review and the automatic-hide
 threshold design. ADR-0024's hide-not-delete and automatic-hide direction remain.
 Account penalties and appeals do not arrive implicitly with creation.
