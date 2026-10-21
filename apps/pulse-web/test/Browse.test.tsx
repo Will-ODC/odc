@@ -166,3 +166,24 @@ it("offers the signed-in community without requiring it for public browsing", as
   await waitFor(() => expect(listPolls).toHaveBeenCalledWith("pulse-general"));
   expect(screen.queryByText("private@example.test")).toBeNull();
 });
+
+it("loads the final page by keyboard and focuses its first new question", async () => {
+  const user = userEvent.setup();
+  const listPolls = vi
+    .fn()
+    .mockResolvedValueOnce(page([row("first")], "next"))
+    .mockResolvedValueOnce(page([row("second")]));
+  render(<Browse api={stubApi({ listPolls })} community="pulse-general" />);
+  await screen.findByRole("button", { name: "Load more" });
+  await user.tab(); // General
+  await user.tab(); // First question
+  await user.tab(); // Load more
+  expect(document.activeElement).toBe(
+    screen.getByRole("button", { name: "Load more" }),
+  );
+  await user.keyboard("{Enter}");
+  const next = await screen.findByRole("link", { name: "Question second" });
+  await waitFor(() => expect(document.activeElement).toBe(next));
+  expect(listPolls).toHaveBeenLastCalledWith("pulse-general", "next");
+  expect(screen.queryByRole("button", { name: "Load more" })).toBeNull();
+});
