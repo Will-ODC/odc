@@ -1,8 +1,8 @@
 # Evolution — contracts/evolution.md
 
-**Version:** 9
+**Version:** 10
 **Status:** DRAFTING (Phase 0 · T5f, amended T9a/ADR-0014, ADR-0015,
-ADR-0017, ADR-0034, ADR-0038). Not frozen.
+ADR-0017, ADR-0034, ADR-0038, T9 re-audit #408). Not frozen.
 **Companion specs:** `event-schema.md`, `event-types.md`, `hashing.md`,
 `export-format.md`, `read-api.md`.
 **Governing ADRs:** ADR-0006 (verifier scope & forward compatibility),
@@ -207,7 +207,7 @@ the surface has to live here.
   constraints on the verifier itself, rather than per-event checks; they are
   outside this split and belong to neither stage. EX-24 is likewise outside
   the split: it requires tool output on every non-empty run and does not change
-  the chain verdict. So are EV-23 to EV-25, which bound the verifier and the
+  the chain verdict. So are EV-23 to EV-26, which bound the verifier and the
   ledger rather than check an event. So are, in `event-types.md`,
   the boundary statements ET-20 and ET-21 and the evolution constraints ET-22
   and ET-22a (which describe what the log does not enforce, and what a future
@@ -471,6 +471,47 @@ the same verdict on everything the writer may produce.
   that a verifier built earlier may refuse, which breaks EV-8's promise that an
   old verifier still checks a newer chain.
 
+## 8. The ledger verifies before it appends (added in v10)
+
+- **EV-26.** **No append without verification.** A ledger MUST NOT append an
+  event unless its export, with that event appended as the last line, verifies
+  `VALID` (EV-7) under a verifier that registers exactly the `(type, version)`
+  pairs of the contracts version the ledger implements, run with neither
+  `--head` nor `--chain` (`export-format.md` EX-15, EX-22). So every Stage A and
+  Stage B check (EV-15) that the new line faces runs before it is appended,
+  never after. That includes the line's `hash` (`hashing.md` HA-13), its
+  signature and key checks (`event-types.md` ET-4 to ET-5), and the rules a new
+  line can break across the chain, such as ET-24 and ET-24a. A ledger that
+  cannot finish these checks for an event, for any reason, MUST NOT append it.
+  It follows that a ledger never appends an event at a `(type, version)` it
+  does not register: that export would be `PARTIAL`, not `VALID`.
+
+  Two consequences are stated rather than left to be discovered. First, on a
+  chain whose export is not already `VALID` under that verifier, EV-26 forbids
+  every further append, whatever the new event is. That covers a chain already
+  `INVALID`, which no append can repair (EV-7), and a chain holding
+  `(type, version)` pairs the ledger does not register, for example after the
+  ledger is rolled back to an earlier contracts version than the one that
+  wrote them, so that its export is `PARTIAL`. Second, EV-26 constrains the
+  result, not the method. A ledger need not re-verify the whole export before
+  each append. It satisfies the rule by keeping whatever state a verifier
+  carries forward from line to line (the previous `hash`, the declared keys, the
+  issues, and each issue's batches) and checking only the new line against it,
+  provided the verdict it reaches is the one a full verification would reach.
+
+  This rule binds the producer only. It adds no check, changes no verdict and
+  is never reported by a verifier, which cannot tell a ledger that checked
+  before appending from one that was lucky.
+
+  _Why._ Verification stops at the first fatal line, and the chain is tainted
+  from there (EV-7). The log is append-only, so one appended event that fails a
+  check leaves every later line unverifiable for good, and no later append can
+  repair it. A `participant_registered` is signed by the registrant's own key
+  (`event-types.md` ET-10), so without this rule any member of the public could
+  break the record by submitting one event with a bad signature or a
+  non-canonical line, and a ledger that appended it would make the break
+  permanent.
+
 ---
 
 ## Degrees of freedom closed (acid-test checklist)
@@ -502,6 +543,7 @@ the same verdict on everything the writer may produce.
 | Line length and nesting depth every verifier accepts  | EV-23          |
 | What a verifier does past its own limits              | EV-24          |
 | Longest line a ledger may write; permanence           | EV-25          |
+| Whether a ledger may append an unverified event       | EV-26          |
 
 ## Acid-test walkthrough
 

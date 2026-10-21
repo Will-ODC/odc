@@ -16,7 +16,7 @@ import { test } from "node:test";
 import { fileURLToPath } from "node:url";
 
 import { serializeEvent } from "../src/serialize.js";
-import { type Event } from "../src/encode.js";
+import { eventHash, verifyEvent, type Event } from "../src/encode.js";
 import { vectors, type Expect } from "../src/vectors/index.js";
 import { CLEF } from "../src/vectors/unicode.js";
 
@@ -771,4 +771,79 @@ test("145 pins ET-9's lower bound: an empty contracts, and nothing else wrong", 
     verdict: "INVALID",
     line: 1,
   });
+});
+
+// --- HA-2: ill-formed UTF-8 (T9 re-audit S-E) -------------------------------
+//
+// The octets are the spec-side literals, never imported from the generator.
+
+/** Each vector's ill-formed sequence on line 2, as raw octets or as escape text. */
+const ILL_FORMED: [string, Buffer][] = [
+  ["146-utf8-raw-surrogate", Buffer.from([0xed, 0xa0, 0x80])],
+  ["147-utf8-escaped-surrogate", Buffer.from("\\ud800", "latin1")],
+  ["148-utf8-overlong", Buffer.from([0xc0, 0x80])],
+  ["149-utf8-above-max", Buffer.from([0xf5, 0x80, 0x80, 0x80])],
+  ["150-utf8-truncated", Buffer.from([0xe2, 0x82])],
+];
+
+const strict = new TextDecoder("utf-8", { fatal: true });
+const lax = new TextDecoder("utf-8", { fatal: false });
+
+test("146-150 carry one ill-formed sequence on line 2, and are sealed so a U+FFFD-substituting reader sees a valid chain (HA-2)", () => {
+  const G = rawLines("001-genesis-only")[0] as Buffer;
+  for (const [id, fault] of ILL_FORMED) {
+    assert.deepEqual(expectOf(id), { verdict: "INVALID", line: 2 }, id);
+    const [l1, l2, l3, ...rest] = rawLines(id);
+    assert.equal(rest.length, 0, `${id}: three lines`);
+    assert.ok(l1 && l2 && l3);
+    assert.deepEqual(l1, G, `${id}: line 1 is the 001 genesis`);
+    // Lines 1 and 3 are well-formed; the fault is on line 2 and only there.
+    strict.decode(l1);
+    strict.decode(l3);
+    const at = l2.indexOf(fault);
+    assert.ok(at !== -1, `${id}: line 2 holds the sequence`);
+    assert.equal(l2.indexOf(fault, at + 1), -1, `${id}: exactly once`);
+    const escaped = fault[0] === 0x5c;
+    if (escaped) {
+      strict.decode(l2); // every octet is ASCII; the DECODED value is ill-formed
+      const title = String(
+        (JSON.parse(l2.toString("utf8")) as Event).payload["title"],
+      );
+      assert.ok(
+        /[\ud800-\udfff]/.test(title),
+        `${id}: decodes to a lone surrogate`,
+      );
+    } else {
+      assert.throws(() => strict.decode(l2), `${id}: line 2 is not UTF-8`);
+    }
+    // The lenient reading: substitute U+FFFD (for the escape, as Go's
+    // encoding/json and Buffer.from both do), then everything checks out.
+    const lenient = (
+      escaped
+        ? l2.toString("utf8").replace("\\ud800", "\ufffd")
+        : lax.decode(l2)
+    ).replace(/[\ud800-\udfff]/g, "\ufffd");
+    const e2 = JSON.parse(lenient) as Event;
+    assert.equal(
+      serializeEvent(e2),
+      lenient,
+      `${id}: canonical once substituted`,
+    );
+    assert.equal(
+      eventHash(e2),
+      e2.hash,
+      `${id}: stored hash matches the lenient title`,
+    );
+    const g = JSON.parse(l1.toString("utf8")) as Event;
+    assert.ok(
+      verifyEvent(
+        e2,
+        String(g.payload["operator_pk"]),
+        String(e2.payload["sig"]),
+      ),
+      `${id}: sig verifies over the lenient title`,
+    );
+    const e3 = JSON.parse(l3.toString("utf8")) as Event;
+    assert.equal(e3.prev_hash, e2.hash, `${id}: line 3 links to line 2`);
+  }
 });

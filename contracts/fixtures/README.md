@@ -1,10 +1,10 @@
 # contracts/fixtures/ — golden vectors
 
-**Version:** 16
+**Version:** 17
 **Status:** DRAFTING (Phase 0 · T5, T5j, ADR-0009, ADR-0010, ADR-0011,
-ADR-0038). Not frozen.
+ADR-0038, T9 re-audit #408). Not frozen.
 
-**145 vectors** — 23 `VALID`, 15 `PARTIAL`, 107 `INVALID`. They are numbered in
+**150 vectors** — 23 `VALID`, 15 `PARTIAL`, 112 `INVALID`. They are numbered in
 category order: `VALID` (`001`–`007`), `PARTIAL` (`008`–`011`), then `INVALID` —
 the envelope and Stage A checks (`012`–`042`), the export framing and canonical
 line form (`043`–`052`), `--head` (`053`–`054`), the Stage B type semantics
@@ -78,6 +78,20 @@ fixture: a 65536-byte `x_` line (`PARTIAL` at 2) and an `x_` line at depth 64
 verifier that drops, truncates or skips the long or deep line names the wrong
 line. `145` pins ET-9's lower bound: an empty `contracts` is `INVALID` at line 1,
 the only fault on an otherwise well-formed, signed genesis.
+
+`146`–`150` pin the closing sentence of `hashing.md` HA-2: a string whose
+decoded value is not well-formed UTF-8 is rejected (T9 re-audit S-E). Each is a
+genesis, an `issue_created` whose title holds one ill-formed sequence, and a
+valid line after it, so each is `INVALID` at line 2: the raw surrogate
+`ed a0 80` (`146`), the escape `\ud800` (`147`), the overlong `c0 80` (`148`),
+`f5 80 80 80`, above U+10FFFF (`149`), and `e2 82` cut short by a space
+(`150`). Line 2 is hashed and signed over the title a lenient decoder sees, with
+U+FFFD in place of the sequence, and line 3 links to that hash. A verifier that
+substitutes U+FFFD instead of rejecting therefore finds every hash, signature
+and link correct, except on `150` under Go's one-U+FFFD-per-octet
+substitution, which fails the hash instead. No canonical line can carry an
+ill-formed string, so EX-2 (raw octets) or EX-9 (the escape) also rejects each
+line; the vectors pin the verdict and line, not the rule a verifier names.
 
 **These vectors pin only cases where the conservative rule and the exact
 all-assignments rule agree** (ADR-0034 decision 7), so ET-24b can be tightened

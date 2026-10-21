@@ -46,7 +46,7 @@ function actualToExpectShape(v: Verdict): unknown {
 }
 
 test(`fixtures index has all vectors`, () => {
-  assert.equal(index.vectors.length, 145);
+  assert.equal(index.vectors.length, 150);
 });
 
 for (const vec of index.vectors) {

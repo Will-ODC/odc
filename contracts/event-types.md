@@ -1,9 +1,9 @@
 # Event Types — contracts/event-types.md
 
-**Version:** 14
+**Version:** 15
 **Status:** DRAFTING (Phase 0 · T3, amended T4a, T5i, T5j, ADR-0009, ADR-0010,
 ADR-0011, T9a/ADR-0013, ADR-0014, ADR-0016, ADR-0018, ADR-0019, ADR-0029 with its
-review fixes, ADR-0034, and ADR-0038). Not frozen.
+review fixes, ADR-0034, ADR-0038, and the T9 re-audit (#408)). Not frozen.
 **Companion specs:** `event-schema.md` (envelope), `ids.md` (identifiers),
 `hashing.md` (preimage — T4).
 
@@ -552,6 +552,23 @@ off-log eligibility check.
   and a `participant_registered` line adjacent in `seq` to a ballot still
   correlates the two planes by position, even once the ballot's `ts` no longer
   confirms the minute.
+
+  **What the discipline leaves a timing observer.** Take an observer who reads
+  only the public log, as often as it likes, and knows when a person voted on an
+  issue. If the producer follows ET-23 to ET-25, the most the time of the vote
+  tells that observer is which batch holds the person's ballot, never which line
+  in it; the positional residual above is a separate matter. That batch
+  holds at least the issue's `ballot_batch_min` ballots (ET-14b, ET-24), so
+  against such an observer the ballot's line is hidden among at least
+  `ballot_batch_min` lines, and no more is promised. The issue's last batch may
+  be smaller, down to a single ballot (ET-24). The ballot's `choice` is hidden
+  less well than its line. Every `choice` is in the clear, so the observer reads
+  the batch's whole tally, and the person's choice is only as hidden as that
+  tally allows: in a batch of 10 with 9 ballots for one choice, the observer is
+  90% sure of the person's choice without knowing their line. A unanimous batch
+  is the extreme case, where the observer learns the choice outright. The bound holds only if the producer follows ET-25, which the log cannot
+  show. The registrar is not such an observer: it sees each ballot at
+  admission (above).
 - **ET-22.** _Permanent evolution constraint (binds `evolution.md`, T4)._ No
   future version of `vote_cast` MAY introduce a voter-held public key, a
   signature produced by a voter-held key, or an unbounded voter-chosen value
@@ -791,8 +808,31 @@ when the chain also holds ballots at a `vote_cast` version it does not register.
   appended MUST be independent of the order in which they arrived; a producer MUST
   NOT append a batch in arrival order. Any order that does not derive from arrival
   — a shuffle, or an order computed from ballot content — satisfies this.
+
+  **A batch is released whole.** A producer _seals_ a batch when it stops
+  admitting ballots to it. No ballot of a batch is appended until the producer
+  has sealed that batch. A sealed batch is then appended in full: every ballot
+  admitted to it, and no ballot admitted after the seal. A producer admits a
+  ballot to a batch only after the ballot passes every check `evolution.md`
+  EV-26 will apply to it that does not depend on where it lands in the log; a
+  ballot that fails one is refused, never admitted. The checks that do depend on
+  where it lands (its `seq`, its `prev_hash` and the signature over them,
+  `hashing.md` HA-15) are fixed when the batch is appended, by the producer and
+  its registrar, whose `vote_cast` signature (ET-17) covers them. So a sealed
+  batch never holds a ballot that fails for a reason the producer did not cause, and never falls short of `ballot_batch_min` (ET-24)
+  because a ballot in it is unappendable. A ballot of that issue
+  admitted after the seal goes to a later batch instant (ET-23), never to the
+  sealed batch's. Other events MAY still fall between a sealed batch's members
+  (ET-24), but none of them can date a member's arrival, because every member
+  had arrived before the first was appended. Without this paragraph, a producer
+  could keep to the first sentence's letter by appending each ballot as it
+  arrives, or in small shuffled groups, and a reader polling the tail
+  (`read-api.md` RA-12), or reading the `ts` of the events around each ballot,
+  would learn when each ballot arrived.
+
   **This rule is not verifiable from the log.** A shuffled batch and an
-  arrival-ordered batch are indistinguishable to every reader, so no verifier can
+  arrival-ordered batch are indistinguishable to every reader, and so are a
+  batch released whole and one released ballot by ballot, so no verifier can
   report a violation and no fixture can pin one: ET-25 is an obligation on the
   ledger implementation and on nothing else, and it belongs to neither
   verification stage (`evolution.md` EV-15). It is stated normatively anyway,
@@ -841,6 +881,8 @@ when the chain also holds ballots at a `vote_cast` version it does not register.
 | No two batches of one issue share a `ts`       | ET-24a            |
 | Batch checks beside unreadable ballots         | ET-24b            |
 | Order within a batch (producer-only, uncheckable) | ET-25          |
+| A batch is released whole, after it is sealed  | ET-25             |
+| What a timing observer can still learn         | ET-21             |
 
 ## Acid-test walkthrough
 
