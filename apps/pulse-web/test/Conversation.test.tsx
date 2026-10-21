@@ -50,12 +50,12 @@ it("links a counted vote to the trust page (#351)", async () => {
   await main().findByRole("heading", { name: poll().question, level: 1 });
   await openCard();
   expect(
-    within(card()).queryByRole("link", { name: /trust your vote/ }),
+    within(card()).queryByRole("link", { name: /How votes count/ }),
   ).toBeNull();
   await answer();
   expect(
     within(card())
-      .getByRole("link", { name: /Why you can trust your vote/ })
+      .getByRole("link", { name: /How votes count/ })
       .getAttribute("href"),
   ).toBe("/trust");
 });
