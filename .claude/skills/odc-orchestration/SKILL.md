@@ -248,6 +248,15 @@ go past it.
   `.github/`, because the eslint config imports `.github/scripts/`. Send each
   finding to the lead that owns the PR, and review the fix again. A PR the
   orchestrator wrote itself needs a reviewer that did not write it either.
+  **This covers every PR the orchestrator will recommend for merging,** not
+  only lead PRs: one from Codex or another session that lands during the run
+  is reviewed the same way (operator, 2026-10-20; #399 and #403–#406 were
+  reviewed only because the operator asked).
+- **Re-check a PR after `master` is merged into it.** Run the unit's tests,
+  lint, typecheck and `pnpm -s format:check` on the merged result before
+  pushing. If resolving the conflict changed code or tests, not only prose,
+  review that merge commit again. In the 2026-10-20 run, merging `master` into
+  an approved PR broke three tests from a PR merged an hour earlier.
 - **When the leads report,** check their PRs do not collide — settle a clash
   between two leads by message — and tell the operator which PRs are ready to
   merge, in what order, with each review's verdict. Merging stays the
