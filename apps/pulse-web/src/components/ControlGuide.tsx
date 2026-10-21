@@ -3,6 +3,25 @@ import type { RefObject } from "react";
 import { createPortal } from "react-dom";
 import "./ControlGuide.css";
 
+type Box = { top: number; left: number; width: number; height: number };
+
+const clamp = (value: number, max: number) => Math.min(Math.max(value, 0), max);
+
+/**
+ * The spotlight is position: fixed, so its box is the layout viewport without
+ * scrollbars: documentElement.clientWidth/clientHeight, not 100vw/100vh.
+ * Pad by one --step, then clamp each edge into that box, so padding becomes
+ * asymmetric where the control touches the screen edge.
+ */
+export function spotlightBox(rect: DOMRect, pad: number): Box {
+  const { clientWidth, clientHeight } = document.documentElement;
+  const left = clamp(rect.left - pad, clientWidth);
+  const top = clamp(rect.top - pad, clientHeight);
+  const right = clamp(rect.right + pad, clientWidth);
+  const bottom = clamp(rect.bottom + pad, clientHeight);
+  return { top, left, width: right - left, height: bottom - top };
+}
+
 /** Nonmodal help: the highlighted controls retain their ordinary behavior. */
 export function ControlGuide({
   root,
@@ -19,15 +38,21 @@ export function ControlGuide({
 }) {
   const id = useId();
   const started = useRef(false);
-  const [rect, setRect] = useState<DOMRect | null>(null);
+  const [box, setBox] = useState<Box | null>(null);
   useLayoutEffect(() => {
     const target = root.current?.querySelector<HTMLElement>(selector);
     if (!target) {
-      setRect(null);
+      setBox(null);
       return;
     }
     target.scrollIntoView?.({ block: "nearest", behavior: "instant" });
-    const measure = () => setRect(target.getBoundingClientRect());
+    const measure = () => {
+      const pad =
+        parseFloat(
+          getComputedStyle(document.documentElement).getPropertyValue("--step"),
+        ) || 0;
+      setBox(spotlightBox(target.getBoundingClientRect(), pad));
+    };
     measure();
     const resize =
       typeof ResizeObserver === "undefined"
@@ -70,15 +95,16 @@ export function ControlGuide({
   }, [onDismiss]);
   return createPortal(
     <>
-      {rect ? (
+      {box ? (
         <div
           className="control-guide__spotlight"
           aria-hidden="true"
+          // Expand the overlay, not the controls, and keep every edge visible.
           style={{
-            top: rect.top,
-            left: rect.left,
-            width: rect.width,
-            height: rect.height,
+            top: `${box.top}px`,
+            left: `${box.left}px`,
+            width: `${box.width}px`,
+            height: `${box.height}px`,
           }}
         />
       ) : null}
