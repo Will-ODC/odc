@@ -203,8 +203,9 @@ Issues #364 and #365 are closed. None of these changes clears T9.
   branch, so a later push creates a new branch with no PR. Agent sessions can
   delete remote branches.
 - **Turbo lint caching is disabled** (ADR-0042, #381), because import resolution
-  depends on workspace metadata, shared configuration and symlinks. The
-  untracked root `AGENTS.md` is switched off by `agentGuidance: false` (#240).
+  depends on workspace metadata, shared configuration and symlinks.
+- **The untracked root `AGENTS.md`** is switched off by `agentGuidance: false`
+  (#240).
 - **Tell dispatched agents to use the scratchpad for worktrees**, and commit
   before running a review or mutation agent, since reviewers edit and restore the
   tree.
