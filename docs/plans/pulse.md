@@ -166,22 +166,23 @@ no payments or automatic claims of impact are introduced by this UI direction.
 The conversation ballot uses pick-then-Submit (ADR-0035); donations and volunteer
 commitments also require confirmation.
 
-## P6 — Poll authoring · HTTP AND FORM READY TO BUILD
+## P6 — Poll authoring · HTTP MERGED; FORM IN REVIEW
 
 ADR-0037 records the operator's 2026-10-11 choices: one-week editable close,
 suggestions off (#336), signed-in posting, community or General destination,
 anonymous public attribution by default, optional naming, five creations per
 rolling hour, and Owner/granular unlimited-posting grants. The approved purpose
-statement and first-post acknowledgement ship with creation. The planned
-interfaces are in `apps/pulse/API.md`; no creation route is served yet.
+statement and first-post acknowledgement ship with creation. The served
+interfaces are in `apps/pulse/API.md` (PR #389).
 
-The design and storage foundations are merged; see `memory/pulse.md` for the
-completed slices. Remaining work proceeds in merge-gated steps:
+The design, storage, HTTP and public attribution foundations are merged; see
+`memory/pulse.md` for current status. The implementation slices are:
 
-1. Creation HTTP boundary: authenticated context/create and owner grant/revoke,
+1. **Merged (#389/#387):** creation HTTP boundary and public attribution:
+   authenticated context/create and owner grant/revoke,
    origin checks, bounded input, retry contract and safe public projections.
    Real HTTP with disposable Postgres, all documented error cases and privacy tests.
-2. Creation screen and attribution: first-post promise, anonymous/named choice,
+2. **In review (PR #393):** creation screen and attribution: first-post promise, anonymous/named choice,
    secondary closing-time control, published conversation link, recoverable
    errors, keyboard and actual phone/desktop checks. No ballot side effects.
 

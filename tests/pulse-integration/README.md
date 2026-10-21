@@ -6,6 +6,8 @@ Postgres, mail service or running application is required.
 
 - `test/end-to-end.test.ts` runs the client HTTP adapter in Node.
 - `test/conversation-http.test.tsx` runs the React app in jsdom against HTTP.
+- `test/poll-creation-http.test.ts` publishes a question, reads it and votes
+  through the real HTTP boundary.
 
 Both apps are explicit workspace development dependencies. Deep source imports
 are test setup only; the browser app uses the public HTTP API. This package is
