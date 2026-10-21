@@ -1,7 +1,8 @@
+import { useState } from "react";
 import type { ReactNode } from "react";
 import type { PulseApi } from "./api/types.js";
 import type { Route } from "./flow/route.js";
-import { FIRST_POLL_ID } from "./flow/route.js";
+import { FIRST_POLL_ID, pathOf } from "./flow/route.js";
 import { browserStore, takeReturn } from "./flow/sign-in-return.js";
 import { AppShell } from "./components/AppShell.js";
 import { TopBanner } from "./components/TopBanner.js";
@@ -17,6 +18,7 @@ import {
   type RelatedPollIds,
 } from "./screens/FoundationQuestions.js";
 import { Trust } from "./screens/Trust.js";
+import { NewPoll } from "./screens/NewPoll.js";
 import "./styles/tokens.css";
 import "./App.css";
 
@@ -45,6 +47,12 @@ export function App({
 }) {
   const browser = useRoute();
   const at = route ?? browser.route;
+  /**
+   * Set only when the emailed link returns to the posting form: then, and
+   * only then, the form brings back a draft kept when its post needed a
+   * sign-in. Anyone opening /new any other way starts empty.
+   */
+  const [restoreDraft, setRestoreDraft] = useState(false);
 
   switch (at.kind) {
     case "welcome":
@@ -62,7 +70,10 @@ export function App({
     case "signIn":
       return (
         <SignInPage>
-          <SignIn api={api} {...(at.pollId ? { returnTo: at.pollId } : {})} />
+          <SignIn
+            api={api}
+            {...(at.returnTo ? { returnTo: at.returnTo } : {})}
+          />
         </SignInPage>
       );
     case "redeem":
@@ -76,14 +87,13 @@ export function App({
              * redeemed, so leaving that URL in the history would hand the back
              * button a link that can now only answer "already used".
              */
-            onSignedIn={() =>
-              browser.replace({
-                kind: "conversation",
-                // The question "Confirm with your email" was pressed on, when
-                // this browser remembers one (#353).
-                pollId: takeReturn(browserStore()) ?? LANDS_ON,
-              })
-            }
+            onSignedIn={() => {
+              // The question "Confirm with your email" was pressed on, or
+              // the posting form, when this browser remembers one (#353).
+              const to = takeReturn(browserStore());
+              setRestoreDraft(to?.kind === "newPoll");
+              browser.replace(to ?? { kind: "conversation", pollId: LANDS_ON });
+            }}
             onAskAgain={() => browser.replace({ kind: "signIn" })}
           />
         </SignInPage>
@@ -105,6 +115,20 @@ export function App({
     case "trust":
       // Static copy: like the prototype, it never touches `api`.
       return <Trust />;
+    case "newPoll":
+      return (
+        <NewPoll
+          api={api}
+          signInHref={pathOf({
+            kind: "signIn",
+            returnTo: { kind: "newPoll" },
+          })}
+          onPosted={(poll) =>
+            browser.go({ kind: "conversation", pollId: poll.id })
+          }
+          restoreDraft={restoreDraft}
+        />
+      );
   }
 }
 

@@ -34,7 +34,7 @@ describe("reading a URL", () => {
   it("keeps the question a sign-in was started from", () => {
     expect(routeFrom("/sign-in?poll=parks")).toEqual({
       kind: "signIn",
-      pollId: "parks",
+      returnTo: { kind: "conversation", pollId: "parks" },
     });
     expect(routeFrom("/sign-in?poll=")).toEqual({ kind: "signIn" });
     // A token wins: the emailed link is the one to spend.
@@ -42,9 +42,26 @@ describe("reading a URL", () => {
       kind: "redeem",
       token: "abc",
     });
-    const route = { kind: "signIn" as const, pollId: "a b&c" };
+    const route = {
+      kind: "signIn" as const,
+      returnTo: { kind: "conversation" as const, pollId: "a b&c" },
+    };
     expect(pathOf(route)).toBe("/sign-in?poll=a%20b%26c");
     expect(routeFrom(pathOf(route))).toEqual(route);
+  });
+
+  /* The posting form sends a signed-out person here, and back (ADR-0037). */
+  it("opens the posting form, and a sign-in that returns to it", () => {
+    expect(routeFrom("/new")).toEqual({ kind: "newPoll" });
+    expect(routeFrom("/New/")).toEqual({ kind: "newPoll" });
+    expect(pathOf({ kind: "newPoll" })).toBe("/new");
+    const signIn = {
+      kind: "signIn" as const,
+      returnTo: { kind: "newPoll" as const },
+    };
+    expect(pathOf(signIn)).toBe("/sign-in?next=new");
+    expect(routeFrom(pathOf(signIn))).toEqual(signIn);
+    expect(routeFrom("/sign-in?next=elsewhere")).toEqual({ kind: "signIn" });
   });
 
   /*
