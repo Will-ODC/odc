@@ -49,9 +49,10 @@ the same CI runs.
   never signed in (#349) both clear the ballot cookie.
 - **Confirmed votes are built** (#360, ADR-0040, migration 007). A vote cast while
   signed in, or by a browser that signs in later, is confirmed. Results carry
-  all votes plus confirmed votes counted once per person. A confirmed vote stores
+  all votes plus confirmed votes counted once per email account. A confirmed vote stores
   only an HMAC code under `PULSE_CONFIRMATION_KEY`, never the account or address.
-  **The UI does not show them yet:** that is #353.
+  **The UI is built** (#353, PR #386): confirmed status, both result numbers,
+  cross-tab refresh after sign-in and accurate `/trust` wording.
 - **Pillar 2 (story UI):** the vote page is a **conversation** (epic #303,
   ADR-0035): #299/PR #307 vote card, #301/PR #313 page, #302/PR #322 made it the
   default and retired the swipe ballot, `Run` and `ChoiceBallot`. Around it:
@@ -63,12 +64,14 @@ the same CI runs.
 - **MCP public reads are built** (#300 read slice, PR #323): `get_poll` and
   `get_results` at `/api/mcp`. ADR-0036 (voting from AI apps) is still marked
   proposed; no casting, sign-in or own-answer tools exist.
-- **Poll creation: storage only.** ADR-0037 (#340) settles the policy and the
-  planned API. Built: migration 005 (#346), the Postgres publication store with
+- **Poll creation: storage and HTTP are built; form is in review.** ADR-0037
+  (#340) settles the policy and API. Built: migration 005 (#346), the Postgres publication store with
   quotas, safe retries and owner-only posting grants (#354), and an in-memory
-  equivalent with one shared conformance suite (#367). **No HTTP route, startup
-  wiring or form.** Owner configuration is a constructor option, not yet an env
-  setting.
+  equivalent with one shared conformance suite (#367). PR #389 serves creation
+  context, publication and owner posting-permission routes, with startup wiring
+  and optional `PULSE_OWNER_EMAIL`. Public GET and MCP attribution merged in
+  #387; legacy polls gain no invented author. The creation form is open in
+  PR #393 and is not on master.
 - **Pillar 3 (path to action) is not started.** `proofEmailsOptIn` is collected
   and leads nowhere. #331-#333 plan it.
 - **Infrastructure is built.** Postgres storage (ADR-0020, ADR-0021, ADR-0023),
@@ -77,9 +80,9 @@ the same CI runs.
 
 ## What stands between this and a usable deploy
 
-1. **Poll creation is not served** (above), so a deployment has nothing to vote
-   on except seed data. Reporting, review and the automatic-hide threshold are
-   separate broad-launch prerequisites.
+1. **The creation form is not merged** (PR #393); the publication API is served.
+   Reporting, review and the automatic-hide threshold are separate broad-launch
+   prerequisites.
 2. **Published starting questions** for `/questions`, and comments (#297).
    The explainer video (#339) comes later.
 3. **A host and a domain.** The domain is `onlinedemocracy.org` (owned); the
@@ -90,18 +93,16 @@ the same CI runs.
 
 ## Next / not built
 
-- **NEXT, in dependency order (no new policy decision needed):**
-  1. Poll-creation HTTP routes: `GET /api/poll-creation/context`,
-     `POST /api/polls`, the posting-permission routes, with authentication,
-     expiry and origin protection, and startup wiring (API.md "Planned — not
-     served").
-  2. The creation form: purpose promise, date and anonymity controls, and who
-     posted it in public GET and MCP results.
-     Each step: tests, fresh review, PR, green CI and Will's merge before the next.
-     UI needs phone, desktop and keyboard checks.
-- **#353, confirmed status on the vote card and both result numbers.** Unblocked
-  (#352 and #351 merged). Branch `pulse/353-confirmed-status` exists on origin
-  with unfinished work; start from a rebase onto master.
+- **NEXT: finish review and checks for PR #393**, the ADR-0037 creation form:
+  purpose promise, date and anonymity controls, publication and attribution.
+  HTTP and public attribution dependencies (#389/#387) are merged. UI needs
+  phone, desktop and keyboard checks; William retains final merge authority.
+- **Demo feedback is implemented in independent, unmerged PRs** (2026-10-20):
+  #401 → PR #403 opens each question's vote card by default; #400 → PR #404
+  adds space around tutorial highlights; #402 → PR #405 shortens the trust
+  link/title to "How votes count" and the page from roughly 976 to 294 words.
+  Author checks pass; fresh reviews, browser checks and final CI are being
+  completed. These changes are not deployed or merged.
 - Open feature issues: #296 photo and summary, #297 comments, #336 suggestions in
   the conversation page, #331-#333 desktop side columns and action follow-through,
   #329 a "My votes" page, #314 browser-extension prototype (idea only), #186 a
@@ -116,18 +117,27 @@ the same CI runs.
   of related polls, story-style". It is also ADR-0022's route back to a question
   from outside a run.
 - **No anonymity indicator exists** in the client. ADR-0037 requires accurate
-  interim anonymity wording until authorised moderator access exists.
+  interim anonymity wording until authorised moderator access exists; PR #393
+  supplies the creation disclosure and public byline.
+- **Core integration is deferred** by William (2026-10-20), tracked as bounded
+  future epic #398. ADR-0039 chooses public core APIs, but no integration is
+  built and no migration implementation is authorized now.
 - `@fastify/rate-limit` uses an in-memory store, so N instances means N times the
   limit. This is the first thing that breaks when pulse scales out.
   (`trustProxy: 1` is a different fix.)
 
 ## Open decisions (operator)
 
+- **Pulse/core compatibility (#398, deferred):** which responsibilities stay
+  with Pulse; how eligibility and identity cross the API boundary; how mutable
+  recasts and approval choices map to core's v1 ballot rules; what the UI says
+  during batched publication; and how rollout preserves existing polls. These
+  require an accepted integration ADR before implementation tickets are cut.
 - **P2: should a later community pick move a returning voter?** Today it does
   not (ADR-0030 writes community once). `claim.test.ts` pins the current answer.
 - **Signing out clears the ballot cookie**, so a person who votes, signs out,
   signs back in and votes again is counted twice in the full totals. Confirmed
-  totals count them once (ADR-0040). That cost is accepted.
+  totals count each account once (ADR-0040). That cost is accepted.
 - **How long `pending_claim` rows are kept, and what a mail-provider error may
   write to logs.** Both from #315; filed in `memory/OPEN-QUESTIONS.md` under
   "Pulse sign-in data: retention and logging (2026-10-11)".
@@ -208,8 +218,10 @@ the same CI runs.
 - `.dockerignore` patterns need `**/`.
 - Compose interpolates the whole file before profiles filter it, so a `${VAR:?}`
   on a profiled service breaks `up db`.
-- The client image builds with `tsconfig.build.json`, because the default config
-  includes `test/**`, which imports server source.
+- The client image builds with source-only `tsconfig.build.json`; browser tests
+  stay in the app and real-HTTP cross-app suites live in
+  `tests/pulse-integration/` (ADR-0041). Static import boundaries are enforced by
+  lint (ADR-0042); run `pnpm test:boundaries` for the focused guard suite.
 - The root `just up` starts nothing, by design. `just pulse-up` is pulse's
   command. `pnpm dev` invents a session secret and a confirmation key each run,
   so a restart signs everyone out and forgets confirmations. That is deliberate.

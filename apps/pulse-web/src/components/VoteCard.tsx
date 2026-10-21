@@ -337,10 +337,11 @@ export function VoteCard({
               <a
                 className="vote-card__link"
                 href={trustHref}
+                aria-label="How votes count (opens in a new tab)"
                 target="_blank"
                 rel="noopener"
               >
-                Why you can trust your vote (opens in a new tab)
+                How votes count
               </a>
             </p>
           ) : null}

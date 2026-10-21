@@ -34,7 +34,7 @@ container, so the page and the API share one address.
 | `/questions`       | The four starting questions.                                           |
 | `/?poll=ID`        | The live vote page for one poll. Old `/conversation` links still work. |
 | `/new`             | Post a question after signing in, then open its vote page.             |
-| `/trust`           | "Why you can trust your vote".                                         |
+| `/trust`           | "How votes count": a short guide to counting and its limits.           |
 | `/sign-in?token=…` | Where emailed sign-in links land.                                      |
 | `/preview/chat`    | A prototype with sample data only.                                     |
 

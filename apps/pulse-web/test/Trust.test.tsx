@@ -45,7 +45,7 @@ describe("the trust page's own address (#351)", () => {
     expect(
       screen.getByRole("heading", {
         level: 1,
-        name: "Why you can trust your vote",
+        name: "How votes count",
       }),
     ).toBeTruthy();
     // Let any effect that might fetch get its chance before counting.
@@ -65,60 +65,68 @@ describe("what the page says", () => {
     ).toEqual(["Today", "The basics", "The plan", "How to help"]);
   });
 
-  it("explains each basic under its own heading", () => {
+  it("keeps the page short enough to read at a glance", () => {
     render(<Trust />);
-    const basics = within(
-      screen.getByRole("region", { name: "The basics" }),
-    ).getAllByRole("heading", { level: 3 });
-    expect(basics.map((h) => h.textContent)).toEqual([
-      "Fingerprint (hash)",
-      "A chain of records",
+    const text = [
+      ...screen.getByRole("article").querySelectorAll("h1, h2, h3, p, li"),
+    ]
+      .map((block) => block.textContent)
+      .join(" ");
+    const words = text.match(/\S+/g) ?? [];
+    expect(words.length).toBeLessThanOrEqual(350);
+  });
+
+  it("defines the six basics in plain sentences", () => {
+    render(<Trust />);
+    const basics = screen.getByRole("region", { name: "The basics" });
+    expect(within(basics).getAllByRole("listitem")).toHaveLength(6);
+    for (const term of [
+      "Hash",
+      "Chain",
       "Digital signature",
-      "A public copy",
+      "Public copy",
       "Independent checkers",
-      "Votes written in groups",
-    ]);
+      "Votes in groups",
+    ]) {
+      expect(basics.textContent).toContain(term);
+    }
+    expect(basics.textContent).toMatch(/ledger.*record.*only allows additions/);
+    expect(basics.textContent).toMatch(/not built yet/);
   });
 
-  /*
-   * The one claim this page must never make. Pulse votes are on no chain and
-   * no ledger today (ADR-0039), so "Today" says so outright and "The basics"
-   * frames itself as the ledger's design, not as what happened to your vote.
-   */
-  it("says plainly that votes are not on a public record yet", () => {
+  it("states the present limits on checking and privacy", () => {
     render(<Trust />);
-    const today = screen.getByRole("region", { name: "Today" });
-    expect(today.textContent).toContain(
-      "Your vote is not on a public record yet.",
+    const today =
+      screen.getByRole("region", { name: "Today" }).textContent ?? "";
+    expect(today).toMatch(/No public vote record exists yet/);
+    expect(today).toMatch(/Only Pulse.s operators can check the count today/);
+    expect(today).toMatch(
+      /Email-confirmed votes store a code instead of your email/,
     );
-    expect(today.textContent).toContain(
-      "Nobody outside pulse can check the count today.",
+    expect(today).toMatch(
+      /operator can link it to you with the database and secret key/,
     );
-    expect(
-      screen.getByRole("region", { name: "The basics" }).textContent,
-    ).toContain("The ledger is not built yet, and pulse votes are not on it.");
   });
 
-  /*
-   * A vote is filed under the browser's ballot cookie and nothing else,
-   * signed in or not (apps/pulse/API.md, "The ballot cookie"), so signing in
-   * must never be described as what stops a second vote.
-   */
-  it("ties the vote to the browser and does not claim signing in stops double votes", () => {
+  it("explains browser votes and the separate email count without promising unique people", () => {
     render(<Trust />);
-    const today = (
-      screen.getByRole("region", { name: "Today" }).textContent ?? ""
-    ).replace(/\s+/g, " ");
-    expect(today).toContain(
-      "Your vote is tied to this browser, whether or not you sign in.",
+    const today =
+      screen.getByRole("region", { name: "Today" }).textContent ?? "";
+    expect(today).toMatch(/Change it until the question closes/);
+    expect(today).toMatch(/new answer replaces the old one/);
+    expect(today).toMatch(/browser.s cookie/);
+    expect(today).toMatch(
+      /another browser, clearing cookies or signing out.*add votes to the full total/,
     );
-    expect(today).toContain("It does not stop anyone voting twice");
-    // The confirmed number (ADR-0040) is per address, never per person.
-    expect(today).toContain("each email address counts once per question");
-    expect(today).toContain("Two addresses still count as two.");
-    expect(today.toLowerCase()).not.toMatch(
-      /sign(ing)? in (ties|links|stops|prevents|proves)/,
+    expect(today).toMatch(
+      /Email-confirmed votes count once per account per question/,
     );
+    expect(today).toMatch(/most recent answer counts/);
+    expect(today).toMatch(
+      /Vote signed in, or sign in on that browser before the question closes/,
+    );
+    expect(today).toMatch(/Two emails count twice/);
+    expect(today).toMatch(/does not prove each voter is a different person/);
   });
 
   it("never says pulse votes are on a chain or ledger now", () => {
@@ -143,20 +151,28 @@ describe("what the page says", () => {
     const steps = within(plan).getAllByRole("listitem");
     expect(steps.map((step) => step.textContent?.split(":")[0])).toEqual([
       "Done",
-      "Done",
       "Next",
-      "After that",
-      "After that",
-      "After that",
-      "After that",
+      "Later",
     ]);
-    expect(plan.textContent).toContain("It does not exist yet.");
+    expect(steps[0]?.textContent).toMatch(
+      /Drafted rules and two independent checkers/,
+    );
+    expect(steps[1]?.textContent).toMatch(/fresh security review/);
+    expect(steps[2]?.textContent).toMatch(
+      /Build the ledger and connect Pulse through its public API/,
+    );
+    expect(steps[2]?.textContent).toMatch(
+      /cannot prove every vote was entered honestly/,
+    );
+    expect(steps[2]?.textContent).toMatch(
+      /Anyone will be able to recount from a public copy/,
+    );
     expect(plan.textContent).not.toMatch(/\b20\d\d\b/);
   });
 });
 
 describe("how to help", () => {
-  it("links to the rules, the charter, both checkers, the issues and the repository", () => {
+  it("links to the rules, project and issues", () => {
     render(<Trust />);
     const help = screen.getByRole("region", { name: "How to help" });
     const hrefs = Object.fromEntries(
@@ -165,12 +181,9 @@ describe("how to help", () => {
         .map((link) => [link.textContent, link.getAttribute("href")]),
     );
     expect(hrefs).toEqual({
-      "The rules": `${REPO}/tree/master/contracts`,
-      "The charter": `${REPO}/blob/master/docs/charter.md`,
-      "The Go checker": `${REPO}/tree/master/services/verifier`,
-      "The TypeScript checker": `${REPO}/tree/master/tools/verifier-ts`,
-      "Open issues": `${REPO}/issues`,
-      "The whole project": REPO,
+      Rules: `${REPO}/tree/master/contracts`,
+      Project: REPO,
+      Issues: `${REPO}/issues`,
     });
   });
 
