@@ -165,20 +165,24 @@ and what crosses each boundary.
   batch. The signer atomically closes the issue's open batch and returns its id
   and its counts per choice. After a last seal it refuses every further entry
   of that issue.
-- **Ledger → signer, sign a batch:** one call carrying the batch's unsigned
-  `vote_cast` payloads in the ledger's chosen append order, the first `seq`,
-  the batch's `ts`, and the `prev_hash` of the first ballot (the hash of the
-  event the run follows). Each ballot's hash covers its own `sig` (HA-13, HA-15), so
-  ballots 2..N cannot have a `prev_hash` until the ballot before them is signed;
-  the ledger therefore cannot send them pre-chained. The signer checks that the
-  `(issue, choice)` multiset equals the sealed counts exactly, then, in order,
-  assigns each ballot `seq` = first `seq` + its index, the shared `ts`, and the
-  `prev_hash` of the ballot before it, signs it, computes its hash, and returns
-  the complete signed run. The ledger re-checks every returned line (EV-26)
-  before appending the run whole (ET-25). A batch is signed at exactly one
-  position: a repeated call with identical inputs returns identical events
-  (decision 3), and any other position is refused. _(Clarified 2026-10-21 at
-  the ledger lead's request; Will chose this over one call per ballot.)_
+- **Ledger → signer, sign a batch:** one call carrying the batch id, the batch's
+  unsigned `vote_cast` payloads in the ledger's chosen append order, the first
+  `seq`, the batch's `ts`, and the `prev_hash` of the first ballot (the hash of
+  the event the run follows). Each ballot's hash covers its own `sig` (HA-13,
+  HA-15), so ballots 2..N cannot have a `prev_hash` until the ballot before them
+  is signed; the ledger therefore cannot send them pre-chained. The signer
+  checks that the `(issue, choice)` multiset equals that batch's sealed counts
+  exactly, then, in order, assigns each ballot `seq` = first `seq` + its index,
+  the shared `ts`, and the `prev_hash` of the ballot before it, signs it,
+  computes its hash, and returns the complete signed run. The ledger checks that
+  each returned payload equals the one it sent at that index, so the signer
+  cannot change the order or swap choices (ET-25: the ledger chooses the order),
+  and runs EV-26 on every returned line before appending the run whole. A batch
+  is signed at exactly one position: the signer stores each batch's first call's
+  inputs, returns identical events for a repeated call with identical inputs
+  (decision 3), and refuses any call for that batch whose inputs differ in any
+  way. _(Clarified 2026-10-21 at the ledger lead's request; Will chose this over
+  one call per ballot.)_
 - **Identity → ledger, append a registration:** a client's
   `participant_registered` v2. Linkage is recorded only on confirmed append; a
   retry that appends twice is a harmless duplicate.
@@ -203,13 +207,14 @@ Rules that follow:
 - **The ledger stays the producer.** It decides when to seal, the batch instant
   (ET-23, ET-24a), the order (ET-25: not arrival, and the signer holds no
   arrival order to leak), seal-order appends, and one open batch per issue. It
-  holds its tail from the first sign call until the run is appended, so the
-  signed positions stay valid. That lock spans a call to an operator-run
-  service, never a client round trip. Before its first sign call it persists
-  the sign request (batch id, order, `ts`, first `seq`), and on recovery from a
-  crash it replays that request before appending anything else; since the
-  signer signs a batch at one position only, losing the request would strand
-  admitted ballots. It verifies every line before appending (EV-26).
+  holds its tail from the sign call until the run is appended, so the signed
+  positions stay valid. That lock spans a call to an operator-run service, never
+  a client round trip. Before the sign call it persists the sign request,
+  exactly that call's inputs (batch id, payloads in order, first `seq`, `ts`,
+  first `prev_hash`), and on recovery from a crash it replays that request
+  before appending anything else; since the signer signs a batch at one position
+  only, losing the request would strand admitted ballots. It verifies every line
+  before appending (EV-26).
 - **No receipt anywhere on the path (ET-21a).** The signer is now on the
   submission path. It MUST NOT return anything to identity, or to anyone, that
   singles out a ballot's line or batch or attests to it. Identity has nothing
