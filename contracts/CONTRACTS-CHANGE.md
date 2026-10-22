@@ -19,6 +19,28 @@ Format (newest first, one entry per merged contracts change):
 
 ---
 
+## event-types.md v17 · event-schema.md v8 · evolution.md v12 · export-format.md v6 · hashing.md v3 · ids.md v2 · read-api.md v4 · fixtures/README.md v18 · README.md — 2026-10-21 — T9a: third re-audit T3-1 to T3-3; RELEASE CANDIDATE
+
+- **README.md**: status DRAFTING → **RELEASE CANDIDATE** (ADR-0007). No tag, so
+  nothing is frozen and `contracts-guard`'s freeze rules stay dormant; Phase 1
+  service code may now be written. Changes stay additive and version-bumped.
+  Every spec's `Status:` line, and `fixtures/README.md`'s, now reads RELEASE
+  CANDIDATE with its amendment history kept; text only, each version bumped as
+  `contracts-guard` requires.
+- **ET-20 / ET-25** (T3-1): the registrar's eligibility and uniqueness decision
+  is made before admission and is final, and the registrar MUST sign every
+  admitted ballot. Otherwise a refusal at signing, after the seal, could drop a
+  sealed batch below `ballot_batch_min` and let EV-26 strand later ballots.
+  Which component admits or signs stays open (S-C).
+- **ET-21a** (T3-2): binds every component the operator runs, on the
+  submission path or not (for example a status or tally page), not only the
+  ledger and registrar; item 2 covers any statement verifiable as the
+  operator's (for example a DKIM-signed email).
+- **ET-25** (T3-3): after an under-size batch, EV-26 forbids later ballots of
+  the issue at another instant; a same-instant ballot stays `VALID` and is
+  forbidden by the seal instead.
+- Producer-only: no verdict changes and no committed vector changes.
+
 ## event-types.md v16 · evolution.md v11 · read-api.md v3 — 2026-10-21 — second T9 re-audit NS-1, NS-3, NS-4, NS-5 (#415)
 
 - **ET-25** (NS-1): a producer MUST NOT seal a batch below `ballot_batch_min`

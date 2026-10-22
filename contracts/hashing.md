@@ -1,7 +1,7 @@
 # Hashing — contracts/hashing.md
 
-**Version:** 2
-**Status:** DRAFTING (Phase 0 · T4, amended T5j). Not frozen.
+**Version:** 3
+**Status:** RELEASE CANDIDATE (T9a; Phase 0 · T4, amended T5j). Not frozen.
 **Companion specs:** `event-schema.md` (envelope), `event-types.md` (payloads),
 `ids.md` (identifiers), `export-format.md` (NDJSON framing), `evolution.md`
 (versioning + cross-version verifier behavior).
