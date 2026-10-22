@@ -77,11 +77,7 @@ it("shows loading, retry and empty states with useful destinations", async () =>
   expect(await screen.findByText("Please try later.")).toBeTruthy();
   await userEvent.click(screen.getByRole("button", { name: "Try again" }));
   expect(await screen.findByText(/No questions here yet/)).toBeTruthy();
-  expect(
-    screen
-      .getByRole("link", { name: "Starting questions" })
-      .getAttribute("href"),
-  ).toBe("/questions");
+  expect(screen.queryByRole("link", { name: "Starting questions" })).toBeNull();
   expect(
     screen.getByRole("link", { name: "Post a question" }).getAttribute("href"),
   ).toBe("/new");
@@ -158,10 +154,11 @@ it("offers the signed-in community without requiring it for public browsing", as
       community="pulse-general"
     />,
   );
+  await userEvent.click(
+    await screen.findByRole("button", { name: "Your communities" }),
+  );
   expect(
-    (await screen.findByRole("link", { name: "Your community" })).getAttribute(
-      "href",
-    ),
+    screen.getByRole("link", { name: "campus" }).getAttribute("href"),
   ).toBe("/browse?community=campus");
   await waitFor(() => expect(listPolls).toHaveBeenCalledWith("pulse-general"));
   expect(screen.getByRole("main").textContent).not.toContain(
@@ -189,7 +186,7 @@ it("loads the final page by keyboard and focuses its first new question", async 
   expect(screen.queryByRole("button", { name: "Load more" })).toBeNull();
 });
 
-it("keeps home, guided questions and posting in the top navigation", async () => {
+it("keeps home, General and posting in the top navigation", async () => {
   render(
     <Browse
       api={stubApi({ listPolls: async () => page([]) })}
@@ -198,9 +195,10 @@ it("keeps home, guided questions and posting in the top navigation", async () =>
   );
   const nav = screen.getByRole("navigation", { name: "Main navigation" });
   expect(nav.querySelector('a[href="/"]')?.textContent).toBe("Home");
-  expect(nav.querySelector('a[href="/questions"]')?.textContent).toBe(
-    "Starting questions",
-  );
+  expect(nav.querySelector('a[href="/questions"]')).toBeNull();
+  expect(
+    nav.querySelector('a[href="/browse?community=pulse-general"]')?.textContent,
+  ).toBe("General");
   expect(
     screen.getByRole("link", { name: "Post a question" }).getAttribute("href"),
   ).toBe("/new");

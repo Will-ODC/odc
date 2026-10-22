@@ -182,6 +182,16 @@ test("seeds the four launch questions, and the web dev env points at exactly tho
     assert.equal(res.json().method, "single");
     assert.equal(res.json().open, true);
   }
+  const general = await app.inject({
+    url: "/api/polls?community=pulse-general",
+  });
+  assert.deepEqual(
+    general
+      .json()
+      .polls.map((poll: { id: string }) => poll.id)
+      .sort(),
+    Object.values(wanted).sort(),
+  );
   await app.close();
 });
 

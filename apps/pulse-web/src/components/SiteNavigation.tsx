@@ -1,3 +1,5 @@
+import { AccountMenu } from "./AccountMenu.js";
+
 /** The same destinations on every screen; session data arrives as props. */
 export function SiteNavigation({
   currentHref,
@@ -8,16 +10,7 @@ export function SiteNavigation({
 }) {
   const links = [
     { href: "/", label: "Home" },
-    { href: "/questions", label: "Starting questions" },
     { href: "/browse?community=pulse-general", label: "General" },
-    ...(community && community !== "pulse-general"
-      ? [
-          {
-            href: `/browse?community=${encodeURIComponent(community)}`,
-            label: "Your community",
-          },
-        ]
-      : []),
   ];
   return (
     <nav className="banner__nav" aria-label="Main navigation">
@@ -30,6 +23,21 @@ export function SiteNavigation({
           {label}
         </a>
       ))}
+      {community && community !== "pulse-general" ? (
+        <AccountMenu label="Your communities">
+          <a
+            href={`/browse?community=${encodeURIComponent(community)}`}
+            aria-current={
+              currentHref ===
+              `/browse?community=${encodeURIComponent(community)}`
+                ? "page"
+                : undefined
+            }
+          >
+            {community}
+          </a>
+        </AccountMenu>
+      ) : null}
     </nav>
   );
 }

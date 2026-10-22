@@ -90,6 +90,15 @@ export class PostgresVotingStore implements VotingStore {
     return poll;
   }
 
+  async setSeedCommunity(pollId: string, community: string): Promise<void> {
+    const result = await this.#pool.query(
+      "update polls set community = $2 where id = $1 and created_by is null returning id",
+      [pollId, community],
+    );
+    if (result.rowCount !== 1)
+      throw new TypeError("seed poll missing or authored");
+  }
+
   async getPoll(pollId: string): Promise<Poll | undefined> {
     // The authored columns (ADR-0037) are read for their public facts only.
     // `created_by` is deliberately not selected: the author's account never
