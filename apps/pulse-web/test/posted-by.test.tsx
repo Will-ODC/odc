@@ -75,8 +75,12 @@ describe("the way to post", () => {
     expect(link.getAttribute("href")).toBe("/new");
   });
 
-  it("is left out where the bar is not given one", () => {
+  it("is available consistently by default", () => {
     render(<TopBanner />);
-    expect(screen.queryByRole("link", { name: "Post a question" })).toBeNull();
+    expect(
+      screen
+        .getByRole("link", { name: "Post a question" })
+        .getAttribute("href"),
+    ).toBe("/new");
   });
 });

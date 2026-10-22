@@ -243,3 +243,58 @@
   clip-path: inset(50%);
   white-space: nowrap;
 }
+
+.post__promise-row {
+  display: flex;
+  align-items: flex-start;
+  gap: var(--step);
+}
+.post__promise-row .post__promise {
+  flex: 1;
+}
+.post__info {
+  display: grid;
+  place-items: center;
+  flex: none;
+  width: calc(var(--step) * 5.5);
+  height: calc(var(--step) * 5.5);
+  padding: 0;
+  border: none;
+  border-radius: var(--r-control);
+  background: transparent;
+  color: var(--ballot-ink-soft);
+  font: inherit;
+  cursor: pointer;
+}
+.post__info span {
+  display: grid;
+  place-items: center;
+  width: calc(var(--step) * 3);
+  height: calc(var(--step) * 3);
+  border: var(--hairline) solid var(--control-line);
+  border-radius: var(--r-pill);
+  font-size: var(--t-small);
+  font-weight: 700;
+}
+.post__info:hover {
+  background: var(--surface-hover);
+}
+.post__info:focus-visible {
+  outline: calc(var(--hairline) * 2) solid var(--focus-ring);
+  outline-offset: calc(var(--hairline) * 2);
+}
+.post__info-dialog {
+  box-sizing: border-box;
+  width: min(var(--prose-measure), calc(100vw - var(--gutter) * 2));
+  max-height: calc(100dvh - var(--gutter) * 2);
+  overflow-y: auto;
+  padding: var(--gutter);
+  border: var(--hairline) solid var(--control-line);
+  border-radius: var(--r-control);
+  background: var(--ballot-bg);
+  color: var(--ballot-ink);
+  font: inherit;
+}
+.post__info-dialog::backdrop {
+  background: var(--scrim);
+}

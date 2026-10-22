@@ -13,7 +13,7 @@ afterEach(() => {
 beforeEach(() => globalThis.history.replaceState(null, "", "/"));
 
 /** Every method a spy, so a test can say none of them was called. */
-function watchedApi(): { api: PulseApi; calls: () => number } {
+function watchedApi(): { api: PulseApi; calls: () => string[] } {
   const spies = new Map<string, ReturnType<typeof vi.fn>>();
   const api = new Proxy({} as PulseApi, {
     get(_target, name: string) {
@@ -28,14 +28,16 @@ function watchedApi(): { api: PulseApi; calls: () => number } {
   return {
     api,
     calls: () =>
-      [...spies.values()].reduce((sum, spy) => sum + spy.mock.calls.length, 0),
+      [...spies.entries()].flatMap(([name, spy]) =>
+        spy.mock.calls.map(() => name),
+      ),
   };
 }
 
 const REPO = "https://github.com/Will-ODC/odc";
 
 describe("the trust page's own address (#351)", () => {
-  it("opens at /trust with no sign-in and no API calls", async () => {
+  it("opens without sign-in and only reads the session for shared navigation", async () => {
     const fetchSpy = vi.spyOn(globalThis, "fetch");
     const { api, calls } = watchedApi();
     globalThis.history.replaceState(null, "", "/trust");
@@ -50,7 +52,7 @@ describe("the trust page's own address (#351)", () => {
     ).toBeTruthy();
     // Let any effect that might fetch get its chance before counting.
     await Promise.resolve();
-    expect(calls()).toBe(0);
+    expect(calls()).toEqual(["me"]);
     expect(fetchSpy).not.toHaveBeenCalled();
     expect(screen.queryByLabelText("Your email")).toBeNull();
   });

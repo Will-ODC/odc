@@ -196,7 +196,7 @@ it("keeps home, guided questions and posting in the top navigation", async () =>
       community="pulse-general"
     />,
   );
-  const nav = screen.getByRole("navigation", { name: "Browse navigation" });
+  const nav = screen.getByRole("navigation", { name: "Main navigation" });
   expect(nav.querySelector('a[href="/"]')?.textContent).toBe("Home");
   expect(nav.querySelector('a[href="/questions"]')?.textContent).toBe(
     "Starting questions",

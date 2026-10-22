@@ -6,14 +6,14 @@ import { pathOf } from "../flow/route.js";
 import "./Trust.css";
 
 /**
- * Static counting guide (#351, #402, ADR-0039): no sign-in or API calls.
+ * Static counting guide (#351, #402, ADR-0039). The supplied banner owns session reads.
  * Keep current voting limits separate from the unbuilt ledger's design.
  * "Today" copy changes only after the code does.
  */
-export function Trust() {
+export function Trust({ banner }: { banner?: ReactNode }) {
   const id = useId();
   return (
-    <AppShell banner={<TopBanner />}>
+    <AppShell banner={banner ?? <TopBanner signInHref="/sign-in" />}>
       <article className="trust" aria-labelledby={`${id}-title`}>
         <h1 id={`${id}-title`} className="trust__title">
           How votes count
