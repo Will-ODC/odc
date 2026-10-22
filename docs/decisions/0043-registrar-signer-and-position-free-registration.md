@@ -66,7 +66,8 @@ never share state:
   issue's last seal, so a push that timed out cannot become a second ballot
   (ET-20) or a counted ballot identity rolled back. It deletes an issue's set
   only when identity calls the signer's public "release issue" endpoint, which
-  identity calls only once every push for that issue has a definite answer.
+  identity calls only after the issue's last seal and once every push for that
+  issue has a definite answer; the signer refuses an earlier release.
 
 No contract change for ballots: `vote_cast` v1 and HA-15 stay as they are.
 ET-25 already says it "fixes when the decision is made, not which component
@@ -156,9 +157,10 @@ and what crosses each boundary.
   or "refused" (unknown issue, choice out of range, issue closed), with no
   batch id, line or signature. A request id already in the issue's set is
   answered "accepted" without admitting again.
-- **Identity → signer, release an issue:** `issue_id` only, sent once every
-  push for that issue has a definite answer. The signer then deletes the
-  issue's request-id set.
+- **Identity → signer, release an issue:** `issue_id` only, sent only after
+  the issue's last seal and once every push for that issue has a definite
+  answer. The signer refuses a release before the last seal; otherwise it
+  deletes the issue's request-id set.
 - **Ledger → signer, seal:** `issue_id`, and whether this is the issue's last
   batch. The signer atomically closes the issue's open batch and returns its id
   and its counts per choice. After a last seal it refuses every further entry
