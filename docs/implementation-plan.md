@@ -46,7 +46,7 @@ The append-only event log. The single writer of truth.
 - API: `GET /events?since={seq}` (`read-api.md`; read-only, it MUST NOT accept `POST`/`PUT`/`DELETE`, RA-13) · `GET /head` · `GET /export`. Write path: service-defined (RA-13), within EV-25, EV-26, ET-21a and ET-23–ET-25.
 - Inside: hash computed at insert; insert-only enforced at the storage layer; `seq` assigned here (`ts` never orders anything, ES-21; a ballot's `ts` is quantized, ET-23).
 - **Verify before append** (`evolution.md` EV-26): an event is appended only if the export with it as the last line verifies `VALID` under a verifier of exactly this ledger's contracts version. A chain not already `VALID` takes no further appends, and no line may exceed the EV-25 cap (65536 bytes, depth 64).
-- Validation needs nothing outside the log: a `vote_cast` is accepted only if its `sig` verifies under the `registrar_pk` its own `genesis` declares (`event-types.md` ET-17). The **write path is not self-contained**, though: a ballot's signature covers its final `seq`, `ts` and `prev_hash` (`hashing.md` HA-15), so `signer` signs each ballot at append, once its line is fixed (ET-25). The ledger seals an issue's open batch at `signer`, orders it, and asks `signer` to sign that run before appending it (ADR-0043; waits on the charter amendment, §3a). Registrations use `participant_registered` v2, whose signature is position-free and can be appended at any line (ADR-0043, once `contracts/` carries it).
+- Validation needs nothing outside the log: a `vote_cast` is accepted only if its `sig` verifies under the `registrar_pk` its own `genesis` declares (`event-types.md` ET-17). The **write path is not self-contained**, though: a ballot's signature covers its final `seq`, `ts` and `prev_hash` (`hashing.md` HA-15), so `signer` signs each ballot at append, once its line is fixed (ET-25). The ledger seals an issue's open batch at `signer`, orders it, and asks `signer` to sign that run before appending it (ADR-0043). Registrations use `participant_registered` v2, whose signature is position-free and can be appended at any line (ADR-0043, once `contracts/` carries it).
 - Duplicate votes are **recorded, not rejected**, and **cannot be de-duplicated on-log at all**: a ballot carries no voter field (ET-21), so there is nothing to group by and "latest per participant wins" is not computable. One-ballot-per-human is registrar policy, decided off-log before the ballot is admitted (ET-20). The log records what happened; views decide what it means, and `evolution.md` EV-13 permanently excludes the ballot plane from every correction mechanism.
 - MVP authorization: `issue_created` requires the operator key; `participant_registered` is **self-signed** under its own `pubkey` (ET-10, proof of possession) — one-human-per-key is `identity`'s off-log policy, not a property of the event (ET-12); `vote_cast` requires the **registrar** key, held by `signer` (ADR-0043). The genesis MUST declare `registrar_pk != operator_pk` (`event-types.md` ET-9d) — one key in both roles would let a single holder mint the questions and forge every answer. Distinctness is verifier-enforced; **custody is not and cannot be** (two distinct keys can still sit in one pair of hands, ADR-0018), so `signer` holding the registrar key and never the operator key remains policy this service and `signer` must actually honour.
 - Write path: `issue_created` and `participant_registered` are signed by their own keys (operator, registrant). **A ballot is not**: the registrar is in the vote path, split in two (ADR-0043) — `identity` decides eligibility off-log, before admission and final (ET-20, ET-25), and passes `signer` an unattributed `(issue, choice)`; `signer` signs every ballot of a sealed batch at append. The voter holds no on-log key, because a voter-held key is a demandable receipt (ADR-0004, charter §5/§8). No component on the submission path gives a receipt: not which line or batch is the ballot's, and not any third-party-verifiable statement about it (ET-21a).
@@ -63,13 +63,13 @@ Standalone CLI, written **from `contracts/` alone in a fresh context** — an ag
 Human-facing registration; keeper of the private linkage map (own database, never exposed, physically separate from `ledger`).
 
 - API: `POST /register` (new participant: receives the registrant's pubkey and self-signed `participant_registered` (ET-10); identity never holds the participant's private key; records linkage privately once the event is appended; the signature is `participant_registered` v2's position-free one, ADR-0043, so it proves nothing about possession: identity links a `pubkey` only after a fresh challenge-response from that key, and refuses a `pubkey` already linked; one already on the log but not linked is accepted only when identity's own durable record shows an unfinished submission for that same challenge-verified key, and refused otherwise) · `POST /challenge` (auth for clients).
-- Admission half of the registrar (ADR-0043; waits on the charter amendment, §3a): its eligibility and one-ballot-per-human decision is made before admission and final (ET-20, ET-25); it then pushes an unattributed `(issue, choice)` to `signer` and keeps only "voter V has voted on issue I". It holds no registrar key, never learns a ballot's batch or line, and gives no receipt (ET-21a).
+- Admission half of the registrar (ADR-0043): its eligibility and one-ballot-per-human decision is made before admission and final (ET-20, ET-25); it then pushes an unattributed `(issue, choice)` to `signer` and keeps only "voter V has voted on issue I". It holds no registrar key, never learns a ballot's batch or line, and gives no receipt (ET-21a).
 - v1 = keypairs and pseudonyms. Blind signatures arrive later **behind this same API**.
 - Ordering: the registrant's `participant_registered` is appended to `ledger` first; record the private linkage only on confirmed append; retries must be safe. A person must never exist in one store but not the other.
 
 ### 3a. `signer` — Phase 1
 
-> **Waits on the charter.** Do not build `signer`, or the signer parts of `ledger` and `identity`, before the charter §10 item 6 amendment merges (follow-up PR `docs/charter-registrar-split`, approved by Will 2026-10-21).
+> **Charter.** §10 item 6 names this split: identity decides who may vote; `signer`, holding no linkage map, signs every admitted ballot (amended with ADR-0043, approved by Will 2026-10-21).
 
 The signing half of the registrar (ADR-0043). Own storage; holds the registrar private key, never the operator key or any participant key, and no linkage map.
 
@@ -102,12 +102,12 @@ Thin protocol wrapper. Resources = `tally` and `ledger` reads; tools = vote cast
 
 ## Build order
 
-| Phase | Work                                          | Parallel?                                               |
-| ----- | --------------------------------------------- | ------------------------------------------------------- |
-| 0     | `contracts/` — write, review, RC              | —                                                       |
-| 1     | `ledger` · `verifier` · `identity` · `signer` | yes — four agents; `signer` after the charter amendment |
-| 2     | `tally` · `web`                               | yes — mocks until Phase 1 lands                         |
-| 3     | `mcp`; first deferred service when needed     | —                                                       |
+| Phase | Work                                          | Parallel?                       |
+| ----- | --------------------------------------------- | ------------------------------- |
+| 0     | `contracts/` — write, review, RC              | —                               |
+| 1     | `ledger` · `verifier` · `identity` · `signer` | yes — four agents               |
+| 2     | `tally` · `web`                               | yes — mocks until Phase 1 lands |
+| 3     | `mcp`; first deferred service when needed     | —                               |
 
 ## MVP acceptance test
 
