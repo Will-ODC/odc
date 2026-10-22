@@ -165,13 +165,20 @@ and what crosses each boundary.
   batch. The signer atomically closes the issue's open batch and returns its id
   and its counts per choice. After a last seal it refuses every further entry
   of that issue.
-- **Ledger → signer, sign a batch:** the batch's unsigned `vote_cast` events in
-  append order, with `seq`, `ts` and `prev_hash`. The signer checks that their
-  `(issue, choice)` multiset equals the sealed counts exactly, that the `seq`s
-  are one contiguous run at one `ts`, and that each `prev_hash` is the hash of
-  the event before it once signed, then returns the signatures. A batch is
-  signed at exactly one position: a repeated call with identical preimages
-  returns identical signatures (decision 3), and any other position is refused.
+- **Ledger → signer, sign a batch:** one call carrying the batch's unsigned
+  `vote_cast` payloads in the ledger's chosen append order, the first `seq`,
+  the batch's `ts`, and the `prev_hash` of the first ballot (the hash of the
+  event the run follows). Each ballot's hash covers its own `sig` (HA-13, HA-15), so
+  ballots 2..N cannot have a `prev_hash` until the ballot before them is signed;
+  the ledger therefore cannot send them pre-chained. The signer checks that the
+  `(issue, choice)` multiset equals the sealed counts exactly, then, in order,
+  assigns each ballot `seq` = first `seq` + its index, the shared `ts`, and the
+  `prev_hash` of the ballot before it, signs it, computes its hash, and returns
+  the complete signed run. The ledger re-checks every returned line (EV-26)
+  before appending the run whole (ET-25). A batch is signed at exactly one
+  position: a repeated call with identical inputs returns identical events
+  (decision 3), and any other position is refused. _(Clarified 2026-10-21 at
+  the ledger lead's request; Will chose this over one call per ballot.)_
 - **Identity → ledger, append a registration:** a client's
   `participant_registered` v2. Linkage is recorded only on confirmed append; a
   retry that appends twice is a harmless duplicate.
