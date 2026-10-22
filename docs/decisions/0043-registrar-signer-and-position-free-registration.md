@@ -256,7 +256,7 @@ Rules that follow:
   ledger now calls the signer; the "no calls to other services" rule becomes
   "calls only the signer's public API, on the ballot write path".
 - A signer outage before the ledger holds a batch's signatures stalls ledger
-  appends from the first sign call until the signer answers; once the ledger
+  appends from the sign call until the signer answers; once the ledger
   holds them, a signer outage stalls nothing. An outage before sealing only
   delays ballots.
 - The web client signs registrations without waiting for the ledger, but must
