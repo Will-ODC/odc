@@ -17,7 +17,11 @@ contracts/       # Event schema, hashing, export, IDs. DRAFTING → RELEASE
                  # CANDIDATE → FROZEN; the freeze is deferred (ADR-0007).
 services/        # charter-governed core
   ledger/        # append-only hash-chained event log — the only truth
-  identity/      # registration + private linkage map (own DB, never exposed)
+  identity/      # registration + private linkage map (own DB, never exposed);
+                 # decides who may vote, never signs ballots (ADR-0043)
+  signer/        # PLANNED, Phase 1, not yet created: holds the registrar key,
+                 # no linkage map; signs admitted ballots with deterministic
+                 # Ed25519 from a reproducible build (ADR-0043)
   tally/         # derived views; holds no truth; rebuildable from export
   verifier/      # Go CLI; built from contracts/ ONLY, in a fresh context
   web/           # human client (Phase 2, not started)

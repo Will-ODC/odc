@@ -15,16 +15,14 @@ is decided, and delete it when it becomes moot. Pulse's open decisions are in
 
 | Question                                                                                            | Where                                                        |
 | --------------------------------------------------------------------------------------------------- | ------------------------------------------------------------ |
-| **Q-F**: the registrar's signature as a subliminal channel                                          | "Q-F — What mitigates the registrar's signature…"            |
 | **Anchor contents and cadence** (Q-A item 4, which ADR-0013 and ADR-0032 left open)                 | "Anchor contents and cadence"                                |
-| **The registrar signs each ballot's final log position**, with NS-2 (T9 re-audits S-C, NS-2)        | "Open entries from the T9 re-audit (2026-10-20)"             |
 | **Key rotation, compromise and the published test keys** (T9 re-audit S-G, 2026-10-20)              | "Open entries from the T9 re-audit (2026-10-20)"             |
 | **EX-24 claim decoding**: invalid UTF-8, BOM, `\u` escapes (2026-10-10)                             | "EX-24 claim decoding (2026-10-10)"                          |
 | **Pulse: how long `pending_claim` rows are kept** (2026-10-11, #315)                                | "Pulse sign-in data: retention and logging (2026-10-11)"     |
 | **Pulse: what an email-provider error may write to logs** (2026-10-11, #315)                        | "Pulse sign-in data: retention and logging (2026-10-11)"     |
 | Does `read-api.md` (RA-1 to RA-13, **zero** conformance coverage) need vectors before Phase 1?      | "Read-API conformance coverage"                              |
 | **⚠️ Ballot expressiveness vs receipt-freeness**: a live contradiction between charter §5 and ET-22 | **Archive file**. Read it before writing ceiling ADR part B. |
-| Registrar key custody and the no-receipt discipline in Phase 1 identity                             | Archive file: "Registrar-side ballot privacy"                |
+| Phase 1 identity's audit trail and no-receipt discipline (custody settled by ADR-0043)              | Archive file: "Registrar-side ballot privacy"                |
 | `RETIRED.md` valve; EV-5's fixture breadth; an HA-2 fixture                                         | Archive file, three adjacent bullets                         |
 | Sanction/negative events; money/attestation/capability events (Phase 2+)                            | Archive file, deferred, and **not** freeze blockers          |
 
@@ -37,24 +35,14 @@ floors, the charter §4 anchoring edit (ratified 2026-08-15), and the traps left
 by the ADR pass and by fixture phase 1. All of those traps are now closed. Look
 in the archive under "T9 findings F1-F6 (settled; moved 2026-10-10)". ADRs
 and specs that cite "`memory/OPEN-QUESTIONS.md` Q-A" (or Q-B, Q-D, Q-E or Q-H)
-mean that archive section. Q-F is still here.
+mean that archive section. Q-F, S-C and NS-2 are archived too, settled by
+ADR-0043.
 
 **Where a new question goes:** a new bullet in this file, with a bold title and a
 date, or its own `##` section if it needs one. Once it is settled, move it to the
 archive with a one-line pointer to the ADR or PR that settled it.
 
 ## Open entries from the T9 audit
-
-- **Q-F — What mitigates the registrar's signature as a subliminal channel?**
-  (from S2.) Every ballot carries 64 registrar-chosen, published, permanent
-  signature bytes, into which the registrar can encode the voter's identity
-  undetectably. The audit explicitly **disagrees with the prior posture audit**
-  here: that document called the registrar's admission-time knowledge the only
-  artifact connecting a human to a ballot, but that knowledge is transient and
-  deletable, whereas this one is written to the permanent public record. Options:
-  attested builds, threshold/split registrar signing, published nonce derivation.
-  Also asks whether this moves blind-signature credentials off charter §11's
-  deferred list.
 
 - **Anchor contents and cadence** (split out of Q-A, 2026-10-10). ADR-0013
   settled chain identity, and ADR-0032 settled anchor-comparison precedence.
@@ -83,39 +71,11 @@ archive with a one-line pointer to the ADR or PR that settled it.
 
 ## Open entries from the T9 re-audit (2026-10-20)
 
-Both come from `docs/security/t9-reaudit-2026-10-20.md` (PR #407), which
+The entry below comes from `docs/security/t9-reaudit-2026-10-20.md` (PR #407), which
 returned APPROVE WITH NITS. The operator chose to fix S-A, S-B and S-E first
-(#408) and to file these as questions.
+(#408) and to file the rest as questions. S-C, with NS-2, was settled by ADR-0043
+and is in the archive.
 
-- **The registrar signs each ballot's final log position** (S-C). HA-15's
-  signing preimage covers `seq`, `ts` and `prev_hash`, and ET-17 makes the
-  registrar the signer of `vote_cast`. So the registrar can sign a ballot only
-  after the ledger has fixed its place in the log, and it sees each ballot's
-  exact line, not only `{who, issue, choice}` at admission (ET-21). The ET-25
-  shuffle then protects nothing against the registrar, and the identity
-  service, which also holds the linkage map, becomes a voter-to-log-line join.
-  It also conflicts with `services/ledger/CLAUDE.md`'s "no calls to other
-  services". Open: how Phase 1 keeps admission (which knows the voter) apart
-  from signing (which knows the position) — for example an unattributed pool of
-  `(issue, choice)` that the signer consumes — and how ledger and identity
-  coordinate appends. Design before the Phase 1 write path. Related: the
-  archive's "Registrar-side ballot privacy" and Q-F above. The additive ET-21
-  wording (state the residual honestly) can land any time.
-  **Also decide here: NS-2** (second T9 re-audit, 2026-10-20, PR #414).
-  HA-15's preimage covers `seq`, `ts` and `prev_hash` for every signed event,
-  including the registrant's own `participant_registered` signature (ET-10).
-  With EV-26 refusing any event whose signature fails at its final position,
-  a registrant can sign only once the ledger has fixed the tail it extends.
-  The re-audit showed a registration signed for line 3 and appended at line 4
-  is `INVALID`. So a Phase 1 ledger must either hold a tail reservation across
-  a client round-trip (a slow or hostile registrant stalls the log, ballots
-  included) or reject and retry (livelock under load). The binding is what
-  stops a captured event being replayed at another line, so the fix is a
-  design choice: keep it with a reservation protocol and timeout, or sign a
-  position-free statement for registrations and accept duplicates (already
-  `VALID` under ET-12). The second option changes `hashing.md` or adds a new
-  `participant_registered` version, which is possible only before the freeze.
-  Decide before the ledger write path is coded and before the freeze.
 - **Key rotation, compromise and the published test keys** (S-G; gates the
   freeze, not RC). ET-9e closed the `genesis` payload for good, so any rotation
   must arrive as new versions of every signed type, signed under a key a new

@@ -27,13 +27,28 @@ are named in the live file's index.
   construction, strict rejection (D3/D5 in docs/plans/phase-0.md; ADR in T3).
 - ~~Signature scheme~~ → DECIDED: Ed25519 (D2; ADR in T3).
 - **Ballot unlinkability vs. signed `vote_cast`** → DECIDED (ADR-0004): voter-held ballot keys removed entirely; `vote_cast` is registrar-signed, no voter-held artifact can prove any ballot.
+- **The registrar signs each ballot's final log position** (T9 re-audit S-C,
+  with NS-2, 2026-10-20) → DECIDED (ADR-0043, operator, 2026-10-21). Admission
+  (identity) and signing are split: identity pushes an unattributed
+  `(issue, choice)` to a separate signer, which holds the registrar key and no
+  linkage map and signs each sealed batch at append. NS-2: a new
+  `participant_registered` v2 whose registrant signature does not cover `seq`,
+  `ts` or `prev_hash`; a replay is a duplicate, `VALID` under ET-12. Rejected:
+  tail reservation (a hostile client stalls the log) and reject-and-retry
+  (livelock). The contract edits, verifiers and vectors are owed (ADR-0043).
+- **Q-F — What mitigates the registrar's signature as a subliminal channel?**
+  (T9 audit S2) → DECIDED (ADR-0043, 2026-10-21): deterministic RFC 8032
+  Ed25519 from a reproducible, published build. Residual: not checkable from
+  the export, rests on trusting the build. Threshold signing (FROST) deferred,
+  to be reconsidered before the T10 freeze.
 - **Registrar-side ballot privacy (Phase 1 identity design, from ADR-0004).**
   In v1 the registrar (identity service) necessarily sees `{who, issue,
 choice}` at eligibility-check time — trust-by-policy per charter §10 v1,
   removed by blind-signature credentials in identity v2. Phase 1 must design:
-  registrar key custody (separate from `operator_pk`, held only by identity);
+  registrar key custody (separate from `operator_pk`; **settled by ADR-0043**:
+  held by a separate signer service, not identity);
   one-human-one-issue enforcement and its audit trail (off-log); and the
-  no-receipt discipline — identity and web MUST NOT return or display any
+  no-receipt discipline — identity, the signer (ADR-0043) and web MUST NOT return or display any
   per-ballot confirmation artifact binding a voter to a specific log line
   (no signed receipts, no "your vote is seq N" attestations).
 - **Verifier reason codes** → DECIDED (T4a / EV-17, 2026-07-25): no reason-code registry for v1; reason text is advisory, conformance judged on verdict token + line number alone.

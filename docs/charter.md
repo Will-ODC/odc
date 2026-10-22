@@ -95,7 +95,7 @@ Participation generates data, and today the value of such data is harvested by p
 3. **Tally engine** — all derived views: aggregations, parallel tallies, reputation, delegation graphs.
 4. **Minimal API** — enough to develop against.
 5. **Web app** — human-facing client (the existing onlinedemocracy.org is the seed).
-6. **Identity service** — v1: key-based pseudonyms, linkage held privately, physically separated from the log; v2: blind-signature credentials and in-person enrollment. It is also the ballot registrar: it decides who may vote, signs every accepted ballot, and in v1 is trusted by policy not to add, drop or link ballots (`event-types.md` ET-17, ET-20, ET-21).
+6. **Identity service** — v1: key-based pseudonyms, linkage held privately, physically separated from the log; v2: blind-signature credentials and in-person enrollment. The ballot registrar role is split: identity decides who may vote, and a separate signer service, holding no linkage map, signs every admitted ballot; in v1 both are trusted by policy not to add, drop or link ballots (`event-types.md` ET-17, ET-20, ET-21; ADR-0043).
 7. **MCP server** — thin wrapper over the substrate; built last because everything below it must already be trustworthy.
 
 ## 11. Out of scope for v1
