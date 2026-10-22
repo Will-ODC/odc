@@ -73,7 +73,7 @@ Human-facing registration; keeper of the private linkage map (own database, neve
 
 The signing half of the registrar (ADR-0043). Own storage; holds the registrar private key, never the operator key or any participant key, and no linkage map.
 
-- API: add an unattributed `(issue, choice)` entry (from `identity`) · release an issue's request ids (from `identity`) · seal an issue's open batch, returning counts per choice (from `ledger`) · sign a sealed batch's run at its fixed positions in one call, chaining each ballot's `prev_hash` itself and returning the signed run, at exactly one position (an identical replay returns the same run) (from `ledger`).
+- API: add an unattributed `(issue, choice)` entry (from `identity`) · release an issue's request ids (from `identity`) · seal an issue's open batch, returning counts per choice (from `ledger`) · sign a sealed batch's run in one call, chaining each ballot's `prev_hash` itself and returning the signed run, at exactly one position (an identical replay returns the same run) (from `ledger`).
 - Keeps each open batch as counts per choice, with no arrival order or time — none in request logs, metrics or stored request ids either, on `signer` or `identity`; per issue, `signer` keeps the set of admitted request ids, unordered and with nothing beside them (no batch, choice, order or time), answers any known id "accepted" without admitting again (even after the last seal), and deletes the set only when `identity` calls "release issue", after the issue's last seal and once every push for that issue has a definite answer (an earlier release is refused). Signs with deterministic RFC 8032 Ed25519, from a reproducible, published build (Q-F). On the submission path, so no receipt (ET-21a).
 
 ### 4. `tally` — Phase 2
