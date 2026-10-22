@@ -575,9 +575,10 @@ off-log eligibility check.
   can join the two is an open design question (`memory/OPEN-QUESTIONS.md`,
   "The registrar signs each ballot's final log position").
 - **ET-21a.** _No receipt from the write path._ Neither the ledger, nor the
-  registrar, nor any other component the operator runs on the path a ballot
-  takes from its submitter to the log (a web or MCP front end, a mail or
-  notification sender, and the like) MAY give a ballot's submitter, or anyone acting for them, at any
+  registrar, nor any other component the operator runs (a web or MCP front
+  end, a mail or notification sender, a status or tally page, and the like),
+  whether or not it is on the path a ballot takes from its submitter to the
+  log, MAY give a ballot's submitter, or anyone acting for them, at any
   time and by any channel:
   1. anything that singles out the ballot's line, or its batch, from the rest of
      the log: telling them which line or batch is theirs, whether by its `seq`,

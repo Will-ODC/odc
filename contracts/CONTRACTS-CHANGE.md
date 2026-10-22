@@ -32,9 +32,10 @@ Format (newest first, one entry per merged contracts change):
   admitted ballot. Otherwise a refusal at signing, after the seal, could drop a
   sealed batch below `ballot_batch_min` and let EV-26 strand later ballots.
   Which component admits or signs stays open (S-C).
-- **ET-21a** (T3-2): binds every component the operator runs on the
-  submission path, not only the ledger and registrar; item 2 covers any
-  statement verifiable as the operator's (for example a DKIM-signed email).
+- **ET-21a** (T3-2): binds every component the operator runs, on the
+  submission path or not (for example a status or tally page), not only the
+  ledger and registrar; item 2 covers any statement verifiable as the
+  operator's (for example a DKIM-signed email).
 - **ET-25** (T3-3): after an under-size batch, EV-26 forbids later ballots of
   the issue at another instant; a same-instant ballot stays `VALID` and is
   forbidden by the seal instead.

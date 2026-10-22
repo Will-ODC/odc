@@ -3,7 +3,9 @@
 **Status: RELEASE CANDIDATE. Not frozen. No `contracts-v1` tag.** The genesis
 rehearsal passed and T9 closed (third re-audit, 2026-10-21), so Phase 1
 service code may now be written against these specs. Changes stay possible:
-additive-only, version-bumped, with a `CONTRACTS-CHANGE.md` entry. The
+additive-only, version-bumped, with a `CONTRACTS-CHANGE.md` entry, and Phase 1
+services MUST tolerate such an additive change while the release candidate
+stands (ADR-0007). The
 freeze-only half of `contracts-guard` (the rules that apply once the tag
 exists) stays dormant until the tag.
 
