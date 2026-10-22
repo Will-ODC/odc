@@ -36,6 +36,22 @@ jobs:
           --health-interval 10s
           --health-timeout 5s
           --health-retries 5
+      # The ledger's own database, never pulse's (rule 1: no shared databases).
+      # `ledger` is a superuser here so the tests can create a throwaway
+      # database per test and the migrations can create the `ledger_app` role.
+      ledger-postgres:
+        image: postgres:17
+        env:
+          POSTGRES_USER: ledger
+          POSTGRES_PASSWORD: ledger
+          POSTGRES_DB: ledger
+        ports:
+          - 5433:5432
+        options: >-
+          --health-cmd "pg_isready -U ledger -d ledger"
+          --health-interval 10s
+          --health-timeout 5s
+          --health-retries 5
     env:
       # Pulse-owned names on purpose. A bare DATABASE_URL is one of the most
       # widely exported variables there is, so keying off it would point the
@@ -45,6 +61,9 @@ jobs:
       # a reason to skip; it is set here and nowhere else.
       PULSE_DATABASE_URL: postgres://pulse:pulse@localhost:5432/pulse_test
       PULSE_REQUIRE_DATABASE: "1"
+      # Same pattern for the ledger: its own names, and required on CI.
+      LEDGER_DATABASE_URL: postgres://ledger:ledger@localhost:5433/ledger
+      LEDGER_REQUIRE_DATABASE: "1"
     steps:
       - uses: actions/checkout@v4
       # No `version:` here on purpose — action-setup reads the pnpm version from
