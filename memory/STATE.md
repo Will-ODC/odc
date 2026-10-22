@@ -50,14 +50,16 @@ in the Done list below. The Go CLI takes `<file>` with no subcommand; the TS CLI
 
 ## Next
 
-1. **Decide S-C with NS-2** (operator) and write it as an ADR. The registrar
+1. **Write the S-C/NS-2/Q-F ADR** (the operator chose all three on
+   2026-10-21; the ADR is in progress). The registrar
    signs each ballot's final log position (HA-15, ET-25), so how `ledger` and
    `identity` coordinate appends, and whether registration is interactive, must
    be settled before either write path is built. Options are in
    `memory/OPEN-QUESTIONS.md`, "Open entries from the T9 re-audit
    (2026-10-20)". Q-F (the registrar's signature as a subliminal channel, in
    "Open entries from the T9 audit") is settled with it. The operator chose
-   all three on 2026-10-21; the ADR records them.
+   all three on 2026-10-21; the entries move to the archive when the ADR
+   merges.
 2. **Ledger lead** (`services/ledger/`), which can start before the ADR on the
    parts it does not touch: INSERT-only storage (`odc-storage`), hash at
    insert, `seq`, the read API RA-1 to RA-13 and `GET /export`, and EV-26
