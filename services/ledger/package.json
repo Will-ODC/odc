@@ -1,0 +1,22 @@
+{
+  "name": "@odc/ledger",
+  "version": "0.0.0",
+  "private": true,
+  "type": "module",
+  "description": "ODC ledger: the append-only, hash-chained event log. The single writer of truth (Phase 1).",
+  "scripts": {
+    "build": "rm -rf dist && tsc -p tsconfig.json",
+    "test": "node --test dist/tests/*/*.test.js",
+    "lint": "eslint src tests",
+    "typecheck": "tsc -p tsconfig.json --noEmit"
+  },
+  "dependencies": {
+    "@noble/curves": "^2.3.0",
+    "fastify": "^5.11.3",
+    "pg": "^8.13.0"
+  },
+  "devDependencies": {
+    "@types/node": "^20.14.0",
+    "@types/pg": "^8.11.0"
+  }
+}
