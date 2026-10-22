@@ -58,9 +58,12 @@ never share state:
   traces and stored request ids, on identity and on the signer alike: neither
   may record when a given entry was pushed or received together with its
   issue or choice, because the two records together rebuild the join. Identity
-  keeps a request id only while the push is unresolved; the signer keeps the
-  request ids of an open batch, with no choice and no time beside them, only
-  until that batch is sealed, and then deletes them.
+  keeps a request id only while the push is unresolved. The signer keeps, per
+  issue, the set of request ids it has admitted, with nothing beside them (no
+  batch, choice, order or time), until that issue's last seal, and deletes them
+  then. A retry of an id already in the set returns "accepted" without
+  admitting again, so a push that timed out before a seal cannot become a
+  second ballot after it (ET-20).
 
 No contract change for ballots: `vote_cast` v1 and HA-15 stay as they are.
 ET-25 already says it "fixes when the decision is made, not which component
@@ -104,8 +107,11 @@ far still verifies. T10 re-audits it.
 line, so holding a copy of one proves nothing about holding the key: anyone
 can copy a `pubkey` and `sig` from the log and submit them. Identity MUST link
 a `pubkey` to a person only after a fresh challenge-response signed by that
-key (`POST /challenge`), and MUST refuse a `pubkey` that is already linked or
-already registered on the log.
+key (`POST /challenge`). It MUST refuse a `pubkey` that is already linked. A
+`pubkey` already registered on the log but not linked is accepted only when
+identity's own durable record shows an unfinished submission for that same
+challenge-verified key (recovery after a crash between append and link), and
+refused otherwise.
 
 ### 3. Q-F: deterministic signing from an attested build
 

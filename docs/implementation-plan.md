@@ -62,7 +62,7 @@ Standalone CLI, written **from `contracts/` alone in a fresh context** — an ag
 
 Human-facing registration; keeper of the private linkage map (own database, never exposed, physically separate from `ledger`).
 
-- API: `POST /register` (new participant: receives the registrant's pubkey and self-signed `participant_registered` (ET-10); identity never holds the participant's private key; records linkage privately once the event is appended; the signature is `participant_registered` v2's position-free one, ADR-0043, so it proves nothing about possession: identity links a `pubkey` only after a fresh challenge-response from that key, and refuses a `pubkey` already linked or already registered) · `POST /challenge` (auth for clients).
+- API: `POST /register` (new participant: receives the registrant's pubkey and self-signed `participant_registered` (ET-10); identity never holds the participant's private key; records linkage privately once the event is appended; the signature is `participant_registered` v2's position-free one, ADR-0043, so it proves nothing about possession: identity links a `pubkey` only after a fresh challenge-response from that key, and refuses a `pubkey` already linked; one already on the log but not linked is accepted only when identity's own durable record shows an unfinished submission for that same challenge-verified key, and refused otherwise) · `POST /challenge` (auth for clients).
 - Admission half of the registrar (ADR-0043; waits on the charter amendment, §3a): its eligibility and one-ballot-per-human decision is made before admission and final (ET-20, ET-25); it then pushes an unattributed `(issue, choice)` to `signer` and keeps only "voter V has voted on issue I". It holds no registrar key, never learns a ballot's batch or line, and gives no receipt (ET-21a).
 - v1 = keypairs and pseudonyms. Blind signatures arrive later **behind this same API**.
 - Ordering: the registrant's `participant_registered` is appended to `ledger` first; record the private linkage only on confirmed append; retries must be safe. A person must never exist in one store but not the other.
@@ -74,7 +74,7 @@ Human-facing registration; keeper of the private linkage map (own database, neve
 The signing half of the registrar (ADR-0043). Own storage; holds the registrar private key, never the operator key or any participant key, and no linkage map.
 
 - API: add an unattributed `(issue, choice)` entry (from `identity`) · seal an issue's open batch, returning counts per choice (from `ledger`) · sign a sealed batch's run at its fixed positions, exactly once (from `ledger`).
-- Keeps each open batch as counts per choice, with no arrival order or time — none in request logs, metrics or stored request ids either, on `signer` or `identity`; request ids are deleted when their batch is sealed. Signs with deterministic RFC 8032 Ed25519, from a reproducible, published build (Q-F). On the submission path, so no receipt (ET-21a).
+- Keeps each open batch as counts per choice, with no arrival order or time — none in request logs, metrics or stored request ids either, on `signer` or `identity`; per issue, `signer` keeps the set of admitted request ids with nothing beside them (no batch, choice, order or time) until the issue's last seal, and a retry of a known id returns "accepted" without admitting again. Signs with deterministic RFC 8032 Ed25519, from a reproducible, published build (Q-F). On the submission path, so no receipt (ET-21a).
 
 ### 4. `tally` — Phase 2
 
