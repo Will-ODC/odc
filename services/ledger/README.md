@@ -1,6 +1,6 @@
 # ledger
 
-**Status: not started. Blocked on contracts/ freeze (Phase 0). Phase: 1.**
+**Status: not started. Phase 1 — builds now against the contracts RELEASE CANDIDATE (ADR-0007); nothing waits on the freeze.**
 
 The append-only event log. The single writer of truth.
 

@@ -1,7 +1,7 @@
 # Evolution — contracts/evolution.md
 
-**Version:** 11
-**Status:** DRAFTING (Phase 0 · T5f, amended T9a/ADR-0014, ADR-0015,
+**Version:** 12
+**Status:** RELEASE CANDIDATE (T9a; Phase 0 · T5f, amended T9a/ADR-0014, ADR-0015,
 ADR-0017, ADR-0034, ADR-0038, T9 re-audits #408 and #415). Not frozen.
 **Companion specs:** `event-schema.md`, `event-types.md`, `hashing.md`,
 `export-format.md`, `read-api.md`.

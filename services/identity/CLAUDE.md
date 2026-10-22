@@ -2,5 +2,7 @@
 
 - Own database, never exposed, physically separate from ledger.
 - The linkage map never appears in any API response, log line, or export. No exceptions.
-- Ordering: emit participant_registered to ledger first; record linkage only on confirmed append; retries safe.
+- Registration: `participant_registered` is **self-signed by the registrant** under its own `pubkey` (`event-types.md` ET-10). Identity never holds or signs with a participant's private key. Ordering: the registration is appended to the ledger first; record linkage only on confirmed append; retries safe. Because the signature covers the event's final `seq`, `ts` and `prev_hash` (`hashing.md` HA-15), how a signed registration reaches its line is open: `memory/OPEN-QUESTIONS.md`, "The registrar signs each ballot's final log position" (NS-2).
+- Registrar: identity holds `registrar_pk`'s private key and never `operator_pk`'s (ET-9a). Its eligibility and one-ballot-per-human decision is off-log policy, made before admission and final (ET-20, ET-25); it signs every `vote_cast` admitted to a sealed batch, at append, because the signature covers the ballot's final line (ET-17, ET-25, HA-15). So it sees both `{voter, issue, choice}` and each ballot's line (ET-21) — how admission and signing are kept apart, so identity is not a voter-to-line join, is the same open question (S-C). Also open there: the registrar's 64 signature bytes as a covert channel (Q-F).
+- No receipt (ET-21a): never tell a voter, or anyone acting for them, which line or batch is theirs, and never give a third-party-verifiable statement that a ballot was admitted, appended, or what it chose. An unauthenticated "accepted" or "refused" is allowed.
 - v1 = keypairs + pseudonyms; blind signatures later behind this same API.

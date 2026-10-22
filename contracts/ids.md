@@ -1,7 +1,7 @@
 # Identifiers — contracts/ids.md
 
-**Version:** 1
-**Status:** DRAFTING (Phase 0 · T3). Not frozen.
+**Version:** 2
+**Status:** RELEASE CANDIDATE (T9a; Phase 0 · T3). Not frozen.
 **Companion specs:** `event-schema.md`, `event-types.md`, `hashing.md` (T4).
 
 Defines the two stable identifiers the v1 event types reference:
