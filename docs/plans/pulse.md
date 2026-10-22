@@ -194,7 +194,8 @@ Do not invent authors or membership for existing data.
 
 Reporting/review (#233–#236), duplicate warnings (#261), suggestions (#336),
 photos/summary (#296), comments (#297) and richer browsing previews (#427) remain separate.
-The browsing API (#259 / PR #419) is built; no browsing consumer is built yet.
+The browsing API (#259 / PR #419) and browser (#260 / PR #426) are built;
+MCP discovery (#291) remains unbuilt.
 Broad public posting launch waits for reporting/review and the automatic-hide
 threshold design. ADR-0024's hide-not-delete and automatic-hide direction remain.
 Account penalties and appeals do not arrive implicitly with creation.
