@@ -57,9 +57,8 @@ in the Done list below. The Go CLI takes `<file>` with no subcommand; the TS CLI
    be settled before either write path is built. Options are in
    `memory/OPEN-QUESTIONS.md`, "Open entries from the T9 re-audit
    (2026-10-20)". Q-F (the registrar's signature as a subliminal channel, in
-   "Open entries from the T9 audit") is settled with it. The operator chose
-   all three on 2026-10-21; the entries move to the archive when the ADR
-   merges.
+   "Open entries from the T9 audit") is settled with it. The entries move to the archive
+   when the ADR merges.
 2. **Ledger lead** (`services/ledger/`), which can start before the ADR on the
    parts it does not touch: INSERT-only storage (`odc-storage`), hash at
    insert, `seq`, the read API RA-1 to RA-13 and `GET /export`, and EV-26
