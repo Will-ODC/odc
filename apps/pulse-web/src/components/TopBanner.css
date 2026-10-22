@@ -1,15 +1,17 @@
+/* One layout and token palette for every product screen. */
 .banner {
-  display: flex;
+  display: grid;
+  grid-template-columns: auto minmax(0, 1fr) auto;
   align-items: center;
-  justify-content: space-between;
-  gap: var(--gutter);
-  padding: var(--step) var(--rail-gap);
-  border-bottom: 1px solid var(--ballot-line);
+  gap: var(--step) var(--gutter);
+  padding: var(--step) var(--gutter);
+  border-bottom: var(--hairline) solid var(--control-line);
+  background: var(--surface-rest);
+  color: var(--ballot-ink);
 }
-
-/* Declaration for declaration, `.screen__brand` — the values are the tokens
-   all three marks read, never a literal repeated here. */
 .banner__brand {
+  grid-column: 1;
+  grid-row: 1;
   display: flex;
   align-items: center;
   gap: var(--step);
@@ -17,74 +19,73 @@
   font-weight: 600;
   letter-spacing: 0.02em;
   color: var(--brand-ink);
+  text-decoration: none;
 }
-
 .banner__brand i {
   width: var(--step);
   height: var(--step);
   border-radius: var(--r-pill);
   background: var(--brand-dot);
 }
-
-.banner__sign-in {
-  font-size: var(--t-small);
-  color: var(--ballot-ink-muted);
-}
-
-.banner__sign-in:hover {
-  color: var(--ballot-ink);
-}
-
-.banner__sign-in:focus-visible {
-  outline: 2px solid var(--ballot-ink);
-  outline-offset: 2px;
-}
-
-/*
- * Everything after the brand, kept together at the end and on ONE line: at
- * most "Post a question" and one account control, which fit a 375px phone.
- */
-.banner__actions {
+.banner__nav {
+  grid-column: 1 / -1;
+  grid-row: 2;
   display: flex;
+  flex-wrap: wrap;
+  row-gap: var(--step);
+}
+.banner__actions {
   flex-wrap: nowrap;
+  grid-column: 3;
+  grid-row: 1;
+  display: flex;
   align-items: center;
-  justify-content: flex-end;
-  gap: var(--step) var(--gutter);
+  gap: calc(var(--step) * 1.5);
   min-width: 0;
 }
-
-.banner__post {
-  font-size: var(--t-small);
-  font-weight: 600;
+.banner__nav a,
+.banner__actions > a {
   color: var(--ballot-ink-soft);
+  font-size: var(--t-small);
+  text-decoration: none;
   white-space: nowrap;
 }
-
-/* "Post a question" is "Post" on a narrow phone. */
+.banner__nav a {
+  padding-inline: calc(var(--step) * 1.5);
+}
+.banner__nav a:first-child {
+  padding-inline-start: 0;
+}
+.banner__nav a + a,
+.banner__actions > * + * {
+  border-inline-start: var(--hairline) solid var(--control-line);
+}
+.banner__actions > * + * {
+  padding-inline-start: calc(var(--step) * 1.5);
+}
+.banner__post,
+.banner a[aria-current="page"] {
+  font-weight: 600;
+}
+.banner a:hover,
+.banner a[aria-current="page"] {
+  color: var(--ballot-ink);
+}
+.banner a:hover {
+  text-decoration: underline;
+}
+.banner a:focus-visible {
+  outline: calc(var(--hairline) * 2) solid var(--focus-ring);
+  outline-offset: calc(var(--hairline) * 2);
+}
 @media (max-width: 399px) {
   .banner__post-more {
     display: none;
   }
 }
-
-.banner__sign-in {
-  white-space: nowrap;
-}
-
-a.banner__brand {
-  text-decoration: none;
-}
-
-a.banner__brand:focus-visible {
-  outline: 2px solid var(--ballot-ink);
-  outline-offset: 2px;
-}
-
-.banner__post:hover {
-  color: var(--ballot-ink);
-}
-
-.banner__post:focus-visible {
-  outline: 2px solid var(--ballot-ink);
-  outline-offset: 2px;
+@media (min-width: 800px) {
+  .banner__nav {
+    grid-column: 2;
+    grid-row: 1;
+  }
 }

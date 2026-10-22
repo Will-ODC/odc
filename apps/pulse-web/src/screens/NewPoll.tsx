@@ -87,6 +87,7 @@ export function NewPoll({
           progress={bar.progress}
           holdsVotes={false}
           onPostPage
+          signInHref={signInHref}
           onSignOut={bar.signOut}
           onCancel={bar.dismiss}
         />
@@ -636,45 +637,36 @@ function PostForm({
         </div>
 
         {needsPromise ? (
-          <section className="post__purpose" aria-labelledby={`${id}-purpose`}>
-            <h2 id={`${id}-purpose`} className="post__heading">
-              What this discussion is for
-            </h2>
-            <p className="post__text">
-              Comments help us turn ideas into action that improves our
-              community&rsquo;s wellbeing as much as possible. Be honest,
-              listen, and work together.
-            </p>
-            <p className="post__text">
-              When we disagree, say so respectfully. Decide on a compromise
-              together, or try different ways to solve the same problem. Keep
-              talking and share what works.
-            </p>
-            <label className="signin__optin post__promise">
-              <input
-                type="checkbox"
-                checked={draft.promised}
-                aria-invalid={shown.promise !== undefined}
-                {...(shown.promise
-                  ? { "aria-describedby": `${id}-promise-problem` }
-                  : {})}
-                onChange={(event) => {
-                  const promised = event.target.checked;
-                  edit((old) => ({ ...old, promised }));
-                  if (promised) setShown((old) => withoutField(old, "promise"));
-                }}
-              />
-              <b>
-                I will discuss ideas without attacking, harassing or threatening
-                people.
-              </b>
-            </label>
+          <div className="post__purpose">
+            <div className="post__promise-row">
+              <label className="signin__optin post__promise">
+                <input
+                  type="checkbox"
+                  checked={draft.promised}
+                  aria-invalid={shown.promise !== undefined}
+                  {...(shown.promise
+                    ? { "aria-describedby": `${id}-promise-problem` }
+                    : {})}
+                  onChange={(event) => {
+                    const promised = event.target.checked;
+                    edit((old) => ({ ...old, promised }));
+                    if (promised)
+                      setShown((old) => withoutField(old, "promise"));
+                  }}
+                />
+                <b>
+                  I will discuss ideas without attacking, harassing or
+                  threatening people.
+                </b>
+              </label>
+              <PurposeInfo />
+            </div>
             {shown.promise ? (
               <p className="signin__problem" id={`${id}-promise-problem`}>
                 {shown.promise}
               </p>
             ) : null}
-          </section>
+          </div>
         ) : (
           <p className="post__reminder">
             <b>Be honest. Respect people. Help us move forward.</b>
@@ -826,4 +818,51 @@ function withoutField(
   const rest = { ...problems };
   delete rest[field];
   return rest;
+}
+
+/** Native modal keeps Escape, focus containment and the explanation together. */
+function PurposeInfo() {
+  const id = useId();
+  const dialog = useRef<HTMLDialogElement>(null);
+  const trigger = useRef<HTMLButtonElement>(null);
+  return (
+    <>
+      <button
+        type="button"
+        ref={trigger}
+        className="post__info"
+        aria-label="About this discussion"
+        aria-haspopup="dialog"
+        onClick={() => dialog.current?.showModal()}
+      >
+        <span aria-hidden="true">i</span>
+      </button>
+      <dialog
+        ref={dialog}
+        className="post__info-dialog"
+        aria-labelledby={id}
+        onClose={() => trigger.current?.focus()}
+      >
+        <h2 id={id} className="post__heading">
+          What this discussion is for
+        </h2>
+        <p className="post__text">
+          Comments help us turn ideas into action that improves our community’s
+          wellbeing as much as possible. Be honest, listen, and work together.
+        </p>
+        <p className="post__text">
+          When we disagree, say so respectfully. Decide on a compromise
+          together, or try different ways to solve the same problem. Keep
+          talking and share what works.
+        </p>
+        <button
+          type="button"
+          className="signin__again"
+          onClick={() => dialog.current?.close()}
+        >
+          Close
+        </button>
+      </dialog>
+    </>
+  );
 }

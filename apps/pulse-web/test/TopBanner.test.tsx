@@ -32,7 +32,7 @@ describe("the bar across the top", () => {
     expect(screen.queryByRole("link", { name: "Sign in" })).toBeNull();
     expect(screen.queryByRole("button", { name: "Sign out" })).toBeNull();
     // Everything after the mark: the post link and ONE account control.
-    expect(screen.getAllByRole("link")).toHaveLength(1);
+    expect(screen.getByRole("link", { name: "Post a question" })).toBeTruthy();
     expect(screen.getAllByRole("button")).toHaveLength(1);
     await user.click(screen.getByRole("button", { name: "Account" }));
     expect(screen.getByRole("button", { name: "Sign out" })).toBeTruthy();

@@ -1,37 +1,33 @@
-/*
- * Two rooms, one markup.
- *
- * Written mobile-first on purpose: everything outside the media query is the
- * phone, exactly as it was before this file existed, and the desktop layout
- * is an addition below it that a narrow screen never reads. Nothing here is
- * undone at phone width, because nothing here is applied at phone width.
- *
- * `--shell-wide` is a literal and cannot be a token — a media query is
- * evaluated before custom properties resolve, so `@media (min-width: var(…))`
- * never matches. It is the one number in this file that is not a token, and
- * it lives here because these are the only rules that read it.
- */
-
-/* ---- the phone: one column, the frame is a phone ---- */
+/* One full-width page at every size; optional rails start at 1100px.
+   Media query breakpoints cannot read CSS custom properties. */
 
 .shell {
   display: flex;
   flex-direction: column;
+  width: 100%;
+  min-height: 100dvh;
+  --frame-w: 100%;
+  --frame-h: auto;
+  --frame-radius: 0;
+  --frame-border: 0;
+  --frame-shadow: none;
+  --screen-brand-display: none;
 }
 
-/* No page chrome on a phone: the screen is the app. */
+/* The same site navigation stays available on phones and desktop. */
 .shell__banner {
-  display: none;
+  display: block;
 }
 
 .shell__body {
+  flex: 1;
   display: grid;
   grid-template-columns: auto;
 }
 
 .shell__stage {
   display: flex;
-  align-items: center;
+  align-items: stretch;
   justify-content: center;
 }
 
@@ -48,29 +44,7 @@
 
 @media (min-width: 1100px) {
   .shell {
-    /*
-     * Claim the whole window.
-     *
-     * `body` centres its children (App.css), which is what the phone wants —
-     * a 390px screen in the middle of the page. A grid that inherits that
-     * treatment is shrink-to-fit, so the page was 1168px wide inside a 1440px
-     * window and 136px down each side belonged to nothing: dead page that
-     * looked exactly like the app, which is the bug this whole layout exists
-     * to remove.
-     */
-    width: 100%;
-    min-height: 100dvh;
-
-    /*
-     * The frame stops being a phone and becomes the page. Same five
-     * properties the phone sets, given different values — the screens
-     * themselves are not touched, and neither is their markup.
-     */
-    --frame-w: 100%;
     --frame-h: 100%;
-    --frame-radius: 0;
-    --frame-border: 0;
-    --frame-shadow: none;
 
     /*
      * The two sides, louder. The resting tint was tuned against a 390px
@@ -92,10 +66,6 @@
 
     /* A sign-in form, not a banner: a column a person reads down. */
     --screen-measure: 400px;
-  }
-
-  .shell__banner {
-    display: block;
   }
 
   .shell__body {
@@ -126,7 +96,7 @@
      * A column of its own with a line either side, so the three read as one
      * page rather than as a screenshot with notes beside it.
      */
-    border-inline: 1px solid var(--ballot-line);
+    border-inline: var(--hairline) solid var(--ballot-line);
   }
 
   .shell__rail {

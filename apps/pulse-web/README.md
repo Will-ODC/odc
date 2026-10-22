@@ -39,6 +39,13 @@ container, so the page and the API share one address.
 | `/sign-in?token=…`     | Where emailed sign-in links land; goes straight back to where you were. |
 | `/preview/chat`        | A prototype with sample data only.                                      |
 
+For local testing, run both apps with their `dev` commands and open
+`http://localhost:5173/sign-in?next=new`. Enter any test email; on Check your email,
+choose **Open local mailbox**, then click its actual sign-in link. The same
+sign-in and redemption flow runs locally and in production; local mail is
+captured instead of delivered. Startup and reset scenarios are documented in
+[the API README](../pulse/README.md#run-it-on-your-computer).
+
 The vote page, sign-in and question creation call the API. Each question opens
 with its vote card expanded. Choose an answer, then press Submit to save it.
 You can close the card and reopen it with Vote. **Show me how** walks through
@@ -46,13 +53,17 @@ the real controls; it never picks or submits an answer. Its highlight leaves
 space around the controls and stays inside the screen, so the space is smaller
 on a side where a control touches the screen edge.
 
-The vote page and `/new` share one bar across the top: the mark, "Post a
-question" (just "Post" on a narrow phone; left out on `/new`, where the mark
-links home) and one account control. That control is "Sign in", or an
-**Account** button that shows who is signed in and "Sign out", or "Sign in" and
-"Forget my votes here". After a vote, one "How votes count" link sits under the
-counts. Right after posting, the new question shows "Your question is live ·
-Copy link" once.
+Every product page uses the same browse-style top banner at desktop and phone
+widths: the Pulse home link, Home, Starting questions, General, the signed-in
+community when available, Post and one account control. The current destination
+is marked without removing its link. Account state also appears on the welcome,
+introduction, trust and sign-in pages; these headers read the session, while
+static page content does not load poll data. Sign-in pages omit a redundant
+Sign in link. Shared `TopBanner`, `SiteNavigation` and `AccountMenu` components
+own the navigation layout and styles; colors and spacing use `styles/tokens.css`.
+The form's Sign in link retains its return to `/new`. The first-post discussion
+promise remains visible; its existing explanation opens from an information icon
+in a native dialog with Close, Escape and focus return.
 
 Question creation keeps a draft in this browser for up to an hour after a
 sign-in-required posting failure. Only the explicit sign-in recovery path

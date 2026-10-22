@@ -1,9 +1,20 @@
+import type { ReactNode } from "react";
 import { IntroPage } from "../components/IntroPage.js";
 
 /** Reviewed static release snapshot, not a rolling or live changelog. */
-export function Progress({ onContinue }: { onContinue: () => void }) {
+export function Progress({
+  onContinue,
+  banner,
+}: {
+  onContinue: () => void;
+  banner?: ReactNode;
+}) {
   return (
-    <IntroPage title="What we’re building together" compact>
+    <IntroPage
+      title="What we’re building together"
+      compact
+      {...(banner ? { banner } : {})}
+    >
       <h2 className="welcome__section">Built · 20 October 2026</h2>
       <ul className="welcome__progress">
         <li>

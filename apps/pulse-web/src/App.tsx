@@ -5,7 +5,7 @@ import type { Route } from "./flow/route.js";
 import { FIRST_POLL_ID, pathOf } from "./flow/route.js";
 import { browserStore, takeReturn } from "./flow/sign-in-return.js";
 import { AppShell } from "./components/AppShell.js";
-import { TopBanner } from "./components/TopBanner.js";
+import { PageBanner } from "./screens/PageBanner.js";
 import { useRoute } from "./hooks/use-route.js";
 import { Conversation } from "./screens/Conversation.js";
 import { ChatPreview } from "./screens/ChatPreview.js";
@@ -80,16 +80,25 @@ export function App({
   function screenFor() {
     switch (at.kind) {
       case "welcome":
-        return <Welcome onStart={() => browser.go({ kind: "progress" })} />;
+        return (
+          <Welcome
+            banner={<PageBanner api={api} currentHref="/" />}
+            onStart={() => browser.go({ kind: "progress" })}
+          />
+        );
       case "progress":
         return (
-          <Progress onContinue={() => browser.go({ kind: "questions" })} />
+          <Progress
+            banner={<PageBanner api={api} currentHref="/start" />}
+            onContinue={() => browser.go({ kind: "questions" })}
+          />
         );
       case "browse":
         return <Browse key={at.community} api={api} community={at.community} />;
       case "questions":
         return (
           <FoundationQuestions
+            banner={<PageBanner api={api} currentHref="/questions" />}
             {...(firstPollId ? { firstPollId } : {})}
             {...(relatedPollIds ? { relatedPollIds } : {})}
             onChoose={(id) => browser.go({ kind: "conversation", pollId: id })}
@@ -97,7 +106,7 @@ export function App({
         );
       case "signIn":
         return (
-          <SignInPage>
+          <SignInPage api={api}>
             <SignIn
               api={api}
               {...(at.returnTo ? { returnTo: at.returnTo } : {})}
@@ -106,7 +115,7 @@ export function App({
         );
       case "redeem":
         return (
-          <SignInPage>
+          <SignInPage api={api}>
             <Redeem
               api={api}
               token={at.token}
@@ -160,7 +169,7 @@ export function App({
         return <ChatPreview />;
       case "trust":
         // Static copy: like the prototype, it never touches `api`.
-        return <Trust />;
+        return <Trust banner={<PageBanner api={api} currentHref="/trust" />} />;
       case "newPoll":
         return (
           <NewPoll
@@ -186,8 +195,12 @@ export function App({
  * pinned to its left edge. No rails, because there is nothing to navigate
  * while signing in, and no "Sign in" link in the bar, because this is it.
  */
-function SignInPage({ children }: { children: ReactNode }) {
-  return <AppShell banner={<TopBanner />}>{children}</AppShell>;
+function SignInPage({ children, api }: { children: ReactNode; api: PulseApi }) {
+  return (
+    <AppShell banner={<PageBanner api={api} signInHref="" />}>
+      {children}
+    </AppShell>
+  );
 }
 
 /**

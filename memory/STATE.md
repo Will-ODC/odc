@@ -21,69 +21,74 @@
 
 ## Current phase
 
-**Phase 0, Contracts. The T9 security-audit gate is CLOSED.** T9 returned
-REQUEST CHANGES (six findings, `docs/security/audit-phase-0.md`); all six were
-answered in the specs as ADR-0013 to ADR-0018 (#98). Only a **fresh re-audit**
-clears T9. Nothing may be implemented in `services/` until T9 and T9a. The ledger
-is unstarted.
+**Phase 1: ledger, verifier, identity.** Phase 0 is finished. T9 closed on
+2026-10-21: the original audit (`docs/security/audit-phase-0.md`) returned
+REQUEST CHANGES, answered as ADR-0013 to ADR-0018 (#98); three fresh re-audits
+followed (#407, #414, #428), each APPROVE WITH NITS with zero BLOCKING, and the
+operator accepted the third as the pass. T9a merged the same day: #429 moved
+`contracts/` to **RELEASE CANDIDATE** (no `contracts-v1` tag) with the third
+audit's T3-1 to T3-3; #430 reconciled the service guidance and
+`docs/implementation-plan.md`; #432 made four operator-approved charter wording
+changes. The T10 freeze and its re-audit stay deferred until real use (ADR-0007).
 
-**Spec versions on master (2026-10-20; read the `Version:` lines, not prose):**
-`event-schema.md` **v7**, `event-types.md` **v14**, `evolution.md` **v9** (all
-ADR-0038, #355: PRs #359 and #361), `export-format.md` v5 (#224, ADR-0032), `hashing.md` v2,
-`ids.md` v1, `read-api.md` v1, `fixtures/README.md` **v16** (#372).
-`contracts/` is **DRAFTING**.
+**Spec versions on master (2026-10-21; read the `Version:` lines, not prose):**
+`event-schema.md` v8, `event-types.md` v17, `evolution.md` v12,
+`export-format.md` v6, `hashing.md` v3, `ids.md` v2, `read-api.md` v4,
+`fixtures/README.md` v18 (all #429). Changes now follow the release-candidate
+rule in `contracts/README.md`: additive, version-bumped, and tolerated by
+services.
 
-**Conformance phases 1 to 4 are merged, and ADR-0034 is in both verifiers.**
-ADR-0034 (mixed-version ballot batching: ET-18b, ET-22a, ET-24b) merged as Go
-#324 (#319) and TS #325 (#320), each built in an isolated sparse worktree and
-approved (with nits, fixed) by an isolated fresh reviewer. Its vectors
-`116`-`134` merged in #327 (#321). The agreement proof is
-`docs/security/attacks/check-adr-0034-agreement.py`. Phase 3 batching vectors `099`-`108` came in #202; phase 4
-(`--chain` and genesis/head reporting, EX-21 to EX-24) came in #220 (Go), #221 (TS)
-and #222 (vectors `109`-`115`). #203 reconciled EV-15's stage map. #219 made a TS
-internal error exit 3, not 1. #223 is the security checkpoint
-(`docs/security/hash-chain-checkpoint-2026-10-09.md`).
+**Both verifiers are done for Phase 1.** Go (`services/verifier`) and TS
+(`tools/verifier-ts`) pass all **150** vectors (VALID 23, PARTIAL 15, INVALID
+112). Vectors `146`-`150` (ill-formed UTF-8, HA-2) came in #410 with EV-26 and
+ET-25. Conformance phases 1 to 4, ADR-0034 and ADR-0038 are in both; detail is
+in the Done list below. The Go CLI takes `<file>` with no subcommand; the TS CLI takes
+`verify <file>` (`.github/workflows/repo.yml`).
 
-**The four `contracts/` contradictions are decided** (ADR-0038, #355 → PRs #359,
-#361): verifier limits (EV-23 to EV-25: lines up to 65536 bytes and depth 64,
-past a verifier's own limits a tool-level failure, never a verdict), honest
-EV-21 advice for `genesis`, ET-9f now **both ancestry keys or neither**, and
-`genesis.contracts` at most 64 bytes (ET-9). **Both verifiers implement all of
-it** (Go #370, TS #371, ET-9f in both via #372). #372 also flipped `086` to
-INVALID and added vectors `135`-`145`: the corpus is **145** (VALID 23,
-PARTIAL 15, INVALID 107), and all pass both verifiers.
+**The ledger and identity are unstarted.** `services/ledger/` and
+`services/identity/` hold guidance only.
 
 ## Next
 
-In this order. Passing CI or a checkpoint does not clear T9.
+1. **Write the S-C/NS-2/Q-F ADR** (the operator chose all three on
+   2026-10-21; the ADR is in progress). The registrar
+   signs each ballot's final log position (HA-15, ET-25), so how `ledger` and
+   `identity` coordinate appends, and whether registration is interactive, must
+   be settled before either write path is built. Options are in
+   `memory/OPEN-QUESTIONS.md`, "Open entries from the T9 re-audit
+   (2026-10-20)". Q-F (the registrar's signature as a subliminal channel, in
+   "Open entries from the T9 audit") is settled with it. The entries move to the archive
+   when the ADR merges.
+2. **Ledger lead** (`services/ledger/`), which can start before the ADR on the
+   parts it does not touch: INSERT-only storage (`odc-storage`), hash at
+   insert, `seq`, the read API RA-1 to RA-13 and `GET /export`, and EV-26
+   verify-before-append with its own checks, never verifier code. The write
+   path and batching (ET-23 to ET-25) wait for the ADR.
+3. **Identity lead** (`services/identity/`) after the ADR: registration, the
+   private linkage map, registrar key custody, eligibility final at admission
+   (ET-20), and no receipt on the submission path (ET-21a).
 
-1. **Fresh T9 re-audit** by a context that did not write `audit-phase-0.md`.
-   Acceptance is APPROVE.
-2. **T9a: release candidate.** Flip `contracts/README.md` from DRAFTING to RELEASE
-   CANDIDATE, reconcile implementation/charter/service guidance, and move this
-   file to Phase 1 (ledger, verifier, identity). **Do not create a `contracts-v1`
-   tag.** The T10 freeze and its re-audit stay deferred until real use (ADR-0007).
+Gates on the way: an `odc-security-auditor` audit before identity's first
+merge; S-D (the anchor record) before the first anchor; S-G (key rotation and
+the published test keys) before the freeze.
 
 Optional, from ADR-0034 owed item 4: `docs/security/attacks/check-unknown-batching-proposal.py`'s
 `proposed` mode now matches the ratified expectations and could join required CI.
-
-**Recent hardening is merged:** Go input-proportional memory (#369, PR #385),
-dependency/toolchain updates (#382, PRs #383/#388), and lazy TS ET-24b candidacy
-(#326, PR #390). The TS change retains a documented worst-case cost of distinct
-intervals × distinct opaque instants; that limit was accepted by the operator.
-Issues #364 and #365 are closed. None of these changes clears T9.
 
 **Owed with no ticket:**
 
 - **Cloud setup/network draft** is saved but not yet reviewed, saved and
   published by the operator, so it does not persist. Confirm or drop.
-- **Conformance coverage is thinner than the vector count suggests.** The last
-  exact count, taken at T9 when the corpus held 83 vectors: 143 rule ids, 73
-  cited by no vector. It has not been re-run since. Gaps include **all of
-  `read-api.md` (RA-1 to RA-13)**, ES-30 to ES-32, ET-3, EX-14, most of `ids.md`,
-  and EV-11 to EV-14. Citation is an upper bound on coverage, not coverage itself.
-  **Count citations against the rule index periodically.** A rule can be
-  implemented everywhere and covered by nothing, with every suite still green.
+- **Conformance coverage is thinner than the vector count suggests.** Count
+  taken 2026-10-21 at 150 vectors: 168 rule ids defined, 95 cited by some
+  vector, **73 cited by none**, no stale citations. By prefix (cited/defined):
+  RA 0/13, ID 2/10, EV 11/26, HA 8/17, ES 22/34, ET 31/44, EX 21/24. The
+  count takes rule ids that open a bold bullet in `contracts/*.md` (match
+  `- **XX-N`, not `- **XX-N**`: most rules are written `**XX-N.**`) and the `cites`
+  arrays in `fixtures/index.json`. Citation is an upper bound on coverage, not
+  coverage itself. **Recount periodically**: a rule can be implemented
+  everywhere and covered by nothing, with every suite still green. The read API
+  has no vectors at all, so the ledger's own tests must cover it.
 - **Ballot-expressiveness ADR part B** is owed by the operator, not a session.
   Its old default ("one-choice until argued otherwise") was withdrawn on
   2026-08-19, so the ceiling is deliberately open. v1 is unchanged. Read the
@@ -118,6 +123,13 @@ Issues #364 and #365 are closed. None of these changes clears T9.
 - ADR-0038 (the four contradictions, #355): contract #359, `genesis.contracts`
   cap #361. Go #370 (#364), TS #371 (#365), then ET-9f in both verifiers with
   the `086` flip and vectors `135`-`145` in #372 (#366), merged 2026-10-19.
+- Verifier hardening: Go input-proportional memory (#369, PR #385), toolchain
+  and dependencies (#382, PRs #383/#388), lazy TS ET-24b candidacy (#326, PR
+  #390; one hostile shape stays quadratic, an accepted known limit).
+- T9 re-audits: #407 (fixes #410: EV-26, ET-25 sealed batch, vectors
+  `146`-`150`), #414 (fixes #417: NS-1, NS-3 to NS-5), #428 (accepted as the
+  pass, 2026-10-21). S-C, S-D, S-G and NS-2 filed in OPEN-QUESTIONS (#409, #416).
+- T9a: release candidate #429, guidance #430, charter wording #432.
 - Memory index and `memory-index` CI guard (#117, #121).
 
 ## Standing decisions — one line each

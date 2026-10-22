@@ -8,7 +8,7 @@ import {
   within,
 } from "@testing-library/react";
 import userEvent from "@testing-library/user-event";
-import { afterEach, describe, expect, it, vi } from "vitest";
+import { afterEach, beforeAll, describe, expect, it, vi } from "vitest";
 import { ApiError } from "../src/api/types.js";
 import type {
   CreationContext,
@@ -17,6 +17,8 @@ import type {
 } from "../src/api/types.js";
 import { ANONYMITY_NOTE, NewPoll } from "../src/screens/NewPoll.js";
 import { poll, stubApi } from "./stub-api.js";
+import { installDialog } from "./dialog-polyfill.js";
+beforeAll(installDialog);
 
 afterEach(() => {
   cleanup();
@@ -82,7 +84,7 @@ describe("the four states", () => {
     expect(
       await screen.findByRole("heading", { name: "Post a question", level: 1 }),
     ).toBeTruthy();
-    expect(screen.getByText("General")).toBeTruthy();
+    expect(screen.getByText("General", { selector: "b" })).toBeTruthy();
   });
 
   it("offers sign-in, coming back here, to someone signed out", async () => {
@@ -121,21 +123,36 @@ describe("the four states", () => {
 });
 
 describe("the purpose promise (ADR-0037)", () => {
-  it("shows the statement and an unchecked promise on a first post", async () => {
+  it("keeps the unchecked promise visible and opens its explanation on demand", async () => {
+    const user = userEvent.setup();
     show();
+    const help = await screen.findByRole("button", {
+      name: "About this discussion",
+    });
     expect(
-      await screen.findByRole("heading", {
-        name: "What this discussion is for",
-      }),
-    ).toBeTruthy();
+      screen.queryByRole("heading", { name: "What this discussion is for" }),
+    ).toBeNull();
     const promise = screen.getByRole("checkbox", {
       name: "I will discuss ideas without attacking, harassing or threatening people.",
     }) as HTMLInputElement;
     expect(promise.checked).toBe(false);
+    help.focus();
+    await user.keyboard("{Enter}");
+    const popup = screen.getByRole("dialog", {
+      name: "What this discussion is for",
+    });
     expect(
-      screen.getByText(/Comments help us turn ideas into action/),
+      within(popup).getByText(/Comments help us turn ideas into action/),
     ).toBeTruthy();
-    expect(screen.queryByText(/Help us move forward/)).toBeNull();
+    expect(within(popup).getByText(/When we disagree/)).toBeTruthy();
+    await user.click(within(popup).getByRole("button", { name: "Close" }));
+    expect(screen.queryByRole("dialog")).toBeNull();
+    expect(document.activeElement).toBe(help);
+    expect(promise.checked).toBe(false);
+    await user.keyboard("{Enter}");
+    await user.keyboard("{Escape}");
+    expect(screen.queryByRole("dialog")).toBeNull();
+    expect(document.activeElement).toBe(help);
   });
 
   it("shows only the reminder on later posts", async () => {
@@ -394,6 +411,8 @@ describe("posting, confirmed in place", () => {
     while (document.activeElement !== promise) await user.tab();
     await user.keyboard(" ");
     await user.tab();
+    expect(document.activeElement).toBe(button("About this discussion"));
+    await user.tab();
     expect(document.activeElement).toBe(button("Post question"));
     await user.keyboard("{Enter}");
     // Asked in place; nothing posted yet.
@@ -625,8 +644,8 @@ describe("posting, confirmed in place", () => {
     await user.click(button("Post question"));
     await user.click(await screen.findByRole("button", { name: "Post it" }));
     expect(
-      await screen.findByRole("heading", {
-        name: "What this discussion is for",
+      await screen.findByRole("button", {
+        name: "About this discussion",
       }),
     ).toBeTruthy();
     expect(
@@ -724,8 +743,12 @@ describe("the bar across the top", () => {
       bar().getByRole("link", { name: "pulse" }).getAttribute("href"),
     ).toBe("/");
     expect(await bar().findByRole("link", { name: "Sign in" })).toBeTruthy();
-    // Not a link to the page it is on.
-    expect(bar().queryByRole("link", { name: /Post/ })).toBeNull();
+    expect(
+      bar().getByRole("link", { name: /Post/ }).getAttribute("aria-current"),
+    ).toBe("page");
+    expect(
+      bar().getByRole("link", { name: "Sign in" }).getAttribute("href"),
+    ).toBe("/sign-in?next=new");
   });
 
   it("puts the account behind one button when signed in", async () => {

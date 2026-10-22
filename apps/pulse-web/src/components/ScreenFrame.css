@@ -21,6 +21,7 @@
  * what made it visibly jump between the two screens.
  */
 .screen__mark {
+  display: var(--screen-brand-display);
   padding: var(--gutter) var(--gutter) 0;
 }
 

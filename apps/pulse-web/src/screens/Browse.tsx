@@ -33,35 +33,17 @@ export function Browse({
     links?.[Math.min(focusAt.current, links.length - 1)]?.focus();
     focusAt.current = null;
   }, [data, more]);
-  const own = session.status === "signedIn" ? session.me.community : null;
   return (
     <div className="welcome browse">
       <header className="browse__header">
         <SiteBanner
+          currentHref={pathOf({ kind: "browse", community })}
           session={session}
           progress={progress}
           holdsVotes={false}
           onSignOut={signOut}
           onCancel={dismiss}
         />
-        <nav className="browse__nav" aria-label="Browse navigation">
-          <a href={pathOf({ kind: "welcome" })}>Home</a>
-          <a href={pathOf({ kind: "questions" })}>Starting questions</a>
-          <a
-            href={pathOf({ kind: "browse", community: "pulse-general" })}
-            aria-current={community === "pulse-general" ? "page" : undefined}
-          >
-            General
-          </a>
-          {own && own !== "pulse-general" ? (
-            <a
-              href={pathOf({ kind: "browse", community: own })}
-              aria-current={community === own ? "page" : undefined}
-            >
-              Your community
-            </a>
-          ) : null}
-        </nav>
       </header>
       <main className="welcome__main browse__main">
         <h1 ref={heading} tabIndex={-1}>

@@ -651,3 +651,31 @@ describe("when the address belongs to more than one community", () => {
     expect(screen.queryByRole("heading", { name: QUESTION })).toBeNull();
   });
 });
+
+it("offers the local mailbox after a normal email request", async () => {
+  const user = userEvent.setup();
+  render(<SignIn api={stubApi({ requestLink: async () => SERVER_SENT })} />);
+  await user.type(field(), "alice@example.test");
+  await user.keyboard("{Enter}");
+  const inbox = await screen.findByRole("link", { name: "Open local mailbox" });
+  expect(inbox.getAttribute("href")).toBe("/api/dev/mailbox");
+  expect(
+    screen.getByRole("heading", { name: "Check your email." }),
+  ).toBeTruthy();
+});
+
+it("does not offer a local mailbox in production", async () => {
+  vi.stubEnv("DEV", false);
+  try {
+    const user = userEvent.setup();
+    render(<SignIn api={stubApi({ requestLink: async () => SERVER_SENT })} />);
+    await user.type(field(), "alice@example.test");
+    await user.click(go());
+    await screen.findByRole("heading", { name: "Check your email." });
+    expect(
+      screen.queryByRole("link", { name: "Open local mailbox" }),
+    ).toBeNull();
+  } finally {
+    vi.unstubAllEnvs();
+  }
+});

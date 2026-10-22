@@ -12,6 +12,25 @@ route.
 
 ## Signing in
 
+### Local development mailbox
+
+Development uses the ordinary `POST /api/sign-in` and redemption endpoints for
+all addresses. No email is delivered externally. `GET /api/dev/mailbox` serves
+an HTML inbox of captured messages, newest first, with the actual sign-in links.
+It is linked from the development client's Check your email screen. Opening the
+mailbox does not redeem links; clicking a message's link follows ordinary browser
+redemption, including expiry, one-use tokens and ballot confirmation.
+
+Only `buildDevServer` registers the mailbox; production returns 404.
+The configured web origin must be loopback (`localhost`, `127.0.0.1` or `[::1]`).
+The request must come from a loopback peer with Host matching that origin; a
+foreign Origin or cross-site Fetch Metadata is refused with 403 `local_only`.
+Normal top-level navigation may omit Origin. Responses are HTML, no-store,
+no-referrer, non-embeddable and have a restrictive Content Security Policy.
+The inbox is empty after an API restart, even with persistent storage; request
+a fresh link if the old message is gone. Use only disposable development data.
+`POST /api/dev/sign-in` is not served.
+
 Identity is an email address and nothing stronger. There are no passwords. **Anyone
 with a working address may sign in** (ADR-0030). The address's domain decides only
 which community, if any, the person belongs to: a domain listed in a table names a

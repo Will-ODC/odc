@@ -6,10 +6,12 @@ export function IntroPage({
   title,
   children,
   compact = false,
+  banner,
 }: {
   title: string;
   children: ReactNode;
   compact?: boolean;
+  banner?: ReactNode;
 }) {
   const heading = useRef<HTMLHeadingElement>(null);
   useEffect(() => {
@@ -17,9 +19,7 @@ export function IntroPage({
   }, []);
   return (
     <div className={`welcome${compact ? " welcome--compact" : ""}`}>
-      <header>
-        <TopBanner signInHref="/sign-in" />
-      </header>
+      <header>{banner ?? <TopBanner signInHref="/sign-in" />}</header>
       <main className="welcome__main">
         <h1 ref={heading} tabIndex={-1}>
           {title}

@@ -1,9 +1,19 @@
+import type { ReactNode } from "react";
 import { IntroPage } from "../components/IntroPage.js";
 
 /** Static introduction; opening the walkthrough never casts a vote. */
-export function Welcome({ onStart }: { onStart: () => void }) {
+export function Welcome({
+  onStart,
+  banner,
+}: {
+  onStart: () => void;
+  banner?: ReactNode;
+}) {
   return (
-    <IntroPage title="Help shape an Online Democratic Community">
+    <IntroPage
+      title="Help shape an Online Democratic Community"
+      {...(banner ? { banner } : {})}
+    >
       <p className="welcome__lede">
         A place where people discuss ideas, decide together and work toward
         action.

@@ -1,3 +1,4 @@
+import type { ReactNode } from "react";
 import { IntroPage } from "../components/IntroPage.js";
 
 export type RelatedPollIds = Partial<
@@ -8,8 +9,10 @@ export function FoundationQuestions({
   firstPollId,
   relatedPollIds = {},
   onChoose,
+  banner,
 }: {
   firstPollId?: string;
+  banner?: ReactNode;
   relatedPollIds?: RelatedPollIds;
   onChoose: (id: string) => void;
 }) {
@@ -26,7 +29,11 @@ export function FoundationQuestions({
     },
   ];
   return (
-    <IntroPage title="What should we decide next?" compact>
+    <IntroPage
+      title="What should we decide next?"
+      compact
+      {...(banner ? { banner } : {})}
+    >
       <p className="welcome__lede">
         Choose a question. You can open any of these, whatever your other
         answers.

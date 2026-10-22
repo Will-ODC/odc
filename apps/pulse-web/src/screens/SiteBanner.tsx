@@ -22,6 +22,8 @@ export function SiteBanner({
   progress,
   holdsVotes,
   onPostPage = false,
+  currentHref,
+  signInHref = pathOf({ kind: "signIn" }),
   onSignOut,
   onCancel,
 }: {
@@ -30,17 +32,26 @@ export function SiteBanner({
   /** Whether this browser holds votes someone could forget. */
   holdsVotes: boolean;
   /**
-   * On the posting form itself: no "Post a question" (it would loop), and
-   * the mark links home instead.
+   * Mark the shared posting link as the current page.
    */
   onPostPage?: boolean;
+  currentHref?: string;
+  signInHref?: string;
   onSignOut: () => void;
   onCancel: () => void;
 }) {
-  const signInHref = pathOf({ kind: "signIn" });
-  const where = onPostPage
-    ? { homeHref: pathOf({ kind: "welcome" }) }
-    : { postHref: pathOf({ kind: "newPoll" }) };
+  const where = {
+    homeHref: pathOf({ kind: "welcome" }),
+    postHref: pathOf({ kind: "newPoll" }),
+    ...(onPostPage
+      ? { currentHref: "/new" }
+      : currentHref
+        ? { currentHref }
+        : {}),
+    ...(session.status === "signedIn"
+      ? { community: session.me.community }
+      : {}),
+  };
   switch (session.status) {
     case "loading":
       return <TopBanner {...where} />;
@@ -63,7 +74,7 @@ export function SiteBanner({
       return (
         <TopBanner
           {...where}
-          signInHref={signInHref}
+          {...(signInHref ? { signInHref } : {})}
           {...(holdsVotes
             ? {
                 account: (
