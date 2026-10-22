@@ -1,4 +1,5 @@
 import { randomBytes } from "node:crypto";
+import { registerDevMailbox } from "./dev-mailbox.js";
 import { pathToFileURL } from "node:url";
 import type { FastifyInstance } from "fastify";
 import type { Pool } from "pg";
@@ -397,6 +398,7 @@ export async function buildDevServer(
       // clicking through the flow for the tenth time, not someone mining.
       signInRateLimit: { max: 100, timeWindow: "1 minute" },
     });
+    registerDevMailbox(app, mailer, config.webOrigin);
     if (pool) {
       // This server opened the pool, so closing the server closes it.
       app.addHook("onClose", async () => {
@@ -512,7 +514,8 @@ async function main(): Promise<void> {
       `  community "${SEED.community}" is @${SEED.domain}; any other address signs in with none`,
       `  @${SHARED_DOMAIN.domain} is asked to choose: ${SHARED_DOMAIN.communities.join(" or ")}`,
       ...SEED.polls.map((poll) => `  poll "${poll.id}": ${poll.question}`),
-      "  sign-in links are printed here; paste one into the browser",
+      `  local mailbox: ${config.webOrigin}/api/dev/mailbox`,
+      "  sign-in links are also printed here",
     ].join("\n"),
   );
 }
