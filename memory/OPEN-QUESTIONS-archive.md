@@ -48,7 +48,7 @@ choice}` at eligibility-check time — trust-by-policy per charter §10 v1,
   registrar key custody (separate from `operator_pk`; **settled by ADR-0043**:
   held by a separate signer service, not identity);
   one-human-one-issue enforcement and its audit trail (off-log); and the
-  no-receipt discipline — identity and web MUST NOT return or display any
+  no-receipt discipline — identity, the signer (ADR-0043) and web MUST NOT return or display any
   per-ballot confirmation artifact binding a voter to a specific log line
   (no signed receipts, no "your vote is seq N" attestations).
 - **Verifier reason codes** → DECIDED (T4a / EV-17, 2026-07-25): no reason-code registry for v1; reason text is advisory, conformance judged on verdict token + line number alone.

@@ -54,6 +54,13 @@ never share state:
   choice**, with no arrival order and no arrival time, and signs every ballot
   of a sealed batch at append, once its line is fixed. It sees positions but
   never voters.
+- **No arrival time anywhere.** "No arrival time" covers request logs, metrics,
+  traces and stored request ids, on identity and on the signer alike: neither
+  may record when a given entry was pushed or received together with its
+  issue or choice, because the two records together rebuild the join. Identity
+  keeps a request id only while the push is unresolved; the signer keeps the
+  request ids of an open batch, with no choice and no time beside them, only
+  until that batch is sealed, and then deletes them.
 
 No contract change for ballots: `vote_cast` v1 and HA-15 stay as they are.
 ET-25 already says it "fixes when the decision is made, not which component
@@ -62,7 +69,11 @@ admits or signs".
 **Stated residual.** The operator runs identity, the signer and the ledger.
 Identity knows `{voter, issue, choice, time}` and the signer knows
 `{issue, choice, time}` and every final line; together they can rebuild the
-join. Separation is custody, not mathematics, in the same register as ADR-0018:
+join. Identity alone also narrows a ballot: it knows the voter, the choice and
+when it pushed, and it can read batch instants from the public log, so it can
+place the ballot among that batch's lines with that choice. When the choice is
+unique in the batch, including an under-size last batch of one, that is
+exactly one line. Separation is custody, not mathematics, in the same register as ADR-0018:
 the log cannot show that the parts are run apart. A signer can also stuff or
 drop ballots, which is ET-20's existing trust-by-policy residual moved to a new
 holder.
@@ -77,9 +88,24 @@ all six content fields, so the chain is unchanged. A replayed v2 registration
 appended again is a duplicate, already `VALID` under ET-12; derived views
 deduplicate by `participant_id` (ID-4), as they must already.
 
-This is additive and version-bumped, allowed under the release candidate. v1
-stays registered, so every chain written so far still verifies. T10 re-audits
-it.
+This is version-bumped and allowed under the release candidate, but it is not
+purely additive: it needs two scoped exceptions, for `(participant_registered,
+2)` only, to rules that today bind every signature. `event-schema.md` ES-32
+says a signature covers the same six content fields as the hash preimage, and
+`hashing.md` HA-16 says every `sig` is over `SIGN_PRE(E)`. Both gain an
+exception naming this one pair. EV-3 and EV-4 still hold: the hash construction
+(HA-1 to HA-14, the domain constant, every field encoding) is unchanged, so the
+v2 line hashes exactly as any event does and an old verifier recomputes it;
+only which bytes the registrant signs differs, and no existing `(type,
+version)`, v1 included, changes. v1 stays registered, so every chain written so
+far still verifies. T10 re-audits it.
+
+**Possession is checked off-log.** A v2 signature is public and valid at any
+line, so holding a copy of one proves nothing about holding the key: anyone
+can copy a `pubkey` and `sig` from the log and submit them. Identity MUST link
+a `pubkey` to a person only after a fresh challenge-response signed by that
+key (`POST /challenge`), and MUST refuse a `pubkey` that is already linked or
+already registered on the log.
 
 ### 3. Q-F: deterministic signing from an attested build
 
@@ -142,8 +168,12 @@ Rules that follow:
 - **Identity orders its own write around the push.** It marks the voter
   pending, pushes the entry, and records "voted" only on accepted; on refused
   it rolls back. So a ballot refused after a last seal is refused before the
-  registrar records the voter (ET-25). Identity discards the request id once the
-  push is acknowledged.
+  registrar records the voter (ET-25). On a timeout or any other indefinite
+  outcome the signer may already hold the entry, so identity never rolls back:
+  the voter stays pending and identity retries with the same request id until
+  it gets a definite answer. Rolling back there could admit a second ballot for
+  the same voter (ET-20). Identity discards the request id once the answer is
+  definite.
 - **Admission is the signer accepting an entry.** The signer runs every
   position-independent EV-26 check first (issue exists and is readable, choice
   in range), so ET-25's admission rule holds. It refuses a non-last seal below
@@ -153,8 +183,11 @@ Rules that follow:
   arrival order to leak), seal-order appends, and one open batch per issue. It
   holds its tail from the first sign call until the run is appended, so the
   signed positions stay valid. That lock spans a call to an operator-run
-  service, never a client round trip. It verifies every line before appending
-  (EV-26).
+  service, never a client round trip. Before its first sign call it persists
+  the sign request (batch id, order, `ts`, first `seq`), and on recovery from a
+  crash it replays that request before appending anything else; since the
+  signer signs a batch at one position only, losing the request would strand
+  admitted ballots. It verifies every line before appending (EV-26).
 - **No receipt anywhere on the path (ET-21a).** The signer is now on the
   submission path. It MUST NOT return anything to identity, or to anyone, that
   singles out a ballot's line or batch or attests to it. Identity has nothing
@@ -195,8 +228,10 @@ Rules that follow:
 - Phase 1 has four core services: ledger, verifier, identity and signer. The
   ledger now calls the signer; the "no calls to other services" rule becomes
   "calls only the signer's public API, on the ballot write path".
-- A signer outage after it has signed a batch stalls ledger appends until the
-  batch is appended. A signer outage before signing only delays ballots.
+- A signer outage before the ledger holds a batch's signatures stalls ledger
+  appends from the first sign call until the signer answers; once the ledger
+  holds them, a signer outage stalls nothing. An outage before sealing only
+  delays ballots.
 - The web client signs registrations without waiting for the ledger, but must
   first read the chain's genesis hash (below).
 - An auditor with access to identity can compare its per-issue count of voters
@@ -212,7 +247,9 @@ Rules that follow:
    preimage below. ET-4 to ET-4c, ET-11 and ET-12 apply unchanged. Bump the
    file version and add a `CONTRACTS-CHANGE.md` entry.
 2. **A new HA rule in `hashing.md`** (call it HA-15a), applying only to
-   `(participant_registered, 2)`; HA-15 is not edited. The registration
+   `(participant_registered, 2)`, plus scoped exceptions in ES-32 and HA-16
+   naming this pair (decision 2). HA-15 and every hashing rule stay as they
+   are. The registration
    preimage MUST: start with its own fixed ASCII domain tag, distinct from
    `DOMAIN`, so it can never equal any `SIGN_PRE`; cover `type` and `version`;
    cover the chain's identity, the genesis hash (ET-7a), as 64 lowercase-hex
@@ -257,7 +294,8 @@ Rules that follow:
   (registration and registrar bullets), `services/mcp/CLAUDE.md` and
   `services/web/CLAUDE.md` (who signs; v2 registration), and the root
   `CLAUDE.md` repo map (`services/signer`). Will decided (2026-10-21) that
-  these land in **one follow-up PR together with the charter amendment**, and
+  these land in **one follow-up PR together with the charter amendment**
+  (branch `docs/charter-registrar-split`), and
   that it merges **before any ledger or identity lead starts**. `memory/STATE.md` is updated at merge time, by its owner.
 
 ## Charter check
@@ -265,9 +303,10 @@ Rules that follow:
 - **P1 (the log is the only truth).** Unchanged: verifiers still check every
   ballot under `registrar_pk` and every registration under its `pubkey` from the
   log alone. Duplicate registrations are recorded, as ET-12 already allows.
-- **P2 (one human, two planes).** Strengthened: no single component now holds
-  both a voter's identity and a ballot's line. Ballots and sentiment stay
-  apart.
+- **P2 (one human, two planes).** Strengthened, not closed: no component is
+  handed both a voter's identity and a ballot's line, but identity can narrow a
+  ballot to the lines of one batch with its choice, sometimes to one line
+  (decision 1's residual). Ballots and sentiment stay apart.
 - **P3, P4.** Untouched.
 - **§5 receipt-freeness.** Holds "against everyone but the registrar", now two
   components; ET-21a now binds the signer too.

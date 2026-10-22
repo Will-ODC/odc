@@ -71,9 +71,9 @@ archive with a one-line pointer to the ADR or PR that settled it.
 
 ## Open entries from the T9 re-audit (2026-10-20)
 
-It comes from `docs/security/t9-reaudit-2026-10-20.md` (PR #407), which
+The entry below comes from `docs/security/t9-reaudit-2026-10-20.md` (PR #407), which
 returned APPROVE WITH NITS. The operator chose to fix S-A, S-B and S-E first
-(#408) and to file these as questions. S-C, with NS-2, was settled by ADR-0043
+(#408) and to file the rest as questions. S-C, with NS-2, was settled by ADR-0043
 and is in the archive.
 
 - **Key rotation, compromise and the published test keys** (S-G; gates the
