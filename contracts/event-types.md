@@ -1,9 +1,9 @@
 # Event Types — contracts/event-types.md
 
-**Version:** 16
-**Status:** DRAFTING (Phase 0 · T3, amended T4a, T5i, T5j, ADR-0009, ADR-0010,
+**Version:** 17
+**Status:** RELEASE CANDIDATE (T9a; Phase 0 · T3, amended T4a, T5i, T5j, ADR-0009, ADR-0010,
 ADR-0011, T9a/ADR-0013, ADR-0014, ADR-0016, ADR-0018, ADR-0019, ADR-0029 with its
-review fixes, ADR-0034, ADR-0038, and the T9 re-audits (#408, #415)). Not frozen.
+review fixes, ADR-0034, ADR-0038, the T9 re-audits (#408, #415), and T9a). Not frozen.
 **Companion specs:** `event-schema.md` (envelope), `ids.md` (identifiers),
 `hashing.md` (preimage — T4).
 
@@ -521,7 +521,8 @@ off-log eligibility check.
   ET-17), and that its `choice` is **in range** (ET-18a). It does NOT, by
   itself, enforce ballot **eligibility** (that the voter was entitled) or
   **uniqueness** (one ballot per human per issue): those are registrar policy,
-  checked off-log before the registrar signs (charter §P2, §5, §10). A malicious
+  checked off-log, and decided before the ballot is admitted to a batch
+  (ET-25), which is before the registrar signs it (charter §P2, §5, §10). A malicious
   registrar could stuff or drop ballots — v1 accepts this trust-by-policy
   posture (charter §10 v1); identity v2 hardens it.
 - **ET-21.** The ballot carries **no voter fingerprint** — no `participant_id`,
@@ -573,8 +574,11 @@ off-log eligibility check.
   admission, and each ballot's final line when it signs it (above). Whether it
   can join the two is an open design question (`memory/OPEN-QUESTIONS.md`,
   "The registrar signs each ballot's final log position").
-- **ET-21a.** _No receipt from the write path._ Neither the ledger nor the
-  registrar MAY give a ballot's submitter, or anyone acting for them, at any
+- **ET-21a.** _No receipt from the write path._ Neither the ledger, nor the
+  registrar, nor any other component the operator runs (a web or MCP front
+  end, a mail or notification sender, a status or tally page, and the like),
+  whether or not it is on the path a ballot takes from its submitter to the
+  log, MAY give a ballot's submitter, or anyone acting for them, at any
   time and by any channel:
   1. anything that singles out the ballot's line, or its batch, from the rest of
      the log: telling them which line or batch is theirs, whether by its `seq`,
@@ -582,7 +586,8 @@ off-log eligibility check.
      way. Publishing the log to everyone (`read-api.md`) singles out no line,
      and item 1 does not bar it; or
   2. any statement about the ballot that a third party could verify came from
-     the ledger or the registrar, such as a signed one: not that the ballot was
+     the operator or any component it runs, such as a signed message or a
+     DKIM-signed email: not that the ballot was
      admitted, not that it was appended, and not which `choice` it carries.
 
   They MAY tell the submitter, without authentication a third party could
@@ -846,7 +851,12 @@ when the chain also holds ballots at a `vote_cast` version it does not register.
   ballot that fails one is refused, never admitted. The checks that do depend on
   where it lands (its `seq`, its `prev_hash` and the signature over them,
   `hashing.md` HA-15) are fixed when the batch is appended, by the producer and
-  its registrar, whose `vote_cast` signature (ET-17) covers them. So a sealed
+  its registrar, whose `vote_cast` signature (ET-17) covers them. Admission
+  also needs the registrar's eligibility and uniqueness decision (ET-20). That
+  decision MUST be made before admission and is final: the registrar MUST sign
+  every ballot admitted to a batch, and refuses a ballot only before it is
+  admitted. This fixes when the decision is made, not which component admits or
+  signs, nor what either retains (the open question named in ET-21). So a sealed
   batch never holds a ballot that fails for a reason the producer did not cause, and never falls short of `ballot_batch_min` (ET-24)
   because a ballot in it is unappendable. A ballot of that issue
   admitted after the seal goes to a batch instant (ET-23) that issue has not
@@ -864,8 +874,11 @@ when the chain also holds ballots at a `vote_cast` version it does not register.
   that issue, and it MUST refuse it before the registrar records the voter as
   having voted (ET-20) or signs anything for it. ET-24 allows an under-size
   batch only as the issue's last, so once one is appended, EV-26 forbids
-  appending any later ballot of that issue (it would end the batch and make the
-  export `INVALID`). Without this paragraph a producer could admit ballots it is
+  appending any later ballot of that issue at another instant, which would end
+  the batch and make the export `INVALID`. A later ballot at the same instant,
+  with no other ballot of the issue between, would only extend the batch and
+  leave the export `VALID`; what forbids it is the seal ("A batch is released
+  whole" above: no ballot admitted after the seal), not EV-26. Without this paragraph a producer could admit ballots it is
   then barred from appending, and their voters, already recorded as having
   voted, would lose their vote with nothing on the log to show it. The log has
   no event that closes an issue, so the decision that a batch is the last is the

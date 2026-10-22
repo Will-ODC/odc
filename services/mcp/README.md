@@ -1,6 +1,6 @@
 # mcp
 
-**Status: not started. Blocked on contracts/ freeze (Phase 0). Phase: 3.**
+**Status: not started. Phase 3 — built last, against the contracts RELEASE CANDIDATE (ADR-0007); nothing waits on the freeze.**
 
 Thin protocol wrapper over the substrate. Contains no logic of its own.
 

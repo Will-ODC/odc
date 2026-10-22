@@ -1,7 +1,7 @@
 # contracts/fixtures/ — golden vectors
 
-**Version:** 17
-**Status:** DRAFTING (Phase 0 · T5, T5j, ADR-0009, ADR-0010, ADR-0011,
+**Version:** 18
+**Status:** RELEASE CANDIDATE (T9a; Phase 0 · T5, T5j, ADR-0009, ADR-0010, ADR-0011,
 ADR-0038, T9 re-audit #408). Not frozen.
 
 **150 vectors** — 23 `VALID`, 15 `PARTIAL`, 112 `INVALID`. They are numbered in

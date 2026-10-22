@@ -107,7 +107,7 @@ but it reverses ADR-0030's "decided once" for this case, so it is a decision.
 wants to act in both in one session. ADR-0024 point 6 says one community at a
 time.
 
-## P3 — The subject browser / home screen · INITIAL LIST SELECTED
+## P3 — Richer browsing · INITIAL LIST BUILT; EXTENSIONS UNSTARTED
 
 Asked for by the operator 2026-08-25 and **sharpened 2026-09-06: a home screen
 that browses all polls and batches of related polls, story-style.** That is the
@@ -124,23 +124,16 @@ It has three jobs, and the third is new:
 3. **ADR-0024 makes it the primary way anyone reaches a second question at
    all**, because under crowdsourced posting `next` is mostly empty.
 
-**Initial screen scope accepted by the operator, 2026-10-21:** #260 is a
-minimal newest-first list. Welcome adds Explore questions at
-`/browse?community=pulse-general`; Start voting keeps `/start` → `/questions`.
-Public community links can be shared, signed-in people can switch to their
-community, open and closed questions link to the current vote page, and Load
-more follows the listing cursor. Browsing never casts a vote. Related-question
-navigation (#425), grouped feeds (#397) and ranking are separate work. Broader
-browsing order remains a query policy (ADR-0021), while ADR-0025 defines related
-membership independently of an answer.
+**The initial list is built** (#260 / PR #426, merged 2026-10-21), using
+the community-scoped listing API (#259 / PR #419). Current behavior is recorded
+in `memory/pulse.md` and `apps/pulse-web/README.md`.
 
-**Listing API built:** #259 / PR #419 merged `GET /api/polls?community=ID`
-on 2026-10-21. Public, community-scoped summaries include open and closed polls,
-exclude hidden and unscoped legacy polls, and paginate newest first by creation
-time and UTF-8 poll ID (migration 008). See `apps/pulse/API.md` for the served
-contract. The browser list (#260) and MCP discovery (#291) remain unbuilt; the initial
-browser layout and route are now accepted above. This API does not provide
-ADR-0025's related-poll links.
+Remaining work is separate: thumbnails/context excerpts (#427, depends on
+#296), the mixed post/poll feed (#397), related-vote continuation (#425), and
+MCP discovery (#291). ADR-0025's related storage/read step remains accepted but
+unimplemented; a community listing does not supply those relationships.
+Query-selected browsing order (ADR-0021) and answer-independent related
+membership (ADR-0025) remain distinct.
 
 ## P5 — Pillar 3, the path to action · UI DIRECTION SET; RECORDS AND NOTIFICATION RULES PENDING
 
@@ -200,8 +193,9 @@ migration.
 Do not invent authors or membership for existing data.
 
 Reporting/review (#233–#236), duplicate warnings (#261), suggestions (#336),
-photos/summary (#296), comments (#297) and the browsing UI (#260) remain separate.
-The browsing API (#259 / PR #419) is built; no browsing consumer is built yet.
+photos/summary (#296), comments (#297) and richer browsing previews (#427) remain separate.
+The browsing API (#259 / PR #419) and browser (#260 / PR #426) are built;
+MCP discovery (#291) remains unbuilt.
 Broad public posting launch waits for reporting/review and the automatic-hide
 threshold design. ADR-0024's hide-not-delete and automatic-hide direction remain.
 Account penalties and appeals do not arrive implicitly with creation.

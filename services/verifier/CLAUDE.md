@@ -2,7 +2,8 @@
 
 - ONLY the odc-verifier-builder agent works here, in a fresh context.
 - Inputs allowed: `contracts/` (incl. `contracts/fixtures/`), this directory,
-  `docs/charter.md` §4. NEVER ledger source, another service's source, or any
+  `docs/charter.md` §4. NEVER ledger source, another service's source, the
+  second verifier's source (`tools/verifier-ts/`), or any
   prior discussion (`memory/`, `docs/decisions/`, other plan tickets).
 - Go only; zero shared code/runtime/serialization with ledger. Standard library
   only, with ONE exception: `filippo.io/edwards25519`, used **solely** for the

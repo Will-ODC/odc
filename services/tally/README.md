@@ -1,6 +1,6 @@
 # tally
 
-**Status: not started. Blocked on contracts/ freeze (Phase 0). Phase: 2.**
+**Status: not started. Phase 2 — builds against the contracts RELEASE CANDIDATE (ADR-0007), with mocks until Phase 1 lands; nothing waits on the freeze.**
 
 All derived views. Holds no truth; rebuildable from the export at any time.
 
