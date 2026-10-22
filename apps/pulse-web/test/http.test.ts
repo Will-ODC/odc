@@ -494,3 +494,18 @@ describe("listing public questions", () => {
     );
   });
 });
+
+it("uses the ordinary email route for the demo address in every build", async () => {
+  for (const development of [true, false]) {
+    vi.stubEnv("DEV", development);
+    try {
+      const calls = stubFetch({ body: JSON.stringify({ status: "sent" }) });
+      expect(
+        await new HttpPulseApi().requestLink("demo@example.test", false),
+      ).toEqual({ status: "sent" });
+      expect(calls[0]?.url).toBe("/api/sign-in");
+    } finally {
+      vi.unstubAllEnvs();
+    }
+  }
+});

@@ -6,6 +6,8 @@ export default defineConfig({
   server: {
     // The API runs alongside in dev; same-origin so the session cookie works
     // without any CORS or SameSite special-casing.
-    proxy: { "/api": "http://localhost:8080" },
+    proxy: {
+      "/api": { target: "http://localhost:8080", changeOrigin: false },
+    },
   },
 });

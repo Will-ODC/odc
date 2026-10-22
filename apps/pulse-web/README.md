@@ -39,6 +39,13 @@ container, so the page and the API share one address.
 | `/sign-in?token=…`     | Where emailed sign-in links land; goes straight back to where you were. |
 | `/preview/chat`        | A prototype with sample data only.                                      |
 
+For local testing, run both apps with their `dev` commands and open
+`http://localhost:5173/sign-in?next=new`. Enter any test email; on Check your email,
+choose **Open local mailbox**, then click its actual sign-in link. The same
+sign-in and redemption flow runs locally and in production; local mail is
+captured instead of delivered. Startup and reset scenarios are documented in
+[the API README](../pulse/README.md#run-it-on-your-computer).
+
 The vote page, sign-in and question creation call the API. Each question opens
 with its vote card expanded. Choose an answer, then press Submit to save it.
 You can close the card and reopen it with Vote. **Show me how** walks through
