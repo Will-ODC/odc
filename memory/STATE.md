@@ -40,9 +40,10 @@ services.
 
 **Both verifiers are done for Phase 1.** Go (`services/verifier`) and TS
 (`tools/verifier-ts`) pass all **150** vectors (VALID 23, PARTIAL 15, INVALID
-112). Vectors `146`-`150` (EV-26, ET-25 sealed batch, ET-21 residual) came in
-#410. Conformance phases 1 to 4, ADR-0034 and ADR-0038 are in both; detail is
-in the Done list below. The Go CLI takes `<file>` with no `verify` subcommand.
+112). Vectors `146`-`150` (ill-formed UTF-8, HA-2) came in #410 with EV-26 and
+ET-25. Conformance phases 1 to 4, ADR-0034 and ADR-0038 are in both; detail is
+in the Done list below. The Go CLI takes `<file>` with no subcommand; the TS CLI takes
+`verify <file>` (`.github/workflows/repo.yml`).
 
 **The ledger and identity are unstarted.** `services/ledger/` and
 `services/identity/` hold guidance only.
@@ -54,8 +55,9 @@ in the Done list below. The Go CLI takes `<file>` with no `verify` subcommand.
    `identity` coordinate appends, and whether registration is interactive, must
    be settled before either write path is built. Options are in
    `memory/OPEN-QUESTIONS.md`, "Open entries from the T9 re-audit
-   (2026-10-20)". Q-F (the registrar's signature as a subliminal channel) is
-   decided in the same place.
+   (2026-10-20)". Q-F (the registrar's signature as a subliminal channel, in
+   "Open entries from the T9 audit") is settled with it. The operator chose
+   all three on 2026-10-21; the ADR records them.
 2. **Ledger lead** (`services/ledger/`), which can start before the ADR on the
    parts it does not touch: INSERT-only storage (`odc-storage`), hash at
    insert, `seq`, the read API RA-1 to RA-13 and `GET /export`, and EV-26
@@ -80,13 +82,12 @@ Optional, from ADR-0034 owed item 4: `docs/security/attacks/check-unknown-batchi
   taken 2026-10-21 at 150 vectors: 168 rule ids defined, 95 cited by some
   vector, **73 cited by none**, no stale citations. By prefix (cited/defined):
   RA 0/13, ID 2/10, EV 11/26, HA 8/17, ES 22/34, ET 31/44, EX 21/24. The
-  count takes bold bullet definitions in `contracts/*.md` and the `cites`
+  count takes rule ids that open a bold bullet in `contracts/*.md` (match
+  `- **XX-N`, not `- **XX-N**`: most rules are written `**XX-N.**`) and the `cites`
   arrays in `fixtures/index.json`. Citation is an upper bound on coverage, not
   coverage itself. **Recount periodically**: a rule can be implemented
   everywhere and covered by nothing, with every suite still green. The read API
   has no vectors at all, so the ledger's own tests must cover it.
-- **`docs/implementation-plan.md` § verifier** still writes
-  `verify <export.ndjson> …`; the Go CLI takes `<file>` with no subcommand.
 - **Ballot-expressiveness ADR part B** is owed by the operator, not a session.
   Its old default ("one-choice until argued otherwise") was withdrawn on
   2026-08-19, so the ceiling is deliberately open. v1 is unchanged. Read the

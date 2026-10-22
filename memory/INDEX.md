@@ -26,9 +26,9 @@ Do not apply charter rules to `apps/**`, and do not relax them anywhere else.
 > smaller, so on a divergence you would otherwise trust the wrong one.
 
 - **ODC core:** Phase 1. T9 passed and `contracts/` is a RELEASE CANDIDATE
-  (#428-#432, 2026-10-21). Both verifiers pass all 150 vectors. Next: the
-  S-C/NS-2 decision and ADR, then the ledger and identity. Both are
-  unstarted. → `memory/STATE.md`
+  (#428-#430, #432, 2026-10-21). Both verifiers pass all 150 vectors. Next:
+  the S-C/NS-2 ADR, with the ledger's read side alongside; identity after the
+  ADR. Ledger and identity are unstarted. → `memory/STATE.md`
 - **Pulse:** sign-in, voting, confirmed votes, storage, mail and serving are
   built. The conversation vote page, welcome, tutorial and trust page are merged.
   Confirmed-vote display, poll-creation HTTP and public attribution are merged.
