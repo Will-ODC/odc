@@ -44,18 +44,15 @@ it.each(routes)(
     expect(nav.getByRole("link", { name: "Home" }).getAttribute("href")).toBe(
       "/",
     );
-    expect(
-      nav
-        .getByRole("link", { name: "Starting questions" })
-        .getAttribute("href"),
-    ).toBe("/questions");
+    expect(nav.queryByRole("link", { name: "Starting questions" })).toBeNull();
     expect(
       nav.getByRole("link", { name: "General" }).getAttribute("href"),
     ).toBe("/browse?community=pulse-general");
+    await user.click(
+      await nav.findByRole("button", { name: "Your communities" }),
+    );
     expect(
-      (await nav.findByRole("link", { name: "Your community" })).getAttribute(
-        "href",
-      ),
+      nav.getByRole("link", { name: "demo-community" }).getAttribute("href"),
     ).toBe("/browse?community=demo-community");
     expect(
       header

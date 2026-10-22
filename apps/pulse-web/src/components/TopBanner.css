@@ -89,3 +89,16 @@
     grid-row: 1;
   }
 }
+
+.banner__nav > .account-menu {
+  border-inline-start: var(--hairline) solid var(--control-line);
+  padding-inline-start: calc(var(--step) * 1.5);
+}
+.banner__nav .account-menu__panel {
+  inset-inline-start: 0;
+  inset-inline-end: auto;
+  align-items: flex-start;
+}
+.banner__nav .account-menu__panel a {
+  padding: 0;
+}

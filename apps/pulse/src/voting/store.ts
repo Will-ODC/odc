@@ -88,6 +88,8 @@ export interface VotingStore {
   /** Public summaries, newest first; at most limit + 1 rows. */
   listPolls(query: PollListQuery): Promise<PollSummary[]>;
   createPoll(input: NewPoll): Promise<Poll>;
+  /** Development seeds only: assign a listing community without authorship. */
+  setSeedCommunity(pollId: string, community: string): Promise<void>;
   getPoll(pollId: string): Promise<Poll | undefined>;
   castVote(
     pollId: string,
@@ -168,6 +170,7 @@ export function validateBallot(poll: Poll, ballot: readonly number[]): void {
  */
 export class InMemoryVotingStore implements VotingStore {
   readonly #polls = new Map<string, Poll>();
+  readonly #seedCommunities = new Map<string, string>();
   /** `voteKey(pollId, voterId)` → vote. One row per voter per poll. */
   readonly #votes = new Map<string, Vote>();
   /**
@@ -203,6 +206,13 @@ export class InMemoryVotingStore implements VotingStore {
     return poll;
   }
 
+  async setSeedCommunity(pollId: string, community: string): Promise<void> {
+    const poll = this.#polls.get(pollId);
+    if (!poll || poll.publication)
+      throw new TypeError("seed poll missing or authored");
+    this.#seedCommunities.set(pollId, community);
+  }
+
   async getPoll(pollId: string): Promise<Poll | undefined> {
     return this.#polls.get(pollId);
   }
@@ -211,7 +221,8 @@ export class InMemoryVotingStore implements VotingStore {
     return [...this.#polls.values()]
       .filter(
         (p) =>
-          p.publication?.community.id === query.community &&
+          (p.publication?.community.id ?? this.#seedCommunities.get(p.id)) ===
+            query.community &&
           (query.before === undefined || comparePolls(p, query.before) < 0),
       )
       .sort((a, b) => comparePolls(b, a))

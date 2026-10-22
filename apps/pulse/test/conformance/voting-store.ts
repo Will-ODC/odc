@@ -51,6 +51,28 @@ export function votingStoreConformance(
     `VotingStore conformance: ${label}`,
     { skip: options.skip ?? false },
     () => {
+      test("places_an_unattributed_seed_in_General_without_replacing_its_votes", async (t) => {
+        const store = await storeAt(t);
+        const before = await pollWith(store);
+        await store.castVote("p1", "voter-a", [1]);
+        await store.setSeedCommunity("p1", "pulse-general");
+        await store.setSeedCommunity("p1", "pulse-general");
+        assert.deepEqual(await store.getPoll("p1"), before);
+        assert.equal((await store.results("p1")).voters, 1);
+        const listed = await store.listPolls({
+          community: "pulse-general",
+          limit: 20,
+        });
+        assert.deepEqual(
+          listed.map((poll) => poll.id),
+          ["p1"],
+        );
+        await assert.rejects(
+          store.setSeedCommunity("missing", "pulse-general"),
+          /seed poll missing or authored/,
+        );
+      });
+
       test("counts_a_ballot_and_returns_it", async (t) => {
         const store = await storeAt(t);
         await pollWith(store);

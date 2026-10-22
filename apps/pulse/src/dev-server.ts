@@ -477,12 +477,16 @@ async function inPostgres(
  */
 async function seedPolls(votes: VotingStore): Promise<void> {
   for (const poll of SEED.polls) {
-    if (await votes.getPoll(poll.id)) continue;
-    try {
-      await votes.createPoll(poll);
-    } catch (error) {
-      // Another server starting on the same database wrote it first.
-      if (!(await votes.getPoll(poll.id))) throw error;
+    if (!(await votes.getPoll(poll.id))) {
+      try {
+        await votes.createPoll(poll);
+      } catch (error) {
+        // Another server starting on the same database wrote it first.
+        if (!(await votes.getPoll(poll.id))) throw error;
+      }
+    }
+    if (LAUNCH_QUESTIONS.some((question) => question.id === poll.id)) {
+      await votes.setSeedCommunity(poll.id, "pulse-general");
     }
   }
 }

@@ -54,8 +54,10 @@ space around the controls and stays inside the screen, so the space is smaller
 on a side where a control touches the screen edge.
 
 Every product page uses the same browse-style top banner at desktop and phone
-widths: the Pulse home link, Home, Starting questions, General, the signed-in
-community when available, Post and one account control. The current destination
+widths: the Pulse home link, Home, General, a Your communities menu listing the account’s
+currently known community when available, Post and one account control. Starting
+questions remain available in the guided introduction and are seeded into General
+in local development. Multiple memberships remain follow-up #440. The current destination
 is marked without removing its link. Account state also appears on the welcome,
 introduction, trust and sign-in pages; these headers read the session, while
 static page content does not load poll data. Sign-in pages omit a redundant
