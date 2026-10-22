@@ -3,11 +3,7 @@ import type { CommunityChoice, PulseApi } from "../api/types.js";
 import { ApiError } from "../api/types.js";
 import { ScreenFrame } from "../components/ScreenFrame.js";
 import { looksLikeEmail } from "../flow/email.js";
-import {
-  announceSignIn,
-  browserStore,
-  rememberReturn,
-} from "../flow/sign-in-return.js";
+import { browserStore, rememberReturn } from "../flow/sign-in-return.js";
 import type { ReturnTo } from "../flow/route.js";
 import "./SignIn.css";
 
@@ -54,7 +50,6 @@ const COULD_NOT_SEND = "We could not send the link. Try again in a moment.";
 export function SignIn({
   api,
   returnTo,
-  onSignedIn,
 }: {
   api: PulseApi;
   /**
@@ -63,7 +58,6 @@ export function SignIn({
    * because the emailed link itself cannot carry it.
    */
   returnTo?: ReturnTo;
-  onSignedIn?: () => void;
 }) {
   useEffect(() => rememberReturn(returnTo, browserStore()), [returnTo]);
   const [email, setEmail] = useState("");
@@ -114,10 +108,7 @@ export function SignIn({
       setAsking({ ...choosing, sending: true, failure: null });
       try {
         const result = await api.requestLink(choosing.email, optIn, community);
-        if (result.status === "signed_in") {
-          announceSignIn(browserStore());
-          onSignedIn?.();
-        } else if (result.status === "sent") {
+        if (result.status === "sent") {
           setAsking({ status: "sent", email: choosing.email });
         } else {
           // Asked again despite answering. Today's server never does this: it
@@ -177,11 +168,6 @@ export function SignIn({
     setAsking({ status: "sending" });
     try {
       const result = await api.requestLink(address, optIn);
-      if (result.status === "signed_in") {
-        announceSignIn(browserStore());
-        onSignedIn?.();
-        return;
-      }
       // Anyone with a valid address gets a link. The one other answer is a
       // question: the address belongs to several communities, and the person
       // picks which one before anything is sent (ADR-0023).
@@ -237,12 +223,6 @@ export function SignIn({
         Enter your email and we will send you a link. There is no password to
         make up.
       </p>
-
-      {import.meta.env.DEV ? (
-        <p className="signin__lede">
-          Local testing: use demo@example.test to sign in without email.
-        </p>
-      ) : null}
 
       <form className="signin__form" onSubmit={submit} noValidate>
         <label className="signin__label" htmlFor={emailId}>
@@ -350,6 +330,12 @@ function LinkSent({
       <p className="signin__lede">
         We sent a link to <b>{email}</b>. Open it and you are in.
       </p>
+      {import.meta.env.DEV ? (
+        <p className="signin__lede">
+          Local development: <a href="/api/dev/mailbox">Open local mailbox</a>{" "}
+          to read your sign-in email.
+        </p>
+      ) : null}
       <button className="signin__again" type="button" onClick={onUseAnother}>
         Use a different email
       </button>

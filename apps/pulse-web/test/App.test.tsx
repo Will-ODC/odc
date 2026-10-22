@@ -465,25 +465,3 @@ describe("a question just posted", () => {
     expect(screen.queryByText(/Your question is live/)).toBeNull();
   });
 });
-
-it("returns directly from local email sign-in to the creation form", async () => {
-  globalThis.history.replaceState(null, "", "/sign-in?next=new");
-  const user = userEvent.setup();
-  render(
-    <App
-      api={stubApi({
-        requestLink: async () => ({ status: "signed_in" }),
-        creationContext: async () => ({
-          community: { id: "pulse-general", label: "General" },
-          canPostUnlimited: false,
-          purposeVersion: "community-purpose-v1",
-          purposeAcknowledged: true,
-        }),
-      })}
-    />,
-  );
-  await user.type(screen.getByLabelText("Your email"), "demo@example.test");
-  await user.click(screen.getByRole("button", { name: "Continue" }));
-  expect(await screen.findByLabelText("Your question")).toBeTruthy();
-  expect(globalThis.location.pathname).toBe("/new");
-});

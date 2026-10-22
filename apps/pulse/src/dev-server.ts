@@ -1,4 +1,5 @@
 import { randomBytes } from "node:crypto";
+import { registerDevMailbox } from "./dev-mailbox.js";
 import { pathToFileURL } from "node:url";
 import type { FastifyInstance } from "fastify";
 import type { Pool } from "pg";
@@ -397,94 +398,7 @@ export async function buildDevServer(
       // clicking through the flow for the tenth time, not someone mining.
       signInRateLimit: { max: 100, timeWindow: "1 minute" },
     });
-    // Registered here, never by the production server. Reuse redemption so
-    // sessions, revocation and existing-ballot confirmation stay identical.
-    app.post(
-      "/api/dev/sign-in",
-      { config: { rateLimit: { max: 100, timeWindow: "1 minute" } } },
-      async (request, reply) => {
-        const local = ["localhost", "127.0.0.1", "[::1]"].includes(
-          new URL(config.webOrigin).hostname,
-        );
-        if (!local || request.headers.origin !== config.webOrigin) {
-          return reply.code(403).send({
-            error: "local_only",
-            message: "Use the local app to sign in with the test account.",
-          });
-        }
-        const body = request.body as {
-          email?: unknown;
-          proofEmailsOptIn?: unknown;
-          community?: unknown;
-        } | null;
-        if (typeof body?.email !== "string") {
-          return reply.code(400).send({
-            error: "bad_request",
-            message: "Enter your email address.",
-          });
-        }
-        if (body.email.trim().toLowerCase() !== "demo@example.test") {
-          return reply.code(400).send({
-            error: "demo_account_only",
-            message: "Use demo@example.test for local test sign-in.",
-          });
-        }
-        if (
-          (body.proofEmailsOptIn !== undefined &&
-            typeof body.proofEmailsOptIn !== "boolean") ||
-          (body.community !== undefined && typeof body.community !== "string")
-        ) {
-          return reply.code(400).send({
-            error: "bad_request",
-            message: "Choose a community and say yes or no to updates.",
-          });
-        }
-        // A request owns its token: concurrent logins never consult a shared
-        // console mailbox. Existing pending email links cannot block this fixed
-        // local account. The route still has its own per-client rate limit.
-        let token: string | undefined;
-        const demoClaims = new ClaimService(
-          {
-            membership: new DomainAllowlist(storage.domains),
-            voters: storage.voters,
-            claims: storage.claims,
-            mailer: new ConsoleMailer(() => {}),
-            linkFor: (value) => {
-              token = value;
-              return value;
-            },
-          },
-          { maxLiveLinksPerEmail: Number.POSITIVE_INFINITY },
-        );
-        const issued = await demoClaims.requestLink(body.email, {
-          proofEmailsOptIn: body.proofEmailsOptIn === true,
-          ...(typeof body.community === "string"
-            ? { community: body.community }
-            : {}),
-        });
-        if (issued.status === "unknown_community") {
-          return reply.code(400).send({
-            error: "unknown_community",
-            message: "That address cannot sign in to that community.",
-          });
-        }
-        if (issued.status !== "sent" || !token)
-          throw new Error("local sign-in did not produce a claim");
-        const redeemed = await app.inject({
-          method: "POST",
-          url: "/api/sign-in/redeem",
-          remoteAddress: request.ip,
-          headers: { cookie: request.headers.cookie ?? "" },
-          payload: { token },
-        });
-        const cookie = redeemed.headers["set-cookie"];
-        if (cookie) reply.header("set-cookie", cookie);
-        return reply
-          .code(redeemed.statusCode)
-          .type("application/json")
-          .send(redeemed.body);
-      },
-    );
+    registerDevMailbox(app, mailer, config.webOrigin);
     if (pool) {
       // This server opened the pool, so closing the server closes it.
       app.addHook("onClose", async () => {
@@ -600,8 +514,8 @@ async function main(): Promise<void> {
       `  community "${SEED.community}" is @${SEED.domain}; any other address signs in with none`,
       `  @${SHARED_DOMAIN.domain} is asked to choose: ${SHARED_DOMAIN.communities.join(" or ")}`,
       ...SEED.polls.map((poll) => `  poll "${poll.id}": ${poll.question}`),
-      "  demo@example.test signs in directly from the local browser form",
-      "  other sign-in links are printed here; paste one into the browser",
+      `  local mailbox: ${config.webOrigin}/api/dev/mailbox`,
+      "  sign-in links are also printed here",
     ].join("\n"),
   );
 }

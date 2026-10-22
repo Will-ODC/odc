@@ -230,8 +230,6 @@ export interface CommunityChoice {
 export type RequestLinkResult =
   /** `message` is the server's own "check your email" sentence, when it sent one. */
   | { status: "sent"; message?: string }
-  /** Only the local development account can sign in without email. */
-  | { status: "signed_in" }
   | { status: "choose_community"; communities: CommunityChoice[] };
 
 /**

@@ -652,27 +652,29 @@ describe("when the address belongs to more than one community", () => {
   });
 });
 
-it("completes local sign-in with the ordinary keyboard form without an email prompt", async () => {
+it("offers the local mailbox after a normal email request", async () => {
   const user = userEvent.setup();
-  const onSignedIn = vi.fn();
-  render(
-    <SignIn
-      api={stubApi({ requestLink: async () => ({ status: "signed_in" }) })}
-      onSignedIn={onSignedIn}
-    />,
-  );
-  await user.click(field());
-  await user.type(field(), "demo@example.test");
+  render(<SignIn api={stubApi({ requestLink: async () => SERVER_SENT })} />);
+  await user.type(field(), "alice@example.test");
   await user.keyboard("{Enter}");
-  await waitFor(() => expect(onSignedIn).toHaveBeenCalledTimes(1));
-  expect(screen.queryByText("Check your email.")).toBeNull();
+  const inbox = await screen.findByRole("link", { name: "Open local mailbox" });
+  expect(inbox.getAttribute("href")).toBe("/api/dev/mailbox");
+  expect(
+    screen.getByRole("heading", { name: "Check your email." }),
+  ).toBeTruthy();
 });
 
-it("hides the local testing hint in production", () => {
+it("does not offer a local mailbox in production", async () => {
   vi.stubEnv("DEV", false);
   try {
-    render(<SignIn api={stubApi()} />);
-    expect(screen.queryByText(/Local testing:/)).toBeNull();
+    const user = userEvent.setup();
+    render(<SignIn api={stubApi({ requestLink: async () => SERVER_SENT })} />);
+    await user.type(field(), "alice@example.test");
+    await user.click(go());
+    await screen.findByRole("heading", { name: "Check your email." });
+    expect(
+      screen.queryByRole("link", { name: "Open local mailbox" }),
+    ).toBeNull();
   } finally {
     vi.unstubAllEnvs();
   }
