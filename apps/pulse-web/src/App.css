@@ -33,3 +33,14 @@ body {
 #root {
   width: 100%;
 }
+
+/* Read out, never drawn: the status that outlives a screen (App.tsx). */
+.app__announce {
+  position: absolute;
+  width: 1px;
+  height: 1px;
+  margin: 0;
+  overflow: hidden;
+  clip-path: inset(50%);
+  white-space: nowrap;
+}

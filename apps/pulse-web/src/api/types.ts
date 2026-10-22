@@ -157,7 +157,21 @@ export interface Me {
   email: string;
 }
 
+export interface PollSummary {
+  id: string;
+  question: string;
+  method: PollMethod;
+  createdAt: string;
+  closesAt: string | null;
+  open: boolean;
+}
+export interface PollPage {
+  polls: PollSummary[];
+  nextCursor: string | null;
+}
+
 export interface PulseApi {
+  listPolls(community: string, cursor?: string): Promise<PollPage>;
   /**
    * Ask for a sign-in link. `proofEmailsOptIn` is the opt-in for hearing what
    * came of the vote — the server's own name for it, and a real boolean either

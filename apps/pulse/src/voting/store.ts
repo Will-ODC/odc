@@ -1,4 +1,9 @@
 import {
+  comparePolls,
+  type PollListQuery,
+  type PollSummary,
+} from "./listing.js";
+import {
   createPoll,
   isOpen,
   type NewPoll,
@@ -80,6 +85,8 @@ export interface CastOptions {
 }
 
 export interface VotingStore {
+  /** Public summaries, newest first; at most limit + 1 rows. */
+  listPolls(query: PollListQuery): Promise<PollSummary[]>;
   createPoll(input: NewPoll): Promise<Poll>;
   getPoll(pollId: string): Promise<Poll | undefined>;
   castVote(
@@ -198,6 +205,24 @@ export class InMemoryVotingStore implements VotingStore {
 
   async getPoll(pollId: string): Promise<Poll | undefined> {
     return this.#polls.get(pollId);
+  }
+
+  async listPolls(query: PollListQuery): Promise<PollSummary[]> {
+    return [...this.#polls.values()]
+      .filter(
+        (p) =>
+          p.publication?.community.id === query.community &&
+          (query.before === undefined || comparePolls(p, query.before) < 0),
+      )
+      .sort((a, b) => comparePolls(b, a))
+      .slice(0, query.limit + 1)
+      .map((p) => ({
+        id: p.id,
+        question: p.question,
+        method: p.method,
+        createdAt: p.createdAt,
+        ...(p.closesAt ? { closesAt: p.closesAt } : {}),
+      }));
   }
 
   async castVote(

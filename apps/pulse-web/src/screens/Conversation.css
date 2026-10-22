@@ -25,6 +25,17 @@
   overflow-y: auto;
   padding: var(--gutter);
 }
+/*
+ * Below the wide layout the question is on the card, so the space above it
+ * holds only the answers so far: sized to them, not stretched to fill, so the
+ * card sits right under them rather than at the foot of a mostly empty phone.
+ * Still scrolls once the answers outgrow the room.
+ */
+@media (max-width: 1099px) {
+  .conversation__scroll {
+    flex: 0 1 auto;
+  }
+}
 .conversation__column {
   width: 100%;
   max-width: calc(var(--rail) * 3);
@@ -45,7 +56,6 @@
   outline: none;
 }
 .conversation__hero > p,
-.conversation__note,
 .conversation__empty,
 .conversation__sidebar p,
 .conversation__thread small {
@@ -78,30 +88,20 @@
   max-height: 60dvh;
   overflow-y: auto;
 }
-.conversation__composer {
-  display: block;
-  margin-top: var(--step);
-  font-size: var(--t-small);
-  color: var(--ballot-ink-muted);
-}
-.conversation__composer textarea {
-  box-sizing: border-box;
-  width: 100%;
-  resize: none;
-  padding: calc(var(--step) * 1.5);
-  margin-top: var(--step);
-  border: var(--hairline) solid var(--control-line);
-  border-radius: var(--r-control);
-  background: var(--surface-rest);
-  color: var(--ballot-ink-muted);
-  font: inherit;
-}
-.conversation__composer textarea::placeholder {
-  color: var(--ballot-ink-muted);
-  opacity: 1;
-}
-.conversation__note {
-  margin: var(--step) 0 0;
+/*
+ * The vote card is open and says the question and closing date, so the page
+ * heading stays for screen readers and focus but is not drawn twice. On a
+ * wide window the card is a small tab to the side and the heading shows.
+ */
+@media (max-width: 1099px) {
+  .conversation__hero--merged {
+    position: absolute;
+    width: 1px;
+    height: 1px;
+    overflow: hidden;
+    clip-path: inset(50%);
+    white-space: nowrap;
+  }
 }
 .conversation button {
   font: inherit;

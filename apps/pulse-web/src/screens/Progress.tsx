@@ -4,21 +4,26 @@ import { IntroPage } from "../components/IntroPage.js";
 export function Progress({ onContinue }: { onContinue: () => void }) {
   return (
     <IntroPage title="What we’re building together" compact>
-      <h2 className="welcome__section">Built · 6–12 October 2026</h2>
+      <h2 className="welcome__section">Built · 20 October 2026</h2>
       <ul className="welcome__progress">
         <li>
-          <a href="https://github.com/Will-ODC/odc/pull/313">
-            Conversation voting on phone and desktop.
+          <a href="https://github.com/Will-ODC/odc/pull/386">
+            Email-confirmed votes, with both result numbers.
           </a>
         </li>
         <li>
-          <a href="https://github.com/Will-ODC/odc/pull/322">
-            Approval voting that saves all your choices.
+          <a href="https://github.com/Will-ODC/odc/pull/393">
+            Post a question, anonymous by default.
           </a>
         </li>
         <li>
-          <a href="https://github.com/Will-ODC/odc/pull/344">
-            A button to sign out.
+          <a href="https://github.com/Will-ODC/odc/pull/405">
+            A shorter “How votes count” page.
+          </a>
+        </li>
+        <li>
+          <a href="https://github.com/Will-ODC/odc/pull/403">
+            Vote cards open when a question loads.
           </a>
         </li>
       </ul>

@@ -4,6 +4,8 @@ dist/
 *.log
 .env
 .env.*
+# Public, non-secret dev defaults for the web client (poll ids only).
+!apps/pulse-web/.env.development
 .DS_Store
 coverage/
 services/verifier/verifier

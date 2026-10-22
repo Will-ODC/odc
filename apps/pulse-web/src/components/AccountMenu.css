@@ -1,0 +1,47 @@
+/* Sits at the end of TopBanner; reads the banner's tokens, no literals. */
+.account-menu {
+  position: relative;
+}
+
+.banner .account-menu__button {
+  font: inherit;
+  font-size: var(--t-small);
+  white-space: nowrap;
+  color: var(--ballot-ink-soft);
+  background: var(--surface-hover);
+  border: var(--hairline) solid var(--control-line);
+  border-radius: var(--r-control);
+  padding: calc(var(--step) / 2) var(--step);
+  cursor: pointer;
+}
+
+.banner .account-menu__button:focus-visible {
+  outline: calc(var(--hairline) * 2) solid var(--focus-ring);
+  outline-offset: calc(var(--hairline) * 2);
+}
+
+/* Drops below the bar, against the right edge, over the page. */
+.account-menu__panel {
+  position: absolute;
+  inset-block-start: calc(100% + var(--step));
+  inset-inline-end: 0;
+  z-index: 2;
+  box-sizing: border-box;
+  width: max-content;
+  max-width: calc(100vw - var(--gutter));
+  display: flex;
+  flex-direction: column;
+  align-items: flex-end;
+  gap: var(--step);
+  padding: calc(var(--step) * 1.5);
+  background: var(--ballot-bg);
+  border: var(--hairline) solid var(--ballot-line);
+  border-radius: var(--r-control);
+  box-shadow: var(--shadow-ballot);
+  font-size: var(--t-small);
+  color: var(--ballot-ink-muted);
+}
+
+.account-menu__panel[hidden] {
+  display: none;
+}

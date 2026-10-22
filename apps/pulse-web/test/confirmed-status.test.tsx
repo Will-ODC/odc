@@ -416,10 +416,14 @@ describe("signing in while a counted vote is on screen", () => {
       await waitFor(() =>
         expect(screen.queryByRole("link", { name: "Sign in" })).toBeNull(),
       );
+      // The account menu hides Sign in even before the async session update.
+      // Wait for the card itself to stop offering confirmation instead.
+      await waitFor(() =>
+        expect(
+          main.queryByRole("link", { name: /Confirm with your email/ }),
+        ).toBeNull(),
+      );
       expect(main.getAllByRole("status")[0]?.textContent).toBe("Counted");
-      expect(
-        main.queryByRole("link", { name: /Confirm with your email/ }),
-      ).toBeNull();
       expect(fetched).not.toHaveBeenCalled();
     } finally {
       vi.useRealTimers();

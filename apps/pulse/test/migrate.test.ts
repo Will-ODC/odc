@@ -93,6 +93,7 @@ test("applies_a_fresh_schema", { skip }, async () => {
       "005",
       "006",
       "007",
+      "008",
     ]);
     assert.deepEqual(await tablesIn(pool, schema), TABLES);
   });
@@ -518,6 +519,7 @@ test(
         "polls_author_created_idx",
         "polls_id_author_unique",
         "polls_pkey",
+        "polls_public_listing_idx",
         "posting_permission_change_pkey",
         "posting_permission_pkey",
         "publication_acknowledgement_pkey",

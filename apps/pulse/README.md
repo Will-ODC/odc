@@ -26,6 +26,11 @@ it yet. The owner is whoever signs in with `PULSE_OWNER_EMAIL`.
 For contributors, see the [Pulse agent guide](./CLAUDE.md). The API reference
 marks planned interfaces separately from routes that are served today.
 
+**Public browsing** is available through `GET /api/polls?community=ID` (#259),
+without signing in. It returns open and closed question summaries, newest first,
+with cursor pagination. Hidden polls are excluded. The browser list and MCP
+discovery remain separate work; see [API.md](./API.md) for the query contract.
+
 ## Run it on your computer
 
 ```bash

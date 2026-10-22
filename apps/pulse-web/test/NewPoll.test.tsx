@@ -1,5 +1,12 @@
 // @vitest-environment jsdom
-import { act, cleanup, render, screen, waitFor } from "@testing-library/react";
+import {
+  act,
+  cleanup,
+  render,
+  screen,
+  waitFor,
+  within,
+} from "@testing-library/react";
 import userEvent from "@testing-library/user-event";
 import { afterEach, describe, expect, it, vi } from "vitest";
 import { ApiError } from "../src/api/types.js";
@@ -699,5 +706,47 @@ describe("posting, confirmed in place", () => {
     });
     await screen.findByRole("link", { name: "Sign in to post" });
     expect(screen.queryByText(/What you wrote is kept/)).toBeNull();
+  });
+});
+
+/*
+ * Operator walkthrough, 2026-10-21: /new had no bar on a phone, so there was
+ * no way home. It has the app's own bar now, at every width.
+ */
+describe("the bar across the top", () => {
+  const bar = () => within(screen.getByRole("banner"));
+
+  it("links home and offers the way in when signed out", async () => {
+    show({
+      context: () => Promise.reject(new ApiError(401, "Sign in first.")),
+    });
+    expect(
+      bar().getByRole("link", { name: "pulse" }).getAttribute("href"),
+    ).toBe("/");
+    expect(await bar().findByRole("link", { name: "Sign in" })).toBeTruthy();
+    // Not a link to the page it is on.
+    expect(bar().queryByRole("link", { name: /Post/ })).toBeNull();
+  });
+
+  it("puts the account behind one button when signed in", async () => {
+    const user = userEvent.setup();
+    render(
+      <NewPoll
+        api={stubApi({
+          creationContext: () => Promise.resolve(FIRST),
+          me: () =>
+            Promise.resolve({
+              id: "v1",
+              community: null,
+              email: "voter@example.org",
+            }),
+        })}
+        signInHref="/sign-in?next=new"
+        onPosted={() => {}}
+      />,
+    );
+    await user.click(await bar().findByRole("button", { name: "Account" }));
+    expect(bar().getByText("voter@example.org")).toBeTruthy();
+    expect(bar().getByRole("button", { name: "Sign out" })).toBeTruthy();
   });
 });

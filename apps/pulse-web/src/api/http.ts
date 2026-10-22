@@ -6,6 +6,7 @@ import type {
   Me,
   NewPollRequest,
   Poll,
+  PollPage,
   PulseApi,
   RequestLinkResult,
   Results,
@@ -87,6 +88,22 @@ export class HttpPulseApi implements PulseApi {
     await this.#send("POST", "/sign-out");
   }
 
+  async listPolls(community: string, cursor?: string): Promise<PollPage> {
+    const query = new URLSearchParams({ community });
+    if (cursor !== undefined) query.set("cursor", cursor);
+    const body = await this.#send<unknown>(
+      "GET",
+      `/polls?${query}`,
+      undefined,
+      undefined,
+      {},
+      AbortSignal.timeout(10000),
+    );
+    if (!isPollPage(body))
+      throw new ApiError(200, "We couldn't read the questions. Try again.");
+    return body;
+  }
+
   async poll(pollId: string): Promise<Poll> {
     return this.#send("GET", `/polls/${encodeURIComponent(pollId)}`);
   }
@@ -151,12 +168,14 @@ export class HttpPulseApi implements PulseApi {
     body?: unknown,
     answer?: (status: number, parsed: unknown) => A | undefined,
     headers: Record<string, string> = {},
+    signal?: AbortSignal,
   ): Promise<T | ([A] extends [never] ? never : Answered<A>)> {
     let response: Response;
     try {
       response = await this.#fetch(this.#base + path, {
         method,
         credentials: "same-origin",
+        ...(signal ? { signal } : {}),
         ...(body === undefined
           ? Object.keys(headers).length > 0
             ? { headers }
@@ -297,4 +316,32 @@ function stringField(parsed: unknown, key: string): string | undefined {
     if (typeof value === "string" && value.trim() !== "") return value;
   }
   return undefined;
+}
+
+function isPollPage(body: unknown): body is PollPage {
+  if (!body || typeof body !== "object") return false;
+  const page = body as Record<string, unknown>;
+  const date = (v: unknown) =>
+    typeof v === "string" && Number.isFinite(Date.parse(v));
+  return (
+    (page.nextCursor === null ||
+      (typeof page.nextCursor === "string" &&
+        /^[A-Za-z0-9_-]{1,2048}$/.test(page.nextCursor))) &&
+    Array.isArray(page.polls) &&
+    page.polls.length <= 100 &&
+    page.polls.every((p: unknown) => {
+      if (!p || typeof p !== "object") return false;
+      const row = p as Record<string, unknown>;
+      return (
+        typeof row.id === "string" &&
+        row.id.length > 0 &&
+        typeof row.question === "string" &&
+        row.question.length > 0 &&
+        (row.method === "single" || row.method === "approval") &&
+        typeof row.open === "boolean" &&
+        date(row.createdAt) &&
+        (row.closesAt === null || date(row.closesAt))
+      );
+    })
+  );
 }

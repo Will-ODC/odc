@@ -4,7 +4,7 @@
 > Read `memory/INDEX.md` first. Agent rules are in `apps/pulse/CLAUDE.md`, the
 > served API is in `apps/pulse/API.md`, and the work queue is GitHub
 > issues (design detail an issue links to is in `docs/plans/pulse.md`). This file holds current state only, and history is in
-> git. Slimmed 2026-10-10, refreshed 2026-10-20. The long ledger it replaced is in
+> git. Slimmed 2026-10-10, refreshed 2026-10-21. The long ledger it replaced is in
 > `git log -p -- memory/pulse.md`.
 >
 > The operator's development-feedback loop, the trust and reporting decisions,
@@ -37,7 +37,7 @@ Repo discipline still applies: tests ship with the change, there is one small
 branch per change, named for its ticket (`pulse/<issue>-<short>`, #310), and
 the same CI runs.
 
-## Where it stands (2026-10-20)
+## Where it stands (2026-10-21)
 
 - **Pillar 1 (identity) is built.** Magic-link sign-in and redeem (#81-#87,
   #116, #149). Open sign-up lets anyone sign in, and community is an optional
@@ -64,6 +64,16 @@ the same CI runs.
 - **MCP public reads are built** (#300 read slice, PR #323): `get_poll` and
   `get_results` at `/api/mcp`. ADR-0036 (voting from AI apps) is still marked
   proposed; no casting, sign-in or own-answer tools exist.
+- **Public poll listing is built** (#259 / PR #419, merged 2026-10-21).
+  `GET /api/polls?community=ID` needs no sign-in and returns open and closed
+  question summaries, excluding hidden polls and legacy polls without a
+  community. Newest-first creation time and UTF-8 poll ID ordering use
+  community-bound cursor pagination (20 by default, maximum 100).
+  Migration 008 adds the visible-community listing index. PR validation passed
+  606 API tests with PostgreSQL required and zero skips, independent review
+  returned APPROVE with no findings, and CI passed. **No browser list or MCP
+  discovery consumer is built yet** (#260/#291); existing MCP tools still read
+  individual polls/results only.
 - **Poll creation is built, including the form.** ADR-0037
   (#340) settles the policy and API. Built: migration 005 (#346), the Postgres publication store with
   quotas, safe retries and owner-only posting grants (#354), and an in-memory
@@ -96,11 +106,50 @@ the same CI runs.
 5. **A container-image scan** in `pulse-images.yml` before the first deploy
    (deferred by the operator, 2026-10-11; #315's other items are done).
 
+## Current operator plan (2026-10-21)
+
+1. Finish #260: welcome's Explore questions opens a public, community-scoped
+   browse list, while Start voting retains the existing guided introduction.
+   Show open/closed questions, newest first, with pagination and recoverable
+   errors. Implementation is in flight on `pulse/260-browse`; not merged.
+2. Refine poll creation next. The operator expects substantial improvement;
+   the particular form/content/workflow changes still need to be scoped.
+   Reuse the built creation flow rather than creating a second authoring system.
+3. Prepare a small invited pilot once browsing and the agreed creation
+   refinements are ready, with a chosen host, persistent database, verified
+   sending domain and the deferred container-image scan. This is a plan,
+   not a claim of deployment or authorisation to deploy.
+4. Broad launch still needs the recorded reporting/moderation prerequisites
+   and published starting questions. Continue toward discussion, related votes
+   and documented action through #303 and its linked tickets.
+
+## Browse handoff (2026-10-21, awaiting merge)
+
+- #260 is implemented in PR #426 on `pulse/260-browse`, not yet merged.
+  Welcome offers Explore questions alongside the unchanged guided Start voting
+  path. The public list supports communities, open/closed questions, cursor
+  pagination and recoverable failures; browsing never casts a vote.
+- Current layout: centered main column with space for columns on both sides
+  on desktop, full width on phones, and quiet top text navigation with subtle
+  separators. General is public; Your community uses the existing email-linked
+  community label, not a new membership or social-confirmation system.
+- Independent implementation and layout reviews returned APPROVE. The latest
+  local web suite has 490 passing tests; CI reruns after pushes. No merge or
+  public deployment has been performed by this chat.
+- Later browse thumbnails and a few context lines per entry are #427, dependent
+  on #296 image/context fields; #397 owns the richer mixed feed. Reuse these
+  issues rather than creating duplicates. Side-column contents remain #331.
+- **Next selected work remains poll-creation refinement**, with specific
+  changes still to be scoped. Longer work stays in its existing issues:
+  #422 bottom vote drawer, #297/#423 discussion, #424 opinion-diversity
+  prototype and #425 related-vote continuation. Invited-pilot prerequisites
+  remain the current plan above.
+
 ## Next / not built
 
 - **The authoring and demo-feedback slices are complete** (#393/#403–#405).
-  No next feature is selected by this handoff; choose from the remaining work
-  below. A local demo is available, but there is no claim of a public deploy.
+  The operator selected #260 browsing next, followed by poll-creation
+  refinement; see the current plan above. A local demo is available, but there is no claim of a public deploy.
 - Open feature issues: #296 photo and summary, #297 comments, #336 suggestions in
   the conversation page, #331-#333 desktop side columns and action follow-through,
   #329 a "My votes" page, #314 browser-extension prototype (idea only), #186 a
@@ -114,6 +163,9 @@ the same CI runs.
   described it (2026-09-06) as "a home screen that browses all polls and batches
   of related polls, story-style". It is also ADR-0022's route back to a question
   from outside a run.
+  Its listing API prerequisite is now delivered (#259 / PR #419). The minimal
+  browser list (#260) still needs its layout and entry route accepted; MCP
+  discovery (#291) remains a separate consumer.
 - **Authorised moderator access is not built.** The merged creation form and
   public byline use ADR-0037's interim anonymity disclosure (#393); do not claim
   the later moderator-access model exists.

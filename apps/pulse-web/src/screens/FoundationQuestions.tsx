@@ -51,8 +51,10 @@ export function FoundationQuestions({
         })}
       </ul>
       <p className="welcome__note">
-        Questions marked “Coming soon” are being prepared. Opening a question
-        does not submit an answer.
+        {questions.some(({ id }) => !id?.trim())
+          ? "Questions marked “Coming soon” are being prepared. "
+          : ""}
+        Opening a question does not submit an answer.
       </p>
     </IntroPage>
   );

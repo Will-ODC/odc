@@ -27,35 +27,24 @@ describe("opening the emailed link", () => {
 
   it("spends the token it was given", async () => {
     const redeem = vi.fn(() => Promise.resolve(ME));
+    const onSignedIn = vi.fn();
     render(
       <Redeem
         api={stubApi({ redeem })}
         token="abc123"
-        onSignedIn={noop}
+        onSignedIn={onSignedIn}
         onAskAgain={noop}
       />,
     );
-    await screen.findByText("You are in.");
+    await waitFor(() => expect(onSignedIn).toHaveBeenCalled());
     expect(redeem).toHaveBeenCalledWith("abc123");
   });
 
   /*
-   * The link is the one moment pulse knows which address it reached, and
-   * someone with two accounts needs to see which one they just used.
+   * No "You are in · Continue" screen (operator walkthrough, 2026-10-21):
+   * signing in goes straight on to where the person was, once.
    */
-  it("names the address it signed them in as", async () => {
-    render(
-      <Redeem
-        api={stubApi({ redeem: () => Promise.resolve(ME) })}
-        token="abc"
-        onSignedIn={noop}
-        onAskAgain={noop}
-      />,
-    );
-    expect(await screen.findByText("jo@student.ubc.ca")).toBeTruthy();
-  });
-
-  it("moves on when they press Continue", async () => {
+  it("goes straight on, once, without a screen to press through", async () => {
     const onSignedIn = vi.fn();
     render(
       <Redeem
@@ -65,10 +54,9 @@ describe("opening the emailed link", () => {
         onAskAgain={noop}
       />,
     );
-    await userEvent.click(
-      await screen.findByRole("button", { name: "Continue" }),
-    );
-    expect(onSignedIn).toHaveBeenCalledTimes(1);
+    await waitFor(() => expect(onSignedIn).toHaveBeenCalledTimes(1));
+    expect(screen.queryByRole("button", { name: "Continue" })).toBeNull();
+    expect(screen.queryByText("You are in.")).toBeNull();
   });
 });
 
@@ -90,18 +78,46 @@ describe("opening the emailed link", () => {
 describe("spending the token exactly once", () => {
   it("redeems once even though StrictMode runs the effect twice", async () => {
     const redeem = vi.fn(() => Promise.resolve(ME));
+    const onSignedIn = vi.fn();
     render(
       <StrictMode>
         <Redeem
           api={stubApi({ redeem })}
           token="abc"
-          onSignedIn={noop}
+          onSignedIn={onSignedIn}
           onAskAgain={noop}
         />
       </StrictMode>,
     );
-    await screen.findByText("You are in.");
+    await waitFor(() => expect(onSignedIn).toHaveBeenCalled());
     expect(redeem).toHaveBeenCalledTimes(1);
+    // Where to return is read and forgotten in `onSignedIn`: twice would
+    // send the second call to the default.
+    expect(onSignedIn).toHaveBeenCalledTimes(1);
+  });
+
+  /*
+   * The app hands in a fresh `onSignedIn` every time it draws, which reruns
+   * the effect. Going on twice would read the remembered place a second
+   * time, find it already forgotten, and replace it with the default.
+   */
+  it("goes on once even when handed a new callback after signing in", async () => {
+    const first = vi.fn();
+    const later = vi.fn();
+    const api = stubApi({ redeem: () => Promise.resolve(ME) });
+    const { rerender } = render(
+      <StrictMode>
+        <Redeem api={api} token="abc" onSignedIn={first} onAskAgain={noop} />
+      </StrictMode>,
+    );
+    await waitFor(() => expect(first).toHaveBeenCalledTimes(1));
+    rerender(
+      <StrictMode>
+        <Redeem api={api} token="abc" onSignedIn={later} onAskAgain={noop} />
+      </StrictMode>,
+    );
+    expect(later).not.toHaveBeenCalled();
+    expect(first).toHaveBeenCalledTimes(1);
   });
 });
 
@@ -222,11 +238,12 @@ describe("when the server cannot be reached", () => {
       .fn()
       .mockRejectedValueOnce(new TypeError("offline"))
       .mockResolvedValueOnce(ME);
+    const onSignedIn = vi.fn();
     render(
       <Redeem
         api={stubApi({ redeem })}
         token="abc123"
-        onSignedIn={noop}
+        onSignedIn={onSignedIn}
         onAskAgain={noop}
       />,
     );
@@ -234,7 +251,7 @@ describe("when the server cannot be reached", () => {
 
     await userEvent.click(screen.getByRole("button", { name: "Try again" }));
 
-    expect(await screen.findByText("You are in.")).toBeTruthy();
+    await waitFor(() => expect(onSignedIn).toHaveBeenCalledTimes(1));
     expect(redeem).toHaveBeenCalledTimes(2);
     expect(redeem).toHaveBeenLastCalledWith("abc123");
   });
@@ -263,11 +280,6 @@ describe("telling somebody who cannot see the screen", () => {
       "a failed request",
       () => stubApi({ redeem: () => Promise.reject(new TypeError("offline")) }),
       "We could not reach pulse.",
-    ],
-    [
-      "being signed in",
-      () => stubApi({ redeem: () => Promise.resolve(ME) }),
-      "You are in.",
     ],
   ] as const;
 

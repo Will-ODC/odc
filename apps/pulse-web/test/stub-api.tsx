@@ -94,6 +94,7 @@ export function stubApi(over: Partial<PulseApi> = {}): PulseApi {
   const unused = (name: string) => () =>
     Promise.reject(new Error(`the ballot should not call ${name}`));
   return {
+    listPolls: unused("listPolls"),
     poll: () => Promise.resolve(poll()),
     cast: () =>
       Promise.resolve({

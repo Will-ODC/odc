@@ -1,5 +1,5 @@
 import { useEffect, useRef } from "react";
-import type { Me, PulseApi } from "../api/types.js";
+import type { PulseApi } from "../api/types.js";
 import { ScreenFrame } from "../components/ScreenFrame.js";
 import { ViewState } from "../components/ViewState.js";
 import { useRedeem } from "../hooks/use-redeem.js";
@@ -12,10 +12,11 @@ import "./SignIn.css";
  * Spending the token is the only thing this screen does, and it does it once,
  * on arrival — the person already pressed the button, in their mail client.
  *
- * Success is a screen rather than a redirect. The link is the one moment pulse
- * knows the address it reached, and showing it back is what lets someone catch
- * having signed in as the wrong one; a silent bounce onward would also race
- * the history replace that keeps the spent link out of the back button.
+ * Success goes straight on (operator walkthrough, 2026-10-21): the "You are
+ * in · Continue" screen that used to stand here was one press between the
+ * person and the form or question they came from. `onSignedIn` decides where
+ * that is, replaces the spent link in the history, and says "Signed in"
+ * through a status region; the bar there shows the account.
  */
 export function Redeem({
   api,
@@ -32,9 +33,14 @@ export function Redeem({
   // Tell this browser's other pulse tabs, so a vote card waiting there says
   // "confirmed by email" without a reload (#353).
   const signedIn = redeemed.status === "ready";
+  // Once only: `onSignedIn` reads and forgets where to return.
+  const gone = useRef(false);
   useEffect(() => {
-    if (signedIn) announceSignIn(browserStore());
-  }, [signedIn]);
+    if (!signedIn || gone.current) return;
+    gone.current = true;
+    announceSignIn(browserStore());
+    onSignedIn();
+  }, [signedIn, onSignedIn]);
 
   /*
    * The link ran out: spent, expired, or not one of ours.
@@ -76,9 +82,8 @@ export function Redeem({
 
   return (
     <ScreenFrame>
-      <ViewState data={redeemed}>
-        {(me: Me) => <SignedIn me={me} onContinue={onSignedIn} />}
-      </ViewState>
+      {/* Signed in is gone from here at once; only loading is ever seen. */}
+      <ViewState data={redeemed}>{() => null}</ViewState>
     </ScreenFrame>
   );
 }
@@ -118,33 +123,5 @@ function Stopped({
         {action}
       </button>
     </ScreenFrame>
-  );
-}
-
-function SignedIn({ me, onContinue }: { me: Me; onContinue: () => void }) {
-  const heading = useRef<HTMLHeadingElement>(null);
-  // The loading region has just been replaced; without moving focus it falls
-  // to `document.body` and nothing announces that the person is signed in.
-  useEffect(() => heading.current?.focus(), []);
-
-  return (
-    <>
-      {/*
-       * The live region is not decoration. `<ViewState>` has been announcing
-       * "Loading…" through one; replacing it with markup that has none leaves
-       * a screen-reader user on "Loading…" with no idea they are signed in.
-       */}
-      <div role="status" aria-live="polite">
-        <h1 className="signin__title" tabIndex={-1} ref={heading}>
-          You are in.
-        </h1>
-        <p className="signin__lede">
-          Signed in as <b>{me.email}</b>.
-        </p>
-      </div>
-      <button className="signin__go" type="button" onClick={onContinue}>
-        Continue
-      </button>
-    </>
   );
 }

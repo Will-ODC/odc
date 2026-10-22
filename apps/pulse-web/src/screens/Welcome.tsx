@@ -29,6 +29,9 @@ export function Welcome({ onStart }: { onStart: () => void }) {
       <button className="welcome__start" type="button" onClick={onStart}>
         Start voting
       </button>
+      <p className="welcome__note">
+        <a href="/browse?community=pulse-general">Explore questions</a>
+      </p>
     </IntroPage>
   );
 }

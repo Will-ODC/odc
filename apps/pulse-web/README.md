@@ -27,16 +27,17 @@ container, so the page and the API share one address.
 
 ## Pages
 
-| Path               | What it shows                                                          |
-| ------------------ | ---------------------------------------------------------------------- |
-| `/`                | Welcome page, then Start voting.                                       |
-| `/start`           | What has been done so far, and what ODC is for.                        |
-| `/questions`       | The four starting questions.                                           |
-| `/?poll=ID`        | The live vote page for one poll. Old `/conversation` links still work. |
-| `/new`             | Post a question after signing in, then open its vote page.             |
-| `/trust`           | "How votes count": a short guide to counting and its limits.           |
-| `/sign-in?token=…` | Where emailed sign-in links land.                                      |
-| `/preview/chat`    | A prototype with sample data only.                                     |
+| Path                   | What it shows                                                           |
+| ---------------------- | ----------------------------------------------------------------------- |
+| `/`                    | Welcome page, then Start voting.                                        |
+| `/start`               | What has been done so far, and what ODC is for.                         |
+| `/browse?community=ID` | Community questions, newest first; General by default.                  |
+| `/questions`           | The four starting questions.                                            |
+| `/?poll=ID`            | The live vote page for one poll. Old `/conversation` links still work.  |
+| `/new`                 | Post a question after signing in, then open its vote page.              |
+| `/trust`               | "How votes count": a short guide to counting and its limits.            |
+| `/sign-in?token=…`     | Where emailed sign-in links land; goes straight back to where you were. |
+| `/preview/chat`        | A prototype with sample data only.                                      |
 
 The vote page, sign-in and question creation call the API. Each question opens
 with its vote card expanded. Choose an answer, then press Submit to save it.
@@ -44,6 +45,14 @@ You can close the card and reopen it with Vote. **Show me how** walks through
 the real controls; it never picks or submits an answer. Its highlight leaves
 space around the controls and stays inside the screen, so the space is smaller
 on a side where a control touches the screen edge.
+
+The vote page and `/new` share one bar across the top: the mark, "Post a
+question" (just "Post" on a narrow phone; left out on `/new`, where the mark
+links home) and one account control. That control is "Sign in", or an
+**Account** button that shows who is signed in and "Sign out", or "Sign in" and
+"Forget my votes here". After a vote, one "How votes count" link sits under the
+counts. Right after posting, the new question shows "Your question is live ·
+Copy link" once.
 
 Question creation keeps a draft in this browser for up to an hour after a
 sign-in-required posting failure. Only the explicit sign-in recovery path
@@ -53,6 +62,19 @@ first-post purpose promise is never saved with the draft.
 The client uses the served routes in [`../pulse/API.md`](../pulse/API.md).
 Roadmap and planned API sections describe future work, not current client
 behavior.
+
+## Browse questions (#260)
+
+Welcome keeps Start voting → /start → /questions and adds Explore questions →
+`/browse?community=pulse-general`. Browsing is public, newest first and scoped
+by community, not a global or related-question feed. Shared
+`/browse?community=ID` links open that community. Signed-in visitors can also
+switch to their community. Open and closed questions link to the existing vote
+page; opening a question never casts a vote. Load more uses the API cursor and
+keeps existing questions on a failed request. The wide list has top navigation
+for home, starting questions, posting and communities; email-confirmed membership
+supplies the Your community link. Thumbnails/context previews remain future work. Missing communities show an empty
+state with links to the starting questions and posting form.
 
 ## Settings
 
@@ -66,6 +88,18 @@ Docker build arguments:
 
 A missing ID shows that question as Coming soon. These IDs are public, not
 secrets. Changing one needs a rebuild.
+
+## Publishing the starting questions
+
+Locally, `vite` dev reads `.env.development`, which points the four variables
+above at the dev server's seeded `launch-*` polls (Vite never loads it for
+`vite build`, and the Docker context excludes it). On deploy day the owner
+(`PULSE_OWNER_EMAIL`) signs in and posts each question through `/new` with the
+text in `docs/plans/pulse-first-story-content-draft.md`, using the form's
+"Change when it closes" to set a later close time (a year out, like the dev
+seed; the default is 7 days), copies each new poll's
+id from its URL, and sets the four `VITE_PULSE_*_POLL_ID` values for the web
+build.
 
 ## Keep these rules
 

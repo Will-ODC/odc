@@ -1,4 +1,5 @@
 import type { ReactNode } from "react";
+import { AccountMenu } from "./AccountMenu.js";
 import "./TopBanner.css";
 
 /**
@@ -8,63 +9,67 @@ import "./TopBanner.css";
  * one thing a person might come back to do in the quietest corner of the
  * page. It belongs across the top, where a website keeps it.
  *
- * Desktop only, by the same rule as the rails: at phone width the screen IS
- * the app and there is no page chrome to hang a bar on. AppShell.css hides
- * it there.
+ * The conversation and the posting form show it at every width, so a phone
+ * always has a way home; inside `AppShell` alone (the sign-in screens) it is
+ * desktop only, because there the frame carries the mark.
+ *
+ * At most the mark, "Post a question" and ONE account control: three
+ * controls wrapped it onto two lines on a 375px phone (operator walkthrough,
+ * 2026-10-21).
  */
 export function TopBanner({
   signInHref,
   postHref,
-  identity,
-  aside,
+  homeHref,
+  account,
 }: {
   /** Where "Post a question" goes (ADR-0037). Left out where it would loop. */
   postHref?: string;
   /**
    * Where "Sign in" goes. Left out on the sign-in screens themselves, where
-   * the link would only reload the page the person is already on.
+   * the link would only reload the page the person is already on. Ignored
+   * once `account` is given.
    */
   signInHref?: string;
+  /** Makes the mark a link home, on a page that is not home. */
+  homeHref?: string;
   /**
-   * Who is signed in, when anybody is — the mark and the address.
-   *
-   * A slot rather than a component, because what goes here is the one part
-   * of this bar that is still being decided: signing in turns the privacy
-   * mark from the anonymous one into the recognised one, and that art does
-   * not exist yet. Until it does, nothing is rendered here and the bar
-   * offers the way in.
+   * The account's controls — who is signed in and "Sign out", or "Forget my
+   * votes here" — shown behind one small button (`AccountMenu`) in place of
+   * the "Sign in" link.
    */
-  identity?: ReactNode;
-  /**
-   * Something to offer beside the way in, for someone who is not signed in —
-   * today only "Forget my votes here". Ignored once `identity` is given.
-   */
-  aside?: ReactNode;
+  account?: ReactNode;
 }) {
+  const mark = (
+    <>
+      <i aria-hidden="true" />
+      pulse
+    </>
+  );
   return (
     <div className="banner">
-      <span className="banner__brand">
-        <i aria-hidden="true" />
-        pulse
-      </span>
+      {homeHref ? (
+        <a className="banner__brand" href={homeHref}>
+          {mark}
+        </a>
+      ) : (
+        <span className="banner__brand">{mark}</span>
+      )}
 
       <span className="banner__actions">
         {postHref ? (
           <a className="banner__post" href={postHref}>
-            Post a question
+            Post<span className="banner__post-more"> a question</span>
           </a>
         ) : null}
 
-        {identity ?? (
-          <span className="banner__end">
-            {aside}
-            {signInHref ? (
-              <a className="banner__sign-in" href={signInHref}>
-                Sign in
-              </a>
-            ) : null}
-          </span>
-        )}
+        {account ? (
+          <AccountMenu>{account}</AccountMenu>
+        ) : signInHref ? (
+          <a className="banner__sign-in" href={signInHref}>
+            Sign in
+          </a>
+        ) : null}
       </span>
     </div>
   );

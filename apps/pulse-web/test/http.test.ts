@@ -444,3 +444,53 @@ describe("being told to wait", () => {
     expect((err as ApiError).retryAfter).toBeUndefined();
   });
 });
+
+describe("listing public questions", () => {
+  const valid = {
+    polls: [
+      {
+        id: "a",
+        question: "Question?",
+        method: "single",
+        open: true,
+        createdAt: "2026-10-21T12:00:00.000Z",
+        closesAt: null,
+      },
+    ],
+    nextCursor: null,
+  };
+  it("encodes community and opaque cursor, reads the page and bounds request time", async () => {
+    const calls = stubFetch({ body: JSON.stringify(valid) });
+    expect(await new HttpPulseApi().listPolls("a&b", "opaque_cursor")).toEqual(
+      valid,
+    );
+    expect(calls[0]?.url).toBe(
+      "/api/polls?community=a%26b&cursor=opaque_cursor",
+    );
+    expect(calls[0]?.init.method).toBe("GET");
+    expect(calls[0]?.init.signal).toBeInstanceOf(AbortSignal);
+  });
+  it.each([
+    {},
+    null,
+    { polls: {}, nextCursor: null },
+    { polls: [], nextCursor: 1 },
+    { ...valid, polls: [{ ...valid.polls[0], open: "true" }] },
+    { ...valid, polls: [{ ...valid.polls[0], createdAt: "bad" }] },
+  ])("refuses malformed successful listings: %j", async (body) => {
+    stubFetch({ body: JSON.stringify(body) });
+    await expect(new HttpPulseApi().listPolls("campus")).rejects.toBeInstanceOf(
+      ApiError,
+    );
+  });
+  it("reports failed and unavailable listings through ApiError", async () => {
+    stubFetch({ status: 500, body: "{}" });
+    await expect(new HttpPulseApi().listPolls("campus")).rejects.toThrow(
+      "Something went wrong",
+    );
+    stubFetch({ throws: true });
+    await expect(new HttpPulseApi().listPolls("campus")).rejects.toThrow(
+      "Couldn't reach pulse",
+    );
+  });
+});
