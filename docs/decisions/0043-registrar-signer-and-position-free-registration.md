@@ -154,7 +154,11 @@ and what crosses each boundary.
   request id used only to make retries idempotent. Never a `participant_id`,
   pubkey, session or anything derived from the voter. The reply is "accepted",
   or "refused" (unknown issue, choice out of range, issue closed), with no
-  batch id, line or signature.
+  batch id, line or signature. A request id already in the issue's set is
+  answered "accepted" without admitting again.
+- **Identity → signer, release an issue:** `issue_id` only, sent once every
+  push for that issue has a definite answer. The signer then deletes the
+  issue's request-id set.
 - **Ledger → signer, seal:** `issue_id`, and whether this is the issue's last
   batch. The signer atomically closes the issue's open batch and returns its id
   and its counts per choice. After a last seal it refuses every further entry
