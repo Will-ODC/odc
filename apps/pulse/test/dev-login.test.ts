@@ -123,20 +123,80 @@ test("demo refuses a non-loopback configured web origin even when Origin matches
   assert.equal(response.statusCode, 403);
 });
 
-test("demo can redeem an already pending console link", async (t) => {
-  const { app } = await buildDevServer(devConfig({}));
+test("demo signs in despite a full pending mailbox lost on restart", async (t) => {
+  const { app, mailer } = await buildDevServer(devConfig({}));
   t.after(() => app.close());
-  await app.inject({
+  for (let i = 0; i < 3; i++) {
+    await app.inject({
+      method: "POST",
+      url: "/api/sign-in",
+      payload: { email: "demo@example.test" },
+    });
+  }
+  const capped = await app.inject({
     method: "POST",
     url: "/api/sign-in",
     payload: { email: "demo@example.test" },
   });
+  assert.equal(capped.json().error, "link_already_sent");
+  // Claims survive in a database; the process-local console mailbox does not.
+  mailer.sent.length = 0;
+  const response = await app.inject({
+    method: "POST",
+    url: "/api/dev/sign-in",
+    headers: { origin },
+    payload: { email: "demo@example.test", proofEmailsOptIn: true },
+  });
+  assert.equal(response.statusCode, 200);
+  assert.equal(response.json().status, "signed_in");
+  assert.equal(mailer.sent.length, 0);
+});
+
+test("overlapping demo logins each redeem their own token", async (t) => {
+  const { app } = await buildDevServer(devConfig({}));
+  t.after(() => app.close());
+  const responses = await Promise.all(
+    Array.from({ length: 10 }, () =>
+      app.inject({
+        method: "POST",
+        url: "/api/dev/sign-in",
+        headers: { origin },
+        payload: { email: "demo@example.test" },
+      }),
+    ),
+  );
+  for (const response of responses) {
+    assert.equal(response.statusCode, 200);
+    assert.equal(response.json().status, "signed_in");
+    const session = response.cookies.find((c) => c.name === "pulse_session");
+    assert.ok(session);
+    const me = await app.inject({
+      url: "/api/me",
+      headers: { cookie: `pulse_session=${session.value}` },
+    });
+    assert.equal(me.statusCode, 200);
+    assert.equal(me.json().voter.email, "demo@example.test");
+  }
+});
+
+test("demo login rate limit refuses repeated requests without a cookie", async (t) => {
+  const { app } = await buildDevServer(devConfig({}));
+  t.after(() => app.close());
+  for (let i = 0; i < 100; i++) {
+    await app.inject({
+      method: "POST",
+      url: "/api/dev/sign-in",
+      headers: { origin },
+      payload: { email: "other@example.test" },
+    });
+  }
   const response = await app.inject({
     method: "POST",
     url: "/api/dev/sign-in",
     headers: { origin },
     payload: { email: "demo@example.test" },
   });
-  assert.equal(response.statusCode, 200);
-  assert.equal(response.json().status, "signed_in");
+  assert.equal(response.statusCode, 429);
+  assert.equal(response.json().error, "too_many_requests");
+  assert.equal(response.headers["set-cookie"], undefined);
 });

@@ -399,62 +399,92 @@ export async function buildDevServer(
     });
     // Registered here, never by the production server. Reuse redemption so
     // sessions, revocation and existing-ballot confirmation stay identical.
-    app.post("/api/dev/sign-in", async (request, reply) => {
-      const local = ["localhost", "127.0.0.1", "[::1]"].includes(
-        new URL(config.webOrigin).hostname,
-      );
-      if (!local || request.headers.origin !== config.webOrigin) {
-        return reply.code(403).send({
-          error: "local_only",
-          message: "Use the local app to sign in with the test account.",
+    app.post(
+      "/api/dev/sign-in",
+      { config: { rateLimit: { max: 100, timeWindow: "1 minute" } } },
+      async (request, reply) => {
+        const local = ["localhost", "127.0.0.1", "[::1]"].includes(
+          new URL(config.webOrigin).hostname,
+        );
+        if (!local || request.headers.origin !== config.webOrigin) {
+          return reply.code(403).send({
+            error: "local_only",
+            message: "Use the local app to sign in with the test account.",
+          });
+        }
+        const body = request.body as {
+          email?: unknown;
+          proofEmailsOptIn?: unknown;
+          community?: unknown;
+        } | null;
+        if (typeof body?.email !== "string") {
+          return reply.code(400).send({
+            error: "bad_request",
+            message: "Enter your email address.",
+          });
+        }
+        if (body.email.trim().toLowerCase() !== "demo@example.test") {
+          return reply.code(400).send({
+            error: "demo_account_only",
+            message: "Use demo@example.test for local test sign-in.",
+          });
+        }
+        if (
+          (body.proofEmailsOptIn !== undefined &&
+            typeof body.proofEmailsOptIn !== "boolean") ||
+          (body.community !== undefined && typeof body.community !== "string")
+        ) {
+          return reply.code(400).send({
+            error: "bad_request",
+            message: "Choose a community and say yes or no to updates.",
+          });
+        }
+        // A request owns its token: concurrent logins never consult a shared
+        // console mailbox. Existing pending email links cannot block this fixed
+        // local account. The route still has its own per-client rate limit.
+        let token: string | undefined;
+        const demoClaims = new ClaimService(
+          {
+            membership: new DomainAllowlist(storage.domains),
+            voters: storage.voters,
+            claims: storage.claims,
+            mailer: new ConsoleMailer(() => {}),
+            linkFor: (value) => {
+              token = value;
+              return value;
+            },
+          },
+          { maxLiveLinksPerEmail: Number.POSITIVE_INFINITY },
+        );
+        const issued = await demoClaims.requestLink(body.email, {
+          proofEmailsOptIn: body.proofEmailsOptIn === true,
+          ...(typeof body.community === "string"
+            ? { community: body.community }
+            : {}),
         });
-      }
-      const body = request.body as { email?: unknown } | null;
-      if (typeof body?.email !== "string") {
-        return reply.code(400).send({
-          error: "bad_request",
-          message: "Enter your email address.",
+        if (issued.status === "unknown_community") {
+          return reply.code(400).send({
+            error: "unknown_community",
+            message: "That address cannot sign in to that community.",
+          });
+        }
+        if (issued.status !== "sent" || !token)
+          throw new Error("local sign-in did not produce a claim");
+        const redeemed = await app.inject({
+          method: "POST",
+          url: "/api/sign-in/redeem",
+          remoteAddress: request.ip,
+          headers: { cookie: request.headers.cookie ?? "" },
+          payload: { token },
         });
-      }
-      if (body.email.trim().toLowerCase() !== "demo@example.test") {
-        return reply.code(400).send({
-          error: "demo_account_only",
-          message: "Use demo@example.test for local test sign-in.",
-        });
-      }
-      const sent = await app.inject({
-        method: "POST",
-        url: "/api/sign-in",
-        remoteAddress: request.ip,
-        payload: body,
-      });
-      // An earlier attempt from the normal email flow may still be pending.
-      // It is this same reserved account; redeem its outstanding local link.
-      const pending =
-        sent.statusCode === 429 && sent.json().error === "link_already_sent";
-      if (sent.statusCode !== 200 && !pending) {
+        const cookie = redeemed.headers["set-cookie"];
+        if (cookie) reply.header("set-cookie", cookie);
         return reply
-          .code(sent.statusCode)
+          .code(redeemed.statusCode)
           .type("application/json")
-          .send(sent.body);
-      }
-      const link = mailer.lastTo("demo@example.test");
-      const token = link && new URL(link.body).searchParams.get("token");
-      if (!token) throw new Error("local sign-in did not produce a claim");
-      const redeemed = await app.inject({
-        method: "POST",
-        url: "/api/sign-in/redeem",
-        remoteAddress: request.ip,
-        headers: { cookie: request.headers.cookie ?? "" },
-        payload: { token },
-      });
-      const cookie = redeemed.headers["set-cookie"];
-      if (cookie) reply.header("set-cookie", cookie);
-      return reply
-        .code(redeemed.statusCode)
-        .type("application/json")
-        .send(redeemed.body);
-    });
+          .send(redeemed.body);
+      },
+    );
     if (pool) {
       // This server opened the pool, so closing the server closes it.
       app.addHook("onClose", async () => {
@@ -570,7 +600,8 @@ async function main(): Promise<void> {
       `  community "${SEED.community}" is @${SEED.domain}; any other address signs in with none`,
       `  @${SHARED_DOMAIN.domain} is asked to choose: ${SHARED_DOMAIN.communities.join(" or ")}`,
       ...SEED.polls.map((poll) => `  poll "${poll.id}": ${poll.question}`),
-      "  sign-in links are printed here; paste one into the browser",
+      "  demo@example.test signs in directly from the local browser form",
+      "  other sign-in links are printed here; paste one into the browser",
     ].join("\n"),
   );
 }

@@ -20,10 +20,11 @@ this one address to `POST /api/dev/sign-in` with the usual sign-in body.
 The route exists only in `buildDevServer`, requires an exact `Origin` matching
 the configured loopback web origin (`localhost`, `127.0.0.1` or `[::1]`), and
 returns 403 `local_only` otherwise. Other addresses return 400 `demo_account_only`.
-Malformed bodies return 400 `bad_request`; ordinary sign-in validation and
-rate-limit errors are preserved. Success returns 200 `status: "signed_in"`,
+Malformed bodies return 400 `bad_request`; an invalid community returns 400
+`unknown_community`. More than 100 attempts per client per minute returns 429
+`too_many_requests`. Pending email links do not block this local shortcut. Success returns 200 `status: "signed_in"`,
 `voter` and `firstTime`, with the normal session cookie. It requests and redeems
-a console magic link internally, including opt-in, session generation and
+a request-specific magic link internally without printing it, including opt-in, session generation and
 confirmation of this browser's existing ballot. Tokens are never returned.
 
 Production does not register this route (404) and its client always uses
