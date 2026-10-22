@@ -330,6 +330,12 @@ function LinkSent({
       <p className="signin__lede">
         We sent a link to <b>{email}</b>. Open it and you are in.
       </p>
+      {import.meta.env.DEV ? (
+        <p className="signin__lede">
+          Local development: <a href="/api/dev/mailbox">Open local mailbox</a>{" "}
+          to read your sign-in email.
+        </p>
+      ) : null}
       <button className="signin__again" type="button" onClick={onUseAnother}>
         Use a different email
       </button>

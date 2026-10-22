@@ -38,7 +38,11 @@ pnpm --filter @odc/pulse dev       # API on http://127.0.0.1:8080
 pnpm --filter @odc/pulse-web dev   # app on http://localhost:5173
 ```
 
-- No email is sent. Sign-in links print in the API's terminal.
+- Enter any test email in the ordinary sign-in form. On Check your email,
+  choose **Open local mailbox**, then click the message's sign-in link. The
+  mailbox is also at `http://localhost:5173/api/dev/mailbox`.
+- No email is sent externally. The local mailbox captures messages; links also
+  print in the API terminal. Production has no local mailbox or sign-in shortcut.
 - Three demo polls load from `src/dev-server.ts`.
 - `@example.test` emails join `demo-community`. `@both.example.test` emails pick
   between two communities. Other emails get no community.
@@ -57,6 +61,22 @@ pnpm --filter @odc/pulse-web dev   # app on http://localhost:5173
 | `PULSE_OWNER_EMAIL`      | unset, so nobody is owner                        |
 
 `PULSE_WEB_ORIGIN` is also the only `Origin` that poll creation accepts.
+
+Use `localhost:5173` consistently. If the port is occupied, stop the other web
+server first; changing the port also requires matching `PULSE_WEB_ORIGIN`.
+
+For a fresh test, restart the default in-memory API and clear this site's
+browser data. Signing out alone does not reset posts, the five-per-hour posting
+quota or the first-post acknowledgement. With Postgres, use only a disposable
+development database and the reset command below. Mailbox contents are always
+process-local and disappear on restart; request a fresh link afterward.
+
+Use separate addresses (for example `alice@example.test` and `bob@example.test`)
+to test independent accounts, and separate browser profiles when they must be
+signed in at the same time. `person@both.example.test` exercises community
+selection. Set `PULSE_OWNER_EMAIL` to a test address before starting the API to
+test owner permissions. Local capture tests the actual magic-link flow; verify
+real email delivery separately before release.
 
 ## Test
 

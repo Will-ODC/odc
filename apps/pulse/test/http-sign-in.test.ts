@@ -674,3 +674,27 @@ test("being_asked_to_choose_counts_against_the_per_client_rate_limit", async () 
   assert.equal(blocked.statusCode, 429);
   assert.equal(blocked.json().error, "too_many_requests");
 });
+
+test("production server has no local mailbox or shortcut and still emails every account", async (t) => {
+  const h = await setup({}, true);
+  t.after(() => h.app.close());
+  const demo = await h.app.inject({
+    method: "POST",
+    url: "/api/dev/sign-in",
+    headers: { origin: "http://localhost:5173" },
+    payload: { email: "demo@example.test" },
+  });
+  assert.equal(demo.statusCode, 404);
+  assert.equal(
+    (await h.app.inject({ url: "/api/dev/mailbox" })).statusCode,
+    404,
+  );
+  const normal = await h.app.inject({
+    method: "POST",
+    url: "/api/sign-in",
+    payload: { email: "demo@example.test" },
+  });
+  assert.equal(normal.json().status, "sent");
+  assert.equal(normal.headers["set-cookie"], undefined);
+  assert.equal(h.mailer.sent.length, 1);
+});
