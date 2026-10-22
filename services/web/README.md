@@ -1,6 +1,6 @@
 # web
 
-**Status: not started. Blocked on contracts/ freeze (Phase 0). Phase: 2.**
+**Status: not started. Phase 2 — builds against the contracts RELEASE CANDIDATE (ADR-0007), with mocks until Phase 1 lands; nothing waits on the freeze.**
 
 The human client. Talks only to public APIs.
 
