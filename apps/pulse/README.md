@@ -38,7 +38,11 @@ pnpm --filter @odc/pulse dev       # API on http://127.0.0.1:8080
 pnpm --filter @odc/pulse-web dev   # app on http://localhost:5173
 ```
 
-- No email is sent. Sign-in links print in the API's terminal.
+- In the ordinary sign-in form, enter `demo@example.test` and Continue to sign
+  in immediately, without email or a password. This shared test account works
+  only with the development server and a loopback web origin. Use a disposable
+  development database. The production server has no shortcut.
+- No email is sent locally. Other accounts' sign-in links print in the API's terminal.
 - Three demo polls load from `src/dev-server.ts`.
 - `@example.test` emails join `demo-community`. `@both.example.test` emails pick
   between two communities. Other emails get no community.

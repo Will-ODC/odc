@@ -62,6 +62,12 @@ export function App({
   const [announced, setAnnounced] = useState("");
   /** The question this browser has just posted, until dismissed or left. */
   const [justPosted, setJustPosted] = useState<string | null>(null);
+  const signedIn = () => {
+    const to = takeReturn(browserStore());
+    setRestoreDraft(to?.kind === "newPoll");
+    setAnnounced("Signed in");
+    browser.replace(to ?? { kind: "conversation", pollId: LANDS_ON });
+  };
   if (
     justPosted !== null &&
     !(at.kind === "conversation" && at.pollId === justPosted)
@@ -100,6 +106,7 @@ export function App({
           <SignInPage>
             <SignIn
               api={api}
+              onSignedIn={signedIn}
               {...(at.returnTo ? { returnTo: at.returnTo } : {})}
             />
           </SignInPage>
@@ -115,16 +122,7 @@ export function App({
                * redeemed, so leaving that URL in the history would hand the back
                * button a link that can now only answer "already used".
                */
-              onSignedIn={() => {
-                // The question "Confirm with your email" was pressed on, or
-                // the posting form, when this browser remembers one (#353).
-                const to = takeReturn(browserStore());
-                setRestoreDraft(to?.kind === "newPoll");
-                setAnnounced("Signed in");
-                browser.replace(
-                  to ?? { kind: "conversation", pollId: LANDS_ON },
-                );
-              }}
+              onSignedIn={signedIn}
               onAskAgain={() => browser.replace({ kind: "signIn" })}
             />
           </SignInPage>

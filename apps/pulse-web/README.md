@@ -39,6 +39,12 @@ container, so the page and the API share one address.
 | `/sign-in?token=…`     | Where emailed sign-in links land; goes straight back to where you were. |
 | `/preview/chat`        | A prototype with sample data only.                                      |
 
+For browser-only local testing, run both apps with their `dev` commands, open
+`http://localhost:5173/sign-in?next=new`, enter `demo@example.test` and Continue.
+No password or email step is needed. The development API creates a normal
+session for this shared test account. Other addresses use console magic links;
+production always uses email verification. Use a disposable development database.
+
 The vote page, sign-in and question creation call the API. Each question opens
 with its vote card expanded. Choose an answer, then press Submit to save it.
 You can close the card and reopen it with Vote. **Show me how** walks through

@@ -494,3 +494,24 @@ describe("listing public questions", () => {
     );
   });
 });
+
+describe("local test account sign-in", () => {
+  afterEach(() => vi.unstubAllEnvs());
+  it("uses the development route and reports a completed login", async () => {
+    vi.stubEnv("DEV", true);
+    const calls = stubFetch({ body: JSON.stringify({ status: "signed_in" }) });
+    expect(
+      await new HttpPulseApi().requestLink(" DEMO@example.test ", false),
+    ).toEqual({ status: "signed_in" });
+    expect(calls[0]?.url).toBe("/api/dev/sign-in");
+    expect(calls[0]?.init.credentials).toBe("same-origin");
+  });
+  it("uses normal email verification in production for the same address", async () => {
+    vi.stubEnv("DEV", false);
+    const calls = stubFetch({ body: JSON.stringify({ status: "sent" }) });
+    expect(
+      await new HttpPulseApi().requestLink("demo@example.test", false),
+    ).toEqual({ status: "sent" });
+    expect(calls[0]?.url).toBe("/api/sign-in");
+  });
+});

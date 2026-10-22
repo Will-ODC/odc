@@ -651,3 +651,29 @@ describe("when the address belongs to more than one community", () => {
     expect(screen.queryByRole("heading", { name: QUESTION })).toBeNull();
   });
 });
+
+it("completes local sign-in with the ordinary keyboard form without an email prompt", async () => {
+  const user = userEvent.setup();
+  const onSignedIn = vi.fn();
+  render(
+    <SignIn
+      api={stubApi({ requestLink: async () => ({ status: "signed_in" }) })}
+      onSignedIn={onSignedIn}
+    />,
+  );
+  await user.click(field());
+  await user.type(field(), "demo@example.test");
+  await user.keyboard("{Enter}");
+  await waitFor(() => expect(onSignedIn).toHaveBeenCalledTimes(1));
+  expect(screen.queryByText("Check your email.")).toBeNull();
+});
+
+it("hides the local testing hint in production", () => {
+  vi.stubEnv("DEV", false);
+  try {
+    render(<SignIn api={stubApi()} />);
+    expect(screen.queryByText(/Local testing:/)).toBeNull();
+  } finally {
+    vi.unstubAllEnvs();
+  }
+});

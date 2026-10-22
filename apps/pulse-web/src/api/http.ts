@@ -45,9 +45,14 @@ export class HttpPulseApi implements PulseApi {
     // Anyone with a valid address gets a link (ADR-0030). The one refusal that
     // is really a question — "which community?" (P2) — comes back as an answer;
     // every other refusal throws.
-    const body = await this.#send<{ message?: unknown }, ChooseCommunity>(
+    const localDemo =
+      import.meta.env.DEV && email.trim().toLowerCase() === "demo@example.test";
+    const body = await this.#send<
+      { status?: unknown; message?: unknown },
+      ChooseCommunity
+    >(
       "POST",
-      "/sign-in",
+      localDemo ? "/dev/sign-in" : "/sign-in",
       {
         email,
         proofEmailsOptIn,
@@ -56,6 +61,8 @@ export class HttpPulseApi implements PulseApi {
       chooseCommunity,
     );
     if (body instanceof Answered) return body.value;
+    if (localDemo && body.status === "signed_in")
+      return { status: "signed_in" };
     // The server's own "check your email" sentence, carried rather than
     // dropped: the screen that follows should not have to invent copy the
     // API already documents as safe to show.

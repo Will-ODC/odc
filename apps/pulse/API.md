@@ -12,6 +12,25 @@ route.
 
 ## Signing in
 
+### Local development account
+
+The ordinary browser form accepts `demo@example.test` without email or a
+password when running both apps with `pnpm dev`. The development client sends
+this one address to `POST /api/dev/sign-in` with the usual sign-in body.
+The route exists only in `buildDevServer`, requires an exact `Origin` matching
+the configured loopback web origin (`localhost`, `127.0.0.1` or `[::1]`), and
+returns 403 `local_only` otherwise. Other addresses return 400 `demo_account_only`.
+Malformed bodies return 400 `bad_request`; ordinary sign-in validation and
+rate-limit errors are preserved. Success returns 200 `status: "signed_in"`,
+`voter` and `firstTime`, with the normal session cookie. It requests and redeems
+a console magic link internally, including opt-in, session generation and
+confirmation of this browser's existing ballot. Tokens are never returned.
+
+Production does not register this route (404) and its client always uses
+`POST /api/sign-in`, including for this test address. Other local accounts also
+use that ordinary email-link flow. The fixed account is shared test data, not
+proof of control of an inbox. Use only a disposable development database.
+
 Identity is an email address and nothing stronger. There are no passwords. **Anyone
 with a working address may sign in** (ADR-0030). The address's domain decides only
 which community, if any, the person belongs to: a domain listed in a table names a

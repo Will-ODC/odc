@@ -397,6 +397,64 @@ export async function buildDevServer(
       // clicking through the flow for the tenth time, not someone mining.
       signInRateLimit: { max: 100, timeWindow: "1 minute" },
     });
+    // Registered here, never by the production server. Reuse redemption so
+    // sessions, revocation and existing-ballot confirmation stay identical.
+    app.post("/api/dev/sign-in", async (request, reply) => {
+      const local = ["localhost", "127.0.0.1", "[::1]"].includes(
+        new URL(config.webOrigin).hostname,
+      );
+      if (!local || request.headers.origin !== config.webOrigin) {
+        return reply.code(403).send({
+          error: "local_only",
+          message: "Use the local app to sign in with the test account.",
+        });
+      }
+      const body = request.body as { email?: unknown } | null;
+      if (typeof body?.email !== "string") {
+        return reply.code(400).send({
+          error: "bad_request",
+          message: "Enter your email address.",
+        });
+      }
+      if (body.email.trim().toLowerCase() !== "demo@example.test") {
+        return reply.code(400).send({
+          error: "demo_account_only",
+          message: "Use demo@example.test for local test sign-in.",
+        });
+      }
+      const sent = await app.inject({
+        method: "POST",
+        url: "/api/sign-in",
+        remoteAddress: request.ip,
+        payload: body,
+      });
+      // An earlier attempt from the normal email flow may still be pending.
+      // It is this same reserved account; redeem its outstanding local link.
+      const pending =
+        sent.statusCode === 429 && sent.json().error === "link_already_sent";
+      if (sent.statusCode !== 200 && !pending) {
+        return reply
+          .code(sent.statusCode)
+          .type("application/json")
+          .send(sent.body);
+      }
+      const link = mailer.lastTo("demo@example.test");
+      const token = link && new URL(link.body).searchParams.get("token");
+      if (!token) throw new Error("local sign-in did not produce a claim");
+      const redeemed = await app.inject({
+        method: "POST",
+        url: "/api/sign-in/redeem",
+        remoteAddress: request.ip,
+        headers: { cookie: request.headers.cookie ?? "" },
+        payload: { token },
+      });
+      const cookie = redeemed.headers["set-cookie"];
+      if (cookie) reply.header("set-cookie", cookie);
+      return reply
+        .code(redeemed.statusCode)
+        .type("application/json")
+        .send(redeemed.body);
+    });
     if (pool) {
       // This server opened the pool, so closing the server closes it.
       app.addHook("onClose", async () => {
