@@ -1,7 +1,7 @@
 # Export Format — contracts/export-format.md
 
-**Version:** 5
-**Status:** DRAFTING (Phase 0 · T4a, amended T9a/ADR-0013 and ADR-0019). Not
+**Version:** 6
+**Status:** RELEASE CANDIDATE (T9a; Phase 0 · T4a, amended T9a/ADR-0013 and ADR-0019). Not
 frozen.
 **Companion specs:** `event-schema.md` (envelope), `hashing.md` (preimage +
 `hash`), `read-api.md` (the online read interface), `evolution.md` (versioning).

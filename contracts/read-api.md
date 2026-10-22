@@ -1,7 +1,7 @@
 # Read API — contracts/read-api.md
 
-**Version:** 3
-**Status:** DRAFTING (Phase 0 · T4, amended T9 re-audits #408 and #415). Not frozen.
+**Version:** 4
+**Status:** RELEASE CANDIDATE (T9a; Phase 0 · T4, amended T9 re-audits #408 and #415). Not frozen.
 **Companion specs:** `event-schema.md` (envelope), `hashing.md` (`hash`),
 `export-format.md` (the file form of the same events), `evolution.md`.
 
