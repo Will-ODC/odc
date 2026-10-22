@@ -1,7 +1,7 @@
 # Event Schema — contracts/event-schema.md
 
-**Version:** 7
-**Status:** DRAFTING (Phase 0 · T3, amended T4a, T9a/ADR-0014, ADR-0016,
+**Version:** 8
+**Status:** RELEASE CANDIDATE (T9a; Phase 0 · T3, amended T4a, T9a/ADR-0014, ADR-0016,
 ADR-0019, ADR-0029, ADR-0034, and ADR-0038). Not frozen.
 **Companion specs:** `event-types.md` (payloads), `ids.md` (identifiers),
 `hashing.md` (byte-exact preimage — T4), `export-format.md` (NDJSON — T4).
