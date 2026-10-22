@@ -60,10 +60,13 @@ never share state:
   issue or choice, because the two records together rebuild the join. Identity
   keeps a request id only while the push is unresolved. The signer keeps, per
   issue, the set of request ids it has admitted, with nothing beside them (no
-  batch, choice, order or time), until that issue's last seal, and deletes them
-  then. A retry of an id already in the set returns "accepted" without
-  admitting again, so a push that timed out before a seal cannot become a
-  second ballot after it (ET-20).
+  batch, choice, order or time), stored unordered: no auto-increment key, no
+  `created_at` column, nothing that brings back arrival order. It answers any
+  id in the set "accepted" without admitting again, including after the
+  issue's last seal, so a push that timed out cannot become a second ballot
+  (ET-20) or a counted ballot identity rolled back. It deletes an issue's set
+  only when identity calls the signer's public "release issue" endpoint, which
+  identity calls only once every push for that issue has a definite answer.
 
 No contract change for ballots: `vote_cast` v1 and HA-15 stay as they are.
 ET-25 already says it "fixes when the decision is made, not which component
