@@ -1,9 +1,9 @@
 # ADR-0043: A separate registrar signer, and position-free registration
 
-- **Status:** accepted (operator decisions, Will, 2026-10-21). **Decision 4
-  conflicts with the wording of charter §10 item 6** and does not take effect
-  until the operator settles that sentence (see "Charter check"). Decisions 1
-  to 3 stand without it.
+- **Status:** accepted (operator decisions, Will, 2026-10-21), all four
+  decisions. Decision 4 needs charter §10 item 6 amended; Will approved that
+  amendment on 2026-10-21, and it lands in a separate follow-up PR (see
+  "Charter check").
 - **Date:** 2026-10-21
 - **Phase:** 1
 - **Settles:** S-C and NS-2 (`memory/OPEN-QUESTIONS-archive.md`, "The registrar
@@ -187,8 +187,8 @@ Rules that follow:
 - **Q-F: threshold signing (FROST) now.** Stronger, deferred for cost and
   maturity; reconsidered before the T10 freeze.
 - **Decision 4: the signer as a separately stored part of identity.** Not
-  chosen, because one service boundary would hold both halves. It remains the
-  fallback if the charter conflict below is settled the other way.
+  chosen, because one service boundary would hold both halves. This would have
+  kept the charter's old wording; Will chose to amend the charter instead.
 
 ## Consequences
 
@@ -217,7 +217,7 @@ Rules that follow:
    `DOMAIN`, so it can never equal any `SIGN_PRE`; cover `type` and `version`;
    cover the chain's identity, the genesis hash (ET-7a), as 64 lowercase-hex
    characters, so a registration cannot be replayed onto another chain or a
-   fork; cover every payload key except `sig` (today only `pubkey`); and
+   fork (Will's decision, 2026-10-21: keep chain binding); cover every payload key except `sig` (today only `pubkey`); and
    exclude `seq`, `ts` and `prev_hash`. Encodings reuse `ENC_STR` and `ENC_INT`.
    The exact tag bytes and a worked hand-verifiable example are the contracts
    PR's to pin.
@@ -248,17 +248,17 @@ Rules that follow:
 - `memory/OPEN-QUESTIONS.md` and `-archive.md`: S-C, NS-2 and Q-F moved to
   the archive with pointers here; the "Registrar-side ballot privacy" entry
   notes that custody is settled here. Updated in this PR.
-- `docs/charter.md` §10 item 6: **conflicts with decision 4, not edited**
-  (Charter check).
+- `docs/charter.md` §10 item 6: **owed.** The amendment is approved by Will
+  (Charter check) and lands in the follow-up PR below, not here.
 - **Not updated here, owed:** `contracts/event-types.md` ET-9a, the
   `vote_cast` introduction and ET-21, plus `hashing.md` (the contracts PR
   above); `services/ledger/CLAUDE.md` (write-path bullet, `vote_cast` key
   "held by identity", custody bullet), `services/identity/CLAUDE.md`
   (registration and registrar bullets), `services/mcp/CLAUDE.md` and
   `services/web/CLAUDE.md` (who signs; v2 registration), and the root
-  `CLAUDE.md` repo map (`services/signer`). These are agent-instruction files;
-  their edits need the operator's go-ahead and belong to the service-scaffold
-  PR. `memory/STATE.md` is updated at merge time, by its owner.
+  `CLAUDE.md` repo map (`services/signer`). Will decided (2026-10-21) that
+  these land in **one follow-up PR together with the charter amendment**, and
+  that it merges **before any ledger or identity lead starts**. `memory/STATE.md` is updated at merge time, by its owner.
 
 ## Charter check
 
@@ -271,10 +271,13 @@ Rules that follow:
 - **P3, P4.** Untouched.
 - **§5 receipt-freeness.** Holds "against everyone but the registrar", now two
   components; ET-21a now binds the signer too.
-- **Conflict with §10 item 6.** The charter says of the identity service: "It is
-  also the ballot registrar: it decides who may vote, signs every accepted
-  ballot, and in v1 is trusted by policy not to add, drop or link ballots".
-  Decision 4 moves the signing to `services/signer`. Per the charter's
-  precedence the charter was not edited. Until the operator amends that
-  sentence, decisions 1 to 3 can be built with the signer as a separately
-  stored part of identity, which keeps the charter's wording true.
+- **§10 item 6 is amended, by Will's decision.** The charter says of the
+  identity service: "It is also the ballot registrar: it decides who may vote,
+  signs every accepted ballot, and in v1 is trusted by policy not to add, drop
+  or link ballots". Decision 4 contradicts that. Will approved amending it on
+  2026-10-21: the registrar role is split; identity decides who may vote; a
+  separate signer service, holding no linkage map, signs every admitted
+  ballot. This PR does not edit the charter. The amended wording is owed and
+  lands in the follow-up PR with the CLAUDE.md files, before any ledger or
+  identity lead starts. Until that PR merges, the charter's current wording
+  stands and no code may be built against decision 4.
