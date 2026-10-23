@@ -90,15 +90,16 @@ function expectationFor(v: Vector, all: Vector[]): Expectation {
   return { kind: "refuse", line: v.expect.lines[0] ?? 0 };
 }
 
-/** Feed lines one at a time; return the first refused line, or undefined. */
-function feed(bytes: Uint8Array): number | undefined {
+/** Feed lines one at a time; return the first refused line and its kind. */
+function feed(bytes: Uint8Array): { line: number; kind: string } | undefined {
   const { records, unterminated } = splitExport(bytes);
   let state = initialState();
   for (let i = 0; i < records.length; i++) {
     // A missing final LF is a framing fault no single line shows (EX-4, EX-20).
-    if (unterminated && i === records.length - 1) return i + 1;
+    if (unterminated && i === records.length - 1)
+      return { line: i + 1, kind: "invalid" };
     const r = checkLine(state, records[i] ?? new Uint8Array());
-    if (!r.ok) return i + 1;
+    if (!r.ok) return { line: i + 1, kind: r.refusal.kind };
     state = r.state;
   }
   return undefined;
@@ -141,9 +142,21 @@ describe("golden vectors (contracts/fixtures/index.json)", () => {
       const key = `${v.expect.verdict}${v.head !== undefined || v.chain !== undefined ? " (flags dropped)" : ""}`;
       tally[key] = (tally[key] ?? 0) + 1;
       const refused = feed(bytes);
-      if (refused !== want) {
+      // EV-7/EV-17: an unregistered line past line 1 makes the export PARTIAL
+      // ("unregistered"); every other refusal is INVALID ("invalid").
+      const wantKind =
+        exp.kind === "refuse" &&
+        (exp.early === true || v.expect.verdict === "PARTIAL") &&
+        exp.line > 1
+          ? "unregistered"
+          : "invalid";
+      if (refused?.line !== want) {
         disagreements.push(
-          `${v.id}: checkLine refused ${refused ?? "none"}, want ${want ?? "none"}`,
+          `${v.id}: checkLine refused ${refused?.line ?? "none"}, want ${want ?? "none"}`,
+        );
+      } else if (refused !== undefined && refused.kind !== wantKind) {
+        disagreements.push(
+          `${v.id}: refusal kind ${refused.kind}, want ${wantKind}`,
         );
       }
     }
@@ -156,6 +169,15 @@ describe("golden vectors (contracts/fixtures/index.json)", () => {
     for (const line of summary) t.diagnostic(line);
     console.log(summary.join("\n"));
     assert.equal(exercised + skipped.length, all.length);
+    assert.equal(skipped.length, 1);
+    assert.deepEqual(tally, {
+      VALID: 19,
+      "VALID (flags dropped)": 4,
+      PARTIAL: 15,
+      INVALID: 105,
+      "INVALID (flags dropped)": 6,
+    });
+    assert.equal(early.length, 7);
     assert.deepEqual(disagreements, []);
   });
 });

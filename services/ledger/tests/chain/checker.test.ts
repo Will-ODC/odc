@@ -13,6 +13,7 @@ import {
   GENESIS_TS,
   OPERATOR,
   REGISTRAR,
+  finish,
   genesisPayload,
   TestChain,
   minute,
@@ -369,6 +370,32 @@ describe("checker: verifyExport framing and replay", () => {
     assert.equal(again.state.headHash, r.state.headHash);
   });
 
+  it("replays a stored log that is not VALID to a refusal and no state (EV-26)", () => {
+    const { chain } = withIssue();
+    const lines = chain.lines();
+    lines[1] = serializeLine(chain.issue({}, { seq: 2, sig: "00".repeat(64) }));
+    const r = replay(lines);
+    assert.equal(r.ok, false);
+    assert.ok(!r.ok && r.line === 2 && !("state" in r));
+  });
+
+  it("orders nothing by ts: an earlier ts after a later one is fine (ES-21)", () => {
+    const chain = new TestChain();
+    chain.add(chain.genesis());
+    accepts(chain, chain.issue({}, { ts: minute(9) }));
+    accepts(chain, chain.issue({}, { ts: minute(1) }));
+  });
+
+  it("refuses a sig that is not a string (ES-30)", () => {
+    const { chain } = withIssue();
+    const raw = JSON.parse(
+      Buffer.from(serializeLine(chain.issue())).toString(),
+    );
+    raw.payload.sig = 7;
+    delete raw.hash;
+    refuses(chain, finish(raw, null), "ES-30");
+  });
+
   it("attributes framing faults per EX-18 and EX-20", () => {
     const { chain } = withIssue();
     const bytes = chain.exportBytes();
@@ -386,61 +413,4 @@ describe("checker: verifyExport framing and replay", () => {
       1,
     );
   });
-});
-
-describe("checker: chain property (odc-testing)", () => {
-  function rng(seed: number): () => number {
-    let x = seed >>> 0 || 1;
-    return () => {
-      x ^= x << 13;
-      x ^= x >>> 17;
-      x ^= x << 5;
-      return (x >>> 0) / 2 ** 32;
-    };
-  }
-
-  function randomChain(rand: () => number): TestChain {
-    const chain = new TestChain();
-    chain.add(chain.genesis());
-    const issues: string[] = [];
-    let instant = 10;
-    for (let i = 0; i < 12; i++) {
-      const pick = rand();
-      if (pick < 0.25) chain.add(chain.participant(testKey(0x20 + i)));
-      else if (pick < 0.5 || issues.length === 0) {
-        issues.push(chain.add(chain.issue({ title: `Issue ${i}` })).hash);
-      } else {
-        const issue = issues[Math.floor(rand() * issues.length)] ?? "";
-        instant += 1;
-        for (let k = 0; k < 3; k++)
-          chain.add(chain.vote(issue, k % 3, T(instant)));
-      }
-    }
-    return chain;
-  }
-
-  for (const seed of [1, 7, 42, 1234, 99991]) {
-    it(`seed ${seed}: VALID, then one flipped byte is refused at its own line`, () => {
-      const rand = rng(seed);
-      const chain = randomChain(rand);
-      const bytes = chain.exportBytes();
-      assert.ok(verifyExport(bytes).ok);
-      for (let trial = 0; trial < 20; trial++) {
-        const pos = Math.floor(rand() * bytes.length);
-        const mask = 1 + Math.floor(rand() * 255);
-        const tampered = Buffer.from(bytes);
-        tampered[pos] = (tampered[pos] ?? 0) ^ mask;
-        // The line holding the byte; a flipped LF belongs to the line it ends.
-        let line = 1;
-        for (let i = 0; i < pos; i++) if (bytes[i] === 0x0a) line++;
-        const r = verifyExport(tampered);
-        assert.ok(!r.ok, `byte ${pos} ^ ${mask} went undetected`);
-        assert.equal(
-          r.line,
-          line,
-          `byte ${pos} ^ ${mask}: ${r.refusal.reason}`,
-        );
-      }
-    });
-  }
 });

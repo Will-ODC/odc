@@ -102,7 +102,7 @@ function keyOrRefuse(hex: string): VerificationKey {
 
 function sigOrRefuse(key: VerificationKey, event: Event, rule: string): void {
   const sig = event.payload.sig;
-  if (typeof sig !== "string") refuse("ES-18", "sig is not a string");
+  if (typeof sig !== "string") refuse("ES-30", "sig is not a string");
   const r = verifySignature(key, signingPreimage(event), sig);
   if (!r.ok) {
     throw new Refused({ ...r.refusal, reason: `${rule}: ${r.refusal.reason}` });
