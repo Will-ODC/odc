@@ -117,7 +117,7 @@ the same CI runs.
    lint and typecheck. The dev-server suite passed 18 tests with 10 Postgres
    cases skipped because no test database was configured. Both PRs passed CI
    before merge; no public deployment is claimed.
-2. **Latest requested UI refinement: #453**, a compact results banner with
+2. **Recommended results refinement: #453**, a compact results banner with
    vertical bars below the question/image/context and above comments. This
    remains unbuilt and is the recommended next implementation slice. Preserve current
    results visibility, all/confirmed counts, privacy and casting behavior.
@@ -157,6 +157,14 @@ the same CI runs.
 
 ## Backlog ownership (reviewed 2026-10-23)
 
+- New community direction: #457 owns readable community paths (proposed
+  `/c/<community-name>`, with old links preserved). #458 owns a linked
+  discussion/voting thread on creation, suspension, banning, restoration and
+  destruction/dissolution under constitutional and foundational rules.
+  These are unbuilt requests; policy questions are recorded once in
+  `memory/pulse-development.md`, "Community paths and lifecycle deliberation".
+  #440 still owns multiple verified memberships. URL work and lifecycle
+  deliberation do not authorize new enforcement or deletion behavior.
 - Reviewed all 73 then-open issues. #186 was closed as a duplicate of #425;
   its closed-first-question/no-saved-ballot regression is explicitly retained
   there. This is consolidation, not a claim the defect is fixed. Related order
@@ -177,8 +185,9 @@ the same CI runs.
 ## Next / not built
 
 - **The authoring and demo-feedback slices are complete** (#393/#403–#405).
-  Browse #260 and the #451/#452 layout are also merged. #453 is the latest
-  requested UI slice; poll-creation refinements still need scoping. See the
+  Browse #260 and the #451/#452 layout are also merged. #453 is the recommended
+  results slice; #457/#458 add community paths and lifecycle deliberation.
+  Poll-creation refinements still need scoping. See the
   current plan above. A local demo is available, but there is no claim of a public deploy.
 - Open feature issues: #296 photo and summary, #297 comments, #336 suggestions in
   the conversation page, #331-#333 desktop side columns and action follow-through,
@@ -208,6 +217,10 @@ the same CI runs.
 
 ## Open decisions (operator)
 
+- **Community lifecycle (#458):** governing/protected rules, creation and
+  moderation authority, eligible voters, decision thresholds, appeals,
+  state semantics and retention remain open. See the community deliberation
+  section in `memory/pulse-development.md`; no lifecycle rule is adopted.
 - **Pulse/core compatibility (#398, deferred):** which responsibilities stay
   with Pulse; how eligibility and identity cross the API boundary; how mutable
   recasts and approval choices map to core's v1 ballot rules; what the UI says

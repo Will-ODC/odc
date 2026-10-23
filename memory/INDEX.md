@@ -32,7 +32,8 @@ Do not apply charter rules to `apps/**`, and do not relax them anywhere else.
 - **Pulse:** sign-in, voting, confirmed votes, poll creation and public browsing
   are built. #451/#452 merged the bottom voting drawer, main-content results,
   Home browser and About introduction. The live tutorial is removed.
-  **Latest requested UI slice: #453 compact vertical-bar results above comments.**
+  **Requested results refinement: #453 compact vertical-bar results above comments.**
+  #457/#458 add community paths and lifecycle deliberation; rules remain open.
   Comments/replies, abuse reporting and MCP discovery remain unbuilt;
   issue ownership and the #186 → #425 consolidation are in `memory/pulse.md`.
   Poll-creation refinement still needs scoping. A deploy also
