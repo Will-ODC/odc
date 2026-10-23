@@ -15,6 +15,7 @@ export type Fault =
   | "tamper_payload" // changes the last event's choice, validly re-signed
   | "http_408" // request timeout status
   | "http_429" // rate limited
+  | "bad_request" // 400: the signer found the request malformed
   | "bare_404"; // 404 with no error code, like a wrong path or a proxy
 
 interface IssueBook {
@@ -128,6 +129,7 @@ export class FakeSigner {
     if (fault === "timeout") return null;
     if (fault === "malformed") return reply(200, { nope: true });
     if (fault === "http_408") return reply(408, { error: "timeout" });
+    if (fault === "bad_request") return reply(400, { error: "bad_request" });
     if (fault === "http_429") return reply(429, { error: "under_min" });
     if (fault === "bare_404") return reply(404, "not here");
     if (seal) return this.seal(seal[1] as string, body);
