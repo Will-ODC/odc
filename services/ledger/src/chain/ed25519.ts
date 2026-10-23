@@ -73,6 +73,9 @@ export function decodeVerificationKey(hex: string): KeyResult {
   try {
     point = ed25519.Point.fromBytes(bytes, false);
   } catch {
+    // ET-4b/ET-4c define the decoding; an encoding that is canonical but no
+    // curve point is labelled ET-5 here. The verdict and line are the same
+    // either way: the event's signature cannot verify.
     return invalid("ET-5", "key does not decode to a curve point");
   }
   if (!isPrimeOrder(point)) {
@@ -104,6 +107,9 @@ export function verifySignature(
   try {
     r = ed25519.Point.fromBytes(rBytes, false);
   } catch {
+    // Includes x = 0 with the sign bit set (RFC 8032 §5.1.3 rejects it; ET-4a
+    // pins only y < p). Labelled ET-5, as for keys above: the verdict is the
+    // same, since no such R can satisfy the equation.
     return invalid("ET-5", "sig R does not decode to a curve point");
   }
   const digest = createHash("sha512")

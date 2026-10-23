@@ -10,7 +10,10 @@ import {
   verifySignature,
   type VerificationKey,
 } from "../../src/chain/ed25519.js";
+import { parseLine, type Event } from "../../src/chain/canonical.js";
+import { signingPreimage } from "../../src/chain/hashing.js";
 import { sign, testKey } from "./support/builders.js";
+import { loadVectors, vectorLines } from "./support/fixtures.js";
 
 const msg = Buffer.from("ODC test message");
 const alice = testKey(0x11);
@@ -56,7 +59,7 @@ describe("Ed25519 verification (ET-4..ET-5)", () => {
     );
     const flipped =
       (parseInt(sig[0] ?? "0", 16) ^ 1).toString(16) + sig.slice(1);
-    assert.equal(verifySignature(key(alice.pk), msg, flipped).ok, false);
+    assert.equal(ruleOf(verifySignature(key(alice.pk), msg, flipped)), "ET-5");
   });
 
   it("rejects non-hex or uppercase sig (ES-31)", () => {
@@ -92,6 +95,44 @@ describe("Ed25519 verification (ET-4..ET-5)", () => {
       "hex",
     );
     assert.equal(ruleOf(verifySignature(key(alice.pk), msg, mutated)), "ET-4a");
+    // y = p + 1 with the sign bit set: bit 255 is cleared before the y < p
+    // test, not ignored, so this is still non-canonical.
+    const signedR = le32(P + 1n);
+    signedR[31] = (signedR[31] ?? 0) | 0x80;
+    const withSign = Buffer.concat([signedR, sig.subarray(32)]).toString("hex");
+    assert.equal(
+      ruleOf(verifySignature(key(alice.pk), msg, withSign)),
+      "ET-4a",
+    );
+  });
+
+  it("refuses an R with x = 0 and the sign bit set, even where S would fit", () => {
+    // R = identity (y = 1) with octet 31 |= 0x80, and S = k·a, so [S]B equals
+    // O + [k]A: it would verify if the encoding were decoded leniently.
+    const ext = ed25519.utils.getExtendedPublicKey(alice.seed);
+    const rBytes = Buffer.from("01" + "00".repeat(31), "hex");
+    rBytes[31] = 0x80;
+    const k =
+      leInt(
+        createHash("sha512")
+          .update(rBytes)
+          .update(ext.pointBytes)
+          .update(msg)
+          .digest(),
+      ) % L;
+    const sig = Buffer.concat([rBytes, le32((k * ext.scalar) % L)]);
+    const r = verifySignature(key(alice.pk), msg, sig.toString("hex"));
+    assert.equal(ruleOf(r), "ET-5");
+    assert.match(r.ok ? "" : r.refusal.reason, /R does not decode/);
+    // The order-2 point (y = p - 1, x = 0), also with the sign bit set.
+    const order2 = le32(P - 1n);
+    order2[31] = (order2[31] ?? 0) | 0x80;
+    const r2 = verifySignature(
+      key(alice.pk),
+      msg,
+      Buffer.concat([order2, sig.subarray(32)]).toString("hex"),
+    );
+    assert.match(r2.ok ? "" : r2.refusal.reason, /R does not decode/);
   });
 
   it("checks the cofactorless equation: R with a torsion component fails", () => {
@@ -174,5 +215,49 @@ describe("verification keys (ID-3, ET-4b, ET-4c)", () => {
   it("rejects an encoding that is no curve point", () => {
     // y = 2 has no x on edwards25519.
     assert.equal(ruleOf(decodeVerificationKey("02" + "00".repeat(31))), "ET-5");
+  });
+});
+
+describe("the golden vectors' keys and signatures", () => {
+  const vectors = loadVectors();
+  const line2Key = (id: string): string => {
+    const v = vectors.find((x) => x.id.startsWith(id));
+    assert.ok(v, id);
+    const parsed = parseLine(vectorLines(v)[1] as Buffer);
+    assert.ok(parsed.ok);
+    return String(parsed.event.payload.pubkey);
+  };
+
+  it("refuses the registration keys of 078 (ET-4b), 081 and 082 (ET-4c)", () => {
+    assert.equal(ruleOf(decodeVerificationKey(line2Key("078"))), "ET-4b");
+    assert.equal(ruleOf(decodeVerificationKey(line2Key("081"))), "ET-4c");
+    assert.equal(ruleOf(decodeVerificationKey(line2Key("082"))), "ET-4c");
+  });
+
+  it("verifies every signed event of every VALID vector over SIGN_PRE", () => {
+    let checked = 0;
+    for (const v of vectors.filter((x) => x.expect.verdict === "VALID")) {
+      let genesis: Event | null = null;
+      for (const line of vectorLines(v)) {
+        const parsed = parseLine(line);
+        assert.ok(parsed.ok, v.id);
+        const e = parsed.event;
+        if (e.type === "genesis") genesis = e;
+        const signer =
+          e.type === "participant_registered"
+            ? e.payload.pubkey
+            : e.type === "vote_cast"
+              ? genesis?.payload.registrar_pk
+              : genesis?.payload.operator_pk;
+        const r = verifySignature(
+          key(String(signer)),
+          signingPreimage(e),
+          String(e.payload.sig),
+        );
+        assert.ok(r.ok, `${v.id} seq ${e.seq}`);
+        checked++;
+      }
+    }
+    assert.ok(checked > 50, `checked ${checked}`);
   });
 });
