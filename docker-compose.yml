@@ -4,4 +4,20 @@
 # Each service block here includes its OWN postgres instance
 # (rule 1: no shared databases, ever — one db container per service).
 # Populated as services land in Phase 1+.
-services: {}
+services:
+  # The ledger's own Postgres (services/ledger/docker-compose.yml runs it
+  # alone). `ledger` is the migration role; the migrations create the runtime
+  # role `ledger_app`.
+  ledger-db:
+    image: postgres:17
+    environment:
+      POSTGRES_USER: ledger
+      POSTGRES_PASSWORD: ledger
+      POSTGRES_DB: ledger
+    ports:
+      - "127.0.0.1:5434:5432"
+    healthcheck:
+      test: ["CMD", "pg_isready", "-U", "ledger", "-d", "ledger"]
+      interval: 2s
+      timeout: 5s
+      retries: 15
