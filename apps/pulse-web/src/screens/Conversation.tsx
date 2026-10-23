@@ -309,7 +309,7 @@ function LoadedQuestion({
                   >
                     {answer.poll.question}
                   </button>
-                  <p>
+                  <p className="conversation__answer">
                     You picked{" "}
                     {answer.ballot
                       .map((index) => answer.poll.choices[index])
