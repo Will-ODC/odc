@@ -7,7 +7,7 @@ import { ApiError } from "../src/api/types.js";
 import { poll, stubApi } from "./stub-api.js";
 
 afterEach(cleanup);
-beforeEach(() => history.replaceState(null, "", "/"));
+beforeEach(() => history.replaceState(null, "", "/about"));
 async function begin() {
   await userEvent.click(screen.getByRole("button", { name: "Start voting" }));
   await userEvent.click(
@@ -37,7 +37,7 @@ it("explains three steps without contacting the API or showing unfinished media"
   expect(document.querySelector("video, iframe")).toBeNull();
 });
 
-it("starts the configured vote by keyboard without picking or casting, and keeps a welcome history entry", async () => {
+it("starts the configured vote by keyboard without picking or casting, and keeps an About history entry", async () => {
   const user = userEvent.setup();
   const read = vi.fn(async () =>
     poll({ id: "website-ui", question: "Which website layout?" }),

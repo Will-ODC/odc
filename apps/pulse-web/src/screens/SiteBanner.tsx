@@ -41,7 +41,7 @@ export function SiteBanner({
   onCancel: () => void;
 }) {
   const where = {
-    homeHref: pathOf({ kind: "welcome" }),
+    homeHref: pathOf({ kind: "browse", community: "pulse-general" }),
     postHref: pathOf({ kind: "newPoll" }),
     ...(onPostPage
       ? { currentHref: "/new" }

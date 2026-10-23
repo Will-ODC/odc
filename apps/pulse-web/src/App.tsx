@@ -11,7 +11,7 @@ import { Conversation } from "./screens/Conversation.js";
 import { ChatPreview } from "./screens/ChatPreview.js";
 import { Redeem } from "./screens/Redeem.js";
 import { SignIn } from "./screens/SignIn.js";
-import { Welcome } from "./screens/Welcome.js";
+import { About } from "./screens/About.js";
 import { Progress } from "./screens/Progress.js";
 import {
   FoundationQuestions,
@@ -79,10 +79,10 @@ export function App({
 
   function screenFor() {
     switch (at.kind) {
-      case "welcome":
+      case "about":
         return (
-          <Welcome
-            banner={<PageBanner api={api} currentHref="/" />}
+          <About
+            banner={<PageBanner api={api} currentHref="/about" />}
             onStart={() => browser.go({ kind: "progress" })}
           />
         );

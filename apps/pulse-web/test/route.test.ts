@@ -2,8 +2,11 @@ import { describe, expect, it } from "vitest";
 import { FIRST_POLL_ID, pathOf, routeFrom } from "../src/flow/route.js";
 
 describe("reading a URL", () => {
-  it("opens the welcome when the path says nothing", () => {
-    expect(routeFrom("/")).toEqual({ kind: "welcome" });
+  it("opens the browser when the path says nothing", () => {
+    expect(routeFrom("/")).toEqual({
+      kind: "browse",
+      community: "pulse-general",
+    });
   });
 
   it("starts the conversation wherever ?poll= says", () => {
@@ -149,8 +152,11 @@ describe("reading a URL", () => {
     });
   });
 
-  it("opens the welcome when ?poll= is empty", () => {
-    expect(routeFrom("/?poll=")).toEqual({ kind: "welcome" });
+  it("opens the browser when ?poll= is empty", () => {
+    expect(routeFrom("/?poll=")).toEqual({
+      kind: "browse",
+      community: "pulse-general",
+    });
   });
 });
 
@@ -204,7 +210,7 @@ describe("writing a URL", () => {
  */
 describe("the two directions agree", () => {
   const routes = [
-    { kind: "welcome" },
+    { kind: "about" },
     { kind: "progress" },
     { kind: "questions" },
     { kind: "conversation", pollId: FIRST_POLL_ID },
@@ -232,5 +238,12 @@ it("opens and round-trips the existing conversation alias", () => {
     const route = { kind: "conversation" as const, pollId };
     expect(routeFrom(pathOf(route))).toEqual(route);
   }
-  expect(routeFrom("/").kind).toBe("welcome");
+  expect(routeFrom("/").kind).toBe("browse");
+});
+
+it("opens About directly with case and trailing-slash normalization", () => {
+  for (const href of ["/about", "/About/", "/ABOUT"]) {
+    expect(routeFrom(href)).toEqual({ kind: "about" });
+  }
+  expect(pathOf({ kind: "about" })).toBe("/about");
 });

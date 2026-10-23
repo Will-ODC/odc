@@ -11,7 +11,7 @@ afterEach(() => {
   localStorage.clear();
 });
 const routes: Route[] = [
-  { kind: "welcome" },
+  { kind: "about" },
   { kind: "progress" },
   { kind: "questions" },
   { kind: "trust" },
@@ -45,9 +45,9 @@ it.each(routes)(
       "/",
     );
     expect(nav.queryByRole("link", { name: "Starting questions" })).toBeNull();
-    expect(
-      nav.getByRole("link", { name: "General" }).getAttribute("href"),
-    ).toBe("/browse?community=pulse-general");
+    expect(nav.getByRole("link", { name: "About" }).getAttribute("href")).toBe(
+      "/about",
+    );
     await user.click(
       await nav.findByRole("button", { name: "Your communities" }),
     );
@@ -64,7 +64,7 @@ it.each(routes)(
   },
 );
 
-it("marks the current community in the shared navigation", async () => {
+it("marks the public browser as Home in the shared navigation", async () => {
   render(
     <App
       route={{ kind: "browse", community: "pulse-general" }}
@@ -74,6 +74,6 @@ it("marks the current community in the shared navigation", async () => {
     />,
   );
   expect(
-    screen.getByRole("link", { name: "General" }).getAttribute("aria-current"),
+    screen.getByRole("link", { name: "Home" }).getAttribute("aria-current"),
   ).toBe("page");
 });
