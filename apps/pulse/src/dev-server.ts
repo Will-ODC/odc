@@ -485,9 +485,8 @@ async function seedPolls(votes: VotingStore): Promise<void> {
         if (!(await votes.getPoll(poll.id))) throw error;
       }
     }
-    if (LAUNCH_QUESTIONS.some((question) => question.id === poll.id)) {
-      await votes.setSeedCommunity(poll.id, "pulse-general");
-    }
+    // Every local seed belongs in the public Home/browser listing.
+    await votes.setSeedCommunity(poll.id, "pulse-general");
   }
 }
 
