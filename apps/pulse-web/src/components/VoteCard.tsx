@@ -27,6 +27,8 @@ export type VoteCardStatus =
   | { kind: "answered"; results: Results; changed: boolean };
 export interface VoteCardProps {
   question: string;
+  /** Results can live in the page instead of the voting card. */
+  presentation?: "card" | "results";
   /** Who posted it: "Posted anonymously" or "Posted by …". Left out for a
    *  question from before posting existed. */
   byline?: string;
@@ -71,6 +73,7 @@ export interface VoteCardProps {
 /** Controlled and presentational: the caller owns picks, sending and navigation. */
 export function VoteCard({
   question,
+  presentation = "card",
   byline,
   why,
   method,
@@ -152,6 +155,10 @@ export function VoteCard({
   // "Try again" on fresh results unmounts itself, and so does the panel the
   // failure replaces: when focus was on either, keep it on the results area
   // rather than let it fall to the page. Focus elsewhere is left alone.
+  useEffect(() => {
+    if (presentation === "results") panel.current?.focus();
+  }, [presentation]);
+
   const problem = Boolean(resultsProblem);
   const hadProblem = useRef(problem);
   useEffect(() => {
@@ -237,8 +244,13 @@ export function VoteCard({
   return (
     <section
       ref={card}
-      className="vote-card"
-      aria-labelledby={`${id}-question`}
+      className={
+        presentation === "results"
+          ? "vote-card vote-card--results"
+          : "vote-card"
+      }
+      aria-label={presentation === "results" ? question : undefined}
+      aria-labelledby={presentation === "card" ? `${id}-question` : undefined}
       onKeyDown={onKeyDown}
       onPointerDown={(event) => {
         // A second tap on the disabled Submit must not blur the pending status.
@@ -250,24 +262,28 @@ export function VoteCard({
           event.preventDefault();
       }}
     >
-      <header className="vote-card__top">
-        <span className="vote-card__heading">DECISION</span>
-        <button
-          type="button"
-          className="vote-card__close"
-          aria-label="Close"
-          onClick={onClose}
-        >
-          <span aria-hidden="true">×</span>
-        </button>
-      </header>
-      <h2 id={`${id}-question`} className="vote-card__question">
-        {question}
-      </h2>
-      {byline ? <p className="vote-card__why">{byline}</p> : null}
-      <p id={`${id}-why`} className="vote-card__why">
-        {why}
-      </p>
+      {presentation === "card" ? (
+        <>
+          <header className="vote-card__top">
+            <span className="vote-card__heading">DECISION</span>
+            <button
+              type="button"
+              className="vote-card__close"
+              aria-label="Close"
+              onClick={onClose}
+            >
+              <span aria-hidden="true">×</span>
+            </button>
+          </header>
+          <h2 id={`${id}-question`} className="vote-card__question">
+            {question}
+          </h2>
+          {byline ? <p className="vote-card__why">{byline}</p> : null}
+          <p id={`${id}-why`} className="vote-card__why">
+            {why}
+          </p>
+        </>
+      ) : null}
       {status.kind === "answered" ? (
         <>
           <p
@@ -314,29 +330,28 @@ export function VoteCard({
           ) : (
             <ResultsPanel
               results={status.results}
+              compact={presentation === "results"}
               yourChoices={picked}
               panelRef={panel}
             />
           )}
-          {/* The one way to /trust, beside the counts it explains. */}
-          {trustHref ? (
-            <p className="vote-card__note">
-              <a
-                className="vote-card__link"
-                href={trustHref}
-                aria-label="How votes count (opens in a new tab)"
-                target="_blank"
-                rel="noopener"
-              >
-                How votes count
-              </a>
-            </p>
-          ) : null}
           <div className="vote-card__actions">
             {onChangeAnswer ? (
               <button type="button" onClick={onChangeAnswer}>
                 Change my answer
               </button>
+            ) : null}
+            {trustHref ? (
+              <a
+                className="vote-card__info"
+                href={trustHref}
+                aria-label="How votes count (opens in a new tab)"
+                title="How votes count"
+                target="_blank"
+                rel="noopener noreferrer"
+              >
+                <span aria-hidden="true">i</span>
+              </a>
             ) : null}
             {onNext ? (
               <button type="button" onClick={onNext}>
@@ -344,7 +359,9 @@ export function VoteCard({
               </button>
             ) : null}
           </div>
-          <p className="vote-card__note">{privacyNote}</p>
+          {presentation === "card" ? (
+            <p className="vote-card__note">{privacyNote}</p>
+          ) : null}
         </>
       ) : (
         <>

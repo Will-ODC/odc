@@ -1,6 +1,6 @@
 # ODC mockup candidate context
 
-Updated: 2026-10-20
+Updated: 2026-10-23
 
 ## Pulse design of record and alternatives
 
@@ -9,16 +9,16 @@ mockup standing; a historical deck is not a description of the running app.
 
 | Record | Standing |
 | --- | --- |
-| `pulse-screens/09-chat-vote.html`; ADR-0035 | **Current conversation design of record.** The reusable vote card merged in PR #307. |
-| [PR #313](https://github.com/Will-ODC/odc/pull/313), #301; [PR #322](https://github.com/Will-ODC/odc/pull/322), #302 | **Built conversation layout.** Compact Vote panel at the top right on desktop, expanding above the composer on phone; one Close button and a Vote tab to reopen. #313 built it; #322 made conversation the default and retired `Run`, `SwipeBallot` and `ChoiceBallot`. |
+| `pulse-screens/09-chat-vote.html`; ADR-0035 | **Conversation design reference.** ADR-0044 supersedes card/results placement: bottom voting drawer, results below the saved answer in main content. |
+| [PR #313](https://github.com/Will-ODC/odc/pull/313), #301; [PR #322](https://github.com/Will-ODC/odc/pull/322), #302 | **Historical placement.** #313 built the conversation and #322 made it the default. ADR-0044 / #422 moves voting to a persistent bottom drawer on phone and desktop; results appear under the saved answer in the main content. |
 | `pulse-screens/08-desktop-vote.html`, #298 | Retained three-column desktop alternative, not the current default. |
 | `pulse-screens/01-claim.html` through `07-action.html` | Historical split story deck, including the retired dark swipe ballot. Useful for earlier design intent, not the current screen inventory. |
 | `pulse-vote-states-v1.html` | Historical layout, retained six-state coverage reference: nothing picked, selection, confirming, many options, already voted, closed without voting. Apply current reversible pick-then-Submit behavior (ADR-0035), not the deck's original irreversible-vote wording. |
 | `pulse-story-mobile-v1.html` | Historical original single-file story reference, superseded by the split deck and then the conversation. |
 | [Issue #314](https://github.com/Will-ODC/odc/issues/314) | Browser extension idea only; sample-data prototype proposed, browser/access decisions pending. |
 
-Mockup 09 records the chosen conversation direction; the merged top-right panel
-is its implemented layout. The assistant remains disabled. Welcome now lives at
+Mockup 09 records the conversation direction. Follow ADR-0044 for current
+placement: the voting drawer sits at the bottom and results stay in main content. The assistant remains disabled. Welcome now lives at
 `/` (#341/PR #347); explicit `/?poll=ID` and `/conversation?poll=ID` links open
 the conversation. `/start` and `/questions` are the welcome flow's next pages.
 The extension would be another client, with explicit content-to-poll association;

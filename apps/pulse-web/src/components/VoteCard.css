@@ -167,3 +167,32 @@
 .vote-card__note:focus {
   outline: none;
 }
+
+.vote-card--results {
+  padding: 0;
+  border: none;
+  border-radius: 0;
+  box-shadow: none;
+  background: transparent;
+}
+.vote-card__info {
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  box-sizing: border-box;
+  inline-size: calc(var(--step) * 3);
+  block-size: calc(var(--step) * 3);
+  border: var(--hairline) solid var(--control-line);
+  border-radius: var(--r-pill);
+  color: var(--ballot-ink-soft);
+  font-size: var(--t-small);
+  font-style: normal;
+  text-decoration: none;
+}
+.vote-card__info:hover {
+  background: var(--surface-hover);
+}
+.vote-card__info:focus-visible {
+  outline: calc(var(--hairline) * 2) solid var(--focus-ring);
+  outline-offset: calc(var(--hairline) * 2);
+}
