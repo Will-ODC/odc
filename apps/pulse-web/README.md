@@ -61,10 +61,11 @@ extra privacy reminder and nested card framing. The live page has no tutorial
 button.
 
 Every product page uses the same browse-style top banner at desktop and phone
-widths: the Pulse home link, Home, About, a Your communities menu listing the account’s
+widths: the Pulse home link, Home, About, a Your communities dropdown listing the account’s
 currently known community when available, Post and one account control. Starting
 questions remain available in the guided introduction and are seeded into General
-in local development. Multiple memberships remain follow-up #440. The current destination
+in local development. Multiple memberships remain follow-up #440. The communities dropdown uses a bordered trigger with a chevron and highlighted
+menu links. The current destination
 is marked without removing its link. Account state also appears on About,
 introduction, trust and sign-in pages; these headers read the session, while
 static page content does not load poll data. Sign-in pages omit a redundant
