@@ -18,7 +18,7 @@ import { migrate } from "../../src/db/migrate.js";
  * unset, unless LEDGER_REQUIRE_DATABASE=1, in which case `withDb` fails.
  */
 const url = databaseUrl();
-const skip =
+export const skip =
   url === undefined && !databaseRequired() && "no LEDGER_DATABASE_URL";
 
 /** Tests only; production sets LEDGER_APP_PASSWORD. Same in every file. */

@@ -51,6 +51,9 @@ dbTest("racing_appends_chain_contiguously", async ({ owner, app }) => {
   );
 });
 
+// Removing only the trigger's lock fails this test through race()'s waitFor
+// timeout (the inserts never queue on the lock), not through a fork: the
+// primary key on seq would still store exactly one row.
 dbTest("racing_raw_inserts_store_exactly_one", async ({ owner, app }) => {
   let i = 0;
   const results = await race(owner, () =>

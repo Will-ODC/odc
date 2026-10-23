@@ -1,4 +1,4 @@
-import type { Pool, PoolClient } from "pg";
+import pg, { type Pool, type PoolClient } from "pg";
 
 /**
  * The event store, used as the runtime role (`ledger_app`: SELECT, INSERT).
@@ -25,6 +25,11 @@ export type Head = Pick<EventRow, "seq" | "hash">;
 
 /** "ledg". The insert trigger takes the same key. Per database. */
 export const APPEND_LOCK_KEY = 1818584167;
+
+/** A pool for the runtime role (`ledger_app`), as the service connects. */
+export function createPool(connectionString: string): Pool {
+  return new pg.Pool({ connectionString });
+}
 
 // bigint arrives from pg as a string; float8 arrives as a number, exact here
 // because the column CHECKs keep seq and version within 2^53 - 1.

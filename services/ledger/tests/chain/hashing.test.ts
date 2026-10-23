@@ -119,5 +119,8 @@ describe("hashing.md", () => {
     assert.throws(() => computeHash({ ...e, type: "x_\ud800" }), TypeError);
     assert.throws(() => encodePayload({ k: "\udc00" }), TypeError);
     assert.throws(() => encodePayload({ "\ud800": 1 }), TypeError);
+    // Directly on both preimages, through the string encoder (encStr).
+    assert.throws(() => preimage({ ...e, ts: "\udfff" }), TypeError);
+    assert.throws(() => signingPreimage({ ...e, ts: "\udfff" }), TypeError);
   });
 });
