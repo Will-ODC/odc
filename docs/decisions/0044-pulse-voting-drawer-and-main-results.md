@@ -24,7 +24,7 @@ without carrying another question's unsent selection.
 
 After submission, results and confirmation appear below the saved answer in
 the main content, together with Change my answer and Next where applicable.
-The drawer shows its Vote handle, which reopens voting to change the answer.
+The drawer's handle then reads Change my answer and reopens voting to change it.
 Closed-question results also appear in main content and never enable casting.
 Main content and the drawer scroll independently so each remains reachable.
 Results use compact rows without repeating the saved answer or its privacy

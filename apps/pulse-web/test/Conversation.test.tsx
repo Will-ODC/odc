@@ -144,7 +144,10 @@ it("keeps results under the answer while the bottom drawer is only for voting", 
     within(drawer).queryByRole("group", { name: "How people answered" }),
   ).toBeNull();
   await waitFor(() => expect(document.activeElement).toBe(standing));
-  expect(within(drawer).getByRole("button", { name: "Vote" })).toBeTruthy();
+  expect(
+    within(drawer).getByRole("button", { name: "Change my answer" }),
+  ).toBeTruthy();
+  expect(within(drawer).queryByRole("button", { name: "Vote" })).toBeNull();
   await user.click(
     within(card()).getByRole("button", { name: "Change my answer" }),
   );
@@ -160,7 +163,9 @@ it("keeps results under the answer while the bottom drawer is only for voting", 
   await main().findByText("Counted. That replaces your earlier answer.");
   expect(cast).toHaveBeenLastCalledWith(p.id, [0]);
   expect(await main().findByText("You picked No.")).toBeTruthy();
-  await user.click(within(drawer).getByRole("button", { name: "Vote" }));
+  await user.click(
+    within(drawer).getByRole("button", { name: "Change my answer" }),
+  );
   expect(within(drawer).getByRole("button", { name: "Submit" })).toBeTruthy();
   expect(cast).toHaveBeenCalledTimes(2);
 });

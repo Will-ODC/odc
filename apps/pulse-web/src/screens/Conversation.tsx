@@ -505,7 +505,7 @@ function LiveCard({
           else setVisible(true);
         }}
       >
-        Vote
+        {showing.kind === "answered" ? "Change my answer" : "Vote"}
       </button>
     </div>
   );
