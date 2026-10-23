@@ -2,6 +2,7 @@ import assert from "node:assert/strict";
 import { test } from "node:test";
 import {
   createSignerClient,
+  signRequestBody,
   type SignRequest,
 } from "../../src/clients/signer.js";
 import { minute } from "../chain/support/builders.js";
@@ -95,6 +96,8 @@ test("an_outage_a_timeout_or_a_malformed_body_is_unavailable_never_a_throw", () 
       ["fail", "http_503"],
       ["timeout", "timeout"],
       ["malformed", "malformed_body"],
+      ["http_408", "http_408"],
+      ["bare_404", "http_404"],
     ] as const) {
       fake.inject("seal", fault);
       assert.deepEqual(await seal(), {
@@ -112,4 +115,58 @@ test("an_outage_a_timeout_or_a_malformed_body_is_unavailable_never_a_throw", () 
       kind: "unavailable",
       reason: "network",
     });
+  }));
+
+async function sealed(fake: FakeSigner, choices: number[]): Promise<string> {
+  for (const c of choices) fake.addEntry(ISSUE, c);
+  const client = createSignerClient({ baseUrl: fake.url });
+  const r = await client.seal(ISSUE, { last: false, sealId: SEAL });
+  assert.ok(r.ok);
+  return r.value.batchId;
+}
+
+test("a_run_whose_payload_differs_from_the_request_is_a_mismatch", () =>
+  withFake(async (fake) => {
+    const client = createSignerClient({ baseUrl: fake.url });
+    const batchId = await sealed(fake, [0, 1, 0]);
+    fake.inject("sign", "tamper_payload");
+    const r = await client.sign(request(batchId, [0, 0, 1]));
+    assert.deepEqual(r, { ok: false, kind: "mismatch", reason: "payload 2" });
+  }));
+
+// tamper_sig leaves the run shape-valid, so the client returns it: only the
+// EV-26 checker catches it, before any append. That is tested with the
+// batcher in wave 2 (tests/batching/recovery.test.ts).
+
+test("the_same_seal_id_for_another_question_is_a_conflict", () =>
+  withFake(async (fake) => {
+    const client = createSignerClient({ baseUrl: fake.url });
+    await sealed(fake, [0, 1, 2]);
+    assert.deepEqual(await client.seal(ISSUE, { last: true, sealId: SEAL }), {
+      ok: false,
+      kind: "refused",
+      code: "seal_conflict",
+    });
+  }));
+
+test("a_replayed_sign_request_sends_byte_identical_bodies", () =>
+  withFake(async (fake) => {
+    const client = createSignerClient({ baseUrl: fake.url });
+    const batchId = await sealed(fake, [2, 1, 1]);
+    const saved = request(batchId, [1, 2, 1]);
+    // As read back from storage: payload keys in another order.
+    const reloaded: SignRequest = {
+      ...saved,
+      payloads: saved.payloads.map((p) => ({
+        choice: p.choice,
+        issue_id: p.issue_id,
+      })),
+    };
+    assert.equal(signRequestBody(reloaded), signRequestBody(saved));
+    const a = await client.sign(saved);
+    const b = await client.sign(reloaded);
+    assert.ok(a.ok);
+    assert.deepEqual(b, a);
+    const [first, second] = fake.signBodies.get(batchId) ?? [];
+    assert.equal(second, first);
   }));

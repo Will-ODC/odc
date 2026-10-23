@@ -1,6 +1,6 @@
 // An in-process HTTP double of the planned signer service (ADR-0043), so the
 // real client (src/clients/signer.ts) is exercised over the wire. Paths and
-// bodies are the ones API.md documents. TEST KEY ONLY: it signs with REGISTRAR.
+// bodies are the ones API.md (wave 2) documents. TEST KEY ONLY: it signs with REGISTRAR.
 import { randomBytes } from "node:crypto";
 import { createServer, type IncomingMessage, type Server } from "node:http";
 import type { AddressInfo } from "node:net";
@@ -12,7 +12,9 @@ export type Fault =
   | "timeout" // never answers
   | "malformed" // 200 with a body that is not the documented shape
   | "tamper_sig" // flips a byte of the first event's signature
-  | "tamper_payload"; // changes the last event's choice, validly re-signed
+  | "tamper_payload" // changes the last event's choice, validly re-signed
+  | "http_408" // request timeout status
+  | "bare_404"; // 404 with no error code, like a wrong path or a proxy
 
 interface IssueBook {
   choiceCount: number;
@@ -37,7 +39,11 @@ export class FakeSigner {
   private readonly issues = new Map<string, IssueBook>();
   private readonly seals = new Map<
     string,
-    { batch_id: string; counts: number[] }
+    {
+      issueId: string;
+      last: boolean;
+      out: { batch_id: string; counts: number[] };
+    }
   >();
   private readonly batches = new Map<string, Batch>();
   private readonly faults: { route: "seal" | "sign"; fault: Fault }[] = [];
@@ -120,6 +126,8 @@ export class FakeSigner {
     if (fault === "fail") return reply(503, { error: "unavailable" });
     if (fault === "timeout") return null;
     if (fault === "malformed") return reply(200, { nope: true });
+    if (fault === "http_408") return reply(408, { error: "timeout" });
+    if (fault === "bare_404") return reply(404, "not here");
     if (seal) return this.seal(seal[1] as string, body);
     return this.sign((sign as RegExpExecArray)[1] as string, raw, body, fault);
   }
@@ -129,7 +137,13 @@ export class FakeSigner {
     const last = body.last === true;
     this.sealCalls.push({ issueId, sealId, last });
     const done = this.seals.get(sealId);
-    if (done !== undefined) return reply(200, done); // idempotent by seal id
+    if (done !== undefined) {
+      // Idempotent by seal id, but only for the same question.
+      if (done.issueId !== issueId || done.last !== last) {
+        return reply(409, { error: "seal_conflict" });
+      }
+      return reply(200, done.out);
+    }
     const book = this.issues.get(issueId);
     if (book === undefined) return reply(404, { error: "unknown_issue" });
     if (book.closed) return reply(409, { error: "issue_closed" });
@@ -144,7 +158,7 @@ export class FakeSigner {
       counts: book.counts,
       signed: null,
     });
-    this.seals.set(sealId, out);
+    this.seals.set(sealId, { issueId, last, out });
     book.counts = Array<number>(book.choiceCount).fill(0);
     if (last) book.closed = true;
     return reply(200, out);
@@ -169,6 +183,16 @@ export class FakeSigner {
         return reply(409, { error: "position_taken" });
       events = batch.signed.events;
     } else {
+      if (
+        body.issue_id !== batch.issueId ||
+        !Number.isSafeInteger(body.first_seq) ||
+        typeof body.ts !== "string" ||
+        typeof body.first_prev_hash !== "string" ||
+        !/^[0-9a-f]{64}$/.test(body.first_prev_hash) ||
+        !Array.isArray(body.payloads)
+      ) {
+        return reply(400, { error: "bad_request" });
+      }
       const payloads = body.payloads as { issue_id: string; choice: number }[];
       const counts = Array<number>(batch.counts.length).fill(0);
       for (const p of payloads) {
@@ -177,6 +201,8 @@ export class FakeSigner {
         }
         counts[p.choice] = (counts[p.choice] ?? 0) + 1;
       }
+      // An empty run is refused too. ADR-0043 does not say; the ledger never
+      // asks, since an empty last batch has nothing to append.
       if (counts.join() !== batch.counts.join() || payloads.length === 0) {
         return reply(409, { error: "counts_mismatch" });
       }
