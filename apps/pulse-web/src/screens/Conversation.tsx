@@ -571,6 +571,14 @@ function LiveCard({
   ) : null;
   const vote = !visible || showing.kind === "answered" ? handle : card;
   return (
-    <div className="conversation__question">{renderPage(standing, vote)}</div>
+    <div className="conversation__question">
+      {renderPage(
+        standing,
+        vote,
+        showing.kind === "answered"
+          ? { poll, ballot, results: showing.results }
+          : undefined,
+      )}
+    </div>
   );
 }
