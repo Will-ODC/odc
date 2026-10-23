@@ -50,7 +50,8 @@ captured instead of delivered. Startup and reset scenarios are documented in
 The vote page, sign-in and question creation call the API. Each question opens
 with its bottom voting drawer expanded, on phone and desktop. Choose an answer,
 then press Submit to save it. Results appear in the upper main content directly
-below your saved answer, with confirmation, Change my answer and Next when
+below your saved answer, which has a softly tinted accent and spacing beneath
+the question, with confirmation, Change my answer and Next when
 available. The bottom drawer is reserved for voting; after submitting, its Vote
 handle opens the choices again without casting. Closing an unsent ballot keeps
 its selection and leaves the Vote handle available. Upper content scrolls
