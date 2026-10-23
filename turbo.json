@@ -14,7 +14,12 @@
     },
     "test": {
       "dependsOn": ["build"],
-      "env": ["PULSE_DATABASE_URL", "PULSE_REQUIRE_DATABASE"]
+      "env": [
+        "PULSE_DATABASE_URL",
+        "PULSE_REQUIRE_DATABASE",
+        "LEDGER_DATABASE_URL",
+        "LEDGER_REQUIRE_DATABASE"
+      ]
     },
     "lint": {
       "cache": false
