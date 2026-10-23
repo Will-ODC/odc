@@ -23,10 +23,5 @@ export function databaseRequired(env: Env = process.env): boolean {
   return env["LEDGER_REQUIRE_DATABASE"] === "1";
 }
 
-export function appPassword(env: Env = process.env): string | undefined {
-  const raw = env["LEDGER_APP_PASSWORD"];
-  return raw === undefined || raw === "" ? undefined : raw;
-}
-
 /** The runtime role the migrations create. */
 export const APP_ROLE = "ledger_app";

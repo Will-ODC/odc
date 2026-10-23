@@ -1,4 +1,4 @@
-import { createHash } from "node:crypto";
+import { createHash, createHmac, pbkdf2Sync, randomBytes } from "node:crypto";
 import { readFile, readdir } from "node:fs/promises";
 import { fileURLToPath } from "node:url";
 import type { Pool } from "pg";
@@ -8,7 +8,7 @@ import { APP_ROLE } from "./config.js";
  * The migration runner: plain reviewed SQL files in `services/ledger/migrations`,
  * applied in order, one transaction each, as the migration (owner) role. No ORM.
  *
- * Forward-only: an applied file whose checksum changed is refused, and so is a
+ * Forward-only: it refuses an applied file that changed or is missing, and a
  * pending file that sorts below one already applied. Running it twice is a
  * no-op. The whole run holds an advisory lock so concurrent boots do not race.
  */
@@ -18,12 +18,7 @@ export interface MigrateOptions {
   appPassword?: string;
 }
 
-export interface Migration {
-  version: string;
-  file: string;
-  sql: string;
-  checksum: string;
-}
+export type Migration = Record<"version" | "file" | "sql" | "checksum", string>;
 
 export class MigrationError extends Error {
   override name = "MigrationError";
@@ -51,12 +46,8 @@ export async function loadMigrations(
       throw new MigrationError(`two migrations share version ${version}`);
     }
     const sql = await readFile(`${dir}/${file}`, "utf8");
-    out.push({
-      version,
-      file,
-      sql,
-      checksum: createHash("sha256").update(sql).digest("hex"),
-    });
+    const checksum = createHash("sha256").update(sql).digest("hex");
+    out.push({ version, file, sql, checksum });
   }
   return out;
 }
@@ -79,21 +70,17 @@ export async function migrate(
       "SELECT version, checksum FROM schema_migrations",
     );
     const seen = new Map(rows.map((r) => [r.version, r.checksum]));
-    const highest = rows.reduce(
-      (max, r) => Math.max(max, Number(r.version)),
-      0,
-    );
+    const files = new Set(migrations.map((m) => m.version));
+    const gone = rows.find((r) => !files.has(r.version));
+    if (gone) throw new MigrationError(`applied ${gone.version} has no file`);
+    const highest = Math.max(0, ...rows.map((r) => Number(r.version)));
     for (const m of migrations) {
       const sum = seen.get(m.version);
       if (sum !== undefined && sum !== m.checksum) {
-        throw new MigrationError(
-          `${m.file} changed after it was applied; add a new file instead`,
-        );
+        throw new MigrationError(`${m.file} changed after it was applied`);
       }
       if (sum === undefined && Number(m.version) < highest) {
-        throw new MigrationError(
-          `${m.file} has never run but sorts below applied ${highest}`,
-        );
+        throw new MigrationError(`${m.file} sorts below applied ${highest}`);
       }
     }
     const applied: string[] = [];
@@ -116,10 +103,10 @@ export async function migrate(
       applied.push(m.version);
     }
     if (options.appPassword !== undefined) {
-      // A utility statement takes no bind parameters; escapeLiteral quotes it.
-      await client.query(
-        `ALTER ROLE ${APP_ROLE} LOGIN PASSWORD ${client.escapeLiteral(options.appPassword)}`,
-      );
+      // Utility statements take no bind parameters and may be logged, so the
+      // server is sent a SCRAM verifier, never the password itself.
+      const verifier = scramVerifier(options.appPassword);
+      await client.query(`ALTER ROLE ${APP_ROLE} LOGIN PASSWORD '${verifier}'`);
     }
     return applied;
   } finally {
@@ -128,4 +115,23 @@ export async function migrate(
       .catch(() => undefined);
     client.release();
   }
+}
+
+/**
+ * A SCRAM-SHA-256 verifier in PostgreSQL's stored form (RFC 5802, RFC 7677).
+ * Printable ASCII only: the server SASLpreps other passwords, and this does not.
+ */
+export function scramVerifier(
+  password: string,
+  salt = randomBytes(16),
+): string {
+  if (!/^[\x20-\x7e]+$/.test(password)) {
+    throw new MigrationError("LEDGER_APP_PASSWORD must be printable ASCII");
+  }
+  const salted = pbkdf2Sync(password, salt, 4096, 32, "sha256");
+  const hmac = (key: string) =>
+    createHmac("sha256", salted).update(key).digest();
+  const stored = createHash("sha256").update(hmac("Client Key")).digest();
+  const b64 = (b: Buffer) => b.toString("base64");
+  return `SCRAM-SHA-256$4096:${b64(salt)}$${b64(stored)}:${b64(hmac("Server Key"))}`;
 }

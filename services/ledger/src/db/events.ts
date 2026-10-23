@@ -1,12 +1,13 @@
-import pg, { type Pool, type PoolClient } from "pg";
+import type { Pool, PoolClient } from "pg";
 
 /**
  * The event store, used as the runtime role (`ledger_app`: SELECT, INSERT).
  *
  * This module stores and reads; it does not hash, serialize or verify. The
- * caller supplies each row's canonical `line` and `hash`. The database itself
- * refuses a row that breaks the chain (migrations/001_events.sql), so a bug
- * above this layer surfaces as a failed append, never as a broken log.
+ * caller supplies each row's `line` and `hash`. The database refuses a row
+ * whose seq or prev_hash breaks the chain, or whose columns disagree with its
+ * `line` (migrations/001_events.sql), so those bugs fail the append. It does
+ * not recompute `hash` or check the line is canonical: that is EV-26, above.
  */
 export interface EventRow {
   seq: number;
@@ -20,62 +21,28 @@ export interface EventRow {
   line: string;
 }
 
-export interface Head {
-  seq: number;
-  hash: string;
-}
+export type Head = Pick<EventRow, "seq" | "hash">;
 
 /** "ledg". The insert trigger takes the same key. Per database. */
 export const APPEND_LOCK_KEY = 1818584167;
 
-export function createPool(connectionString: string): Pool {
-  return new pg.Pool({ connectionString });
-}
-
-const COLUMNS = "seq, type, version, ts, prev_hash, hash, line";
-
-interface DbRow {
-  seq: string;
-  type: string;
-  version: string;
-  ts: string;
-  prev_hash: string;
-  hash: string;
-  line: string;
-}
-
-/** bigint arrives as a string; the column CHECKs keep it within 2^53 - 1. */
-function toRow(r: DbRow): EventRow {
-  return {
-    seq: Number(r.seq),
-    type: r.type,
-    version: Number(r.version),
-    ts: r.ts,
-    prevHash: r.prev_hash,
-    hash: r.hash,
-    line: r.line,
-  };
-}
+// bigint arrives from pg as a string; float8 arrives as a number, exact here
+// because the column CHECKs keep seq and version within 2^53 - 1.
+const COLUMNS = `seq::float8 AS seq, type, version::float8 AS version, ts,
+  prev_hash AS "prevHash", hash, line`;
 
 function assertCount(name: string, value: number, min: number): void {
   if (!Number.isSafeInteger(value) || value < min) {
-    throw new RangeError(
-      `${name} must be a safe integer >= ${min}, got ${value}`,
-    );
+    throw new RangeError(`${name} must be a safe integer >= ${min}`);
   }
 }
 
-async function headOn(client: Pool | PoolClient): Promise<Head | null> {
-  const { rows } = await client.query<{ seq: string; hash: string }>(
-    "SELECT seq, hash FROM events ORDER BY seq DESC LIMIT 1",
-  );
-  const r = rows[0];
-  return r === undefined ? null : { seq: Number(r.seq), hash: r.hash };
-}
-
 /** The highest-seq event's seq and hash, or null for an empty log. */
-export function head(pool: Pool): Promise<Head | null> {
-  return headOn(pool);
+export async function head(client: Pool | PoolClient): Promise<Head | null> {
+  const { rows } = await client.query<Head>(
+    "SELECT seq::float8 AS seq, hash FROM events ORDER BY events.seq DESC LIMIT 1",
+  );
+  return rows[0] ?? null;
 }
 
 /**
@@ -95,22 +62,14 @@ export async function appendRun(
   try {
     await client.query("BEGIN");
     await client.query("SELECT pg_advisory_xact_lock($1)", [APPEND_LOCK_KEY]);
-    const rows = await prepare(await headOn(client));
     const stored: EventRow[] = [];
-    for (const row of rows) {
-      const { rows: out } = await client.query<DbRow>(
-        `INSERT INTO events (${COLUMNS}) VALUES ($1, $2, $3, $4, $5, $6, $7) RETURNING ${COLUMNS}`,
-        [
-          row.seq,
-          row.type,
-          row.version,
-          row.ts,
-          row.prevHash,
-          row.hash,
-          row.line,
-        ],
+    for (const r of await prepare(await head(client))) {
+      const { rows } = await client.query<EventRow>(
+        `INSERT INTO events (seq, type, version, ts, prev_hash, hash, line)
+         VALUES ($1, $2, $3, $4, $5, $6, $7) RETURNING ${COLUMNS}`,
+        [r.seq, r.type, r.version, r.ts, r.prevHash, r.hash, r.line],
       );
-      stored.push(toRow(out[0] as DbRow));
+      stored.push(rows[0] as EventRow);
     }
     await client.query("COMMIT");
     return stored;
@@ -139,11 +98,11 @@ export async function readSince(
 ): Promise<EventRow[]> {
   assertCount("since", since, 0);
   assertCount("limit", limit, 1);
-  const { rows } = await pool.query<DbRow>(
-    `SELECT ${COLUMNS} FROM events WHERE seq > $1 ORDER BY seq LIMIT $2`,
+  const { rows } = await pool.query<EventRow>(
+    `SELECT ${COLUMNS} FROM events WHERE seq > $1 ORDER BY events.seq LIMIT $2`,
     [since, limit],
   );
-  return rows.map(toRow);
+  return rows;
 }
 
 /**

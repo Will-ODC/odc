@@ -1,29 +1,21 @@
 -- 001: the event log, the runtime role, and the storage-layer guards.
 --
--- Run by the migration (owner) role. Forward-only: a mistake is fixed by a new
--- numbered file, never by editing this one (the runner checks a checksum).
+-- Run by the migration (owner) role, which is trusted to run only reviewed
+-- migrations: as owner it could disable or drop these guards, so
+-- tests/db/migrations-scan.test.ts fails any migration that tries. Forward-only:
+-- a mistake is fixed by a new numbered file (the runner checks a checksum).
 
 -- The runtime role. Roles are cluster-wide, so another database on the same
--- server may already have created it; a concurrent creator is not an error.
--- Its password is set by the runner from LEDGER_APP_PASSWORD, never written
--- here.
-DO $$
-BEGIN
-  IF NOT EXISTS (SELECT 1 FROM pg_roles WHERE rolname = 'ledger_app') THEN
-    BEGIN
-      CREATE ROLE ledger_app LOGIN;
-    EXCEPTION WHEN duplicate_object OR unique_violation THEN
-      NULL;
-    END;
-  END IF;
-END
-$$;
+-- server may already have created it. Its password is set by the runner.
+DO $$ BEGIN
+  CREATE ROLE ledger_app LOGIN;
+EXCEPTION WHEN duplicate_object OR unique_violation THEN NULL;
+END $$;
 
--- One row per event. `line` is the exact canonical export line
--- (export-format.md EX-7..EX-9) without its LF, so the export is every line in
--- seq order, each followed by "\n". The other columns are copies of envelope
--- fields that reads and the guards below need; the CHECKs tie the cheap ones to
--- `line`. `payload` lives only inside `line`.
+-- One row per event. `line` is the export line (EX-7..EX-9) without its LF; the
+-- CHECKs refuse a row whose columns disagree with it, so the link trigger checks
+-- what the export shows. That `line` is canonical (key order, escaping, no
+-- duplicate keys) is the application's EV-26 check, not the database's.
 CREATE TABLE events (
   seq       bigint PRIMARY KEY CHECK (seq >= 1 AND seq <= 9007199254740991),
   type      text   NOT NULL CHECK (type ~ '^[a-z][a-z0-9_]*$'),
@@ -34,9 +26,13 @@ CREATE TABLE events (
   line      text   NOT NULL,
   -- A canonical line never holds a raw LF (EX-9 escapes it).
   CONSTRAINT events_line_single CHECK (strpos(line, E'\n') = 0),
-  -- EX-7 fixes the envelope order: seq first, hash last.
+  -- EX-7 order: seq first; prev_hash then hash last (13 + 64 + 10 + 64 + 2).
   CONSTRAINT events_line_seq CHECK (left(line, 7 + length(seq::text) + 1) = '{"seq":' || seq || ','),
-  CONSTRAINT events_line_hash CHECK (right(line, 74) = '"hash":"' || hash || '"}')
+  CONSTRAINT events_line_tail CHECK (
+    right(line, 153) = '"prev_hash":"' || prev_hash || '","hash":"' || hash || '"}'),
+  CONSTRAINT events_line_fields CHECK (line::jsonb @> jsonb_build_object(
+    'seq', seq, 'type', type, 'version', version, 'ts', ts,
+    'prev_hash', prev_hash, 'hash', hash))
 );
 
 -- Rule 4, belt and braces: whatever the role, the table refuses every change
@@ -58,36 +54,20 @@ CREATE TRIGGER events_no_truncate
   FOR EACH STATEMENT EXECUTE FUNCTION events_refuse_change();
 
 -- ES-6/ES-7/ES-24 at the storage layer: a new row continues the chain exactly,
--- or the insert fails, even if the application is wrong. It takes the same
--- transaction-scoped advisory lock the writer takes (src/db/events.ts
--- APPEND_LOCK_KEY, "ledg"), so two writers that skip the application lock still
--- cannot both read the same tail.
+-- or the insert fails. It takes the writer's advisory lock (src/db/events.ts
+-- APPEND_LOCK_KEY), so writers that skip it still cannot both read one tail.
 CREATE FUNCTION events_check_link() RETURNS trigger
 LANGUAGE plpgsql AS $$
 DECLARE
-  last_seq  bigint;
-  last_hash text;
+  last record;
 BEGIN
   PERFORM pg_advisory_xact_lock(1818584167);
-  SELECT seq, hash INTO last_seq, last_hash FROM events ORDER BY seq DESC LIMIT 1;
-  IF last_seq IS NULL THEN
-    IF NEW.seq <> 1 THEN
-      RAISE EXCEPTION 'events: first seq must be 1, got %', NEW.seq
-        USING ERRCODE = 'check_violation';
-    END IF;
-    IF NEW.prev_hash <> repeat('0', 64) THEN
-      RAISE EXCEPTION 'events: seq 1 must have prev_hash of 64 zeros'
-        USING ERRCODE = 'check_violation';
-    END IF;
-  ELSE
-    IF NEW.seq <> last_seq + 1 THEN
-      RAISE EXCEPTION 'events: seq must be %, got %', last_seq + 1, NEW.seq
-        USING ERRCODE = 'check_violation';
-    END IF;
-    IF NEW.prev_hash <> last_hash THEN
-      RAISE EXCEPTION 'events: prev_hash of seq % must equal hash of seq %', NEW.seq, last_seq
-        USING ERRCODE = 'check_violation';
-    END IF;
+  SELECT seq, hash INTO last FROM events ORDER BY seq DESC LIMIT 1;
+  -- An empty log takes seq 1 with a prev_hash of 64 zeros (ES-7).
+  IF NEW.seq <> coalesce(last.seq, 0) + 1
+     OR NEW.prev_hash <> coalesce(last.hash, repeat('0', 64)) THEN
+    RAISE EXCEPTION 'events: seq % / prev_hash does not continue head seq %',
+      NEW.seq, coalesce(last.seq, 0) USING ERRCODE = 'check_violation';
   END IF;
   RETURN NEW;
 END
@@ -97,8 +77,7 @@ CREATE TRIGGER events_link
   BEFORE INSERT ON events
   FOR EACH ROW EXECUTE FUNCTION events_check_link();
 
--- Grants are part of the migration. The runtime role reads and appends; it
--- never changes or removes a row.
+-- Grants are part of the migration: the runtime role reads and appends only.
 REVOKE ALL ON events FROM PUBLIC;
 REVOKE ALL ON events FROM ledger_app;
 GRANT SELECT, INSERT ON events TO ledger_app;
