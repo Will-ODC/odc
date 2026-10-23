@@ -140,6 +140,6 @@ it("approval cast, replacement, network retry and closed results work over the r
     cleanup();
     await app.close();
   }
-  // One test drives a real server through nine screens; the 5 s default is too
-  // tight once the shared CI job also runs the ledger's database suites.
+  // One test drives a real server through nine screens. On CI it passes in
+  // about 4.4-4.8 s, too close to the 5 s default, and has timed out there.
 }, 30_000);
