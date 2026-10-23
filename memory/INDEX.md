@@ -29,13 +29,13 @@ Do not apply charter rules to `apps/**`, and do not relax them anywhere else.
   charter §10 split are merged (#438, #439, #443). Ledger wave 1 merged
   (#444-#448); wave 2 is being opened. Identity and the signer are unstarted.
   → `memory/STATE.md`
-- **Pulse:** sign-in, voting, confirmed votes, storage, mail and serving are
-  built. The conversation vote page, welcome, tutorial and trust page are merged.
-  Confirmed-vote display, poll-creation HTTP and public attribution are merged.
-  The creation form and demo feedback are merged (#393/#403–#405).
-  Public community-scoped poll listing (#259 / PR #419) and its browser
-  (#260 / PR #426) are merged; MCP discovery (#291) remains unbuilt.
-  **Next: poll-creation refinement.** A deploy also
+- **Pulse:** sign-in, voting, confirmed votes, poll creation and public browsing
+  are built. #451/#452 merged the bottom voting drawer, main-content results,
+  Home browser and About introduction. The live tutorial is removed.
+  **Latest requested UI slice: #453 compact vertical-bar results above comments.**
+  Comments/replies, abuse reporting and MCP discovery remain unbuilt;
+  issue ownership and the #186 → #425 consolidation are in `memory/pulse.md`.
+  Poll-creation refinement still needs scoping. A deploy also
   needs a host and a verified sending domain; `onlinedemocracy.org` is owned.
   → `memory/pulse.md`
 
