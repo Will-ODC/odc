@@ -52,3 +52,15 @@ describe("fitting a phone", () => {
     );
   });
 });
+
+it("aligns the communities disclosure with the navigation links", () => {
+  expect(rule("components/TopBanner.css", ".banner__nav")).toMatch(
+    /align-items:\s*center/,
+  );
+  const disclosure = rule(
+    "components/TopBanner.css",
+    ".banner__nav > .account-menu",
+  );
+  expect(disclosure).toMatch(/display:\s*flex/);
+  expect(disclosure).toMatch(/align-items:\s*center/);
+});
