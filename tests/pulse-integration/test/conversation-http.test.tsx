@@ -91,9 +91,7 @@ it("approval cast, replacement, network retry and closed results work over the r
       screen.getByRole("button", { name: "How should the voting page look?" }),
     );
     await screen.findByRole("heading", { name: "Stay free of ads?", level: 1 });
-    await user.click(
-      await screen.findByRole("button", { name: "Show me how" }),
-    );
+    expect(screen.queryByRole("button", { name: "Show me how" })).toBeNull();
     await user.click(screen.getByRole("radio", { name: "Yes" }));
     await user.click(screen.getByRole("button", { name: "Submit" }));
     await screen.findByText("Counted");
@@ -114,8 +112,16 @@ it("approval cast, replacement, network retry and closed results work over the r
     await user.click(card.getByRole("button", { name: "Submit" }));
     await screen.findByText("Counted");
     expect(await api.myBallot("approval")).toEqual([0, 2]);
+    card = within(screen.getByRole("region"));
     expect(card.getAllByText("yours")).toHaveLength(2);
+    expect(
+      within(screen.getByRole("complementary", { name: "Voting" })).queryByRole(
+        "group",
+        { name: "How people answered" },
+      ),
+    ).toBeNull();
     await user.click(card.getByRole("button", { name: "Change my answer" }));
+    card = within(screen.getByRole("region"));
     await user.click(card.getByRole("checkbox", { name: "Park" }));
     fail = true;
     await user.click(card.getByRole("button", { name: "Submit" }));
