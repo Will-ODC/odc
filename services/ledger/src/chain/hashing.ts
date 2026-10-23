@@ -2,7 +2,8 @@
 // integer/string payload (HA-7): it never consults the event's type.
 
 import { createHash } from "node:crypto";
-import { sortedKeys, type Payload, type UnhashedEvent } from "./canonical.js";
+import { isWellFormed, sortedKeys } from "./canonical.js";
+import type { Payload, UnhashedEvent } from "./canonical.js";
 
 const DOMAIN = Buffer.from([0x4f, 0x44, 0x43, 0x31]); // "ODC1", HA-10
 const TAG_INT = 0x69; // 'i', HA-7
@@ -16,8 +17,10 @@ export function u64(n: number): Buffer {
   return out;
 }
 
-/** HA-5: ENC_STR(s) = U64(len) || UTF8(s), with no normalization (HA-2). */
+/** HA-5: ENC_STR(s) = U64(len) || UTF8(s), with no normalization (HA-2).
+ *  Throws on a lone surrogate, which Buffer.from would turn into U+FFFD. */
 function encStr(s: string): Buffer {
+  if (!isWellFormed(s)) throw new TypeError("string is not well-formed UTF-16");
   const bytes = Buffer.from(s, "utf8");
   return Buffer.concat([u64(bytes.length), bytes]);
 }

@@ -26,8 +26,9 @@ export interface Event extends UnhashedEvent {
 
 /** Why a line was refused. `rule` names the contract sentence (advisory). */
 export interface Refusal {
-  /** `unregistered`: well-formed but outside the v1 registry (would be PARTIAL).
-   *  `cap`: beyond the EV-25 line cap. `invalid`: everything else. */
+  /** `unregistered`: well-formed but outside the v1 registry (would be PARTIAL);
+   *  never produced here, the checker produces it for an unregistered
+   *  (type, version). `cap`: beyond the EV-25 line cap. `invalid`: the rest. */
   readonly kind: "invalid" | "unregistered" | "cap";
   readonly rule: string;
   readonly reason: string;
@@ -422,6 +423,8 @@ export function parseLine(line: Uint8Array): ParseResult {
   if (line.length > MAX_LINE_BYTES) {
     return refuse("cap", "EV-25", `line is ${line.length} bytes`);
   }
+  // `cap` is the EV-25 producer limit, never "maybe valid": past depth 2 the
+  // line is INVALID anyway (EV-24), and it is refused either way.
   if (lineDepth(line) > MAX_LINE_DEPTH) {
     return refuse("cap", "EV-25", "line nested deeper than 64");
   }

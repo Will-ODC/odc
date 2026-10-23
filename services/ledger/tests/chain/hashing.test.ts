@@ -113,4 +113,11 @@ describe("hashing.md", () => {
     const sigEntry = 1 + 8 + 3 + 8 + 128;
     assert.equal(withSig.length - without.length, sigEntry);
   });
+
+  it("throws on a lone surrogate instead of hashing U+FFFD (HA-2)", () => {
+    const e = lineOf("001-genesis-only", 1);
+    assert.throws(() => computeHash({ ...e, type: "x_\ud800" }), TypeError);
+    assert.throws(() => encodePayload({ k: "\udc00" }), TypeError);
+    assert.throws(() => encodePayload({ "\ud800": 1 }), TypeError);
+  });
 });
