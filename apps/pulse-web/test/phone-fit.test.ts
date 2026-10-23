@@ -24,19 +24,25 @@ describe("fitting a phone", () => {
     );
   });
 
-  /*
-   * With the question on the card, the space above it held only "Your
-   * answers will appear here" and blank phone: it now takes its content's
-   * height, so the card sits under it (review of #420; card top measured at
-   * 127px instead of 501px on 375x812).
-   */
-  it("does not stretch the answers above the card on a phone", () => {
+  it("reserves a bottom drawer while the upper content scrolls independently", () => {
+    expect(rule("screens/Conversation.css", ".conversation__scroll")).toMatch(
+      /flex:\s*1;/,
+    );
+    expect(rule("screens/Conversation.css", ".conversation__scroll")).toMatch(
+      /overflow-y:\s*auto/,
+    );
+    expect(rule("screens/Conversation.css", ".conversation__dock")).toMatch(
+      /flex-shrink:\s*0/,
+    );
+    expect(rule("screens/Conversation.css", ".conversation__dock")).toContain(
+      "env(safe-area-inset-bottom)",
+    );
     const css = readFileSync(
       new URL("../src/screens/Conversation.css", import.meta.url),
       "utf8",
     );
-    expect(css).toMatch(
-      /@media \(max-width: 1099px\) \{\s*\.conversation__scroll \{\s*flex: 0 1 auto;/,
+    expect(css).not.toMatch(
+      /\.conversation__vote\s*\{[^}]*position:\s*absolute/,
     );
   });
 

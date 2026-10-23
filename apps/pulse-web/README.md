@@ -47,11 +47,16 @@ captured instead of delivered. Startup and reset scenarios are documented in
 [the API README](../pulse/README.md#run-it-on-your-computer).
 
 The vote page, sign-in and question creation call the API. Each question opens
-with its vote card expanded. Choose an answer, then press Submit to save it.
-You can close the card and reopen it with Vote. **Show me how** walks through
-the real controls; it never picks or submits an answer. Its highlight leaves
-space around the controls and stays inside the screen, so the space is smaller
-on a side where a control touches the screen edge.
+with its bottom voting drawer expanded, on phone and desktop. Choose an answer,
+then press Submit to save it. Results appear in the upper main content directly
+below your saved answer, with confirmation, Change my answer and Next when
+available. The bottom drawer is reserved for voting; after submitting, its Vote
+handle opens the choices again without casting. Closing an unsent ballot keeps
+its selection and leaves the Vote handle available. Upper content scrolls
+independently of the drawer. Closed-question results also open in the main content. The small circular info link beside Change my answer
+opens How votes count in a new tab. Results omit the repeated answer summary,
+extra privacy reminder and nested card framing. The live page has no tutorial
+button.
 
 Every product page uses the same browse-style top banner at desktop and phone
 widths: the Pulse home link, Home, General, a Your communities menu listing the account’s

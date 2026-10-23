@@ -29,11 +29,14 @@ export function ResultsPanel({
   results,
   yourChoices = [],
   ended = false,
+  compact = false,
   onClose,
   panelRef,
   explainHref,
 }: {
   results: Results;
+  /** Main content already says the saved answer; use tighter results there. */
+  compact?: boolean;
   /**
    * The indexes of the choices this person picked - one on a `single` poll,
    * any number on an `approval` one. Matched against `ChoiceResult.index`,
@@ -74,7 +77,7 @@ export function ResultsPanel({
   );
   return (
     <div
-      className="results"
+      className={compact ? "results results--compact" : "results"}
       role="group"
       aria-label="How people answered"
       ref={panelRef}
@@ -90,7 +93,7 @@ export function ResultsPanel({
           <span aria-hidden="true">×</span>
         </button>
       ) : null}
-      <p className="ballot__eyebrow">WHERE IT STANDS</p>
+      {compact ? null : <p className="ballot__eyebrow">WHERE IT STANDS</p>}
       <p className="results__count">{howMany(results, ended)}</p>
       {explainHref && results.voters > 0 ? (
         <p className="results__explain">
@@ -109,7 +112,9 @@ export function ResultsPanel({
         Nobody answered: the sentence above says so, and a list of empty bars
         under it would only say it again, worse. The way out stays.
       */}
-      {results.voters > 0 ? <Counts results={results} yours={yours} /> : null}
+      {results.voters > 0 ? (
+        <Counts results={results} yours={yours} summary={!compact} />
+      ) : null}
     </div>
   );
 }
@@ -118,9 +123,11 @@ export function ResultsPanel({
 function Counts({
   results,
   yours,
+  summary,
 }: {
   results: Results;
   yours: readonly ChoiceResult[];
+  summary: boolean;
 }) {
   const isYours = (choice: ChoiceResult) =>
     yours.some((one) => one.index === choice.index);
@@ -146,7 +153,7 @@ function Counts({
 
   return (
     <>
-      {yours.length > 0 ? (
+      {summary && yours.length > 0 ? (
         <p className="results__yours">
           You picked <Labels choices={yours} />.
         </p>
