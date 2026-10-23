@@ -1,0 +1,26 @@
+# The ledger's own Postgres, runnable alone (rule 1: no shared databases):
+#
+#   docker compose -f services/ledger/docker-compose.yml up -d db
+#   LEDGER_DATABASE_URL=postgres://ledger:ledger@127.0.0.1:5434/ledger \
+#     pnpm --filter @odc/ledger test
+#
+# `ledger` is the migration (owner) role. The runtime role `ledger_app` is
+# created by the migrations, never by hand.
+name: ledger
+
+services:
+  db:
+    image: postgres:17
+    environment:
+      POSTGRES_USER: ledger
+      POSTGRES_PASSWORD: ledger
+      POSTGRES_DB: ledger
+    ports:
+      - "127.0.0.1:5434:5432" # 5432 and 5433 are commonly taken
+    tmpfs:
+      - /var/lib/postgresql/data # test database: `down` keeps nothing
+    healthcheck:
+      test: ["CMD", "pg_isready", "-U", "ledger", "-d", "ledger"]
+      interval: 2s
+      timeout: 5s
+      retries: 15
