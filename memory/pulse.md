@@ -37,6 +37,44 @@ Repo discipline still applies: tests ship with the change, there is one small
 branch per change, named for its ticket (`pulse/<issue>-<short>`, #310), and
 the same CI runs.
 
+## Unmerged preview and handoff (2026-10-23)
+
+Recorded on the feature branch at the operator's explicit request to commit,
+push and update memory. These changes are committed on
+`pulse/449-community-dropdown`; they are **not merged or publicly deployed**.
+The earlier local branches are incremental snapshots; this branch contains the
+combined preview. No PR has been created for this session's changes.
+
+- **#422 / ADR-0044:** voting uses a bottom drawer on phone and desktop,
+  expanded for a new question. Results sit under the saved answer in main
+  content. The saved answer has spacing and a soft accent. Results are compact;
+  the circular info link beside Change my answer opens How votes count.
+  Show me how and the repeated privacy reminder are removed from the live page.
+- **#449:** Home (`/`) opens the public poll browser. About (`/about`) keeps
+  the former welcome content and guided Start voting flow. General has no
+  separate navigation link. Your communities is an aligned dropdown with a
+  bordered trigger, expanding chevron and padded menu links.
+- **All seven development seed questions appear on Home.** The seed helper
+  assigns General without adding authorship or replacing existing choices or
+  votes. The API was restarted with explicit operator approval on 2026-10-23;
+  its former in-memory polls, votes, mailbox and sessions were reset.
+- **Grouping:** Home lists `pulse-general`; a community browser lists that
+  community. New polls use the author's account community, or General when
+  absent. There are no topic categories or automatic classification. Lists
+  include visible open and closed questions, newest first. The four starting
+  questions and choice-dependent Next links use explicit poll IDs.
+- **Validation:** final web suite **500 passed** using
+  `--fileParallelism=false`; API **418 passed, 118 PostgreSQL tests skipped**
+  because no test database was configured; real-HTTP integration **13 passed**.
+  Browser checks covered voting/results, Home/About, all seven seeds and the
+  signed-in communities dropdown. Every implementation slice received an
+  independent APPROVE review. Build/type checks, lint and changed-file
+  formatting passed. A whole-tree format check reaches unrelated untracked
+  `review-d1/` files and fails there; that directory remains untouched.
+- **Next:** preserve the combined preview and prepare ticket-sized #422/#449
+  PRs for operator review before merge. Then continue creation/browse refinement.
+  PostgreSQL-backed verification and persistent local testing remain outstanding.
+
 ## Where it stands (2026-10-21)
 
 - **Pillar 1 (identity) is built.** Magic-link sign-in and redeem (#81-#87,
@@ -230,7 +268,9 @@ the same CI runs.
   describes the answer currently standing.
 - **ADR-0035:** the vote page is a conversation. Mockup
   `docs/mockups/pulse-screens/09-chat-vote.html` is the design of record; the
-  built panel sits top right on desktop and above the composer on phone.
+  former merged panel sits top right on desktop and above the composer on
+  phone. ADR-0044 changes this to a bottom voting drawer with main-content
+  results in the unmerged preview described above.
 - **ADR-0037:** poll creation: closes after seven days unless the poster picks a
   later time; suggestions off (#336); five publications per rolling hour per
   account; Owner and narrow grants; community or General posting; anonymous by
@@ -280,15 +320,21 @@ the same CI runs.
 
 **Client**
 
-- **Local demo handoff (2026-10-20):** API `http://127.0.0.1:8080`, web
-  `http://localhost:5173`, served from the attached
-  `repo-guidance-cleanup/odc` worktree, now detached at merged master. The old
-  local-only `codex/demo-ui-feedback` branch is an earlier combined preview,
-  not the canonical source. Data is in memory and lost on API stop. Console
-  mail prints sign-in links without sending email; request a fresh link for
-  `demo@example.test` when needed and never save tokens in memory. The
-  blue-halo pointer reported during the demo is from Codex browser control,
-  not a Pulse tutorial graphic.
+- **Local preview (2026-10-23):** API `http://127.0.0.1:8080`, web
+  `http://localhost:5173`, served from `/Users/williamchu/Desktop/odc` on
+  `pulse/449-community-dropdown`. Use this checkout for both processes.
+  `pnpm --filter @odc/pulse dev` and `pnpm --filter @odc/pulse-web dev`
+  start them. Both must keep the same origin; preserve the Vite proxy's
+  `changeOrigin: false` for mailbox access. Old fixture previews on 5174 are
+  not the full application.
+- **Local data is API-process memory.** Restart loses created polls, votes and
+  mailbox messages; generated secrets sign people out and reset confirmations.
+  Seeds are recreated. Persistent testing needs a disposable Postgres database
+  with `PULSE_DATABASE_URL` and stable session/confirmation secrets.
+- **Local sign-in:** enter a test email through the ordinary form, open
+  `http://localhost:5173/api/dev/mailbox`, and click its actual sign-in link.
+  No external email is sent, and no password or direct-login shortcut exists.
+  Request fresh links after restart; never save tokens in memory.
 - **Never index `results.choices` by `yourChoice`.** Match on
   `ChoiceResult.index` (ADR-0021).
 - **Every way of casting must check `poll.open`** (through `locked` plus

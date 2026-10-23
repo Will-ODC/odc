@@ -35,7 +35,10 @@ Do not apply charter rules to `apps/**`, and do not relax them anywhere else.
   The creation form and demo feedback are merged (#393/#403–#405).
   Public community-scoped poll listing (#259 / PR #419) and its browser
   (#260 / PR #426) are merged; MCP discovery (#291) remains unbuilt.
-  **Next: poll-creation refinement.** A deploy also
+  Unmerged #422/#449 preview adds the bottom voting drawer, main-content
+  results, Home browser/About, seven visible seed questions and the communities
+  dropdown; see the handoff in `memory/pulse.md`.
+  **Next: review the preview, then poll-creation refinement.** A deploy also
   needs a host and a verified sending domain; `onlinedemocracy.org` is owned.
   → `memory/pulse.md`
 
