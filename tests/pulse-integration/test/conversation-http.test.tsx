@@ -80,7 +80,7 @@ it("approval cast, replacement, network retry and closed results work over the r
   };
   const api = new HttpPulseApi(`http://127.0.0.1:${address.port}/api`, request);
   try {
-    globalThis.history.replaceState(null, "", "/");
+    globalThis.history.replaceState(null, "", "/about");
     const first = render(<App api={api} firstPollId="ads-free" />);
     const user = userEvent.setup();
     await user.click(screen.getByRole("button", { name: "Start voting" }));

@@ -2,7 +2,7 @@ import type { ReactNode } from "react";
 import { IntroPage } from "../components/IntroPage.js";
 
 /** Static introduction; opening the walkthrough never casts a vote. */
-export function Welcome({
+export function About({
   onStart,
   banner,
 }: {
@@ -40,7 +40,7 @@ export function Welcome({
         Start voting
       </button>
       <p className="welcome__note">
-        <a href="/browse?community=pulse-general">Explore questions</a>
+        <a href="/">Explore questions</a>
       </p>
     </IntroPage>
   );

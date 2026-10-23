@@ -6,7 +6,7 @@ import { App } from "../src/App.js";
 import { poll, stubApi } from "./stub-api.js";
 
 afterEach(cleanup);
-beforeEach(() => history.replaceState(null, "", "/"));
+beforeEach(() => history.replaceState(null, "", "/about"));
 
 it("explains recent progress and purpose before offering independently accessible votes", async () => {
   const read = vi.fn(async (id: string) => poll({ id }));

@@ -30,14 +30,14 @@ it("round-trips browse community links and defaults to General", () => {
   expect(routeFrom(pathOf(route))).toEqual(route);
 });
 
-it("links welcome to exploration while retaining the guided start", async () => {
+it("links About to exploration while retaining the guided start", async () => {
   const listPolls = vi.fn();
-  render(<App api={stubApi({ listPolls })} route={{ kind: "welcome" }} />);
+  render(<App api={stubApi({ listPolls })} route={{ kind: "about" }} />);
   expect(
     screen
       .getByRole("link", { name: "Explore questions" })
       .getAttribute("href"),
-  ).toBe("/browse?community=pulse-general");
+  ).toBe("/");
   expect(screen.getByRole("button", { name: "Start voting" })).toBeTruthy();
   expect(listPolls).not.toHaveBeenCalled();
 });
@@ -186,7 +186,7 @@ it("loads the final page by keyboard and focuses its first new question", async 
   expect(screen.queryByRole("button", { name: "Load more" })).toBeNull();
 });
 
-it("keeps home, General and posting in the top navigation", async () => {
+it("keeps Home, About and posting in the top navigation", async () => {
   render(
     <Browse
       api={stubApi({ listPolls: async () => page([]) })}
@@ -196,11 +196,46 @@ it("keeps home, General and posting in the top navigation", async () => {
   const nav = screen.getByRole("navigation", { name: "Main navigation" });
   expect(nav.querySelector('a[href="/"]')?.textContent).toBe("Home");
   expect(nav.querySelector('a[href="/questions"]')).toBeNull();
+  expect(nav.querySelector('a[href="/about"]')?.textContent).toBe("About");
   expect(
-    nav.querySelector('a[href="/browse?community=pulse-general"]')?.textContent,
-  ).toBe("General");
+    nav.querySelector('a[href="/browse?community=pulse-general"]'),
+  ).toBeNull();
   expect(
     screen.getByRole("link", { name: "Post a question" }).getAttribute("href"),
   ).toBe("/new");
   await screen.findByText(/No questions here yet/);
+});
+
+it("opens the poll browser at Home and preserves the introduction at About", async () => {
+  history.replaceState(null, "", "/");
+  const listPolls = vi.fn().mockResolvedValue(page());
+  const read = vi.fn();
+  const cast = vi.fn();
+  const { unmount } = render(
+    <App api={stubApi({ listPolls, poll: read, cast })} />,
+  );
+  expect(
+    await screen.findByRole("link", { name: "Question one" }),
+  ).toBeTruthy();
+  expect(listPolls).toHaveBeenCalledWith("pulse-general");
+  expect(
+    screen.getByRole("link", { name: "Home" }).getAttribute("aria-current"),
+  ).toBe("page");
+  expect(screen.queryByRole("link", { name: "General" })).toBeNull();
+  const about = screen.getByRole("link", { name: "About" });
+  expect(about.getAttribute("href")).toBe("/about");
+  unmount();
+  history.replaceState(null, "", "/about");
+  render(<App api={stubApi({ poll: read, cast })} />);
+  expect(
+    screen.getByRole("heading", {
+      name: "Help shape an Online Democratic Community",
+    }),
+  ).toBeTruthy();
+  expect(
+    screen.getByRole("link", { name: "About" }).getAttribute("aria-current"),
+  ).toBe("page");
+  expect(screen.getByRole("button", { name: "Start voting" })).toBeTruthy();
+  expect(read).not.toHaveBeenCalled();
+  expect(cast).not.toHaveBeenCalled();
 });

@@ -29,7 +29,8 @@ container, so the page and the API share one address.
 
 | Path                   | What it shows                                                           |
 | ---------------------- | ----------------------------------------------------------------------- |
-| `/`                    | Welcome page, then Start voting.                                        |
+| `/`                    | Home: public poll browser, newest first.                                |
+| `/about`               | About: the former welcome content and Start voting.                     |
 | `/start`               | What has been done so far, and what ODC is for.                         |
 | `/browse?community=ID` | Community questions, newest first; General by default.                  |
 | `/questions`           | The four starting questions.                                            |
@@ -60,11 +61,11 @@ extra privacy reminder and nested card framing. The live page has no tutorial
 button.
 
 Every product page uses the same browse-style top banner at desktop and phone
-widths: the Pulse home link, Home, General, a Your communities menu listing the account’s
+widths: the Pulse home link, Home, About, a Your communities menu listing the account’s
 currently known community when available, Post and one account control. Starting
 questions remain available in the guided introduction and are seeded into General
 in local development. Multiple memberships remain follow-up #440. The current destination
-is marked without removing its link. Account state also appears on the welcome,
+is marked without removing its link. Account state also appears on About,
 introduction, trust and sign-in pages; these headers read the session, while
 static page content does not load poll data. Sign-in pages omit a redundant
 Sign in link. Shared `TopBanner`, `SiteNavigation` and `AccountMenu` components
@@ -84,15 +85,16 @@ behavior.
 
 ## Browse questions (#260)
 
-Welcome keeps Start voting → /start → /questions and adds Explore questions →
-`/browse?community=pulse-general`. Browsing is public, newest first and scoped
+Home (`/`) opens the public poll browser. About (`/about`) keeps the former
+welcome content and Start voting → /start → /questions, plus Explore questions →
+Home. The shared navigation uses Home and About; General has no separate nav
+link. Browsing is public, newest first and scoped
 by community, not a global or related-question feed. Shared
 `/browse?community=ID` links open that community. Signed-in visitors can also
 switch to their community. Open and closed questions link to the existing vote
 page; opening a question never casts a vote. Load more uses the API cursor and
-keeps existing questions on a failed request. The wide list has top navigation
-for home, starting questions, posting and communities; email-confirmed membership
-supplies the Your community link. Thumbnails/context previews remain future work. Missing communities show an empty
+keeps existing questions on a failed request. The wide list shares the Home, About, posting and community navigation;
+email-confirmed membership supplies the Your communities menu. Thumbnails/context previews remain future work. Missing communities show an empty
 state with links to the starting questions and posting form.
 
 ## Settings
