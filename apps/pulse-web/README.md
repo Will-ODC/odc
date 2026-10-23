@@ -54,7 +54,9 @@ below your saved answer, which has a softly tinted accent and spacing beneath
 the question, with confirmation, Change my answer and Next when
 available. The bottom drawer is reserved for voting; after submitting, its
 Change my answer handle opens the choices again without casting. Closing an
-unsent ballot keeps its selection and leaves the Vote handle available. Upper content scrolls
+unsent ballot keeps its selection and leaves the Vote handle available. The
+drawer uses a downward chevron to close, with the accessible button name Close.
+Upper content scrolls
 independently of the drawer. Closed-question results also open in the main content. The small circular info link beside Change my answer
 opens How votes count in a new tab. Results omit the repeated answer summary,
 extra privacy reminder and nested card framing. The live page has no tutorial

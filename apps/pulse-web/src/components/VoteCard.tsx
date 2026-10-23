@@ -13,6 +13,22 @@ import { ResultsPanel } from "./ResultsPanel.js";
 import { ViewState } from "./ViewState.js";
 import "./VoteCard.css";
 
+const dismissIcon = (
+  <svg
+    className="vote-card__chevron"
+    viewBox="0 0 24 24"
+    fill="none"
+    stroke="currentColor"
+    strokeWidth="2"
+    strokeLinecap="round"
+    strokeLinejoin="round"
+    aria-hidden="true"
+    focusable="false"
+  >
+    <path d="m6 9 6 6 6-6" />
+  </svg>
+);
+
 export interface CardChoice {
   index: number;
   label: string;
@@ -230,7 +246,7 @@ export function VoteCard({
           aria-label="Close"
           onClick={onClose}
         >
-          <span aria-hidden="true">×</span>
+          {dismissIcon}
         </button>
       </section>
     );
@@ -267,7 +283,7 @@ export function VoteCard({
               aria-label="Close"
               onClick={onClose}
             >
-              <span aria-hidden="true">×</span>
+              {dismissIcon}
             </button>
           </header>
           <h2 id={`${id}-question`} className="vote-card__question">

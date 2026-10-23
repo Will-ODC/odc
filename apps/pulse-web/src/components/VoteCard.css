@@ -154,6 +154,9 @@
 }
 
 .vote-card button.vote-card__close {
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
   flex: 0 0 auto;
   margin-inline-start: auto;
   min-inline-size: calc(var(--step) * 5.5);
@@ -161,6 +164,10 @@
   padding: var(--step);
   font-size: var(--t-body);
   line-height: 1;
+}
+.vote-card__chevron {
+  inline-size: calc(var(--step) * 2);
+  block-size: calc(var(--step) * 2);
 }
 
 /* Takes focus when the link beside it goes; nothing to show for that. */

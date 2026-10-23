@@ -397,13 +397,18 @@ it("expands an externally collapsed card from the Vote tab", async () => {
   );
 });
 
-it.each([false, true])(
-  "decision and result cards expose one keyboard-operable × (%s)",
-  async (answered) => {
+it.each([
+  { answered: false, collapsed: false },
+  { answered: true, collapsed: false },
+  { answered: false, collapsed: true },
+])(
+  "cards expose one keyboard-operable downward chevron (%j)",
+  async ({ answered, collapsed }) => {
     const onClose = vi.fn();
     render(
       <VoteCard
         {...base}
+        collapsed={collapsed}
         onClose={onClose}
         status={
           answered
@@ -414,7 +419,8 @@ it.each([false, true])(
     );
     const close = button("Close");
     expect(screen.getAllByRole("button", { name: "Close" })).toHaveLength(1);
-    expect(close.textContent).toBe("×");
+    expect(close.textContent).not.toContain("×");
+    expect(close.querySelector('svg[aria-hidden="true"]')).toBeTruthy();
     close.focus();
     await userEvent.setup().keyboard("{Enter}");
     expect(onClose).toHaveBeenCalledOnce();
