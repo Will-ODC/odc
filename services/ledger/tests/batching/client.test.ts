@@ -97,6 +97,7 @@ test("an_outage_a_timeout_or_a_malformed_body_is_unavailable_never_a_throw", () 
       ["timeout", "timeout"],
       ["malformed", "malformed_body"],
       ["http_408", "http_408"],
+      ["http_429", "http_429"],
       ["bare_404", "http_404"],
     ] as const) {
       fake.inject("seal", fault);
