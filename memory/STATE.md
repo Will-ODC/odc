@@ -51,8 +51,7 @@ in the Done list below. The Go CLI takes `<file>` with no subcommand; the TS CLI
 changes), canonical hashing and parsing #445, Ed25519 #446, the EV-26 checker
 #447 (all 150 vectors fed line by line, tally asserted) and the signer client
 #448. Wave 2 (read API and append core, write path, batching state, batcher,
-wiring and the CI verifier step) is built and being opened as PRs. Every wave-1
-PR had a fresh review; three had a real blocker on the first pass. The ledger
+wiring and the CI verifier step) is built and being opened as PRs. Every wave-1 PR had a fresh review before merge. The ledger
 is built from `contracts/` alone and runs both verifiers only as outside
 programs.
 
@@ -62,7 +61,7 @@ registrar key and no linkage map, and signs a sealed batch in one call that
 chains the hashes; registrations move to a position-free
 `participant_registered` v2 bound to the genesis hash; the signer uses
 deterministic Ed25519 from a reproducible build. Charter §10 item 6 says so
-(#439). Ledger choices (operator, 2026-10-21): operator events by conditional
+(#439). Ledger choices (operator, 2026-10-21, chosen in chat; recorded only here until wave 2's `services/ledger/API.md` documents them): operator events by conditional
 append (409 if the tail moved; the ledger holds no key), registrations refused
 until v2 is in the contracts, and an operator-signed "close issue" call seals an
 issue's last batch.
