@@ -74,8 +74,6 @@ Exactly `contracts/read-api.md` RA-1 to RA-13.
 
 ## Internal port
 
-_Lands in #462._
-
 ### `POST /appends`
 
 Append one operator-signed event (`genesis` or `issue_created`) at the tail.
