@@ -10,7 +10,8 @@ Every error is `{ "error": "<slug>", "message": "<one plain sentence>" }`. The
 counted. A body larger than a route accepts is 413 `body_too_large` on every
 route.
 
-In local development, the four seeded starting questions are listed in General.
+In local development, all seven seeded questions are listed in General, which
+is the default Home/browser listing.
 They retain no author attribution. Community listing otherwise follows the same
 rules as created questions; legacy polls without a community remain excluded.
 

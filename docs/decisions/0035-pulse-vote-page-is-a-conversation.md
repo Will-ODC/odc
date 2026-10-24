@@ -33,7 +33,9 @@ open questions, 2026-10-11:
 2. **A run of questions is one conversation.** Pressing Next brings the next
    question's card into the same thread.
 3. **After voting, results show in the card's place**, with buttons to hide
-   the card and to close it.
+   the card and to close it. **Placement superseded by ADR-0044 (2026-10-23):**
+   results now sit below the saved answer in the main content; the persistent
+   bottom drawer is reserved for voting.
 4. **Desktop keeps a left side column** (Answered; browse when #259/#260 land).
 5. **Comments are reached by scrolling the upper content** of the page, under
    the poster's summary, not in a side column or in the assistant's thread.

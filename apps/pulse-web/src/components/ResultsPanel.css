@@ -202,3 +202,21 @@
   outline: calc(var(--hairline) * 2) solid var(--focus-ring);
   outline-offset: calc(var(--hairline) * 2);
 }
+
+.results--compact {
+  gap: calc(var(--step) / 2);
+  margin-top: var(--step);
+}
+.results--compact .results__count {
+  font-size: var(--t-small);
+}
+.results--compact .results__list {
+  gap: var(--step);
+}
+.results--compact .results__row {
+  grid-template-columns: minmax(0, 1fr) auto;
+  gap: calc(var(--step) / 2) var(--step);
+}
+.results--compact .results__bar {
+  height: calc(var(--step) / 2);
+}

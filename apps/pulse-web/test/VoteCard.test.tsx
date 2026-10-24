@@ -302,7 +302,7 @@ describe("status", () => {
     const link = screen.getByRole("link", {
       name: "How votes count (opens in a new tab)",
     });
-    expect(link.textContent).toBe("How votes count");
+    expect(link.textContent).toBe("i");
     expect(link.getAttribute("href")).toBe("/trust");
     expect(link.getAttribute("target")).toBe("_blank");
     expect(link.getAttribute("rel")).toContain("noopener");
@@ -311,12 +311,7 @@ describe("status", () => {
     render(<VoteCard {...base} trustHref="/trust" />);
     expect(screen.queryByRole("link")).toBeNull();
   });
-  /*
-   * One link to /trust, beside the counts it explains, before the result
-   * actions (operator walkthrough, 2026-10-21; the results panel's own
-   * "What does this mean?" is not used on the card).
-   */
-  it("reaches the one trust link by keyboard between the counts and the result actions", async () => {
+  it("tabs from Change my answer to the info link, then Next", async () => {
     const user = userEvent.setup();
     render(
       <VoteCard
@@ -332,9 +327,13 @@ describe("status", () => {
       />,
     );
     expect(screen.getAllByRole("link")).toHaveLength(1);
-    screen.getByRole("link", { name: /How votes count/ }).focus();
+    button("Change my answer").focus();
     await user.tab();
-    expect(document.activeElement).toBe(button("Change my answer"));
+    expect(document.activeElement).toBe(
+      screen.getByRole("link", { name: /How votes count/ }),
+    );
+    await user.tab();
+    expect(document.activeElement).toBe(button("Next"));
   });
   it("moves focus to the pending status when Submit becomes disabled", () => {
     const { rerender } = render(<VoteCard {...base} picked={[2]} />);
@@ -398,13 +397,18 @@ it("expands an externally collapsed card from the Vote tab", async () => {
   );
 });
 
-it.each([false, true])(
-  "decision and result cards expose one keyboard-operable × (%s)",
-  async (answered) => {
+it.each([
+  { answered: false, collapsed: false },
+  { answered: true, collapsed: false },
+  { answered: false, collapsed: true },
+])(
+  "cards expose one keyboard-operable downward chevron (%j)",
+  async ({ answered, collapsed }) => {
     const onClose = vi.fn();
     render(
       <VoteCard
         {...base}
+        collapsed={collapsed}
         onClose={onClose}
         status={
           answered
@@ -415,7 +419,8 @@ it.each([false, true])(
     );
     const close = button("Close");
     expect(screen.getAllByRole("button", { name: "Close" })).toHaveLength(1);
-    expect(close.textContent).toBe("×");
+    expect(close.textContent).not.toContain("×");
+    expect(close.querySelector('svg[aria-hidden="true"]')).toBeTruthy();
     close.focus();
     await userEvent.setup().keyboard("{Enter}");
     expect(onClose).toHaveBeenCalledOnce();

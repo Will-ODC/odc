@@ -31,6 +31,7 @@
   grid-column: 1 / -1;
   grid-row: 2;
   display: flex;
+  align-items: center;
   flex-wrap: wrap;
   row-gap: var(--step);
 }
@@ -91,14 +92,50 @@
 }
 
 .banner__nav > .account-menu {
+  display: flex;
+  align-items: center;
   border-inline-start: var(--hairline) solid var(--control-line);
   padding-inline-start: calc(var(--step) * 1.5);
 }
+.banner__nav .account-menu__button {
+  display: inline-flex;
+  align-items: center;
+  gap: var(--step);
+  padding: calc(var(--step) / 2) var(--step);
+  border: var(--hairline) solid var(--control-line);
+  border-radius: var(--r-control);
+  background: var(--surface-rest);
+}
+.banner__nav .account-menu__button::after {
+  content: "";
+  inline-size: calc(var(--step) * 0.75);
+  block-size: calc(var(--step) * 0.75);
+  border-inline-end: var(--hairline) solid currentColor;
+  border-block-end: var(--hairline) solid currentColor;
+  transform: translateY(-25%) rotate(45deg);
+}
+.banner__nav .account-menu__button[aria-expanded="true"]::after {
+  transform: translateY(25%) rotate(225deg);
+}
+.banner__nav .account-menu__button:hover,
+.banner__nav .account-menu__button[aria-expanded="true"] {
+  background: var(--surface-hover);
+  color: var(--ballot-ink);
+}
 .banner__nav .account-menu__panel {
-  inset-inline-start: 0;
+  inset-inline-start: calc(var(--step) * 1.5);
   inset-inline-end: auto;
-  align-items: flex-start;
+  align-items: stretch;
+  min-inline-size: calc(100% - var(--step) * 1.5);
+  gap: calc(var(--step) / 2);
+  padding: var(--step);
 }
 .banner__nav .account-menu__panel a {
-  padding: 0;
+  padding: var(--step) calc(var(--step) * 1.5);
+  border-inline-start: none;
+  border-radius: var(--r-control);
+}
+.banner__nav .account-menu__panel a:hover,
+.banner__nav .account-menu__panel a[aria-current="page"] {
+  background: var(--surface-hover);
 }
