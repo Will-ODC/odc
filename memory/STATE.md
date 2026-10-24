@@ -45,15 +45,16 @@ ET-25. Conformance phases 1 to 4, ADR-0034 and ADR-0038 are in both; detail is
 in the Done list below. The Go CLI takes `<file>` with no subcommand; the TS CLI takes
 `verify <file>` (`.github/workflows/repo.yml`).
 
-**The ledger is half merged.** Wave 1 merged 2026-10-23: storage #444
-(INSERT-only table; CHECKs tie `seq`, `type`, `version`, `ts`, `prev_hash` and
-`hash` to the stored line; a migration scan refuses UPDATE/DELETE/trigger
-changes), canonical hashing and parsing #445, Ed25519 #446, the EV-26 checker
-#447 (all 150 vectors fed line by line, tally asserted) and the signer client
-#448. Wave 2 (read API and append core, write path, batching state, batcher,
-wiring and the CI verifier step) is built and being opened as PRs. Every wave-1 PR had a fresh review before merge. The ledger
-is built from `contracts/` alone and runs both verifiers only as outside
-programs.
+**The ledger is built through ballot batching.** Wave 1 merged
+2026-10-23: storage #444, canonical hashing and parsing #445, Ed25519 #446,
+the EV-26 checker #447 and the signer client #448. Wave 2's append core and
+INSERT-only batching state #460, public read API #461 and internal operator
+write/close routes #462 and ballot batching #463 are merged. Local validation
+at #463's final reviewed head passed 340 ledger tests against Postgres 17,
+with zero skipped; both PRs passed CI. Final server wiring and a CI check that both
+verifiers judge a batched export remain pending; close calls still return 503
+until wired. Each merged slice received fresh-context review. The ledger is
+built from `contracts/` alone and runs both verifiers only as outside programs.
 
 **ADR-0043 is accepted** (#438, clarified in #443): identity decides who may
 vote; a separate **signer** service (planned, `services/signer/`) holds the
@@ -61,7 +62,8 @@ registrar key and no linkage map, and signs a sealed batch in one call that
 chains the hashes; registrations move to a position-free
 `participant_registered` v2 bound to the genesis hash; the signer uses
 deterministic Ed25519 from a reproducible build. Charter §10 item 6 says so
-(#439). Ledger choices (operator, 2026-10-21, chosen in chat; recorded only here until wave 2's `services/ledger/API.md` documents them): operator events by conditional
+(#439). Ledger choices (operator, 2026-10-21; now documented in
+`services/ledger/API.md`): operator events by conditional
 append (409 if the tail moved; the ledger holds no key), registrations refused
 until v2 is in the contracts, and an operator-signed "close issue" call seals an
 issue's last batch.
@@ -70,10 +72,11 @@ issue's last batch.
 
 ## Next
 
-1. **Ledger wave 2**: review each PR fresh and merge. Owed nits from wave 1 ride
-   in it (direct lone-surrogate test, byte-flip line-attribution test including
-   LF, PARTIAL replay test, a loud alert on a signer 400, the README note on
-   which columns are tied byte for byte).
+1. **Finish ledger wave 2**: review the final wiring slice (startup recovery before new appends, batching
+   ticks and operator close integration, plus both verifiers judging a batched
+   export in CI). Wave-1 nits landed in #460/#461: direct lone-surrogate tests,
+   byte-flip line attribution including LF, PARTIAL replay and the README
+   storage binding note; the signer-400 alert is in #463.
 2. **Contracts PR for `participant_registered` v2**: spec text in
    `event-types.md` with scoped exceptions to ES-32 and HA-16, both verifiers
    (each built in isolation), and vectors. Verifiers land with or before the
@@ -138,7 +141,8 @@ Optional, from ADR-0034 owed item 4: `docs/security/attacks/check-unknown-batchi
   (#320); vectors `116`-`134` in #327 (#321). TS sub-quadratic cost is
   follow-up #326.
 - ADR-0043 (registrar signer, v2 registration): #438, charter §10 #439, one-call
-  batch signing #443. Ledger wave 1: #444-#448 (2026-10-23).
+  batch signing #443. Ledger wave 1: #444-#448; wave 2 append core/batching state #460, read API
+  #461, operator write path #462 and batcher #463 (2026-10-23).
 - ADR-0038 (the four contradictions, #355): contract #359, `genesis.contracts`
   cap #361. Go #370 (#364), TS #371 (#365), then ET-9f in both verifiers with
   the `086` flip and vectors `135`-`145` in #372 (#366), merged 2026-10-19.
@@ -188,8 +192,9 @@ Optional, from ADR-0034 owed item 4: `docs/security/attacks/check-unknown-batchi
 
 ## Blockers & live cautions
 
-- **The root ODC stack is a stub.** Root `docker-compose.yml` is `services: {}`,
-  and `just smoke`/`just verify` are TODOs. Pulse's images are separate.
+- **The root ODC stack is incomplete.** Root `docker-compose.yml` now runs the
+  ledger database (#461); service wiring and `just smoke`/`just verify` remain
+  incomplete. Pulse's images are separate.
 - **Never open `services/verifier/` and ledger source in one context.** Build each
   verifier in a **sparse worktree**: `git worktree add --no-checkout`, then
   `git sparse-checkout set --no-cone '/contracts/' '/services/verifier/' '/docs/charter.md'`,

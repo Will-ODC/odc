@@ -27,7 +27,9 @@ Do not apply charter rules to `apps/**`, and do not relax them anywhere else.
 
 - **ODC core:** Phase 1. ADR-0043 (separate signer, v2 registration) and the
   charter §10 split are merged (#438, #439, #443). Ledger wave 1 merged
-  (#444-#448); wave 2 is being opened. Identity and the signer are unstarted.
+  (#444-#448); wave 2 append core, read API and operator write path are merged
+  (#460-#463), including the batcher; final wiring remains pending.
+  Identity and the signer are unstarted.
   → `memory/STATE.md`
 - **Pulse:** sign-in, voting, confirmed votes, poll creation and public browsing
   are built. #451/#452 merged the bottom voting drawer, main-content results,
