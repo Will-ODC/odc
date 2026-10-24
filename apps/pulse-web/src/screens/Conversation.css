@@ -25,16 +25,11 @@
   overflow-y: auto;
   padding: var(--gutter);
 }
-/*
- * Below the wide layout the question is on the card, so the space above it
- * holds only the answers so far: sized to them, not stretched to fill, so the
- * card sits right under them rather than at the foot of a mostly empty phone.
- * Still scrolls once the answers outgrow the room.
- */
-@media (max-width: 1099px) {
-  .conversation__scroll {
-    flex: 0 1 auto;
-  }
+.conversation__question {
+  display: flex;
+  flex: 1;
+  min-height: 0;
+  flex-direction: column;
 }
 .conversation__column {
   width: 100%;
@@ -58,7 +53,7 @@
 .conversation__hero > p,
 .conversation__empty,
 .conversation__sidebar p,
-.conversation__thread small {
+.conversation__thread > li > small {
   font-size: var(--t-small);
   color: var(--ballot-ink-muted);
   line-height: 1.5;
@@ -71,28 +66,38 @@
   flex-direction: column;
   gap: var(--gutter);
 }
-.conversation__thread li {
+.conversation__thread > li {
   padding: calc(var(--step) * 2);
   background: var(--surface-rest);
   border-radius: var(--r-card);
   overflow-wrap: anywhere;
 }
-.conversation__thread p {
+.conversation__answer {
+  box-sizing: border-box;
+  width: fit-content;
+  max-width: 100%;
+  margin: calc(var(--step) * 2) 0;
+  padding: var(--step) calc(var(--step) * 1.5);
+  border: var(--hairline) solid rgba(var(--side-b), var(--side-rest));
+  border-inline-start: calc(var(--hairline) * 3) solid rgb(var(--side-b));
+  border-radius: var(--r-control);
+  background: rgba(var(--side-b), var(--side-rest));
+  color: var(--ballot-ink);
   font-size: var(--t-body);
+  font-weight: 600;
+  line-height: 1.5;
 }
 .conversation__dock {
+  flex-shrink: 0;
   padding: var(--step) calc(var(--step) * 1.5);
+  padding-bottom: max(var(--step), env(safe-area-inset-bottom));
   border-top: var(--hairline) solid var(--ballot-line);
 }
 .conversation__dock .vote-card {
   max-height: 60dvh;
   overflow-y: auto;
 }
-/*
- * The vote card is open and says the question and closing date, so the page
- * heading stays for screen readers and focus but is not drawn twice. On a
- * wide window the card is a small tab to the side and the heading shows.
- */
+/* The open voting drawer already names the question on small screens. */
 @media (max-width: 1099px) {
   .conversation__hero--merged {
     position: absolute;
@@ -146,30 +151,7 @@
     font-size: var(--t-small);
   }
   .conversation__dock {
-    padding: var(--step) var(--gutter) calc(var(--step) * 2);
-  }
-}
-
-/* Operator experiment: a small, non-modal vote tab at the desktop's top right. */
-@media (min-width: 1100px) {
-  .conversation__main {
-    position: relative;
-  }
-  .conversation__vote {
-    pointer-events: none;
-    position: absolute;
-    inset-block-start: calc(var(--step) * 2);
-    inset-inline-end: var(--gutter);
-    width: var(--dialog-w);
-    max-width: calc(100vw - var(--rail) - var(--gutter) * 2);
-  }
-  .conversation__vote > * {
-    pointer-events: auto;
-  }
-  .conversation__vote > button {
-    display: block;
-    margin-inline-start: auto;
-    box-shadow: var(--shadow-ballot);
+    padding-inline: var(--gutter);
   }
 }
 

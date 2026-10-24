@@ -190,7 +190,7 @@ test("seeds the four launch questions, and the web dev env points at exactly tho
       .json()
       .polls.map((poll: { id: string }) => poll.id)
       .sort(),
-    Object.values(wanted).sort(),
+    [...Object.values(wanted), "ads-free", "pay-for-it", "ads-allowed"].sort(),
   );
   await app.close();
 });

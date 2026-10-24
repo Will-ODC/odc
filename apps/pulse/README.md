@@ -44,7 +44,7 @@ pnpm --filter @odc/pulse-web dev   # app on http://localhost:5173
 - No email is sent externally. The local mailbox captures messages; links also
   print in the API terminal. Production has no local mailbox or sign-in shortcut.
 - Three demo polls and four starting questions load from `src/dev-server.ts`.
-  The four starting questions appear in General; seeding assigns their community
+  All seven appear on Home (the General listing); seeding assigns their community
   without inventing an author or replacing their existing votes.
 - `@example.test` emails join `demo-community`. `@both.example.test` emails pick
   between two communities. Other emails get no community.

@@ -122,7 +122,7 @@ it("shows loading, empty and errors with a working retry", async () => {
     await main().findByRole("heading", { name: poll().question, level: 1 }),
   ).toBeTruthy();
 });
-it("casts, changes, closes and reopens results in the card", async () => {
+it("keeps results under the answer while the bottom drawer is only for voting", async () => {
   const p = poll();
   let attempt = 0;
   const cast = vi.fn(
@@ -134,35 +134,42 @@ it("casts, changes, closes and reopens results in the card", async () => {
   );
   render(<Conversation api={stubApi({ cast })} pollId={p.id} />);
   await main().findByRole("heading", { name: p.question, level: 1 });
-  openCard();
+  const drawer = screen.getByRole("complementary", { name: "Voting" });
+  expect(within(drawer).getByRole("button", { name: "Submit" })).toBeTruthy();
   const user = await answer();
-  expect(cast).toHaveBeenCalledWith(p.id, [1]);
+  const standing = main().getByRole("group", { name: "How people answered" });
+  const answerRow = main().getByText("You picked Yes.").closest("li")!;
+  expect(answerRow.contains(standing)).toBe(true);
   expect(
-    within(card()).getByRole("group", { name: "How people answered" }),
+    within(drawer).queryByRole("group", { name: "How people answered" }),
+  ).toBeNull();
+  await waitFor(() => expect(document.activeElement).toBe(standing));
+  expect(
+    within(drawer).getByRole("button", { name: "Change my answer" }),
   ).toBeTruthy();
-  expect(within(card()).queryByRole("button", { name: "Hide" })).toBeNull();
-  await user.click(within(card()).getByRole("button", { name: "Close" }));
-  expect(main().queryByRole("region")).toBeNull();
-  await user.click(main().getByRole("button", { name: "Vote" }));
+  expect(within(drawer).queryByRole("button", { name: "Vote" })).toBeNull();
   await user.click(
     within(card()).getByRole("button", { name: "Change my answer" }),
   );
-  await user.click(within(card()).getByRole("radio", { name: "No" }));
-  await user.click(within(card()).getByRole("button", { name: "Submit" }));
-  expect(
-    await main().findByText("Counted. That replaces your earlier answer."),
-  ).toBeTruthy();
-  expect(cast).toHaveBeenLastCalledWith(p.id, [0]);
-  // The transcript line catches up after the card; wait for it (raced on CI).
-  expect(await main().findByText("You picked No.")).toBeTruthy();
-  await user.click(within(card()).getByRole("button", { name: "Close" }));
-  expect(main().queryByRole("region")).toBeNull();
-  expect(document.activeElement).toBe(
-    main().getByRole("button", { name: "Vote" }),
+  expect(within(drawer).getByRole("radio", { name: "Yes" })).toHaveProperty(
+    "checked",
+    true,
   );
-  await user.keyboard("{Enter}");
-  expect(document.activeElement).toBe(within(card()).getByRole("group"));
+  expect(document.activeElement).toBe(
+    within(drawer).getByRole("radio", { name: "Yes" }),
+  );
+  await user.click(within(drawer).getByRole("radio", { name: "No" }));
+  await user.click(within(drawer).getByRole("button", { name: "Submit" }));
+  await main().findByText("Counted. That replaces your earlier answer.");
+  expect(cast).toHaveBeenLastCalledWith(p.id, [0]);
+  expect(await main().findByText("You picked No.")).toBeTruthy();
+  await user.click(
+    within(drawer).getByRole("button", { name: "Change my answer" }),
+  );
+  expect(within(drawer).getByRole("button", { name: "Submit" })).toBeTruthy();
+  expect(cast).toHaveBeenCalledTimes(2);
 });
+
 it("opens the next question's card even if the previous card was closed (#401)", async () => {
   const p = poll({ next: [null, "second"] });
   const second = poll({ id: "second", question: "Where?", next: [null, null] });
@@ -289,11 +296,16 @@ it("refuses a known closed poll and lets a non-voter read final results", async 
   expect(within(card()).queryByRole("button", { name: "Submit" })).toBeNull();
   await userEvent.click(main().getByRole("button", { name: "See results" }));
   expect(await main().findByText("Nobody answered this one.")).toBeTruthy();
-  await userEvent.click(main().getByRole("button", { name: "Close" }));
-  expect(document.activeElement).toBe(
-    main().getByRole("button", { name: "Vote" }),
+  const standing = main().getByRole("group", { name: "How people answered" });
+  expect(
+    screen.getByRole("complementary", { name: "Voting" }).contains(standing),
+  ).toBe(false);
+  await userEvent.click(
+    within(standing).getByRole("button", { name: "Close" }),
   );
-  await userEvent.click(main().getByRole("button", { name: "Vote" }));
+  expect(document.activeElement).toBe(
+    main().getByRole("button", { name: "See results" }),
+  );
   expect(within(card()).getByText("This one has closed.")).toBeTruthy();
   expect(main().queryByText("Nobody answered this one.")).toBeNull();
   expect(cast).not.toHaveBeenCalled();
@@ -345,10 +357,6 @@ it("keyboard-only picking and confirmation casts exactly once", async () => {
   render(<Conversation api={stubApi({ cast })} pollId="ads-free" />);
   await main().findByRole("heading", { name: poll().question, level: 1 });
   const user = userEvent.setup();
-  await user.tab();
-  expect(document.activeElement).toBe(
-    main().getByRole("button", { name: "Show me how" }),
-  );
   await user.tab(); // Close
   await user.tab(); // First choice
   expect(document.activeElement).toBe(
@@ -691,7 +699,13 @@ it("links to /trust once after voting, as 'How votes count'", async () => {
     .getAllByRole("link")
     .filter((link) => link.getAttribute("href") === "/trust");
   expect(links).toHaveLength(1);
-  expect(links[0]?.textContent).toBe("How votes count");
+  expect(links[0]?.textContent).toBe("i");
+  expect(links[0]?.previousElementSibling?.textContent).toBe(
+    "Change my answer",
+  );
+  expect(main().queryByText("Only you can see your answer here.")).toBeNull();
+  expect(main().queryByText("WHERE IT STANDS")).toBeNull();
+  expect(main().queryByRole("button", { name: "Show me how" })).toBeNull();
   expect(screen.queryByText(/What does this mean\?/)).toBeNull();
 });
 

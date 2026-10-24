@@ -4,7 +4,7 @@
 > Read `memory/INDEX.md` first. Agent rules are in `apps/pulse/CLAUDE.md`, the
 > served API is in `apps/pulse/API.md`, and the work queue is GitHub
 > issues (design detail an issue links to is in `docs/plans/pulse.md`). This file holds current state only, and history is in
-> git. Slimmed 2026-10-10, refreshed 2026-10-21. The long ledger it replaced is in
+> git. Slimmed 2026-10-10, refreshed 2026-10-23. The long ledger it replaced is in
 > `git log -p -- memory/pulse.md`.
 >
 > The operator's development-feedback loop, the trust and reporting decisions,
@@ -37,7 +37,7 @@ Repo discipline still applies: tests ship with the change, there is one small
 branch per change, named for its ticket (`pulse/<issue>-<short>`, #310), and
 the same CI runs.
 
-## Where it stands (2026-10-21)
+## Where it stands (2026-10-23)
 
 - **Pillar 1 (identity) is built.** Magic-link sign-in and redeem (#81-#87,
   #116, #149). Open sign-up lets anyone sign in, and community is an optional
@@ -56,10 +56,14 @@ the same CI runs.
 - **Pillar 2 (story UI):** the vote page is a **conversation** (epic #303,
   ADR-0035): #299/PR #307 vote card, #301/PR #313 page, #302/PR #322 made it the
   default and retired the swipe ballot, `Run` and `ChoiceBallot`. Around it:
-  welcome at `/`, progress at `/start`, four starting questions at `/questions`
-  (#341/PR #347); the optional "Show me how" tutorial (#342/PR #363); the trust
-  page at `/trust` (#351/PR #357, ADR-0039); a plain sign-in heading and no focus
-  box on headings (PR #373). The starting questions need published poll IDs
+  Home is the General poll browser at `/`; the introduction and Start voting
+  are at `/about` (#449 / PR #452, `1570690`). Progress remains at `/start`,
+  with four starting questions at `/questions` (#341/PR #347). #422 / PR #451
+  (`46f9158`, ADR-0044) puts voting in a permanent bottom drawer on phone and
+  desktop, with results below the saved answer in main content. After voting,
+  the drawer handle says Change my answer. The live tutorial was removed.
+  The trust page remains at `/trust` (#351/PR #357, ADR-0039); sign-in has a
+  plain heading with no focus box (PR #373). The starting questions need published poll IDs
   (`VITE_PULSE_*_POLL_ID`); until then they show Coming soon.
 - **MCP public reads are built** (#300 read slice, PR #323): `get_poll` and
   `get_results` at `/api/mcp`. ADR-0036 (voting from AI apps) is still marked
@@ -106,15 +110,21 @@ the same CI runs.
 5. **A container-image scan** in `pulse-images.yml` before the first deploy
    (deferred by the operator, 2026-10-11; #315's other items are done).
 
-## Current operator plan (2026-10-21)
+## Current operator direction and next work (2026-10-23)
 
-1. **Browse #260 is merged** (PR #426, 2026-10-21): welcome's Explore questions opens a public, community-scoped
-   browse list, while Start voting retains the existing guided introduction.
-   Show open/closed questions, newest first, with pagination and recoverable
-   errors. Continue with poll-creation refinement below.
-2. Refine poll creation next. The operator expects substantial improvement;
-   the particular form/content/workflow changes still need to be scoped.
-   Reuse the built creation flow rather than creating a second authoring system.
+1. **Drawer and Home/About are merged** (#451/#452). Local validation of the
+   combined UI passed 494 browser tests and 13 real-HTTP integration tests,
+   lint and typecheck. The dev-server suite passed 18 tests with 10 Postgres
+   cases skipped because no test database was configured. Both PRs passed CI
+   before merge; no public deployment is claimed.
+2. **Recommended results refinement: #453**, a compact results banner with
+   vertical bars below the question/image/context and above comments. This
+   remains unbuilt and is the recommended next implementation slice. Preserve current
+   results visibility, all/confirmed counts, privacy and casting behavior.
+   It can ship without comments; #297 owns their records and posting, #423
+   replies, and #424 the separate opinion-diversity prototype.
+   Poll-creation refinement remains an earlier request whose particular
+   changes still need scoping; reuse the built creation flow.
 3. Prepare a small invited pilot once browsing and the agreed creation
    refinements are ready, with a chosen host, persistent database, verified
    sending domain and the deferred container-image scan. This is a plan,
@@ -123,48 +133,85 @@ the same CI runs.
    and published starting questions. Continue toward discussion, related votes
    and documented action through #303 and its linked tickets.
 
-## Browse (merged 2026-10-21)
+## Browse (merged, updated 2026-10-23)
 
 - #260 merged in PR #426 (`ad4288f`), confirmed on GitHub.
-  Welcome offers Explore questions alongside the unchanged guided Start voting
-  path. The public list supports communities, open/closed questions, cursor
+  #449 / PR #452 now puts the General list at Home (`/`), with the former
+  welcome at `/about`. Its Start voting path remains unchanged, and Explore
+  questions returns to Home. Existing community and explicit poll links work.
+  All seven local seed questions appear in General. The public list supports communities, open/closed questions, cursor
   pagination and recoverable failures; browsing never casts a vote.
 - Current layout: centered main column with space for columns on both sides
   on desktop, full width on phones, and quiet top text navigation with subtle
   separators. General is public; Your community uses the existing email-linked
   community label, not a new membership or social-confirmation system.
-- Independent implementation and layout reviews returned APPROVE. The latest
-  local web suite had 490 passing tests. William merged PR #426; no public
+- Independent implementation and layout reviews of #426 returned APPROVE.
+  Validation of the later #451/#452 layout is recorded above; no public
   deployment has been performed by this chat.
 - Later browse thumbnails and a few context lines per entry are #427, dependent
   on #296 image/context fields; #397 owns the richer mixed feed. Reuse these
   issues rather than creating duplicates. Side-column contents remain #331.
-- **Next selected work remains poll-creation refinement**, with specific
-  changes still to be scoped. Longer work stays in its existing issues:
-  #422 bottom vote drawer, #297/#423 discussion, #424 opinion-diversity
-  prototype and #425 related-vote continuation. Invited-pilot prerequisites
-  remain the current plan above.
+- #453 owns the newly requested results presentation; #297/#423 own
+  discussion, #424 the opinion-diversity prototype and #425 related-question
+  continuation. Invited-pilot prerequisites remain the current plan above.
+
+## Backlog ownership (reviewed 2026-10-23)
+
+- New community direction: #457 owns readable community paths (proposed
+  `/c/<community-name>`, with old links preserved). #458 owns a linked
+  discussion/voting thread on creation, suspension, banning, restoration and
+  destruction/dissolution under constitutional and foundational rules.
+  These are unbuilt requests; policy questions are recorded once in
+  `memory/pulse-development.md`, "Community paths and lifecycle deliberation".
+  #440 still owns multiple verified memberships. URL work and lifecycle
+  deliberation do not authorize new enforcement or deletion behavior.
+- Reviewed all 73 then-open issues. #186 was closed as a duplicate of #425;
+  its closed-first-question/no-saved-ballot regression is explicitly retained
+  there. This is consolidation, not a claim the defect is fixed. Related order
+  and terminal fallback still need accepted decisions.
+- **Continuation clarification (2026-10-23): #425** now owns left/right page
+  chevrons, with Next following the current thread/story when relevant and
+  otherwise continuing to the next poll in the main feed. #464's brief
+  feed-only navigation ticket was consolidated into #425. The unfinished
+  feed-only edits were removed; no continuation implementation is in progress.
+  This is likely future work; a simple slice is possible only after its
+  navigation semantics are agreed. Feed order may later be algorithmic, but
+  no algorithm, personalization or inferred relationship rule is selected.
+- #453 owns open/closed poll chart presentation; #332 owns linked action
+  progress and evidence, reusing the same results. #303 and #297 now reflect
+  the results-before-comments layout and merged drawer.
+- #291 owns discovery/listing in the existing public MCP adapter, not another
+  implementation of PR #323's get_poll/get_results. #397 owns posts,
+  post-to-poll relationships and the mixed feed; reuse #427's poll previews.
+- Abuse reporting already has separate owners: #233 shared submission,
+  duplicates and limits; #234 review; #235 user reports; #236 poll reports;
+  #237 private-message reports. Public-comment reporting belongs to #297
+  using #233's shared foundation. These are distinct outcomes, not duplicates.
+  Reporting access, reasons/limits, review authority and enforcement rules
+  remain prerequisites; see `memory/pulse-development.md`.
 
 ## Next / not built
 
 - **The authoring and demo-feedback slices are complete** (#393/#403–#405).
-  Browse #260 is also merged. Poll-creation refinement is next; see the
+  Browse #260 and the #451/#452 layout are also merged. #453 is the recommended
+  results slice; #457/#458 add community paths and lifecycle deliberation.
+  Poll-creation refinements still need scoping. See the
   current plan above. A local demo is available, but there is no claim of a public deploy.
 - Open feature issues: #296 photo and summary, #297 comments, #336 suggestions in
   the conversation page, #331-#333 desktop side columns and action follow-through,
-  #329 a "My votes" page, #314 browser-extension prototype (idea only), #186 a
-  closed first question leaves nothing to press.
+  #329 a "My votes" page, #314 browser-extension prototype (idea only), and
+  #425 related/closed-question onward navigation (including former #186).
 - P8 slice 2 (the guest upgrade path) and P9-P11 are unstarted. Email assurance
   does not prove social confirmation or a unique human.
 - **ADR-0025 (related polls) is accepted but NOT built.**
   `GET /api/polls/:id/related` is "Planned, not served". P10's declinable gate
   depends on it.
-- P3, the subject browser / home screen, is blocked on a decision. The operator
+- P3's richer feed and related-question grouping remain future work. The operator
   described it (2026-09-06) as "a home screen that browses all polls and batches
   of related polls, story-style". It is also ADR-0022's route back to a question
   from outside a run.
   Its listing API (#259 / PR #419) and minimal browser (#260 / PR #426) are
-  merged. Richer previews (#427), the mixed feed (#397) and related-vote
+  merged, and #452 makes the General browser Home. Richer previews (#427), the mixed feed (#397) and related-vote
   navigation (#425) remain separate; MCP discovery (#291) is still unbuilt.
 - **Authorised moderator access is not built.** The merged creation form and
   public byline use ADR-0037's interim anonymity disclosure (#393); do not claim
@@ -178,6 +225,16 @@ the same CI runs.
 
 ## Open decisions (operator)
 
+- **Continuation (#425):** define relevance and explicit story/thread order,
+  precedence with answer-selected Next and related alternatives, source-feed
+  scope/order, Previous/history behavior, pagination and end-of-feed fallback.
+  Preserve saved answers, discard another question's unsent choices, block
+  navigation while casting and never cast automatically. Later algorithmic
+  feed ordering needs its own accepted policy and implementation scope.
+- **Community lifecycle (#458):** governing/protected rules, creation and
+  moderation authority, eligible voters, decision thresholds, appeals,
+  state semantics and retention remain open. See the community deliberation
+  section in `memory/pulse-development.md`; no lifecycle rule is adopted.
 - **Pulse/core compatibility (#398, deferred):** which responsibilities stay
   with Pulse; how eligibility and identity cross the API boundary; how mutable
   recasts and approval choices map to core's v1 ballot rules; what the UI says
@@ -228,9 +285,10 @@ the same CI runs.
   `docs/plans/pulse.md`.
 - **A re-cast is an upsert** (`voting/pg-store.ts`). Any "stamped once" rule
   describes the answer currently standing.
-- **ADR-0035:** the vote page is a conversation. Mockup
-  `docs/mockups/pulse-screens/09-chat-vote.html` is the design of record; the
-  built panel sits top right on desktop and above the composer on phone.
+- **ADR-0035 / ADR-0044:** the vote page is a conversation; ADR-0044
+  supersedes the historical mockup's placement with a permanent bottom voting
+  drawer and results beneath the saved answer in main content. Next stays
+  with results. #453 is the pending chart refinement, not built behavior.
 - **ADR-0037:** poll creation: closes after seven days unless the poster picks a
   later time; suggestions off (#336); five publications per rolling hour per
   account; Owner and narrow grants; community or General posting; anonymous by

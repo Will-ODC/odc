@@ -10,7 +10,7 @@ export function SiteNavigation({
 }) {
   const links = [
     { href: "/", label: "Home" },
-    { href: "/browse?community=pulse-general", label: "General" },
+    { href: "/about", label: "About" },
   ];
   return (
     <nav className="banner__nav" aria-label="Main navigation">

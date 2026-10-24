@@ -1,13 +1,12 @@
 import { useCallback, useEffect, useRef, useState } from "react";
+import type { ReactNode } from "react";
 import type { Poll, PulseApi, Results } from "../api/types.js";
 import { cardStatus, closingNote, nextFor } from "../flow/conversation.js";
 import { byline } from "../flow/new-poll.js";
-import { guideFor } from "../flow/vote-help.js";
 import { pathOf } from "../flow/route.js";
 import { usePoll } from "../hooks/use-poll.js";
 import { useCastVote } from "../hooks/use-cast-vote.js";
 import { useClosedResults } from "../hooks/use-closed-results.js";
-import { ControlGuide } from "../components/ControlGuide.js";
 import { useFreshResults } from "../hooks/use-fresh-results.js";
 import type { Confirmation } from "../flow/vote-card.js";
 import { VoteCard } from "../components/VoteCard.js";
@@ -257,86 +256,105 @@ function LoadedQuestion({
   useEffect(() => {
     if (loaded.status === "ready") heading.current?.focus();
   }, [loaded.status]);
-  return (
-    <>
-      <div className="conversation__scroll">
-        <div className="conversation__column">
-          <ViewState data={loaded}>
-            {(poll) => (
-              // One heading node either way, so focus on it survives the
-              // card opening and closing.
-              <section
-                className={
-                  cardOpen
-                    ? "conversation__hero conversation__hero--merged"
-                    : "conversation__hero"
-                }
-              >
-                {cardOpen ? null : <p>{closingNote(poll)}</p>}
-                <h1 ref={heading} tabIndex={-1}>
-                  {poll.question}
-                </h1>
-                {!cardOpen && byline(poll.attribution) ? (
-                  <p className="conversation__byline">
-                    {byline(poll.attribution)}
-                  </p>
-                ) : null}
-              </section>
-            )}
-          </ViewState>
-          {loaded.status === "error" || loaded.status === "empty" ? (
-            <button type="button" onClick={onRetry}>
-              Try again
-            </button>
-          ) : null}
-          <ol className="conversation__thread" aria-label="Conversation">
-            {answers.map((answer) => (
-              <li key={answer.poll.id}>
-                <button
-                  type="button"
-                  disabled={busy}
-                  onClick={() => onGo(answer.poll.id)}
+  const renderPage = (
+    standing: ReactNode,
+    vote: ReactNode,
+    current?: Answer,
+  ) => {
+    // Render the saved answer and its results in the same commit, before the
+    // conversation history catches up, so the focused panel never changes rows.
+    const thread =
+      current && !answers.some((answer) => answer.poll.id === current.poll.id)
+        ? [...answers, current]
+        : answers;
+    return (
+      <>
+        <div className="conversation__scroll">
+          <div className="conversation__column">
+            <ViewState data={loaded}>
+              {(poll) => (
+                // One heading node either way, so focus on it survives the
+                // card opening and closing.
+                <section
+                  className={
+                    cardOpen
+                      ? "conversation__hero conversation__hero--merged"
+                      : "conversation__hero"
+                  }
                 >
-                  {answer.poll.question}
-                </button>
-                <p>
-                  You picked{" "}
-                  {answer.ballot
-                    .map((index) => answer.poll.choices[index])
-                    .join(" and ")}
-                  .
-                </p>
-                <small>Only you can see your answer here.</small>
-              </li>
-            ))}
-          </ol>
-          {answers.length === 0 && loaded.status === "ready" ? (
-            <p className="conversation__empty">
-              Your answers will appear here after you submit.
-            </p>
-          ) : null}
+                  {cardOpen ? null : <p>{closingNote(poll)}</p>}
+                  <h1 ref={heading} tabIndex={-1}>
+                    {poll.question}
+                  </h1>
+                  {!cardOpen && byline(poll.attribution) ? (
+                    <p className="conversation__byline">
+                      {byline(poll.attribution)}
+                    </p>
+                  ) : null}
+                </section>
+              )}
+            </ViewState>
+            {loaded.status === "error" || loaded.status === "empty" ? (
+              <button type="button" onClick={onRetry}>
+                Try again
+              </button>
+            ) : null}
+            <ol className="conversation__thread" aria-label="Conversation">
+              {thread.map((answer) => (
+                <li key={answer.poll.id}>
+                  <button
+                    type="button"
+                    disabled={busy}
+                    onClick={() => onGo(answer.poll.id)}
+                  >
+                    {answer.poll.question}
+                  </button>
+                  <p className="conversation__answer">
+                    You picked{" "}
+                    {answer.ballot
+                      .map((index) => answer.poll.choices[index])
+                      .join(" and ")}
+                    .
+                  </p>
+                  {answer.poll.id === pollId ? standing : null}
+                </li>
+              ))}
+            </ol>
+            {!thread.some((answer) => answer.poll.id === pollId)
+              ? standing
+              : null}
+            {thread.length === 0 && loaded.status === "ready" ? (
+              <p className="conversation__empty">
+                Your answers will appear here after you submit.
+              </p>
+            ) : null}
+          </div>
         </div>
-      </div>
-      <div className="conversation__dock">
-        <div className="conversation__column">
-          {loaded.status === "ready" ? (
-            <div className="conversation__vote">
-              <LiveCard
-                key={loaded.value.id}
-                api={api}
-                poll={loaded.value}
-                {...(saved ? { saved } : {})}
-                confirmation={confirmation}
-                onCounted={onCounted}
-                onBusy={onBusy}
-                onGo={onGo}
-                onCardOpen={setCardOpen}
-              />
+        {vote ? (
+          <aside className="conversation__dock" aria-label="Voting">
+            <div className="conversation__column">
+              <div className="conversation__vote">{vote}</div>
             </div>
-          ) : null}
-        </div>
-      </div>
-    </>
+          </aside>
+        ) : null}
+      </>
+    );
+  };
+  return loaded.status === "ready" ? (
+    <LiveCard
+      key={loaded.value.id}
+      api={api}
+      poll={loaded.value}
+      {...(saved ? { saved } : {})}
+      confirmation={confirmation}
+      onCounted={onCounted}
+      onBusy={onBusy}
+      onGo={onGo}
+      onCardOpen={setCardOpen}
+      renderPage={renderPage}
+    />
+  ) : (
+    renderPage(null, null)
   );
 }
 
@@ -349,6 +367,7 @@ function LiveCard({
   onBusy,
   onGo,
   onCardOpen,
+  renderPage,
 }: {
   api: PulseApi;
   poll: Poll;
@@ -359,15 +378,17 @@ function LiveCard({
   onGo: (id: string) => void;
   /** Whether the open card is showing the question, for the page heading. */
   onCardOpen: (open: boolean) => void;
+  renderPage: (
+    standing: ReactNode,
+    vote: ReactNode,
+    current?: Answer,
+  ) => ReactNode;
 }) {
   const { state, cast, reset } = useCastVote(api, poll.id);
   const [picked, setPicked] = useState<number[]>(saved?.ballot ?? []);
   const [showSaved, setShowSaved] = useState(Boolean(saved));
   const [collapsed, setCollapsed] = useState(false);
   const [visible, setVisible] = useState(true);
-  const [helping, setHelping] = useState(false);
-  const help = useRef<HTMLButtonElement>(null);
-  const guideRoot = useRef<HTMLDivElement>(null);
   const show = useRef<HTMLButtonElement>(null);
   const wrapper = useRef<HTMLDivElement>(null);
   const wasVisible = useRef(true);
@@ -442,130 +463,122 @@ function LiveCard({
     savedShowing.kind === "answered" && fresh.results
       ? { ...savedShowing, results: fresh.results }
       : savedShowing;
+  const resultView = showing.kind === "answered";
+  const hadResults = useRef(resultView);
+  useEffect(() => {
+    if (
+      (resultView && document.activeElement === document.body) ||
+      hadResults.current !== resultView
+    ) {
+      const node = wrapper.current;
+      const target = resultView
+        ? node?.querySelector<HTMLElement>(".results")
+        : (node?.querySelector<HTMLElement>("input:checked") ??
+          node?.querySelector<HTMLElement>("input"));
+      target?.focus();
+    }
+    hadResults.current = resultView;
+  }, [resultView, saved]);
   const next = showing.kind === "answered" ? nextFor(poll, ballot) : null;
   const shut = status.kind === "closed";
   // The card, open or folded, names the question; closed results do not.
-  const showsQuestion = visible && !(shut && closed.showing);
+  const showsQuestion =
+    visible && showing.kind !== "answered" && !(shut && closed.showing);
   useEffect(() => onCardOpen(showsQuestion), [onCardOpen, showsQuestion]);
   function change() {
     setShowSaved(false);
     fresh.clear();
     reset();
     setCollapsed(false);
+    setVisible(true);
   }
   function close() {
     setVisible(false);
   }
-  const guide = guideFor(
-    visible,
-    collapsed,
-    showing.kind,
-    picked.length > 0,
-    Boolean(next),
+  const handle = (
+    <div className="conversation__help">
+      <button
+        type="button"
+        ref={show}
+        onClick={() => {
+          if (showing.kind === "answered") change();
+          else setVisible(true);
+        }}
+      >
+        {showing.kind === "answered" ? "Change my answer" : "Vote"}
+      </button>
+    </div>
   );
-  const dismissHelp = () => {
-    setHelping(false);
-    help.current?.focus();
-  };
-  const helpButton = poll.open ? (
-    <button
-      type="button"
-      ref={help}
-      onClick={() => {
-        setHelping(true);
-      }}
-    >
-      Show me how
-    </button>
+  const card = (
+    <div ref={wrapper}>
+      <VoteCard
+        presentation={showing.kind === "answered" ? "results" : "card"}
+        question={poll.question}
+        {...(byline(poll.attribution)
+          ? { byline: byline(poll.attribution) as string }
+          : {})}
+        why={closingNote({ ...poll, open: !shut })}
+        method={poll.method}
+        choices={poll.choices.map((label, index) => ({ index, label }))}
+        picked={picked}
+        status={showing}
+        privacyNote="Your answer is private."
+        trustHref={pathOf({ kind: "trust" })}
+        confirmation={cardConfirmation}
+        confirmHref={pathOf({
+          kind: "signIn",
+          returnTo: { kind: "conversation", pollId: poll.id },
+        })}
+        {...(fresh.problem
+          ? {
+              resultsProblem: {
+                message: fresh.problem,
+                onRetry: fresh.refresh,
+              },
+            }
+          : {})}
+        collapsed={collapsed}
+        onPick={setPicked}
+        onSubmit={(ballot) => {
+          onBusy(true);
+          cast(ballot);
+        }}
+        onCollapse={setCollapsed}
+        onClose={close}
+        {...(showing.kind === "answered" && poll.open
+          ? { onChangeAnswer: change }
+          : {})}
+        {...(next ? { onNext: () => onGo(next) } : {})}
+      />
+    </div>
+  );
+  const standing = shut ? (
+    closed.showing ? (
+      <ClosedResults
+        data={closed.data}
+        onRetry={closed.retry}
+        onClose={closed.close}
+        panelRef={closed.panelRef}
+        explainHref={pathOf({ kind: "trust" })}
+      />
+    ) : (
+      <button type="button" ref={closed.triggerRef} onClick={closed.open}>
+        See results
+      </button>
+    )
+  ) : showing.kind === "answered" ? (
+    card
   ) : null;
-  const coach = helping ? (
-    <ControlGuide
-      root={guideRoot}
-      selector={guide.selector}
-      text={guide.text}
-      finished={guide.finished}
-      onDismiss={dismissHelp}
-    />
-  ) : null;
-  if (!visible)
-    return (
-      <div ref={guideRoot} className="conversation__help">
-        <button
-          type="button"
-          data-guide="open"
-          ref={show}
-          onClick={() => setVisible(true)}
-        >
-          Vote
-        </button>
-        {helpButton}
-        {coach}
-      </div>
-    );
-  if (shut && closed.showing)
-    return (
-      <div className="vote-card">
-        <ClosedResults
-          data={closed.data}
-          onRetry={closed.retry}
-          onClose={() => {
-            closed.close();
-            close();
-          }}
-          panelRef={closed.panelRef}
-          explainHref={pathOf({ kind: "trust" })}
-        />
-      </div>
-    );
+  const vote = !visible || showing.kind === "answered" ? handle : card;
   return (
-    <div ref={guideRoot}>
-      {helpButton}
-      {coach}
-      <div ref={wrapper}>
-        <VoteCard
-          question={poll.question}
-          {...(byline(poll.attribution)
-            ? { byline: byline(poll.attribution) as string }
-            : {})}
-          why={closingNote({ ...poll, open: !shut })}
-          method={poll.method}
-          choices={poll.choices.map((label, index) => ({ index, label }))}
-          picked={picked}
-          status={showing}
-          privacyNote="Your answer is private."
-          trustHref={pathOf({ kind: "trust" })}
-          confirmation={cardConfirmation}
-          confirmHref={pathOf({
-            kind: "signIn",
-            returnTo: { kind: "conversation", pollId: poll.id },
-          })}
-          {...(fresh.problem
-            ? {
-                resultsProblem: {
-                  message: fresh.problem,
-                  onRetry: fresh.refresh,
-                },
-              }
-            : {})}
-          collapsed={collapsed}
-          onPick={setPicked}
-          onSubmit={(ballot) => {
-            onBusy(true);
-            cast(ballot);
-          }}
-          onCollapse={setCollapsed}
-          onClose={close}
-          {...(showing.kind === "answered" && poll.open
-            ? { onChangeAnswer: change }
-            : {})}
-          {...(next ? { onNext: () => onGo(next) } : {})}
-        />
-      </div>
-      {shut ? (
-        <button type="button" ref={closed.triggerRef} onClick={closed.open}>
-          See results
-        </button>
-      ) : null}
+    <div className="conversation__question">
+      {renderPage(
+        standing,
+        vote,
+        showing.kind === "answered"
+          ? { poll, ballot, results: showing.results }
+          : undefined,
+      )}
     </div>
   );
 }

@@ -13,7 +13,7 @@
  * nobody had clicked anything.
  */
 export type Route =
-  | { kind: "welcome" }
+  | { kind: "about" }
   | { kind: "progress" }
   | { kind: "questions" }
   | { kind: "browse"; community: string }
@@ -33,7 +33,7 @@ export type Route =
   | { kind: "chatPreview" }
   /** "Why you can trust your vote" (#351). Static copy, no server calls. */
   | { kind: "trust" }
-  /** Live conversation page; explicit poll links bypass the welcome. */
+  /** Live conversation page; explicit poll links bypass the browser. */
   | { kind: "conversation"; pollId: string }
   /** Posting a question (ADR-0037). Signed in only; the screen says so. */
   | { kind: "newPoll" };
@@ -94,13 +94,12 @@ export function routeFrom(href: string): Route {
   if (path === NEW_POLL_PATH) return { kind: "newPoll" };
   if (path === "/start") return { kind: "progress" };
   if (path === "/questions") return { kind: "questions" };
-  if (path === "/browse")
+  if (path === "/about") return { kind: "about" };
+  if (path === "/browse" || (path === "/" && !url.searchParams.get("poll")))
     return {
       kind: "browse",
       community: url.searchParams.get("community")?.trim() || "pulse-general",
     };
-
-  if (path === "/" && !url.searchParams.get("poll")) return { kind: "welcome" };
 
   // `?poll=` so a conversation can be started anywhere in the graph without a rebuild.
   return {
@@ -112,14 +111,16 @@ export function routeFrom(href: string): Route {
 /** The URL a route should show. The inverse of `routeFrom` for every route. */
 export function pathOf(route: Route): string {
   switch (route.kind) {
-    case "welcome":
-      return "/";
+    case "about":
+      return "/about";
     case "progress":
       return "/start";
     case "questions":
       return "/questions";
     case "browse":
-      return `/browse?community=${encodeURIComponent(route.community)}`;
+      return route.community === "pulse-general"
+        ? "/"
+        : `/browse?community=${encodeURIComponent(route.community)}`;
     case "signIn":
       switch (route.returnTo?.kind) {
         case undefined:
