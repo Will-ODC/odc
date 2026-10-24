@@ -13,6 +13,7 @@ import type { ClaimService } from "../identity/claim.js";
 import type { Voter, VoterStore } from "../identity/store.js";
 import type { ConfirmationKey } from "../voting/confirmation.js";
 import { publicPoll } from "../voting/public-poll.js";
+import { historyPage, parseHistoryQuery } from "../voting/history.js";
 import { parsePollListQuery, pollListPage } from "../voting/listing.js";
 import {
   BallotError,
@@ -477,6 +478,27 @@ export async function createServer(deps: ServerDeps): Promise<FastifyInstance> {
     const voter = await requireVoter(request, reply);
     if (!voter) return reply;
     return reply.send({ voter: publicVoter(voter) });
+  });
+
+  app.get("/api/my-votes", async (request, reply) => {
+    reply.header("cache-control", "private, no-store");
+    const query = parseHistoryQuery(request.query);
+    if (!query)
+      return reply.code(400).send({
+        error: "bad_request",
+        message: "Choose a valid page of your votes.",
+      });
+    // Reading history never mints a ballot. A missing or invalid cookie owns
+    // no votes, even if the browser still has a signed-in account session.
+    const ballot = heldBallot(request);
+    if (!ballot) return reply.send({ votes: [], nextCursor: null });
+    const votes = await deps.votes.listVotes(ballot, query.limit, query.before);
+    const polls = new Map(
+      (
+        await Promise.all(votes.map((vote) => deps.votes.getPoll(vote.pollId)))
+      ).flatMap((poll) => (poll ? [[poll.id, poll] as const] : [])),
+    );
+    return reply.send(historyPage(votes, polls, query.limit, now()));
   });
 
   // Reading a poll or its results needs no session: a signed-in story viewer

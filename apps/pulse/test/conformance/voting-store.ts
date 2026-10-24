@@ -86,6 +86,38 @@ export function votingStoreConformance(
         });
       });
 
+      test("private vote history pages only this browser's current ballots", async (t) => {
+        const store = await storeAt(t);
+        for (const id of ["p1", "p2", "p3"]) {
+          await store.createPoll({
+            id,
+            question: id,
+            choices: ["Yes", "No"],
+            method: "single",
+          });
+        }
+        await store.castVote("p1", "browser-a", [0]);
+        await store.castVote("p2", "browser-a", [1]);
+        await store.castVote("p3", "browser-b", [0]);
+        await store.castVote("p2", "browser-a", [0]);
+        assert.deepEqual(
+          (await store.listVotes("browser-b", 20)).map((v) => v.pollId),
+          ["p3"],
+        );
+        const first = await store.listVotes("browser-a", 1);
+        assert.equal(first.length, 2);
+        assert.equal(first[0]?.pollId, "p2");
+        assert.deepEqual(first[0]?.choices, [0]);
+        const second = await store.listVotes("browser-a", 1, {
+          castAt: first[0]!.castAt,
+          pollId: first[0]!.pollId,
+        });
+        assert.deepEqual(
+          second.map((v) => v.pollId),
+          ["p1"],
+        );
+      });
+
       test("casting_again_before_close_changes_the_vote_and_the_count_follows", async (t) => {
         const store = await storeAt(t);
         await pollWith(store);

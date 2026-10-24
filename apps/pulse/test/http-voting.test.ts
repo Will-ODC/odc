@@ -193,6 +193,96 @@ test("a_poll_with_no_closing_time_serialises_closesAt_as_null", async () => {
   assert.equal(reply.json().open, true);
 });
 
+test("my votes belongs only to this browser and disappears after forgetting", async () => {
+  const { browser } = await setup();
+  const first = browser();
+  const second = browser();
+  const empty = await first({ method: "GET", url: "/api/my-votes" });
+  assert.deepEqual(empty.json(), { votes: [], nextCursor: null });
+  assert.equal(empty.cookies.length, 0, "history read does not mint a ballot");
+
+  await first({
+    method: "POST",
+    url: "/api/polls/p1/votes",
+    payload: { ballot: [0, 2] },
+  });
+  await second({
+    method: "POST",
+    url: "/api/polls/p1/votes",
+    payload: { ballot: [1] },
+  });
+  const mine = await first({ method: "GET", url: "/api/my-votes" });
+  assert.equal(mine.headers["cache-control"], "private, no-store");
+  assert.deepEqual(mine.json(), {
+    votes: [
+      {
+        pollId: "p1",
+        question: "Where next?",
+        choices: ["Park", "Rink"],
+        castAt: START.toISOString(),
+        open: true,
+      },
+    ],
+    nextCursor: null,
+  });
+  assert.deepEqual(
+    (await second({ method: "GET", url: "/api/my-votes" })).json().votes[0]
+      .choices,
+    ["Library"],
+  );
+
+  await first({ method: "POST", url: "/api/sign-out" });
+  assert.deepEqual(
+    (await first({ method: "GET", url: "/api/my-votes" })).json(),
+    {
+      votes: [],
+      nextCursor: null,
+    },
+  );
+  assert.deepEqual(
+    (await second({ method: "GET", url: "/api/my-votes" })).json().votes[0]
+      .choices,
+    ["Library"],
+  );
+});
+
+test("my votes cursor pages current ballots and rejects malformed queries", async () => {
+  const { browser } = await setup();
+  const visit = browser();
+  await visit({
+    method: "POST",
+    url: "/api/polls/p1/votes",
+    payload: { ballot: [0] },
+  });
+  await visit({
+    method: "POST",
+    url: "/api/polls/open-ended/votes",
+    payload: { ballot: [1] },
+  });
+  const first = await visit({ method: "GET", url: "/api/my-votes?limit=1" });
+  assert.equal(first.json().votes.length, 1);
+  assert.equal(first.json().votes[0].pollId, "p1");
+  const cursor = first.json().nextCursor as string;
+  const second = await visit({
+    method: "GET",
+    url: `/api/my-votes?limit=1&cursor=${cursor}`,
+  });
+  assert.deepEqual(
+    second.json().votes.map((vote: { pollId: string }) => vote.pollId),
+    ["open-ended"],
+  );
+  assert.equal(second.json().nextCursor, null);
+  assert.equal(
+    (await visit({ method: "GET", url: "/api/my-votes?limit=0" })).statusCode,
+    400,
+  );
+  assert.equal(
+    (await visit({ method: "GET", url: "/api/my-votes?cursor=not-a-cursor" }))
+      .statusCode,
+    400,
+  );
+});
+
 // Public attribution (ADR-0037). Polls are published through the in-memory
 // creation store, which shares the voting store as its database, exactly as
 // the Postgres creation store writes the poll row GET then reads.

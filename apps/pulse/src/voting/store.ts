@@ -28,6 +28,12 @@ export interface Vote {
   castAt: Date;
 }
 
+/** A page boundary for one browser's private vote history. */
+export interface VoteBefore {
+  castAt: Date;
+  pollId: string;
+}
+
 /**
  * The outcome of a cast. `counted` is a first ballot, `changed` replaces a
  * prior ballot while the poll is still open, `closed` is a poll past its time.
@@ -110,6 +116,12 @@ export interface VotingStore {
   ): Promise<number>;
   /** The voter's own ballot, so the UI can show what they picked. */
   voteOf(pollId: string, voterId: string): Promise<Vote | undefined>;
+  /** Newest first, with one extra row so the caller can offer another page. */
+  listVotes(
+    voterId: string,
+    limit: number,
+    before?: VoteBefore,
+  ): Promise<Vote[]>;
   results(pollId: string): Promise<Results>;
 }
 
@@ -293,6 +305,32 @@ export class InMemoryVotingStore implements VotingStore {
 
   async voteOf(pollId: string, voterId: string): Promise<Vote | undefined> {
     return this.#votes.get(voteKey(pollId, voterId));
+  }
+
+  async listVotes(
+    voterId: string,
+    limit: number,
+    before?: VoteBefore,
+  ): Promise<Vote[]> {
+    return [...this.#votes.values()]
+      .filter(
+        (vote) =>
+          vote.voterId === voterId &&
+          (before === undefined ||
+            vote.castAt < before.castAt ||
+            (vote.castAt.getTime() === before.castAt.getTime() &&
+              Buffer.compare(
+                Buffer.from(vote.pollId),
+                Buffer.from(before.pollId),
+              ) < 0)),
+      )
+      .sort(
+        (a, b) =>
+          b.castAt.getTime() - a.castAt.getTime() ||
+          Buffer.compare(Buffer.from(b.pollId), Buffer.from(a.pollId)),
+      )
+      .slice(0, limit + 1)
+      .map((vote) => ({ ...vote, choices: [...vote.choices] }));
   }
 
   async results(pollId: string): Promise<Results> {

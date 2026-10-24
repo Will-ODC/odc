@@ -19,6 +19,7 @@ import {
 } from "./screens/FoundationQuestions.js";
 import { Trust } from "./screens/Trust.js";
 import { Browse } from "./screens/Browse.js";
+import { MyVotes } from "./screens/MyVotes.js";
 import { NewPoll } from "./screens/NewPoll.js";
 import "./styles/tokens.css";
 import "./App.css";
@@ -95,6 +96,8 @@ export function App({
         );
       case "browse":
         return <Browse key={at.community} api={api} community={at.community} />;
+      case "myVotes":
+        return <MyVotes api={api} />;
       case "questions":
         return (
           <FoundationQuestions

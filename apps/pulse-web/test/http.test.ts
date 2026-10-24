@@ -44,6 +44,32 @@ describe("reading a poll", () => {
   });
 });
 
+describe("reading this browser's vote history", () => {
+  it("sends the ballot cookie and the page cursor", async () => {
+    const calls = stubFetch({
+      body: JSON.stringify({ votes: [], nextCursor: null }),
+    });
+    expect(await new HttpPulseApi().myVotes("abc_123")).toEqual({
+      votes: [],
+      nextCursor: null,
+    });
+    expect(calls[0]?.url).toBe("/api/my-votes?cursor=abc_123");
+    expect(calls[0]?.init.credentials).toBe("same-origin");
+  });
+
+  it("rejects an unreadable private page", async () => {
+    stubFetch({
+      body: JSON.stringify({
+        votes: [{ question: "missing poll id" }],
+        nextCursor: null,
+      }),
+    });
+    await expect(new HttpPulseApi().myVotes()).rejects.toThrow(
+      "We couldn't read your votes",
+    );
+  });
+});
+
 describe("asking for a sign-in link", () => {
   it("posts to the path the server serves, with the server's own opt-in name", async () => {
     const calls = stubFetch({

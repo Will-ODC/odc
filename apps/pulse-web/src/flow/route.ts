@@ -14,6 +14,7 @@
  */
 export type Route =
   | { kind: "about" }
+  | { kind: "myVotes" }
   | { kind: "progress" }
   | { kind: "questions" }
   | { kind: "browse"; community: string }
@@ -92,6 +93,7 @@ export function routeFrom(href: string): Route {
   if (path === CHAT_PREVIEW_PATH) return { kind: "chatPreview" };
   if (path === TRUST_PATH) return { kind: "trust" };
   if (path === NEW_POLL_PATH) return { kind: "newPoll" };
+  if (path === "/my-votes") return { kind: "myVotes" };
   if (path === "/start") return { kind: "progress" };
   if (path === "/questions") return { kind: "questions" };
   if (path === "/about") return { kind: "about" };
@@ -113,6 +115,8 @@ export function pathOf(route: Route): string {
   switch (route.kind) {
     case "about":
       return "/about";
+    case "myVotes":
+      return "/my-votes";
     case "progress":
       return "/start";
     case "questions":

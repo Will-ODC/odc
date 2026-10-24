@@ -19,6 +19,7 @@ import {
   type CastResult,
   type Results,
   type Vote,
+  type VoteBefore,
   type VotingStore,
 } from "./store.js";
 
@@ -278,6 +279,38 @@ export class PostgresVotingStore implements VotingStore {
       ),
       castAt: first.cast_at,
     };
+  }
+
+  async listVotes(
+    voterId: string,
+    limit: number,
+    before?: VoteBefore,
+  ): Promise<Vote[]> {
+    const { rows } = await this.#pool.query<{
+      poll_id: string;
+      cast_at: Date;
+      choices: number[];
+    }>(
+      "select v.poll_id, v.cast_at," +
+        " coalesce(array_agg(c.position order by c.position) filter" +
+        " (where c.position is not null), '{}') as choices" +
+        " from vote v" +
+        " left join vote_choice vc on vc.vote_id = v.id" +
+        " left join poll_choice c on c.id = vc.choice_id and c.poll_id = v.poll_id" +
+        " where v.voter_id = $1" +
+        ' and ($2::timestamptz is null or (v.cast_at, v.poll_id collate "C")' +
+        ' < ($2::timestamptz, $3::text collate "C"))' +
+        " group by v.id" +
+        ' order by v.cast_at desc, v.poll_id collate "C" desc' +
+        " limit $4",
+      [voterId, before?.castAt ?? null, before?.pollId ?? null, limit + 1],
+    );
+    return rows.map((row) => ({
+      pollId: row.poll_id,
+      voterId,
+      choices: row.choices,
+      castAt: row.cast_at,
+    }));
   }
 
   async results(pollId: string): Promise<Results> {

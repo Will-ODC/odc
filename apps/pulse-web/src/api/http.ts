@@ -4,6 +4,7 @@ import type {
   CastOutcome,
   CreationContext,
   Me,
+  MyVotesPage,
   NewPollRequest,
   Poll,
   PollPage,
@@ -101,6 +102,21 @@ export class HttpPulseApi implements PulseApi {
     );
     if (!isPollPage(body))
       throw new ApiError(200, "We couldn't read the questions. Try again.");
+    return body;
+  }
+
+  async myVotes(cursor?: string): Promise<MyVotesPage> {
+    const query = cursor ? `?cursor=${encodeURIComponent(cursor)}` : "";
+    const body = await this.#send<unknown>(
+      "GET",
+      `/my-votes${query}`,
+      undefined,
+      undefined,
+      {},
+      AbortSignal.timeout(10000),
+    );
+    if (!isMyVotesPage(body))
+      throw new ApiError(200, "We couldn't read your votes. Try again.");
     return body;
   }
 
@@ -341,6 +357,33 @@ function isPollPage(body: unknown): body is PollPage {
         typeof row.open === "boolean" &&
         date(row.createdAt) &&
         (row.closesAt === null || date(row.closesAt))
+      );
+    })
+  );
+}
+
+function isMyVotesPage(body: unknown): body is MyVotesPage {
+  if (!body || typeof body !== "object") return false;
+  const page = body as Record<string, unknown>;
+  return (
+    (page.nextCursor === null ||
+      (typeof page.nextCursor === "string" &&
+        /^[A-Za-z0-9_-]{1,2048}$/.test(page.nextCursor))) &&
+    Array.isArray(page.votes) &&
+    page.votes.length <= 50 &&
+    page.votes.every((vote: unknown) => {
+      if (!vote || typeof vote !== "object") return false;
+      const row = vote as Record<string, unknown>;
+      return (
+        typeof row.pollId === "string" &&
+        row.pollId.length > 0 &&
+        typeof row.question === "string" &&
+        row.question.length > 0 &&
+        Array.isArray(row.choices) &&
+        row.choices.every((c: unknown) => typeof c === "string") &&
+        typeof row.castAt === "string" &&
+        Number.isFinite(Date.parse(row.castAt)) &&
+        typeof row.open === "boolean"
       );
     })
   );
