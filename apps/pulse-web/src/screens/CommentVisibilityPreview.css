@@ -1,0 +1,110 @@
+.comment-preview {
+  min-height: 100dvh;
+  padding: clamp(16px, 4vw, 48px);
+  box-sizing: border-box;
+  color: var(--ballot-ink);
+  background: var(--ballot-page);
+  line-height: 1.5;
+}
+.comment-preview__shell {
+  max-width: 1200px;
+  margin-inline: auto;
+}
+.comment-preview h1 {
+  max-width: 28ch;
+  font-size: clamp(1.75rem, 4vw, 3rem);
+  line-height: 1.15;
+}
+.comment-preview h2 {
+  margin: 0;
+  font-size: 1.15rem;
+  line-height: 1.35;
+}
+.comment-preview__badge {
+  display: inline-block;
+  margin: 0;
+  padding: 4px 10px;
+  border-radius: var(--r-pill);
+  background: var(--surface-hover);
+  font-weight: 700;
+}
+.comment-preview__reference {
+  display: flex;
+  align-items: center;
+  flex-wrap: wrap;
+  gap: 12px;
+  margin-block: 24px 12px;
+  font-weight: 700;
+}
+.comment-preview select,
+.comment-preview button {
+  padding: 8px 12px;
+  border: 1px solid var(--control-line);
+  border-radius: var(--r-control);
+  background: var(--surface-hover);
+  color: var(--ballot-ink);
+  font: inherit;
+}
+.comment-preview button {
+  cursor: pointer;
+}
+.comment-preview select:focus-visible,
+.comment-preview button:focus-visible {
+  outline: 2px solid var(--focus-ring);
+  outline-offset: 2px;
+}
+.comment-preview__note {
+  max-width: 80ch;
+  color: var(--ballot-ink-muted);
+}
+.comment-preview__views {
+  display: grid;
+  grid-template-columns: repeat(3, minmax(0, 1fr));
+  gap: 16px;
+  align-items: stretch;
+  margin-block: 24px;
+}
+.comment-preview__views > section,
+.comment-preview__baseline {
+  min-width: 0;
+  padding: 20px;
+  border: 1px solid var(--ballot-line);
+  border-radius: var(--r-card);
+  background: var(--surface-rest);
+}
+.comment-preview__views > section > p {
+  min-height: 3em;
+  color: var(--ballot-ink-muted);
+}
+.comment-preview__comments {
+  display: grid;
+  gap: 10px;
+  list-style: none;
+  margin: 16px 0 0;
+  padding: 0;
+}
+.comment-preview__comments li {
+  min-width: 0;
+  padding: 12px;
+  border: 1px solid var(--ballot-line);
+  border-radius: var(--r-control);
+  overflow-wrap: anywhere;
+}
+.comment-preview__comments li p {
+  margin: 0 0 8px;
+}
+.comment-preview__comments small,
+.comment-preview__empty {
+  color: var(--ballot-ink-muted);
+}
+.comment-preview__baseline {
+  margin-bottom: 40px;
+}
+@media (max-width: 800px) {
+  .comment-preview__views {
+    grid-template-columns: 1fr;
+  }
+  .comment-preview__views > section > p {
+    min-height: 0;
+  }
+}

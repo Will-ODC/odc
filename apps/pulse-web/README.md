@@ -27,18 +27,19 @@ container, so the page and the API share one address.
 
 ## Pages
 
-| Path                   | What it shows                                                           |
-| ---------------------- | ----------------------------------------------------------------------- |
-| `/`                    | Home: public poll browser, newest first.                                |
-| `/about`               | About: the former welcome content and Start voting.                     |
-| `/start`               | What has been done so far, and what ODC is for.                         |
-| `/browse?community=ID` | Community questions, newest first; General by default.                  |
-| `/questions`           | The four starting questions.                                            |
-| `/?poll=ID`            | The live vote page for one poll. Old `/conversation` links still work.  |
-| `/new`                 | Post a question after signing in, then open its vote page.              |
-| `/trust`               | "How votes count": a short guide to counting and its limits.            |
-| `/sign-in?token=…`     | Where emailed sign-in links land; goes straight back to where you were. |
-| `/preview/chat`        | A prototype with sample data only.                                      |
+| Path                          | What it shows                                                           |
+| ----------------------------- | ----------------------------------------------------------------------- |
+| `/`                           | Home: public poll browser, newest first.                                |
+| `/about`                      | About: the former welcome content and Start voting.                     |
+| `/start`                      | What has been done so far, and what ODC is for.                         |
+| `/browse?community=ID`        | Community questions, newest first; General by default.                  |
+| `/questions`                  | The four starting questions.                                            |
+| `/?poll=ID`                   | The live vote page for one poll. Old `/conversation` links still work.  |
+| `/new`                        | Post a question after signing in, then open its vote page.              |
+| `/trust`                      | "How votes count": a short guide to counting and its limits.            |
+| `/sign-in?token=…`            | Where emailed sign-in links land; goes straight back to where you were. |
+| `/preview/chat`               | A prototype with sample data only.                                      |
+| `/preview/comment-visibility` | Compare equal-space comment views with a chronological sample thread.   |
 
 For local testing, run both apps with their `dev` commands and open
 `http://localhost:5173/sign-in?next=new`. Enter any test email; on Check your email,

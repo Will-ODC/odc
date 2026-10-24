@@ -132,6 +132,12 @@ describe("reading a URL", () => {
     expect(routeFrom("/preview/chat")).toEqual({ kind: "chatPreview" });
   });
 
+  it("opens the sample comment comparison without mistaking it for a poll", () => {
+    expect(routeFrom("/preview/comment-visibility")).toEqual({
+      kind: "commentVisibilityPreview",
+    });
+  });
+
   /* The same tolerance the sign-in path has, for the same reasons. */
   it("opens the chat preview with a trailing slash or another case", () => {
     expect(routeFrom("/preview/chat/")).toEqual({ kind: "chatPreview" });
@@ -197,6 +203,12 @@ describe("writing a URL", () => {
     expect(pathOf({ kind: "chatPreview" })).toBe("/preview/chat");
   });
 
+  it("points at the sample comment comparison", () => {
+    expect(pathOf({ kind: "commentVisibilityPreview" })).toBe(
+      "/preview/comment-visibility",
+    );
+  });
+
   it("escapes a token on the way out", () => {
     expect(pathOf({ kind: "redeem", token: "a+b/c=d" })).toBe(
       "/sign-in?token=a%2Bb%2Fc%3Dd",
@@ -219,6 +231,7 @@ describe("the two directions agree", () => {
     { kind: "redeem", token: "abc123" },
     { kind: "redeem", token: "a+b/c=d" },
     { kind: "chatPreview" },
+    { kind: "commentVisibilityPreview" },
     { kind: "trust" },
   ] as const;
 

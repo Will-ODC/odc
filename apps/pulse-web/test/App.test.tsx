@@ -140,6 +140,18 @@ describe("the chat preview", () => {
   });
 });
 
+it("opens the comment comparison as a sample-only route", () => {
+  globalThis.history.replaceState(null, "", "/preview/comment-visibility");
+  const poll = vi.fn();
+  const cast = vi.fn();
+  render(<App api={stubApi({ poll, cast })} />);
+  expect(
+    screen.getByRole("heading", { name: /What if different opinions/ }),
+  ).toBeTruthy();
+  expect(poll).not.toHaveBeenCalled();
+  expect(cast).not.toHaveBeenCalled();
+});
+
 describe("after the link is spent", () => {
   /*
    * The token is gone the moment it is redeemed, so the URL that carried it

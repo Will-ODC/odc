@@ -9,6 +9,7 @@ import { PageBanner } from "./screens/PageBanner.js";
 import { useRoute } from "./hooks/use-route.js";
 import { Conversation } from "./screens/Conversation.js";
 import { ChatPreview } from "./screens/ChatPreview.js";
+import { CommentVisibilityPreview } from "./screens/CommentVisibilityPreview.js";
 import { Redeem } from "./screens/Redeem.js";
 import { SignIn } from "./screens/SignIn.js";
 import { About } from "./screens/About.js";
@@ -167,6 +168,8 @@ export function App({
       case "chatPreview":
         // Sample data only: the prototype never touches `api`.
         return <ChatPreview />;
+      case "commentVisibilityPreview":
+        return <CommentVisibilityPreview />;
       case "trust":
         // Static copy: like the prototype, it never touches `api`.
         return <Trust banner={<PageBanner api={api} currentHref="/trust" />} />;
