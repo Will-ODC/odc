@@ -153,21 +153,17 @@ export class Batcher {
   private async run(newSeals: boolean): Promise<boolean> {
     try {
       if (!(await this.replayAll())) return false;
-      let done = true;
       for (const issue of this.ledger.state.issues.values()) {
-        if (!(await this.advance(issue, newSeals))) done = false;
+        if (!(await this.advance(issue, newSeals))) return false;
       }
-      return done;
+      return true;
     } catch (err) {
       this.warn(false, `step failed: ${(err as Error).message}`);
       return false;
     }
   }
 
-  /**
-   * A stored sign request fixes its batch at one position, so nothing else may
-   * be appended until it is (ADR-0043). False while any stays pending.
-   */
+  /** ADR-0043: replay fixed-position requests before anything else appends. */
   private async replayAll(): Promise<boolean> {
     for (const req of await pendingSignRequests(this.pool)) {
       if (!(await this.replay(req))) return false;

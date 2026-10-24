@@ -169,9 +169,14 @@ outage never crashes the ledger: batches stay pending.
 - Refusals the ledger expects: `409 under_min` (a non-last seal below the
   issue's `ballot_batch_min`; nothing is sealed and the batch stays open),
   `404 unknown_issue`, `409 issue_closed`, `409 seal_conflict` (this
-  `seal_id` was already used for another issue or another `last`). A refused non-last seal is retried
-  at a later batch instant under a new `seal_id`; a last seal is re-asked
-  with the same `seal_id` until it succeeds.
+  `seal_id` was already used for another issue or another `last`). After
+  `under_min`, the ledger retains the same seal id and unused instant, including
+  across restarts, and retries once per interval. The signer must reevaluate
+  this refusal as ballots arrive: only a successful seal fixes the batch for
+  that id. Other definite non-last refusals abandon the intent; a later attempt
+  uses a new id and instant. A close abandons an under-min non-last intent and
+  creates a last-seal intent. A last seal is re-asked with the same `seal_id`
+  until it succeeds.
 
 ### Sign: `POST /batches/{batch_id}/signatures`
 

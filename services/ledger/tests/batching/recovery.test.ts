@@ -4,6 +4,7 @@ import type { Pool } from "pg";
 import type { Event } from "../../src/chain/index.js";
 import type { BatcherLedger } from "../../src/batching/batcher.js";
 import type { SignerClient } from "../../src/clients/signer.js";
+import { issueProgress } from "../../src/db/batching.js";
 import { REGISTRAR, finish } from "../chain/support/builders.js";
 import { skip, withDb } from "../db/harness.js";
 import type { Fault } from "../support/fake-signer.js";
@@ -146,25 +147,29 @@ test(
 );
 
 test(
-  "a_signer_outage_or_timeout_appends_nothing_raises_no_alert_and_a_later_tick_succeeds",
+  "a_sign_timeout_blocks_other_issues_until_replay_and_a_later_tick_succeeds",
   { skip },
   () =>
     withDb(async ({ app }) =>
-      world(app, [{}], async (w) => {
-        const [issue] = w.issueIds as [string];
+      world(app, [{}, {}], async (w) => {
+        const [issue, other] = w.issueIds as [string, string];
         const b = w.batcher();
         fill(w.fake, issue, [0, 1, 2]);
         w.fake.inject("seal", "fail");
         assert.equal(await b.tick(), false);
+        const intent = (await issueProgress(app, issue)).intent;
         w.fake.inject("seal", "timeout");
         assert.equal(await b.tick(), false);
+        w.clock.now += 60000;
+        fill(w.fake, other, [2, 1, 0]);
         w.fake.inject("sign", "timeout");
         assert.equal(await b.tick(), false);
         assert.equal(votes(await w.events()).length, 0);
         assert.equal(await b.tick(), true);
-        assert.equal(votes(await w.events()).length, 3);
-        // Every retry of the seal used the one seal id: one batch, not three.
-        assert.equal(new Set(w.fake.sealCalls.map((c) => c.sealId)).size, 1);
+        assert.equal(votes(await w.events(), issue).length, 3);
+        assert.equal(votes(await w.events(), other).length, 3);
+        assert.equal(w.fake.sealCalls[0]?.sealId, intent?.sealId);
+        assert.equal(await w.exportValid(), true);
         assert.ok(!w.logs.some((l) => l.startsWith("ALERT")));
       }),
     ),
