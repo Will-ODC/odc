@@ -195,3 +195,17 @@ test("malformed_bodies_are_400_bad_request", { skip }, () =>
     assert.deepEqual(await huge.json(), { error: "payload_too_large" });
   }),
 );
+
+test("the_public_port_has_no_write_routes", { skip }, () =>
+  withServers(async ({ pub }) => {
+    const chain = new TestChain();
+    const g = chain.genesis();
+    const appends = await postJson(`${pub}/appends`, { event: unhashed(g) });
+    assert.equal(appends.status, 404);
+    const close = await postJson(`${pub}/issues/${"a".repeat(64)}/close`, {
+      ts: g.ts,
+      sig: "0".repeat(128),
+    });
+    assert.equal(close.status, 404);
+  }),
+);

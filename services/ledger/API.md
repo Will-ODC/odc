@@ -98,7 +98,8 @@ operator key.
   (EV-26), or a line would exceed the EV-25 cap. The reason is advisory text.
 - `422 chain_not_valid`: the stored log does not verify `VALID`, so EV-26 bars
   every append.
-- `503 batch_pending`: a ballot batch's sign request is stored but its run is
+- `503 batch_pending` (once batching is wired in): a ballot batch's sign
+  request is stored but its run is
   not appended yet (for example, the signer is down). That batch is signed for
   the current tail only, so an operator append would strand its ballots.
   Retry later.
