@@ -19,11 +19,39 @@
   font-size: var(--t-body);
   line-height: 1.5;
 }
-.browse__list span {
+.browse__status {
   display: block;
   margin-top: calc(var(--step) / 2);
   color: var(--ballot-ink-soft);
   font-size: var(--t-small);
+}
+.browse__share {
+  display: flex;
+  align-items: center;
+  flex-wrap: wrap;
+  gap: var(--step);
+  margin-top: var(--step);
+  font-size: var(--t-small);
+}
+.browse__share button {
+  font: inherit;
+  color: var(--ballot-ink);
+  background: var(--surface-hover);
+  border: var(--hairline) solid var(--control-line);
+  border-radius: var(--r-control);
+  padding: calc(var(--step) / 2) var(--step);
+  cursor: pointer;
+}
+.browse__share button:focus-visible,
+.browse__share input:focus-visible {
+  outline: calc(var(--hairline) * 2) solid var(--focus-ring);
+  outline-offset: calc(var(--hairline) * 2);
+}
+.browse__share input {
+  min-width: 0;
+  max-width: 100%;
+  flex: 1 1 16rem;
+  font: inherit;
 }
 .browse__list a:focus-visible {
   outline: calc(var(--hairline) * 2) solid var(--focus-ring);

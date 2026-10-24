@@ -7,7 +7,13 @@ import { App } from "../src/App.js";
 import { routeFrom, pathOf } from "../src/flow/route.js";
 import { ApiError, type PollPage, type PollSummary } from "../src/api/types.js";
 import { stubApi } from "./stub-api.js";
-afterEach(cleanup);
+afterEach(() => {
+  cleanup();
+  Object.defineProperty(navigator, "clipboard", {
+    value: undefined,
+    configurable: true,
+  });
+});
 const row = (id: string, open = true): PollSummary => ({
   id,
   question: `Question ${id}`,
@@ -58,6 +64,59 @@ it("lists open and closed questions as keyboard links without casting", async ()
   ).toBe("/?poll=closed");
   expect(listPolls).toHaveBeenCalledExactlyOnceWith("campus");
   expect(cast).not.toHaveBeenCalled();
+});
+
+it("copies the direct link to any listed question without voting", async () => {
+  const writeText = vi.fn(() => Promise.resolve());
+  Object.defineProperty(navigator, "clipboard", {
+    value: { writeText },
+    configurable: true,
+  });
+  const cast = vi.fn();
+  render(
+    <Browse
+      api={stubApi({
+        listPolls: async () => page([row("a/b"), row("closed", false)]),
+        cast,
+      })}
+      community="pulse-general"
+    />,
+  );
+  await userEvent.click(
+    await screen.findByRole("button", { name: "Copy link to Question a/b" }),
+  );
+  expect(writeText).toHaveBeenCalledWith(
+    new URL("/?poll=a%2Fb", location.href).href,
+  );
+  expect(await screen.findByText("Copied")).toBeTruthy();
+  await userEvent.click(
+    screen.getByRole("button", { name: "Copy link to Question closed" }),
+  );
+  expect(writeText).toHaveBeenLastCalledWith(
+    new URL("/?poll=closed", location.href).href,
+  );
+  expect(cast).not.toHaveBeenCalled();
+});
+
+it("offers a selectable link when clipboard access is unavailable", async () => {
+  render(
+    <Browse
+      api={stubApi({ listPolls: async () => page([row("one")]) })}
+      community="pulse-general"
+    />,
+  );
+  await userEvent.click(
+    await screen.findByRole("button", { name: "Copy link to Question one" }),
+  );
+  const field = screen.getByRole<HTMLInputElement>("textbox", {
+    name: "Link to Question one",
+  });
+  expect(field.readOnly).toBe(true);
+  expect(field.value).toBe(new URL("/?poll=one", location.href).href);
+  await waitFor(() => {
+    expect(field.selectionStart).toBe(0);
+    expect(field.selectionEnd).toBe(field.value.length);
+  });
 });
 
 it("shows loading, retry and empty states with useful destinations", async () => {
@@ -175,6 +234,7 @@ it("loads the final page by keyboard and focuses its first new question", async 
   render(<Browse api={stubApi({ listPolls })} community="pulse-general" />);
   await screen.findByRole("button", { name: "Load more" });
   await user.tab(); // First question
+  await user.tab(); // Its Copy link button
   await user.tab(); // Load more
   expect(document.activeElement).toBe(
     screen.getByRole("button", { name: "Load more" }),
