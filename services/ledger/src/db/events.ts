@@ -58,6 +58,9 @@ export async function head(client: Pool | PoolClient): Promise<Head | null> {
  * fails. This is where the caller builds and verifies lines (EV-26), since
  * each hash covers `seq` and `prev_hash`. Returns the stored rows, as read
  * back. An empty run appends nothing. Any error rolls back the whole run.
+ *
+ * Low level: production appends go through Ledger.appendRun (src/ledger.ts),
+ * which runs the EV-26 check; call this directly only from Ledger and tests.
  */
 export async function appendRun(
   pool: Pool,
@@ -86,7 +89,12 @@ export async function appendRun(
   }
 }
 
-/** One event: `appendRun` with a single row. */
+/**
+ * One event: `appendRun` with a single row.
+ *
+ * Low level: production appends go through Ledger.appendRun (src/ledger.ts),
+ * which runs the EV-26 check; call this directly only from Ledger and tests.
+ */
 export async function appendEvent(
   pool: Pool,
   prepare: (head: Head | null) => EventRow | Promise<EventRow>,

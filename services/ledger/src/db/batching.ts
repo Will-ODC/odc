@@ -71,6 +71,12 @@ export async function insertSignRequest(
   pool: Pool,
   r: SignRequest,
 ): Promise<void> {
+  // Only each choice is stored; issue_id is rebuilt from the request on read.
+  if (r.payloads.some((p) => p.issue_id !== r.issueId)) {
+    throw new Error(
+      "every payload's issue_id must equal the request's issueId",
+    );
+  }
   await pool.query(
     `INSERT INTO batch_sign_requests (batch_id, issue_id, first_seq, ts, first_prev_hash, choices)
      VALUES ($1, $2, $3, $4, $5, $6)`,
@@ -85,6 +91,11 @@ export async function insertSignRequest(
   );
 }
 
+/**
+ * Commits on its own, after the run's transaction, by design: a crash between
+ * the two leaves the request pending, and recovery checks the log for the run
+ * first (the batcher's `alreadyAppended`), then records only this row.
+ */
 export async function insertCompletion(
   pool: Pool,
   batchId: string,

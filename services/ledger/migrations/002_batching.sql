@@ -61,7 +61,8 @@ CREATE TABLE batch_sign_requests (
 );
 
 -- The batch is done: its run committed (appended), or it was an empty last
--- batch with nothing to append.
+-- batch with nothing to append. It commits apart from the run, by design:
+-- recovery checks the log first (the batcher's `alreadyAppended`).
 CREATE TABLE batch_completions (
   batch_id text    PRIMARY KEY REFERENCES batch_seal_results (batch_id),
   appended boolean NOT NULL
@@ -71,6 +72,27 @@ CREATE TABLE batch_completions (
 CREATE TABLE batch_issue_closes (
   issue_id text PRIMARY KEY CHECK (issue_id ~ '^[0-9a-f]{64}$')
 );
+
+-- A seal has one outcome: a result or a refusal, never both. The xact lock
+-- (per seal_id) serializes concurrent inserts so each sees the other's commit.
+CREATE FUNCTION batching_one_outcome() RETURNS trigger
+LANGUAGE plpgsql AS $$
+BEGIN
+  PERFORM pg_advisory_xact_lock(1650553960, hashtext(NEW.seal_id));
+  IF EXISTS (SELECT 1 FROM batch_seal_results WHERE seal_id = NEW.seal_id)
+    OR EXISTS (SELECT 1 FROM batch_seal_refusals WHERE seal_id = NEW.seal_id)
+  THEN
+    RAISE EXCEPTION 'seal % already has an outcome', NEW.seal_id
+      USING ERRCODE = 'unique_violation';
+  END IF;
+  RETURN NEW;
+END
+$$;
+
+CREATE TRIGGER batch_seal_results_one_outcome BEFORE INSERT
+  ON batch_seal_results FOR EACH ROW EXECUTE FUNCTION batching_one_outcome();
+CREATE TRIGGER batch_seal_refusals_one_outcome BEFORE INSERT
+  ON batch_seal_refusals FOR EACH ROW EXECUTE FUNCTION batching_one_outcome();
 
 CREATE FUNCTION batching_refuse_change() RETURNS trigger
 LANGUAGE plpgsql AS $$

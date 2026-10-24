@@ -5,7 +5,8 @@ import { loadMigrations } from "../../src/db/migrate.js";
 /**
  * The owner role can switch off rule 4's guards, so no migration may contain a
  * statement that changes rows or weakens a guard. `ALTER TABLE events ADD` is
- * the one additive change allowed (odc-storage). Errs on the side of refusing.
+ * the one additive change allowed (odc-storage), also on batch_*. Refuses when
+ * in doubt. Blind to `DO $$ ... EXECUTE format(...)` (002): review those.
  */
 const FORBIDDEN: RegExp[] = [
   /\bUPDATE\s+(ONLY\s+)?\w+\s+SET\b/i,
@@ -18,8 +19,8 @@ const FORBIDDEN: RegExp[] = [
   /\bsession_replication_role\b/i,
   /\bGRANT\b[^;]*\b(UPDATE|DELETE|TRUNCATE|ALL)\b/i,
   /\bALTER\s+(FUNCTION|TRIGGER)\b/i,
-  /\bALTER\s+TABLE\s+(IF\s+EXISTS\s+)?(ONLY\s+)?events\b(?!\s+ADD\b)/i,
-  /\bALTER\s+TABLE\b[^;]*\bevents\b[^;]*,\s*(DROP|ALTER|DISABLE|RENAME)\b/i,
+  /\bALTER\s+TABLE\s+(IF\s+EXISTS\s+)?(ONLY\s+)?(events|batch_\w+)\b(?!\s+ADD\b)/i,
+  /\bALTER\s+TABLE\b[^;]*\b(events|batch_\w+)\b[^;]*,\s*(DROP|ALTER|DISABLE|RENAME)\b/i,
 ];
 
 /** The FORBIDDEN patterns found in `sql`, comments stripped, any case. */
@@ -46,9 +47,13 @@ test("the_scan_catches_each_way_around_the_guards", () => {
     "GRANT UPDATE ON events TO ledger_app;",
     "ALTER TABLE events RENAME TO old_events;",
     "ALTER TABLE events ADD COLUMN x int, DROP CONSTRAINT events_line_tail;",
+    "ALTER TABLE batch_completions RENAME TO x;",
+    "ALTER TABLE ONLY batch_seal_results DROP CONSTRAINT x;",
+    "ALTER TABLE batch_issue_closes ADD COLUMN x int, RENAME TO y;",
   ]) {
     assert.notDeepEqual(forbiddenIn(sql), [], sql);
   }
   assert.deepEqual(forbiddenIn("ALTER TABLE events ADD COLUMN x int;"), []);
+  assert.deepEqual(forbiddenIn("ALTER TABLE batch_completions ADD x int;"), []);
   assert.deepEqual(forbiddenIn("-- DELETE FROM events\nSELECT 1;"), []);
 });

@@ -8,7 +8,7 @@ import {
 import type { EventRow } from "../../src/db/events.js";
 import { AppendRefused, ChainNotValid, Ledger } from "../../src/ledger.js";
 import { readSince } from "../../src/db/events.js";
-import { TestChain } from "../chain/support/builders.js";
+import { TestChain, testKey } from "../chain/support/builders.js";
 import { insertRaw, skip, withDb } from "../db/harness.js";
 
 function row(e: Event): EventRow {
@@ -87,5 +87,63 @@ test("a_stored_log_that_is_not_valid_bars_every_append", { skip }, () =>
       ledger.appendRun(() => []),
       ChainNotValid,
     );
+  }),
+);
+
+test("a_second_run_waits_for_the_first_and_builds_on_its_state", { skip }, () =>
+  withDb(async ({ app }) => {
+    const ledger = await Ledger.open(app);
+    const chain = new TestChain();
+    const g = chain.add(chain.genesis());
+    const i = chain.add(chain.issue());
+    const p = chain.add(chain.participant(testKey(0x10)));
+    let release!: () => void;
+    const gate = new Promise<void>((r) => (release = r));
+    let entered!: () => void;
+    const inFirst = new Promise<void>((r) => (entered = r));
+    const first = ledger.appendRun(async () => {
+      entered();
+      await gate;
+      return [unhashed(g), unhashed(i)];
+    });
+    await inFirst;
+    const seen: [number, string, number | undefined][] = [];
+    const second = ledger.appendRun((state, head) => {
+      seen.push([state.nextSeq, state.headHash, head?.seq]);
+      return [unhashed(p)];
+    });
+    await new Promise((r) => setTimeout(r, 100));
+    assert.deepEqual(seen, [], "second build ran early");
+    release();
+    await Promise.all([first, second]);
+    assert.deepEqual(seen, [[3, i.hash, 2]]);
+    const rows = await readSince(app, 0, 10);
+    // Each hash covers seq and prev_hash, so equal hashes mean contiguous.
+    assert.deepEqual(
+      rows.map((r) => r.hash),
+      [g, i, p].map((e) => e.hash),
+    );
+  }),
+);
+
+test("a_head_moved_by_an_outside_insert_refuses_the_next_run", { skip }, () =>
+  withDb(async ({ owner, app }) => {
+    const ledger = await Ledger.open(app);
+    const chain = new TestChain();
+    const g = chain.add(chain.genesis());
+    const i = chain.add(chain.issue());
+    const p = chain.add(chain.participant(testKey(0x10)));
+    await ledger.appendRun(() => [unhashed(g)]);
+    await insertRaw(owner, row(i));
+    let built = false;
+    await assert.rejects(
+      ledger.appendRun(() => {
+        built = true;
+        return [unhashed(p)];
+      }),
+      /stored head moved/,
+    );
+    assert.equal(built, false);
+    assert.equal((await readSince(app, 0, 10)).length, 2);
   }),
 );
