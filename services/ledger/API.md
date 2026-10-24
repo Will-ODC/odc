@@ -33,7 +33,8 @@ because they shape the endpoints below.
   `contracts/` (D3; ADR-0043 decision 2).** `POST /appends` answers
   `422 type_not_accepted` for `participant_registered`. The ledger's checker
   still reads v1 registrations already on a chain.
-- **An operator-signed close call seals an issue's last batch (D4).**
+- **An operator-signed close call seals an issue's last batch (D4), once
+  batching is wired in;** until then it answers `503 batching_unavailable`.
   `POST /issues/{issue_id}/close`, signed by the chain's `operator_pk`, seals
   the issue's open batch as its last (ET-24, ET-25). Without it an issue's
   batches are only ever sealed at `ballot_batch_min` or more.
@@ -72,6 +73,8 @@ Exactly `contracts/read-api.md` RA-1 to RA-13.
   response verifies exactly as the log does.
 
 ## Internal port
+
+_Lands in #462._
 
 ### `POST /appends`
 
@@ -136,6 +139,8 @@ appears.
   name). A replay inside the window is harmless: closing is idempotent.
 
 ## Calls the ledger makes
+
+_Lands in #463 and the wiring PR._
 
 The ledger calls only the signer's public API (ADR-0043), on the ballot write
 path, through one client module (`src/clients/signer.ts`), from its batcher

@@ -313,3 +313,32 @@ test("export_taken_while_appending_is_a_valid_prefix", { skip }, () =>
     }
   }),
 );
+
+test(
+  "pages_read_during_multi_event_runs_are_contiguous_and_end_on_a_run",
+  { skip },
+  () =>
+    withPublic(async ({ url, grow }) => {
+      await grow(4); // genesis + 4: every run boundary is a multiple of 5
+      const appending = (async () => {
+        for (let i = 0; i < 30; i++) await grow(5);
+      })();
+      let since = 0;
+      let done = false;
+      void appending.then(() => (done = true));
+      while (!done || since < 155) {
+        const p = await page(url, `?since=${since}`);
+        p.events.forEach((e, i) => assert.equal(e.seq, since + 1 + i));
+        const last = p.events.at(-1);
+        if (last !== undefined) {
+          assert.equal(
+            last.seq % 5,
+            0,
+            `page ended inside a run at ${last.seq}`,
+          );
+          since = last.seq;
+        }
+      }
+      await appending;
+    }),
+);

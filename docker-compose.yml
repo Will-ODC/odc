@@ -15,7 +15,7 @@ services:
       POSTGRES_PASSWORD: ledger
       POSTGRES_DB: ledger
     ports:
-      - "127.0.0.1:5434:5432"
+      - "127.0.0.1:5436:5432"
     healthcheck:
       test: ["CMD", "pg_isready", "-U", "ledger", "-d", "ledger"]
       interval: 2s

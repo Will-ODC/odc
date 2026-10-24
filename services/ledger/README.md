@@ -1,10 +1,9 @@
 # ledger
 
-**Status: Phase 1.** Storage, the EV-26 checker, the single writer, the public
-read API, the operator write path and ballot batching are built. The signer
-service it calls (`services/signer`) does not exist yet; the ledger is tested
-against a double of it. Built against the contracts RELEASE CANDIDATE
-(ADR-0007).
+**Status: Phase 1, in progress.** Storage, the EV-26 checker, the single
+writer and the public read API are built. The operator write path lands in
+#462, and ballot batching in #463 plus a wiring PR. Built against the
+contracts RELEASE CANDIDATE (ADR-0007).
 
 ## What it is
 
@@ -18,10 +17,10 @@ its Postgres database; no other service reads it. Rules for agents are in
 
 Two ports, both documented in `API.md`. The **public** port serves
 `GET /events` (`contracts/read-api.md`), `GET /head` and `GET /export`; it is
-unauthenticated and read-only. The **internal** port takes the operator's
-signed appends (`POST /appends`) and close calls
-(`POST /issues/{issue_id}/close`); bind it to a private network only. The
-ledger's one outbound call is to the signer, on the ballot write path.
+unauthenticated and read-only. The **internal** port (lands in #462) takes the
+operator's signed appends and close calls; bind it to a private network only.
+The ledger's one outbound call will be to the signer, on the ballot write path
+(#463 and the wiring PR).
 
 ## Storage
 
@@ -39,19 +38,6 @@ cluster-wide role: every database on the same Postgres server shares it and
 its password, which the runner sets from `LEDGER_APP_PASSWORD` as a SCRAM
 verifier, never in plain text.
 
-## How to run it
-
-Start the database with `docker compose -f services/ledger/docker-compose.yml
-up -d --wait db`, apply the migrations as the owner role (`migrate()` in
-`src/db/migrate.ts`; there is no CLI for it yet), build with
-`pnpm --filter @odc/ledger build`, then run
-`LEDGER_DATABASE_URL=postgres://ledger_app:<password>@127.0.0.1:5434/ledger
-LEDGER_SIGNER_URL=<signer base URL> pnpm --filter @odc/ledger start`. On start
-it replays any stored sign request before it accepts appends, then seals
-ballot batches on a timer. `LEDGER_PUBLIC_PORT` (default 8090),
-`LEDGER_PUBLIC_HOST` (default `0.0.0.0`), `LEDGER_INTERNAL_PORT` (default 8091) and `LEDGER_INTERNAL_HOST` (default `127.0.0.1`) set where it listens
-(`src/config.ts`).
-
 ## How to test it
 
 ```sh
@@ -63,8 +49,4 @@ LEDGER_DATABASE_URL=postgres://ledger:ledger@127.0.0.1:5434/ledger \
 
 Without `LEDGER_DATABASE_URL` the DB tests skip; `LEDGER_REQUIRE_DATABASE=1`
 (set on CI) turns a missing database into a failure. Each test creates and
-drops its own throwaway database. The black-box verifier check,
-`pnpm --filter @odc/ledger test:verifiers`, also needs `ODC_VERIFY_GO` (the
-built Go verifier) and `ODC_VERIFY_TS`
-(`node <repo>/tools/verifier-ts/dist/src/cli.js verify`); CI runs it in its
-own step.
+drops its own throwaway database.

@@ -75,12 +75,21 @@ export function buildPublicApp(deps: PublicDeps): FastifyInstance {
   });
 
   // EX-1..EX-6: the stored lines, LF-terminated, from one snapshot. An empty
-  // log streams zero bytes.
-  app.get("/export", (_req, reply) =>
-    reply
+  // log streams zero bytes. The snapshot is opened and its first batch read
+  // before the 200 is sent, so a failure there is an error response, never
+  // a truncated body that would look like a valid prefix.
+  app.get("/export", async (_req, reply) => {
+    const lines = exportLines(pool);
+    const first = await lines.next();
+    async function* all(): AsyncGenerator<string> {
+      if (first.done === true) return;
+      yield first.value;
+      yield* lines;
+    }
+    return reply
       .type("application/x-ndjson")
-      .send(Readable.from(exportLines(pool), { objectMode: false })),
-  );
+      .send(Readable.from(all(), { objectMode: false }));
+  });
 
   return app;
 }
