@@ -5,11 +5,16 @@ import {
   tsToEpochMs,
   type UnhashedEvent,
 } from "../../src/chain/index.js";
-import { shuffle } from "../../src/batching/batcher.js";
+import pg from "pg";
+import {
+  Batcher,
+  shuffle,
+  type BatcherLedger,
+} from "../../src/batching/batcher.js";
 import type { SignerClient } from "../../src/clients/signer.js";
 import { skip, withDb } from "../db/harness.js";
 import { OPERATOR, issuePayload } from "../chain/support/builders.js";
-import { START_MS, fill, unhashed, votes, world } from "./setup.js";
+import { START_MS, count, fill, unhashed, votes, world } from "./setup.js";
 
 const MIN = 60000;
 const quantized = (ms: number) => epochMsToTs(Math.floor(ms / MIN) * MIN);
@@ -23,6 +28,12 @@ test("shuffle_is_a_permutation_driven_only_by_the_random_source", () => {
   assert.deepEqual(sorted(out), xs);
 });
 
+test("a_batcher_refuses_a_pool_of_one_connection", () => {
+  const o = { ledger: {} as BatcherLedger, signer: {} as SignerClient };
+  const pool = new pg.Pool({ max: 1 }); // never connects
+  assert.throws(() => new Batcher({ ...o, pool }), /max >= 2/);
+});
+
 test(
   "a_full_batch_is_sealed_shuffled_signed_and_appended_as_one_run_at_a_quantized_ts",
   { skip },
@@ -30,18 +41,17 @@ test(
     withDb(async ({ app }) =>
       world(app, [{}], async (w) => {
         const [issue] = w.issueIds as [string];
-        fill(w.fake, issue, [0, 1, 2, 2]);
-        assert.equal(await w.batcher().tick(), true);
+        fill(w.fake, issue, [2, 0, 1, 2]);
+        assert.equal(await w.batcher({ random: () => 0 }).tick(), true);
         const run = votes(await w.events());
         assert.deepEqual(
           run.map((e) => e.seq),
           [3, 4, 5, 6],
         );
         assert.ok(run.every((e) => e.ts === quantized(START_MS)));
-        assert.deepEqual(
-          sorted(run.map((e) => Number(e.payload.choice))),
-          [0, 1, 2, 2],
-        );
+        // The shuffle of the counts' 0,1,2,2: neither count nor arrival order.
+        const order = run.map((e) => Number(e.payload.choice));
+        assert.deepEqual(order, [1, 2, 2, 0]);
         assert.equal(await w.exportValid(), true);
         const { rows } = await app.query(
           "SELECT appended FROM batch_completions",
@@ -52,7 +62,7 @@ test(
 );
 
 test(
-  "an_under_min_batch_stays_open_across_ticks_then_fills_and_appends",
+  "a_quiet_issue_keeps_one_intent_re_asked_once_per_interval_then_fills_and_closes",
   { skip },
   () =>
     withDb(async ({ app }) =>
@@ -60,36 +70,32 @@ test(
         const [issue] = w.issueIds as [string];
         const b = w.batcher();
         fill(w.fake, issue, [1, 1]);
-        await b.tick();
-        await b.tick(); // same interval: not re-asked
-        w.clock.now += MIN;
-        await b.tick();
-        assert.equal(votes(await w.events()).length, 0);
-        assert.equal(w.fake.sealCalls.length, 2);
+        for (let i = 0; i < 5; i++, w.clock.now += MIN) {
+          await b.tick();
+          await b.tick(); // same interval: not re-asked
+        }
+        const rows = async () => [
+          await count(app, "batch_seal_intents"),
+          await count(app, "batch_seal_refusals"),
+        ];
+        assert.deepEqual(await rows(), [1, 0]);
+        assert.equal(w.fake.sealCalls.length, 5);
+        assert.equal(new Set(w.fake.sealCalls.map((c) => c.sealId)).size, 1);
         fill(w.fake, issue, [0]);
-        w.clock.now += MIN;
         await b.tick();
+        // It keeps its intent's instant, which no seal of the issue had.
         const run = votes(await w.events());
         assert.equal(run.length, 3);
-        assert.ok(run.every((e) => e.ts === quantized(START_MS + 2 * MIN)));
-      }),
-    ),
-);
-
-test(
-  "an_under_size_batch_is_appended_only_as_the_last_and_the_issue_is_never_sealed_again",
-  { skip },
-  () =>
-    withDb(async ({ app }) =>
-      world(app, [{}], async (w) => {
-        const [issue] = w.issueIds as [string];
-        const b = w.batcher();
-        fill(w.fake, issue, [0, 1, 2]);
-        await b.tick();
+        assert.ok(run.every((e) => e.ts === quantized(START_MS)));
+        // A close drops an outstanding under-min intent (one refusal row).
         fill(w.fake, issue, [2]);
+        w.clock.now += MIN;
+        await b.tick();
         assert.equal(await b.closeIssue(issue), "closed");
-        assert.equal(votes(await w.events()).length, 4);
+        assert.deepEqual(await rows(), [3, 1]);
+        assert.equal(new Set(votes(await w.events()).map((e) => e.ts)).size, 2);
         assert.equal(await w.exportValid(), true);
+        // Closed: entries refused, never sealed again.
         assert.equal(w.fake.addEntry(issue, 0), "refused");
         const calls = w.fake.sealCalls.length;
         w.clock.now += 5 * MIN;
@@ -205,20 +211,6 @@ test("a_clock_stepping_backwards_never_reuses_a_batch_instant", { skip }, () =>
         epochMsToTs(tsToEpochMs(first) + MIN),
       ]);
       assert.equal(await w.exportValid(), true);
-    }),
-  ),
-);
-
-test("appended_order_is_the_shuffle_not_the_count_order", { skip }, () =>
-  withDb(async ({ app }) =>
-    world(app, [{}], async (w) => {
-      const [issue] = w.issueIds as [string];
-      fill(w.fake, issue, [2, 0, 1, 0]); // counts [2, 1, 1] expand to 0,0,1,2
-      await w.batcher({ random: () => 0 }).tick();
-      const order = votes(await w.events()).map((e) =>
-        Number(e.payload.choice),
-      );
-      assert.deepEqual(order, [0, 1, 2, 0]);
     }),
   ),
 );

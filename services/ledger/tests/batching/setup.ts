@@ -5,11 +5,7 @@ import {
   type Event,
   type UnhashedEvent,
 } from "../../src/chain/index.js";
-import {
-  createBatcher,
-  type Batcher,
-  type BatcherOptions,
-} from "../../src/batching/batcher.js";
+import { Batcher, type BatcherOptions } from "../../src/batching/batcher.js";
 import {
   createSignerClient,
   type SignerClient,
@@ -46,6 +42,8 @@ export interface World {
   clock: { now: number };
   logs: string[];
   batcher: (over?: Partial<BatcherOptions>) => Batcher;
+  /** A new process on the same database: a fresh Ledger and Batcher. */
+  restart: () => Promise<Batcher>;
   events: () => Promise<Event[]>;
   exportValid: () => Promise<boolean>;
 }
@@ -82,7 +80,7 @@ export async function world(
     clock,
     logs,
     batcher: (over = {}) =>
-      createBatcher({
+      new Batcher({
         ledger,
         pool: app,
         signer: client,
@@ -90,6 +88,7 @@ export async function world(
         log: (l) => logs.push(l),
         ...over,
       }),
+    restart: async () => w.batcher({ ledger: await Ledger.open(app) }),
     events: async () => {
       const rows = await readSince(app, 0, 1000);
       return rows.map((r) => JSON.parse(r.line) as Event);
@@ -121,4 +120,11 @@ export function fill(
   choices: number[],
 ): void {
   for (const c of choices) fake.addEntry(issueId, c);
+}
+
+export async function count(app: Pool, table: string): Promise<number> {
+  const r = await app.query<{ n: string }>(
+    `SELECT count(*) AS n FROM ${table}`,
+  );
+  return Number(r.rows[0]?.n);
 }

@@ -4,15 +4,26 @@ import type { Pool } from "pg";
 import type { Event } from "../../src/chain/index.js";
 import type { BatcherLedger } from "../../src/batching/batcher.js";
 import type { SignerClient } from "../../src/clients/signer.js";
+import { REGISTRAR, finish } from "../chain/support/builders.js";
 import { skip, withDb } from "../db/harness.js";
-import { fill, votes, world } from "./setup.js";
+import type { Fault } from "../support/fake-signer.js";
+import { count, fill, unhashed, votes, world, type World } from "./setup.js";
 
-async function pendingRequests(app: Pool): Promise<number> {
-  const { rows } = await app.query<{ n: string }>(
-    `SELECT count(*) AS n FROM batch_sign_requests s
-      WHERE NOT EXISTS (SELECT 1 FROM batch_completions c WHERE c.batch_id = s.batch_id)`,
-  );
-  return Number(rows[0]?.n);
+/** A stored sign request has no completion. */
+const pending = async (app: Pool) =>
+  (await count(app, "batch_sign_requests")) >
+  (await count(app, "batch_completions"));
+
+/** A signer whose sign call reaches the fake, then the process dies. */
+function dyingSigner(w: World, onSigned: (run: Event[]) => void) {
+  return {
+    seal: (id, o) => w.client.seal(id, o),
+    sign: async (req) => {
+      const r = await w.client.sign(req);
+      if (r.ok) onSigned(r.value);
+      throw new Error("process killed before append");
+    },
+  } satisfies SignerClient;
 }
 
 test(
@@ -23,74 +34,93 @@ test(
       world(app, [{}], async (w) => {
         const [issue] = w.issueIds as [string];
         let signed: Event[] = [];
-        const crashing: SignerClient = {
-          seal: (id, o) => w.client.seal(id, o),
-          sign: async (req) => {
-            const r = await w.client.sign(req);
-            if (r.ok) signed = r.value;
-            throw new Error("process killed before append");
-          },
-        };
+        const signer = dyingSigner(w, (run) => void (signed = run));
         fill(w.fake, issue, [0, 1, 2, 1]);
-        assert.equal(await w.batcher({ signer: crashing }).tick(), false);
+        assert.equal(await w.batcher({ signer }).tick(), false);
         assert.equal(votes(await w.events()).length, 0);
-        assert.equal(await pendingRequests(app), 1);
+        assert.equal(await pending(app), true);
 
-        assert.equal(await w.batcher().recover(), true);
-        const run = votes(await w.events());
+        assert.equal(await (await w.restart()).recover(), true);
         assert.deepEqual(
-          run.map((e) => e.hash),
+          votes(await w.events()).map((e) => e.hash),
           signed.map((e) => e.hash),
         );
         const [bodies] = [...w.fake.signBodies.values()] as [string[]];
-        assert.equal(bodies.length, 2);
-        assert.equal(bodies[0], bodies[1]);
-        assert.equal(await pendingRequests(app), 0);
+        assert.deepEqual(bodies, [bodies[0], bodies[0]]);
+        assert.equal(await pending(app), false);
         assert.equal(await w.exportValid(), true);
       }),
     ),
 );
 
 test(
-  "a_crash_after_commit_before_completion_records_completion_without_appending_again",
+  "a_stored_sign_request_whose_positions_hold_another_run_is_never_completed",
   { skip },
   () =>
     withDb(async ({ app }) =>
       world(app, [{}], async (w) => {
         const [issue] = w.issueIds as [string];
-        const crashing: BatcherLedger = {
-          get state() {
-            return w.ledger.state;
-          },
+        // Another valid run of the same ballots, in another order, takes the positions.
+        let racing: Promise<unknown> | undefined;
+        const signer = dyingSigner(w, (run) => {
+          const head = run[0] as Event;
+          const other: Event[] = [];
+          for (const { payload: p } of [...run].reverse()) {
+            const payload = { issue_id: issue, choice: Number(p.choice) };
+            const prev_hash = other.at(-1)?.hash ?? head.prev_hash;
+            const seq = head.seq + other.length;
+            other.push(
+              finish({ ...unhashed(head), seq, prev_hash, payload }, REGISTRAR),
+            );
+          }
+          racing = w.ledger.appendRun(() => other.map(unhashed));
+        });
+        fill(w.fake, issue, [0, 1, 2, 2]);
+        assert.equal(await w.batcher({ signer }).tick(), false);
+        await racing;
+
+        assert.equal(await (await w.restart()).recover(), false);
+        assert.equal(await count(app, "batch_completions"), 0);
+        assert.match(w.logs.join("\n"), /^ALERT batcher: .*tail moved/m);
+      }),
+    ),
+);
+
+test(
+  "a_crash_after_the_run_is_appended_before_completion_records_completion_only",
+  { skip },
+  () =>
+    withDb(async ({ app }) =>
+      world(app, [{}], async (w) => {
+        const [issue] = w.issueIds as [string];
+        const ledger: BatcherLedger = {
+          state: w.ledger.state,
           appendRun: async (build) => {
             await w.ledger.appendRun(build);
             throw new Error("process killed before completion");
           },
         };
         fill(w.fake, issue, [0, 1, 2]);
-        assert.equal(await w.batcher({ ledger: crashing }).tick(), false);
-        assert.equal(await pendingRequests(app), 1);
+        assert.equal(await w.batcher({ ledger }).tick(), false);
+        assert.equal(await pending(app), true);
 
-        assert.equal(await w.batcher().recover(), true);
+        assert.equal(await (await w.restart()).recover(), true);
         assert.equal(votes(await w.events()).length, 3);
-        assert.equal(await pendingRequests(app), 0);
-        assert.equal(
-          [...w.fake.signBodies.values()][0]?.length,
-          1,
-          "not re-signed",
-        );
+        assert.equal(await pending(app), false);
+        const bodies = [...w.fake.signBodies.values()].flat();
+        assert.equal(bodies.length, 1, "not re-signed");
       }),
     ),
 );
 
 test(
-  "a_crash_after_seal_before_its_result_is_stored_reseals_with_the_same_seal_id",
+  "a_crash_after_seal_before_its_result_is_stored_reseals_the_same_batch",
   { skip },
   () =>
     withDb(async ({ app }) =>
       world(app, [{}], async (w) => {
         const [issue] = w.issueIds as [string];
-        const crashing: SignerClient = {
+        const signer: SignerClient = {
           seal: async (id, o) => {
             await w.client.seal(id, o);
             throw new Error("process killed after seal");
@@ -98,13 +128,14 @@ test(
           sign: (req) => w.client.sign(req),
         };
         fill(w.fake, issue, [2, 2, 0]);
-        assert.equal(await w.batcher({ signer: crashing }).tick(), false);
-        assert.equal(votes(await w.events()).length, 0);
+        assert.equal(await w.batcher({ signer }).tick(), false);
+        assert.equal(await count(app, "batch_seal_results"), 0);
 
-        assert.equal(await w.batcher().recover(), true);
+        assert.equal(await (await w.restart()).recover(), true);
         const [first, second] = w.fake.sealCalls;
         assert.equal(w.fake.sealCalls.length, 2);
         assert.equal(first?.sealId, second?.sealId);
+        assert.equal(w.fake.signBodies.size, 1, "one batch");
         const run = votes(await w.events());
         assert.deepEqual(
           run.map((e) => Number(e.payload.choice)).sort(),
@@ -114,34 +145,8 @@ test(
     ),
 );
 
-for (const fault of ["tamper_sig", "tamper_payload"] as const) {
-  test(
-    `a_signed_run_with_${fault}_is_never_appended_and_stays_pending`,
-    { skip },
-    () =>
-      withDb(async ({ app }) =>
-        world(app, [{}], async (w) => {
-          const [issue] = w.issueIds as [string];
-          const b = w.batcher();
-          fill(w.fake, issue, [0, 1, 2]);
-          w.fake.inject("sign", fault);
-          assert.equal(await b.tick(), false);
-          assert.equal(votes(await w.events()).length, 0);
-          assert.equal(await pendingRequests(app), 1);
-          assert.match(w.logs.join("\n"), /not appended/);
-          assert.equal(await b.signPending(), true);
-          // The next answer to the identical request is honest: it is appended.
-          assert.equal(await b.tick(), true);
-          assert.equal(votes(await w.events()).length, 3);
-          assert.equal(await w.exportValid(), true);
-          assert.equal(await b.signPending(), false);
-        }),
-      ),
-  );
-}
-
 test(
-  "a_signer_outage_or_timeout_appends_nothing_and_a_later_tick_succeeds",
+  "a_signer_outage_or_timeout_appends_nothing_raises_no_alert_and_a_later_tick_succeeds",
   { skip },
   () =>
     withDb(async ({ app }) =>
@@ -160,23 +165,48 @@ test(
         assert.equal(votes(await w.events()).length, 3);
         // Every retry of the seal used the one seal id: one batch, not three.
         assert.equal(new Set(w.fake.sealCalls.map((c) => c.sealId)).size, 1);
+        assert.ok(!w.logs.some((l) => l.startsWith("ALERT")));
       }),
     ),
 );
 
-test(
-  "a_400_from_the_signer_raises_an_alert_and_keeps_the_batch_pending",
-  { skip },
-  () =>
-    withDb(async ({ app }) =>
-      world(app, [{}], async (w) => {
-        const [issue] = w.issueIds as [string];
-        fill(w.fake, issue, [0, 1, 2]);
-        w.fake.inject("sign", "bad_request");
-        assert.equal(await w.batcher().tick(), false);
-        assert.equal(votes(await w.events()).length, 0);
-        assert.equal(await pendingRequests(app), 1);
-        assert.match(w.logs.join("\n"), /^ALERT batcher: .*http_400/m);
-      }),
-    ),
-);
+const ALERTS: [Fault, number[], RegExp][] = [
+  ["tamper_sig", [0, 1, 2], /not appended: event 0 refused/],
+  ["tamper_payload", [0, 1, 2], /not appended: payload 2/],
+  ["bad_request", [0, 1, 2], /not appended: http_400/],
+  ["seal_under_min", [0], /bad counts/],
+  ["seal_extra_count", [0, 1, 2], /bad counts/],
+];
+for (const [fault, entries, why] of ALERTS) {
+  test(
+    `a_signer_answer_a_retry_cannot_fix_(${fault})_alerts_and_appends_nothing`,
+    { skip },
+    () =>
+      withDb(async ({ app }) =>
+        world(app, [{}], async (w) => {
+          const [issue] = w.issueIds as [string];
+          fill(w.fake, issue, entries);
+          const sealFault = fault.startsWith("seal_");
+          w.fake.inject(sealFault ? "seal" : "sign", fault);
+          const b = w.batcher();
+          assert.equal(await b.tick(), false);
+          assert.equal(votes(await w.events()).length, 0);
+          const alerts = w.logs.filter((l) => l.startsWith("ALERT batcher: "));
+          assert.equal(alerts.length, 1);
+          assert.match(alerts[0] as string, why);
+          assert.equal(await pending(app), !sealFault);
+          if (sealFault) {
+            // Sealed at the signer: the same seal id gets the same bad answer.
+            assert.equal(await b.tick(), false);
+            assert.equal(w.logs.filter((l) => why.test(l)).length, 2);
+            assert.equal(await count(app, "batch_seal_results"), 0);
+            return;
+          }
+          // The fake is honest next time: the identical request is appended.
+          assert.equal(await b.tick(), true);
+          assert.equal(votes(await w.events()).length, 3);
+          assert.equal(await w.exportValid(), true);
+        }),
+      ),
+  );
+}

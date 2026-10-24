@@ -11,11 +11,13 @@ export type Fault =
   | "fail" // 503
   | "timeout" // never answers
   | "malformed" // 200 with a body that is not the documented shape
-  | "tamper_sig" // flips a byte of the first event's signature
+  | "tamper_sig" // flips a byte of the first sig; hashes and chain stay consistent
   | "tamper_payload" // changes the last event's choice, validly re-signed
   | "http_408" // request timeout status
   | "http_429" // rate limited
   | "bad_request" // 400: the signer found the request malformed
+  | "seal_under_min" // seals a non-last batch below ballot_batch_min
+  | "seal_extra_count" // seals, answering one count more than choice_count
   | "bare_404"; // 404 with no error code, like a wrong path or a proxy
 
 interface IssueBook {
@@ -132,11 +134,15 @@ export class FakeSigner {
     if (fault === "bad_request") return reply(400, { error: "bad_request" });
     if (fault === "http_429") return reply(429, { error: "under_min" });
     if (fault === "bare_404") return reply(404, "not here");
-    if (seal) return this.seal(seal[1] as string, body);
+    if (seal) return this.seal(seal[1] as string, body, fault);
     return this.sign((sign as RegExpExecArray)[1] as string, raw, body, fault);
   }
 
-  private seal(issueId: string, body: Record<string, unknown>) {
+  private seal(
+    issueId: string,
+    body: Record<string, unknown>,
+    fault: Fault | null,
+  ) {
     const sealId = String(body.seal_id);
     const last = body.last === true;
     this.sealCalls.push({ issueId, sealId, last });
@@ -152,10 +158,12 @@ export class FakeSigner {
     if (book === undefined) return reply(404, { error: "unknown_issue" });
     if (book.closed) return reply(409, { error: "issue_closed" });
     const total = book.counts.reduce((a, b) => a + b, 0);
-    if (!last && total < book.min) return reply(409, { error: "under_min" });
+    if (!last && total < book.min && fault !== "seal_under_min") {
+      return reply(409, { error: "under_min" });
+    }
     const out = {
       batch_id: randomBytes(8).toString("hex"),
-      counts: book.counts,
+      counts: fault === "seal_extra_count" ? [...book.counts, 0] : book.counts,
     };
     this.batches.set(out.batch_id, {
       issueId,
@@ -222,10 +230,14 @@ export class FakeSigner {
       const [first, ...rest] = events as [Event, ...Event[]];
       const sig = String(first.payload.sig);
       const flipped = (sig[0] === "0" ? "1" : "0") + sig.slice(1);
-      events = [
-        { ...first, payload: { ...first.payload, sig: flipped } },
-        ...rest,
-      ];
+      const { seq, type, version, ts, prev_hash, payload } = first;
+      const base = { seq, type, version, ts, prev_hash, payload };
+      const bad = finish(base, null, flipped);
+      const payloads = rest.map((e) => ({
+        issue_id: batch.issueId,
+        choice: Number(e.payload.choice),
+      }));
+      events = [bad, ...signRun(payloads, bad.seq + 1, bad.ts, bad.hash)];
     }
     if (fault === "tamper_payload") {
       const last = events.at(-1) as Event;

@@ -24,18 +24,14 @@ import {
   type SealedBatch,
 } from "../db/batching.js";
 import { readSince } from "../db/events.js";
-import type { BuildRun } from "../ledger.js";
+import { AppendRefused, ChainNotValid, type BuildRun } from "../ledger.js";
 
 /**
- * The producer side of ballot batching (ET-23 to ET-25, ADR-0043 "How the
- * append is coordinated"). Per open issue it decides when to seal and at which
- * batch instant, asks the signer to seal, orders the batch by a cryptographic
- * shuffle, asks the signer to sign the run at the tail, and appends it whole
- * through the single writer. Every step is recorded before the call it
- * precedes (src/db/batching.ts), so `recover()` can finish it after a crash.
- *
- * ET-21a: nothing here returns or logs anything that singles out a ballot. Log
- * lines name only the issue, the batch id and a reason code.
+ * Ballot batching (ET-23 to ET-25, ADR-0043 "How the append is coordinated"):
+ * per issue, choose the instant, seal, shuffle, sign at the tail, append whole.
+ * Each step is recorded before the call it precedes (src/db/batching.ts), so
+ * `recover()` finishes it after a crash. ET-21a: logs name only the issue, the
+ * batch id and a reason, never a ballot.
  */
 export interface BatcherLedger {
   readonly state: { readonly issues: ReadonlyMap<string, IssueState> };
@@ -46,13 +42,10 @@ export interface BatcherOptions {
   readonly ledger: BatcherLedger;
   readonly pool: Pool;
   readonly signer: SignerClient;
-  /** Milliseconds since the epoch. */
   readonly clock?: () => number;
   /** A uniform integer in [0, n). Tests inject it; production uses crypto. */
   readonly random?: (n: number) => number;
   readonly log?: (line: string) => void;
-  /** How often `start()` ticks. */
-  readonly tickMs?: number;
 }
 
 export type CloseStatus = "closing" | "closed";
@@ -63,8 +56,15 @@ export class UnknownIssue extends Error {
   }
 }
 
-/** A step that did not complete; its records stay pending and are retried. */
-class Pending extends Error {}
+/** A step left pending, retried later; `alert` when a retry cannot fix it. */
+class Pending extends Error {
+  constructor(
+    message: string,
+    readonly alert = false,
+  ) {
+    super(message);
+  }
+}
 
 /** Fisher-Yates with the given source of uniform integers. ET-25: not arrival order. */
 export function shuffle<T>(
@@ -81,40 +81,14 @@ export function shuffle<T>(
   return out;
 }
 
-const PAYLOAD_KEYS = "choice,issue_id,sig";
-
-/** Checks a signed run against the request; returns the events to append. */
+/** The client matched the run to the request; this checks chain and hashes. */
 function checkRun(req: SignRequest, events: readonly Event[]): UnhashedEvent[] {
-  if (events.length !== req.payloads.length) {
-    throw new Pending("signed run has the wrong length");
-  }
-  return events.map((e, i) => {
-    const sent = req.payloads[i];
+  return events.map(({ hash, ...e }, i) => {
     const prev = i === 0 ? req.firstPrevHash : events[i - 1]?.hash;
-    const ok =
-      sent !== undefined &&
-      e.seq === req.firstSeq + i &&
-      e.type === "vote_cast" &&
-      e.version === 1 &&
-      e.ts === req.ts &&
-      e.prev_hash === prev &&
-      Object.keys(e.payload).sort().join(",") === PAYLOAD_KEYS &&
-      e.payload.issue_id === sent.issue_id &&
-      e.payload.choice === sent.choice &&
-      typeof e.payload.sig === "string";
-    if (!ok) throw new Pending(`signed event ${i} differs from the request`);
-    const unhashed: UnhashedEvent = {
-      seq: e.seq,
-      type: e.type,
-      version: e.version,
-      payload: e.payload,
-      ts: e.ts,
-      prev_hash: e.prev_hash,
-    };
-    if (computeHash(unhashed) !== e.hash) {
-      throw new Pending(`signed event ${i} hash does not match`);
+    if (e.prev_hash !== prev || computeHash(e) !== hash) {
+      throw new Pending(`signed event ${i} does not chain`, true);
     }
-    return unhashed;
+    return e;
   });
 }
 
@@ -125,18 +99,22 @@ export class Batcher {
   private readonly clock: () => number;
   private readonly random: (n: number) => number;
   private readonly log: (line: string) => void;
-  private readonly tickMs: number;
   private queue: Promise<unknown> = Promise.resolve();
-  private timer: NodeJS.Timeout | null = null;
+  /** Per issue: the seal id the signer last refused under_min, and when. */
+  private readonly underMin = new Map<string, string>();
 
   constructor(o: BatcherOptions) {
+    // appendRun holds one pool connection (the writer lock) while
+    // insertSignRequest commits on another: a pool of one would deadlock.
+    if ((o.pool.options.max ?? 10) < 2) {
+      throw new Error("the batcher's pool needs max >= 2");
+    }
     this.ledger = o.ledger;
     this.pool = o.pool;
     this.signer = o.signer;
     this.clock = o.clock ?? Date.now;
     this.random = o.random ?? ((n) => randomInt(n));
     this.log = o.log ?? ((line) => console.error(line));
-    this.tickMs = o.tickMs ?? 1000;
   }
 
   /**
@@ -166,33 +144,6 @@ export class Batcher {
     });
   }
 
-  /**
-   * True while a stored sign request has no appended run. Its batch is signed
-   * at that one position, so any other append (an operator's included) would
-   * strand it: callers must refuse to append until this is false (ADR-0043).
-   */
-  async signPending(): Promise<boolean> {
-    return (await pendingSignRequests(this.pool)).length > 0;
-  }
-
-  start(): void {
-    if (this.timer !== null) return;
-    const loop = (): void => {
-      this.timer = setTimeout(() => {
-        void this.tick().finally(() => {
-          if (this.timer !== null) loop();
-        });
-      }, this.tickMs);
-    };
-    loop();
-  }
-
-  async stop(): Promise<void> {
-    if (this.timer !== null) clearTimeout(this.timer);
-    this.timer = null;
-    await this.queue;
-  }
-
   private serial<T>(fn: () => Promise<T>): Promise<T> {
     const next = this.queue.then(fn);
     this.queue = next.catch(() => undefined);
@@ -208,9 +159,7 @@ export class Batcher {
       }
       return done;
     } catch (err) {
-      this.log(
-        `batcher: step failed: ${err instanceof Error ? err.message : String(err)}`,
-      );
+      this.warn(false, `step failed: ${(err as Error).message}`);
       return false;
     }
   }
@@ -246,7 +195,11 @@ export class Batcher {
         continue;
       }
       if (p.intent !== null) {
-        const r = await this.seal(issue, p.intent);
+        const asked = `${p.intent.sealId}@${this.interval(issue)}`;
+        if (!p.closeRequested && this.underMin.get(issue.issueId) === asked) {
+          return true;
+        }
+        const r = await this.seal(issue, p.intent, p.closeRequested);
         if (r === "unavailable") return false;
         if (r === "refused" && !p.closeRequested) return true;
         continue;
@@ -272,10 +225,9 @@ export class Batcher {
   }
 
   /**
-   * ET-23 and ET-24a: the issue's quantized now, unless an earlier seal of the
-   * issue already had that instant or a later one (the clock stepped back, or
-   * this interval was already tried). Then a tick holds (null), and a last
-   * seal, which cannot wait, advances one interval past the latest.
+   * ET-23, ET-24a: the issue's quantized now, unless a seal of the issue had it
+   * or a later one (clock stepped back, interval tried). Then a tick holds
+   * (null) and a last seal, which cannot wait, goes one interval past it.
    */
   private chooseInstant(
     issue: IssueState,
@@ -283,7 +235,7 @@ export class Batcher {
     force: boolean,
   ): number | null {
     const iv = issue.ballotBatchIntervalMs;
-    const now = Math.floor(this.clock() / iv) * iv;
+    const now = this.interval(issue) * iv;
     let latest = lastSealMs;
     for (const ts of issue.usedInstants) {
       const ms = tsToEpochMs(ts);
@@ -293,9 +245,21 @@ export class Batcher {
     return force ? latest + iv : null;
   }
 
+  private interval(issue: IssueState): number {
+    return Math.floor(this.clock() / issue.ballotBatchIntervalMs);
+  }
+
+  /**
+   * A non-last seal refused under_min sealed nothing: its intent stays live and
+   * is re-asked, same seal id (the signer answers it afresh: ledger-proposed),
+   * once per interval, so a quiet issue writes no rows. It keeps its instant,
+   * which no other seal of the issue can take meanwhile (one live intent) and
+   * EV-26 rechecks (ET-24a). Only a close or another code records a refusal.
+   */
   private async seal(
     issue: IssueState,
     intent: SealIntent,
+    closing: boolean,
   ): Promise<"sealed" | "refused" | "unavailable"> {
     const r = await this.signer.seal(issue.issueId, {
       last: intent.last,
@@ -303,13 +267,20 @@ export class Batcher {
     });
     if (!r.ok) {
       if (r.kind === "refused" && !intent.last) {
-        await insertSealRefusal(this.pool, intent.sealId, r.code);
+        if (r.code === "under_min" && !closing) {
+          const at = `${intent.sealId}@${this.interval(issue)}`;
+          this.underMin.set(issue.issueId, at);
+        } else {
+          await insertSealRefusal(this.pool, intent.sealId, r.code);
+        }
         return "refused";
       }
       // A last seal is never abandoned: it is re-asked with the same seal id.
       const why = r.kind === "refused" ? r.code : r.reason;
-      this.log(`batcher: seal of issue ${issue.issueId} pending: ${why}`);
-      this.alertIfMalformed(why);
+      this.warn(
+        why === "http_400",
+        `seal of issue ${issue.issueId} pending: ${why}`,
+      );
       return "unavailable";
     }
     const { batchId, counts } = r.value;
@@ -318,8 +289,10 @@ export class Batcher {
       counts.length !== issue.choiceCount ||
       (!intent.last && total < issue.ballotBatchMin)
     ) {
-      this.log(
-        `batcher: seal of issue ${issue.issueId} returned bad counts; batch ${batchId} pending`,
+      // Sealed already, so every retry gets the same answer.
+      this.warn(
+        true,
+        `seal of issue ${issue.issueId} returned bad counts; batch ${batchId} pending`,
       );
       return "unavailable";
     }
@@ -366,7 +339,7 @@ export class Batcher {
     }
     return this.append(req.batchId, req.issueId, async (head) => {
       if (head?.seq !== req.firstSeq - 1 || head.hash !== req.firstPrevHash) {
-        throw new Pending("the tail moved past the stored sign request");
+        throw new Pending("the tail moved past the stored sign request", true);
       }
       return req;
     });
@@ -383,19 +356,24 @@ export class Batcher {
       await this.ledger.appendRun(async (_state, head) => {
         const req = await request(head);
         const r = await this.signer.sign(req);
-        if (!r.ok) {
-          throw new Pending(
-            r.kind === "refused" ? `refused ${r.code}` : r.reason,
-          );
-        }
-        return checkRun(req, r.value);
+        if (r.ok) return checkRun(req, r.value);
+        // Only "no answer" may come right on retry; http_400 is our bug.
+        const temporary = r.kind === "unavailable" && r.reason !== "http_400";
+        throw new Pending(
+          r.kind === "refused" ? `refused ${r.code}` : r.reason,
+          !temporary,
+        );
       });
     } catch (err) {
       const why = err instanceof Error ? err.message : String(err);
-      this.log(
-        `batcher: batch ${batchId} of issue ${issueId} not appended: ${why}`,
+      const alert =
+        (err instanceof Pending && err.alert) ||
+        err instanceof AppendRefused ||
+        err instanceof ChainNotValid;
+      this.warn(
+        alert,
+        `batch ${batchId} of issue ${issueId} not appended: ${why}`,
       );
-      this.alertIfMalformed(why);
       return false;
     }
     await insertCompletion(this.pool, batchId, true);
@@ -403,33 +381,24 @@ export class Batcher {
   }
 
   /**
-   * A 400 means the signer found the ledger's own request malformed. The
-   * client counts it as "no answer" (undocumented code), so the batch stays
-   * pending and is retried, but a retry sends the same bytes and cannot fix a
-   * ledger bug: say so loudly for the operator.
+   * `alert`: a retry resends the same bytes to a deterministic signer and
+   * cannot fix it, so it is logged as ALERT on every attempt.
    */
-  private alertIfMalformed(why: string): void {
-    if (why === "http_400") {
-      this.log(
-        "ALERT batcher: the signer rejected a ledger request as malformed (http_400); retrying sends identical bytes, so an operator must look",
-      );
-    }
+  private warn(alert: boolean, line: string): void {
+    this.log(`${alert ? "ALERT " : ""}batcher: ${line}`);
   }
 
   /** True when the stored log already holds the request's run (crash after commit). */
   private async alreadyAppended(req: SignRequest): Promise<boolean> {
-    const rows = await readSince(
-      this.pool,
-      req.firstSeq - 1,
-      req.payloads.length,
-    );
-    if (rows.length !== req.payloads.length) return false;
-    if (rows[0]?.prevHash !== req.firstPrevHash) return false;
+    const n = req.payloads.length;
+    const rows = await readSince(this.pool, req.firstSeq - 1, n);
+    if (rows.length !== n) return false;
     return rows.every((row, i) => {
       const parsed = parseLine(new TextEncoder().encode(row.line));
       if (!parsed.ok) return false;
       const e = parsed.event;
       return (
+        e.prev_hash === (i === 0 ? req.firstPrevHash : rows[i - 1]?.hash) &&
         e.type === "vote_cast" &&
         e.ts === req.ts &&
         e.payload.issue_id === req.issueId &&
@@ -437,8 +406,4 @@ export class Batcher {
       );
     });
   }
-}
-
-export function createBatcher(options: BatcherOptions): Batcher {
-  return new Batcher(options);
 }
