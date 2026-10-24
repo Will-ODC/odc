@@ -19,6 +19,25 @@ JSON nor plain text is `415 unsupported_media_type`, and a server fault is
 `500 internal`.
 Request bodies are never logged.
 
+## Operator decisions this API follows
+
+Will chose these on 2026-10-21, during ledger planning. They are recorded here
+because they shape the endpoints below.
+
+- **Operator events are a conditional append (D2).** The operator signs
+  `genesis` and `issue_created` against the head it read and submits them to
+  `POST /appends`. If the tail has moved, the answer is `409 stale_tail` with
+  the current head, and the operator re-signs. The endpoint is on the internal
+  port only, and the ledger never holds the operator key.
+- **New registrations are refused until `participant_registered` v2 is in
+  `contracts/` (D3; ADR-0043 decision 2).** `POST /appends` answers
+  `422 type_not_accepted` for `participant_registered`. The ledger's checker
+  still reads v1 registrations already on a chain.
+- **An operator-signed close call seals an issue's last batch (D4).**
+  `POST /issues/{issue_id}/close`, signed by the chain's `operator_pk`, seals
+  the issue's open batch as its last (ET-24, ET-25). Without it an issue's
+  batches are only ever sealed at `ballot_batch_min` or more.
+
 ## Public port
 
 ### `GET /events?since={seq}&limit={n}`
