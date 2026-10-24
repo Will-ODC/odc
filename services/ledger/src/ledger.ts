@@ -108,9 +108,10 @@ export class Ledger {
       const built = await build(next, head);
       const rows: EventRow[] = [];
       built.forEach((e, i) => {
-        const event: Event = { ...e, hash: computeHash(e) };
+        let event: Event;
         let bytes: Uint8Array;
         try {
+          event = { ...e, hash: computeHash(e) };
           bytes = serializeLine(event);
         } catch (err) {
           const reason = err instanceof Error ? err.message : String(err);

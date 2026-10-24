@@ -125,6 +125,41 @@ test("an_event_type_rule_breach_is_422_rejected", { skip }, () =>
   }),
 );
 
+test(
+  "unencodable_event_values_are_422_and_leave_the_head_unchanged",
+  { skip },
+  () =>
+    withServers(async ({ internal, pub, submit }) => {
+      const chain = new TestChain();
+      await submit(chain.add(chain.genesis()));
+      const e = unhashed(chain.issue());
+      const invalid = [
+        { ...e, version: -1 },
+        ...[-1, 1.5, 2 ** 53].map((n) => ({
+          ...e,
+          payload: { ...e.payload, n },
+        })),
+        { ...e, payload: { ...e.payload, title: "\ud800" } },
+      ];
+      for (const event of invalid) {
+        const res = await postJson(`${internal}/appends`, { event });
+        assert.equal(res.status, 422);
+        assert.equal(
+          ((await res.json()) as { error: string }).error,
+          "rejected",
+        );
+        assert.deepEqual(await (await fetch(`${pub}/head`)).json(), {
+          seq: 1,
+          hash: chain.head,
+        });
+        assert.ok(
+          (await getBytes(`${pub}/export`)).equals(chain.exportBytes()),
+        );
+      }
+      assert.equal((await submit(chain.issue())).status, 201);
+    }),
+);
+
 test("a_corrupted_stored_log_is_422_chain_not_valid", { skip }, () => {
   const chain = new TestChain();
   const g = chain.add(chain.genesis());
