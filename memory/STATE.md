@@ -45,28 +45,45 @@ ET-25. Conformance phases 1 to 4, ADR-0034 and ADR-0038 are in both; detail is
 in the Done list below. The Go CLI takes `<file>` with no subcommand; the TS CLI takes
 `verify <file>` (`.github/workflows/repo.yml`).
 
-**The ledger and identity are unstarted.** `services/ledger/` and
-`services/identity/` hold guidance only.
+**The ledger is half merged.** Wave 1 merged 2026-10-23: storage #444
+(INSERT-only table; CHECKs tie `seq`, `type`, `version`, `ts`, `prev_hash` and
+`hash` to the stored line; a migration scan refuses UPDATE/DELETE/trigger
+changes), canonical hashing and parsing #445, Ed25519 #446, the EV-26 checker
+#447 (all 150 vectors fed line by line, tally asserted) and the signer client
+#448. Wave 2 (read API and append core, write path, batching state, batcher,
+wiring and the CI verifier step) is built and being opened as PRs. Every wave-1 PR had a fresh review before merge. The ledger
+is built from `contracts/` alone and runs both verifiers only as outside
+programs.
+
+**ADR-0043 is accepted** (#438, clarified in #443): identity decides who may
+vote; a separate **signer** service (planned, `services/signer/`) holds the
+registrar key and no linkage map, and signs a sealed batch in one call that
+chains the hashes; registrations move to a position-free
+`participant_registered` v2 bound to the genesis hash; the signer uses
+deterministic Ed25519 from a reproducible build. Charter §10 item 6 says so
+(#439). Ledger choices (operator, 2026-10-21, chosen in chat; recorded only here until wave 2's `services/ledger/API.md` documents them): operator events by conditional
+append (409 if the tail moved; the ledger holds no key), registrations refused
+until v2 is in the contracts, and an operator-signed "close issue" call seals an
+issue's last batch.
+
+**Identity and the signer are unstarted.**
 
 ## Next
 
-1. **Write the S-C/NS-2/Q-F ADR** (the operator chose all three on
-   2026-10-21; the ADR is in progress). The registrar
-   signs each ballot's final log position (HA-15, ET-25), so how `ledger` and
-   `identity` coordinate appends, and whether registration is interactive, must
-   be settled before either write path is built. Options are in
-   `memory/OPEN-QUESTIONS.md`, "Open entries from the T9 re-audit
-   (2026-10-20)". Q-F (the registrar's signature as a subliminal channel, in
-   "Open entries from the T9 audit") is settled with it. The entries move to the archive
-   when the ADR merges.
-2. **Ledger lead** (`services/ledger/`), which can start before the ADR on the
-   parts it does not touch: INSERT-only storage (`odc-storage`), hash at
-   insert, `seq`, the read API RA-1 to RA-13 and `GET /export`, and EV-26
-   verify-before-append with its own checks, never verifier code. The write
-   path and batching (ET-23 to ET-25) wait for the ADR.
-3. **Identity lead** (`services/identity/`) after the ADR: registration, the
-   private linkage map, registrar key custody, eligibility final at admission
-   (ET-20), and no receipt on the submission path (ET-21a).
+1. **Ledger wave 2**: review each PR fresh and merge. Owed nits from wave 1 ride
+   in it (direct lone-surrogate test, byte-flip line-attribution test including
+   LF, PARTIAL replay test, a loud alert on a signer 400, the README note on
+   which columns are tied byte for byte).
+2. **Contracts PR for `participant_registered` v2**: spec text in
+   `event-types.md` with scoped exceptions to ES-32 and HA-16, both verifiers
+   (each built in isolation), and vectors. Verifiers land with or before the
+   vectors. Until it merges the ledger refuses new registrations.
+3. **ADR-0043 owes one line**: the ledger-chosen `seal_id` that makes a seal
+   call idempotent (in the ledger code, marked "ledger-proposed").
+4. **Signer lead** (`services/signer/`, creates its README and CLAUDE.md) and
+   **identity lead** (`services/identity/`). Open signer-API points from the
+   ledger: refusal codes, a cheap "batch at minimum?" read, and whether a
+   timed-out sign call fixes the batch's position.
 
 Gates on the way: an `odc-security-auditor` audit before identity's first
 merge; S-D (the anchor record) before the first anchor; S-G (key rotation and
@@ -120,6 +137,8 @@ Optional, from ADR-0034 owed item 4: `docs/security/attacks/check-unknown-batchi
 - ADR-0034 mixed-version batching: contract #294; Go #324 (#319), TS #325
   (#320); vectors `116`-`134` in #327 (#321). TS sub-quadratic cost is
   follow-up #326.
+- ADR-0043 (registrar signer, v2 registration): #438, charter §10 #439, one-call
+  batch signing #443. Ledger wave 1: #444-#448 (2026-10-23).
 - ADR-0038 (the four contradictions, #355): contract #359, `genesis.contracts`
   cap #361. Go #370 (#364), TS #371 (#365), then ET-9f in both verifiers with
   the `086` flip and vectors `135`-`145` in #372 (#366), merged 2026-10-19.
@@ -214,6 +233,12 @@ Optional, from ADR-0034 owed item 4: `docs/security/attacks/check-unknown-batchi
   _created_ looks the same as one still running. Merging auto-deletes the head
   branch, so a later push creates a new branch with no PR. Agent sessions can
   delete remote branches.
+- **The Pulse `conversation-http` test ran at 4.4-4.8 s on CI against a 5 s
+  limit** and timed out on two ledger PRs; #450 gave it 30 s. A red
+  `format / lint / typecheck` on a ledger PR can still be another package's
+  test: read the log before fixing the PR.
+- **After a squash merge, stacked branches conflict.** Rebase with
+  `git rebase --onto origin/master <old-base-branch>`.
 - **Turbo lint caching is disabled** (ADR-0042, #381), because import resolution
   depends on workspace metadata, shared configuration and symlinks.
 - **The untracked root `AGENTS.md`** is switched off by `agentGuidance: false`

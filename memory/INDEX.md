@@ -25,17 +25,18 @@ Do not apply charter rules to `apps/**`, and do not relax them anywhere else.
 > entry, the entry wins — and fix the line.** You read this file first and it is
 > smaller, so on a divergence you would otherwise trust the wrong one.
 
-- **ODC core:** Phase 1. T9 passed and `contracts/` is a RELEASE CANDIDATE
-  (#428-#430, #432, 2026-10-21). Both verifiers pass all 150 vectors. Next:
-  the S-C/NS-2 ADR, with the ledger's read side alongside; identity after the
-  ADR. Ledger and identity are unstarted. → `memory/STATE.md`
-- **Pulse:** sign-in, voting, confirmed votes, storage, mail and serving are
-  built. The conversation vote page, welcome, tutorial and trust page are merged.
-  Confirmed-vote display, poll-creation HTTP and public attribution are merged.
-  The creation form and demo feedback are merged (#393/#403–#405).
-  Public community-scoped poll listing (#259 / PR #419) and its browser
-  (#260 / PR #426) are merged; MCP discovery (#291) remains unbuilt.
-  **Next: poll-creation refinement.** A deploy also
+- **ODC core:** Phase 1. ADR-0043 (separate signer, v2 registration) and the
+  charter §10 split are merged (#438, #439, #443). Ledger wave 1 merged
+  (#444-#448); wave 2 is being opened. Identity and the signer are unstarted.
+  → `memory/STATE.md`
+- **Pulse:** sign-in, voting, confirmed votes, poll creation and public browsing
+  are built. #451/#452 merged the bottom voting drawer, main-content results,
+  Home browser and About introduction. The live tutorial is removed.
+  **Requested results refinement: #453 compact vertical-bar results above comments.**
+  #457/#458 add community paths and lifecycle deliberation; rules remain open.
+  Comments/replies, abuse reporting and MCP discovery remain unbuilt;
+  issue ownership and the #186 → #425 consolidation are in `memory/pulse.md`.
+  Poll-creation refinement still needs scoping. A deploy also
   needs a host and a verified sending domain; `onlinedemocracy.org` is owned.
   → `memory/pulse.md`
 

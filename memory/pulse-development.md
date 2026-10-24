@@ -80,6 +80,46 @@ protections include private reports, server-side submission limits and preventin
 repeat submissions from multiplying the same unresolved complaint. Exact limits,
 review roles, appeal behavior and the evidence needed to act remain undecided.
 
+## Community paths and lifecycle deliberation (2026-10-23)
+
+The operator requested Reddit-style community URL paths and a connected thread
+of votes discussing community creation, banning, destruction and suspension
+under constitutional and foundational rules. This is a request to deliberate,
+not an adopted lifecycle policy or authorization to enforce one.
+
+- **#457 owns community paths.** Proposed shape: `/c/<community-name>` instead
+  of `/browse?community=ID`. The exact prefix, naming/normalization rules and
+  mapping to stable community IDs remain to be accepted. Keep old links
+  working; a readable URL grants no membership or posting rights. This work
+  can proceed independently of lifecycle enforcement and #440's multiple
+  verified memberships.
+- **#458 owns one linked community-rules discussion/voting thread.** Reuse
+  #255–#258 proposal/decision work, #285/#286 constitution versioning where
+  applicable, #297/#423 public discussion and #425 linked-question navigation.
+  No new voting engine or community-admin implementation is authorized by
+  this thread. Publish real polls only once their content, authority and
+  decision rules are accepted; creating the issue did not create live polls.
+
+Questions for that thread remain open:
+
+1. Which constitution/foundational text governs Pulse communities, which
+   provisions are protected, and how conflicts or amendments are handled.
+2. Who may create a community or initiate, decide, review and carry out a
+   suspension, ban, restoration or destruction/dissolution; distinguish a
+   community-wide action from banning a person within one community.
+3. Eligible electorate, participation/support requirements, closing/effective
+   times, evidence, notice, review/appeal and emergency-action limits.
+4. What each lifecycle state permits, how temporary restrictions end and how
+   restoration works. Do not treat suspension, banning and dissolution as
+   interchangeable operations.
+5. Whether destruction means disabling/archive versus deletion, and how
+   existing polls, ballots, comments, membership records and public links are
+   retained, protected or made available. No destructive behavior is chosen.
+
+These are Pulse application questions. No core charter change or platform-level
+community-gating rule is authorized; core remains governed by the charter.
+Accepted durable rules need their own ADR before enforcement is scoped.
+
 ## Suggested structure, not yet ratified
 
 While there is one participant, record each design question, its options and the
@@ -204,10 +244,11 @@ ideas. Their original GitHub bodies remain available as provenance.
   concrete behavior change. Choose the interaction and narrow acceptance
   criteria before implementation. PR #206 fixed result highlighting, not
   multiple-answer selection.
-- **#186 — keep open:** a closed first question needs a way onward. The
-  destination remains undecided; a question listing or a defined fallback is a
-  contained feature. Do not invent an answer-dependent next step without an
-  answer. The operator previously deferred this until poll creation.
+- **#186 — closed as duplicate of #425 (2026-10-23):** #425 retains the
+  closed-first-question/no-saved-ballot regression; consolidation does not
+  mean it is fixed. Follow the requested thread/story-first continuation,
+  otherwise the main feed, once ordering and terminal-fallback rules are
+  accepted. Do not invent an answer-dependent next step without an answer.
 
 Issue provenance: https://github.com/Will-ODC/odc/issues/217,
 https://github.com/Will-ODC/odc/issues/214,
