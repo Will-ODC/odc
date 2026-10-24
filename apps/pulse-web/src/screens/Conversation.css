@@ -66,6 +66,13 @@
   flex-direction: column;
   gap: var(--gutter);
 }
+.conversation__standing {
+  min-inline-size: 0;
+  margin-block: var(--step) var(--gutter);
+  padding: calc(var(--step) * 2);
+  border-radius: var(--r-card);
+  background: var(--surface-rest);
+}
 .conversation__thread > li {
   padding: calc(var(--step) * 2);
   background: var(--surface-rest);

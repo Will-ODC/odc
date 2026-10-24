@@ -17,12 +17,15 @@ import { ViewState } from "./ViewState.js";
  */
 export function ClosedResults({
   data,
+  compact = false,
   onRetry,
   onClose,
   panelRef,
   explainHref,
 }: {
   data: ViewData<Standing>;
+  /** Use the question page's compact results layout. */
+  compact?: boolean;
   onRetry: () => void;
   onClose: () => void;
   /** Focus lands here on open, and on each change of state while open. */
@@ -34,6 +37,7 @@ export function ClosedResults({
     return (
       <ResultsPanel
         results={data.value.results}
+        compact={compact}
         yourChoices={data.value.yourChoices}
         ended
         onClose={onClose}

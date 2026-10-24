@@ -299,6 +299,9 @@ function LoadedQuestion({
                 Try again
               </button>
             ) : null}
+            {standing ? (
+              <div className="conversation__standing">{standing}</div>
+            ) : null}
             <ol className="conversation__thread" aria-label="Conversation">
               {thread.map((answer) => (
                 <li key={answer.poll.id}>
@@ -316,13 +319,9 @@ function LoadedQuestion({
                       .join(" and ")}
                     .
                   </p>
-                  {answer.poll.id === pollId ? standing : null}
                 </li>
               ))}
             </ol>
-            {!thread.some((answer) => answer.poll.id === pollId)
-              ? standing
-              : null}
             {thread.length === 0 && loaded.status === "ready" ? (
               <p className="conversation__empty">
                 Your answers will appear here after you submit.
@@ -556,6 +555,7 @@ function LiveCard({
     closed.showing ? (
       <ClosedResults
         data={closed.data}
+        compact
         onRetry={closed.retry}
         onClose={closed.close}
         panelRef={closed.panelRef}

@@ -113,7 +113,12 @@ export function ResultsPanel({
         under it would only say it again, worse. The way out stays.
       */}
       {results.voters > 0 ? (
-        <Counts results={results} yours={yours} summary={!compact} />
+        <Counts
+          results={results}
+          yours={yours}
+          summary={!compact}
+          vertical={compact}
+        />
       ) : null}
     </div>
   );
@@ -124,19 +129,17 @@ function Counts({
   results,
   yours,
   summary,
+  vertical,
 }: {
   results: Results;
   yours: readonly ChoiceResult[];
   summary: boolean;
+  vertical: boolean;
 }) {
   const isYours = (choice: ChoiceResult) =>
     yours.some((one) => one.index === choice.index);
-  /**
-   * The widest share on screen, so the bars are read against each other rather
-   * than against a hundred that nothing may reach. An `approval` poll can push
-   * a single share past most of the scale and a `single` poll can leave every
-   * bar short; both look wrong drawn against a fixed 100.
-   */
+  /* The original horizontal rows use the widest choice as their scale. The
+   * compact vertical bars use the percentages themselves against 100. */
   const widest = results.choices.reduce(
     (most, one) => Math.max(most, one.share),
     0,
@@ -159,6 +162,16 @@ function Counts({
         </p>
       ) : null}
 
+      {vertical ? (
+        <p className="results__denominators">
+          Each percentage is a share of {results.voters} total{" "}
+          {results.voters === 1 ? "vote" : "votes"}
+          {anyConfirmed
+            ? ` or ${results.confirmedVoters} email-confirmed ${results.confirmedVoters === 1 ? "vote" : "votes"}, respectively.`
+            : "."}
+        </p>
+      ) : null}
+
       <ul className="results__list">
         {results.choices.map((choice) => (
           <li
@@ -176,11 +189,13 @@ function Counts({
               className="results__bar"
               aria-hidden="true"
               style={
-                { "--fill": `${scale(choice.share, widest)}%` } as CSSProperties
+                {
+                  "--fill": `${vertical ? choice.share : scale(choice.share, widest)}%`,
+                } as CSSProperties
               }
             />
             <span className="results__figure">
-              {choice.count} · {choice.share}%
+              {choice.count} · {choice.share}%{vertical ? " of all votes" : ""}
             </span>
             {anyConfirmed ? (
               <>
@@ -189,12 +204,13 @@ function Counts({
                   aria-hidden="true"
                   style={
                     {
-                      "--fill": `${scale(choice.confirmedShare, widestConfirmed)}%`,
+                      "--fill": `${vertical ? choice.confirmedShare : scale(choice.confirmedShare, widestConfirmed)}%`,
                     } as CSSProperties
                   }
                 />
                 <span className="results__figure results__figure--confirmed">
                   {choice.confirmedCount} · {choice.confirmedShare}% confirmed
+                  {vertical ? " by email" : ""}
                 </span>
               </>
             ) : null}

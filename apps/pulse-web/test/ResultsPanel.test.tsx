@@ -376,3 +376,56 @@ describe("confirmed by email (#353)", () => {
     expect(screen.queryByRole("link")).toBeNull();
   });
 });
+
+describe("compact question-page results (#453)", () => {
+  it("labels separate denominators and uses actual shares for vertical bars", () => {
+    show({
+      compact: true,
+      results: results({
+        method: "approval",
+        voters: 10,
+        confirmedVoters: 4,
+        choices: [
+          {
+            index: 0,
+            label: "Library",
+            count: 7,
+            share: 70,
+            confirmedCount: 1,
+            confirmedShare: 25,
+          },
+          {
+            index: 1,
+            label: "A long name that must wrap on a phone",
+            count: 6,
+            share: 60,
+            confirmedCount: 3,
+            confirmedShare: 75,
+          },
+        ],
+      }),
+    });
+    expect(
+      screen.getByText(/share of 10 total votes or 4 email-confirmed votes/),
+    ).toBeTruthy();
+    expect(screen.getByText("7 · 70% of all votes")).toBeTruthy();
+    expect(screen.getByText("1 · 25% confirmed by email")).toBeTruthy();
+    expect(screen.getByText(/more than everybody/)).toBeTruthy();
+    const bars = [...document.querySelectorAll<HTMLElement>(".results__bar")];
+    expect(bars.map((bar) => bar.style.getPropertyValue("--fill"))).toEqual([
+      "70%",
+      "25%",
+      "60%",
+      "75%",
+    ]);
+    expect(
+      bars.every((bar) => bar.getAttribute("aria-hidden") === "true"),
+    ).toBe(true);
+  });
+
+  it("keeps an empty closed result readable without drawing bars", () => {
+    show({ compact: true, ended: true, results: results({ voters: 0 }) });
+    expect(screen.getByText("Nobody answered this one.")).toBeTruthy();
+    expect(document.querySelector(".results__bar")).toBeNull();
+  });
+});

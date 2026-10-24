@@ -122,7 +122,7 @@ it("shows loading, empty and errors with a working retry", async () => {
     await main().findByRole("heading", { name: poll().question, level: 1 }),
   ).toBeTruthy();
 });
-it("keeps results under the answer while the bottom drawer is only for voting", async () => {
+it("puts one results banner after the question and before the thread, with voting in the drawer", async () => {
   const p = poll();
   let attempt = 0;
   const cast = vi.fn(
@@ -139,7 +139,19 @@ it("keeps results under the answer while the bottom drawer is only for voting", 
   const user = await answer();
   const standing = main().getByRole("group", { name: "How people answered" });
   const answerRow = main().getByText("You picked Yes.").closest("li")!;
-  expect(answerRow.contains(standing)).toBe(true);
+  const heading = main().getByRole("heading", { name: p.question, level: 1 });
+  expect(
+    heading.compareDocumentPosition(standing) &
+      Node.DOCUMENT_POSITION_FOLLOWING,
+  ).toBeTruthy();
+  expect(
+    standing.compareDocumentPosition(answerRow) &
+      Node.DOCUMENT_POSITION_FOLLOWING,
+  ).toBeTruthy();
+  expect(
+    main().getAllByRole("group", { name: "How people answered" }),
+  ).toHaveLength(1);
+  expect(standing.classList.contains("results--compact")).toBe(true);
   expect(
     within(drawer).queryByRole("group", { name: "How people answered" }),
   ).toBeNull();
@@ -297,6 +309,7 @@ it("refuses a known closed poll and lets a non-voter read final results", async 
   await userEvent.click(main().getByRole("button", { name: "See results" }));
   expect(await main().findByText("Nobody answered this one.")).toBeTruthy();
   const standing = main().getByRole("group", { name: "How people answered" });
+  expect(standing.classList.contains("results--compact")).toBe(true);
   expect(
     screen.getByRole("complementary", { name: "Voting" }).contains(standing),
   ).toBe(false);
