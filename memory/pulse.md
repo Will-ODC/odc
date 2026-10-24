@@ -169,6 +169,14 @@ the same CI runs.
   its closed-first-question/no-saved-ballot regression is explicitly retained
   there. This is consolidation, not a claim the defect is fixed. Related order
   and terminal fallback still need accepted decisions.
+- **Continuation clarification (2026-10-23): #425** now owns left/right page
+  chevrons, with Next following the current thread/story when relevant and
+  otherwise continuing to the next poll in the main feed. #464's brief
+  feed-only navigation ticket was consolidated into #425. The unfinished
+  feed-only edits were removed; no continuation implementation is in progress.
+  This is likely future work; a simple slice is possible only after its
+  navigation semantics are agreed. Feed order may later be algorithmic, but
+  no algorithm, personalization or inferred relationship rule is selected.
 - #453 owns open/closed poll chart presentation; #332 owns linked action
   progress and evidence, reusing the same results. #303 and #297 now reflect
   the results-before-comments layout and merged drawer.
@@ -217,6 +225,12 @@ the same CI runs.
 
 ## Open decisions (operator)
 
+- **Continuation (#425):** define relevance and explicit story/thread order,
+  precedence with answer-selected Next and related alternatives, source-feed
+  scope/order, Previous/history behavior, pagination and end-of-feed fallback.
+  Preserve saved answers, discard another question's unsent choices, block
+  navigation while casting and never cast automatically. Later algorithmic
+  feed ordering needs its own accepted policy and implementation scope.
 - **Community lifecycle (#458):** governing/protected rules, creation and
   moderation authority, eligible voters, decision thresholds, appeals,
   state semantics and retention remain open. See the community deliberation
