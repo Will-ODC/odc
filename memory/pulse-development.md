@@ -244,10 +244,11 @@ ideas. Their original GitHub bodies remain available as provenance.
   concrete behavior change. Choose the interaction and narrow acceptance
   criteria before implementation. PR #206 fixed result highlighting, not
   multiple-answer selection.
-- **#186 — keep open:** a closed first question needs a way onward. The
-  destination remains undecided; a question listing or a defined fallback is a
-  contained feature. Do not invent an answer-dependent next step without an
-  answer. The operator previously deferred this until poll creation.
+- **#186 — closed as duplicate of #425 (2026-10-23):** #425 retains the
+  closed-first-question/no-saved-ballot regression; consolidation does not
+  mean it is fixed. Follow the requested thread/story-first continuation,
+  otherwise the main feed, once ordering and terminal-fallback rules are
+  accepted. Do not invent an answer-dependent next step without an answer.
 
 Issue provenance: https://github.com/Will-ODC/odc/issues/217,
 https://github.com/Will-ODC/odc/issues/214,
