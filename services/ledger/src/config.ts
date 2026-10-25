@@ -49,6 +49,17 @@ export function serverConfig(env: Env = process.env): ServerConfig {
   if (signerUrl === undefined || signerUrl === "") {
     throw new ConfigError("LEDGER_SIGNER_URL is unset");
   }
+  let parsed: URL | null = null;
+  try {
+    parsed = new URL(signerUrl);
+  } catch {
+    parsed = null;
+  }
+  if (parsed === null || !["http:", "https:"].includes(parsed.protocol)) {
+    throw new ConfigError(
+      `LEDGER_SIGNER_URL must be an http(s) URL, got "${signerUrl}"`,
+    );
+  }
   return {
     databaseUrl: url,
     signerUrl,

@@ -160,6 +160,7 @@ test(
             const res = await judge(dir, `bflip-${k}.ndjson`, tampered);
             for (const [who, v] of Object.entries(res)) {
               console.log(`${who} bflip ${k}: exit ${v.exit}: ${v.first}`);
+              assert.equal(v.exit, 1, `${who} bflip ${k}: ${v.first}`);
               assert.equal(v.verdict, "INVALID", `${who}: ${v.first}`);
               assert.equal(v.line, own.line, `${who} bflip ${k}: ${v.first}`);
             }

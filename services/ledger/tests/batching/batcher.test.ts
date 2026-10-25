@@ -247,6 +247,33 @@ test("start_ticks_on_a_timer_and_stop_ends_it_cleanly", { skip }, () =>
 );
 
 test(
+  "stop_during_a_running_tick_lets_it_finish_and_never_ticks_again",
+  { skip, timeout: 30_000 },
+  () =>
+    withDb(async ({ app }) =>
+      world(app, [{}], async (w) => {
+        const [issue] = w.issueIds as [string];
+        const sleep = (ms: number) => new Promise((r) => setTimeout(r, ms));
+        fill(w.fake, issue, [0, 1, 2]);
+        w.fake.inject("seal", "timeout"); // holds the tick for the client timeout
+        const b = w.batcher({ tickMs: 10 });
+        b.start();
+        for (let i = 0; i < 200 && w.fake.sealCalls.length === 0; i++) {
+          await sleep(5);
+        }
+        assert.equal(w.fake.sealCalls.length, 1); // mid-tick
+        await b.stop(); // returns once that tick has finished
+        // Give a still-running loop every reason to seal again: a new
+        // interval and a full batch. A stopped batcher makes no call.
+        w.clock.now += MIN;
+        fill(w.fake, issue, [0, 1, 2]);
+        await sleep(80);
+        assert.equal(w.fake.sealCalls.length, 1);
+      }),
+    ),
+);
+
+test(
   "sign_pending_is_true_only_while_a_sign_request_has_no_run",
   { skip },
   () =>

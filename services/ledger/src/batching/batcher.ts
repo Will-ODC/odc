@@ -106,6 +106,8 @@ export class Batcher {
   private timer: NodeJS.Timeout | null = null;
   /** Per issue: the seal id the signer last refused under_min, and when. */
   private readonly underMin = new Map<string, string>();
+  /** When each issue's last-seal refusal was last raised as an ALERT. */
+  private readonly lastSealAlert = new Map<string, number>();
 
   constructor(o: BatcherOptions) {
     // appendRun holds one pool connection (the writer lock) while
@@ -314,10 +316,16 @@ export class Batcher {
       // A definite refusal of a last seal (seal_conflict, issue_closed,
       // unknown_issue) is answered the same on every retry.
       const why = r.kind === "refused" ? r.code : r.reason;
-      this.warn(
-        r.kind === "refused" || why === "http_400",
-        `seal of issue ${issue.issueId} pending: ${why}`,
-      );
+      // ALERT on the first refusal, then at most once a minute per issue,
+      // so a refusal that never changes does not flood the log every tick.
+      let alert = r.kind === "refused" || why === "http_400";
+      if (alert) {
+        const now = this.clock();
+        const last = this.lastSealAlert.get(issue.issueId);
+        alert = last === undefined || now - last >= 60_000;
+        if (alert) this.lastSealAlert.set(issue.issueId, now);
+      }
+      this.warn(alert, `seal of issue ${issue.issueId} pending: ${why}`);
       return "unavailable";
     }
     const { batchId, counts } = r.value;

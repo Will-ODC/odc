@@ -47,8 +47,9 @@ async function main(): Promise<void> {
   if (valid) batcher.start();
 
   const stop = async (): Promise<void> => {
-    await batcher.stop();
+    // Stop taking requests first, then let the batcher finish its step.
     await Promise.allSettled([publicApp.close(), internalApp.close()]);
+    await batcher.stop();
     await pool.end();
   };
   process.once("SIGTERM", () => void stop());

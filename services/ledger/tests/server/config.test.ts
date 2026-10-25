@@ -16,3 +16,19 @@ test("the_signer_url_is_required_and_trimmed", () => {
   assert.equal(c.signerUrl, "http://s:1");
   assert.equal(c.internalHost, "127.0.0.1");
 });
+
+test("the_signer_url_must_be_an_http_or_https_url", () => {
+  for (const v of ["signer:9000", "ftp://s/", "not a url", "//s:1"]) {
+    assert.throws(
+      () => serverConfig({ ...DB, LEDGER_SIGNER_URL: v }),
+      (e: unknown) =>
+        e instanceof ConfigError && /http\(s\) URL/.test(e.message),
+      v,
+    );
+  }
+  assert.equal(
+    serverConfig({ ...DB, LEDGER_SIGNER_URL: "https://s.internal:9000/" })
+      .signerUrl,
+    "https://s.internal:9000/",
+  );
+});
