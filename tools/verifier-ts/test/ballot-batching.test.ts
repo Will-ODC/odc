@@ -647,7 +647,9 @@ test("BallotBatches: an opaque ballot does no per-interval work (cost independen
   //    per-interval and per-issue maps serve no operation at all
   //    (`mapOps`, counted inside ShardedMap: every get/has/set/size and every
   //    entry iterated). Any per-interval or per-issue loop in opaque() must
-  //    read one of them, however it tests a multiple, so it fails here.
+  //    read one of them, however it tests a multiple, so it fails here. It
+  //    covers the existing maps only, not a new structure someone adds (a
+  //    parallel array of groups, or a cast past `private` to the shards).
   //  - The work of the one query: every `isQuantized` call plus every instant
   //    a refresh walks. It must be the same beside 100, 10k and 100k distinct
   //    intervals. (A count over the number of OPAQUE ballots would not catch
