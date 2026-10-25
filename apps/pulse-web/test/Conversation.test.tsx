@@ -88,6 +88,13 @@ it("keeps a manually closed card closed and preserves its unsent pick on reopen"
   await main().findByRole("heading", { name: poll().question, level: 1 });
   await user.click(within(card()).getByRole("radio", { name: "Yes" }));
   await user.click(within(card()).getByRole("button", { name: "Close" }));
+  // Closing leaves a handle in the drawer, and focus on it.
+  expect(document.activeElement).toBe(
+    within(screen.getByRole("complementary", { name: "Voting" })).getByRole(
+      "button",
+      { name: "Vote" },
+    ),
+  );
   await user.click(screen.getByRole("heading", { name: "Answered" }));
   expect(main().queryByRole("region")).toBeNull();
   await user.click(main().getByRole("button", { name: "Vote" }));
@@ -170,6 +177,65 @@ it("keeps results under the answer while the bottom drawer is only for voting", 
   expect(cast).toHaveBeenCalledTimes(2);
 });
 
+it("keeps the saved answer and its results when backing out of a change", async () => {
+  const p = poll();
+  const cast = vi.fn(
+    async (_id: string, ballot: Ballot): Promise<CastOutcome> => ({
+      status: "counted",
+      ballot,
+      results: tally(p, ballot),
+    }),
+  );
+  render(<Conversation api={stubApi({ cast })} pollId={p.id} />);
+  await main().findByRole("heading", { name: p.question, level: 1 });
+  const user = await answer();
+  const drawer = screen.getByRole("complementary", { name: "Voting" });
+  await user.click(
+    within(drawer).getByRole("button", { name: "Change my answer" }),
+  );
+  await user.click(within(drawer).getByRole("radio", { name: "No" }));
+  await user.click(within(drawer).getByRole("button", { name: "Close" }));
+  const handle = within(drawer).getByRole("button", {
+    name: "Change my answer",
+  });
+  expect(document.activeElement).toBe(handle);
+  const row = main().getByText("You picked Yes.").closest("li")!;
+  const standing = within(row).getByRole("group", {
+    name: "How people answered",
+  });
+  expect(
+    within(standing).getByText(/yours/i).closest("li")?.textContent,
+  ).toMatch(/Yes/);
+  expect(cast).toHaveBeenCalledExactlyOnceWith(p.id, [1]);
+  // Reopening starts from the saved choice, not the unsent one.
+  await user.click(handle);
+  expect(within(drawer).getByRole("radio", { name: "Yes" })).toHaveProperty(
+    "checked",
+    true,
+  );
+});
+it("names the closed question's handle Show question, not Vote", async () => {
+  const p = poll({ open: false });
+  const user = userEvent.setup();
+  render(
+    <Conversation
+      api={stubApi({
+        poll: async () => p,
+        results: async () => results(),
+        myBallot: async () => null,
+      })}
+      pollId={p.id}
+    />,
+  );
+  await main().findByRole("heading", { name: p.question, level: 1 });
+  await user.click(within(card()).getByRole("button", { name: "Close" }));
+  const drawer = screen.getByRole("complementary", { name: "Voting" });
+  expect(within(drawer).queryByRole("button", { name: "Vote" })).toBeNull();
+  const handle = within(drawer).getByRole("button", { name: "Show question" });
+  expect(document.activeElement).toBe(handle);
+  await user.click(handle);
+  expect(within(card()).getByText("This one has closed.")).toBeTruthy();
+});
 it("opens the next question's card even if the previous card was closed (#401)", async () => {
   const p = poll({ next: [null, "second"] });
   const second = poll({ id: "second", question: "Where?", next: [null, null] });
