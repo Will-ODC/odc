@@ -89,6 +89,17 @@ jobs:
       # before that, exactly as the three above did.
       # Includes the dedicated Pulse integration workspace and app-local suites.
       - run: pnpm run test
+      # The ledger's exports (operator events over HTTP, ballot batches through
+      # the batcher) judged by both independent verifiers as black boxes. Not
+      # part of `pnpm run test`; with LEDGER_REQUIRE_DATABASE=1 a missing
+      # verifier fails, never skips.
+      - name: Ledger export through both verifiers
+        env:
+          ODC_VERIFY_GO: ${{ runner.temp }}/odc-verify-ledger
+          ODC_VERIFY_TS: node ${{ github.workspace }}/tools/verifier-ts/dist/src/cli.js verify
+        run: |
+          (cd services/verifier && go build -o "$ODC_VERIFY_GO" .)
+          pnpm --filter @odc/ledger test:verifiers
       # The Go verifier judges the same immutable fixtures independently. Keep
       # this in the already-required repo job so a new fixture cannot land while
       # the verifier disagrees, even without a branch-protection update.

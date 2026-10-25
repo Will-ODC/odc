@@ -13,6 +13,7 @@ export type Fault =
   | "malformed" // 200 with a body that is not the documented shape
   | "tamper_sig" // flips a byte of the first sig; hashes and chain stay consistent
   | "tamper_payload" // changes the last event's choice, validly re-signed
+  | "bad_hash" // the first event's hash is wrong; payloads and positions match
   | "http_408" // request timeout status
   | "http_429" // rate limited
   | "bad_request" // 400: the signer found the request malformed
@@ -238,6 +239,14 @@ export class FakeSigner {
         choice: Number(e.payload.choice),
       }));
       events = [bad, ...signRun(payloads, bad.seq + 1, bad.ts, bad.hash)];
+    }
+    if (fault === "bad_hash") {
+      const [first, ...rest] = events as [Event, ...Event[]];
+      const h = first.hash;
+      events = [
+        { ...first, hash: (h[0] === "0" ? "1" : "0") + h.slice(1) },
+        ...rest,
+      ];
     }
     if (fault === "tamper_payload") {
       const last = events.at(-1) as Event;

@@ -1,9 +1,11 @@
 # ledger
 
-**Status: Phase 1, in progress.** Storage, the EV-26 checker, the single
-writer, the public read API and the operator write path are built. Ballot
-batching lands in #463 plus a wiring PR. Built against the
-contracts RELEASE CANDIDATE (ADR-0007).
+**Status: Phase 1, built.** Storage, the EV-26 checker, the single writer,
+the public read API, the operator write path and ballot batching are built
+and wired into the server. The signer service (`services/signer/`) does not
+exist yet: batching is tested against an HTTP double of its documented API
+(`tests/support/fake-signer.ts`). Built against the contracts RELEASE
+CANDIDATE (ADR-0007).
 
 ## What it is
 
@@ -20,8 +22,9 @@ Two ports, both documented in `API.md`. The **public** port serves
 unauthenticated and read-only. The **internal** port takes the operator's
 signed appends (`POST /appends`) and close calls
 (`POST /issues/{issue_id}/close`); bind it to a private network only.
-The ledger's one outbound call will be to the signer, on the ballot write path
-(#463 and the wiring PR).
+The ledger's one outbound call is to the signer, on the ballot write path
+(`API.md` "Calls the ledger makes"): `src/batching/` seals, orders, signs and
+appends ballot batches through `src/clients/signer.ts`.
 
 ## Storage
 
@@ -46,9 +49,13 @@ up -d --wait db`, apply the migrations as the owner role (`migrate()` in
 `src/db/migrate.ts`; there is no CLI for it yet), build with
 `pnpm --filter @odc/ledger build`, then run
 `LEDGER_DATABASE_URL=postgres://ledger_app:<password>@127.0.0.1:5434/ledger
-pnpm --filter @odc/ledger start`. `LEDGER_PUBLIC_PORT` (default 8090),
-`LEDGER_PUBLIC_HOST` (default `0.0.0.0`), `LEDGER_INTERNAL_PORT` (default 8091) and `LEDGER_INTERNAL_HOST` (default `127.0.0.1`) set where it listens
-(`src/config.ts`).
+LEDGER_SIGNER_URL=<signer base URL> pnpm --filter @odc/ledger start`. Both are
+required. On start, if the stored log verifies `VALID`, it replays any stored
+sign request before the internal port listens, then seals ballot batches on a
+one-second timer; a log that is not `VALID` serves reads only.
+`LEDGER_PUBLIC_PORT` (default 8090), `LEDGER_PUBLIC_HOST` (default `0.0.0.0`),
+`LEDGER_INTERNAL_PORT` (default 8091) and `LEDGER_INTERNAL_HOST` (default
+`127.0.0.1`) set where it listens (`src/config.ts`).
 
 ## How to test it
 
@@ -62,3 +69,27 @@ LEDGER_DATABASE_URL=postgres://ledger:ledger@127.0.0.1:5434/ledger \
 Without `LEDGER_DATABASE_URL` the DB tests skip; `LEDGER_REQUIRE_DATABASE=1`
 (set on CI) turns a missing database into a failure. Each test creates and
 drops its own throwaway database.
+
+Both independent verifiers also judge the ledger's own exports as black boxes
+(`tests/verifiers/export.verify.ts`): a chain of operator events built over
+HTTP and a chain of ballot batches built by the batcher must be `VALID` to
+both, and byte flips must be `INVALID` at the line the ledger names. It is not
+part of `test`; CI runs it as its own step:
+
+```sh
+(cd services/verifier && go build -o /tmp/odc-verify .)
+pnpm --filter @odc/verifier-ts build
+LEDGER_DATABASE_URL=... LEDGER_REQUIRE_DATABASE=1 ODC_VERIFY_GO=/tmp/odc-verify \
+  ODC_VERIFY_TS="node $PWD/tools/verifier-ts/dist/src/cli.js verify" \
+  pnpm --filter @odc/ledger test:verifiers
+```
+
+Without both variables it skips, unless `LEDGER_REQUIRE_DATABASE=1`, where a
+missing verifier is a failure.
+
+## Before deployment
+
+- Give the public port a SELECT-only database role and its own pool, so
+  read-only is structural, not by code (deferred from the #461 review).
+- Build and deploy `services/signer/` (ADR-0043); until then the ledger has
+  nothing to seal against and the close call stays `closing`.

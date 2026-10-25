@@ -1,6 +1,7 @@
 // POST /issues/{issue_id}/close over real HTTP (API.md "Internal port").
 import assert from "node:assert/strict";
 import { test } from "node:test";
+import { UnknownIssue } from "../../src/batching/batcher.js";
 import { epochMsToTs, tsToEpochMs } from "../../src/chain/index.js";
 import { closeMessage, type CloseIssue } from "../../src/server/index.js";
 import {
@@ -199,5 +200,15 @@ test("without_batching_a_valid_close_is_503", { skip }, () =>
       );
     },
     { clock },
+  ),
+);
+
+test("an_issue_the_batcher_does_not_know_is_404", { skip }, () =>
+  withServers(
+    async (ctx) => {
+      const s = await setup(ctx);
+      await expectError(await s.close(s.issueId), 404, "unknown_issue");
+    },
+    { closeIssue: (id) => Promise.reject(new UnknownIssue(id)), clock },
   ),
 );

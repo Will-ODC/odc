@@ -324,9 +324,12 @@ test(
         for (let i = 0; i < 30; i++) await grow(5);
       })();
       let since = 0;
+      // A failed append ends the loop; `await appending` then rethrows it.
       let done = false;
-      void appending.then(() => (done = true));
-      while (!done || since < 155) {
+      let ok = true;
+      const end = (fine: boolean) => () => ((done = true), (ok = fine));
+      void appending.then(end(true), end(false));
+      while (!done || (ok && since < 155)) {
         const p = await page(url, `?since=${since}`);
         p.events.forEach((e, i) => assert.equal(e.seq, since + 1 + i));
         const last = p.events.at(-1);

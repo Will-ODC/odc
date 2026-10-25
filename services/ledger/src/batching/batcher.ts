@@ -46,6 +46,8 @@ export interface BatcherOptions {
   /** A uniform integer in [0, n). Tests inject it; production uses crypto. */
   readonly random?: (n: number) => number;
   readonly log?: (line: string) => void;
+  /** How often `start()` ticks. Default one second. */
+  readonly tickMs?: number;
 }
 
 export type CloseStatus = "closing" | "closed";
@@ -99,7 +101,9 @@ export class Batcher {
   private readonly clock: () => number;
   private readonly random: (n: number) => number;
   private readonly log: (line: string) => void;
+  private readonly tickMs: number;
   private queue: Promise<unknown> = Promise.resolve();
+  private timer: NodeJS.Timeout | null = null;
   /** Per issue: the seal id the signer last refused under_min, and when. */
   private readonly underMin = new Map<string, string>();
 
@@ -115,6 +119,36 @@ export class Batcher {
     this.clock = o.clock ?? Date.now;
     this.random = o.random ?? ((n) => randomInt(n));
     this.log = o.log ?? ((line) => console.error(line));
+    this.tickMs = o.tickMs ?? 1000;
+  }
+
+  /**
+   * True while a stored sign request has no appended run. Its batch is signed
+   * at that one position, so any other append (an operator's included) would
+   * strand it: callers refuse to append until this is false (ADR-0043).
+   */
+  async signPending(): Promise<boolean> {
+    return (await pendingSignRequests(this.pool)).length > 0;
+  }
+
+  /** Ticks every `tickMs` until `stop()`, which is final; ticks never overlap. */
+  start(): void {
+    if (this.timer !== null) return;
+    const loop = (): void => {
+      this.timer = setTimeout(() => {
+        void this.tick().finally(() => {
+          if (this.timer !== null) loop();
+        });
+      }, this.tickMs);
+    };
+    loop();
+  }
+
+  /** Stops the timer and waits for the step in progress to finish. */
+  async stop(): Promise<void> {
+    if (this.timer !== null) clearTimeout(this.timer);
+    this.timer = null;
+    await this.queue;
   }
 
   /**
@@ -153,10 +187,15 @@ export class Batcher {
   private async run(newSeals: boolean): Promise<boolean> {
     try {
       if (!(await this.replayAll())) return false;
+      let done = true;
       for (const issue of this.ledger.state.issues.values()) {
-        if (!(await this.advance(issue, newSeals))) return false;
+        if (await this.advance(issue, newSeals)) continue;
+        done = false;
+        // Only a stored sign request holds a log position; a seal-stage
+        // failure of one issue must not starve the others.
+        if (await this.signPending()) return false;
       }
-      return true;
+      return done;
     } catch (err) {
       this.warn(false, `step failed: ${(err as Error).message}`);
       return false;
@@ -272,9 +311,11 @@ export class Batcher {
         return "refused";
       }
       // A last seal is never abandoned: it is re-asked with the same seal id.
+      // A definite refusal of a last seal (seal_conflict, issue_closed,
+      // unknown_issue) is answered the same on every retry.
       const why = r.kind === "refused" ? r.code : r.reason;
       this.warn(
-        why === "http_400",
+        r.kind === "refused" || why === "http_400",
         `seal of issue ${issue.issueId} pending: ${why}`,
       );
       return "unavailable";
@@ -402,4 +443,8 @@ export class Batcher {
       );
     });
   }
+}
+
+export function createBatcher(options: BatcherOptions): Batcher {
+  return new Batcher(options);
 }

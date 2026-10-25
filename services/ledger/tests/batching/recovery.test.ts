@@ -168,7 +168,9 @@ test(
         assert.equal(await b.tick(), true);
         assert.equal(votes(await w.events(), issue).length, 3);
         assert.equal(votes(await w.events(), other).length, 3);
-        assert.equal(w.fake.sealCalls[0]?.sealId, intent?.sealId);
+        // A seal outage of `issue` held no position: `other` was still asked.
+        const first = w.fake.sealCalls.find((c) => c.issueId === issue);
+        assert.equal(first?.sealId, intent?.sealId);
         assert.equal(await w.exportValid(), true);
         assert.ok(!w.logs.some((l) => l.startsWith("ALERT")));
       }),
@@ -178,6 +180,7 @@ test(
 const ALERTS: [Fault, number[], RegExp][] = [
   ["tamper_sig", [0, 1, 2], /not appended: event 0 refused/],
   ["tamper_payload", [0, 1, 2], /not appended: payload 2/],
+  ["bad_hash", [0, 1, 2], /not appended: signed event 0 does not chain/],
   ["bad_request", [0, 1, 2], /not appended: http_400/],
   ["seal_under_min", [0], /bad counts/],
   ["seal_extra_count", [0, 1, 2], /bad counts/],

@@ -33,8 +33,7 @@ because they shape the endpoints below.
   `contracts/` (D3; ADR-0043 decision 2).** `POST /appends` answers
   `422 type_not_accepted` for `participant_registered`. The ledger's checker
   still reads v1 registrations already on a chain.
-- **An operator-signed close call seals an issue's last batch (D4), once
-  batching is wired in;** until then it answers `503 batching_unavailable`.
+- **An operator-signed close call seals an issue's last batch (D4).**
   `POST /issues/{issue_id}/close`, signed by the chain's `operator_pk`, seals
   the issue's open batch as its last (ET-24, ET-25). Without it an issue's
   batches are only ever sealed at `ballot_batch_min` or more.
@@ -96,11 +95,12 @@ operator key.
   (EV-26), or a line would exceed the EV-25 cap. The reason is advisory text.
 - `422 chain_not_valid`: the stored log does not verify `VALID`, so EV-26 bars
   every append.
-- `503 batch_pending` (once batching is wired in): a ballot batch's sign
-  request is stored but its run is
+- `503 batch_pending`: a ballot batch's sign request is stored but its run is
   not appended yet (for example, the signer is down). That batch is signed for
-  the current tail only, so an operator append would strand its ballots.
-  Retry later.
+  the current tail only, so an operator append would strand its ballots. It is
+  checked under the writer lock, so no sign request can appear between the
+  check and the insert. Retry later; the operator must then re-read the head
+  and re-sign, since the batch has moved the tail.
 - `400 bad_request`: the body is not a JSON object of the shape above:
   exactly the key `event`, holding exactly those six keys; `seq` and `version`
   integers up to 2^53 − 1; `type`, `ts` and `prev_hash` strings; `payload` an
@@ -131,15 +131,14 @@ appears.
   `404 unknown_issue` (no genesis yet, or `issue_id` is not the hash of an
   `issue_created` on the log), `401 bad_signature`.
 - `503 batching_unavailable`: the request is valid but this ledger process
-  has no batching module wired in, so nothing is sealed. Retry later.
+  runs no batcher, so nothing is sealed. The server runs none only when its
+  stored log is not `VALID` (EV-26 then bars every append).
 - Checked in this order: body, `ts`, signature, issue, batching. A log with
   no genesis, or an `issue_id` that is not 64 lowercase hex, is `404` before
   the signature (there is no key to check it against, or nothing it could
   name). A replay inside the window is harmless: closing is idempotent.
 
 ## Calls the ledger makes
-
-_Lands in #463 and the wiring PR._
 
 The ledger calls only the signer's public API (ADR-0043), on the ballot write
 path, through one client module (`src/clients/signer.ts`), from its batcher
@@ -169,14 +168,18 @@ outage never crashes the ledger: batches stay pending.
 - Refusals the ledger expects: `409 under_min` (a non-last seal below the
   issue's `ballot_batch_min`; nothing is sealed and the batch stays open),
   `404 unknown_issue`, `409 issue_closed`, `409 seal_conflict` (this
-  `seal_id` was already used for another issue or another `last`). After
-  `under_min`, the ledger retains the same seal id and unused instant, including
-  across restarts, and retries once per interval. The signer must reevaluate
-  this refusal as ballots arrive: only a successful seal fixes the batch for
-  that id. Other definite non-last refusals abandon the intent; a later attempt
-  uses a new id and instant. A close abandons an under-min non-last intent and
-  creates a last-seal intent. A last seal is re-asked with the same `seal_id`
-  until it succeeds.
+  `seal_id` was already used for another issue or another `last`).
+  Ledger-proposed: a non-last seal refused `409 under_min` has sealed nothing,
+  so the signer MUST answer a later request with the same `seal_id` afresh: it
+  seals if the batch now meets `ballot_batch_min`, and refuses `under_min`
+  again if not. The ledger re-asks one live `seal_id` per issue at most once
+  per batch interval, so a quiet issue costs no stored rows. For any other
+  refusal, or when the issue is being closed, the ledger records the refusal
+  and moves on to a new `seal_id`. A last seal is re-asked with the same
+  `seal_id` until it succeeds; a definite refusal of it (which a retry cannot
+  change) is logged as an alert on every attempt. One issue's seal failing
+  never holds up another issue's batches; only a stored, unappended sign
+  request stops every other append.
 
 ### Sign: `POST /batches/{batch_id}/signatures`
 
