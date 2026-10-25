@@ -138,7 +138,7 @@ describe("the purpose promise (ADR-0037)", () => {
     expect(promise.checked).toBe(false);
     help.focus();
     await user.keyboard("{Enter}");
-    const popup = screen.getByRole("dialog", {
+    const popup = await screen.findByRole("dialog", {
       name: "What this discussion is for",
     });
     expect(
