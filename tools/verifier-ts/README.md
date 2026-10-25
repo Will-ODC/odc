@@ -234,9 +234,10 @@ Two stages, per `evolution.md` EV-6/EV-15:
   looked; so each interval's total walk is bounded by the opaque ballots after
   it. 100k intervals × 100k opaque ballots, ~205 s under the old per-interval
   loop, now takes milliseconds. `test/ballot-batching.test.ts` pins both
-  properties as ratios of two runs on the same machine (cost independent of
-  the number of intervals; total walk linear under interleaved queries), with
-  the mutant measurements in the comments. **Known limit, not fixed:** many
+  properties by counting work, never timing it (test-only counters
+  `walkSteps`, `leftProbes` and `quantizedTestCount`, which feed no verdict):
+  the same step count beside 100, 10k and 100k intervals, and a total walk
+  linear under interleaved queries. **Known limit, not fixed:** many
   opaque ballots at many distinct instants that are multiples of no interval,
   followed by a registered ballot on every interval, still costs
   O(distinct intervals × distinct opaque instants); removing it would need
@@ -327,7 +328,8 @@ would be inventing conformance in a file no reviewer treats as normative.
   own T1, T1, T2, T2, T2, T1 example, three batches at exactly the minimum
   (the per-batch counter reset), the EX-16 truncation residual with and
   without `--head`, interaction with other faults and `--head`,
-  a linear-cost budget, the opaque-ballot cost bound, and the CLI's line and exit status. `epochMs` is
+  a counted linear-cost bound, the counted opaque-ballot cost bound, and the
+  CLI's line and exit status. `epochMs` is
   checked against `Date` (via `setUTCFullYear`, which unlike `Date.UTC` does
   not remap years 0–99) over every year of ES-20's range.
 - **`test/chain-builder.ts`** — not a suite: the `Chain` builder the three
@@ -399,17 +401,20 @@ would be inventing conformance in a file no reviewer treats as normative.
   inverted with every other test still green. The VALID and PARTIAL inputs are
   read out of `contracts/fixtures/index.json` by declared verdict, so no verdict
   value is invented here.
-- **`test/key-scaling.test.ts`** — a wall-clock budget pinning that payload key
-  handling stays sub-quadratic in key count. The parser compares each key
+- **`test/key-scaling.test.ts`** — a counted bound (no timing) pinning that
+  payload key handling stays sub-quadratic in key count. The parser compares each key
   against the immediately preceding key only, which EX-8's ascending-order
   requirement makes sufficient for both the duplicate rule (HA-6) and the order
   rule; a seen-keys rescan would be O(n²) and could wedge the verifier for
   minutes on a few megabytes of input without changing any verdict. Measured on
   the 128k-key payload the test uses: ~115 ms as written, ~634 s (10.5 minutes)
-  with the quadratic shape — the budget sits between them with ~30x headroom
-  over the former. Its reach is the parser, the HA-7 preimage and all of Stage
-  A, through to the entry of Stage B — **not** Stage B's own per-key work,
-  which no such payload can reach: `(genesis, 1)` defines seven payload keys,
+  with the quadratic shape. The test counts comparisons through test-only
+  counters (`keyComparisonCount` in the parser, `payloadSortComparisonCount`
+  in the preimage sort): exactly n − 1 in the parser, at most n·⌈log₂ n⌉ in
+  the sort, against a rescan's ~n²/2. Its reach is the parser's comparison
+  and the HA-7 preimage's sort, on a path through all of Stage A to the entry
+  of Stage B — **not** Stage B's own per-key work, which no such payload can
+  reach: `(genesis, 1)` defines seven payload keys,
   so the ES-18/ES-34 key-set check rejects the first undefined one on sight.
   Stage B's key handling is bounded by the key set, not by the input.
 - **`test/extreme-values.test.ts`** — value-level fuzzing for that same class.

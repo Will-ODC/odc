@@ -72,6 +72,19 @@ function daysFromCivil(y: number, m: number, d: number): number {
   return era * 146097 + doe - 719468; // 719468 = days from 0000-03-01 to 1970-01-01
 }
 
+/** Calls of `isQuantized` in this process so far; read by tests only. */
+let quantizedTests = 0;
+
+/**
+ * How many times `isQuantized` has run in this process. For tests: an opaque
+ * ballot's per-interval work is a multiple test against each interval, so a
+ * delta of this count shows that work is absent without timing anything (a
+ * timed ratio flaked on a shared CI runner). It never feeds a verdict.
+ */
+export function quantizedTestCount(): number {
+  return quantizedTests;
+}
+
 /**
  * ET-23: is `ms` an exact multiple of `intervalMs`? Both are exact integers
  * (see `epochMs`; `intervalMs` is an ES-5 integer ≥ 60000). ET-23: "zero and
@@ -79,6 +92,7 @@ function daysFromCivil(y: number, m: number, d: number): number {
  * `=== 0` accepts.
  */
 export function isQuantized(ms: number, intervalMs: number): boolean {
+  quantizedTests++;
   return ms % intervalMs === 0;
 }
 
@@ -223,6 +237,8 @@ export class BallotBatches {
   private latestOpaque = 0;
   /** Instants visited by every refresh so far; read by tests (`walkSteps`). */
   private walked = 0;
+  /** ET-24a lookups in a `left` set so far; read by tests (`leftProbes`). */
+  private probed = 0;
 
   /** `shardCap` and `chunkShift` are parameters for tests only. */
   constructor(
@@ -241,6 +257,15 @@ export class BallotBatches {
    */
   walkSteps(): number {
     return this.walked;
+  }
+
+  /**
+   * How many ET-24a lookups in an issue's `left` set have run, in total. For
+   * tests: it shows each run start does one Set lookup rather than a rescan,
+   * without timing anything.
+   */
+  leftProbes(): number {
+    return this.probed;
   }
 
   /**
@@ -433,6 +458,7 @@ export class BallotBatches {
     // A run start: L ends the known run R (at t = run.current) and begins a new
     // one. Either definite failure makes THIS the fatal line; which one is
     // named is advisory (ET-24a "One line, two rules"; EV-17).
+    this.probed++;
     if (run.left.has(ms)) return "ET-24a"; // item 3: always definite
     let outcome: BatchOutcome = "resolved";
     if (run.count < run.batchMin) {

@@ -28,7 +28,12 @@ import { tmpdir } from "node:os";
 import { dirname, join, resolve } from "node:path";
 import { fileURLToPath } from "node:url";
 import { verifyExport } from "../src/verify.js";
-import { BallotBatches, epochMs, isQuantized } from "../src/batching.js";
+import {
+  BallotBatches,
+  epochMs,
+  isQuantized,
+  quantizedTestCount,
+} from "../src/batching.js";
 import { tokenAndLine } from "./genesis-builder.js";
 import { Chain, T1, T2, T3, T4, UNREG } from "./chain-builder.js";
 
@@ -609,26 +614,22 @@ test("BallotBatches stays linear under a hostile pattern (200k instants, one iss
   // Every ballot opens a new instant, so the set of left instants grows to
   // 200k and every ballot must be checked against all of them (ET-24a). An
   // implementation that rescans the earlier ballots or instants per ballot is
-  // O(n^2) — ~2e10 steps here; this one does one Set lookup per ballot.
+  // O(n^2) — ~2e10 steps here; this one does one Set lookup per run start.
+  // This counts that work instead of timing it (a timed budget is noise on a
+  // shared CI runner): n - 1 run starts plus the return make n lookups, and
+  // with no opaque ballot there is no walk and no ET-23 multiple test.
   const t = new BallotBatches();
   t.openIssue("a", 1, 60000, 1); // below the ET-14b floor on purpose: no ET-24 stop
   const n = 200000;
-  const start = process.hrtime.bigint();
+  const tests0 = quantizedTestCount();
   for (let i = 0; i < n; i++)
     assert.equal(t.admit("a", i + 2, i * 60000), "resolved");
   const back = t.admit("a", n + 2, 0); // return to the very first instant
-  const ms = Number(process.hrtime.bigint() - start) / 1e6;
   assert.equal(back, "ET-24a");
-  assert.ok(ms < 2000, `took ${ms} ms`);
+  assert.equal(t.leftProbes(), n);
+  assert.equal(t.walkSteps(), 0);
+  assert.equal(quantizedTestCount() - tests0, 0);
 });
-
-/** Minimum of `k` calls of `f`, after one warm-up call: sheds GC and JIT noise. */
-function minOf(k: number, f: () => number): number {
-  f();
-  let best = Infinity;
-  for (let i = 0; i < k; i++) best = Math.min(best, f());
-  return best;
-}
 
 test("BallotBatches: an opaque ballot does no per-interval work (cost independent of distinct intervals)", () => {
   // ET-24b item 1 makes an opaque ballot a candidate of every issue whose
@@ -636,42 +637,36 @@ test("BallotBatches: an opaque ballot does no per-interval work (cost independen
   // every DISTINCT interval cost O(opaque x distinct intervals): ~205 s at
   // 100k intervals x 100k opaque. Now an opaque ballot only records its
   // instant, and each interval group works out its candidates lazily at its
-  // next query. Machine speed varies ~10x between a laptop and a loaded CI
-  // runner (a 2 s absolute limit once flaked at 2.09 s), so the main check is
-  // a ratio of two runs on the same machine: the same 20k opaque ballots (the
-  // pattern below, then one registered ballot) beside 10k distinct intervals
-  // against beside 100. Measured: 1.04-1.15 idle with this implementation,
-  // 1.1-1.8 with two full suites running alongside; a mutant restoring the
-  // per-interval loop in opaque() measured 94-97 (3.3-3.6 s against 36-38
-  // ms). The band, ratio < 10, sits between the two. (A ratio over
-  // the number of OPAQUE ballots would not catch that mutant: it is linear in
-  // them too.) Each side is the minimum of five runs after a warm-up; the
-  // setup (opening the issues) is not timed.
+  // next query. The work is COUNTED, not timed: an earlier timed ratio of two
+  // runs (10k against 100 intervals, band < 10) read 21.8 on a GitHub runner
+  // against a 0.68 ms baseline. Per-interval work on an opaque ballot is an
+  // ET-23 multiple test against each interval, so the count is every
+  // `isQuantized` call plus every instant a refresh walks, from the first
+  // opaque ballot to the end of the one query. It must be the same beside 100,
+  // 10k and 100k distinct intervals; a per-interval loop in opaque() makes it
+  // 20000 x intervals. (A count over the number of OPAQUE ballots would not
+  // catch that mutant: it is linear in them too.) Opening the issues is not
+  // counted.
   const run = (intervals: number, opaque: number): number => {
     const t = new BallotBatches();
     for (let i = 0; i < intervals; i++)
       t.openIssue(`i${i}`, i + 2, 60000 * (i + 1), 3);
-    const start = process.hrtime.bigint();
+    const tests0 = quantizedTestCount();
     for (let j = 0; j < opaque; j++)
       t.opaque(intervals + 2 + j, 60000 * (j % 7));
     // The lazy summary is live: issue i0 (interval 60000) sees a candidate.
     const out = t.admit("i0", intervals + opaque + 3, 60000 * 100);
-    const ms = Number(process.hrtime.bigint() - start) / 1e6;
     assert.equal(out, "unresolved");
-    return ms;
+    return quantizedTestCount() - tests0 + t.walkSteps();
   };
-  const many = minOf(5, () => run(10000, 20000));
-  const few = minOf(5, () => run(100, 20000));
-  const ratio = many / few;
-  assert.ok(
-    ratio < 10,
-    `10k/100 intervals ratio ${ratio.toFixed(1)} (${many.toFixed(2)} ms / ${few.toFixed(2)} ms)`,
-  );
-  // The ticket's size, once: 100k intervals x 100k opaque took ~205 s before
-  // and ~2 ms now (Node 24, an idle laptop). A 10 s backstop catches only a
-  // gross regression; the ratio above is the real check.
-  const ticket = run(100000, 100000);
-  assert.ok(ticket < 10000, `100k x 100k took ${ticket} ms`);
+  const few = run(100, 20000);
+  const many = run(10000, 20000);
+  assert.equal(many, few, `10k intervals cost ${many} steps, 100 cost ${few}`);
+  // The one query walks at most the 7 distinct instants, one test each.
+  assert.ok(few <= 14, `${few} steps for one query over 7 instants`);
+  // The ticket's size, once: 100k intervals x 100k opaque (~205 s under the
+  // per-interval loop) costs the same steps as above.
+  assert.equal(run(100000, 100000), few);
 });
 
 test("BallotBatches: each interval group walks only the opaque instants touched since it last looked", () => {

@@ -280,6 +280,19 @@ function validTimestamp(s: string): boolean {
 
 // --- payload parsing (EX-8 ordering, HA-6 duplicates, ES-16/17 value types) ---
 
+/** Payload key comparisons in this process so far; read by tests only. */
+let keyComparisons = 0;
+
+/**
+ * How many payload key comparisons `parsePayload` has made in this process.
+ * For tests: `test/key-scaling.test.ts` asserts one per key after the first,
+ * which pins the adjacency check below without timing it. It never feeds a
+ * verdict.
+ */
+export function keyComparisonCount(): number {
+  return keyComparisons;
+}
+
 function parsePayload(r: Reader): PayloadEntry[] {
   r.expect(0x7b); // {
   const entries: PayloadEntry[] = [];
@@ -302,8 +315,10 @@ function parsePayload(r: Reader): PayloadEntry[] {
     // hostile export of a few megabytes wedge the verifier for minutes without
     // changing any verdict — measured on the same 128k-key payload the guard
     // test uses: 634s (10.5 minutes) with the rescan, 115ms as written.
-    // `test/key-scaling.test.ts` is the regression guard for this.
+    // `test/key-scaling.test.ts` is the regression guard for this (it counts
+    // comparisons via `keyComparisonCount`).
     if (prevKeyBytes !== null) {
+      keyComparisons++;
       const cmp = Buffer.compare(prevKeyBytes, key.bytes);
       if (cmp === 0) throw new ParseFail("duplicate payload key"); // HA-6
       if (cmp > 0) throw new ParseFail("payload keys not ascending"); // EX-8

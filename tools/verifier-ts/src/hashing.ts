@@ -34,14 +34,28 @@ function encInt(n: number): Buffer {
   return u64(n);
 }
 
+/** Key comparisons by `encPayload`'s sort in this process; read by tests only. */
+let sortComparisons = 0;
+
+/**
+ * How many key comparisons `encPayload`'s defensive sort has made in this
+ * process. For tests: `test/key-scaling.test.ts` bounds it to show the preimage
+ * build is not quadratic in the key count, without timing it. It never feeds a
+ * hash.
+ */
+export function payloadSortComparisonCount(): number {
+  return sortComparisons;
+}
+
 // HA-7: ENC_PAYLOAD(P). Keys are taken in ascending UTF-8-byte order (HA-8).
 // The stored line is already required to be in that order (EX-8, enforced by the
 // parser), but we sort defensively so the preimage is correct regardless.
 function encPayload(entries: PayloadEntry[], omitSig: boolean): Buffer {
   const kept = omitSig ? entries.filter((e) => e.key !== "sig") : entries;
-  const sorted = [...kept].sort((a, b) =>
-    Buffer.compare(a.keyBytes, b.keyBytes),
-  );
+  const sorted = [...kept].sort((a, b) => {
+    sortComparisons++;
+    return Buffer.compare(a.keyBytes, b.keyBytes);
+  });
   const parts: Buffer[] = [u64(sorted.length)];
   for (const e of sorted) {
     // 1-octet type tag: 0x69 'i' for integer, 0x73 's' for string (HA-7/HA-9).

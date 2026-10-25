@@ -19,17 +19,24 @@
 // that fails if someone "simplifies" the adjacency comparison into a
 // seen-keys scan.
 //
-// It is a WALL-CLOCK BUDGET, deliberately loose. Measured here: ~0.9 us/key
-// parsing and ~2.3 us/key end to end, i.e. ~0.3 s for 128k keys. The budget is
-// ~30x that, so ordinary machine-speed variation cannot trip it, while a
-// quadratic implementation misses it by two orders of magnitude. No verdict
-// value is asserted — `contracts/fixtures/` remains the oracle for those.
+// It COUNTS the work rather than timing it. It was a 10 s wall-clock budget;
+// a timed bound on a shared CI runner is noise (two sibling cost tests in
+// ballot-batching.test.ts flaked that way), so the parser's key comparisons and
+// the preimage sort's comparisons are counted through test-only counters
+// (`keyComparisonCount`, `payloadSortComparisonCount`) and asserted against
+// the key count. A seen-keys rescan makes ~n^2/2 comparisons; the bounds below
+// are n - 1 and n * ceil(log2 n). No verdict value is asserted —
+// `contracts/fixtures/` remains the oracle for those.
 
 import { test } from "node:test";
 import assert from "node:assert/strict";
 import { verifyExport } from "../src/verify.js";
-import { parseEventLine, type ParsedEvent } from "../src/parse.js";
-import { computeHash } from "../src/hashing.js";
+import {
+  keyComparisonCount,
+  parseEventLine,
+  type ParsedEvent,
+} from "../src/parse.js";
+import { computeHash, payloadSortComparisonCount } from "../src/hashing.js";
 import { verdictLine } from "../src/report.js";
 
 const ZERO64 = "0".repeat(64);
@@ -44,7 +51,7 @@ const ZERO64 = "0".repeat(64);
  * The `hash` is the REAL one, recomputed over the finished line. An earlier
  * version of this generator hard-coded a placeholder, and verification then
  * stopped at the HA-14 mismatch — Stage B was never entered at all, so the
- * budget below measured strictly less than its name claimed.
+ * test below measured strictly less than its name claimed.
  */
 function manyKeyLine(n: number): Buffer {
   const parts: string[] = [];
@@ -62,35 +69,37 @@ function manyKeyLine(n: number): Buffer {
 }
 
 const KEY_COUNT = 128_000;
-const BUDGET_MS = 10_000;
+/** Any comparison sort's worst case, far below a rescan's ~n^2/2. */
+const SORT_BOUND = KEY_COUNT * Math.ceil(Math.log2(KEY_COUNT));
 
 test("the parser reaches every key of a large well-ordered payload", () => {
-  // Guards the guard: if the generator emitted mis-ordered keys the timing
+  // Guards the guard: if the generator emitted mis-ordered keys the counting
   // tests below would pass trivially by failing at key 2.
   const parsed = parseEventLine(manyKeyLine(KEY_COUNT));
   assert.notEqual(parsed, null, "a well-ordered many-key payload must parse");
   assert.equal(parsed?.payload.length, KEY_COUNT);
 });
 
-test(`parses a ${KEY_COUNT}-key payload well inside ${BUDGET_MS}ms (sub-quadratic duplicate-key check)`, () => {
+test(`parses a ${KEY_COUNT}-key payload with one key comparison per key (sub-quadratic duplicate-key check)`, () => {
   const bytes = manyKeyLine(KEY_COUNT);
-  const t0 = process.hrtime.bigint();
+  const before = keyComparisonCount();
   const parsed = parseEventLine(bytes);
-  const ms = Number(process.hrtime.bigint() - t0) / 1e6;
+  const comparisons = keyComparisonCount() - before;
   assert.notEqual(parsed, null);
-  assert.ok(
-    ms < BUDGET_MS,
-    `parsing ${KEY_COUNT} payload keys took ${ms.toFixed(0)}ms (budget ${BUDGET_MS}ms) — ` +
+  assert.equal(
+    comparisons,
+    KEY_COUNT - 1,
+    `parsing ${KEY_COUNT} payload keys made ${comparisons} key comparisons — ` +
       `the per-key work is no longer O(1); check parsePayload's key comparison`,
   );
 });
 
-test(`verifies a ${KEY_COUNT}-key export well inside ${BUDGET_MS}ms (nothing downstream is quadratic either)`, () => {
+test(`verifies a ${KEY_COUNT}-key export in sub-quadratic comparisons (nothing downstream is quadratic either)`, () => {
   // Covers the parser, the HA-7 preimage build (a pass over every key) and all
   // of Stage A — seq, ts, the prev_hash anchor and the HA-14 hash comparison —
   // through to the entry of Stage B. A per-key linear scan added anywhere in
   // that stretch (a `find` over the payload inside a per-key loop, say) shows
-  // up here and not in the parser-only budget above.
+  // up here and not in the parser-only count above.
   //
   // WHAT IT DOES NOT COVER: Stage B's own per-key work. The hash is correct, so
   // Stage B IS entered — but `(genesis, 1)` defines seven payload keys, so the
@@ -98,10 +107,18 @@ test(`verifies a ${KEY_COUNT}-key export well inside ${BUDGET_MS}ms (nothing dow
   // runs. No 128k-key payload can do better for a registered type: every key
   // past the defined set is rejected at the first comparison, by construction.
   // Stage B's key handling is bounded by the key set, not by the input.
+  //
+  // WHAT THE COUNTS COVER: the two per-key loops in that stretch, the parser's
+  // ordering comparison and the HA-7 preimage's defensive sort (each preimage
+  // built adds its own sort, so the bound is per call and generous). A new
+  // per-key scan elsewhere would not be counted; it is a counted guard on the
+  // loops that exist, not a timer over the whole path.
   const bytes = Buffer.concat([manyKeyLine(KEY_COUNT), Buffer.from("\n")]);
-  const t0 = process.hrtime.bigint();
+  const parse0 = keyComparisonCount();
+  const sort0 = payloadSortComparisonCount();
   const verdict = verifyExport(bytes);
-  const ms = Number(process.hrtime.bigint() - t0) / 1e6;
+  const parsed = keyComparisonCount() - parse0;
+  const sorted = payloadSortComparisonCount() - sort0;
   assert.ok(
     ["VALID", "INVALID", "PARTIAL"].includes(verdict.verdict),
     "EV-17: exactly one of the three verdicts",
@@ -109,16 +126,21 @@ test(`verifies a ${KEY_COUNT}-key export well inside ${BUDGET_MS}ms (nothing dow
   // A COVERAGE PROBE, not an oracle: advisory reason text is never
   // conformance-checked (EV-17), and `contracts/fixtures/` remains the only
   // authority on what an input verifies to. It is asserted here because it is
-  // the one signal that this timing spans what the comment above says it does
-  // — a stale or placeholder `hash` would report HA-14 instead, and the budget
+  // the one signal that these counts span what the comment above says it does
+  // — a stale or placeholder `hash` would report HA-14 instead, and the counts
   // would quietly stop measuring most of the path.
   assert.match(
     verdictLine(verdict),
     /Stage B/,
     `expected verification to reach Stage B, got: ${verdictLine(verdict)}`,
   );
+  assert.equal(
+    parsed,
+    KEY_COUNT - 1,
+    `verifying made ${parsed} parser key comparisons for ${KEY_COUNT} keys`,
+  );
   assert.ok(
-    ms < BUDGET_MS,
-    `verifying a ${KEY_COUNT}-key export took ${ms.toFixed(0)}ms (budget ${BUDGET_MS}ms)`,
+    sorted > 0 && sorted <= SORT_BOUND,
+    `verifying made ${sorted} preimage sort comparisons (bound ${SORT_BOUND})`,
   );
 });
