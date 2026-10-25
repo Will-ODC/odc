@@ -235,8 +235,9 @@ Two stages, per `evolution.md` EV-6/EV-15:
   it. 100k intervals × 100k opaque ballots, ~205 s under the old per-interval
   loop, now takes milliseconds. `test/ballot-batching.test.ts` pins both
   properties by counting work, never timing it (test-only counters
-  `walkSteps`, `leftProbes` and `quantizedTestCount`, which feed no verdict):
-  the same step count beside 100, 10k and 100k intervals, and a total walk
+  `walkSteps`, `leftProbes`, `quantizedTestCount` and `mapOps`, which feed no
+  verdict): no read of the per-interval or per-issue maps across the opaque
+  ballots, the same step count beside 100, 10k and 100k intervals, and a total walk
   linear under interleaved queries. **Known limit, not fixed:** many
   opaque ballots at many distinct instants that are multiples of no interval,
   followed by a registered ballot on every interval, still costs
@@ -401,8 +402,10 @@ would be inventing conformance in a file no reviewer treats as normative.
   inverted with every other test still green. The VALID and PARTIAL inputs are
   read out of `contracts/fixtures/index.json` by declared verdict, so no verdict
   value is invented here.
-- **`test/key-scaling.test.ts`** — a counted bound (no timing) pinning that
-  payload key handling stays sub-quadratic in key count. The parser compares each key
+- **`test/key-scaling.test.ts`** — a counted bound (no timing) on the existing
+  payload key comparison sites, not a proof that key handling as a whole is
+  sub-quadratic: an uncounted rescan beside them would pass. The parser
+  compares each key
   against the immediately preceding key only, which EX-8's ascending-order
   requirement makes sufficient for both the duplicate rule (HA-6) and the order
   rule; a seen-keys rescan would be O(n²) and could wedge the verifier for
@@ -414,8 +417,7 @@ would be inventing conformance in a file no reviewer treats as normative.
   the sort, against a rescan's ~n²/2. Its reach is the parser's comparison
   and the HA-7 preimage's sort, on a path through all of Stage A to the entry
   of Stage B — **not** Stage B's own per-key work, which no such payload can
-  reach: `(genesis, 1)` defines seven payload keys,
-  so the ES-18/ES-34 key-set check rejects the first undefined one on sight.
+  reach: `(genesis, 1)` defines seven payload keys, so the ES-18/ES-34 key-set check rejects the first undefined one on sight.
   Stage B's key handling is bounded by the key set, not by the input.
 - **`test/extreme-values.test.ts`** — value-level fuzzing for that same class.
   Generates structurally valid exports carrying extreme values (huge strings

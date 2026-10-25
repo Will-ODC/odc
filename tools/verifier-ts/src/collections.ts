@@ -21,8 +21,20 @@ export const CHUNK_SHIFT = 20;
 /** A Map with no entry cap. `shardCap` is a parameter for tests only. */
 export class ShardedMap<K, V> {
   private readonly shards: Map<K, V>[] = [new Map()];
+  /** Operations so far: each get/has/set/size and each entry iterated. */
+  private touched = 0;
 
   constructor(private readonly shardCap: number = SHARD_CAP) {}
+
+  /**
+   * How many operations this map has served: one per `get`, `has`, `set` and
+   * `size`, and one per entry `values()` yields. For tests only: it shows a
+   * code path never reads or iterates a map, without timing anything. It
+   * never changes what an operation returns.
+   */
+  get ops(): number {
+    return this.touched;
+  }
 
   private shardOf(key: K): Map<K, V> | undefined {
     // Newest first: recently added keys are the likeliest lookups.
@@ -34,14 +46,17 @@ export class ShardedMap<K, V> {
   }
 
   get(key: K): V | undefined {
+    this.touched++;
     return this.shardOf(key)?.get(key);
   }
 
   has(key: K): boolean {
+    this.touched++;
     return this.shardOf(key) !== undefined;
   }
 
   set(key: K, value: V): this {
+    this.touched++;
     const existing = this.shardOf(key);
     if (existing !== undefined) {
       existing.set(key, value);
@@ -57,6 +72,7 @@ export class ShardedMap<K, V> {
   }
 
   get size(): number {
+    this.touched++;
     let n = 0;
     for (const s of this.shards) n += s.size;
     return n;
@@ -68,7 +84,11 @@ export class ShardedMap<K, V> {
   }
 
   *values(): IterableIterator<V> {
-    for (const s of this.shards) yield* s.values();
+    for (const s of this.shards)
+      for (const v of s.values()) {
+        this.touched++;
+        yield v;
+      }
   }
 }
 

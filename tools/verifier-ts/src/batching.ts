@@ -260,9 +260,19 @@ export class BallotBatches {
   }
 
   /**
+   * Operations served so far by the per-interval and per-issue maps
+   * (`ShardedMap.ops`). For tests: an opaque ballot must touch neither, so
+   * any per-interval or per-issue loop in `opaque` shows up here however it
+   * tests a multiple, without timing anything.
+   */
+  mapOps(): { groups: number; issues: number } {
+    return { groups: this.groups.ops, issues: this.issues.ops };
+  }
+
+  /**
    * How many ET-24a lookups in an issue's `left` set have run, in total. For
-   * tests: it shows each run start does one Set lookup rather than a rescan,
-   * without timing anything.
+   * tests: it pins one lookup per run start, without timing anything. It
+   * counts lookups, not their cost: a slower lookup structure would not show.
    */
   leftProbes(): number {
     return this.probed;

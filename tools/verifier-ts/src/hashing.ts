@@ -39,8 +39,9 @@ let sortComparisons = 0;
 
 /**
  * How many key comparisons `encPayload`'s defensive sort has made in this
- * process. For tests: `test/key-scaling.test.ts` bounds it to show the preimage
- * build is not quadratic in the key count, without timing it. It never feeds a
+ * process. For tests: `test/key-scaling.test.ts` bounds it to show this sort
+ * stays within a comparison sort's bound, without timing it. It counts the
+ * sort's comparator only, not any other pass over the keys. It never feeds a
  * hash.
  */
 export function payloadSortComparisonCount(): number {

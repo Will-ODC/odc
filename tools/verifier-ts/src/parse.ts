@@ -286,8 +286,9 @@ let keyComparisons = 0;
 /**
  * How many payload key comparisons `parsePayload` has made in this process.
  * For tests: `test/key-scaling.test.ts` asserts one per key after the first,
- * which pins the adjacency check below without timing it. It never feeds a
- * verdict.
+ * which pins the adjacency comparison site below without timing it. It counts
+ * that site only: an uncounted rescan added beside it would not show. It never
+ * feeds a verdict.
  */
 export function keyComparisonCount(): number {
   return keyComparisons;

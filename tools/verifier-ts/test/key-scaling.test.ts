@@ -1,4 +1,6 @@
-// Regression guard: payload key handling must stay SUB-QUADRATIC in key count.
+// Regression guard on the EXISTING payload key comparison sites: the parser's
+// adjacency check stays one comparison per key, and the preimage sort stays
+// within a comparison sort's bound. It counts those two sites only.
 //
 // WHY. "A stranger can write a verifier and check the log in an afternoon" is a
 // charter §4 property, so a hostile export of modest size must not be able to
@@ -16,8 +18,10 @@
 // adjacent. One comparison per key, no set, no rescan.
 //
 // This file exists so that property cannot be lost silently: it is the test
-// that fails if someone "simplifies" the adjacency comparison into a
-// seen-keys scan.
+// that fails if someone "simplifies" the adjacency comparison itself into a
+// seen-keys scan. It does NOT prove key handling sub-quadratic as a whole: an
+// uncounted rescan added beside the counted comparison, or an uncounted
+// O(n^2) pass elsewhere (in encPayload, say), would pass.
 //
 // It COUNTS the work rather than timing it. It was a 10 s wall-clock budget;
 // a timed bound on a shared CI runner is noise (two sibling cost tests in
@@ -69,7 +73,11 @@ function manyKeyLine(n: number): Buffer {
 }
 
 const KEY_COUNT = 128_000;
-/** Any comparison sort's worst case, far below a rescan's ~n^2/2. */
+/**
+ * Any comparison sort's worst case for ONE sort, far below a rescan's ~n^2/2.
+ * It is checked against the whole verify run's total, which is stricter: a run
+ * that builds more than one preimage must fit them all under it.
+ */
 const SORT_BOUND = KEY_COUNT * Math.ceil(Math.log2(KEY_COUNT));
 
 test("the parser reaches every key of a large well-ordered payload", () => {
@@ -80,7 +88,7 @@ test("the parser reaches every key of a large well-ordered payload", () => {
   assert.equal(parsed?.payload.length, KEY_COUNT);
 });
 
-test(`parses a ${KEY_COUNT}-key payload with one key comparison per key (sub-quadratic duplicate-key check)`, () => {
+test(`parses a ${KEY_COUNT}-key payload with one key comparison per key (the adjacency comparison site)`, () => {
   const bytes = manyKeyLine(KEY_COUNT);
   const before = keyComparisonCount();
   const parsed = parseEventLine(bytes);
@@ -94,12 +102,11 @@ test(`parses a ${KEY_COUNT}-key payload with one key comparison per key (sub-qua
   );
 });
 
-test(`verifies a ${KEY_COUNT}-key export in sub-quadratic comparisons (nothing downstream is quadratic either)`, () => {
+test(`verifies a ${KEY_COUNT}-key export within the counted comparison sites' bounds`, () => {
   // Covers the parser, the HA-7 preimage build (a pass over every key) and all
   // of Stage A — seq, ts, the prev_hash anchor and the HA-14 hash comparison —
-  // through to the entry of Stage B. A per-key linear scan added anywhere in
-  // that stretch (a `find` over the payload inside a per-key loop, say) shows
-  // up here and not in the parser-only count above.
+  // through to the entry of Stage B, and counts the two comparison sites on
+  // that path.
   //
   // WHAT IT DOES NOT COVER: Stage B's own per-key work. The hash is correct, so
   // Stage B IS entered — but `(genesis, 1)` defines seven payload keys, so the
@@ -109,10 +116,10 @@ test(`verifies a ${KEY_COUNT}-key export in sub-quadratic comparisons (nothing d
   // Stage B's key handling is bounded by the key set, not by the input.
   //
   // WHAT THE COUNTS COVER: the two per-key loops in that stretch, the parser's
-  // ordering comparison and the HA-7 preimage's defensive sort (each preimage
-  // built adds its own sort, so the bound is per call and generous). A new
-  // per-key scan elsewhere would not be counted; it is a counted guard on the
-  // loops that exist, not a timer over the whole path.
+  // ordering comparison and the HA-7 preimage's defensive sort, totalled over
+  // the whole run (see SORT_BOUND). A new per-key scan elsewhere, including an
+  // uncounted one beside these, would not be counted; it is a counted guard on
+  // the comparison sites that exist, not a timer over the whole path.
   const bytes = Buffer.concat([manyKeyLine(KEY_COUNT), Buffer.from("\n")]);
   const parse0 = keyComparisonCount();
   const sort0 = payloadSortComparisonCount();

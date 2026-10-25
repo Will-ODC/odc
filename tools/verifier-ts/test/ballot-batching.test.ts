@@ -615,6 +615,9 @@ test("BallotBatches stays linear under a hostile pattern (200k instants, one iss
   // 200k and every ballot must be checked against all of them (ET-24a). An
   // implementation that rescans the earlier ballots or instants per ballot is
   // O(n^2) — ~2e10 steps here; this one does one Set lookup per run start.
+  // The counts pin that shape (one lookup per run start, no walk, no multiple
+  // test); they count lookups, not their cost, so a slower `left` structure
+  // with the same lookups would not show here.
   // This counts that work instead of timing it (a timed budget is noise on a
   // shared CI runner): n - 1 run starts plus the return make n lookups, and
   // with no opaque ballot there is no walk and no ET-23 multiple test.
@@ -639,21 +642,30 @@ test("BallotBatches: an opaque ballot does no per-interval work (cost independen
   // instant, and each interval group works out its candidates lazily at its
   // next query. The work is COUNTED, not timed: an earlier timed ratio of two
   // runs (10k against 100 intervals, band < 10) read 21.8 on a GitHub runner
-  // against a 0.68 ms baseline. Per-interval work on an opaque ballot is an
-  // ET-23 multiple test against each interval, so the count is every
-  // `isQuantized` call plus every instant a refresh walks, from the first
-  // opaque ballot to the end of the one query. It must be the same beside 100,
-  // 10k and 100k distinct intervals; a per-interval loop in opaque() makes it
-  // 20000 x intervals. (A count over the number of OPAQUE ballots would not
-  // catch that mutant: it is linear in them too.) Opening the issues is not
-  // counted.
+  // against a 0.68 ms baseline. Two counts:
+  //  - The guard at the data structure: across the opaque loop, the
+  //    per-interval and per-issue maps serve no operation at all
+  //    (`mapOps`, counted inside ShardedMap: every get/has/set/size and every
+  //    entry iterated). Any per-interval or per-issue loop in opaque() must
+  //    read one of them, however it tests a multiple, so it fails here.
+  //  - The work of the one query: every `isQuantized` call plus every instant
+  //    a refresh walks. It must be the same beside 100, 10k and 100k distinct
+  //    intervals. (A count over the number of OPAQUE ballots would not catch
+  //    a per-interval mutant: it is linear in them too.)
+  // Opening the issues is not counted.
   const run = (intervals: number, opaque: number): number => {
     const t = new BallotBatches();
     for (let i = 0; i < intervals; i++)
       t.openIssue(`i${i}`, i + 2, 60000 * (i + 1), 3);
     const tests0 = quantizedTestCount();
+    const maps0 = t.mapOps();
     for (let j = 0; j < opaque; j++)
       t.opaque(intervals + 2 + j, 60000 * (j % 7));
+    assert.deepEqual(
+      t.mapOps(),
+      maps0,
+      `${opaque} opaque ballots touched the interval or issue maps`,
+    );
     // The lazy summary is live: issue i0 (interval 60000) sees a candidate.
     const out = t.admit("i0", intervals + opaque + 3, 60000 * 100);
     assert.equal(out, "unresolved");
