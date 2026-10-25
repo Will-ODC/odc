@@ -10,6 +10,8 @@ import { databaseUrl } from "./db/config.js";
  *   every interface.
  * - LEDGER_INTERNAL_PORT / LEDGER_INTERNAL_HOST: the write path. Default 8091
  *   on loopback; set the host to a private interface only, never a public one.
+ * - LEDGER_SIGNER_URL: required. The signer's base URL (ADR-0043); the
+ *   ledger's only outbound call, on the ballot write path.
  */
 type Env = Readonly<Record<string, string | undefined>>;
 
@@ -19,6 +21,7 @@ export interface ServerConfig {
   publicHost: string;
   internalPort: number;
   internalHost: string;
+  signerUrl: string;
 }
 
 export class ConfigError extends Error {
@@ -42,8 +45,25 @@ function host(env: Env, name: string, fallback: string): string {
 export function serverConfig(env: Env = process.env): ServerConfig {
   const url = databaseUrl(env);
   if (url === undefined) throw new ConfigError("LEDGER_DATABASE_URL is unset");
+  const signerUrl = env["LEDGER_SIGNER_URL"]?.trim();
+  if (signerUrl === undefined || signerUrl === "") {
+    throw new ConfigError("LEDGER_SIGNER_URL is unset");
+  }
+  let parsed: URL | null = null;
+  try {
+    parsed = new URL(signerUrl);
+  } catch {
+    parsed = null;
+  }
+  if (parsed === null || !["http:", "https:"].includes(parsed.protocol)) {
+    throw new ConfigError(
+      // Never echo the value: a mistyped URL may carry credentials.
+      "LEDGER_SIGNER_URL must be an http(s) URL",
+    );
+  }
   return {
     databaseUrl: url,
+    signerUrl,
     publicPort: port(env, "LEDGER_PUBLIC_PORT", 8090),
     publicHost: host(env, "LEDGER_PUBLIC_HOST", "0.0.0.0"),
     internalPort: port(env, "LEDGER_INTERNAL_PORT", 8091),

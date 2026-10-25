@@ -7,6 +7,7 @@
   "scripts": {
     "build": "rm -rf dist && tsc -p tsconfig.json",
     "test": "node --test dist/tests/*/*.test.js",
+    "test:verifiers": "node --test dist/tests/verifiers/*.verify.js",
     "lint": "eslint src tests",
     "typecheck": "tsc -p tsconfig.json --noEmit",
     "start": "node dist/src/main.js"

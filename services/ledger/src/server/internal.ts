@@ -11,6 +11,7 @@ import {
   type UnhashedEvent,
 } from "../chain/index.js";
 import type { Head } from "../db/events.js";
+import { UnknownIssue } from "../batching/batcher.js";
 import { AppendRefused, ChainNotValid, type Ledger } from "../ledger.js";
 import { createApp, type ServerLogger } from "./http.js";
 
@@ -23,8 +24,14 @@ export type CloseIssue = (issueId: string) => Promise<"closing" | "closed">;
 
 export interface InternalDeps {
   ledger: Ledger;
-  /** Absent until batching is wired: the close call then answers 503. */
+  /** Absent in a process with no running batcher: close then answers 503. */
   closeIssue?: CloseIssue | undefined;
+  /**
+   * True while a stored sign request has no appended run. An operator append
+   * would move the tail past the one position that batch is signed for and
+   * strand its ballots, so /appends answers 503 until it is appended.
+   */
+  batchPending?: (() => Promise<boolean>) | undefined;
   /** Milliseconds since the epoch; the close call's `ts` window. */
   clock?: () => number;
   logger?: ServerLogger;
@@ -89,6 +96,8 @@ function parseAppend(body: unknown): UnhashedEvent | null {
   };
 }
 
+class BatchPending extends Error {}
+
 class StaleTail extends Error {
   constructor(readonly head: Head) {
     super("stale tail");
@@ -101,7 +110,7 @@ class StaleTail extends Error {
  * the log. Bind it to a private network only.
  */
 export function buildInternalApp(deps: InternalDeps): FastifyInstance {
-  const { ledger, closeIssue } = deps;
+  const { ledger, closeIssue, batchPending } = deps;
   const clock = deps.clock ?? Date.now;
   // One event line is at most 65536 bytes (EV-25); its JSON request wrapper
   // may escape a little more, so allow twice that.
@@ -114,7 +123,11 @@ export function buildInternalApp(deps: InternalDeps): FastifyInstance {
       return reply.code(422).send({ error: "type_not_accepted" });
     }
     try {
-      const [stored] = await ledger.appendRun((_state, head) => {
+      const [stored] = await ledger.appendRun(async (_state, head) => {
+        // Under the writer lock, so no sign request can appear in between.
+        if (batchPending !== undefined && (await batchPending())) {
+          throw new BatchPending();
+        }
         // Conditional on the tail, checked inside the writer's lock so the
         // check and the insert cannot be split by another append.
         const tail: Head = head ?? { seq: 0, hash: ZERO_HASH };
@@ -125,6 +138,9 @@ export function buildInternalApp(deps: InternalDeps): FastifyInstance {
       });
       return reply.code(201).send({ seq: stored?.seq, hash: stored?.hash });
     } catch (err) {
+      if (err instanceof BatchPending) {
+        return reply.code(503).send({ error: "batch_pending" });
+      }
       if (err instanceof StaleTail) {
         return reply.code(409).send({ error: "stale_tail", head: err.head });
       }
@@ -179,7 +195,15 @@ export function buildInternalApp(deps: InternalDeps): FastifyInstance {
       if (closeIssue === undefined) {
         return reply.code(503).send({ error: "batching_unavailable" });
       }
-      const status = await closeIssue(issueId);
+      let status: "closing" | "closed";
+      try {
+        status = await closeIssue(issueId);
+      } catch (err) {
+        if (err instanceof UnknownIssue) {
+          return reply.code(404).send({ error: "unknown_issue" });
+        }
+        throw err;
+      }
       return reply.code(status === "closing" ? 202 : 200).send({ status });
     },
   );

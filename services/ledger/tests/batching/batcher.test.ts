@@ -5,6 +5,7 @@ import {
   tsToEpochMs,
   type UnhashedEvent,
 } from "../../src/chain/index.js";
+import { randomBytes } from "node:crypto";
 import pg from "pg";
 import {
   Batcher,
@@ -213,4 +214,121 @@ test("a_clock_stepping_backwards_never_reuses_a_batch_instant", { skip }, () =>
       assert.equal(await w.exportValid(), true);
     }),
   ),
+);
+
+test("start_ticks_on_a_timer_and_stop_ends_it_cleanly", { skip }, () =>
+  withDb(async ({ app }) =>
+    world(app, [{}], async (w) => {
+      const [issue] = w.issueIds as [string];
+      const sleep = (ms: number) => new Promise((r) => setTimeout(r, ms));
+      fill(w.fake, issue, [0, 1, 2]);
+      const idle = w.batcher({ tickMs: 20 });
+      idle.start();
+      await idle.stop(); // before its first tick: it never ticks
+      await sleep(60);
+      assert.equal(w.fake.sealCalls.length, 0);
+
+      const b = w.batcher({ tickMs: 10 });
+      w.fake.inject("sign", "fail"); // the batch lands only on a later tick
+      b.start();
+      b.start(); // idempotent: still one loop
+      for (let i = 0; i < 200 && votes(await w.events()).length === 0; i++) {
+        await sleep(10);
+      }
+      await b.stop();
+      assert.equal(votes(await w.events()).length, 3);
+      const calls = w.fake.sealCalls.length;
+      w.clock.now += MIN;
+      fill(w.fake, issue, [0, 1, 2]);
+      await sleep(60);
+      assert.equal(w.fake.sealCalls.length, calls);
+    }),
+  ),
+);
+
+test(
+  "stop_during_a_running_tick_lets_it_finish_and_never_ticks_again",
+  { skip, timeout: 30_000 },
+  () =>
+    withDb(async ({ app }) =>
+      world(app, [{}], async (w) => {
+        const [issue] = w.issueIds as [string];
+        const sleep = (ms: number) => new Promise((r) => setTimeout(r, ms));
+        fill(w.fake, issue, [0, 1, 2]);
+        w.fake.inject("seal", "timeout"); // holds the tick for the client timeout
+        const b = w.batcher({ tickMs: 10 });
+        b.start();
+        for (let i = 0; i < 200 && w.fake.sealCalls.length === 0; i++) {
+          await sleep(5);
+        }
+        assert.equal(w.fake.sealCalls.length, 1); // mid-tick
+        await b.stop(); // returns once that tick has finished
+        // Give a still-running loop every reason to seal again: a new
+        // interval and a full batch. A stopped batcher makes no call.
+        w.clock.now += MIN;
+        fill(w.fake, issue, [0, 1, 2]);
+        await sleep(80);
+        assert.equal(w.fake.sealCalls.length, 1);
+      }),
+    ),
+);
+
+test(
+  "sign_pending_is_true_only_while_a_sign_request_has_no_run",
+  { skip },
+  () =>
+    withDb(async ({ app }) =>
+      world(app, [{}], async (w) => {
+        const [issue] = w.issueIds as [string];
+        const b = w.batcher();
+        assert.equal(await b.signPending(), false);
+        fill(w.fake, issue, [0, 1, 2]);
+        w.fake.inject("seal", "fail");
+        assert.equal(await b.tick(), false);
+        assert.equal(await b.signPending(), false); // a seal holds no position
+        w.fake.inject("sign", "timeout");
+        assert.equal(await b.tick(), false);
+        assert.equal(await b.signPending(), true);
+        assert.equal(await b.tick(), true);
+        assert.equal(await b.signPending(), false);
+      }),
+    ),
+);
+
+test(
+  "a_last_seal_refused_for_good_alerts_and_does_not_starve_another_issue",
+  { skip },
+  () =>
+    withDb(async ({ app }) =>
+      world(app, [{}, {}], async (w) => {
+        const [a, other] = w.issueIds as [string, string];
+        // The signer already closed `a` under a seal id the ledger never saw.
+        const sealId = randomBytes(16).toString("hex");
+        assert.ok((await w.client.seal(a, { last: true, sealId })).ok);
+        const b = w.batcher();
+        assert.equal(await b.closeIssue(a), "closing");
+        const alerts = w.logs.filter((l) => l.startsWith("ALERT batcher: "));
+        assert.equal(alerts.length, 1);
+        assert.match(alerts[0] as string, /seal of issue .* issue_closed/);
+        fill(w.fake, other, [0, 1, 2]);
+        assert.equal(await b.tick(), false); // `a` is still not done
+        assert.equal(votes(await w.events(), other).length, 3);
+        assert.equal(await w.exportValid(), true);
+        // Paced: another refusal within the minute is a plain line, and one
+        // after the minute is an ALERT again.
+        const count = () =>
+          w.logs.filter((l) => l.startsWith("ALERT batcher: seal of issue"))
+            .length;
+        const before = w.logs.length;
+        await b.tick();
+        assert.equal(count(), 1);
+        assert.ok(
+          w.logs.slice(before).some((l) => /issue_closed/.test(l)),
+          "the refusal is still logged",
+        );
+        w.clock.now += 60_000;
+        await b.tick();
+        assert.equal(count(), 2);
+      }),
+    ),
 );

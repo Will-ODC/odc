@@ -12,6 +12,7 @@ export interface ServerDeps {
   ledger: Ledger;
   pool: Pool;
   closeIssue?: CloseIssue | undefined;
+  batchPending?: (() => Promise<boolean>) | undefined;
   clock?: () => number;
   logger?: ServerLogger;
 }
@@ -27,6 +28,7 @@ export function buildServers(deps: ServerDeps): {
     internalApp: buildInternalApp({
       ledger: deps.ledger,
       closeIssue: deps.closeIssue,
+      batchPending: deps.batchPending,
       clock: deps.clock ?? Date.now,
       logger,
     }),

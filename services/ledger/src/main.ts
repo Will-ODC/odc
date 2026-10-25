@@ -1,3 +1,5 @@
+import { createBatcher } from "./batching/batcher.js";
+import { createSignerClient } from "./clients/signer.js";
 import { serverConfig } from "./config.js";
 import { createPool } from "./db/events.js";
 import { Ledger } from "./ledger.js";
@@ -16,18 +18,24 @@ async function main(): Promise<void> {
     console.error(`ledger: ${ledger.notValid.message}; appends are refused`);
   }
 
-  // ---------------------------------------------------------------------
-  // BATCHING RECOVERY GOES HERE, before the internal port accepts appends.
-  // A stored sign request must be replayed, unchanged, before anything else
-  // is appended (API.md "Calls the ledger makes"; CLAUDE.md). The batching
-  // module also supplies `closeIssue`; until then the close call answers 503.
-  // ---------------------------------------------------------------------
-  const closeIssue = undefined;
+  const batcher = createBatcher({
+    ledger,
+    pool,
+    signer: createSignerClient({ baseUrl: config.signerUrl }),
+    log: (line) => console.error(`ledger batching: ${line}`),
+  });
+  // A stored sign request is replayed, unchanged, before anything else is
+  // appended (API.md "Calls the ledger makes"). If the signer is down this
+  // leaves it pending, and /appends answers 503 until it is appended.
+  // A log that is not VALID takes no appends, so no batcher runs at all.
+  const valid = ledger.notValid === null;
+  if (valid) await batcher.recover();
 
   const { publicApp, internalApp } = buildServers({
     ledger,
     pool,
-    closeIssue,
+    closeIssue: valid ? (id) => batcher.closeIssue(id) : undefined,
+    batchPending: () => batcher.signPending(),
     logger: true,
   });
   await publicApp.listen({ port: config.publicPort, host: config.publicHost });
@@ -36,8 +44,12 @@ async function main(): Promise<void> {
     host: config.internalHost,
   });
 
+  if (valid) batcher.start();
+
   const stop = async (): Promise<void> => {
+    // Stop taking requests first, then let the batcher finish its step.
     await Promise.allSettled([publicApp.close(), internalApp.close()]);
+    await batcher.stop();
     await pool.end();
   };
   process.once("SIGTERM", () => void stop());
