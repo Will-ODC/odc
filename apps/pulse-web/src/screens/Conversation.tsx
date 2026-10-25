@@ -497,8 +497,13 @@ function LiveCard({
   }
   function close() {
     // Backing out of a change: the earlier answer still stands on the server,
-    // so show it again rather than an empty ballot under "You picked".
-    if (saved && (status.kind === "answerable" || status.kind === "failed")) {
+    // so show it again rather than an empty ballot under "You picked". Not
+    // after a lost connection, when the new answer may have been stored.
+    if (
+      saved &&
+      (status.kind === "answerable" ||
+        (state.status === "failed" && state.refused))
+    ) {
       reset();
       setPicked(saved.ballot);
       setShowSaved(true);

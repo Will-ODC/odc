@@ -213,7 +213,62 @@ it("keeps the saved answer and its results when backing out of a change", async 
     "checked",
     true,
   );
+  expect(within(drawer).getByRole("radio", { name: "No" })).toHaveProperty(
+    "checked",
+    false,
+  );
 });
+
+it.each([
+  {
+    failure: "a refusal",
+    error: new ApiError(409, "That did not go through."),
+    restores: true,
+  },
+  {
+    failure: "a lost connection",
+    error: new Error("offline"),
+    restores: false,
+  },
+])(
+  "after $failure, closing a change restores the saved answer only if the server refused",
+  async ({ error, restores }) => {
+    const p = poll();
+    const cast = vi
+      .fn()
+      .mockResolvedValueOnce({
+        status: "counted",
+        ballot: [1],
+        results: tally(p, [1]),
+      })
+      .mockRejectedValueOnce(error);
+    render(<Conversation api={stubApi({ cast })} pollId={p.id} />);
+    await main().findByRole("heading", { name: p.question, level: 1 });
+    const user = await answer();
+    const drawer = screen.getByRole("complementary", { name: "Voting" });
+    await user.click(
+      within(drawer).getByRole("button", { name: "Change my answer" }),
+    );
+    await user.click(within(drawer).getByRole("radio", { name: "No" }));
+    await user.click(within(drawer).getByRole("button", { name: "Submit" }));
+    await within(drawer).findByRole("alert");
+    await user.click(within(drawer).getByRole("button", { name: "Close" }));
+    const results = main().queryByRole("group", {
+      name: "How people answered",
+    });
+    if (restores) {
+      expect(results).not.toBeNull();
+      expect(
+        within(drawer).getByRole("button", { name: "Change my answer" }),
+      ).toBeTruthy();
+    } else {
+      // The new answer may have been stored: show no counts that claim Yes.
+      expect(results).toBeNull();
+      expect(within(drawer).getByRole("button", { name: "Vote" })).toBeTruthy();
+    }
+  },
+);
+
 it("names the closed question's handle Show question, not Vote", async () => {
   const p = poll({ open: false });
   const user = userEvent.setup();
@@ -236,6 +291,7 @@ it("names the closed question's handle Show question, not Vote", async () => {
   await user.click(handle);
   expect(within(card()).getByText("This one has closed.")).toBeTruthy();
 });
+
 it("opens the next question's card even if the previous card was closed (#401)", async () => {
   const p = poll({ next: [null, "second"] });
   const second = poll({ id: "second", question: "Where?", next: [null, null] });

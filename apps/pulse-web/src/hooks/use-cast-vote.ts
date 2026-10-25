@@ -25,7 +25,12 @@ export type CastState =
       results: Results;
     }
   | { status: "closed" }
-  | { status: "failed"; message: string };
+  /**
+   * `refused` when the server answered and turned the vote down, so the
+   * earlier answer certainly still stands. A lost connection is not refused:
+   * the vote may have been stored before the reply went missing.
+   */
+  | { status: "failed"; message: string; refused: boolean };
 
 export interface CastVote {
   state: CastState;
@@ -74,7 +79,12 @@ export function useCastVote(api: PulseApi, pollId: string): CastVote {
             results: outcome.results,
           });
         },
-        (err: unknown) => setState({ status: "failed", message: reason(err) }),
+        (err: unknown) =>
+          setState({
+            status: "failed",
+            message: reason(err),
+            refused: err instanceof ApiError,
+          }),
       );
     },
     [api, pollId],
