@@ -1,6 +1,7 @@
 // @vitest-environment jsdom
 import { act, cleanup, renderHook, waitFor } from "@testing-library/react";
 import { afterEach, expect, it, vi } from "vitest";
+import { ApiError } from "../src/api/types.js";
 import { useCastVote } from "../src/hooks/use-cast-vote.js";
 import { results, stubApi } from "./stub-api.js";
 
@@ -17,6 +18,29 @@ it("sends every approval choice and retains the complete ballot", async () => {
   expect(cast).toHaveBeenCalledExactlyOnceWith("p1", [2, 0]);
   await waitFor(() => expect(result.current.state.status).toBe("counted"));
   expect(result.current.state).toMatchObject({ ballot: [0, 2], changed: true });
+});
+
+it("marks a failure refused only when the server answered", async () => {
+  const cast = vi
+    .fn()
+    .mockRejectedValueOnce(new ApiError(409, "Not now"))
+    .mockRejectedValueOnce(new Error("offline"));
+  const { result } = renderHook(() => useCastVote(stubApi({ cast }), "p1"));
+  act(() => result.current.cast([0]));
+  await waitFor(() =>
+    expect(result.current.state).toEqual({
+      status: "failed",
+      message: "Not now",
+      refused: true,
+    }),
+  );
+  act(() => result.current.cast([0]));
+  await waitFor(() =>
+    expect(result.current.state).toMatchObject({
+      status: "failed",
+      refused: false,
+    }),
+  );
 });
 
 it("copies picks while sending and ignores an empty ballot", async () => {

@@ -273,8 +273,8 @@ function LoadedQuestion({
           <div className="conversation__column">
             <ViewState data={loaded}>
               {(poll) => (
-                // One heading node either way, so focus on it survives the
-                // card opening and closing.
+                // One heading node while the card opens and closes, so focus
+                // on it survives; it is drawn afresh once the poll loads.
                 <section
                   className={
                     cardOpen
@@ -465,10 +465,13 @@ function LiveCard({
       : savedShowing;
   const resultView = showing.kind === "answered";
   const hadResults = useRef(resultView);
+  // The one place focus follows results in and out of the page. Backing out
+  // of a change closes the drawer, and focus stays on its handle instead.
   useEffect(() => {
     if (
-      (resultView && document.activeElement === document.body) ||
-      hadResults.current !== resultView
+      visible &&
+      ((resultView && document.activeElement === document.body) ||
+        hadResults.current !== resultView)
     ) {
       const node = wrapper.current;
       const target = resultView
@@ -478,7 +481,7 @@ function LiveCard({
       target?.focus();
     }
     hadResults.current = resultView;
-  }, [resultView, saved]);
+  }, [resultView, saved, visible]);
   const next = showing.kind === "answered" ? nextFor(poll, ballot) : null;
   const shut = status.kind === "closed";
   // The card, open or folded, names the question; closed results do not.
@@ -493,6 +496,18 @@ function LiveCard({
     setVisible(true);
   }
   function close() {
+    // Backing out of a change: the earlier answer still stands on the server,
+    // so show it again rather than an empty ballot under "You picked". Not
+    // after a lost connection, when the new answer may have been stored.
+    if (
+      saved &&
+      (status.kind === "answerable" ||
+        (state.status === "failed" && state.refused))
+    ) {
+      reset();
+      setPicked(saved.ballot);
+      setShowSaved(true);
+    }
     setVisible(false);
   }
   const handle = (
@@ -505,7 +520,11 @@ function LiveCard({
           else setVisible(true);
         }}
       >
-        {showing.kind === "answered" ? "Change my answer" : "Vote"}
+        {shut
+          ? "Show question"
+          : showing.kind === "answered"
+            ? "Change my answer"
+            : "Vote"}
       </button>
     </div>
   );

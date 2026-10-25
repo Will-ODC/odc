@@ -163,7 +163,7 @@ test("seeds a run of polls and one domain, so the flow works the moment it start
   await app.close();
 });
 
-test("seeds the four launch questions, and the web dev env points at exactly those ids", async () => {
+test("lists every seed in General, and the web dev env points at exactly the four launch ids", async () => {
   const { app } = await buildDevServer(devConfig({}));
   const envFile = readFileSync(
     new URL("../../../pulse-web/.env.development", import.meta.url),
