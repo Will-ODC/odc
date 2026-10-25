@@ -136,7 +136,13 @@ describe("the purpose promise (ADR-0037)", () => {
       name: "I will discuss ideas without attacking, harassing or threatening people.",
     }) as HTMLInputElement;
     expect(promise.checked).toBe(false);
+    // The form moves focus to its heading on arrival (NewPoll.tsx). Let that
+    // happen first, or it can take focus back from the button below and the
+    // Enter press lands on the heading instead.
+    const heading = screen.getByRole("heading", { name: "Post a question" });
+    await waitFor(() => expect(document.activeElement).toBe(heading));
     help.focus();
+    expect(document.activeElement).toBe(help);
     await user.keyboard("{Enter}");
     const popup = screen.getByRole("dialog", {
       name: "What this discussion is for",
