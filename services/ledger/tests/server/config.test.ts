@@ -26,6 +26,12 @@ test("the_signer_url_must_be_an_http_or_https_url", () => {
       v,
     );
   }
+  // A rejected value is never echoed: it may carry credentials.
+  const secret = "htps://user:token123@signer";
+  assert.throws(
+    () => serverConfig({ ...DB, LEDGER_SIGNER_URL: secret }),
+    (e: unknown) => e instanceof ConfigError && !e.message.includes("token123"),
+  );
   assert.equal(
     serverConfig({ ...DB, LEDGER_SIGNER_URL: "https://s.internal:9000/" })
       .signerUrl,

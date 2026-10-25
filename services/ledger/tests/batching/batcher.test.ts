@@ -314,6 +314,21 @@ test(
         assert.equal(await b.tick(), false); // `a` is still not done
         assert.equal(votes(await w.events(), other).length, 3);
         assert.equal(await w.exportValid(), true);
+        // Paced: another refusal within the minute is a plain line, and one
+        // after the minute is an ALERT again.
+        const count = () =>
+          w.logs.filter((l) => l.startsWith("ALERT batcher: seal of issue"))
+            .length;
+        const before = w.logs.length;
+        await b.tick();
+        assert.equal(count(), 1);
+        assert.ok(
+          w.logs.slice(before).some((l) => /issue_closed/.test(l)),
+          "the refusal is still logged",
+        );
+        w.clock.now += 60_000;
+        await b.tick();
+        assert.equal(count(), 2);
       }),
     ),
 );

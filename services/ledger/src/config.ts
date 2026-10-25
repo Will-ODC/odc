@@ -57,7 +57,8 @@ export function serverConfig(env: Env = process.env): ServerConfig {
   }
   if (parsed === null || !["http:", "https:"].includes(parsed.protocol)) {
     throw new ConfigError(
-      `LEDGER_SIGNER_URL must be an http(s) URL, got "${signerUrl}"`,
+      // Never echo the value: a mistyped URL may carry credentials.
+      "LEDGER_SIGNER_URL must be an http(s) URL",
     );
   }
   return {
