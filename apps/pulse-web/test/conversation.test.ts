@@ -24,7 +24,9 @@ it("a closed poll outranks counted or failed cast state", () => {
     }),
   ).toEqual({ kind: "closed" });
   expect(cardStatus(poll(), { status: "closed" })).toEqual({ kind: "closed" });
-  expect(cardStatus(poll(), { status: "failed", message: "Retry" })).toEqual({
+  expect(
+    cardStatus(poll(), { status: "failed", message: "Retry", refused: true }),
+  ).toEqual({
     kind: "failed",
     message: "Retry",
   });

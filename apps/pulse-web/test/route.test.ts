@@ -152,6 +152,12 @@ describe("reading a URL", () => {
     });
   });
 
+  it("reads ?community= on Home too, and writes it back as /browse", () => {
+    const route = routeFrom("/?community=riverside");
+    expect(route).toEqual({ kind: "browse", community: "riverside" });
+    expect(pathOf(route)).toBe("/browse?community=riverside");
+  });
+
   it("opens the browser when ?poll= is empty", () => {
     expect(routeFrom("/?poll=")).toEqual({
       kind: "browse",

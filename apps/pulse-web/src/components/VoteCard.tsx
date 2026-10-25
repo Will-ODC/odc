@@ -171,10 +171,6 @@ export function VoteCard({
   // "Try again" on fresh results unmounts itself, and so does the panel the
   // failure replaces: when focus was on either, keep it on the results area
   // rather than let it fall to the page. Focus elsewhere is left alone.
-  useEffect(() => {
-    if (presentation === "results") panel.current?.focus();
-  }, [presentation]);
-
   const problem = Boolean(resultsProblem);
   const hadProblem = useRef(problem);
   useEffect(() => {
@@ -260,7 +256,7 @@ export function VoteCard({
           ? "vote-card vote-card--results"
           : "vote-card"
       }
-      aria-label={presentation === "results" ? question : undefined}
+      aria-label={presentation === "results" ? "Your answer" : undefined}
       aria-labelledby={presentation === "card" ? `${id}-question` : undefined}
       onKeyDown={onKeyDown}
       onPointerDown={(event) => {
