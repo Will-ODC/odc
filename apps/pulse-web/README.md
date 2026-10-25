@@ -51,24 +51,26 @@ The vote page, sign-in and question creation call the API. Each question opens
 with its bottom voting drawer expanded, on phone and desktop. Choose an answer,
 then press Submit to save it. Results appear in the upper main content directly
 below your saved answer, which has a softly tinted accent and spacing beneath
-the question, with confirmation, Change my answer and Next when
-available. The bottom drawer is reserved for voting; after submitting, its
-Change my answer handle opens the choices again without casting. Closing an
-unsent ballot keeps its selection and leaves the Vote handle available. The
-drawer uses a downward chevron to close, with the accessible button name Close.
-Upper content scrolls
-independently of the drawer. Closed-question results also open in the main content. The small circular info link beside Change my answer
-opens How votes count in a new tab. Results omit the repeated answer summary,
-extra privacy reminder and nested card framing. The live page has no tutorial
-button.
+the question, with confirmation, Change my answer and Next when available. The
+bottom drawer is reserved for voting; after submitting, its Change my answer
+handle opens the choices again without casting. Closing the drawer during a
+change keeps the saved answer and its results. Closing an unsent ballot keeps
+its selection and leaves the Vote handle available; on a closed question the
+handle reads Show question. The drawer uses a downward chevron to close, with
+the accessible button name Close. Upper content scrolls independently of the
+drawer. Closed-question results also open in the main content. The small
+circular info link beside Change my answer opens How votes count in a new tab.
+Results omit the repeated answer summary, extra privacy reminder and nested
+card framing. The live page has no tutorial button.
 
 Every product page uses the same browse-style top banner at desktop and phone
-widths: the Pulse home link, Home, About, a Your communities dropdown listing the account’s
-currently known community when available, Post and one account control. Starting
-questions remain available in the guided introduction and are seeded into General
-in local development. Multiple memberships remain follow-up #440. The communities dropdown uses a bordered trigger with a chevron and highlighted
-menu links. The current destination
-is marked without removing its link. Account state also appears on About,
+widths: the Pulse home link, Home, About, a Your communities dropdown listing
+the account’s currently known community when available, Post and one account
+control. Starting questions remain available in the guided introduction and are
+seeded into General in local development. Multiple memberships remain
+follow-up #440. The communities dropdown uses a bordered trigger with a chevron
+and highlighted menu links. The current destination is marked without removing
+its link. Account state also appears on About,
 introduction, trust and sign-in pages; these headers read the session, while
 static page content does not load poll data. Sign-in pages omit a redundant
 Sign in link. Shared `TopBanner`, `SiteNavigation` and `AccountMenu` components
@@ -91,14 +93,15 @@ behavior.
 Home (`/`) opens the public poll browser. About (`/about`) keeps the former
 welcome content and Start voting → /start → /questions, plus Explore questions →
 Home. The shared navigation uses Home and About; General has no separate nav
-link. Browsing is public, newest first and scoped
-by community, not a global or related-question feed. Shared
-`/browse?community=ID` links open that community. Signed-in visitors can also
-switch to their community. Open and closed questions link to the existing vote
-page; opening a question never casts a vote. Load more uses the API cursor and
-keeps existing questions on a failed request. The wide list shares the Home, About, posting and community navigation;
-email-confirmed membership supplies the Your communities menu. Thumbnails/context previews remain future work. Missing communities show an empty
-state with links to the starting questions and posting form.
+link. Browsing is public, newest first and scoped by community, not a global or
+related-question feed. Shared `/browse?community=ID` links open that community.
+Signed-in visitors can also switch to their community. Open and closed
+questions link to the existing vote page; opening a question never casts a
+vote. Load more uses the API cursor and keeps existing questions on a failed
+request. The wide list shares the Home, About, posting and community
+navigation; email-confirmed membership supplies the Your communities menu.
+Thumbnails/context previews remain future work. Missing communities show an
+empty state with links to the starting questions and posting form.
 
 ## Settings
 

@@ -42,7 +42,8 @@ export type Route =
 export type ReturnTo = Extract<Route, { kind: "conversation" | "newPoll" }>;
 
 /**
- * Where a run begins when the URL does not say.
+ * The conversation a `?poll=`-style link falls back to when it names no poll
+ * (an unknown path). `/` itself opens the browser.
  *
  * Matches `FIRST_POLL_ID` in the dev server's seed. It is a client-side
  * default rather than a fact about the graph: once questions can be authored
