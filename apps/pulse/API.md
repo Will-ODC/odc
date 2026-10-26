@@ -341,6 +341,50 @@ identity, so one person who votes, signs out, signs back in and votes again is c
 **twice**. Pulse is counted-not-verified and already deduplicates only per browser;
 being double-counted is a smaller harm than being read.
 
+### `GET /api/my-votes?limit=20&cursor=…`
+
+The current browser's saved answers, newest cast first. This route reads only
+the signed `pulse_ballot` cookie, including for someone who has not signed in.
+It never creates a cookie. With no valid ballot cookie it returns an empty page,
+even if a separate account session exists. `POST /api/sign-out` clears the ballot
+cookie, so this history disappears from that browser. Responses carry
+`Cache-Control: private, no-store`.
+
+```json
+{
+  "votes": [
+    {
+      "pollId": "question-id",
+      "question": "Should we open a garden?",
+      "choices": ["Yes"],
+      "ballot": [0],
+      "castAt": "2026-10-20T12:00:00.000Z",
+      "closesAt": null,
+      "open": true
+    }
+  ],
+  "nextCursor": null
+}
+```
+
+Each entry is the current ballot for one poll: `ballot` holds the chosen
+positions in ascending order and `choices` their labels in the same order.
+`closesAt` is the poll's closing time or `null`, and `open` says whether it was
+open when this page was read. It has no account id, voter id, or confirmation code. Closed polls
+remain listed, and a changed answer moves to the top. `limit` defaults to 20
+and accepts 1 through 50. A cursor is an opaque page boundary tied to cast
+time and poll id; pass it unchanged. Invalid or extra query parameters return
+400 `bad_request`. A cursor never grants access to a different browser's votes.
+As with public poll browsing, this is a live list, not a snapshot: changes while
+paging can move entries. A page may hold fewer than `limit` entries, even none,
+and still carry a `nextCursor`: an entry whose question was deleted while the
+page was read is left out. Keep following the cursor until it is `null`.
+Storage failures return 500 `server_error`.
+
+Signing out clears the cookie in that browser; it does not revoke the ballot
+identity on the server. Anyone holding a copy of the cookie can read this
+list, as they could already read each of its ballots one poll at a time.
+
 ### `GET /api/polls?community=ID&limit=20&cursor=…`
 
 Public browsing (#259), without a session or ballot cookie. `community` is
