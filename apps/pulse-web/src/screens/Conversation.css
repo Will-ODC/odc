@@ -24,6 +24,9 @@
   min-height: 0;
   overflow-y: auto;
   padding: var(--gutter);
+  padding-bottom: calc(
+    var(--gutter) + var(--step) * 8 + env(safe-area-inset-bottom)
+  );
 }
 .conversation__question {
   display: flex;
@@ -88,25 +91,28 @@
   line-height: 1.5;
 }
 .conversation__dock {
-  flex-shrink: 0;
-  padding: var(--step) calc(var(--step) * 1.5);
-  padding-bottom: max(var(--step), env(safe-area-inset-bottom));
-  border-top: var(--hairline) solid var(--ballot-line);
+  position: fixed;
+  z-index: 1;
+  right: max(var(--gutter), env(safe-area-inset-right));
+  bottom: max(var(--gutter), env(safe-area-inset-bottom));
+  width: min(
+    calc(var(--rail) * 2),
+    calc(
+      100% - var(--gutter) * 2 - env(safe-area-inset-left) -
+        env(safe-area-inset-right)
+    )
+  );
+  /* Only the button or card intercepts clicks over the page. */
+  pointer-events: none;
 }
 .conversation__dock .vote-card {
-  max-height: 60dvh;
+  max-height: min(
+    60dvh,
+    calc(100dvh - var(--gutter) * 2 - env(safe-area-inset-bottom))
+  );
   overflow-y: auto;
-}
-/* The open voting drawer already names the question on small screens. */
-@media (max-width: 1099px) {
-  .conversation__hero--merged {
-    position: absolute;
-    width: 1px;
-    height: 1px;
-    overflow: hidden;
-    clip-path: inset(50%);
-    white-space: nowrap;
-  }
+  overscroll-behavior: contain;
+  pointer-events: auto;
 }
 .conversation button {
   font: inherit;
@@ -150,9 +156,6 @@
   .conversation__sidebar h2 {
     font-size: var(--t-small);
   }
-  .conversation__dock {
-    padding-inline: var(--gutter);
-  }
 }
 
 .conversation__help {
@@ -160,6 +163,37 @@
   gap: var(--step);
   justify-content: flex-end;
 }
-.conversation__vote > div > button {
-  margin-bottom: var(--step);
+.conversation__help > button {
+  padding: var(--step) calc(var(--step) * 1.5);
+  border-color: var(--control-line);
+  border-radius: var(--r-pill);
+  color: var(--ballot-bg);
+  background: rgb(var(--side-b));
+  font-size: var(--t-small);
+  font-weight: 700;
+  box-shadow: var(--shadow-ballot);
+  pointer-events: auto;
+}
+
+/* Both states reveal from the same corner with the same timing. */
+.conversation__dock .vote-card,
+.conversation__help > button {
+  transform-origin: bottom right;
+  animation: voting-reveal var(--motion-quick) ease-out;
+}
+@keyframes voting-reveal {
+  from {
+    opacity: 0;
+    transform: translateY(var(--step)) scale(0.97);
+  }
+  to {
+    opacity: 1;
+    transform: translateY(0) scale(1);
+  }
+}
+@media (prefers-reduced-motion: reduce) {
+  .conversation__dock .vote-card,
+  .conversation__help > button {
+    animation: none;
+  }
 }

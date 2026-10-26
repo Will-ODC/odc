@@ -24,25 +24,60 @@ describe("fitting a phone", () => {
     );
   });
 
-  it("reserves a bottom drawer while the upper content scrolls independently", () => {
-    expect(rule("screens/Conversation.css", ".conversation__scroll")).toMatch(
-      /flex:\s*1;/,
+  it("floats voting at the bottom right without reserving a full-width row", () => {
+    const dock = rule("screens/Conversation.css", ".conversation__dock");
+    expect(dock).toMatch(/position:\s*fixed/);
+    expect(dock).toContain(
+      "right: max(var(--gutter), env(safe-area-inset-right))",
     );
+    expect(dock).toContain(
+      "bottom: max(var(--gutter), env(safe-area-inset-bottom))",
+    );
+    expect(dock).toContain("env(safe-area-inset-right)");
+    expect(dock).toContain("env(safe-area-inset-bottom)");
+    expect(dock).toMatch(/width:\s*min\(/);
+    expect(dock).not.toMatch(/border-top:/);
     expect(rule("screens/Conversation.css", ".conversation__scroll")).toMatch(
       /overflow-y:\s*auto/,
     );
-    expect(rule("screens/Conversation.css", ".conversation__dock")).toMatch(
-      /flex-shrink:\s*0/,
+    expect(rule("screens/Conversation.css", ".conversation__scroll")).toMatch(
+      /padding-bottom:/,
     );
-    expect(rule("screens/Conversation.css", ".conversation__dock")).toContain(
-      "env(safe-area-inset-bottom)",
+    expect(
+      rule("screens/Conversation.css", ".conversation__dock .vote-card"),
+    ).toMatch(/overflow-y:\s*auto/);
+  });
+
+  it("matches Submit sizing while keeping the floating button prominent", () => {
+    const button = rule(
+      "screens/Conversation.css",
+      ".conversation__help > button",
     );
+    expect(button).toContain("background: rgb(var(--side-b))");
+    expect(button).toContain("color: var(--ballot-bg)");
+    expect(button).toMatch(/font-weight:\s*700/);
+    const submit = rule("components/VoteCard.css", ".vote-card button");
+    for (const property of ["padding", "font-size"]) {
+      const declaration = submit.match(new RegExp(`  ${property}: [^;]+;`))![0];
+      expect(button).toContain(declaration);
+    }
+    expect(button).not.toMatch(/min-(height|width):/);
+  });
+
+  it("uses the same bottom-right reveal for the vote button and popout", () => {
     const css = readFileSync(
       new URL("../src/screens/Conversation.css", import.meta.url),
       "utf8",
     );
-    expect(css).not.toMatch(
-      /\.conversation__vote\s*\{[^}]*position:\s*absolute/,
+    expect(css).toContain(
+      ".conversation__dock .vote-card,\n.conversation__help > button {",
+    );
+    expect(css).toContain("transform-origin: bottom right");
+    expect(css).toContain(
+      "animation: voting-reveal var(--motion-quick) ease-out",
+    );
+    expect(css).toMatch(
+      /@media \(prefers-reduced-motion: reduce\)[\s\S]*animation: none/,
     );
   });
 

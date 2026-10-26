@@ -48,7 +48,12 @@ captured instead of delivered. Startup and reset scenarios are documented in
 [the API README](../pulse/README.md#run-it-on-your-computer).
 
 The vote page, sign-in and question creation call the API. Each question opens
-with its bottom voting drawer expanded, on phone and desktop. Choose an answer,
+with its voting popout expanded at the bottom right, on phone and desktop.
+The popout stays aligned to a prominent, accent-filled floating button and fits within the
+viewport; it does not reserve a full-width row. The closing-time note stays on
+the main page when the popout opens or closes. Button and popout share the same
+bottom-right reveal and are inset from the screen edges; reduced-motion settings
+disable the animation. Choose an answer,
 then press Submit to save it. Results appear in the upper main content directly
 below your saved answer, which has a softly tinted accent and spacing beneath
 the question, with confirmation, Change my answer and Next when available. The
@@ -57,8 +62,8 @@ handle opens the choices again without casting. Closing the drawer during a
 change keeps the saved answer and its results. Closing an unsent ballot keeps
 its selection and leaves the Vote handle available; on a closed question the
 handle reads Show question. The drawer uses a downward chevron to close, with
-the accessible button name Close. Upper content scrolls independently of the
-drawer. Closed-question results also open in the main content. The small
+the accessible button name Close. The page and popout scroll independently, with space to scroll the last page
+content above the floating button. Closed-question results also open in the main content. The small
 circular info link beside Change my answer opens How votes count in a new tab.
 Results omit the repeated answer summary, extra privacy reminder and nested
 card framing. The live page has no tutorial button.

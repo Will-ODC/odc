@@ -6,10 +6,7 @@ import { TopBanner } from "../src/components/TopBanner.js";
 import { Conversation } from "../src/screens/Conversation.js";
 import { poll, stubApi } from "./stub-api.js";
 
-/*
- * Who posted a poll is shown wherever the poll is (ADR-0037): the question at
- * the top of the conversation, and the vote card that covers it on a phone.
- */
+// The byline stays beside the main question when the popout opens or closes.
 afterEach(cleanup);
 
 async function open(attribution?: Parameters<typeof poll>[0]) {
@@ -27,16 +24,13 @@ async function open(attribution?: Parameters<typeof poll>[0]) {
 }
 
 describe("who posted it", () => {
-  /*
-   * Once, on the card, while the card is open: the page heading is merged
-   * out of sight then, so the byline is not drawn twice (operator
-   * walkthrough, 2026-10-21). With the card closed it is at the top.
-   */
-  it("says anonymously, once, on the open card", async () => {
+  it("says anonymously once beside the main question", async () => {
     const main = await open({ attribution: { kind: "anonymous" } });
     expect(main.getAllByText("Posted anonymously")).toHaveLength(1);
     expect(
-      within(main.getByRole("region")).getByText("Posted anonymously"),
+      within(main.getByRole("heading", { level: 1 }).parentElement!).getByText(
+        "Posted anonymously",
+      ),
     ).toBeTruthy();
   });
 
@@ -53,12 +47,14 @@ describe("who posted it", () => {
     ).toBe(false);
   });
 
-  it("says it at the top once the card is closed", async () => {
+  it("keeps the same byline at the top when the card closes", async () => {
     const main = await open({ attribution: { kind: "anonymous" } });
+    const byline = main.getByText("Posted anonymously");
     await userEvent.click(
       within(main.getByRole("region")).getByRole("button", { name: "Close" }),
     );
     expect(main.getAllByText("Posted anonymously")).toHaveLength(1);
+    expect(main.getByText("Posted anonymously")).toBe(byline);
     expect(main.queryByRole("region")).toBeNull();
   });
 

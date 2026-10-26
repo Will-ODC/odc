@@ -436,12 +436,15 @@ it("handles a poll closing during submit without offering another cast", async (
   const cast = vi.fn(async () => ({ status: "closed" as const }));
   render(<Conversation api={stubApi({ cast })} pollId="ads-free" />);
   await main().findByRole("heading", { name: poll().question, level: 1 });
+  const note = main().getByText(closingNote(poll()));
   openCard();
   const user = userEvent.setup();
   await user.click(within(card()).getByRole("radio", { name: "Yes" }));
   await user.click(within(card()).getByRole("button", { name: "Submit" }));
   expect(await main().findByText("This one has closed.")).toBeTruthy();
   expect(within(card()).queryByRole("button", { name: "Submit" })).toBeNull();
+  expect(main().getByText("This question has closed.")).toBe(note);
+  expect(main().queryByText(closingNote(poll()))).toBeNull();
   expect(cast).toHaveBeenCalledOnce();
 });
 it("a failed send keeps the picks for retry", async () => {
@@ -778,14 +781,7 @@ it("does not offer to forget to someone who is signed in", async () => {
   ).toBeNull();
 });
 
-/*
- * Operator walkthrough, 2026-10-21: on a phone the question and its closing
- * date were drawn twice, at the top of the page and in the card that is open
- * on load. The card says them; the page heading stays for focus and screen
- * readers, and is merged out of sight (`.conversation__hero--merged`) until
- * the card is closed.
- */
-it("says the question and closing date once while the card is open", async () => {
+it("keeps the closing note in the same page node when voting opens and closes", async () => {
   const p = poll({ closesAt: "2030-05-01T12:00:00.000Z" });
   const user = userEvent.setup();
   render(<Conversation api={stubApi({ poll: async () => p })} pollId={p.id} />);
@@ -793,16 +789,18 @@ it("says the question and closing date once while the card is open", async () =>
     name: p.question,
     level: 1,
   });
-  await waitFor(() => expect(document.activeElement).toBe(heading));
-  expect(heading.closest(".conversation__hero--merged")).not.toBeNull();
+  const hero = heading.parentElement!;
+  const note = within(hero).getByText(closingNote(p));
   expect(screen.getAllByText(closingNote(p))).toHaveLength(1);
-
+  expect(within(card()).queryByText(closingNote(p))).toBeNull();
   await user.click(within(card()).getByRole("button", { name: "Close" }));
-  const shown = main().getByRole("heading", { name: p.question, level: 1 });
-  expect(shown.closest(".conversation__hero--merged")).toBeNull();
+  expect(within(hero).getByText(closingNote(p))).toBe(note);
+  await user.click(main().getByRole("button", { name: "Vote" }));
+  expect(within(hero).getByText(closingNote(p))).toBe(note);
   expect(screen.getAllByText(closingNote(p))).toHaveLength(1);
-  // The same heading node throughout, so focus on it is never dropped.
-  expect(shown).toBe(heading);
+  expect(main().getByRole("heading", { name: p.question, level: 1 })).toBe(
+    heading,
+  );
 });
 
 it("leaves out the 'Opens another question' hint under choices", async () => {

@@ -65,7 +65,7 @@ describe("picking and submitting", () => {
   it("renders the question, explanation, detail and privacy note", () => {
     render(<VoteCard {...base} />);
     expect(screen.getByRole("region", { name: base.question })).toBeTruthy();
-    expect(screen.getByText(base.why)).toBeTruthy();
+    expect(screen.getByText(base.why!)).toBeTruthy();
     expect(screen.getByText(choices[0]!.detail!)).toBeTruthy();
     expect(screen.getByText(base.privacyNote)).toBeTruthy();
     expect((button("Submit") as HTMLButtonElement).disabled).toBe(true);

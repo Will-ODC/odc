@@ -48,7 +48,7 @@ export interface VoteCardProps {
   /** Who posted it: "Posted anonymously" or "Posted by …". Left out for a
    *  question from before posting existed. */
   byline?: string;
-  why: string;
+  why?: string;
   method: PollMethod;
   choices: readonly CardChoice[];
   picked: readonly number[];
@@ -286,9 +286,11 @@ export function VoteCard({
             {question}
           </h2>
           {byline ? <p className="vote-card__why">{byline}</p> : null}
-          <p id={`${id}-why`} className="vote-card__why">
-            {why}
-          </p>
+          {why ? (
+            <p id={`${id}-why`} className="vote-card__why">
+              {why}
+            </p>
+          ) : null}
         </>
       ) : null}
       {status.kind === "answered" ? (
@@ -375,7 +377,7 @@ export function VoteCard({
           <fieldset
             className="vote-card__choices"
             aria-labelledby={`${id}-question`}
-            aria-describedby={`${id}-why ${id}-note`}
+            aria-describedby={why ? `${id}-why ${id}-note` : `${id}-note`}
             disabled={!editable}
           >
             {choices.map((choice, row) => (

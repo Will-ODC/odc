@@ -16,7 +16,10 @@ the drawer.
 
 ## Decision
 
-Every question uses a bottom voting drawer on phone and desktop. It opens
+Every question uses a bottom-right voting popout on phone and desktop.
+The operator refined the placement on 2026-10-26: a compact floating button
+replaces the full-width bottom row, and its voting window stays aligned to
+the bottom right. It fits within the viewport and scrolls independently. It opens
 with the choices visible, requires selection followed by explicit Submit,
 and retains sending, retry and change-answer behavior. Closing leaves a Vote
 handle; opening it never submits a ballot. On a closed question the handle
