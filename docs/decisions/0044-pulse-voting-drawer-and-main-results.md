@@ -29,6 +29,9 @@ expanded without carrying another question's unsent selection.
 After submission, results and confirmation appear below the saved answer in
 the main content, together with Change my answer and Next where applicable.
 The drawer's handle then reads Change my answer and reopens voting to change it.
+Returning to an open question this browser already answered shows the same page
+as just after submitting: the saved answer, results, and the Change my answer
+handle, with the voting window minimized.
 Closing the drawer mid-change shows the saved answer again when the server
 refused the new one, and not after a lost connection, which may have stored it.
 Closed-question results also appear in main content and never enable casting.

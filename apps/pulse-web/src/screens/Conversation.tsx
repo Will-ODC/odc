@@ -8,6 +8,7 @@ import { usePoll } from "../hooks/use-poll.js";
 import { useCastVote } from "../hooks/use-cast-vote.js";
 import { useClosedResults } from "../hooks/use-closed-results.js";
 import { useFreshResults } from "../hooks/use-fresh-results.js";
+import { useSavedAnswer } from "../hooks/use-saved-answer.js";
 import type { Confirmation } from "../flow/vote-card.js";
 import { VoteCard } from "../components/VoteCard.js";
 import { ClosedResults } from "../components/ClosedResults.js";
@@ -471,6 +472,16 @@ function LiveCard({
       : savedShowing;
   const resultView = showing.kind === "answered";
   const hadResults = useRef(resultView);
+  useSavedAnswer(api, poll.id, !poll.open || saved !== undefined, (found) => {
+    // Someone already started answering: their choice wins over the old one.
+    if (picked.length > 0) return;
+    // Arriving presses nothing, so this does not count as results coming in.
+    // Focus in the drawer still follows, because that drawer is going away.
+    hadResults.current = true;
+    setPicked(found.ballot);
+    setShowSaved(true);
+    onCounted({ poll, ...found });
+  });
   // The one place focus follows results in and out of the page. Backing out
   // of a change closes the drawer, and focus stays on its handle instead.
   useEffect(() => {
