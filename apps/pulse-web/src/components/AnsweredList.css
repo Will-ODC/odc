@@ -1,0 +1,32 @@
+/*
+ * Your saved answers (#484). Borrows Browse's list (Browse.css) for the rows
+ * and owns its detail lines, so a change to how Browse styles its own rows
+ * cannot restyle these. One look on the My votes page and in the rail.
+ */
+.answered__detail {
+  display: block;
+  margin-top: calc(var(--step) / 2);
+  color: var(--muted);
+  font-size: var(--t-small);
+}
+
+.answered a[aria-current="page"] {
+  color: var(--green-hover);
+}
+
+.answered li:has(a[aria-current="page"]) {
+  background: var(--green-wash);
+}
+
+/* The rail is a quarter of the width: the same rows, tighter. */
+.answered--compact {
+  margin: 0;
+}
+
+.answered--compact li {
+  padding: calc(var(--step) * 1.25) calc(var(--step) * 1.5);
+}
+
+.answered--compact a {
+  font-size: var(--t-small);
+}

@@ -4,14 +4,17 @@ import type { Poll, PulseApi, Results } from "../api/types.js";
 import { cardStatus, closingNote, nextFor } from "../flow/conversation.js";
 import { byline } from "../flow/new-poll.js";
 import { pathOf } from "../flow/route.js";
+import { answeredList } from "../flow/answered.js";
 import { usePoll } from "../hooks/use-poll.js";
 import { useCastVote } from "../hooks/use-cast-vote.js";
 import { useClosedResults } from "../hooks/use-closed-results.js";
 import { useFreshResults } from "../hooks/use-fresh-results.js";
+import { useMyVotes } from "../hooks/use-my-votes.js";
 import type { Confirmation } from "../flow/vote-card.js";
 import { VoteCard } from "../components/VoteCard.js";
 import { ClosedResults } from "../components/ClosedResults.js";
 import { ViewState } from "../components/ViewState.js";
+import { AnsweredList } from "../components/AnsweredList.js";
 import { PostedBanner } from "../components/PostedBanner.js";
 import { CopyLink } from "../components/CopyLink.js";
 import { useSession } from "../hooks/use-session.js";
@@ -75,14 +78,24 @@ export function Conversation({
   const [heldBefore, setHeldBefore] = useState(false);
   // Bumped when the votes are forgotten, so the question starts over.
   const [round, setRound] = useState(0);
+  // This browser's saved answers, read on every visit, so the Answered list
+  // survives navigation and reload (#484); this page's answers join it below.
+  const mine = useMyVotes(api);
+  const { clear: clearMine } = mine;
   const forgotten = useCallback(() => {
     setAnswers([]);
     setHeldBefore(false);
     setAt(pollId);
     setRound((n) => n + 1);
-  }, [pollId]);
+    clearMine();
+  }, [pollId, clearMine]);
+  // Signing out clears the ballot cookie (API.md), and the list with it.
+  const signedOut = useCallback(() => {
+    clearMine();
+    onSignedOut?.();
+  }, [clearMine, onSignedOut]);
   const { session, progress, signOut, dismiss } = useSession(api, {
-    ...(onSignedOut ? { onSignedOut } : {}),
+    onSignedOut: signedOut,
     onForgotten: forgotten,
   });
   useEffect(() => {
@@ -118,6 +131,10 @@ export function Conversation({
     before.current = confirmation;
   }, [confirmation]);
   const saved = answers.find((one) => one.poll.id === at);
+  const answered = answeredList(
+    mine.data.status === "ready" ? mine.data.value.votes : [],
+    answers,
+  );
   const main = useRef<HTMLElement>(null);
   // "Your question is live" belongs to the question just posted. "Next"
   // moves to another without a route change, so leaving it ends the line.
@@ -140,18 +157,25 @@ export function Conversation({
       <aside className="conversation__sidebar">
         <nav aria-label="Answered">
           <h2>Answered</h2>
-          {answers.length === 0 ? <p>No answers yet.</p> : null}
-          {answers.map((answer) => (
-            <button
-              key={answer.poll.id}
-              type="button"
-              disabled={busy}
-              aria-current={at === answer.poll.id ? "step" : undefined}
-              onClick={() => go(answer.poll.id)}
-            >
-              {answer.poll.question}
-            </button>
-          ))}
+          {answered.length > 0 ? (
+            <AnsweredList votes={answered} current={at} compact onOpen={go} />
+          ) : mine.data.status === "loading" ? (
+            <p>Loading…</p>
+          ) : mine.data.status === "error" ? (
+            <>
+              <p>{mine.data.message}</p>
+              <button type="button" onClick={mine.retry}>
+                Try again
+              </button>
+            </>
+          ) : (
+            <p>No answers yet.</p>
+          )}
+          {mine.data.status === "ready" && mine.data.value.nextCursor ? (
+            <p>
+              <a href={pathOf({ kind: "myVotes" })}>See all my votes</a>
+            </p>
+          ) : null}
         </nav>
         <p>More questions will appear here as you answer.</p>
       </aside>
@@ -253,7 +277,19 @@ function LoadedQuestion({
   shareable: boolean;
   onRetry: () => void;
 }) {
-  const loaded = usePoll(api, pollId);
+  const fetched = usePoll(api, pollId);
+  const restored = useRestoredAnswer(
+    api,
+    fetched.status === "ready" ? fetched.value : null,
+    saved,
+    onCounted,
+  );
+  // The question is drawn with its saved answer or not at all, never first
+  // unanswered and then answered a moment later.
+  const loaded =
+    fetched.status === "ready" && !restored
+      ? { status: "loading" as const }
+      : fetched;
   const heading = useRef<HTMLHeadingElement>(null);
   useEffect(() => {
     if (loaded.status === "ready") heading.current?.focus();
@@ -364,6 +400,47 @@ function LoadedQuestion({
   ) : (
     renderPage(null, null)
   );
+}
+
+/**
+ * A saved answer from an earlier visit, put back on the page (#484).
+ *
+ * The page only knew answers given on this visit, so after a reload the
+ * question asked again as if it had never been answered. Before the card is
+ * drawn, this asks the server for this browser's ballot and, when there is
+ * one, its results, and hands them on as if just counted. The card waits for
+ * the answer, so it is drawn once, with the saved answer or without it.
+ * Failing to ask is not an error the page shows: the question is drawn
+ * unanswered, as it was before.
+ */
+function useRestoredAnswer(
+  api: PulseApi,
+  poll: Poll | null,
+  saved: Answer | undefined,
+  onFound: (answer: Answer) => void,
+): boolean {
+  const [settled, setSettled] = useState(Boolean(saved));
+  const found = useRef(onFound);
+  found.current = onFound;
+  useEffect(() => {
+    if (settled || !poll) return;
+    let live = true;
+    api
+      .myBallot(poll.id)
+      .then(async (ballot) => {
+        if (!ballot || ballot.length === 0) return;
+        const results = await api.results(poll.id);
+        if (live) found.current({ poll, ballot, results });
+      })
+      .catch(() => {})
+      .finally(() => {
+        if (live) setSettled(true);
+      });
+    return () => {
+      live = false;
+    };
+  }, [api, poll, settled]);
+  return settled;
 }
 
 function LiveCard({
