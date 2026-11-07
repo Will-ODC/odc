@@ -51,13 +51,15 @@
   margin: 0 auto;
   padding: calc(var(--step) * 3) var(--gutter);
 }
-.browse h1 {
+/* Two classes, so it holds against IntroPage's `.welcome h1` whichever
+   stylesheet loads first. */
+.welcome.browse h1 {
   max-width: none;
   text-align: left;
   font-size: var(--t-word);
   margin: 0 0 var(--step);
 }
-.browse .welcome__note {
+.welcome.browse .welcome__note {
   max-width: none;
   text-align: left;
   margin: 0;
