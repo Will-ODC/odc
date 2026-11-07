@@ -75,12 +75,13 @@ PR whose diff touches one of these (operator, 2026-11-07):
 - `contracts/`, `docs/charter.md`, `services/verifier/`, `tools/verifier-ts/`;
 - the merge and review rules: `.claude/skills/odc-orchestration/`,
   `.claude/skills/odc-pipeline/`, `.claude/skills/odc-code-review/`,
-  `.claude/agents/odc-reviewer.md`, `.claude/agents/odc-ui-reviewer.md`, and
+  `.claude/skills/lead/`, `.claude/agents/odc-reviewer.md`,
+  `.claude/agents/odc-ui-reviewer.md`, `.claude/agents/odc-navigator.md`, and
   root `CLAUDE.md`;
 - CI and guards: `.github/` and `lefthook.yml`.
 
 Check it with one command, which prints nothing when the orchestrator may merge:
-`gh pr diff <N> --name-only | grep -E '^(contracts/|docs/charter\.md|services/verifier/|tools/verifier-ts/|\.claude/skills/odc-(orchestration|pipeline|code-review)/|\.claude/agents/odc-(ui-)?reviewer\.md|CLAUDE\.md|\.github/|lefthook\.yml)'`
+`gh pr diff <N> --name-only | grep -E '^(contracts/|docs/charter\.md$|services/verifier/|tools/verifier-ts/|\.claude/skills/(odc-(orchestration|pipeline|code-review)|lead)/|\.claude/agents/odc-(ui-reviewer|reviewer|navigator)\.md$|CLAUDE\.md$|\.github/|lefthook\.yml$)'`
 
 **Properly reviewed** means all of these:
 
@@ -116,17 +117,18 @@ run, so it adds independence (operator, 2026-11-07). Use it where the CLI is
 installed (`command -v codex`), as `codex review` or `codex exec`:
 
 - **A second review** on UI PRs and on complex PRs. In a review worktree
-  checked out at the PR head, run `git fetch origin && codex review --base
-origin/master`. It takes no custom instructions together with `--base`. The
-  orchestrator triages its findings into [BLOCKING] / [SHOULD] / [NIT] and
+  checked out at the PR head, run
+  `git fetch origin && codex review --base origin/master`. It takes no custom
+  instructions together with `--base`. The orchestrator triages its findings into [BLOCKING] / [SHOULD] / [NIT] and
   sends them to the owner like any other finding. It adds to the Claude reviews
   and never counts as the `odc-reviewer` approval.
 - **Routine read-only work** when Claude usage is high: lookups and inventory
   with `codex exec -s read-only -C <worktree> "<brief>"`. The brief has the
   same five sections as any other.
 - **If Codex rejects its configured model** ("not supported when using Codex
-  with a ChatGPT account"), pass a listed one with `-c model="<slug>"`; `codex
-debug models` lists them. Do not edit the operator's `~/.codex/config.toml`.
+  with a ChatGPT account"), pass a listed one with `-c model="<slug>"`. This
+  lists them:
+  `codex debug models | jq -r '.models[] | select(.visibility != "hide") | .slug'`. Do not edit the operator's `~/.codex/config.toml`.
 - **Taking over as orchestrator** at 90% usage (below).
 
 ### Wrap up at 90% usage

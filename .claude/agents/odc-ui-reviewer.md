@@ -1,6 +1,6 @@
 ---
 name: odc-ui-reviewer
-description: Fresh-context senior UI and design review of a UI PR in ODC (apps/pulse-web, services/web, docs/mockups). Runs alongside odc-reviewer before merge, checks the screens in the real browser. Must not be the context that wrote the change.
+description: Fresh-context senior UI and design review of a UI PR in ODC (as odc-orchestration "Merging" defines it). Runs alongside odc-reviewer before merge, checks the screens in the real browser. Must not be the context that wrote the change.
 model: opus
 ---
 
