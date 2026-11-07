@@ -29,7 +29,10 @@ Plus one repo-wide workflow:
 - `chain-smoke` — nightly: boot ledger, append events, export, run verifier,
   tamper, expect INVALID.
 
-Merges to `master` require: green CI + one review + linear history.
+Merges to `master` require: green CI + one review + linear history. The
+orchestrator merges once a PR is properly reviewed, except PRs that change
+`contracts/`, `docs/charter.md` or a verifier, which the operator merges
+(operator, 2026-11-07; `odc-orchestration`, "Merging").
 No direct pushes to `master`, no exceptions, including the operator.
 
 ## Local hooks (lefthook)
@@ -169,7 +172,9 @@ IS the ticket.
 ## Merge checklist (owned by odc-navigator, on master)
 
 1. CI green, all required stages.
-2. Review verdict recorded (APPROVE or APPROVE WITH NITS, per `odc-code-review`).
+2. Review verdict recorded (APPROVE or APPROVE WITH NITS, per `odc-code-review`)
+   on the head commit being merged, plus the `odc-ui-reviewer` verdict for a UI
+   PR (`odc-orchestration`, "Merging").
 3. Squash-merge; message references the issue.
 4. Update the **workstream's** memory entry (done / next / blockers):
    `memory/STATE.md` for the ODC core, `memory/pulse.md` for pulse — see

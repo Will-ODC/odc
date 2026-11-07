@@ -19,6 +19,10 @@ description: Code review procedure and checklist for ODC. Use this skill wheneve
    and flag it only if it names neither.
 3. Walk the checklist below, then read the diff once more top-to-bottom for
    anything the checklist missed.
+4. A UI PR (`apps/pulse-web/**`, `services/web/**`, `docs/mockups/**`) also
+   gets a separate fresh `odc-ui-reviewer`, which checks the screens in the
+   real browser. Both verdicts are needed before merge (`odc-orchestration`,
+   "Merging").
 
 ## Output format
 

@@ -20,7 +20,8 @@ everything the operator has not kept for themself. Ask the operator only about:
   Opus per the table.
 - **Goals in tension** — when two goals pull apart and nothing written says
   which wins.
-- **What the operator owns** — merging, audits, deploys, spending, a charter
+- **What the operator owns** — merging a PR that changes `contracts/`,
+  `docs/charter.md` or either verifier, audits, deploys, spending, a charter
   conflict, and anything an ADR or memory entry reserves to the operator.
 
 **Check the written goals before asking.** For the ODC core: `docs/charter.md`
@@ -38,12 +39,11 @@ design choices where appropriate. Overarching goals, and decisions on
 user-facing features and critical functionality, still go to the operator.
 
 **The loop,** for each unit of work: build → commit, push, open the PR → CI
-green → the orchestrator starts a fresh-context `odc-reviewer` (a lead never
-does; see "What a lead never does") → the owner fixes → review again until
-approved → report it ready to merge → next unit. Merging stays the operator's
-call, and audits are never part of the loop. Stop a unit only for an open
-operator question on it, and keep the other units moving. Start the next unit
-only within the WIP limit in `odc-pipeline`: a unit in a service that still
+green → the orchestrator starts the fresh-context reviews (a lead never does;
+see "What a lead never does") → the owner fixes → review again until approved
+→ the orchestrator merges it (see "Merging") → next unit. Audits are never part
+of the loop. Stop a unit only for an open operator question on it, and keep
+the other units moving. Start the next unit only within the WIP limit in `odc-pipeline`: a unit in a service that still
 has an unmerged branch waits for the merge, or stacks on it as `odc-pipeline`
 allows.
 
@@ -66,6 +66,47 @@ looks like. Then:
   has got toward it.
 - Do work only if it serves the goal. Work that does not serve it is a
   question for the operator, not something to start.
+
+### Merging
+
+The orchestrator merges a PR once it is properly reviewed (operator,
+2026-11-07). A PR that changes `contracts/`, `docs/charter.md`,
+`services/verifier/` or `tools/verifier-ts/` is the exception: report it ready,
+and the operator merges it.
+
+**Properly reviewed** means all of these, checked on the PR's current head
+commit:
+
+- a fresh-context `odc-reviewer` verdict of APPROVE or APPROVE WITH NITS on
+  that commit. Any later commit, including a merge of `master` that changes
+  code or tests, needs a new review (see "Re-check a PR after `master` is merged into it");
+- for a **UI PR** — one that touches `apps/pulse-web/**`, `services/web/**` or
+  `docs/mockups/**` — also an approving verdict from a fresh
+  `odc-ui-reviewer`, a senior UI and design reviewer that checks the screens
+  in the real browser;
+- every CI check green;
+- no blocking or should-fix finding left open, and no open operator question
+  on it. Nits may stay if the report lists them.
+
+**To merge:** `gh pr merge <N> --squash --match-head-commit <sha>`, with the sha
+the reviews approved, so a commit pushed after the review cannot slip in. Then
+follow the merge checklist in `odc-pipeline` (memory on `master`). Stacked PRs
+follow `odc-pipeline`'s stack rules. Tell the operator what was merged in one
+line per PR.
+
+### Use Codex where it helps
+
+Codex (the `codex` CLI) is a different model that has seen nothing of this
+run, so it adds independence (operator, 2026-11-07). Use it where the CLI is
+installed (`command -v codex`), as `codex review` or `codex exec`:
+
+- **A second review** on UI PRs and on complex PRs: run `codex review --base
+master` in the PR's review worktree. Send its findings to the owner like any
+  other finding. It adds to the Claude reviews and does not replace them.
+- **Routine read-only work** when Claude usage is high: lookups and inventory
+  with `codex exec -s read-only -C <worktree> "<brief>"`. The brief has the
+  same five sections as any other.
+- **Taking over as orchestrator** at 90% usage (below).
 
 ### Wrap up at 90% usage
 
@@ -167,6 +208,8 @@ branches, PRs and merging, `odc-pipeline` is the source; this file follows it.
 | Complex implementation — a service, endpoint, or real feature | **Opus**   | `odc-implementer`       |
 | Building either verifier (contracts-only, fresh context)      | **Opus**   | `odc-verifier-builder`  |
 | Pre-merge review (fresh context)                              | **Opus**   | `odc-reviewer`          |
+| UI and design review of a UI PR (fresh context)               | **Opus**   | `odc-ui-reviewer`       |
+| Second, independent review of a UI or complex PR              | **Codex**  | `codex review`          |
 | Phase-gate security audit (fresh context)                     | **Opus**   | `odc-security-auditor`  |
 | Resolving a contradiction between two documents               | **Opus**   | (judgement — see below) |
 | Exploration, inventory, "where does X live"                   | **Sonnet** | `odc-navigator`         |
@@ -174,7 +217,7 @@ branches, PRs and merging, `odc-pipeline` is the source; this file follows it.
 | Renames, mechanical find-and-replace, formatting              | **Sonnet** | `odc-navigator`         |
 | Running tests or guards and reporting the output              | **Sonnet** | `odc-navigator`         |
 | Simple implementation: a one-behaviour fix with a clear spec  | **Sonnet** | `odc-navigator`         |
-| Merge mechanics, once the operator says merge                 | **Sonnet** | `odc-navigator`         |
+| Merge mechanics, once a PR is properly reviewed ("Merging")   | **Sonnet** | `odc-navigator`         |
 | Taking over as orchestrator when Claude usage runs out        | **Codex**  | (hand-off — see above)  |
 
 **The line between "simple" and "complex" implementation.** Simple means: the
@@ -400,8 +443,8 @@ go past it.
   PR merged an hour earlier.
 - **When the leads report,** check their PRs do not collide — settle a clash
   between two leads by message — and tell the operator which PRs are ready to
-  merge, in what order, with each review's verdict. Merging stays the
-  operator's call.
+  merge, in what order, with each review's verdict. Merge them per
+  "Merging"; a PR in the operator's exception list waits for the operator.
 
 Diff size: `apps/pulse*` is exempt from the `diff-size.sh` ceiling (the script
 lists every exemption), so a pulse feature can arrive as large PRs.
