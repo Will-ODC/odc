@@ -1,0 +1,504 @@
+<title>Pulse Light Restyle</title>
+<meta name="claude:viewport-fit-sides" content="cover">
+<link rel="preconnect" href="https://fonts.googleapis.com">
+<link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+<link rel="stylesheet" href="https://fonts.googleapis.com/css2?family=Inter:wght@400;500;600;700&display=swap">
+<!--
+  Pulse light restyle, #482 (2026-11-07). The operator asked for a simple,
+  generic light look in white and green: flat white surfaces, thin gray
+  borders, one green family, red only for "No" and errors, no glass or blur.
+  Every screen is light, signed in or out (operator, 2026-11-07).
+
+  This page deliberately commits to the light look in both host themes,
+  because the light look is what is being reviewed. All data is illustrative.
+  The screens follow the live app's layout and copy (ADR-0035, ADR-0044);
+  only the colors, borders, corners and shadows change.
+-->
+<style>
+  /* Layout: a short palette strip, then the app's screens as framed artboards,
+     desktop first, then phone. Tokens below are the proposed tokens.css values. */
+  :root {
+    color-scheme: light;
+    /* Neutrals */
+    --page: #ffffff;
+    --subtle: #f6f7f6;        /* hover rows, the gallery ground */
+    --line: #dfe3e1;          /* every border */
+    --line-strong: #c3c9c6;   /* inputs, unselected radio */
+    --ink: #1b1f1d;           /* headings and body, 16:1 on white */
+    --ink-soft: #3f4642;
+    --muted: #5f6763;         /* secondary text, 5.9:1 on white */
+    /* One green family */
+    --green: #188038;         /* buttons, links, the brand dot: 5.0:1 on white */
+    --green-hover: #137333;
+    --green-wash: #e6f4ea;    /* chosen answer, "yours", posted banner */
+    --green-line: #a8d5b5;
+    /* Status: one job each */
+    --red: #c5221f;           /* "No" and errors only */
+    --focus: #1b1f1d;         /* focus ring: dark gray, 2px, offset 2px */
+    --shadow-pop: 0 6px 20px rgba(27, 31, 29, 0.12), 0 1px 3px rgba(27, 31, 29, 0.08);
+
+    --r-card: 12px;
+    --r-control: 8px;
+    --r-pill: 999px;
+    --font: "Inter", system-ui, -apple-system, "Segoe UI", Roboto, sans-serif;
+  }
+
+  * { box-sizing: border-box; }
+  body {
+    margin: 0;
+    background: var(--subtle);
+    color: var(--ink);
+    font: 15px/1.5 var(--font);
+    padding-block: 32px 64px;
+    padding-left: max(16px, env(safe-area-inset-left, 0px));
+    padding-right: max(16px, env(safe-area-inset-right, 0px));
+  }
+  .doc { max-width: 1040px; margin: 0 auto; display: grid; gap: 40px; }
+  .doc > header { display: grid; gap: 8px; max-width: 68ch; }
+  .doc h1 { font-size: 26px; line-height: 1.2; margin: 0; letter-spacing: -0.01em; text-wrap: balance; }
+  .doc header p { margin: 0; color: var(--ink-soft); }
+  .tag { font-size: 12px; font-weight: 600; color: var(--muted); text-transform: uppercase; letter-spacing: 0.06em; }
+
+  /* Palette strip */
+  .swatches { display: grid; grid-template-columns: repeat(auto-fill, minmax(150px, 1fr)); gap: 12px; }
+  .sw { background: var(--page); border: 1px solid var(--line); border-radius: var(--r-card); overflow: hidden; }
+  .sw i { display: block; height: 44px; border-bottom: 1px solid var(--line); }
+  .sw div { padding: 8px 10px; font-size: 12px; line-height: 1.4; }
+  .sw b { display: block; font-size: 13px; }
+  .sw span { color: var(--muted); font-variant-numeric: tabular-nums; }
+
+  section.group { display: grid; gap: 16px; }
+  section.group > h2 { font-size: 18px; margin: 0; }
+  .boards { display: flex; flex-wrap: wrap; gap: 24px; align-items: flex-start; }
+  figure { margin: 0; display: grid; gap: 8px; min-width: 0; max-width: 100%; }
+  figcaption { font-size: 13px; color: var(--muted); }
+  figcaption b { color: var(--ink); font-weight: 600; }
+  .scroll { overflow-x: auto; max-width: 100%; border-radius: var(--r-card); }
+
+  /* ---------- The app, restyled ---------- */
+  .app {
+    background: var(--page);
+    border: 1px solid var(--line);
+    border-radius: var(--r-card);
+    overflow: hidden;
+    position: relative;
+    color: var(--ink);
+  }
+  .app.desk { width: 980px; height: 600px; }
+  .app.phone { width: 390px; min-height: 720px; max-width: 100%; }
+
+  /* Which version shows. The page picks by screen width on load (under 700px
+     is a phone, the same test the app will use) and the switch overrides it. */
+  .switch { display: inline-flex; border: 1px solid var(--line-strong); border-radius: var(--r-control); overflow: hidden; background: var(--page); justify-self: start; }
+  .switch button { font: 600 14px/1 var(--font); height: 40px; padding: 0 18px; border: 0; background: none; color: var(--ink-soft); cursor: pointer; }
+  .switch button + button { border-left: 1px solid var(--line-strong); }
+  .switch button[aria-pressed="true"] { background: var(--green-wash); color: var(--green-hover); }
+  .switch button:focus-visible, .btn:focus-visible { outline: 2px solid var(--focus); outline-offset: 2px; }
+  body[data-v="phone"] .v-desk, body[data-v="desk"] .v-phone { display: none; }
+
+  /* ---------- The phone version: same palette, sized for thumbs ---------- */
+  .phone { font-size: 16px; }
+  .phone .bar { height: auto; padding: 0; display: grid; }
+  .phone .bar .top { display: flex; justify-content: space-between; align-items: center; height: 52px; padding: 0 16px; }
+  .phone .bar .tabs { display: flex; padding: 0 8px; border-top: 1px solid var(--line); }
+  .phone .bar .tabs a { flex: 1; text-align: center; height: 44px; line-height: 44px; padding: 0; border-radius: 0; color: var(--ink-soft); border-bottom: 2px solid transparent; }
+  .phone .bar .tabs a.on { background: none; color: var(--green); border-bottom-color: var(--green); }
+  .phone .btn { height: 44px; padding: 0 18px; font-size: 15px; }
+  .phone .btn.sm { height: 40px; padding: 0 14px; font-size: 14px; }
+  .phone .stage { padding: 20px 16px 24px; gap: 16px; }
+  .phone .meta { font-size: 14px; }
+  .phone .row { padding: 0 16px; min-height: 56px; }
+  .phone .row.two { display: grid; gap: 2px; padding: 12px 16px; align-content: center; }
+  .phone .input { height: 48px; font-size: 16px; }
+  .phone .check { font-size: 14px; min-height: 44px; }
+  .phone .check i { width: 22px; height: 22px; }
+  /* The voting window becomes a sheet along the bottom edge on a phone. */
+  .phone .pop { left: 0; right: 0; bottom: 0; width: auto; border-radius: 16px 16px 0 0; border-bottom: 0; padding: 8px 16px 16px; box-shadow: 0 -4px 20px rgba(27, 31, 29, 0.10); }
+  .phone .pop::before { content: ""; justify-self: center; width: 36px; height: 4px; border-radius: 2px; background: var(--line-strong); }
+  .phone .choice { min-height: 52px; font-size: 16px; }
+  .phone .choice .radio { width: 22px; height: 22px; }
+  .phone .icon-btn { width: 44px; height: 44px; }
+  .phone .pop h3 { font-size: 17px; }
+
+  /* On a real phone, each screen fills the width: no frames side by side. */
+  @media (max-width: 699px) {
+    body { padding-block: 20px 40px; }
+    .doc { gap: 28px; }
+    .boards { display: grid; gap: 28px; }
+    .app.phone { width: 100%; border-radius: var(--r-card); }
+    .swatches { grid-template-columns: repeat(2, 1fr); }
+  }
+
+  .bar {
+    display: flex; align-items: center; justify-content: space-between;
+    height: 52px; padding: 0 20px;
+    border-bottom: 1px solid var(--line);
+    background: var(--page);
+    font-size: 14px;
+  }
+  .bar nav { display: flex; align-items: center; gap: 4px; }
+  .brand { display: inline-flex; align-items: center; gap: 8px; font-weight: 700; font-size: 16px; margin-right: 12px; letter-spacing: -0.01em; }
+  .brand::before { content: ""; width: 10px; height: 10px; border-radius: 50%; background: var(--green); }
+  .bar a { color: var(--ink-soft); text-decoration: none; padding: 6px 10px; border-radius: var(--r-control); font-weight: 500; }
+  .bar a.on { color: var(--green); background: var(--green-wash); }
+  .bar .right { display: flex; gap: 8px; align-items: center; }
+  .btn {
+    display: inline-flex; align-items: center; justify-content: center; gap: 6px;
+    font: 600 14px/1 var(--font);
+    height: 36px; padding: 0 16px; border-radius: var(--r-control);
+    border: 1px solid var(--line-strong); background: var(--page); color: var(--ink);
+    text-decoration: none; cursor: pointer;
+  }
+  .btn.primary { background: var(--green); border-color: var(--green); color: #fff; }
+  .btn.primary:hover { background: var(--green-hover); }
+  .btn.quiet { border-color: transparent; color: var(--ink-soft); }
+  .btn.sm { height: 30px; padding: 0 12px; font-size: 13px; }
+  .btn.block { width: 100%; height: 44px; font-size: 15px; }
+  .focus { outline: 2px solid var(--focus); outline-offset: 2px; }
+  .bar .btn.primary { color: #fff; }
+
+  .stage { padding: 32px 40px; display: grid; gap: 20px; align-content: start; }
+  .phone .stage { padding: 20px 16px; gap: 16px; }
+  .stage h1 { margin: 0; font-size: 26px; line-height: 1.25; letter-spacing: -0.015em; text-wrap: balance; }
+  .phone .stage h1 { font-size: 22px; }
+  .meta { color: var(--muted); font-size: 13px; margin: 0; }
+  .link { color: var(--green); font-weight: 500; text-decoration: underline; text-underline-offset: 2px; }
+
+  /* Explore list: one bordered list, rows divided by hairlines */
+  .list { border: 1px solid var(--line); border-radius: var(--r-card); overflow: hidden; }
+  .row { display: flex; justify-content: space-between; align-items: center; gap: 16px; padding: 14px 16px; border-top: 1px solid var(--line); }
+  .row:first-child { border-top: 0; }
+  .row:hover, .row.hover { background: var(--subtle); }
+  .row a { color: var(--ink); font-weight: 600; text-decoration: none; }
+  .row .meta { white-space: nowrap; }
+  .pill { display: inline-flex; align-items: center; gap: 6px; font-size: 12px; font-weight: 600; padding: 3px 10px; border-radius: var(--r-pill); border: 1px solid var(--line); color: var(--ink-soft); white-space: nowrap; }
+  .pill.open { background: var(--green-wash); border-color: var(--green-line); color: var(--green-hover); }
+  .pill.open::before { content: ""; width: 6px; height: 6px; border-radius: 50%; background: var(--green); }
+  .filters { display: flex; gap: 8px; flex-wrap: wrap; }
+
+  /* Voting popout */
+  .pop {
+    position: absolute; right: 20px; bottom: 20px; width: 380px;
+    background: var(--page); border: 1px solid var(--line); border-radius: var(--r-card);
+    box-shadow: var(--shadow-pop);
+    padding: 16px; display: grid; gap: 12px;
+  }
+  .phone .pop { left: 12px; right: 12px; bottom: 12px; width: auto; }
+  .pop header { display: flex; justify-content: space-between; align-items: center; }
+  .eyebrow { font-size: 11px; font-weight: 700; letter-spacing: 0.08em; text-transform: uppercase; color: var(--green); }
+  .icon-btn { width: 32px; height: 32px; border-radius: var(--r-control); border: 1px solid var(--line); background: var(--page); display: grid; place-items: center; color: var(--ink-soft); }
+  .icon-btn svg { width: 16px; height: 16px; }
+  .pop h3 { margin: 0; font-size: 15px; }
+  .choices { display: grid; gap: 8px; margin: 0; padding: 0; list-style: none; }
+  .choice {
+    display: flex; align-items: center; gap: 12px;
+    padding: 10px 12px; border: 1px solid var(--line); border-radius: var(--r-control);
+    font-weight: 500; font-size: 14px; background: var(--page);
+  }
+  .choice .radio { width: 18px; height: 18px; border-radius: 50%; border: 2px solid var(--line-strong); flex: none; }
+  .choice .num { font-size: 12px; color: var(--muted); width: 14px; text-align: center; font-variant-numeric: tabular-nums; }
+  .choice.sel { border-color: var(--green); background: var(--green-wash); }
+  .choice.sel .radio { border-color: var(--green); background: radial-gradient(circle, var(--green) 0 4px, transparent 5px); }
+  .choice.no.sel { border-color: var(--red); background: #fdecea; }
+  .choice.no.sel .radio { border-color: var(--red); background: radial-gradient(circle, var(--red) 0 4px, transparent 5px); }
+  .pop footer { display: flex; justify-content: space-between; align-items: center; }
+  .handle { position: absolute; right: 20px; bottom: 20px; box-shadow: var(--shadow-pop); }
+
+  /* Results under the saved answer */
+  .card { border: 1px solid var(--line); border-radius: var(--r-card); padding: 16px; display: grid; gap: 14px; }
+  .yours-line { margin: 0; font-size: 14px; }
+  .res { list-style: none; margin: 0; padding: 0; display: grid; gap: 12px; }
+  .res li { display: grid; grid-template-columns: 1fr auto; gap: 4px 12px; font-size: 13px; }
+  .res .lab { grid-column: 1 / -1; display: flex; gap: 8px; align-items: center; font-weight: 500; }
+  .badge { font-size: 11px; font-weight: 600; padding: 1px 8px; border-radius: var(--r-pill); background: var(--green-wash); color: var(--green-hover); border: 1px solid var(--green-line); }
+  .track { height: 8px; border-radius: var(--r-pill); background: #eceeed; overflow: hidden; align-self: center; }
+  .track i { display: block; height: 100%; border-radius: inherit; background: #9aa29e; }
+  .res li.mine .track i { background: var(--green); }
+  .fig { color: var(--muted); font-variant-numeric: tabular-nums; }
+  .actions { display: flex; gap: 8px; align-items: center; flex-wrap: wrap; }
+  .info { width: 22px; height: 22px; border-radius: 50%; border: 1px solid var(--line-strong); display: grid; place-items: center; font-size: 12px; font-weight: 700; color: var(--ink-soft); }
+  .banner { display: flex; justify-content: space-between; align-items: center; gap: 12px; padding: 10px 14px; border: 1px solid var(--green-line); background: var(--green-wash); border-radius: var(--r-control); font-size: 14px; }
+
+  /* Left rail (desktop) */
+  .with-rail { display: grid; grid-template-columns: 220px 1fr; height: calc(100% - 52px); }
+  .rail { border-right: 1px solid var(--line); padding: 20px 16px; display: grid; gap: 8px; align-content: start; font-size: 13px; }
+  .rail h2 { font-size: 12px; text-transform: uppercase; letter-spacing: 0.06em; color: var(--muted); margin: 0 0 4px; }
+  .rail a { color: var(--ink-soft); text-decoration: none; padding: 6px 8px; border-radius: var(--r-control); }
+  .rail a.on { background: var(--green-wash); color: var(--green-hover); font-weight: 600; }
+
+  /* Forms */
+  .field { display: grid; gap: 6px; }
+  .field label { font-size: 13px; font-weight: 600; }
+  .input { height: 44px; border: 1px solid var(--line-strong); border-radius: var(--r-control); padding: 0 12px; display: flex; align-items: center; color: var(--muted); font-size: 15px; }
+  .input.focus { border-color: var(--green); outline: 2px solid var(--focus); outline-offset: 2px; color: var(--ink); }
+  .check { display: flex; gap: 10px; align-items: center; font-size: 13px; color: var(--ink-soft); }
+  .check i { width: 18px; height: 18px; border: 2px solid var(--line-strong); border-radius: 4px; }
+  .err { color: var(--red); font-size: 13px; margin: 0; }
+  .input.bad { border-color: var(--red); color: var(--ink); }
+
+  /* About */
+  .center { text-align: center; justify-items: center; }
+  .steps { display: grid; gap: 12px; width: 100%; }
+  .step { border: 1px solid var(--line); border-radius: var(--r-card); padding: 14px; display: grid; gap: 4px; text-align: left; grid-template-columns: auto 1fr; column-gap: 12px; }
+  .step .n { grid-row: span 2; width: 28px; height: 28px; border-radius: 50%; background: var(--green-wash); color: var(--green-hover); font-weight: 700; font-size: 13px; display: grid; place-items: center; }
+  .step b { font-size: 14px; }
+  .step span { font-size: 13px; color: var(--muted); }
+
+  .notes { display: grid; gap: 10px; max-width: 72ch; font-size: 14px; color: var(--ink-soft); }
+  .notes h2 { font-size: 18px; color: var(--ink); margin: 0; }
+  .notes ul { margin: 0; padding-left: 20px; display: grid; gap: 6px; }
+
+  @media (prefers-reduced-motion: no-preference) { .btn, .row { transition: background-color 0.15s; } }
+</style>
+
+<div class="doc">
+  <header>
+    <span class="tag">Pulse · #482 · mockup for approval</span>
+    <h1>Pulse in white and green</h1>
+    <p>The same screens and words as today, in two versions. A phone (a screen under 700px wide) gets the phone version: bigger text and buttons, tabs under the top bar, and the voting window as a sheet along the bottom. Anything wider gets the desktop version. Both use the same colors. The questions and numbers below are made up for the picture.</p>
+    <div class="switch" role="group" aria-label="Version shown">
+      <button type="button" id="v-phone" data-v="phone" aria-pressed="false">Phone version</button>
+      <button type="button" id="v-desk" data-v="desk" aria-pressed="false">Desktop version</button>
+    </div>
+  </header>
+
+  <section class="group" aria-labelledby="pal">
+    <h2 id="pal">The whole palette</h2>
+    <div class="swatches">
+      <div class="sw"><i style="background:#ffffff"></i><div><b>White</b><span>Page, cards</span></div></div>
+      <div class="sw"><i style="background:#f6f7f6"></i><div><b>Light gray</b><span>Hover rows</span></div></div>
+      <div class="sw"><i style="background:#dfe3e1"></i><div><b>Border gray</b><span>Every 1px line</span></div></div>
+      <div class="sw"><i style="background:#5f6763"></i><div><b>Gray text</b><span>Dates, hints · 5.9:1</span></div></div>
+      <div class="sw"><i style="background:#1b1f1d"></i><div><b>Ink</b><span>Text, focus ring · 16:1</span></div></div>
+      <div class="sw"><i style="background:#188038"></i><div><b>Green</b><span>Buttons, links · 5.0:1</span></div></div>
+      <div class="sw"><i style="background:#e6f4ea"></i><div><b>Pale green</b><span>Chosen, yours, open</span></div></div>
+      <div class="sw"><i style="background:#c5221f"></i><div><b>Red</b><span>"No" and errors only</span></div></div>
+    </div>
+  </section>
+
+  <section class="group v-desk" aria-labelledby="desk">
+    <h2 id="desk">Desktop</h2>
+
+    <figure>
+      <figcaption><b>Home.</b> One bordered list, gray dividers, a green dot for open questions.</figcaption>
+      <div class="scroll"><div class="app desk">
+        <div class="bar">
+          <nav><span class="brand">pulse</span><a class="on" href="#home">Home</a><a href="#about">About</a><a href="#votes">My votes</a></nav>
+          <div class="right"><a class="btn primary sm" href="#new">Post a question</a><a class="btn sm" href="#signin">Sign in</a></div>
+        </div>
+        <div class="stage" style="max-width:760px;margin:0 auto;width:100%">
+          <div style="display:grid;gap:6px">
+            <h1>Explore questions</h1>
+            <div class="filters"><span class="pill">General</span><span class="pill">Newest first</span><span class="pill">Open and closed questions</span></div>
+          </div>
+          <div class="list">
+            <div class="row"><a href="#q">How do we pay for it?</a><span class="pill open">Open</span></div>
+            <div class="row hover"><a href="#q">How should the voting page look?</a><span class="pill open">Open</span></div>
+            <div class="row"><a href="#q">When should we vote on these rules again?</a><span class="pill open">Open</span></div>
+            <div class="row"><a href="#q">How should optional data be used?</a><span class="pill open">Open</span></div>
+            <div class="row"><a href="#q">How should the website cover its costs?</a><span class="pill">Closed</span></div>
+            <div class="row"><a href="#q">Should the ODC stay free of paid ads?</a><span class="pill open">Open</span></div>
+            <div class="row"><a href="#q">Which ads are allowed?</a><span class="pill">Closed</span></div>
+          </div>
+        </div>
+      </div></div>
+    </figure>
+
+    <figure>
+      <figcaption><b>A question, before voting.</b> The voting popout is a white card with a light shadow. The chosen answer turns pale green, and Submit is the one solid green button. The focus ring is shown on Submit.</figcaption>
+      <div class="scroll"><div class="app desk">
+        <div class="bar">
+          <nav><span class="brand">pulse</span><a href="#home">Home</a><a href="#about">About</a><a href="#votes">My votes</a></nav>
+          <div class="right"><a class="btn primary sm" href="#new">Post a question</a><a class="btn sm" href="#signin">Sign in</a></div>
+        </div>
+        <div class="stage" style="max-width:760px;margin:0 auto;width:100%">
+          <p class="meta">Closes Nov 10, 2026 · you can change your answer until then.</p>
+          <h1>How do we pay for it?</h1>
+          <div class="actions"><button class="btn sm" type="button">Copy link</button></div>
+          <p class="meta">Your answers will appear here after you submit.</p>
+        </div>
+        <div class="pop">
+          <header><span class="eyebrow">Decision</span><span class="icon-btn" aria-hidden="true"><svg viewBox="0 0 16 16" fill="none" stroke="currentColor" stroke-width="1.8"><path d="M4 6l4 4 4-4"/></svg></span></header>
+          <h3>How do we pay for it?</h3>
+          <ul class="choices">
+            <li class="choice"><span class="radio"></span><span class="num">1</span>Members chip in</li>
+            <li class="choice sel"><span class="radio"></span><span class="num">2</span>One-off donations</li>
+            <li class="choice"><span class="radio"></span><span class="num">3</span>Grants</li>
+            <li class="choice"><span class="radio"></span><span class="num">4</span>A cut of what moves through it</li>
+          </ul>
+          <footer><span class="meta">Your answer is private.</span><button class="btn primary focus" type="button">Submit</button></footer>
+        </div>
+      </div></div>
+    </figure>
+
+    <figure>
+      <figcaption><b>After voting, signed in.</b> Results sit under the saved answer. Your answer's bar is green and the others are gray. The popout closes to a single "Change my answer" button.</figcaption>
+      <div class="scroll"><div class="app desk">
+        <div class="bar">
+          <nav><span class="brand">pulse</span><a href="#home">Home</a><a href="#about">About</a><a href="#votes">My votes</a></nav>
+          <div class="right"><a class="btn primary sm" href="#new">Post a question</a><span class="btn sm quiet">sam@example.org</span></div>
+        </div>
+        <div class="with-rail">
+          <aside class="rail"><h2>Answered</h2><a class="on" href="#q">How do we pay for it?</a><a href="#q">Should the ODC stay free of paid ads?</a></aside>
+          <div class="stage" style="max-width:640px">
+            <p class="meta">Closes Nov 10, 2026 · you can change your answer until then.</p>
+            <h1>How do we pay for it?</h1>
+            <div class="card">
+              <p class="yours-line">You picked <b>One-off donations</b>.</p>
+              <p class="meta" style="margin:-6px 0 0">48 votes so far · 31 confirmed by email</p>
+              <ul class="res">
+                <li><span class="lab">Members chip in</span><span class="track"><i style="width:62%"></i></span><span class="fig">15 · 31%</span></li>
+                <li class="mine"><span class="lab">One-off donations <span class="badge">yours</span></span><span class="track"><i style="width:100%"></i></span><span class="fig">24 · 50%</span></li>
+                <li><span class="lab">Grants</span><span class="track"><i style="width:29%"></i></span><span class="fig">7 · 15%</span></li>
+                <li><span class="lab">A cut of what moves through it</span><span class="track"><i style="width:8%"></i></span><span class="fig">2 · 4%</span></li>
+              </ul>
+              <div class="actions"><button class="btn sm" type="button">Change my answer</button><span class="info" title="How votes count">i</span><span style="flex:1"></span><button class="btn primary sm" type="button">Next</button></div>
+            </div>
+          </div>
+        </div>
+        <button class="btn handle" type="button">Change my answer</button>
+      </div></div>
+    </figure>
+  </section>
+
+  <section class="group v-phone" aria-labelledby="ph">
+    <h2 id="ph">Phone</h2>
+    <div class="boards">
+      <figure>
+        <figcaption><b>Home.</b> Tabs under the top bar, each 44px tall. Rows are at least 56px.</figcaption>
+        <div class="app phone">
+          <div class="bar"><div class="top"><span class="brand">pulse</span><span class="right"><a class="btn quiet sm" href="#new">Post</a><a class="btn sm" href="#signin">Sign in</a></span></div><nav class="tabs"><a class="on" href="#home">Home</a><a href="#about">About</a><a href="#votes">My votes</a></nav></div>
+          <div class="stage">
+            <h1>Explore questions</h1>
+            <div class="filters"><span class="pill">General</span><span class="pill">Newest first</span></div>
+            <div class="list">
+              <div class="row"><a href="#q">How do we pay for it?</a><span class="pill open">Open</span></div>
+              <div class="row"><a href="#q">How should the voting page look?</a><span class="pill open">Open</span></div>
+              <div class="row"><a href="#q">When should we vote on these rules again?</a><span class="pill open">Open</span></div>
+              <div class="row"><a href="#q">How should the website cover its costs?</a><span class="pill">Closed</span></div>
+              <div class="row"><a href="#q">Should the ODC stay free of paid ads?</a><span class="pill open">Open</span></div>
+            </div>
+          </div>
+        </div>
+      </figure>
+
+      <figure>
+        <figcaption><b>Question.</b> The voting window is a sheet along the bottom edge. Answer rows are 52px, and "No" picked shows the one other color.</figcaption>
+        <div class="app phone">
+          <div class="bar"><div class="top"><span class="brand">pulse</span><span class="right"><a class="btn quiet sm" href="#new">Post</a><a class="btn sm" href="#signin">Sign in</a></span></div><nav class="tabs"><a href="#home">Home</a><a href="#about">About</a><a href="#votes">My votes</a></nav></div>
+          <div class="stage">
+            <p class="meta">Closes Nov 12, 2026 · you can change your answer until then.</p>
+            <h1>Should the ODC stay free of paid ads?</h1>
+            <div class="actions"><button class="btn sm" type="button">Copy link</button></div>
+          </div>
+          <div class="pop">
+            <header><span class="eyebrow">Decision</span><span class="icon-btn" aria-hidden="true"><svg viewBox="0 0 16 16" fill="none" stroke="currentColor" stroke-width="1.8"><path d="M4 6l4 4 4-4"/></svg></span></header>
+            <h3>Should the ODC stay free of paid ads?</h3>
+            <ul class="choices">
+              <li class="choice"><span class="radio"></span><span class="num">1</span>Yes</li>
+              <li class="choice no sel"><span class="radio"></span><span class="num">2</span>No</li>
+            </ul>
+            <footer><span class="meta">Your answer is private.</span><button class="btn primary" type="button">Submit</button></footer>
+          </div>
+        </div>
+      </figure>
+
+      <figure>
+        <figcaption><b>After voting.</b> Results under the saved answer. The sheet closes to one full-width "Change my answer" button.</figcaption>
+        <div class="app phone">
+          <div class="bar"><div class="top"><span class="brand">pulse</span><span class="right"><a class="btn quiet sm" href="#new">Post</a><span class="btn sm quiet">Account</span></span></div><nav class="tabs"><a href="#home">Home</a><a href="#about">About</a><a href="#votes">My votes</a></nav></div>
+          <div class="stage" style="padding-bottom:84px">
+            <h1>How do we pay for it?</h1>
+            <div class="card">
+              <p class="yours-line">You picked <b>One-off donations</b>.</p>
+              <p class="meta" style="margin:-6px 0 0">48 votes so far · 31 confirmed by email</p>
+              <ul class="res">
+                <li><span class="lab">Members chip in</span><span class="track"><i style="width:62%"></i></span><span class="fig">15 · 31%</span></li>
+                <li class="mine"><span class="lab">One-off donations <span class="badge">yours</span></span><span class="track"><i style="width:100%"></i></span><span class="fig">24 · 50%</span></li>
+                <li><span class="lab">Grants</span><span class="track"><i style="width:29%"></i></span><span class="fig">7 · 15%</span></li>
+                <li><span class="lab">A cut of what moves through it</span><span class="track"><i style="width:8%"></i></span><span class="fig">2 · 4%</span></li>
+              </ul>
+              <div class="actions"><span class="info" title="How votes count">i</span><span style="flex:1"></span><button class="btn primary sm" type="button">Next</button></div>
+            </div>
+          </div>
+          <div style="position:absolute;left:16px;right:16px;bottom:16px"><button class="btn block" type="button" style="box-shadow:var(--shadow-pop)">Change my answer</button></div>
+        </div>
+      </figure>
+
+      <figure>
+        <figcaption><b>Sign in.</b> A 48px field with 16px text, so the phone does not zoom in. The field is focused and shows an error.</figcaption>
+        <div class="app phone">
+          <div class="bar"><div class="top"><span class="brand">pulse</span><span class="right"><a class="btn quiet sm" href="#new">Post</a></span></div><nav class="tabs"><a href="#home">Home</a><a href="#about">About</a><a href="#votes">My votes</a></nav></div>
+          <div class="stage" style="padding-top:36px">
+            <h1>Sign in with your email</h1>
+            <p class="meta">Enter your email and we will send you a link. There is no password to make up.</p>
+            <div class="field"><label for="m-email">Your email</label><div class="input bad focus" id="m-email">sam@example</div><p class="err">That doesn't look like an email address.</p></div>
+            <div class="check"><i></i>Email me once when something comes of this.</div>
+            <button class="btn primary block" type="button">Continue</button>
+          </div>
+        </div>
+      </figure>
+
+      <figure>
+        <figcaption><b>About.</b> The three steps stacked as plain bordered cards.</figcaption>
+        <div class="app phone">
+          <div class="bar"><div class="top"><span class="brand">pulse</span><span class="right"><a class="btn quiet sm" href="#new">Post</a><a class="btn sm" href="#signin">Sign in</a></span></div><nav class="tabs"><a href="#home">Home</a><a class="on" href="#about">About</a><a href="#votes">My votes</a></nav></div>
+          <div class="stage center">
+            <h1>Help shape an Online Democratic Community</h1>
+            <p class="meta">A place where people discuss ideas, decide together and work toward action.</p>
+            <div class="steps">
+              <div class="step"><span class="n">1</span><b>Understand</b><span>Read the short explanation and the question.</span></div>
+              <div class="step"><span class="n">2</span><b>Discuss</b><span>Compare the ideas. Comments are coming soon.</span></div>
+              <div class="step"><span class="n">3</span><b>Vote</b><span>Choose an answer and press Submit.</span></div>
+            </div>
+            <button class="btn primary block" type="button">Start voting</button>
+            <a class="link" href="#home">Explore questions</a>
+          </div>
+        </div>
+      </figure>
+
+      <figure>
+        <figcaption><b>My votes</b>, after posting a question (the pale green banner).</figcaption>
+        <div class="app phone">
+          <div class="bar"><div class="top"><span class="brand">pulse</span><span class="right"><a class="btn quiet sm" href="#new">Post</a><span class="btn sm quiet">Account</span></span></div><nav class="tabs"><a href="#home">Home</a><a href="#about">About</a><a class="on" href="#votes">My votes</a></nav></div>
+          <div class="stage">
+            <div class="banner"><span>Your question is live</span><button class="btn sm" type="button">Copy link</button></div>
+            <h1>My votes</h1>
+            <div class="list">
+              <div class="row two"><a href="#q">How do we pay for it?</a><span class="meta">Open · You can change your answer</span></div>
+              <div class="row two"><a href="#q">Should the ODC stay free of paid ads?</a><span class="meta">Open · You can change your answer</span></div>
+              <div class="row two"><a href="#q">Which ads are allowed?</a><span class="meta">Closed · View results</span></div>
+            </div>
+            <button class="btn block" type="button">Load more</button>
+          </div>
+        </div>
+      </figure>
+    </div>
+  </section>
+
+  <section class="notes" aria-labelledby="what">
+    <h2 id="what">What changes in the app</h2>
+    <ul>
+      <li>The dark page and its see-through panels become white, with 1px gray borders. Only the floating voting popout keeps a light shadow, because it sits over the page.</li>
+      <li>The teal accent becomes one green. Pale green marks "chosen", "yours" and "open". Red appears only for "No" and for errors.</li>
+      <li>Corners get smaller: 12px for cards, 8px for buttons and fields.</li>
+      <li>The focus ring becomes dark gray, 2px wide with a 2px gap, so it shows clearly on white and on green.</li>
+      <li>The results chart keeps its tested blue and orange.</li>
+      <li>Phones (screens under 700px wide) get the phone version. It uses 16px text, buttons and rows at least 44px tall, Home / About / My votes as tabs under the top bar, and the voting window as a sheet along the bottom edge.</li>
+      <li>No behavior or wording changes.</li>
+    </ul>
+  </section>
+</div>
+
+<script>
+  (function () {
+    var narrow = window.matchMedia("(max-width: 699px)");
+    var buttons = document.querySelectorAll(".switch button");
+    function show(v) {
+      document.body.setAttribute("data-v", v);
+      buttons.forEach(function (b) { b.setAttribute("aria-pressed", String(b.dataset.v === v)); });
+    }
+    buttons.forEach(function (b) { b.addEventListener("click", function () { show(b.dataset.v); }); });
+    show(narrow.matches ? "phone" : "desk");
+  })();
+</script>
