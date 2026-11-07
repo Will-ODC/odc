@@ -1,4 +1,4 @@
-import { useEffect, useId, useRef } from "react";
+import { Fragment, useEffect, useId, useRef } from "react";
 import type { KeyboardEvent, ReactNode } from "react";
 import type { PollMethod, Results } from "../api/types.js";
 import {
@@ -74,7 +74,7 @@ export interface VoteCardProps {
    */
   confirmation?: Confirmation;
   /**
-   * Where "Confirm with your email" points, shown only while `confirmation` is
+   * Where the confirm offer's Sign in (#480) points, shown only while `confirmation` is
    * `offer`. Opened in a new tab, so this card is still here, and updates,
    * once the person has signed in.
    */
@@ -84,6 +84,9 @@ export interface VoteCardProps {
    * status, and shows this in place of the numbers, with a way to ask again.
    */
   resultsProblem?: { message: string; onRetry: () => void };
+  /** Whether the results are minimized (#478); see `ResultsPanel`. */
+  resultsHidden?: boolean;
+  onResultsHidden?: (hidden: boolean) => void;
 }
 
 /** Controlled and presentational: the caller owns picks, sending and navigation. */
@@ -109,6 +112,8 @@ export function VoteCard({
   confirmation = "unknown",
   confirmHref,
   resultsProblem,
+  resultsHidden,
+  onResultsHidden,
 }: VoteCardProps) {
   const id = useId();
   const card = useRef<HTMLElement>(null);
@@ -182,7 +187,7 @@ export function VoteCard({
       panel.current?.focus();
   }, [problem, collapsed, status.kind]);
 
-  // "Confirm with your email" goes once the vote is confirmed. When focus was
+  // The confirm offer's Sign in (#480) goes once the vote is confirmed. When focus was
   // on it, it would fall to the page; the note that now says "confirmed by
   // email" takes it instead. Focus elsewhere is left alone.
   const counted = useRef<HTMLParagraphElement>(null);
@@ -295,78 +300,110 @@ export function VoteCard({
       ) : null}
       {status.kind === "answered" ? (
         <>
-          <p
-            role="status"
-            className="vote-card__note"
-            ref={counted}
-            tabIndex={-1}
+          {/*
+            On the question page the saved answer leads (#478): what you
+            picked, with the vote's status at the end of the same line.
+          */}
+          <div
+            className={
+              presentation === "results" ? "vote-card__yours" : undefined
+            }
           >
-            {countedNote(status.changed, confirmation)}
-          </p>
+            {presentation === "results" ? (
+              <span>
+                You picked <Picked choices={choices} picked={picked} />.
+              </span>
+            ) : null}
+            <p
+              role="status"
+              className="vote-card__note"
+              ref={counted}
+              tabIndex={-1}
+            >
+              {countedNote(status.changed, confirmation)}
+            </p>
+          </div>
+          {/*
+            One short line (#480). "Confirm", never "verify": an email does
+            not prove one vote per person (ADR-0040). The new tab is in the
+            name, so a screen reader still hears it.
+          */}
           {confirmation === "offer" && confirmHref ? (
-            <p className="vote-card__note">
+            <p className="vote-card__confirm">
+              Sign in to confirm your vote.{" "}
               <a
-                className="vote-card__link"
+                className="vote-card__signin"
                 href={confirmHref}
                 target="_blank"
                 rel="noopener noreferrer"
+                aria-label="Sign in to confirm your vote (opens in a new tab)"
               >
-                Confirm with your email (opens in a new tab)
+                Sign in
               </a>
             </p>
           ) : null}
-          {resultsProblem ? (
-            <div
-              className="results"
-              role="group"
-              aria-label="How people answered"
-              ref={panel}
-              tabIndex={-1}
-            >
-              <ViewState
-                data={{ status: "error", message: resultsProblem.message }}
+          {/* One card holds the results and what to do next (#478). */}
+          <div
+            className={
+              presentation === "results" ? "vote-card__results" : undefined
+            }
+          >
+            {resultsProblem ? (
+              <div
+                className="results"
+                role="group"
+                aria-label="How people answered"
+                ref={panel}
+                tabIndex={-1}
               >
-                {() => null}
-              </ViewState>
-              <button
-                type="button"
-                className="results__retry"
-                onClick={resultsProblem.onRetry}
-              >
-                Try again
-              </button>
+                <ViewState
+                  data={{ status: "error", message: resultsProblem.message }}
+                >
+                  {() => null}
+                </ViewState>
+                <button
+                  type="button"
+                  className="results__retry"
+                  onClick={resultsProblem.onRetry}
+                >
+                  Try again
+                </button>
+              </div>
+            ) : (
+              <ResultsPanel
+                results={status.results}
+                compact={presentation === "results"}
+                yourChoices={picked}
+                panelRef={panel}
+                {...(resultsHidden !== undefined && onResultsHidden
+                  ? { hidden: resultsHidden, onHiddenChange: onResultsHidden }
+                  : {})}
+              />
+            )}
+            <div className="vote-card__actions">
+              {onChangeAnswer ? (
+                <button type="button" onClick={onChangeAnswer}>
+                  Change my answer
+                </button>
+              ) : null}
+              {trustHref ? (
+                <a
+                  className="vote-card__info"
+                  href={trustHref}
+                  aria-label="How votes count (opens in a new tab)"
+                  title="How votes count"
+                  target="_blank"
+                  rel="noopener noreferrer"
+                >
+                  <span aria-hidden="true">i</span>
+                </a>
+              ) : null}
+              {onNext ? (
+                <button type="button" onClick={onNext}>
+                  Next
+                </button>
+              ) : null}
             </div>
-          ) : (
-            <ResultsPanel
-              results={status.results}
-              compact={presentation === "results"}
-              yourChoices={picked}
-              panelRef={panel}
-            />
-          )}
-          <div className="vote-card__actions">
-            {onChangeAnswer ? (
-              <button type="button" onClick={onChangeAnswer}>
-                Change my answer
-              </button>
-            ) : null}
-            {trustHref ? (
-              <a
-                className="vote-card__info"
-                href={trustHref}
-                aria-label="How votes count (opens in a new tab)"
-                title="How votes count"
-                target="_blank"
-                rel="noopener noreferrer"
-              >
-                <span aria-hidden="true">i</span>
-              </a>
-            ) : null}
-            {onNext ? (
-              <button type="button" onClick={onNext}>
-                Next
-              </button>
-            ) : null}
           </div>
           {presentation === "card" ? (
             <p className="vote-card__note">{privacyNote}</p>
@@ -460,4 +497,21 @@ export function VoteCard({
       )}
     </section>
   );
+}
+
+/** "A", "A and B": the labels of what was picked, each in bold. */
+function Picked({
+  choices,
+  picked,
+}: {
+  choices: readonly CardChoice[];
+  picked: readonly number[];
+}) {
+  const labels = choices.filter((choice) => picked.includes(choice.index));
+  return labels.map((choice, at) => (
+    <Fragment key={choice.index}>
+      {at === 0 ? "" : at === labels.length - 1 ? " and " : ", "}
+      <b>{choice.label}</b>
+    </Fragment>
+  ));
 }

@@ -20,6 +20,9 @@ afterEach(cleanup);
 beforeAll(() => import("../src/components/BarChart.js"));
 
 const main = () => within(screen.getByRole("main"));
+/** The saved-answer line, whose labels are in bold (#478). */
+const said = (text: string) => (_: string, node: Element | null) =>
+  node?.tagName === "SPAN" && node.textContent === text;
 function tally(p: Poll, ballot: Ballot) {
   return results({
     pollId: p.id,
@@ -149,14 +152,15 @@ it("puts one results banner after the question and before the thread, with votin
   expect(within(drawer).getByRole("button", { name: "Submit" })).toBeTruthy();
   const user = await answer();
   const standing = main().getByRole("group", { name: "How people answered" });
-  const answerRow = main().getByText("You picked Yes.").closest("li")!;
+  const answerRow = main().getByText(said("You picked Yes."));
   const heading = main().getByRole("heading", { name: p.question, level: 1 });
   expect(
     heading.compareDocumentPosition(standing) &
       Node.DOCUMENT_POSITION_FOLLOWING,
   ).toBeTruthy();
   expect(
-    standing.compareDocumentPosition(answerRow) &
+    // The answer leads, then the results (#478).
+    answerRow.compareDocumentPosition(standing) &
       Node.DOCUMENT_POSITION_FOLLOWING,
   ).toBeTruthy();
   expect(
@@ -171,8 +175,12 @@ it("puts one results banner after the question and before the thread, with votin
     within(drawer).getByRole("button", { name: "Change my answer" }),
   ).toBeTruthy();
   expect(within(drawer).queryByRole("button", { name: "Vote" })).toBeNull();
+  // One way to change an answer: the drawer's handle (#478).
+  expect(
+    within(card()).queryByRole("button", { name: "Change my answer" }),
+  ).toBeNull();
   await user.click(
-    within(card()).getByRole("button", { name: "Change my answer" }),
+    within(drawer).getByRole("button", { name: "Change my answer" }),
   );
   expect(within(drawer).getByRole("radio", { name: "Yes" })).toHaveProperty(
     "checked",
@@ -185,7 +193,7 @@ it("puts one results banner after the question and before the thread, with votin
   await user.click(within(drawer).getByRole("button", { name: "Submit" }));
   await main().findByText("Counted. That replaces your earlier answer.");
   expect(cast).toHaveBeenLastCalledWith(p.id, [0]);
-  expect(await main().findByText("You picked No.")).toBeTruthy();
+  expect(await main().findByText(said("You picked No."))).toBeTruthy();
   await user.click(
     within(drawer).getByRole("button", { name: "Change my answer" }),
   );
@@ -215,7 +223,7 @@ it("keeps the saved answer and its results when backing out of a change", async 
     name: "Change my answer",
   });
   expect(document.activeElement).toBe(handle);
-  expect(main().getByText("You picked Yes.")).toBeTruthy();
+  expect(main().getByText(said("You picked Yes."))).toBeTruthy();
   // One results banner above the thread (#453), still showing the saved answer.
   const standing = main().getByRole("group", {
     name: "How people answered",
@@ -335,7 +343,12 @@ it("opens the next question's card even if the previous card was closed (#401)",
   await main().findByRole("heading", { name: second.question, level: 1 });
   await user.click(within(card()).getByRole("button", { name: "Close" }));
   expect(main().queryByRole("region")).toBeNull();
-  await user.click(main().getByRole("button", { name: p.question }));
+  await user.click(
+    within(screen.getByRole("navigation", { name: "Answered" })).getByRole(
+      "link",
+      { name: p.question },
+    ),
+  );
   await main().findByRole("heading", { name: p.question, level: 1 });
   expect(main().queryByRole("region")).not.toBeNull();
 });
@@ -378,7 +391,12 @@ it("sends every approval pick, follows its lowest-index edge, and retains the co
   expect(
     await main().findByRole("heading", { name: second.question, level: 1 }),
   ).toBeTruthy();
-  expect(main().getByText("You picked Park and Library.")).toBeTruthy();
+  // The earlier answer is in the Answered list, not under the results (#478).
+  expect(
+    within(screen.getByRole("navigation", { name: "Answered" })).getByText(
+      "Your answer: Park, Library",
+    ),
+  ).toBeTruthy();
   expect(within(card()).getByRole("group")).toBeTruthy();
   expect(
     within(card())
@@ -390,7 +408,12 @@ it("sends every approval pick, follows its lowest-index edge, and retains the co
     true,
   );
   expect(cast).toHaveBeenCalledOnce();
-  await user.click(main().getByRole("button", { name: p.question }));
+  await user.click(
+    within(screen.getByRole("navigation", { name: "Answered" })).getByRole(
+      "link",
+      { name: p.question },
+    ),
+  );
   await main().findByRole("heading", { name: p.question, level: 1 });
   openCard();
   expect(
@@ -443,14 +466,15 @@ it("refuses a known closed poll and lets a non-voter read final results", async 
   expect(
     screen.getByRole("complementary", { name: "Voting" }).contains(standing),
   ).toBe(false);
-  await userEvent.click(
-    within(standing).getByRole("button", { name: "Close" }),
-  );
-  expect(document.activeElement).toBe(
-    main().getByRole("button", { name: "See results" }),
-  );
+  // Hiding keeps one line and the button that brings them back (#478).
+  const hide = within(standing).getByRole("button", { name: "Hide results" });
+  expect(hide.getAttribute("aria-expanded")).toBe("true");
+  await userEvent.click(hide);
+  expect(document.activeElement).toBe(hide);
+  expect(hide.textContent).toBe("Show results");
+  expect(hide.getAttribute("aria-expanded")).toBe("false");
+  expect(within(standing).getByText("Nobody answered this one.")).toBeTruthy();
   expect(within(card()).getByText("This one has closed.")).toBeTruthy();
-  expect(main().queryByText("Nobody answered this one.")).toBeNull();
   expect(cast).not.toHaveBeenCalled();
 });
 it("handles a poll closing during submit without offering another cast", async () => {
@@ -540,7 +564,10 @@ it("retrying a failed replacement sends the new choice rather than the prior ans
   openCard();
   const user = await answer("Yes");
   await user.click(
-    within(card()).getByRole("button", { name: "Change my answer" }),
+    within(screen.getByRole("complementary", { name: "Voting" })).getByRole(
+      "button",
+      { name: "Change my answer" },
+    ),
   );
   await user.keyboard("1");
   await user.tab();
@@ -554,7 +581,7 @@ it("retrying a failed replacement sends the new choice rather than the prior ans
   await main().findByText("Counted. That replaces your earlier answer.");
   expect(cast).toHaveBeenLastCalledWith(p.id, [0]);
   // The transcript line catches up after the card; wait for it (raced on CI).
-  expect(await main().findByText("You picked No.")).toBeTruthy();
+  expect(await main().findByText(said("You picked No."))).toBeTruthy();
 });
 
 const voter = { id: "v1", community: null, email: "voter@example.org" };
@@ -842,9 +869,8 @@ it("links to /trust once after voting, as 'How votes count'", async () => {
     .filter((link) => link.getAttribute("href") === "/trust");
   expect(links).toHaveLength(1);
   expect(links[0]?.textContent).toBe("i");
-  expect(links[0]?.previousElementSibling?.textContent).toBe(
-    "Change my answer",
-  );
+  // First in the results' footer, now that Change my answer is the drawer's.
+  expect(links[0]?.previousElementSibling).toBeNull();
   expect(main().queryByText("Only you can see your answer here.")).toBeNull();
   expect(main().queryByText("WHERE IT STANDS")).toBeNull();
   expect(main().queryByRole("button", { name: "Show me how" })).toBeNull();
@@ -988,7 +1014,7 @@ describe("the Answered list (#484)", () => {
       />,
     );
     await main().findByRole("heading", { name: poll().question, level: 1 });
-    expect(main().getByText("You picked No.")).toBeTruthy();
+    expect(main().getByText(said("You picked No."))).toBeTruthy();
     expect(main().getByText("Counted")).toBeTruthy();
     expect(
       within(screen.getByRole("complementary", { name: "Voting" })).getByRole(
@@ -1052,5 +1078,70 @@ describe("the Answered list (#484)", () => {
         .getByRole("link", { name: "See all my votes" })
         .getAttribute("href"),
     ).toBe("/my-votes");
+  });
+});
+
+describe("the results after voting (#478, #480)", () => {
+  it("leads with the answer and offers a short Sign in to confirm", async () => {
+    render(<Conversation api={stubApi()} pollId="ads-free" />);
+    await main().findByRole("heading", { name: poll().question, level: 1 });
+    await answer();
+    expect(
+      within(card()).getByText(
+        (_, node) => node?.textContent === "You picked Yes.",
+      ),
+    ).toBeTruthy();
+    const signIn = within(card()).getByRole("link", {
+      name: "Sign in to confirm your vote (opens in a new tab)",
+    });
+    expect(signIn.textContent).toBe("Sign in");
+    expect(signIn.getAttribute("target")).toBe("_blank");
+    expect(within(card()).queryByText(/verif/i)).toBeNull();
+  });
+
+  it("minimizes the results to one line, keeps focus, and keeps it hidden through a change", async () => {
+    const p = poll();
+    let casts = 0;
+    const cast = vi.fn(
+      async (_id: string, ballot: Ballot): Promise<CastOutcome> => ({
+        status: casts++ === 0 ? "counted" : "changed",
+        ballot,
+        results: tally(p, ballot),
+      }),
+    );
+    render(<Conversation api={stubApi({ cast })} pollId={p.id} />);
+    await main().findByRole("heading", { name: p.question, level: 1 });
+    const user = await answer();
+    const results = () =>
+      main().getByRole("group", { name: "How people answered" });
+    const hide = within(results()).getByRole("button", {
+      name: "Hide results",
+    });
+    const body = document.getElementById(hide.getAttribute("aria-controls")!);
+    expect(body?.hidden).toBe(false);
+    await user.click(hide);
+    expect(document.activeElement).toBe(hide);
+    expect(hide.getAttribute("aria-expanded")).toBe("false");
+    expect(within(results()).getByText("1 vote so far")).toBeTruthy();
+    expect(within(results()).queryByText(/confirmed by email/)).toBeNull();
+
+    const drawer = screen.getByRole("complementary", { name: "Voting" });
+    await user.click(
+      within(drawer).getByRole("button", { name: "Change my answer" }),
+    );
+    await user.click(within(drawer).getByRole("radio", { name: "No" }));
+    await user.click(within(drawer).getByRole("button", { name: "Submit" }));
+    await main().findByText("Counted. That replaces your earlier answer.");
+    expect(cast).toHaveBeenCalledTimes(2);
+    const show = within(results()).getByRole("button", {
+      name: "Show results",
+    });
+    expect(show.getAttribute("aria-expanded")).toBe("false");
+    show.focus();
+    await user.keyboard("{Enter}");
+    expect(show.getAttribute("aria-expanded")).toBe("true");
+    expect(
+      within(results()).getByText("1 vote so far · 0 confirmed by email"),
+    ).toBeTruthy();
   });
 });

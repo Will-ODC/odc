@@ -194,9 +194,7 @@ export function Conversation({
           key={`${round}:${at}`}
           api={api}
           pollId={at}
-          answers={answers}
           {...(saved ? { saved } : {})}
-          busy={busy}
           confirmation={confirmation}
           onCounted={counted}
           onBusy={setBusy}
@@ -211,9 +209,7 @@ export function Conversation({
 function Question({
   api,
   pollId,
-  answers,
   saved,
-  busy,
   confirmation,
   onCounted,
   onBusy,
@@ -222,9 +218,7 @@ function Question({
 }: {
   api: PulseApi;
   pollId: string;
-  answers: readonly Answer[];
   saved?: Answer;
-  busy: boolean;
   confirmation: Confirmation;
   onCounted: (answer: Answer) => void;
   onBusy: (busy: boolean) => void;
@@ -238,9 +232,7 @@ function Question({
       key={attempt}
       api={api}
       pollId={pollId}
-      answers={answers}
       {...(saved ? { saved } : {})}
-      busy={busy}
       confirmation={confirmation}
       onCounted={onCounted}
       onBusy={onBusy}
@@ -254,9 +246,7 @@ function Question({
 function LoadedQuestion({
   api,
   pollId,
-  answers,
   saved,
-  busy,
   confirmation,
   onCounted,
   onBusy,
@@ -266,9 +256,7 @@ function LoadedQuestion({
 }: {
   api: PulseApi;
   pollId: string;
-  answers: readonly Answer[];
   saved?: Answer;
-  busy: boolean;
   confirmation: Confirmation;
   onCounted: (answer: Answer) => void;
   onBusy: (busy: boolean) => void;
@@ -297,15 +285,8 @@ function LoadedQuestion({
   const renderPage = (
     standing: ReactNode,
     vote: ReactNode,
-    current?: Answer,
     pollClosed = false,
   ) => {
-    // Render the saved answer and its results in the same commit, before the
-    // conversation history catches up, so the focused panel never changes rows.
-    const thread =
-      current && !answers.some((answer) => answer.poll.id === current.poll.id)
-        ? [...answers, current]
-        : answers;
     return (
       <>
         <div className="conversation__scroll">
@@ -348,31 +329,10 @@ function LoadedQuestion({
             {standing ? (
               <div className="conversation__standing">{standing}</div>
             ) : null}
-            <ol className="conversation__thread" aria-label="Conversation">
-              {thread.map((answer) => (
-                <li key={answer.poll.id}>
-                  <button
-                    type="button"
-                    disabled={busy}
-                    onClick={() => onGo(answer.poll.id)}
-                  >
-                    {answer.poll.question}
-                  </button>
-                  <p className="conversation__answer">
-                    You picked{" "}
-                    {answer.ballot
-                      .map((index) => answer.poll.choices[index])
-                      .join(" and ")}
-                    .
-                  </p>
-                </li>
-              ))}
-            </ol>
-            {thread.length === 0 && loaded.status === "ready" ? (
-              <p className="conversation__empty">
-                Your answers will appear here after you submit.
-              </p>
-            ) : null}
+            {/*
+              No list of earlier answers under the results (#478, operator
+              2026-11-07): the Answered rail and the My votes tab carry them.
+            */}
           </div>
         </div>
         {vote ? (
@@ -463,7 +423,6 @@ function LiveCard({
   renderPage: (
     standing: ReactNode,
     vote: ReactNode,
-    current?: Answer,
     pollClosed?: boolean,
   ) => ReactNode;
 }) {
@@ -472,6 +431,9 @@ function LiveCard({
   const [showSaved, setShowSaved] = useState(Boolean(saved));
   const [collapsed, setCollapsed] = useState(false);
   const [visible, setVisible] = useState(true);
+  // Minimized results stay minimized while this question is on screen,
+  // through a changed answer and fresh numbers (#478).
+  const [resultsHidden, setResultsHidden] = useState(false);
   const show = useRef<HTMLButtonElement>(null);
   const wrapper = useRef<HTMLDivElement>(null);
   const wasVisible = useRef(true);
@@ -642,9 +604,8 @@ function LiveCard({
         }}
         onCollapse={setCollapsed}
         onClose={close}
-        {...(showing.kind === "answered" && poll.open
-          ? { onChangeAnswer: change }
-          : {})}
+        resultsHidden={resultsHidden}
+        onResultsHidden={setResultsHidden}
         {...(next ? { onNext: () => onGo(next) } : {})}
       />
     </div>
@@ -670,14 +631,7 @@ function LiveCard({
   const vote = !visible || showing.kind === "answered" ? handle : card;
   return (
     <div className="conversation__question">
-      {renderPage(
-        standing,
-        vote,
-        showing.kind === "answered"
-          ? { poll, ballot, results: showing.results }
-          : undefined,
-        shut,
-      )}
+      {renderPage(standing, vote, shut)}
     </div>
   );
 }
