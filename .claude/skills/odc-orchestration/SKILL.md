@@ -1,9 +1,96 @@
 ---
 name: odc-orchestration
-description: How to dispatch work in the ODC monorepo — which model runs which task, how to write a subagent brief that works, how to run agents in parallel without corrupting one working tree, and how to run lead sessions that each own one feature and run their own implementers. Use this skill whenever delegating, starting or acting as a lead, spawning a subagent, planning a multi-step task, choosing between Opus and Sonnet, or deciding whether to do something yourself.
+description: How the orchestrator works for the operator in the ODC monorepo — which questions go to the operator and how they are asked, working toward a stated goal, wrapping up at 90% usage — and how to dispatch work — which model runs which task, how to write a subagent brief that works, how to run agents in parallel without corrupting one working tree, and how to run lead sessions that each own one feature and run their own implementers. Use this skill whenever delegating, starting or acting as a lead, spawning a subagent, planning a multi-step task, choosing between Opus and Sonnet, or deciding whether to do something yourself.
 ---
 
 # ODC Orchestration
+
+## The operator sets direction; the orchestrator settles the rest
+
+The operator sets direction. The orchestrator turns it into work and decides
+everything the operator has not kept for themself. Ask the operator only about:
+
+- **Direction** — what to build next, what to drop, which workstream goes
+  first.
+- **User-facing features** — what a user should see or be able to do, and
+  what "good enough" means for it.
+- **Critical functionality** — anything where being wrong is silent: votes,
+  identity and privacy, hashing, `contracts/`, charter rules.
+- **Goals in tension** — when two goals pull apart and nothing written says
+  which wins.
+- **What the operator owns** — merging, audits, deploys, spending, a charter
+  conflict, and anything an ADR or memory entry reserves to the operator.
+
+**Check the written goals before asking.** For the ODC core: `docs/charter.md`
+and the current phase of `docs/implementation-plan.md`. For pulse:
+`memory/pulse.md` and the epic or issue. For both: `docs/decisions/`. If one of
+them answers the question, follow it and name it in the report; do not ask the
+operator to decide it again. Everything else — how to build it, which model,
+how to split PRs, names, test shape — the orchestrator decides and reports.
+
+### Run automated loops toward a stated goal
+
+What the operator wants from orchestration (2026-11-07): automated loops,
+including critical reviews, and independent subagents that make ambiguous
+design choices where appropriate. Overarching goals, and decisions on
+user-facing features and critical functionality, still go to the operator.
+
+**The loop,** for each unit of work: build → fresh-context critical review
+(`odc-reviewer`) → fix → review again until approved → CI green → report →
+next unit. Do not wait between units. Stop a unit only for an open operator
+question on it, and keep the other units moving.
+
+**Ambiguous design choices that are not the operator's** — internal structure,
+a library, a data shape behind an API, error handling — go to an independent
+subagent: `odc-architect`, in a context that has not been building the work.
+Give it the goal, the options and the constraints. It picks one and gives the
+reason in a few lines. Put the choice and reason in the report, and in an ADR
+if it is architectural. If the subagent finds the choice affects a
+user-facing feature or critical functionality, it is the operator's question.
+
+**The goal.** Every run has a goal, in the operator's words; when the
+operator starts a `/goal` run, its text is the goal. If the operator has not given one, the
+first question is what it is. Then:
+
+- Put the goal at the top of every lead's and subagent's brief.
+- Check each report and PR against it, and say in each relay how far the run
+  has got toward it.
+- Do work only if it serves the goal. Work that does not serve it is a
+  question for the operator, not something to start.
+
+### Wrap up at 90% usage
+
+Check usage (`mcp__ccd_session_mgmt__get_usage`) at each checkpoint of a long
+run: a push, a PR, CI going green, a lead's report. At about 90% (operator,
+2026-10-20):
+
+1. Tell every lead and subagent to stop starting new work, finish or park the
+   current step, and report.
+2. Commit the work in progress to its branch; the context that commits is the
+   orchestrator or the lead, as usual. Push it.
+3. Update memory so the next session can continue: the goal, sessions,
+   branches, PRs, open questions, merge order and the next step. Use the
+   Claude memory directory and its `MEMORY.md` line. Repo `memory/` changes
+   only at merge time on `master`.
+4. Tell the operator in two or three lines where the work stopped and what
+   the next session starts with. Then stop.
+
+### How every question is asked
+
+This covers every question that reaches the operator, from any session: the
+orchestrator, a lead, or a subagent's report passed up. No exceptions.
+
+- **One question per popup** (`AskUserQuestion`), one at a time; wait for the
+  answer before asking the next (operator, 2026-10-21).
+- **Short and plain.** One or two sentences of context, then the question.
+  Plain words, no jargon, no analogies. Define a term before using it. Name a
+  file or PR only when the answer depends on it.
+- **Two or three options,** the recommended one first and marked
+  "(Recommended)". Each option says in one line what happens if it is picked.
+- **Say what is already decided,** and where, so the question covers only the
+  open part.
+- If an answer is unclear or does not arrive, say so and ask again. Never
+  guess.
 
 ## The standing instruction
 
@@ -161,9 +248,8 @@ is the go-ahead. Each lead works in its own worktree. The two sessions talk with
    `<area>/<issue>-<short>`; a step already planned in memory or an ADR gets no
    ticket and uses `<area>/<short>` (`odc-pipeline`, "Planned steps get no
    ticket"). Never guess "the next free number".
-3. **Ask the operator's questions now,** as multiple-choice popups
-   (`AskUserQuestion`, recommended option first), and put the answers in the
-   brief. Re-issuing a lead's card with the answers in it is cheaper than
+3. **Ask the operator's questions now,** per "How every question is asked",
+   and put the answers in the brief. Re-issuing a lead's card with the answers in it is cheaper than
    relaying them afterwards.
 
 ### The lead's brief
@@ -186,8 +272,8 @@ The five sections above, plus:
 1. **Read** what the brief names, then **send a synopsis and stop.** It is for
    the operator, so it is a few lines in plain words, no jargon: what will be
    built, what a user will notice, which folders change, and how the work will
-   split into PRs. Write each decision as one sentence of context plus two or
-   three options, the recommended one first, so it can be asked as a popup.
+   split into PRs. Write each decision the way "How every question is asked"
+   says, so it can be asked as a popup.
    Show it in the lead's own session and send it to the orchestrator. **Build
    nothing until a go arrives by the channel the brief names. Silence is not a
    yes:** never write "my pick goes ahead unless told otherwise".
@@ -224,8 +310,8 @@ go past it.
   card can silently push an older one off the list.
 - **Relay short, ask in popups** (operator, 2026-10-20: "faster and simpler").
   Cut each synopsis or report to two or three lines and put every decision into
-  `AskUserQuestion` — up to four per popup, across leads, recommended option
-  first. Do not paste a lead's full text or a prose list of decisions.
+  `AskUserQuestion`, one per popup, per "How every question is asked". Do not
+  paste a lead's full text or a prose list of decisions.
 - **Keep one list of open questions.** The operator may answer inside a lead's
   session; update the list from what leads report as answered.
 - **Do not wait for a message.** A lead with no commits may have built
