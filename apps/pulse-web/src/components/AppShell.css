@@ -85,11 +85,6 @@
 
   .shell__stage {
     grid-column: 2;
-    /*
-     * A column of its own with a line either side, so the three read as one
-     * page rather than as a screenshot with notes beside it.
-     */
-    border-inline: var(--hairline) solid var(--line);
   }
 
   .shell__rail {

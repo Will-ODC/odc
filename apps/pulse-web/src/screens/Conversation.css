@@ -186,10 +186,10 @@
 }
 .conversation__help > button {
   padding: var(--step) calc(var(--step) * 1.5);
-  border-color: rgb(var(--side-b));
+  border-color: var(--green);
   border-radius: var(--r-control);
   color: var(--on-accent);
-  background: rgb(var(--side-b));
+  background: var(--green);
   font-size: var(--t-small);
   font-weight: 700;
   box-shadow: var(--shadow-pop);
@@ -197,6 +197,20 @@
 }
 .conversation .conversation__help > button:hover {
   background: var(--green-hover);
+}
+/* "Change my answer" is the quieter outlined button, as in the results above it. */
+.conversation .conversation__help > .conversation__handle--quiet {
+  border-color: var(--line-strong);
+  color: var(--ink);
+  background: var(--surface);
+}
+.conversation .conversation__help > .conversation__handle--quiet:hover {
+  background: var(--hover);
+}
+/* Try again under a question that could not load, centred under its message. */
+.conversation__column > button {
+  display: block;
+  margin: var(--step) auto 0;
 }
 
 /* Both states reveal from the same corner with the same timing. */

@@ -4,6 +4,7 @@
   grid-template-columns: auto minmax(0, 1fr) auto;
   align-items: center;
   gap: var(--step) var(--gutter);
+  box-sizing: border-box;
   min-height: var(--bar-h);
   padding: var(--step) var(--gutter);
   border-bottom: var(--hairline) solid var(--line);
@@ -102,7 +103,7 @@
   gap: calc(var(--step) * 1.5);
   min-width: 0;
 }
-.banner__nav a,
+.banner__nav > a,
 .banner__actions > a {
   color: var(--ink-soft);
   font-size: var(--t-small);
@@ -115,12 +116,12 @@
 .banner__nav {
   gap: calc(var(--step) / 2);
 }
-.banner__nav a:hover,
+.banner__nav > a:hover,
 .banner__actions > a:hover {
   background: var(--hover);
   color: var(--ink);
 }
-.banner__nav a[aria-current="page"] {
+.banner__nav > a[aria-current="page"] {
   background: var(--green-wash);
   color: var(--green-hover);
   font-weight: 600;
@@ -175,10 +176,17 @@
     margin-inline: calc(var(--gutter) * -1);
     padding-inline: var(--step);
     border-top: var(--hairline) solid var(--line);
-    flex-wrap: nowrap;
+    flex-wrap: wrap;
     gap: 0;
   }
-  .banner__nav a {
+  /* "Your communities" takes a row of its own under the tabs, so the tabs
+     never run off a narrow phone. */
+  .banner__nav > .account-menu {
+    flex: 1 0 100%;
+    justify-content: center;
+    border-top: var(--hairline) solid var(--line);
+  }
+  .banner__nav > a {
     flex: 1;
     min-height: var(--touch);
     display: flex;
@@ -189,18 +197,27 @@
     border-bottom: calc(var(--hairline) * 2) solid transparent;
     font-size: var(--t-body);
   }
-  .banner__nav a[aria-current="page"] {
+  .banner__nav > a[aria-current="page"] {
     background: none;
     color: var(--green);
     border-bottom-color: var(--green);
   }
-  .banner__actions > a {
+  .banner__actions > a,
+  .banner .account-menu__button,
+  .account-menu__panel a,
+  .account-menu__panel button {
     box-sizing: border-box;
-    min-height: calc(var(--touch) - var(--step) / 2);
+    min-height: var(--touch);
+  }
+  .banner__actions > a {
     display: inline-flex;
     align-items: center;
     padding-block: 0;
     font-size: var(--t-small);
+  }
+  .account-menu__panel a {
+    display: flex;
+    align-items: center;
   }
 }
 

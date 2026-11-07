@@ -59,15 +59,12 @@
   border-radius: var(--r-control);
 }
 
-.signin__field:focus-visible {
-  border-color: var(--green);
-}
-
 .signin__field::placeholder {
   color: var(--faint);
 }
 
 .signin__field:focus-visible {
+  border-color: var(--green);
   outline: 2px solid var(--focus);
   outline-offset: 2px;
 }
@@ -205,6 +202,10 @@
 @media (max-width: 699px) {
   .signin__field {
     min-height: calc(var(--touch) + var(--step) / 2);
+  }
+  .signin__choice {
+    box-sizing: border-box;
+    min-height: var(--touch);
   }
   .signin__go,
   .signin__again {

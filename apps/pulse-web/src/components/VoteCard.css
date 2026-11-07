@@ -132,6 +132,13 @@
 .vote-card button.vote-card__submit:hover:not(:disabled) {
   background: var(--green-hover);
 }
+/* Nothing picked yet: plainly not ready, not a faded green. */
+.vote-card button.vote-card__submit:disabled {
+  color: var(--muted);
+  background: var(--chip);
+  border-color: var(--line);
+  opacity: 1;
+}
 .vote-card button:disabled {
   opacity: 0.55;
   cursor: default;

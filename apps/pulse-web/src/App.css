@@ -31,3 +31,15 @@ body {
 #root {
   width: 100%;
 }
+
+/* A link the screen did not style itself is green, never the browser's blue. */
+a {
+  color: var(--green-hover);
+}
+
+/* Anything focusable the screen did not style itself gets the app's ring, not
+   the browser's orange one. */
+:focus-visible {
+  outline: calc(var(--hairline) * 2) solid var(--focus);
+  outline-offset: calc(var(--hairline) * 2);
+}
