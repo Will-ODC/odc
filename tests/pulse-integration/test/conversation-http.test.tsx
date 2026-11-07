@@ -127,7 +127,13 @@ it("approval cast, replacement, network retry and closed results work over the r
         { name: "How people answered" },
       ),
     ).toBeNull();
-    await user.click(card.getByRole("button", { name: "Change my answer" }));
+    // The drawer's handle is the one way to change an answer (#478).
+    await user.click(
+      within(screen.getByRole("complementary", { name: "Voting" })).getByRole(
+        "button",
+        { name: "Change my answer" },
+      ),
+    );
     card = within(screen.getByRole("region"));
     await user.click(card.getByRole("checkbox", { name: "Park" }));
     fail = true;

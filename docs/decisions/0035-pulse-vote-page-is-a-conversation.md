@@ -31,7 +31,9 @@ open questions, 2026-10-11:
 1. **The swipe ballot is retired**, on phone as well as desktop. There is one
    way to vote: the vote card.
 2. **A run of questions is one conversation.** Pressing Next brings the next
-   question's card into the same thread.
+   question's card into the same thread. **Thread list removed (#478, operator, 2026-11-07):**
+   earlier answers no longer repeat under the results; the Answered rail
+   (desktop) and the My votes tab (phone) list them.
 3. **After voting, results show in the card's place**, with buttons to hide
    the card and to close it. **Placement superseded by ADR-0044 (2026-10-23):**
    results now sit below the saved answer in the main content; the persistent
