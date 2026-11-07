@@ -1,6 +1,6 @@
 ---
 name: odc-orchestration
-description: How the orchestrator works for the operator in the ODC monorepo — which questions go to the operator and how they are asked, working toward a stated goal, wrapping up at 90% usage — and how to dispatch work — which model runs which task, how to write a subagent brief that works, how to run agents in parallel without corrupting one working tree, and how to run lead sessions that each own one feature and run their own implementers. Use this skill whenever delegating, starting or acting as a lead, spawning a subagent, planning a multi-step task, choosing between Opus and Sonnet, or deciding whether to do something yourself.
+description: How the orchestrator works for the operator in the ODC monorepo — which questions go to the operator and how they are asked, working toward a stated goal, wrapping up at 90% usage and handing off to Codex — and how to dispatch work — which model runs which task, how to write a subagent brief that works, how to run agents in parallel without corrupting one working tree, and how to run lead sessions that each own one feature and run their own implementers. Use this skill whenever delegating, starting or acting as a lead, spawning a subagent, planning a multi-step task, choosing between Opus and Sonnet, or deciding whether to do something yourself.
 ---
 
 # ODC Orchestration
@@ -14,8 +14,10 @@ everything the operator has not kept for themself. Ask the operator only about:
   first.
 - **User-facing features** — what a user should see or be able to do, and
   what "good enough" means for it.
-- **Critical functionality** — anything where being wrong is silent: votes,
-  identity and privacy, hashing, `contracts/`, charter rules.
+- **Critical functionality** — what votes count, who may vote, what stays
+  private, what is hashed or goes into `contracts/`, and charter rules. This
+  covers what these do, not how they are coded; how they are coded is routed
+  Opus per the table.
 - **Goals in tension** — when two goals pull apart and nothing written says
   which wins.
 - **What the operator owns** — merging, audits, deploys, spending, a charter
@@ -35,24 +37,31 @@ including critical reviews, and independent subagents that make ambiguous
 design choices where appropriate. Overarching goals, and decisions on
 user-facing features and critical functionality, still go to the operator.
 
-**The loop,** for each unit of work: build → fresh-context critical review
-(`odc-reviewer`) → fix → review again until approved → CI green → report →
-next unit. Do not wait between units. Stop a unit only for an open operator
-question on it, and keep the other units moving.
+**The loop,** for each unit of work: build → commit, push, open the PR → CI
+green → the orchestrator starts a fresh-context `odc-reviewer` (a lead never
+does; see "What a lead never does") → the owner fixes → review again until
+approved → report it ready to merge → next unit. Merging stays the operator's
+call, and audits are never part of the loop. Stop a unit only for an open
+operator question on it, and keep the other units moving. Start the next unit
+only within the WIP limit in `odc-pipeline`: a unit in a service that still
+has an unmerged branch waits for the merge, or stacks on it as `odc-pipeline`
+allows.
 
 **Ambiguous design choices that are not the operator's** — internal structure,
-a library, a data shape behind an API, error handling — go to an independent
-subagent: `odc-architect`, in a context that has not been building the work.
-Give it the goal, the options and the constraints. It picks one and gives the
-reason in a few lines. Put the choice and reason in the report, and in an ADR
-if it is architectural. If the subagent finds the choice affects a
-user-facing feature or critical functionality, it is the operator's question.
+a library, a data shape behind an API, error handling — go to a fresh
+`odc-architect` started with the Agent tool (never `subagent_type: "fork"`,
+which inherits what this context has seen). Brief it only with the goal, the
+options and the constraints, with the git guardrails, and tell it to answer in
+a few lines rather than write a plan. It picks one and gives the reason. Put
+the choice and reason in the report, and in an ADR if it is architectural. If
+the architect finds the choice affects a user-facing feature or critical
+functionality, it is the operator's question.
 
-**The goal.** Every run has a goal, in the operator's words; when the
-operator starts a `/goal` run, its text is the goal. If the operator has not given one, the
-first question is what it is. Then:
+**The goal.** Every run has a goal in the operator's words: a `/goal` text, or
+the request itself. Ask for one only when the request does not say what done
+looks like. Then:
 
-- Put the goal at the top of every lead's and subagent's brief.
+- A brief opens with the goal, then the ticket and branch.
 - Check each report and PR against it, and say in each relay how far the run
   has got toward it.
 - Do work only if it serves the goal. Work that does not serve it is a
@@ -60,20 +69,46 @@ first question is what it is. Then:
 
 ### Wrap up at 90% usage
 
-Check usage (`mcp__ccd_session_mgmt__get_usage`) at each checkpoint of a long
-run: a push, a PR, CI going green, a lead's report. At about 90% (operator,
-2026-10-20):
+Check usage (`mcp__ccd_session_mgmt__get_usage`, a deferred tool: load it with
+`ToolSearch` first) at each checkpoint of a long run: a push, a PR, CI going
+green, a lead's report. At about 90% (operator, 2026-10-20):
 
 1. Tell every lead and subagent to stop starting new work, finish or park the
    current step, and report.
-2. Commit the work in progress to its branch; the context that commits is the
-   orchestrator or the lead, as usual. Push it.
+2. Bring in any changes left in subagent worktrees, then commit the work in
+   progress to its branch. Only the orchestrator or the lead commits, and
+   subagents keep their git guardrails. Push it.
 3. Update memory so the next session can continue: the goal, sessions,
    branches, PRs, open questions, merge order and the next step. Use the
-   Claude memory directory and its `MEMORY.md` line. Repo `memory/` changes
-   only at merge time on `master`.
-4. Tell the operator in two or three lines where the work stopped and what
+   Claude memory directory. Each lead writes its own memory file; only the
+   orchestrator edits the `MEMORY.md` index line. Repo `memory/` changes only
+   at merge time on `master`.
+4. **Hand off to Codex if it can continue** (operator, 2026-11-07). See below.
+5. Tell the operator in two or three lines where the work stopped and what
    the next session starts with. Then stop.
+
+### Hand off to Codex as the next orchestrator
+
+When Claude usage is running out and Codex has more left, Codex can take over
+as orchestrator. This works only on the operator's Mac, where the `codex` CLI
+is installed and signed in, and the `codex` MCP server is registered in local
+config. In a cloud session, skip it.
+
+- **Check Codex has usage left.** If that cannot be confirmed, ask the
+  operator in one popup: "Claude usage is at 90%. Hand off to Codex?"
+- **Write the hand-off** in the memory file from step 3: the goal, the
+  operator's answers so far, open questions, branches and PRs with their
+  state, and the next step.
+- **Start Codex in a terminal tab the operator can talk to,** not with
+  `codex exec`, which cannot ask the operator anything. The prompt tells
+  Codex to read, in order: root `CLAUDE.md`, this skill, `memory/INDEX.md`,
+  and the hand-off file by its absolute path. Codex does not load
+  `.claude/skills/` on its own, so the prompt must name them.
+- **Codex follows the same rules:** operator questions as this skill says
+  (one at a time, in plain text, since Codex has no popups), no merging, the
+  git guardrails for anything it spawns, and reviews by a context that did not
+  write the code.
+- **Tell the operator** which terminal tab Codex is running in.
 
 ### How every question is asked
 
@@ -123,6 +158,7 @@ branches, PRs and merging, `odc-pipeline` is the source; this file follows it.
 | Running tests or guards and reporting the output              | **Sonnet** | `odc-navigator`         |
 | Simple implementation: a one-behaviour fix with a clear spec  | **Sonnet** | `odc-navigator`         |
 | Merge mechanics, once the operator says merge                 | **Sonnet** | `odc-navigator`         |
+| Taking over as orchestrator when Claude usage runs out        | **Codex**  | (hand-off — see above)  |
 
 **The line between "simple" and "complex" implementation.** Simple means: the
 change is fully specified before it starts, it touches one file or one obvious
@@ -249,8 +285,8 @@ is the go-ahead. Each lead works in its own worktree. The two sessions talk with
    ticket and uses `<area>/<short>` (`odc-pipeline`, "Planned steps get no
    ticket"). Never guess "the next free number".
 3. **Ask the operator's questions now,** per "How every question is asked",
-   and put the answers in the brief. Re-issuing a lead's card with the answers in it is cheaper than
-   relaying them afterwards.
+   and put the answers in the brief. Re-issuing a lead's card with the
+   answers in it is cheaper than relaying them afterwards.
 
 ### The lead's brief
 
