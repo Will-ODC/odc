@@ -95,7 +95,8 @@ and limitations.
 
 The operator's standing instruction, verbatim: **"using opus as an orchestrator
 and for complex implementation, and sonnet for routine exploration and simple
-implementation."**
+implementation."** Exception: Codex may take over as orchestrator when Claude
+usage runs out (operator, 2026-11-07); see `odc-orchestration`.
 
 **`.claude/skills/odc-orchestration` is the single home** for what that means:
 the routing table, the simple-versus-complex line, how to write a subagent

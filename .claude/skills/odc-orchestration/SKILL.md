@@ -90,24 +90,37 @@ green, a lead's report. At about 90% (operator, 2026-10-20):
 ### Hand off to Codex as the next orchestrator
 
 When Claude usage is running out and Codex has more left, Codex can take over
-as orchestrator. This works only on the operator's Mac, where the `codex` CLI
-is installed and signed in, and the `codex` MCP server is registered in local
-config. In a cloud session, skip it.
+as orchestrator. This works only where the `codex` CLI is installed and signed
+in, and the session has the terminal tools (the operator's Mac). If
+`command -v codex` finds nothing, or the terminal tools are missing (any cloud
+session), skip this step.
 
-- **Check Codex has usage left.** If that cannot be confirmed, ask the
-  operator in one popup: "Claude usage is at 90%. Hand off to Codex?"
+- **Ask the operator in one popup** (Claude cannot see how much Codex usage is
+  left): "Claude usage is at about 90%. Codex can carry on as the orchestrator
+  from the hand-off notes." Options: "Hand off to Codex (Recommended): Codex
+  continues in a terminal tab." / "Stop here: the next Claude session
+  continues."
 - **Write the hand-off** in the memory file from step 3: the goal, the
   operator's answers so far, open questions, branches and PRs with their
   state, and the next step.
 - **Start Codex in a terminal tab the operator can talk to,** not with
-  `codex exec`, which cannot ask the operator anything. The prompt tells
-  Codex to read, in order: root `CLAUDE.md`, this skill, `memory/INDEX.md`,
-  and the hand-off file by its absolute path. Codex does not load
-  `.claude/skills/` on its own, so the prompt must name them.
-- **Codex follows the same rules:** operator questions as this skill says
-  (one at a time, in plain text, since Codex has no popups), no merging, the
-  git guardrails for anything it spawns, and reviews by a context that did not
-  write the code.
+  `codex exec`, which cannot ask the operator anything. Open the tab with
+  `mcp__terminal__open_terminal_tab` (deferred: load it with `ToolSearch`), cd
+  to the repo, and run `codex "<prompt>"`, which starts an interactive session
+  with that prompt. The prompt tells Codex to read, in order: root
+  `CLAUDE.md`, this skill, `memory/INDEX.md`, and the hand-off file by its
+  absolute path. It also tells Codex that writing the hand-off file (outside
+  the repo) and `git push` may need the operator's approval in Codex's
+  sandbox; the operator approves them in the tab.
+- **Codex runs flat.** It does not start or talk to Claude lead sessions.
+  Leads stopped in step 1 stay stopped; their state is in the hand-off, and
+  the next Claude session resumes them.
+- **Codex follows the same rules:** operator questions as this skill says (in
+  plain text, one at a time, with numbered options, the recommended one
+  first), no merging, and the git guardrails for anything it spawns. It runs
+  each review as a separate `codex review` (a fresh process) on the PR branch,
+  or leaves the PR marked unreviewed for the next Claude session. A Codex
+  review is not an Opus review, so the report says which ran.
 - **Tell the operator** which terminal tab Codex is running in.
 
 ### How every question is asked
@@ -133,6 +146,10 @@ The operator's rule, verbatim:
 
 > **"using opus as an orchestrator and for complex implementation, and sonnet
 > for routine exploration and simple implementation."**
+
+One exception (operator, 2026-11-07): when Claude usage is running out and
+Codex has more left, Codex may take over as orchestrator (see "Hand off to
+Codex as the next orchestrator").
 
 This skill is the single source of truth for what that means in practice. The
 root `CLAUDE.md` points here and carries no table of its own; `.claude/agents/*.md` carry
