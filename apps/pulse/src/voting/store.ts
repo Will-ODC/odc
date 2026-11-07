@@ -28,6 +28,30 @@ export interface Vote {
   castAt: Date;
 }
 
+/** A page boundary for one browser's private vote history. */
+export interface VoteBefore {
+  castAt: Date;
+  pollId: string;
+}
+
+/**
+ * One row of a browser's vote history: its ballot, and enough of its poll to
+ * show it without another read. `poll` is absent only for a poll deleted
+ * while the page was read; the row still marks the page boundary.
+ */
+export interface HistoryVote {
+  pollId: string;
+  castAt: Date;
+  /** Chosen positions, ascending. */
+  ballot: number[];
+  poll?: {
+    question: string;
+    /** Labels of the chosen positions, in the same order as `ballot`. */
+    choices: string[];
+    closesAt?: Date;
+  };
+}
+
 /**
  * The outcome of a cast. `counted` is a first ballot, `changed` replaces a
  * prior ballot while the poll is still open, `closed` is a poll past its time.
@@ -110,6 +134,15 @@ export interface VotingStore {
   ): Promise<number>;
   /** The voter's own ballot, so the UI can show what they picked. */
   voteOf(pollId: string, voterId: string): Promise<Vote | undefined>;
+  /**
+   * The voter's current ballots, newest cast first (ties by poll id, bytewise),
+   * with one extra row so the caller can offer another page.
+   */
+  voteHistory(
+    voterId: string,
+    limit: number,
+    before?: VoteBefore,
+  ): Promise<HistoryVote[]>;
   results(pollId: string): Promise<Results>;
 }
 
@@ -293,6 +326,49 @@ export class InMemoryVotingStore implements VotingStore {
 
   async voteOf(pollId: string, voterId: string): Promise<Vote | undefined> {
     return this.#votes.get(voteKey(pollId, voterId));
+  }
+
+  async voteHistory(
+    voterId: string,
+    limit: number,
+    before?: VoteBefore,
+  ): Promise<HistoryVote[]> {
+    return [...this.#votes.values()]
+      .filter(
+        (vote) =>
+          vote.voterId === voterId &&
+          (before === undefined ||
+            vote.castAt < before.castAt ||
+            (vote.castAt.getTime() === before.castAt.getTime() &&
+              Buffer.compare(
+                Buffer.from(vote.pollId),
+                Buffer.from(before.pollId),
+              ) < 0)),
+      )
+      .sort(
+        (a, b) =>
+          b.castAt.getTime() - a.castAt.getTime() ||
+          Buffer.compare(Buffer.from(b.pollId), Buffer.from(a.pollId)),
+      )
+      .slice(0, limit + 1)
+      .map((vote) => {
+        const poll = this.#polls.get(vote.pollId);
+        const ballot = [...vote.choices].sort((a, b) => a - b);
+        return {
+          pollId: vote.pollId,
+          castAt: vote.castAt,
+          ballot,
+          ...(poll
+            ? {
+                poll: {
+                  question: poll.question,
+                  choices: ballot.flatMap((at) => poll.choices[at] ?? []),
+                  ...(poll.closesAt ? { closesAt: poll.closesAt } : {}),
+                },
+              }
+            : {}),
+        };
+      });
   }
 
   async results(pollId: string): Promise<Results> {

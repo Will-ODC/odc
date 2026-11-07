@@ -86,6 +86,104 @@ export function votingStoreConformance(
         });
       });
 
+      test("vote history lists only this browser's ballots, newest cast first, a re-cast moving to the top", async (t) => {
+        let now = AT;
+        const store = await make(() => now, t);
+        for (const id of ["p1", "p2", "p3"]) {
+          await store.createPoll({
+            id,
+            question: `Question ${id}`,
+            choices: ["Yes", "No", "Maybe"],
+            method: id === "p3" ? "approval" : "single",
+            ...(id === "p2" ? { closesAt: later(3600) } : {}),
+          });
+        }
+        await store.castVote("p1", "browser-a", [0]);
+        now = later(1);
+        await store.castVote("p2", "browser-a", [1]);
+        now = later(2);
+        await store.castVote("p3", "browser-a", [2, 0]);
+        await store.castVote("p3", "browser-b", [1]);
+        // p1 has the smallest id and the oldest vote; changing it must lift it.
+        now = later(3);
+        await store.castVote("p1", "browser-a", [1]);
+
+        assert.deepEqual(
+          (await store.voteHistory("browser-b", 20)).map((v) => v.pollId),
+          ["p3"],
+        );
+        const rows = await store.voteHistory("browser-a", 20);
+        assert.deepEqual(
+          rows.map((v) => v.pollId),
+          ["p1", "p3", "p2"],
+        );
+        assert.deepEqual(rows[0], {
+          pollId: "p1",
+          castAt: later(3),
+          ballot: [1],
+          poll: { question: "Question p1", choices: ["No"] },
+        });
+        // Approval picks come back in position order, labels beside them.
+        assert.deepEqual(rows[1]?.ballot, [0, 2]);
+        assert.deepEqual(rows[1]?.poll?.choices, ["Yes", "Maybe"]);
+        assert.deepEqual(rows[2]?.poll?.closesAt, later(3600));
+      });
+
+      test("vote history pages with one extra row and resumes after a cursor", async (t) => {
+        let now = AT;
+        const store = await make(() => now, t);
+        for (const id of ["p1", "p2", "p3"]) {
+          await store.createPoll({
+            id,
+            question: id,
+            choices: ["Yes", "No"],
+            method: "single",
+          });
+          await store.castVote(id, "browser-a", [0]);
+          now = new Date(now.getTime() + 1000);
+        }
+        const first = await store.voteHistory("browser-a", 1);
+        assert.deepEqual(
+          first.map((v) => v.pollId),
+          ["p3", "p2"],
+          "one shown plus the probe row",
+        );
+        const second = await store.voteHistory("browser-a", 1, {
+          castAt: first[0]!.castAt,
+          pollId: first[0]!.pollId,
+        });
+        assert.deepEqual(
+          second.map((v) => v.pollId),
+          ["p2", "p1"],
+        );
+      });
+
+      test("vote history breaks a cast-time tie by poll id, bytewise, descending", async (t) => {
+        const store = await storeAt(t);
+        for (const id of ["a", "B", "b"]) {
+          await store.createPoll({
+            id,
+            question: id,
+            choices: ["Yes", "No"],
+            method: "single",
+          });
+          await store.castVote(id, "browser-a", [0]);
+        }
+        // Same cast time for all three: "b" > "a" > "B" in byte order.
+        assert.deepEqual(
+          (await store.voteHistory("browser-a", 20)).map((v) => v.pollId),
+          ["b", "a", "B"],
+        );
+        const afterA = await store.voteHistory("browser-a", 20, {
+          castAt: AT,
+          pollId: "a",
+        });
+        assert.deepEqual(
+          afterA.map((v) => v.pollId),
+          ["B"],
+        );
+      });
+
       test("casting_again_before_close_changes_the_vote_and_the_count_follows", async (t) => {
         const store = await storeAt(t);
         await pollWith(store);

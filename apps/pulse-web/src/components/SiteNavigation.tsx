@@ -11,6 +11,7 @@ export function SiteNavigation({
   const links = [
     { href: "/", label: "Home" },
     { href: "/about", label: "About" },
+    { href: "/my-votes", label: "My votes" },
   ];
   return (
     <nav className="banner__nav" aria-label="Main navigation">

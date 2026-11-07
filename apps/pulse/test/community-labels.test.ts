@@ -158,7 +158,12 @@ test(
     await pool.query(
       "insert into allowed_domain values ('late-domain', 'example.test', false), ('known', 'known.test', false)",
     );
-    assert.deepEqual((await migrate(pool)).applied, ["006", "007", "008"]);
+    assert.deepEqual((await migrate(pool)).applied, [
+      "006",
+      "007",
+      "008",
+      "009",
+    ]);
     assert.deepEqual(
       (await pool.query("select * from community order by id")).rows,
       [

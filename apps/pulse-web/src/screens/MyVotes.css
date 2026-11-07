@@ -1,0 +1,10 @@
+/*
+ * My votes borrows Browse's list (Browse.css) and owns its detail lines, so a
+ * change to how Browse styles its own rows cannot restyle these.
+ */
+.my-votes__detail {
+  display: block;
+  margin-top: calc(var(--step) / 2);
+  color: var(--ballot-ink-soft);
+  font-size: var(--t-small);
+}

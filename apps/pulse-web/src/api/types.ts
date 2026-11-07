@@ -170,8 +170,25 @@ export interface PollPage {
   nextCursor: string | null;
 }
 
+export interface MyVote {
+  pollId: string;
+  question: string;
+  /** Labels of the chosen positions, in `ballot` order. */
+  choices: string[];
+  /** Chosen positions, ascending. */
+  ballot: number[];
+  castAt: string;
+  closesAt: string | null;
+  open: boolean;
+}
+export interface MyVotesPage {
+  votes: MyVote[];
+  nextCursor: string | null;
+}
+
 export interface PulseApi {
   listPolls(community: string, cursor?: string): Promise<PollPage>;
+  myVotes(cursor?: string): Promise<MyVotesPage>;
   /**
    * Ask for a sign-in link. `proofEmailsOptIn` is the opt-in for hearing what
    * came of the vote — the server's own name for it, and a real boolean either
