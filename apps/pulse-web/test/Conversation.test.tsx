@@ -7,7 +7,7 @@ import {
   within,
 } from "@testing-library/react";
 import userEvent from "@testing-library/user-event";
-import { afterEach, beforeAll, expect, it, vi } from "vitest";
+import { afterEach, beforeAll, describe, expect, it, vi } from "vitest";
 import { ApiError } from "../src/api/types.js";
 import type { Ballot, CastOutcome, Poll } from "../src/api/types.js";
 import { closingNote } from "../src/flow/conversation.js";
@@ -116,7 +116,7 @@ it("shows loading, empty and errors with a working retry", async () => {
   const { unmount } = render(
     <Conversation api={stubApi({ poll: fetchPoll })} pollId="missing" />,
   );
-  expect(screen.getByText("Loading…")).toBeTruthy();
+  expect(main().getByText("Loading…")).toBeTruthy();
   unmount();
   fetchPoll
     .mockRejectedValueOnce(new ApiError(404, "Missing"))
@@ -937,4 +937,120 @@ it("ends the just-posted line when Next moves to another question", async () => 
   await main().findByRole("heading", { name: "More parks?", level: 1 });
   expect(screen.queryByText(/Your question is live/)).toBeNull();
   expect(onDismiss).toHaveBeenCalledTimes(1);
+});
+
+describe("the Answered list (#484)", () => {
+  const rail = () =>
+    within(screen.getByRole("navigation", { name: "Answered" }));
+  const fromServer = {
+    pollId: "parks",
+    question: "More parks?",
+    choices: ["Yes"],
+    ballot: [1],
+    castAt: "2026-11-01T00:00:00.000Z",
+    closesAt: null,
+    open: true,
+  };
+
+  it("starts from this browser's saved answers and adds a new one on top", async () => {
+    render(
+      <Conversation
+        api={stubApi({
+          myVotes: async () => ({ votes: [fromServer], nextCursor: null }),
+        })}
+        pollId="ads-free"
+      />,
+    );
+    expect(
+      await rail().findByRole("link", { name: "More parks?" }),
+    ).toBeTruthy();
+    await main().findByRole("heading", { name: poll().question, level: 1 });
+    await answer();
+    const links = rail().getAllByRole("link");
+    expect(links.map((link) => link.textContent)).toEqual([
+      poll().question,
+      "More parks?",
+    ]);
+    expect(links[0]!.getAttribute("aria-current")).toBe("page");
+    expect(rail().getAllByText("Your answer: Yes")).toHaveLength(2);
+  });
+
+  it("puts a saved answer back on the page after a reload", async () => {
+    const cast = vi.fn();
+    render(
+      <Conversation
+        api={stubApi({
+          myBallot: async () => [0],
+          results: async () => tally(poll(), [0]),
+          cast,
+        })}
+        pollId="ads-free"
+      />,
+    );
+    await main().findByRole("heading", { name: poll().question, level: 1 });
+    expect(main().getByText("You picked No.")).toBeTruthy();
+    expect(main().getByText("Counted")).toBeTruthy();
+    expect(
+      within(screen.getByRole("complementary", { name: "Voting" })).getByRole(
+        "button",
+        { name: "Change my answer" },
+      ),
+    ).toBeTruthy();
+    expect(main().queryByRole("button", { name: "Submit" })).toBeNull();
+    expect(cast).not.toHaveBeenCalled();
+  });
+
+  it("asks the question as before when the saved answer cannot be read", async () => {
+    render(
+      <Conversation
+        api={stubApi({
+          myBallot: async () => [0],
+          results: () => Promise.reject(new Error("offline")),
+        })}
+        pollId="ads-free"
+      />,
+    );
+    await main().findByRole("heading", { name: poll().question, level: 1 });
+    openCard();
+    expect(within(card()).getByRole("button", { name: "Submit" })).toBeTruthy();
+  });
+
+  it("opens a listed question in place, without loading the page again", async () => {
+    const parks = poll({ id: "parks", question: "More parks?" });
+    render(
+      <Conversation
+        api={stubApi({
+          myVotes: async () => ({ votes: [fromServer], nextCursor: null }),
+          poll: async (id) => (id === "parks" ? parks : poll()),
+        })}
+        pollId="ads-free"
+      />,
+    );
+    await userEvent.click(
+      await rail().findByRole("link", { name: "More parks?" }),
+    );
+    expect(
+      await main().findByRole("heading", { name: "More parks?", level: 1 }),
+    ).toBeTruthy();
+  });
+
+  it("says when the list could not be read, and tries again", async () => {
+    const myVotes = vi
+      .fn()
+      .mockRejectedValueOnce(new Error("offline"))
+      .mockResolvedValue({ votes: [fromServer], nextCursor: "next" });
+    render(<Conversation api={stubApi({ myVotes })} pollId="ads-free" />);
+    expect(
+      await rail().findByText("We couldn't load your votes. Try again."),
+    ).toBeTruthy();
+    await userEvent.click(rail().getByRole("button", { name: "Try again" }));
+    expect(
+      await rail().findByRole("link", { name: "More parks?" }),
+    ).toBeTruthy();
+    expect(
+      rail()
+        .getByRole("link", { name: "See all my votes" })
+        .getAttribute("href"),
+    ).toBe("/my-votes");
+  });
 });
