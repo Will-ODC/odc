@@ -34,8 +34,8 @@
      says (operator, 2026-11-07). */
   --red: #c5221f; /* 5.6:1 */
 
-  /* A focus ring is dark gray: it shows on white, on the wash and on green. */
-  --focus: #1b1f1d;
+  /* Keyboard focus uses the accent at 5:1 on white, without a black frame. */
+  --focus: var(--green);
 
   /* Bars in results: the other answers gray (3.4:1), yours green. */
   --track: #858d89;

@@ -82,7 +82,7 @@
 .two-press__action--secondary {
   color: var(--ink);
   background: var(--surface);
-  border: var(--hairline) solid var(--line-strong);
+  border: var(--hairline) solid var(--line);
 }
 
 .two-press__action--primary:hover:not(:disabled):not([aria-disabled="true"]) {

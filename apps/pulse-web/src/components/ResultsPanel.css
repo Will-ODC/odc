@@ -9,10 +9,7 @@
   flex-direction: column;
   align-items: stretch;
   gap: 6px;
-  box-sizing: border-box;
   width: 100%;
-  /* Room for the focus ring, so it never cuts through the line above. */
-  padding: calc(var(--step) / 2);
   text-align: left;
 }
 
@@ -175,7 +172,7 @@
   align-self: center;
   padding: 11px 20px;
   border-radius: var(--r-control);
-  border: 1px solid var(--line-strong);
+  border: var(--hairline) solid var(--line);
   background: var(--surface);
   color: var(--ink);
   font: inherit;
@@ -227,9 +224,7 @@
   color: var(--muted);
 }
 
-/* Focus lands here after a vote; it is drawn in the app's ring, not the browser's. */
-.results:focus-visible {
-  outline: calc(var(--hairline) * 2) solid var(--focus);
-  outline-offset: calc(var(--hairline) * 4);
-  border-radius: var(--r-control);
+/* Focus lands here after a vote for announcement, not keyboard interaction. */
+.results:focus {
+  outline: none;
 }

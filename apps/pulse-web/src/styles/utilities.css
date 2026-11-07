@@ -22,7 +22,7 @@
   padding: var(--step) calc(var(--step) * 2);
   color: var(--ink);
   background: var(--surface);
-  border: var(--hairline) solid var(--line-strong);
+  border: var(--hairline) solid var(--line);
   border-radius: var(--r-control);
   cursor: pointer;
 }

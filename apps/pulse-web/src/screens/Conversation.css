@@ -128,7 +128,7 @@
   font-weight: 600;
   color: var(--ink);
   background: var(--surface);
-  border: var(--hairline) solid var(--line-strong);
+  border: var(--hairline) solid var(--line);
   border-radius: var(--r-control);
   padding: var(--step) calc(var(--step) * 1.5);
   cursor: pointer;
@@ -200,7 +200,7 @@
 }
 /* "Change my answer" is the quieter outlined button, as in the results above it. */
 .conversation .conversation__help > .conversation__handle--quiet {
-  border-color: var(--line-strong);
+  border-color: var(--line);
   color: var(--ink);
   background: var(--surface);
 }

@@ -71,7 +71,7 @@
   font-weight: 600;
   color: var(--ink-soft);
   background: transparent;
-  border: var(--hairline) solid var(--line-strong);
+  border: var(--hairline) solid var(--line);
   border-radius: var(--r-control);
   cursor: pointer;
 }

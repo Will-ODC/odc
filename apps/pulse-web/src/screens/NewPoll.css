@@ -261,7 +261,7 @@
   place-items: center;
   width: calc(var(--step) * 3);
   height: calc(var(--step) * 3);
-  border: var(--hairline) solid var(--line-strong);
+  border: var(--hairline) solid var(--line);
   border-radius: var(--r-pill);
   font-size: var(--t-small);
   font-weight: 700;
