@@ -207,6 +207,10 @@
     box-sizing: border-box;
     min-height: var(--touch);
   }
+  .signin__optin {
+    min-height: var(--touch);
+    align-items: center;
+  }
   .signin__go,
   .signin__again {
     box-sizing: border-box;

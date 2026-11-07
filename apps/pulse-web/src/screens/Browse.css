@@ -94,3 +94,9 @@
   display: block;
   margin: calc(var(--step) * 2) auto 0;
 }
+
+/* The way on from an empty list, centred under its message like Try again. */
+.browse__more {
+  margin: var(--step) 0 0;
+  text-align: center;
+}

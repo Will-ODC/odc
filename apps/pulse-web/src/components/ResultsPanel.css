@@ -9,7 +9,10 @@
   flex-direction: column;
   align-items: stretch;
   gap: 6px;
+  box-sizing: border-box;
   width: 100%;
+  /* Room for the focus ring, so it never cuts through the line above. */
+  padding: calc(var(--step) / 2);
   text-align: left;
 }
 
@@ -227,6 +230,6 @@
 /* Focus lands here after a vote; it is drawn in the app's ring, not the browser's. */
 .results:focus-visible {
   outline: calc(var(--hairline) * 2) solid var(--focus);
-  outline-offset: calc(var(--step) * 1.5);
+  outline-offset: calc(var(--hairline) * 4);
   border-radius: var(--r-control);
 }

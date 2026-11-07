@@ -71,7 +71,7 @@ export function MyVotes({ api }: { api: PulseApi }) {
           )}
         </ViewState>
         {data.status === "empty" ? (
-          <p>
+          <p className="browse__more">
             <a href="/">Explore questions</a>
           </p>
         ) : null}
