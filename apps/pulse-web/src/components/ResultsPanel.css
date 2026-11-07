@@ -1,8 +1,7 @@
 /*
- * Sits where the outcome sits - inside the ballot chrome, on the dark ground,
- * taking the place of what it replaces rather than covering it (the rule
- * `.ballot__done` records). So it borrows the dark ballot tokens and adds no
- * page chrome of its own.
+ * Sits where the outcome sits, under the saved answer, taking the place of
+ * what it replaces rather than covering it. It adds no page chrome of its
+ * own: the other answers' bars are gray and yours is the one green bar.
  */
 .results {
   position: relative;
@@ -18,14 +17,14 @@
   margin: 0;
   font-size: var(--t-body);
   font-weight: 600;
-  color: var(--ballot-ink);
+  color: var(--ink);
 }
 
 .results__yours {
   margin: 0 0 var(--step);
   font-size: var(--t-small);
   line-height: 1.5;
-  color: var(--ballot-ink-soft);
+  color: var(--ink-soft);
 }
 
 .results__list {
@@ -67,23 +66,24 @@
   gap: 6px;
   font-size: var(--t-small);
   line-height: 1.35;
-  color: var(--ballot-ink-soft);
+  color: var(--ink-soft);
 }
 
 .results__row[data-yours="true"] .results__label {
-  color: var(--ballot-ink);
+  color: var(--ink);
   font-weight: 600;
 }
 
 .results__badge {
   padding: 1px 7px;
+  border: var(--hairline) solid var(--green-line);
   border-radius: var(--r-pill);
-  background: var(--ballot-chip);
+  background: var(--green-wash);
   font-size: var(--t-eyebrow);
   font-weight: 700;
-  letter-spacing: 0.12em;
+  letter-spacing: 0.06em;
   text-transform: uppercase;
-  color: var(--ballot-ink-muted);
+  color: var(--green-hover);
 }
 
 .results__bar {
@@ -91,7 +91,7 @@
   position: relative;
   height: 8px;
   border-radius: var(--r-pill);
-  background: var(--ballot-chip);
+  background: var(--chip);
   overflow: hidden;
 }
 
@@ -105,7 +105,7 @@
 }
 
 .results__row[data-yours="true"] .results__bar::after {
-  background: rgba(var(--side-b), 0.85);
+  background: var(--green);
 }
 
 /*
@@ -119,14 +119,14 @@
 
 .results__bar--confirmed::after,
 .results__row[data-yours="true"] .results__bar--confirmed::after {
-  background: var(--ballot-ink-muted);
+  background: var(--muted);
 }
 
 .results__figure {
   grid-area: figure;
   font-size: var(--t-small);
   font-variant-numeric: tabular-nums;
-  color: var(--ballot-ink-muted);
+  color: var(--muted);
 }
 
 .results__figure--confirmed {
@@ -140,17 +140,17 @@
 }
 
 .results__link {
-  color: var(--ballot-ink-soft);
+  color: var(--green);
   text-decoration: underline;
   text-underline-offset: 0.2em;
 }
 
 .results__link:hover {
-  color: var(--ballot-ink);
+  color: var(--green-hover);
 }
 
 .results__link:focus-visible {
-  outline: calc(var(--hairline) * 2) solid var(--focus-ring);
+  outline: calc(var(--hairline) * 2) solid var(--focus);
   outline-offset: calc(var(--hairline) * 2);
 }
 
@@ -159,11 +159,11 @@
   font-size: var(--t-small);
   line-height: 1.45;
   /*
-   * `--ballot-ink-muted`, not `--ballot-ink-faint`: faint measures about 2.8:1
-   * on this ground, under the 4.5:1 floor, and this is the one line standing
+   * `--muted`, not `--faint`: faint sits nearest the 4.5:1 floor on this
+   * ground, and this is the one line standing
    * between an approval reader and "these numbers are broken".
    */
-  color: var(--ballot-ink-muted);
+  color: var(--muted);
 }
 
 .results__close,
@@ -171,17 +171,23 @@
   margin-top: var(--step);
   align-self: center;
   padding: 11px 20px;
-  border-radius: var(--r-pill);
-  border: 1px solid var(--control-line);
-  background: var(--control-bg);
-  color: var(--ballot-ink);
+  border-radius: var(--r-control);
+  border: 1px solid var(--line-strong);
+  background: var(--surface);
+  color: var(--ink);
   font: inherit;
   font-size: var(--t-body);
+  font-weight: 600;
   cursor: pointer;
 }
 
+.results__close:hover,
+.results__retry:hover {
+  background: var(--hover);
+}
+
 .results__close:focus-visible {
-  outline: 2px solid var(--focus-ring);
+  outline: 2px solid var(--focus);
   outline-offset: 2px;
 }
 
@@ -199,7 +205,7 @@
   margin-inline-end: calc(var(--step) * 6.5);
 }
 .results__retry:focus-visible {
-  outline: calc(var(--hairline) * 2) solid var(--focus-ring);
+  outline: calc(var(--hairline) * 2) solid var(--focus);
   outline-offset: calc(var(--hairline) * 2);
 }
 
@@ -215,5 +221,12 @@
   min-height: calc(var(--step) * 30);
   margin: 0;
   font-size: var(--t-small);
-  color: var(--ballot-ink-muted);
+  color: var(--muted);
+}
+
+/* Focus lands here after a vote; it is drawn in the app's ring, not the browser's. */
+.results:focus-visible {
+  outline: calc(var(--hairline) * 2) solid var(--focus);
+  outline-offset: calc(var(--hairline) * 4);
+  border-radius: var(--r-control);
 }

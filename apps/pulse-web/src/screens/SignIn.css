@@ -1,12 +1,8 @@
 /*
- * Signing in, and what the emailed link opens. Shares the ballot's dark
- * ground so the app does not change colour underneath someone.
- *
- * Follows docs/mockups/pulse-screens/01-claim.html and 02-sent.html for
- * wording and shape; the palette is screen 1's dark set rather than those
- * files' light Civic Glass, because the ballot beside it is dark and a light
- * sign-in would read as a different product. Whether the whole deck goes dark
- * is still the operator's open question.
+ * Signing in, and what the emailed link opens. Follows
+ * docs/mockups/pulse-screens/01-claim.html and 02-sent.html for wording and
+ * shape, and the light look (#482, pulse-light-v1.html) for colour: every
+ * screen is light, signed in or out.
  */
 .signin__title {
   margin: 0;
@@ -14,7 +10,7 @@
   font-weight: 800;
   letter-spacing: -0.03em;
   line-height: 1.2;
-  color: var(--ballot-ink);
+  color: var(--ink);
 }
 /* Focused on arrival for screen readers only; see `.welcome h1:focus`. */
 .signin__title:focus {
@@ -25,16 +21,16 @@
   margin: 0;
   font-size: var(--t-body);
   line-height: 1.5;
-  color: var(--ballot-ink-muted);
+  color: var(--muted);
 }
 
 .signin__lede b {
-  color: var(--ballot-ink-soft);
+  color: var(--ink-soft);
   font-weight: 600;
 }
 
 .signin__address {
-  color: var(--ballot-ink-soft);
+  color: var(--ink-soft);
   font-weight: 600;
 }
 
@@ -48,7 +44,7 @@
 .signin__label {
   font-size: var(--t-small);
   font-weight: 600;
-  color: var(--ballot-ink-soft);
+  color: var(--ink-soft);
 }
 
 .signin__field {
@@ -57,23 +53,27 @@
   padding: 14px 16px;
   font: inherit;
   font-size: var(--t-body);
-  color: var(--ballot-ink);
-  background: var(--ballot-chip);
-  border: 1px solid var(--ballot-line);
+  color: var(--ink);
+  background: var(--surface);
+  border: 1px solid var(--line-strong);
   border-radius: var(--r-control);
 }
 
+.signin__field:focus-visible {
+  border-color: var(--green);
+}
+
 .signin__field::placeholder {
-  color: var(--ballot-ink-faint);
+  color: var(--faint);
 }
 
 .signin__field:focus-visible {
-  outline: 2px solid rgb(var(--side-b));
+  outline: 2px solid var(--focus);
   outline-offset: 2px;
 }
 
 .signin__field[aria-invalid="true"] {
-  border-color: rgb(var(--side-a));
+  border-color: var(--red);
 }
 
 .signin__field:disabled {
@@ -86,7 +86,7 @@
   gap: 10px;
   font-size: var(--t-small);
   line-height: 1.45;
-  color: var(--ballot-ink-muted);
+  color: var(--muted);
   cursor: pointer;
 }
 
@@ -95,7 +95,7 @@
   width: 18px;
   height: 18px;
   margin: 1px 0 0;
-  accent-color: rgb(var(--side-b));
+  accent-color: var(--green);
 }
 
 /* One plain sentence: what happened, and what to do about it. */
@@ -103,7 +103,7 @@
   margin: 0;
   font-size: var(--t-small);
   line-height: 1.45;
-  color: rgb(var(--side-a));
+  color: var(--red);
 }
 
 .signin__go {
@@ -113,11 +113,15 @@
   font-size: var(--t-body);
   font-weight: 700;
   letter-spacing: -0.01em;
-  color: var(--ballot-bg);
-  background: rgb(var(--side-b));
+  color: var(--on-accent);
+  background: var(--green);
   border: none;
   border-radius: var(--r-control);
   cursor: pointer;
+}
+
+.signin__go:hover:not(:disabled) {
+  background: var(--green-hover);
 }
 
 .signin__go:disabled {
@@ -131,16 +135,16 @@
   font: inherit;
   font-size: var(--t-body);
   font-weight: 600;
-  color: var(--ballot-ink-soft);
-  background: transparent;
-  border: 1px solid var(--ballot-line);
+  color: var(--ink);
+  background: var(--surface);
+  border: 1px solid var(--line-strong);
   border-radius: var(--r-control);
   cursor: pointer;
 }
 
 .signin__go:focus-visible,
 .signin__again:focus-visible {
-  outline: 2px solid rgb(var(--side-b));
+  outline: 2px solid var(--focus);
   outline-offset: 2px;
 }
 
@@ -164,9 +168,9 @@
   gap: calc(var(--step) * 1.5);
   padding: calc(var(--step) * 1.75) calc(var(--step) * 2);
   font-size: var(--t-body);
-  color: var(--ballot-ink);
-  background: var(--ballot-chip);
-  border: var(--hairline) solid var(--ballot-line);
+  color: var(--ink);
+  background: var(--surface);
+  border: var(--hairline) solid var(--line);
   border-radius: var(--r-control);
   cursor: pointer;
 }
@@ -174,16 +178,16 @@
 .signin__choice input {
   flex: 0 0 auto;
   margin: 0;
-  accent-color: rgb(var(--side-b));
+  accent-color: var(--green);
 }
 
 .signin__choice:has(input:checked) {
-  background: var(--surface-hover);
-  border-color: rgb(var(--side-b));
+  background: var(--green-wash);
+  border-color: var(--green);
 }
 
 .signin__choice:has(input:focus-visible) {
-  outline: calc(var(--hairline) * 2) solid rgb(var(--side-b));
+  outline: calc(var(--hairline) * 2) solid var(--focus);
   outline-offset: calc(var(--hairline) * 2);
 }
 
@@ -195,4 +199,19 @@
 .signin__again:disabled {
   opacity: 0.55;
   cursor: default;
+}
+
+/* The phone version (#482): a 16px field, so the phone does not zoom in. */
+@media (max-width: 699px) {
+  .signin__field {
+    min-height: calc(var(--touch) + var(--step) / 2);
+  }
+  .signin__go,
+  .signin__again {
+    box-sizing: border-box;
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    min-height: var(--touch);
+  }
 }

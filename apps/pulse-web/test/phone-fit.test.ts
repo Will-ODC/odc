@@ -54,7 +54,7 @@ describe("fitting a phone", () => {
       ".conversation__help > button",
     );
     expect(button).toContain("background: rgb(var(--side-b))");
-    expect(button).toContain("color: var(--ballot-bg)");
+    expect(button).toContain("color: var(--on-accent)");
     expect(button).toMatch(/font-weight:\s*700/);
     const submit = rule("components/VoteCard.css", ".vote-card button");
     for (const property of ["padding", "font-size"]) {

@@ -2,8 +2,8 @@
   min-height: 100dvh;
   display: flex;
   flex-direction: column;
-  color: var(--ballot-ink);
-  background: var(--ballot-page);
+  color: var(--ink);
+  background: var(--page);
 }
 .welcome__main {
   box-sizing: border-box;
@@ -38,7 +38,7 @@
   text-wrap: pretty;
   font-size: var(--t-body);
   line-height: 1.5;
-  color: var(--ballot-ink-soft);
+  color: var(--ink-soft);
 }
 .welcome__steps {
   display: grid;
@@ -54,9 +54,9 @@
   grid-template-columns: calc(var(--step) * 4) minmax(0, 1fr);
   column-gap: calc(var(--step) * 1.5);
   padding: calc(var(--step) * 1.5);
-  border: var(--hairline) solid var(--ballot-line);
-  border-radius: var(--r-control);
-  background: var(--surface-rest);
+  border: var(--hairline) solid var(--line);
+  border-radius: var(--r-card);
+  background: var(--surface);
 }
 .welcome__steps li::before {
   content: counter(intro-step) / "";
@@ -65,10 +65,10 @@
   place-items: center;
   align-self: start;
   aspect-ratio: 1;
-  border: var(--hairline) solid var(--control-line);
+  border: none;
   border-radius: var(--r-pill);
-  color: rgb(var(--side-b));
-  background: var(--surface-hover);
+  color: var(--green-hover);
+  background: var(--green-wash);
   font-size: var(--t-body);
   font-weight: 700;
 }
@@ -79,12 +79,12 @@
 .welcome__steps p {
   font-size: var(--t-small);
   line-height: 1.5;
-  color: var(--ballot-ink-soft);
+  color: var(--ink-soft);
   margin: calc(var(--step) / 2) 0 0;
 }
 .welcome__steps small,
 .welcome__note {
-  color: var(--ballot-ink-soft);
+  color: var(--ink-soft);
   font-size: var(--t-small);
   line-height: 1.5;
 }
@@ -104,16 +104,19 @@
   font-weight: 700;
   border: none;
   border-radius: var(--r-control);
-  background: rgb(var(--side-b));
-  color: var(--ballot-bg);
+  background: var(--green);
+  color: var(--on-accent);
   cursor: pointer;
+}
+.welcome__start:hover:not(:disabled) {
+  background: var(--green-hover);
 }
 .welcome__start:disabled {
   opacity: 0.55;
   cursor: default;
 }
 .welcome__start:focus-visible {
-  outline: calc(var(--hairline) * 2) solid var(--focus-ring);
+  outline: calc(var(--hairline) * 2) solid var(--focus);
   outline-offset: calc(var(--hairline) * 4);
 }
 @media (min-width: 700px) {
@@ -154,7 +157,7 @@
   font-size: var(--t-small);
   margin: calc(var(--step) * 2) 0 var(--step);
   text-align: center;
-  color: var(--ballot-ink-soft);
+  color: var(--ink-soft);
 }
 .welcome__progress,
 .welcome__purpose {
@@ -166,12 +169,12 @@
   margin: 0;
   padding: calc(var(--step) * 1.5) calc(var(--step) * 1.5)
     calc(var(--step) * 1.5) calc(var(--step) * 3.5);
-  border: var(--hairline) solid var(--ballot-line);
+  border: var(--hairline) solid var(--line);
   border-radius: var(--r-control);
-  background: var(--surface-rest);
+  background: var(--surface);
 }
 .welcome__progress a {
-  color: var(--ballot-ink-soft);
+  color: var(--green);
 }
 .welcome__purpose {
   display: grid;
@@ -182,7 +185,7 @@
 }
 .welcome__purpose li {
   padding-inline-start: calc(var(--step) * 1.5);
-  border-inline-start: calc(var(--hairline) * 2) solid var(--control-line);
+  border-inline-start: calc(var(--hairline) * 2) solid var(--line-strong);
 }
 .welcome__questions {
   list-style: none;
@@ -196,7 +199,7 @@
 }
 .welcome__questions small {
   justify-self: center;
-  color: var(--ballot-ink-soft);
+  color: var(--ink-soft);
   font-size: var(--t-small);
 }
 .welcome__questions button {
@@ -204,11 +207,14 @@
   padding: calc(var(--step) * 2);
   font: inherit;
   font-size: var(--t-body);
-  color: var(--ballot-ink);
-  background: var(--surface-hover);
-  border: var(--hairline) solid var(--control-line);
+  color: var(--ink);
+  background: var(--surface);
+  border: var(--hairline) solid var(--line);
   border-radius: var(--r-control);
   cursor: pointer;
+}
+.welcome__questions button:hover:not(:disabled) {
+  background: var(--hover);
 }
 .welcome__questions button:disabled {
   opacity: 0.55;
@@ -216,7 +222,7 @@
 }
 .welcome__questions button:focus-visible,
 .welcome__progress a:focus-visible {
-  outline: calc(var(--hairline) * 2) solid var(--focus-ring);
+  outline: calc(var(--hairline) * 2) solid var(--focus);
   outline-offset: calc(var(--hairline) * 2);
 }
 

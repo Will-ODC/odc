@@ -7,7 +7,7 @@
   gap: var(--step);
   min-width: 0;
   font-size: var(--t-small);
-  color: var(--ballot-ink-muted);
+  color: var(--muted);
 }
 
 .two-press__question,
@@ -18,12 +18,12 @@
 }
 
 .two-press__error {
-  color: var(--ballot-ink);
+  color: var(--ink);
 }
 
 .two-press__action {
   font: inherit;
-  color: var(--ballot-ink-muted);
+  color: var(--muted);
   background: none;
   border: 0;
   padding: 0;
@@ -32,11 +32,11 @@
 }
 
 .two-press__action:hover:not(:disabled):not([aria-disabled="true"]) {
-  color: var(--ballot-ink);
+  color: var(--ink);
 }
 
 .two-press__action:focus-visible {
-  outline: 2px solid var(--ballot-ink);
+  outline: 2px solid var(--focus);
   outline-offset: 2px;
 }
 
@@ -59,7 +59,7 @@
 .two-press--primary .two-press__question,
 .two-press--primary .two-press__error {
   text-align: start;
-  color: var(--ballot-ink);
+  color: var(--ink);
   font-weight: 600;
 }
 
@@ -74,24 +74,29 @@
 }
 
 .two-press__action--primary {
-  color: var(--ballot-bg);
-  background: rgb(var(--side-b));
+  color: var(--on-accent);
+  background: var(--green);
   border: none;
 }
 
 .two-press__action--secondary {
-  color: var(--ballot-ink-soft);
-  background: transparent;
-  border: var(--hairline) solid var(--ballot-line);
+  color: var(--ink);
+  background: var(--surface);
+  border: var(--hairline) solid var(--line-strong);
 }
 
 .two-press__action--primary:hover:not(:disabled):not([aria-disabled="true"]) {
-  color: var(--ballot-bg);
+  color: var(--on-accent);
+  background: var(--green-hover);
+}
+
+.two-press__action--secondary:hover:not(:disabled) {
+  background: var(--hover);
 }
 
 .two-press__action--primary:focus-visible,
 .two-press__action--secondary:focus-visible {
-  outline: 2px solid rgb(var(--side-b));
+  outline: 2px solid var(--focus);
   outline-offset: 2px;
 }
 

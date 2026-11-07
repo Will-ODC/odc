@@ -18,11 +18,11 @@
   display: none;
   flex-direction: column;
   gap: calc(var(--step) * 2);
-  color: var(--ballot-ink);
-  background: var(--ballot-bg);
-  border: var(--hairline) solid var(--control-line);
+  color: var(--ink);
+  background: var(--page);
+  border: var(--hairline) solid var(--line);
   border-radius: var(--r-card);
-  box-shadow: var(--shadow-ballot);
+  box-shadow: var(--shadow-pop);
 }
 
 /* `display` only while open: an author `display` would otherwise beat the
@@ -61,7 +61,7 @@
   font-size: var(--t-eyebrow);
   font-weight: 700;
   letter-spacing: 0.16em;
-  color: var(--ballot-ink-faint);
+  color: var(--faint);
 }
 
 .decision__close {
@@ -69,10 +69,10 @@
   font: inherit;
   font-size: var(--t-small);
   font-weight: 600;
-  color: var(--ballot-ink-soft);
+  color: var(--ink-soft);
   background: transparent;
-  border: var(--hairline) solid var(--ballot-line);
-  border-radius: var(--r-pill);
+  border: var(--hairline) solid var(--line-strong);
+  border-radius: var(--r-control);
   cursor: pointer;
 }
 
@@ -90,11 +90,15 @@
   font-size: var(--t-body);
   font-weight: 700;
   letter-spacing: -0.01em;
-  color: var(--ballot-bg);
-  background: rgb(var(--side-b));
+  color: var(--on-accent);
+  background: var(--green);
   border: none;
   border-radius: var(--r-control);
   cursor: pointer;
+}
+
+.decision__primary:hover:not(:disabled) {
+  background: var(--green-hover);
 }
 
 .decision__primary:disabled {
@@ -104,7 +108,7 @@
 
 .decision__close:focus-visible,
 .decision__primary:focus-visible {
-  outline: calc(var(--hairline) * 2) solid rgb(var(--side-b));
+  outline: calc(var(--hairline) * 2) solid var(--focus);
   outline-offset: calc(var(--hairline) * 2);
 }
 

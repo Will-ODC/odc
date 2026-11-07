@@ -4,10 +4,11 @@
   grid-template-columns: auto minmax(0, 1fr) auto;
   align-items: center;
   gap: var(--step) var(--gutter);
+  min-height: var(--bar-h);
   padding: var(--step) var(--gutter);
-  border-bottom: var(--hairline) solid var(--control-line);
-  background: var(--surface-rest);
-  color: var(--ballot-ink);
+  border-bottom: var(--hairline) solid var(--line);
+  background: var(--surface);
+  color: var(--ink);
 }
 .banner__brand {
   grid-column: 1;
@@ -15,10 +16,10 @@
   display: flex;
   align-items: center;
   gap: var(--step);
-  font-size: var(--t-small);
-  font-weight: 600;
-  letter-spacing: 0.02em;
-  color: var(--brand-ink);
+  font-size: var(--t-brand);
+  font-weight: 700;
+  letter-spacing: -0.01em;
+  color: var(--ink);
   text-decoration: none;
 }
 .banner__brand i {
@@ -26,7 +27,7 @@
   width: var(--step);
   height: var(--step);
   border-radius: var(--r-pill);
-  background: var(--brand-dot);
+  background: var(--green);
   flex: none;
   animation: brand-pulse 5.6s ease-in-out infinite;
   transform-origin: center;
@@ -36,7 +37,7 @@
   content: "";
   position: absolute;
   inset: -1px;
-  border: 1px solid var(--brand-dot);
+  border: 1px solid var(--green);
   border-radius: inherit;
   opacity: 0;
   pointer-events: none;
@@ -103,37 +104,45 @@
 }
 .banner__nav a,
 .banner__actions > a {
-  color: var(--ballot-ink-soft);
+  color: var(--ink-soft);
   font-size: var(--t-small);
+  font-weight: 500;
   text-decoration: none;
   white-space: nowrap;
+  padding: calc(var(--step) * 0.75) calc(var(--step) * 1.25);
+  border-radius: var(--r-control);
 }
-.banner__nav a {
-  padding-inline: calc(var(--step) * 1.5);
+.banner__nav {
+  gap: calc(var(--step) / 2);
 }
-.banner__nav a:first-child {
-  padding-inline-start: 0;
+.banner__nav a:hover,
+.banner__actions > a:hover {
+  background: var(--hover);
+  color: var(--ink);
 }
-.banner__nav a + a,
-.banner__actions > * + * {
-  border-inline-start: var(--hairline) solid var(--control-line);
-}
-.banner__actions > * + * {
-  padding-inline-start: calc(var(--step) * 1.5);
-}
-.banner__post,
-.banner a[aria-current="page"] {
+.banner__nav a[aria-current="page"] {
+  background: var(--green-wash);
+  color: var(--green-hover);
   font-weight: 600;
 }
-.banner a:hover,
-.banner a[aria-current="page"] {
-  color: var(--ballot-ink);
+/* The two actions read as buttons: Post is the one solid green thing in the bar. */
+.banner__actions > .banner__post {
+  background: var(--green);
+  color: var(--on-accent);
+  font-weight: 600;
 }
-.banner a:hover {
-  text-decoration: underline;
+.banner__actions > .banner__post:hover,
+.banner__actions > .banner__post[aria-current="page"] {
+  background: var(--green-hover);
+  color: var(--on-accent);
+}
+.banner__actions > .banner__sign-in {
+  border: var(--hairline) solid var(--line-strong);
+  color: var(--ink);
+  font-weight: 600;
 }
 .banner a:focus-visible {
-  outline: calc(var(--hairline) * 2) solid var(--focus-ring);
+  outline: calc(var(--hairline) * 2) solid var(--focus);
   outline-offset: calc(var(--hairline) * 2);
 }
 @media (max-width: 399px) {
@@ -148,20 +157,65 @@
   }
 }
 
+/*
+ * The phone version (#482): under 700px the navigation becomes a row of
+ * tabs across the full width under the brand, each a 44px target, the
+ * current one underlined in green.
+ */
+@media (max-width: 699px) {
+  .banner {
+    padding: 0 var(--gutter);
+    row-gap: 0;
+  }
+  .banner__brand,
+  .banner__actions {
+    min-height: var(--bar-h);
+  }
+  .banner__nav {
+    margin-inline: calc(var(--gutter) * -1);
+    padding-inline: var(--step);
+    border-top: var(--hairline) solid var(--line);
+    flex-wrap: nowrap;
+    gap: 0;
+  }
+  .banner__nav a {
+    flex: 1;
+    min-height: var(--touch);
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    padding: 0 var(--step);
+    border-radius: 0;
+    border-bottom: calc(var(--hairline) * 2) solid transparent;
+    font-size: var(--t-body);
+  }
+  .banner__nav a[aria-current="page"] {
+    background: none;
+    color: var(--green);
+    border-bottom-color: var(--green);
+  }
+  .banner__actions > a {
+    box-sizing: border-box;
+    min-height: calc(var(--touch) - var(--step) / 2);
+    display: inline-flex;
+    align-items: center;
+    padding-block: 0;
+    font-size: var(--t-small);
+  }
+}
+
 .banner__nav > .account-menu {
   display: flex;
   align-items: center;
-  border-inline-start: var(--hairline) solid var(--control-line);
-  padding-inline-start: calc(var(--step) * 1.5);
 }
 .banner__nav .account-menu__button {
   display: inline-flex;
   align-items: center;
   gap: var(--step);
   padding: calc(var(--step) / 2) var(--step);
-  border: var(--hairline) solid var(--control-line);
+  border: var(--hairline) solid var(--line-strong);
   border-radius: var(--r-control);
-  background: var(--surface-rest);
+  background: var(--surface);
 }
 .banner__nav .account-menu__button::after {
   content: "";
@@ -176,8 +230,8 @@
 }
 .banner__nav .account-menu__button:hover,
 .banner__nav .account-menu__button[aria-expanded="true"] {
-  background: var(--surface-hover);
-  color: var(--ballot-ink);
+  background: var(--hover);
+  color: var(--ink);
 }
 .banner__nav .account-menu__panel {
   inset-inline-start: calc(var(--step) * 1.5);
@@ -194,5 +248,5 @@
 }
 .banner__nav .account-menu__panel a:hover,
 .banner__nav .account-menu__panel a[aria-current="page"] {
-  background: var(--surface-hover);
+  background: var(--hover);
 }

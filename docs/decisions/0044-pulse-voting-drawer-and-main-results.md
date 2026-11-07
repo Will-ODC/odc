@@ -38,6 +38,11 @@ reminder. How votes count is a small circular info link immediately after Change
 my answer. The live page has no Show me how tutorial control.
 This changes layout, not vote storage, identity or APIs.
 
+**Phone version (#482, operator, 2026-11-07).** Under 700px wide the popout
+is a full-width sheet along the bottom edge of the screen, and its closed
+handle is one full-width button. Wider screens keep the bottom-right popout.
+Behavior is unchanged.
+
 ## Consequences
 
 Results remain readable outside the voting surface. Keyboard focus follows a
