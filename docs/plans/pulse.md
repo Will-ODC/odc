@@ -187,7 +187,8 @@ The design, storage, HTTP and public attribution foundations are merged; see
    errors, keyboard and actual phone/desktop checks. No ballot side effects.
 
 Each step receives fresh review (substantive fixes reviewed again), package checks,
-push/PR and all required green CI before moving on. No agent approval or merge.
+push/PR and all required green CI before moving on. No agent approval or merge (superseded 2026-11-07: the orchestrator merges
+properly reviewed PRs, per `odc-orchestration`, "Merging").
 Use the next unused migration number from current master; never edit an applied
 migration.
 Do not invent authors or membership for existing data.

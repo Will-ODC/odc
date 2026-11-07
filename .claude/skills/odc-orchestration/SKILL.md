@@ -20,8 +20,7 @@ everything the operator has not kept for themself. Ask the operator only about:
   Opus per the table.
 - **Goals in tension** — when two goals pull apart and nothing written says
   which wins.
-- **What the operator owns** — merging a PR that changes `contracts/`,
-  `docs/charter.md` or either verifier, audits, deploys, spending, a charter
+- **What the operator owns** — merging the PRs listed in "Merging", audits, deploys, spending, a charter
   conflict, and anything an ADR or memory entry reserves to the operator.
 
 **Check the written goals before asking.** For the ODC core: `docs/charter.md`
@@ -70,29 +69,45 @@ looks like. Then:
 ### Merging
 
 The orchestrator merges a PR once it is properly reviewed (operator,
-2026-11-07). A PR that changes `contracts/`, `docs/charter.md`,
-`services/verifier/` or `tools/verifier-ts/` is the exception: report it ready,
-and the operator merges it.
+2026-11-07). **The operator merges** — the orchestrator reports it ready — any
+PR whose diff touches one of these (operator, 2026-11-07):
 
-**Properly reviewed** means all of these, checked on the PR's current head
-commit:
+- `contracts/`, `docs/charter.md`, `services/verifier/`, `tools/verifier-ts/`;
+- the merge and review rules: `.claude/skills/odc-orchestration/`,
+  `.claude/skills/odc-pipeline/`, `.claude/skills/odc-code-review/`,
+  `.claude/agents/odc-reviewer.md`, `.claude/agents/odc-ui-reviewer.md`, and
+  root `CLAUDE.md`;
+- CI and guards: `.github/` and `lefthook.yml`.
 
-- a fresh-context `odc-reviewer` verdict of APPROVE or APPROVE WITH NITS on
-  that commit. Any later commit, including a merge of `master` that changes
-  code or tests, needs a new review (see "Re-check a PR after `master` is merged into it");
-- for a **UI PR** — one that touches `apps/pulse-web/**`, `services/web/**` or
-  `docs/mockups/**` — also an approving verdict from a fresh
-  `odc-ui-reviewer`, a senior UI and design reviewer that checks the screens
-  in the real browser;
+Check it with one command, which prints nothing when the orchestrator may merge:
+`gh pr diff <N> --name-only | grep -E '^(contracts/|docs/charter\.md|services/verifier/|tools/verifier-ts/|\.claude/skills/odc-(orchestration|pipeline|code-review)/|\.claude/agents/odc-(ui-)?reviewer\.md|CLAUDE\.md|\.github/|lefthook\.yml)'`
+
+**Properly reviewed** means all of these:
+
+- a fresh-context `odc-reviewer` verdict of APPROVE or APPROVE WITH NITS that
+  names the sha it reviewed, and that sha is the PR's current head. Any later
+  commit needs a fresh `odc-reviewer` on the new head. When the only new commit
+  is a `master` merge whose conflict resolution changed no code or tests, a
+  short review of `git diff <approved-sha> <head>` is enough;
+- for a **UI PR** — one that touches `apps/pulse-web/**`, `services/web/**`,
+  `docs/mockups/**`, or user-visible strings in `apps/pulse/**` — also an
+  APPROVE or APPROVE WITH NITS from a fresh `odc-ui-reviewer` (a senior UI and
+  design reviewer that checks the screens in the real browser) on the same
+  sha. Start it in a review worktree at the PR head, like `odc-reviewer`, and
+  tell it the worktree's absolute path for its `launch.json` entry;
 - every CI check green;
 - no blocking or should-fix finding left open, and no open operator question
   on it. Nits may stay if the report lists them.
 
-**To merge:** `gh pr merge <N> --squash --match-head-commit <sha>`, with the sha
-the reviews approved, so a commit pushed after the review cannot slip in. Then
-follow the merge checklist in `odc-pipeline` (memory on `master`). Stacked PRs
-follow `odc-pipeline`'s stack rules. Tell the operator what was merged in one
-line per PR.
+GitHub does not enforce any of this: the `protect-master` ruleset requires no
+approving reviews, only green checks and an up-to-date branch. The rule above is
+the gate.
+
+**To merge:** `gh pr merge <N> --squash --match-head-commit <sha>`, with the
+head sha the latest review approved, so a commit pushed after the review cannot
+slip in. Then follow the merge checklist in `odc-pipeline` (memory on
+`master`). Stacked PRs follow `odc-pipeline`'s stack rules. Tell the operator
+what was merged in one line per PR.
 
 ### Use Codex where it helps
 
@@ -100,12 +115,18 @@ Codex (the `codex` CLI) is a different model that has seen nothing of this
 run, so it adds independence (operator, 2026-11-07). Use it where the CLI is
 installed (`command -v codex`), as `codex review` or `codex exec`:
 
-- **A second review** on UI PRs and on complex PRs: run `codex review --base
-master` in the PR's review worktree. Send its findings to the owner like any
-  other finding. It adds to the Claude reviews and does not replace them.
+- **A second review** on UI PRs and on complex PRs. In a review worktree
+  checked out at the PR head, run `git fetch origin && codex review --base
+origin/master`. It takes no custom instructions together with `--base`. The
+  orchestrator triages its findings into [BLOCKING] / [SHOULD] / [NIT] and
+  sends them to the owner like any other finding. It adds to the Claude reviews
+  and never counts as the `odc-reviewer` approval.
 - **Routine read-only work** when Claude usage is high: lookups and inventory
   with `codex exec -s read-only -C <worktree> "<brief>"`. The brief has the
   same five sections as any other.
+- **If Codex rejects its configured model** ("not supported when using Codex
+  with a ChatGPT account"), pass a listed one with `-c model="<slug>"`; `codex
+debug models` lists them. Do not edit the operator's `~/.codex/config.toml`.
 - **Taking over as orchestrator** at 90% usage (below).
 
 ### Wrap up at 90% usage
@@ -437,8 +458,7 @@ go past it.
 - **Re-check a PR after `master` is merged into it.** Whoever merges `master`
   in (the orchestrator, or the lead that owns the PR) runs the unit's tests,
   lint, typecheck and `pnpm -s format:check` on the merged result before
-  pushing. If resolving the conflict changed code or tests, not only prose,
-  the orchestrator has a fresh `odc-reviewer` review that merge commit. In the
+  pushing. What review the merged head then needs is set in "Merging". In the
   2026-10-20 run, merging `master` into an approved PR broke three tests from a
   PR merged an hour earlier.
 - **When the leads report,** check their PRs do not collide — settle a clash

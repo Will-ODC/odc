@@ -30,9 +30,9 @@ Plus one repo-wide workflow:
   tamper, expect INVALID.
 
 Merges to `master` require: green CI + one review + linear history. The
-orchestrator merges once a PR is properly reviewed, except PRs that change
-`contracts/`, `docs/charter.md` or a verifier, which the operator merges
-(operator, 2026-11-07; `odc-orchestration`, "Merging").
+orchestrator merges once a PR is properly reviewed; the operator merges the
+PRs on the operator-merges list (operator, 2026-11-07). The definition and the
+list live in `odc-orchestration`, "Merging".
 No direct pushes to `master`, no exceptions, including the operator.
 
 ## Local hooks (lefthook)
@@ -174,8 +174,10 @@ IS the ticket.
 1. CI green, all required stages.
 2. Review verdict recorded (APPROVE or APPROVE WITH NITS, per `odc-code-review`)
    on the head commit being merged, plus the `odc-ui-reviewer` verdict for a UI
-   PR (`odc-orchestration`, "Merging").
-3. Squash-merge; message references the issue.
+   PR (`odc-orchestration`, "Merging"), and the PR is not on that section's
+   operator-merges list.
+3. Squash-merge with `gh pr merge <N> --squash --match-head-commit <approved
+sha>`; message references the issue.
 4. Update the **workstream's** memory entry (done / next / blockers):
    `memory/STATE.md` for the ODC core, `memory/pulse.md` for pulse — see
    `memory/INDEX.md`. This happens HERE, on master at merge time, never on
