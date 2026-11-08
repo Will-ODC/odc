@@ -1,6 +1,6 @@
 name: pulse-images
 
-# Builds both pulse images whenever something that goes into them changes.
+# Builds both pulse images when their inputs change and on a weekly/manual scan.
 #
 # The images were written in #165 and first built by hand on 2026-10-09; until
 # then "the first docker build is still the test" sat in memory for a month,
@@ -12,6 +12,9 @@ name: pulse-images
 # is NOT a required check until a repo admin adds `pulse-images` to the
 # `protect-master` ruleset, so until then a red run warns and blocks nothing.
 on:
+  schedule:
+    - cron: "0 6 * * 1"
+  workflow_dispatch:
   pull_request:
     paths:
       - "apps/pulse/**"
@@ -45,6 +48,8 @@ jobs:
       - name: Scan the API image
         uses: aquasecurity/trivy-action@ed142fd0673e97e23eac54620cfb913e5ce36c25 # v0.36.0
         with:
+          # Pin the scanner binary independently of the action wrapper.
+          version: v0.70.0
           image-ref: pulse-api:ci
           format: table
           exit-code: 1
@@ -54,6 +59,8 @@ jobs:
         if: ${{ !cancelled() && steps.build-web.outcome == 'success' }}
         uses: aquasecurity/trivy-action@ed142fd0673e97e23eac54620cfb913e5ce36c25 # v0.36.0
         with:
+          # Pin the scanner binary independently of the action wrapper.
+          version: v0.70.0
           image-ref: pulse-web:ci
           format: table
           exit-code: 1
