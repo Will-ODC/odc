@@ -55,7 +55,22 @@ function hasClosed(poll: Poll): boolean {
   return poll.closesAt !== null && Date.parse(poll.closesAt) <= Date.now();
 }
 
-/** A whole run stays in one conversation; only its active card changes. */
+/** Rail copy when the saved answers cannot be read (#488). */
+const RAIL_ERROR = "We couldn't load your votes.";
+const RAIL_PARTIAL_ERROR = "We couldn't load all your votes.";
+/**
+ * How long a question waits for its saved answer before it is asked anyway.
+ * A stalled read must not leave a question that has loaded on "Loading…".
+ */
+const RESTORE_WAIT_MS = 5000;
+
+/**
+ * A whole run stays in one conversation; only its active card changes.
+ *
+ * Opening another question from the rail, or going Back to one, keeps this
+ * conversation on screen: App does not remount it per question, and the
+ * question shown follows `pollId` when the address changes (#488).
+ */
 export function Conversation({
   api,
   pollId,
@@ -76,6 +91,15 @@ export function Conversation({
   posted?: { url: string; onDismiss: () => void };
 }) {
   const [at, setAt] = useState(pollId);
+  const [busy, setBusy] = useState(false);
+  // The address changed (a rail row, or Back and Forward): show its question.
+  // A cast still in flight belongs to the question being left.
+  const [routed, setRouted] = useState(pollId);
+  if (routed !== pollId) {
+    setRouted(pollId);
+    setAt(pollId);
+    setBusy(false);
+  }
   const [answers, setAnswers] = useState<Answer[]>([]);
   // Poll ids cast or changed during this visit, oldest first. Restoring a
   // saved answer does not add it here.
@@ -106,7 +130,6 @@ export function Conversation({
     onSignedOut: signedOut,
     onForgotten: forgotten,
   });
-  const [busy, setBusy] = useState(false);
   const remembered = useCallback((answer: Answer) => {
     setAnswers((old) =>
       old.some((one) => one.poll.id === answer.poll.id)
@@ -128,9 +151,12 @@ export function Conversation({
   const show = (id: string) => {
     if (!busy) setAt(id);
   };
+  // A rail row: the question opens here, and its address goes on history so
+  // Back returns to the one before. Opened here too, not only through the
+  // address: after Next the address can already name the row clicked.
   const go = (id: string) => {
     if (busy) return;
-    show(id);
+    setAt(id);
     onNavigate?.({ kind: "conversation", pollId: id });
   };
   const confirmation = confirmationOf(session);
@@ -148,11 +174,21 @@ export function Conversation({
     answers,
     recentAnswers,
   );
+  const railHeading = useRef<HTMLAnchorElement>(null);
   const historyError =
     mine.data.status === "error" ? (
       <>
-        <p>{mine.data.message}</p>
-        <button className="button" type="button" onClick={mine.retry}>
+        <p>{answered.length > 0 ? RAIL_PARTIAL_ERROR : RAIL_ERROR}</p>
+        <button
+          className="button"
+          type="button"
+          onClick={() => {
+            // The button goes while the list is read again; focus stays in
+            // the rail rather than falling to the page.
+            railHeading.current?.focus();
+            mine.retry();
+          }}
+        >
           Try again
         </button>
       </>
@@ -171,7 +207,9 @@ export function Conversation({
         <SiteBanner
           session={session}
           progress={progress}
-          holdsVotes={heldBefore || answered.length > 0}
+          holdsVotes={
+            heldBefore || answered.length > 0 || mine.data.status === "ready"
+          }
           onSignOut={signOut}
           onCancel={dismiss}
         />
@@ -179,10 +217,18 @@ export function Conversation({
       <aside className="conversation__sidebar">
         <nav aria-label="My votes">
           <h2>
-            <a href={pathOf({ kind: "myVotes" })}>My votes</a>
+            <a ref={railHeading} href={pathOf({ kind: "myVotes" })}>
+              My votes
+            </a>
           </h2>
           {answered.length > 0 ? (
-            <AnsweredList votes={answered} current={at} compact onOpen={go} />
+            <AnsweredList
+              votes={answered}
+              current={at}
+              compact
+              disabled={busy}
+              onOpen={go}
+            />
           ) : mine.data.status === "loading" ? (
             <p>Loading…</p>
           ) : mine.data.status === "error" ? (
@@ -459,6 +505,9 @@ function useRestoredAnswer(
   useEffect(() => {
     if (settled || !poll) return;
     let live = true;
+    // Bounded: a read that never answers asks the question unanswered, and
+    // anything arriving after that is dropped by the cleanup below.
+    const giveUp = setTimeout(() => setSettled(true), RESTORE_WAIT_MS);
     api
       .myBallot(poll.id)
       .then(async (ballot) => {
@@ -473,6 +522,7 @@ function useRestoredAnswer(
       });
     return () => {
       live = false;
+      clearTimeout(giveUp);
     };
   }, [api, poll, settled, onHeldBallot]);
   return settled;

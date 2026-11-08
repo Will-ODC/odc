@@ -40,3 +40,17 @@ it("draws secondary buttons with the light separator (#482)", () => {
     ).toBe(true);
   }
 });
+
+it("leaves the rail's Try again its shared outlined look (#488)", () => {
+  // The rail's rows are links now; old rules for rail buttons turned its only
+  // button, Try again, into borderless text.
+  expect(css("screens/Conversation.css")).not.toMatch(
+    /\.conversation__sidebar button/,
+  );
+});
+
+it("shows rail questions as unavailable while an answer is sent (#488)", () => {
+  expect(css("components/AnsweredList.css")).toMatch(
+    /\.answered a\[aria-disabled="true"\] \{[^}]*cursor: not-allowed;/,
+  );
+});

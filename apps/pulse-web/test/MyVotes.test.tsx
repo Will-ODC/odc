@@ -139,8 +139,9 @@ it("keeps the list and offers to retry when loading more fails", async () => {
 it("says so when an answer's labels are not available", async () => {
   show(async () => page([vote({ choices: [], ballot: [] })]));
   expect(
-    await screen.findByText("Your answer: (answer unavailable)"),
+    await screen.findByText("Your answer couldn't be shown."),
   ).toBeTruthy();
+  expect(screen.queryByText(/Your answer:/)).toBeNull();
 });
 
 it("clears visible answers after forgetting this browser's votes", async () => {

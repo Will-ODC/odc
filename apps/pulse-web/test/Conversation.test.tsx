@@ -1147,12 +1147,13 @@ describe("the Answered list (#484)", () => {
   it("says when the list could not be read, and tries again", async () => {
     const myVotes = vi
       .fn()
-      .mockRejectedValueOnce(new Error("offline"))
+      .mockRejectedValueOnce(new ApiError(500, "Something went wrong."))
       .mockResolvedValue({ votes: [fromServer], nextCursor: "next" });
     render(<Conversation api={stubApi({ myVotes })} pollId="ads-free" />);
     expect(
-      await rail().findByText("We couldn't load your votes. Try again."),
+      await rail().findByText("We couldn't load your votes."),
     ).toBeTruthy();
+    expect(rail().queryByText(/Something went wrong/)).toBeNull();
     const retry = rail().getByRole("button", { name: "Try again" });
     expect(retry.classList.contains("button")).toBe(true);
     expect(
@@ -1173,7 +1174,8 @@ describe("the Answered list (#484)", () => {
     render(
       <Conversation
         api={stubApi({
-          myVotes: () => Promise.reject(new Error("offline")),
+          myVotes: () =>
+            Promise.reject(new ApiError(500, "Something went wrong.")),
         })}
         pollId="ads-free"
       />,
@@ -1182,10 +1184,172 @@ describe("the Answered list (#484)", () => {
     await answer();
 
     expect(rail().getByRole("link", { name: poll().question })).toBeTruthy();
-    expect(
-      rail().getByText("We couldn't load your votes. Try again."),
-    ).toBeTruthy();
+    expect(rail().getByText("We couldn't load all your votes.")).toBeTruthy();
+    expect(rail().queryByText(/Something went wrong/)).toBeNull();
     expect(rail().getByRole("button", { name: "Try again" })).toBeTruthy();
+  });
+
+  it("keeps the rail and this visit's answers when a rail question opens (#488)", async () => {
+    const parks = poll({ id: "parks", question: "More parks?" });
+    const myVotes = vi.fn(async () => ({
+      votes: [fromServer],
+      nextCursor: null,
+    }));
+    const me = vi.fn(async () => null);
+    history.replaceState(null, "", "/?poll=ads-free");
+    render(
+      <App
+        api={stubApi({
+          myVotes,
+          me,
+          poll: async (id) => (id === "parks" ? parks : poll()),
+        })}
+      />,
+    );
+    await main().findByRole("heading", { name: poll().question, level: 1 });
+    await answer("Yes");
+    const sessionReads = me.mock.calls.length;
+
+    await userEvent.click(rail().getByRole("link", { name: "More parks?" }));
+    // The conversation stays on screen: the rail does not start over.
+    expect(rail().queryByText("Loading…")).toBeNull();
+    expect(rail().getByRole("link", { name: poll().question })).toBeTruthy();
+    await main().findByRole("heading", { name: "More parks?", level: 1 });
+    expect(location.pathname + location.search).toBe("/?poll=parks");
+    expect(myVotes).toHaveBeenCalledTimes(1);
+    expect(me.mock.calls.length).toBe(sessionReads);
+    // This visit's answer is still in the conversation thread.
+    expect(main().getByText("You picked Yes.")).toBeTruthy();
+
+    act(() => history.back());
+    await main().findByRole("heading", { name: poll().question, level: 1 });
+    expect(rail().queryByText("Loading…")).toBeNull();
+    expect(myVotes).toHaveBeenCalledTimes(1);
+  });
+
+  it("offers to forget when saved history has more pages but none on the first", async () => {
+    render(
+      <Conversation
+        api={stubApi({
+          myVotes: async () => ({ votes: [], nextCursor: "next" }),
+        })}
+        pollId="ads-free"
+      />,
+    );
+    await rail().findByRole("link", { name: "See all my votes" });
+
+    await openAccount(userEvent.setup());
+    expect(
+      banner().getByRole("button", { name: "Forget my votes here" }),
+    ).toBeTruthy();
+  });
+
+  it("marks the rail's questions unavailable while an answer is being sent", async () => {
+    let finish: (outcome: CastOutcome) => void = () => {};
+    const cast = vi.fn(
+      () =>
+        new Promise<CastOutcome>((resolve) => {
+          finish = resolve;
+        }),
+    );
+    render(
+      <Conversation
+        api={stubApi({
+          myVotes: async () => ({ votes: [fromServer], nextCursor: null }),
+          cast,
+        })}
+        pollId="ads-free"
+      />,
+    );
+    const link = await rail().findByRole("link", { name: "More parks?" });
+    await main().findByRole("heading", { name: poll().question, level: 1 });
+    expect(link.getAttribute("aria-disabled")).toBeNull();
+    const user = userEvent.setup();
+    await user.click(within(card()).getByRole("radio", { name: "Yes" }));
+    await user.click(within(card()).getByRole("button", { name: "Submit" }));
+    await waitFor(() =>
+      expect(
+        rail()
+          .getByRole("link", { name: "More parks?" })
+          .getAttribute("aria-disabled"),
+      ).toBe("true"),
+    );
+    await user.click(rail().getByRole("link", { name: "More parks?" }));
+    expect(main().getByRole("heading", { level: 1 }).textContent).toBe(
+      poll().question,
+    );
+    await act(async () =>
+      finish({ status: "counted", ballot: [1], results: tally(poll(), [1]) }),
+    );
+    await main().findByText("Counted");
+    expect(
+      rail()
+        .getByRole("link", { name: "More parks?" })
+        .getAttribute("aria-disabled"),
+    ).toBeNull();
+  });
+
+  it("asks the question when reading the saved ballot never finishes", async () => {
+    vi.useFakeTimers({ shouldAdvanceTime: true });
+    try {
+      const myBallot = vi.fn(() => new Promise<Ballot | null>(() => {}));
+      render(<Conversation api={stubApi({ myBallot })} pollId="ads-free" />);
+      await waitFor(() => expect(myBallot).toHaveBeenCalled());
+      expect(main().queryByRole("heading", { level: 1 })).toBeNull();
+      await act(async () => {
+        await vi.advanceTimersByTimeAsync(10_000);
+      });
+      await main().findByRole("heading", { name: poll().question, level: 1 });
+      openCard();
+      expect(
+        within(card()).getByRole("button", { name: "Submit" }),
+      ).toBeTruthy();
+    } finally {
+      vi.useRealTimers();
+    }
+  });
+
+  it("asks the question when the saved answer's results never arrive", async () => {
+    vi.useFakeTimers({ shouldAdvanceTime: true });
+    try {
+      const results = vi.fn(() => new Promise<never>(() => {}));
+      render(
+        <Conversation
+          api={stubApi({ myBallot: async () => [0], results })}
+          pollId="ads-free"
+        />,
+      );
+      await waitFor(() => expect(results).toHaveBeenCalled());
+      expect(main().queryByRole("heading", { level: 1 })).toBeNull();
+      await act(async () => {
+        await vi.advanceTimersByTimeAsync(10_000);
+      });
+      await main().findByRole("heading", { name: poll().question, level: 1 });
+      openCard();
+      expect(
+        within(card()).getByRole("button", { name: "Submit" }),
+      ).toBeTruthy();
+    } finally {
+      vi.useRealTimers();
+    }
+  });
+
+  it("keeps focus in the rail after Try again", async () => {
+    const myVotes = vi
+      .fn()
+      .mockRejectedValueOnce(new ApiError(500, "Something went wrong."))
+      .mockResolvedValue({ votes: [fromServer], nextCursor: null });
+    render(<Conversation api={stubApi({ myVotes })} pollId="ads-free" />);
+    await userEvent.click(
+      await rail().findByRole("button", { name: "Try again" }),
+    );
+    expect(document.activeElement).toBe(
+      rail().getByRole("link", { name: "My votes" }),
+    );
+    await rail().findByRole("link", { name: "More parks?" });
+    expect(document.activeElement).toBe(
+      rail().getByRole("link", { name: "My votes" }),
+    );
   });
 
   it("links to more saved votes instead of claiming an unfinished page is empty", async () => {
