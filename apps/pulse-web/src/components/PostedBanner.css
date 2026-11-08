@@ -5,10 +5,10 @@
   align-items: center;
   gap: var(--step);
   padding: var(--step) var(--gutter);
-  border-bottom: var(--hairline) solid var(--ballot-line);
-  background: rgba(var(--side-b), var(--side-rest));
+  border-bottom: var(--hairline) solid var(--green-line);
+  background: var(--green-wash);
   font-size: var(--t-small);
-  color: var(--ballot-ink);
+  color: var(--ink);
 }
 
 .posted__line {
@@ -30,9 +30,9 @@
   flex-basis: 100%;
   font: inherit;
   padding: var(--step);
-  color: var(--ballot-ink);
-  background: var(--ballot-chip);
-  border: var(--hairline) solid var(--ballot-line);
+  color: var(--ink);
+  background: var(--surface);
+  border: var(--hairline) solid var(--line);
   border-radius: var(--r-control);
 }
 
@@ -40,5 +40,5 @@
 .posted__status {
   flex-basis: 100%;
   margin: 0;
-  color: var(--ballot-ink-muted);
+  color: var(--muted);
 }

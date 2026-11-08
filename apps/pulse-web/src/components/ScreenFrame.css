@@ -4,8 +4,8 @@
   display: flex;
   flex-direction: column;
   overflow: hidden;
-  background: var(--ballot-bg);
-  color: var(--ballot-ink);
+  background: var(--page);
+  color: var(--ink);
   border: var(--frame-border);
   border-radius: var(--frame-radius);
   box-shadow: var(--frame-shadow);
@@ -33,14 +33,14 @@
   font-size: var(--t-small);
   font-weight: 600;
   letter-spacing: 0.02em;
-  color: var(--brand-ink);
+  color: var(--ink);
 }
 
 .screen__brand i {
   width: var(--step);
   height: var(--step);
   border-radius: var(--r-pill);
-  background: var(--brand-dot);
+  background: var(--green);
 }
 
 /*

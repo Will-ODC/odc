@@ -4,8 +4,8 @@
   height: 100dvh;
   display: grid;
   grid-template-rows: auto minmax(0, 1fr);
-  color: var(--ballot-ink);
-  background: var(--ballot-page);
+  color: var(--ink);
+  background: var(--page);
 }
 .conversation__banner {
   grid-column: 1 / -1;
@@ -58,7 +58,7 @@
 .conversation__sidebar p,
 .conversation__thread > li > small {
   font-size: var(--t-small);
-  color: var(--ballot-ink-muted);
+  color: var(--muted);
   line-height: 1.5;
 }
 .conversation__thread {
@@ -73,12 +73,14 @@
   min-inline-size: 0;
   margin-block: var(--step) var(--gutter);
   padding: calc(var(--step) * 2);
+  border: var(--hairline) solid var(--line);
   border-radius: var(--r-card);
-  background: var(--surface-rest);
+  background: var(--surface);
 }
 .conversation__thread > li {
   padding: calc(var(--step) * 2);
-  background: var(--surface-rest);
+  background: var(--surface);
+  border: var(--hairline) solid var(--line);
   border-radius: var(--r-card);
   overflow-wrap: anywhere;
 }
@@ -88,11 +90,10 @@
   max-width: 100%;
   margin: calc(var(--step) * 2) 0;
   padding: var(--step) calc(var(--step) * 1.5);
-  border: var(--hairline) solid rgba(var(--side-b), var(--side-rest));
-  border-inline-start: calc(var(--hairline) * 3) solid rgb(var(--side-b));
+  border: var(--hairline) solid var(--green-line);
   border-radius: var(--r-control);
-  background: rgba(var(--side-b), var(--side-rest));
-  color: var(--ballot-ink);
+  background: var(--green-wash);
+  color: var(--ink);
   font-size: var(--t-body);
   font-weight: 600;
   line-height: 1.5;
@@ -124,29 +125,38 @@
 .conversation button {
   font: inherit;
   font-size: var(--t-small);
-  color: var(--ballot-ink);
-  background: var(--surface-hover);
-  border: var(--hairline) solid var(--control-line);
+  font-weight: 600;
+  color: var(--ink);
+  background: var(--surface);
+  border: var(--hairline) solid var(--line);
   border-radius: var(--r-control);
   padding: var(--step) calc(var(--step) * 1.5);
   cursor: pointer;
+}
+.conversation button:hover:not(:disabled) {
+  background: var(--hover);
 }
 .conversation button:disabled {
   cursor: default;
   opacity: 0.55;
 }
 .conversation button:focus-visible {
-  outline: calc(var(--hairline) * 2) solid var(--focus-ring);
+  outline: calc(var(--hairline) * 2) solid var(--focus);
   outline-offset: calc(var(--hairline) * 2);
 }
 .conversation__sidebar button {
   display: block;
   text-align: left;
   width: 100%;
-  margin-bottom: var(--step);
+  margin-bottom: calc(var(--step) / 2);
+  border-color: transparent;
+  font-weight: 500;
+  color: var(--ink-soft);
 }
 .conversation__sidebar button[aria-current] {
-  border-color: rgb(var(--side-b));
+  background: var(--green-wash);
+  color: var(--green-hover);
+  font-weight: 600;
 }
 @media (min-width: 1100px) {
   .conversation {
@@ -156,12 +166,16 @@
     display: flex;
     flex-direction: column;
     padding: calc(var(--step) * 2);
-    border-right: var(--hairline) solid var(--ballot-line);
+    border-right: var(--hairline) solid var(--line);
     overflow-y: auto;
     min-height: 0;
   }
   .conversation__sidebar h2 {
-    font-size: var(--t-small);
+    font-size: var(--t-eyebrow);
+    font-weight: 700;
+    letter-spacing: 0.06em;
+    text-transform: uppercase;
+    color: var(--muted);
   }
 }
 
@@ -172,14 +186,31 @@
 }
 .conversation__help > button {
   padding: var(--step) calc(var(--step) * 1.5);
-  border-color: var(--control-line);
-  border-radius: var(--r-pill);
-  color: var(--ballot-bg);
-  background: rgb(var(--side-b));
+  border-color: var(--green);
+  border-radius: var(--r-control);
+  color: var(--on-accent);
+  background: var(--green);
   font-size: var(--t-small);
   font-weight: 700;
-  box-shadow: var(--shadow-ballot);
+  box-shadow: var(--shadow-pop);
   pointer-events: auto;
+}
+.conversation .conversation__help > button:hover {
+  background: var(--green-hover);
+}
+/* "Change my answer" is the quieter outlined button, as in the results above it. */
+.conversation .conversation__help > .conversation__handle--quiet {
+  border-color: var(--line);
+  color: var(--ink);
+  background: var(--surface);
+}
+.conversation .conversation__help > .conversation__handle--quiet:hover {
+  background: var(--hover);
+}
+/* Try again under a question that could not load, centred under its message. */
+.conversation__column > button {
+  display: block;
+  margin: var(--step) auto 0;
 }
 
 /* Both states reveal from the same corner with the same timing. */
@@ -202,5 +233,39 @@
   .conversation__dock .vote-card,
   .conversation__help > button {
     animation: none;
+  }
+}
+
+/*
+ * The phone version (#482): under 700px the voting window is a sheet along
+ * the bottom edge, full width, and closes to one full-width button.
+ */
+@media (max-width: 699px) {
+  .conversation__dock {
+    right: 0;
+    bottom: 0;
+    left: 0;
+    width: auto;
+  }
+  .conversation__dock .vote-card {
+    max-height: 70dvh;
+    padding-inline-start: max(calc(var(--step) * 2), env(safe-area-inset-left));
+    padding-inline-end: max(calc(var(--step) * 2), env(safe-area-inset-right));
+    padding-bottom: calc(var(--step) * 2 + env(safe-area-inset-bottom));
+    border-bottom: none;
+    border-radius: var(--r-sheet) var(--r-sheet) 0 0;
+    box-shadow: var(--shadow-sheet);
+  }
+  .conversation__help {
+    padding: var(--gutter);
+    padding-inline-start: max(var(--gutter), env(safe-area-inset-left));
+    padding-inline-end: max(var(--gutter), env(safe-area-inset-right));
+    padding-bottom: max(var(--gutter), env(safe-area-inset-bottom));
+  }
+  .conversation__help > button {
+    flex: 1;
+  }
+  .conversation button {
+    min-height: var(--touch);
   }
 }

@@ -6,7 +6,8 @@
 .bar-chart {
   margin: 0;
   padding: calc(var(--step) * 2);
-  border-radius: var(--r-control);
+  border: var(--hairline) solid var(--line);
+  border-radius: var(--r-card);
   background: var(--chart-surface);
   color: var(--chart-ink);
 }
@@ -87,7 +88,7 @@
   background: var(--chart-surface);
   color: var(--chart-ink);
   font-size: var(--t-small);
-  box-shadow: var(--shadow-ballot);
+  box-shadow: var(--shadow-pop);
 }
 .bar-chart__tooltip p {
   display: flex;

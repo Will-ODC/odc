@@ -70,13 +70,14 @@ export function Browse({
           )}
         </ViewState>
         {data.status === "error" ? (
-          <button type="button" onClick={retry}>
+          <button className="button" type="button" onClick={retry}>
             Try again
           </button>
         ) : null}
         {more.status === "error" ? <p role="alert">{more.message}</p> : null}
         {data.status === "ready" && data.value.nextCursor ? (
           <button
+            className="button"
             type="button"
             disabled={more.status === "loading"}
             onClick={() => {

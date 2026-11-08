@@ -18,6 +18,31 @@ function rule(file: string, selector: string): string {
 }
 
 describe("fitting a phone", () => {
+  it("gives the phone version thumb-sized targets and a full-width sheet (#482)", () => {
+    const css = readFileSync(
+      new URL("../src/screens/Conversation.css", import.meta.url),
+      "utf8",
+    );
+    const phone = css.slice(css.indexOf("@media (max-width: 699px)"));
+    expect(phone).toMatch(
+      /\.conversation__dock \{\s*right: 0;\s*bottom: 0;\s*left: 0;\s*width: auto;/,
+    );
+    expect(phone).toMatch(
+      /\.conversation button \{\s*min-height: var\(--touch\);/,
+    );
+    expect(phone).toMatch(
+      /\.conversation__dock \.vote-card \{[\s\S]*padding-inline-start: max\([\s\S]*safe-area-inset-left/,
+    );
+    expect(phone).toMatch(
+      /\.conversation__help \{[\s\S]*padding-inline-end: max\([\s\S]*safe-area-inset-right/,
+    );
+    const tokens = readFileSync(
+      new URL("../src/styles/tokens.css", import.meta.url),
+      "utf8",
+    );
+    expect(tokens).toContain("--touch: 44px;");
+  });
+
   it("draws the sign-in frame's border inside its size", () => {
     expect(rule("components/ScreenFrame.css", ".screen")).toMatch(
       /box-sizing:\s*border-box/,
@@ -53,8 +78,8 @@ describe("fitting a phone", () => {
       "screens/Conversation.css",
       ".conversation__help > button",
     );
-    expect(button).toContain("background: rgb(var(--side-b))");
-    expect(button).toContain("color: var(--ballot-bg)");
+    expect(button).toContain("background: var(--green)");
+    expect(button).toContain("color: var(--on-accent)");
     expect(button).toMatch(/font-weight:\s*700/);
     const submit = rule("components/VoteCard.css", ".vote-card button");
     for (const property of ["padding", "font-size"]) {
