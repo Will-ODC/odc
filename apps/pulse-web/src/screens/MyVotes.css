@@ -5,6 +5,6 @@
 .my-votes__detail {
   display: block;
   margin-top: calc(var(--step) / 2);
-  color: var(--ballot-ink-soft);
+  color: var(--muted);
   font-size: var(--t-small);
 }

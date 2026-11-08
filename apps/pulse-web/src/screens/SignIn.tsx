@@ -16,8 +16,9 @@ import "./SignIn.css";
  *
  * **There is no mockup of this screen.** `01-claim.html` was redesigned into
  * the swipe ballot in #97 and nothing replaced the claim design, so the
- * wording, the layout and the dark palette were written from scratch and
- * blessed by the operator on 2026-09-09 rather than taken from the deck. Do
+ * wording and the layout were written from scratch and blessed by the
+ * operator on 2026-09-09 rather than taken from the deck; the colours follow
+ * the light look (#482, `pulse-light-v1.html`). Do
  * not cite `01-claim` or `02-sent` as the design of record here; they depict,
  * respectively, the ballot and a light-palette screen this does not follow.
  *
@@ -258,6 +259,11 @@ export function SignIn({
             }
           }}
         />
+        {problem !== null ? (
+          <p className="signin__problem" id={errorId} role="alert">
+            {problem}
+          </p>
+        ) : null}
 
         <label className="signin__optin" htmlFor={optInId}>
           <input
@@ -271,11 +277,6 @@ export function SignIn({
           <span>Email me once when something comes of this.</span>
         </label>
 
-        {problem !== null ? (
-          <p className="signin__problem" id={errorId} role="alert">
-            {problem}
-          </p>
-        ) : null}
         {failure !== null ? (
           <p className="signin__problem" role="alert">
             {failure}

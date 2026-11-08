@@ -13,3 +13,32 @@
   clip-path: inset(50%);
   white-space: nowrap;
 }
+
+/* A plain secondary button for a screen with none of its own (Try again, Load more). */
+.button {
+  font: inherit;
+  font-size: var(--t-small);
+  font-weight: 600;
+  padding: var(--step) calc(var(--step) * 2);
+  color: var(--ink);
+  background: var(--surface);
+  border: var(--hairline) solid var(--line);
+  border-radius: var(--r-control);
+  cursor: pointer;
+}
+.button:hover:not(:disabled) {
+  background: var(--hover);
+}
+.button:disabled {
+  color: var(--muted);
+  cursor: default;
+}
+.button:focus-visible {
+  outline: calc(var(--hairline) * 2) solid var(--focus);
+  outline-offset: calc(var(--hairline) * 2);
+}
+@media (max-width: 699px) {
+  .button {
+    min-height: var(--touch);
+  }
+}

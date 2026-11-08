@@ -7,7 +7,7 @@
   font: inherit;
   font-size: var(--t-small);
   white-space: nowrap;
-  color: var(--ballot-ink-soft);
+  color: var(--ink-soft);
   background: transparent;
   border: none;
   border-radius: 0;
@@ -16,7 +16,7 @@
 }
 
 .banner .account-menu__button:focus-visible {
-  outline: calc(var(--hairline) * 2) solid var(--focus-ring);
+  outline: calc(var(--hairline) * 2) solid var(--focus);
   outline-offset: calc(var(--hairline) * 2);
 }
 
@@ -34,12 +34,12 @@
   align-items: flex-end;
   gap: var(--step);
   padding: calc(var(--step) * 1.5);
-  background: var(--ballot-bg);
-  border: var(--hairline) solid var(--ballot-line);
+  background: var(--page);
+  border: var(--hairline) solid var(--line);
   border-radius: var(--r-control);
-  box-shadow: var(--shadow-ballot);
+  box-shadow: var(--shadow-pop);
   font-size: var(--t-small);
-  color: var(--ballot-ink-muted);
+  color: var(--muted);
 }
 
 .account-menu__panel[hidden] {
