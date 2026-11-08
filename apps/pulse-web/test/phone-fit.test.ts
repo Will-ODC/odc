@@ -30,6 +30,12 @@ describe("fitting a phone", () => {
     expect(phone).toMatch(
       /\.conversation button \{\s*min-height: var\(--touch\);/,
     );
+    expect(phone).toMatch(
+      /\.conversation__dock \.vote-card \{[\s\S]*padding-inline-start: max\([\s\S]*safe-area-inset-left/,
+    );
+    expect(phone).toMatch(
+      /\.conversation__help \{[\s\S]*padding-inline-end: max\([\s\S]*safe-area-inset-right/,
+    );
     const tokens = readFileSync(
       new URL("../src/styles/tokens.css", import.meta.url),
       "utf8",

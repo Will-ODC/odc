@@ -249,6 +249,8 @@
   }
   .conversation__dock .vote-card {
     max-height: 70dvh;
+    padding-inline-start: max(calc(var(--step) * 2), env(safe-area-inset-left));
+    padding-inline-end: max(calc(var(--step) * 2), env(safe-area-inset-right));
     padding-bottom: calc(var(--step) * 2 + env(safe-area-inset-bottom));
     border-bottom: none;
     border-radius: var(--r-sheet) var(--r-sheet) 0 0;
@@ -256,6 +258,8 @@
   }
   .conversation__help {
     padding: var(--gutter);
+    padding-inline-start: max(var(--gutter), env(safe-area-inset-left));
+    padding-inline-end: max(var(--gutter), env(safe-area-inset-right));
     padding-bottom: max(var(--gutter), env(safe-area-inset-bottom));
   }
   .conversation__help > button {
