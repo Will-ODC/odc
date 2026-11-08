@@ -93,6 +93,15 @@ The client uses the served routes in [`../pulse/API.md`](../pulse/API.md).
 Roadmap and planned API sections describe future work, not current client
 behavior.
 
+## Saved answers (#484)
+
+My votes (`/my-votes`) lists answers saved in this browser, newest first. The
+vote page's My votes rail uses the same saved answers and updates after a
+successful cast or change; reopening an older answer keeps its position.
+Opening a rail question updates its URL, and Back returns to the previous
+question. Reloading restores the saved answer from the server. Signing out or
+forgetting votes here clears the browser's saved-answer list.
+
 ## Browse questions (#260)
 
 Home (`/`) opens the public poll browser. About (`/about`) keeps the former

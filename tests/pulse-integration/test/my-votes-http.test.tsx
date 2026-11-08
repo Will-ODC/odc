@@ -139,9 +139,10 @@ it("the Answered list and the saved answer survive a reload over the real HTTP A
     const first = render(<App api={mine} route={route} />);
     const main = within(await screen.findByRole("main"));
     expect(await main.findByText("You picked Yes.")).toBeTruthy();
-    const rail = within(screen.getByRole("navigation", { name: "Answered" }));
+    const rail = within(screen.getByRole("navigation", { name: "My votes" }));
+    const railVotes = within(rail.getByRole("list"));
     expect(
-      (await rail.findAllByRole("link")).map((link) => link.textContent),
+      (await railVotes.findAllByRole("link")).map((link) => link.textContent),
     ).toEqual(["More parks?", "A new rink?"]);
     first.unmount();
 
@@ -149,13 +150,14 @@ it("the Answered list and the saved answer survive a reload over the real HTTP A
     await mine.cast("rinks", [1]);
     render(<App api={mine} route={route} />);
     const again = within(
-      await screen.findByRole("navigation", { name: "Answered" }),
+      await screen.findByRole("navigation", { name: "My votes" }),
     );
     expect(await again.findAllByText("Your answer: Yes")).toHaveLength(2);
-    expect(again.getAllByRole("link").map((link) => link.textContent)).toEqual([
-      "A new rink?",
-      "More parks?",
-    ]);
+    expect(
+      within(again.getByRole("list"))
+        .getAllByRole("link")
+        .map((link) => link.textContent),
+    ).toEqual(["A new rink?", "More parks?"]);
   } finally {
     await app.close();
   }

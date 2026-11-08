@@ -37,7 +37,13 @@ export function MyVotes({ api }: { api: PulseApi }) {
           onCancel={dismiss}
         />
       </header>
-      <main className="welcome__main browse__main">
+      <main
+        className={`welcome__main browse__main${
+          data.status === "empty" || data.status === "error"
+            ? " browse__main--message"
+            : ""
+        }`}
+      >
         <h1>My votes</h1>
         <p className="welcome__note">
           Answers saved in this browser. Signing out or forgetting votes here

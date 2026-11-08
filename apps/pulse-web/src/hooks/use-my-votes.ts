@@ -5,11 +5,10 @@ import type { ViewData } from "./view-data.js";
 type More =
   { status: "idle" | "loading" } | { status: "error"; message: string };
 
-const EMPTY = "No votes saved in this browser yet.";
+export const MY_VOTES_EMPTY = "No votes saved in this browser yet.";
+export const MY_VOTES_ERROR = "We couldn't load your votes. Try again.";
 const message = (err: unknown) =>
-  err instanceof ApiError
-    ? err.message
-    : "We couldn't load your votes. Try again.";
+  err instanceof ApiError ? err.message : MY_VOTES_ERROR;
 
 /**
  * This browser's saved answers (#329), read from the server on every visit,
@@ -82,7 +81,7 @@ export function useMyVotes(api: PulseApi) {
     ++generation.current;
     busy.current = false;
     setMore({ status: "idle" });
-    setData({ status: "empty", message: EMPTY });
+    setData({ status: "empty", message: MY_VOTES_EMPTY });
   }, []);
 
   return { data, more, loadMore, clear, retry: () => retry((n) => n + 1) };
@@ -90,6 +89,6 @@ export function useMyVotes(api: PulseApi) {
 
 function asView(page: MyVotesPage): ViewData<MyVotesPage> {
   return page.votes.length === 0 && page.nextCursor === null
-    ? { status: "empty", message: EMPTY }
+    ? { status: "empty", message: MY_VOTES_EMPTY }
     : { status: "ready", value: page };
 }

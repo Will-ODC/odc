@@ -148,6 +148,7 @@ export function App({
             key={at.pollId}
             api={api}
             pollId={at.pollId}
+            onNavigate={browser.go}
             // Replaced, so the back button does not return to a page that
             // still believes someone is signed in.
             onSignedOut={() => {

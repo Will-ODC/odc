@@ -1,6 +1,7 @@
 import { useCallback, useEffect, useRef, useState } from "react";
 import type { ReactNode } from "react";
 import type { Poll, PulseApi, Results } from "../api/types.js";
+import type { Route } from "../flow/route.js";
 import { cardStatus, closingNote, nextFor } from "../flow/conversation.js";
 import { byline } from "../flow/new-poll.js";
 import { pathOf } from "../flow/route.js";
@@ -9,7 +10,7 @@ import { usePoll } from "../hooks/use-poll.js";
 import { useCastVote } from "../hooks/use-cast-vote.js";
 import { useClosedResults } from "../hooks/use-closed-results.js";
 import { useFreshResults } from "../hooks/use-fresh-results.js";
-import { useMyVotes } from "../hooks/use-my-votes.js";
+import { MY_VOTES_EMPTY, useMyVotes } from "../hooks/use-my-votes.js";
 import type { Confirmation } from "../flow/vote-card.js";
 import { VoteCard } from "../components/VoteCard.js";
 import { ClosedResults } from "../components/ClosedResults.js";
@@ -58,11 +59,14 @@ function hasClosed(poll: Poll): boolean {
 export function Conversation({
   api,
   pollId,
+  onNavigate,
   onSignedOut,
   posted,
 }: {
   api: PulseApi;
   pollId: string;
+  /** Pushes a question onto browser history so its address can be shared. */
+  onNavigate?: (to: Route) => void;
   /** Runs once the server has signed this person out everywhere. */
   onSignedOut?: () => void;
   /**
@@ -121,8 +125,13 @@ export function Conversation({
     },
     [remembered],
   );
-  const go = (id: string) => {
+  const show = (id: string) => {
     if (!busy) setAt(id);
+  };
+  const go = (id: string) => {
+    if (busy) return;
+    show(id);
+    onNavigate?.({ kind: "conversation", pollId: id });
   };
   const confirmation = confirmationOf(session);
   // Signing in confirms every vote already given here, so every result already
@@ -140,8 +149,8 @@ export function Conversation({
     recentAnswers,
   );
   const main = useRef<HTMLElement>(null);
-  // "Your question is live" belongs to the question just posted. "Next"
-  // moves to another without a route change, so leaving it ends the line.
+  // "Your question is live" belongs to the question just posted. Leaving it
+  // for another question ends the line.
   const leftPosted = posted !== undefined && at !== pollId;
   const dismissPosted = posted?.onDismiss;
   useEffect(() => {
@@ -159,8 +168,10 @@ export function Conversation({
         />
       </header>
       <aside className="conversation__sidebar">
-        <nav aria-label="Answered">
-          <h2>Answered</h2>
+        <nav aria-label="My votes">
+          <h2>
+            <a href={pathOf({ kind: "myVotes" })}>My votes</a>
+          </h2>
           {answered.length > 0 ? (
             <AnsweredList votes={answered} current={at} compact onOpen={go} />
           ) : mine.data.status === "loading" ? (
@@ -168,12 +179,12 @@ export function Conversation({
           ) : mine.data.status === "error" ? (
             <>
               <p>{mine.data.message}</p>
-              <button type="button" onClick={mine.retry}>
+              <button className="button" type="button" onClick={mine.retry}>
                 Try again
               </button>
             </>
           ) : (
-            <p>No answers yet.</p>
+            <p>{MY_VOTES_EMPTY}</p>
           )}
           {mine.data.status === "ready" && mine.data.value.nextCursor ? (
             <p>
@@ -181,7 +192,6 @@ export function Conversation({
             </p>
           ) : null}
         </nav>
-        <p>More questions will appear here as you answer.</p>
       </aside>
       <main className="conversation__main" ref={main}>
         {posted && at === pollId ? (
@@ -206,7 +216,7 @@ export function Conversation({
           onHeldBallot={foundHeldBallot}
           onCounted={counted}
           onBusy={setBusy}
-          onGo={go}
+          onGo={show}
           // The posting banner already offers Copy link; one is enough.
           shareable={!(posted && at === pollId)}
         />

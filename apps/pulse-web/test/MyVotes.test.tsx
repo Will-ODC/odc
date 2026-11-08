@@ -71,6 +71,9 @@ it("explains a failed load and tries again on request", async () => {
   expect(
     await screen.findByText("We couldn't load your votes. Try again."),
   ).toBeTruthy();
+  expect(
+    screen.getByRole("main").classList.contains("browse__main--message"),
+  ).toBe(true);
   await user.click(screen.getByRole("button", { name: "Try again" }));
   expect(await screen.findByText("Your answer: Yes")).toBeTruthy();
   expect(myVotes).toHaveBeenCalledTimes(2);
@@ -90,6 +93,9 @@ it("offers a way to start voting when nothing is saved", async () => {
   expect(
     await screen.findByText("No votes saved in this browser yet."),
   ).toBeTruthy();
+  expect(
+    screen.getByRole("main").classList.contains("browse__main--message"),
+  ).toBe(true);
   expect(
     screen
       .getByRole("link", { name: "Explore questions" })

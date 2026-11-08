@@ -1,5 +1,6 @@
 // @vitest-environment jsdom
 import {
+  act,
   cleanup,
   render,
   screen,
@@ -10,6 +11,7 @@ import userEvent from "@testing-library/user-event";
 import { afterEach, beforeAll, describe, expect, it, vi } from "vitest";
 import { ApiError } from "../src/api/types.js";
 import type { Ballot, CastOutcome, Poll } from "../src/api/types.js";
+import { App } from "../src/App.js";
 import { closingNote } from "../src/flow/conversation.js";
 import { Conversation } from "../src/screens/Conversation.js";
 import { graph, poll, results, stubApi } from "./stub-api.js";
@@ -99,7 +101,7 @@ it("keeps a manually closed card closed and preserves its unsent pick on reopen"
       { name: "Vote" },
     ),
   );
-  await user.click(screen.getByRole("heading", { name: "Answered" }));
+  await user.click(main().getByRole("heading", { name: poll().question }));
   expect(main().queryByRole("region")).toBeNull();
   await user.click(main().getByRole("button", { name: "Vote" }));
   expect(within(card()).getByRole("radio", { name: "Yes" })).toHaveProperty(
@@ -760,13 +762,16 @@ it("forgetting clears the answers shown on this page", async () => {
   );
   await user.click(banner().getByRole("button", { name: "Forget them" }));
   await waitFor(() =>
-    expect(screen.getByRole("navigation", { name: "Answered" })).toBeTruthy(),
+    expect(screen.getByRole("navigation", { name: "My votes" })).toBeTruthy(),
   );
   expect(
-    within(screen.getByRole("navigation", { name: "Answered" })).getByText(
-      "No answers yet.",
+    within(screen.getByRole("navigation", { name: "My votes" })).getByText(
+      "No votes saved in this browser yet.",
     ),
   ).toBeTruthy();
+  expect(
+    screen.queryByText("More questions will appear here as you answer."),
+  ).toBeNull();
   expect(main().queryByText("Counted")).toBeNull();
 });
 
@@ -944,7 +949,8 @@ it("ends the just-posted line when Next moves to another question", async () => 
 
 describe("the Answered list (#484)", () => {
   const rail = () =>
-    within(screen.getByRole("navigation", { name: "Answered" }));
+    within(screen.getByRole("navigation", { name: "My votes" }));
+  const voteLinks = () => within(rail().getByRole("list"));
   const fromServer = {
     pollId: "parks",
     question: "More parks?",
@@ -967,9 +973,12 @@ describe("the Answered list (#484)", () => {
     expect(
       await rail().findByRole("link", { name: "More parks?" }),
     ).toBeTruthy();
+    expect(
+      rail().getByRole("link", { name: "My votes" }).getAttribute("href"),
+    ).toBe("/my-votes");
     await main().findByRole("heading", { name: poll().question, level: 1 });
     await answer();
-    const links = rail().getAllByRole("link");
+    const links = voteLinks().getAllByRole("link");
     expect(links.map((link) => link.textContent)).toEqual([
       poll().question,
       "More parks?",
@@ -1037,7 +1046,9 @@ describe("the Answered list (#484)", () => {
       />,
     );
     expect(
-      (await rail().findAllByRole("link")).map((link) => link.textContent),
+      within(await rail().findByRole("list"))
+        .getAllByRole("link")
+        .map((link) => link.textContent),
     ).toEqual(["More parks?", poll().question]);
     await main().findByText("You picked Yes.");
     const drawer = within(
@@ -1049,7 +1060,7 @@ describe("the Answered list (#484)", () => {
     await user.click(drawer.getByRole("button", { name: "Submit" }));
     await main().findByText("You picked No.");
     expect(
-      rail()
+      voteLinks()
         .getAllByRole("link")
         .map((link) => link.textContent),
     ).toEqual([poll().question, "More parks?"]);
@@ -1090,6 +1101,32 @@ describe("the Answered list (#484)", () => {
     ).toBeTruthy();
   });
 
+  it("puts an opened rail question in history and Back restores the previous one", async () => {
+    const parks = poll({ id: "parks", question: "More parks?" });
+    history.replaceState(null, "", "/?poll=ads-free");
+    render(
+      <App
+        api={stubApi({
+          myVotes: async () => ({ votes: [fromServer], nextCursor: null }),
+          poll: async (id) => (id === "parks" ? parks : poll()),
+        })}
+      />,
+    );
+    await main().findByRole("heading", { name: poll().question, level: 1 });
+
+    await userEvent.click(
+      await rail().findByRole("link", { name: "More parks?" }),
+    );
+    await main().findByRole("heading", { name: "More parks?", level: 1 });
+    expect(location.pathname + location.search).toBe("/?poll=parks");
+
+    act(() => history.back());
+    await waitFor(() =>
+      expect(location.pathname + location.search).toBe("/?poll=ads-free"),
+    );
+    await main().findByRole("heading", { name: poll().question, level: 1 });
+  });
+
   it("says when the list could not be read, and tries again", async () => {
     const myVotes = vi
       .fn()
@@ -1099,7 +1136,12 @@ describe("the Answered list (#484)", () => {
     expect(
       await rail().findByText("We couldn't load your votes. Try again."),
     ).toBeTruthy();
-    await userEvent.click(rail().getByRole("button", { name: "Try again" }));
+    const retry = rail().getByRole("button", { name: "Try again" });
+    expect(retry.classList.contains("button")).toBe(true);
+    expect(
+      screen.queryByText("More questions will appear here as you answer."),
+    ).toBeNull();
+    await userEvent.click(retry);
     expect(
       await rail().findByRole("link", { name: "More parks?" }),
     ).toBeTruthy();

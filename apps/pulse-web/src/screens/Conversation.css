@@ -177,6 +177,14 @@
     text-transform: uppercase;
     color: var(--muted);
   }
+  .conversation__sidebar h2 a {
+    color: inherit;
+    text-decoration: none;
+  }
+  .conversation__sidebar h2 a:hover {
+    color: var(--green-hover);
+    text-decoration: underline;
+  }
 }
 
 .conversation__help {
