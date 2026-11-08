@@ -45,6 +45,14 @@ export interface VoteCardProps {
   question: string;
   /** Results can live in the page instead of the voting card. */
   presentation?: "card" | "results";
+  /**
+   * The desktop layout (#490): the card sits in the page right under the
+   * question, so it drops its label and the repeated question, closes with a
+   * visible "Close" only while changing an answer (`closable`), and "Change
+   * my answer" sits on the "You picked" line with Next under the results.
+   */
+  inPage?: boolean;
+  closable?: boolean;
   /** Who posted it: "Posted anonymously" or "Posted by …". Left out for a
    *  question from before posting existed. */
   byline?: string;
@@ -93,6 +101,8 @@ export interface VoteCardProps {
 export function VoteCard({
   question,
   presentation = "card",
+  inPage = false,
+  closable = false,
   byline,
   why,
   method,
@@ -230,6 +240,34 @@ export function VoteCard({
       ?.focus();
   }
 
+  // What to do next. In the page (#490), Next sits under the results card.
+  const actions = (
+    <div className="vote-card__actions">
+      {onChangeAnswer && !inPage ? (
+        <button type="button" onClick={onChangeAnswer}>
+          Change my answer
+        </button>
+      ) : null}
+      {trustHref ? (
+        <a
+          className="vote-card__info"
+          href={trustHref}
+          aria-label="How votes count (opens in a new tab)"
+          title="How votes count"
+          target="_blank"
+          rel="noopener noreferrer"
+        >
+          <span aria-hidden="true">i</span>
+        </a>
+      ) : null}
+      {onNext && !inPage ? (
+        <button type="button" onClick={onNext}>
+          Next
+        </button>
+      ) : null}
+    </div>
+  );
+
   if (collapsed) {
     return (
       <section
@@ -256,13 +294,23 @@ export function VoteCard({
   return (
     <section
       ref={card}
-      className={
+      className={[
+        "vote-card",
+        presentation === "results" ? "vote-card--results" : "",
+        inPage ? "vote-card--page" : "",
+      ]
+        .filter(Boolean)
+        .join(" ")}
+      aria-label={
         presentation === "results"
-          ? "vote-card vote-card--results"
-          : "vote-card"
+          ? "Your answer"
+          : inPage
+            ? question
+            : undefined
       }
-      aria-label={presentation === "results" ? "Your answer" : undefined}
-      aria-labelledby={presentation === "card" ? `${id}-question` : undefined}
+      aria-labelledby={
+        presentation === "card" && !inPage ? `${id}-question` : undefined
+      }
       onKeyDown={onKeyDown}
       onPointerDown={(event) => {
         // A second tap on the disabled Submit must not blur the pending status.
@@ -274,7 +322,7 @@ export function VoteCard({
           event.preventDefault();
       }}
     >
-      {presentation === "card" ? (
+      {presentation === "card" && !inPage ? (
         <>
           <header className="vote-card__top">
             <span className="vote-card__heading">DECISION</span>
@@ -308,6 +356,7 @@ export function VoteCard({
             className={
               presentation === "results" ? "vote-card__yours" : undefined
             }
+            {...(inPage ? { tabIndex: -1 } : {})}
           >
             {presentation === "results" ? (
               <span>
@@ -322,6 +371,15 @@ export function VoteCard({
             >
               {countedNote(status.changed, confirmation)}
             </p>
+            {inPage && onChangeAnswer ? (
+              <button
+                type="button"
+                className="vote-card__change"
+                onClick={onChangeAnswer}
+              >
+                Change my answer
+              </button>
+            ) : null}
           </div>
           {/*
             One short line (#480). "Confirm", never "verify": an email does
@@ -380,31 +438,15 @@ export function VoteCard({
                   : {})}
               />
             )}
-            <div className="vote-card__actions">
-              {onChangeAnswer ? (
-                <button type="button" onClick={onChangeAnswer}>
-                  Change my answer
-                </button>
-              ) : null}
-              {trustHref ? (
-                <a
-                  className="vote-card__info"
-                  href={trustHref}
-                  aria-label="How votes count (opens in a new tab)"
-                  title="How votes count"
-                  target="_blank"
-                  rel="noopener noreferrer"
-                >
-                  <span aria-hidden="true">i</span>
-                </a>
-              ) : null}
-              {onNext ? (
-                <button type="button" onClick={onNext}>
-                  Next
-                </button>
-              ) : null}
-            </div>
+            {actions}
           </div>
+          {inPage && onNext ? (
+            <div className="vote-card__next">
+              <button type="button" onClick={onNext}>
+                Next
+              </button>
+            </div>
+          ) : null}
           {presentation === "card" ? (
             <p className="vote-card__note">{privacyNote}</p>
           ) : null}
@@ -413,7 +455,9 @@ export function VoteCard({
         <>
           <fieldset
             className="vote-card__choices"
-            aria-labelledby={`${id}-question`}
+            {...(inPage
+              ? { "aria-label": question }
+              : { "aria-labelledby": `${id}-question` })}
             aria-describedby={why ? `${id}-why ${id}-note` : `${id}-note`}
             disabled={!editable}
           >
@@ -469,6 +513,15 @@ export function VoteCard({
           ) : null}
           <footer className="vote-card__foot">
             <p className="vote-card__note">{privacyNote}</p>
+            {inPage && closable ? (
+              <button
+                type="button"
+                className="vote-card__dismiss"
+                onClick={onClose}
+              >
+                Close
+              </button>
+            ) : null}
             {editable || status.kind === "sending" ? (
               <button
                 type="button"

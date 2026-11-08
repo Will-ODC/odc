@@ -10,6 +10,7 @@ import { useCastVote } from "../hooks/use-cast-vote.js";
 import { useClosedResults } from "../hooks/use-closed-results.js";
 import { useFreshResults } from "../hooks/use-fresh-results.js";
 import { useMyVotes } from "../hooks/use-my-votes.js";
+import { useWide } from "../hooks/use-wide.js";
 import type { Confirmation } from "../flow/vote-card.js";
 import { VoteCard } from "../components/VoteCard.js";
 import { ClosedResults } from "../components/ClosedResults.js";
@@ -282,6 +283,9 @@ function LoadedQuestion({
   useEffect(() => {
     if (loaded.status === "ready") heading.current?.focus();
   }, [loaded.status]);
+  // On desktop (#490) voting sits in the page under the question; on a phone
+  // it is the sheet along the bottom edge.
+  const wide = useWide();
   const renderPage = (
     standing: ReactNode,
     vote: ReactNode,
@@ -326,6 +330,11 @@ function LoadedQuestion({
                 Try again
               </button>
             ) : null}
+            {wide && vote ? (
+              <div className="conversation__vote conversation__vote--page">
+                {vote}
+              </div>
+            ) : null}
             {standing ? (
               <div className="conversation__standing">{standing}</div>
             ) : null}
@@ -335,7 +344,7 @@ function LoadedQuestion({
             */}
           </div>
         </div>
-        {vote ? (
+        {vote && !wide ? (
           <aside className="conversation__dock" aria-label="Voting">
             <div className="conversation__column">
               <div className="conversation__vote">{vote}</div>
@@ -355,6 +364,7 @@ function LoadedQuestion({
       onCounted={onCounted}
       onBusy={onBusy}
       onGo={onGo}
+      wide={wide}
       renderPage={renderPage}
     />
   ) : (
@@ -411,6 +421,7 @@ function LiveCard({
   onCounted,
   onBusy,
   onGo,
+  wide,
   renderPage,
 }: {
   api: PulseApi;
@@ -420,6 +431,8 @@ function LiveCard({
   onCounted: (answer: Answer) => void;
   onBusy: (busy: boolean) => void;
   onGo: (id: string) => void;
+  /** The desktop layout (#490): voting in the page, no drawer. */
+  wide: boolean;
   renderPage: (
     standing: ReactNode,
     vote: ReactNode,
@@ -510,8 +523,12 @@ function LiveCard({
       : savedShowing;
   const resultView = showing.kind === "answered";
   const hadResults = useRef(resultView);
+  // Set by Close on desktop, so focus goes back to "Change my answer".
+  const backedOut = useRef(false);
   // The one place focus follows results in and out of the page. Backing out
   // of a change closes the drawer, and focus stays on its handle instead.
+  // On desktop (#490) the answer folds into the "You picked" line, which
+  // takes focus, or its "Change my answer" after Close.
   useEffect(() => {
     if (
       visible &&
@@ -519,16 +536,23 @@ function LiveCard({
         hadResults.current !== resultView)
     ) {
       const node = wrapper.current;
-      const target = resultView
-        ? node?.querySelector<HTMLElement>(".results")
-        : (node?.querySelector<HTMLElement>("input:checked") ??
-          node?.querySelector<HTMLElement>("input"));
+      const target = !resultView
+        ? (node?.querySelector<HTMLElement>("input:checked") ??
+          node?.querySelector<HTMLElement>("input"))
+        : !wide
+          ? node?.querySelector<HTMLElement>(".results")
+          : backedOut.current
+            ? node?.querySelector<HTMLElement>(".vote-card__change")
+            : node?.querySelector<HTMLElement>(".vote-card__yours");
       target?.focus();
     }
+    backedOut.current = false;
     hadResults.current = resultView;
-  }, [resultView, saved, visible]);
+  }, [resultView, saved, visible, wide]);
   const next = showing.kind === "answered" ? nextFor(poll, ballot) : null;
   const shut = status.kind === "closed";
+  // Desktop only: the choices are open again over a saved answer.
+  const changing = wide && !shut && !resultView && Boolean(saved);
   function change() {
     setShowSaved(false);
     fresh.clear();
@@ -549,7 +573,9 @@ function LiveCard({
       setPicked(saved.ballot);
       setShowSaved(true);
     }
-    setVisible(false);
+    // On desktop the choices stay on the page: Close only backs out of a change.
+    if (wide) backedOut.current = true;
+    else setVisible(false);
   }
   const handle = (
     <div className="conversation__help">
@@ -576,6 +602,9 @@ function LiveCard({
     <div ref={wrapper}>
       <VoteCard
         presentation={showing.kind === "answered" ? "results" : "card"}
+        inPage={wide}
+        closable={changing}
+        {...(wide ? { onChangeAnswer: change } : {})}
         question={poll.question}
         method={poll.method}
         choices={poll.choices.map((label, index) => ({ index, label }))}
@@ -610,6 +639,34 @@ function LiveCard({
       />
     </div>
   );
+  // While an answer is being changed on desktop, the saved one and its
+  // results stay under the choices until the new one is counted (#490).
+  const kept =
+    changing && saved ? (
+      <VoteCard
+        presentation="results"
+        inPage
+        question={poll.question}
+        method={poll.method}
+        choices={poll.choices.map((label, index) => ({ index, label }))}
+        picked={saved.ballot}
+        status={{ kind: "answered", results: saved.results, changed: false }}
+        privacyNote="Your answer is private."
+        trustHref={pathOf({ kind: "trust" })}
+        confirmation={cardConfirmation}
+        confirmHref={pathOf({
+          kind: "signIn",
+          returnTo: { kind: "conversation", pollId: poll.id },
+        })}
+        collapsed={false}
+        onPick={() => {}}
+        onSubmit={() => {}}
+        onCollapse={() => {}}
+        onClose={() => {}}
+        resultsHidden={resultsHidden}
+        onResultsHidden={setResultsHidden}
+      />
+    ) : null;
   const standing = shut ? (
     closed.showing ? (
       <ClosedResults
@@ -627,8 +684,16 @@ function LiveCard({
     )
   ) : showing.kind === "answered" ? (
     card
+  ) : wide ? (
+    kept
   ) : null;
-  const vote = !visible || showing.kind === "answered" ? handle : card;
+  const vote = wide
+    ? showing.kind === "answered"
+      ? null
+      : card
+    : !visible || showing.kind === "answered"
+      ? handle
+      : card;
   return (
     <div className="conversation__question">
       {renderPage(standing, vote, shut)}

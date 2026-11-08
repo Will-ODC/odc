@@ -68,6 +68,13 @@ circular info link beside Change my answer opens How votes count in a new tab.
 Results omit the repeated answer summary, extra privacy reminder and nested
 card framing. The live page has no tutorial button.
 
+That popout is the phone's (under 700px). On desktop (#490, ADR-0044) there is
+no popout: the choices sit in the page directly under the question, without
+repeating it, and Copy link sits at the end of the closing-date line. After a
+vote they fold into the "You picked" line, whose Change my answer reopens them
+in place with a visible Close; the saved answer's results stay below while you
+choose, and Next sits under the results card.
+
 Every product page uses the same browse-style top banner at desktop and phone
 widths: the Pulse home link, Home, About, a Your communities dropdown listing
 the account’s currently known community when available, Post and one account
