@@ -7,8 +7,9 @@ description: Code review procedure and checklist for ODC. Use this skill wheneve
 
 ## Procedure
 
-1. Reviews run in a fresh Opus session that did not implement the
-   change. Input: the diff, the PR description, the service's `API.md`, and
+1. Reviews run in a fresh session that did not write or orchestrate the
+   change: Opus when Claude orchestrates, a fresh Codex process when Codex
+   orchestrates (`odc-orchestration`, "Merging"). Input: the diff, the PR description, the service's `API.md`, and
    `contracts/`. Not the implementation conversation.
 2. Read the PR description first; if you can't tell what/why/how-tested,
    that alone is a blocking finding. Then read **the ticket it names**

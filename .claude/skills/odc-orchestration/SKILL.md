@@ -66,6 +66,16 @@ looks like. Then:
 - Do work only if it serves the goal. Work that does not serve it is a
   question for the operator, not something to start.
 
+### Keep session titles current
+
+Session titles are how the operator finds work in the sidebar (operator,
+2026-11-08). The orchestrator renames its own session
+(`mcp__ccd_session_mgmt__set_session_title` with `"self"`) whenever its work
+changes, naming the tickets and PRs in hand: "Orchestrator: #488 fixes, #493
+merge rule". A lead does the same for its own session. Codex has no command
+to set a title and labels a session by its first prompt line, so every Codex
+prompt starts with `Title: <ticket or step> <a few words> (<branch>)`.
+
 ### Merging
 
 The orchestrator merges a PR once it is properly reviewed (operator,
@@ -106,13 +116,23 @@ the gate.
 
 **The same gate whoever orchestrates** (operator, 2026-11-08). When Codex is
 the orchestrator it may merge too, on the same list and the same gate. It meets
-each required review with an independent reviewer: a separate, fresh
-`codex exec` process in a review worktree at the PR head, which did not write
-or orchestrate the change. Brief it with `.claude/agents/odc-reviewer.md` or
-`.claude/agents/odc-ui-reviewer.md` and the skills that file names. A UI
-review counts only if that reviewer checked the screens in a real browser. If
-Codex cannot run one of the reviews, it leaves the PR unmerged for the next
-Claude session. Every report names the model and sha of each review.
+the `odc-reviewer` requirement with an independent reviewer: a separate, fresh
+Codex process that did not write or orchestrate the change. To start one:
+
+1. Make a review worktree at the PR head, run `pnpm install --frozen-lockfile`
+   in it (the Codex sandbox has no network), and write
+   `git diff <base>...HEAD` to `REVIEW.diff` at its root. `<base>` is the PR's
+   base branch: the parent branch for a stacked PR, otherwise `origin/master`.
+2. Run `codex exec -c model="<slug>" -s workspace-write -C <worktree> "<brief>"`.
+   The brief is the text of `.claude/agents/odc-reviewer.md`, the PR number,
+   the base and the head sha, and says the verdict line must name that sha.
+
+A UI PR also needs the `odc-ui-reviewer` review, which checks the screens in
+a real browser with the Claude desktop browser tools. Codex has no equivalent
+here, so a UI PR waits for a Claude session to run that review. Any PR whose
+reviews Codex cannot run stays open and is marked unreviewed in the hand-off
+for the next Claude session. Every report names the model and sha of each
+review.
 
 **To merge:** `gh pr merge <N> --squash --match-head-commit <sha>`, with the
 head sha the latest review approved, so a commit pushed after the review cannot
@@ -122,8 +142,8 @@ what was merged in one line per PR.
 
 ### Use Codex where it helps
 
-Codex (the `codex` CLI) is a different model that has seen nothing of this
-run, so it adds independence (operator, 2026-11-07). Use it where the CLI is
+When Claude orchestrates, Codex (the `codex` CLI) is a different model that
+has seen nothing of this run, so it adds independence (operator, 2026-11-07). Use it where the CLI is
 installed (`command -v codex`), as `codex review` or `codex exec`:
 
 - **A second review** on UI PRs and on complex PRs. In a review worktree
@@ -193,8 +213,8 @@ session), skip this step.
   plain text, one at a time, with numbered options, the recommended one
   first), merging only as "Merging" allows, and the git guardrails for
   anything it spawns. It runs each required review as "Merging" describes for
-  a Codex orchestrator, or leaves the PR marked unreviewed for the next Claude
-  session.
+  a Codex orchestrator, or leaves the PR open and marked unreviewed for the
+  next Claude session.
 - **Tell the operator** which terminal tab Codex is running in.
 
 ### How every question is asked
@@ -241,6 +261,7 @@ branches, PRs and merging, `odc-pipeline` is the source; this file follows it.
 | Complex implementation — a service, endpoint, or real feature | **Opus**   | `odc-implementer`       |
 | Building either verifier (contracts-only, fresh context)      | **Opus**   | `odc-verifier-builder`  |
 | Pre-merge review (fresh context)                              | **Opus**   | `odc-reviewer`          |
+| Pre-merge review when Codex orchestrates ("Merging")          | **Codex**  | fresh `codex exec`      |
 | UI and design review of a UI PR (fresh context)               | **Opus**   | `odc-ui-reviewer`       |
 | Second, independent review of a UI or complex PR              | **Codex**  | `codex review`          |
 | Phase-gate security audit (fresh context)                     | **Opus**   | `odc-security-auditor`  |
