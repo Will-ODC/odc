@@ -11,3 +11,6 @@ coverage/
 services/verifier/verifier
 .claude/worktrees/
 /wt-*/
+
+# Swift Package Manager cache
+.build/

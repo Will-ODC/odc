@@ -9,8 +9,9 @@ description: Code review procedure and checklist for ODC. Use this skill wheneve
 
 1. Reviews run in a fresh session that did not write or orchestrate the
    change: Opus when Claude orchestrates, a fresh Codex process when Codex
-   orchestrates (`odc-orchestration`, "Merging"). Input: the diff, the PR description, the service's `API.md`, and
-   `contracts/`. Not the implementation conversation.
+   orchestrates (`odc-orchestration`, "Merging"). Input: the diff, the PR
+   description, the service's `API.md`, and `contracts/`. Not the
+   implementation conversation.
 2. Read the PR description first; if you can't tell what/why/how-tested,
    that alone is a blocking finding. Then read **the ticket it names**
    (`gh issue view N`) and check the diff's scope against it: work the ticket
