@@ -32,14 +32,12 @@ Do not apply charter rules to `apps/**`, and do not relax them anywhere else.
   Identity and the signer are unstarted.
   → `memory/STATE.md`
 - **Pulse:** sign-in, voting, confirmed votes, poll creation and public browsing
-  are built. #451/#452 merged the bottom voting drawer, main-content results,
-  Home browser and About introduction. The live tutorial is removed.
-  **Requested results refinement: #453 compact vertical-bar results above comments.**
-  #457/#458 add community paths and lifecycle deliberation; rules remain open.
-  Comments/replies, abuse reporting and MCP discovery remain unbuilt;
-  issue ownership and the #186 → #425 consolidation are in `memory/pulse.md`.
-  Poll-creation refinement still needs scoping. A deploy also
-  needs a host and a verified sending domain; `onlinedemocracy.org` is owned.
+  are built. #467 added private My votes history, #468 compact results charts,
+  #485 the white-and-green restyle and phone layout, and #491 pinned image scans
+  plus a host-neutral deployment runbook. The open stack is #488, #489 and #492;
+  #487 is open and unstarted. Comments/replies, abuse reporting and MCP
+  discovery remain unbuilt. Deployment needs a host, DNS, a verified sending
+  domain and the runbook's proxy-hop and rate-limit prerequisites.
   → `memory/pulse.md`
 
 ## Load order
