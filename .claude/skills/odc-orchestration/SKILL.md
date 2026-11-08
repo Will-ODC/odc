@@ -104,6 +104,16 @@ GitHub does not enforce any of this: the `protect-master` ruleset requires no
 approving reviews, only green checks and an up-to-date branch. The rule above is
 the gate.
 
+**The same gate whoever orchestrates** (operator, 2026-11-08). When Codex is
+the orchestrator it may merge too, on the same list and the same gate. It meets
+each required review with an independent reviewer: a separate, fresh
+`codex exec` process in a review worktree at the PR head, which did not write
+or orchestrate the change. Brief it with `.claude/agents/odc-reviewer.md` or
+`.claude/agents/odc-ui-reviewer.md` and the skills that file names. A UI
+review counts only if that reviewer checked the screens in a real browser. If
+Codex cannot run one of the reviews, it leaves the PR unmerged for the next
+Claude session. Every report names the model and sha of each review.
+
 **To merge:** `gh pr merge <N> --squash --match-head-commit <sha>`, with the
 head sha the latest review approved, so a commit pushed after the review cannot
 slip in. Then follow the merge checklist in `odc-pipeline` (memory on
@@ -120,8 +130,8 @@ installed (`command -v codex`), as `codex review` or `codex exec`:
   checked out at the PR head, run
   `git fetch origin && codex review --base origin/master`. It takes no custom
   instructions together with `--base`. The orchestrator triages its findings into [BLOCKING] / [SHOULD] / [NIT] and
-  sends them to the owner like any other finding. It adds to the Claude reviews
-  and never counts as the `odc-reviewer` approval.
+  sends them to the owner like any other finding. `codex review` follows no
+  ODC checklist, so it adds to the required reviews and never counts as one.
 - **Routine read-only work** when Claude usage is high: lookups and inventory
   with `codex exec -s read-only -C <worktree> "<brief>"`. The brief has the
   same five sections as any other.
@@ -181,10 +191,10 @@ session), skip this step.
   the next Claude session resumes them.
 - **Codex follows the same rules:** operator questions as this skill says (in
   plain text, one at a time, with numbered options, the recommended one
-  first), no merging, and the git guardrails for anything it spawns. It runs
-  each review as a separate `codex review` (a fresh process) on the PR branch,
-  or leaves the PR marked unreviewed for the next Claude session. A Codex
-  review is not an Opus review, so the report says which ran.
+  first), merging only as "Merging" allows, and the git guardrails for
+  anything it spawns. It runs each required review as "Merging" describes for
+  a Codex orchestrator, or leaves the PR marked unreviewed for the next Claude
+  session.
 - **Tell the operator** which terminal tab Codex is running in.
 
 ### How every question is asked
