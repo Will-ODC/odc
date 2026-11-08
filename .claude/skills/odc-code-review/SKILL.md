@@ -15,8 +15,8 @@ description: Code review procedure and checklist for ODC. Use this skill wheneve
 2. Read the PR description first; if you can't tell what/why/how-tested,
    that alone is a blocking finding. Then read **the ticket it names**
    (`gh issue view N`; a Codex reviewer, which has no network, reads
-   `PR.json` and `TICKET.md` beside `REVIEW.diff` instead) and check the diff's scope against it: work the ticket
-   gives to another ticket, or a PR that names no ticket, is a `[SHOULD]`.
+   `PR.json` and `TICKET.md` beside `REVIEW.diff` instead) and check the
+   diff's scope against it: work the ticket gives to another ticket, or a PR that names no ticket, is a `[SHOULD]`.
    A planned step has no ticket by design (`odc-pipeline`, "Planned steps get
    no ticket"): check its scope against the plan or ADR step it names instead,
    and flag it only if it names neither.

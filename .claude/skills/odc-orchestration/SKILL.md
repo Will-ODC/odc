@@ -142,7 +142,8 @@ Codex process that did not write or orchestrate the change. To start one:
    Then it gives the text of `.claude/agents/odc-reviewer.md`, the PR number,
    the base and the head sha. It says the diff is at `REVIEW.diff`, the PR
    description is in `PR.json` and the ticket is in `TICKET.md`, and that the
-   verdict line must name that sha.
+   verdict line must name that sha. For a verifier PR it also says: read
+   nothing outside this worktree, and do not use git to read other paths.
 
 A UI PR also needs the `odc-ui-reviewer` review, which checks the screens in
 a real browser with the Claude desktop browser tools. Codex has no equivalent
@@ -174,8 +175,12 @@ with
 `codex exec -c model="<slug>" -s workspace-write -C <worktree> "<brief>" < /dev/null`.
 Keep the `< /dev/null`: run in the background without it, `codex exec` waits
 for input forever. The prompt starts with a `Title:` line, Codex gets its own
-worktree, and the brief includes the git guardrails from "Writing a brief that
-actually works". Use this route for implementation and fixes, writing tests,
+worktree (run `pnpm install --frozen-lockfile` in it first: the sandbox has
+no network), and the brief includes the git guardrails from "Writing a brief
+that actually works". Codex does not load `CLAUDE.md` or `.claude/agents/`,
+so the brief also gives the text of the role it stands in for:
+`.claude/agents/odc-implementer.md` for implementation, fixes and tests,
+`.claude/agents/odc-navigator.md` for lookups, test runs and simple fixes. Use this route for implementation and fixes, writing tests,
 running tests and guards, and second reviews. Lookups and inventory use the
 same command with `-s read-only`.
 
@@ -302,7 +307,8 @@ A second instruction, verbatim (operator, 2026-11-08):
 > delegating appropriately"**
 
 Where the two conflict, the 2026-11-08 instruction wins: Codex is the default
-for delegated implementation and navigation work, except `contracts/` work
+for delegated implementation and lookups, except the merge checklist, which
+stays with `odc-navigator`; `contracts/` work
 and ADRs, which stay with Opus `odc-architect`, and either verifier, which
 stays with `odc-verifier-builder`.
 
