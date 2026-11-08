@@ -41,6 +41,7 @@ RUN pnpm --filter @odc/pulse-web exec tsc -p tsconfig.build.json --noEmit \
     && pnpm --filter @odc/pulse-web exec vite build
 
 FROM nginx:1.29-alpine AS runtime
+RUN apk upgrade --no-cache
 
 COPY --from=build /repo/apps/pulse-web/dist /usr/share/nginx/html
 COPY apps/pulse-web/nginx.conf /etc/nginx/conf.d/default.conf

@@ -15,6 +15,22 @@ the literal name `api` to the API service, because that name is compiled into
 the current nginx configuration. Keep both processes behind the web image so
 the page and API have one origin; the session cookies depend on it.
 
+nginx resolves `api` when it starts. Restart the web container if the API's
+address changes; the current configuration does not refresh DNS dynamically.
+
+### Proxy configuration required before going live
+
+The API currently trusts one private proxy hop (`src/main.ts:327`,
+`src/http/server.ts:146-160`). With a host edge in front of nginx, that can
+identify the edge as the client and put users in a shared rate-limit bucket.
+Before using Render, Fly.io or another edge proxy, adapt and test the trusted
+proxy configuration for that host: either trust two verified private hops in
+the API, or configure nginx's real-IP handling for the host's trusted edge
+addresses. Two hops work only when both proxy addresses pass the API's private
+address check. Do not trust arbitrary forwarded headers. Verify that two
+clients get distinct rate-limit buckets and cannot spoof their address.
+There is no environment variable for changing the hop count today.
+
 ## Open operator questions
 
 Nothing in this runbook answers these questions:
@@ -77,6 +93,22 @@ below; it ignores ambient `DATABASE_URL`, `RESEND_API_KEY`, and `PORT`.
   read the common host variable `PORT`.
 - `PULSE_HOST` (optional): API bind address; defaults to `0.0.0.0`.
 
+Source references (relative to `apps/pulse/`):
+
+| Setting                  | Source                             |
+| ------------------------ | ---------------------------------- |
+| `PULSE_SESSION_SECRET`   | `src/main.ts:111`                  |
+| `PULSE_CONFIRMATION_KEY` | `src/main.ts:122`                  |
+| `PULSE_DATABASE_URL`     | `src/db/config.ts:23`              |
+| `PULSE_RESEND_API_KEY`   | `src/identity/resend-mailer.ts:58` |
+| `PULSE_WEB_ORIGIN`       | `src/main.ts:118`                  |
+| `PULSE_MAIL_FROM`        | `src/identity/resend-mailer.ts:61` |
+| `PULSE_MAIL_REPLY_TO`    | `src/identity/resend-mailer.ts:70` |
+| `PULSE_DATABASE_SCHEMA`  | `src/main.ts:165`                  |
+| `PULSE_OWNER_EMAIL`      | `src/authoring/owner.ts:14`        |
+| `PULSE_PORT`             | `src/main.ts:168`                  |
+| `PULSE_HOST`             | `src/main.ts:169`                  |
+
 Generate the two application secrets independently and keep them stable across
 deploys. The confirmation key is sensitive alongside the database because the
 pair can reveal which confirmed person cast a vote.
@@ -94,6 +126,7 @@ IDs used by `/questions`:
 
 If they are omitted, those starting questions show as coming soon. They are
 Vite build-time values, so changing one requires rebuilding the web image.
+The mappings are in `apps/pulse-web/src/main.tsx:22-33`.
 
 ## Health checks
 
