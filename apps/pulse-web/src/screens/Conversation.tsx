@@ -73,6 +73,9 @@ export function Conversation({
 }) {
   const [at, setAt] = useState(pollId);
   const [answers, setAnswers] = useState<Answer[]>([]);
+  // Poll ids cast or changed during this visit, oldest first. Restoring a
+  // saved answer does not add it here.
+  const [recentAnswers, setRecentAnswers] = useState<string[]>([]);
   // Whether this browser held a ballot before this visit. The ballot cookie
   // cannot be read from script, so the first question's ballot stands in.
   const [heldBefore, setHeldBefore] = useState(false);
@@ -84,6 +87,7 @@ export function Conversation({
   const { clear: clearMine } = mine;
   const forgotten = useCallback(() => {
     setAnswers([]);
+    setRecentAnswers([]);
     setHeldBefore(false);
     setAt(pollId);
     setRound((n) => n + 1);
@@ -98,26 +102,25 @@ export function Conversation({
     onSignedOut: signedOut,
     onForgotten: forgotten,
   });
-  useEffect(() => {
-    let live = true;
-    api.myBallot(pollId).then(
-      (ballot) => {
-        if (live) setHeldBefore(ballot !== null);
-      },
-      () => {},
-    );
-    return () => {
-      live = false;
-    };
-  }, [api, pollId]);
   const [busy, setBusy] = useState(false);
-  const counted = useCallback((answer: Answer) => {
+  const remembered = useCallback((answer: Answer) => {
     setAnswers((old) =>
       old.some((one) => one.poll.id === answer.poll.id)
         ? old.map((one) => (one.poll.id === answer.poll.id ? answer : one))
         : [...old, answer],
     );
   }, []);
+  const foundHeldBallot = useCallback(() => setHeldBefore(true), []);
+  const counted = useCallback(
+    (answer: Answer) => {
+      remembered(answer);
+      setRecentAnswers((old) => [
+        ...old.filter((id) => id !== answer.poll.id),
+        answer.poll.id,
+      ]);
+    },
+    [remembered],
+  );
   const go = (id: string) => {
     if (!busy) setAt(id);
   };
@@ -134,6 +137,7 @@ export function Conversation({
   const answered = answeredList(
     mine.data.status === "ready" ? mine.data.value.votes : [],
     answers,
+    recentAnswers,
   );
   const main = useRef<HTMLElement>(null);
   // "Your question is live" belongs to the question just posted. "Next"
@@ -198,6 +202,8 @@ export function Conversation({
           {...(saved ? { saved } : {})}
           busy={busy}
           confirmation={confirmation}
+          onRemembered={remembered}
+          onHeldBallot={foundHeldBallot}
           onCounted={counted}
           onBusy={setBusy}
           onGo={go}
@@ -215,6 +221,8 @@ function Question({
   saved,
   busy,
   confirmation,
+  onRemembered,
+  onHeldBallot,
   onCounted,
   onBusy,
   onGo,
@@ -226,6 +234,8 @@ function Question({
   saved?: Answer;
   busy: boolean;
   confirmation: Confirmation;
+  onRemembered: (answer: Answer) => void;
+  onHeldBallot: () => void;
   onCounted: (answer: Answer) => void;
   onBusy: (busy: boolean) => void;
   onGo: (id: string) => void;
@@ -242,6 +252,8 @@ function Question({
       {...(saved ? { saved } : {})}
       busy={busy}
       confirmation={confirmation}
+      onRemembered={onRemembered}
+      onHeldBallot={onHeldBallot}
       onCounted={onCounted}
       onBusy={onBusy}
       onGo={onGo}
@@ -258,6 +270,8 @@ function LoadedQuestion({
   saved,
   busy,
   confirmation,
+  onRemembered,
+  onHeldBallot,
   onCounted,
   onBusy,
   onGo,
@@ -270,6 +284,8 @@ function LoadedQuestion({
   saved?: Answer;
   busy: boolean;
   confirmation: Confirmation;
+  onRemembered: (answer: Answer) => void;
+  onHeldBallot: () => void;
   onCounted: (answer: Answer) => void;
   onBusy: (busy: boolean) => void;
   onGo: (id: string) => void;
@@ -282,7 +298,8 @@ function LoadedQuestion({
     api,
     fetched.status === "ready" ? fetched.value : null,
     saved,
-    onCounted,
+    onHeldBallot,
+    onRemembered,
   );
   // The question is drawn with its saved answer or not at all, never first
   // unanswered and then answered a moment later.
@@ -392,6 +409,7 @@ function LoadedQuestion({
       poll={loaded.value}
       {...(saved ? { saved } : {})}
       confirmation={confirmation}
+      onRemembered={onRemembered}
       onCounted={onCounted}
       onBusy={onBusy}
       onGo={onGo}
@@ -417,6 +435,7 @@ function useRestoredAnswer(
   api: PulseApi,
   poll: Poll | null,
   saved: Answer | undefined,
+  onHeldBallot: () => void,
   onFound: (answer: Answer) => void,
 ): boolean {
   const [settled, setSettled] = useState(Boolean(saved));
@@ -428,7 +447,8 @@ function useRestoredAnswer(
     api
       .myBallot(poll.id)
       .then(async (ballot) => {
-        if (!ballot || ballot.length === 0) return;
+        if (!live || !ballot || ballot.length === 0) return;
+        onHeldBallot();
         const results = await api.results(poll.id);
         if (live) found.current({ poll, ballot, results });
       })
@@ -439,7 +459,7 @@ function useRestoredAnswer(
     return () => {
       live = false;
     };
-  }, [api, poll, settled]);
+  }, [api, poll, settled, onHeldBallot]);
   return settled;
 }
 
@@ -448,6 +468,7 @@ function LiveCard({
   poll,
   saved,
   confirmation,
+  onRemembered,
   onCounted,
   onBusy,
   onGo,
@@ -457,6 +478,7 @@ function LiveCard({
   poll: Poll;
   saved?: Answer;
   confirmation: Confirmation;
+  onRemembered: (answer: Answer) => void;
   onCounted: (answer: Answer) => void;
   onBusy: (busy: boolean) => void;
   onGo: (id: string) => void;
@@ -501,7 +523,7 @@ function LiveCard({
   const status = cardStatus(poll, state);
   const ballot = state.status === "counted" ? state.ballot : picked;
   const fresh = useFreshResults(api, poll.id, (results) =>
-    onCounted({ poll, ballot, results }),
+    onRemembered({ poll, ballot, results }),
   );
   const { refresh: refreshResults } = fresh;
   const answered =

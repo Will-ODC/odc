@@ -140,10 +140,9 @@ it("the Answered list and the saved answer survive a reload over the real HTTP A
     const main = within(await screen.findByRole("main"));
     expect(await main.findByText("You picked Yes.")).toBeTruthy();
     const rail = within(screen.getByRole("navigation", { name: "Answered" }));
-    expect(rail.getAllByRole("link").map((link) => link.textContent)).toEqual([
-      "More parks?",
-      "A new rink?",
-    ]);
+    expect(
+      (await rail.findAllByRole("link")).map((link) => link.textContent),
+    ).toEqual(["More parks?", "A new rink?"]);
     first.unmount();
 
     // Changed from elsewhere in this browser: the next page shows the change.

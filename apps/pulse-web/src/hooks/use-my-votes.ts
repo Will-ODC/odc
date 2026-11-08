@@ -1,4 +1,4 @@
-import { useEffect, useRef, useState } from "react";
+import { useCallback, useEffect, useRef, useState } from "react";
 import { ApiError, type MyVotesPage, type PulseApi } from "../api/types.js";
 import type { ViewData } from "./view-data.js";
 
@@ -77,13 +77,13 @@ export function useMyVotes(api: PulseApi) {
     );
   }
 
-  function clear() {
+  const clear = useCallback(() => {
     // Drops any read still in flight, so it cannot put the votes back.
     ++generation.current;
     busy.current = false;
     setMore({ status: "idle" });
     setData({ status: "empty", message: EMPTY });
-  }
+  }, []);
 
   return { data, more, loadMore, clear, retry: () => retry((n) => n + 1) };
 }

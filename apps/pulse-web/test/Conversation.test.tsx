@@ -695,12 +695,15 @@ it("offers nothing to forget when this browser holds no votes", async () => {
  * their answers. The way to forget them is the same request as signing out.
  */
 it("lets someone who never signed in forget this browser's votes", async () => {
-  const signOut = vi.fn(() => Promise.resolve());
+  let held: Ballot | null = [1];
+  const signOut = vi.fn(async () => {
+    held = null;
+  });
   const onSignedOut = vi.fn();
   const user = userEvent.setup();
   render(
     <Conversation
-      api={stubApi({ myBallot: async () => [1], signOut })}
+      api={stubApi({ myBallot: async () => held, signOut })}
       pollId="ads-free"
       onSignedOut={onSignedOut}
     />,
@@ -977,10 +980,11 @@ describe("the Answered list (#484)", () => {
 
   it("puts a saved answer back on the page after a reload", async () => {
     const cast = vi.fn();
+    const myBallot = vi.fn(async () => [0]);
     render(
       <Conversation
         api={stubApi({
-          myBallot: async () => [0],
+          myBallot,
           results: async () => tally(poll(), [0]),
           cast,
         })}
@@ -998,6 +1002,58 @@ describe("the Answered list (#484)", () => {
     ).toBeTruthy();
     expect(main().queryByRole("button", { name: "Submit" })).toBeNull();
     expect(cast).not.toHaveBeenCalled();
+    expect(myBallot).toHaveBeenCalledExactlyOnceWith("ads-free");
+  });
+
+  it("moves a changed saved answer to the top with its new label", async () => {
+    const current = {
+      pollId: poll().id,
+      question: poll().question,
+      choices: ["Yes"],
+      ballot: [1],
+      castAt: "2026-10-31T00:00:00.000Z",
+      closesAt: null,
+      open: true,
+    };
+    const cast = vi.fn(
+      async (_id: string, ballot: Ballot): Promise<CastOutcome> => ({
+        status: "changed",
+        ballot,
+        results: tally(poll(), ballot),
+      }),
+    );
+    render(
+      <Conversation
+        api={stubApi({
+          myVotes: async () => ({
+            votes: [fromServer, current],
+            nextCursor: null,
+          }),
+          myBallot: async () => [1],
+          results: async () => tally(poll(), [1]),
+          cast,
+        })}
+        pollId={poll().id}
+      />,
+    );
+    expect(
+      (await rail().findAllByRole("link")).map((link) => link.textContent),
+    ).toEqual(["More parks?", poll().question]);
+    await main().findByText("You picked Yes.");
+    const drawer = within(
+      screen.getByRole("complementary", { name: "Voting" }),
+    );
+    const user = userEvent.setup();
+    await user.click(drawer.getByRole("button", { name: "Change my answer" }));
+    await user.click(drawer.getByRole("radio", { name: "No" }));
+    await user.click(drawer.getByRole("button", { name: "Submit" }));
+    await main().findByText("You picked No.");
+    expect(
+      rail()
+        .getAllByRole("link")
+        .map((link) => link.textContent),
+    ).toEqual([poll().question, "More parks?"]);
+    expect(rail().getByText("Your answer: No")).toBeTruthy();
   });
 
   it("asks the question as before when the saved answer cannot be read", async () => {

@@ -11,26 +11,36 @@ export interface LocalAnswer {
  * what was answered on this page since they were read.
  *
  * The server lists the newest cast first and moves a changed answer to the
- * top (API.md, `GET /api/my-votes`), so this does the same: an answer the
- * server does not have yet, or has with a different ballot, goes on top,
- * newest first. One it already has with the same ballot (a saved answer
- * shown again, or fresh results for it) keeps the server's place.
+ * top (API.md, `GET /api/my-votes`), so `recent` records only successful
+ * casts and changes on this page, in the order they happened. Restoring an
+ * older answer is not a cast: it keeps the server's place, or is appended
+ * after the loaded server rows when that row has not been loaded yet.
  */
 export function answeredList(
   saved: readonly MyVote[],
   local: readonly LocalAnswer[],
+  recent: readonly string[],
   now: number = Date.now(),
 ): MyVote[] {
-  const known = new Map(saved.map((vote) => [vote.pollId, vote]));
-  const moved: MyVote[] = [];
-  for (const answer of local) {
-    const vote = asVote(answer, now);
-    const before = known.get(vote.pollId);
-    if (before && sameBallot(before.ballot, vote.ballot)) continue;
-    moved.unshift(vote);
+  const answers = new Map(local.map((answer) => [answer.poll.id, answer]));
+  const promotedIds: string[] = [];
+  const promoted = new Set<string>();
+  for (let at = recent.length - 1; at >= 0; at -= 1) {
+    const id = recent[at];
+    if (id !== undefined && answers.has(id) && !promoted.has(id)) {
+      promoted.add(id);
+      promotedIds.push(id);
+    }
   }
-  const top = new Set(moved.map((vote) => vote.pollId));
-  return [...moved, ...saved.filter((vote) => !top.has(vote.pollId))];
+  const savedIds = new Set(saved.map((vote) => vote.pollId));
+  const restored = local.filter(
+    (answer) => !promoted.has(answer.poll.id) && !savedIds.has(answer.poll.id),
+  );
+  return [
+    ...promotedIds.map((id) => asVote(answers.get(id)!, now)),
+    ...saved.filter((vote) => !promoted.has(vote.pollId)),
+    ...restored.map((answer) => asVote(answer, now)),
+  ];
 }
 
 function asVote({ poll, ballot }: LocalAnswer, now: number): MyVote {
@@ -47,8 +57,4 @@ function asVote({ poll, ballot }: LocalAnswer, now: number): MyVote {
     open:
       poll.open && (poll.closesAt === null || Date.parse(poll.closesAt) > now),
   };
-}
-
-function sameBallot(a: readonly number[], b: readonly number[]): boolean {
-  return a.length === b.length && a.every((index, at) => index === b[at]);
 }
