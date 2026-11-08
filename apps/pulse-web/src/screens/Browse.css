@@ -102,3 +102,8 @@
   margin: var(--step) 0 0;
   text-align: center;
 }
+
+/* Loading, empty and error sit clear of the subtitle, not tight under it. */
+.browse__main > .viewstate {
+  margin-top: calc(var(--step) * 3);
+}
