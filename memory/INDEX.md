@@ -33,8 +33,8 @@ Do not apply charter rules to `apps/**`, and do not relax them anywhere else.
   → `memory/STATE.md`
 - **Pulse:** sign-in, voting, confirmed votes, poll creation and public browsing
   are built. #467 added private My votes history, #468 compact results charts,
-  #485 the white-and-green restyle and phone layout, and #491 pinned image scans
-  plus a host-neutral deployment runbook. The open stack is #488, #489 and #492;
+  #485 the white-and-green restyle and phone layout, and #491 a sha-pinned
+  Trivy action plus a host-neutral deployment runbook. The open stack is #488, #489 and #492;
   #487 is open and unstarted. Comments/replies, abuse reporting and MCP
   discovery remain unbuilt. Deployment needs a host, DNS, a verified sending
   domain and the runbook's proxy-hop and rate-limit prerequisites.

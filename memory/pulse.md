@@ -99,8 +99,8 @@ the same CI runs.
   and leads nowhere. #331-#333 plan it.
 - **Infrastructure is built.** Postgres storage (ADR-0020, ADR-0021, ADR-0023),
   Resend mail (#164, ADR-0027), and two images on one origin (#165, ADR-0028),
-  built and scanned in CI with pinned Trivy (#212, PR #491). Dependabot alerts
-  are on. `apps/pulse/DEPLOY.md` is the host-neutral deployment runbook (#491).
+  built and scanned in CI with a sha-pinned Trivy action (#212, PR #491).
+  Dependabot alerts are on. `apps/pulse/DEPLOY.md` is the host-neutral deployment runbook (#491).
 
 ## What stands between this and a usable deploy
 
@@ -190,7 +190,9 @@ the same CI runs.
   Browse #260, the #451/#452 layout, #453 / PR #468 results charts and #482 /
   PR #485 light restyle are merged. The current stack is #488, #489 and #492;
   #487 is open and unstarted. #457/#458 add community paths and lifecycle
-  deliberation. A local demo is available, but there is no public deploy.
+  deliberation. Poll-creation refinements are an open operator request whose particular
+  changes still need scoping; reuse the built creation flow. A local demo is
+  available, but there is no public deploy.
 - Open feature issues: #296 photo and summary, #297 comments, #336 suggestions in
   the conversation page, #331-#333 desktop side columns and action follow-through,
   #314 browser-extension prototype (idea only), and #425 related/closed-question
