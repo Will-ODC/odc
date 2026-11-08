@@ -148,6 +148,15 @@ export function Conversation({
     answers,
     recentAnswers,
   );
+  const historyError =
+    mine.data.status === "error" ? (
+      <>
+        <p>{mine.data.message}</p>
+        <button className="button" type="button" onClick={mine.retry}>
+          Try again
+        </button>
+      </>
+    ) : null;
   const main = useRef<HTMLElement>(null);
   // "Your question is live" belongs to the question just posted. Leaving it
   // for another question ends the line.
@@ -162,7 +171,7 @@ export function Conversation({
         <SiteBanner
           session={session}
           progress={progress}
-          holdsVotes={heldBefore || answers.length > 0}
+          holdsVotes={heldBefore || answered.length > 0}
           onSignOut={signOut}
           onCancel={dismiss}
         />
@@ -177,15 +186,11 @@ export function Conversation({
           ) : mine.data.status === "loading" ? (
             <p>Loading…</p>
           ) : mine.data.status === "error" ? (
-            <>
-              <p>{mine.data.message}</p>
-              <button className="button" type="button" onClick={mine.retry}>
-                Try again
-              </button>
-            </>
-          ) : (
+            historyError
+          ) : mine.data.status === "empty" ? (
             <p>{MY_VOTES_EMPTY}</p>
-          )}
+          ) : null}
+          {answered.length > 0 ? historyError : null}
           {mine.data.status === "ready" && mine.data.value.nextCursor ? (
             <p>
               <a href={pathOf({ kind: "myVotes" })}>See all my votes</a>

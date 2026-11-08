@@ -987,6 +987,23 @@ describe("the Answered list (#484)", () => {
     expect(rail().getAllByText("Your answer: Yes")).toHaveLength(2);
   });
 
+  it("offers to forget votes found only in saved history", async () => {
+    render(
+      <Conversation
+        api={stubApi({
+          myVotes: async () => ({ votes: [fromServer], nextCursor: null }),
+        })}
+        pollId="ads-free"
+      />,
+    );
+    await rail().findByRole("link", { name: "More parks?" });
+
+    await openAccount(userEvent.setup());
+    expect(
+      banner().getByRole("button", { name: "Forget my votes here" }),
+    ).toBeTruthy();
+  });
+
   it("puts a saved answer back on the page after a reload", async () => {
     const cast = vi.fn();
     const myBallot = vi.fn(async () => [0]);
@@ -1150,5 +1167,42 @@ describe("the Answered list (#484)", () => {
         .getByRole("link", { name: "See all my votes" })
         .getAttribute("href"),
     ).toBe("/my-votes");
+  });
+
+  it("keeps the history error and retry below answers from this page", async () => {
+    render(
+      <Conversation
+        api={stubApi({
+          myVotes: () => Promise.reject(new Error("offline")),
+        })}
+        pollId="ads-free"
+      />,
+    );
+    await main().findByRole("heading", { name: poll().question, level: 1 });
+    await answer();
+
+    expect(rail().getByRole("link", { name: poll().question })).toBeTruthy();
+    expect(
+      rail().getByText("We couldn't load your votes. Try again."),
+    ).toBeTruthy();
+    expect(rail().getByRole("button", { name: "Try again" })).toBeTruthy();
+  });
+
+  it("links to more saved votes instead of claiming an unfinished page is empty", async () => {
+    render(
+      <Conversation
+        api={stubApi({
+          myVotes: async () => ({ votes: [], nextCursor: "next" }),
+        })}
+        pollId="ads-free"
+      />,
+    );
+
+    expect(
+      await rail().findByRole("link", { name: "See all my votes" }),
+    ).toBeTruthy();
+    expect(
+      rail().queryByText("No votes saved in this browser yet."),
+    ).toBeNull();
   });
 });
