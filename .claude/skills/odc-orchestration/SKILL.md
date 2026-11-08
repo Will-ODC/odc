@@ -17,8 +17,9 @@ everything the operator has not kept for themself. Ask the operator only about:
 - **Critical functionality** — what votes count, who may vote, what stays
   private, what is hashed or goes into `contracts/`, and charter rules. This
   covers what these do, not how they are coded; how they are coded is routed
-  per the table: `contracts/` work and ADRs to Opus `odc-architect`, other
-  complex code to Codex by default with Opus as the Claude fallback.
+  per the table: `contracts/` work and ADRs to Opus `odc-architect`, either
+  verifier to `odc-verifier-builder`, other complex code to Codex by default
+  with Opus as the Claude fallback.
 - **Goals in tension** — when two goals pull apart and nothing written says
   which wins.
 - **What the operator owns** — merging the PRs listed in "Merging", audits, deploys, spending, a charter
@@ -76,10 +77,11 @@ changes, naming the tickets and PRs in hand: "Orchestrator: #488 fixes, #493
 merge rule". A lead does the same for its own session. The rename tool is
 deferred, so load it with `ToolSearch` first; if the operator set the title,
 the app asks them to approve a rename, so rename only titles the app or this
-session set, never rename in an unattended session, and remember that a
-subagent cannot rename its own session. Codex (CLI 0.147, as of 2026-11-08)
+session set, never rename in a session the operator is not watching (such
+as a Codex hand-off or a scheduled run), and remember that a subagent cannot
+rename its own session. Codex (CLI 0.147, as of 2026-11-08)
 has no command to set a title and labels a session by its first prompt line,
-so every Codex prompt starts with
+so every `codex exec` or interactive `codex` prompt starts with
 `Title: <ticket or step> <a few words> (<branch>)`.
 
 ### Merging
@@ -147,7 +149,10 @@ a real browser with the Claude desktop browser tools. Codex has no equivalent
 here, so a UI PR waits for a Claude session to run that review. Any PR whose
 reviews Codex cannot run stays open and is marked unreviewed in the hand-off
 for the next Claude session. Every report names the model and sha of each
-review.
+review. After a Codex merge, Codex walks the `odc-pipeline` merge checklist
+itself (memory on `master` included), since it cannot start `odc-navigator`;
+if it cannot, it lists the owed memory update in the hand-off for the next
+Claude session.
 
 **To merge:** `gh pr merge <N> --squash --match-head-commit <sha>`, with the
 head sha the latest review approved, so a commit pushed after the review cannot
@@ -182,8 +187,9 @@ step the Codex sandbox cannot do. After Codex finishes, the orchestrator runs
 steps that need network access, `git push`, or tests that open ports.
 
 Any work that touches `services/verifier/` or `tools/verifier-ts/` — a
-build, a fix, a test, a rename — goes to `odc-verifier-builder`, never to a
-`codex exec` in a full checkout.
+build, a fix, a test, a rename — goes to `odc-verifier-builder`, never to
+Codex. The only Codex exception is a review in a sparse worktree, as
+"Merging" and the second-review bullet below describe.
 
 When Codex hits its usage limit, the orchestrator falls back to Claude
 routing (Opus or Sonnet, per the table) and tells the operator (operator,
@@ -192,16 +198,14 @@ routing (Opus or Sonnet, per the table) and tells the operator (operator,
 Other Codex routes and fallbacks:
 
 - **A second review** on UI PRs and on complex PRs. In a review worktree
-  checked out at the PR head, run
+  checked out at the PR head (sparse for a verifier PR, as "Review every PR
+  you recommend" describes), run
   `git fetch origin && codex review --base <the PR's base branch>`. Use the
   parent branch for a stacked PR and `origin/master` otherwise. It takes no
   custom instructions together with `--base`. The orchestrator triages its
   findings into [BLOCKING] / [SHOULD] / [NIT] and sends them to the owner like
   any other finding. `codex review` follows no ODC checklist, so it adds to the
   required reviews and never counts as one.
-- **Read-only work** can use
-  `codex exec -s read-only -C <worktree> "<brief>" < /dev/null`.
-  The brief has the same five sections as any other.
 - **If Codex rejects its configured model** ("not supported when using Codex
   with a ChatGPT account"), pass a listed one with `-c model="<slug>"`. This
   lists them:
@@ -299,7 +303,8 @@ A second instruction, verbatim (operator, 2026-11-08):
 
 Where the two conflict, the 2026-11-08 instruction wins: Codex is the default
 for delegated implementation and navigation work, except `contracts/` work
-and ADRs, which stay with Opus `odc-architect`.
+and ADRs, which stay with Opus `odc-architect`, and either verifier, which
+stays with `odc-verifier-builder`.
 
 This skill is the single source of truth for what that means in practice. The
 root `CLAUDE.md` points here and carries no table of its own; `.claude/agents/*.md` carry
@@ -325,10 +330,10 @@ branches, PRs and merging, `odc-pipeline` is the source; this file follows it.
 | Exploration, inventory, "where does X live"                    | **Codex** (default) / Sonnet         | `codex exec` / `odc-navigator`   |
 | Verifying cited facts: does this path/commit/PR/line resolve?  | **Codex** (default) / Sonnet         | `codex exec` / `odc-navigator`   |
 | Renames, mechanical find-and-replace, formatting               | **Codex** (default) / Sonnet         | `codex exec` / `odc-navigator`   |
-| Writing tests for delegated implementation                     | **Codex** (default) / Opus or Sonnet | `codex exec` / implementer       |
+| Writing tests for delegated implementation                     | **Codex** (default) / Opus or Sonnet | `codex exec` / `odc-implementer` |
 | Running tests or guards and reporting the output               | **Codex** (default) / Sonnet         | `codex exec` / `odc-navigator`   |
 | Simple implementation: a one-behaviour fix with a clear spec   | **Codex** (default) / Sonnet         | `codex exec` / `odc-navigator`   |
-| Merge mechanics and the merge checklist, memory included       | **Sonnet**                           | `odc-navigator`                  |
+| Merge mechanics and the merge checklist, memory included       | **Sonnet** (Claude orchestrator)     | `odc-navigator`                  |
 | Taking over as orchestrator when Claude usage runs out         | **Codex**                            | (hand-off — see above)           |
 
 **The line between "simple" and "complex" implementation.** Codex is the
