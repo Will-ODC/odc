@@ -1,6 +1,6 @@
 # ODC mockup candidate context
 
-Updated: 2026-11-07
+Updated: 2026-11-08
 
 ## Pulse design of record and alternatives
 
@@ -10,6 +10,7 @@ mockup standing; a historical deck is not a description of the running app.
 | Record | Standing |
 | --- | --- |
 | `pulse-light-v1.html`, #482 | **Visual style of record** (approved by the operator 2026-11-07). Light everywhere in white and green, with flat surfaces and 1px gray borders, replacing the dark ballot palette. Phone version under 700px wide: larger type and touch targets, tabs under the top bar, voting as a bottom sheet. Otherwise the layout follows the rows below. |
+| `pulse-light-v1.html` sections "Dark theme" (#499) and "The posted notice, compact" (#500) | **Proposals for review** (2026-11-08), not yet approved. #499: a dark value for every colour token in `tokens.css`, a sun/moon theme button last in the top bar on every page, first visit follows the device and a press is remembered. #500: the "Your question is live" notice as one compact line inside the question's column, with "Copied" in place of Copy link. Once approved they join the style of record above. |
 | `pulse-screens/09-chat-vote.html`; ADR-0035 | **Conversation design reference.** ADR-0044 supersedes card/results placement: results below the saved answer in main content; a bottom voting drawer on phone, and on desktop (#490) voting in the page under the question. |
 | [PR #313](https://github.com/Will-ODC/odc/pull/313), #301; [PR #322](https://github.com/Will-ODC/odc/pull/322), #302 | **Historical placement.** #313 built the conversation and #322 made it the default. ADR-0044 / #422 moves voting to a persistent bottom drawer on phone and desktop; results appear under the saved answer in the main content. |
 | `pulse-screens/08-desktop-vote.html`, #298 | Retained three-column desktop alternative, not the current default. |
