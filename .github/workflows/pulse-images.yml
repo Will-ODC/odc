@@ -39,5 +39,21 @@ jobs:
       # workspace and the lockfile lives at the top.
       - name: Build the API image
         run: docker build -f apps/pulse/Dockerfile -t pulse-api:ci .
+      - name: Scan the API image
+        uses: aquasecurity/trivy-action@ed142fd0673e97e23eac54620cfb913e5ce36c25 # v0.36.0
+        with:
+          image-ref: pulse-api:ci
+          format: table
+          exit-code: 1
+          ignore-unfixed: true
+          severity: HIGH,CRITICAL
       - name: Build the web image
         run: docker build -f apps/pulse-web/Dockerfile -t pulse-web:ci .
+      - name: Scan the web image
+        uses: aquasecurity/trivy-action@ed142fd0673e97e23eac54620cfb913e5ce36c25 # v0.36.0
+        with:
+          image-ref: pulse-web:ci
+          format: table
+          exit-code: 1
+          ignore-unfixed: true
+          severity: HIGH,CRITICAL
