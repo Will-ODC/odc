@@ -517,6 +517,9 @@ function LiveCard({
       <button
         type="button"
         ref={show}
+        {...(showing.kind === "answered"
+          ? { className: "conversation__handle--quiet" }
+          : {})}
         onClick={() => {
           if (showing.kind === "answered") change();
           else setVisible(true);

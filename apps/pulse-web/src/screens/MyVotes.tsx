@@ -71,18 +71,19 @@ export function MyVotes({ api }: { api: PulseApi }) {
           )}
         </ViewState>
         {data.status === "empty" ? (
-          <p>
+          <p className="browse__more">
             <a href="/">Explore questions</a>
           </p>
         ) : null}
         {data.status === "error" ? (
-          <button type="button" onClick={retry}>
+          <button className="button" type="button" onClick={retry}>
             Try again
           </button>
         ) : null}
         {more.status === "error" ? <p role="alert">{more.message}</p> : null}
         {data.status === "ready" && data.value.nextCursor ? (
           <button
+            className="button"
             type="button"
             disabled={more.status === "loading"}
             onClick={() => {

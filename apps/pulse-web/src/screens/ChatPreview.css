@@ -1,5 +1,5 @@
 /*
- * The chat preview (#228). The same dark ground as every other screen, so the
+ * The chat preview (#228). The same white ground as every other screen, so the
  * prototype is judged on the idea - a decision inside a conversation - rather
  * than on a new look.
  */
@@ -34,8 +34,8 @@
   padding: calc(var(--step) / 2) calc(var(--step) * 1.25);
   font-size: var(--t-small);
   font-weight: 700;
-  color: var(--ballot-bg);
-  background: rgb(var(--side-b));
+  color: var(--on-accent);
+  background: var(--green);
   border-radius: var(--r-pill);
 }
 
@@ -51,7 +51,7 @@
   margin: 0;
   font-size: var(--t-small);
   line-height: 1.45;
-  color: var(--ballot-ink-muted);
+  color: var(--muted);
 }
 
 .chatpreview__pick {
@@ -61,26 +61,26 @@
   gap: var(--step);
   font-size: var(--t-small);
   font-weight: 600;
-  color: var(--ballot-ink-soft);
+  color: var(--ink-soft);
 }
 
 .chatpreview__select {
   padding: var(--step) calc(var(--step) * 1.5);
   font: inherit;
-  color: var(--ballot-ink);
-  background: var(--ballot-chip);
-  border: var(--hairline) solid var(--ballot-line);
+  color: var(--ink);
+  background: var(--surface);
+  border: var(--hairline) solid var(--line-strong);
   border-radius: var(--r-control);
 }
 
 .chatpreview__select option {
   color: var(--ink);
-  background: var(--glass-strong);
+  background: var(--surface);
 }
 
 .chatpreview__select:focus-visible,
 .chat__open:focus-visible {
-  outline: calc(var(--hairline) * 2) solid rgb(var(--side-b));
+  outline: calc(var(--hairline) * 2) solid var(--focus);
   outline-offset: calc(var(--hairline) * 2);
 }
 
@@ -90,7 +90,7 @@
   font-weight: 700;
   letter-spacing: 0.16em;
   text-transform: uppercase;
-  color: rgb(var(--side-b));
+  color: var(--green);
 }
 
 .chatpreview__said {
@@ -121,7 +121,7 @@
 .chat__author {
   font-size: var(--t-small);
   font-weight: 600;
-  color: var(--ballot-ink-muted);
+  color: var(--muted);
 }
 
 .chat__bubble {
@@ -130,18 +130,18 @@
   padding: var(--step) calc(var(--step) * 1.5);
   font-size: var(--t-body);
   line-height: 1.4;
-  background: var(--surface-lifted);
+  background: var(--chip);
   border-radius: var(--r-control);
 }
 
 .chat__bubble--mine {
-  color: var(--ballot-bg);
-  background: rgb(var(--side-b));
+  color: var(--on-accent);
+  background: var(--green);
 }
 
 .chat__aside {
   font-size: var(--t-small);
-  color: var(--ballot-ink-faint);
+  color: var(--faint);
 }
 
 .chat__card {
@@ -151,9 +151,9 @@
   flex-direction: column;
   gap: var(--step);
   padding: calc(var(--step) * 1.5);
-  background: var(--surface-rest);
-  border: var(--hairline) solid var(--control-line);
-  border-radius: var(--r-control);
+  background: var(--surface);
+  border: var(--hairline) solid var(--line);
+  border-radius: var(--r-card);
 }
 
 .chat__eyebrow {
@@ -161,7 +161,7 @@
   font-size: var(--t-eyebrow);
   font-weight: 700;
   letter-spacing: 0.16em;
-  color: var(--ballot-ink-faint);
+  color: var(--faint);
 }
 
 .chat__question {
@@ -177,9 +177,9 @@
   font: inherit;
   font-size: var(--t-small);
   font-weight: 700;
-  color: var(--ballot-bg);
-  background: rgb(var(--side-b));
+  color: var(--on-accent);
+  background: var(--green);
   border: none;
-  border-radius: var(--r-pill);
+  border-radius: var(--r-control);
   cursor: pointer;
 }

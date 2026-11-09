@@ -4,7 +4,7 @@
 > Read `memory/INDEX.md` first. Agent rules are in `apps/pulse/CLAUDE.md`, the
 > served API is in `apps/pulse/API.md`, and the work queue is GitHub
 > issues (design detail an issue links to is in `docs/plans/pulse.md`). This file holds current state only, and history is in
-> git. Slimmed 2026-10-10, refreshed 2026-10-23. The long ledger it replaced is in
+> git. Slimmed 2026-10-10, refreshed 2026-11-08. The long ledger it replaced is in
 > `git log -p -- memory/pulse.md`.
 >
 > The operator's development-feedback loop, the trust and reporting decisions,
@@ -37,7 +37,7 @@ Repo discipline still applies: tests ship with the change, there is one small
 branch per change, named for its ticket (`pulse/<issue>-<short>`, #310), and
 the same CI runs.
 
-## Where it stands (2026-10-23)
+## Where it stands (2026-11-08)
 
 - **Pillar 1 (identity) is built.** Magic-link sign-in and redeem (#81-#87,
   #116, #149). Open sign-up lets anyone sign in, and community is an optional
@@ -65,6 +65,9 @@ the same CI runs.
   The trust page remains at `/trust` (#351/PR #357, ADR-0039); sign-in has a
   plain heading with no focus box (PR #373). The starting questions need published poll IDs
   (`VITE_PULSE_*_POLL_ID`); until then they show Coming soon.
+  #453 / PR #468 adds compact results charts. #482 / PR #485 restyles the web
+  app in white and green and adds a phone layout below 700px; the approved
+  mockup is `docs/mockups/pulse-light-v1.html`.
 - **MCP public reads are built** (#300 read slice, PR #323): `get_poll` and
   `get_results` at `/api/mcp`. ADR-0036 (voting from AI apps) is still marked
   proposed; no casting, sign-in or own-answer tools exist.
@@ -95,8 +98,9 @@ the same CI runs.
 - **Pillar 3 (path to action) is not started.** `proofEmailsOptIn` is collected
   and leads nowhere. #331-#333 plan it.
 - **Infrastructure is built.** Postgres storage (ADR-0020, ADR-0021, ADR-0023),
-  Resend mail (#164, ADR-0027), two images on one origin (#165, ADR-0028), built
-  in CI (#212). Dependabot alerts are on.
+  Resend mail (#164, ADR-0027), and two images on one origin (#165, ADR-0028),
+  built and scanned in CI with a sha-pinned Trivy action (#212, PR #491).
+  Dependabot alerts are on. `apps/pulse/DEPLOY.md` is the host-neutral deployment runbook (#491).
 
 ## What stands between this and a usable deploy
 
@@ -104,34 +108,24 @@ the same CI runs.
    prerequisites. Poll creation itself is merged, including the browser form.
 2. **Published starting questions** for `/questions`, and comments (#297).
    The explainer video (#339) comes later.
-3. **A host and a domain.** The domain is `onlinedemocracy.org` (owned); the
-   host is not chosen.
+3. **A host and DNS.** The host is not chosen; DNS for `onlinedemocracy.org`
+   still needs configuring.
 4. **A sending domain verified with Resend** (SPF/DKIM). DNS work, not code.
-5. **A container-image scan** in `pulse-images.yml` before the first deploy
-   (deferred by the operator, 2026-10-11; #315's other items are done).
+5. **The proxy-hop and rate-limit prerequisites** in `apps/pulse/DEPLOY.md`
+   must be satisfied before go-live.
 
-## Current operator direction and next work (2026-10-23)
+## Current operator direction and next work (2026-11-08)
 
-1. **Drawer and Home/About are merged** (#451/#452). Local validation of the
-   combined UI passed 494 browser tests and 13 real-HTTP integration tests,
-   lint and typecheck. The dev-server suite passed 18 tests with 10 Postgres
-   cases skipped because no test database was configured. Both PRs passed CI
-   before merge; no public deployment is claimed.
-2. **Recommended results refinement: #453**, a compact results banner with
-   vertical bars below the question/image/context and above comments. This
-   remains unbuilt and is the recommended next implementation slice. Preserve current
-   results visibility, all/confirmed counts, privacy and casting behavior.
-   It can ship without comments; #297 owns their records and posting, #423
-   replies, and #424 the separate opinion-diversity prototype.
-   Poll-creation refinement remains an earlier request whose particular
-   changes still need scoping; reuse the built creation flow.
-3. Prepare a small invited pilot once browsing and the agreed creation
-   refinements are ready, with a chosen host, persistent database, verified
-   sending domain and the deferred container-image scan. This is a plan,
-   not a claim of deployment or authorisation to deploy.
-4. Broad launch still needs the recorded reporting/moderation prerequisites
-   and published starting questions. Continue toward discussion, related votes
-   and documented action through #303 and its linked tickets.
+1. **Recent UI work is merged:** private My votes history (#329 / PR #467),
+   compact results charts (#453 / PR #468), and the light restyle with phone
+   layout (#482 / PR #485).
+2. **The open stack starts at PR #488:** #484 Answered list sync has fixes in
+   progress; PR #489 simplifies results (#478/#480) on top of #488; PR #492
+   adds the desktop layout (#490) on top of #489.
+3. #487 remains open and has not started.
+4. Prepare a small invited pilot only after choosing a host, configuring DNS,
+   verifying a sending domain and satisfying `apps/pulse/DEPLOY.md`'s
+   proxy-hop and rate-limit prerequisites. This is not authorization to deploy.
 
 ## Browse (merged, updated 2026-10-23)
 
@@ -151,9 +145,9 @@ the same CI runs.
 - Later browse thumbnails and a few context lines per entry are #427, dependent
   on #296 image/context fields; #397 owns the richer mixed feed. Reuse these
   issues rather than creating duplicates. Side-column contents remain #331.
-- #453 owns the newly requested results presentation; #297/#423 own
-  discussion, #424 the opinion-diversity prototype and #425 related-question
-  continuation. Invited-pilot prerequisites remain the current plan above.
+- #453's results presentation is merged in PR #468; #297/#423 own discussion,
+  #424 the opinion-diversity prototype and #425 related-question continuation.
+  Invited-pilot prerequisites remain the current plan above.
 
 ## Backlog ownership (reviewed 2026-10-23)
 
@@ -177,9 +171,9 @@ the same CI runs.
   This is likely future work; a simple slice is possible only after its
   navigation semantics are agreed. Feed order may later be algorithmic, but
   no algorithm, personalization or inferred relationship rule is selected.
-- #453 owns open/closed poll chart presentation; #332 owns linked action
-  progress and evidence, reusing the same results. #303 and #297 now reflect
-  the results-before-comments layout and merged drawer.
+- #453's open/closed poll chart presentation is merged in PR #468; #332 owns
+  linked action progress and evidence, reusing the same results. #303 and #297
+  reflect the results-before-comments layout and merged drawer.
 - #291 owns discovery/listing in the existing public MCP adapter, not another
   implementation of PR #323's get_poll/get_results. #397 owns posts,
   post-to-poll relationships and the mixed feed; reuse #427's poll previews.
@@ -193,14 +187,16 @@ the same CI runs.
 ## Next / not built
 
 - **The authoring and demo-feedback slices are complete** (#393/#403–#405).
-  Browse #260 and the #451/#452 layout are also merged. #453 is the recommended
-  results slice; #457/#458 add community paths and lifecycle deliberation.
-  Poll-creation refinements still need scoping. See the
-  current plan above. A local demo is available, but there is no claim of a public deploy.
+  Browse #260, the #451/#452 layout, #453 / PR #468 results charts and #482 /
+  PR #485 light restyle are merged. The current stack is #488, #489 and #492;
+  #487 is open and unstarted. #457/#458 add community paths and lifecycle
+  deliberation. Poll-creation refinements are an open operator request whose particular
+  changes still need scoping; reuse the built creation flow. A local demo is
+  available, but there is no public deploy.
 - Open feature issues: #296 photo and summary, #297 comments, #336 suggestions in
   the conversation page, #331-#333 desktop side columns and action follow-through,
-  #329 a "My votes" page, #314 browser-extension prototype (idea only), and
-  #425 related/closed-question onward navigation (including former #186).
+  #314 browser-extension prototype (idea only), and #425 related/closed-question
+  onward navigation (including former #186).
 - P8 slice 2 (the guest upgrade path) and P9-P11 are unstarted. Email assurance
   does not prove social confirmation or a unique human.
 - **ADR-0025 (related polls) is accepted but NOT built.**
@@ -288,7 +284,7 @@ the same CI runs.
 - **ADR-0035 / ADR-0044:** the vote page is a conversation; ADR-0044
   supersedes the historical mockup's placement with a permanent bottom voting
   drawer and results beneath the saved answer in main content. Next stays
-  with results. #453 is the pending chart refinement, not built behavior.
+  with results. #453's compact chart refinement is built in PR #468.
 - **ADR-0037:** poll creation: closes after seven days unless the poster picks a
   later time; suggestions off (#336); five publications per rolling hour per
   account; Owner and narrow grants; community or General posting; anonymous by

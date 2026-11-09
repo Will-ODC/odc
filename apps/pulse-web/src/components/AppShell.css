@@ -46,13 +46,6 @@
   .shell {
     --frame-h: 100%;
 
-    /*
-     * The two sides, louder. The resting tint was tuned against a 390px
-     * phone where it covers most of the screen; stretched across a window it
-     * washes out to nothing and the halves stop looking like anything.
-     */
-    --side-rest: 0.14;
-
     /* The question keeps less of a tall window than it does of a phone. */
     --head-min: 24%;
 
@@ -92,11 +85,6 @@
 
   .shell__stage {
     grid-column: 2;
-    /*
-     * A column of its own with a line either side, so the three read as one
-     * page rather than as a screenshot with notes beside it.
-     */
-    border-inline: var(--hairline) solid var(--ballot-line);
   }
 
   .shell__rail {
@@ -112,7 +100,7 @@
      */
     min-height: 0;
     overflow-y: auto;
-    color: var(--ballot-ink-soft);
+    color: var(--ink-soft);
     font-size: var(--t-body);
   }
 }
