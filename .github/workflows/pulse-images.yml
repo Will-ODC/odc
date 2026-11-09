@@ -1,6 +1,6 @@
 name: pulse-images
 
-# Builds both pulse images whenever something that goes into them changes.
+# Builds both pulse images when their inputs change and on a weekly/manual scan.
 #
 # The images were written in #165 and first built by hand on 2026-10-09; until
 # then "the first docker build is still the test" sat in memory for a month,
@@ -11,7 +11,12 @@ name: pulse-images
 # included, for files most PRs never touch. The cost of that choice: a new job
 # is NOT a required check until a repo admin adds `pulse-images` to the
 # `protect-master` ruleset, so until then a red run warns and blocks nothing.
+# The weekly scheduled run fails on master and GitHub notifies the workflow's
+# last editor; until pulse-images is a required check, that is the only signal.
 on:
+  schedule:
+    - cron: "0 6 * * 1"
+  workflow_dispatch:
   pull_request:
     paths:
       - "apps/pulse/**"
@@ -39,12 +44,19 @@ jobs:
       # workspace and the lockfile lives at the top.
       - name: Build the API image
         run: docker build -f apps/pulse/Dockerfile -t pulse-api:ci .
+      - name: Check the API image has no package manager
+        run: |
+          docker run --rm --entrypoint sh pulse-api:ci -c 'for t in yarn yarnpkg npm npx corepack; do if command -v "$t" >/dev/null; then echo "package manager present: $t"; exit 1; fi; done'
       - name: Build the web image
         id: build-web
         run: docker build -f apps/pulse-web/Dockerfile -t pulse-web:ci .
       - name: Scan the API image
         uses: aquasecurity/trivy-action@ed142fd0673e97e23eac54620cfb913e5ce36c25 # v0.36.0
         with:
+          # Pin the scanner binary independently of the action wrapper.
+          # Pinned on purpose and bumped by hand; the vulnerability database
+          # still updates every run.
+          version: v0.70.0
           image-ref: pulse-api:ci
           format: table
           exit-code: 1
@@ -54,6 +66,10 @@ jobs:
         if: ${{ !cancelled() && steps.build-web.outcome == 'success' }}
         uses: aquasecurity/trivy-action@ed142fd0673e97e23eac54620cfb913e5ce36c25 # v0.36.0
         with:
+          # Pin the scanner binary independently of the action wrapper.
+          # Pinned on purpose and bumped by hand; the vulnerability database
+          # still updates every run.
+          version: v0.70.0
           image-ref: pulse-web:ci
           format: table
           exit-code: 1
