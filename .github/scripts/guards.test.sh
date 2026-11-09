@@ -1,14 +1,42 @@
 #!/usr/bin/env bash
 #
 # Tests for the CI guard scripts (T2). Builds throwaway git repos, replays each
-# scenario the guards must catch, and asserts the exit code. No network, no deps
-# beyond git + bash. Run: bash .github/scripts/guards.test.sh
-set -uo pipefail
+# scenario the guards must catch, and asserts the exit code and diagnostic. No
+# network, no deps beyond git + bash. Run: bash .github/scripts/guards.test.sh
+set -euo pipefail
 
 HERE="$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)"
 GUARD="$HERE/contracts-guard.sh"
 DIFFSIZE="$HERE/diff-size.sh"
 MEMINDEX="$HERE/memory-index.sh"
+
+# macOS still ships Bash 3.2, which lacks mapfile. The memory-index guard uses
+# only `mapfile -t <array>`, so export that narrow compatibility implementation
+# to the child shell when the builtin is unavailable.
+if ! command -v mapfile >/dev/null 2>&1; then
+  mapfile() {
+    local array_name="MAPFILE"
+    local line
+    local quoted
+
+    if [[ "${1:-}" == "-t" ]]; then
+      shift
+    fi
+    if (($# > 0)); then
+      array_name="$1"
+      shift
+    fi
+    (($# == 0)) || return 2
+    [[ "$array_name" =~ ^[a-zA-Z_][a-zA-Z0-9_]*$ ]] || return 2
+
+    eval "$array_name=()"
+    while IFS= read -r line; do
+      printf -v quoted '%q' "$line"
+      eval "$array_name+=( $quoted )"
+    done
+  }
+  export -f mapfile
+fi
 
 pass=0
 fail=0
@@ -35,29 +63,84 @@ new_repo() {
   git -C "$d" commit -qm init
 }
 
-# run_guard <dir>: run contracts-guard against base..HEAD in <dir>. Echoes exit.
-run_guard() {
-  (cd "$1" && BASE=base HEAD=HEAD bash "$GUARD" >/dev/null 2>&1)
-  echo $?
+guard_status=0
+guard_output=""
+
+# Expected guard failures must be captured explicitly so `set -e` still makes
+# every fixture setup command fail fast.
+run_contract_guard() {
+  if guard_output="$(cd "$1" && BASE=base HEAD=HEAD bash "$GUARD" 2>&1)"; then
+    guard_status=0
+  else
+    guard_status=$?
+  fi
 }
 
-# assert <expected-exit> <actual-exit> <label>
-assert() {
-  if [[ "$1" == "$2" ]]; then ok "$3"; else
-    bad "$3 (expected exit $1, got $2)"
+run_diff_size() {
+  if guard_output="$(cd "$1" && BASE=base HEAD=HEAD bash "$DIFFSIZE" 2>&1)"; then
+    guard_status=0
+  else
+    guard_status=$?
+  fi
+}
+
+run_memory_index() {
+  if guard_output="$(ROOT="$1" bash "$MEMINDEX" 2>&1)"; then
+    guard_status=0
+  else
+    guard_status=$?
+  fi
+}
+
+assert_pass() {
+  local label="$1"
+  if [[ "$guard_status" -eq 0 ]]; then
+    ok "$label"
+  else
+    bad "$label (expected exit 0, got $guard_status; output: $guard_output)"
+  fi
+}
+
+assert_failure() {
+  local diagnostic="$1"
+  local label="$2"
+  if [[ "$guard_status" -ne 1 ]]; then
+    bad "$label (expected exit 1, got $guard_status; output: $guard_output)"
+  elif [[ "$guard_output" != *"$diagnostic"* ]]; then
+    bad "$label (missing diagnostic '$diagnostic'; output: $guard_output)"
+  else
+    ok "$label"
+  fi
+}
+
+assert_value() {
+  local expected="$1"
+  local actual="$2"
+  local label="$3"
+  if [[ "$expected" == "$actual" ]]; then
+    ok "$label"
+  else
+    bad "$label (expected $expected, got $actual)"
   fi
 }
 
 TMP="$(mktemp -d)"
-trap 'rm -rf "$TMP"' EXIT
+cleanup() {
+  local status="$1"
+  rm -rf "$TMP"
+  exit "$status"
+}
+trap 'cleanup $?' EXIT
 
 # --- Scenario 1: contracts/ touched, changelog entry, no spec → PASS (exit 0)
 R="$TMP/s1"
 new_repo "$R"
 git -C "$R" checkout -q -b work
 printf '## x — n/a — 2026-01-01 — T2\n- seeded\n' >"$R/contracts/CONTRACTS-CHANGE.md"
-git -C "$R" add -A && git -C "$R" commit -qm change
-assert 0 "$(run_guard "$R")" "changelog entry, no spec touched → pass"
+git -C "$R" add -A
+git -C "$R" commit -qm change
+run_contract_guard "$R"
+assert_pass "changelog entry, no spec touched → pass"
 
 # --- Scenario 2: spec touched WITHOUT version bump → FAIL (exit 1)
 R="$TMP/s2"
@@ -65,8 +148,11 @@ new_repo "$R"
 git -C "$R" checkout -q -b work
 printf '# Event Schema\n\nSome normative text.\n' >"$R/contracts/event-schema.md"
 printf '## event-schema — v1 — 2026-01-01 — T3\n- draft\n' >"$R/contracts/CONTRACTS-CHANGE.md"
-git -C "$R" add -A && git -C "$R" commit -qm change
-assert 1 "$(run_guard "$R")" "spec touched, no Version line → fail"
+git -C "$R" add -A
+git -C "$R" commit -qm change
+run_contract_guard "$R"
+assert_failure "Spec contracts/event-schema.md has no added 'Version:' line." \
+  "spec touched, no Version line → fail"
 
 # --- Scenario 3: spec touched WITH version bump + changelog → PASS
 R="$TMP/s3"
@@ -74,50 +160,65 @@ new_repo "$R"
 git -C "$R" checkout -q -b work
 printf '# Event Schema\n\n**Version:** v1\n\nSome normative text.\n' >"$R/contracts/event-schema.md"
 printf '## event-schema — v1 — 2026-01-01 — T3\n- draft\n' >"$R/contracts/CONTRACTS-CHANGE.md"
-git -C "$R" add -A && git -C "$R" commit -qm change
-assert 0 "$(run_guard "$R")" "spec touched with Version + changelog → pass"
+git -C "$R" add -A
+git -C "$R" commit -qm change
+run_contract_guard "$R"
+assert_pass "spec touched with Version + changelog → pass"
 
 # --- Scenario 4: spec touched, version bump, but NO changelog entry → FAIL
 R="$TMP/s4"
 new_repo "$R"
 git -C "$R" checkout -q -b work
 printf '# Event Schema\n\n**Version:** v1\n\ntext\n' >"$R/contracts/event-schema.md"
-git -C "$R" add -A && git -C "$R" commit -qm change
-assert 1 "$(run_guard "$R")" "spec + version but no changelog → fail"
+git -C "$R" add -A
+git -C "$R" commit -qm change
+run_contract_guard "$R"
+assert_failure "No new contracts/CONTRACTS-CHANGE.md entry." \
+  "spec + version but no changelog → fail"
 
 # --- Scenario 5: no contracts/ change at all → PASS (guard is a no-op)
 R="$TMP/s5"
 new_repo "$R"
 git -C "$R" checkout -q -b work
 printf 'root\n' >"$R/README.md"
-git -C "$R" add -A && git -C "$R" commit -qm change
-assert 0 "$(run_guard "$R")" "no contracts/ change → pass (no-op)"
+git -C "$R" add -A
+git -C "$R" commit -qm change
+run_contract_guard "$R"
+assert_pass "no contracts/ change → pass (no-op)"
 
 # --- Scenario 6: FREEZE — contracts-v1 tag exists, edit hashing.md → FAIL
 R="$TMP/s6"
 new_repo "$R"
 printf '# Hashing\n\n**Version:** v1\nrules\n' >"$R/contracts/hashing.md"
-git -C "$R" add -A && git -C "$R" commit -qm "add hashing"
+git -C "$R" add -A
+git -C "$R" commit -qm "add hashing"
 git -C "$R" tag contracts-v1
 git -C "$R" checkout -q -b work
 printf '# Hashing\n\n**Version:** v1\nrules changed\n' >"$R/contracts/hashing.md"
 printf '## hashing — v2 — 2026-01-01 — X\n- tweak\n' >"$R/contracts/CONTRACTS-CHANGE.md"
-git -C "$R" add -A && git -C "$R" commit -qm change
+git -C "$R" add -A
+git -C "$R" commit -qm change
 # base for this scenario is the tagged commit's parent chain; diff base..HEAD.
-assert 1 "$(run_guard "$R")" "frozen hashing.md edited after contracts-v1 → fail"
+run_contract_guard "$R"
+assert_failure "FROZEN: contracts/hashing.md cannot change after the contracts-v1 tag." \
+  "frozen hashing.md edited after contracts-v1 → fail"
 
 # --- Scenario 7: FREEZE — contracts-v1 tag exists, edit a fixture → FAIL
 R="$TMP/s7"
 new_repo "$R"
 mkdir -p "$R/contracts/fixtures"
 printf '{"seq":1}\n' >"$R/contracts/fixtures/001.json"
-git -C "$R" add -A && git -C "$R" commit -qm "add fixture"
+git -C "$R" add -A
+git -C "$R" commit -qm "add fixture"
 git -C "$R" tag contracts-v1
 git -C "$R" checkout -q -b work
 printf '{"seq":2}\n' >"$R/contracts/fixtures/001.json"
 printf '## fixtures — v2 — 2026-01-01 — X\n- tweak\n' >"$R/contracts/CONTRACTS-CHANGE.md"
-git -C "$R" add -A && git -C "$R" commit -qm change
-assert 1 "$(run_guard "$R")" "frozen fixture edited after contracts-v1 → fail"
+git -C "$R" add -A
+git -C "$R" commit -qm change
+run_contract_guard "$R"
+assert_failure "FROZEN: contracts/fixtures/001.json cannot be modified, deleted, or renamed" \
+  "frozen fixture edited after contracts-v1 → fail"
 
 # --- Scenario 7c: FREEZE — ADDING a new fixture after contracts-v1 → PASS.
 # evolution.md EV-5/EV-14 require every additive change to ship golden fixtures,
@@ -126,26 +227,33 @@ R="$TMP/s7c"
 new_repo "$R"
 mkdir -p "$R/contracts/fixtures"
 printf '{"seq":1}\n' >"$R/contracts/fixtures/001.json"
-git -C "$R" add -A && git -C "$R" commit -qm "add fixture"
+git -C "$R" add -A
+git -C "$R" commit -qm "add fixture"
 git -C "$R" tag contracts-v1
 git -C "$R" checkout -q -b work
 printf '{"seq":9}\n' >"$R/contracts/fixtures/042-new-type.json" # untouched: 001.json
 printf '## fixtures — v2 — 2026-01-01 — X\n- new type vector\n' >"$R/contracts/CONTRACTS-CHANGE.md"
-git -C "$R" add -A && git -C "$R" commit -qm change
-assert 0 "$(run_guard "$R")" "NEW fixture added after contracts-v1 → pass"
+git -C "$R" add -A
+git -C "$R" commit -qm change
+run_contract_guard "$R"
+assert_pass "NEW fixture added after contracts-v1 → pass"
 
 # --- Scenario 7d: FREEZE — DELETING an existing fixture after the tag → FAIL
 R="$TMP/s7d"
 new_repo "$R"
 mkdir -p "$R/contracts/fixtures"
 printf '{"seq":1}\n' >"$R/contracts/fixtures/001.json"
-git -C "$R" add -A && git -C "$R" commit -qm "add fixture"
+git -C "$R" add -A
+git -C "$R" commit -qm "add fixture"
 git -C "$R" tag contracts-v1
 git -C "$R" checkout -q -b work
 git -C "$R" rm -q "contracts/fixtures/001.json"
 printf '## fixtures — v2 — 2026-01-01 — X\n- drop vector\n' >"$R/contracts/CONTRACTS-CHANGE.md"
-git -C "$R" add -A && git -C "$R" commit -qm change
-assert 1 "$(run_guard "$R")" "existing fixture deleted after contracts-v1 → fail"
+git -C "$R" add -A
+git -C "$R" commit -qm change
+run_contract_guard "$R"
+assert_failure "FROZEN: contracts/fixtures/001.json cannot be modified, deleted, or renamed" \
+  "existing fixture deleted after contracts-v1 → fail"
 
 # --- Scenario 7e: FREEZE — RENAMING an existing fixture after the tag → FAIL.
 # Guards against rename detection laundering a delete into an allowed add.
@@ -153,13 +261,17 @@ R="$TMP/s7e"
 new_repo "$R"
 mkdir -p "$R/contracts/fixtures"
 printf '{"seq":1}\n' >"$R/contracts/fixtures/001.json"
-git -C "$R" add -A && git -C "$R" commit -qm "add fixture"
+git -C "$R" add -A
+git -C "$R" commit -qm "add fixture"
 git -C "$R" tag contracts-v1
 git -C "$R" checkout -q -b work
 git -C "$R" mv "contracts/fixtures/001.json" "contracts/fixtures/001-renamed.json"
 printf '## fixtures — v2 — 2026-01-01 — X\n- rename vector\n' >"$R/contracts/CONTRACTS-CHANGE.md"
-git -C "$R" add -A && git -C "$R" commit -qm change
-assert 1 "$(run_guard "$R")" "existing fixture renamed after contracts-v1 → fail"
+git -C "$R" add -A
+git -C "$R" commit -qm change
+run_contract_guard "$R"
+assert_failure "FROZEN: contracts/fixtures/001.json cannot be modified, deleted, or renamed" \
+  "existing fixture renamed after contracts-v1 → fail"
 
 # --- Scenarios 7f-7l: FREEZE, the aggregate files (ADR-0008).
 #
@@ -192,7 +304,8 @@ frozen_repo() {
 }
 JSON
   remanifest "$d"
-  git -C "$d" add -A && git -C "$d" commit -qm fixtures
+  git -C "$d" add -A
+  git -C "$d" commit -qm fixtures
   git -C "$d" tag -f contracts-v1 >/dev/null 2>&1
   git -C "$d" checkout -q -b work
   printf '## fixtures — v2 — 2026-01-01 — X\n- change\n' >"$d/contracts/CONTRACTS-CHANGE.md"
@@ -230,25 +343,37 @@ frozen_repo "$R"
 printf '{"seq":9}\n' >"$R/contracts/fixtures/vectors/002.ndjson"
 append_entry "$R" "002-second" "VALID"
 remanifest "$R"
-git -C "$R" add -A && git -C "$R" commit -qm append
-assert 0 "$(run_guard "$R")" "FREEZE: appending a vector (register+manifest+file) → pass"
+git -C "$R" add -A
+git -C "$R" commit -qm append
+run_contract_guard "$R"
+assert_pass "FREEZE: appending a vector (register+manifest+file) → pass"
 
 # 7g: editing an existing verdict — the thing the freeze exists to stop.
 R="$TMP/s7g"
 frozen_repo "$R"
-sed -i 's/"verdict": "VALID"/"verdict": "INVALID"/' "$R/contracts/fixtures/index.json"
+sed 's/"verdict": "VALID"/"verdict": "INVALID"/' \
+  "$R/contracts/fixtures/index.json" >"$R/index.tmp"
+mv "$R/index.tmp" "$R/contracts/fixtures/index.json"
 remanifest "$R"
-git -C "$R" add -A && git -C "$R" commit -qm flip
-assert 1 "$(run_guard "$R")" "FREEZE: existing verdict edited in the register → fail"
+git -C "$R" add -A
+git -C "$R" commit -qm flip
+run_contract_guard "$R"
+assert_failure "FROZEN: contracts/fixtures/index.json may only GAIN entries" \
+  "FREEZE: existing verdict edited in the register → fail"
 
 # 7h: editing an existing NOTE. Frozen too — prose is what a verifier author
 # reads and implements from, so corrections must land before the tag.
 R="$TMP/s7h"
 frozen_repo "$R"
-sed -i 's/"note": "the first one"/"note": "reworded"/' "$R/contracts/fixtures/index.json"
+sed 's/"note": "the first one"/"note": "reworded"/' \
+  "$R/contracts/fixtures/index.json" >"$R/index.tmp"
+mv "$R/index.tmp" "$R/contracts/fixtures/index.json"
 remanifest "$R"
-git -C "$R" add -A && git -C "$R" commit -qm renote
-assert 1 "$(run_guard "$R")" "FREEZE: existing note edited in the register → fail"
+git -C "$R" add -A
+git -C "$R" commit -qm renote
+run_contract_guard "$R"
+assert_failure "FROZEN: contracts/fixtures/index.json may only GAIN entries" \
+  "FREEZE: existing note edited in the register → fail"
 
 # 7i: removing an entry. The vector FILE survives, so rule (d) never fires —
 # only the no-deletion rule catches it. Silently un-runs a frozen vector.
@@ -256,8 +381,11 @@ R="$TMP/s7i"
 frozen_repo "$R"
 printf '{\n  "vectors": [\n  ]\n}\n' >"$R/contracts/fixtures/index.json"
 remanifest "$R"
-git -C "$R" add -A && git -C "$R" commit -qm drop
-assert 1 "$(run_guard "$R")" "FREEZE: register entry removed while its vector stays → fail"
+git -C "$R" add -A
+git -C "$R" commit -qm drop
+run_contract_guard "$R"
+assert_failure "FROZEN: contracts/fixtures/index.json may only GAIN entries" \
+  "FREEZE: register entry removed while its vector stays → fail"
 
 # 7j: a pure ADDITION reusing an existing id — two contradictory assertions over
 # frozen bytes. It passes the no-deletion rule, so it needs its own check.
@@ -266,8 +394,11 @@ frozen_repo "$R"
 printf '{"seq":9}\n' >"$R/contracts/fixtures/vectors/002.ndjson"
 append_entry "$R" "001-first" "INVALID"
 remanifest "$R"
-git -C "$R" add -A && git -C "$R" commit -qm dupe
-assert 1 "$(run_guard "$R")" "FREEZE: appended entry reusing an existing id → fail"
+git -C "$R" add -A
+git -C "$R" commit -qm dupe
+run_contract_guard "$R"
+assert_failure "Duplicate vector id(s) in contracts/fixtures/index.json:" \
+  "FREEZE: appended entry reusing an existing id → fail"
 
 # 7k: a stale manifest. Rule (c) does not diff the manifest, so its correctness
 # is the only thing pinning vector bytes — the guard must run that check itself
@@ -275,15 +406,21 @@ assert 1 "$(run_guard "$R")" "FREEZE: appended entry reusing an existing id → 
 R="$TMP/s7k"
 frozen_repo "$R"
 printf '{"seq":9}\n' >"$R/contracts/fixtures/vectors/002.ndjson" # added, NOT manifested
-git -C "$R" add -A && git -C "$R" commit -qm unmanifested
-assert 1 "$(run_guard "$R")" "FREEZE: vector added without a manifest entry → fail"
+git -C "$R" add -A
+git -C "$R" commit -qm unmanifested
+run_contract_guard "$R"
+assert_failure "contracts/fixtures/ does not match its manifest." \
+  "FREEZE: vector added without a manifest entry → fail"
 
 # 7l: deleting the manifest, which would disable 7k's check entirely.
 R="$TMP/s7l"
 frozen_repo "$R"
 git -C "$R" rm -q "contracts/fixtures/MANIFEST.sha256"
-git -C "$R" add -A && git -C "$R" commit -qm demanifest
-assert 1 "$(run_guard "$R")" "FREEZE: manifest deleted after contracts-v1 → fail"
+git -C "$R" add -A
+git -C "$R" commit -qm demanifest
+run_contract_guard "$R"
+assert_failure "FROZEN: contracts/fixtures/MANIFEST.sha256 may be regenerated but not deleted or renamed" \
+  "FREEZE: manifest deleted after contracts-v1 → fail"
 
 # --- Scenarios 7m-7o: the duplicate-key exploit against rule (a).
 #
@@ -307,19 +444,25 @@ R="$TMP/s7m"
 frozen_repo "$R"
 dup_key "$R" '      },' '      "expect": {\n        "verdict": "INVALID"\n      },'
 remanifest "$R"
-git -C "$R" add -A && git -C "$R" commit -qm dupkey
+git -C "$R" add -A
+git -C "$R" commit -qm dupkey
 # Prove the premise: the diff really does delete nothing, so rule (a) is happy.
 del="$(git -C "$R" diff --numstat base HEAD -- contracts/fixtures/index.json | awk '{print $2}')"
-assert 0 "$del" "FREEZE: the duplicate-key attack really is a pure insertion"
-assert 1 "$(run_guard "$R")" "FREEZE: duplicate expect key flipping a verdict → fail"
+assert_value 0 "$del" "FREEZE: the duplicate-key attack really is a pure insertion"
+run_contract_guard "$R"
+assert_failure "contracts/fixtures/index.json is not well-formed, an object in it repeats a key" \
+  "FREEZE: duplicate expect key flipping a verdict → fail"
 
 # 7n: a second "export", repointing a frozen id at another vector's bytes.
 R="$TMP/s7n"
 frozen_repo "$R"
 dup_key "$R" '"export": "vectors/001.ndjson",' '      "export": "vectors/002.ndjson",'
 remanifest "$R"
-git -C "$R" add -A && git -C "$R" commit -qm dupexport
-assert 1 "$(run_guard "$R")" "FREEZE: duplicate export key repointing a vector → fail"
+git -C "$R" add -A
+git -C "$R" commit -qm dupexport
+run_contract_guard "$R"
+assert_failure "contracts/fixtures/index.json is not well-formed, an object in it repeats a key" \
+  "FREEZE: duplicate export key repointing a vector → fail"
 
 # 7o: a malformed register. json.load failing must fail the guard, not be
 # swallowed — otherwise the check disappears exactly when the file is worst.
@@ -327,21 +470,28 @@ R="$TMP/s7o"
 frozen_repo "$R"
 printf '{ "vectors": [ {,, ] }\n' >"$R/contracts/fixtures/index.json"
 remanifest "$R"
-git -C "$R" add -A && git -C "$R" commit -qm malformed
-assert 1 "$(run_guard "$R")" "FREEZE: unparseable index.json → fail"
+git -C "$R" add -A
+git -C "$R" commit -qm malformed
+run_contract_guard "$R"
+assert_failure "contracts/fixtures/index.json is not well-formed, an object in it repeats a key" \
+  "FREEZE: unparseable index.json → fail"
 
 # --- Scenario 7b: per-file version check — spec A edited unbumped while spec B
 # is added WITH a Version line must still FAIL (B's bump can't cover A).
 R="$TMP/s7b"
 new_repo "$R"
 printf '# Spec A\n\n**Version:** v1\n\noriginal text\n' >"$R/contracts/a.md"
-git -C "$R" add -A && git -C "$R" commit -qm "add spec a"
+git -C "$R" add -A
+git -C "$R" commit -qm "add spec a"
 git -C "$R" checkout -q -b work
 printf '# Spec A\n\n**Version:** v1\n\nEDITED text, no bump\n' >"$R/contracts/a.md"
 printf '# Spec B\n\n**Version:** v1\n\nnew spec\n' >"$R/contracts/b.md"
 printf '## specs — v1 — 2026-01-01 — T4\n- add b, edit a\n' >"$R/contracts/CONTRACTS-CHANGE.md"
-git -C "$R" add -A && git -C "$R" commit -qm change
-assert 1 "$(run_guard "$R")" "spec A edited unbumped, spec B added bumped → fail"
+git -C "$R" add -A
+git -C "$R" commit -qm change
+run_contract_guard "$R"
+assert_failure "Spec contracts/a.md has no added 'Version:' line." \
+  "spec A edited unbumped, spec B added bumped → fail"
 
 # --- Scenario 8: diff-size fails past the hard ceiling (>1000 changed lines)
 R="$TMP/s8"
@@ -349,10 +499,11 @@ new_repo "$R"
 git -C "$R" checkout -q -b work
 # 1100 lines added in a non-exempt file.
 seq 1 1100 >"$R/big.txt"
-git -C "$R" add -A && git -C "$R" commit -qm big
-ds=$( (cd "$R" && BASE=base HEAD=HEAD bash "$DIFFSIZE" >/dev/null 2>&1)
-  echo $?)
-assert 1 "$ds" "diff-size >1000 changed lines → fail"
+git -C "$R" add -A
+git -C "$R" commit -qm big
+run_diff_size "$R"
+assert_failure "::error::Diff is 1100 changed lines (> 1000)." \
+  "diff-size >1000 changed lines → fail"
 
 # --- Scenario 8a: the ceiling really is 1000, not 600. An 800-line diff would
 # have failed under the old FAIL=600, so this is the scenario that pins the
@@ -362,30 +513,30 @@ R="$TMP/s8a"
 new_repo "$R"
 git -C "$R" checkout -q -b work
 seq 1 800 >"$R/big.txt"
-git -C "$R" add -A && git -C "$R" commit -qm big800
-ds=$( (cd "$R" && BASE=base HEAD=HEAD bash "$DIFFSIZE" >/dev/null 2>&1)
-  echo $?)
-assert 0 "$ds" "diff-size 800 changed lines → pass (ceiling is 1000, not 600)"
+git -C "$R" add -A
+git -C "$R" commit -qm big800
+run_diff_size "$R"
+assert_pass "diff-size 800 changed lines → pass (ceiling is 1000, not 600)"
 
 # --- Scenario 8b: and a diff comfortably under the ceiling still passes.
 R="$TMP/s8b"
 new_repo "$R"
 git -C "$R" checkout -q -b work
 seq 1 500 >"$R/big.txt"
-git -C "$R" add -A && git -C "$R" commit -qm big500
-ds=$( (cd "$R" && BASE=base HEAD=HEAD bash "$DIFFSIZE" >/dev/null 2>&1)
-  echo $?)
-assert 0 "$ds" "diff-size 500 changed lines → pass"
+git -C "$R" add -A
+git -C "$R" commit -qm big500
+run_diff_size "$R"
+assert_pass "diff-size 500 changed lines → pass"
 
 # --- Scenario 9: diff-size ignores exempt lockfile churn
 R="$TMP/s9"
 new_repo "$R"
 git -C "$R" checkout -q -b work
 seq 1 900 >"$R/pnpm-lock.yaml"
-git -C "$R" add -A && git -C "$R" commit -qm lock
-ds=$( (cd "$R" && BASE=base HEAD=HEAD bash "$DIFFSIZE" >/dev/null 2>&1)
-  echo $?)
-assert 0 "$ds" "diff-size ignores lockfile churn → pass"
+git -C "$R" add -A
+git -C "$R" commit -qm lock
+run_diff_size "$R"
+assert_pass "diff-size ignores lockfile churn → pass"
 
 # --- Scenario 10: diff-size ignores markdown churn (specs/docs exempt)
 R="$TMP/s10"
@@ -394,10 +545,10 @@ git -C "$R" checkout -q -b work
 mkdir -p "$R/contracts" "$R/docs"
 seq 1 600 >"$R/contracts/event-schema.md"
 seq 1 600 >"$R/docs/some-adr.md"
-git -C "$R" add -A && git -C "$R" commit -qm specs
-ds=$( (cd "$R" && BASE=base HEAD=HEAD bash "$DIFFSIZE" >/dev/null 2>&1)
-  echo $?)
-assert 0 "$ds" "diff-size ignores markdown churn (1200 md lines) → pass"
+git -C "$R" add -A
+git -C "$R" commit -qm specs
+run_diff_size "$R"
+assert_pass "diff-size ignores markdown churn (1200 md lines) → pass"
 
 # --- Scenario 11: markdown exemption does not mask non-exempt code churn
 R="$TMP/s11"
@@ -406,10 +557,11 @@ git -C "$R" checkout -q -b work
 mkdir -p "$R/contracts" "$R/src"
 seq 1 900 >"$R/contracts/spec.md" # exempt
 seq 1 1100 >"$R/src/big.ts"       # counted → over the 1000 ceiling
-git -C "$R" add -A && git -C "$R" commit -qm mixed
-ds=$( (cd "$R" && BASE=base HEAD=HEAD bash "$DIFFSIZE" >/dev/null 2>&1)
-  echo $?)
-assert 1 "$ds" "diff-size still counts code alongside exempt markdown → fail"
+git -C "$R" add -A
+git -C "$R" commit -qm mixed
+run_diff_size "$R"
+assert_failure "::error::Diff is 1100 changed lines (> 1000)." \
+  "diff-size still counts code alongside exempt markdown → fail"
 
 # --- Scenario 12: diff-size ignores docs/mockups churn (hand-authored HTML decks)
 R="$TMP/s12"
@@ -417,10 +569,10 @@ new_repo "$R"
 git -C "$R" checkout -q -b work
 mkdir -p "$R/docs/mockups"
 seq 1 1200 >"$R/docs/mockups/deck.html"
-git -C "$R" add -A && git -C "$R" commit -qm mockup
-ds=$( (cd "$R" && BASE=base HEAD=HEAD bash "$DIFFSIZE" >/dev/null 2>&1)
-  echo $?)
-assert 0 "$ds" "diff-size ignores docs/mockups churn (1200 html lines) → pass"
+git -C "$R" add -A
+git -C "$R" commit -qm mockup
+run_diff_size "$R"
+assert_pass "diff-size ignores docs/mockups churn (1200 html lines) → pass"
 
 # --- Scenario 13: mockups exemption does not mask non-exempt code churn
 R="$TMP/s13"
@@ -429,10 +581,11 @@ git -C "$R" checkout -q -b work
 mkdir -p "$R/docs/mockups" "$R/src"
 seq 1 900 >"$R/docs/mockups/deck.html" # exempt
 seq 1 1100 >"$R/src/big.ts"            # counted → over the 1000 ceiling
-git -C "$R" add -A && git -C "$R" commit -qm mixed
-ds=$( (cd "$R" && BASE=base HEAD=HEAD bash "$DIFFSIZE" >/dev/null 2>&1)
-  echo $?)
-assert 1 "$ds" "diff-size still counts code alongside exempt mockups → fail"
+git -C "$R" add -A
+git -C "$R" commit -qm mixed
+run_diff_size "$R"
+assert_failure "::error::Diff is 1100 changed lines (> 1000)." \
+  "diff-size still counts code alongside exempt mockups → fail"
 
 # --- Scenario 14: diff-size ignores pulse churn (charter-exempt product epic)
 R="$TMP/s14"
@@ -441,10 +594,10 @@ git -C "$R" checkout -q -b work
 mkdir -p "$R/apps/pulse/src" "$R/apps/pulse-web/src"
 seq 1 900 >"$R/apps/pulse/src/big.ts"      # exempt
 seq 1 900 >"$R/apps/pulse-web/src/big.ts"  # exempt
-git -C "$R" add -A && git -C "$R" commit -qm pulse
-ds=$( (cd "$R" && BASE=base HEAD=HEAD bash "$DIFFSIZE" >/dev/null 2>&1)
-  echo $?)
-assert 0 "$ds" "diff-size ignores pulse churn (1800 ts lines) → pass"
+git -C "$R" add -A
+git -C "$R" commit -qm pulse
+run_diff_size "$R"
+assert_pass "diff-size ignores pulse churn (1800 ts lines) → pass"
 
 # --- Scenario 15: the pulse exemption is dir-scoped, not an apps/ blanket
 R="$TMP/s15"
@@ -453,10 +606,11 @@ git -C "$R" checkout -q -b work
 mkdir -p "$R/apps/pulse/src" "$R/services/ledger"
 seq 1 900 >"$R/apps/pulse/src/big.ts"       # exempt
 seq 1 1100 >"$R/services/ledger/big.ts"     # counted → over the 1000 ceiling
-git -C "$R" add -A && git -C "$R" commit -qm mixed
-ds=$( (cd "$R" && BASE=base HEAD=HEAD bash "$DIFFSIZE" >/dev/null 2>&1)
-  echo $?)
-assert 1 "$ds" "diff-size still counts services/ alongside exempt pulse → fail"
+git -C "$R" add -A
+git -C "$R" commit -qm mixed
+run_diff_size "$R"
+assert_failure "::error::Diff is 1100 changed lines (> 1000)." \
+  "diff-size still counts services/ alongside exempt pulse → fail"
 
 # --- Scenario 16: a sibling app is NOT exempt; only the two pulse packages are
 R="$TMP/s16"
@@ -464,10 +618,11 @@ new_repo "$R"
 git -C "$R" checkout -q -b work
 mkdir -p "$R/apps/other/src"
 seq 1 1100 >"$R/apps/other/src/big.ts" # counted → over the ceiling
-git -C "$R" add -A && git -C "$R" commit -qm other
-ds=$( (cd "$R" && BASE=base HEAD=HEAD bash "$DIFFSIZE" >/dev/null 2>&1)
-  echo $?)
-assert 1 "$ds" "diff-size counts a non-pulse app under apps/ → fail"
+git -C "$R" add -A
+git -C "$R" commit -qm other
+run_diff_size "$R"
+assert_failure "::error::Diff is 1100 changed lines (> 1000)." \
+  "diff-size counts a non-pulse app under apps/ → fail"
 
 # memory-index scenarios need a real repo: the guard discovers directories with
 # `git ls-tree`, which is the point — an untracked dir is not committed work.
@@ -475,36 +630,42 @@ mem_repo() {
   local r="$1"; shift
   mkdir -p "$r/memory"
   git -C "$r" init -q
-  git -C "$r" config user.email t@t; git -C "$r" config user.name t
-  for d in "$@"; do mkdir -p "$r/$d" && echo x >"$r/$d/f.txt"; done
+  git -C "$r" config user.email t@t
+  git -C "$r" config user.name t
+  for d in "$@"; do
+    mkdir -p "$r/$d"
+    echo x >"$r/$d/f.txt"
+  done
 }
 
 # --- Scenario 17: fails when a committed workstream dir is unlisted
 R="$TMP/s17"
 mem_repo "$R" services apps
 printf '| Core | `services/` | `memory/STATE.md` |\n' >"$R/memory/INDEX.md"
-git -C "$R" add -A && git -C "$R" commit -qm init
-mi=$( (ROOT="$R" bash "$MEMINDEX" >/dev/null 2>&1)
-  echo $?)
-assert 1 "$mi" "memory-index fails on an unlisted workstream dir (apps/) → fail"
+git -C "$R" add -A
+git -C "$R" commit -qm init
+run_memory_index "$R"
+assert_failure "These top-level directories have no row in memory/INDEX.md: apps" \
+  "memory-index fails on an unlisted workstream dir (apps/) → fail"
 
 # --- Scenario 18: passes once every committed dir is named
 R="$TMP/s18"
 mem_repo "$R" services apps
 printf '| Core | `services/` | x |\n| Pulse | `apps/` | y |\n| Mem | `memory/` | z |\n' >"$R/memory/INDEX.md"
-git -C "$R" add -A && git -C "$R" commit -qm init
-mi=$( (ROOT="$R" bash "$MEMINDEX" >/dev/null 2>&1)
-  echo $?)
-assert 0 "$mi" "memory-index passes when every workstream dir is named → pass"
+git -C "$R" add -A
+git -C "$R" commit -qm init
+run_memory_index "$R"
+assert_pass "memory-index passes when every workstream dir is named → pass"
 
 # --- Scenario 19: fails loudly when the index itself is missing
 R="$TMP/s19"
 mem_repo "$R" services
-git -C "$R" add -A && git -C "$R" commit -qm init
+git -C "$R" add -A
+git -C "$R" commit -qm init
 rm -f "$R/memory/INDEX.md"
-mi=$( (ROOT="$R" bash "$MEMINDEX" >/dev/null 2>&1)
-  echo $?)
-assert 1 "$mi" "memory-index fails when memory/INDEX.md is absent → fail"
+run_memory_index "$R"
+assert_failure "memory/INDEX.md not found — the memory index is required." \
+  "memory-index fails when memory/INDEX.md is absent → fail"
 
 # --- Scenario 20: catches a BRAND-NEW directory nobody thought to list.
 # This is the case a hardcoded directory list could never catch, and it is the
@@ -512,29 +673,31 @@ assert 1 "$mi" "memory-index fails when memory/INDEX.md is absent → fail"
 R="$TMP/s20"
 mem_repo "$R" services packages
 printf '| Core | `services/` | x |\n| Mem | `memory/` | z |\n' >"$R/memory/INDEX.md"
-git -C "$R" add -A && git -C "$R" commit -qm init
-mi=$( (ROOT="$R" bash "$MEMINDEX" >/dev/null 2>&1)
-  echo $?)
-assert 1 "$mi" "memory-index catches a brand-new top-level dir (packages/) → fail"
+git -C "$R" add -A
+git -C "$R" commit -qm init
+run_memory_index "$R"
+assert_failure "These top-level directories have no row in memory/INDEX.md: packages" \
+  "memory-index catches a brand-new top-level dir (packages/) → fail"
 
 # --- Scenario 21: dot-directories are tooling, not workstreams
 R="$TMP/s21"
 mem_repo "$R" services .github .claude
 printf '| Core | `services/` | x |\n| Mem | `memory/` | z |\n' >"$R/memory/INDEX.md"
-git -C "$R" add -A && git -C "$R" commit -qm init
-mi=$( (ROOT="$R" bash "$MEMINDEX" >/dev/null 2>&1)
-  echo $?)
-assert 0 "$mi" "memory-index ignores dot-dirs (.github, .claude) → pass"
+git -C "$R" add -A
+git -C "$R" commit -qm init
+run_memory_index "$R"
+assert_pass "memory-index ignores dot-dirs (.github, .claude) → pass"
 
 # --- Scenario 22: an untracked directory is not committed work, so it is ignored
 R="$TMP/s22"
 mem_repo "$R" services
 printf '| Core | `services/` | x |\n| Mem | `memory/` | z |\n' >"$R/memory/INDEX.md"
-git -C "$R" add -A && git -C "$R" commit -qm init
-mkdir -p "$R/node_modules/pkg" && echo x >"$R/node_modules/pkg/f.txt"
-mi=$( (ROOT="$R" bash "$MEMINDEX" >/dev/null 2>&1)
-  echo $?)
-assert 0 "$mi" "memory-index ignores an untracked dir (node_modules) → pass"
+git -C "$R" add -A
+git -C "$R" commit -qm init
+mkdir -p "$R/node_modules/pkg"
+echo x >"$R/node_modules/pkg/f.txt"
+run_memory_index "$R"
+assert_pass "memory-index ignores an untracked dir (node_modules) → pass"
 
 echo
 echo "guards.test.sh: $pass passed, $fail failed"
