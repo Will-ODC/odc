@@ -126,6 +126,7 @@ appears.
   `"ODC-LEDGER-CLOSE-ISSUE-v1\n" + <genesis hash> + "\n" + <issue_id> + "\n" + <ts>`,
   where the genesis hash is the chain's identity (ET-7a). `ts` must be within
   five minutes of the ledger's clock.
+- This endpoint has its own 1024-byte body limit.
 - `202`: `{ "status": "closing" }` while the last batch is sealed, signed and
   appended; `200`: `{ "status": "closed" }` once done or if already closed.
 - `400 bad_request` (the body is not exactly `{ "ts", "sig" }`, both

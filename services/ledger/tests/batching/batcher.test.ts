@@ -288,7 +288,7 @@ test("start_ticks_on_a_timer_and_stop_ends_it_cleanly", { skip }, () =>
 
 test(
   "stop_during_a_running_tick_lets_it_finish_and_never_ticks_again",
-  { skip },
+  { skip, timeout: 30_000 },
   () =>
     withDb(async ({ app }) =>
       world(app, [{}], async (w) => {
@@ -316,6 +316,12 @@ test(
           await Promise.race([
             inSeal.promise,
             tick.then(() => assert.fail("tick ended without reaching seal")),
+            new Promise<never>((_, reject) => {
+              setTimeout(
+                () => reject(new Error("tick never reached seal")),
+                10_000,
+              ).unref();
+            }),
           ]); // mid-tick
           stopping = b.stop().then(() => {
             stopped = true;
