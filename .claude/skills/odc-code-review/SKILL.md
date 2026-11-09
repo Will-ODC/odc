@@ -19,10 +19,14 @@ description: Code review procedure and checklist for ODC. Use this skill wheneve
    and flag it only if it names neither.
 3. Walk the checklist below, then read the diff once more top-to-bottom for
    anything the checklist missed.
+4. A UI PR (as `odc-orchestration`, "Merging", defines it) also gets a
+   separate fresh `odc-ui-reviewer`, which checks the screens in the real
+   browser. Both verdicts are needed before merge.
 
 ## Output format
 
-Verdict first, with its handles: **PR #N (ticket #M, or the planned step) — APPROVE** /
+Verdict first, with its handles: **PR #N @ <head sha> (ticket #M, or the
+planned step) — APPROVE** /
 **APPROVE WITH NITS** / **REQUEST CHANGES**.
 Then findings, each tagged:
 

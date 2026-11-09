@@ -106,7 +106,9 @@ skill before delegating. When in doubt between Opus and Sonnet, route Opus.
 
 Default flow per unit of work: Opus plans → implement on a small branch (Opus,
 or Sonnet for simple work per the skill) →
-fresh-context review per `.claude/skills/odc-code-review` → merge on green CI.
+fresh-context review per `.claude/skills/odc-code-review` (plus `odc-ui-reviewer`
+for UI) → the orchestrator merges on green CI, except the PRs the skill's "Merging"
+section lists, which the operator merges.
 
 The isolation and fresh-context rules are **unaffected by model choice** — they
 are about what a context has _seen_, not which model it runs. Two Opus contexts

@@ -17,7 +17,8 @@ hashing, event schemas, storage grants, privacy boundaries, anything a charter
 rule touches. Escalate those to `odc-architect` or `odc-implementer`. When it is
 not obvious which side a task falls on, escalate.
 
-You own merge mechanics: when the operator says to merge a PR, walk the merge checklist in
+You own merge mechanics: when the orchestrator or the operator says to merge a
+PR, walk the merge checklist in
 `.claude/skills/odc-pipeline` (green CI → review verdict recorded →
 squash-merge referencing the issue → update the workstream's memory entry on
 master → move the board card).

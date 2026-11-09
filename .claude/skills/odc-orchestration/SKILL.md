@@ -20,7 +20,7 @@ everything the operator has not kept for themself. Ask the operator only about:
   Opus per the table.
 - **Goals in tension** — when two goals pull apart and nothing written says
   which wins.
-- **What the operator owns** — merging, audits, deploys, spending, a charter
+- **What the operator owns** — merging the PRs listed in "Merging", audits, deploys, spending, a charter
   conflict, and anything an ADR or memory entry reserves to the operator.
 
 **Check the written goals before asking.** For the ODC core: `docs/charter.md`
@@ -38,12 +38,11 @@ design choices where appropriate. Overarching goals, and decisions on
 user-facing features and critical functionality, still go to the operator.
 
 **The loop,** for each unit of work: build → commit, push, open the PR → CI
-green → the orchestrator starts a fresh-context `odc-reviewer` (a lead never
-does; see "What a lead never does") → the owner fixes → review again until
-approved → report it ready to merge → next unit. Merging stays the operator's
-call, and audits are never part of the loop. Stop a unit only for an open
-operator question on it, and keep the other units moving. Start the next unit
-only within the WIP limit in `odc-pipeline`: a unit in a service that still
+green → the orchestrator starts the fresh-context reviews (a lead never does;
+see "What a lead never does") → the owner fixes → review again until approved
+→ the orchestrator merges it (see "Merging") → next unit. Audits are never part
+of the loop. Stop a unit only for an open operator question on it, and keep
+the other units moving. Start the next unit only within the WIP limit in `odc-pipeline`: a unit in a service that still
 has an unmerged branch waits for the merge, or stacks on it as `odc-pipeline`
 allows.
 
@@ -66,6 +65,71 @@ looks like. Then:
   has got toward it.
 - Do work only if it serves the goal. Work that does not serve it is a
   question for the operator, not something to start.
+
+### Merging
+
+The orchestrator merges a PR once it is properly reviewed (operator,
+2026-11-07). **The operator merges** — the orchestrator reports it ready — any
+PR whose diff touches one of these (operator, 2026-11-07):
+
+- `contracts/`, `docs/charter.md`, `services/verifier/`, `tools/verifier-ts/`;
+- the merge and review rules: `.claude/skills/odc-orchestration/`,
+  `.claude/skills/odc-pipeline/`, `.claude/skills/odc-code-review/`,
+  `.claude/skills/lead/`, `.claude/agents/odc-reviewer.md`,
+  `.claude/agents/odc-ui-reviewer.md`, `.claude/agents/odc-navigator.md`, and
+  root `CLAUDE.md`;
+- CI and guards: `.github/` and `lefthook.yml`.
+
+Check it with one command, which prints nothing when the orchestrator may merge:
+`gh pr diff <N> --name-only | grep -E '^(contracts/|docs/charter\.md$|services/verifier/|tools/verifier-ts/|\.claude/skills/(odc-(orchestration|pipeline|code-review)|lead)/|\.claude/agents/odc-(ui-reviewer|reviewer|navigator)\.md$|CLAUDE\.md$|\.github/|lefthook\.yml$)'`
+
+**Properly reviewed** means all of these:
+
+- a fresh-context `odc-reviewer` verdict of APPROVE or APPROVE WITH NITS that
+  names the sha it reviewed, and that sha is the PR's current head. Any later
+  commit needs a fresh `odc-reviewer` on the new head. When the only new commit
+  is a `master` merge whose conflict resolution changed no code or tests, a
+  short review of `git diff <approved-sha> <head>` is enough;
+- for a **UI PR** — one that touches `apps/pulse-web/**`, `services/web/**`,
+  `docs/mockups/**`, or user-visible strings in `apps/pulse/**` — also an
+  APPROVE or APPROVE WITH NITS from a fresh `odc-ui-reviewer` (a senior UI and
+  design reviewer that checks the screens in the real browser) on the same
+  sha. Start it in a review worktree at the PR head, like `odc-reviewer`, and
+  tell it the worktree's absolute path for its `launch.json` entry;
+- every CI check green;
+- no blocking or should-fix finding left open, and no open operator question
+  on it. Nits may stay if the report lists them.
+
+GitHub does not enforce any of this: the `protect-master` ruleset requires no
+approving reviews, only green checks and an up-to-date branch. The rule above is
+the gate.
+
+**To merge:** `gh pr merge <N> --squash --match-head-commit <sha>`, with the
+head sha the latest review approved, so a commit pushed after the review cannot
+slip in. Then follow the merge checklist in `odc-pipeline` (memory on
+`master`). Stacked PRs follow `odc-pipeline`'s stack rules. Tell the operator
+what was merged in one line per PR.
+
+### Use Codex where it helps
+
+Codex (the `codex` CLI) is a different model that has seen nothing of this
+run, so it adds independence (operator, 2026-11-07). Use it where the CLI is
+installed (`command -v codex`), as `codex review` or `codex exec`:
+
+- **A second review** on UI PRs and on complex PRs. In a review worktree
+  checked out at the PR head, run
+  `git fetch origin && codex review --base origin/master`. It takes no custom
+  instructions together with `--base`. The orchestrator triages its findings into [BLOCKING] / [SHOULD] / [NIT] and
+  sends them to the owner like any other finding. It adds to the Claude reviews
+  and never counts as the `odc-reviewer` approval.
+- **Routine read-only work** when Claude usage is high: lookups and inventory
+  with `codex exec -s read-only -C <worktree> "<brief>"`. The brief has the
+  same five sections as any other.
+- **If Codex rejects its configured model** ("not supported when using Codex
+  with a ChatGPT account"), pass a listed one with `-c model="<slug>"`. This
+  lists them:
+  `codex debug models | jq -r '.models[] | select(.visibility != "hide") | .slug'`. Do not edit the operator's `~/.codex/config.toml`.
+- **Taking over as orchestrator** at 90% usage (below).
 
 ### Wrap up at 90% usage
 
@@ -167,6 +231,8 @@ branches, PRs and merging, `odc-pipeline` is the source; this file follows it.
 | Complex implementation — a service, endpoint, or real feature | **Opus**   | `odc-implementer`       |
 | Building either verifier (contracts-only, fresh context)      | **Opus**   | `odc-verifier-builder`  |
 | Pre-merge review (fresh context)                              | **Opus**   | `odc-reviewer`          |
+| UI and design review of a UI PR (fresh context)               | **Opus**   | `odc-ui-reviewer`       |
+| Second, independent review of a UI or complex PR              | **Codex**  | `codex review`          |
 | Phase-gate security audit (fresh context)                     | **Opus**   | `odc-security-auditor`  |
 | Resolving a contradiction between two documents               | **Opus**   | (judgement — see below) |
 | Exploration, inventory, "where does X live"                   | **Sonnet** | `odc-navigator`         |
@@ -174,7 +240,7 @@ branches, PRs and merging, `odc-pipeline` is the source; this file follows it.
 | Renames, mechanical find-and-replace, formatting              | **Sonnet** | `odc-navigator`         |
 | Running tests or guards and reporting the output              | **Sonnet** | `odc-navigator`         |
 | Simple implementation: a one-behaviour fix with a clear spec  | **Sonnet** | `odc-navigator`         |
-| Merge mechanics, once the operator says merge                 | **Sonnet** | `odc-navigator`         |
+| Merge mechanics, once a PR is properly reviewed ("Merging")   | **Sonnet** | `odc-navigator`         |
 | Taking over as orchestrator when Claude usage runs out        | **Codex**  | (hand-off — see above)  |
 
 **The line between "simple" and "complex" implementation.** Simple means: the
@@ -394,14 +460,13 @@ go past it.
 - **Re-check a PR after `master` is merged into it.** Whoever merges `master`
   in (the orchestrator, or the lead that owns the PR) runs the unit's tests,
   lint, typecheck and `pnpm -s format:check` on the merged result before
-  pushing. If resolving the conflict changed code or tests, not only prose,
-  the orchestrator has a fresh `odc-reviewer` review that merge commit. In the
+  pushing. What review the merged head then needs is set in "Merging". In the
   2026-10-20 run, merging `master` into an approved PR broke three tests from a
   PR merged an hour earlier.
 - **When the leads report,** check their PRs do not collide — settle a clash
   between two leads by message — and tell the operator which PRs are ready to
-  merge, in what order, with each review's verdict. Merging stays the
-  operator's call.
+  merge, in what order, with each review's verdict. Merge them per
+  "Merging"; a PR in the operator's exception list waits for the operator.
 
 Diff size: `apps/pulse*` is exempt from the `diff-size.sh` ceiling (the script
 lists every exemption), so a pulse feature can arrive as large PRs.
