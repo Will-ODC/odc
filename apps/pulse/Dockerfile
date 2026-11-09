@@ -41,8 +41,9 @@ RUN pnpm --filter @odc/pulse deploy --prod /out
 FROM node:22.22-alpine AS runtime
 # Apply available security fixes and omit package managers from the served image.
 RUN apk upgrade --no-cache \
-    && rm -rf /usr/local/lib/node_modules/npm /usr/local/lib/node_modules/corepack \
-    && rm -f /usr/local/bin/npm /usr/local/bin/npx /usr/local/bin/corepack
+    && rm -rf /opt/yarn-v* /usr/local/lib/node_modules/npm /usr/local/lib/node_modules/corepack \
+    && rm -f /usr/local/bin/yarn /usr/local/bin/yarnpkg \
+        /usr/local/bin/npm /usr/local/bin/npx /usr/local/bin/corepack
 WORKDIR /app
 
 ENV NODE_ENV=production

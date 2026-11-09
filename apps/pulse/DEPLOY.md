@@ -15,10 +15,13 @@ the literal name `api` to the API service, because that name is compiled into
 the current nginx configuration. Keep both processes behind the web image so
 the page and API have one origin; the session cookies depend on it.
 
-nginx resolves `api` when it starts. Restart the web container if the API's
-address changes; the current configuration does not refresh DNS dynamically.
+nginx resolves `api` when it starts and will not start if the name does not
+resolve (`host not found in upstream`). Start the API first, or expect the web
+container to restart until the API is up; Fly `.internal` names resolve only
+for running Machines. Restart the web container if the API's address changes;
+the current configuration does not refresh DNS dynamically.
 
-### Proxy configuration required before going live
+## Proxy configuration required before going live
 
 The API currently trusts one private proxy hop (`src/main.ts:327`,
 `src/http/server.ts:146-160`). With a host edge in front of nginx, that can
@@ -126,7 +129,7 @@ IDs used by `/questions`:
 
 If they are omitted, those starting questions show as coming soon. They are
 Vite build-time values, so changing one requires rebuilding the web image.
-The mappings are in `apps/pulse-web/src/main.tsx:22-33`.
+The mappings are in `apps/pulse-web/src/main.tsx:22-34`.
 
 ## Health checks
 
