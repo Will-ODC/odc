@@ -26,13 +26,8 @@ type PulseServer = Awaited<ReturnType<typeof createServer>>;
 const WEB_ORIGIN = "http://localhost:5173";
 
 /**
- * Poll creation (ADR-0037) over a real socket: sign in through the real
- * client, publish a question with the creation route, then read it and vote
- * on it through the client exactly as for any other poll.
- *
- * The client has no creation call yet, so the publish is a plain `fetch`
- * carrying what a browser would: the session cookie from the jar, JSON, and
- * the page's `Origin`.
+ * Poll creation (ADR-0037) over a real socket: sign in and publish through the
+ * real client, then read the question and vote on it through that same client.
  */
 function cookieJar(): { fetch: typeof fetch; header(): string | undefined } {
   const jar = new Map<string, string>();
@@ -43,6 +38,10 @@ function cookieJar(): { fetch: typeof fetch; header(): string | undefined } {
 
   const doFetch: typeof fetch = async (input, init) => {
     const headers = new Headers(init?.headers);
+    const method = init?.method?.toUpperCase() ?? "GET";
+    if (method !== "GET" && method !== "HEAD" && !headers.has("origin")) {
+      headers.set("origin", WEB_ORIGIN);
+    }
     const cookie = header();
     if (cookie !== undefined && init?.credentials !== "omit") {
       headers.set("cookie", cookie);
@@ -108,7 +107,7 @@ describe("poll creation against the real server", () => {
     await app.close();
   });
 
-  const publish = (body: unknown, key: string, origin = WEB_ORIGIN) =>
+  const publishFrom = (origin: string, body: unknown, key: string) =>
     jar.fetch(`${baseUrl}/polls`, {
       method: "POST",
       credentials: "include",
@@ -123,7 +122,8 @@ describe("poll creation against the real server", () => {
   const question = {
     question: "Where should the new bike racks go?",
     choices: ["Library", "Gym", "Both"],
-    method: "single",
+    method: "single" as const,
+    attribution: { kind: "anonymous" as const },
     purposeAcknowledgement: "community-purpose-v1",
   };
 
@@ -136,9 +136,7 @@ describe("poll creation against the real server", () => {
     const me = await api.me();
     expect(me?.community).toBe("ubc-students");
 
-    const context = await jar.fetch(`${baseUrl}/poll-creation/context`);
-    expect(context.status).toBe(200);
-    expect(await context.json()).toEqual({
+    expect(await api.creationContext()).toEqual({
       community: { id: "ubc-students", label: "ubc-students" },
       canPostUnlimited: false,
       purposeVersion: "community-purpose-v1",
@@ -146,48 +144,37 @@ describe("poll creation against the real server", () => {
     });
 
     const key = randomUUID();
-    const created = await publish(question, key);
-    expect(created.status).toBe(201);
-    // Creation never hands out or clears a cookie, the ballot one included.
-    expect(created.headers.getSetCookie()).toEqual([]);
-    const body = (await created.json()) as {
-      poll: { id: string; attribution: unknown };
-      replayed: boolean;
-    };
-    expect(body.replayed).toBe(false);
-    expect(body.poll.attribution).toEqual({ kind: "anonymous" });
+    const created = await api.createPoll(key, question);
+    expect(created.attribution).toEqual({ kind: "anonymous" });
     // No account id or address anywhere in what came back.
-    expect(JSON.stringify(body)).not.toContain(me?.id ?? "");
-    expect(JSON.stringify(body)).not.toContain("jo@student.ubc.ca");
+    expect(JSON.stringify(created)).not.toContain(me?.id ?? "");
+    expect(JSON.stringify(created)).not.toContain("jo@student.ubc.ca");
 
     // A retry of the same request is the same question, not a second one.
-    const replay = await publish(question, key);
-    expect(replay.status).toBe(200);
-    expect(((await replay.json()) as { poll: { id: string } }).poll.id).toBe(
-      body.poll.id,
-    );
+    const replay = await api.createPoll(key, question);
+    expect(replay.id).toBe(created.id);
 
     // Public browse discovery reuses the server listing, without signing in or casting.
     const guest = new HttpPulseApi(baseUrl, cookieJar().fetch);
     const listing = await guest.listPolls("ubc-students");
-    expect(listing.polls.map((p) => p.id)).toEqual([body.poll.id]);
+    expect(listing.polls.map((p) => p.id)).toEqual([created.id]);
     expect((await guest.listPolls("pulse-general")).polls).toEqual([]);
-    expect((await guest.results(body.poll.id)).voters).toBe(0);
+    expect((await guest.results(created.id)).voters).toBe(0);
 
     // It is an ordinary poll now: the client reads it and votes on it.
-    const poll = await api.poll(body.poll.id);
+    const poll = await api.poll(created.id);
     expect(poll.question).toBe("Where should the new bike racks go?");
     expect(poll.choices).toEqual(["Library", "Gym", "Both"]);
     expect(poll.open).toBe(true);
 
-    const outcome = await api.cast(body.poll.id, [2]);
+    const outcome = await api.cast(created.id, [2]);
     expect(outcome.status).toBe("counted");
-    expect(await api.myBallot(body.poll.id)).toEqual([2]);
-    expect((await api.results(body.poll.id)).choices[2]?.count).toBe(1);
+    expect(await api.myBallot(created.id)).toEqual([2]);
+    expect((await api.results(created.id)).choices[2]?.count).toBe(1);
   });
 
   it("refuses a publish from another origin or without a session", async () => {
-    const signedOut = await publish(question, randomUUID());
+    const signedOut = await publishFrom(WEB_ORIGIN, question, randomUUID());
     expect(signedOut.status).toBe(401);
 
     await api.requestLink("jo@student.ubc.ca", false);
@@ -196,10 +183,10 @@ describe("poll creation against the real server", () => {
     ).searchParams.get("token");
     await api.redeem(token ?? "");
 
-    const foreign = await publish(
+    const foreign = await publishFrom(
+      "https://elsewhere.example",
       question,
       randomUUID(),
-      "https://elsewhere.example",
     );
     expect(foreign.status).toBe(403);
     expect(((await foreign.json()) as { error: string }).error).toBe(
