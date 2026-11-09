@@ -65,7 +65,9 @@
   margin: 0;
 }
 .welcome.browse .browse__main--message .viewstate {
+  align-items: flex-start;
   margin-top: var(--step);
+  text-align: left;
 }
 .browse__list li + li {
   border-top: none;

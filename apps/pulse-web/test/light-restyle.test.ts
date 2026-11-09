@@ -54,3 +54,15 @@ it("shows rail questions as unavailable while an answer is sent (#488)", () => {
     /\.answered a\[aria-disabled="true"\] \{[^}]*cursor: not-allowed;/,
   );
 });
+
+it("makes the My votes rail heading a visible, padded link (#488)", () => {
+  expect(css("screens/Conversation.css")).toMatch(
+    /\.conversation__sidebar h2 a \{[^}]*display: inline-flex;[^}]*min-height: calc\(var\(--step\) \* 3\);[^}]*padding-block: calc\(var\(--step\) \/ 2\);[^}]*text-decoration: underline;/s,
+  );
+});
+
+it("left-aligns My votes messages with their heading and note (#488)", () => {
+  expect(css("screens/Browse.css")).toMatch(
+    /\.welcome\.browse \.browse__main--message \.viewstate \{[^}]*align-items: flex-start;[^}]*text-align: left;/s,
+  );
+});

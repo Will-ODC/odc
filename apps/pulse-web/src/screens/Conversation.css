@@ -164,8 +164,14 @@
     color: var(--muted);
   }
   .conversation__sidebar h2 a {
+    box-sizing: border-box;
+    display: inline-flex;
+    align-items: center;
+    min-height: calc(var(--step) * 3);
+    padding-block: calc(var(--step) / 2);
     color: inherit;
-    text-decoration: none;
+    text-decoration: underline;
+    text-underline-offset: calc(var(--hairline) * 2);
   }
   .conversation__sidebar h2 a:hover {
     color: var(--green-hover);

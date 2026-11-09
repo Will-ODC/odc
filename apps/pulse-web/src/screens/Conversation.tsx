@@ -1,6 +1,6 @@
 import { useCallback, useEffect, useRef, useState } from "react";
 import type { ReactNode } from "react";
-import type { Poll, PulseApi, Results } from "../api/types.js";
+import type { MyVote, Poll, PulseApi, Results } from "../api/types.js";
 import type { Route } from "../flow/route.js";
 import { cardStatus, closingNote, nextFor } from "../flow/conversation.js";
 import { byline } from "../flow/new-poll.js";
@@ -10,7 +10,7 @@ import { usePoll } from "../hooks/use-poll.js";
 import { useCastVote } from "../hooks/use-cast-vote.js";
 import { useClosedResults } from "../hooks/use-closed-results.js";
 import { useFreshResults } from "../hooks/use-fresh-results.js";
-import { MY_VOTES_EMPTY, useMyVotes } from "../hooks/use-my-votes.js";
+import { useMyVotes } from "../hooks/use-my-votes.js";
 import type { Confirmation } from "../flow/vote-card.js";
 import { VoteCard } from "../components/VoteCard.js";
 import { ClosedResults } from "../components/ClosedResults.js";
@@ -20,6 +20,7 @@ import { PostedBanner } from "../components/PostedBanner.js";
 import { CopyLink } from "../components/CopyLink.js";
 import { useSession } from "../hooks/use-session.js";
 import type { Session } from "../hooks/use-session.js";
+import type { ViewData } from "../hooks/view-data.js";
 import { SiteBanner } from "./SiteBanner.js";
 import "./Conversation.css";
 
@@ -155,9 +156,9 @@ export function Conversation({
   // Back returns to the one before. Opened here too, not only through the
   // address: after Next the address can already name the row clicked.
   const go = (id: string) => {
-    if (busy) return;
+    if (busy || id === at) return;
     setAt(id);
-    onNavigate?.({ kind: "conversation", pollId: id });
+    if (id !== pollId) onNavigate?.({ kind: "conversation", pollId: id });
   };
   const confirmation = confirmationOf(session);
   // Signing in confirms every vote already given here, so every result already
@@ -174,25 +175,22 @@ export function Conversation({
     answers,
     recentAnswers,
   );
+  const railVote =
+    mine.data.status === "ready"
+      ? mine.data.value.votes.find((vote) => vote.pollId === at)
+      : undefined;
   const railHeading = useRef<HTMLAnchorElement>(null);
-  const historyError =
-    mine.data.status === "error" ? (
-      <>
-        <p>{answered.length > 0 ? RAIL_PARTIAL_ERROR : RAIL_ERROR}</p>
-        <button
-          className="button"
-          type="button"
-          onClick={() => {
-            // The button goes while the list is read again; focus stays in
-            // the rail rather than falling to the page.
-            railHeading.current?.focus();
-            mine.retry();
-          }}
-        >
-          Try again
-        </button>
-      </>
-    ) : null;
+  const railState: ViewData<null> =
+    mine.data.status === "error"
+      ? {
+          status: "error",
+          message: answered.length > 0 ? RAIL_PARTIAL_ERROR : RAIL_ERROR,
+        }
+      : mine.data.status === "loading"
+        ? { status: "loading" }
+        : mine.data.status === "empty"
+          ? { status: "empty", message: mine.data.message }
+          : { status: "ready", value: null };
   const main = useRef<HTMLElement>(null);
   // "Your question is live" belongs to the question just posted. Leaving it
   // for another question ends the line.
@@ -229,14 +227,26 @@ export function Conversation({
               disabled={busy}
               onOpen={go}
             />
-          ) : mine.data.status === "loading" ? (
-            <p>Loading…</p>
-          ) : mine.data.status === "error" ? (
-            historyError
-          ) : mine.data.status === "empty" ? (
-            <p>{MY_VOTES_EMPTY}</p>
           ) : null}
-          {answered.length > 0 ? historyError : null}
+          {mine.data.status === "error" || answered.length === 0 ? (
+            <ViewState data={railState} variant="compact">
+              {() => null}
+            </ViewState>
+          ) : null}
+          {mine.data.status === "error" ? (
+            <button
+              className="button"
+              type="button"
+              onClick={() => {
+                // The button goes while the list is read again; focus stays in
+                // the rail rather than falling to the page.
+                railHeading.current?.focus();
+                mine.retry();
+              }}
+            >
+              Try again
+            </button>
+          ) : null}
           {mine.data.status === "ready" && mine.data.value.nextCursor ? (
             <p>
               <a href={pathOf({ kind: "myVotes" })}>See all my votes</a>
@@ -261,6 +271,7 @@ export function Conversation({
           pollId={at}
           answers={answers}
           {...(saved ? { saved } : {})}
+          {...(railVote ? { railVote } : {})}
           busy={busy}
           confirmation={confirmation}
           onRemembered={remembered}
@@ -280,6 +291,7 @@ function Question({
   pollId,
   answers,
   saved,
+  railVote,
   busy,
   confirmation,
   onRemembered,
@@ -293,6 +305,7 @@ function Question({
   pollId: string;
   answers: readonly Answer[];
   saved?: Answer;
+  railVote?: MyVote;
   busy: boolean;
   confirmation: Confirmation;
   onRemembered: (answer: Answer) => void;
@@ -311,6 +324,7 @@ function Question({
       pollId={pollId}
       answers={answers}
       {...(saved ? { saved } : {})}
+      {...(railVote ? { railVote } : {})}
       busy={busy}
       confirmation={confirmation}
       onRemembered={onRemembered}
@@ -329,6 +343,7 @@ function LoadedQuestion({
   pollId,
   answers,
   saved,
+  railVote,
   busy,
   confirmation,
   onRemembered,
@@ -343,6 +358,7 @@ function LoadedQuestion({
   pollId: string;
   answers: readonly Answer[];
   saved?: Answer;
+  railVote?: MyVote;
   busy: boolean;
   confirmation: Confirmation;
   onRemembered: (answer: Answer) => void;
@@ -359,6 +375,7 @@ function LoadedQuestion({
     api,
     fetched.status === "ready" ? fetched.value : null,
     saved,
+    railVote,
     onHeldBallot,
     onRemembered,
   );
@@ -496,6 +513,7 @@ function useRestoredAnswer(
   api: PulseApi,
   poll: Poll | null,
   saved: Answer | undefined,
+  railVote: MyVote | undefined,
   onHeldBallot: () => void,
   onFound: (answer: Answer) => void,
 ): boolean {
@@ -505,26 +523,57 @@ function useRestoredAnswer(
   useEffect(() => {
     if (settled || !poll) return;
     let live = true;
+    let fallback: Answer | null | undefined;
+    const fallbackRead = railVote
+      ? api.results(poll.id).then(
+          (results) => {
+            fallback = { poll, ballot: railVote.ballot, results };
+            return results;
+          },
+          () => {
+            fallback = null;
+            return null;
+          },
+        )
+      : null;
+    const finish = (answer?: Answer) => {
+      if (!live) return;
+      if (answer) {
+        onHeldBallot();
+        found.current(answer);
+      }
+      live = false;
+      clearTimeout(giveUp);
+      setSettled(true);
+    };
     // Bounded: a read that never answers asks the question unanswered, and
-    // anything arriving after that is dropped by the cleanup below.
-    const giveUp = setTimeout(() => setSettled(true), RESTORE_WAIT_MS);
+    // anything arriving after that is dropped by the cleanup below. A ballot
+    // already listed in the rail can fill the gap when its results arrived.
+    const giveUp = setTimeout(
+      () => finish(fallback ?? undefined),
+      RESTORE_WAIT_MS,
+    );
     api
       .myBallot(poll.id)
       .then(async (ballot) => {
-        if (!live || !ballot || ballot.length === 0) return;
+        if (!live) return;
+        if (!ballot || ballot.length === 0) {
+          finish();
+          return;
+        }
         onHeldBallot();
-        const results = await api.results(poll.id);
-        if (live) found.current({ poll, ballot, results });
+        const results = fallbackRead
+          ? await fallbackRead
+          : await api.results(poll.id);
+        if (results) finish({ poll, ballot, results });
+        else finish();
       })
-      .catch(() => {})
-      .finally(() => {
-        if (live) setSettled(true);
-      });
+      .catch(() => finish());
     return () => {
       live = false;
       clearTimeout(giveUp);
     };
-  }, [api, poll, settled, onHeldBallot]);
+  }, [api, poll, railVote, settled, onHeldBallot]);
   return settled;
 }
 

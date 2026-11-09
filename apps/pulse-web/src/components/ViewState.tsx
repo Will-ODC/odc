@@ -13,14 +13,20 @@ import "./ViewState.css";
 export function ViewState<T>({
   data,
   children,
+  variant = "default",
 }: {
   data: ViewData<T>;
   children: (value: T) => ReactNode;
+  variant?: "default" | "compact";
 }) {
   if (data.status === "ready") return <>{children(data.value)}</>;
 
   return (
-    <div className="viewstate" role="status" aria-live="polite">
+    <div
+      className={`viewstate${variant === "compact" ? " viewstate--compact" : ""}`}
+      role="status"
+      aria-live="polite"
+    >
       {data.status === "loading" ? (
         <>
           <div className="viewstate__pulse" aria-hidden="true" />

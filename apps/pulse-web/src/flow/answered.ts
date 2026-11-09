@@ -38,7 +38,14 @@ export function answeredList(
   );
   return [
     ...promotedIds.map((id) => asVote(answers.get(id)!, now)),
-    ...saved.filter((vote) => !promoted.has(vote.pollId)),
+    ...saved
+      .filter((vote) => !promoted.has(vote.pollId))
+      .map((vote) => {
+        const localAnswer = answers.get(vote.pollId);
+        return localAnswer
+          ? { ...asVote(localAnswer, now), castAt: vote.castAt }
+          : vote;
+      }),
     ...restored.map((answer) => asVote(answer, now)),
   ];
 }

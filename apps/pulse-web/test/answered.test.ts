@@ -86,6 +86,16 @@ describe("answeredList (#484)", () => {
     ).toEqual(server);
   });
 
+  it("uses a restored local answer in the older server row's place", () => {
+    const server = [saved({ pollId: "fixes" }), saved()];
+    const parks = poll({ id: "parks", question: "More parks?" });
+    const list = answeredList(server, [{ poll: parks, ballot: [0] }], [], NOW);
+    expect(list.map((vote) => [vote.pollId, vote.choices])).toEqual([
+      ["fixes", ["Yes"]],
+      ["parks", ["No"]],
+    ]);
+  });
+
   it("appends a restored answer that is absent from the loaded server page", () => {
     const server = [saved({ pollId: "fixes", question: "Fixes?" })];
     const parks = poll({ id: "parks", question: "More parks?" });
