@@ -308,13 +308,18 @@ test(
         const timers = new ManualSchedule();
         const b = w.batcher({ signer, schedule: timers.schedule });
         b.start();
+        assert.equal(timers.size, 1, "one tick is pending");
         const tick = timers.runNext();
-        await inSeal.promise; // mid-tick
         let stopped = false;
-        const stopping = b.stop().then(() => {
-          stopped = true;
-        });
+        let stopping!: Promise<void>;
         try {
+          await Promise.race([
+            inSeal.promise,
+            tick.then(() => assert.fail("tick ended without reaching seal")),
+          ]); // mid-tick
+          stopping = b.stop().then(() => {
+            stopped = true;
+          });
           // A full turn of the event loop: a stop that did not wait for the
           // tick would have resolved by now.
           await new Promise<void>(setImmediate);

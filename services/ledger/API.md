@@ -40,6 +40,8 @@ because they shape the endpoints below.
 
 ## Public port
 
+The public port's request-body limit is 1024 bytes.
+
 ### `GET /events?since={seq}&limit={n}`
 
 Exactly `contracts/read-api.md` RA-1 to RA-13.

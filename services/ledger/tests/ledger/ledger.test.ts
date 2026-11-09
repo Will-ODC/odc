@@ -130,16 +130,21 @@ test("a_second_run_waits_for_the_first_and_builds_on_its_state", { skip }, () =>
       await gate;
       return [unhashed(g), unhashed(i)];
     });
-    await inFirst; // the first run holds the lock, inside its transaction
-    const connectsHeld = db.connects();
+    let connectsHeld!: number;
+    let second!: Promise<Event[]>;
     const seen: [number, string, number | undefined][] = [];
     let secondSettled = false;
-    const second = ledger.appendRun((state, head) => {
-      seen.push([state.nextSeq, state.headHash, head?.seq]);
-      return [unhashed(p)];
-    });
-    void second.finally(() => (secondSettled = true)).catch(() => undefined);
     try {
+      await Promise.race([
+        inFirst,
+        first.then(() => assert.fail("first run ended without entering build")),
+      ]); // the first run holds the lock, inside its transaction
+      connectsHeld = db.connects();
+      second = ledger.appendRun((state, head) => {
+        seen.push([state.nextSeq, state.headHash, head?.seq]);
+        return [unhashed(p)];
+      });
+      void second.finally(() => (secondSettled = true)).catch(() => undefined);
       // A full turn of the event loop. An append that is not queued behind
       // the first calls pool.connect() within that turn, before any I/O.
       await new Promise<void>(setImmediate);

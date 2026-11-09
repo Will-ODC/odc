@@ -196,10 +196,15 @@ for (const port of ports) {
         assert.deepEqual(JSON.parse(raw), { error: c.error });
         if (c.status === 500) {
           assert.equal(raw, '{"error":"internal"}');
-          // The operator still sees the fault, but never the request body.
+          // The operator log carries the fault (and may contain SECRET), so
+          // only the response is checked for it.
+          assert.doesNotMatch(raw, new RegExp(SECRET));
           const log = lines.join("");
           assert.match(log, /request failed/);
-          assert.doesNotMatch(log, new RegExp(BODY_MARKER));
+          // Only the internal 500 has a request body; the public case is GET.
+          if (port.name === "internal") {
+            assert.doesNotMatch(log, new RegExp(BODY_MARKER));
+          }
         }
       });
     });
