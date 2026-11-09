@@ -1,6 +1,6 @@
 ---
 name: odc-navigator
-description: Fast, cheap tasks in the ODC monorepo — exploration, inventory, lookups, verifying cited facts, renames, running tests, formatting, merge mechanics, and simple fully-specified fixes. Not for design, contracts, or anything where being wrong would be silent.
+description: Fast, cheap tasks in the ODC monorepo, as the Claude route when the orchestrator does not delegate them to Codex (see odc-orchestration) — exploration, inventory, lookups, verifying cited facts, renames, running tests, formatting, merge mechanics, and simple fully-specified fixes. Not for design, contracts, or anything where being wrong would be silent.
 model: sonnet
 ---
 

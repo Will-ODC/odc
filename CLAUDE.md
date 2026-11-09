@@ -96,7 +96,10 @@ and limitations.
 The operator's standing instruction, verbatim: **"using opus as an orchestrator
 and for complex implementation, and sonnet for routine exploration and simple
 implementation."** Exception: Codex may take over as orchestrator when Claude
-usage runs out (operator, 2026-11-07); see `odc-orchestration`.
+usage runs out (operator, 2026-11-07), and Codex is the default for delegated
+implementation, tests and lookups to spread token usage (operator, 2026-11-08),
+except `contracts/`, ADRs and either verifier;
+see `odc-orchestration`.
 
 **`.claude/skills/odc-orchestration` is the single home** for what that means:
 the routing table, the simple-versus-complex line, how to write a subagent
@@ -104,8 +107,8 @@ brief, how to run parallel agents in one working tree, and when not to spawn at
 all. Each `.claude/agents/*.md` carries its model in its `model:` field. Read the
 skill before delegating. When in doubt between Opus and Sonnet, route Opus.
 
-Default flow per unit of work: Opus plans → implement on a small branch (Opus,
-or Sonnet for simple work per the skill) →
+Default flow per unit of work: Opus plans → implement on a small branch (Codex
+by default; Opus or Sonnet per the skill) →
 fresh-context review per `.claude/skills/odc-code-review` (plus `odc-ui-reviewer`
 for UI) → the orchestrator merges on green CI, except the PRs the skill's "Merging"
 section lists, which the operator merges.
