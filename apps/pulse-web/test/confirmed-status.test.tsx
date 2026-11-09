@@ -251,12 +251,14 @@ describe("signing in while a counted vote is on screen", () => {
 
   it("turns confirmed when another tab announces a sign-in, without focus", async () => {
     let me: Me | null = null;
+    const fetchMe = vi.fn(() => Promise.resolve(me));
+    const fetchResults = vi.fn(() => Promise.resolve(counts(1)));
     render(
       <Conversation
         api={stubApi({
           cast,
-          me: () => Promise.resolve(me),
-          results: () => Promise.resolve(counts(1)),
+          me: fetchMe,
+          results: fetchResults,
         })}
         pollId={p.id}
       />,
@@ -264,10 +266,19 @@ describe("signing in while a counted vote is on screen", () => {
     const main = await vote();
     me = ME;
     // Some other key changing says nothing about signing in.
-    act(() => {
-      window.dispatchEvent(new StorageEvent("storage", { key: "other" }));
-    });
-    await new Promise((done) => setTimeout(done, 20));
+    fetchMe.mockClear();
+    fetchResults.mockClear();
+    vi.useFakeTimers();
+    try {
+      await act(async () => {
+        window.dispatchEvent(new StorageEvent("storage", { key: "other" }));
+        await vi.runAllTimersAsync();
+      });
+    } finally {
+      vi.useRealTimers();
+    }
+    expect(fetchMe).not.toHaveBeenCalled();
+    expect(fetchResults).not.toHaveBeenCalled();
     expect(main.getByRole("status").textContent).toBe("Counted");
     act(() => {
       window.dispatchEvent(new StorageEvent("storage", { key: SIGNED_IN_KEY }));
