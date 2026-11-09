@@ -11,6 +11,7 @@ import {
   Batcher,
   shuffle,
   type BatcherLedger,
+  type Schedule,
 } from "../../src/batching/batcher.js";
 import type { SignerClient } from "../../src/clients/signer.js";
 import { skip, withDb } from "../db/harness.js";
@@ -20,6 +21,38 @@ import { START_MS, count, fill, unhashed, votes, world } from "./setup.js";
 const MIN = 60000;
 const quantized = (ms: number) => epochMsToTs(Math.floor(ms / MIN) * MIN);
 const sorted = (xs: number[]) => [...xs].sort((a, b) => a - b);
+
+function deferred(): { promise: Promise<void>; resolve: () => void } {
+  let resolve!: () => void;
+  const promise = new Promise<void>((done) => (resolve = done));
+  return { promise, resolve };
+}
+
+/**
+ * A `Schedule` stepped by hand, so the timer tests need no real sleeps.
+ * `runNext()` fires the oldest pending tick and resolves once that tick has
+ * finished and the batcher has (or has not) scheduled the next one.
+ */
+class ManualSchedule {
+  private readonly pending = new Set<() => Promise<void>>();
+
+  readonly schedule: Schedule = (_delayMs, run) => {
+    this.pending.add(run);
+    return () => this.pending.delete(run);
+  };
+
+  get size(): number {
+    return this.pending.size;
+  }
+
+  async runNext(): Promise<boolean> {
+    const [run] = this.pending;
+    if (run === undefined) return false;
+    this.pending.delete(run);
+    await run();
+    return true;
+  }
+}
 
 test("shuffle_is_a_permutation_driven_only_by_the_random_source", () => {
   const always0 = () => 0;
@@ -220,54 +253,82 @@ test("start_ticks_on_a_timer_and_stop_ends_it_cleanly", { skip }, () =>
   withDb(async ({ app }) =>
     world(app, [{}], async (w) => {
       const [issue] = w.issueIds as [string];
-      const sleep = (ms: number) => new Promise((r) => setTimeout(r, ms));
       fill(w.fake, issue, [0, 1, 2]);
-      const idle = w.batcher({ tickMs: 20 });
+      const timers = new ManualSchedule();
+      const idle = w.batcher({ schedule: timers.schedule });
       idle.start();
+      assert.equal(timers.size, 1);
       await idle.stop(); // before its first tick: it never ticks
-      await sleep(60);
+      assert.equal(timers.size, 0, "stop cancels the pending tick");
+      assert.equal(await timers.runNext(), false);
       assert.equal(w.fake.sealCalls.length, 0);
 
-      const b = w.batcher({ tickMs: 10 });
+      const b = w.batcher({ schedule: timers.schedule });
       w.fake.inject("sign", "fail"); // the batch lands only on a later tick
       b.start();
       b.start(); // idempotent: still one loop
-      for (let i = 0; i < 200 && votes(await w.events()).length === 0; i++) {
-        await sleep(10);
-      }
-      await b.stop();
+      assert.equal(timers.size, 1, "one loop, one pending tick");
+      assert.equal(await timers.runNext(), true); // sealed; the sign call fails
+      assert.equal(w.fake.sealCalls.length, 1);
+      assert.equal(votes(await w.events()).length, 0);
+      assert.equal(timers.size, 1, "a finished tick schedules the next");
+      assert.equal(await timers.runNext(), true); // replays the sign request
       assert.equal(votes(await w.events()).length, 3);
-      const calls = w.fake.sealCalls.length;
+      await b.stop();
+      assert.equal(timers.size, 0);
+      // Give a still-running loop every reason to seal again: a new interval
+      // and a full batch. A stopped batcher has no tick left to fire.
       w.clock.now += MIN;
       fill(w.fake, issue, [0, 1, 2]);
-      await sleep(60);
-      assert.equal(w.fake.sealCalls.length, calls);
+      assert.equal(await timers.runNext(), false);
+      assert.equal(w.fake.sealCalls.length, 1);
     }),
   ),
 );
 
 test(
   "stop_during_a_running_tick_lets_it_finish_and_never_ticks_again",
-  { skip, timeout: 30_000 },
+  { skip },
   () =>
     withDb(async ({ app }) =>
       world(app, [{}], async (w) => {
         const [issue] = w.issueIds as [string];
-        const sleep = (ms: number) => new Promise((r) => setTimeout(r, ms));
         fill(w.fake, issue, [0, 1, 2]);
-        w.fake.inject("seal", "timeout"); // holds the tick for the client timeout
-        const b = w.batcher({ tickMs: 10 });
+        // Hold the tick inside its seal call until the test releases it.
+        const inSeal = deferred();
+        const release = deferred();
+        const signer: SignerClient = {
+          seal: async (id, options) => {
+            inSeal.resolve();
+            await release.promise;
+            return w.client.seal(id, options);
+          },
+          sign: (request) => w.client.sign(request),
+        };
+        const timers = new ManualSchedule();
+        const b = w.batcher({ signer, schedule: timers.schedule });
         b.start();
-        for (let i = 0; i < 200 && w.fake.sealCalls.length === 0; i++) {
-          await sleep(5);
+        const tick = timers.runNext();
+        await inSeal.promise; // mid-tick
+        let stopped = false;
+        const stopping = b.stop().then(() => {
+          stopped = true;
+        });
+        try {
+          // A full turn of the event loop: a stop that did not wait for the
+          // tick would have resolved by now.
+          await new Promise<void>(setImmediate);
+          assert.equal(stopped, false, "stop waits for the running tick");
+        } finally {
+          release.resolve(); // a failure must not leave the tick hanging
         }
-        assert.equal(w.fake.sealCalls.length, 1); // mid-tick
-        await b.stop(); // returns once that tick has finished
-        // Give a still-running loop every reason to seal again: a new
-        // interval and a full batch. A stopped batcher makes no call.
+        await stopping; // returns once that tick has finished its batch
+        assert.equal(votes(await w.events()).length, 3);
+        await tick;
+        assert.equal(timers.size, 0, "the finished tick scheduled no other");
         w.clock.now += MIN;
         fill(w.fake, issue, [0, 1, 2]);
-        await sleep(80);
+        assert.equal(await timers.runNext(), false);
         assert.equal(w.fake.sealCalls.length, 1);
       }),
     ),

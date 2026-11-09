@@ -38,6 +38,21 @@ export interface BatcherLedger {
   appendRun(build: BuildRun): Promise<Event[]>;
 }
 
+/**
+ * Runs `run` once after `delayMs` and returns a function that cancels it. The
+ * returned promise of `run` settles when that tick and its rescheduling are
+ * done, so a test scheduler can step the loop without real sleeps.
+ */
+export type Schedule = (
+  delayMs: number,
+  run: () => Promise<void>,
+) => () => void;
+
+const nodeSchedule: Schedule = (delayMs, run) => {
+  const t = setTimeout(() => void run(), delayMs);
+  return () => clearTimeout(t);
+};
+
 export interface BatcherOptions {
   readonly ledger: BatcherLedger;
   readonly pool: Pool;
@@ -48,6 +63,8 @@ export interface BatcherOptions {
   readonly log?: (line: string) => void;
   /** How often `start()` ticks. Default one second. */
   readonly tickMs?: number;
+  /** Schedules `start()`'s ticks. Default `setTimeout`; tests step it by hand. */
+  readonly schedule?: Schedule;
 }
 
 export type CloseStatus = "closing" | "closed";
@@ -102,8 +119,10 @@ export class Batcher {
   private readonly random: (n: number) => number;
   private readonly log: (line: string) => void;
   private readonly tickMs: number;
+  private readonly schedule: Schedule;
   private queue: Promise<unknown> = Promise.resolve();
-  private timer: NodeJS.Timeout | null = null;
+  /** Cancels the scheduled tick; null when stopped. */
+  private timer: (() => void) | null = null;
   /** Per issue: the seal id the signer last refused under_min, and when. */
   private readonly underMin = new Map<string, string>();
   /** When each issue's last-seal refusal was last raised as an ALERT. */
@@ -122,6 +141,7 @@ export class Batcher {
     this.random = o.random ?? ((n) => randomInt(n));
     this.log = o.log ?? ((line) => console.error(line));
     this.tickMs = o.tickMs ?? 1000;
+    this.schedule = o.schedule ?? nodeSchedule;
   }
 
   /**
@@ -137,18 +157,18 @@ export class Batcher {
   start(): void {
     if (this.timer !== null) return;
     const loop = (): void => {
-      this.timer = setTimeout(() => {
-        void this.tick().finally(() => {
+      this.timer = this.schedule(this.tickMs, async () => {
+        await this.tick().finally(() => {
           if (this.timer !== null) loop();
         });
-      }, this.tickMs);
+      });
     };
     loop();
   }
 
   /** Stops the timer and waits for the step in progress to finish. */
   async stop(): Promise<void> {
-    if (this.timer !== null) clearTimeout(this.timer);
+    this.timer?.();
     this.timer = null;
     await this.queue;
   }
