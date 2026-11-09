@@ -99,7 +99,12 @@ My votes (`/my-votes`) lists answers saved in this browser, newest first. The
 vote page's My votes rail uses the same saved answers and updates after a
 successful cast or change; reopening an older answer keeps its position.
 Opening a rail question updates its URL, and Back returns to the previous
-question. Reloading restores the saved answer from the server. Signing out or
+question. Reloading restores the saved answer from the server; if that read
+takes more than 5 seconds, the question is asked unanswered rather than taking
+the rail's row as the answer. Leaving a question while its answer is being sent
+drops that answer from the page, so coming back reads it from the server again.
+The rail keeps one status line for screen readers, which reads out Loading…,
+an error, or "Your votes are loaded." after Try again. Signing out or
 forgetting votes here clears the browser's saved-answer list.
 
 ## Browse questions (#260)

@@ -1,6 +1,6 @@
 import { useCallback, useEffect, useRef, useState } from "react";
 import type { ReactNode } from "react";
-import type { MyVote, Poll, PulseApi, Results } from "../api/types.js";
+import type { Poll, PulseApi, Results } from "../api/types.js";
 import type { Route } from "../flow/route.js";
 import { cardStatus, closingNote, nextFor } from "../flow/conversation.js";
 import { byline } from "../flow/new-poll.js";
@@ -59,6 +59,7 @@ function hasClosed(poll: Poll): boolean {
 /** Rail copy when the saved answers cannot be read (#488). */
 const RAIL_ERROR = "We couldn't load your votes.";
 const RAIL_PARTIAL_ERROR = "We couldn't load all your votes.";
+const RAIL_RELOADED = "Your votes are loaded.";
 /**
  * How long a question waits for its saved answer before it is asked anyway.
  * A stalled read must not leave a question that has loaded on "Loading…".
@@ -93,15 +94,18 @@ export function Conversation({
 }) {
   const [at, setAt] = useState(pollId);
   const [busy, setBusy] = useState(false);
+  const [answers, setAnswers] = useState<Answer[]>([]);
   // The address changed (a rail row, or Back and Forward): show its question.
-  // A cast still in flight belongs to the question being left.
+  // A cast still in flight belongs to the question being left, and its reply
+  // will reach no card, so what this page holds for that question may be the
+  // answer it replaced. Forget it: coming back reads the saved answer again.
   const [routed, setRouted] = useState(pollId);
   if (routed !== pollId) {
     setRouted(pollId);
     setAt(pollId);
     setBusy(false);
+    if (busy) setAnswers((old) => old.filter((one) => one.poll.id !== at));
   }
-  const [answers, setAnswers] = useState<Answer[]>([]);
   // Poll ids cast or changed during this visit, oldest first. Restoring a
   // saved answer does not add it here.
   const [recentAnswers, setRecentAnswers] = useState<string[]>([]);
@@ -175,11 +179,12 @@ export function Conversation({
     answers,
     recentAnswers,
   );
-  const railVote =
-    mine.data.status === "ready"
-      ? mine.data.value.votes.find((vote) => vote.pollId === at)
-      : undefined;
   const railHeading = useRef<HTMLAnchorElement>(null);
+  // Set by the rail's Try again, so a reload that ends well is read out too.
+  const [railRetried, setRailRetried] = useState(false);
+  // One status region for the rail, mounted throughout, so each change is read
+  // out: Loading… while the list is read (with answers already listed too),
+  // then an error, the empty message, or nothing to show.
   const railState: ViewData<null> =
     mine.data.status === "error"
       ? {
@@ -188,7 +193,7 @@ export function Conversation({
         }
       : mine.data.status === "loading"
         ? { status: "loading" }
-        : mine.data.status === "empty"
+        : mine.data.status === "empty" && answered.length === 0
           ? { status: "empty", message: mine.data.message }
           : { status: "ready", value: null };
   const main = useRef<HTMLElement>(null);
@@ -228,11 +233,14 @@ export function Conversation({
               onOpen={go}
             />
           ) : null}
-          {mine.data.status === "error" || answered.length === 0 ? (
-            <ViewState data={railState} variant="compact">
-              {() => null}
-            </ViewState>
-          ) : null}
+          <ViewState
+            data={railState}
+            variant="compact"
+            persistent
+            {...(railRetried ? { readyNote: RAIL_RELOADED } : {})}
+          >
+            {() => null}
+          </ViewState>
           {mine.data.status === "error" ? (
             <button
               className="button"
@@ -241,6 +249,7 @@ export function Conversation({
                 // The button goes while the list is read again; focus stays in
                 // the rail rather than falling to the page.
                 railHeading.current?.focus();
+                setRailRetried(true);
                 mine.retry();
               }}
             >
@@ -271,7 +280,6 @@ export function Conversation({
           pollId={at}
           answers={answers}
           {...(saved ? { saved } : {})}
-          {...(railVote ? { railVote } : {})}
           busy={busy}
           confirmation={confirmation}
           onRemembered={remembered}
@@ -291,7 +299,6 @@ function Question({
   pollId,
   answers,
   saved,
-  railVote,
   busy,
   confirmation,
   onRemembered,
@@ -305,7 +312,6 @@ function Question({
   pollId: string;
   answers: readonly Answer[];
   saved?: Answer;
-  railVote?: MyVote;
   busy: boolean;
   confirmation: Confirmation;
   onRemembered: (answer: Answer) => void;
@@ -324,7 +330,6 @@ function Question({
       pollId={pollId}
       answers={answers}
       {...(saved ? { saved } : {})}
-      {...(railVote ? { railVote } : {})}
       busy={busy}
       confirmation={confirmation}
       onRemembered={onRemembered}
@@ -343,7 +348,6 @@ function LoadedQuestion({
   pollId,
   answers,
   saved,
-  railVote,
   busy,
   confirmation,
   onRemembered,
@@ -358,7 +362,6 @@ function LoadedQuestion({
   pollId: string;
   answers: readonly Answer[];
   saved?: Answer;
-  railVote?: MyVote;
   busy: boolean;
   confirmation: Confirmation;
   onRemembered: (answer: Answer) => void;
@@ -375,7 +378,6 @@ function LoadedQuestion({
     api,
     fetched.status === "ready" ? fetched.value : null,
     saved,
-    railVote,
     onHeldBallot,
     onRemembered,
   );
@@ -513,7 +515,6 @@ function useRestoredAnswer(
   api: PulseApi,
   poll: Poll | null,
   saved: Answer | undefined,
-  railVote: MyVote | undefined,
   onHeldBallot: () => void,
   onFound: (answer: Answer) => void,
 ): boolean {
@@ -523,19 +524,6 @@ function useRestoredAnswer(
   useEffect(() => {
     if (settled || !poll) return;
     let live = true;
-    let fallback: Answer | null | undefined;
-    const fallbackRead = railVote
-      ? api.results(poll.id).then(
-          (results) => {
-            fallback = { poll, ballot: railVote.ballot, results };
-            return results;
-          },
-          () => {
-            fallback = null;
-            return null;
-          },
-        )
-      : null;
     const finish = (answer?: Answer) => {
       if (!live) return;
       if (answer) {
@@ -547,12 +535,12 @@ function useRestoredAnswer(
       setSettled(true);
     };
     // Bounded: a read that never answers asks the question unanswered, and
-    // anything arriving after that is dropped by the cleanup below. A ballot
-    // already listed in the rail can fill the gap when its results arrived.
-    const giveUp = setTimeout(
-      () => finish(fallback ?? undefined),
-      RESTORE_WAIT_MS,
-    );
+    // anything arriving after that is dropped by the cleanup below. The rail's
+    // row is not used instead: it can be older than the server's ballot (a
+    // change sent from another tab), and the question is honest unanswered.
+    // Nothing here depends on the rail, so the rail loading or reloading
+    // never restarts the wait or asks for the ballot twice.
+    const giveUp = setTimeout(() => finish(), RESTORE_WAIT_MS);
     api
       .myBallot(poll.id)
       .then(async (ballot) => {
@@ -562,18 +550,14 @@ function useRestoredAnswer(
           return;
         }
         onHeldBallot();
-        const results = fallbackRead
-          ? await fallbackRead
-          : await api.results(poll.id);
-        if (results) finish({ poll, ballot, results });
-        else finish();
+        finish({ poll, ballot, results: await api.results(poll.id) });
       })
       .catch(() => finish());
     return () => {
       live = false;
       clearTimeout(giveUp);
     };
-  }, [api, poll, railVote, settled, onHeldBallot]);
+  }, [api, poll, settled, onHeldBallot]);
   return settled;
 }
 

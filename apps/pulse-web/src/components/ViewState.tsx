@@ -14,27 +14,43 @@ export function ViewState<T>({
   data,
   children,
   variant = "default",
+  persistent = false,
+  readyNote,
 }: {
   data: ViewData<T>;
   children: (value: T) => ReactNode;
   variant?: "default" | "compact";
+  /**
+   * Keep the status region mounted once ready, so a later reload is read out
+   * from a region that was already there; a newly inserted one often is not.
+   * The region is empty while ready, but for `readyNote`.
+   */
+  persistent?: boolean;
+  /** Read out, not drawn, while ready: for a reload that ended well. */
+  readyNote?: string;
 }) {
-  if (data.status === "ready") return <>{children(data.value)}</>;
-
+  const className = `viewstate${variant === "compact" ? " viewstate--compact" : ""}`;
+  const ready = data.status === "ready";
+  // One shape in every state, so a persistent region is the same node throughout.
   return (
-    <div
-      className={`viewstate${variant === "compact" ? " viewstate--compact" : ""}`}
-      role="status"
-      aria-live="polite"
-    >
-      {data.status === "loading" ? (
-        <>
-          <div className="viewstate__pulse" aria-hidden="true" />
-          <p>Loading…</p>
-        </>
-      ) : (
-        <p>{data.message}</p>
+    <>
+      {ready ? children(data.value) : null}
+      {ready && !persistent ? null : (
+        <div className={className} role="status" aria-live="polite">
+          {data.status === "ready" ? (
+            readyNote ? (
+              <p className="visually-hidden">{readyNote}</p>
+            ) : null
+          ) : data.status === "loading" ? (
+            <>
+              <div className="viewstate__pulse" aria-hidden="true" />
+              <p>Loading…</p>
+            </>
+          ) : (
+            <p>{data.message}</p>
+          )}
+        </div>
       )}
-    </div>
+    </>
   );
 }

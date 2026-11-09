@@ -1224,6 +1224,62 @@ describe("the Answered list (#484)", () => {
     ).toBe("/my-votes");
   });
 
+  it("reads out a rail retry from one status region, with no answers yet", async () => {
+    let finishRetry!: (page: {
+      votes: (typeof fromServer)[];
+      nextCursor: string | null;
+    }) => void;
+    const myVotes = vi
+      .fn()
+      .mockRejectedValueOnce(new ApiError(500, "Something went wrong."))
+      .mockImplementationOnce(
+        () => new Promise((resolve) => (finishRetry = resolve)),
+      );
+    render(<Conversation api={stubApi({ myVotes })} pollId="ads-free" />);
+    await rail().findByText("We couldn't load your votes.");
+    const region = rail().getByRole("status");
+    await userEvent.click(rail().getByRole("button", { name: "Try again" }));
+    expect(rail().getByRole("status")).toBe(region);
+    expect(region.textContent).toContain("Loading…");
+    await act(async () =>
+      finishRetry({ votes: [fromServer], nextCursor: null }),
+    );
+    await rail().findByRole("link", { name: "More parks?" });
+    expect(rail().getByRole("status")).toBe(region);
+    expect(region.textContent).toBe("Your votes are loaded.");
+  });
+
+  it("reads out and shows a rail retry while answers from this page are listed", async () => {
+    let finishRetry!: (page: {
+      votes: (typeof fromServer)[];
+      nextCursor: string | null;
+    }) => void;
+    const myVotes = vi
+      .fn()
+      .mockRejectedValueOnce(new ApiError(500, "Something went wrong."))
+      .mockImplementationOnce(
+        () => new Promise((resolve) => (finishRetry = resolve)),
+      )
+      .mockRejectedValueOnce(new ApiError(500, "Something went wrong."));
+    render(<Conversation api={stubApi({ myVotes })} pollId="ads-free" />);
+    await rail().findByText("We couldn't load your votes.");
+    const region = rail().getByRole("status");
+    await main().findByRole("heading", { name: poll().question, level: 1 });
+    await answer();
+    expect(rail().getByRole("status")).toBe(region);
+    expect(region.textContent).toBe("We couldn't load all your votes.");
+    await userEvent.click(rail().getByRole("button", { name: "Try again" }));
+    expect(rail().getByRole("status")).toBe(region);
+    expect(within(region).getByText("Loading…")).toBeTruthy();
+    expect(rail().getByRole("link", { name: poll().question })).toBeTruthy();
+    await act(async () =>
+      finishRetry({ votes: [fromServer], nextCursor: null }),
+    );
+    await rail().findByRole("link", { name: "More parks?" });
+    expect(rail().getByRole("status")).toBe(region);
+    expect(region.textContent).toBe("Your votes are loaded.");
+  });
+
   it("keeps the history error and retry below answers from this page", async () => {
     render(
       <Conversation
@@ -1385,7 +1441,54 @@ describe("the Answered list (#484)", () => {
     expect(rail().queryByText("Your answer: Yes")).toBeNull();
   });
 
-  it("unlocks the rail and thread when the address changes during a send and loading fails", async () => {
+  it("shows the changed answer after leaving and returning during its send", async () => {
+    const first = poll();
+    const parks = poll({ id: "parks", question: "More parks?" });
+    // The server holds Yes until the change to No is stored.
+    let held: number[] = [1];
+    let finish!: (outcome: CastOutcome) => void;
+    const cast = vi.fn(
+      () =>
+        new Promise<CastOutcome>((resolve) => {
+          finish = (outcome) => {
+            held = [0];
+            resolve(outcome);
+          };
+        }),
+    );
+    const current = {
+      ...fromServer,
+      pollId: first.id,
+      question: first.question,
+    };
+    const api = stubApi({
+      poll: graph([first, parks]),
+      myVotes: async () => ({ votes: [current], nextCursor: null }),
+      myBallot: async (id) => (id === first.id ? held : null),
+      results: async (id) => tally(id === first.id ? first : parks, held),
+      cast,
+    });
+    const view = render(<Conversation api={api} pollId={first.id} />);
+    await main().findByText("You picked Yes.");
+    const user = userEvent.setup();
+    await user.click(
+      within(card()).getByRole("button", { name: "Change my answer" }),
+    );
+    await user.click(within(card()).getByRole("radio", { name: "No" }));
+    await user.click(within(card()).getByRole("button", { name: "Submit" }));
+    view.rerender(<Conversation api={api} pollId={parks.id} />);
+    await main().findByRole("heading", { name: parks.question, level: 1 });
+    await act(async () =>
+      finish({ status: "changed", ballot: [0], results: tally(first, [0]) }),
+    );
+    view.rerender(<Conversation api={api} pollId={first.id} />);
+    await main().findByText("You picked No.");
+    expect(main().queryByText("You picked Yes.")).toBeNull();
+    expect(rail().getByText("Your answer: No")).toBeTruthy();
+    expect(rail().queryByText("Your answer: Yes")).toBeNull();
+  });
+
+  it("unlocks the rail when the address changes during a send and loading fails", async () => {
     const first = poll();
     let finish!: (outcome: CastOutcome) => void;
     const cast = vi.fn(
@@ -1424,10 +1527,8 @@ describe("the Answered list (#484)", () => {
         .getByRole("link", { name: first.question })
         .getAttribute("aria-disabled"),
     ).toBeNull();
-    expect(main().getByRole("button", { name: first.question })).toHaveProperty(
-      "disabled",
-      false,
-    );
+    // The answer being replaced is not claimed while its change is unsettled.
+    expect(main().queryByText("You picked Yes.")).toBeNull();
     await act(async () =>
       finish({ status: "changed", ballot: [0], results: tally(first, [0]) }),
     );
@@ -1439,9 +1540,12 @@ describe("the Answered list (#484)", () => {
       const myBallot = vi.fn(() => new Promise<Ballot | null>(() => {}));
       render(<Conversation api={stubApi({ myBallot })} pollId="ads-free" />);
       await waitFor(() => expect(myBallot).toHaveBeenCalled());
+      await act(async () => {
+        await vi.advanceTimersByTimeAsync(4_900);
+      });
       expect(main().queryByRole("heading", { level: 1 })).toBeNull();
       await act(async () => {
-        await vi.advanceTimersByTimeAsync(10_000);
+        await vi.advanceTimersByTimeAsync(200);
       });
       await main().findByRole("heading", { name: poll().question, level: 1 });
       openCard();
@@ -1453,7 +1557,7 @@ describe("the Answered list (#484)", () => {
     }
   });
 
-  it("uses the matching rail answer when the saved-ballot wait runs out", async () => {
+  it("asks unanswered when the wait runs out, even with the question in the rail", async () => {
     vi.useFakeTimers({ shouldAdvanceTime: true });
     try {
       const current = {
@@ -1463,27 +1567,73 @@ describe("the Answered list (#484)", () => {
         choices: ["No"],
         ballot: [0],
       };
+      const results = vi.fn(async () => tally(poll(), [0]));
       render(
         <Conversation
           api={stubApi({
             myVotes: async () => ({ votes: [current], nextCursor: null }),
             myBallot: () => new Promise<Ballot | null>(() => {}),
-            results: async () => tally(poll(), [0]),
+            results,
           })}
           pollId={poll().id}
         />,
       );
       await rail().findByText("Your answer: No");
       await act(async () => {
-        await vi.advanceTimersByTimeAsync(10_000);
+        await vi.advanceTimersByTimeAsync(5_100);
       });
-      await main().findByText("You picked No.");
+      await main().findByRole("heading", { name: poll().question, level: 1 });
+      openCard();
       expect(
-        within(card()).getByRole("button", { name: "Change my answer" }),
+        within(card()).getByRole("button", { name: "Submit" }),
       ).toBeTruthy();
-      expect(
-        within(card()).queryByRole("button", { name: "Submit" }),
-      ).toBeNull();
+      expect(main().queryByText("You picked No.")).toBeNull();
+      // A rail row is not read as the saved answer, so its results are not asked for.
+      expect(results).not.toHaveBeenCalled();
+      expect(rail().getByText("Your answer: No")).toBeTruthy();
+    } finally {
+      vi.useRealTimers();
+    }
+  });
+
+  it("keeps the 5 s wait and one saved-ballot read when the rail arrives during it", async () => {
+    vi.useFakeTimers({ shouldAdvanceTime: true });
+    try {
+      const current = {
+        ...fromServer,
+        pollId: poll().id,
+        question: poll().question,
+        choices: ["No"],
+        ballot: [0],
+      };
+      let finishVotes!: (page: {
+        votes: (typeof current)[];
+        nextCursor: string | null;
+      }) => void;
+      const myBallot = vi.fn(() => new Promise<Ballot | null>(() => {}));
+      render(
+        <Conversation
+          api={stubApi({
+            myVotes: () => new Promise((resolve) => (finishVotes = resolve)),
+            myBallot,
+          })}
+          pollId={poll().id}
+        />,
+      );
+      await waitFor(() => expect(myBallot).toHaveBeenCalled());
+      await act(async () => {
+        await vi.advanceTimersByTimeAsync(4_900);
+      });
+      await act(async () =>
+        finishVotes({ votes: [current], nextCursor: null }),
+      );
+      await rail().findByText("Your answer: No");
+      expect(main().queryByRole("heading", { level: 1 })).toBeNull();
+      await act(async () => {
+        await vi.advanceTimersByTimeAsync(200);
+      });
+      await main().findByRole("heading", { name: poll().question, level: 1 });
+      expect(myBallot).toHaveBeenCalledTimes(1);
     } finally {
       vi.useRealTimers();
     }
@@ -1500,9 +1650,12 @@ describe("the Answered list (#484)", () => {
         />,
       );
       await waitFor(() => expect(results).toHaveBeenCalled());
+      await act(async () => {
+        await vi.advanceTimersByTimeAsync(4_900);
+      });
       expect(main().queryByRole("heading", { level: 1 })).toBeNull();
       await act(async () => {
-        await vi.advanceTimersByTimeAsync(10_000);
+        await vi.advanceTimersByTimeAsync(200);
       });
       await main().findByRole("heading", { name: poll().question, level: 1 });
       openCard();

@@ -55,6 +55,11 @@
 }
 .conversation__hero > p,
 .conversation__empty,
+/* The rail's status line sits a step clear of the list and of Try again.
+   Empty while there is nothing to say, so it adds no space then. */
+.conversation__sidebar .viewstate--compact:not(:empty) {
+  margin-block: var(--step);
+}
 .conversation__sidebar p,
 .conversation__thread > li > small {
   font-size: var(--t-small);

@@ -67,6 +67,7 @@
 .welcome.browse .browse__main--message .viewstate {
   align-items: flex-start;
   margin-top: var(--step);
+  padding: 0;
   text-align: left;
 }
 .browse__list li + li {
@@ -106,4 +107,12 @@
 .browse__more {
   margin: var(--step) 0 0;
   text-align: center;
+}
+
+/* My votes' left-aligned message: Try again and the way on line up under it. */
+.browse__main--message > .button {
+  margin-inline: 0;
+}
+.browse__main--message .browse__more {
+  text-align: left;
 }
