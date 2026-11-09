@@ -102,7 +102,10 @@ Opening a rail question updates its URL, and Back returns to the previous
 question. Reloading restores the saved answer from the server; if that read
 takes more than 5 seconds, the question is asked unanswered rather than taking
 the rail's row as the answer. Leaving a question while its answer is being sent
-drops that answer from the page, so coming back reads it from the server again.
+keeps its rail row in place until the send settles, then shows the outcome:
+a counted answer moves to the top; after a lost connection the page reads the
+saved answer from the server again. Coming back before the send settles shows
+Loading… for up to 5 seconds instead of the answer being replaced.
 The rail keeps one status line for screen readers, which reads out Loading…,
 an error, or "Your votes are loaded." after Try again. Signing out or
 forgetting votes here clears the browser's saved-answer list.

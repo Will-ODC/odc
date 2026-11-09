@@ -55,16 +55,17 @@
 }
 .conversation__hero > p,
 .conversation__empty,
-/* The rail's status line sits a step clear of the list and of Try again.
-   Empty while there is nothing to say, so it adds no space then. */
-.conversation__sidebar .viewstate--compact:not(:empty) {
-  margin-block: var(--step);
-}
 .conversation__sidebar p,
 .conversation__thread > li > small {
   font-size: var(--t-small);
   color: var(--muted);
   line-height: 1.5;
+}
+/* The rail's status line sits a step clear of the list and of Try again,
+   only while it shows something: empty, or holding only the note read out
+   after a reload, it adds no space. */
+.conversation__sidebar .viewstate--compact:has(> :not(.visually-hidden)) {
+  margin-block: var(--step);
 }
 .conversation__thread {
   list-style: none;
