@@ -43,6 +43,13 @@ is a full-width sheet along the bottom edge of the screen, and its closed
 handle is one full-width button. Wider screens keep the bottom-right popout.
 Behavior is unchanged.
 
+**Simplified after voting (#478, #480, operator, 2026-11-07).** The page
+leads with the saved answer and its status on one line, then a one-line
+"Sign in to confirm your vote" offer, then one results card that can be
+minimized to its total. The drawer's handle is the only Change my answer,
+and the list of earlier answers under the results is gone (the Answered
+rail and My votes carry them).
+
 ## Consequences
 
 Results remain readable outside the voting surface. Keyboard focus follows a

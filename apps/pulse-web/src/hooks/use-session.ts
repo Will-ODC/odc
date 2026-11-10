@@ -68,7 +68,7 @@ export function useSession(
 
   /*
    * Ask again when the person comes back to this page, while nobody is signed
-   * in here (#353). "Confirm with your email" opens sign-in in another tab,
+   * in here (#353). The confirm offer's Sign in (#480) opens sign-in in another tab,
    * and the emailed link opens a third; signing in there sets the cookie this
    * page shares, but nothing tells this page. Coming back to it - the window
    * regaining focus, or the tab becoming visible - is the moment the answer

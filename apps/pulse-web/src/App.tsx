@@ -129,7 +129,7 @@ export function App({
                * button a link that can now only answer "already used".
                */
               onSignedIn={() => {
-                // The question "Confirm with your email" was pressed on, or
+                // The question the confirm offer's Sign in (#480) was pressed on, or
                 // the posting form, when this browser remembers one (#353).
                 const to = takeReturn(browserStore());
                 setRestoreDraft(to?.kind === "newPoll");
@@ -144,10 +144,12 @@ export function App({
         );
       case "conversation":
         return (
+          // Not keyed by question: opening another one from the rail, or
+          // going Back, keeps the conversation and its rail on screen (#488).
           <Conversation
-            key={at.pollId}
             api={api}
             pollId={at.pollId}
+            onNavigate={browser.go}
             // Replaced, so the back button does not return to a page that
             // still believes someone is signed in.
             onSignedOut={() => {

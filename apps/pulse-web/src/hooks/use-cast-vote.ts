@@ -34,7 +34,12 @@ export type CastState =
 
 export interface CastVote {
   state: CastState;
-  cast: (ballot: Ballot) => void;
+  /**
+   * Sends the ballot. The promise settles with the state the send ended in,
+   * even after the component using this hook has gone, so whoever owns the
+   * page can still learn how a send it left behind turned out.
+   */
+  cast: (ballot: Ballot) => Promise<CastState>;
   /**
    * Put the question back, so the answer can be given again.
    *
@@ -58,33 +63,38 @@ export function useCastVote(api: PulseApi, pollId: string): CastVote {
   const [state, setState] = useState<CastState>({ status: "idle" });
 
   const cast = useCallback(
-    (ballot: Ballot) => {
+    (ballot: Ballot): Promise<CastState> => {
       // Keep a copy: subsequent controlled picks must not mutate an in-flight vote.
       const submitted = [...ballot];
       const choice = submitted[0];
-      if (choice === undefined) return; // An empty ballot is never a retraction.
+      // An empty ballot is never a retraction.
+      if (choice === undefined) return Promise.resolve({ status: "idle" });
       setState({ status: "casting", choice, ballot: submitted });
 
-      api.cast(pollId, submitted).then(
-        (outcome) => {
-          if (outcome.status === "closed") {
-            setState({ status: "closed" });
-            return;
-          }
-          setState({
-            status: "counted",
-            choice,
-            ballot: [...outcome.ballot],
-            changed: outcome.status === "changed",
-            results: outcome.results,
-          });
+      return api.cast(pollId, submitted).then(
+        (outcome): CastState => {
+          const settled: CastState =
+            outcome.status === "closed"
+              ? { status: "closed" }
+              : {
+                  status: "counted",
+                  choice,
+                  ballot: [...outcome.ballot],
+                  changed: outcome.status === "changed",
+                  results: outcome.results,
+                };
+          setState(settled);
+          return settled;
         },
-        (err: unknown) =>
-          setState({
+        (err: unknown): CastState => {
+          const settled: CastState = {
             status: "failed",
             message: reason(err),
             refused: err instanceof ApiError,
-          }),
+          };
+          setState(settled);
+          return settled;
+        },
       );
     },
     [api, pollId],

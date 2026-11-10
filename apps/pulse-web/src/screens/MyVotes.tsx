@@ -1,12 +1,11 @@
 import { useEffect, useRef } from "react";
 import type { PulseApi } from "../api/types.js";
+import { AnsweredList } from "../components/AnsweredList.js";
 import { ViewState } from "../components/ViewState.js";
-import { pathOf } from "../flow/route.js";
 import { useMyVotes } from "../hooks/use-my-votes.js";
 import { useSession } from "../hooks/use-session.js";
 import { SiteBanner } from "./SiteBanner.js";
 import "./Browse.css";
-import "./MyVotes.css";
 
 /** This browser's current ballots, read from the server on every visit (#329). */
 export function MyVotes({ api }: { api: PulseApi }) {
@@ -38,37 +37,20 @@ export function MyVotes({ api }: { api: PulseApi }) {
           onCancel={dismiss}
         />
       </header>
-      <main className="welcome__main browse__main">
+      <main
+        className={`welcome__main browse__main${
+          data.status === "empty" || data.status === "error"
+            ? " browse__main--message"
+            : ""
+        }`}
+      >
         <h1>My votes</h1>
         <p className="welcome__note">
           Answers saved in this browser. Signing out or forgetting votes here
           clears access to them.
         </p>
         <ViewState data={data}>
-          {(page) => (
-            <ul ref={list} className="browse__list">
-              {page.votes.map((vote) => (
-                <li key={vote.pollId}>
-                  <a
-                    href={pathOf({ kind: "conversation", pollId: vote.pollId })}
-                  >
-                    {vote.question}
-                  </a>
-                  <span className="my-votes__detail">
-                    Your answer:{" "}
-                    {vote.choices.length
-                      ? vote.choices.join(", ")
-                      : "(answer unavailable)"}
-                  </span>
-                  <span className="my-votes__detail">
-                    {vote.open
-                      ? "Open · You can change your answer"
-                      : "Closed · View results"}
-                  </span>
-                </li>
-              ))}
-            </ul>
-          )}
+          {(page) => <AnsweredList votes={page.votes} listRef={list} />}
         </ViewState>
         {data.status === "empty" ? (
           <p className="browse__more">
