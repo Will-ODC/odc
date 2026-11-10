@@ -20,7 +20,7 @@ export type Route =
   | { kind: "browse"; community: string }
   /**
    * Asking for a sign-in link. `returnTo` is where to come back to once the
-   * emailed link is clicked: "Confirm with your email" on a vote card names
+   * emailed link is clicked: the confirm offer's Sign in (#480) on a vote card names
    * its own question (#353), and the posting form names itself. Left out,
    * sign-in lands where it always has.
    */

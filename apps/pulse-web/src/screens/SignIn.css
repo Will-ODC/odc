@@ -69,6 +69,12 @@
   outline-offset: 2px;
 }
 
+/* A field in error keeps its red edge, and its ring says so too. */
+.signin__field[aria-invalid="true"]:focus-visible {
+  border-color: var(--red);
+  outline-color: var(--red);
+}
+
 .signin__field[aria-invalid="true"] {
   border-color: var(--red);
 }

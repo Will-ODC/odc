@@ -109,6 +109,10 @@
   text-align: center;
 }
 
+/* Loading, empty and error sit clear of the subtitle, not tight under it. */
+.browse__main > .viewstate {
+  margin-top: calc(var(--step) * 3);
+}
 /* My votes' left-aligned message: Try again and the way on line up under it. */
 .browse__main--message > .button {
   margin-inline: 0;
