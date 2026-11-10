@@ -218,7 +218,12 @@ export class ClaimService {
    */
   async inspect(token: string): Promise<InspectResult> {
     const claim = await this.#claims.byTokenHash(hashToken(token));
-    if (!claim) return { status: "unknown_link" };
+    if (!claim)
+      return {
+        status: (await this.#claims.wasUsed(hashToken(token)))
+          ? "already_used"
+          : "unknown_link",
+      };
     if (claim.usedAt !== undefined) return { status: "already_used" };
     if (claim.expiresAt <= this.#clock()) return { status: "expired" };
     return { status: "live", email: claim.subject, expiresAt: claim.expiresAt };
@@ -231,7 +236,12 @@ export class ClaimService {
    */
   async redeem(token: string): Promise<RedeemResult> {
     const claim = await this.#claims.byTokenHash(hashToken(token));
-    if (!claim) return { status: "unknown_link" };
+    if (!claim)
+      return {
+        status: (await this.#claims.wasUsed(hashToken(token)))
+          ? "already_used"
+          : "unknown_link",
+      };
 
     const now = this.#clock();
     // Used before expired: a link someone already clicked should say so, even
@@ -239,9 +249,9 @@ export class ClaimService {
     if (claim.usedAt !== undefined) return { status: "already_used" };
     if (claim.expiresAt <= now) return { status: "expired" };
 
-    // The checks above read the link before any concurrent click could mark
-    // it. Spending is one step that says whether THIS request spent it, so a
-    // second click that got this far is told here instead of signed in twice.
+    // A successful spend deletes the pending address and leaves only a hash
+    // marker. This atomic check must still succeed after the read above: a
+    // competing click or expiry sweep may already have removed the row.
     if (!(await this.#claims.markUsed(claim.tokenHash, now))) {
       return { status: "already_used" };
     }

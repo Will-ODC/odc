@@ -811,3 +811,61 @@ test("a_returning_voter_keeps_their_first_community_whatever_they_pick_later", a
   assert.equal(again.firstTime, false);
   assert.equal(again.voter.community, "ubc-staff");
 });
+
+test("redeeming_a_link_removes_the_pending_email_row", async () => {
+  const h = setup();
+  await h.service.requestLink("ada@student.ubc.ca");
+  const token = h.lastToken("ada@student.ubc.ca");
+  assert.equal((await h.service.redeem(token)).status, "signed_in");
+  assert.equal(await h.claims.byTokenHash(hashToken(token)), undefined);
+  assert.equal((await h.service.inspect(token)).status, "already_used");
+  assert.equal((await h.service.redeem(token)).status, "already_used");
+});
+
+test("the_next_link_write_removes_expired_rows_for_every_address", async () => {
+  const h = setup();
+  await h.service.requestLink("ada@student.ubc.ca");
+  const token = h.lastToken("ada@student.ubc.ca");
+  h.after(15 * 60_000);
+  await h.service.requestLink("sam@student.ubc.ca");
+  assert.equal(await h.claims.byTokenHash(hashToken(token)), undefined);
+  assert.equal((await h.service.redeem(token)).status, "unknown_link");
+  assert.equal(
+    (await h.service.redeem(h.lastToken("sam@student.ubc.ca"))).status,
+    "signed_in",
+  );
+});
+
+test("a_redeem_paused_after_read_cannot_use_a_link_deleted_by_the_expiry_sweep", async () => {
+  const h = setup();
+  await h.service.requestLink("ada@student.ubc.ca");
+  const token = h.lastToken("ada@student.ubc.ca");
+  const spend = h.claims.markUsed.bind(h.claims);
+  let release!: () => void;
+  let read!: () => void;
+  const reached = new Promise<void>((resolve) => {
+    read = resolve;
+  });
+  const resume = new Promise<void>((resolve) => {
+    release = resolve;
+  });
+  h.claims.markUsed = async (hash, at) => {
+    read();
+    await resume;
+    return spend(hash, at);
+  };
+  const redeeming = h.service.redeem(token);
+  await reached;
+  try {
+    h.after(15 * 60_000);
+    await h.service.requestLink("sam@student.ubc.ca");
+    assert.equal(await h.claims.byTokenHash(hashToken(token)), undefined);
+  } finally {
+    release();
+  }
+  assert.notEqual((await redeeming).status, "signed_in");
+  assert.equal(
+    await h.voters.byCredential("email", "ada@student.ubc.ca"),
+    undefined,
+  );
+});

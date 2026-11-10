@@ -72,7 +72,7 @@ export interface PendingClaim {
   proofEmailsOptIn: boolean;
   createdAt: Date;
   expiresAt: Date;
-  /** Set the moment it is redeemed. A link works exactly once. */
+  /** Legacy rows only: upgraded into a hash-only spent-link marker. */
   usedAt?: Date;
 }
 
@@ -108,10 +108,12 @@ export interface VoterStore {
 export interface ClaimStore {
   put(claim: PendingClaim): Promise<void>;
   byTokenHash(tokenHash: string): Promise<PendingClaim | undefined>;
+  /** Hash-only replay marker: no address or other claim data is retained. */
+  wasUsed(tokenHash: string): Promise<boolean>;
   /**
-   * Spend a link: record `usedAt` and return true — or return false, changing
-   * nothing, when it was already spent or does not exist. Checking and
-   * spending are one step, so two clicks at once cannot both spend it.
+   * Spend an unexpired link: delete its pending row and retain only its hash.
+   * Returns false if expired, already spent, or missing. Checking, deleting
+   * and remembering the hash are atomic: two clicks cannot both spend it.
    */
   markUsed(tokenHash: string, usedAt: Date): Promise<boolean>;
   /** Outstanding, unexpired links for one subject — used to throttle requests. */
@@ -123,8 +125,8 @@ export interface ClaimStore {
   /**
    * Forget a link nobody can ever hold: its email was refused by the provider,
    * so it never left pulse. It stops counting against the address's live-link
-   * cap (P4a). A link already spent is kept — "already used" is what a second
-   * click must hear — and an unknown hash changes nothing.
+   * cap (P4a). A spent-link hash marker is left alone, so a second click still
+   * hears "already used"; an unknown hash changes nothing.
    */
   discard(tokenHash: string): Promise<void>;
 }
@@ -223,8 +225,13 @@ export function voterWith(voter: NewVoter, email: string | null): Voter {
 
 export class InMemoryClaimStore implements ClaimStore {
   readonly #claims = new Map<string, PendingClaim>();
+  readonly #used = new Set<string>();
 
   async put(claim: PendingClaim): Promise<void> {
+    // A sign-in-link write sweeps expired rows for every address. The same
+    // application clock that dates this link defines the expiry boundary.
+    for (const [hash, pending] of this.#claims)
+      if (pending.expiresAt <= claim.createdAt) this.#claims.delete(hash);
     this.#claims.set(claim.tokenHash, claim);
   }
 
@@ -232,10 +239,16 @@ export class InMemoryClaimStore implements ClaimStore {
     return this.#claims.get(tokenHash);
   }
 
+  async wasUsed(tokenHash: string): Promise<boolean> {
+    return this.#used.has(tokenHash);
+  }
+
   async markUsed(tokenHash: string, usedAt: Date): Promise<boolean> {
     const claim = this.#claims.get(tokenHash);
-    if (!claim || claim.usedAt !== undefined) return false;
-    this.#claims.set(tokenHash, { ...claim, usedAt });
+    if (!claim || claim.usedAt !== undefined || claim.expiresAt <= usedAt)
+      return false;
+    this.#claims.delete(tokenHash);
+    this.#used.add(tokenHash);
     return true;
   }
 

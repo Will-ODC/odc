@@ -224,6 +224,13 @@ Two clicks on one link at once — a double click — sign in once: the first se
 cookie and the second is answered 410 `already_used`. A client should not show that
 second answer as a failure to someone who is, in fact, signed in.
 
+The pending row containing the address is deleted atomically when the link is
+spent; only a token-hash replay marker remains, preserving `already_used` for
+repeat clicks without retaining the pending address. Expired, unused rows are
+removed on the next sign-in-link write, so an expired link whose row has been
+swept answers `unknown_link`. Both remain 410 and cannot sign anyone in. Link
+lifetime and the success response are unchanged.
+
 ### `POST /api/sign-out`
 
 No body. Always answers `200 { "status": "signed_out" }`, whether or not anyone was
