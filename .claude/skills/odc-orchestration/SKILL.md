@@ -1,6 +1,6 @@
 ---
 name: odc-orchestration
-description: How the orchestrator works for the operator in the ODC monorepo — which questions go to the operator and how they are asked, working toward a stated goal, wrapping up at 90% usage and handing off to Codex — and how to dispatch work — which model runs which task, how to write a subagent brief that works, how to run agents in parallel without corrupting one working tree, and how to run lead sessions that each own one feature and run their own implementers. Use this skill whenever delegating, starting or acting as a lead, spawning a subagent, planning a multi-step task, choosing between Opus and Sonnet, or deciding whether to do something yourself.
+description: How the orchestrator works for the operator in the ODC monorepo — which questions go to the operator and how they are asked, working toward a stated goal, wrapping up at 90% usage and handing off to Codex — and how to dispatch work — which model runs which task (Codex by default, Opus or Sonnet), how to write a subagent brief that works, how to run agents in parallel without corrupting one working tree, and how to run lead sessions that each own one feature and run their own implementers. Use this skill whenever delegating, starting or acting as a lead, spawning a subagent, planning a multi-step task, choosing between Codex, Opus and Sonnet, or deciding whether to do something yourself.
 ---
 
 # ODC Orchestration
@@ -17,10 +17,12 @@ everything the operator has not kept for themself. Ask the operator only about:
 - **Critical functionality** — what votes count, who may vote, what stays
   private, what is hashed or goes into `contracts/`, and charter rules. This
   covers what these do, not how they are coded; how they are coded is routed
-  Opus per the table.
+  per the table: `contracts/` work and ADRs to Opus `odc-architect`, either
+  verifier to `odc-verifier-builder`, other complex code to Codex by default
+  with Opus as the Claude fallback.
 - **Goals in tension** — when two goals pull apart and nothing written says
   which wins.
-- **What the operator owns** — merging, audits, deploys, spending, a charter
+- **What the operator owns** — merging the PRs listed in "Merging", audits, deploys, spending, a charter
   conflict, and anything an ADR or memory entry reserves to the operator.
 
 **Check the written goals before asking.** For the ODC core: `docs/charter.md`
@@ -38,12 +40,11 @@ design choices where appropriate. Overarching goals, and decisions on
 user-facing features and critical functionality, still go to the operator.
 
 **The loop,** for each unit of work: build → commit, push, open the PR → CI
-green → the orchestrator starts a fresh-context `odc-reviewer` (a lead never
-does; see "What a lead never does") → the owner fixes → review again until
-approved → report it ready to merge → next unit. Merging stays the operator's
-call, and audits are never part of the loop. Stop a unit only for an open
-operator question on it, and keep the other units moving. Start the next unit
-only within the WIP limit in `odc-pipeline`: a unit in a service that still
+green → the orchestrator starts the fresh-context reviews (a lead never does;
+see "What a lead never does") → the owner fixes → review again until approved
+→ the orchestrator merges it (see "Merging") → next unit. Audits are never part
+of the loop. Stop a unit only for an open operator question on it, and keep
+the other units moving. Start the next unit only within the WIP limit in `odc-pipeline`: a unit in a service that still
 has an unmerged branch waits for the merge, or stacks on it as `odc-pipeline`
 allows.
 
@@ -66,6 +67,155 @@ looks like. Then:
   has got toward it.
 - Do work only if it serves the goal. Work that does not serve it is a
   question for the operator, not something to start.
+
+### Keep session titles current
+
+Session titles are how the operator finds work in the sidebar (operator,
+2026-11-08). The orchestrator renames its own session
+(`mcp__ccd_session_mgmt__set_session_title` with `"self"`) whenever its work
+changes, naming the tickets and PRs in hand: "Orchestrator: #488 fixes, #493
+merge rule". A lead does the same for its own session. The rename tool is
+deferred, so load it with `ToolSearch` first; if the operator set the title,
+the app asks them to approve a rename, so rename only titles the app or this
+session set, never rename in a session the operator is not watching (such
+as a Codex hand-off or a scheduled run), and remember that a subagent cannot
+rename its own session. Codex (CLI 0.147, as of 2026-11-08)
+has no command to set a title and labels a session by its first prompt line,
+so every `codex exec` or interactive `codex` prompt starts with
+`Title: <ticket or step> <a few words> (<branch>)`.
+
+### Merging
+
+The orchestrator merges a PR once it is properly reviewed (operator,
+2026-11-07). **The operator merges** — the orchestrator reports it ready — any
+PR whose diff touches one of these (operator, 2026-11-07):
+
+- `contracts/`, `docs/charter.md`, `services/verifier/`, `tools/verifier-ts/`;
+- the merge and review rules: `.claude/skills/odc-orchestration/`,
+  `.claude/skills/odc-pipeline/`, `.claude/skills/odc-code-review/`,
+  `.claude/skills/lead/`, `.claude/agents/odc-reviewer.md`,
+  `.claude/agents/odc-ui-reviewer.md`, `.claude/agents/odc-navigator.md`, and
+  root `CLAUDE.md`;
+- CI and guards: `.github/` and `lefthook.yml`.
+
+Check it with one command, which prints nothing when the orchestrator may merge:
+`gh pr diff <N> --name-only | grep -E '^(contracts/|docs/charter\.md$|services/verifier/|tools/verifier-ts/|\.claude/skills/(odc-(orchestration|pipeline|code-review)|lead)/|\.claude/agents/odc-(ui-reviewer|reviewer|navigator)\.md$|CLAUDE\.md$|\.github/|lefthook\.yml$)'`
+
+**Properly reviewed** means all of these:
+
+- a fresh-context `odc-reviewer` verdict of APPROVE or APPROVE WITH NITS that
+  names the sha it reviewed, and that sha is the PR's current head. Any later
+  commit needs a fresh `odc-reviewer` on the new head. When the only new commit
+  is a `master` merge whose conflict resolution changed no code or tests, a
+  short review of `git diff <approved-sha> <head>` is enough;
+- for a **UI PR** — one that touches `apps/pulse-web/**`, `services/web/**`,
+  `docs/mockups/**`, or user-visible strings in `apps/pulse/**` — also an
+  APPROVE or APPROVE WITH NITS from a fresh `odc-ui-reviewer` (a senior UI and
+  design reviewer that checks the screens in the real browser) on the same
+  sha. Start it in a review worktree at the PR head, like `odc-reviewer`, and
+  tell it the worktree's absolute path for its `launch.json` entry;
+- every CI check green;
+- no blocking or should-fix finding left open, and no open operator question
+  on it. Nits may stay if the report lists them.
+
+GitHub does not enforce any of this: the `protect-master` ruleset requires no
+approving reviews, only green checks and an up-to-date branch. The rule above is
+the gate.
+
+**The same gate whoever orchestrates** (operator, 2026-11-08). When Codex is
+the orchestrator it may merge too, on the same list and the same gate. It meets
+the `odc-reviewer` requirement with an independent reviewer: a separate, fresh
+Codex process that did not write or orchestrate the change. To start one:
+
+1. Make a review worktree at the PR head and run
+   `pnpm install --frozen-lockfile` in it (the Codex sandbox has no network).
+   For a PR that touches either verifier, make the worktree sparse exactly as
+   "Review every PR you recommend" describes; never give the reviewer a full
+   checkout. Write `git diff <base>...HEAD` to `REVIEW.diff` at its root.
+   `<base>` is the PR's base branch: the parent branch for a stacked PR,
+   otherwise `origin/master`. The reviewer has no network, so it cannot run
+   `gh`; beside `REVIEW.diff`, also write `gh pr view <N> --json title,body`
+   to `PR.json`, and the ticket to `TICKET.md`: `gh issue view <M>`, or, for a
+   planned step, the plan or ADR step the PR names.
+2. Run `codex exec -c model="<slug>" -s workspace-write -C <worktree> "<brief>" < /dev/null`.
+   The brief starts with the `Title:` line from "Keep session titles current".
+   Then it gives the text of `.claude/agents/odc-reviewer.md`, the PR number,
+   the base and the head sha. It says the diff is at `REVIEW.diff`, the PR
+   description is in `PR.json` and the ticket is in `TICKET.md`, and that the
+   verdict line must name that sha. For a verifier PR it also says: read
+   nothing outside this worktree, and do not use git to read other paths.
+
+A UI PR also needs the `odc-ui-reviewer` review, which checks the screens in
+a real browser with the Claude desktop browser tools. Codex has no equivalent
+here, so a UI PR waits for a Claude session to run that review. Any PR whose
+reviews Codex cannot run stays open and is marked unreviewed in the hand-off
+for the next Claude session. Every report names the model and sha of each
+review. After a Codex merge, Codex walks the `odc-pipeline` merge checklist
+itself (memory on `master` included), since it cannot start `odc-navigator`;
+if it cannot, it lists the owed memory update in the hand-off for the next
+Claude session.
+
+**To merge:** `gh pr merge <N> --squash --match-head-commit <sha>`, with the
+head sha the latest review approved, so a commit pushed after the review cannot
+slip in. Then follow the merge checklist in `odc-pipeline` (memory on
+`master`). Stacked PRs follow `odc-pipeline`'s stack rules. Tell the operator
+what was merged in one line per PR.
+
+### Use Codex where it helps
+
+When Claude orchestrates, Codex (the `codex` CLI) is a different model that has
+seen nothing of this run, so it adds independence (operator, 2026-11-07). Use
+it where the CLI is installed (`command -v codex`), as `codex review` or
+`codex exec`.
+
+#### Delegate to Codex by default
+
+To spread token usage, a Claude orchestrator delegates to Codex by default
+with
+`codex exec -c model="<slug>" -s workspace-write -C <worktree> "<brief>" < /dev/null`.
+Keep the `< /dev/null`: run in the background without it, `codex exec` waits
+for input forever. The prompt starts with a `Title:` line, Codex gets its own
+worktree (run `pnpm install --frozen-lockfile` in it first: the sandbox has
+no network), and the brief includes the git guardrails from "Writing a brief
+that actually works". Codex does not load `CLAUDE.md` or `.claude/agents/`,
+so the brief also gives the text of the role it stands in for:
+`.claude/agents/odc-implementer.md` for implementation, fixes and tests,
+`.claude/agents/odc-navigator.md` for lookups, test runs and simple fixes. Use this route for implementation and fixes, writing tests,
+running tests and guards, and second reviews. Lookups and inventory use the
+same command with `-s read-only`.
+
+Claude keeps orchestration decisions; the required fresh `odc-reviewer` and
+`odc-ui-reviewer` reviews while Claude orchestrates; anything in `contracts/`
+and every ADR, which stay with Opus `odc-architect`; the merge checklist in
+`odc-pipeline`, memory included, which stays with `odc-navigator`; and any
+step the Codex sandbox cannot do. After Codex finishes, the orchestrator runs
+steps that need network access, `git push`, or tests that open ports.
+
+Any work that touches `services/verifier/` or `tools/verifier-ts/` — a
+build, a fix, a test, a rename — goes to `odc-verifier-builder`, never to
+Codex. The only Codex exception is a review in a sparse worktree, as
+"Merging" and the second-review bullet below describe.
+
+When Codex hits its usage limit, the orchestrator falls back to Claude
+routing (Opus or Sonnet, per the table) and tells the operator (operator,
+2026-11-08: "claude carry on work").
+
+Other Codex routes and fallbacks:
+
+- **A second review** on UI PRs and on complex PRs. In a review worktree
+  checked out at the PR head (sparse for a verifier PR, as "Review every PR
+  you recommend" describes), run
+  `git fetch origin && codex review --base <the PR's base branch>`. Use the
+  parent branch for a stacked PR and `origin/master` otherwise. It takes no
+  custom instructions together with `--base`. The orchestrator triages its
+  findings into [BLOCKING] / [SHOULD] / [NIT] and sends them to the owner like
+  any other finding. `codex review` follows no ODC checklist, so it adds to the
+  required reviews and never counts as one.
+- **If Codex rejects its configured model** ("not supported when using Codex
+  with a ChatGPT account"), pass a listed one with `-c model="<slug>"`. This
+  lists them:
+  `codex debug models | jq -r '.models[] | select(.visibility != "hide") | .slug'`. Do not edit the operator's `~/.codex/config.toml`.
+- **Taking over as orchestrator** at 90% usage (below).
 
 ### Wrap up at 90% usage
 
@@ -117,10 +267,10 @@ session), skip this step.
   the next Claude session resumes them.
 - **Codex follows the same rules:** operator questions as this skill says (in
   plain text, one at a time, with numbered options, the recommended one
-  first), no merging, and the git guardrails for anything it spawns. It runs
-  each review as a separate `codex review` (a fresh process) on the PR branch,
-  or leaves the PR marked unreviewed for the next Claude session. A Codex
-  review is not an Opus review, so the report says which ran.
+  first), merging only as "Merging" allows, and the git guardrails for
+  anything it spawns. It runs each required review as "Merging" describes for
+  a Codex orchestrator, or leaves the PR open and marked unreviewed for the
+  next Claude session.
 - **Tell the operator** which terminal tab Codex is running in.
 
 ### How every question is asked
@@ -151,6 +301,17 @@ One exception (operator, 2026-11-07): when Claude usage is running out and
 Codex has more left, Codex may take over as orchestrator (see "Hand off to
 Codex as the next orchestrator").
 
+A second instruction, verbatim (operator, 2026-11-08):
+
+> **"ensure codex is used consistently for spread out token usage, by
+> delegating appropriately"**
+
+Where the two conflict, the 2026-11-08 instruction wins: Codex is the default
+for delegated implementation and lookups, except the merge checklist, which
+stays with `odc-navigator`; `contracts/` work
+and ADRs, which stay with Opus `odc-architect`, and either verifier, which
+stays with `odc-verifier-builder`.
+
 This skill is the single source of truth for what that means in practice. The
 root `CLAUDE.md` points here and carries no table of its own; `.claude/agents/*.md` carry
 the same routing baked into each role's `model:` field. If any of the three
@@ -159,32 +320,39 @@ branches, PRs and merging, `odc-pipeline` is the source; this file follows it.
 
 ## Routing table
 
-| Work                                                          | Model      | Agent                   |
-| ------------------------------------------------------------- | ---------- | ----------------------- |
-| Orchestrating a multi-agent task; deciding what to dispatch   | **Opus**   | (you)                   |
-| Architecture, cross-service planning, phase planning          | **Opus**   | `odc-architect`         |
-| Drafting or editing anything in `contracts/`; writing an ADR  | **Opus**   | `odc-architect`         |
-| Complex implementation — a service, endpoint, or real feature | **Opus**   | `odc-implementer`       |
-| Building either verifier (contracts-only, fresh context)      | **Opus**   | `odc-verifier-builder`  |
-| Pre-merge review (fresh context)                              | **Opus**   | `odc-reviewer`          |
-| Phase-gate security audit (fresh context)                     | **Opus**   | `odc-security-auditor`  |
-| Resolving a contradiction between two documents               | **Opus**   | (judgement — see below) |
-| Exploration, inventory, "where does X live"                   | **Sonnet** | `odc-navigator`         |
-| Verifying cited facts: does this path/commit/PR/line resolve? | **Sonnet** | `odc-navigator`         |
-| Renames, mechanical find-and-replace, formatting              | **Sonnet** | `odc-navigator`         |
-| Running tests or guards and reporting the output              | **Sonnet** | `odc-navigator`         |
-| Simple implementation: a one-behaviour fix with a clear spec  | **Sonnet** | `odc-navigator`         |
-| Merge mechanics, once the operator says merge                 | **Sonnet** | `odc-navigator`         |
-| Taking over as orchestrator when Claude usage runs out        | **Codex**  | (hand-off — see above)  |
+| Work                                                           | Model                                | Agent                            |
+| -------------------------------------------------------------- | ------------------------------------ | -------------------------------- |
+| Orchestrating a multi-agent task; deciding what to dispatch    | **Opus**                             | (you)                            |
+| Architecture, cross-service planning, phase planning           | **Opus**                             | `odc-architect`                  |
+| Drafting or editing anything in `contracts/`; writing an ADR   | **Opus**                             | `odc-architect`                  |
+| Complex implementation outside `contracts/` (service, feature) | **Codex** (default) / Opus           | `codex exec` / `odc-implementer` |
+| Building either verifier (contracts-only, fresh context)       | **Opus**                             | `odc-verifier-builder`           |
+| Pre-merge review (fresh context)                               | **Opus**                             | `odc-reviewer`                   |
+| Pre-merge review when Codex orchestrates ("Merging")           | **Codex**                            | fresh `codex exec`               |
+| UI and design review of a UI PR (fresh context)                | **Opus**                             | `odc-ui-reviewer`                |
+| Second, independent review of a UI or complex PR               | **Codex**                            | `codex review`                   |
+| Phase-gate security audit (fresh context)                      | **Opus**                             | `odc-security-auditor`           |
+| Resolving a contradiction between two documents                | **Opus**                             | (judgement — see below)          |
+| Exploration, inventory, "where does X live"                    | **Codex** (default) / Sonnet         | `codex exec` / `odc-navigator`   |
+| Verifying cited facts: does this path/commit/PR/line resolve?  | **Codex** (default) / Sonnet         | `codex exec` / `odc-navigator`   |
+| Renames, mechanical find-and-replace, formatting               | **Codex** (default) / Sonnet         | `codex exec` / `odc-navigator`   |
+| Writing tests for delegated implementation                     | **Codex** (default) / Opus or Sonnet | `codex exec` / `odc-implementer` |
+| Running tests or guards and reporting the output               | **Codex** (default) / Sonnet         | `codex exec` / `odc-navigator`   |
+| Simple implementation: a one-behaviour fix with a clear spec   | **Codex** (default) / Sonnet         | `codex exec` / `odc-navigator`   |
+| Merge mechanics and the merge checklist, memory included       | **Sonnet** (Claude orchestrator)     | `odc-navigator`                  |
+| Taking over as orchestrator when Claude usage runs out         | **Codex**                            | (hand-off — see above)           |
 
-**The line between "simple" and "complex" implementation.** Simple means: the
-change is fully specified before it starts, it touches one file or one obvious
-set, and being wrong is _visible_ — a test fails, a build breaks. Complex means
-anything where being wrong is _silent_: hashing, event schemas, storage grants,
-privacy boundaries, anything under `contracts/`, anything a charter rule
-touches. **When it is not obvious which, route Opus.** The cost of the wrong
-Sonnet dispatch is a subtly wrong artifact that passes CI; the cost of the wrong
-Opus dispatch is some tokens.
+**The line between "simple" and "complex" implementation.** Codex is the
+default for both, with one exception: `contracts/` work and ADRs are never
+the Codex default; they go to Opus `odc-architect`. Otherwise this line
+chooses the Claude fallback when Codex cannot do the step. Simple means: the
+change is fully specified before it starts, it touches one file or one
+obvious set, and being wrong is _visible_ — a test fails, a build breaks.
+Complex means anything where being wrong is _silent_: hashing, event schemas,
+storage grants, privacy boundaries, anything a charter rule touches.
+**When the Claude fallback is not obvious, route Opus.** The cost of the
+wrong Sonnet fallback is a subtly wrong artifact that passes CI; the cost of
+the wrong Opus fallback is some tokens.
 
 ## Writing a brief that actually works
 
@@ -264,8 +432,9 @@ These are unchanged and non-negotiable:
   into its context (the full read list is in `.claude/agents/odc-verifier-builder.md`).
   Never open verifier source and ledger source in one context, whatever the
   model. If a task needs both, refuse and split it.
-- **Fresh-context review.** `odc-reviewer` must not be the context that wrote
-  the code. Re-running the authoring context on Opus is not a review.
+- **Fresh-context review.** `odc-reviewer` must not be the context that
+  wrote or orchestrated the change. Re-running the authoring context on Opus
+  is not a review.
 - **Fresh-context audit.** `odc-security-auditor` must never be the context that
   designed or implemented the area, nor the one that wrote the previous audit.
 
@@ -394,14 +563,13 @@ go past it.
 - **Re-check a PR after `master` is merged into it.** Whoever merges `master`
   in (the orchestrator, or the lead that owns the PR) runs the unit's tests,
   lint, typecheck and `pnpm -s format:check` on the merged result before
-  pushing. If resolving the conflict changed code or tests, not only prose,
-  the orchestrator has a fresh `odc-reviewer` review that merge commit. In the
+  pushing. What review the merged head then needs is set in "Merging". In the
   2026-10-20 run, merging `master` into an approved PR broke three tests from a
   PR merged an hour earlier.
 - **When the leads report,** check their PRs do not collide — settle a clash
   between two leads by message — and tell the operator which PRs are ready to
-  merge, in what order, with each review's verdict. Merging stays the
-  operator's call.
+  merge, in what order, with each review's verdict. Merge them per
+  "Merging"; a PR in the operator's exception list waits for the operator.
 
 Diff size: `apps/pulse*` is exempt from the `diff-size.sh` ceiling (the script
 lists every exemption), so a pulse feature can arrive as large PRs.

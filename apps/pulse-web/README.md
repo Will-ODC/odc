@@ -100,6 +100,25 @@ The client uses the served routes in [`../pulse/API.md`](../pulse/API.md).
 Roadmap and planned API sections describe future work, not current client
 behavior.
 
+## Saved answers (#484)
+
+My votes (`/my-votes`) lists answers saved in this browser, newest first. The
+vote page's My votes rail uses the same saved answers and updates after a
+successful cast or change; reopening an older answer keeps its position.
+Opening a rail question updates its URL, and Back returns to the previous
+question. Reloading restores the saved answer from the server; if that read
+takes more than 5 seconds, the question is asked unanswered rather than taking
+the rail's row as the answer. Leaving a question while its answer is being sent
+keeps its rail row in place until the send settles, then shows the outcome:
+a counted answer moves to the top; after a lost connection the page reads the
+saved answer from the server again. Coming back before the send settles shows
+Loading… for up to 5 seconds, then the question with "Your answer is still
+being sent." and no way to answer it again, until the send settles and the
+question is drawn with its outcome.
+The rail keeps one status line for screen readers, which reads out Loading…,
+an error, or "Your votes are loaded." after Try again. Signing out or
+forgetting votes here clears the browser's saved-answer list.
+
 ## Browse questions (#260)
 
 Home (`/`) opens the public poll browser. About (`/about`) keeps the former

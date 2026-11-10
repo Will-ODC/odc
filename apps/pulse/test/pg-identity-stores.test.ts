@@ -82,6 +82,45 @@ test(
 );
 
 test(
+  "eight_overlapping_sign_outs_each_advance_the_generation",
+  { skip: databaseSkip },
+  async (t) => {
+    // Promise.all alone does not prove overlap: eight updates can run one at a
+    // time and still return generations 1..8. Hold the voter row from another
+    // connection until Postgres reports all eight updates waiting in the lock
+    // chain, then release them together.
+    const pool = await migratedSchema(t);
+    const store = new PostgresVoterStore(pool);
+    await store.create(newVoter("voter-1"), ADA);
+
+    const hold = await pool.connect();
+    try {
+      await hold.query("begin");
+      await hold.query("select 1 from voter where id = 'voter-1' for update");
+      const holdPid = await backendPid(hold);
+      const updates = Promise.all(
+        Array.from({ length: 8 }, () =>
+          store.advanceSessionGeneration("voter-1"),
+        ),
+      );
+      await until(async () => (await blockedBy(pool, holdPid)) >= 8);
+      await hold.query("commit");
+
+      assert.deepEqual(
+        (await updates)
+          .map((voter) => voter?.sessionGeneration)
+          .sort((a, b) => (a ?? 0) - (b ?? 0)),
+        [1, 2, 3, 4, 5, 6, 7, 8],
+      );
+      assert.equal((await store.byId("voter-1"))?.sessionGeneration, 8);
+    } finally {
+      await hold.query("rollback").catch(() => null);
+      hold.release();
+    }
+  },
+);
+
+test(
   "a_voter_created_already_signed_out_keeps_that_moment",
   { skip: databaseSkip },
   async (t) => {
