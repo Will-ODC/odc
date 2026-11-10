@@ -18,6 +18,7 @@ import type { CastState } from "../hooks/use-cast-vote.js";
 import { useClosedResults } from "../hooks/use-closed-results.js";
 import { useFreshResults } from "../hooks/use-fresh-results.js";
 import { useMyVotes } from "../hooks/use-my-votes.js";
+import { useWide } from "../hooks/use-wide.js";
 import type { Confirmation } from "../flow/vote-card.js";
 import { VoteCard } from "../components/VoteCard.js";
 import { ClosedResults } from "../components/ClosedResults.js";
@@ -211,6 +212,23 @@ export function Conversation({
   useLayoutEffect(() => {
     latest.current = { at, answers, unsettled };
   });
+  // After a lost connection the answer may have been stored: ask the server
+  // which one it holds, and list that one. A changed one counts as a cast.
+  // Undefined when the server could not say, or the votes were forgotten.
+  const readBack = useCallback(
+    async (poll: Poll): Promise<Answer | undefined> => {
+      const askedIn = generation.current;
+      const found = await savedAnswer(api, poll);
+      if (!found || generation.current !== askedIn) return undefined;
+      const before = latest.current.answers.find(
+        (one) => one.poll.id === poll.id,
+      );
+      if (before && sameBallot(before.ballot, found.ballot)) remembered(found);
+      else counted(found);
+      return found;
+    },
+    [api, counted, remembered],
+  );
   const sent = useCallback(
     (poll: Poll, outcome: Promise<CastState>) => {
       const sentIn = generation.current;
@@ -229,23 +247,15 @@ export function Conversation({
           counted({ poll, ballot: state.ballot, results: state.results });
         else if (left && state.status === "failed" && !state.refused) {
           // The connection was lost: the answer may have been stored. Ask.
-          const found = await savedAnswer(api, poll);
+          await readBack(poll);
           if (!current()) return;
-          if (found) {
-            const before = latest.current.answers.find(
-              (one) => one.poll.id === poll.id,
-            );
-            if (before && sameBallot(before.ballot, found.ballot))
-              remembered(found);
-            else counted(found);
-          }
         }
         if (!left) return;
         setUnsettled((old) => old.filter((id) => id !== poll.id));
         if (latest.current.at === poll.id) setSettledAgain((n) => n + 1);
       });
     },
-    [api, counted, remembered],
+    [counted, readBack],
   );
   // Every question link, including Next, follows the rail's history path
   // (#502). Open locally too for callers without a router; do not push when
@@ -375,6 +385,7 @@ export function Conversation({
           waiting={unsettled.includes(at)}
           confirmation={confirmation}
           onRemembered={remembered}
+          onReadBack={readBack}
           onHeldBallot={foundHeldBallot}
           onSent={sent}
           onGo={go}
@@ -392,6 +403,7 @@ function Question({
   waiting,
   confirmation,
   onRemembered,
+  onReadBack,
   onHeldBallot,
   onSent,
   onGo,
@@ -403,6 +415,8 @@ function Question({
   waiting: boolean;
   confirmation: Confirmation;
   onRemembered: (answer: Answer) => void;
+  /** Asks the server which answer it holds for a poll, and lists it. */
+  onReadBack: (poll: Poll) => Promise<Answer | undefined>;
   onHeldBallot: () => void;
   onSent: Sent;
   onGo: (id: string) => void;
@@ -419,6 +433,7 @@ function Question({
       waiting={waiting}
       confirmation={confirmation}
       onRemembered={onRemembered}
+      onReadBack={onReadBack}
       onHeldBallot={onHeldBallot}
       onSent={onSent}
       onGo={onGo}
@@ -435,6 +450,7 @@ function LoadedQuestion({
   waiting,
   confirmation,
   onRemembered,
+  onReadBack,
   onHeldBallot,
   onSent,
   onGo,
@@ -448,6 +464,8 @@ function LoadedQuestion({
   waiting: boolean;
   confirmation: Confirmation;
   onRemembered: (answer: Answer) => void;
+  /** Asks the server which answer it holds for a poll, and lists it. */
+  onReadBack: (poll: Poll) => Promise<Answer | undefined>;
   onHeldBallot: () => void;
   onSent: Sent;
   onGo: (id: string) => void;
@@ -474,6 +492,9 @@ function LoadedQuestion({
   useEffect(() => {
     if (loaded.status === "ready") heading.current?.focus();
   }, [loaded.status]);
+  // On desktop (#490) voting sits in the page under the question; on a phone
+  // it is the sheet along the bottom edge.
+  const wide = useWide();
   const renderPage = (
     standing: ReactNode,
     vote: ReactNode,
@@ -518,6 +539,11 @@ function LoadedQuestion({
                 Try again
               </button>
             ) : null}
+            {wide && vote ? (
+              <div className="conversation__vote conversation__vote--page">
+                {vote}
+              </div>
+            ) : null}
             {standing ? (
               <div className="conversation__standing">{standing}</div>
             ) : null}
@@ -527,7 +553,7 @@ function LoadedQuestion({
             */}
           </div>
         </div>
-        {vote ? (
+        {vote && !wide ? (
           <aside className="conversation__dock" aria-label="Voting">
             <div className="conversation__column">
               <div className="conversation__vote">{vote}</div>
@@ -554,8 +580,10 @@ function LoadedQuestion({
       {...(saved ? { saved } : {})}
       confirmation={confirmation}
       onRemembered={onRemembered}
+      onReadBack={onReadBack}
       onSent={onSent}
       onGo={onGo}
+      wide={wide}
       renderPage={renderPage}
     />
   ) : (
@@ -642,8 +670,10 @@ function LiveCard({
   saved,
   confirmation,
   onRemembered,
+  onReadBack,
   onSent,
   onGo,
+  wide,
   renderPage,
 }: {
   api: PulseApi;
@@ -651,8 +681,12 @@ function LiveCard({
   saved?: Answer;
   confirmation: Confirmation;
   onRemembered: (answer: Answer) => void;
+  /** Asks the server which answer it holds for a poll, and lists it. */
+  onReadBack: (poll: Poll) => Promise<Answer | undefined>;
   onSent: Sent;
   onGo: (id: string) => void;
+  /** The desktop layout (#490): voting in the page, no drawer. */
+  wide: boolean;
   renderPage: (
     standing: ReactNode,
     vote: ReactNode,
@@ -742,8 +776,12 @@ function LiveCard({
       : savedShowing;
   const resultView = showing.kind === "answered";
   const hadResults = useRef(resultView);
+  // Set by Close on desktop, so focus goes back to "Change my answer".
+  const backedOut = useRef(false);
   // The one place focus follows results in and out of the page. Backing out
   // of a change closes the drawer, and focus stays on its handle instead.
+  // On desktop (#490) the answer folds into the "You picked" line, which
+  // takes focus, or its "Change my answer" after Close.
   useEffect(() => {
     if (
       visible &&
@@ -751,16 +789,33 @@ function LiveCard({
         hadResults.current !== resultView)
     ) {
       const node = wrapper.current;
-      const target = resultView
-        ? node?.querySelector<HTMLElement>(".results")
-        : (node?.querySelector<HTMLElement>("input:checked") ??
-          node?.querySelector<HTMLElement>("input"));
+      const target = !resultView
+        ? (node?.querySelector<HTMLElement>("input:checked") ??
+          node?.querySelector<HTMLElement>("input"))
+        : !wide
+          ? node?.querySelector<HTMLElement>(".results")
+          : backedOut.current
+            ? node?.querySelector<HTMLElement>(".vote-card__change")
+            : node?.querySelector<HTMLElement>(".vote-card__yours");
       target?.focus();
     }
+    backedOut.current = false;
     hadResults.current = resultView;
-  }, [resultView, saved, visible]);
+  }, [resultView, saved, visible, wide]);
   const next = showing.kind === "answered" ? nextFor(poll, ballot) : null;
   const shut = status.kind === "closed";
+  // Desktop only: the choices are open again over a saved answer.
+  const changing = wide && !shut && !resultView && Boolean(saved);
+  // Close is not offered while a change is being sent, nor while the server
+  // is asked which answer it holds: the outcome decides what shows, and
+  // focus follows it to the "You picked" line.
+  const [checking, setChecking] = useState(false);
+  const closable = changing && status.kind !== "sending" && !checking;
+  // Read by a server reply that arrives after a later render.
+  const current = useRef(state);
+  useLayoutEffect(() => {
+    current.current = state;
+  });
   function change() {
     setShowSaved(false);
     fresh.clear();
@@ -768,20 +823,35 @@ function LiveCard({
     setCollapsed(false);
     setVisible(true);
   }
+  // Back to an answer the server holds, with "Change my answer" focused.
+  function backTo(answer: Answer) {
+    reset();
+    setPicked(answer.ballot);
+    setShowSaved(true);
+    if (wide) backedOut.current = true;
+  }
   function close() {
     // Backing out of a change: the earlier answer still stands on the server,
-    // so show it again rather than an empty ballot under "You picked". Not
-    // after a lost connection, when the new answer may have been stored.
+    // so show it again rather than an empty ballot under "You picked".
     if (
       saved &&
       (status.kind === "answerable" ||
         (state.status === "failed" && state.refused))
-    ) {
-      reset();
-      setPicked(saved.ballot);
-      setShowSaved(true);
+    )
+      backTo(saved);
+    else if (wide && saved && state.status === "failed") {
+      // After a lost connection the new answer may have been stored: ask
+      // which one the server holds and show that. If it cannot say, the
+      // card stays as it is, and Close asks again.
+      const failed = state;
+      setChecking(true);
+      void onReadBack(poll).then((found) => {
+        setChecking(false);
+        if (found && current.current === failed) backTo(found);
+      });
     }
-    setVisible(false);
+    // On desktop the choices stay on the page: Close only backs out of a change.
+    if (!wide) setVisible(false);
   }
   const handle = (
     <div className="conversation__help">
@@ -808,6 +878,9 @@ function LiveCard({
     <div ref={wrapper}>
       <VoteCard
         presentation={showing.kind === "answered" ? "results" : "card"}
+        inPage={wide}
+        closable={closable}
+        {...(wide ? { onChangeAnswer: change } : {})}
         question={poll.question}
         method={poll.method}
         choices={poll.choices.map((label, index) => ({ index, label }))}
@@ -839,6 +912,34 @@ function LiveCard({
       />
     </div>
   );
+  // While an answer is being changed on desktop, the saved one and its
+  // results stay under the choices until the new one is counted (#490).
+  const kept =
+    changing && saved ? (
+      <VoteCard
+        presentation="results"
+        inPage
+        question={poll.question}
+        method={poll.method}
+        choices={poll.choices.map((label, index) => ({ index, label }))}
+        picked={saved.ballot}
+        status={{ kind: "answered", results: saved.results, changed: false }}
+        privacyNote="Your answer is private."
+        trustHref={pathOf({ kind: "trust" })}
+        confirmation={cardConfirmation}
+        confirmHref={pathOf({
+          kind: "signIn",
+          returnTo: { kind: "conversation", pollId: poll.id },
+        })}
+        collapsed={false}
+        onPick={() => {}}
+        onSubmit={() => {}}
+        onCollapse={() => {}}
+        onClose={() => {}}
+        resultsHidden={resultsHidden}
+        onResultsHidden={setResultsHidden}
+      />
+    ) : null;
   const standing = shut ? (
     closed.showing ? (
       <ClosedResults
@@ -856,8 +957,16 @@ function LiveCard({
     )
   ) : showing.kind === "answered" ? (
     card
+  ) : wide ? (
+    kept
   ) : null;
-  const vote = !visible || showing.kind === "answered" ? handle : card;
+  const vote = wide
+    ? showing.kind === "answered"
+      ? null
+      : card
+    : !visible || showing.kind === "answered"
+      ? handle
+      : card;
   return (
     <div className="conversation__question">
       {renderPage(standing, vote, shut)}
