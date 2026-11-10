@@ -1,5 +1,6 @@
 import assert from "node:assert/strict";
 import { test } from "node:test";
+import type { Pool } from "pg";
 import {
   serializeLine,
   type Event,
@@ -10,6 +11,28 @@ import { AppendRefused, ChainNotValid, Ledger } from "../../src/ledger.js";
 import { readSince } from "../../src/db/events.js";
 import { TestChain, testKey } from "../chain/support/builders.js";
 import { insertRaw, skip, withDb } from "../db/harness.js";
+
+/**
+ * `pool`, counting `connect()` calls: a database append starts with one
+ * (src/db/events.ts), so the count says how many appends have reached the
+ * database at all.
+ */
+function countingConnects(pool: Pool): { pool: Pool; connects: () => number } {
+  let n = 0;
+  const counted = new Proxy(pool, {
+    get(target, key) {
+      if (key === "connect") {
+        return () => {
+          n++;
+          return target.connect();
+        };
+      }
+      const value: unknown = Reflect.get(target, key);
+      return typeof value === "function" ? value.bind(target) : value;
+    },
+  });
+  return { pool: counted, connects: () => n };
+}
 
 function row(e: Event): EventRow {
   return {
@@ -90,40 +113,71 @@ test("a_stored_log_that_is_not_valid_bars_every_append", { skip }, () =>
   }),
 );
 
-test("a_second_run_waits_for_the_first_and_builds_on_its_state", { skip }, () =>
-  withDb(async ({ app }) => {
-    const ledger = await Ledger.open(app);
-    const chain = new TestChain();
-    const g = chain.add(chain.genesis());
-    const i = chain.add(chain.issue());
-    const p = chain.add(chain.participant(testKey(0x10)));
-    let release!: () => void;
-    const gate = new Promise<void>((r) => (release = r));
-    let entered!: () => void;
-    const inFirst = new Promise<void>((r) => (entered = r));
-    const first = ledger.appendRun(async () => {
-      entered();
-      await gate;
-      return [unhashed(g), unhashed(i)];
-    });
-    await inFirst;
-    const seen: [number, string, number | undefined][] = [];
-    const second = ledger.appendRun((state, head) => {
-      seen.push([state.nextSeq, state.headHash, head?.seq]);
-      return [unhashed(p)];
-    });
-    await new Promise((r) => setTimeout(r, 100));
-    assert.deepEqual(seen, [], "second build ran early");
-    release();
-    await Promise.all([first, second]);
-    assert.deepEqual(seen, [[3, i.hash, 2]]);
-    const rows = await readSince(app, 0, 10);
-    // Each hash covers seq and prev_hash, so equal hashes mean contiguous.
-    assert.deepEqual(
-      rows.map((r) => r.hash),
-      [g, i, p].map((e) => e.hash),
-    );
-  }),
+// Proves in-process Ledger.queue ordering; the DB advisory lock is covered in tests/db/concurrency.test.ts.
+test(
+  "a_second_run_waits_for_the_first_and_builds_on_its_state",
+  { skip, timeout: 30_000 },
+  () =>
+    withDb(async ({ app }) => {
+      const db = countingConnects(app);
+      const ledger = await Ledger.open(db.pool);
+      const chain = new TestChain();
+      const g = chain.add(chain.genesis());
+      const i = chain.add(chain.issue());
+      const p = chain.add(chain.participant(testKey(0x10)));
+      let release!: () => void;
+      const gate = new Promise<void>((r) => (release = r));
+      let entered!: () => void;
+      const inFirst = new Promise<void>((r) => (entered = r));
+      const first = ledger.appendRun(async () => {
+        entered();
+        await gate;
+        return [unhashed(g), unhashed(i)];
+      });
+      let connectsHeld!: number;
+      let second!: Promise<Event[]>;
+      const seen: [number, string, number | undefined][] = [];
+      let secondSettled = false;
+      try {
+        await Promise.race([
+          inFirst,
+          first.then(() =>
+            assert.fail("first run ended without entering build"),
+          ),
+          new Promise<never>((_, reject) => {
+            setTimeout(
+              () => reject(new Error("first run never entered build")),
+              10_000,
+            ).unref();
+          }),
+        ]); // the first run holds the lock, inside its transaction
+        connectsHeld = db.connects();
+        second = ledger.appendRun((state, head) => {
+          seen.push([state.nextSeq, state.headHash, head?.seq]);
+          return [unhashed(p)];
+        });
+        void second
+          .finally(() => (secondSettled = true))
+          .catch(() => undefined);
+        // A full turn of the event loop. An append that is not queued behind
+        // the first calls pool.connect() within that turn, before any I/O.
+        await new Promise<void>(setImmediate);
+        assert.equal(db.connects(), connectsHeld, "second run reached the db");
+        assert.deepEqual(seen, [], "second build ran early");
+        assert.equal(secondSettled, false, "second run settled early");
+      } finally {
+        release(); // a failure must not leave the first run's lock held
+      }
+      await Promise.all([first, second]);
+      assert.deepEqual(seen, [[3, i.hash, 2]]);
+      assert.equal(db.connects(), connectsHeld + 1);
+      const rows = await readSince(app, 0, 10);
+      // Each hash covers seq and prev_hash, so equal hashes mean contiguous.
+      assert.deepEqual(
+        rows.map((r) => r.hash),
+        [g, i, p].map((e) => e.hash),
+      );
+    }),
 );
 
 test("a_head_moved_by_an_outside_insert_refuses_the_next_run", { skip }, () =>
