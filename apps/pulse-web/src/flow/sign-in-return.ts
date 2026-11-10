@@ -4,7 +4,7 @@ import type { ReturnTo } from "./route.js";
  * Where to come back to after signing in (#353): a question, or the posting
  * form.
  *
- * "Confirm with your email" on a vote card opens `/sign-in?poll=<id>`, and the
+ * The confirm offer's Sign in (#480) on a vote card opens `/sign-in?poll=<id>`, and the
  * posting form sends a signed-out person to `/sign-in?next=new`. The emailed
  * link that follows is `/sign-in?token=…` and carries neither: the server
  * builds it, and nothing in the request says where to return. So the sign-in

@@ -71,6 +71,9 @@ it("explains a failed load and tries again on request", async () => {
   expect(
     await screen.findByText("We couldn't load your votes. Try again."),
   ).toBeTruthy();
+  expect(
+    screen.getByRole("main").classList.contains("browse__main--message"),
+  ).toBe(true);
   await user.click(screen.getByRole("button", { name: "Try again" }));
   expect(await screen.findByText("Your answer: Yes")).toBeTruthy();
   expect(myVotes).toHaveBeenCalledTimes(2);
@@ -90,6 +93,9 @@ it("offers a way to start voting when nothing is saved", async () => {
   expect(
     await screen.findByText("No votes saved in this browser yet."),
   ).toBeTruthy();
+  expect(
+    screen.getByRole("main").classList.contains("browse__main--message"),
+  ).toBe(true);
   expect(
     screen
       .getByRole("link", { name: "Explore questions" })
@@ -133,8 +139,9 @@ it("keeps the list and offers to retry when loading more fails", async () => {
 it("says so when an answer's labels are not available", async () => {
   show(async () => page([vote({ choices: [], ballot: [] })]));
   expect(
-    await screen.findByText("Your answer: (answer unavailable)"),
+    await screen.findByText("Your answer couldn't be shown."),
   ).toBeTruthy();
+  expect(screen.queryByText(/Your answer:/)).toBeNull();
 });
 
 it("clears visible answers after forgetting this browser's votes", async () => {
