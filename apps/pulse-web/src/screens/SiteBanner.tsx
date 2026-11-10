@@ -79,9 +79,11 @@ export function SiteBanner({
             ? {
                 account: (
                   <>
-                    <a className="banner__sign-in" href={signInHref}>
-                      Sign in
-                    </a>
+                    {signInHref ? (
+                      <a className="banner__sign-in" href={signInHref}>
+                        Sign in
+                      </a>
+                    ) : null}
                     <ForgetVotes
                       progress={progress}
                       onForget={onSignOut}

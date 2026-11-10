@@ -83,8 +83,11 @@ seeded into General in local development. Multiple memberships remain
 follow-up #440. The communities dropdown uses a bordered trigger with a chevron
 and highlighted menu links. The current destination is marked without removing
 its link. Account state also appears on About,
-introduction, trust and sign-in pages; these headers read the session, while
-static page content does not load poll data. Sign-in pages omit a redundant
+introduction, trust and sign-in pages; these headers read the session and the
+same server-backed My votes state as the question rail. A browser with saved
+votes gets Account and Forget my votes here on every page; forgetting clears
+that state and returns to Sign in. Static page content does not load poll data.
+Sign-in pages omit a redundant
 Sign in link. Shared `TopBanner`, `SiteNavigation` and `AccountMenu` components
 own the navigation layout and styles; colors and spacing use `styles/tokens.css`.
 The form's Sign in link retains its return to `/new`. The first-post discussion

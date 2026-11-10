@@ -24,6 +24,7 @@ import {
 } from "../flow/new-poll.js";
 import type { Draft, Problems } from "../flow/new-poll.js";
 import { useCreationContext } from "../hooks/use-creation-context.js";
+import { useMyVotes } from "../hooks/use-my-votes.js";
 import { useSession } from "../hooks/use-session.js";
 import { SiteBanner } from "./SiteBanner.js";
 import { browserStore } from "../flow/sign-in-return.js";
@@ -78,14 +79,21 @@ export function NewPoll({
   const [kept, setKept] = useState(false);
   // The app's own bar, at every width, so a phone has a way home (operator
   // walkthrough, 2026-10-21). Signing out there shows the way back in.
-  const bar = useSession(api, { onSignedOut: signedOut });
+  const mine = useMyVotes(api);
+  const bar = useSession(api, {
+    onSignedOut: () => {
+      mine.clear();
+      signedOut();
+    },
+    onForgotten: mine.clear,
+  });
   return (
     <div className="post-page">
       <header className="post__bar">
         <SiteBanner
           session={bar.session}
           progress={bar.progress}
-          holdsVotes={false}
+          holdsVotes={mine.holdsVotes}
           onPostPage
           signInHref={signInHref}
           onSignOut={bar.signOut}

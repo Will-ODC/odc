@@ -4,6 +4,7 @@ import { pathOf } from "../flow/route.js";
 import { SiteBanner } from "./SiteBanner.js";
 import { ViewState } from "../components/ViewState.js";
 import { usePollList } from "../hooks/use-poll-list.js";
+import { useMyVotes } from "../hooks/use-my-votes.js";
 import { useSession } from "../hooks/use-session.js";
 import "./Browse.css";
 
@@ -15,7 +16,11 @@ export function Browse({
   community: string;
 }) {
   const { data, more, loadMore, retry } = usePollList(api, community);
-  const { session, progress, signOut, dismiss } = useSession(api);
+  const mine = useMyVotes(api);
+  const { session, progress, signOut, dismiss } = useSession(api, {
+    onSignedOut: mine.clear,
+    onForgotten: mine.clear,
+  });
   const heading = useRef<HTMLHeadingElement>(null);
   useEffect(() => {
     heading.current?.focus();
@@ -40,7 +45,7 @@ export function Browse({
           currentHref={pathOf({ kind: "browse", community })}
           session={session}
           progress={progress}
-          holdsVotes={false}
+          holdsVotes={mine.holdsVotes}
           onSignOut={signOut}
           onCancel={dismiss}
         />

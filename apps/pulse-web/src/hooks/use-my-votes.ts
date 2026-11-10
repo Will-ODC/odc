@@ -84,7 +84,16 @@ export function useMyVotes(api: PulseApi) {
     setData({ status: "empty", message: MY_VOTES_EMPTY });
   }, []);
 
-  return { data, more, loadMore, clear, retry: () => retry((n) => n + 1) };
+  return {
+    data,
+    more,
+    loadMore,
+    clear,
+    // A cursor-only page still means this browser holds saved votes. Every
+    // page derives its header from this same server-backed source (#487).
+    holdsVotes: data.status === "ready",
+    retry: () => retry((n) => n + 1),
+  };
 }
 
 function asView(page: MyVotesPage): ViewData<MyVotesPage> {
