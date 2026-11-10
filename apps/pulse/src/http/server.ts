@@ -1,4 +1,5 @@
 import { randomUUID } from "node:crypto";
+import { logFault } from "../logging.js";
 import { BlockList, isIP } from "node:net";
 import cookie from "@fastify/cookie";
 import rateLimit from "@fastify/rate-limit";
@@ -199,7 +200,7 @@ export async function createServer(deps: ServerDeps): Promise<FastifyInstance> {
       });
     }
 
-    request.log.error(error);
+    logFault(request.log.error.bind(request.log), error, "request failed");
     return reply.code(500).send({
       error: "server_error",
       message: "Something went wrong. Try again.",

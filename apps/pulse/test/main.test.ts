@@ -1,4 +1,6 @@
 import assert from "node:assert/strict";
+import { spawnSync } from "node:child_process";
+import { fileURLToPath } from "node:url";
 import { test } from "node:test";
 import {
   DEFAULT_HOST,
@@ -202,11 +204,13 @@ test("a_schema_is_carried_through_when_one_is_named", () => {
 /** Drive `stopOnSignals` with `process.exit` and the listeners replaced. */
 async function underSignals(
   emit: (signal: "SIGTERM" | "SIGINT") => void,
+  options: { closeError?: unknown; log?: (message: string) => void } = {},
 ): Promise<{ closes: number; exits: number[] }> {
   let closes = 0;
   const app = {
     close: async () => {
       closes += 1;
+      if (options.closeError !== undefined) throw options.closeError;
     },
   };
   const exits: number[] = [];
@@ -218,7 +222,7 @@ async function underSignals(
 
   try {
     // @ts-expect-error — only `close` is used.
-    stopOnSignals(app, { log: () => undefined });
+    stopOnSignals(app, { log: options.log ?? (() => undefined) });
     emit("SIGTERM");
     emit("SIGINT");
     // Let the close promise and its `then` settle.
@@ -256,6 +260,37 @@ test("a_second_stop_signal_does_not_start_a_second_close", async () => {
 
   assert.equal(closes, 1);
   assert.deepEqual(exits, [0]);
+});
+
+test("a_failed_shutdown_logs_only_kind_and_SQLSTATE_without_personal_error_fields", async () => {
+  const logs: string[] = [];
+  const closeError = Object.assign(
+    new Error("close-fault-message private-person@example.test"),
+    {
+      code: "08006",
+      detail: "private-detail private-person@example.test",
+      cause: new Error("private-cause private-person@example.test"),
+    },
+  );
+  const result = await underSignals(
+    (signal) => {
+      if (signal === "SIGTERM") process.emit(signal);
+    },
+    {
+      closeError,
+      log: (message) => logs.push(message),
+    },
+  );
+  assert.equal(result.closes, 1);
+  assert.deepEqual(result.exits, [1]);
+  const failure = logs.find((message) => /did not stop cleanly/.test(message));
+  assert.ok(failure);
+  assert.match(failure, /"type":"Error"/);
+  assert.match(failure, /"code":"08006"/);
+  assert.doesNotMatch(
+    logs.join("\n"),
+    /private-person@example.test|close-fault-message|private-detail|private-cause/,
+  );
 });
 
 test("the_served_log_never_writes_down_a_sign_in_token", () => {
@@ -473,10 +508,21 @@ test(
       await app.close();
     });
 
-    pool.emit("error", new Error("connection terminated unexpectedly"));
+    pool.emit(
+      "error",
+      Object.assign(
+        new Error("connection terminated for private-person@example.test"),
+        { code: "08006", detail: "private-person@example.test" },
+      ),
+    );
 
     assert.equal(warnings.length, 1);
-    assert.match(String(warnings[0]), /connection terminated unexpectedly/);
+    assert.match(String(warnings[0]), /"type":"Error"/);
+    assert.match(String(warnings[0]), /08006/);
+    assert.doesNotMatch(
+      String(warnings[0]),
+      /private-person@example.test|connection terminated/,
+    );
   },
 );
 
@@ -661,5 +707,30 @@ test(
       payload: { permission: "unlimited_posting" },
     });
     assert.equal(granted.statusCode, 204);
+  },
+);
+
+test(
+  "unexpected_startup_database_fault_does_not_log_personal_message_or_cause",
+  { skip: databaseSkip },
+  () => {
+    const database = new URL(process.env["PULSE_DATABASE_URL"]!);
+    database.username = "private-person@example.test";
+    const child = spawnSync(
+      process.execPath,
+      [fileURLToPath(new URL("../src/main.js", import.meta.url))],
+      {
+        encoding: "utf8",
+        timeout: 10_000,
+        env: { ...process.env, ...COMPLETE, PULSE_DATABASE_URL: database.href },
+      },
+    );
+    assert.equal(child.status, 1, child.stderr);
+    assert.match(child.stderr, /pulse could not start/);
+    assert.match(child.stderr, /28000/);
+    assert.doesNotMatch(
+      child.stderr + child.stdout,
+      /private-person@example.test|private-person%40example.test|does not exist/,
+    );
   },
 );
