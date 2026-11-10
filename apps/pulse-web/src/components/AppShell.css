@@ -40,6 +40,17 @@
   display: none;
 }
 
+/*
+ * A sign-in form, not a banner: a column a person reads down (#508). From the
+ * desktop breakpoint up, not only at 1100px, or a 1000px window stretches the
+ * field and the button across the whole page.
+ */
+@media (min-width: 700px) {
+  .shell {
+    --screen-measure: 400px;
+  }
+}
+
 /* ---- the website: 1100px and up ---- */
 
 @media (min-width: 1100px) {
@@ -56,9 +67,6 @@
     --t-hero: 34px;
     --t-word: 42px;
     --nextq-max: 20ch;
-
-    /* A sign-in form, not a banner: a column a person reads down. */
-    --screen-measure: 400px;
   }
 
   .shell__body {

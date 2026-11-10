@@ -14,7 +14,7 @@ it("sends every approval choice and retains the complete ballot", async () => {
     results: results({ method: "approval" }),
   }));
   const { result } = renderHook(() => useCastVote(stubApi({ cast }), "p1"));
-  act(() => result.current.cast([2, 0]));
+  act(() => void result.current.cast([2, 0]));
   expect(cast).toHaveBeenCalledExactlyOnceWith("p1", [2, 0]);
   await waitFor(() => expect(result.current.state.status).toBe("counted"));
   expect(result.current.state).toMatchObject({ ballot: [0, 2], changed: true });
@@ -26,7 +26,7 @@ it("marks a failure refused only when the server answered", async () => {
     .mockRejectedValueOnce(new ApiError(409, "Not now"))
     .mockRejectedValueOnce(new Error("offline"));
   const { result } = renderHook(() => useCastVote(stubApi({ cast }), "p1"));
-  act(() => result.current.cast([0]));
+  act(() => void result.current.cast([0]));
   await waitFor(() =>
     expect(result.current.state).toEqual({
       status: "failed",
@@ -34,7 +34,7 @@ it("marks a failure refused only when the server answered", async () => {
       refused: true,
     }),
   );
-  act(() => result.current.cast([0]));
+  act(() => void result.current.cast([0]));
   await waitFor(() =>
     expect(result.current.state).toMatchObject({
       status: "failed",
@@ -57,10 +57,10 @@ it("copies picks while sending and ignores an empty ballot", async () => {
       }),
   );
   const { result } = renderHook(() => useCastVote(stubApi({ cast }), "p1"));
-  act(() => result.current.cast([]));
+  act(() => void result.current.cast([]));
   expect(cast).not.toHaveBeenCalled();
   const ballot = [0, 2];
-  act(() => result.current.cast(ballot));
+  act(() => void result.current.cast(ballot));
   ballot.push(1);
   expect(result.current.state).toMatchObject({
     status: "casting",
@@ -75,4 +75,44 @@ it("copies picks while sending and ignores an empty ballot", async () => {
   });
   act(() => result.current.reset());
   expect(result.current.state).toEqual({ status: "idle" });
+});
+
+it("settles each send with its end state, even once the hook is gone (#488)", async () => {
+  let release!: () => void;
+  const cast = vi
+    .fn()
+    .mockImplementationOnce(
+      () =>
+        new Promise((resolve) => {
+          release = () =>
+            resolve({ status: "changed", ballot: [1], results: results() });
+        }),
+    )
+    .mockRejectedValueOnce(new Error("offline"));
+  const { result, unmount } = renderHook(() =>
+    useCastVote(stubApi({ cast }), "p1"),
+  );
+  let sent!: Promise<unknown>;
+  act(() => {
+    sent = result.current.cast([1]);
+  });
+  unmount();
+  release();
+  await expect(sent).resolves.toMatchObject({
+    status: "counted",
+    ballot: [1],
+    changed: true,
+  });
+  const second = renderHook(() => useCastVote(stubApi({ cast }), "p1"));
+  let failed!: Promise<unknown>;
+  act(() => {
+    failed = second.result.current.cast([0]);
+  });
+  await expect(failed).resolves.toMatchObject({
+    status: "failed",
+    refused: false,
+  });
+  await expect(second.result.current.cast([])).resolves.toEqual({
+    status: "idle",
+  });
 });

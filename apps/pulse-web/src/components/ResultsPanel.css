@@ -209,13 +209,6 @@
   outline-offset: calc(var(--hairline) * 2);
 }
 
-.results--compact {
-  gap: calc(var(--step) / 2);
-  margin-top: var(--step);
-}
-.results--compact .results__count {
-  font-size: var(--t-small);
-}
 /* Holds the chart's place while its code loads, so the page does not jump. */
 .results__chart-loading {
   min-height: calc(var(--step) * 30);
@@ -227,4 +220,91 @@
 /* Focus lands here after a vote for announcement, not keyboard interaction. */
 .results:focus {
   outline: none;
+}
+
+/*
+ * The question page's results card (#478): one edge, a header that names it
+ * and can minimize it to one line, then the count and the chart.
+ */
+.results--compact {
+  gap: var(--step);
+  margin-top: calc(var(--step) * 1.5);
+  padding: calc(var(--step) * 1.5) calc(var(--step) * 2);
+  border: var(--hairline) solid var(--line);
+  border-radius: var(--r-card);
+  background: var(--surface);
+}
+.results__head {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: calc(var(--step) * 1.5);
+}
+.results__title {
+  margin: 0;
+  font-size: var(--t-body);
+  font-weight: 700;
+  color: var(--ink);
+}
+.results--compact .results__head .results__count {
+  font-weight: 500;
+  color: var(--ink-soft);
+}
+.results .results__toggle {
+  display: inline-flex;
+  align-items: center;
+  gap: calc(var(--step) / 2);
+  margin-inline-end: calc(var(--step) * -1);
+  padding: calc(var(--step) / 2) var(--step);
+  border: none;
+  border-radius: var(--r-control);
+  background: none;
+  color: var(--ink-soft);
+  font: inherit;
+  font-size: var(--t-small);
+  font-weight: 600;
+  cursor: pointer;
+}
+.results .results__toggle:hover {
+  background: var(--hover);
+  color: var(--ink);
+}
+.results__toggle:focus-visible {
+  outline: calc(var(--hairline) * 2) solid var(--focus);
+  outline-offset: 0;
+}
+.results__chevron {
+  inline-size: calc(var(--step) * 1.75);
+  block-size: calc(var(--step) * 1.75);
+  flex: none;
+}
+.results__body {
+  display: flex;
+  flex-direction: column;
+  gap: var(--step);
+}
+.results__body > .results__count {
+  font-size: var(--t-small);
+  font-weight: 500;
+  color: var(--muted);
+}
+/* The card is the chart's frame now, and its header names it. The side room
+   keeps the axis labels ("100%") from being cut at either edge. */
+.results--compact .bar-chart {
+  padding: 0 var(--step);
+  border: none;
+}
+.results--compact .bar-chart__caption {
+  position: absolute;
+  width: 1px;
+  height: 1px;
+  overflow: hidden;
+  clip-path: inset(50%);
+  white-space: nowrap;
+}
+
+@media (max-width: 699px) {
+  .results__toggle {
+    min-height: var(--touch);
+  }
 }

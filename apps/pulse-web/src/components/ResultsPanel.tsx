@@ -1,4 +1,4 @@
-import { Fragment, Suspense, lazy } from "react";
+import { Fragment, Suspense, lazy, useId, useState } from "react";
 import type { CSSProperties, RefObject } from "react";
 import type { ChoiceResult, Results } from "../api/types.js";
 import { percent, resultsChart } from "../flow/results-chart.js";
@@ -43,6 +43,8 @@ export function ResultsPanel({
   onClose,
   panelRef,
   explainHref,
+  hidden: hiddenProp,
+  onHiddenChange,
 }: {
   results: Results;
   /** Main content already says the saved answer; use tighter results there. */
@@ -78,13 +80,56 @@ export function ResultsPanel({
    * link, so the conversation's local history survives. Omit to leave it out.
    */
   explainHref?: string | undefined;
+  /**
+   * Whether the compact results are minimized to one line (#478). Give both
+   * to keep the choice above this panel, so it outlives the panel itself
+   * (changing an answer redraws it); leave both out and the panel keeps it.
+   */
+  hidden?: boolean;
+  onHiddenChange?: (hidden: boolean) => void;
 }) {
+  const [ownHidden, setOwnHidden] = useState(false);
+  const hidden = hiddenProp ?? ownHidden;
+  const setHidden = onHiddenChange ?? setOwnHidden;
+  const bodyId = useId();
   // In the order the results list them, so the words read down the list.
   // Right only while a ballot is unordered (`single`, `approval`): a ranked
   // method would need the ballot's own order here, or it drops the ranking.
   const yours = results.choices.filter((choice) =>
     yourChoices.includes(choice.index),
   );
+  const explanation =
+    explainHref && results.voters > 0 ? (
+      <p className="results__explain">
+        <a
+          className="results__link"
+          href={explainHref}
+          target="_blank"
+          rel="noopener noreferrer"
+        >
+          What does this mean? (opens in a new tab)
+        </a>
+      </p>
+    ) : null;
+  // The question page's results (#453): one chart, not a row per answer. If
+  // the chart's code cannot load, the rows still give every figure. Nobody
+  // answered: the count says so, and empty bars would only say it again.
+  const chart =
+    results.voters > 0 ? (
+      <>
+        <LoadBoundary fallback={<Counts results={results} yours={yours} />}>
+          <Suspense
+            fallback={<p className="results__chart-loading">Loading chart…</p>}
+          >
+            <BarChart
+              {...resultsChart(results, yourChoices)}
+              formatValue={percent}
+            />
+          </Suspense>
+        </LoadBoundary>
+        <ApprovalNote results={results} />
+      </>
+    ) : null;
   return (
     <div
       className={compact ? "results results--compact" : "results"}
@@ -93,7 +138,37 @@ export function ResultsPanel({
       ref={panelRef}
       tabIndex={-1}
     >
-      {onClose ? (
+      {compact ? (
+        // One row that stays put in both states, so the toggle keeps focus.
+        <div className="results__head">
+          {hidden ? (
+            <p className="results__count">{total(results, ended)}</p>
+          ) : (
+            <p className="results__title">How people answered</p>
+          )}
+          <button
+            type="button"
+            className="results__toggle"
+            aria-expanded={!hidden}
+            aria-controls={bodyId}
+            onClick={() => setHidden(!hidden)}
+          >
+            {hidden ? "Show results" : "Hide results"}
+            <svg
+              className="results__chevron"
+              viewBox="0 0 16 16"
+              fill="none"
+              stroke="currentColor"
+              strokeWidth="1.8"
+              aria-hidden="true"
+              focusable="false"
+            >
+              <path d={hidden ? "M4 6l4 4 4-4" : "M4 10l4-4 4 4"} />
+            </svg>
+          </button>
+        </div>
+      ) : null}
+      {onClose && !compact ? (
         <button
           type="button"
           className="results__close"
@@ -104,43 +179,27 @@ export function ResultsPanel({
         </button>
       ) : null}
       {compact ? null : <p className="ballot__eyebrow">WHERE IT STANDS</p>}
-      <p className="results__count">{howMany(results, ended)}</p>
-      {explainHref && results.voters > 0 ? (
-        <p className="results__explain">
-          <a
-            className="results__link"
-            href={explainHref}
-            target="_blank"
-            rel="noopener noreferrer"
-          >
-            What does this mean? (opens in a new tab)
-          </a>
-        </p>
+      {compact ? null : (
+        <p className="results__count">{howMany(results, ended)}</p>
+      )}
+      {compact && !hidden ? (
+        <div className="results__body" id={bodyId}>
+          <p className="results__count">{howMany(results, ended)}</p>
+          {explanation}
+          {chart}
+        </div>
       ) : null}
-
+      {compact ? (
+        // The toggle names this region even while it is hidden.
+        hidden ? (
+          <div id={bodyId} hidden />
+        ) : null
+      ) : null}
+      {compact ? null : explanation}
       {/*
         Nobody answered: the sentence above says so, and a list of empty bars
         under it would only say it again, worse. The way out stays.
       */}
-      {results.voters > 0 && compact ? (
-        <>
-          {/* The question page's banner (#453): one chart, not a row per answer. */}
-          {/* If the chart's code cannot load, the rows still give every figure. */}
-          <LoadBoundary fallback={<Counts results={results} yours={yours} />}>
-            <Suspense
-              fallback={
-                <p className="results__chart-loading">Loading chart…</p>
-              }
-            >
-              <BarChart
-                {...resultsChart(results, yourChoices)}
-                formatValue={percent}
-              />
-            </Suspense>
-          </LoadBoundary>
-          <ApprovalNote results={results} />
-        </>
-      ) : null}
       {results.voters > 0 && !compact ? (
         <Counts results={results} yours={yours} />
       ) : null}
@@ -278,6 +337,15 @@ function howMany(results: Results, ended: boolean): string {
   const votes = voters === 1 ? "1 vote" : `${voters} votes`;
   const total = ended ? votes : `${votes} so far`;
   return `${total} · ${confirmedVoters} confirmed by email`;
+}
+
+/** The total alone, for the one line minimized results keep (#478). */
+function total(results: Results, ended: boolean): string {
+  const { voters } = results;
+  if (voters === 0)
+    return ended ? "Nobody answered this one." : "Nobody has answered yet.";
+  const votes = voters === 1 ? "1 vote" : `${voters} votes`;
+  return ended ? votes : `${votes} so far`;
 }
 
 /** A bar's width as a share of the widest one, never dividing by zero. */
