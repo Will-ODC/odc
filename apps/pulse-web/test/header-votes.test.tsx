@@ -137,3 +137,118 @@ it("keeps Forget available on sign-in without adding a link back to that same pa
   );
   expect(header.queryByText("Sign in", { exact: true })).toBeNull();
 });
+
+const recoveryPages = pages.filter(
+  ({ route }) =>
+    route.kind === "about" ||
+    route.kind === "browse" ||
+    route.kind === "newPoll",
+);
+function showFailedRead(route: Route, myVotes: () => Promise<MyVotesPage>) {
+  const signOut = vi.fn(async () => {});
+  render(
+    <App
+      route={route}
+      api={stubApi({
+        myVotes,
+        signOut,
+        listPolls: async () => ({ polls: [], nextCursor: null }),
+        creationContext: async () => {
+          throw new ApiError(401, "Sign in to post a question.");
+        },
+      })}
+    />,
+  );
+  return { signOut, header: within(screen.getByRole("banner")) };
+}
+describe.each(recoveryPages)(
+  "$name failed history read (#487)",
+  ({ route }) => {
+    it("keeps Forget available after a failed history read", async () => {
+      const user = userEvent.setup();
+      const { signOut, header } = showFailedRead(route, async () => {
+        throw new Error("offline");
+      });
+      await user.click(await header.findByRole("button", { name: "Account" }));
+      expect(
+        await header.findByText("We couldn't load your votes. Try again."),
+      ).toBeTruthy();
+      expect(header.getByRole("button", { name: "Try again" })).toBeTruthy();
+      await user.click(
+        header.getByRole("button", { name: "Forget my votes here" }),
+      );
+      await user.click(header.getByRole("button", { name: "Forget them" }));
+      await header.findByRole("link", { name: "Sign in" });
+      expect(header.queryByRole("button", { name: "Account" })).toBeNull();
+      expect(signOut).toHaveBeenCalledTimes(1);
+    });
+    it.each([false, true])(
+      "retries a failed read and shows the recovered held-vote state (%s)",
+      async (hasVotes) => {
+        const user = userEvent.setup();
+        let finish!: (page: MyVotesPage) => void;
+        const myVotes = vi
+          .fn<() => Promise<MyVotesPage>>()
+          .mockRejectedValueOnce(new Error("offline"))
+          .mockImplementationOnce(
+            () =>
+              new Promise((resolve) => {
+                finish = resolve;
+              }),
+          );
+        const { header } = showFailedRead(route, myVotes);
+        await user.click(
+          await header.findByRole("button", { name: "Account" }),
+        );
+        await user.click(
+          await header.findByRole("button", { name: "Try again" }),
+        );
+        expect(header.getByRole("button", { name: "Account" })).toBeTruthy();
+        expect(header.getByText("Loading your votes…")).toBeTruthy();
+        expect(
+          header.getByRole("button", { name: "Forget my votes here" }),
+        ).toBeTruthy();
+        await act(async () =>
+          finish({ votes: hasVotes ? [saved] : [], nextCursor: null }),
+        );
+        if (hasVotes) {
+          expect(header.getByRole("button", { name: "Account" })).toBeTruthy();
+          expect(
+            header.queryByText("We couldn't load your votes. Try again."),
+          ).toBeNull();
+        } else {
+          expect(
+            await header.findByRole("link", { name: "Sign in" }),
+          ).toBeTruthy();
+          expect(header.queryByRole("button", { name: "Account" })).toBeNull();
+        }
+        expect(myVotes).toHaveBeenCalledTimes(2);
+      },
+    );
+  },
+);
+
+it("does not restore Account when a retry completes after Forget (#487)", async () => {
+  let finish!: (page: MyVotesPage) => void;
+  const myVotes = vi
+    .fn<() => Promise<MyVotesPage>>()
+    .mockRejectedValueOnce(new Error("offline"))
+    .mockImplementationOnce(
+      () =>
+        new Promise((resolve) => {
+          finish = resolve;
+        }),
+    );
+  const { header, signOut } = showFailedRead({ kind: "about" }, myVotes);
+  const user = userEvent.setup();
+  await user.click(await header.findByRole("button", { name: "Account" }));
+  await user.click(await header.findByRole("button", { name: "Try again" }));
+  await user.click(
+    header.getByRole("button", { name: "Forget my votes here" }),
+  );
+  await user.click(header.getByRole("button", { name: "Forget them" }));
+  await header.findByRole("link", { name: "Sign in" });
+  await act(async () => finish({ votes: [saved], nextCursor: null }));
+  expect(header.queryByRole("button", { name: "Account" })).toBeNull();
+  expect(signOut).toHaveBeenCalledTimes(1);
+});

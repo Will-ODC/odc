@@ -5,6 +5,11 @@ import type { ViewData } from "./view-data.js";
 type More =
   { status: "idle" | "loading" } | { status: "error"; message: string };
 
+/** Header recovery when whether this browser holds votes is still unknown. */
+export type VoteRead =
+  | { status: "loading" }
+  | { status: "error"; message: string; onRetry: () => void };
+
 export const MY_VOTES_EMPTY = "No votes saved in this browser yet.";
 export const MY_VOTES_ERROR = "We couldn't load your votes. Try again.";
 const message = (err: unknown) =>
@@ -84,6 +89,14 @@ export function useMyVotes(api: PulseApi) {
     setData({ status: "empty", message: MY_VOTES_EMPTY });
   }, []);
 
+  const retryRead = () => retry((n) => n + 1);
+  const voteRead: VoteRead | undefined =
+    data.status === "loading"
+      ? { status: "loading" }
+      : data.status === "error"
+        ? { status: "error", message: data.message, onRetry: retryRead }
+        : undefined;
+
   return {
     data,
     more,
@@ -92,7 +105,8 @@ export function useMyVotes(api: PulseApi) {
     // A cursor-only page still means this browser holds saved votes. Every
     // page derives its header from this same server-backed source (#487).
     holdsVotes: data.status === "ready",
-    retry: () => retry((n) => n + 1),
+    voteRead,
+    retry: retryRead,
   };
 }
 

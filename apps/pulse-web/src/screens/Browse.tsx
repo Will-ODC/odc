@@ -46,6 +46,7 @@ export function Browse({
           session={session}
           progress={progress}
           holdsVotes={mine.holdsVotes}
+          {...(mine.voteRead ? { voteRead: mine.voteRead } : {})}
           onSignOut={signOut}
           onCancel={dismiss}
         />

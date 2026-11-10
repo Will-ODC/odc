@@ -2,6 +2,7 @@ import { pathOf } from "../flow/route.js";
 import { TopBanner } from "../components/TopBanner.js";
 import { SignedIn } from "../components/SignedIn.js";
 import { ForgetVotes } from "../components/ForgetVotes.js";
+import type { VoteRead } from "../hooks/use-my-votes.js";
 import type { Session, SignOutProgress } from "../hooks/use-session.js";
 
 /**
@@ -21,6 +22,7 @@ export function SiteBanner({
   session,
   progress,
   holdsVotes,
+  voteRead,
   onPostPage = false,
   currentHref,
   signInHref = pathOf({ kind: "signIn" }),
@@ -31,6 +33,8 @@ export function SiteBanner({
   progress: SignOutProgress;
   /** Whether this browser holds votes someone could forget. */
   holdsVotes: boolean;
+  /** A failed or pending read must not remove the safe way to forget votes. */
+  voteRead?: VoteRead;
   /**
    * Mark the shared posting link as the current page.
    */
@@ -75,7 +79,7 @@ export function SiteBanner({
         <TopBanner
           {...where}
           {...(signInHref ? { signInHref } : {})}
-          {...(holdsVotes
+          {...(holdsVotes || voteRead
             ? {
                 account: (
                   <>
@@ -83,6 +87,16 @@ export function SiteBanner({
                       <a className="banner__sign-in" href={signInHref}>
                         Sign in
                       </a>
+                    ) : null}
+                    {voteRead?.status === "loading" ? (
+                      <p role="status">Loading your votes…</p>
+                    ) : voteRead?.status === "error" ? (
+                      <>
+                        <p role="alert">{voteRead.message}</p>
+                        <button type="button" onClick={voteRead.onRetry}>
+                          Try again
+                        </button>
+                      </>
                     ) : null}
                     <ForgetVotes
                       progress={progress}

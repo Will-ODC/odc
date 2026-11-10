@@ -94,6 +94,7 @@ export function NewPoll({
           session={bar.session}
           progress={bar.progress}
           holdsVotes={mine.holdsVotes}
+          {...(mine.voteRead ? { voteRead: mine.voteRead } : {})}
           onPostPage
           signInHref={signInHref}
           onSignOut={bar.signOut}
