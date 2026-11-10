@@ -256,3 +256,39 @@
     min-height: var(--touch);
   }
 }
+
+/*
+ * The desktop version (#490): voting sits in the page right under the
+ * question, so the page reads top to bottom in one column. Copy link moves
+ * to the end of the closing-date line, out from between the two.
+ */
+@media (min-width: 700px) {
+  .conversation__scroll {
+    padding-block: calc(var(--gutter) * 2);
+  }
+  .conversation__hero {
+    display: grid;
+    grid-template-columns: minmax(0, 1fr) auto;
+    align-items: center;
+    column-gap: var(--gutter);
+  }
+  .conversation__hero > * {
+    grid-column: 1 / -1;
+  }
+  .conversation__hero > p:first-child {
+    grid-column: 1;
+    grid-row: 1;
+  }
+  .conversation__hero > .copy-link {
+    grid-column: 2;
+    grid-row: 1;
+    justify-self: end;
+    margin-bottom: 0;
+  }
+  .conversation__hero h1 {
+    text-wrap: balance;
+  }
+  .conversation__vote--page {
+    margin-bottom: var(--gutter);
+  }
+}
