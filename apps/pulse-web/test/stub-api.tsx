@@ -85,9 +85,10 @@ export function counted(choice: number, of: Results) {
 /**
  * A plain object is enough: `PulseApi` is structural, so a stub does not have
  * to extend anything. Anything a test has not said the screen may call rejects
- * loudly rather than quietly answering — except `me` and `myBallot`, which
- * answer "nobody signed in" and "no ballot here". Every conversation asks both
- * for the bar across the top, and a fresh browser is the ordinary case, not a
+ * loudly rather than quietly answering — except `me`, `myBallot` and
+ * `myVotes`, which answer "nobody signed in", "no ballot here" and "no saved
+ * answers". Every conversation asks all three, for the bar across the top and
+ * the Answered list (#484), and a fresh browser is the ordinary case, not a
  * mistake to flag.
  */
 export function stubApi(over: Partial<PulseApi> = {}): PulseApi {
@@ -95,7 +96,7 @@ export function stubApi(over: Partial<PulseApi> = {}): PulseApi {
     Promise.reject(new Error(`the ballot should not call ${name}`));
   return {
     listPolls: unused("listPolls"),
-    myVotes: unused("myVotes"),
+    myVotes: () => Promise.resolve({ votes: [], nextCursor: null }),
     poll: () => Promise.resolve(poll()),
     cast: () =>
       Promise.resolve({
