@@ -25,10 +25,6 @@ type PulseServer = Awaited<ReturnType<typeof createServer>>;
 /** The web origin the server trusts, and so the one a browser page would send. */
 const WEB_ORIGIN = "http://localhost:5173";
 
-/**
- * Poll creation (ADR-0037) over a real socket: sign in and publish through the
- * real client, then read the question and vote on it through that same client.
- */
 function cookieJar(): { fetch: typeof fetch; header(): string | undefined } {
   const jar = new Map<string, string>();
   const header = () =>
@@ -62,6 +58,10 @@ function cookieJar(): { fetch: typeof fetch; header(): string | undefined } {
   return { fetch: doFetch, header };
 }
 
+/**
+ * Poll creation (ADR-0037) over a real socket: sign in and publish through the
+ * real client, then read the question and vote on it through that same client.
+ */
 describe("poll creation against the real server", () => {
   let app: PulseServer;
   let mailer: ConsoleMailer;
@@ -143,8 +143,22 @@ describe("poll creation against the real server", () => {
       purposeAcknowledged: false,
     });
 
+    const creationResponses: Response[] = [];
+    api = new HttpPulseApi(baseUrl, async (input, init) => {
+      const response = await jar.fetch(input, init);
+      creationResponses.push(response.clone());
+      return response;
+    });
+    const sessionCookie = jar.header();
+    expect(sessionCookie).toBeDefined();
     const key = randomUUID();
     const created = await api.createPoll(key, question);
+    expect(creationResponses[0]?.status).toBe(201);
+    expect(await creationResponses[0]?.json()).toMatchObject({
+      replayed: false,
+    });
+    expect(creationResponses[0]?.headers.getSetCookie()).toEqual([]);
+    expect(jar.header()).toBe(sessionCookie);
     expect(created.attribution).toEqual({ kind: "anonymous" });
     // No account id or address anywhere in what came back.
     expect(JSON.stringify(created)).not.toContain(me?.id ?? "");
@@ -153,6 +167,12 @@ describe("poll creation against the real server", () => {
     // A retry of the same request is the same question, not a second one.
     const replay = await api.createPoll(key, question);
     expect(replay.id).toBe(created.id);
+    expect(creationResponses[1]?.status).toBe(200);
+    expect(await creationResponses[1]?.json()).toMatchObject({
+      replayed: true,
+    });
+    expect(creationResponses[1]?.headers.getSetCookie()).toEqual([]);
+    expect(jar.header()).toBe(sessionCookie);
 
     // Public browse discovery reuses the server listing, without signing in or casting.
     const guest = new HttpPulseApi(baseUrl, cookieJar().fetch);
@@ -160,6 +180,9 @@ describe("poll creation against the real server", () => {
     expect(listing.polls.map((p) => p.id)).toEqual([created.id]);
     expect((await guest.listPolls("pulse-general")).polls).toEqual([]);
     expect((await guest.results(created.id)).voters).toBe(0);
+    expect((await guest.poll(created.id)).attribution).toEqual({
+      kind: "anonymous",
+    });
 
     // It is an ordinary poll now: the client reads it and votes on it.
     const poll = await api.poll(created.id);
