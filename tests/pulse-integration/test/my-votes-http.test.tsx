@@ -1,6 +1,6 @@
 // @vitest-environment jsdom
-import { cleanup, render, screen } from "@testing-library/react";
-import { afterEach, expect, it } from "vitest";
+import { cleanup, render, screen, within } from "@testing-library/react";
+import { afterEach, beforeAll, expect, it } from "vitest";
 import { createServer } from "../../../apps/pulse/src/http/server.js";
 import { SessionSigner } from "../../../apps/pulse/src/http/session.js";
 import { ClaimService } from "../../../apps/pulse/src/identity/claim.js";
@@ -18,7 +18,14 @@ import { InMemorySuggestionStore } from "../../../apps/pulse/src/voting/suggesti
 import { HttpPulseApi } from "../../../apps/pulse-web/src/api/http.js";
 import { App } from "../../../apps/pulse-web/src/App.js";
 
-afterEach(cleanup);
+// ResultsPanel lazy-loads the chart; load its module up front so a cold
+// test run does not outwait findBy's default timeout transforming Recharts.
+beforeAll(() => import("../../../apps/pulse-web/src/components/BarChart.js"));
+
+afterEach(() => {
+  cleanup();
+  globalThis.history.replaceState(null, "", "/");
+});
 
 /** One browser: its own cookie jar against the shared server. */
 function browser(base: string) {
@@ -70,19 +77,98 @@ it("My votes lists this browser's saved answers over the real HTTP API, and only
   const base = `http://127.0.0.1:${address.port}/api`;
   try {
     const mine = browser(base);
-    await mine.cast("parks", [1]);
+    // Newest first; the store lists same-millisecond casts by poll id,
+    // descending. Cast in the order that agrees with both, so a tie cannot
+    // flip the expected order.
     await mine.cast("fixes", [2, 0]);
+    await mine.cast("parks", [1]);
     const first = render(<App api={mine} route={{ kind: "myVotes" }} />);
     expect(await screen.findByText("Your answer: Park, Rink")).toBeTruthy();
     expect(screen.getByText("Your answer: Yes")).toBeTruthy();
     const page = await mine.myVotes();
-    expect(page.votes.map((vote) => vote.ballot)).toEqual([[0, 2], [1]]);
+    expect(page.votes.map((vote) => vote.ballot)).toEqual([[1], [0, 2]]);
     first.unmount();
 
     // A second browser has no ballot cookie, so it owns no votes.
     render(<App api={browser(base)} route={{ kind: "myVotes" }} />);
     expect(
       await screen.findByText("No votes saved in this browser yet."),
+    ).toBeTruthy();
+  } finally {
+    await app.close();
+  }
+});
+
+it("the Answered list and the saved answer survive a reload over the real HTTP API (#484)", async () => {
+  const voters = new InMemoryVoterStore();
+  const votes = new InMemoryVotingStore();
+  await votes.createPoll({
+    id: "parks",
+    question: "More parks?",
+    choices: ["No", "Yes"],
+    method: "single",
+  });
+  await votes.createPoll({
+    id: "rinks",
+    question: "A new rink?",
+    choices: ["No", "Yes"],
+    method: "single",
+  });
+  const app = await createServer({
+    voters,
+    votes,
+    suggestions: new InMemorySuggestionStore(),
+    signer: new SessionSigner("answered-test-secret-long-enough"),
+    secureCookies: false,
+    claims: new ClaimService({
+      membership: new DomainAllowlist(new StaticDomainSource([])),
+      voters,
+      claims: new InMemoryClaimStore(),
+      mailer: new ConsoleMailer(() => {}),
+      linkFor: (token) => `http://localhost/sign-in?token=${token}`,
+    }),
+  });
+  await app.listen({ port: 0, host: "127.0.0.1" });
+  const address = app.server.address();
+  if (!address || typeof address === "string") throw new Error("No port");
+  const base = `http://127.0.0.1:${address.port}/api`;
+  try {
+    const mine = browser(base);
+    // Newest first; the store lists same-millisecond casts by poll id,
+    // descending. Cast in the order that agrees with both, so a tie cannot
+    // flip the expected order.
+    await mine.cast("parks", [1]);
+    await mine.cast("rinks", [1]);
+    const route = { kind: "conversation", pollId: "parks" } as const;
+
+    // A fresh page, as after a reload: the answer and the list come back.
+    const first = render(<App api={mine} route={route} />);
+    const main = within(await screen.findByRole("main"));
+    expect(await main.findByText("You picked Yes.")).toBeTruthy();
+    const rail = within(screen.getByRole("navigation", { name: "My votes" }));
+    const railVotes = within(rail.getByRole("list"));
+    expect(
+      (await railVotes.findAllByRole("link")).map((link) => link.textContent),
+    ).toEqual(["A new rink?", "More parks?"]);
+    first.unmount();
+
+    // Changed from elsewhere in this browser: the next page shows the change.
+    // A later millisecond than every earlier cast, so the change is newest.
+    await new Promise((resolve) => setTimeout(resolve, 5));
+    await mine.cast("parks", [0]);
+    render(<App api={mine} route={route} />);
+    const again = within(
+      await screen.findByRole("navigation", { name: "My votes" }),
+    );
+    expect(await again.findByText("Your answer: No")).toBeTruthy();
+    expect(again.getByText("Your answer: Yes")).toBeTruthy();
+    expect(
+      within(again.getByRole("list"))
+        .getAllByRole("link")
+        .map((link) => link.textContent),
+    ).toEqual(["More parks?", "A new rink?"]);
+    expect(
+      await within(screen.getByRole("main")).findByText("You picked No."),
     ).toBeTruthy();
   } finally {
     await app.close();

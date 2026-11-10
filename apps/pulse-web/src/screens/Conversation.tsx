@@ -1,21 +1,33 @@
-import { useCallback, useEffect, useRef, useState } from "react";
+import {
+  useCallback,
+  useEffect,
+  useLayoutEffect,
+  useRef,
+  useState,
+} from "react";
 import type { ReactNode } from "react";
-import type { Poll, PulseApi, Results } from "../api/types.js";
+import type { Ballot, Poll, PulseApi, Results } from "../api/types.js";
+import type { Route } from "../flow/route.js";
 import { cardStatus, closingNote, nextFor } from "../flow/conversation.js";
 import { byline } from "../flow/new-poll.js";
 import { pathOf } from "../flow/route.js";
+import { answeredList } from "../flow/answered.js";
 import { usePoll } from "../hooks/use-poll.js";
 import { useCastVote } from "../hooks/use-cast-vote.js";
+import type { CastState } from "../hooks/use-cast-vote.js";
 import { useClosedResults } from "../hooks/use-closed-results.js";
 import { useFreshResults } from "../hooks/use-fresh-results.js";
+import { useMyVotes } from "../hooks/use-my-votes.js";
 import type { Confirmation } from "../flow/vote-card.js";
 import { VoteCard } from "../components/VoteCard.js";
 import { ClosedResults } from "../components/ClosedResults.js";
 import { ViewState } from "../components/ViewState.js";
+import { AnsweredList } from "../components/AnsweredList.js";
 import { PostedBanner } from "../components/PostedBanner.js";
 import { CopyLink } from "../components/CopyLink.js";
 import { useSession } from "../hooks/use-session.js";
 import type { Session } from "../hooks/use-session.js";
+import type { ViewData } from "../hooks/view-data.js";
 import { SiteBanner } from "./SiteBanner.js";
 import "./Conversation.css";
 
@@ -46,20 +58,64 @@ function confirmationOf(session: Session): Confirmation {
   }
 }
 
+/** Hands the page a send and the promise of how it ends. */
+type Sent = (poll: Poll, outcome: Promise<CastState>) => void;
+
 /** Whether a poll's closing time has passed, by this browser's clock. */
 function hasClosed(poll: Poll): boolean {
   return poll.closesAt !== null && Date.parse(poll.closesAt) <= Date.now();
 }
 
-/** A whole run stays in one conversation; only its active card changes. */
+function sameBallot(a: Ballot, b: Ballot): boolean {
+  const left = [...a].sort((x, y) => x - y);
+  const right = [...b].sort((x, y) => x - y);
+  return (
+    left.length === right.length && left.every((one, i) => one === right[i])
+  );
+}
+
+/** This browser's saved answer to `poll` and its results, if it has one. */
+async function savedAnswer(
+  api: PulseApi,
+  poll: Poll,
+): Promise<Answer | undefined> {
+  try {
+    const ballot = await api.myBallot(poll.id);
+    if (!ballot || ballot.length === 0) return undefined;
+    return { poll, ballot: [...ballot], results: await api.results(poll.id) };
+  } catch {
+    return undefined;
+  }
+}
+
+/** Rail copy when the saved answers cannot be read (#488). */
+const RAIL_ERROR = "We couldn't load your votes.";
+const RAIL_PARTIAL_ERROR = "We couldn't load all your votes.";
+const RAIL_RELOADED = "Your votes are loaded.";
+/**
+ * How long a question waits for its saved answer before it is asked anyway.
+ * A stalled read must not leave a question that has loaded on "Loading…".
+ */
+const RESTORE_WAIT_MS = 5000;
+
+/**
+ * A whole run stays in one conversation; only its active card changes.
+ *
+ * Opening another question from the rail, or going Back to one, keeps this
+ * conversation on screen: App does not remount it per question, and the
+ * question shown follows `pollId` when the address changes (#488).
+ */
 export function Conversation({
   api,
   pollId,
+  onNavigate,
   onSignedOut,
   posted,
 }: {
   api: PulseApi;
   pollId: string;
+  /** Pushes a question onto browser history so its address can be shared. */
+  onNavigate?: (to: Route) => void;
   /** Runs once the server has signed this person out everywhere. */
   onSignedOut?: () => void;
   /**
@@ -70,43 +126,137 @@ export function Conversation({
 }) {
   const [at, setAt] = useState(pollId);
   const [answers, setAnswers] = useState<Answer[]>([]);
+  // Questions with an answer being sent, until the send settles. Each send's
+  // outcome reaches this page from the send itself, not from its card, so a
+  // send whose card has gone still updates the list (#488).
+  const [sending, setSending] = useState<readonly string[]>([]);
+  // Sent questions that were left before the send settled. Until it does,
+  // what this page holds for one may be the answer it replaced: the rail
+  // keeps that row in its place, but the question does not claim it.
+  const [unsettled, setUnsettled] = useState<readonly string[]>([]);
+  // The rail and the question links wait only for the question on screen.
+  const busy = sending.includes(at) && !unsettled.includes(at);
+  // The address changed (a rail row, or Back and Forward): show its question.
+  // Not when it names the question already shown (after Next): nothing is
+  // left then, and a send on it still holds the rail.
+  const [routed, setRouted] = useState(pollId);
+  if (routed !== pollId) {
+    setRouted(pollId);
+    if (at !== pollId) {
+      setAt(pollId);
+      if (busy) setUnsettled((old) => [...old, at]);
+    }
+  }
+  // Bumped when a send left behind settles while its question is on screen
+  // again, so the question is drawn afresh with the outcome.
+  const [settledAgain, setSettledAgain] = useState(0);
+  // Poll ids cast or changed during this visit, oldest first. Restoring a
+  // saved answer does not add it here.
+  const [recentAnswers, setRecentAnswers] = useState<string[]>([]);
   // Whether this browser held a ballot before this visit. The ballot cookie
   // cannot be read from script, so the first question's ballot stands in.
   const [heldBefore, setHeldBefore] = useState(false);
   // Bumped when the votes are forgotten, so the question starts over.
   const [round, setRound] = useState(0);
+  // This browser's saved answers, read on every visit, so the Answered list
+  // survives navigation and reload (#484); this page's answers join it below.
+  const mine = useMyVotes(api);
+  const { clear: clearMine } = mine;
+  // Set by the rail's Try again, so a reload that ends well is read out too.
+  const [railRetried, setRailRetried] = useState(false);
+  // Counts forgettings, so a send from before one changes nothing after it.
+  const generation = useRef(0);
   const forgotten = useCallback(() => {
+    generation.current += 1;
     setAnswers([]);
+    setRecentAnswers([]);
+    setSending([]);
+    setUnsettled([]);
     setHeldBefore(false);
+    setRailRetried(false);
     setAt(pollId);
     setRound((n) => n + 1);
-  }, [pollId]);
+    clearMine();
+  }, [pollId, clearMine]);
+  // Signing out clears the ballot cookie (API.md), and the list with it.
+  const signedOut = useCallback(() => {
+    setRailRetried(false);
+    clearMine();
+    onSignedOut?.();
+  }, [clearMine, onSignedOut]);
   const { session, progress, signOut, dismiss } = useSession(api, {
-    ...(onSignedOut ? { onSignedOut } : {}),
+    onSignedOut: signedOut,
     onForgotten: forgotten,
   });
-  useEffect(() => {
-    let live = true;
-    api.myBallot(pollId).then(
-      (ballot) => {
-        if (live) setHeldBefore(ballot !== null);
-      },
-      () => {},
-    );
-    return () => {
-      live = false;
-    };
-  }, [api, pollId]);
-  const [busy, setBusy] = useState(false);
-  const counted = useCallback((answer: Answer) => {
+  const remembered = useCallback((answer: Answer) => {
     setAnswers((old) =>
       old.some((one) => one.poll.id === answer.poll.id)
         ? old.map((one) => (one.poll.id === answer.poll.id ? answer : one))
         : [...old, answer],
     );
   }, []);
-  const go = (id: string) => {
+  const foundHeldBallot = useCallback(() => setHeldBefore(true), []);
+  const counted = useCallback(
+    (answer: Answer) => {
+      remembered(answer);
+      setRecentAnswers((old) => [
+        ...old.filter((id) => id !== answer.poll.id),
+        answer.poll.id,
+      ]);
+    },
+    [remembered],
+  );
+  // Read by a send's outcome, which arrives after the render that sent it.
+  const latest = useRef({ at, answers, unsettled });
+  useLayoutEffect(() => {
+    latest.current = { at, answers, unsettled };
+  });
+  const sent = useCallback(
+    (poll: Poll, outcome: Promise<CastState>) => {
+      const sentIn = generation.current;
+      const current = () => generation.current === sentIn;
+      setSending((old) => [...old, poll.id]);
+      void outcome.then(async (state) => {
+        if (!current()) return;
+        // This send's entry only. A second send for a question whose first
+        // is still out is never offered (`useRestoredAnswer`'s stillSending).
+        setSending((old) => {
+          const one = old.indexOf(poll.id);
+          return one < 0 ? old : [...old.slice(0, one), ...old.slice(one + 1)];
+        });
+        const left = latest.current.unsettled.includes(poll.id);
+        if (state.status === "counted")
+          counted({ poll, ballot: state.ballot, results: state.results });
+        else if (left && state.status === "failed" && !state.refused) {
+          // The connection was lost: the answer may have been stored. Ask.
+          const found = await savedAnswer(api, poll);
+          if (!current()) return;
+          if (found) {
+            const before = latest.current.answers.find(
+              (one) => one.poll.id === poll.id,
+            );
+            if (before && sameBallot(before.ballot, found.ballot))
+              remembered(found);
+            else counted(found);
+          }
+        }
+        if (!left) return;
+        setUnsettled((old) => old.filter((id) => id !== poll.id));
+        if (latest.current.at === poll.id) setSettledAgain((n) => n + 1);
+      });
+    },
+    [api, counted, remembered],
+  );
+  const show = (id: string) => {
     if (!busy) setAt(id);
+  };
+  // A rail row: the question opens here, and its address goes on history so
+  // Back returns to the one before. Opened here too, not only through the
+  // address: after Next the address can already name the row clicked.
+  const go = (id: string) => {
+    if (busy || id === at) return;
+    setAt(id);
+    if (id !== pollId) onNavigate?.({ kind: "conversation", pollId: id });
   };
   const confirmation = confirmationOf(session);
   // Signing in confirms every vote already given here, so every result already
@@ -117,10 +267,34 @@ export function Conversation({
       setAnswers((old) => old.map((one) => ({ ...one, stale: true })));
     before.current = confirmation;
   }, [confirmation]);
-  const saved = answers.find((one) => one.poll.id === at);
+  // What the question may claim: not an answer whose change is still out.
+  const settledAnswers = answers.filter(
+    (one) => !unsettled.includes(one.poll.id),
+  );
+  const saved = settledAnswers.find((one) => one.poll.id === at);
+  const answered = answeredList(
+    mine.data.status === "ready" ? mine.data.value.votes : [],
+    answers,
+    recentAnswers,
+  );
+  const railHeading = useRef<HTMLAnchorElement>(null);
+  // One status region for the rail, mounted throughout, so each change is read
+  // out: Loading… while the list is read (with answers already listed too),
+  // then an error, the empty message, or nothing to show.
+  const railState: ViewData<null> =
+    mine.data.status === "error"
+      ? {
+          status: "error",
+          message: answered.length > 0 ? RAIL_PARTIAL_ERROR : RAIL_ERROR,
+        }
+      : mine.data.status === "loading"
+        ? { status: "loading" }
+        : mine.data.status === "empty" && answered.length === 0
+          ? { status: "empty", message: mine.data.message }
+          : { status: "ready", value: null };
   const main = useRef<HTMLElement>(null);
-  // "Your question is live" belongs to the question just posted. "Next"
-  // moves to another without a route change, so leaving it ends the line.
+  // "Your question is live" belongs to the question just posted. Leaving it
+  // for another question ends the line.
   const leftPosted = posted !== undefined && at !== pollId;
   const dismissPosted = posted?.onDismiss;
   useEffect(() => {
@@ -132,28 +306,58 @@ export function Conversation({
         <SiteBanner
           session={session}
           progress={progress}
-          holdsVotes={heldBefore || answers.length > 0}
+          holdsVotes={
+            heldBefore || answered.length > 0 || mine.data.status === "ready"
+          }
           onSignOut={signOut}
           onCancel={dismiss}
         />
       </header>
       <aside className="conversation__sidebar">
-        <nav aria-label="Answered">
-          <h2>Answered</h2>
-          {answers.length === 0 ? <p>No answers yet.</p> : null}
-          {answers.map((answer) => (
-            <button
-              key={answer.poll.id}
-              type="button"
+        <nav aria-label="My votes">
+          <h2>
+            <a ref={railHeading} href={pathOf({ kind: "myVotes" })}>
+              My votes
+            </a>
+          </h2>
+          {answered.length > 0 ? (
+            <AnsweredList
+              votes={answered}
+              current={at}
+              compact
               disabled={busy}
-              aria-current={at === answer.poll.id ? "step" : undefined}
-              onClick={() => go(answer.poll.id)}
+              onOpen={go}
+            />
+          ) : null}
+          <ViewState
+            data={railState}
+            variant="compact"
+            persistent
+            {...(railRetried ? { readyNote: RAIL_RELOADED } : {})}
+          >
+            {() => null}
+          </ViewState>
+          {mine.data.status === "error" ? (
+            <button
+              className="button"
+              type="button"
+              onClick={() => {
+                // The button goes while the list is read again; focus stays in
+                // the rail rather than falling to the page.
+                railHeading.current?.focus();
+                setRailRetried(true);
+                mine.retry();
+              }}
             >
-              {answer.poll.question}
+              Try again
             </button>
-          ))}
+          ) : null}
+          {mine.data.status === "ready" && mine.data.value.nextCursor ? (
+            <p>
+              <a href={pathOf({ kind: "myVotes" })}>See all my votes</a>
+            </p>
+          ) : null}
         </nav>
-        <p>More questions will appear here as you answer.</p>
       </aside>
       <main className="conversation__main" ref={main}>
         {posted && at === pollId ? (
@@ -167,16 +371,18 @@ export function Conversation({
           />
         ) : null}
         <Question
-          key={`${round}:${at}`}
+          key={`${round}:${at}:${settledAgain}`}
           api={api}
           pollId={at}
-          answers={answers}
+          answers={settledAnswers}
           {...(saved ? { saved } : {})}
+          waiting={unsettled.includes(at)}
           busy={busy}
           confirmation={confirmation}
-          onCounted={counted}
-          onBusy={setBusy}
-          onGo={go}
+          onRemembered={remembered}
+          onHeldBallot={foundHeldBallot}
+          onSent={sent}
+          onGo={show}
           // The posting banner already offers Copy link; one is enough.
           shareable={!(posted && at === pollId)}
         />
@@ -189,10 +395,12 @@ function Question({
   pollId,
   answers,
   saved,
+  waiting,
   busy,
   confirmation,
-  onCounted,
-  onBusy,
+  onRemembered,
+  onHeldBallot,
+  onSent,
   onGo,
   shareable,
 }: {
@@ -200,10 +408,12 @@ function Question({
   pollId: string;
   answers: readonly Answer[];
   saved?: Answer;
+  waiting: boolean;
   busy: boolean;
   confirmation: Confirmation;
-  onCounted: (answer: Answer) => void;
-  onBusy: (busy: boolean) => void;
+  onRemembered: (answer: Answer) => void;
+  onHeldBallot: () => void;
+  onSent: Sent;
   onGo: (id: string) => void;
   shareable: boolean;
 }) {
@@ -216,10 +426,12 @@ function Question({
       pollId={pollId}
       answers={answers}
       {...(saved ? { saved } : {})}
+      waiting={waiting}
       busy={busy}
       confirmation={confirmation}
-      onCounted={onCounted}
-      onBusy={onBusy}
+      onRemembered={onRemembered}
+      onHeldBallot={onHeldBallot}
+      onSent={onSent}
       onGo={onGo}
       shareable={shareable}
       onRetry={() => setAttempt((one) => one + 1)}
@@ -232,10 +444,12 @@ function LoadedQuestion({
   pollId,
   answers,
   saved,
+  waiting,
   busy,
   confirmation,
-  onCounted,
-  onBusy,
+  onRemembered,
+  onHeldBallot,
+  onSent,
   onGo,
   shareable,
   onRetry,
@@ -244,16 +458,33 @@ function LoadedQuestion({
   pollId: string;
   answers: readonly Answer[];
   saved?: Answer;
+  /** A send left behind for this question has not settled yet. */
+  waiting: boolean;
   busy: boolean;
   confirmation: Confirmation;
-  onCounted: (answer: Answer) => void;
-  onBusy: (busy: boolean) => void;
+  onRemembered: (answer: Answer) => void;
+  onHeldBallot: () => void;
+  onSent: Sent;
   onGo: (id: string) => void;
   /** Whether to offer Copy link under the question. */
   shareable: boolean;
   onRetry: () => void;
 }) {
-  const loaded = usePoll(api, pollId);
+  const fetched = usePoll(api, pollId);
+  const restored = useRestoredAnswer(
+    api,
+    fetched.status === "ready" ? fetched.value : null,
+    saved,
+    waiting,
+    onHeldBallot,
+    onRemembered,
+  );
+  // The question is drawn with its saved answer or not at all, never first
+  // unanswered and then answered a moment later.
+  const loaded =
+    fetched.status === "ready" && restored === "pending"
+      ? { status: "loading" as const }
+      : fetched;
   const heading = useRef<HTMLHeadingElement>(null);
   useEffect(() => {
     if (loaded.status === "ready") heading.current?.focus();
@@ -349,6 +580,15 @@ function LoadedQuestion({
       </>
     );
   };
+  if (loaded.status === "ready" && restored === "stillSending")
+    // The question, but no card to answer it with: a second send would race
+    // the one still out. The page draws it afresh once that one settles.
+    return renderPage(
+      null,
+      <p className="conversation__pending" role="status">
+        Your answer is still being sent.
+      </p>,
+    );
   return loaded.status === "ready" ? (
     <LiveCard
       key={loaded.value.id}
@@ -356,8 +596,8 @@ function LoadedQuestion({
       poll={loaded.value}
       {...(saved ? { saved } : {})}
       confirmation={confirmation}
-      onCounted={onCounted}
-      onBusy={onBusy}
+      onRemembered={onRemembered}
+      onSent={onSent}
       onGo={onGo}
       renderPage={renderPage}
     />
@@ -366,13 +606,86 @@ function LoadedQuestion({
   );
 }
 
+/**
+ * A saved answer from an earlier visit, put back on the page (#484).
+ *
+ * The page only knew answers given on this visit, so after a reload the
+ * question asked again as if it had never been answered. Before the card is
+ * drawn, this asks the server for this browser's ballot and, when there is
+ * one, its results, and hands them on as if just counted. The card waits for
+ * the answer, so it is drawn once, with the saved answer or without it.
+ * Failing to ask is not an error the page shows: the question is drawn
+ * unanswered, as it was before.
+ *
+ * While a send left behind for this question is still out (`waiting`), the
+ * server's ballot may be about to change, so it is not asked for: the page
+ * draws the question again once the send settles. After the same wait the
+ * question is shown without a card to answer it (`stillSending`), never
+ * unanswered with Submit: a second send would race the first (#488).
+ */
+function useRestoredAnswer(
+  api: PulseApi,
+  poll: Poll | null,
+  saved: Answer | undefined,
+  waiting: boolean,
+  onHeldBallot: () => void,
+  onFound: (answer: Answer) => void,
+): "pending" | "settled" | "stillSending" {
+  const [settled, setSettled] = useState(Boolean(saved));
+  const [slow, setSlow] = useState(false);
+  const found = useRef(onFound);
+  found.current = onFound;
+  useEffect(() => {
+    if (settled || !poll) return;
+    let live = true;
+    const finish = (answer?: Answer) => {
+      if (!live) return;
+      if (answer) {
+        onHeldBallot();
+        found.current(answer);
+      }
+      live = false;
+      clearTimeout(giveUp);
+      setSettled(true);
+    };
+    // Bounded: a read that never answers asks the question unanswered, and
+    // anything arriving after that is dropped by the cleanup below. The rail's
+    // row is not used instead: it can be older than the server's ballot (a
+    // change sent from another tab), and the question is honest unanswered.
+    // Nothing here depends on the rail, so the rail loading or reloading
+    // never restarts the wait or asks for the ballot twice.
+    const giveUp = setTimeout(
+      () => (waiting ? setSlow(true) : finish()),
+      RESTORE_WAIT_MS,
+    );
+    if (!waiting)
+      api
+        .myBallot(poll.id)
+        .then(async (ballot) => {
+          if (!live) return;
+          if (!ballot || ballot.length === 0) {
+            finish();
+            return;
+          }
+          onHeldBallot();
+          finish({ poll, ballot, results: await api.results(poll.id) });
+        })
+        .catch(() => finish());
+    return () => {
+      live = false;
+      clearTimeout(giveUp);
+    };
+  }, [api, poll, settled, waiting, onHeldBallot]);
+  return settled ? "settled" : slow ? "stillSending" : "pending";
+}
+
 function LiveCard({
   api,
   poll,
   saved,
   confirmation,
-  onCounted,
-  onBusy,
+  onRemembered,
+  onSent,
   onGo,
   renderPage,
 }: {
@@ -380,8 +693,8 @@ function LiveCard({
   poll: Poll;
   saved?: Answer;
   confirmation: Confirmation;
-  onCounted: (answer: Answer) => void;
-  onBusy: (busy: boolean) => void;
+  onRemembered: (answer: Answer) => void;
+  onSent: Sent;
   onGo: (id: string) => void;
   renderPage: (
     standing: ReactNode,
@@ -399,15 +712,14 @@ function LiveCard({
   const wrapper = useRef<HTMLDivElement>(null);
   const wasVisible = useRef(true);
   const closed = useClosedResults(api, poll.id);
+  // The page learns the outcome from the send itself (`onSent`); the card
+  // only keeps the counted ballot as its picks.
   const previous = useRef(state);
   useEffect(() => {
-    onBusy(state.status === "casting");
-    if (state.status === "counted" && state !== previous.current) {
+    if (state.status === "counted" && state !== previous.current)
       setPicked(state.ballot);
-      onCounted({ poll, ballot: state.ballot, results: state.results });
-    }
     previous.current = state;
-  }, [state, poll, onCounted, onBusy]);
+  }, [state]);
   useEffect(() => {
     if (!visible) show.current?.focus();
     else if (!wasVisible.current) {
@@ -424,7 +736,7 @@ function LiveCard({
   const status = cardStatus(poll, state);
   const ballot = state.status === "counted" ? state.ballot : picked;
   const fresh = useFreshResults(api, poll.id, (results) =>
-    onCounted({ poll, ballot, results }),
+    onRemembered({ poll, ballot, results }),
   );
   const { refresh: refreshResults } = fresh;
   const answered =
@@ -559,10 +871,7 @@ function LiveCard({
           : {})}
         collapsed={collapsed}
         onPick={setPicked}
-        onSubmit={(ballot) => {
-          onBusy(true);
-          cast(ballot);
-        }}
+        onSubmit={(ballot) => onSent(poll, cast(ballot))}
         onCollapse={setCollapsed}
         onClose={close}
         {...(showing.kind === "answered" && poll.open
