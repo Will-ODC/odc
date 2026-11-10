@@ -32,7 +32,7 @@
   padding: var(--step);
   color: var(--ink);
   background: var(--surface);
-  border: var(--hairline) solid var(--line);
+  border: var(--hairline) solid var(--line-strong);
   border-radius: var(--r-control);
 }
 

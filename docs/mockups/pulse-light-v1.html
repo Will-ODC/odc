@@ -219,6 +219,22 @@
   .info { width: 22px; height: 22px; border-radius: 50%; border: 1px solid var(--line-strong); display: grid; place-items: center; font-size: 12px; font-weight: 700; color: var(--ink-soft); }
   .banner { display: flex; justify-content: space-between; align-items: center; gap: 12px; padding: 10px 14px; border: 1px solid var(--green-line); background: var(--green-wash); border-radius: var(--r-control); font-size: 14px; }
 
+  /* After voting, simplified (#478, #480): your answer first, then one results
+     card with no card inside it, then what you can do next. */
+  .sv-you { display: flex; justify-content: space-between; align-items: center; gap: 12px; padding: 10px 14px; border: 1px solid var(--green-line); background: var(--green-wash); border-radius: var(--r-control); font-size: 15px; }
+  .sv-you .sv-status { color: var(--muted); font-size: 13px; white-space: nowrap; }
+  .sv-mine { display: grid; gap: 8px; }
+  .sv-confirm { display: flex; align-items: center; gap: 10px; margin: 0; font-size: 14px; color: var(--ink-soft); white-space: nowrap; }
+  .sv-confirm .btn svg, .sv-toggle svg { width: 14px; height: 14px; flex: none; }
+  .sv-head { display: flex; justify-content: space-between; align-items: center; gap: 12px; min-height: 30px; }
+  .sv-head h2 { margin: 0; font-size: 15px; }
+  .sv-head .sv-sum { color: var(--ink-soft); font-size: 14px; }
+  .sv-results .sv-count { margin: -8px 0 0; }
+  .sv-toggle { margin-right: -8px; }
+  .card.sv-min { padding: 4px 12px 4px 16px; }
+  .sv-tap { width: 44px; height: 44px; display: grid; place-items: center; margin-left: -11px; }
+  .sv-note { font-size: 13px; color: var(--muted); margin: 0; }
+
   /* Left rail (desktop) */
   .with-rail { display: grid; grid-template-columns: 220px 1fr; height: calc(100% - 52px); }
   .rail { border-right: 1px solid var(--line); padding: 20px 16px; display: grid; gap: 8px; align-content: start; font-size: 13px; }
@@ -360,6 +376,40 @@
         <button class="btn handle" type="button">Change my answer</button>
       </div></div>
     </figure>
+
+    <figure>
+      <figcaption><b>After voting, simplified (#478, #480).</b> Top to bottom: your answer, then how people answered, then what you can do next. Your answer and its status sit in one pale green line. The confirm offer is one short line with a Sign in button, shown only after a counted vote that is not yet confirmed. The results are one card with no card inside it; "Hide results" folds them to one line. The conversation card under the results and the second "Change my answer" button are gone: the floating button at the bottom right is the one way to change your answer. The bars here are a sketch; the real chart keeps its own shape and colors.</figcaption>
+      <div class="scroll"><div class="app desk" style="height:auto;min-height:600px">
+        <div class="bar">
+          <nav><span class="brand">pulse</span><a href="#home">Home</a><a href="#about">About</a><a href="#votes">My votes</a></nav>
+          <div class="right"><a class="btn primary sm" href="#new">Post a question</a><a class="btn sm" href="#signin">Sign in</a></div>
+        </div>
+        <div class="with-rail">
+          <aside class="rail"><h2>Answered</h2><a class="on" href="#q">How do we pay for it?</a><a href="#q">Should the ODC stay free of paid ads?</a></aside>
+          <div class="stage" style="max-width:640px;padding-bottom:84px">
+            <p class="meta">Closes Nov 10, 2026 · you can change your answer until then.</p>
+            <h1>How do we pay for it?</h1>
+            <div class="actions"><button class="btn sm" type="button">Copy link</button></div>
+            <div class="sv-mine">
+              <div class="sv-you"><span>You picked <b>One-off donations</b>.</span><span class="sv-status">Counted</span></div>
+              <p class="sv-confirm">Sign in to confirm your vote. <a class="btn sm" href="#signin" target="_blank" rel="noopener" aria-label="Sign in to confirm your vote (opens in a new tab)">Sign in <svg viewBox="0 0 16 16" fill="none" stroke="currentColor" stroke-width="1.8" aria-hidden="true"><path d="M6 3h7v7M13 3L4 12"/></svg></a></p>
+            </div>
+            <section class="card sv-results" aria-label="How people answered">
+              <div class="sv-head"><h2>How people answered</h2><button class="btn quiet sm sv-toggle" type="button" aria-expanded="true" aria-controls="sv-d-body">Hide results <svg viewBox="0 0 16 16" fill="none" stroke="currentColor" stroke-width="1.8" aria-hidden="true"><path d="M4 10l4-4 4 4"/></svg></button></div>
+              <p class="meta sv-count">48 votes so far · 31 confirmed by email</p>
+              <ul class="res" id="sv-d-body">
+                <li><span class="lab">Members chip in</span><span class="track"><i style="width:62%"></i></span><span class="fig">15 · 31%</span></li>
+                <li class="mine"><span class="lab">One-off donations <span class="badge">yours</span></span><span class="track"><i style="width:100%"></i></span><span class="fig">24 · 50%</span></li>
+                <li><span class="lab">Grants</span><span class="track"><i style="width:29%"></i></span><span class="fig">7 · 15%</span></li>
+                <li><span class="lab">A cut of what moves through it</span><span class="track"><i style="width:8%"></i></span><span class="fig">2 · 4%</span></li>
+              </ul>
+              <div class="actions"><span class="info" role="img" aria-label="How votes count">i</span><span style="flex:1"></span><button class="btn primary sm" type="button">Next</button></div>
+            </section>
+          </div>
+        </div>
+        <button class="btn handle" type="button">Change my answer</button>
+      </div></div>
+    </figure>
   </section>
 
   <section class="group v-phone" aria-labelledby="ph">
@@ -421,6 +471,54 @@
               </ul>
               <div class="actions"><span class="info" title="How votes count">i</span><span style="flex:1"></span><button class="btn primary sm" type="button">Next</button></div>
             </div>
+          </div>
+          <div style="position:absolute;left:16px;right:16px;bottom:16px"><button class="btn block" type="button" style="box-shadow:var(--shadow-pop)">Change my answer</button></div>
+        </div>
+      </figure>
+
+      <figure>
+        <figcaption><b>After voting, simplified (#478, #480).</b> Your answer in one pale green line, then the one-line confirm offer (its Sign in button is 44px tall and opens in a new tab), then one results card. The full-width button along the bottom is the one "Change my answer". The info button has a 44px tap area.</figcaption>
+        <div class="app phone">
+          <div class="bar"><div class="top"><span class="brand">pulse</span><span class="right"><a class="btn quiet sm" href="#new">Post</a><a class="btn sm" href="#signin">Sign in</a></span></div><nav class="tabs"><a href="#home">Home</a><a href="#about">About</a><a href="#votes">My votes</a></nav></div>
+          <div class="stage" style="padding-bottom:84px">
+            <p class="meta">Closes Nov 10, 2026 · you can change your answer until then.</p>
+            <h1>How do we pay for it?</h1>
+            <div class="actions"><button class="btn sm" type="button">Copy link</button></div>
+            <div class="sv-mine">
+              <div class="sv-you"><span>You picked <b>One-off donations</b>.</span><span class="sv-status">Counted</span></div>
+              <p class="sv-confirm">Sign in to confirm your vote. <a class="btn" href="#signin" target="_blank" rel="noopener" aria-label="Sign in to confirm your vote (opens in a new tab)">Sign in <svg viewBox="0 0 16 16" fill="none" stroke="currentColor" stroke-width="1.8" aria-hidden="true"><path d="M6 3h7v7M13 3L4 12"/></svg></a></p>
+            </div>
+            <section class="card sv-results" aria-label="How people answered">
+              <div class="sv-head"><h2>How people answered</h2><button class="btn quiet sv-toggle" type="button" aria-expanded="true" aria-controls="sv-p-body">Hide results <svg viewBox="0 0 16 16" fill="none" stroke="currentColor" stroke-width="1.8" aria-hidden="true"><path d="M4 10l4-4 4 4"/></svg></button></div>
+              <p class="meta sv-count">48 votes so far · 31 confirmed by email</p>
+              <ul class="res" id="sv-p-body">
+                <li><span class="lab">Members chip in</span><span class="track"><i style="width:62%"></i></span><span class="fig">15 · 31%</span></li>
+                <li class="mine"><span class="lab">One-off donations <span class="badge">yours</span></span><span class="track"><i style="width:100%"></i></span><span class="fig">24 · 50%</span></li>
+                <li><span class="lab">Grants</span><span class="track"><i style="width:29%"></i></span><span class="fig">7 · 15%</span></li>
+                <li><span class="lab">A cut of what moves through it</span><span class="track"><i style="width:8%"></i></span><span class="fig">2 · 4%</span></li>
+              </ul>
+              <div class="actions"><span class="sv-tap"><span class="info" role="img" aria-label="How votes count">i</span></span><span style="flex:1"></span><button class="btn primary" type="button">Next</button></div>
+            </section>
+          </div>
+          <div style="position:absolute;left:16px;right:16px;bottom:16px"><button class="btn block" type="button" style="box-shadow:var(--shadow-pop)">Change my answer</button></div>
+        </div>
+      </figure>
+
+      <figure>
+        <figcaption><b>After voting, simplified: results hidden.</b> The card folds to one line: the vote count and "Show results". The button stays in the same corner in both states, so focus stays on it (focus ring shown). The choice holds while you stay on this question. On a closed question the Sign in line and the bottom button do not show; Hide and Show work the same.</figcaption>
+        <div class="app phone" style="min-height:0;padding-bottom:84px">
+          <div class="bar"><div class="top"><span class="brand">pulse</span><span class="right"><a class="btn quiet sm" href="#new">Post</a><a class="btn sm" href="#signin">Sign in</a></span></div><nav class="tabs"><a href="#home">Home</a><a href="#about">About</a><a href="#votes">My votes</a></nav></div>
+          <div class="stage">
+            <p class="meta">Closes Nov 10, 2026 · you can change your answer until then.</p>
+            <h1>How do we pay for it?</h1>
+            <div class="actions"><button class="btn sm" type="button">Copy link</button></div>
+            <div class="sv-mine">
+              <div class="sv-you"><span>You picked <b>One-off donations</b>.</span><span class="sv-status">Counted</span></div>
+              <p class="sv-confirm">Sign in to confirm your vote. <a class="btn" href="#signin" target="_blank" rel="noopener" aria-label="Sign in to confirm your vote (opens in a new tab)">Sign in <svg viewBox="0 0 16 16" fill="none" stroke="currentColor" stroke-width="1.8" aria-hidden="true"><path d="M6 3h7v7M13 3L4 12"/></svg></a></p>
+            </div>
+            <section class="card sv-results sv-min" aria-label="How people answered">
+              <div class="sv-head"><span class="sv-sum">48 votes so far</span><button class="btn quiet sv-toggle focus" type="button" aria-expanded="false">Show results <svg viewBox="0 0 16 16" fill="none" stroke="currentColor" stroke-width="1.8" aria-hidden="true"><path d="M4 6l4 4 4-4"/></svg></button></div>
+            </section>
           </div>
           <div style="position:absolute;left:16px;right:16px;bottom:16px"><button class="btn block" type="button" style="box-shadow:var(--shadow-pop)">Change my answer</button></div>
         </div>

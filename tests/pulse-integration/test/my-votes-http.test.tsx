@@ -144,7 +144,13 @@ it("the Answered list and the saved answer survive a reload over the real HTTP A
     // A fresh page, as after a reload: the answer and the list come back.
     const first = render(<App api={mine} route={route} />);
     const main = within(await screen.findByRole("main"));
-    expect(await main.findByText("You picked Yes.")).toBeTruthy();
+    // The labels are bold, so match the whole saved-answer line (#478).
+    expect(
+      await main.findByText(
+        (_, node) =>
+          node?.tagName === "SPAN" && node.textContent === "You picked Yes.",
+      ),
+    ).toBeTruthy();
     const rail = within(screen.getByRole("navigation", { name: "My votes" }));
     const railVotes = within(rail.getByRole("list"));
     expect(
@@ -168,7 +174,10 @@ it("the Answered list and the saved answer survive a reload over the real HTTP A
         .map((link) => link.textContent),
     ).toEqual(["More parks?", "A new rink?"]);
     expect(
-      await within(screen.getByRole("main")).findByText("You picked No."),
+      await within(screen.getByRole("main")).findByText(
+        (_, node) =>
+          node?.tagName === "SPAN" && node.textContent === "You picked No.",
+      ),
     ).toBeTruthy();
   } finally {
     await app.close();

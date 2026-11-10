@@ -129,7 +129,7 @@ export function App({
                * button a link that can now only answer "already used".
                */
               onSignedIn={() => {
-                // The question "Confirm with your email" was pressed on, or
+                // The question the confirm offer's Sign in (#480) was pressed on, or
                 // the posting form, when this browser remembers one (#353).
                 const to = takeReturn(browserStore());
                 setRestoreDraft(to?.kind === "newPoll");

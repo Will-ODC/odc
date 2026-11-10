@@ -49,7 +49,9 @@ const base: VoteCardProps = {
 /** The note saying what became of the vote (the card's first status). */
 const note = () => screen.getAllByRole("status")[0]?.textContent;
 const confirmLink = () =>
-  screen.queryByRole("link", { name: /Confirm with your email/ });
+  screen.queryByRole("link", {
+    name: /^Sign in to confirm your vote \(opens in a new tab\)$/,
+  });
 
 describe("what the card says about a counted vote", () => {
   it("words each state, and a replacement after it", () => {
@@ -214,7 +216,9 @@ describe("signing in while a counted vote is on screen", () => {
     const main = await vote();
     expect(
       main
-        .getByRole("link", { name: /Confirm with your email/ })
+        .getByRole("link", {
+          name: /^Sign in to confirm your vote \(opens in a new tab\)$/,
+        })
         .getAttribute("href"),
     ).toBe(`/sign-in?poll=${p.id}`);
     expect(main.getByText("1 vote so far · 0 confirmed by email")).toBeTruthy();
@@ -244,9 +248,11 @@ describe("signing in while a counted vote is on screen", () => {
       await main.findByText("1 vote so far · 1 confirmed by email"),
     ).toBeTruthy();
     expect(fetched).toHaveBeenCalledWith(p.id);
-    expect(main.queryByRole("link", { name: /Confirm with your email/ })).toBe(
-      null,
-    );
+    expect(
+      main.queryByRole("link", {
+        name: /^Sign in to confirm your vote \(opens in a new tab\)$/,
+      }),
+    ).toBe(null);
   });
 
   it("turns confirmed when another tab announces a sign-in, without focus", async () => {
@@ -383,9 +389,11 @@ describe("signing in while a counted vote is on screen", () => {
     );
     const main = await vote();
     expect(main.getAllByRole("status")[0]?.textContent).toBe("Counted");
-    expect(main.queryByRole("link", { name: /Confirm with your email/ })).toBe(
-      null,
-    );
+    expect(
+      main.queryByRole("link", {
+        name: /^Sign in to confirm your vote \(opens in a new tab\)$/,
+      }),
+    ).toBe(null);
   });
 
   /* ADR-0040: signing in after a question closed confirms nothing there. */
@@ -420,7 +428,9 @@ describe("signing in while a counted vote is on screen", () => {
       // Wait for the card itself to stop offering confirmation instead.
       await waitFor(() =>
         expect(
-          main.queryByRole("link", { name: /Confirm with your email/ }),
+          main.queryByRole("link", {
+            name: /^Sign in to confirm your vote \(opens in a new tab\)$/,
+          }),
         ).toBeNull(),
       );
       expect(main.getAllByRole("status")[0]?.textContent).toBe("Counted");

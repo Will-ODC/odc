@@ -238,3 +238,88 @@
     padding-inline: calc(var(--step) * 2);
   }
 }
+
+/* On the question page: your answer on one pale green line, its status at the end (#478). */
+.vote-card__yours {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: center;
+  justify-content: space-between;
+  gap: calc(var(--step) / 2) calc(var(--step) * 1.5);
+  padding: calc(var(--step) * 1.25) calc(var(--step) * 1.75);
+  border: var(--hairline) solid var(--green-line);
+  border-radius: var(--r-control);
+  background: var(--green-wash);
+  font-size: var(--t-body);
+  overflow-wrap: anywhere;
+}
+.vote-card__yours .vote-card__note {
+  color: var(--muted);
+}
+
+/* The confirm offer: one short line and a small Sign in button (#480). */
+.vote-card__confirm {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: center;
+  gap: var(--step) calc(var(--step) * 1.25);
+  margin: var(--step) 0;
+  font-size: var(--t-small);
+  color: var(--ink-soft);
+}
+.vote-card__signin {
+  display: inline-flex;
+  align-items: center;
+  box-sizing: border-box;
+  padding: calc(var(--step) * 0.5) calc(var(--step) * 1.5);
+  border: var(--hairline) solid var(--line-strong);
+  border-radius: var(--r-control);
+  background: var(--surface);
+  color: var(--ink);
+  font-weight: 600;
+  text-decoration: none;
+}
+.vote-card__signin:hover {
+  background: var(--hover);
+}
+.vote-card__signin:focus-visible {
+  outline: calc(var(--hairline) * 2) solid var(--focus);
+  outline-offset: calc(var(--hairline) * 2);
+}
+
+/* The results card's footer: How votes count on the left, Next on the right. */
+.vote-card--results .vote-card__actions {
+  margin-top: calc(var(--step) * 1.5);
+}
+.vote-card--results .vote-card__actions > button:last-child {
+  margin-inline-start: auto;
+  color: var(--on-accent);
+  background: var(--green);
+  border-color: var(--green);
+}
+.vote-card--results .vote-card__actions > button:last-child:hover {
+  background: var(--green-hover);
+}
+
+@media (max-width: 699px) {
+  .vote-card__signin {
+    min-height: var(--touch);
+  }
+  .vote-card__info {
+    margin: calc((var(--touch) - var(--step) * 3) / 2);
+  }
+}
+
+/* The results card on the question page: the results and their footer together (#478). */
+.vote-card__results {
+  margin-top: calc(var(--step) * 1.5);
+  padding: calc(var(--step) * 1.5) calc(var(--step) * 2);
+  border: var(--hairline) solid var(--line);
+  border-radius: var(--r-card);
+  background: var(--surface);
+}
+.vote-card__results .results--compact {
+  margin: 0;
+  padding: 0;
+  border: none;
+}
