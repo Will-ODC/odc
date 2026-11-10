@@ -50,6 +50,16 @@ minimized to its total. The drawer's handle is the only Change my answer,
 and the list of earlier answers under the results is gone (the Answered
 rail and My votes carry them).
 
+**Voting in the page on desktop (#490, operator, 2026-11-08).** The operator
+was "not married to the bottom right drawer". At 700px and wider there is no
+drawer: the voting card sits in the page directly under the question, in one
+column, without repeating the question. After a counted vote it folds into the
+"You picked" line, which holds the only Change my answer; that reopens the
+choices in place with a visible Close, while the saved answer's results stay
+below. Copy link sits at the end of the closing-date line and Next under the
+results card. The phone sheet above is unchanged. Focus goes to the
+"You picked" line after a vote, and back to Change my answer after Close.
+
 ## Consequences
 
 Results remain readable outside the voting surface. Keyboard focus follows a

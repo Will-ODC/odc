@@ -69,7 +69,6 @@ function failureOf(target: { ndjson: Buffer; head: string }): {
 } {
   const r = selfVerify(target);
   assert.equal(r.ok, false, "expected self-verify to fail");
-  assert.equal(r.ok, false);
   return { line: r.line, rule: r.rule };
 }
 

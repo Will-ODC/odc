@@ -6,14 +6,14 @@ by a service.
 It builds a throwaway hash-chained event log from a seed, exports it as
 canonical NDJSON, damages it in one of eight documented ways, and checks its own
 output. Its purpose is to give T7's Go verifier a chain that is larger and less
-tidy than the 75 hand-built vectors in `contracts/fixtures/`, and to give T8 a
+tidy than the 150 hand-built vectors in `contracts/fixtures/`, and to give T8 a
 cross-language comparison target.
 
 ## What it is not
 
 **There is no verifier here, and none is coming.** `selfVerify` checks the chain
 this package just built. It emits no `VALID`/`INVALID`/`PARTIAL` verdict,
-executes none of the 75 fixture verdicts, and implements no `EV-17` precedence.
+executes none of the 150 fixture verdicts, and implements no `EV-17` precedence.
 T7's Go verifier — written in a fresh context from `contracts/` alone — is the
 first thing in this repo that judges an export.
 
