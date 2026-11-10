@@ -7,22 +7,29 @@ description: Code review procedure and checklist for ODC. Use this skill wheneve
 
 ## Procedure
 
-1. Reviews run in a fresh Opus session that did not implement the
-   change. Input: the diff, the PR description, the service's `API.md`, and
-   `contracts/`. Not the implementation conversation.
+1. Reviews run in a fresh session that did not write or orchestrate the
+   change: Opus when Claude orchestrates, a fresh Codex process when Codex
+   orchestrates (`odc-orchestration`, "Merging"). Input: the diff, the PR
+   description, the service's `API.md`, and `contracts/`. Not the
+   implementation conversation.
 2. Read the PR description first; if you can't tell what/why/how-tested,
    that alone is a blocking finding. Then read **the ticket it names**
-   (`gh issue view N`) and check the diff's scope against it: work the ticket
-   gives to another ticket, or a PR that names no ticket, is a `[SHOULD]`.
+   (`gh issue view N`; a Codex reviewer, which has no network, reads
+   `PR.json` and `TICKET.md` beside `REVIEW.diff` instead) and check the
+   diff's scope against it: work the ticket gives to another ticket, or a PR that names no ticket, is a `[SHOULD]`.
    A planned step has no ticket by design (`odc-pipeline`, "Planned steps get
    no ticket"): check its scope against the plan or ADR step it names instead,
    and flag it only if it names neither.
 3. Walk the checklist below, then read the diff once more top-to-bottom for
    anything the checklist missed.
+4. A UI PR (as `odc-orchestration`, "Merging", defines it) also gets a
+   separate fresh `odc-ui-reviewer`, which checks the screens in the real
+   browser. Both verdicts are needed before merge.
 
 ## Output format
 
-Verdict first, with its handles: **PR #N (ticket #M, or the planned step) — APPROVE** /
+Verdict first, with its handles: **PR #N @ <head sha> (ticket #M, or the
+planned step) — APPROVE** /
 **APPROVE WITH NITS** / **REQUEST CHANGES**.
 Then findings, each tagged:
 
