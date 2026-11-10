@@ -30,3 +30,9 @@
 .answered--compact a {
   font-size: var(--t-small);
 }
+
+/* While an answer is being sent the page stays on its question (#488). */
+.answered a[aria-disabled="true"] {
+  color: var(--muted);
+  cursor: not-allowed;
+}

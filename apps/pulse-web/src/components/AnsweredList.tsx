@@ -11,11 +11,14 @@ import "./AnsweredList.css";
  *
  * `onOpen`, when given, opens a question in place instead of loading the
  * page again (the rail, where the conversation is already on screen).
+ * `disabled` marks the rows unavailable while the page cannot leave the
+ * question on screen (an answer is being sent); a plain click does nothing.
  */
 export function AnsweredList({
   votes,
   current,
   compact = false,
+  disabled = false,
   onOpen,
   listRef,
 }: {
@@ -23,6 +26,7 @@ export function AnsweredList({
   /** The question on screen, marked as the current one. */
   current?: string;
   compact?: boolean;
+  disabled?: boolean;
   onOpen?: (pollId: string) => void;
   listRef?: Ref<HTMLUListElement>;
 }) {
@@ -36,6 +40,7 @@ export function AnsweredList({
           <a
             href={pathOf({ kind: "conversation", pollId: vote.pollId })}
             aria-current={current === vote.pollId ? "page" : undefined}
+            aria-disabled={disabled ? "true" : undefined}
             {...(onOpen
               ? {
                   onClick: (event: MouseEvent<HTMLAnchorElement>) => {
@@ -47,7 +52,7 @@ export function AnsweredList({
                     )
                       return;
                     event.preventDefault();
-                    onOpen(vote.pollId);
+                    if (!disabled) onOpen(vote.pollId);
                   },
                 }
               : {})}
@@ -55,10 +60,9 @@ export function AnsweredList({
             {vote.question}
           </a>
           <span className="answered__detail">
-            Your answer:{" "}
             {vote.choices.length
-              ? vote.choices.join(", ")
-              : "(answer unavailable)"}
+              ? `Your answer: ${vote.choices.join(", ")}`
+              : "Your answer couldn't be shown."}
           </span>
           <span className="answered__detail">
             {vote.open

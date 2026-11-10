@@ -19,14 +19,14 @@ describe("the room the phone sits in", () => {
     render(
       <AppShell
         banner={<p>the bar</p>}
-        nav={<nav aria-label="Answered" />}
+        nav={<nav aria-label="My votes" />}
         aside={<aside />}
       >
         <p>the ballot</p>
       </AppShell>,
     );
     expect(screen.getByText("the bar")).toBeTruthy();
-    expect(screen.getByRole("navigation", { name: "Answered" })).toBeTruthy();
+    expect(screen.getByRole("navigation", { name: "My votes" })).toBeTruthy();
     expect(screen.getByRole("complementary")).toBeTruthy();
   });
 

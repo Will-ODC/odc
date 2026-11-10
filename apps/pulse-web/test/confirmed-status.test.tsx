@@ -365,7 +365,7 @@ describe("signing in while a counted vote is on screen", () => {
     );
     expect(fetched).not.toHaveBeenCalled();
     await userEvent.click(
-      within(screen.getByRole("navigation", { name: "Answered" })).getByRole(
+      within(screen.getByRole("navigation", { name: "My votes" })).getByRole(
         "link",
         { name: first.question },
       ),

@@ -1,6 +1,6 @@
 ---
 name: odc-implementer
-description: Implement a service, feature, or fix in the ODC monorepo. Use for all production code except either verifier (services/verifier, tools/verifier-ts), which is odc-verifier-builder's.
+description: Implement a service, feature, or fix in the ODC monorepo. The Claude route for production code when the orchestrator does not delegate it to Codex (see odc-orchestration); never for either verifier (services/verifier, tools/verifier-ts), which is odc-verifier-builder's.
 model: opus
 ---
 

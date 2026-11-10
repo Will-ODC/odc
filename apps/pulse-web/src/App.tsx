@@ -144,10 +144,12 @@ export function App({
         );
       case "conversation":
         return (
+          // Not keyed by question: opening another one from the rail, or
+          // going Back, keeps the conversation and its rail on screen (#488).
           <Conversation
-            key={at.pollId}
             api={api}
             pollId={at.pollId}
+            onNavigate={browser.go}
             // Replaced, so the back button does not return to a page that
             // still believes someone is signed in.
             onSignedOut={() => {

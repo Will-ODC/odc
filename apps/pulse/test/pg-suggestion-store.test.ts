@@ -64,27 +64,6 @@ async function fresh(t: TestContext) {
 }
 
 test(
-  "eight_people_saying_the_same_new_thing_at_once_are_one_suggestion",
-  { skip: databaseSkip },
-  async (t) => {
-    // Without taking turns, all eight read an empty list, all eight decide
-    // "add", and the idea is listed eight times with a count of one each.
-    const store = await fresh(t);
-    const results = await Promise.all(
-      Array.from({ length: 8 }, () => store.submit(P1, "Charge the members")),
-    );
-
-    const statuses = results.map((result) => result.status);
-    assert.equal(statuses.filter((s) => s === "added").length, 1);
-    assert.equal(statuses.filter((s) => s === "seconded").length, 7);
-    assert.deepEqual(
-      (await store.list("p1")).map((s) => [s.text, s.count]),
-      [["Charge the members", 8]],
-    );
-  },
-);
-
-test(
   "a_suggestion_on_a_poll_never_written_is_refused_by_name",
   { skip: databaseSkip },
   async (t) => {
@@ -104,9 +83,7 @@ test(
   "a_submission_waits_for_one_already_under_way_on_the_same_poll",
   { skip: databaseSkip },
   async (t) => {
-    // Deterministic where the test above is not: eight real submissions can
-    // happen to run one after another and pass without taking turns at all.
-    // Here someone else is mid-submission, about to add "Charge the members",
+    // Someone else is mid-submission, about to add "Charge the members",
     // holding the poll's row in SHARE mode. A store that takes turns waits for
     // them and then seconds it. A store with a weaker lock, or none, is not
     // held up: it reads an empty list and adds a duplicate.
