@@ -105,7 +105,9 @@ the rail's row as the answer. Leaving a question while its answer is being sent
 keeps its rail row in place until the send settles, then shows the outcome:
 a counted answer moves to the top; after a lost connection the page reads the
 saved answer from the server again. Coming back before the send settles shows
-Loading… for up to 5 seconds instead of the answer being replaced.
+Loading… for up to 5 seconds, then the question with "Your answer is still
+being sent." and no way to answer it again, until the send settles and the
+question is drawn with its outcome.
 The rail keeps one status line for screen readers, which reads out Loading…,
 an error, or "Your votes are loaded." after Try again. Signing out or
 forgetting votes here clears the browser's saved-answer list.

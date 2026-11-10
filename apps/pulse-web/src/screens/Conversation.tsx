@@ -1,4 +1,10 @@
-import { useCallback, useEffect, useRef, useState } from "react";
+import {
+  useCallback,
+  useEffect,
+  useLayoutEffect,
+  useRef,
+  useState,
+} from "react";
 import type { ReactNode } from "react";
 import type { Ballot, Poll, PulseApi, Results } from "../api/types.js";
 import type { Route } from "../flow/route.js";
@@ -202,7 +208,7 @@ export function Conversation({
   );
   // Read by a send's outcome, which arrives after the render that sent it.
   const latest = useRef({ at, answers, unsettled });
-  useEffect(() => {
+  useLayoutEffect(() => {
     latest.current = { at, answers, unsettled };
   });
   const sent = useCallback(
@@ -212,7 +218,12 @@ export function Conversation({
       setSending((old) => [...old, poll.id]);
       void outcome.then(async (state) => {
         if (!current()) return;
-        setSending((old) => old.filter((id) => id !== poll.id));
+        // This send's entry only. A second send for a question whose first
+        // is still out is never offered (`useRestoredAnswer`'s stillSending).
+        setSending((old) => {
+          const one = old.indexOf(poll.id);
+          return one < 0 ? old : [...old.slice(0, one), ...old.slice(one + 1)];
+        });
         const left = latest.current.unsettled.includes(poll.id);
         if (state.status === "counted")
           counted({ poll, ballot: state.ballot, results: state.results });
@@ -471,7 +482,7 @@ function LoadedQuestion({
   // The question is drawn with its saved answer or not at all, never first
   // unanswered and then answered a moment later.
   const loaded =
-    fetched.status === "ready" && !restored
+    fetched.status === "ready" && restored === "pending"
       ? { status: "loading" as const }
       : fetched;
   const heading = useRef<HTMLHeadingElement>(null);
@@ -569,6 +580,15 @@ function LoadedQuestion({
       </>
     );
   };
+  if (loaded.status === "ready" && restored === "stillSending")
+    // The question, but no card to answer it with: a second send would race
+    // the one still out. The page draws it afresh once that one settles.
+    return renderPage(
+      null,
+      <p className="conversation__pending" role="status">
+        Your answer is still being sent.
+      </p>,
+    );
   return loaded.status === "ready" ? (
     <LiveCard
       key={loaded.value.id}
@@ -599,7 +619,9 @@ function LoadedQuestion({
  *
  * While a send left behind for this question is still out (`waiting`), the
  * server's ballot may be about to change, so it is not asked for: the page
- * draws the question again once the send settles. The same wait bounds this.
+ * draws the question again once the send settles. After the same wait the
+ * question is shown without a card to answer it (`stillSending`), never
+ * unanswered with Submit: a second send would race the first (#488).
  */
 function useRestoredAnswer(
   api: PulseApi,
@@ -608,8 +630,9 @@ function useRestoredAnswer(
   waiting: boolean,
   onHeldBallot: () => void,
   onFound: (answer: Answer) => void,
-): boolean {
+): "pending" | "settled" | "stillSending" {
   const [settled, setSettled] = useState(Boolean(saved));
+  const [slow, setSlow] = useState(false);
   const found = useRef(onFound);
   found.current = onFound;
   useEffect(() => {
@@ -631,7 +654,10 @@ function useRestoredAnswer(
     // change sent from another tab), and the question is honest unanswered.
     // Nothing here depends on the rail, so the rail loading or reloading
     // never restarts the wait or asks for the ballot twice.
-    const giveUp = setTimeout(() => finish(), RESTORE_WAIT_MS);
+    const giveUp = setTimeout(
+      () => (waiting ? setSlow(true) : finish()),
+      RESTORE_WAIT_MS,
+    );
     if (!waiting)
       api
         .myBallot(poll.id)
@@ -650,7 +676,7 @@ function useRestoredAnswer(
       clearTimeout(giveUp);
     };
   }, [api, poll, settled, waiting, onHeldBallot]);
-  return settled;
+  return settled ? "settled" : slow ? "stillSending" : "pending";
 }
 
 function LiveCard({

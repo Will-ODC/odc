@@ -1422,7 +1422,7 @@ describe("the Answered list (#484)", () => {
       poll: graph([first, parks]),
       myVotes: async () => ({ votes: [current], nextCursor: null }),
       myBallot: async (id) => (id === first.id ? held : null),
-      results: async (id) => tally(id === first.id ? first : parks, held),
+      results: async (id) => tally(id === first.id ? first : parks, held ?? []),
       cast,
     });
     const view = render(<Conversation api={api} pollId={first.id} />);
@@ -1465,7 +1465,7 @@ describe("the Answered list (#484)", () => {
       poll: graph([first, parks]),
       myVotes: async () => ({ votes: [current], nextCursor: null }),
       myBallot: async (id) => (id === first.id ? held : null),
-      results: async (id) => tally(id === first.id ? first : parks, held),
+      results: async (id) => tally(id === first.id ? first : parks, held ?? []),
       cast,
     });
     const view = render(<Conversation api={api} pollId={first.id} />);
@@ -1777,8 +1777,9 @@ describe("the Answered list (#484)", () => {
     const myBallot = vi.fn(async (id: string) =>
       id === first.id ? sends.state.held : null,
     );
+    const fetchPoll = vi.fn(graph([first, parks]));
     const api = stubApi({
-      poll: graph([first, parks]),
+      poll: fetchPoll,
       myVotes: async () => ({ votes: [saved], nextCursor: null }),
       myBallot,
       results: async () => tally(first, sends.state.held ?? []),
@@ -1790,10 +1791,20 @@ describe("the Answered list (#484)", () => {
     view.rerender(<Conversation api={api} pollId={parks.id} />);
     await main().findByRole("heading", { name: parks.question, level: 1 });
     myBallot.mockClear();
+    const fetches = fetchPoll.mock.results.length;
     view.rerender(<Conversation api={api} pollId={first.id} />);
+    // Let the question itself load first, apart from the send settling, so
+    // only the wait for the send can be what holds the saved-ballot read.
+    await waitFor(() =>
+      expect(fetchPoll.mock.results.length).toBeGreaterThan(fetches),
+    );
+    await act(async () => {
+      await fetchPoll.mock.results.at(-1)!.value;
+    });
     // The answer being replaced is not drawn while its change is out.
     expect(main().getByText("Loading…")).toBeTruthy();
     expect(main().queryByText("You picked Yes.")).toBeNull();
+    expect(myBallot).not.toHaveBeenCalled();
     await act(async () =>
       sends.finish({
         status: "changed",
@@ -1805,6 +1816,132 @@ describe("the Answered list (#484)", () => {
     expect(main().queryByText("You picked Yes.")).toBeNull();
     expect(myBallot).not.toHaveBeenCalled();
     expect(rail().getByText("Your answer: No")).toBeTruthy();
+  });
+
+  it("shows a question whose send is still out after 5 s without a way to send again", async () => {
+    const first = poll();
+    const parks = poll({ id: "parks", question: "More parks?" });
+    const sends = heldCasts([1]);
+    const saved = { ...fromServer, pollId: first.id, question: first.question };
+    const api = stubApi({
+      poll: graph([first, parks]),
+      myVotes: async () => ({ votes: [saved], nextCursor: null }),
+      myBallot: async (id) => (id === first.id ? sends.state.held : null),
+      results: async () => tally(first, sends.state.held ?? []),
+      cast: sends.cast,
+    });
+    const view = render(<Conversation api={api} pollId={first.id} />);
+    await main().findByText("You picked Yes.");
+    await changeTo("No");
+    view.rerender(<Conversation api={api} pollId={parks.id} />);
+    await main().findByRole("heading", { name: parks.question, level: 1 });
+    vi.useFakeTimers();
+    try {
+      view.rerender(<Conversation api={api} pollId={first.id} />);
+      await elapse(0);
+      expect(main().getByText("Loading…")).toBeTruthy();
+      await elapse(5_000);
+      // The question, but not unanswered with Submit: a second send would
+      // race the one still out.
+      main().getByRole("heading", { name: first.question, level: 1 });
+      expect(main().getByText("Your answer is still being sent.")).toBeTruthy();
+      expect(main().queryByRole("button", { name: "Submit" })).toBeNull();
+      expect(main().queryByRole("button", { name: "Answer" })).toBeNull();
+      expect(main().queryByText("You picked Yes.")).toBeNull();
+      await elapse(60_000);
+      expect(main().getByText("Your answer is still being sent.")).toBeTruthy();
+      await act(async () =>
+        sends.finish({
+          status: "changed",
+          ballot: [0],
+          results: tally(first, [0]),
+        }),
+      );
+      await elapse(0);
+      main().getByText("You picked No.");
+      expect(main().queryByText("Your answer is still being sent.")).toBeNull();
+      expect(sends.cast).toHaveBeenCalledTimes(1);
+      expect(rail().getByText("Your answer: No")).toBeTruthy();
+    } finally {
+      vi.useRealTimers();
+    }
+  });
+
+  it("keeps the saved answer's place when a send left behind was never stored", async () => {
+    const first = poll();
+    const parks = poll({ id: "parks", question: "More parks?" });
+    let lose!: () => void;
+    const cast = vi.fn(
+      () =>
+        new Promise<CastOutcome>((_resolve, reject) => {
+          // Lost before the server stored it: the saved answer still stands.
+          lose = () => reject(new Error("offline"));
+        }),
+    );
+    const saved = { ...fromServer, pollId: first.id, question: first.question };
+    const myBallot = vi.fn(async (id: string) =>
+      id === first.id ? [1] : null,
+    );
+    const results = vi.fn(async () => tally(first, [1]));
+    const api = stubApi({
+      poll: graph([first, parks]),
+      myVotes: async () => ({ votes: [fromServer, saved], nextCursor: null }),
+      myBallot,
+      results,
+      cast,
+    });
+    const view = render(<Conversation api={api} pollId={first.id} />);
+    await main().findByText("You picked Yes.");
+    expect(rows()).toEqual([parks.question, first.question]);
+    await changeTo("No");
+    view.rerender(<Conversation api={api} pollId={parks.id} />);
+    await main().findByRole("heading", { name: parks.question, level: 1 });
+    myBallot.mockClear();
+    results.mockClear();
+    await act(async () => lose());
+    await waitFor(() => expect(results).toHaveBeenCalled());
+    await act(async () => {
+      await results.mock.results.at(-1)!.value;
+    });
+    expect(myBallot).toHaveBeenCalledExactlyOnceWith(first.id);
+    // The same answer read back is not a new cast, so it does not move up.
+    expect(rows()).toEqual([parks.question, first.question]);
+    expect(rail().getAllByText("Your answer: Yes")).toHaveLength(2);
+    expect(rail().queryByText("Your answer: No")).toBeNull();
+  });
+
+  it("drops a send that settles after the votes are forgotten", async () => {
+    const sends = heldCasts();
+    const api = stubApi({
+      myVotes: async () => ({ votes: [fromServer], nextCursor: null }),
+      cast: sends.cast,
+      results: async () => tally(poll(), [1]),
+      signOut: async () => {},
+    });
+    render(<Conversation api={api} pollId={poll().id} />);
+    await main().findByRole("heading", { name: poll().question, level: 1 });
+    openCard();
+    const user = await pick("Yes");
+    await openAccount(user);
+    await user.click(
+      banner().getByRole("button", { name: "Forget my votes here" }),
+    );
+    await user.click(banner().getByRole("button", { name: "Forget them" }));
+    await rail().findByText("No votes saved in this browser yet.");
+    await main().findByRole("heading", { name: poll().question, level: 1 });
+    await act(async () =>
+      sends.finish({
+        status: "counted",
+        ballot: [1],
+        results: tally(poll(), [1]),
+      }),
+    );
+    await act(async () => {});
+    expect(rail().queryByRole("link", { name: poll().question })).toBeNull();
+    expect(
+      rail().getByText("No votes saved in this browser yet."),
+    ).toBeTruthy();
+    expect(main().queryByText("You picked Yes.")).toBeNull();
   });
 
   it("keeps the rail locked when the address catches up with the question shown", async () => {

@@ -67,6 +67,21 @@
 .conversation__sidebar .viewstate--compact:has(> :not(.visually-hidden)) {
   margin-block: var(--step);
 }
+/* "Loading…" sits a step clear of the thread card below it. */
+.conversation__column > .viewstate {
+  margin-bottom: var(--gutter);
+}
+/* Stands where the card would, while a send left behind is still out. */
+.conversation__pending {
+  margin: 0;
+  padding: calc(var(--step) * 2);
+  border: var(--hairline) solid var(--line);
+  border-radius: var(--r-card);
+  background: var(--surface);
+  font-size: var(--t-small);
+  color: var(--muted);
+  pointer-events: auto;
+}
 .conversation__thread {
   list-style: none;
   padding: 0;
