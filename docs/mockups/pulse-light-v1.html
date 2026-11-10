@@ -260,6 +260,36 @@
   .step b { font-size: 14px; }
   .step span { font-size: 13px; color: var(--muted); }
 
+  /* Desktop, improved (proposal): the voting card sits in the page under the
+     question instead of floating at the bottom right. One centered column
+     beside the Answered rail. Artboards are drawn at the real 1280 and 1440
+     widths and scroll inside their frames. */
+  .app.dx { width: 1280px; height: auto; min-height: 720px; }
+  .app.dx.w1440 { width: 1440px; }
+  .dx .with-rail { grid-template-columns: 240px 1fr; height: auto; min-height: 668px; }
+  .dx-main { width: 100%; max-width: 680px; margin: 0 auto; padding: 40px 0 48px; display: grid; gap: 20px; align-content: start; }
+  .dx-main h1 { margin: -8px 0 0; font-size: 28px; line-height: 1.25; letter-spacing: -0.015em; text-wrap: balance; }
+  .dx-head { display: flex; justify-content: space-between; align-items: center; gap: 16px; }
+  .dx-vote { border: 1px solid var(--line); border-radius: var(--r-card); padding: 16px; display: grid; gap: 12px; background: var(--page); }
+  .dx-vote .choice { min-height: 48px; font-size: 15px; }
+  .dx-vote footer { display: flex; justify-content: space-between; align-items: center; gap: 12px; }
+  .dx-vote footer .right { display: flex; gap: 8px; align-items: center; }
+  .dx .sv-you .btn { flex: none; }
+  .dx .sv-you .sv-status { margin-left: 8px; }
+  .dx-next { display: flex; justify-content: flex-start; margin-top: -4px; }
+  .dx-vote .btn.primary:disabled { color: var(--muted); background: #eef1ef; border-color: var(--line); cursor: default; }
+  .dx-vote .choice .radio.box { border-radius: 4px; }
+  .dx-vote .choice.sel .radio.box { background: var(--green); box-shadow: inset 0 0 0 3px var(--page); }
+  .dx-vote.off .choice { color: var(--muted); background: var(--subtle); }
+  .dx-problem { margin: 0; color: var(--red); font-size: 14px; }
+  .dx-closed { display: grid; gap: 2px; padding: 10px 14px; border: 1px solid var(--line); border-radius: var(--r-control); background: var(--subtle); font-size: 14px; }
+  .dx-closed span { color: var(--muted); }
+  .app.dx.mini { min-height: 0; }
+  .dx.mini .with-rail { min-height: 0; }
+  .dx-why { display: grid; gap: 8px; max-width: 72ch; font-size: 14px; color: var(--ink-soft); background: var(--page); border: 1px solid var(--line); border-radius: var(--r-card); padding: 16px 20px; }
+  .dx-why h3 { margin: 0; font-size: 15px; color: var(--ink); }
+  .dx-why ul { margin: 0; padding-left: 20px; display: grid; gap: 6px; }
+
   .notes { display: grid; gap: 10px; max-width: 72ch; font-size: 14px; color: var(--ink-soft); }
   .notes h2 { font-size: 18px; color: var(--ink); margin: 0; }
   .notes ul { margin: 0; padding-left: 20px; display: grid; gap: 6px; }
@@ -410,6 +440,310 @@
         <button class="btn handle" type="button">Change my answer</button>
       </div></div>
     </figure>
+  </section>
+
+  <section class="group v-desk" aria-labelledby="desk2">
+    <h2 id="desk2">Desktop, improved (proposal)</h2>
+
+    <div class="dx-why">
+      <h3>Why</h3>
+      <ul>
+        <li>The choices move up into the page, right under the question. You read the question and answer it in one column, top to bottom, instead of looking from the top left to the bottom right corner.</li>
+        <li>The bottom-right drawer is replaced on desktop (700px and wider) by the same voting card, placed in the page with no shadow. The phone keeps its bottom sheet, unchanged.</li>
+        <li>The question prints once. The card drops its "Decision" label and the repeated question; the heading above names the choices for screen readers.</li>
+        <li>After you submit, the card folds into the "You picked X." line, and that line carries the one "Change my answer" button. Pressing it opens the choices in the same spot with your saved answer selected.</li>
+        <li>The page is one 680px column centered in the space beside the Answered rail, so nothing sits in a far corner at 1280 or 1440 wide.</li>
+        <li>What changes place: the choices, Submit and "Your answer is private." (drawer to under the question); "Change my answer" (floating button to the end of the "You picked" line); Copy link (under the heading to the end of the closing-date line); Next (inside the results card to just under it, so it stays when results are hidden).</li>
+        <li>What stays put: the results card and its Hide/Show results button, the "Sign in to confirm your vote." line, the closing date, and Home. No wording changes, except a visible "Close" button while changing an answer.</li>
+        <li>The Answered list stays a rail at 1100px and wider. From 700 to 1099px it stays hidden, and My votes carries it, as today.</li>
+        <li>Focus: after Submit, focus moves to the "You picked X." line (tabindex -1, so it can take focus without being a tab stop). "Change my answer" opens the choices with focus on the saved choice. "Close" (nothing sent) puts focus back on the "Change my answer" button.</li>
+      </ul>
+    </div>
+
+    <figure>
+      <figcaption><b>(a) A question, before voting, 1280 wide.</b> The choices sit right under the question in a flat bordered card. Copy link moves to the end of the closing-date line so nothing sits between the question and its choices. Submit stays gray until a choice is picked (shown picked here, with the focus ring).</figcaption>
+      <div class="scroll"><div class="app desk dx">
+        <div class="bar">
+          <nav><span class="brand">pulse</span><a href="#home">Home</a><a href="#about">About</a><a href="#votes">My votes</a></nav>
+          <div class="right"><a class="btn primary sm" href="#new">Post a question</a><a class="btn sm" href="#signin">Sign in</a></div>
+        </div>
+        <div class="with-rail">
+          <aside class="rail"><h2>Answered</h2><a href="#q">Should the ODC stay free of paid ads?</a><a href="#q">Which ads are allowed?</a></aside>
+          <div class="dx-main">
+            <div class="dx-head"><p class="meta">Closes Nov 10, 2026 · you can change your answer until then.</p><button class="btn sm" type="button">Copy link</button></div>
+            <h1 id="dx-qa">How do we pay for it?</h1>
+            <div class="dx-vote" role="radiogroup" aria-labelledby="dx-qa">
+              <ul class="choices">
+                <li class="choice"><span class="radio"></span><span class="num">1</span>Members chip in</li>
+                <li class="choice sel"><span class="radio"></span><span class="num">2</span>One-off donations</li>
+                <li class="choice"><span class="radio"></span><span class="num">3</span>Grants</li>
+                <li class="choice"><span class="radio"></span><span class="num">4</span>A cut of what moves through it</li>
+              </ul>
+              <footer><span class="meta">Your answer is private.</span><button class="btn primary focus" type="button">Submit</button></footer>
+            </div>
+          </div>
+        </div>
+      </div></div>
+    </figure>
+
+    <figure>
+      <figcaption><b>(a) The same, 1440 wide.</b> The column stays 680px and centered beside the rail; the extra width becomes even margins, not a gap between the question and its choices.</figcaption>
+      <div class="scroll"><div class="app desk dx w1440">
+        <div class="bar">
+          <nav><span class="brand">pulse</span><a href="#home">Home</a><a href="#about">About</a><a href="#votes">My votes</a></nav>
+          <div class="right"><a class="btn primary sm" href="#new">Post a question</a><a class="btn sm" href="#signin">Sign in</a></div>
+        </div>
+        <div class="with-rail">
+          <aside class="rail"><h2>Answered</h2><a href="#q">Should the ODC stay free of paid ads?</a><a href="#q">Which ads are allowed?</a></aside>
+          <div class="dx-main">
+            <div class="dx-head"><p class="meta">Closes Nov 10, 2026 · you can change your answer until then.</p><button class="btn sm" type="button">Copy link</button></div>
+            <h1 id="dx-qb">How do we pay for it?</h1>
+            <div class="dx-vote" role="radiogroup" aria-labelledby="dx-qb">
+              <ul class="choices">
+                <li class="choice"><span class="radio"></span><span class="num">1</span>Members chip in</li>
+                <li class="choice"><span class="radio"></span><span class="num">2</span>One-off donations</li>
+                <li class="choice"><span class="radio"></span><span class="num">3</span>Grants</li>
+                <li class="choice"><span class="radio"></span><span class="num">4</span>A cut of what moves through it</li>
+              </ul>
+              <footer><span class="meta">Your answer is private.</span><button class="btn primary" type="button" disabled>Submit</button></footer>
+            </div>
+          </div>
+        </div>
+      </div></div>
+    </figure>
+
+    <figure>
+      <figcaption><b>(b) After voting, results open, 1280 wide.</b> The voting card has folded into the pale green "You picked" line, which now holds the one "Change my answer" button. Then the one-line confirm offer, then the results card. Next sits just under the card. The bars are a sketch; the real chart keeps its own shape and colors.</figcaption>
+      <div class="scroll"><div class="app desk dx">
+        <div class="bar">
+          <nav><span class="brand">pulse</span><a href="#home">Home</a><a href="#about">About</a><a href="#votes">My votes</a></nav>
+          <div class="right"><a class="btn primary sm" href="#new">Post a question</a><a class="btn sm" href="#signin">Sign in</a></div>
+        </div>
+        <div class="with-rail">
+          <aside class="rail"><h2>Answered</h2><a class="on" href="#q">How do we pay for it?</a><a href="#q">Should the ODC stay free of paid ads?</a><a href="#q">Which ads are allowed?</a></aside>
+          <div class="dx-main">
+            <div class="dx-head"><p class="meta">Closes Nov 10, 2026 · you can change your answer until then.</p><button class="btn sm" type="button">Copy link</button></div>
+            <h1>How do we pay for it?</h1>
+            <div class="sv-mine">
+              <div class="sv-you"><span>You picked <b>One-off donations</b>. <span class="sv-status">Counted</span></span><button class="btn sm" type="button">Change my answer</button></div>
+              <p class="sv-confirm">Sign in to confirm your vote. <a class="btn sm" href="#signin" target="_blank" rel="noopener" aria-label="Sign in to confirm your vote (opens in a new tab)">Sign in <svg viewBox="0 0 16 16" fill="none" stroke="currentColor" stroke-width="1.8" aria-hidden="true"><path d="M6 3h7v7M13 3L4 12"/></svg></a></p>
+            </div>
+            <section class="card sv-results" aria-label="How people answered">
+              <div class="sv-head"><h2>How people answered</h2><button class="btn quiet sm sv-toggle" type="button" aria-expanded="true" aria-controls="dx-b-body">Hide results <svg viewBox="0 0 16 16" fill="none" stroke="currentColor" stroke-width="1.8" aria-hidden="true"><path d="M4 10l4-4 4 4"/></svg></button></div>
+              <p class="meta sv-count">48 votes so far · 31 confirmed by email</p>
+              <ul class="res" id="dx-b-body">
+                <li><span class="lab">Members chip in</span><span class="track"><i style="width:62%"></i></span><span class="fig">15 · 31%</span></li>
+                <li class="mine"><span class="lab">One-off donations <span class="badge">yours</span></span><span class="track"><i style="width:100%"></i></span><span class="fig">24 · 50%</span></li>
+                <li><span class="lab">Grants</span><span class="track"><i style="width:29%"></i></span><span class="fig">7 · 15%</span></li>
+                <li><span class="lab">A cut of what moves through it</span><span class="track"><i style="width:8%"></i></span><span class="fig">2 · 4%</span></li>
+              </ul>
+              <div class="actions"><span class="info" role="img" aria-label="How votes count">i</span></div>
+            </section>
+            <div class="dx-next"><button class="btn primary" type="button">Next</button></div>
+          </div>
+        </div>
+      </div></div>
+    </figure>
+
+    <figure>
+      <figcaption><b>(c) After voting, results hidden, 1280 wide.</b> The card folds to one line: the vote count and "Show results" (focus ring shown; the button keeps its place in both states). Next stays visible under it.</figcaption>
+      <div class="scroll"><div class="app desk dx" style="min-height:0">
+        <div class="bar">
+          <nav><span class="brand">pulse</span><a href="#home">Home</a><a href="#about">About</a><a href="#votes">My votes</a></nav>
+          <div class="right"><a class="btn primary sm" href="#new">Post a question</a><a class="btn sm" href="#signin">Sign in</a></div>
+        </div>
+        <div class="with-rail" style="min-height:440px">
+          <aside class="rail"><h2>Answered</h2><a class="on" href="#q">How do we pay for it?</a><a href="#q">Should the ODC stay free of paid ads?</a><a href="#q">Which ads are allowed?</a></aside>
+          <div class="dx-main">
+            <div class="dx-head"><p class="meta">Closes Nov 10, 2026 · you can change your answer until then.</p><button class="btn sm" type="button">Copy link</button></div>
+            <h1>How do we pay for it?</h1>
+            <div class="sv-mine">
+              <div class="sv-you"><span>You picked <b>One-off donations</b>. <span class="sv-status">Counted</span></span><button class="btn sm" type="button">Change my answer</button></div>
+              <p class="sv-confirm">Sign in to confirm your vote. <a class="btn sm" href="#signin" target="_blank" rel="noopener" aria-label="Sign in to confirm your vote (opens in a new tab)">Sign in <svg viewBox="0 0 16 16" fill="none" stroke="currentColor" stroke-width="1.8" aria-hidden="true"><path d="M6 3h7v7M13 3L4 12"/></svg></a></p>
+            </div>
+            <section class="card sv-results sv-min" aria-label="How people answered">
+              <div class="sv-head"><span class="sv-sum">48 votes so far</span><button class="btn quiet sm sv-toggle focus" type="button" aria-expanded="false">Show results <svg viewBox="0 0 16 16" fill="none" stroke="currentColor" stroke-width="1.8" aria-hidden="true"><path d="M4 6l4 4 4-4"/></svg></button></div>
+            </section>
+            <div class="dx-next"><button class="btn primary" type="button">Next</button></div>
+          </div>
+        </div>
+      </div></div>
+    </figure>
+
+    <figure>
+      <figcaption><b>Changing your answer, 1280 wide.</b> "Change my answer" opens the choices in place of the "You picked" line, with the saved answer selected and focus on it. "Close" folds them back without sending anything. While the choices are open, the saved answer, its "Counted" status and the confirm offer move just under the results, which stay as you left them (open here) until a new answer is saved. Next is not shown while changing.</figcaption>
+      <div class="scroll"><div class="app desk dx mini">
+        <div class="bar">
+          <nav><span class="brand">pulse</span><a href="#home">Home</a><a href="#about">About</a><a href="#votes">My votes</a></nav>
+          <div class="right"><a class="btn primary sm" href="#new">Post a question</a><a class="btn sm" href="#signin">Sign in</a></div>
+        </div>
+        <div class="with-rail">
+          <aside class="rail"><h2>Answered</h2><a class="on" href="#q">How do we pay for it?</a><a href="#q">Should the ODC stay free of paid ads?</a><a href="#q">Which ads are allowed?</a></aside>
+          <div class="dx-main">
+            <div class="dx-head"><p class="meta">Closes Nov 10, 2026 · you can change your answer until then.</p><button class="btn sm" type="button">Copy link</button></div>
+            <h1 id="dx-qc">How do we pay for it?</h1>
+            <div class="dx-vote" role="radiogroup" aria-labelledby="dx-qc">
+              <ul class="choices">
+                <li class="choice"><span class="radio"></span><span class="num">1</span>Members chip in</li>
+                <li class="choice sel focus"><span class="radio"></span><span class="num">2</span>One-off donations</li>
+                <li class="choice"><span class="radio"></span><span class="num">3</span>Grants</li>
+                <li class="choice"><span class="radio"></span><span class="num">4</span>A cut of what moves through it</li>
+              </ul>
+              <footer><span class="meta">Your answer is private.</span><span class="right"><button class="btn quiet sm" type="button">Close</button><button class="btn primary" type="button">Submit</button></span></footer>
+            </div>
+            <section class="card sv-results" aria-label="How people answered">
+              <div class="sv-head"><h2>How people answered</h2><button class="btn quiet sm sv-toggle" type="button" aria-expanded="true" aria-controls="dx-c-body">Hide results <svg viewBox="0 0 16 16" fill="none" stroke="currentColor" stroke-width="1.8" aria-hidden="true"><path d="M4 10l4-4 4 4"/></svg></button></div>
+              <p class="meta sv-count">48 votes so far · 31 confirmed by email</p>
+              <ul class="res" id="dx-c-body">
+                <li><span class="lab">Members chip in</span><span class="track"><i style="width:62%"></i></span><span class="fig">15 · 31%</span></li>
+                <li class="mine"><span class="lab">One-off donations <span class="badge">yours</span></span><span class="track"><i style="width:100%"></i></span><span class="fig">24 · 50%</span></li>
+                <li><span class="lab">Grants</span><span class="track"><i style="width:29%"></i></span><span class="fig">7 · 15%</span></li>
+                <li><span class="lab">A cut of what moves through it</span><span class="track"><i style="width:8%"></i></span><span class="fig">2 · 4%</span></li>
+              </ul>
+              <div class="actions"><span class="info" role="img" aria-label="How votes count">i</span></div>
+            </section>
+            <div class="sv-mine"><div class="sv-you"><span>You picked <b>One-off donations</b>. <span class="sv-status">Counted</span></span></div><p class="sv-confirm">Sign in to confirm your vote. <a class="btn sm" href="#signin" target="_blank" rel="noopener" aria-label="Sign in to confirm your vote (opens in a new tab)">Sign in <svg viewBox="0 0 16 16" fill="none" stroke="currentColor" stroke-width="1.8" aria-hidden="true"><path d="M6 3h7v7M13 3L4 12"/></svg></a></p></div>
+          </div>
+        </div>
+      </div></div>
+    </figure>
+
+    <figure>
+      <figcaption><b>Sending.</b> After Submit the choices lock and Submit reads "Sending…" until the answer is saved; then the card folds into the "You picked" line, as in (b).</figcaption>
+      <div class="scroll"><div class="app desk dx mini">
+        <div class="bar">
+          <nav><span class="brand">pulse</span><a href="#home">Home</a><a href="#about">About</a><a href="#votes">My votes</a></nav>
+          <div class="right"><a class="btn primary sm" href="#new">Post a question</a><a class="btn sm" href="#signin">Sign in</a></div>
+        </div>
+        <div class="with-rail">
+          <aside class="rail"><h2>Answered</h2><a href="#q">Should the ODC stay free of paid ads?</a><a href="#q">Which ads are allowed?</a></aside>
+          <div class="dx-main">
+            <div class="dx-head"><p class="meta">Closes Nov 10, 2026 · you can change your answer until then.</p><button class="btn sm" type="button">Copy link</button></div>
+            <h1 id="dx-qs">How do we pay for it?</h1>
+            <div class="dx-vote off" role="radiogroup" aria-labelledby="dx-qs" aria-busy="true">
+              <ul class="choices">
+                <li class="choice"><span class="radio"></span><span class="num">1</span>Members chip in</li>
+                <li class="choice sel"><span class="radio"></span><span class="num">2</span>One-off donations</li>
+                <li class="choice"><span class="radio"></span><span class="num">3</span>Grants</li>
+                <li class="choice"><span class="radio"></span><span class="num">4</span>A cut of what moves through it</li>
+              </ul>
+              <footer><span class="meta">Your answer is private.</span><button class="btn primary" type="button" disabled>Sending…</button></footer>
+            </div>
+          </div>
+        </div>
+      </div></div>
+    </figure>
+
+    <figure>
+      <figcaption><b>A failed send.</b> The card stays open with your pick kept. The app's own error line sits inside the card, above the footer, and Submit reads "Try again".</figcaption>
+      <div class="scroll"><div class="app desk dx mini">
+        <div class="bar">
+          <nav><span class="brand">pulse</span><a href="#home">Home</a><a href="#about">About</a><a href="#votes">My votes</a></nav>
+          <div class="right"><a class="btn primary sm" href="#new">Post a question</a><a class="btn sm" href="#signin">Sign in</a></div>
+        </div>
+        <div class="with-rail">
+          <aside class="rail"><h2>Answered</h2><a href="#q">Should the ODC stay free of paid ads?</a><a href="#q">Which ads are allowed?</a></aside>
+          <div class="dx-main">
+            <div class="dx-head"><p class="meta">Closes Nov 10, 2026 · you can change your answer until then.</p><button class="btn sm" type="button">Copy link</button></div>
+            <h1 id="dx-qf">How do we pay for it?</h1>
+            <div class="dx-vote" role="radiogroup" aria-labelledby="dx-qf">
+              <ul class="choices">
+                <li class="choice"><span class="radio"></span><span class="num">1</span>Members chip in</li>
+                <li class="choice sel"><span class="radio"></span><span class="num">2</span>One-off donations</li>
+                <li class="choice"><span class="radio"></span><span class="num">3</span>Grants</li>
+                <li class="choice"><span class="radio"></span><span class="num">4</span>A cut of what moves through it</li>
+              </ul>
+              <p class="dx-problem" role="alert">We could not reach the ballot. Check your connection and try again.</p>
+              <footer><span class="meta">Your answer is private.</span><button class="btn primary focus" type="button">Try again</button></footer>
+            </div>
+          </div>
+        </div>
+      </div></div>
+    </figure>
+
+    <figure>
+      <figcaption><b>A closed question.</b> The question and its choices are always on the page, so the drawer's "Show question" handle has no job left. The choices show locked (your answer still marked if you gave one), the closed notice sits inside the card, and "See results" stays in the page under it, as today, opening the same results card. No Submit, no "Change my answer", no confirm offer.</figcaption>
+      <div class="scroll"><div class="app desk dx mini">
+        <div class="bar">
+          <nav><span class="brand">pulse</span><a href="#home">Home</a><a href="#about">About</a><a href="#votes">My votes</a></nav>
+          <div class="right"><a class="btn primary sm" href="#new">Post a question</a><a class="btn sm" href="#signin">Sign in</a></div>
+        </div>
+        <div class="with-rail">
+          <aside class="rail"><h2>Answered</h2><a class="on" href="#q">How do we pay for it?</a><a href="#q">Should the ODC stay free of paid ads?</a><a href="#q">Which ads are allowed?</a></aside>
+          <div class="dx-main">
+            <div class="dx-head"><p class="meta">This question has closed.</p><button class="btn sm" type="button">Copy link</button></div>
+            <h1 id="dx-qx">Which ads are allowed?</h1>
+            <div class="dx-vote off" role="radiogroup" aria-labelledby="dx-qx" aria-disabled="true">
+              <ul class="choices">
+                <li class="choice sel"><span class="radio"></span><span class="num">1</span>None</li>
+                <li class="choice"><span class="radio"></span><span class="num">2</span>Only local businesses</li>
+                <li class="choice"><span class="radio"></span><span class="num">3</span>Any that pass review</li>
+              </ul>
+              <div class="dx-closed" role="status"><b>This one has closed.</b><span>Nothing you do here will change it.</span></div>
+              <footer><span class="meta">Your answer is private.</span></footer>
+            </div>
+            <div class="dx-next"><button class="btn" type="button">See results</button></div>
+          </div>
+        </div>
+      </div></div>
+    </figure>
+
+    <figure>
+      <figcaption><b>An approval question, 9 choices.</b> Square boxes, any number can be ticked. The card simply grows with the page, so there is no inner scroll box (the drawer needed one); the page scrolls and Submit is reached at the end of the list. Number keys still pick 1 to 9.</figcaption>
+      <div class="scroll"><div class="app desk dx mini">
+        <div class="bar">
+          <nav><span class="brand">pulse</span><a href="#home">Home</a><a href="#about">About</a><a href="#votes">My votes</a></nav>
+          <div class="right"><a class="btn primary sm" href="#new">Post a question</a><a class="btn sm" href="#signin">Sign in</a></div>
+        </div>
+        <div class="with-rail">
+          <aside class="rail"><h2>Answered</h2><a href="#q">Should the ODC stay free of paid ads?</a><a href="#q">Which ads are allowed?</a></aside>
+          <div class="dx-main">
+            <div class="dx-head"><p class="meta">Closes Nov 10, 2026 · you can change your answer until then.</p><button class="btn sm" type="button">Copy link</button></div>
+            <h1 id="dx-qp">Which projects should we start this year?</h1>
+            <div class="dx-vote" role="group" aria-labelledby="dx-qp">
+              <ul class="choices">
+                <li class="choice sel"><span class="radio box"></span><span class="num">1</span>A tool library</li>
+                <li class="choice sel"><span class="radio box"></span><span class="num">2</span>Repair cafe nights</li>
+                <li class="choice"><span class="radio box"></span><span class="num">3</span>Cooking classes</li>
+                <li class="choice"><span class="radio box"></span><span class="num">4</span>A seed swap</li>
+                <li class="choice"><span class="radio box"></span><span class="num">5</span>Kids' coding club</li>
+                <li class="choice sel"><span class="radio box"></span><span class="num">6</span>Community garden plots</li>
+                <li class="choice"><span class="radio box"></span><span class="num">7</span>A shared van</li>
+                <li class="choice"><span class="radio box"></span><span class="num">8</span>Language exchange</li>
+                <li class="choice"><span class="radio box"></span><span class="num">9</span>Monthly film night</li>
+              </ul>
+              <footer><span class="meta">Your answer is private.</span><button class="btn primary" type="button">Submit</button></footer>
+            </div>
+          </div>
+        </div>
+      </div></div>
+    </figure>
+
+    <figure>
+      <figcaption><b>A two-line question.</b> The heading wraps within the 680px column (balanced lines) and the card follows directly under it; nothing else moves.</figcaption>
+      <div class="scroll"><div class="app desk dx mini">
+        <div class="bar">
+          <nav><span class="brand">pulse</span><a href="#home">Home</a><a href="#about">About</a><a href="#votes">My votes</a></nav>
+          <div class="right"><a class="btn primary sm" href="#new">Post a question</a><a class="btn sm" href="#signin">Sign in</a></div>
+        </div>
+        <div class="with-rail">
+          <aside class="rail"><h2>Answered</h2><a href="#q">Should the ODC stay free of paid ads?</a><a href="#q">Which ads are allowed?</a></aside>
+          <div class="dx-main">
+            <div class="dx-head"><p class="meta">Closes Nov 10, 2026 · you can change your answer until then.</p><button class="btn sm" type="button">Copy link</button></div>
+            <h1 id="dx-q2">Should the community fund a shared workshop space for repairs, classes and meetups next year?</h1>
+            <div class="dx-vote" role="radiogroup" aria-labelledby="dx-q2">
+              <ul class="choices">
+                <li class="choice"><span class="radio"></span><span class="num">1</span>Yes</li>
+                <li class="choice"><span class="radio"></span><span class="num">2</span>No</li>
+              </ul>
+              <footer><span class="meta">Your answer is private.</span><button class="btn primary" type="button" disabled>Submit</button></footer>
+            </div>
+          </div>
+        </div>
+      </div></div>
+    </figure>
+
+    <p class="meta"><b style="color:var(--ink)">Already voted, on load:</b> the page opens straight in state (b) or (c), whichever results state you last chose on this question, with focus at the top of the page as usual. <b style="color:var(--ink)">(d) Home</b> is unchanged: see the Desktop section above. <b style="color:var(--ink)">(e) The Answered list</b> is unchanged: a rail at 1100px and wider; from 700 to 1099px it stays hidden and My votes carries it, as today.</p>
   </section>
 
   <section class="group v-phone" aria-labelledby="ph">
