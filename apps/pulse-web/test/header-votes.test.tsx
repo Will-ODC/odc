@@ -142,7 +142,9 @@ const recoveryPages = pages.filter(
   ({ route }) =>
     route.kind === "about" ||
     route.kind === "browse" ||
-    route.kind === "newPoll",
+    route.kind === "newPoll" ||
+    route.kind === "myVotes" ||
+    route.kind === "conversation",
 );
 function showFailedRead(route: Route, myVotes: () => Promise<MyVotesPage>) {
   const signOut = vi.fn(async () => {});
@@ -151,6 +153,9 @@ function showFailedRead(route: Route, myVotes: () => Promise<MyVotesPage>) {
       route={route}
       api={stubApi({
         myVotes,
+        // A failed history read must retain Forget even with no readable
+        // ballot for the current question to supply a fallback.
+        myBallot: async () => null,
         signOut,
         listPolls: async () => ({ polls: [], nextCursor: null }),
         creationContext: async () => {
