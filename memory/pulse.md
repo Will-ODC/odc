@@ -114,15 +114,16 @@ the same CI runs.
 5. **The proxy-hop and rate-limit prerequisites** in `apps/pulse/DEPLOY.md`
    must be satisfied before go-live.
 
-## Current operator direction and next work (2026-11-08)
+## Current operator direction and next work (2026-11-10)
 
 1. **Recent UI work is merged:** private My votes history (#329 / PR #467),
    compact results charts (#453 / PR #468), and the light restyle with phone
    layout (#482 / PR #485).
-2. **The open stack starts at PR #488:** #484 Answered list sync has fixes in
-   progress; PR #489 simplifies results (#478/#480) on top of #488; PR #492
-   adds the desktop layout (#490) on top of #489.
-3. #487 remains open and has not started.
+2. **The #488/#489/#492 stack is merged.** PR #492 (`2d57b5b`, closes #490,
+   ADR-0044) puts desktop voting under the question with no drawer at 700px
+   and up. Test-audit steps #504 (`e517952`) and #505 (storage-event test
+   without a sleep) are merged too.
+3. **Open next work:** #487, #502, #507, #503, #498, #500, #499.
 4. Prepare a small invited pilot only after choosing a host, configuring DNS,
    verifying a sending domain and satisfying `apps/pulse/DEPLOY.md`'s
    proxy-hop and rate-limit prerequisites. This is not authorization to deploy.
@@ -188,7 +189,7 @@ the same CI runs.
 
 - **The authoring and demo-feedback slices are complete** (#393/#403–#405).
   Browse #260, the #451/#452 layout, #453 / PR #468 results charts and #482 /
-  PR #485 light restyle are merged. The current stack is #488, #489 and #492;
+  PR #485 light restyle are merged. The #488/#489/#492 stack is merged;
   #487 is open and unstarted. #457/#458 add community paths and lifecycle
   deliberation. Poll-creation refinements are an open operator request whose particular
   changes still need scoping; reuse the built creation flow. A local demo is
@@ -334,6 +335,16 @@ the same CI runs.
 
 **Client**
 
+- **Unticketed issues (2026-11-10):** `test/App.test.tsx:69` "stops saying
+  'Signed in' once someone signs out" is flaky on CI (`getByRole` right after
+  clicking Account; use `findByRole`). On master at 390px the results chart's
+  top axis label is cut off ("00%") and the fixed "Change my answer" bar
+  covers the bottom of the results card.
+- **Open #492 nits:** no visible focus ring on the "You picked" line; Copy link
+  sits ~8px inside the card edge; column is 744px vs 680px in the mockup;
+  focus drops to body on resize while changing an answer; focus effect gated
+  on `visible` (Conversation.tsx ~789); `kept` duplicates `card` props; voting
+  region and fieldset are both named by the question (announced 3 times).
 - **Local demo handoff (2026-10-20):** API `http://127.0.0.1:8080`, web
   `http://localhost:5173`, served from the attached
   `repo-guidance-cleanup/odc` worktree, now detached at merged master. The old

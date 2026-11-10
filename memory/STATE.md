@@ -49,7 +49,9 @@ in the Done list below. The Go CLI takes `<file>` with no subcommand; the TS CLI
 2026-10-23: storage #444, canonical hashing and parsing #445, Ed25519 #446,
 the EV-26 checker #447 and the signer client #448. Wave 2's append core and
 INSERT-only batching state #460, public read API #461 and internal operator
-write/close routes #462 and ballot batching #463 are merged. Local validation
+write/close routes #462 and ballot batching #463 are merged; #501 (2026-11-10) added an injectable batcher
+schedule option with deterministic timer and writer-lock tests and real-HTTP
+error-reply tests on both ports. Local validation
 at #463's final reviewed head passed 340 ledger tests against Postgres 17,
 with zero skipped; both PRs passed CI. Final server wiring and a CI check that both
 verifiers judge a batched export remain pending; close calls still return 503
@@ -142,7 +144,8 @@ Optional, from ADR-0034 owed item 4: `docs/security/attacks/check-unknown-batchi
   follow-up #326.
 - ADR-0043 (registrar signer, v2 registration): #438, charter §10 #439, one-call
   batch signing #443. Ledger wave 1: #444-#448; wave 2 append core/batching state #460, read API
-  #461, operator write path #462 and batcher #463 (2026-10-23).
+  #461, operator write path #462 and batcher #463 (2026-10-23); #501 batcher
+  injectable schedule and error-reply tests (2026-11-10).
 - ADR-0038 (the four contradictions, #355): contract #359, `genesis.contracts`
   cap #361. Go #370 (#364), TS #371 (#365), then ET-9f in both verifiers with
   the `086` flip and vectors `135`-`145` in #372 (#366), merged 2026-10-19.
