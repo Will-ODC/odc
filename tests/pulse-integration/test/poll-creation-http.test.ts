@@ -154,23 +154,23 @@ describe("poll creation against the real server", () => {
     const key = randomUUID();
     const created = await api.createPoll(key, question);
     expect(creationResponses[0]?.status).toBe(201);
-    expect(await creationResponses[0]?.json()).toMatchObject({
-      replayed: false,
-    });
+    const createdBody: unknown = await creationResponses[0]?.json();
+    expect(createdBody).toMatchObject({ replayed: false });
     expect(creationResponses[0]?.headers.getSetCookie()).toEqual([]);
     expect(jar.header()).toBe(sessionCookie);
     expect(created.attribution).toEqual({ kind: "anonymous" });
     // No account id or address anywhere in what came back.
-    expect(JSON.stringify(created)).not.toContain(me?.id ?? "");
-    expect(JSON.stringify(created)).not.toContain("jo@student.ubc.ca");
+    expect(JSON.stringify(createdBody)).not.toContain(me?.id ?? "");
+    expect(JSON.stringify(createdBody)).not.toContain("jo@student.ubc.ca");
 
     // A retry of the same request is the same question, not a second one.
     const replay = await api.createPoll(key, question);
     expect(replay.id).toBe(created.id);
     expect(creationResponses[1]?.status).toBe(200);
-    expect(await creationResponses[1]?.json()).toMatchObject({
-      replayed: true,
-    });
+    const replayBody: unknown = await creationResponses[1]?.json();
+    expect(replayBody).toMatchObject({ replayed: true });
+    expect(JSON.stringify(replayBody)).not.toContain(me?.id ?? "");
+    expect(JSON.stringify(replayBody)).not.toContain("jo@student.ubc.ca");
     expect(creationResponses[1]?.headers.getSetCookie()).toEqual([]);
     expect(jar.header()).toBe(sessionCookie);
 
