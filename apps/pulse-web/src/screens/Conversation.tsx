@@ -137,8 +137,8 @@ export function Conversation({
   const [unsettled, setUnsettled] = useState<readonly string[]>([]);
   // The rail and the question links wait only for the question on screen.
   const busy = sending.includes(at) && !unsettled.includes(at);
-  // The address changed (a rail row, or Back and Forward): show its question.
-  // Not when it names the question already shown (after Next): nothing is
+  // The address changed (Next, a rail row, or Back and Forward): show it.
+  // Not when it names the question already shown: nothing is
   // left then, and a send on it still holds the rail.
   const [routed, setRouted] = useState(pollId);
   if (routed !== pollId) {
@@ -257,12 +257,9 @@ export function Conversation({
     },
     [counted, readBack],
   );
-  const show = (id: string) => {
-    if (!busy) setAt(id);
-  };
-  // A rail row: the question opens here, and its address goes on history so
-  // Back returns to the one before. Opened here too, not only through the
-  // address: after Next the address can already name the row clicked.
+  // Every question link, including Next, follows the rail's history path
+  // (#502). Open locally too for callers without a router; do not push when
+  // the address already names the question.
   const go = (id: string) => {
     if (busy || id === at) return;
     setAt(id);
@@ -391,7 +388,7 @@ export function Conversation({
           onReadBack={readBack}
           onHeldBallot={foundHeldBallot}
           onSent={sent}
-          onGo={show}
+          onGo={go}
           // The posting banner already offers Copy link; one is enough.
           shareable={!(posted && at === pollId)}
         />
