@@ -1,3 +1,5 @@
+// The buttons wear the card's "Next question" look, defined once there.
+import "./VoteCard.css";
 import "./QuestionPager.css";
 
 export interface MyVotesNavigation {
@@ -15,6 +17,7 @@ export function QuestionPager({
     <span className="question-pager">
       <button
         type="button"
+        className="vote-card__next"
         disabled={!navigation.previous}
         aria-label={
           navigation.previous
@@ -27,6 +30,7 @@ export function QuestionPager({
       </button>
       <button
         type="button"
+        className="vote-card__next"
         disabled={!navigation.next}
         aria-label={
           navigation.next

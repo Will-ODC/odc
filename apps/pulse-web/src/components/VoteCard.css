@@ -139,10 +139,12 @@
   border-color: var(--line);
   opacity: 1;
 }
+.question-pager button:disabled,
 .vote-card button:disabled {
   opacity: 0.55;
   cursor: default;
 }
+.question-pager button:focus-visible,
 .vote-card button:focus-visible {
   outline: var(--focus-ring-width) solid var(--focus);
   outline-offset: var(--focus-ring-offset);
@@ -295,14 +297,25 @@
  * A quiet text control at the end of the row (#554), not a big green button:
  * moving on is offered, not pushed. Phones can also swipe left.
  */
+/*
+ * The one quiet green step between questions: "Next question" (#554), and
+ * Previous/Next through My votes (#528), in the card or under a closed one.
+ */
+.question-pager button.vote-card__next,
 .vote-card button.vote-card__next {
   margin-inline-start: auto;
-  padding-inline: var(--step);
+  padding: var(--step);
+  font: inherit;
+  font-size: var(--t-small);
+  font-weight: 600;
   color: var(--green);
   background: transparent;
-  border-color: transparent;
+  border: var(--hairline) solid transparent;
+  border-radius: var(--r-control);
+  cursor: pointer;
   white-space: nowrap;
 }
+.question-pager button.vote-card__next:hover:not(:disabled),
 .vote-card button.vote-card__next:hover:not(:disabled) {
   color: var(--green-hover);
   background: var(--hover);

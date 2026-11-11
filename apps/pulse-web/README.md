@@ -147,12 +147,20 @@ loading, empty, retry and See all my votes states.
 The rail keeps one status line for screen readers, which reads out Loading…,
 an error, or "Your votes are loaded." after Try again. Signing out or
 forgetting votes here clears the browser's saved-answer list.
-When the open question is already in My votes, Previous and Next follow that
-newest-first list, with disabled controls at its ends. Their accessible names
-include the question they open. The question page follows cursors far enough to
-find an older current row and the row below it. A first-time answer keeps its
-answer-selected Next; changing a saved answer moves it to the top before these
-neighbors are chosen.
+When the open question was already a saved answer when it was opened (its row
+is on the rail's first page, its saved ballot was read back, or it was answered
+on this page and then opened again), Previous and Next follow the newest-first
+My votes list (#528), with disabled controls at its ends, on open and closed
+questions. Their accessible names include the question they open, and a left
+swipe on a phone opens the same Next from the results or a closed question,
+never while the choices are open for a change. When that row, or the row below
+the last one read, is on a later page, the question page reads further pages
+for the pager alone: the rail still draws its first page and See all my votes.
+Until the neighbours are known no Next is offered; if a page cannot be read the
+question falls back to the answer-selected Next. A question answered for the
+first time keeps its answer-selected Next, and an unanswered one reads no more
+pages. Changing a saved answer moves it to the top before its neighbours are
+chosen.
 
 ## Browse questions (#260)
 

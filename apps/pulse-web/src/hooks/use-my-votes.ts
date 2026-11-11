@@ -1,5 +1,10 @@
 import { useCallback, useEffect, useRef, useState } from "react";
-import { ApiError, type MyVotesPage, type PulseApi } from "../api/types.js";
+import {
+  ApiError,
+  type MyVote,
+  type MyVotesPage,
+  type PulseApi,
+} from "../api/types.js";
 import type { ViewData } from "./view-data.js";
 
 type More =
@@ -107,6 +112,73 @@ export function useMyVotes(api: PulseApi) {
     holdsVotes: data.status === "ready",
     voteRead,
     retry: retryRead,
+  };
+}
+
+interface Later {
+  first: MyVotesPage | undefined;
+  rows: MyVote[];
+  cursor: string | null;
+  failed: boolean;
+}
+
+const startOf = (first: MyVotesPage | undefined): Later => ({
+  first,
+  rows: [],
+  cursor: first?.nextCursor ?? null,
+  failed: false,
+});
+
+/**
+ * My votes rows after `first`, read only so a question page can find an older
+ * saved answer's place and the row below it (#528). Nothing draws them: the
+ * rail keeps its first page and See all my votes. While `wanted`, it reads
+ * one page at a time, and starts over when `first` is read again. `more` is
+ * whether a cursor is left; a failed or stuck read stops it (`failed`).
+ */
+export function useLaterVotes(
+  api: PulseApi,
+  first: MyVotesPage | undefined,
+  wanted: boolean,
+) {
+  const [later, setLater] = useState<Later>(() => startOf(first));
+  let current = later;
+  if (later.first !== first) {
+    current = startOf(first);
+    setLater(current);
+  }
+  const { cursor, failed } = current;
+  // The read in flight, so a re-render never asks for the same page twice.
+  const reading = useRef<{ first: MyVotesPage; cursor: string } | null>(null);
+  useEffect(() => {
+    if (!wanted || !first || !cursor || failed) return;
+    const asked = reading.current;
+    if (asked && asked.first === first && asked.cursor === cursor) return;
+    reading.current = { first, cursor };
+    const settle = (next: (old: Later) => Later) => {
+      if (reading.current?.first === first) reading.current = null;
+      setLater((old) =>
+        old.first === first && old.cursor === cursor ? next(old) : old,
+      );
+    };
+    api.myVotes(cursor).then(
+      (page) =>
+        settle((old) =>
+          page.nextCursor === cursor
+            ? { ...old, failed: true }
+            : {
+                ...old,
+                rows: [...old.rows, ...page.votes],
+                cursor: page.nextCursor,
+              },
+        ),
+      () => settle((old) => ({ ...old, failed: true })),
+    );
+  }, [api, first, cursor, failed, wanted]);
+  return {
+    rows: current.rows,
+    more: current.cursor !== null,
+    failed: current.failed,
   };
 }
 

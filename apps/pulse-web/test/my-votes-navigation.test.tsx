@@ -2,6 +2,7 @@
 import {
   act,
   cleanup,
+  fireEvent,
   render,
   screen,
   waitFor,
@@ -187,11 +188,16 @@ it("loads another My votes page to find the current row and its next question", 
   const user = userEvent.setup();
 
   await waitFor(() => expect(myVotes).toHaveBeenCalledWith("older"));
-  await user.click(
-    await main().findByRole("button", {
-      name: `Next question: ${third.question}`,
-    }),
-  );
+  const next = await main().findByRole("button", {
+    name: `Next question: ${third.question}`,
+  });
+  // The later page is read for the pager alone: the rail keeps its first
+  // page and See all my votes.
+  expect(
+    rail().getByRole("link", { name: "See all my votes" }).getAttribute("href"),
+  ).toBe("/my-votes");
+  expect(rail().queryByRole("link", { name: third.question })).toBeNull();
+  await user.click(next);
   await main().findByRole("heading", { name: third.question, level: 1 });
   expect(location.search).toBe("?poll=third");
 });
@@ -227,4 +233,179 @@ it("moves a changed vote to the top before choosing its new My votes neighbors",
   expect(rail().getAllByRole("listitem")[0]?.textContent).toContain(
     middle.question,
   );
+});
+
+it("reads no more of My votes for an unanswered question, and the rail keeps See all my votes", async () => {
+  const unanswered = poll({
+    id: "unanswered",
+    question: "Plant more street trees?",
+    next: [null, third.id],
+  });
+  const myVotes = vi.fn(async (cursor?: string) =>
+    cursor
+      ? { votes: [votes[1]!, votes[2]!], nextCursor: null }
+      : { votes: [votes[0]!], nextCursor: "older" },
+  );
+  show(unanswered.id, myVotes, [unanswered, first, middle, third], {
+    cast: async () => ({
+      status: "counted" as const,
+      ballot: [1],
+      results: answerResults(unanswered),
+    }),
+  });
+  const user = userEvent.setup();
+  await main().findByRole("heading", { name: unanswered.question, level: 1 });
+  expect(
+    await rail().findByRole("link", { name: "See all my votes" }),
+  ).toBeTruthy();
+  await user.click(main().getByRole("radio", { name: "Yes" }));
+  await user.click(main().getByRole("button", { name: "Submit" }));
+  expect(
+    await main().findByRole("button", { name: "Next question" }),
+  ).toBeTruthy();
+  expect(myVotes).toHaveBeenCalledTimes(1);
+  expect(rail().getByRole("link", { name: "See all my votes" })).toBeTruthy();
+});
+
+it("offers no Next of either kind while an older saved answer's neighbours are read", async () => {
+  let finish!: (page: MyVotesPage) => void;
+  const myVotes = vi.fn((cursor?: string) =>
+    cursor
+      ? new Promise<MyVotesPage>((resolve) => (finish = resolve))
+      : Promise.resolve({ votes: [votes[0]!], nextCursor: "older" }),
+  );
+  const older = poll({
+    id: "middle",
+    question: middle.question,
+    // The answer-selected Next would lead elsewhere.
+    next: [first.id, first.id],
+  });
+  show(middle.id, myVotes, [first, older, third]);
+  await waitFor(() => expect(myVotes).toHaveBeenCalledWith("older"));
+  await main().findByRole("heading", { name: middle.question, level: 1 });
+  expect(main().queryByRole("button", { name: /Next question/ })).toBeNull();
+  expect(
+    main().queryByRole("button", { name: /previous question/i }),
+  ).toBeNull();
+
+  act(() => finish({ votes: [votes[1]!, votes[2]!], nextCursor: null }));
+  expect(
+    await main().findByRole("button", {
+      name: `Next question: ${third.question}`,
+    }),
+  ).toBeTruthy();
+  expect(
+    main().getByRole("button", {
+      name: `Previous question: ${first.question}`,
+    }),
+  ).toBeTruthy();
+});
+
+it("gives a first answer the My votes pager once it is left and opened again", async () => {
+  const unanswered = poll({
+    id: "unanswered",
+    question: "Plant more street trees?",
+    next: [null, third.id],
+  });
+  show(
+    unanswered.id,
+    async () => ({ votes: [votes[0]!], nextCursor: null }),
+    [unanswered, first, third],
+    {
+      cast: async () => ({
+        status: "counted" as const,
+        ballot: [1],
+        results: answerResults(unanswered),
+      }),
+    },
+  );
+  const user = userEvent.setup();
+  await main().findByRole("heading", { name: unanswered.question, level: 1 });
+  await user.click(main().getByRole("radio", { name: "Yes" }));
+  await user.click(main().getByRole("button", { name: "Submit" }));
+  await user.click(
+    await main().findByRole("button", { name: "Next question" }),
+  );
+  await main().findByRole("heading", { name: third.question, level: 1 });
+
+  await user.click(rail().getByRole("link", { name: unanswered.question }));
+  await main().findByRole("heading", { name: unanswered.question, level: 1 });
+  expect(
+    await main().findByRole("button", { name: "No previous question" }),
+  ).toHaveProperty("disabled", true);
+  expect(
+    main().getByRole("button", { name: `Next question: ${first.question}` }),
+  ).toHaveProperty("disabled", false);
+});
+
+function swipeLeft(over: HTMLElement) {
+  const down = { identifier: 1, clientX: 300, clientY: 400 };
+  const up = { identifier: 1, clientX: 180, clientY: 410 };
+  fireEvent.touchStart(over, { touches: [down], changedTouches: [down] });
+  fireEvent.touchMove(over, { touches: [up], changedTouches: [up] });
+  fireEvent.touchEnd(over, { touches: [], changedTouches: [up] });
+}
+
+it("never swipes away from a change being made, but swipes from the results and a closed question", async () => {
+  const closed = poll({
+    id: "closed",
+    question: "Close the old pool?",
+    open: false,
+  });
+  const list = [
+    votes[0]!,
+    saved(closed, "2026-11-11T02:30:00.000Z"),
+    votes[1]!,
+  ];
+  let send!: () => void;
+  show(
+    first.id,
+    async () => ({ votes: list, nextCursor: null }),
+    [first, closed, middle],
+    {
+      myBallot: async () => [1],
+      cast: () =>
+        new Promise((resolve) => {
+          send = () =>
+            resolve({
+              status: "counted" as const,
+              ballot: [0],
+              results: answerResults(first),
+            });
+        }),
+    },
+  );
+  const user = userEvent.setup();
+  const heading = await main().findByRole("heading", {
+    name: first.question,
+    level: 1,
+  });
+  await main().findByRole("button", {
+    name: `Next question: ${closed.question}`,
+  });
+
+  // The choices are open again: a swipe does not drop the change.
+  await user.click(main().getByRole("button", { name: "Change my answer" }));
+  await user.click(main().getByRole("radio", { name: "No" }));
+  swipeLeft(heading);
+  expect(location.search).toBe("?poll=first");
+  // Nor while it is being sent.
+  await user.click(main().getByRole("button", { name: "Submit" }));
+  swipeLeft(heading);
+  expect(location.search).toBe("?poll=first");
+  act(() => send());
+  await main().findByRole("button", { name: "No previous question" });
+
+  // From the results, a swipe opens the next row in My votes: now the first
+  // row again after the change moved this question to the top.
+  swipeLeft(main().getByRole("heading", { name: first.question, level: 1 }));
+  await main().findByRole("heading", { name: closed.question, level: 1 });
+  expect(location.search).toBe("?poll=closed");
+  // A closed saved question swipes on to the row below it as well.
+  await main().findByRole("button", {
+    name: `Next question: ${middle.question}`,
+  });
+  swipeLeft(main().getByRole("heading", { name: closed.question, level: 1 }));
+  await main().findByRole("heading", { name: middle.question, level: 1 });
+  expect(location.search).toBe("?poll=middle");
 });

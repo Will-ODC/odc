@@ -75,6 +75,10 @@
   min-inline-size: 0;
   margin-block: var(--step) var(--gutter);
 }
+/* Previous and Next under a closed question's results (#528). */
+.conversation__pager {
+  margin-block-start: calc(var(--step) * 1.5);
+}
 .conversation__dock {
   position: fixed;
   z-index: 1;

@@ -6,30 +6,70 @@ export interface LocalAnswer {
   ballot: readonly number[];
 }
 
-export interface AnsweredNeighbors {
-  previous: MyVote | null;
-  next: MyVote | null;
-}
+/**
+ * Where the open question stands in My votes, for Previous and Next (#528).
+ *
+ * - `none`: not a saved answer when it was opened. The answer-selected Next
+ *   (#502) stays, and there is no Previous.
+ * - `finding`: a saved answer whose row, or the row below it, is on a later
+ *   page not read yet. Neither kind of Next is offered meanwhile.
+ * - `found`: the rows above and below it, `null` at either end.
+ */
+export type MyVotesPlace =
+  | { kind: "none" }
+  | { kind: "finding" }
+  | { kind: "found"; previous: MyVote | null; next: MyVote | null };
 
 /**
- * Previous and Next around a saved answer, in the newest-first My votes order.
+ * The open question's place in `ordered`, the newest-first Answered list
+ * built from every My votes row read so far (`loaded`) and this page's
+ * answers (`recent`, cast or changed here, sit at the top).
  *
- * `saved` decides whether this question was already in My votes when the page
- * read it. A first answer joins the drawn rail immediately, but keeps the
- * answer-selected Next that brought the person through an unanswered run.
+ * `listed` says the question was a saved answer when it was opened: its row
+ * was read, its saved ballot was read back, or it was answered on this page
+ * and opened again later. A first answer keeps its answer-selected Next.
+ * `more` says rows after `loaded` may exist (a cursor, or a list still being
+ * read). A row the server has not listed yet is not placed: a restored answer
+ * is only appended after the loaded rows, which is not its place.
  */
-export function answeredNeighbors(
-  saved: readonly MyVote[],
-  ordered: readonly MyVote[],
-  current: string,
-): AnsweredNeighbors | undefined {
-  if (!saved.some((vote) => vote.pollId === current)) return undefined;
+export function myVotesPlace({
+  ordered,
+  loaded,
+  recent,
+  current,
+  listed,
+  more,
+}: {
+  ordered: readonly MyVote[];
+  loaded: readonly MyVote[];
+  recent: readonly string[];
+  current: string;
+  listed: boolean;
+  more: boolean;
+}): MyVotesPlace {
+  if (!listed) return { kind: "none" };
+  const placed =
+    recent.includes(current) || loaded.some((vote) => vote.pollId === current);
   const index = ordered.findIndex((vote) => vote.pollId === current);
-  if (index < 0) return undefined;
+  if (!placed || index < 0)
+    return more ? { kind: "finding" } : { kind: "none" };
+  if (index === ordered.length - 1 && more) return { kind: "finding" };
   return {
-    previous: index > 0 ? (ordered[index - 1] ?? null) : null,
+    kind: "found",
+    previous: ordered[index - 1] ?? null,
     next: ordered[index + 1] ?? null,
   };
+}
+
+/** My votes rows from several pages, each question once, in first-seen order. */
+export function mergedVotes(
+  first: readonly MyVote[],
+  later: readonly MyVote[],
+): MyVote[] {
+  if (later.length === 0) return [...first];
+  const rows = new Map(first.map((vote) => [vote.pollId, vote]));
+  later.forEach((vote) => rows.set(vote.pollId, vote));
+  return [...rows.values()];
 }
 
 /**

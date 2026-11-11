@@ -6,7 +6,7 @@ import {
   useState,
 } from "react";
 import type { ReactNode } from "react";
-import type { Ballot, Poll, PulseApi, Results } from "../api/types.js";
+import type { Ballot, MyVote, Poll, PulseApi, Results } from "../api/types.js";
 import { UNREACHABLE } from "../api/types.js";
 import type { Route } from "../flow/route.js";
 import { cardStatus, closingNote, nextFor } from "../flow/conversation.js";
@@ -14,15 +14,16 @@ import { byline } from "../flow/new-poll.js";
 import { pathOf } from "../flow/route.js";
 import {
   answeredList,
-  answeredNeighbors,
-  type AnsweredNeighbors,
+  mergedVotes,
+  myVotesPlace,
+  type MyVotesPlace,
 } from "../flow/answered.js";
 import { usePoll } from "../hooks/use-poll.js";
 import { useCastVote } from "../hooks/use-cast-vote.js";
 import type { CastState } from "../hooks/use-cast-vote.js";
 import { useClosedResults } from "../hooks/use-closed-results.js";
 import { useFreshResults } from "../hooks/use-fresh-results.js";
-import { useMyVotes } from "../hooks/use-my-votes.js";
+import { useLaterVotes, useMyVotes } from "../hooks/use-my-votes.js";
 import { useWide } from "../hooks/use-wide.js";
 import { useSwipeLeft } from "../hooks/use-swipe.js";
 import type { Confirmation } from "../flow/vote-card.js";
@@ -167,7 +168,13 @@ export function Conversation({
   // This browser's saved answers, read on every visit, so the Answered list
   // survives navigation and reload (#484); this page's answers join it below.
   const mine = useMyVotes(api);
-  const { clear: clearMine, loadMore: loadMoreMine } = mine;
+  const { clear: clearMine } = mine;
+  // Questions answered here or restored, as of when the open one was
+  // opened: once left and opened again, a first answer is in My votes too.
+  const [listedFor, setListedFor] = useState<{ at: string; ids: string[] }>({
+    at,
+    ids: [],
+  });
   // Set by the rail's Try again, so a reload that ends well is read out too.
   const [railRetried, setRailRetried] = useState(false);
   // Counts forgettings, so a send from before one changes nothing after it.
@@ -189,6 +196,7 @@ export function Conversation({
     setHeldBefore(false);
     setRailRetried(false);
     setAt(pollId);
+    setListedFor({ at: pollId, ids: [] });
     setRound((n) => n + 1);
     clearMine();
   }, [pollId, clearMine]);
@@ -294,22 +302,50 @@ export function Conversation({
     (one) => !unsettled.includes(one.poll.id),
   );
   const saved = settledAnswers.find((one) => one.poll.id === at);
-  const serverVotes = mine.data.status === "ready" ? mine.data.value.votes : [];
+  const firstPage = mine.data.status === "ready" ? mine.data.value : undefined;
+  const serverVotes = firstPage?.votes ?? [];
+  // The rail draws the first page and this page's answers, nothing more.
   const answered = answeredList(serverVotes, answers, recentAnswers);
-  // A question opened from an older My votes page may not be in the rail's
-  // first page. Follow cursors until its row and the row below are known, or
-  // until the list ends and it is confirmed not to be a saved answer.
-  useEffect(() => {
-    if (
-      mine.data.status !== "ready" ||
-      mine.more.status !== "idle" ||
-      !mine.data.value.nextCursor
-    )
-      return;
-    const index = mine.data.value.votes.findIndex((vote) => vote.pollId === at);
-    if (index < 0 || index === mine.data.value.votes.length - 1) loadMoreMine();
-  }, [at, mine.data, mine.more.status, loadMoreMine]);
-  const neighbors = answeredNeighbors(serverVotes, answered, at);
+  // A saved answer read back for this question when it was opened: in
+  // `answers` without having been cast here.
+  const restoredHere =
+    answers.some((one) => one.poll.id === at) && !recentAnswers.includes(at);
+  if (listedFor.at !== at)
+    setListedFor({
+      at,
+      ids: [
+        ...new Set([...listedFor.ids, ...answers.map((one) => one.poll.id)]),
+      ],
+    });
+  else if (restoredHere && !listedFor.ids.includes(at))
+    setListedFor({ at, ids: [...listedFor.ids, at] });
+  const listed =
+    serverVotes.some((vote) => vote.pollId === at) ||
+    restoredHere ||
+    (listedFor.at === at && listedFor.ids.includes(at));
+  // Previous and Next follow My votes (#528). An older saved answer's row, or
+  // the row below the last one read, can be on a later page: those pages are
+  // read for this alone and never drawn, so the rail keeps See all my votes.
+  // An unanswered question reads nothing more.
+  const [wanted, setWanted] = useState(false);
+  const later = useLaterVotes(api, firstPage, wanted);
+  const loaded = mergedVotes(serverVotes, later.rows);
+  const found = myVotesPlace({
+    ordered:
+      later.rows.length > 0
+        ? answeredList(loaded, answers, recentAnswers)
+        : answered,
+    loaded,
+    recent: recentAnswers,
+    current: at,
+    listed,
+    more: mine.data.status === "loading" || later.more,
+  });
+  // A page that could not be read: the answer-selected Next, as before.
+  const place: MyVotesPlace =
+    found.kind === "finding" && later.failed ? { kind: "none" } : found;
+  const looking = place.kind === "finding" && firstPage !== undefined;
+  if (looking !== wanted) setWanted(looking);
   const main = useRef<HTMLElement>(null);
   // "Your question is live" belongs to the question just posted. Leaving it
   // for another question ends the line.
@@ -368,7 +404,7 @@ export function Conversation({
           onHeldBallot={foundHeldBallot}
           onSent={sent}
           onGo={go}
-          {...(neighbors ? { myVotesNeighbors: neighbors } : {})}
+          myVotesPlace={place}
           // The posting banner already offers Copy link; one is enough.
           shareable={!(posted && at === pollId)}
         />
@@ -387,7 +423,7 @@ function Question({
   onHeldBallot,
   onSent,
   onGo,
-  myVotesNeighbors,
+  myVotesPlace,
   shareable,
 }: {
   api: PulseApi;
@@ -401,7 +437,7 @@ function Question({
   onHeldBallot: () => void;
   onSent: Sent;
   onGo: (id: string) => void;
-  myVotesNeighbors?: AnsweredNeighbors;
+  myVotesPlace: MyVotesPlace;
   shareable: boolean;
 }) {
   const [attempt, setAttempt] = useState(0);
@@ -419,7 +455,7 @@ function Question({
       onHeldBallot={onHeldBallot}
       onSent={onSent}
       onGo={onGo}
-      {...(myVotesNeighbors ? { myVotesNeighbors } : {})}
+      myVotesPlace={myVotesPlace}
       shareable={shareable}
       onRetry={() => setAttempt((one) => one + 1)}
     />
@@ -437,7 +473,7 @@ function LoadedQuestion({
   onHeldBallot,
   onSent,
   onGo,
-  myVotesNeighbors,
+  myVotesPlace,
   shareable,
   onRetry,
 }: {
@@ -453,7 +489,7 @@ function LoadedQuestion({
   onHeldBallot: () => void;
   onSent: Sent;
   onGo: (id: string) => void;
-  myVotesNeighbors?: AnsweredNeighbors;
+  myVotesPlace: MyVotesPlace;
   /** Whether to offer Copy link under the question. */
   shareable: boolean;
   onRetry: () => void;
@@ -574,7 +610,7 @@ function LoadedQuestion({
       onReadBack={onReadBack}
       onSent={onSent}
       onGo={onGo}
-      {...(myVotesNeighbors ? { myVotesNeighbors } : {})}
+      myVotesPlace={myVotesPlace}
       wide={wide}
       renderPage={renderPage}
     />
@@ -656,6 +692,16 @@ function useRestoredAnswer(
   return settled ? "settled" : slow ? "stillSending" : "pending";
 }
 
+/** A My votes row as one end of the pager, or a disabled end. */
+function opener(
+  row: MyVote | null,
+  onGo: (id: string) => void,
+): MyVotesNavigation["next"] {
+  return row
+    ? { question: row.question, onOpen: () => onGo(row.pollId) }
+    : null;
+}
+
 function LiveCard({
   api,
   poll,
@@ -665,7 +711,7 @@ function LiveCard({
   onReadBack,
   onSent,
   onGo,
-  myVotesNeighbors,
+  myVotesPlace,
   wide,
   renderPage,
 }: {
@@ -678,7 +724,7 @@ function LiveCard({
   onReadBack: (poll: Poll) => Promise<Answer | undefined>;
   onSent: Sent;
   onGo: (id: string) => void;
-  myVotesNeighbors?: AnsweredNeighbors;
+  myVotesPlace: MyVotesPlace;
   /** The desktop layout (#490): voting in the page, no drawer. */
   wide: boolean;
   renderPage: (
@@ -796,27 +842,29 @@ function LiveCard({
     backedOut.current = false;
     hadResults.current = resultView;
   }, [resultView, saved, visible, wide]);
-  const answerNext = showing.kind === "answered" ? nextFor(poll, ballot) : null;
-  const next = myVotesNeighbors
-    ? (myVotesNeighbors.next?.pollId ?? null)
-    : answerNext;
-  const myVotesNavigation: MyVotesNavigation | undefined = myVotesNeighbors
-    ? {
-        previous: myVotesNeighbors.previous
-          ? {
-              question: myVotesNeighbors.previous.question,
-              onOpen: () => onGo(myVotesNeighbors.previous!.pollId),
-            }
-          : null,
-        next: myVotesNeighbors.next
-          ? {
-              question: myVotesNeighbors.next.question,
-              onOpen: () => onGo(myVotesNeighbors.next!.pollId),
-            }
-          : null,
-      }
-    : undefined;
   const shut = status.kind === "closed";
+  // A saved answer moves through My votes with Previous and Next (#528).
+  // Any other question keeps the answer-selected Next (#502), and while a
+  // saved answer's neighbours are still being read there is no Next at all.
+  const myVotesNavigation: MyVotesNavigation | undefined =
+    myVotesPlace.kind === "found"
+      ? {
+          previous: opener(myVotesPlace.previous, onGo),
+          next: opener(myVotesPlace.next, onGo),
+        }
+      : undefined;
+  const answerNext =
+    myVotesPlace.kind === "none" && showing.kind === "answered"
+      ? nextFor(poll, ballot)
+      : null;
+  // What a left swipe opens on a phone (#554): only over the results, or a
+  // closed question, so a change being made or sent is never dropped.
+  const next =
+    showing.kind === "answered" || (shut && myVotesNavigation)
+      ? myVotesPlace.kind === "found"
+        ? (myVotesPlace.next?.pollId ?? null)
+        : answerNext
+      : null;
   // Desktop only: the choices are open again over a saved answer.
   const changing = wide && !shut && !resultView && Boolean(saved);
   // Close is not offered while a change is being sent: the outcome decides
@@ -951,8 +999,8 @@ function LiveCard({
         onResultsHidden={setResultsHidden}
         {...(myVotesNavigation
           ? { myVotesNavigation }
-          : next
-            ? { onNext: () => onGo(next) }
+          : answerNext
+            ? { onNext: () => onGo(answerNext) }
             : {})}
       />
     </div>
@@ -1002,7 +1050,9 @@ function LiveCard({
         </button>
       )}
       {myVotesNavigation ? (
-        <QuestionPager navigation={myVotesNavigation} />
+        <div className="conversation__pager">
+          <QuestionPager navigation={myVotesNavigation} />
+        </div>
       ) : null}
     </>
   ) : showing.kind === "answered" ? (
@@ -1019,7 +1069,7 @@ function LiveCard({
       : card;
   // On a phone or tablet, a left swipe over an answered question does what
   // "Next question" does (#554); the button stays for everyone else.
-  const swipeable = !shut && next !== null;
+  const swipeable = next !== null;
   const swipe = useSwipeLeft(swipeable ? () => onGo(next) : undefined);
   return (
     <div className="conversation__question" {...swipe}>
