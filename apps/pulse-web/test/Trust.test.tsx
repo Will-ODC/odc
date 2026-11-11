@@ -129,11 +129,18 @@ describe("what the page says", () => {
     expect(today).toMatch(/most recent answer counts and replaces the others/);
     expect(today).toMatch(/once per account per question, in the full total/);
     expect(today).toMatch(
-      /Signing in shows your most recent answer on that browser/,
+      /vote signed in, or sign in on the browser you voted on before the question closes/,
     );
-    expect(today).toMatch(
-      /Vote signed in, or sign in on that browser before the question closes/,
+    expect(today).toMatch(/Signing in there shows your most recent answer/);
+    // The confirm step is its own bullet, apart from the counting rule (#558).
+    const bullets = Array.from(
+      screen
+        .getByRole("region", { name: "Today" })
+        .querySelectorAll(".trust__list > li"),
+      (li) => li.textContent ?? "",
     );
+    const confirm = bullets.find((b) => /Signing in there/.test(b)) ?? "";
+    expect(confirm).not.toMatch(/once per account/);
     expect(today).toMatch(/Two emails count twice/);
     expect(today).toMatch(/does not prove each voter is a different person/);
   });
