@@ -37,8 +37,28 @@ Repo discipline still applies: tests ship with the change, there is one small
 branch per change, named for its ticket (`pulse/<issue>-<short>`, #310), and
 the same CI runs.
 
-## Where it stands (2026-11-10)
+## Where it stands (2026-11-11)
 
+- **Merged since 2026-11-10:** #521 mockups for dark mode and the compact
+  posted notice (#499/#500); #522 steady header width, focus after Forget and
+  the You picked ring (#518); #524 and #545 CI-flaky tests wait on the asserted
+  state (#517, #540); #525 security headers, no-store on account routes and
+  self-hosted Inter (#520); #526 a late Close reply is ignored after the answer
+  is sent again (#519); #531 the Answered rail beside Explore on Home (#498);
+  #543 banner components move to `components/` and current links come from
+  `pathOf` (#539 step 1); #544 a lost connection while voting asks the server
+  on Close, on phone and desktop (#527); #546 shared Button, Field and Choice
+  with focus-ring tokens (#534, which stays open for AccountMenu, Browse,
+  Conversation and ResultsPanel); #553 menu width tokens, with the communities
+  menu centred on phones (#530); #555 a quiet "Next question" link, left swipe
+  on phones and a subtle slide (#554).
+- **One ballot per signed-in person** (#532 / PR #552, ADR-0046, migration
+  011). Operator decision 2026-11-11: a signed-in person's new vote replaces
+  their earlier vote on a poll, and on sign-in the newer answer moves to that
+  browser.
+- **Auth audit 2026-11-11:** Pulse has no passwords. Findings were filed as
+  #548-#550 or fixed in PR #551 (sign-in, redeem and sign-out check the request
+  origin; the session secret must be 32 characters; closes #548).
 - **Pillar 1 (identity) is built.** Magic-link sign-in and redeem (#81-#87,
   #116, #149). Open sign-up lets anyone sign in, and community is an optional
   label (#182/#183, ADR-0030). The person picks their community when an address
@@ -136,12 +156,16 @@ the same CI runs.
 5. **The proxy-hop and rate-limit prerequisites** in `apps/pulse/DEPLOY.md`
    must be satisfied before go-live.
 
-## Current operator direction and next work (2026-11-10)
+## Current operator direction and next work (2026-11-11)
 
 1. The recent Answered, results, desktop voting, sign-in and header changes
    are merged; there is no remaining UI stack awaiting merge.
-2. Open follow-ups: #517 pulse-web CI flakes, #518 header nits, #519 the late
-   Close reply race (Opus), and #520 nginx headers and self-hosted font.
+2. Open follow-ups: #528 Previous/Next follow My votes, #533 ViewState Try
+   again, #535 one paged-list hook, #536 Conversation logic into flow/ and
+   hooks, #537 VoteCard split, #538 CSS encapsulation and tokens, #549
+   trusted proxy hops, #550 purge expired sign-in rows, the rest of #534,
+   #539 step 2 (one session provider; operator decision), and #499 dark mode
+   and #500 compact posted notice (mockups merged in #521, not built).
 3. Prepare a small invited pilot only after choosing a host, configuring DNS,
    verifying a sending domain and satisfying `apps/pulse/DEPLOY.md`'s
    proxy-hop and rate-limit prerequisites. This is not authorization to deploy.
@@ -257,9 +281,6 @@ the same CI runs.
   require an accepted integration ADR before implementation tickets are cut.
 - **P2: should a later community pick move a returning voter?** Today it does
   not (ADR-0030 writes community once). `claim.test.ts` pins the current answer.
-- **Signing out clears the ballot cookie**, so a person who votes, signs out,
-  signs back in and votes again is counted twice in the full totals. Confirmed
-  totals count each account once (ADR-0040). That cost is accepted.
 - `polls` is the only plural table, inherited from ADR-0021. Renaming it needs a
   new migration, never an edit to `001`. No decision has been taken.
 - `diff-size.sh` says the 400-line WARN "still fires for pulse", but it excludes
