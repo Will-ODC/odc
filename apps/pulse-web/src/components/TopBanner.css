@@ -185,6 +185,13 @@
     flex: 1 0 100%;
     justify-content: center;
     border-top: var(--hairline) solid var(--line);
+    position: relative;
+  }
+  /* The trigger is centred in that row, so its panel opens centred under it. */
+  .banner__nav > .account-menu .account-menu__panel {
+    inset-inline-start: 50%;
+    inset-inline-end: auto;
+    transform: translateX(-50%);
   }
   .banner__nav > a {
     flex: 1;
