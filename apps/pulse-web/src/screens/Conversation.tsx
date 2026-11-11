@@ -102,8 +102,8 @@ const RESTORE_WAIT_MS = 5000;
 /**
  * A whole run stays in one conversation; only its active card changes.
  *
- * Opening another question from the rail, or going Back to one, keeps this
- * conversation on screen: App does not remount it per question, and the
+ * Opening another question with Next, from the rail, or by going Back keeps
+ * this conversation on screen: App does not remount it per question, and the
  * question shown follows `pollId` when the address changes (#488).
  */
 export function Conversation({
@@ -501,7 +501,10 @@ function LoadedQuestion({
       : fetched;
   const heading = useRef<HTMLHeadingElement>(null);
   useEffect(() => {
-    if (loaded.status === "ready") heading.current?.focus();
+    // Forget remounts this question to clear its saved answer. Loading it
+    // again must not take focus from Sign in (or another header control).
+    if (loaded.status === "ready" && !document.activeElement?.closest("header"))
+      heading.current?.focus();
   }, [loaded.status]);
   // On desktop (#490) voting sits in the page under the question; on a phone
   // it is the sheet along the bottom edge.
