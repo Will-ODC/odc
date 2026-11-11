@@ -3,6 +3,11 @@
   position: relative;
 }
 
+/*
+ * The shared quiet Button (#534), kept as the banner's plain small trigger:
+ * two classes outrank `.btn--quiet`, and `font: inherit` also resets its
+ * weight. Its focus ring is the shared `.btn` one.
+ */
 .banner .account-menu__button {
   font: inherit;
   font-size: var(--t-small);
@@ -12,12 +17,8 @@
   border: none;
   border-radius: 0;
   padding: 0;
+  text-decoration: none;
   cursor: pointer;
-}
-
-.banner .account-menu__button:focus-visible {
-  outline: calc(var(--hairline) * 2) solid var(--focus);
-  outline-offset: calc(var(--hairline) * 2);
 }
 
 /* Drops below the bar, against the right edge, over the page. */

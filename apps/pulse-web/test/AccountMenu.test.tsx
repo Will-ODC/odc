@@ -27,6 +27,11 @@ function show() {
 }
 
 describe("the account button", () => {
+  it("is the shared quiet Button, restyled for the banner (#534)", () => {
+    const button = show();
+    expect(button.className).toBe("btn btn--quiet account-menu__button");
+  });
+
   it("starts closed and says so", () => {
     const button = show();
     expect(button.getAttribute("aria-expanded")).toBe("false");
