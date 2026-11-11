@@ -491,7 +491,10 @@ function LoadedQuestion({
       : fetched;
   const heading = useRef<HTMLHeadingElement>(null);
   useEffect(() => {
-    if (loaded.status === "ready") heading.current?.focus();
+    // Forget remounts this question to clear its saved answer. Loading it
+    // again must not take focus from Sign in (or another header control).
+    if (loaded.status === "ready" && !document.activeElement?.closest("header"))
+      heading.current?.focus();
   }, [loaded.status]);
   // On desktop (#490) voting sits in the page under the question; on a phone
   // it is the sheet along the bottom edge.
