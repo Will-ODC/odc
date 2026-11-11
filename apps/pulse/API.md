@@ -269,10 +269,16 @@ second answer as a failure to someone who is, in fact, signed in.
 
 The pending row containing the address is deleted atomically when the link is
 spent; only a token-hash replay marker remains, preserving `already_used` for
-repeat clicks without retaining the pending address. Expired, unused rows are
-removed on the next sign-in-link write, so an expired link whose row has been
-swept answers `unknown_link`. Both remain 410 and cannot sign anyone in. Link
-lifetime and the success response are unchanged.
+repeat clicks without retaining the pending address. An expired, unused row is
+eligible for removal once it expires, and a replay marker 20 minutes after use
+(the 15-minute link lifetime plus a five-minute margin). Eligible rows are
+removed at the next server startup or redemption; a sign-in-link request also
+removes expired pending rows. There is no periodic sweep, so with no such
+event a row can stay past its time. A link therefore remains recognisable as
+`already_used` for at least its usable lifetime; once its marker or expired
+pending row has been removed, it answers `unknown_link`. Both remain 410 and cannot sign
+anyone in. All retention boundaries use the application clock. Link lifetime
+and the success response are unchanged.
 
 ### `POST /api/sign-out`
 
