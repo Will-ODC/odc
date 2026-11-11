@@ -1,6 +1,7 @@
 import assert from "node:assert/strict";
 import { spawnSync } from "node:child_process";
-import { fileURLToPath } from "node:url";
+import { createRequire } from "node:module";
+import { fileURLToPath, pathToFileURL } from "node:url";
 import { test } from "node:test";
 import {
   DEFAULT_HOST,
@@ -710,27 +711,41 @@ test(
   },
 );
 
-test(
-  "unexpected_startup_database_fault_does_not_log_personal_message_or_cause",
-  { skip: databaseSkip },
-  () => {
-    const database = new URL(process.env["PULSE_DATABASE_URL"]!);
-    database.username = "private-person@example.test";
+for (const code of ["28000", "28P01", "XX000"]) {
+  test(`unexpected_startup_database_fault_does_not_log_personal_message_or_cause_${code}`, () => {
+    // A nonexistent user produces 28000 with trust authentication, but 28P01
+    // with CI's password authentication. Inject the fault at the pool seam so
+    // this tests the real entry point regardless of the database or its auth.
+    const pg = pathToFileURL(createRequire(import.meta.url).resolve("pg")).href;
+    const preload = `import pg from ${JSON.stringify(pg)};
+      pg.Pool.prototype.connect = async () => {
+        throw Object.assign(new Error("startup-fault-message private-person@example.test"), {
+          code: ${JSON.stringify(code)}, detail: "private-detail private-person@example.test",
+          cause: Object.assign(new Error("private-cause private-person@example.test"), { code: "08006" })
+        });
+      };`;
     const child = spawnSync(
       process.execPath,
-      [fileURLToPath(new URL("../src/main.js", import.meta.url))],
+      [
+        "--import",
+        `data:text/javascript,${encodeURIComponent(preload)}`,
+        fileURLToPath(new URL("../src/main.js", import.meta.url)),
+      ],
       {
         encoding: "utf8",
         timeout: 10_000,
-        env: { ...process.env, ...COMPLETE, PULSE_DATABASE_URL: database.href },
+        env: { ...process.env, ...COMPLETE, NODE_ENV: "test" },
       },
     );
     assert.equal(child.status, 1, child.stderr);
-    assert.match(child.stderr, /pulse could not start/);
-    assert.match(child.stderr, /28000/);
+    assert.equal(
+      child.stderr,
+      `pulse could not start: {"type":"Error","code":"${code}"}\n` +
+        '  caused by: {"type":"Error","code":"08006"}\n',
+    );
     assert.doesNotMatch(
       child.stderr + child.stdout,
-      /private-person@example.test|private-person%40example.test|does not exist/,
+      /private-person@example.test|startup-fault-message|private-detail|private-cause/,
     );
-  },
-);
+  });
+}
