@@ -133,14 +133,15 @@ describe("what the page says", () => {
     );
     expect(today).toMatch(/Signing in there shows your most recent answer/);
     // The confirm step is its own bullet, apart from the counting rule (#558).
-    const bullets = Array.from(
-      screen
-        .getByRole("region", { name: "Today" })
-        .querySelectorAll(".trust__list > li"),
-      (li) => li.textContent ?? "",
+    const bullets = within(
+      screen.getByRole("region", { name: "Today" }),
+    ).getAllByRole("listitem");
+    const confirm = bullets.find((b) =>
+      /Signing in there/.test(b.textContent ?? ""),
     );
-    const confirm = bullets.find((b) => /Signing in there/.test(b)) ?? "";
-    expect(confirm).not.toMatch(/once per account/);
+    expect(confirm).toBeDefined();
+    expect(confirm?.textContent).toMatch(/vote signed in/);
+    expect(confirm?.textContent).not.toMatch(/once per account/);
     expect(today).toMatch(/Two emails count twice/);
     expect(today).toMatch(/does not prove each voter is a different person/);
   });
