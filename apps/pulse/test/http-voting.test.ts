@@ -24,10 +24,13 @@ import { ConfirmationKey } from "../src/voting/confirmation.js";
 import { InMemoryVotingStore, UnknownPollError } from "../src/voting/store.js";
 import type { Publication } from "../src/voting/poll.js";
 import { InMemoryCreationStore } from "../src/authoring/memory-store.js";
+import { sendOriginLikeABrowser } from "./support/origin.js";
 
-const SECRET = "test-secret-that-is-long-enough";
+const SECRET = "test-secret-that-is-long-enough-x";
 /** The confirmation key every server here is given (ADR-0040). */
 const CONFIRMATION_KEY = "a-confirmation-key-for-tests-0123456789";
+/** The web origin the server trusts, and so the one a browser page sends. */
+const WEB_ORIGIN = "https://pulse.test";
 const START = new Date("2026-08-09T12:00:00.000Z");
 
 async function setup(
@@ -65,19 +68,23 @@ async function setup(
     { clock },
   );
 
-  const app = await createServer({
-    claims,
-    voters,
-    votes,
-    suggestions: suggestions ?? new InMemorySuggestionStore({ clock }),
-    signer,
-    clock,
-    secureCookies: false,
-    ...(withoutConfirmationKey
-      ? {}
-      : { confirmationKey: new ConfirmationKey(CONFIRMATION_KEY) }),
-    ...overrides,
-  });
+  const app = sendOriginLikeABrowser(
+    await createServer({
+      claims,
+      voters,
+      votes,
+      suggestions: suggestions ?? new InMemorySuggestionStore({ clock }),
+      signer,
+      clock,
+      secureCookies: false,
+      webOrigin: WEB_ORIGIN,
+      ...(withoutConfirmationKey
+        ? {}
+        : { confirmationKey: new ConfirmationKey(CONFIRMATION_KEY) }),
+      ...overrides,
+    }),
+    WEB_ORIGIN,
+  );
 
   await votes.createPoll({
     id: "p1",

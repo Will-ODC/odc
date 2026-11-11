@@ -29,6 +29,7 @@ import {
 } from "../voting/suggestions.js";
 import { registerCreationRoutes } from "./creation.js";
 import { registerMcpReads, type McpReadOptions } from "./mcp/route.js";
+import { requireWebOrigin } from "./origin.js";
 import { SESSION_COOKIE, SessionSigner } from "./session.js";
 
 /**
@@ -78,9 +79,10 @@ export interface ServerDeps {
   creation?: CreationStore;
   /**
    * The web client's origin, exactly as a browser sends it in `Origin`. Every
-   * creation mutation must come from it. Trusted configuration only — never
-   * derived from `Host` or a forwarded header. Without it every creation
-   * mutation is refused, since no origin can match.
+   * creation mutation, sign-in, link redemption and sign-out must come from
+   * it. Trusted configuration only — never derived from `Host` or a forwarded
+   * header. Without it every one of those is refused, since no origin can
+   * match.
    */
   webOrigin?: string;
   /**
@@ -285,9 +287,14 @@ export async function createServer(deps: ServerDeps): Promise<FastifyInstance> {
     return minted;
   };
 
+  // Sign-in, redemption and sign-out check the request origin like the other
+  // state-changing routes, before the body is read or any cookie is touched.
+  const sameOrigin = requireWebOrigin(deps.webOrigin);
+
   app.post(
     "/api/sign-in",
     {
+      onRequest: sameOrigin,
       config: {
         rateLimit: deps.signInRateLimit ?? { max: 10, timeWindow: "1 hour" },
       },
@@ -415,7 +422,7 @@ export async function createServer(deps: ServerDeps): Promise<FastifyInstance> {
   /** The click. This is what spends the token and signs someone in. */
   app.post(
     "/api/sign-in/redeem",
-    { onRequest: noStore },
+    { onRequest: [noStore, sameOrigin] },
     async (request, reply) => {
       const token = (request.body as { token?: unknown } | undefined)?.token;
       if (typeof token !== "string" || token === "") {
@@ -481,16 +488,24 @@ export async function createServer(deps: ServerDeps): Promise<FastifyInstance> {
    * identity, so the same person voting again after a sign-out is counted
    * twice. Pulse is counted-not-verified and already says deduplication is per
    * browser; being double-counted is a smaller harm than being read.
+   *
+   * From the web origin this always answers 200, signed in or not. Like the
+   * other state-changing routes it checks the request origin first: a missing
+   * or foreign `Origin` gets 403 `origin_not_allowed` and nothing is cleared.
    */
-  app.post("/api/sign-out", async (request, reply) => {
-    const voter = await currentVoter(request);
-    if (voter) {
-      await deps.voters.advanceSessionGeneration(voter.id);
-    }
-    reply.clearCookie(SESSION_COOKIE, { path: "/" });
-    reply.clearCookie(BALLOT_COOKIE, { path: "/" });
-    return reply.send({ status: "signed_out" });
-  });
+  app.post(
+    "/api/sign-out",
+    { onRequest: sameOrigin },
+    async (request, reply) => {
+      const voter = await currentVoter(request);
+      if (voter) {
+        await deps.voters.advanceSessionGeneration(voter.id);
+      }
+      reply.clearCookie(SESSION_COOKIE, { path: "/" });
+      reply.clearCookie(BALLOT_COOKIE, { path: "/" });
+      return reply.send({ status: "signed_out" });
+    },
+  );
 
   app.get("/api/me", { onRequest: noStore }, async (request, reply) => {
     const voter = await requireVoter(request, reply);

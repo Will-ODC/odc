@@ -30,7 +30,7 @@ import { InMemorySuggestionStore } from "../src/voting/suggestions.js";
 import { InMemoryVotingStore, type VotingStore } from "../src/voting/store.js";
 import { databaseSkip, migratedSchema } from "./support/database.js";
 
-const SECRET = "test-secret-that-is-long-enough";
+const SECRET = "test-secret-that-is-long-enough-x";
 const ORIGIN = "https://pulse.example.org";
 const START = new Date("2026-10-20T12:00:00.000Z");
 const HOUR_S = 3600;
@@ -745,7 +745,7 @@ for (const kind of ["memory", "postgres"] as const) {
     const out = await h.app.inject({
       method: "POST",
       url: "/api/sign-out",
-      headers: { cookie },
+      headers: { cookie, origin: ORIGIN },
     });
     assert.equal(out.statusCode, 200);
 
@@ -789,7 +789,7 @@ for (const kind of ["memory", "postgres"] as const) {
     const fresh = h.cookie("guest");
     assert.equal((await h.context(undefined, fresh)).statusCode, 200);
 
-    const other = new SessionSigner("a-completely-different-secret");
+    const other = new SessionSigner("a-completely-different-secret-x-x");
     for (const forged of [
       `${SESSION_COOKIE}=${other.sign(ACCOUNTS.owner.id, 0)}`,
       // Generation 1 was never issued: the account is still at 0.
