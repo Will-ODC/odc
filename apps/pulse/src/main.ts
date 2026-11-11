@@ -83,7 +83,22 @@ export interface ServeConfig {
    * make anyone one.
    */
   ownerEmail?: string;
+  /**
+   * How many private proxy hops in front of the API to trust for the client
+   * address (#549). One nginx in front, the shipped shape, is `1`; a host
+   * edge in front of that nginx is `2`. Each trusted hop must still be a
+   * private address (`createServer`'s `trustProxy`).
+   */
+  trustedProxyHops: number;
 }
+
+/** The hop count when `PULSE_TRUSTED_PROXY_HOPS` is unset: one nginx. */
+export const DEFAULT_TRUSTED_PROXY_HOPS = 1;
+/**
+ * More hops than any real chain. A larger count only widens who may write
+ * the address the rate limits key on.
+ */
+export const MAX_TRUSTED_PROXY_HOPS = 4;
 
 /**
  * Read the environment into a configuration, or refuse to start.
@@ -173,6 +188,7 @@ export function serveConfig(env: NodeJS.ProcessEnv = process.env): ServeConfig {
   const owner = ownerEmail(env);
   return {
     port: port(env.PULSE_PORT),
+    trustedProxyHops: trustedProxyHops(env.PULSE_TRUSTED_PROXY_HOPS),
     host: env.PULSE_HOST?.trim() || DEFAULT_HOST,
     secret: checked.secret,
     confirmationKey: checked.confirmationKey,
@@ -235,6 +251,23 @@ function port(raw: string | undefined): number {
   if (!Number.isInteger(value) || value < 1 || value > 65535) {
     throw new Error(
       `PULSE_PORT must be a port number between 1 and 65535, not "${raw}"`,
+    );
+  }
+  return value;
+}
+
+/**
+ * The trusted proxy hop count, or the default. Refused rather than coerced,
+ * like `port`: a typo here would silently put every visitor in one
+ * rate-limit bucket (too few hops) or let a client choose its own address
+ * (too many), and neither shows until it bites.
+ */
+function trustedProxyHops(raw: string | undefined): number {
+  if (raw === undefined || raw.trim() === "") return DEFAULT_TRUSTED_PROXY_HOPS;
+  const value = Number(raw);
+  if (!Number.isInteger(value) || value < 0 || value > MAX_TRUSTED_PROXY_HOPS) {
+    throw new Error(
+      `PULSE_TRUSTED_PROXY_HOPS must be a whole number from 0 to ${MAX_TRUSTED_PROXY_HOPS}, not "${raw}"`,
     );
   }
   return value;
@@ -343,10 +376,11 @@ export async function buildServer(
       // true and `dev-server` is the only thing that sets it false; naming it
       // here would put the insecure value one edit away from the served path.
       logger: SERVED_LOGGER,
-      // One nginx in front (`apps/pulse-web/nginx.conf`). Without this every
-      // request carries the proxy's address and every rate limit in the server
-      // becomes one bucket shared by everybody.
-      trustProxy: 1,
+      // One nginx in front (`apps/pulse-web/nginx.conf`) by default; a host
+      // edge in front of it adds a hop (#549). Too few and every request
+      // carries a proxy's address, so every rate limit in the server becomes
+      // one bucket shared by everybody.
+      trustProxy: config.trustedProxyHops,
     });
 
     app.addHook("onClose", async () => {

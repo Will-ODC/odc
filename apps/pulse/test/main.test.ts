@@ -6,6 +6,8 @@ import { test } from "node:test";
 import {
   DEFAULT_HOST,
   DEFAULT_PORT,
+  DEFAULT_TRUSTED_PROXY_HOPS,
+  MAX_TRUSTED_PROXY_HOPS,
   SERVED_LOGGER,
   buildServer as buildUnwrappedServer,
   serveConfig,
@@ -59,6 +61,47 @@ test("a_complete_environment_is_read_into_a_configuration", () => {
   // The real provider is wired. `not instanceof ConsoleMailer` was the first
   // version of this and any object at all passes it.
   assert.ok(config.mailer instanceof ResendMailer);
+});
+
+test("the_trusted_proxy_hops_default_to_one_nginx", () => {
+  assert.equal(DEFAULT_TRUSTED_PROXY_HOPS, 1);
+  assert.equal(serveConfig(COMPLETE).trustedProxyHops, 1);
+  assert.equal(
+    serveConfig({ ...COMPLETE, PULSE_TRUSTED_PROXY_HOPS: "  " })
+      .trustedProxyHops,
+    1,
+  );
+});
+
+test("a_host_edge_in_front_of_nginx_sets_two_hops", () => {
+  assert.equal(
+    serveConfig({ ...COMPLETE, PULSE_TRUSTED_PROXY_HOPS: "2" })
+      .trustedProxyHops,
+    2,
+  );
+  assert.equal(
+    serveConfig({ ...COMPLETE, PULSE_TRUSTED_PROXY_HOPS: "0" })
+      .trustedProxyHops,
+    0,
+  );
+});
+
+test("a_hop_count_that_is_not_a_small_whole_number_stops_the_start", () => {
+  // Coercing would hide the mistake: too few hops put every visitor in one
+  // rate-limit bucket, too many let a client choose its own address.
+  for (const raw of [
+    "two",
+    "1.5",
+    "-1",
+    String(MAX_TRUSTED_PROXY_HOPS + 1),
+    "true",
+  ]) {
+    assert.throws(
+      () => serveConfig({ ...COMPLETE, PULSE_TRUSTED_PROXY_HOPS: raw }),
+      /PULSE_TRUSTED_PROXY_HOPS must be a whole number from 0 to \d+/,
+      `"${raw}" must be refused`,
+    );
+  }
 });
 
 test("every_value_the_dev_server_may_invent_is_refused_here", () => {
@@ -356,6 +399,7 @@ test("the_served_log_never_writes_down_a_sign_in_token", () => {
 function servedConfig(schema: string): ServeConfig {
   return {
     port: 0,
+    trustedProxyHops: 1,
     host: "127.0.0.1",
     secret: "a-secret-that-is-long-enough-x-x",
     confirmationKey: "a-confirmation-key-that-is-long-enough-1234",
@@ -388,6 +432,7 @@ test(
 
     const config: ServeConfig = {
       port: 0,
+      trustedProxyHops: 1,
       host: "127.0.0.1",
       secret: "a-secret-that-is-long-enough-x-x",
       confirmationKey: "a-confirmation-key-that-is-long-enough-1234",
@@ -577,6 +622,7 @@ test(
     const { schema } = await throwawaySchema(t);
     const config: ServeConfig = {
       port: 0,
+      trustedProxyHops: 1,
       host: "127.0.0.1",
       secret: "a-secret-that-is-long-enough-x-x",
       confirmationKey: "a-confirmation-key-that-is-long-enough-1234",
