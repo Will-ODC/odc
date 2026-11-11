@@ -1,5 +1,5 @@
 import { useRef } from "react";
-import type { PointerEvent } from "react";
+import type { TouchEvent } from "react";
 
 /** How far a finger must travel left, in CSS pixels, to count as a swipe. */
 export const SWIPE_MIN = 60;
@@ -15,38 +15,52 @@ export function isLeftSwipe(dx: number, dy: number): boolean {
 }
 
 export interface SwipeHandlers {
-  onPointerDown?: (event: PointerEvent<HTMLElement>) => void;
-  onPointerUp?: (event: PointerEvent<HTMLElement>) => void;
-  onPointerCancel?: () => void;
+  onTouchStart?: (event: TouchEvent<HTMLElement>) => void;
+  onTouchMove?: (event: TouchEvent<HTMLElement>) => void;
+  onTouchEnd?: (event: TouchEvent<HTMLElement>) => void;
+  onTouchCancel?: () => void;
+}
+
+/** Zoomed in, a sideways drag pans the page; it is never a swipe. */
+function zoomed(): boolean {
+  return (window.visualViewport?.scale ?? 1) > 1;
 }
 
 /**
- * Calls `onSwipeLeft` when a touch or pen swipes left over the element the
+ * Calls `onSwipeLeft` when one finger swipes left over the element the
  * handlers are spread on (#554). A mouse never swipes: it has buttons for
  * that. Left out, the handlers are empty and nothing listens.
  *
- * The element should allow only vertical panning (`touch-action: pan-y`), so
- * the browser keeps scrolling and leaves sideways travel to this hook.
+ * Touch events, not pointer events: React listens to them passively and the
+ * browser never cancels them for a scroll, so the page keeps its own
+ * panning and zoom (no `touch-action` needed) and this only watches.
  */
 export function useSwipeLeft(onSwipeLeft?: () => void): SwipeHandlers {
   const start = useRef<{ id: number; x: number; y: number } | null>(null);
   if (!onSwipeLeft) return {};
   return {
-    onPointerDown: (event) => {
+    onTouchStart: (event) => {
+      const touch = event.touches[0];
       start.current =
-        event.pointerType === "mouse" || !event.isPrimary
+        event.touches.length !== 1 || !touch || zoomed()
           ? null
-          : { id: event.pointerId, x: event.clientX, y: event.clientY };
+          : { id: touch.identifier, x: touch.clientX, y: touch.clientY };
     },
-    onPointerUp: (event) => {
+    // A second finger makes it a pinch, not a swipe, for the rest of it.
+    onTouchMove: (event) => {
+      if (event.touches.length > 1) start.current = null;
+    },
+    onTouchEnd: (event) => {
       const from = start.current;
       start.current = null;
-      if (!from || from.id !== event.pointerId) return;
-      if (isLeftSwipe(event.clientX - from.x, event.clientY - from.y))
+      if (!from || event.touches.length > 0 || zoomed()) return;
+      const touch = Array.from(event.changedTouches).find(
+        (one) => one.identifier === from.id,
+      );
+      if (touch && isLeftSwipe(touch.clientX - from.x, touch.clientY - from.y))
         onSwipeLeft();
     },
-    // The browser took the gesture (a scroll, a zoom): it is not a swipe.
-    onPointerCancel: () => {
+    onTouchCancel: () => {
       start.current = null;
     },
   };

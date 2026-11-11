@@ -185,16 +185,19 @@
 }
 
 /*
- * Moving between questions (#554). Each question's page is drawn afresh, so
- * its column slides in a little from the right, the way a left swipe moves.
- * An answered question with a next one takes sideways swipes; the browser
- * keeps vertical scrolling and pinch zoom.
+ * Moving between questions (#554). A loaded question's column slides in a
+ * little from the right, the way a left swipe moves; "Loading…" does not.
  */
 .conversation__scroll {
-  /* The slide never shows a sideways scrollbar. */
+  /*
+   * Deliberately clips sideways overflow, so the slide never shows a
+   * sideways scrollbar. Nothing in the column needs it: headings and
+   * answers wrap (overflow-wrap: anywhere). `clip` would compute to
+   * `hidden` here anyway, beside overflow-y: auto.
+   */
   overflow-x: hidden;
 }
-.conversation__scroll > .conversation__column {
+.conversation__question .conversation__scroll > .conversation__column {
   animation: question-arrive var(--motion-quick) ease-out;
 }
 @keyframes question-arrive {
@@ -208,13 +211,9 @@
   }
 }
 @media (prefers-reduced-motion: reduce) {
-  .conversation__scroll > .conversation__column {
+  .conversation__question .conversation__scroll > .conversation__column {
     animation: none;
   }
-}
-.conversation__question--swipe,
-.conversation__question--swipe :is(.conversation__scroll, .conversation__dock) {
-  touch-action: pan-y pinch-zoom;
 }
 
 /*

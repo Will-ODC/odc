@@ -934,14 +934,7 @@ function LiveCard({
   const swipeable = !shut && next !== null;
   const swipe = useSwipeLeft(swipeable ? () => onGo(next) : undefined);
   return (
-    <div
-      className={
-        swipeable
-          ? "conversation__question conversation__question--swipe"
-          : "conversation__question"
-      }
-      {...swipe}
-    >
+    <div className="conversation__question" {...swipe}>
       {renderPage(standing, vote, shut)}
     </div>
   );
