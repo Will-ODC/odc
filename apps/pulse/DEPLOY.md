@@ -34,6 +34,25 @@ address check. Do not trust arbitrary forwarded headers. Verify that two
 clients get distinct rate-limit buckets and cannot spoof their address.
 There is no environment variable for changing the hop count today.
 
+## HTTPS and browser security headers
+
+The web nginx listens only on HTTP port `8080`; terminate HTTPS at the host's
+edge proxy. Set `Strict-Transport-Security: max-age=31536000` on HTTPS responses
+at that TLS terminator, including API and error responses, and redirect public
+HTTP traffic to HTTPS there. Enable HSTS only once HTTPS works on the chosen
+hostname. Add `includeSubDomains` only if every subdomain is ready for HTTPS;
+preloading is a separate operator decision. Do not add HSTS to the internal
+HTTP nginx listener.
+
+nginx sends CSP, `X-Content-Type-Options: nosniff`, `Referrer-Policy: same-origin`
+and a Permissions-Policy denying camera, microphone and geolocation on pages,
+assets, proxied API responses and errors. The page's earlier `no-referrer` meta
+policy remains stricter to protect sign-in tokens. The CSP allows same-origin
+scripts and fonts, and inline styles required by the results/charts; it denies
+framing and object embeds. Inter is bundled locally, with no font-host requests.
+`server_tokens off` suppresses the nginx version. The shared header include must
+stay in every location if cache headers or new locations are added.
+
 ## Open operator questions
 
 Nothing in this runbook answers these questions:
