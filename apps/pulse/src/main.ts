@@ -277,6 +277,8 @@ export const SERVED_LOGGER = {
 export interface ServeOptions {
   /** Where warnings go. Defaults to stderr, which is what a container collects. */
   log?: (message: string) => void;
+  /** Application clock shared by migration, startup retention and claims. */
+  clock?: () => Date;
 }
 
 /**
@@ -290,6 +292,7 @@ export async function buildServer(
   options: ServeOptions = {},
 ): Promise<{ app: FastifyInstance; pool: Pool }> {
   const log = options.log ?? ((message: string) => console.error(message));
+  const clock = options.clock ?? (() => new Date());
 
   const pool = createPool({
     connectionString: config.databaseUrl,
@@ -309,19 +312,34 @@ export async function buildServer(
     // On every start. The runner takes an advisory lock and skips what has
     // already run, so several instances starting at once is fine — which is
     // the case it was built for.
-    await migrate(pool);
+    await migrate(pool, { clock });
 
+    const claimStore = new PostgresClaimStore(pool);
     const claims = new ClaimService(
       {
         membership: new DomainAllowlist(new PostgresDomainSource(pool)),
         voters: new PostgresVoterStore(pool),
-        claims: new PostgresClaimStore(pool),
+        claims: claimStore,
         mailer: config.mailer,
         linkFor: (token) =>
           `${config.webOrigin}/sign-in?token=${encodeURIComponent(token)}`,
       },
-      { log: (message, fault) => log(`${message}: ${JSON.stringify(fault)}`) },
+      {
+        clock,
+        log: (message, fault) => log(`${message}: ${JSON.stringify(fault)}`),
+      },
     );
+    // Housekeeping only: a failed sweep must not keep pulse from starting.
+    // Expired rows are retried at the next redemption or startup.
+    try {
+      await claims.purgeExpired();
+    } catch (error) {
+      logFault(
+        textFaultLogger(log),
+        error,
+        "pulse: the startup sign-in sweep failed",
+      );
+    }
 
     const app = await createServer({
       claims,

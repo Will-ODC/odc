@@ -8,6 +8,8 @@ import {
 } from "../src/identity/allowlist.js";
 import {
   ClaimService,
+  LINK_TTL_MS,
+  USED_CLAIM_MARGIN_MS,
   hashToken,
   type ClaimOptions,
 } from "../src/identity/claim.js";
@@ -891,5 +893,63 @@ test("a_redeem_paused_after_read_cannot_use_a_link_deleted_by_the_expiry_sweep",
   assert.equal(
     await h.voters.byCredential("email", "ada@student.ubc.ca"),
     undefined,
+  );
+});
+
+test("redeem_purges_expired_pending_and_old_used_claims_with_the_app_clock", async () => {
+  const h = setup();
+  await h.service.requestLink("old-used@student.ubc.ca");
+  const oldUsed = h.lastToken("old-used@student.ubc.ca");
+  assert.equal((await h.service.redeem(oldUsed)).status, "signed_in");
+
+  await h.service.requestLink("expired@student.ubc.ca");
+  const expired = h.lastToken("expired@student.ubc.ca");
+  h.after(LINK_TTL_MS - 60_000);
+  await h.service.requestLink("live@student.ubc.ca");
+  const live = h.lastToken("live@student.ubc.ca");
+  h.after(USED_CLAIM_MARGIN_MS + 60_000);
+
+  assert.equal((await h.service.redeem(live)).status, "signed_in");
+  assert.equal(await h.claims.byTokenHash(hashToken(expired)), undefined);
+  assert.equal(await h.claims.wasUsed(hashToken(oldUsed)), false);
+  assert.equal(await h.claims.wasUsed(hashToken(live)), true);
+
+  // The just-spent link remains recognisable throughout its own lifetime plus
+  // the margin; only a later redeem at the exact cutoff forgets the marker.
+  h.after(LINK_TTL_MS + USED_CLAIM_MARGIN_MS - 1);
+  assert.equal((await h.service.redeem(live)).status, "already_used");
+  h.after(1);
+  assert.equal((await h.service.redeem(live)).status, "unknown_link");
+});
+
+test("a_redeem_time_sweep_that_fails_still_signs_in_and_logs_only_safe_diagnostics", async () => {
+  const logged: string[] = [];
+  const h = setup({
+    log: (message, fault) =>
+      logged.push(`${message}: ${JSON.stringify(fault)}`),
+  });
+  await h.service.requestLink("ada@student.ubc.ca");
+  const token = h.lastToken("ada@student.ubc.ca");
+  h.claims.purgeExpired = () =>
+    Promise.reject(
+      Object.assign(new Error(`sweep-fault ${token} ada@student.ubc.ca`), {
+        code: "40P01",
+        detail: `private-detail ${token} ada@student.ubc.ca`,
+      }),
+    );
+
+  assert.equal((await h.service.redeem(token)).status, "signed_in");
+  // The link was still spent once: the sweep failing does not weaken that.
+  assert.equal((await h.service.redeem(token)).status, "already_used");
+
+  const sweep = logged.find((message) =>
+    /expired sign-in links could not be removed/.test(message),
+  );
+  assert.ok(sweep);
+  assert.match(sweep, /"type":"Error"/);
+  assert.match(sweep, /"code":"40P01"/);
+  assert.doesNotMatch(
+    logged.join("\n"),
+    new RegExp(`${token}|ada@student\\.ubc\\.ca|sweep-fault|private-detail`),
   );
 });
