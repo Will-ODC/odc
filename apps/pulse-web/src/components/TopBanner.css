@@ -254,7 +254,6 @@
   inset-inline-start: calc(var(--step) * 1.5);
   inset-inline-end: auto;
   align-items: stretch;
-  min-inline-size: calc(100% - var(--step) * 1.5);
   gap: calc(var(--step) / 2);
   padding: var(--step);
 }

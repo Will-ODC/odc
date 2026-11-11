@@ -30,6 +30,14 @@ describe("the light look's invariants (#482)", () => {
     );
     expect(panel).toMatch(/inset-inline-end:\s*0;/);
     expect(panel).not.toMatch(/(?:min-)?width:\s*\d+px/);
+    // The banner's communities panel must not override the token range (#530).
+    const banner = rules(
+      "components/TopBanner.css",
+      ".banner__nav .account-menu__panel",
+    ).join("\n");
+    expect(banner).not.toMatch(
+      /(?:min-|max-)?(?:inline-size|width|inline-size):/,
+    );
   });
 
   it("has a real focus colour, and no ring on the results focused by script", () => {
