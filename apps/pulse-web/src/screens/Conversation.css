@@ -185,6 +185,38 @@
 }
 
 /*
+ * Moving between questions (#554). A loaded question's column slides in a
+ * little from the right, the way a left swipe moves; "Loading…" does not.
+ */
+.conversation__scroll {
+  /*
+   * Deliberately clips sideways overflow, so the slide never shows a
+   * sideways scrollbar. Nothing in the column needs it: headings and
+   * answers wrap (overflow-wrap: anywhere). `clip` would compute to
+   * `hidden` here anyway, beside overflow-y: auto.
+   */
+  overflow-x: hidden;
+}
+.conversation__question .conversation__scroll > .conversation__column {
+  animation: question-arrive var(--motion-quick) ease-out;
+}
+@keyframes question-arrive {
+  from {
+    opacity: 0;
+    transform: translateX(calc(var(--step) * 3));
+  }
+  to {
+    opacity: 1;
+    transform: translateX(0);
+  }
+}
+@media (prefers-reduced-motion: reduce) {
+  .conversation__question .conversation__scroll > .conversation__column {
+    animation: none;
+  }
+}
+
+/*
  * The phone version (#482): under 700px the voting window is a sheet along
  * the bottom edge, full width, and closes to one full-width button.
  */
@@ -212,6 +244,17 @@
   }
   .conversation__help > button {
     flex: 1;
+  }
+  /*
+   * Closed to its one button, the dock takes its own row under the page
+   * rather than floating over it, so it never covers what the page ends with
+   * - Next under the results (#527). The open sheet still floats.
+   */
+  .conversation__dock:has(.conversation__help) {
+    position: static;
+  }
+  .conversation__question:has(.conversation__help) .conversation__scroll {
+    padding-bottom: var(--gutter);
   }
   .conversation button {
     min-height: var(--touch);

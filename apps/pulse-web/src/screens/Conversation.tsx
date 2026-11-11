@@ -7,6 +7,7 @@ import {
 } from "react";
 import type { ReactNode } from "react";
 import type { Ballot, Poll, PulseApi, Results } from "../api/types.js";
+import { UNREACHABLE } from "../api/types.js";
 import type { Route } from "../flow/route.js";
 import { cardStatus, closingNote, nextFor } from "../flow/conversation.js";
 import { byline } from "../flow/new-poll.js";
@@ -19,6 +20,7 @@ import { useClosedResults } from "../hooks/use-closed-results.js";
 import { useFreshResults } from "../hooks/use-fresh-results.js";
 import { useMyVotes } from "../hooks/use-my-votes.js";
 import { useWide } from "../hooks/use-wide.js";
+import { useSwipeLeft } from "../hooks/use-swipe.js";
 import type { Confirmation } from "../flow/vote-card.js";
 import { VoteCard } from "../components/VoteCard.js";
 import { ClosedResults } from "../components/ClosedResults.js";
@@ -770,11 +772,15 @@ function LiveCard({
   const shut = status.kind === "closed";
   // Desktop only: the choices are open again over a saved answer.
   const changing = wide && !shut && !resultView && Boolean(saved);
-  // Close is not offered while a change is being sent, nor while the server
-  // is asked which answer it holds: the outcome decides what shows, and
-  // focus follows it to the "You picked" line.
+  // Close is not offered while a change is being sent: the outcome decides
+  // what shows, and focus follows it to the "You picked" line. While the
+  // server is asked which answer it holds (#527), Close stays, marked as
+  // unavailable, so focus does not fall to the page.
   const [checking, setChecking] = useState(false);
-  const closable = changing && status.kind !== "sending" && !checking;
+  // The failed send whose read-back also got no answer: the card says the
+  // connection is still down rather than the send's own message.
+  const [stillDown, setStillDown] = useState<CastState | null>(null);
+  const closable = changing && status.kind !== "sending";
   // Read by a server reply that arrives after a later render.
   const current = useRef(state);
   useLayoutEffect(() => {
@@ -795,6 +801,36 @@ function LiveCard({
     if (wide) backedOut.current = true;
   }
   function close() {
+    if (checking) return;
+    if (saved && state.status === "failed" && !state.refused) {
+      // After a lost connection, a cut-off reply or a 5xx the new answer may
+      // have been stored, on a phone as on desktop: ask which one the server
+      // holds and show that. If it cannot say, the card stays open, says the
+      // connection is still down, and Close asks again. Try again waits
+      // during the check, so a read that never finishes is given up on after
+      // the same wait as a restore.
+      const failed = state;
+      setChecking(true);
+      void Promise.race([
+        onReadBack(poll),
+        new Promise<undefined>((done) =>
+          setTimeout(() => done(undefined), RESTORE_WAIT_MS),
+        ),
+      ]).then((found) => {
+        setChecking(false);
+        if (current.current !== failed) return;
+        if (found) {
+          backTo(found);
+          if (!wide) setVisible(false);
+          return;
+        }
+        setStillDown(failed);
+        wrapper.current
+          ?.querySelector<HTMLElement>(".vote-card__dismiss, .vote-card__close")
+          ?.focus();
+      });
+      return;
+    }
     // Backing out of a change: the earlier answer still stands on the server,
     // so show it again rather than an empty ballot under "You picked".
     if (
@@ -803,17 +839,6 @@ function LiveCard({
         (state.status === "failed" && state.refused))
     )
       backTo(saved);
-    else if (wide && saved && state.status === "failed") {
-      // After a lost connection the new answer may have been stored: ask
-      // which one the server holds and show that. If it cannot say, the
-      // card stays as it is, and Close asks again.
-      const failed = state;
-      setChecking(true);
-      void onReadBack(poll).then((found) => {
-        setChecking(false);
-        if (found && current.current === failed) backTo(found);
-      });
-    }
     // On desktop the choices stay on the page: Close only backs out of a change.
     if (!wide) setVisible(false);
   }
@@ -844,12 +869,17 @@ function LiveCard({
         presentation={showing.kind === "answered" ? "results" : "card"}
         inPage={wide}
         closable={closable}
+        checking={checking}
         {...(wide ? { onChangeAnswer: change } : {})}
         question={poll.question}
         method={poll.method}
         choices={poll.choices.map((label, index) => ({ index, label }))}
         picked={picked}
-        status={showing}
+        status={
+          stillDown === state && showing.kind === "failed"
+            ? { kind: "failed", message: UNREACHABLE }
+            : showing
+        }
         privacyNote="Your answer is private."
         trustHref={pathOf({ kind: "trust" })}
         confirmation={cardConfirmation}
@@ -931,8 +961,12 @@ function LiveCard({
     : !visible || showing.kind === "answered"
       ? handle
       : card;
+  // On a phone or tablet, a left swipe over an answered question does what
+  // "Next question" does (#554); the button stays for everyone else.
+  const swipeable = !shut && next !== null;
+  const swipe = useSwipeLeft(swipeable ? () => onGo(next) : undefined);
   return (
-    <div className="conversation__question">
+    <div className="conversation__question" {...swipe}>
       {renderPage(standing, vote, shut)}
     </div>
   );

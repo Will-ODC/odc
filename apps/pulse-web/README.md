@@ -62,8 +62,9 @@ handle opens the choices again without casting. Closing the drawer during a
 change keeps the saved answer and its results. Closing an unsent ballot keeps
 its selection and leaves the Vote handle available; on a closed question the
 handle reads Show question. The drawer uses a downward chevron to close, with
-the accessible button name Close. The page and popout scroll independently, with space to scroll the last page
-content above the floating button. Closed-question results also open in the main content. The small
+the accessible button name Close. The page and popout scroll independently. Closed to its
+one button, the drawer takes its own row under the page instead of floating over it, so it
+never covers Next or the page's last content. Closed-question results also open in the main content. The small
 circular info link beside Change my answer opens How votes count in a new tab.
 Results omit the repeated answer summary, extra privacy reminder and nested
 card framing. The live page has no tutorial button.
@@ -73,7 +74,14 @@ no popout: the choices sit in the page directly under the question, without
 repeating it, and Copy link sits at the end of the closing-date line. After a
 vote they fold into the "You picked" line, whose Change my answer reopens them
 in place with a visible Close; the saved answer's results stay below while you
-choose, and Next sits under the results card.
+choose.
+
+At both widths, moving on is a small text button, "Next question ›", at the
+right end of the results card's footer beside the info link (#554). On a touch
+screen, a left swipe of about 60px over an answered question does the same;
+vertical scrolling, short or diagonal drags and mouse drags do nothing. Each
+question's page slides in briefly from the right, with no animation under
+reduced-motion settings.
 
 Every product page uses the same browse-style top banner at desktop and phone
 widths: the Pulse home link, Home, About, a Your communities dropdown listing
@@ -122,7 +130,14 @@ a counted answer moves to the top; after a lost connection the page reads the
 saved answer from the server again. Coming back before the send settles shows
 Loading… for up to 5 seconds, then the question with "Your answer is still
 being sent." and no way to answer it again, until the send settles and the
-question is drawn with its outcome.
+question is drawn with its outcome. Only a 4xx refusal counts as storing
+nothing; a lost connection, a reply cut off part way or a 5xx may have stored
+the answer, so Close after one asks the server which answer it holds, on a
+phone and on desktop (#527). While it asks, Close stays in place but does
+nothing, the card says "Checking your answer…", and Try again waits. The
+answer the server holds is then shown; if the server cannot be reached
+either, or does not answer within 5 seconds, the card stays open, says the
+connection is still down, and focus returns to Close.
 Home and community browsing reuse the same rail beside Explore at 700px and
 wider. The question page keeps it beside voting and results at those widths,
 including after Submit. Below 700px, saved answers remain behind My votes;

@@ -556,6 +556,35 @@ describe("listing public questions", () => {
   });
 });
 
+it("reads a reply cut off part way as no answer, status 0 (#527)", async () => {
+  vi.stubGlobal(
+    "fetch",
+    async () =>
+      ({
+        ok: true,
+        status: 200,
+        text: () => Promise.reject(new TypeError("network error")),
+      }) as unknown as Response,
+  );
+  const failure = await new HttpPulseApi()
+    .cast("p1", [0])
+    .catch((err: unknown) => err);
+  expect(failure).toBeInstanceOf(ApiError);
+  expect(failure).toMatchObject({
+    status: 0,
+    message: "Couldn't reach pulse. Check your connection and try again.",
+  });
+});
+
+it("reads a fetch that never got a reply as status 0 (#527)", async () => {
+  stubFetch({ throws: true });
+  const failure = await new HttpPulseApi()
+    .cast("p1", [0])
+    .catch((err: unknown) => err);
+  expect(failure).toBeInstanceOf(ApiError);
+  expect(failure).toMatchObject({ status: 0 });
+});
+
 it("uses the ordinary email route for the demo address in every build", async () => {
   for (const development of [true, false]) {
     vi.stubEnv("DEV", development);

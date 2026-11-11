@@ -93,6 +93,8 @@ describe("the four states", () => {
     });
     const link = await screen.findByRole("link", { name: "Sign in to post" });
     expect(link.getAttribute("href")).toBe("/sign-in?next=new");
+    expect(link.classList.contains("btn")).toBe(true);
+    expect(link.classList.contains("btn--primary")).toBe(true);
     expect(screen.queryByLabelText("Your question")).toBeNull();
   });
 

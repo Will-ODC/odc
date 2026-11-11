@@ -25,7 +25,9 @@ it("Next updates the address; Back and Forward restore the question and saved an
   await main().findByRole("heading", { name: first.question, level: 1 });
   await user.click(main().getByRole("radio", { name: "Yes" }));
   await user.click(main().getByRole("button", { name: "Submit" }));
-  await user.click(await main().findByRole("button", { name: "Next" }));
+  await user.click(
+    await main().findByRole("button", { name: "Next question" }),
+  );
   await main().findByRole("heading", { name: parks.question, level: 1 });
   expect(location.pathname + location.search).toBe("/?poll=parks");
   const length = history.length;
@@ -61,7 +63,7 @@ it("Next to the current question leaves history unchanged (#502)", async () => {
     />,
   );
   const main = within(screen.getByRole("main"));
-  const next = await main.findByRole("button", { name: "Next" });
+  const next = await main.findByRole("button", { name: "Next question" });
   const length = history.length;
   await userEvent.click(next);
   expect(location.search).toBe("?poll=ads-free");

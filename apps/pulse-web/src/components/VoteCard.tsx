@@ -49,10 +49,17 @@ export interface VoteCardProps {
    * The desktop layout (#490): the card sits in the page right under the
    * question, so it drops its label and the repeated question, closes with a
    * visible "Close" only while changing an answer (`closable`), and "Change
-   * my answer" sits on the "You picked" line with Next under the results.
+   * my answer" sits on the "You picked" line; a quiet "Next question ›" ends
+   * the actions row.
    */
   inPage?: boolean;
   closable?: boolean;
+  /**
+   * The caller is asking the server which answer it holds after a failed
+   * send (#527). Close stays where it is but does nothing, Try again waits,
+   * and the card says it is checking in place of the old problem.
+   */
+  checking?: boolean;
   /** Who posted it: "Posted anonymously" or "Posted by …". Left out for a
    *  question from before posting existed. */
   byline?: string;
@@ -103,6 +110,7 @@ export function VoteCard({
   presentation = "card",
   inPage = false,
   closable = false,
+  checking = false,
   byline,
   why,
   method,
@@ -132,7 +140,15 @@ export function VoteCard({
   const note = useRef<HTMLDivElement>(null);
   const previous = useRef({ kind: status.kind, collapsed });
   const editable = status.kind === "answerable" || status.kind === "failed";
-  const allowed = editable && validCardBallot(method, choices, picked);
+  const allowed =
+    editable && !checking && validCardBallot(method, choices, picked);
+  // Close keeps focus while a check runs: marked, not removed or disabled.
+  const closeProps = {
+    "aria-disabled": checking || undefined,
+    onClick: () => {
+      if (!checking) onClose();
+    },
+  };
   const submitLabel =
     status.kind === "sending"
       ? "Sending…"
@@ -240,7 +256,7 @@ export function VoteCard({
       ?.focus();
   }
 
-  // What to do next. In the page (#490), Next sits under the results card.
+  // What to do next: a quiet "Next question" at the end of the row (#554).
   const actions = (
     <div className="vote-card__actions">
       {onChangeAnswer && !inPage ? (
@@ -260,9 +276,9 @@ export function VoteCard({
           <span aria-hidden="true">i</span>
         </a>
       ) : null}
-      {onNext && !inPage ? (
-        <button type="button" onClick={onNext}>
-          Next
+      {onNext ? (
+        <button type="button" className="vote-card__next" onClick={onNext}>
+          Next question<span aria-hidden="true"> ›</span>
         </button>
       ) : null}
     </div>
@@ -283,7 +299,7 @@ export function VoteCard({
           type="button"
           className="vote-card__close"
           aria-label="Close"
-          onClick={onClose}
+          {...closeProps}
         >
           {dismissIcon}
         </button>
@@ -330,7 +346,7 @@ export function VoteCard({
               type="button"
               className="vote-card__close"
               aria-label="Close"
-              onClick={onClose}
+              {...closeProps}
             >
               {dismissIcon}
             </button>
@@ -440,13 +456,6 @@ export function VoteCard({
             )}
             {actions}
           </div>
-          {inPage && onNext ? (
-            <div className="vote-card__next">
-              <button type="button" onClick={onNext}>
-                Next
-              </button>
-            </div>
-          ) : null}
           {presentation === "card" ? (
             <p className="vote-card__note">{privacyNote}</p>
           ) : null}
@@ -506,7 +515,11 @@ export function VoteCard({
               </p>
             ) : null}
           </div>
-          {status.kind === "failed" ? (
+          {checking ? (
+            <p className="vote-card__note" role="status">
+              Checking your answer…
+            </p>
+          ) : status.kind === "failed" ? (
             <p className="vote-card__problem" role="alert">
               {status.message}
             </p>
@@ -517,7 +530,7 @@ export function VoteCard({
               <button
                 type="button"
                 className="vote-card__dismiss"
-                onClick={onClose}
+                {...closeProps}
               >
                 Close
               </button>

@@ -80,8 +80,8 @@
 
 .chatpreview__select:focus-visible,
 .chat__open:focus-visible {
-  outline: calc(var(--hairline) * 2) solid var(--focus);
-  outline-offset: calc(var(--hairline) * 2);
+  outline: var(--focus-ring-width) solid var(--focus);
+  outline-offset: var(--focus-ring-offset);
 }
 
 .chatpreview__proto {
