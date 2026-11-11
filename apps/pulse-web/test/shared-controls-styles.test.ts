@@ -69,9 +69,10 @@ it.each(part2)("%s builds no button of its own", (tsx) => {
 
 it.each(part2)("%s's stylesheet copies no focus ring", (_tsx, css) => {
   const sheet = read(`../src/${css}`);
-  // Any rule for a :focus-visible state that draws its own outline.
+  // Any rule for a :focus-visible state that sets any outline property,
+  // offset included: an offset-only rule is still a local copy of the ring.
   const copies = [...sheet.matchAll(/([^{}]*:focus-visible[^{}]*)\{([^}]*)\}/g)]
-    .filter(([, , body]) => /outline(-width|-color|-style)?\s*:/.test(body!))
+    .filter(([, , body]) => /outline(-[a-z]+)?\s*:/.test(body!))
     .map(([, selector]) => selector!.trim());
   expect(copies).toEqual([]);
   expect(sheet).not.toMatch(/outline:\s*\d+px/);
