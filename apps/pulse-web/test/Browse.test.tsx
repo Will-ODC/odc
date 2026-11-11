@@ -1,11 +1,23 @@
 // @vitest-environment jsdom
-import { act, cleanup, render, screen, waitFor } from "@testing-library/react";
+import {
+  act,
+  cleanup,
+  render,
+  screen,
+  waitFor,
+  within,
+} from "@testing-library/react";
 import userEvent from "@testing-library/user-event";
 import { afterEach, expect, it, vi } from "vitest";
 import { Browse } from "../src/screens/Browse.js";
 import { App } from "../src/App.js";
 import { routeFrom, pathOf } from "../src/flow/route.js";
-import { ApiError, type PollPage, type PollSummary } from "../src/api/types.js";
+import {
+  ApiError,
+  type MyVotesPage,
+  type PollPage,
+  type PollSummary,
+} from "../src/api/types.js";
 import { stubApi } from "./stub-api.js";
 afterEach(cleanup);
 const row = (id: string, open = true): PollSummary => ({
@@ -72,7 +84,7 @@ it("shows loading, retry and empty states with useful destinations", async () =>
     )
     .mockResolvedValue(page([]));
   render(<Browse api={stubApi({ listPolls })} community="missing" />);
-  expect(screen.getByText("Loading…")).toBeTruthy();
+  expect(within(screen.getByRole("main")).getByText("Loading…")).toBeTruthy();
   await act(async () => reject(new ApiError(503, "Please try later.")));
   expect(await screen.findByText("Please try later.")).toBeTruthy();
   await userEvent.click(screen.getByRole("button", { name: "Try again" }));
@@ -238,4 +250,100 @@ it("opens the poll browser at Home and preserves the introduction at About", asy
   expect(screen.getByRole("button", { name: "Start voting" })).toBeTruthy();
   expect(read).not.toHaveBeenCalled();
   expect(cast).not.toHaveBeenCalled();
+});
+
+const savedVote = {
+  pollId: "saved",
+  question: "A saved question?",
+  choices: ["Yes"],
+  open: true,
+  castAt: "2026-11-10T12:00:00.000Z",
+  ballot: [0],
+  closesAt: null,
+};
+const answeredRail = () =>
+  within(screen.getByRole("navigation", { name: "My votes" }));
+
+it("shows saved answers beside Explore using the header's single read and keyboard order", async () => {
+  const user = userEvent.setup();
+  const myVotes = vi.fn(async () => ({
+    votes: [savedVote],
+    nextCursor: "more",
+  }));
+  render(
+    <Browse
+      api={stubApi({ myVotes, listPolls: async () => page() })}
+      community="pulse-general"
+    />,
+  );
+  const rail = answeredRail();
+  const saved = await rail.findByRole("link", { name: savedVote.question });
+  expect(saved.getAttribute("href")).toBe("/?poll=saved");
+  expect(rail.getByText("Your answer: Yes")).toBeTruthy();
+  expect(
+    rail.getByRole("link", { name: "See all my votes" }).getAttribute("href"),
+  ).toBe("/my-votes");
+  expect(myVotes).toHaveBeenCalledTimes(1);
+  // The initial heading keeps focus. Shift+Tab reaches the preceding rail,
+  // in the same left-to-right order as the desktop columns.
+  expect(document.activeElement).toBe(
+    screen.getByRole("heading", { name: "Explore questions" }),
+  );
+  await user.tab({ shift: true });
+  expect(document.activeElement).toBe(
+    rail.getByRole("link", { name: "See all my votes" }),
+  );
+  await user.tab({ shift: true });
+  expect(document.activeElement).toBe(saved);
+  await user.tab();
+  await user.tab();
+  expect(document.activeElement).toBe(
+    screen.getByRole("link", { name: "Question one" }),
+  );
+});
+
+it("keeps the Answered loading, error, retry focus and empty states separate from Explore", async () => {
+  let reject!: (reason: unknown) => void;
+  let finish!: (value: MyVotesPage) => void;
+  const myVotes = vi
+    .fn()
+    .mockImplementationOnce(
+      () =>
+        new Promise((_, no) => {
+          reject = no;
+        }),
+    )
+    .mockImplementationOnce(
+      () =>
+        new Promise((yes) => {
+          finish = yes;
+        }),
+    );
+  render(
+    <Browse
+      api={stubApi({ myVotes, listPolls: async () => page() })}
+      community="pulse-general"
+    />,
+  );
+  const rail = answeredRail();
+  expect(rail.getByText("Loading…")).toBeTruthy();
+  await screen.findByRole("link", { name: "Question one" });
+  await act(async () => reject(new Error("offline")));
+  expect(rail.getByText("We couldn't load your votes.")).toBeTruthy();
+  const user = userEvent.setup();
+  rail.getByRole("button", { name: "Try again" }).focus();
+  await user.keyboard("{Enter}");
+  expect(document.activeElement).toBe(
+    rail.getByRole("link", { name: "My votes" }),
+  );
+  expect(rail.getByRole("status").textContent).toContain("Loading…");
+  await act(async () => finish({ votes: [], nextCursor: null }));
+  expect(rail.getByText("No votes saved in this browser yet.")).toBeTruthy();
+  expect(rail.queryByRole("button", { name: "Try again" })).toBeNull();
+  expect(
+    rail.getByRole("link", { name: "My votes" }).getAttribute("href"),
+  ).toBe("/my-votes");
+  expect(document.activeElement).toBe(
+    rail.getByRole("link", { name: "My votes" }),
+  );
 });

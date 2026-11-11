@@ -83,9 +83,19 @@
   border-radius: var(--r-card);
 }
 
-@media (min-width: 1100px) {
+/* Match the question page: a saved-answer rail and one flexible column.
+   At 700px the main column still has 404px after its desktop gutters. */
+@media (min-width: 700px) {
+  .browse__layout {
+    display: grid;
+    grid-template-columns: var(--rail) minmax(0, 1fr);
+    align-items: stretch;
+    flex: 1;
+  }
   .browse .browse__main {
-    width: calc(100% - var(--rail) * 2);
+    box-sizing: border-box;
+    width: 100%;
+    min-width: 0;
   }
 }
 

@@ -370,3 +370,42 @@ it("ignores the server's answer to Close once the answer is sent again", async (
   );
   await main().findByText(said("You picked No."));
 });
+
+it("keeps saved questions beside results and puts the new answer first", async () => {
+  const p = poll();
+  const user = userEvent.setup();
+  const myVotes = vi.fn(async () => ({
+    votes: [
+      {
+        pollId: "parks",
+        question: "More parks?",
+        choices: ["No"],
+        ballot: [0],
+        castAt: "2026-11-09T12:00:00.000Z",
+        closesAt: null,
+        open: true,
+      },
+    ],
+    nextCursor: null,
+  }));
+  render(
+    <Conversation
+      api={stubApi({ myVotes, cast: counting(p) })}
+      pollId={p.id}
+    />,
+  );
+  const rail = within(screen.getByRole("navigation", { name: "My votes" }));
+  await rail.findByRole("link", { name: "More parks?" });
+  await main().findByRole("radio", { name: "Yes" });
+  await user.click(main().getByRole("radio", { name: "Yes" }));
+  await user.click(main().getByRole("button", { name: "Submit" }));
+  await main().findByRole("group", { name: "How people answered" });
+  const links = within(rail.getByRole("list")).getAllByRole("link");
+  expect(links.map((link) => link.textContent)).toEqual([
+    p.question,
+    "More parks?",
+  ]);
+  expect(links[0]?.getAttribute("aria-current")).toBe("page");
+  expect(rail.getByText("Your answer: Yes")).toBeTruthy();
+  expect(myVotes).toHaveBeenCalledTimes(1);
+});
