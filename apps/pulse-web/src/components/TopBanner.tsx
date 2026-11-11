@@ -1,4 +1,4 @@
-import type { ReactNode } from "react";
+import type { ReactNode, RefObject } from "react";
 import { SiteNavigation } from "./SiteNavigation.js";
 import { AccountMenu } from "./AccountMenu.js";
 import "./TopBanner.css";
@@ -11,6 +11,8 @@ export function TopBanner({
   currentHref,
   community,
   account,
+  accountTriggerRef,
+  signInRef,
 }: {
   /** Where the shared posting link goes (ADR-0037). */
   postHref?: string;
@@ -30,6 +32,8 @@ export function TopBanner({
    * the "Sign in" link.
    */
   account?: ReactNode;
+  accountTriggerRef?: RefObject<HTMLButtonElement | null>;
+  signInRef?: RefObject<HTMLAnchorElement | null>;
 }) {
   const mark = (
     <>
@@ -63,9 +67,13 @@ export function TopBanner({
         ) : null}
 
         {account ? (
-          <AccountMenu>{account}</AccountMenu>
+          <AccountMenu
+            {...(accountTriggerRef ? { triggerRef: accountTriggerRef } : {})}
+          >
+            {account}
+          </AccountMenu>
         ) : signInHref ? (
-          <a className="banner__sign-in" href={signInHref}>
+          <a ref={signInRef} className="banner__sign-in" href={signInHref}>
             Sign in
           </a>
         ) : null}

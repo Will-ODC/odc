@@ -316,6 +316,7 @@ export function Conversation({
           holdsVotes={
             heldBefore || answered.length > 0 || mine.data.status === "ready"
           }
+          {...(mine.voteRead ? { voteRead: mine.voteRead } : {})}
           onSignOut={signOut}
           onCancel={dismiss}
         />

@@ -1,4 +1,5 @@
 import type { PulseApi } from "../api/types.js";
+import { useMyVotes } from "../hooks/use-my-votes.js";
 import { useSession } from "../hooks/use-session.js";
 import { SiteBanner } from "./SiteBanner.js";
 
@@ -12,12 +13,17 @@ export function PageBanner({
   currentHref?: string;
   signInHref?: string;
 }) {
-  const { session, progress, signOut, dismiss } = useSession(api);
+  const mine = useMyVotes(api);
+  const { session, progress, signOut, dismiss } = useSession(api, {
+    onSignedOut: mine.clear,
+    onForgotten: mine.clear,
+  });
   return (
     <SiteBanner
       session={session}
       progress={progress}
-      holdsVotes={false}
+      holdsVotes={mine.holdsVotes}
+      {...(mine.voteRead ? { voteRead: mine.voteRead } : {})}
       onSignOut={signOut}
       onCancel={dismiss}
       {...(currentHref ? { currentHref } : {})}

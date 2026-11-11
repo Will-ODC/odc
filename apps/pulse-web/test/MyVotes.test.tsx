@@ -1,5 +1,11 @@
 // @vitest-environment jsdom
-import { cleanup, render, screen, waitFor } from "@testing-library/react";
+import {
+  cleanup,
+  render,
+  screen,
+  waitFor,
+  within,
+} from "@testing-library/react";
 import userEvent from "@testing-library/user-event";
 import { afterEach, expect, it, vi } from "vitest";
 import { ApiError, type MyVote, type MyVotesPage } from "../src/api/types.js";
@@ -69,7 +75,9 @@ it("explains a failed load and tries again on request", async () => {
     .mockResolvedValueOnce(page([vote()]));
   show(myVotes);
   expect(
-    await screen.findByText("We couldn't load your votes. Try again."),
+    await within(screen.getByRole("main")).findByText(
+      "We couldn't load your votes. Try again.",
+    ),
   ).toBeTruthy();
   expect(
     screen.getByRole("main").classList.contains("browse__main--message"),
@@ -84,7 +92,9 @@ it("passes on the server's own error sentence", async () => {
     throw new ApiError(500, "Something went wrong on our side.");
   });
   expect(
-    await screen.findByText("Something went wrong on our side."),
+    await within(screen.getByRole("main")).findByText(
+      "Something went wrong on our side.",
+    ),
   ).toBeTruthy();
 });
 
