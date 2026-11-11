@@ -1,7 +1,8 @@
-import { useEffect, useRef } from "react";
+import { useEffect, useRef, useState } from "react";
 import type { PulseApi } from "../api/types.js";
 import { pathOf } from "../flow/route.js";
 import { SiteBanner } from "./SiteBanner.js";
+import { AnsweredRail } from "../components/AnsweredRail.js";
 import { ViewState } from "../components/ViewState.js";
 import { usePollList } from "../hooks/use-poll-list.js";
 import { useMyVotes } from "../hooks/use-my-votes.js";
@@ -17,9 +18,14 @@ export function Browse({
 }) {
   const { data, more, loadMore, retry } = usePollList(api, community);
   const mine = useMyVotes(api);
+  const [railRetried, setRailRetried] = useState(false);
+  const clearVotes = () => {
+    setRailRetried(false);
+    mine.clear();
+  };
   const { session, progress, signOut, dismiss } = useSession(api, {
-    onSignedOut: mine.clear,
-    onForgotten: mine.clear,
+    onSignedOut: clearVotes,
+    onForgotten: clearVotes,
   });
   const heading = useRef<HTMLHeadingElement>(null);
   useEffect(() => {
@@ -51,54 +57,65 @@ export function Browse({
           onCancel={dismiss}
         />
       </header>
-      <main className="welcome__main browse__main">
-        <h1 ref={heading} tabIndex={-1}>
-          Explore questions
-        </h1>
-        <p className="welcome__note">
-          {community === "pulse-general"
-            ? "General"
-            : `Community: ${community}`}{" "}
-          · Newest first · Open and closed questions
-        </p>
-        <ViewState data={data}>
-          {(page) => (
-            <ul ref={list} className="browse__list">
-              {page.polls.map((p) => (
-                <li key={p.id}>
-                  <a href={pathOf({ kind: "conversation", pollId: p.id })}>
-                    {p.question}
-                  </a>
-                  <span>{p.open ? "Open" : "Closed · View results"}</span>
-                </li>
-              ))}
-            </ul>
-          )}
-        </ViewState>
-        {data.status === "error" ? (
-          <button className="button" type="button" onClick={retry}>
-            Try again
-          </button>
-        ) : null}
-        {more.status === "error" ? <p role="alert">{more.message}</p> : null}
-        {data.status === "ready" && data.value.nextCursor ? (
-          <button
-            className="button"
-            type="button"
-            disabled={more.status === "loading"}
-            onClick={() => {
-              focusAt.current = data.value.polls.length;
-              loadMore();
-            }}
-          >
-            {more.status === "loading"
-              ? "Loading more…"
-              : more.status === "error"
-                ? "Try loading more again"
-                : "Load more"}
-          </button>
-        ) : null}
-      </main>
+      <div className="browse__layout">
+        <AnsweredRail
+          data={mine.data}
+          votes={mine.data.status === "ready" ? mine.data.value.votes : []}
+          railRetried={railRetried}
+          onRetry={() => {
+            setRailRetried(true);
+            mine.retry();
+          }}
+        />
+        <main className="welcome__main browse__main">
+          <h1 ref={heading} tabIndex={-1}>
+            Explore questions
+          </h1>
+          <p className="welcome__note">
+            {community === "pulse-general"
+              ? "General"
+              : `Community: ${community}`}{" "}
+            · Newest first · Open and closed questions
+          </p>
+          <ViewState data={data}>
+            {(page) => (
+              <ul ref={list} className="browse__list">
+                {page.polls.map((p) => (
+                  <li key={p.id}>
+                    <a href={pathOf({ kind: "conversation", pollId: p.id })}>
+                      {p.question}
+                    </a>
+                    <span>{p.open ? "Open" : "Closed · View results"}</span>
+                  </li>
+                ))}
+              </ul>
+            )}
+          </ViewState>
+          {data.status === "error" ? (
+            <button className="button" type="button" onClick={retry}>
+              Try again
+            </button>
+          ) : null}
+          {more.status === "error" ? <p role="alert">{more.message}</p> : null}
+          {data.status === "ready" && data.value.nextCursor ? (
+            <button
+              className="button"
+              type="button"
+              disabled={more.status === "loading"}
+              onClick={() => {
+                focusAt.current = data.value.polls.length;
+                loadMore();
+              }}
+            >
+              {more.status === "loading"
+                ? "Loading more…"
+                : more.status === "error"
+                  ? "Try loading more again"
+                  : "Load more"}
+            </button>
+          ) : null}
+        </main>
+      </div>
     </div>
   );
 }
