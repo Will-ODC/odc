@@ -1,5 +1,6 @@
 // @vitest-environment jsdom
 import {
+  act,
   cleanup,
   render,
   screen,
@@ -31,23 +32,30 @@ const ME = { id: "v1", email: "jo@student.ubc.ca", community: "ubc" };
  */
 describe("what the URL opens", () => {
   it("spends the token from the emailed link", async () => {
-    const redeem = vi.fn(() => Promise.resolve(ME));
+    let finishRedeem!: (me: typeof ME) => void;
+    const redeem = vi.fn(
+      () => new Promise<typeof ME>((resolve) => (finishRedeem = resolve)),
+    );
     globalThis.history.replaceState(null, "", "/sign-in?token=abc123");
 
     render(<App api={stubApi({ redeem })} />);
 
+    expect(redeem).toHaveBeenCalledExactlyOnceWith("abc123");
+    expect(within(screen.getByRole("main")).getByText("Loading…")).toBeTruthy();
+    // Settle redemption and its route change before waiting for the question's
+    // own reads; one wait need not cover the whole chain of effects.
+    await act(async () => finishRedeem(ME));
+    const signedIn = await screen.findByText("Signed in");
+
     // Straight on to the question, with no screen to press through, and
     // "Signed in" said by a status region that outlives the redeem screen.
     expect(
-      await waitFor(() =>
-        within(screen.getByRole("main")).getByRole("heading", {
-          name: poll().question,
-          level: 1,
-        }),
-      ),
+      await within(screen.getByRole("main")).findByRole("heading", {
+        name: poll().question,
+        level: 1,
+      }),
     ).toBeTruthy();
-    expect(redeem).toHaveBeenCalledWith("abc123");
-    expect(screen.getByText("Signed in").getAttribute("role")).toBe("status");
+    expect(signedIn.getAttribute("role")).toBe("status");
     expect(screen.queryByRole("button", { name: "Continue" })).toBeNull();
   });
 
