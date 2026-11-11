@@ -1,3 +1,4 @@
+import { logFault, textFaultLogger } from "./logging.js";
 import { randomBytes } from "node:crypto";
 import { registerDevMailbox } from "./dev-mailbox.js";
 import { pathToFileURL } from "node:url";
@@ -378,7 +379,7 @@ export async function buildDevServer(
       // `ConsoleMailer` cannot fail, so this never fires here. It is wired
       // anyway so the warning goes where every other dev-server warning goes,
       // rather than being the one thing that reaches raw `console.error`.
-      { log: (message, error) => log(`${message}: ${String(error)}`) },
+      { log: (message, fault) => log(`${message}: ${JSON.stringify(fault)}`) },
     );
 
     const app = await createServer({
@@ -442,7 +443,11 @@ async function inPostgres(
   // exception that takes the server down. Report it; the pool drops the
   // connection by itself.
   pool.on("error", (error) => {
-    log(`pulse: an idle database connection failed: ${error.message}`);
+    logFault(
+      textFaultLogger(log),
+      error,
+      "pulse: an idle database connection failed",
+    );
   });
   try {
     // On every start. Harmless when nothing is new: the runner skips what ran.
@@ -490,8 +495,7 @@ async function seedPolls(votes: VotingStore): Promise<void> {
   }
 }
 
-async function main(): Promise<void> {
-  const config = devConfig(process.env);
+async function main(config: DevConfig): Promise<void> {
   const { app } = await buildDevServer(config);
   await app.listen({ port: config.port, host: "127.0.0.1" });
 
@@ -529,5 +533,26 @@ if (
   process.argv[1] !== undefined &&
   import.meta.url === pathToFileURL(process.argv[1]).href
 ) {
-  await main();
+  let config: DevConfig;
+  try {
+    config = devConfig(process.env);
+  } catch (error) {
+    // Planned configuration refusals keep their setup instructions; storage
+    // and listen failures below may contain private values instead (#503).
+    console.error(
+      error instanceof Error
+        ? `pulse dev could not start: ${error.message}`
+        : String(error),
+    );
+    process.exit(1);
+  }
+  try {
+    await main(config);
+  } catch (error) {
+    const log = textFaultLogger((message) => console.error(message));
+    logFault(log, error, "pulse dev could not start");
+    const cause = error instanceof Error ? error.cause : undefined;
+    if (cause !== undefined) logFault(log, cause, "  caused by");
+    process.exit(1);
+  }
 }

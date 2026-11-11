@@ -1,3 +1,4 @@
+import { logFault } from "../logging.js";
 import type {
   FastifyError,
   FastifyInstance,
@@ -336,7 +337,12 @@ function answer(
   error: unknown,
 ): FastifyReply {
   const refusal = classify(error);
-  if (refusal.status === 500) logFault(request, error);
+  if (refusal.status === 500)
+    logFault(
+      request.log.error.bind(request.log),
+      error,
+      "poll creation failed",
+    );
   if (
     error instanceof CreationError &&
     error.code === "posting_limit" &&
@@ -364,34 +370,4 @@ function classify(error: unknown): Refusal {
   if (typeof status === "number" && status >= 400 && status < 500)
     return BAD_REQUEST();
   return new Refusal(500, "server_error", "Something went wrong. Try again.");
-}
-
-/**
- * An unplanned fault, written down without anything that could be private.
- *
- * A database error's `detail` quotes the row it tripped on — an account id,
- * an idempotency key — and its message can quote an input value. So a
- * database error is logged by class and SQLSTATE only. Other errors are
- * pulse's own or the runtime's, and their message and stack are kept, because
- * a 500 nobody can diagnose is its own outage.
- */
-function logFault(request: FastifyRequest, error: unknown): void {
-  const code = (error as { code?: unknown } | null)?.code;
-  const fromDatabase = typeof code === "string" && /^[0-9A-Z]{5}$/.test(code);
-  if (fromDatabase || !(error instanceof Error)) {
-    request.log.error(
-      {
-        fault: {
-          type: error instanceof Error ? error.name : typeof error,
-          ...(typeof code === "string" ? { code } : {}),
-        },
-      },
-      "poll creation failed",
-    );
-    return;
-  }
-  request.log.error(
-    { fault: { type: error.name, message: error.message, stack: error.stack } },
-    "poll creation failed",
-  );
 }

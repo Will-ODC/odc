@@ -1,3 +1,4 @@
+import { logFault, textFaultLogger } from "./logging.js";
 import { pathToFileURL } from "node:url";
 import type { FastifyInstance } from "fastify";
 import type { Pool } from "pg";
@@ -280,7 +281,11 @@ export async function buildServer(
   // An idle connection that fails emits "error" on the pool, and an "error"
   // nobody listens for is an uncaught exception that takes the server down.
   pool.on("error", (error) => {
-    log(`pulse: an idle database connection failed: ${error.message}`);
+    logFault(
+      textFaultLogger(log),
+      error,
+      "pulse: an idle database connection failed",
+    );
   });
 
   try {
@@ -298,7 +303,7 @@ export async function buildServer(
         linkFor: (token) =>
           `${config.webOrigin}/sign-in?token=${encodeURIComponent(token)}`,
       },
-      { log: (message, error) => log(`${message}: ${String(error)}`) },
+      { log: (message, fault) => log(`${message}: ${JSON.stringify(fault)}`) },
     );
 
     const app = await createServer({
@@ -366,15 +371,14 @@ export function stopOnSignals(
         .close()
         .then(() => process.exit(0))
         .catch((error: unknown) => {
-          log(`pulse: did not stop cleanly: ${String(error)}`);
+          logFault(textFaultLogger(log), error, "pulse: did not stop cleanly");
           process.exit(1);
         });
     });
   }
 }
 
-async function main(): Promise<void> {
-  const config = serveConfig(process.env);
+async function main(config: ServeConfig): Promise<void> {
   const { app } = await buildServer(config);
   // Before `listen`, not after: migrations are the slowest part of a boot and
   // the window a rolling deploy is most likely to send SIGTERM into. Registered
@@ -389,27 +393,27 @@ if (
   process.argv[1] !== undefined &&
   import.meta.url === pathToFileURL(process.argv[1]).href
 ) {
+  let config: ServeConfig;
   try {
-    await main();
+    config = serveConfig(process.env);
   } catch (error) {
-    // The message, not a stack: these are configuration refusals meant for
-    // whoever set the variables, and a stack buries the one sentence that says
-    // which variable is missing.
+    // Planned configuration refusals retain the instructions for the operator.
+    // They are separate from storage/listen faults, whose messages can quote
+    // private values and must never reach the log (#503).
     console.error(
       error instanceof Error
         ? `pulse could not start: ${error.message}`
         : String(error),
     );
-    // But a refusal is not the only thing that reaches here. A dead database
-    // throws `connect ECONNREFUSED …`, which alone names neither pulse nor the
-    // database, and `MigrationError` keeps its real reason in `cause`. Dropping
-    // it leaves an operator one context-free line to work from.
+    process.exit(1);
+  }
+  try {
+    await main(config);
+  } catch (error) {
+    const log = textFaultLogger((message) => console.error(message));
+    logFault(log, error, "pulse could not start");
     const cause = error instanceof Error ? error.cause : undefined;
-    if (cause !== undefined) {
-      console.error(
-        `  caused by: ${cause instanceof Error ? cause.message : String(cause)}`,
-      );
-    }
+    if (cause !== undefined) logFault(log, cause, "  caused by");
     process.exit(1);
   }
 }

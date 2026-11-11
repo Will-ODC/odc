@@ -1,5 +1,7 @@
 import assert from "node:assert/strict";
 import { randomUUID } from "node:crypto";
+import { Writable } from "node:stream";
+import { SERVED_LOGGER } from "../src/main.js";
 import { test } from "node:test";
 import type { InjectOptions, LightMyRequestResponse } from "fastify";
 import {
@@ -1130,4 +1132,44 @@ test("signing_in_with_a_session_in_the_ballot_cookie_confirms_nothing", async ()
   const results = (await app.inject({ url: "/api/polls/p1/results" })).json();
   assert.equal(results.voters, 1);
   assert.equal(results.confirmedVoters, 0);
+});
+
+test("a_throwing_fault_getter_keeps_the_generic_500_and_private_text_out_of_logs", async (t) => {
+  const lines: string[] = [];
+  const stream = new Writable({
+    write(chunk, _encoding, done) {
+      lines.push(chunk.toString());
+      done();
+    },
+  });
+  const error = new Error("original private-person@example.test");
+  Object.defineProperty(error, "code", {
+    get() {
+      throw new Error("getter private-person@example.test");
+    },
+  });
+  const votes = new InMemoryVotingStore();
+  votes.getPoll = async () => {
+    throw error;
+  };
+  const { app } = await setup(undefined, undefined, {
+    votes,
+    logger: { ...SERVED_LOGGER, level: "info", stream },
+  });
+  t.after(() => app.close());
+  const response = await app.inject("/api/polls/p1");
+  assert.equal(response.statusCode, 500);
+  assert.deepEqual(response.json(), {
+    error: "server_error",
+    message: "Something went wrong. Try again.",
+  });
+  assert.ok(lines.length > 0, "the logger captured nothing");
+  for (const line of lines) {
+    assert.doesNotMatch(line, /private-person@example\.test|original|getter/);
+  }
+  const faults = lines
+    .map((line) => JSON.parse(line))
+    .filter((line) => line.fault);
+  assert.equal(faults.length, 1);
+  assert.deepEqual(faults[0].fault, { type: "Error" });
 });

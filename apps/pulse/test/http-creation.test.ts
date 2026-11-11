@@ -1000,12 +1000,18 @@ test("a_database_fault_is_logged_without_its_detail", async (t) => {
   assert.ok(!logs.includes("secret-key"));
 });
 
-test("an_unplanned_fault_is_logged_with_its_message", async (t) => {
+test("an_unplanned_fault_is_logged_without_its_message", async (t) => {
   const h = await harness(t, "memory", {
-    creationStore: throwing(new Error("posting community is not configured")),
+    creationStore: throwing(
+      new Error("posting community for ada@example.test is not configured"),
+    ),
   });
   refused(await h.context("owner"), 500, "server_error");
-  assert.match(h.logs.join(""), /posting community is not configured/);
+  assert.match(h.logs.join(""), /"type":"Error"/);
+  assert.doesNotMatch(
+    h.logs.join(""),
+    /ada@example.test|posting community for/,
+  );
 });
 
 test("an_unreachable_database_is_creation_unavailable", async (t) => {

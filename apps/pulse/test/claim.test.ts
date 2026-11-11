@@ -482,11 +482,11 @@ test("a_mail_provider_that_is_down_is_an_answer_the_person_can_act_on", async ()
   const result = await h.service.requestLink("ada@student.ubc.ca");
   assert.equal(result.status, "send_failed");
 
-  // The person is told to try again and nothing else. This is the ONLY place
-  // the reason survives, and the one person who could act on it — whoever set
-  // the sending domain — is not the person looking at the screen.
+  // A provider's response can name the recipient; only safe diagnostics
+  // reach even an injected logger (#503).
   assert.equal(logged.length, 1);
-  assert.match(String(logged[0]), /domain is not verified/);
+  assert.doesNotMatch(JSON.stringify(logged[0]), /domain is not verified/);
+  assert.deepEqual(logged[0], { type: "MailSendError" });
 });
 
 /**
@@ -590,20 +590,44 @@ for (const status of [500, 502, 504]) {
   });
 }
 
-test("a_discard_that_fails_still_answers_send_failed_not_a_fault", async () => {
-  // Freeing the cap is best-effort; the person must still hear "try again".
+test("a_discard_that_fails_logs_only_safe_diagnostics_and_still_answers_send_failed", async () => {
   const logged: string[] = [];
   const mailer = flakyMailer(
     1,
     () => new MailSendError("provider unavailable", { status: 503 }),
   );
-  const h = setup({ log: (message) => logged.push(message) }, { mailer });
-  h.claims.discard = () => Promise.reject(new Error("database went away"));
+  const h = setup(
+    {
+      log: (message, fault) =>
+        logged.push(`${message}: ${JSON.stringify(fault)}`),
+    },
+    { mailer },
+  );
+  h.claims.discard = () =>
+    Promise.reject(
+      Object.assign(
+        new Error("discard-fault-message private-person@example.test"),
+        {
+          code: "23505",
+          detail: "private-detail private-person@example.test",
+          cause: new Error("private-cause private-person@example.test"),
+        },
+      ),
+    );
   assert.equal(
     (await h.service.requestLink("ada@student.ubc.ca")).status,
     "send_failed",
   );
-  assert.ok(logged.some((m) => /could not be discarded/.test(m)));
+  const discard = logged.find((message) =>
+    /could not be discarded/.test(message),
+  );
+  assert.ok(discard);
+  assert.match(discard, /"type":"Error"/);
+  assert.match(discard, /"code":"23505"/);
+  assert.doesNotMatch(
+    logged.join("\n"),
+    /private-person@example.test|discard-fault-message|private-detail|private-cause/,
+  );
 });
 
 test("a_send_that_got_no_answer_keeps_its_link_live", async () => {

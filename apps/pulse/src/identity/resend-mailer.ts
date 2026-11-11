@@ -168,12 +168,11 @@ export class ResendMailer implements Mailer {
 
     if (response.ok) return;
 
-    // The provider's own words, for the log only. They are never shown to the
-    // person signing in: a 422 naming an unverified sending domain is an
-    // operator's problem and reads to anyone else as gibberish about pulse.
-    const explanation =
-      `the mail provider refused the message (${response.status}): ` +
-      (await bodyText(response));
+    // Never keep the provider's reply: it can quote recipients or live links.
+    // The HTTP status is enough to distinguish an outage from a setup fault.
+    const explanation = `the mail provider refused the message (${response.status})`;
+    // Release the response stream without ever reading or storing its text.
+    await response.body?.cancel().catch(() => undefined);
 
     // Which kind of refusal this is decides whether anyone ever finds out.
     // Busy or broken, and trying again is the right advice; anything else is a
@@ -195,15 +194,6 @@ export class ResendMailer implements Mailer {
  */
 function isTransient(status: number): boolean {
   return status === 408 || status === 429 || status >= 500;
-}
-
-/** Never let a failure to read the error body replace the error. */
-async function bodyText(response: Response): Promise<string> {
-  try {
-    return (await response.text()).slice(0, 500);
-  } catch {
-    return "<no body>";
-  }
 }
 
 function escapeHtml(value: string): string {

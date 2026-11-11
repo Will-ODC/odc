@@ -43,6 +43,16 @@ expiry, as before; they cannot be used to sign in. Upgrading also removes
 personal data from previously used links. This does not delete the email
 credential belonging to an account that signed in.
 
+## Error-log privacy
+
+Unexpected API and storage faults are logged only by error class and, for
+Postgres faults, SQLSTATE. Mail failures record their HTTP status when one was
+received. Messages, stacks, database row details, causes and provider response
+text are excluded because they can quote addresses or sign-in links. This
+also applies to background connection, shutdown and unexpected startup faults;
+planned configuration refusals retain their setup instructions. The deliberate
+local-development mailbox and `ConsoleMailer` output still show test messages.
+
 ## Run it on your computer
 
 ```bash

@@ -15,6 +15,12 @@ is the default Home/browser listing.
 They retain no author attribution. Community listing otherwise follows the same
 rules as created questions; legacy polls without a community remain excluded.
 
+Unexpected API faults use generic response messages and are logged by error
+class and valid SQLSTATE only. Mail-provider failures may additionally log the
+HTTP status; provider response text, error messages, stacks, causes, row details
+and request bodies are never part of fault diagnostics (#503). Planned 4xx
+responses and request-log formatting are unchanged.
+
 ## Signing in
 
 ### Local development mailbox

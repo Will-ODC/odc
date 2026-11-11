@@ -109,7 +109,7 @@ test("the_default_timeout_stays_short_enough_that_nobody_waits_on_a_dead_provide
   );
 });
 
-test("a_very_long_refusal_is_truncated_before_it_becomes_an_error_message", async () => {
+test("a_long_provider_refusal_body_is_not_kept_in_the_error", async () => {
   // Providers answer with HTML error pages. Without the cap the whole page ends
   // up in one log line.
   const h = setup(() => new Response("x".repeat(5000), { status: 500 }));
@@ -224,7 +224,7 @@ test("a_reply_to_is_sent_only_when_one_is_configured", async () => {
   assert.equal(calls[0]?.body["reply_to"], "hello@pulse.test");
 });
 
-test("a_refusal_keeps_the_providers_own_words_for_whoever_reads_the_log", async () => {
+test("a_refusal_keeps_only_the_provider_status_without_its_response_text", async () => {
   const h = setup(
     () =>
       new Response(JSON.stringify({ message: "domain is not verified" }), {
@@ -240,9 +240,8 @@ test("a_refusal_keeps_the_providers_own_words_for_whoever_reads_the_log", async 
     );
 
   assert.ok(error instanceof Error);
-  // An operator reading this needs to know it was the sending domain and not
-  // the address. Nobody signing in ever sees it.
-  assert.match(error.message, /domain is not verified/);
+  // A provider reply can quote the recipient: keep the status only (#503).
+  assert.doesNotMatch(error.message, /domain is not verified/);
   assert.match(error.message, /422/);
 });
 
