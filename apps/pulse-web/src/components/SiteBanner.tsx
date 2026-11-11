@@ -74,7 +74,7 @@ export function SiteBanner({
     homeHref: pathOf({ kind: "browse", community: "pulse-general" }),
     postHref: pathOf({ kind: "newPoll" }),
     ...(onPostPage
-      ? { currentHref: "/new" }
+      ? { currentHref: pathOf({ kind: "newPoll" }) }
       : currentHref
         ? { currentHref }
         : {}),
@@ -122,7 +122,9 @@ export function SiteBanner({
                       <>
                         <p
                           role={
-                            currentHref === "/my-votes" ? "status" : "alert"
+                            currentHref === pathOf({ kind: "myVotes" })
+                              ? "status"
+                              : "alert"
                           }
                         >
                           {voteRead.message}
