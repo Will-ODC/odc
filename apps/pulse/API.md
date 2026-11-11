@@ -225,6 +225,14 @@ becomes a confirmed vote of the person signing in — see "Confirmed votes" belo
 closed poll's votes are left as they are, so its results stop changing when it closes.
 Nothing about this shows in the response, and no ballot cookie is minted here.
 
+A person keeps **one vote per poll** (ADR-0046). If they already hold a vote on that
+poll in another browser, the one **cast more recently** stays, and it stays **in this
+browser**: when the other browser's vote is the newer one, its answer and cast time
+move here, and the other browser no longer holds a vote on that poll. When this
+browser's vote is the newer one, the other browser's is deleted. So after signing in,
+`GET /api/my-votes` and `GET /api/polls/:id/ballot` in this browser show the person's
+current answer, which may be one this browser never cast.
+
 `community` is a string, or **`null` when the address's domain named no community**
 (ADR-0030). It is always present, never left out, so a client reads one shape either
 way. Null is the honest answer — no community — rather than an empty string or a
@@ -254,7 +262,8 @@ regardless of differences between their clocks.
 It also clears **`pulse_ballot`** — see "The ballot cookie" below. Signing out ends
 this browser's ability to read or change the vote it cast. The vote itself is not
 withdrawn; it stays counted under the identity that cast it, and **a confirmed vote
-stays confirmed** (ADR-0040).
+stays confirmed** (ADR-0040), until the same person votes on that poll again, which
+replaces it (ADR-0046).
 
 ### `GET /api/me`
 
@@ -331,8 +340,9 @@ person has ever given an address. Two consequences, both deliberate:
   - **Whoever holds the key as well as the database can work it out**, by computing
     the code for every account and looking for it. That is the accepted limit; full
     separation is the ODC core's job (identity service and private linkage map).
-  - The code is the same for one person on one poll, so the database does show that
-    two ballots on the same poll were confirmed by the same (unnamed) person. Codes
+  - The code is the same for one person on one poll. The database showed when two
+    ballots on the same poll were confirmed by the same (unnamed) person, until one
+    replaced the other: now it holds at most one per person per poll (ADR-0046). Codes
     differ between polls, so they do not link one person's votes across polls.
   - A vote nobody confirmed stores nothing of the kind.
 
@@ -355,10 +365,11 @@ overwrite, since a second cast under the same identity _replaces_ rather than ad
 a shared or public machine that is the one way pulse can leak how somebody voted, and
 it is wider than the per-browser weakness above.
 
-The cost is accepted and worth stating plainly: signing in again mints a **new** ballot
-identity, so one person who votes, signs out, signs back in and votes again is counted
-**twice**. Pulse is counted-not-verified and already deduplicates only per browser;
-being double-counted is a smaller harm than being read.
+Signing in again mints a **new** ballot identity, so one person who votes signed in,
+signs out, signs back in and votes again casts from a new ballot. That second vote
+**replaces** the first (ADR-0046): a confirmed person holds one vote per poll, so they
+are counted once. A vote cast without signing in, and never confirmed, is still counted
+once per browser.
 
 ### `GET /api/my-votes?limit=20&cursor=…`
 
@@ -366,7 +377,10 @@ The current browser's saved answers, newest cast first. This route reads only
 the signed `pulse_ballot` cookie, including for someone who has not signed in.
 It never creates a cookie. With no valid ballot cookie it returns an empty page,
 even if a separate account session exists. `POST /api/sign-out` clears the ballot
-cookie, so this history disappears from that browser. Responses carry
+cookie, so this history disappears from that browser. A poll also leaves this list
+when the same person votes on it in another browser while signed in, and one can
+appear here when this browser signs in and the person's newer vote moves here
+(ADR-0046). Responses carry
 `Cache-Control: private, no-store`.
 
 ```json
@@ -563,8 +577,8 @@ The tally. No session required.
 }
 ```
 
-`voters` is the number of **distinct people** who voted, not the number of
-selections. `share` is `count / voters * 100`, rounded to one decimal, `0` when
+`voters` is the number of **ballots**, not the number of selections: one per confirmed
+person (ADR-0046) and one per browser for votes nobody confirmed. `share` is `count / voters * 100`, rounded to one decimal, `0` when
 nobody has voted. For an `approval` poll a voter picks several choices, so shares
 legitimately **sum to more than 100** — that is correct and is not normalised away.
 
@@ -573,8 +587,8 @@ legitimately **sum to more than 100** — that is correct and is not normalised 
 each choice's `confirmedCount` is how many of them picked it, and `confirmedShare` is
 `confirmedCount / confirmedVoters * 100`, rounded the same way. All three are `0` when
 nobody has confirmed, and they are always present. `confirmedVoters` never exceeds
-`voters`. The totals are unchanged by confirmation: every ballot counts in them,
-confirmed or not.
+`voters`. Every ballot counts in the totals, confirmed or not, and a confirmed person
+has one ballot per poll, so the totals count them once too.
 
 ```json
 {
@@ -609,14 +623,17 @@ confirmed or not.
 - A vote is **confirmed** when it is cast by someone signed in, or when the browser
   holding its ballot cookie signs in afterwards (`POST /api/sign-in/redeem`, open polls
   only).
-- **One confirmed vote per person per poll.** If one person confirms from two
-  browsers, the vote **cast most recently** is their confirmed one; the other still
-  counts in `voters` and `count`, never in the confirmed numbers. Changing an answer
-  makes that vote the most recently cast. Confirming an older vote by signing in later
-  does not make it the most recent — the cast time decides, not the sign-in time.
-  Votes cast in the same millisecond settle on one of them, the same one every time.
-- Changing an answer keeps a vote confirmed, signed in or not. Casting while signed in
-  as someone else makes it that person's confirmed vote instead.
+- **One vote per person per poll** (ADR-0046). A vote cast while signed in replaces
+  the person's vote on that poll in any other browser: that browser's
+  `GET /api/polls/:id/ballot` answers `null` and the poll leaves its My votes. When a
+  browser signs in, the person's vote **cast most recently** stays and the other is
+  replaced; the survivor is filed under the browser that signed in (see
+  `POST /api/sign-in/redeem`). Signing in later does not make an older vote the most
+  recent — the cast time decides, not the sign-in time. Votes cast in the same
+  millisecond settle on one of them, the same one every time.
+- Changing an answer keeps a vote confirmed, signed in or not. Changing it while
+  signed out replaces nothing elsewhere. Casting while signed in as someone else makes
+  it that person's confirmed vote instead.
 - Signing out does not remove a confirmation.
 - One person is one account, which today is one email address. Two addresses are two
   confirmed people.
@@ -636,7 +653,9 @@ none yet.
 { "ballot": [0, 2] }
 ```
 
-`ballot` is `null` when this browser has not voted on this poll. Its choices come back
+`ballot` is `null` when this browser has not voted on this poll, or when the person
+whose vote it was has since voted on it elsewhere while signed in (ADR-0046). After a
+sign-in it can be an answer cast in another browser, moved here. Its choices come back
 in the poll's order, whatever order they were cast in: for `single` and `approval` — the
 only methods today — a ballot says which choices, not a ranking of them.
 
@@ -676,7 +695,10 @@ When the poll has closed, the body is just `{ "status": "closed" }`.
 
 A session is still not required. When one is present (the `pulse_session` cookie, valid
 as for `/api/me`), the vote is **confirmed** as that person's (ADR-0040; see "Confirmed
-votes" above). Without one, the vote keeps whatever confirmation it already had.
+votes" above), and it **replaces** that person's vote on this poll in any other browser
+(ADR-0046). `status` still describes this browser's ballot: `counted` when this browser
+had none, even if it replaced one elsewhere. Without a session, the vote keeps whatever
+confirmation it already had and replaces nothing elsewhere.
 
 | Status | Body                                                | When                                          |
 | ------ | --------------------------------------------------- | --------------------------------------------- |

@@ -229,53 +229,173 @@ test(
 const ADA = "a".repeat(64);
 const BO = "b".repeat(64);
 
+/** Their lock keys, as `ConfirmationKey.lockKeyFor` gives (ADR-0046). */
+const asAda = { confirmation: ADA, lockKey: 7_001n } as const;
+const asBo = { confirmation: BO, lockKey: 7_002n } as const;
+const adaSignsIn = { codeFor: () => ADA, lockKey: asAda.lockKey };
+
+/**
+ * Holds `run`'s confirming writes at a barrier until `expected` of them are
+ * queued behind it, then lets them all go at once.
+ *
+ * Real requests rarely overlap on their own (each reads the poll first, and
+ * some open a connection), and `Promise.all` alone can run them one after
+ * another by chance. So the barrier session locks the vote table against
+ * writes, and the test waits until Postgres itself reports `expected`
+ * sessions waiting on it — directly, or behind a session that is. With the
+ * person's lock (ADR-0046) one write waits on the table and the rest wait on
+ * that write's advisory lock; without it, every write waits on the table.
+ * Either way all of them are in flight before any of them writes.
+ */
+async function racing<T>(
+  pool: Pool,
+  expected: number,
+  run: () => Promise<T>,
+): Promise<T> {
+  const barrier = await pool.connect();
+  try {
+    await barrier.query("begin");
+    await barrier.query("lock table vote in share row exclusive mode");
+    const barrierPid = await backendPid(barrier);
+    const writes = run();
+    // Not awaited yet: a write that fails early must not be an unhandled
+    // rejection while the barrier is still up.
+    writes.catch(() => null);
+    await until(
+      async () => (await waitingBehind(pool, barrierPid)) >= expected,
+    );
+    await barrier.query("commit");
+    return await writes;
+  } finally {
+    await barrier.query("rollback").catch(() => null);
+    barrier.release();
+  }
+}
+
+/** How many ballots on `pollId` carry `code`, read from the rows. */
+async function ballotsCarrying(
+  pool: Pool,
+  pollId: string,
+  code: string,
+): Promise<number> {
+  const { rows } = await pool.query<{ n: number }>(
+    "select count(*)::int as n from vote where poll_id = $1 and confirmation = $2",
+    [pollId, code],
+  );
+  return rows[0]?.n ?? -1;
+}
+
 test(
-  "confirmations_racing_for_one_person_and_poll_are_one_confirmed_vote",
+  "one_person_casting_from_several_browsers_at_once_keeps_one_ballot",
   { skip: databaseSkip },
   async (t) => {
-    // ADR-0040's race: the same person confirming from three browsers at once
-    // — two casting while signed in, one signing in after it voted. Held at a
-    // barrier, as above, so all three writes are queued together and commit
-    // in whatever order Postgres picks, rather than one after another as real
-    // requests usually run. Every one lands (three ballots in the totals) and
-    // exactly one counts as confirmed: at the same millisecond the tie goes to
-    // the greatest ballot identity, b:3, whatever order they committed in. The
-    // vote written before the barrier, b:0, is the tie's loser, so a store
-    // that kept the first row it found would pick it.
+    // ADR-0046's race: one person signed in on four browsers, all casting at
+    // once. Each cast deletes the person's other ballot, then writes its own.
+    // Interleaved without a lock, two casts both delete nothing and both
+    // write, which the unique index refuses or, without it, double counts.
+    const { pool, store } = await fresh(t);
+    const outcomes = await racing(pool, 4, () =>
+      Promise.all(
+        ["b:1", "b:2", "b:3", "b:4"].map((browser, i) =>
+          store.castVote("p1", browser, [i % 2], asAda),
+        ),
+      ),
+    );
+
+    assert.deepEqual(
+      outcomes.map((o) => o.status),
+      ["counted", "counted", "counted", "counted"],
+    );
+    assert.equal(await ballotsCarrying(pool, "p1", ADA), 1);
+    const results = await store.results("p1");
+    assert.equal(results.voters, 1);
+    assert.equal(results.confirmedVoters, 1);
+    assert.equal(
+      results.choices.reduce((sum, choice) => sum + choice.count, 0),
+      1,
+    );
+    // And no choice rows are left behind by a deleted ballot.
+    const { rows } = await pool.query<{ n: number }>(
+      "select count(*)::int as n from vote_choice",
+    );
+    assert.equal(rows[0]?.n, 1);
+  },
+);
+
+test(
+  "a_cast_during_a_sign_in_by_the_same_person_leaves_one_ballot",
+  { skip: databaseSkip },
+  async (t) => {
+    // The person casts on b:1 while b:0, which voted before, signs in. In
+    // either order exactly one ballot survives: cast first, then the sign-in
+    // keeps the later (a same-millisecond tie here, which b:1 wins and moves
+    // to b:0); sign-in first, then the cast replaces b:0's.
     const { pool, store } = await fresh(t);
     await store.castVote("p1", "b:0", [0]);
-    const barrier = await pool.connect();
-    try {
-      await barrier.query("begin");
-      await barrier.query("lock table vote in share row exclusive mode");
-      const barrierPid = await backendPid(barrier);
-      const racing = Promise.all([
-        store.castVote("p1", "b:1", [0], { confirmation: ADA }),
-        store.castVote("p1", "b:3", [1], { confirmation: ADA }),
-        store.confirmVotes("b:0", () => ADA),
-      ]);
-      await until(async () => (await blockedBy(pool, barrierPid)) >= 3);
-      await barrier.query("commit");
-      await racing;
+    await store.castVote("p1", "b:9", [1], asBo);
+    await racing(pool, 2, () =>
+      Promise.all([
+        store.castVote("p1", "b:1", [1], asAda),
+        store.confirmVotes("b:0", adaSignsIn),
+      ]),
+    );
 
-      const results = await store.results("p1");
-      assert.equal(results.voters, 3);
-      assert.equal(results.confirmedVoters, 1);
-      assert.deepEqual(
-        results.choices.map((c) => c.confirmedCount),
-        [0, 1],
-      );
-      // All three rows carry the code; the count is one because the rule is
-      // read from the rows, not because a write was lost.
-      const { rows } = await pool.query<{ n: number }>(
-        "select count(*)::int as n from vote where confirmation = $1",
+    assert.equal(await ballotsCarrying(pool, "p1", ADA), 1);
+    const results = await store.results("p1");
+    assert.equal(results.voters, 2);
+    assert.equal(results.confirmedVoters, 2);
+    // Ada's surviving answer is the cast's, whichever browser holds it; Bo's
+    // ballot is not touched.
+    assert.deepEqual(
+      results.choices.map((c) => c.confirmedCount),
+      [0, 2],
+    );
+    assert.deepEqual((await store.voteOf("p1", "b:9"))?.choices, [1]);
+  },
+);
+
+test(
+  "two_casts_and_a_sign_in_by_one_person_racing_leave_one_ballot",
+  { skip: databaseSkip },
+  async (t) => {
+    // ADR-0040's three-way race, now under ADR-0046: two browsers casting
+    // signed in and a third signing in after it voted, all held at the
+    // barrier. They commit in whatever order the person's lock grants, and
+    // exactly one ballot remains.
+    const { pool, store } = await fresh(t);
+    await store.castVote("p1", "b:0", [0]);
+    await racing(pool, 3, () =>
+      Promise.all([
+        store.castVote("p1", "b:1", [0], asAda),
+        store.castVote("p1", "b:3", [1], asAda),
+        store.confirmVotes("b:0", adaSignsIn),
+      ]),
+    );
+
+    assert.equal(await ballotsCarrying(pool, "p1", ADA), 1);
+    const results = await store.results("p1");
+    assert.equal(results.voters, 1);
+    assert.equal(results.confirmedVoters, 1);
+  },
+);
+
+test(
+  "the_database_refuses_a_second_ballot_for_one_code_on_one_poll",
+  { skip: databaseSkip },
+  async (t) => {
+    // The backstop under the lock (vote_poll_confirmation_key): a write that
+    // skipped the store's rule is an error, never a double count.
+    const { pool, store } = await fresh(t);
+    await store.castVote("p1", "b:1", [0], asAda);
+    await store.castVote("p1", "b:2", [0]);
+    await store.castVote("p2", "b:2", [0], asAda);
+    await assert.rejects(
+      pool.query(
+        "update vote set confirmation = $1 where poll_id = 'p1' and voter_id = 'b:2'",
         [ADA],
-      );
-      assert.equal(rows[0]?.n, 3);
-    } finally {
-      await barrier.query("rollback").catch(() => null);
-      barrier.release();
-    }
+      ),
+      /vote_poll_confirmation_key/,
+    );
   },
 );
 
@@ -286,13 +406,13 @@ test(
     // results() counts confirmed people, then their picks. A confirmed cast
     // committing between those two must not be half-seen.
     const { pool, store: writer } = await fresh(t);
-    await writer.castVote("p1", "b:1", [1], { confirmation: ADA });
+    await writer.castVote("p1", "b:1", [1], asAda);
     let interleaved = false;
     const reader = new PostgresVotingStore(
       afterStatement(pool, " as n from (", async () => {
         if (interleaved) return;
         interleaved = true;
-        await writer.castVote("p1", "b:2", [0], { confirmation: BO });
+        await writer.castVote("p1", "b:2", [0], asBo);
       }),
       () => AT,
     );
@@ -370,7 +490,7 @@ test(
     );
     assert.equal(results.confirmedVoters, 0);
     // And the browser that cast it can still have it confirmed by signing in.
-    assert.equal(await store.confirmVotes("b:before", () => ADA), 1);
+    assert.equal(await store.confirmVotes("b:before", adaSignsIn), 1);
     assert.equal((await store.results("old")).confirmedVoters, 1);
   },
 );
@@ -470,6 +590,24 @@ async function backendPid(client: PoolClient): Promise<number> {
     "select pg_backend_pid() as pid",
   );
   return rows[0]?.pid ?? -1;
+}
+
+/**
+ * How many sessions are waiting, directly or through a chain of waiters, on a
+ * lock the session `pid` holds. Asked of Postgres directly, so other runs
+ * sharing the database are never counted.
+ */
+async function waitingBehind(pool: Pool, pid: number): Promise<number> {
+  const { rows } = await pool.query<{ n: number }>(
+    "with recursive behind(pid) as (" +
+      " select $1::int" +
+      " union" +
+      " select a.pid from pg_stat_activity a join behind b" +
+      " on b.pid = any(pg_blocking_pids(a.pid))" +
+      ") select count(*)::int - 1 as n from behind",
+    [pid],
+  );
+  return rows[0]?.n ?? 0;
 }
 
 /**

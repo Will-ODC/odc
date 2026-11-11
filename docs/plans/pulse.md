@@ -273,7 +273,9 @@ than demanded at the door.
   `voter` and `pending_claim`, asserted in four tests, rendered at
   `SignIn.tsx:172-183`.
 - **May a filtered tally imply one person one vote?** It may not. `API.md:160-164`
-  records that signing out and back in counts the same person **twice**. A result
+  recorded that signing out and back in counts the same person **twice**
+  (superseded by ADR-0046, #532: a confirmed person now holds one ballot per
+  poll, but a vote never confirmed still counts once per browser). A result
   labelled "verified members only" reads as a stronger claim than pulse can
   support, and the label must not overstate it.
 - **Is a `community` claimed via a public link worth the same as one proven by a

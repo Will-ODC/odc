@@ -12,11 +12,14 @@ import {
 } from "./poll.js";
 import {
   UnknownPollError,
+  assertCastOptions,
   assertConfirmation,
+  assertLockKey,
   resultsFor,
   validateBallot,
   type CastOptions,
   type CastResult,
+  type ConfirmingPerson,
   type Results,
   type HistoryVote,
   type Vote,
@@ -180,7 +183,7 @@ export class PostgresVotingStore implements VotingStore {
     const poll = await this.#requirePoll(pollId);
     if (voterId.trim() === "") throw new TypeError("voterId must not be empty");
     validateBallot(poll, ballot);
-    assertConfirmation(options.confirmation);
+    assertCastOptions(options);
 
     const now = this.#clock();
     // Checked before anything is written, so a late cast replaces nothing.
@@ -188,6 +191,20 @@ export class PostgresVotingStore implements VotingStore {
 
     const choices = [...ballot].sort((a, b) => a - b);
     const inserted = await inTransaction(this.#pool, async (client) => {
+      if (options.confirmation !== undefined) {
+        // ADR-0046: one ballot per person per poll. This cast is the person's
+        // latest answer, so their ballot in any other browser on this poll
+        // goes (its `vote_choice` rows cascade). The person's lock comes
+        // first, before any row lock, so this cannot interleave with another
+        // of their casts or a sign-in; vote_poll_confirmation_key is the
+        // backstop if some path ever skipped it.
+        await lockPerson(client, options.lockKey);
+        await client.query(
+          "delete from vote where poll_id = $1 and confirmation = $2" +
+            " and voter_id <> $3",
+          [pollId, options.confirmation, voterId],
+        );
+      }
       // One row per (poll, voter), and re-casting REPLACES it: the upsert pulse
       // is exempt to use and `services/` is not. `xmax = 0` holds only for a
       // row this statement inserted, which keeps "counted" and "changed" right
@@ -227,10 +244,14 @@ export class PostgresVotingStore implements VotingStore {
 
   async confirmVotes(
     voterId: string,
-    codeFor: (pollId: string) => string,
+    person: ConfirmingPerson,
   ): Promise<number> {
+    assertLockKey(person.lockKey);
     const now = this.#clock();
     return inTransaction(this.#pool, async (client) => {
+      // The person's lock first (ADR-0046), as a confirmed cast takes it, so
+      // a sign-in and a cast by one person run one after the other.
+      await lockPerson(client, person.lockKey);
       // Open polls only, by the injected clock: a closed poll's results stop
       // changing when it closes. `for update` holds these rows so a cast from
       // this same browser cannot slip between the read and the write.
@@ -244,8 +265,38 @@ export class PostgresVotingStore implements VotingStore {
         [voterId, now],
       );
       for (const row of rows) {
-        const code = codeFor(row.poll_id);
+        const code = person.codeFor(row.poll_id);
         assertConfirmation(code);
+        // The person's ballot on this poll in another browser, if any, and
+        // whether it beats this one by ADR-0040's rule — the order
+        // `confirmedTally` reads, so the database picks as results would.
+        const { rows: rivals } = await client.query<{
+          id: string;
+          wins: boolean;
+        }>(
+          "select r.id," +
+            ' (r.cast_at, r.voter_id collate "C")' +
+            ' > (t.cast_at, t.voter_id collate "C") as wins' +
+            " from vote r join vote t on t.poll_id = r.poll_id" +
+            " where t.id = $1 and r.confirmation = $2 and r.id <> t.id" +
+            " for update of r",
+          [row.id, code],
+        );
+        const rival = rivals[0];
+        if (rival?.wins) {
+          // ADR-0046 4A: the newer answer moves to this browser. This row
+          // goes first, as (poll_id, voter_id) is unique; the rival keeps its
+          // choices, cast time and code, filed under this ballot identity.
+          await client.query("delete from vote where id = $1", [row.id]);
+          await client.query("update vote set voter_id = $2 where id = $1", [
+            rival.id,
+            voterId,
+          ]);
+          continue;
+        }
+        if (rival) {
+          await client.query("delete from vote where id = $1", [rival.id]);
+        }
         await client.query("update vote set confirmation = $2 where id = $1", [
           row.id,
           code,
@@ -441,6 +492,16 @@ async function confirmedTally(
   const counts = new Array<number>(poll.choices.length).fill(0);
   for (const row of picked.rows) counts[row.position] = row.count;
   return { voters: only(people.rows).n, counts };
+}
+
+/**
+ * Takes one person's vote lock until the transaction ends (ADR-0046). The key
+ * goes as text: `pg` sends a bigint parameter no other way.
+ */
+async function lockPerson(client: PoolClient, lockKey: bigint): Promise<void> {
+  await client.query("select pg_advisory_xact_lock($1::bigint)", [
+    lockKey.toString(),
+  ]);
 }
 
 /** For statements that always return exactly one row. */
