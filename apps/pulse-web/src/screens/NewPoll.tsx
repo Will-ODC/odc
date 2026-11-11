@@ -1,4 +1,4 @@
-import { useEffect, useId, useRef, useState } from "react";
+import { useCallback, useEffect, useId, useRef, useState } from "react";
 import type { ReactNode } from "react";
 import type { CreationContext, Poll, PulseApi } from "../api/types.js";
 import { ApiError } from "../api/types.js";
@@ -80,11 +80,13 @@ export function NewPoll({
   // The app's own bar, at every width, so a phone has a way home (operator
   // walkthrough, 2026-10-21). Signing out there shows the way back in.
   const mine = useMyVotes(api);
+  const clearMine = mine.clear;
+  const onSignedOut = useCallback(() => {
+    clearMine();
+    signedOut();
+  }, [clearMine, signedOut]);
   const bar = useSession(api, {
-    onSignedOut: () => {
-      mine.clear();
-      signedOut();
-    },
+    onSignedOut,
     onForgotten: mine.clear,
   });
   return (

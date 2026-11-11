@@ -86,9 +86,12 @@ its link. Account state also appears on About,
 introduction, trust and sign-in pages; these headers read the session and the
 same server-backed My votes state as the question rail. A browser with saved
 votes gets Account and Forget my votes here on every page; forgetting clears
-that state and returns to Sign in. While the saved-vote read is loading or has
-failed, Account keeps the safe Forget action; a failure offers Try again rather
-than assuming the browser has no votes. Static page content does not load poll data.
+that state and returns to Sign in. During the first saved-vote read, the account
+area stays neutral until the result is known. A failed read offers Account with
+Try again and the safe Forget action; Account stays available during its retry.
+Retry moves focus to Account, then to Sign in if no saved votes remain. On My
+votes, the header error uses a polite status instead of an alert. Static page
+content does not load poll data.
 Sign-in pages omit a redundant
 Sign in link. Shared `TopBanner`, `SiteNavigation` and `AccountMenu` components
 own the navigation layout and styles; colors and spacing use `styles/tokens.css`.

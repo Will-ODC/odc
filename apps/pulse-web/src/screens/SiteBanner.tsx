@@ -1,3 +1,4 @@
+import { useEffect, useRef } from "react";
 import { pathOf } from "../flow/route.js";
 import { TopBanner } from "../components/TopBanner.js";
 import { SignedIn } from "../components/SignedIn.js";
@@ -33,7 +34,7 @@ export function SiteBanner({
   progress: SignOutProgress;
   /** Whether this browser holds votes someone could forget. */
   holdsVotes: boolean;
-  /** A failed or pending read must not remove the safe way to forget votes. */
+  /** Only a failed read or its retry keeps the recovery controls visible. */
   voteRead?: VoteRead;
   /**
    * Mark the shared posting link as the current page.
@@ -44,7 +45,19 @@ export function SiteBanner({
   onSignOut: () => void;
   onCancel: () => void;
 }) {
+  const accountTrigger = useRef<HTMLButtonElement>(null);
+  const signInLink = useRef<HTMLAnchorElement>(null);
+  const retryFocus = useRef(false);
+  useEffect(() => {
+    if (!retryFocus.current || voteRead) return;
+    retryFocus.current = false;
+    // An empty result removes the focused Account trigger. Follow it to
+    // Sign in, unless the person has already moved focus elsewhere.
+    if (document.activeElement === document.body) signInLink.current?.focus();
+  }, [voteRead]);
   const where = {
+    accountTriggerRef: accountTrigger,
+    signInRef: signInLink,
     homeHref: pathOf({ kind: "browse", community: "pulse-general" }),
     postHref: pathOf({ kind: "newPoll" }),
     ...(onPostPage
@@ -75,6 +88,8 @@ export function SiteBanner({
       );
     case "signedOut":
     case "unknown":
+      if (voteRead?.status === "loading" && !voteRead.retrying)
+        return <TopBanner {...where} />;
       return (
         <TopBanner
           {...where}
@@ -92,8 +107,22 @@ export function SiteBanner({
                       <p role="status">Loading your votes…</p>
                     ) : voteRead?.status === "error" ? (
                       <>
-                        <p role="alert">{voteRead.message}</p>
-                        <button type="button" onClick={voteRead.onRetry}>
+                        <p
+                          role={
+                            currentHref === "/my-votes" ? "status" : "alert"
+                          }
+                        >
+                          {voteRead.message}
+                        </p>
+                        <button
+                          className="button"
+                          type="button"
+                          onClick={() => {
+                            retryFocus.current = true;
+                            accountTrigger.current?.focus();
+                            voteRead.onRetry();
+                          }}
+                        >
                           Try again
                         </button>
                       </>

@@ -55,6 +55,32 @@ function show(route: Route, page: MyVotesPage) {
 }
 
 describe.each(pages)("$name header (#487)", ({ route }) => {
+  it.each([false, true])(
+    "keeps the first pending vote read neutral before resolving saved votes (%s)",
+    async (hasVotes) => {
+      let finish!: (page: MyVotesPage) => void;
+      const { header } = showFailedRead(
+        route,
+        () =>
+          new Promise((resolve) => {
+            finish = resolve;
+          }),
+      );
+      // Flush the session read while keeping the vote request unresolved.
+      await act(async () => {});
+      expect(header.queryByRole("button", { name: "Account" })).toBeNull();
+      expect(header.queryByRole("link", { name: "Sign in" })).toBeNull();
+      await act(async () =>
+        finish({ votes: hasVotes ? [saved] : [], nextCursor: null }),
+      );
+      if (hasVotes) {
+        expect(header.getByRole("button", { name: "Account" })).toBeTruthy();
+      } else {
+        expect(header.queryByRole("button", { name: "Account" })).toBeNull();
+        expect(header.getByRole("link", { name: "Sign in" })).toBeTruthy();
+      }
+    },
+  );
   it("offers Account when this browser holds saved votes", async () => {
     const { header } = show(route, { votes: [saved], nextCursor: null });
     expect(await header.findByRole("button", { name: "Account" })).toBeTruthy();
@@ -178,7 +204,18 @@ describe.each(recoveryPages)(
       expect(
         await header.findByText("We couldn't load your votes. Try again."),
       ).toBeTruthy();
-      expect(header.getByRole("button", { name: "Try again" })).toBeTruthy();
+      expect(
+        header
+          .getByRole("button", { name: "Try again" })
+          .classList.contains("button"),
+      ).toBe(true);
+      if (route.kind === "myVotes") {
+        expect(header.queryByRole("alert")).toBeNull();
+        expect(screen.queryAllByRole("alert")).toHaveLength(0);
+        expect(header.getByRole("status").textContent).toBe(
+          "We couldn't load your votes. Try again.",
+        );
+      }
       await user.click(
         header.getByRole("button", { name: "Forget my votes here" }),
       );
@@ -205,11 +242,18 @@ describe.each(recoveryPages)(
         await user.click(
           await header.findByRole("button", { name: "Account" }),
         );
-        await user.click(
-          await header.findByRole("button", { name: "Try again" }),
+        // Reach retry using only the keyboard: Sign in, then Try again.
+        await user.tab();
+        await user.tab();
+        expect(document.activeElement).toBe(
+          header.getByRole("button", { name: "Try again" }),
         );
+        await user.keyboard("{Enter}");
         expect(header.getByRole("button", { name: "Account" })).toBeTruthy();
         expect(header.getByText("Loading your votes…")).toBeTruthy();
+        expect(document.activeElement).toBe(
+          header.getByRole("button", { name: "Account" }),
+        );
         expect(
           header.getByRole("button", { name: "Forget my votes here" }),
         ).toBeTruthy();
@@ -226,6 +270,9 @@ describe.each(recoveryPages)(
             await header.findByRole("link", { name: "Sign in" }),
           ).toBeTruthy();
           expect(header.queryByRole("button", { name: "Account" })).toBeNull();
+          expect(document.activeElement).toBe(
+            header.getByRole("link", { name: "Sign in" }),
+          );
         }
         expect(myVotes).toHaveBeenCalledTimes(2);
       },
@@ -256,4 +303,47 @@ it("does not restore Account when a retry completes after Forget (#487)", async 
   await act(async () => finish({ votes: [saved], nextCursor: null }));
   expect(header.queryByRole("button", { name: "Account" })).toBeNull();
   expect(signOut).toHaveBeenCalledTimes(1);
+});
+
+it("keeps focus on Account if a header retry fails again", async () => {
+  const user = userEvent.setup();
+  let fail!: (reason: Error) => void;
+  const myVotes = vi
+    .fn<() => Promise<MyVotesPage>>()
+    .mockRejectedValueOnce(new Error("offline"))
+    .mockImplementationOnce(
+      () =>
+        new Promise((_resolve, reject) => {
+          fail = reject;
+        }),
+    );
+  const { header } = showFailedRead({ kind: "about" }, myVotes);
+  const account = await header.findByRole("button", { name: "Account" });
+  await user.click(account);
+  await user.click(header.getByRole("button", { name: "Try again" }));
+  expect(document.activeElement).toBe(account);
+  await act(async () => fail(new Error("still offline")));
+  expect(header.getByRole("button", { name: "Try again" })).toBeTruthy();
+  expect(document.activeElement).toBe(account);
+});
+
+it("does not steal focus when someone moves away during a header retry", async () => {
+  const user = userEvent.setup();
+  let finish!: (page: MyVotesPage) => void;
+  const myVotes = vi
+    .fn<() => Promise<MyVotesPage>>()
+    .mockRejectedValueOnce(new Error("offline"))
+    .mockImplementationOnce(
+      () =>
+        new Promise((resolve) => {
+          finish = resolve;
+        }),
+    );
+  const { header } = showFailedRead({ kind: "about" }, myVotes);
+  await user.click(await header.findByRole("button", { name: "Account" }));
+  await user.click(header.getByRole("button", { name: "Try again" }));
+  const home = header.getByRole("link", { name: "Home" });
+  act(() => home.focus());
+  await act(async () => finish({ votes: [], nextCursor: null }));
+  expect(document.activeElement).toBe(home);
 });

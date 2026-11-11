@@ -5,9 +5,9 @@ import type { ViewData } from "./view-data.js";
 type More =
   { status: "idle" | "loading" } | { status: "error"; message: string };
 
-/** Header recovery when whether this browser holds votes is still unknown. */
+/** First read stays neutral; a retry keeps the error recovery controls. */
 export type VoteRead =
-  | { status: "loading" }
+  | { status: "loading"; retrying: boolean }
   | { status: "error"; message: string; onRetry: () => void };
 
 export const MY_VOTES_EMPTY = "No votes saved in this browser yet.";
@@ -92,7 +92,7 @@ export function useMyVotes(api: PulseApi) {
   const retryRead = () => retry((n) => n + 1);
   const voteRead: VoteRead | undefined =
     data.status === "loading"
-      ? { status: "loading" }
+      ? { status: "loading", retrying: attempt > 0 }
       : data.status === "error"
         ? { status: "error", message: data.message, onRetry: retryRead }
         : undefined;
