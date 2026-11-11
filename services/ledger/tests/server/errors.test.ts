@@ -23,6 +23,7 @@ const BODY_MARKER = "body-marker-7f3a";
 
 const PUBLIC_LIMIT = 1024;
 const INTERNAL_LIMIT = 2 * 65_536;
+const CLOSE_LIMIT = 1024;
 
 function failingPool(): Pool {
   const fail = () => Promise.reject(new Error(SECRET));
@@ -133,6 +134,24 @@ const ports: readonly Port[] = [
         path: "/missing",
         status: 404,
         error: "not_found",
+      },
+      {
+        name: "a_close_body_of_exactly_1024_bytes_reaches_route_validation",
+        method: "POST",
+        path: `/issues/${"a".repeat(64)}/close`,
+        contentType: "application/json",
+        body: jsonOfSize(CLOSE_LIMIT),
+        status: 400,
+        error: "bad_request",
+      },
+      {
+        name: "a_close_body_one_byte_over_1024_is_413_payload_too_large",
+        method: "POST",
+        path: `/issues/${"a".repeat(64)}/close`,
+        contentType: "application/json",
+        body: jsonOfSize(CLOSE_LIMIT + 1),
+        status: 413,
+        error: "payload_too_large",
       },
       {
         name: "a_body_one_byte_over_131072_is_413_payload_too_large",
