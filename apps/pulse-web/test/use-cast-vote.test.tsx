@@ -1,8 +1,7 @@
 // @vitest-environment jsdom
 import { act, cleanup, renderHook, waitFor } from "@testing-library/react";
 import { afterEach, expect, it, vi } from "vitest";
-import { UNREACHABLE } from "../src/api/http.js";
-import { ApiError } from "../src/api/types.js";
+import { ApiError, UNREACHABLE } from "../src/api/types.js";
 import { useCastVote } from "../src/hooks/use-cast-vote.js";
 import { results, stubApi } from "./stub-api.js";
 

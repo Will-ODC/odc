@@ -1,4 +1,4 @@
-import { ApiError } from "./types.js";
+import { ApiError, UNREACHABLE } from "./types.js";
 import type {
   Ballot,
   CastOutcome,
@@ -14,14 +14,6 @@ import type {
   SuggestResult,
   Suggestion,
 } from "./types.js";
-
-/**
- * The one sentence for a request that got no complete answer: the connection
- * failed before a reply, or the reply was cut off part way. Shared so the
- * same failure reads the same wherever it is caught.
- */
-export const UNREACHABLE =
-  "Couldn't reach pulse. Check your connection and try again.";
 
 /**
  * Talks to the pulse API over the same origin, so the session cookie travels

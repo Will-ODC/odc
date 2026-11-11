@@ -125,8 +125,12 @@ Loading… for up to 5 seconds, then the question with "Your answer is still
 being sent." and no way to answer it again, until the send settles and the
 question is drawn with its outcome. Only a 4xx refusal counts as storing
 nothing; a lost connection, a reply cut off part way or a 5xx may have stored
-the answer, so on desktop Close after one asks the server which answer it
-holds (#527).
+the answer, so Close after one asks the server which answer it holds, on a
+phone and on desktop (#527). While it asks, Close stays in place but does
+nothing, the card says "Checking your answer…", and Try again waits. The
+answer the server holds is then shown; if the server cannot be reached
+either, or does not answer within 5 seconds, the card stays open, says the
+connection is still down, and focus returns to Close.
 Home and community browsing reuse the same rail beside Explore at 700px and
 wider. The question page keeps it beside voting and results at those widths,
 including after Submit. Below 700px, saved answers remain behind My votes;

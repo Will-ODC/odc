@@ -1,7 +1,6 @@
 import { useCallback, useState } from "react";
 import type { Ballot, PulseApi, Results } from "../api/types.js";
-import { UNREACHABLE } from "../api/http.js";
-import { ApiError } from "../api/types.js";
+import { ApiError, UNREACHABLE } from "../api/types.js";
 
 /** Keeps the whole ballot through sending, results and retries.
  * `choice` remains first-choice metadata for existing hook consumers; card

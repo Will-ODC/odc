@@ -53,6 +53,12 @@ export interface VoteCardProps {
    */
   inPage?: boolean;
   closable?: boolean;
+  /**
+   * The caller is asking the server which answer it holds after a failed
+   * send (#527). Close stays where it is but does nothing, Try again waits,
+   * and the card says it is checking in place of the old problem.
+   */
+  checking?: boolean;
   /** Who posted it: "Posted anonymously" or "Posted by …". Left out for a
    *  question from before posting existed. */
   byline?: string;
@@ -103,6 +109,7 @@ export function VoteCard({
   presentation = "card",
   inPage = false,
   closable = false,
+  checking = false,
   byline,
   why,
   method,
@@ -132,7 +139,15 @@ export function VoteCard({
   const note = useRef<HTMLDivElement>(null);
   const previous = useRef({ kind: status.kind, collapsed });
   const editable = status.kind === "answerable" || status.kind === "failed";
-  const allowed = editable && validCardBallot(method, choices, picked);
+  const allowed =
+    editable && !checking && validCardBallot(method, choices, picked);
+  // Close keeps focus while a check runs: marked, not removed or disabled.
+  const closeProps = {
+    "aria-disabled": checking || undefined,
+    onClick: () => {
+      if (!checking) onClose();
+    },
+  };
   const submitLabel =
     status.kind === "sending"
       ? "Sending…"
@@ -283,7 +298,7 @@ export function VoteCard({
           type="button"
           className="vote-card__close"
           aria-label="Close"
-          onClick={onClose}
+          {...closeProps}
         >
           {dismissIcon}
         </button>
@@ -330,7 +345,7 @@ export function VoteCard({
               type="button"
               className="vote-card__close"
               aria-label="Close"
-              onClick={onClose}
+              {...closeProps}
             >
               {dismissIcon}
             </button>
@@ -506,7 +521,11 @@ export function VoteCard({
               </p>
             ) : null}
           </div>
-          {status.kind === "failed" ? (
+          {checking ? (
+            <p className="vote-card__note" role="status">
+              Checking your answer…
+            </p>
+          ) : status.kind === "failed" ? (
             <p className="vote-card__problem" role="alert">
               {status.message}
             </p>
@@ -517,7 +536,7 @@ export function VoteCard({
               <button
                 type="button"
                 className="vote-card__dismiss"
-                onClick={onClose}
+                {...closeProps}
               >
                 Close
               </button>

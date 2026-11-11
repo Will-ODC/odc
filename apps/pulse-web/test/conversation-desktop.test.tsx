@@ -2,6 +2,7 @@
 import {
   act,
   cleanup,
+  fireEvent,
   render,
   screen,
   waitFor,
@@ -9,11 +10,12 @@ import {
 } from "@testing-library/react";
 import userEvent from "@testing-library/user-event";
 import { afterAll, afterEach, beforeAll, expect, it, vi } from "vitest";
-import { HttpPulseApi } from "../src/api/http.js";
+import { UNREACHABLE } from "../src/api/types.js";
 import type { Ballot, CastOutcome, Poll } from "../src/api/types.js";
 import { WIDE } from "../src/hooks/use-wide.js";
 import { Conversation } from "../src/screens/Conversation.js";
-import { graph, poll, results, stubApi } from "./stub-api.js";
+import { pulseServer, tally } from "./pulse-server.js";
+import { graph, poll, stubApi } from "./stub-api.js";
 
 /*
  * The desktop layout (#490): at 700px and wider, voting sits in the page
@@ -43,20 +45,6 @@ afterEach(cleanup);
 const main = () => within(screen.getByRole("main"));
 const said = (text: string) => (_: string, node: Element | null) =>
   node?.tagName === "SPAN" && node.textContent === text;
-function tally(p: Poll, ballot: Ballot) {
-  return results({
-    pollId: p.id,
-    question: p.question,
-    method: p.method,
-    voters: 1,
-    choices: p.choices.map((label, index) => ({
-      index,
-      label,
-      count: ballot.includes(index) ? 1 : 0,
-      share: ballot.includes(index) ? 100 : 0,
-    })),
-  });
-}
 function counting(p: Poll) {
   let attempt = 0;
   return vi.fn(async (_id: string, ballot: Ballot): Promise<CastOutcome> => ({
@@ -271,55 +259,6 @@ it("shows the earlier answer when Close follows a lost connection that stored no
   expect(main().queryByRole("radio")).toBeNull();
 });
 
-/**
- * A pulse server behind a fetch, for the real http client: the ballot it
- * holds, and a lost connection on the send the test marks. Browsers reject a
- * fetch that gets no reply with a TypeError, not an Error.
- */
-function pulseServer(p: Poll) {
-  let held: Ballot | null = null;
-  let dropNext = false;
-  const asked: string[] = [];
-  const reply = (body: unknown, status = 200) =>
-    new Response(JSON.stringify(body), {
-      status,
-      headers: { "content-type": "application/json" },
-    });
-  const doFetch = vi.fn(
-    async (input: RequestInfo | URL, init?: RequestInit) => {
-      const url = String(input);
-      const method = init?.method ?? "GET";
-      asked.push(`${method} ${url}`);
-      const at = `/api/polls/${p.id}`;
-      if (method === "GET" && url === "/api/me")
-        return reply({ error: "signed_out", message: "Sign in." }, 401);
-      if (method === "GET" && url === "/api/my-votes")
-        return reply({ votes: [], nextCursor: null });
-      if (method === "GET" && url === at) return reply(p);
-      if (method === "GET" && url === `${at}/ballot`)
-        return reply({ ballot: held });
-      if (method === "GET" && url === `${at}/results`)
-        return reply(tally(p, held ?? []));
-      if (method === "POST" && url === `${at}/votes`) {
-        const { ballot } = JSON.parse(String(init?.body)) as {
-          ballot: Ballot;
-        };
-        const status = held ? "changed" : "counted";
-        held = ballot;
-        // Stored, but the reply never arrives.
-        if (dropNext) throw new TypeError("Failed to fetch");
-        return reply({ status, ballot, results: tally(p, ballot) });
-      }
-      throw new Error(`the server does not answer ${method} ${url}`);
-    },
-  );
-  return {
-    api: new HttpPulseApi("/api", doFetch as typeof fetch),
-    asked,
-    dropNextSend: () => (dropNext = true),
-  };
-}
-
 it("asks the server on Close after the real client loses the connection (#527)", async () => {
   const p = poll();
   const server = pulseServer(p);
@@ -401,7 +340,7 @@ it("shows a question whose send is still out after 5 s in the page, without Subm
   }
 });
 
-it("ignores the server's answer to Close once the answer is sent again", async () => {
+it("keeps Close in place while it asks the server, says so, and holds Try again (#527)", async () => {
   const p = poll();
   const sends = heldCasts();
   let held: Ballot | null = null;
@@ -419,31 +358,36 @@ it("ignores the server's answer to Close once the answer is sent again", async (
       api={stubApi({
         cast: sends.cast,
         myBallot,
-        results: async () => tally(p, [1]),
+        results: async () => tally(p, [0]),
       })}
       pollId={p.id}
     />,
   );
   await changeToNo(sends, p, user);
-  held = [1];
+  // The lost send was stored.
+  held = [0];
   await act(async () => sends.lose());
-  await user.click(await main().findByRole("button", { name: "Close" }));
-  // Asked once: Close is not offered again while the server is asked.
-  expect(main().queryByRole("button", { name: "Close" })).toBeNull();
+  const close = await main().findByRole("button", { name: "Close" });
+  await user.click(close);
+  // Close stays, marked, and keeps focus; the old problem gives way to a
+  // status line, and Try again waits for the answer.
+  expect(close.isConnected).toBe(true);
+  expect(close.getAttribute("aria-disabled")).toBe("true");
+  expect(document.activeElement).toBe(close);
+  expect(main().getByText("Checking your answer…").getAttribute("role")).toBe(
+    "status",
+  );
+  expect(main().queryByRole("alert")).toBeNull();
+  expect(
+    main().getByRole("button", { name: "Try again" }).hasAttribute("disabled"),
+  ).toBe(true);
+  // A second Close while asking does not ask again.
+  await user.click(close);
   expect(myBallot).toHaveBeenCalledTimes(2);
-  // Sent again before the server says which answer it holds.
-  await user.click(main().getByRole("button", { name: "Try again" }));
   await act(async () => answer());
-  // Still sending: the late reply does not put the earlier answer back.
-  expect(main().getByRole("button", { name: "Sending…" })).toBeTruthy();
-  expect(main().getByRole("radio", { name: "No" })).toHaveProperty(
-    "checked",
-    true,
-  );
-  await act(async () =>
-    sends.finish({ status: "changed", ballot: [0], results: tally(p, [0]) }),
-  );
   await main().findByText(said("You picked No."));
+  expect(main().queryByText("Checking your answer…")).toBeNull();
+  expect(main().queryByRole("radio")).toBeNull();
 });
 
 it("keeps saved questions beside results and puts the new answer first", async () => {
@@ -485,7 +429,42 @@ it("keeps saved questions beside results and puts the new answer first", async (
   expect(myVotes).toHaveBeenCalledTimes(1);
 });
 
-it("ignores the server's late answer to Close once the answer sent again is counted (#519)", async () => {
+it("says the connection is still down, and focuses Close, when the server cannot be asked either (#527)", async () => {
+  const p = poll();
+  const server = pulseServer(p);
+  const user = userEvent.setup();
+  render(<Conversation api={server.api} pollId={p.id} />);
+  await main().findByRole("heading", { name: p.question, level: 1 });
+  await user.click(main().getByRole("radio", { name: "Yes" }));
+  await user.click(main().getByRole("button", { name: "Submit" }));
+  await main().findByText(said("You picked Yes."));
+  await user.click(main().getByRole("button", { name: "Change my answer" }));
+  await user.click(main().getByRole("radio", { name: "No" }));
+  server.dropNextSend();
+  await user.click(main().getByRole("button", { name: "Submit" }));
+  await main().findByRole("alert");
+  server.setOffline(true);
+  await user.click(main().getByRole("button", { name: "Close" }));
+  // Shown again in a fresh alert, so it is announced again.
+  const alert = await main().findByRole("alert");
+  expect(alert.textContent).toBe(UNREACHABLE);
+  const close = main().getByRole("button", { name: "Close" });
+  expect(close.getAttribute("aria-disabled")).toBeNull();
+  await waitFor(() => expect(document.activeElement).toBe(close));
+  expect(
+    main().getByRole("button", { name: "Try again" }).hasAttribute("disabled"),
+  ).toBe(false);
+  expect(main().getByRole("radio", { name: "No" })).toHaveProperty(
+    "checked",
+    true,
+  );
+  // Back online, Close asks again and finds the stored answer.
+  server.setOffline(false);
+  await user.click(close);
+  await main().findByText(said("You picked No."));
+}, 15_000);
+
+it("gives up on a read that never finishes, and ignores its late answer once the answer sent again is counted (#519)", async () => {
   const p = poll();
   const sends = heldCasts();
   let held: Ballot | null = null;
@@ -512,15 +491,28 @@ it("ignores the server's late answer to Close once the answer sent again is coun
   // The lost send stored nothing: asked now, the server would say Yes.
   held = [1];
   await act(async () => sends.lose());
-  await user.click(await main().findByRole("button", { name: "Close" }));
-  expect(myBallot).toHaveBeenCalledTimes(2);
-  // Sent again, and counted, before the server's answer to Close arrives.
-  await user.click(main().getByRole("button", { name: "Try again" }));
-  await act(async () =>
-    sends.finish({ status: "changed", ballot: [0], results: tally(p, [0]) }),
-  );
-  await main().findByText(said("You picked No."));
-  await act(async () => answer());
+  vi.useFakeTimers();
+  try {
+    // Clicked directly: user-event's own waits would run on the fake clock.
+    fireEvent.click(main().getByRole("button", { name: "Close" }));
+    expect(myBallot).toHaveBeenCalledTimes(2);
+    await act(async () => {
+      await vi.advanceTimersByTimeAsync(5_000);
+    });
+    expect(main().getByRole("alert").textContent).toBe(UNREACHABLE);
+    // Sent again, and counted, before the server's answer to Close arrives.
+    fireEvent.click(main().getByRole("button", { name: "Try again" }));
+    await act(async () =>
+      sends.finish({ status: "changed", ballot: [0], results: tally(p, [0]) }),
+    );
+    await act(async () => {
+      await vi.advanceTimersByTimeAsync(0);
+    });
+    main().getByText(said("You picked No."));
+    await act(async () => answer());
+  } finally {
+    vi.useRealTimers();
+  }
   // The late reply describes the server before the retry: it changes nothing.
   expect(main().getByText(said("You picked No."))).toBeTruthy();
   expect(main().queryByText(said("You picked Yes."))).toBeNull();

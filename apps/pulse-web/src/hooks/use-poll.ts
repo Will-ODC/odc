@@ -1,6 +1,6 @@
 import { useEffect, useState } from "react";
 import type { Poll, PulseApi } from "../api/types.js";
-import { ApiError } from "../api/types.js";
+import { ApiError, UNREACHABLE } from "../api/types.js";
 import type { ViewData } from "./view-data.js";
 
 /**
@@ -44,9 +44,5 @@ function failure(err: unknown): ViewData<never> {
   if (err instanceof ApiError) {
     return { status: "error", message: err.message };
   }
-  return {
-    status: "error",
-    message:
-      "We could not reach the ballot. Check your connection and try again.",
-  };
+  return { status: "error", message: UNREACHABLE };
 }
