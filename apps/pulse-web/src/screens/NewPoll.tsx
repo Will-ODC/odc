@@ -3,6 +3,9 @@ import type { ReactNode } from "react";
 import type { CreationContext, Poll, PulseApi } from "../api/types.js";
 import { ApiError } from "../api/types.js";
 import { AppShell } from "../components/AppShell.js";
+import { Button } from "../components/Button.js";
+import { Choice } from "../components/Choice.js";
+import { Field } from "../components/Field.js";
 import { ViewState } from "../components/ViewState.js";
 import { TwoPress } from "../components/TwoPress.js";
 import type { TwoPressProgress } from "../components/TwoPress.js";
@@ -127,9 +130,14 @@ export function NewPoll({
                 )}
               </ViewState>
               {state.status === "error" ? (
-                <button type="button" className="signin__again" onClick={retry}>
+                <Button
+                  variant="secondary"
+                  type="button"
+                  className="post__retry"
+                  onClick={retry}
+                >
                   Try again
-                </button>
+                </Button>
               ) : null}
             </>
           )}
@@ -153,7 +161,7 @@ function SignedOut({ href, kept }: { href: string; kept: boolean }) {
           for an hour, and will be here after you sign in.
         </p>
       ) : null}
-      <a className="signin__go post__link-button" href={href}>
+      <a className="button button--primary post__link-button" href={href}>
         Sign in to post
       </a>
     </>
@@ -323,11 +331,12 @@ function PostForm({
           id={`${id}-question`}
           label="Your question"
           problem={shown.question}
+          className="post__field"
         >
           {(described) => (
             <textarea
               id={`${id}-question`}
-              className="signin__field post__question"
+              className="field__control post__question"
               rows={3}
               value={draft.question}
               aria-invalid={shown.question !== undefined}
@@ -354,7 +363,7 @@ function PostForm({
         {/* #296 adds an optional context paragraph, links and a photo here. */}
 
         <fieldset className="post__group">
-          <legend className="signin__label">Choices</legend>
+          <legend className="field__label">Choices</legend>
           <ol className="post__choices">
             {draft.choices.map((choice, index) => {
               const problem = choiceShown(index);
@@ -372,7 +381,7 @@ function PostForm({
                     ref={(node) => {
                       choiceRefs.current[index] = node;
                     }}
-                    className="signin__field"
+                    className="field__control"
                     value={choice}
                     aria-invalid={problem !== undefined}
                     {...(problem
@@ -430,7 +439,7 @@ function PostForm({
                   ) : null}
                   {problem ? (
                     <p
-                      className="signin__problem post__problem"
+                      className="field__problem post__problem"
                       id={`${inputId}-problem`}
                     >
                       {problem}
@@ -440,10 +449,11 @@ function PostForm({
               );
             })}
           </ol>
-          <button
+          <Button
+            variant="secondary"
             type="button"
             ref={addButton}
-            className="signin__again post__add"
+            className="post__add"
             disabled={!canAdd}
             onClick={() => {
               edit((old) => ({ ...old, choices: [...old.choices, ""] }));
@@ -451,7 +461,7 @@ function PostForm({
             }}
           >
             Add a choice
-          </button>
+          </Button>
           {canAdd ? null : (
             <p className="post__hint">
               {LIMITS.maxChoices} choices is the most a question can have.
@@ -467,22 +477,22 @@ function PostForm({
             onOpen={() => setOpen((old) => ({ ...old, method: true }))}
           >
             <fieldset className="post__group">
-              <legend className="signin__label">How people answer</legend>
-              <div className="signin__choices">
-                <Option
+              <legend className="field__label">How people answer</legend>
+              <div className="choice-list">
+                <Choice
                   name={`${id}-method`}
                   checked={draft.method === "single"}
                   onPick={() => edit((old) => ({ ...old, method: "single" }))}
                 >
                   One choice
-                </Option>
-                <Option
+                </Choice>
+                <Choice
                   name={`${id}-method`}
                   checked={draft.method === "approval"}
                   onPick={() => edit((old) => ({ ...old, method: "approval" }))}
                 >
                   Any number of choices
-                </Option>
+                </Choice>
               </div>
             </fieldset>
           </Setting>
@@ -494,9 +504,9 @@ function PostForm({
             onOpen={() => setOpen((old) => ({ ...old, closing: true }))}
           >
             <fieldset className="post__group">
-              <legend className="signin__label">When it closes</legend>
-              <div className="signin__choices">
-                <Option
+              <legend className="field__label">When it closes</legend>
+              <div className="choice-list">
+                <Choice
                   name={`${id}-closing`}
                   checked={draft.closing.kind === "default"}
                   onPick={() => {
@@ -505,8 +515,8 @@ function PostForm({
                   }}
                 >
                   {defaultCloseNote(now())}
-                </Option>
-                <Option
+                </Choice>
+                <Choice
                   name={`${id}-closing`}
                   checked={draft.closing.kind === "chosen"}
                   onPick={() =>
@@ -518,19 +528,20 @@ function PostForm({
                   }
                 >
                   At a time I pick
-                </Option>
+                </Choice>
               </div>
               {draft.closing.kind === "chosen" ? (
                 <Field
                   id={`${id}-closes`}
                   label="Closing time"
                   problem={shown.closing}
+                  className="post__field"
                 >
                   {(described) => (
                     <input
                       id={`${id}-closes`}
                       type="datetime-local"
-                      className="signin__field"
+                      className="field__control"
                       min={pickerMin(now())}
                       value={
                         draft.closing.kind === "chosen"
@@ -574,11 +585,11 @@ function PostForm({
               className="post__group"
               aria-describedby={`${id}-anonymity`}
             >
-              <legend className="signin__label">
+              <legend className="field__label">
                 Who readers see as the poster
               </legend>
-              <div className="signin__choices">
-                <Option
+              <div className="choice-list">
+                <Choice
                   name={`${id}-attribution`}
                   checked={draft.attribution.kind === "anonymous"}
                   onPick={() => {
@@ -590,8 +601,8 @@ function PostForm({
                   }}
                 >
                   Nobody: post anonymously
-                </Option>
-                <Option
+                </Choice>
+                <Choice
                   name={`${id}-attribution`}
                   checked={draft.attribution.kind === "named"}
                   onPick={() =>
@@ -602,7 +613,7 @@ function PostForm({
                   }
                 >
                   A name I choose
-                </Option>
+                </Choice>
               </div>
               {draft.attribution.kind === "named" ? (
                 <Field
@@ -610,11 +621,12 @@ function PostForm({
                   label="Name to show"
                   hint="Shown exactly as you type it. Pulse does not check it, so readers cannot tell whether it is your real name."
                   problem={shown.name}
+                  className="post__field"
                 >
                   {(described) => (
                     <input
                       id={`${id}-name`}
-                      className="signin__field"
+                      className="field__control"
                       autoComplete="off"
                       value={draft.attribution.name}
                       aria-invalid={shown.name !== undefined}
@@ -673,7 +685,7 @@ function PostForm({
               <PurposeInfo />
             </div>
             {shown.promise ? (
-              <p className="signin__problem" id={`${id}-promise-problem`}>
+              <p className="field__problem" id={`${id}-promise-problem`}>
                 {shown.promise}
               </p>
             ) : null}
@@ -736,7 +748,8 @@ function Setting({
       ) : (
         <p className="post__setting">
           <span>{summary}</span>{" "}
-          <button
+          <Button
+            variant="quiet"
             type="button"
             className="post__change"
             aria-label={`Change ${label}`}
@@ -744,7 +757,7 @@ function Setting({
             onClick={onOpen}
           >
             Change
-          </button>
+          </Button>
         </p>
       )}
     </div>
@@ -755,63 +768,6 @@ function Setting({
  * A labelled field with its hint and problem. The control is a render
  * function so it gets the right `aria-describedby` without repeating it.
  */
-function Field({
-  id,
-  label,
-  hint,
-  problem,
-  children,
-}: {
-  id: string;
-  label: string;
-  hint?: string;
-  problem: string | undefined;
-  children: (described: { "aria-describedby"?: string }) => ReactNode;
-}) {
-  const ids = [
-    ...(hint ? [`${id}-hint`] : []),
-    ...(problem ? [`${id}-problem`] : []),
-  ];
-  return (
-    <div className="post__field">
-      <label className="signin__label" htmlFor={id}>
-        {label}
-      </label>
-      {hint ? (
-        <p className="post__hint" id={`${id}-hint`}>
-          {hint}
-        </p>
-      ) : null}
-      {children(ids.length > 0 ? { "aria-describedby": ids.join(" ") } : {})}
-      {problem ? (
-        <p className="signin__problem" id={`${id}-problem`}>
-          {problem}
-        </p>
-      ) : null}
-    </div>
-  );
-}
-
-function Option({
-  name,
-  checked,
-  onPick,
-  children,
-}: {
-  name: string;
-  checked: boolean;
-  onPick: () => void;
-  children: ReactNode;
-}) {
-  return (
-    <label className="signin__choice">
-      <input type="radio" name={name} checked={checked} onChange={onPick} />
-      <span>{children}</span>
-    </label>
-  );
-}
-
-/** What to say when a post did not go through, in the server's words. */
 function failureOf(err: unknown): string {
   if (!(err instanceof ApiError) || err.status === 0)
     return "We could not reach pulse. Press Post it to try again; it will not be posted twice.";
@@ -838,7 +794,8 @@ function PurposeInfo() {
   const trigger = useRef<HTMLButtonElement>(null);
   return (
     <>
-      <button
+      <Button
+        variant="secondary"
         type="button"
         ref={trigger}
         className="post__info"
@@ -847,7 +804,7 @@ function PurposeInfo() {
         onClick={() => dialog.current?.showModal()}
       >
         <span aria-hidden="true">i</span>
-      </button>
+      </Button>
       <dialog
         ref={dialog}
         className="post__info-dialog"
@@ -866,13 +823,14 @@ function PurposeInfo() {
           together, or try different ways to solve the same problem. Keep
           talking and share what works.
         </p>
-        <button
+        <Button
+          variant="secondary"
           type="button"
-          className="signin__again"
+          className="post__info-close"
           onClick={() => dialog.current?.close()}
         >
           Close
-        </button>
+        </Button>
       </dialog>
     </>
   );

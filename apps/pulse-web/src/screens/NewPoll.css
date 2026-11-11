@@ -127,13 +127,18 @@
 }
 
 .post__remove:focus-visible {
-  outline: calc(var(--hairline) * 2) solid var(--focus);
-  outline-offset: calc(var(--hairline) * 2);
+  outline: var(--focus-ring-width) solid var(--focus);
+  outline-offset: var(--focus-ring-offset);
 }
 
 .post__add {
   align-self: flex-start;
   margin-top: 0;
+}
+
+.post__retry,
+.post__info-close {
+  margin-top: var(--step);
 }
 
 .post__hint {
@@ -170,13 +175,13 @@
 }
 
 .post__promise input[aria-invalid="true"] {
-  outline: calc(var(--hairline) * 2) solid var(--red);
-  outline-offset: calc(var(--hairline) * 2);
+  outline: var(--focus-ring-width) solid var(--red);
+  outline-offset: var(--focus-ring-offset);
 }
 
 .post__promise input:focus-visible {
-  outline: calc(var(--hairline) * 2) solid var(--focus);
-  outline-offset: calc(var(--hairline) * 2);
+  outline: var(--focus-ring-width) solid var(--focus);
+  outline-offset: var(--focus-ring-offset);
 }
 
 .post__reminder {
@@ -206,8 +211,8 @@
 }
 
 .post__change:focus-visible {
-  outline: 2px solid var(--focus);
-  outline-offset: 2px;
+  outline: var(--focus-ring-width) solid var(--focus);
+  outline-offset: var(--focus-ring-offset);
 }
 
 /*
@@ -230,8 +235,8 @@
 }
 
 .post__link-button:focus-visible {
-  outline: 2px solid var(--focus);
-  outline-offset: 2px;
+  outline: var(--focus-ring-width) solid var(--focus);
+  outline-offset: var(--focus-ring-offset);
 }
 
 .post__promise-row {
@@ -270,8 +275,8 @@
   background: var(--hover);
 }
 .post__info:focus-visible {
-  outline: calc(var(--hairline) * 2) solid var(--focus);
-  outline-offset: calc(var(--hairline) * 2);
+  outline: var(--focus-ring-width) solid var(--focus);
+  outline-offset: var(--focus-ring-offset);
 }
 .post__info-dialog {
   box-sizing: border-box;

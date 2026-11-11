@@ -2,6 +2,9 @@ import { useEffect, useId, useRef, useState } from "react";
 import type { CommunityChoice, PulseApi } from "../api/types.js";
 import { ApiError } from "../api/types.js";
 import { ScreenFrame } from "../components/ScreenFrame.js";
+import { Button } from "../components/Button.js";
+import { Choice } from "../components/Choice.js";
+import { Field } from "../components/Field.js";
 import { looksLikeEmail } from "../flow/email.js";
 import { browserStore, rememberReturn } from "../flow/sign-in-return.js";
 import type { ReturnTo } from "../flow/route.js";
@@ -73,7 +76,6 @@ export function SignIn({
   const [fieldError, setFieldError] = useState<string | null>(null);
   const emailId = useId();
   const optInId = useId();
-  const errorId = useId();
 
   const field = useRef<HTMLInputElement>(null);
   /*
@@ -226,44 +228,40 @@ export function SignIn({
       </p>
 
       <form className="signin__form" onSubmit={submit} noValidate>
-        <label className="signin__label" htmlFor={emailId}>
-          Your email
-        </label>
-        <input
-          id={emailId}
-          ref={field}
-          className="signin__field"
-          type="email"
-          name="email"
-          value={email}
-          autoComplete="email"
-          autoCapitalize="none"
-          spellCheck={false}
-          disabled={sending}
-          aria-invalid={problem !== null}
-          {...(problem !== null ? { "aria-describedby": errorId } : {})}
-          onChange={(event) => {
-            setEmail(event.target.value);
-            // Whatever was wrong is being addressed; keep quiet until they
-            // stop typing and it is worth saying again. A failure from the
-            // last attempt goes too — it is stale the moment they start typing.
-            if (fieldError) setFieldError(null);
-            if (asking.status === "failed") {
-              setAsking({ status: "idle" });
-            }
-          }}
-          onBlur={(event) => {
-            const value = event.target.value.trim();
-            if (value !== "" && !looksLikeEmail(value)) {
-              setFieldError("That does not look like an email address.");
-            }
-          }}
-        />
-        {problem !== null ? (
-          <p className="signin__problem" id={errorId} role="alert">
-            {problem}
-          </p>
-        ) : null}
+        <Field id={emailId} label="Your email" problem={problem ?? undefined}>
+          {(described) => (
+            <input
+              id={emailId}
+              ref={field}
+              className="field__control"
+              type="email"
+              name="email"
+              value={email}
+              autoComplete="email"
+              autoCapitalize="none"
+              spellCheck={false}
+              disabled={sending}
+              aria-invalid={problem !== null}
+              {...described}
+              onChange={(event) => {
+                setEmail(event.target.value);
+                // Whatever was wrong is being addressed; keep quiet until they
+                // stop typing and it is worth saying again. A failure from the
+                // last attempt goes too — it is stale the moment they start typing.
+                if (fieldError) setFieldError(null);
+                if (asking.status === "failed") {
+                  setAsking({ status: "idle" });
+                }
+              }}
+              onBlur={(event) => {
+                const value = event.target.value.trim();
+                if (value !== "" && !looksLikeEmail(value)) {
+                  setFieldError("That does not look like an email address.");
+                }
+              }}
+            />
+          )}
+        </Field>
 
         <label className="signin__optin" htmlFor={optInId}>
           <input
@@ -278,14 +276,19 @@ export function SignIn({
         </label>
 
         {failure !== null ? (
-          <p className="signin__problem" role="alert">
+          <p className="field__problem" role="alert">
             {failure}
           </p>
         ) : null}
 
-        <button className="signin__go" type="submit" disabled={sending}>
+        <Button
+          variant="primary"
+          className="signin__go"
+          type="submit"
+          disabled={sending}
+        >
           {sending ? "Sending…" : "Continue"}
-        </button>
+        </Button>
       </form>
     </ScreenFrame>
   );
@@ -337,9 +340,14 @@ function LinkSent({
           to read your sign-in email.
         </p>
       ) : null}
-      <button className="signin__again" type="button" onClick={onUseAnother}>
+      <Button
+        variant="secondary"
+        className="signin__again"
+        type="button"
+        onClick={onUseAnother}
+      >
         Use a different email
-      </button>
+      </Button>
     </ScreenFrame>
   );
 }
@@ -410,47 +418,52 @@ function ChooseCommunity({
 
       <form className="signin__form" onSubmit={submit} noValidate>
         <fieldset
-          className="signin__choices"
+          className="choice-list signin__choices"
           aria-labelledby={headingId}
           disabled={sending}
           {...(problem !== null ? { "aria-describedby": problemId } : {})}
         >
           {communities.map((community) => (
-            <label className="signin__choice" key={community.id}>
-              <input
-                type="radio"
-                name="community"
-                value={community.id}
-                checked={picked === community.id}
-                onChange={() => {
-                  setPicked(community.id);
-                  setUnpicked(false);
-                }}
-              />
-              <span>{community.id}</span>
-            </label>
+            <Choice
+              key={community.id}
+              name="community"
+              value={community.id}
+              checked={picked === community.id}
+              onPick={() => {
+                setPicked(community.id);
+                setUnpicked(false);
+              }}
+            >
+              {community.id}
+            </Choice>
           ))}
         </fieldset>
 
         {problem !== null ? (
-          <p className="signin__problem" id={problemId} role="alert">
+          <p className="field__problem" id={problemId} role="alert">
             {problem}
           </p>
         ) : null}
 
-        <button className="signin__go" type="submit" disabled={sending}>
+        <Button
+          variant="primary"
+          className="signin__go"
+          type="submit"
+          disabled={sending}
+        >
           {sending ? "Sending…" : "Send my link"}
-        </button>
+        </Button>
       </form>
 
-      <button
+      <Button
+        variant="secondary"
         className="signin__again"
         type="button"
         onClick={onBack}
         disabled={sending}
       >
         Use a different email
-      </button>
+      </Button>
     </ScreenFrame>
   );
 }

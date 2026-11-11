@@ -41,48 +41,6 @@
   margin-top: var(--step);
 }
 
-.signin__label {
-  font-size: var(--t-small);
-  font-weight: 600;
-  color: var(--ink-soft);
-}
-
-.signin__field {
-  width: 100%;
-  box-sizing: border-box;
-  padding: 14px 16px;
-  font: inherit;
-  font-size: var(--t-body);
-  color: var(--ink);
-  background: var(--surface);
-  border: 1px solid var(--line-strong);
-  border-radius: var(--r-control);
-}
-
-.signin__field::placeholder {
-  color: var(--faint);
-}
-
-.signin__field:focus-visible {
-  border-color: var(--green);
-  outline: 2px solid var(--focus);
-  outline-offset: 2px;
-}
-
-/* A field in error keeps its red edge, and its ring says so too. */
-.signin__field[aria-invalid="true"]:focus-visible {
-  border-color: var(--red);
-  outline-color: var(--red);
-}
-
-.signin__field[aria-invalid="true"] {
-  border-color: var(--red);
-}
-
-.signin__field:disabled {
-  opacity: 0.6;
-}
-
 .signin__optin {
   display: flex;
   align-items: flex-start;
@@ -101,128 +59,15 @@
   accent-color: var(--green);
 }
 
-/* One plain sentence: what happened, and what to do about it. */
-.signin__problem {
-  margin: 0;
-  font-size: var(--t-small);
-  line-height: 1.45;
-  color: var(--red);
-}
-
-.signin__go {
-  margin-top: var(--step);
-  padding: 15px 18px;
-  font: inherit;
-  font-size: var(--t-body);
-  font-weight: 700;
-  letter-spacing: -0.01em;
-  color: var(--on-accent);
-  background: var(--green);
-  border: none;
-  border-radius: var(--r-control);
-  cursor: pointer;
-}
-
-.signin__go:hover:not(:disabled) {
-  background: var(--green-hover);
-}
-
-.signin__go:disabled {
-  opacity: 0.55;
-  cursor: default;
-}
-
+.signin__go,
 .signin__again {
   margin-top: var(--step);
-  padding: 13px 18px;
-  font: inherit;
-  font-size: var(--t-body);
-  font-weight: 600;
-  color: var(--ink);
-  background: var(--surface);
-  border: var(--hairline) solid var(--line);
-  border-radius: var(--r-control);
-  cursor: pointer;
-}
-
-.signin__go:focus-visible,
-.signin__again:focus-visible {
-  outline: 2px solid var(--focus);
-  outline-offset: 2px;
-}
-
-/*
- * Which community (P2). A radio group drawn as a list of rows, each row the
- * whole label so the name is as easy to hit as the dot.
- */
-.signin__choices {
-  display: flex;
-  flex-direction: column;
-  gap: var(--step);
-  min-inline-size: 0;
-  margin: 0;
-  padding: 0;
-  border: none;
-}
-
-.signin__choice {
-  display: flex;
-  align-items: center;
-  gap: calc(var(--step) * 1.5);
-  padding: calc(var(--step) * 1.75) calc(var(--step) * 2);
-  font-size: var(--t-body);
-  color: var(--ink);
-  background: var(--surface);
-  border: var(--hairline) solid var(--line);
-  border-radius: var(--r-control);
-  cursor: pointer;
-}
-
-.signin__choice input {
-  flex: 0 0 auto;
-  margin: 0;
-  accent-color: var(--green);
-}
-
-.signin__choice:has(input:checked) {
-  background: var(--green-wash);
-  border-color: var(--green);
-}
-
-.signin__choice:has(input:focus-visible) {
-  outline: calc(var(--hairline) * 2) solid var(--focus);
-  outline-offset: calc(var(--hairline) * 2);
-}
-
-.signin__choices:disabled .signin__choice {
-  opacity: 0.6;
-  cursor: default;
-}
-
-.signin__again:disabled {
-  opacity: 0.55;
-  cursor: default;
 }
 
 /* The phone version (#482): a 16px field, so the phone does not zoom in. */
 @media (max-width: 699px) {
-  .signin__field {
-    min-height: calc(var(--touch) + var(--step) / 2);
-  }
-  .signin__choice {
-    box-sizing: border-box;
-    min-height: var(--touch);
-  }
   .signin__optin {
     min-height: var(--touch);
     align-items: center;
-  }
-  .signin__go,
-  .signin__again {
-    box-sizing: border-box;
-    display: flex;
-    align-items: center;
-    justify-content: center;
-    min-height: var(--touch);
   }
 }
