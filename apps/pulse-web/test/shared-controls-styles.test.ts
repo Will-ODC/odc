@@ -5,10 +5,18 @@ import { expect, it } from "vitest";
 const read = (path: string) =>
   readFileSync(new URL(path, import.meta.url), "utf8");
 
+// The body of the phone media block, found by brace matching so a later block
+// or a trailing rule cannot leak in or be cut off.
 const phoneRules = (css: string) => {
   const start = css.indexOf("@media (max-width: 699px)");
   expect(start).toBeGreaterThan(-1);
-  return css.slice(start);
+  const open = css.indexOf("{", start);
+  let depth = 0;
+  for (let i = open; i < css.length; i++) {
+    if (css[i] === "{") depth++;
+    else if (css[i] === "}" && --depth === 0) return css.slice(open + 1, i);
+  }
+  throw new Error("unclosed phone media block");
 };
 
 it("gives only the boxed buttons a full-height touch target on a phone", () => {
@@ -36,4 +44,11 @@ it("keeps the new-poll community name and promise row as before", () => {
   expect(phoneRules(css)).toMatch(
     /\.post__optin \{\s*min-height: var\(--touch\);\s*align-items: center;/,
   );
+});
+
+it("styles the info button above the shared secondary variant, whatever the import order", () => {
+  const css = read("../src/screens/NewPoll.css");
+  // Bare `.post__info` ties with `.btn--secondary`; the pair must outrank it.
+  expect(css).not.toMatch(/(^|\n)\.post__info(\s|:|,|\{)/);
+  expect(css).toMatch(/\.btn\.post__info \{/);
 });
