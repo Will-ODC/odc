@@ -168,6 +168,13 @@ seen nothing of this run, so it adds independence (operator, 2026-11-07). Use
 it where the CLI is installed (`command -v codex`), as `codex review` or
 `codex exec`.
 
+**Use the CLI, not the Codex MCP server.** Codex CLI 0.167 removed
+`codex mcp-server`, so an MCP entry that launches it fails with "Connection
+closed" and no `mcp__codex__*` tools appear (2026-11-10). Every Codex route in
+this skill is a CLI command or an interactive terminal tab. To check Codex is
+usable, run `codex login status`, then a one-line `codex exec -s read-only`
+prompt.
+
 #### Delegate to Codex by default
 
 To spread token usage, a Claude orchestrator delegates to Codex by default
