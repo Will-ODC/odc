@@ -199,6 +199,17 @@ export class PostgresVotingStore implements VotingStore {
         // of their casts or a sign-in; vote_poll_confirmation_key is the
         // backstop if some path ever skipped it.
         await lockPerson(client, options.lockKey);
+        // Then both rows this cast touches — this browser's, and the
+        // person's in another browser — in one statement, in `id` order.
+        // Another person's write holds a different person lock, so only this
+        // order keeps two people whose ballots sit crossed on each other's
+        // browsers from deadlocking (ADR-0046 decision 6).
+        await client.query(
+          "select id from vote where poll_id = $1" +
+            " and (voter_id = $2 or confirmation = $3)" +
+            " order by id for update",
+          [pollId, voterId, options.confirmation],
+        );
         await client.query(
           "delete from vote where poll_id = $1 and confirmation = $2" +
             " and voter_id <> $3",
@@ -253,37 +264,74 @@ export class PostgresVotingStore implements VotingStore {
       // a sign-in and a cast by one person run one after the other.
       await lockPerson(client, person.lockKey);
       // Open polls only, by the injected clock: a closed poll's results stop
-      // changing when it closes. `for update` holds these rows so a cast from
-      // this same browser cannot slip between the read and the write.
-      const { rows } = await client.query<{ id: string; poll_id: string }>(
-        "select v.id, v.poll_id from vote v" +
+      // changing when it closes. Read without a lock: it only says which
+      // polls, and so which codes, this sign-in is about.
+      const { rows: held } = await client.query<{ poll_id: string }>(
+        "select v.poll_id from vote v" +
           " join polls p on p.id = v.poll_id" +
           " where v.voter_id = $1" +
-          "   and (p.closes_at is null or p.closes_at > $2)" +
-          " order by v.id" +
-          " for update of v",
+          "   and (p.closes_at is null or p.closes_at > $2)",
         [voterId, now],
       );
-      for (const row of rows) {
-        const code = person.codeFor(row.poll_id);
+      // Every code is made and checked before anything is locked or written.
+      const polls = held.map((row) => row.poll_id);
+      const codes = polls.map((poll) => {
+        const code = person.codeFor(poll);
         assertConfirmation(code);
-        // The person's ballot on this poll in another browser, if any, and
-        // whether it beats this one by ADR-0040's rule — the order
-        // `confirmedTally` reads, so the database picks as results would.
-        const { rows: rivals } = await client.query<{
-          id: string;
-          wins: boolean;
-        }>(
-          "select r.id," +
-            ' (r.cast_at, r.voter_id collate "C")' +
-            ' > (t.cast_at, t.voter_id collate "C") as wins' +
-            " from vote r join vote t on t.poll_id = r.poll_id" +
-            " where t.id = $1 and r.confirmation = $2 and r.id <> t.id" +
-            " for update of r",
-          [row.id, code],
+        return code;
+      });
+      // Then every row this sign-in can touch — this browser's on those
+      // polls, and the person's ballot on each in any other browser — locked
+      // in ONE statement, in `id` order (ADR-0046 decision 6). The person
+      // lock orders this person's writes; this order is what keeps two
+      // different people from deadlocking when each signs in on a browser
+      // holding the other's ballot. Under read committed a row changed while
+      // we waited is re-checked, and dropped if it no longer matches: no row
+      // can newly take this person's code meanwhile, as only their own
+      // writes, which wait on the person lock, set it.
+      const { rows: locked } = await client.query<{
+        id: string;
+        poll_id: string;
+        voter_id: string;
+        confirmation: string | null;
+      }>(
+        "select id, poll_id, voter_id, confirmation from vote" +
+          " where (voter_id = $1 and poll_id = any($2::text[]))" +
+          "   or (poll_id, confirmation) in" +
+          "     (select * from unnest($2::text[], $3::text[]))" +
+          " order by id for update",
+        [voterId, polls, codes],
+      );
+      let confirmed = 0;
+      for (const [at, pollId] of polls.entries()) {
+        const code = codes[at] as string;
+        const row = locked.find(
+          (r) => r.poll_id === pollId && r.voter_id === voterId,
         );
-        const rival = rivals[0];
-        if (rival?.wins) {
+        // Moved or deleted by someone else's write while we waited.
+        if (!row) continue;
+        confirmed++;
+        const rival = locked.find(
+          (r) =>
+            r.poll_id === pollId && r.confirmation === code && r.id !== row.id,
+        );
+        if (!rival) {
+          await client.query(
+            "update vote set confirmation = $2 where id = $1",
+            [row.id, code],
+          );
+          continue;
+        }
+        // The person's ballot on this poll in another browser: whether it
+        // beats this one by ADR-0040's rule, compared in the order
+        // `confirmedTally` reads, so the database picks as results would.
+        const { rows: compared } = await client.query<{ wins: boolean }>(
+          'select (r.cast_at, r.voter_id collate "C")' +
+            ' > (t.cast_at, t.voter_id collate "C") as wins' +
+            " from vote r, vote t where r.id = $1 and t.id = $2",
+          [rival.id, row.id],
+        );
+        if (compared[0]?.wins) {
           // ADR-0046 4A: the newer answer moves to this browser. This row
           // goes first, as (poll_id, voter_id) is unique; the rival keeps its
           // choices, cast time and code, filed under this ballot identity.
@@ -294,15 +342,13 @@ export class PostgresVotingStore implements VotingStore {
           ]);
           continue;
         }
-        if (rival) {
-          await client.query("delete from vote where id = $1", [rival.id]);
-        }
+        await client.query("delete from vote where id = $1", [rival.id]);
         await client.query("update vote set confirmation = $2 where id = $1", [
           row.id,
           code,
         ]);
       }
-      return rows.length;
+      return confirmed;
     });
   }
 

@@ -85,11 +85,37 @@ confirmation) where confirmation is not null` and drops
    (`"pulse-vote-lock/v1"`). It is never stored, and it is meaningless without
    the key, like the code. It is per person rather than per poll because
    `confirmVotes` covers many polls. A single lock taken before any row lock
-   means a sign-in and a cast cannot deadlock on each other's rows. A cast
-   without a session takes no lock, and its row lock serializes it as today.
+   means a sign-in and a cast by one person cannot deadlock on each other's
+   rows.
+
+   **Across people, rows are locked in one global order.** Two different
+   people hold two different person locks, so those do not order them. On
+   shared browsers their ballots can sit crossed: browser X holds Bo's
+   ballot and browser Y holds Ada's. Ada signing in on X while Bo signs in on
+   Y would each lock its own row and then wait on the other's ("own row, then
+   the rival"), and Postgres would end one with a deadlock error (a 500 at
+   sign-in). The same holds for two such people casting at once. So after
+   the person lock, each confirming write locks **every row it can touch in
+   one `select … order by id for update`**: for a cast, this browser's row
+   and the person's row on the poll; for `confirmVotes`, this browser's rows
+   on open polls (read first without a lock, to know which codes to make) and
+   the person's row on each of those polls. Row locks are then always taken
+   in `id` order, so no two writes can wait on each other in a cycle. A row
+   changed by someone else while the statement waited is re-checked under
+   read committed and dropped if it no longer matches; no row can newly take
+   this person's code meanwhile, because only this person's writes set it,
+   and they wait on the person lock. A sign-in whose own row was moved or
+   deleted meanwhile confirms nothing on that poll. The Postgres tests
+   `two_people_signing_in_on_each_others_browsers_at_once_do_not_deadlock`
+   and `two_people_casting_on_each_others_browsers_at_once_do_not_deadlock`
+   hold both writes at a barrier and fail with a deadlock without this rule.
+
+   A cast without a session takes no person lock and locks only its own row,
+   which serializes it as today; holding one row, it cannot close a cycle.
    The unique index turns any missed path into an error instead of a double
    count. The in-memory store applies the same rules in its single-threaded
    way, and the conformance suite runs both stores.
+
 7. **Results.** `voters` and `count` keep counting rows, which now means one
    per browser for anonymous ballots and one per person for confirmed ones.
    `confirmedTally` needs no change: with one row per code, `distinct on` picks

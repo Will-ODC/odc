@@ -653,9 +653,13 @@ none yet.
 { "ballot": [0, 2] }
 ```
 
-`ballot` is `null` when this browser has not voted on this poll, or when the person
-whose vote it was has since voted on it elsewhere while signed in (ADR-0046). After a
-sign-in it can be an answer cast in another browser, moved here. Its choices come back
+`ballot` is `null` when this browser has not voted on this poll. Under ADR-0046 it
+also becomes `null` when the person whose vote it was has since voted on this poll in
+another browser while signed in, or has signed in on another browser: their one vote
+on the poll is then filed there, whichever answer was newer — the newer answer moves
+there if it was this browser's, and this browser's older one is deleted if not (see
+`POST /api/sign-in/redeem` and "Confirmed votes"). After a sign-in on this browser it
+can be an answer cast in another browser, moved here. Its choices come back
 in the poll's order, whatever order they were cast in: for `single` and `approval` — the
 only methods today — a ballot says which choices, not a ranking of them.
 

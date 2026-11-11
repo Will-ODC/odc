@@ -380,6 +380,82 @@ test(
 );
 
 test(
+  "two_people_signing_in_on_each_others_browsers_at_once_do_not_deadlock",
+  { skip: databaseSkip },
+  async (t) => {
+    // Two different people, so two different person locks: nothing above
+    // orders them. b:x holds a ballot Bo confirmed and b:y one Ada confirmed
+    // (shared browsers). Ada signs in on b:x while Bo signs in on b:y. Each
+    // sign-in touches both rows — its own, and its person's ballot in the
+    // other browser. Locking "own row, then the rival" in that order
+    // deadlocks, and Postgres kills one with 40P01 (a 500 at redeem). The
+    // barrier holds both rows so both sign-ins queue before either locks.
+    let now = AT;
+    const { pool, store } = await fresh(t, () => now);
+    await store.castVote("p1", "b:x", [0], asBo);
+    now = new Date(AT.getTime() + 60_000);
+    await store.castVote("p1", "b:y", [1], asAda);
+
+    const barrier = await pool.connect();
+    try {
+      await barrier.query("begin");
+      await barrier.query(
+        "select id from vote where voter_id in ('b:x', 'b:y') for update",
+      );
+      const barrierPid = await backendPid(barrier);
+      const signIns = Promise.all([
+        store.confirmVotes("b:x", adaSignsIn),
+        store.confirmVotes("b:y", { codeFor: () => BO, lockKey: asBo.lockKey }),
+      ]);
+      signIns.catch(() => null);
+      await until(async () => (await waitingBehind(pool, barrierPid)) >= 2);
+      await barrier.query("commit");
+      await signIns;
+    } finally {
+      await barrier.query("rollback").catch(() => null);
+      barrier.release();
+    }
+
+    // Whichever ran first, each person holds at most one ballot, and the
+    // two crossed rows settled on one.
+    assert.ok((await ballotsCarrying(pool, "p1", ADA)) <= 1);
+    assert.ok((await ballotsCarrying(pool, "p1", BO)) <= 1);
+    assert.equal((await store.results("p1")).voters, 1);
+  },
+);
+
+test(
+  "two_people_casting_on_each_others_browsers_at_once_do_not_deadlock",
+  { skip: databaseSkip },
+  async (t) => {
+    // The cast's version of the case above: b:x holds Ada's ballot and b:y
+    // Bo's. Ada, signed in on b:y, casts while Bo, signed in on b:x, casts.
+    // Each cast replaces its person's ballot in the other browser and writes
+    // its own, so each touches both rows, in opposite orders.
+    const { pool, store } = await fresh(t);
+    await store.castVote("p1", "b:x", [0], asAda);
+    await store.castVote("p1", "b:y", [0], asBo);
+
+    const outcomes = await racing(pool, 2, () =>
+      Promise.all([
+        store.castVote("p1", "b:y", [1], asAda),
+        store.castVote("p1", "b:x", [1], asBo),
+      ]),
+    );
+
+    assert.equal(outcomes.length, 2);
+    assert.equal(await ballotsCarrying(pool, "p1", ADA), 1);
+    assert.equal(await ballotsCarrying(pool, "p1", BO), 1);
+    const results = await store.results("p1");
+    assert.equal(results.voters, 2);
+    assert.deepEqual(
+      results.choices.map((c) => c.count),
+      [0, 2],
+    );
+  },
+);
+
+test(
   "the_database_refuses_a_second_ballot_for_one_code_on_one_poll",
   { skip: databaseSkip },
   async (t) => {
