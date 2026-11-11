@@ -587,9 +587,14 @@ test(
       warnings.join("\n"),
       /sweep-fault|private-person@example\.test/,
     );
-    // Started and serving.
+    // Started and serving: a database-backed read answers.
     assert.equal(
-      (await app.inject({ method: "GET", url: "/api/polls" })).statusCode,
+      (
+        await app.inject({
+          method: "GET",
+          url: "/api/polls?community=pulse-general",
+        })
+      ).statusCode,
       200,
     );
   },
