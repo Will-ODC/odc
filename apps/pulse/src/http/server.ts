@@ -128,8 +128,8 @@ export interface ServerDeps {
    * deployment.
    *
    * **A hop count, never `true`.** Only private network peers can supply it.
-   * `X-Forwarded-For` is a list a client can seed — nginx *prepends* to
-   * whatever arrived — so trusting the whole chain
+   * `X-Forwarded-For` is a list a client can seed — nginx *appends* its
+   * peer to whatever arrived — so trusting the whole chain
    * lets anyone claim any address and defeat the limit they were caught by.
    * Counting hops from the right takes the address the proxy you actually run
    * observed. One nginx in front means `1`.

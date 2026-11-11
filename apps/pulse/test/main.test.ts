@@ -6,6 +6,8 @@ import { test } from "node:test";
 import {
   DEFAULT_HOST,
   DEFAULT_PORT,
+  DEFAULT_TRUSTED_PROXY_HOPS,
+  MAX_TRUSTED_PROXY_HOPS,
   SERVED_LOGGER,
   buildServer as buildUnwrappedServer,
   serveConfig,
@@ -61,6 +63,45 @@ test("a_complete_environment_is_read_into_a_configuration", () => {
   // The real provider is wired. `not instanceof ConsoleMailer` was the first
   // version of this and any object at all passes it.
   assert.ok(config.mailer instanceof ResendMailer);
+});
+
+test("the_trusted_proxy_hops_default_to_one_nginx", () => {
+  assert.equal(DEFAULT_TRUSTED_PROXY_HOPS, 1);
+  assert.equal(serveConfig(COMPLETE).trustedProxyHops, 1);
+  assert.equal(
+    serveConfig({ ...COMPLETE, PULSE_TRUSTED_PROXY_HOPS: "  " })
+      .trustedProxyHops,
+    1,
+  );
+});
+
+test("a_host_edge_in_front_of_nginx_sets_two_hops", () => {
+  assert.equal(
+    serveConfig({ ...COMPLETE, PULSE_TRUSTED_PROXY_HOPS: "2" })
+      .trustedProxyHops,
+    2,
+  );
+});
+
+test("a_hop_count_that_is_not_a_small_whole_number_stops_the_start", () => {
+  // Coercing would hide the mistake: too few hops put every visitor in one
+  // rate-limit bucket, too many let a client choose its own address.
+  for (const raw of [
+    "two",
+    "1.5",
+    "-1",
+    "0",
+    "0x2",
+    "2e0",
+    String(MAX_TRUSTED_PROXY_HOPS + 1),
+    "true",
+  ]) {
+    assert.throws(
+      () => serveConfig({ ...COMPLETE, PULSE_TRUSTED_PROXY_HOPS: raw }),
+      /PULSE_TRUSTED_PROXY_HOPS must be a whole number from 1 to \d+/,
+      `"${raw}" must be refused`,
+    );
+  }
 });
 
 test("every_value_the_dev_server_may_invent_is_refused_here", () => {
@@ -358,6 +399,7 @@ test("the_served_log_never_writes_down_a_sign_in_token", () => {
 function servedConfig(schema: string): ServeConfig {
   return {
     port: 0,
+    trustedProxyHops: 1,
     host: "127.0.0.1",
     secret: "a-secret-that-is-long-enough-x-x",
     confirmationKey: "a-confirmation-key-that-is-long-enough-1234",
@@ -390,6 +432,7 @@ test(
 
     const config: ServeConfig = {
       port: 0,
+      trustedProxyHops: 1,
       host: "127.0.0.1",
       secret: "a-secret-that-is-long-enough-x-x",
       confirmationKey: "a-confirmation-key-that-is-long-enough-1234",
@@ -496,6 +539,33 @@ test(
       new ConfirmationKey(config.confirmationKey).codeFor(voterId, "served"),
     );
     assert.notEqual(stored.rows[0]?.voter_id, voterId);
+  },
+);
+
+test(
+  "the_served_server_trusts_the_configured_proxy_hops",
+  { skip: databaseSkip },
+  async (t) => {
+    // serveConfig's value has to reach the server: two hops behind a host
+    // edge take the client the edge observed, not the edge (#549).
+    const { schema } = await throwawaySchema(t);
+    const chain = {
+      method: "GET" as const,
+      url: "/test/ip",
+      remoteAddress: "172.20.0.4", // nginx, the API's peer
+      headers: { "x-forwarded-for": "203.0.113.10, 198.51.100.20, 10.0.0.7" },
+    };
+    const ipWith = async (hops: number) => {
+      const { app } = await buildServer(
+        { ...servedConfig(schema), trustedProxyHops: hops },
+        { log: () => undefined },
+      );
+      t.after(async () => app.close());
+      app.get("/test/ip", (request) => ({ ip: request.ip }));
+      return (await app.inject(chain)).json();
+    };
+    assert.deepEqual(await ipWith(2), { ip: "198.51.100.20" });
+    assert.deepEqual(await ipWith(1), { ip: "10.0.0.7" });
   },
 );
 
@@ -680,6 +750,7 @@ test(
     const { schema } = await throwawaySchema(t);
     const config: ServeConfig = {
       port: 0,
+      trustedProxyHops: 1,
       host: "127.0.0.1",
       secret: "a-secret-that-is-long-enough-x-x",
       confirmationKey: "a-confirmation-key-that-is-long-enough-1234",

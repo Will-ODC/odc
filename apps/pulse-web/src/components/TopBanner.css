@@ -185,7 +185,6 @@
     flex: 1 0 100%;
     justify-content: center;
     border-top: var(--hairline) solid var(--line);
-    position: relative;
   }
   /* The trigger is centred in that row, so its panel opens centred under it. */
   .banner__nav > .account-menu .account-menu__panel {
@@ -226,6 +225,12 @@
     display: flex;
     align-items: center;
   }
+}
+
+/* The account panel holds the menu ceiling from the start, so Forget's longer
+   question wraps inside it rather than widening the panel as it opens (#561). */
+.banner__actions .account-menu__panel {
+  width: min(var(--menu-max), calc(100vw - var(--gutter) * 2));
 }
 
 .banner__nav > .account-menu {

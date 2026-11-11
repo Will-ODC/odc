@@ -23,16 +23,19 @@ the current configuration does not refresh DNS dynamically.
 
 ## Proxy configuration required before going live
 
-The API currently trusts one private proxy hop (`src/main.ts:327`,
-`src/http/server.ts:146-160`). With a host edge in front of nginx, that can
-identify the edge as the client and put users in a shared rate-limit bucket.
-Before using Render, Fly.io or another edge proxy, adapt and test the trusted
-proxy configuration for that host: either trust two verified private hops in
-the API, or configure nginx's real-IP handling for the host's trusted edge
-addresses. Two hops work only when both proxy addresses pass the API's private
-address check. Do not trust arbitrary forwarded headers. Verify that two
+The API trusts `PULSE_TRUSTED_PROXY_HOPS` private proxy hops for the client
+address (default `1`: the shipped nginx; `src/main.ts`,
+`src/http/server.ts`). With a host edge in front of nginx, one hop identifies
+the edge as the client and puts every user in one shared rate-limit bucket.
+Before using Render, Fly.io or another edge proxy, set
+`PULSE_TRUSTED_PROXY_HOPS=2` — this works only when both nginx's address as
+the API sees it and the edge address nginx appends to `X-Forwarded-For` pass
+the API's private address check — or configure nginx's real-IP handling for
+the host's trusted edge addresses and keep `1`. The value must be a whole
+number from 1 to 4; anything else, including `0`, stops the start (the served
+API is only reached through nginx, so trusting no hop would make nginx's
+address everyone's). Do not trust arbitrary forwarded headers. Verify that two
 clients get distinct rate-limit buckets and cannot spoof their address.
-There is no environment variable for changing the hop count today.
 
 ## HTTPS and browser security headers
 
