@@ -64,6 +64,10 @@
   --bar-h: 52px;
   --touch: 44px;
 
+  /* Menus fit short content, with a shared readable minimum and ceiling. */
+  --menu-min: 160px;
+  --menu-max: 280px;
+
   --step: 8px;
   --gutter: 24px;
   /* A drawn line: borders, and (doubled) focus rings. */
