@@ -163,6 +163,11 @@ export function useLaterVotes(
   const failed = current.failedFor === question;
   // The read in flight, so a re-render never asks for the same page twice.
   const reading = useRef<{ first: MyVotesPage; cursor: string } | null>(null);
+  // The question open when a read settles, which the failure is recorded
+  // against: a read started for one question can end on another that was
+  // waiting for the same page.
+  const open = useRef(question);
+  open.current = question;
   useEffect(() => {
     if (!wanted || !first || !cursor || failed) return;
     const asked = reading.current;
@@ -174,7 +179,7 @@ export function useLaterVotes(
         old.first === first && old.cursor === cursor ? next(old) : old,
       );
     };
-    const stop = (old: Later) => ({ ...old, failedFor: question });
+    const stop = (old: Later) => ({ ...old, failedFor: open.current });
     api.myVotes(cursor).then(
       (page) =>
         settle((old) =>
@@ -189,7 +194,7 @@ export function useLaterVotes(
         ),
       () => settle(stop),
     );
-  }, [api, first, cursor, failed, wanted, question]);
+  }, [api, first, cursor, failed, wanted]);
   return { rows: current.rows, more: current.cursor !== null, failed };
 }
 

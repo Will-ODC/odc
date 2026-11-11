@@ -410,8 +410,17 @@ it("never swipes away from a change being made, but swipes from the results and 
   expect(location.search).toBe("?poll=middle");
 });
 
+interface Settle {
+  resolve: (page: MyVotesPage) => void;
+  reject: (err: unknown) => void;
+}
+
 describe("when a later My votes page cannot be read (#528)", () => {
-  const j = poll({ id: "j", question: "Repaint the old bridge?" });
+  const j = poll({
+    id: "j",
+    question: "Repaint the old bridge?",
+    next: [first.id, first.id],
+  });
   const k = poll({ id: "k", question: "Light the river path?" });
   const y = poll({
     id: "y",
@@ -483,6 +492,37 @@ describe("when a later My votes page cannot be read (#528)", () => {
     expect(myVotes.mock.calls).toEqual([[], ["older"], ["older"]]);
   });
 
+  it.each([
+    ["rejects", (settle: Settle) => settle.reject(new Error("offline"))],
+    ["returns the same cursor", (settle: Settle) => settle.resolve(page1)],
+  ])(
+    "gives the question open when a shared read %s its answer-selected Next",
+    async (_, end: (settle: Settle) => void) => {
+      let settle!: Settle;
+      const myVotes = vi.fn((cursor?: string) =>
+        cursor
+          ? new Promise<MyVotesPage>((resolve, reject) => {
+              settle = { resolve, reject };
+            })
+          : Promise.resolve(page1),
+      );
+      show(y.id, myVotes, all, held);
+      const user = userEvent.setup();
+      await waitFor(() => expect(myVotes).toHaveBeenCalledWith("older"));
+      await main().findByRole("heading", { name: y.question, level: 1 });
+
+      // J ends the first page and waits for the same page as Y.
+      await user.click(rail().getByRole("link", { name: j.question }));
+      await main().findByRole("heading", { name: j.question, level: 1 });
+      await act(async () => end(settle));
+      expect(
+        await main().findByRole("button", { name: "Next question" }),
+      ).toBeTruthy();
+      await act(quiet);
+      expect(myVotes.mock.calls).toEqual([[], ["older"]]);
+    },
+  );
+
   it("asks for a later page once while that read is still out", async () => {
     let finish!: (page: MyVotesPage) => void;
     const myVotes = vi.fn((cursor?: string) =>
@@ -509,4 +549,65 @@ describe("when a later My votes page cannot be read (#528)", () => {
     ).toBeTruthy();
     expect(myVotes.mock.calls).toEqual([[], ["older"]]);
   });
+});
+
+it("forgets which questions were answered here along with the votes", async () => {
+  const unanswered = poll({
+    id: "unanswered",
+    question: "Plant more street trees?",
+    next: [null, third.id],
+  });
+  show(
+    unanswered.id,
+    async () => ({ votes: [], nextCursor: null }),
+    [unanswered, third],
+    {
+      myBallot: async () => null,
+      signOut: async () => {},
+      cast: async () => ({
+        status: "counted" as const,
+        ballot: [1],
+        results: answerResults(unanswered),
+      }),
+    },
+  );
+  const user = userEvent.setup();
+  const answer = async () => {
+    await main().findByRole("heading", {
+      name: unanswered.question,
+      level: 1,
+    });
+    await user.click(await main().findByRole("radio", { name: "Yes" }));
+    await user.click(main().getByRole("button", { name: "Submit" }));
+  };
+  await answer();
+  await user.click(
+    await main().findByRole("button", { name: "Next question" }),
+  );
+  await main().findByRole("heading", { name: third.question, level: 1 });
+
+  // Forget everything here, then go back to the first question, unanswered
+  // again.
+  const banner = within(screen.getAllByRole("banner")[0]!);
+  await user.click(await banner.findByRole("button", { name: "Account" }));
+  await user.click(
+    banner.getByRole("button", { name: "Forget my votes here" }),
+  );
+  await user.click(banner.getByRole("button", { name: "Forget them" }));
+  await waitFor(() =>
+    expect(
+      banner.queryByRole("button", { name: "Forget my votes here" }),
+    ).toBeNull(),
+  );
+  act(() => history.back());
+  await waitFor(() => expect(location.search).toBe("?poll=unanswered"));
+
+  // Answered again, it is a first answer: the answer-selected Next, no pager.
+  await answer();
+  expect(
+    await main().findByRole("button", { name: "Next question" }),
+  ).toBeTruthy();
+  expect(
+    main().queryByRole("button", { name: /Previous question|No previous/ }),
+  ).toBeNull();
 });
