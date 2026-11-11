@@ -49,7 +49,7 @@ export interface VoteCardProps {
    * The desktop layout (#490): the card sits in the page right under the
    * question, so it drops its label and the repeated question, closes with a
    * visible "Close" only while changing an answer (`closable`), and "Change
-   * my answer" sits on the "You picked" line with Next under the results.
+   * my answer" sits on the "You picked" line; a quiet "Next question ›" ends the actions row.
    */
   inPage?: boolean;
   closable?: boolean;

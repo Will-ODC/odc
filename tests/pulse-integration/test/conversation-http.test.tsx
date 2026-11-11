@@ -100,7 +100,7 @@ it("approval cast, replacement, network retry and closed results work over the r
     await user.click(screen.getByRole("button", { name: "Submit" }));
     await screen.findByText("Counted");
     expect(await api.myBallot("ads-free")).toEqual([1]);
-    await user.click(screen.getByRole("button", { name: "Next" }));
+    await user.click(screen.getByRole("button", { name: "Next question" }));
     await screen.findByRole("heading", {
       name: "Which improvements?",
       level: 1,
