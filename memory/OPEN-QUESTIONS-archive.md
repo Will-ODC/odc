@@ -15,6 +15,8 @@ Everything below is DECIDED unless its bullet says otherwise. It is kept
 because the reasoning still governs; four entries here are **still open** and
 are named in the live file's index.
 
+- **Pulse sign-in data: retention and logging (2026-10-11)** → DECIDED
+  (PR #512 / #507; PR #514 / #503). See the section of that title below.
 - **Future `vote_cast` versions and ballot batching** → DECIDED (ADR-0034, #294,
   2026-10-10): option 2 of `docs/plans/hash-chain-unknown-ballot-batching.md`.
   ET-22a binds every `vote_cast` version to one issue and one ballot, batched;
@@ -816,3 +818,25 @@ head_hash, timestamp, operator signature)` as a signed checkpoint, ideally
   declared collapse. Custody of the two keys remains policy (charter §10 v1
   trust posture, hardened in identity v2); see the still-open key-custody
   entry below.
+
+## Pulse sign-in data: retention and logging (2026-10-11)
+
+**Resolution:** PR #512 / #507 deletes used sign-in personal data atomically, keeping only a hash replay marker, and sweeps expired unused links on the next link write (migration 010); PR #514 / #503 limits unexpected-fault logs to error class, valid SQLSTATE and mail HTTP status where applicable, including startup/background faults.
+
+The original questions below record the pre-resolution behavior.
+
+Pulse is charter-exempt; these sit here because #315 asked for them here. Both
+are operator decisions, not confirmed leaks. Source:
+`docs/security/scans-2026-10-11.md`, items 5 and 6.
+
+- **How long are `pending_claim` rows kept?** Each row holds a `subject` (today,
+  an email address) and a token digest. Server code deletes a row only when an unused link is
+  discarded (`apps/pulse/src/identity/pg-store.ts`, `discard`). Spent and
+  expired rows stay forever. Options: purge on a schedule after expiry, purge
+  spent rows at once, or keep them and say why in the README.
+- **What may an email-provider error write to logs?**
+  `apps/pulse/src/identity/resend-mailer.ts` puts up to 500 characters of the
+  provider's error body into the error that reaches the operator log. If the
+  provider echoes the recipient or the message, the address or sign-in link
+  lands in the log. Options: log status code only, log a redacted body, or
+  keep it and treat the log as personal data.

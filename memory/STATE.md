@@ -45,16 +45,15 @@ ET-25. Conformance phases 1 to 4, ADR-0034 and ADR-0038 are in both; detail is
 in the Done list below. The Go CLI takes `<file>` with no subcommand; the TS CLI takes
 `verify <file>` (`.github/workflows/repo.yml`).
 
-**The ledger is built through ballot batching.** Wave 1 merged
+**The ledger is built through wired ballot batching.** Wave 1 merged
 2026-10-23: storage #444, canonical hashing and parsing #445, Ed25519 #446,
 the EV-26 checker #447 and the signer client #448. Wave 2's append core and
-INSERT-only batching state #460, public read API #461 and internal operator
-write/close routes #462 and ballot batching #463 are merged. Local validation
-at #463's final reviewed head passed 340 ledger tests against Postgres 17,
-with zero skipped; both PRs passed CI. Final server wiring and a CI check that both
-verifiers judge a batched export remain pending; close calls still return 503
-until wired. Each merged slice received fresh-context review. The ledger is
-built from `contracts/` alone and runs both verifiers only as outside programs.
+INSERT-only batching state #460, public read API #461, internal operator
+write/close routes #462 and ballot batching #463 are merged. Final wiring
+landed in #474: startup recovery precedes internal appends, the tick loop runs,
+close invokes the batcher, and CI has both verifiers judge a batched export
+and tampered lines. The ledger is built from `contracts/` alone and runs both
+verifiers only as outside programs. Identity and the real signer remain unbuilt.
 
 **ADR-0043 is accepted** (#438, clarified in #443): identity decides who may
 vote; a separate **signer** service (planned, `services/signer/`) holds the
@@ -72,18 +71,13 @@ issue's last batch.
 
 ## Next
 
-1. **Finish ledger wave 2**: review the final wiring slice (startup recovery before new appends, batching
-   ticks and operator close integration, plus both verifiers judging a batched
-   export in CI). Wave-1 nits landed in #460/#461: direct lone-surrogate tests,
-   byte-flip line attribution including LF, PARTIAL replay and the README
-   storage binding note; the signer-400 alert is in #463.
-2. **Contracts PR for `participant_registered` v2**: spec text in
+1. **Contracts PR for `participant_registered` v2**: spec text in
    `event-types.md` with scoped exceptions to ES-32 and HA-16, both verifiers
    (each built in isolation), and vectors. Verifiers land with or before the
    vectors. Until it merges the ledger refuses new registrations.
-3. **ADR-0043 owes one line**: the ledger-chosen `seal_id` that makes a seal
+2. **ADR-0043 owes one line**: the ledger-chosen `seal_id` that makes a seal
    call idempotent (in the ledger code, marked "ledger-proposed").
-4. **Signer lead** (`services/signer/`, creates its README and CLAUDE.md) and
+3. **Signer lead** (`services/signer/`, creates its README and CLAUDE.md) and
    **identity lead** (`services/identity/`). Open signer-API points from the
    ledger: refusal codes, a cheap "batch at minimum?" read, and whether a
    timed-out sign call fixes the batch's position.
@@ -91,6 +85,8 @@ issue's last batch.
 Gates on the way: an `odc-security-auditor` audit before identity's first
 merge; S-D (the anchor record) before the first anchor; S-G (key rotation and
 the published test keys) before the freeze.
+
+PR #515 (odc-orchestration: use the Codex CLI) is open; the operator merges it.
 
 Optional, from ADR-0034 owed item 4: `docs/security/attacks/check-unknown-batching-proposal.py`'s
 `proposed` mode now matches the ratified expectations and could join required CI.
@@ -149,11 +145,20 @@ Optional, from ADR-0034 owed item 4: `docs/security/attacks/check-unknown-batchi
 - Verifier hardening: Go input-proportional memory (#369, PR #385), toolchain
   and dependencies (#382, PRs #383/#388), lazy TS ET-24b candidacy (#326, PR
   #390; one hostile shape stays quadratic, an accepted known limit).
+  TS cost tests count work instead of elapsed time (#476).
 - T9 re-audits: #407 (fixes #410: EV-26, ET-25 sealed batch, vectors
   `146`-`150`), #414 (fixes #417: NS-1, NS-3 to NS-5), #428 (accepted as the
   pass, 2026-10-21). S-C, S-D, S-G and NS-2 filed in OPEN-QUESTIONS (#409, #416).
 - T9a: release candidate #429, guidance #430, charter wording #432.
 - Memory index and `memory-index` CI guard (#117, #121).
+- Test-audit follow-ups: deterministic batcher scheduling and writer-lock
+  barriers plus HTTP error-contract tests (#501); close-route 1024-byte
+  exact-limit and one-byte-over tests (#516); duplicate rehearsal assertion
+  removed and fixture count corrected to 150 (#504).
+- Guard tests fail closed on setup errors and require the intended diagnostic
+  for negative cases (#497).
+- Review/merge routing updates landed in #483/#493; the current rules live in
+  `.claude/skills/odc-orchestration`, `odc-code-review` and `odc-pipeline`.
 
 ## Standing decisions — one line each
 
@@ -193,8 +198,8 @@ Optional, from ADR-0034 owed item 4: `docs/security/attacks/check-unknown-batchi
 ## Blockers & live cautions
 
 - **The root ODC stack is incomplete.** Root `docker-compose.yml` now runs the
-  ledger database (#461); service wiring and `just smoke`/`just verify` remain
-  incomplete. Pulse's images are separate.
+  ledger database (#461); the full service stack and `just smoke`/`just verify`
+  remain incomplete. Ledger server wiring is built. Pulse's images are separate.
 - **Never open `services/verifier/` and ledger source in one context.** Build each
   verifier in a **sparse worktree**: `git worktree add --no-checkout`, then
   `git sparse-checkout set --no-cone '/contracts/' '/services/verifier/' '/docs/charter.md'`,
