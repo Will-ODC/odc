@@ -381,6 +381,12 @@ export async function createServer(deps: ServerDeps): Promise<FastifyInstance> {
     },
   );
 
+  // Run before body parsing so malformed requests and other error responses
+  // cannot cache identity data or the state of a sign-in token either.
+  const noStore = async (_request: FastifyRequest, reply: FastifyReply) => {
+    reply.header("Cache-Control", "no-store");
+  };
+
   /**
    * Is this link still good? Answering does NOT consume it.
    *
@@ -389,62 +395,70 @@ export async function createServer(deps: ServerDeps): Promise<FastifyInstance> {
    * would then be told the link was already used, indistinguishable from having
    * actually reused it. The click POSTs; this only reports.
    */
-  app.get("/api/sign-in/redeem", async (request, reply) => {
-    const token = (request.query as { token?: unknown }).token;
-    if (typeof token !== "string" || token === "") {
-      return reply
-        .code(400)
-        .send({ error: "bad_request", message: "That link is incomplete." });
-    }
+  app.get(
+    "/api/sign-in/redeem",
+    { onRequest: noStore },
+    async (request, reply) => {
+      const token = (request.query as { token?: unknown }).token;
+      if (typeof token !== "string" || token === "") {
+        return reply
+          .code(400)
+          .send({ error: "bad_request", message: "That link is incomplete." });
+      }
 
-    const state = await deps.claims.inspect(token);
-    if (state.status !== "live") return gone(reply, state.status);
-    return reply.send({ status: "ready", email: state.email });
-  });
+      const state = await deps.claims.inspect(token);
+      if (state.status !== "live") return gone(reply, state.status);
+      return reply.send({ status: "ready", email: state.email });
+    },
+  );
 
   /** The click. This is what spends the token and signs someone in. */
-  app.post("/api/sign-in/redeem", async (request, reply) => {
-    const token = (request.body as { token?: unknown } | undefined)?.token;
-    if (typeof token !== "string" || token === "") {
-      return reply
-        .code(400)
-        .send({ error: "bad_request", message: "That link is incomplete." });
-    }
+  app.post(
+    "/api/sign-in/redeem",
+    { onRequest: noStore },
+    async (request, reply) => {
+      const token = (request.body as { token?: unknown } | undefined)?.token;
+      if (typeof token !== "string" || token === "") {
+        return reply
+          .code(400)
+          .send({ error: "bad_request", message: "That link is incomplete." });
+      }
 
-    const result = await deps.claims.redeem(token);
-    if (result.status !== "signed_in") return gone(reply, result.status);
+      const result = await deps.claims.redeem(token);
+      if (result.status !== "signed_in") return gone(reply, result.status);
 
-    // The browser that voted before signing in now has a person behind its
-    // votes, so they become confirmed (ADR-0040). Only a ballot this browser
-    // already holds — none is minted here — and the store is handed one-way
-    // codes, never the account id. Before the cookie is set, so a failure is
-    // the ordinary 500 rather than a signed-in reply hiding it.
-    const ballot = heldBallot(request);
-    const key = deps.confirmationKey;
-    if (ballot !== undefined && key) {
-      const accountId = result.voter.id;
-      await deps.votes.confirmVotes(ballot, (poll) =>
-        key.codeFor(accountId, poll),
+      // The browser that voted before signing in now has a person behind its
+      // votes, so they become confirmed (ADR-0040). Only a ballot this browser
+      // already holds — none is minted here — and the store is handed one-way
+      // codes, never the account id. Before the cookie is set, so a failure is
+      // the ordinary 500 rather than a signed-in reply hiding it.
+      const ballot = heldBallot(request);
+      const key = deps.confirmationKey;
+      if (ballot !== undefined && key) {
+        const accountId = result.voter.id;
+        await deps.votes.confirmVotes(ballot, (poll) =>
+          key.codeFor(accountId, poll),
+        );
+      }
+
+      reply.setCookie(
+        SESSION_COOKIE,
+        deps.signer.sign(result.voter.id, result.voter.sessionGeneration ?? 0),
+        {
+          httpOnly: true,
+          sameSite: "lax",
+          secure: deps.secureCookies ?? true,
+          path: "/",
+          maxAge: deps.signer.ttlSeconds,
+        },
       );
-    }
-
-    reply.setCookie(
-      SESSION_COOKIE,
-      deps.signer.sign(result.voter.id, result.voter.sessionGeneration ?? 0),
-      {
-        httpOnly: true,
-        sameSite: "lax",
-        secure: deps.secureCookies ?? true,
-        path: "/",
-        maxAge: deps.signer.ttlSeconds,
-      },
-    );
-    return reply.send({
-      status: "signed_in",
-      voter: publicVoter(result.voter),
-      firstTime: result.firstTime,
-    });
-  });
+      return reply.send({
+        status: "signed_in",
+        voter: publicVoter(result.voter),
+        firstTime: result.firstTime,
+      });
+    },
+  );
 
   /**
    * Sign out everywhere by advancing the shared session generation.
@@ -475,7 +489,7 @@ export async function createServer(deps: ServerDeps): Promise<FastifyInstance> {
     return reply.send({ status: "signed_out" });
   });
 
-  app.get("/api/me", async (request, reply) => {
+  app.get("/api/me", { onRequest: noStore }, async (request, reply) => {
     const voter = await requireVoter(request, reply);
     if (!voter) return reply;
     return reply.send({ voter: publicVoter(voter) });

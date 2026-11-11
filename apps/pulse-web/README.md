@@ -167,6 +167,17 @@ seed; the default is 7 days), copies each new poll's
 id from its URL, and sets the four `VITE_PULSE_*_POLL_ID` values for the web
 build.
 
+## Production security
+
+Inter weights 400, 500, 600, 700 and 800 are bundled from `@fontsource/inter`;
+fonts load from the app's own origin. nginx's `security-headers.conf` supplies
+the policy for pages, assets, API responses and errors. Keep its include in
+every location: local `add_header` directives otherwise suppress inherited
+headers. CSP permits same-origin scripts and fonts and the inline styles used
+by results and charts. The nginx policy and font imports are checked by
+`test/security-headers.test.ts`. See [the deployment runbook](../pulse/DEPLOY.md)
+for HTTPS and HSTS at the TLS terminator.
+
 ## Keep these rules
 
 - **Sign-in tokens must not leak.** Sign-in links carry a secret token in the
