@@ -382,7 +382,9 @@ it("opens the next question's card even if the previous card was closed (#401)",
   await user.click(within(card()).getByRole("radio", { name: "Yes" }));
   await user.click(within(card()).getByRole("button", { name: "Submit" }));
   await main().findByText("Counted");
-  await user.click(within(card()).getByRole("button", { name: "Next" }));
+  await user.click(
+    within(card()).getByRole("button", { name: "Next question" }),
+  );
   await main().findByRole("heading", { name: second.question, level: 1 });
   await user.click(within(card()).getByRole("button", { name: "Close" }));
   expect(main().queryByRole("region")).toBeNull();
@@ -430,7 +432,9 @@ it("sends every approval pick, follows its lowest-index edge, and retains the co
   expect(
     await within(card()).findAllByRole("rowheader", { name: /\(yours\)/ }),
   ).toHaveLength(2);
-  await user.click(within(card()).getByRole("button", { name: "Next" }));
+  await user.click(
+    within(card()).getByRole("button", { name: "Next question" }),
+  );
   expect(
     await main().findByRole("heading", { name: second.question, level: 1 }),
   ).toBeTruthy();
@@ -482,7 +486,9 @@ it("does not show Next when the steering choice ends the run", async () => {
   await main().findByRole("heading", { name: p.question, level: 1 });
   openCard();
   await answer("No");
-  expect(within(card()).queryByRole("button", { name: "Next" })).toBeNull();
+  expect(
+    within(card()).queryByRole("button", { name: "Next question" }),
+  ).toBeNull();
 });
 it("refuses a known closed poll and lets a non-voter read final results", async () => {
   const p = poll({ open: false });
@@ -1008,7 +1014,9 @@ it("ends the just-posted line when Next moves to another question", async () => 
   );
   await main().findByRole("heading", { name: first.question, level: 1 });
   const user = await answer("Yes");
-  await user.click(within(card()).getByRole("button", { name: "Next" }));
+  await user.click(
+    within(card()).getByRole("button", { name: "Next question" }),
+  );
   await main().findByRole("heading", { name: "More parks?", level: 1 });
   expect(screen.queryByText(/Your question is live/)).toBeNull();
   expect(onDismiss).toHaveBeenCalledTimes(1);
@@ -1247,7 +1255,9 @@ describe("the Answered list (#484)", () => {
     );
     await main().findByRole("heading", { name: first.question, level: 1 });
     const user = await answer("Yes");
-    await user.click(within(card()).getByRole("button", { name: "Next" }));
+    await user.click(
+      within(card()).getByRole("button", { name: "Next question" }),
+    );
     await main().findByRole("heading", { name: parks.question, level: 1 });
     expect(onNavigate).toHaveBeenCalledExactlyOnceWith({
       kind: "conversation",
@@ -2045,7 +2055,7 @@ describe("the Answered list (#484)", () => {
     );
     const user = userEvent.setup();
     await user.click(
-      await within(card()).findByRole("button", { name: "Next" }),
+      await within(card()).findByRole("button", { name: "Next question" }),
     );
     await main().findByRole("heading", { name: parks.question, level: 1 });
     await pick("Yes");

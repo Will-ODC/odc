@@ -74,7 +74,14 @@ no popout: the choices sit in the page directly under the question, without
 repeating it, and Copy link sits at the end of the closing-date line. After a
 vote they fold into the "You picked" line, whose Change my answer reopens them
 in place with a visible Close; the saved answer's results stay below while you
-choose, and Next sits under the results card.
+choose.
+
+At both widths, moving on is a small text button, "Next question ›", at the
+right end of the results card's footer beside the info link (#554). On a touch
+screen, a left swipe of about 60px over an answered question does the same;
+vertical scrolling, short or diagonal drags and mouse drags do nothing. Each
+question's page slides in briefly from the right, with no animation under
+reduced-motion settings.
 
 Every product page uses the same browse-style top banner at desktop and phone
 widths: the Pulse home link, Home, About, a Your communities dropdown listing

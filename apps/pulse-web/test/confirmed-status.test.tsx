@@ -366,7 +366,7 @@ describe("signing in while a counted vote is on screen", () => {
     );
     const main = await vote();
     expect(main.getByText("1 vote so far · 0 confirmed by email")).toBeTruthy();
-    await userEvent.click(main.getByRole("button", { name: "Next" }));
+    await userEvent.click(main.getByRole("button", { name: "Next question" }));
     await main.findByRole("heading", { name: "And then?", level: 1 });
     // Signed in elsewhere while the second question is showing, unanswered.
     me = ME;
