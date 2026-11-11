@@ -97,6 +97,7 @@ test("applies_a_fresh_schema", { skip }, async () => {
       "008",
       "009",
       "010",
+      "011",
     ]);
     assert.deepEqual(await tablesIn(pool, schema), TABLES);
   });
@@ -535,7 +536,7 @@ test(
         "vote_choice_pkey",
         "vote_history_idx",
         "vote_pkey",
-        "vote_poll_confirmation_idx",
+        "vote_poll_confirmation_key",
         "vote_poll_id_voter_id_key",
         "voter_credential_pkey",
         "voter_credential_voter_id_idx",
@@ -612,6 +613,7 @@ test(
         );
         assert.deepEqual((await migrate(pool, { clock: () => AT })).applied, [
           "010",
+          "011",
         ]);
         const store = new PostgresClaimStore(pool);
         assert.equal(await store.byTokenHash("used"), undefined);
@@ -620,6 +622,103 @@ test(
         assert.deepEqual((await pool.query("select * from used_claim")).rows, [
           { token_hash: "used" },
         ]);
+      });
+    });
+  },
+);
+
+test(
+  "upgrading_keeps_one_ballot_per_confirmed_person_per_poll_the_latest",
+  { skip },
+  async () => {
+    // ADR-0046 decision 8. Before 011 one person could hold several ballots
+    // on a poll; 011 keeps ADR-0040's survivor (latest cast, a tie to the
+    // greater ballot identity in byte order) and deletes the rest with their
+    // choices — on closed polls too. Unconfirmed ballots and other codes stay.
+    const ada = "a".repeat(64);
+    const bo = "b".repeat(64);
+    const at = (seconds: number) => new Date(AT.getTime() + seconds * 1000);
+    await inTempDir(async (dir) => {
+      await writeMigrations(dir, await loadMigrations(), (v) => v < "011");
+      await inThrowawaySchema(async (pool) => {
+        await migrate(pool, { dir, clock: () => AT });
+        for (const [poll, closesAt] of [
+          ["open", null],
+          ["shut", at(1)],
+        ] as const) {
+          await pool.query(
+            "insert into polls (id, question, method, created_at, closes_at, accepts_suggestions)" +
+              " values ($1, 'Q', 'single', $2, $3, false)",
+            [poll, AT, closesAt],
+          );
+          await pool.query(
+            "insert into poll_choice (id, poll_id, position, label)" +
+              " values ($1, $2, 0, 'A')",
+            [randomUUID(), poll],
+          );
+        }
+        const ballots: [string, string, string | null, Date][] = [
+          // Ada on "open": the latest, b:late, survives.
+          ["open", "b:early", ada, AT],
+          ["open", "b:late", ada, at(60)],
+          ["open", "b:middle", ada, at(30)],
+          // Bo on "open": one ballot, kept.
+          ["open", "b:bo", bo, AT],
+          // Nobody confirmed these: all kept.
+          ["open", "b:anon-1", null, AT],
+          ["open", "b:anon-2", null, AT],
+          // Ada on "shut", a same-millisecond tie: "b:a" is the greater in
+          // byte order ("Z" < "a") and survives, where a case-folding
+          // collation would keep "b:Z".
+          ["shut", "b:Z", ada, AT],
+          ["shut", "b:a", ada, AT],
+        ];
+        for (const [poll, voter, code, castAt] of ballots) {
+          await pool.query(
+            "insert into vote (id, poll_id, voter_id, cast_at, confirmation)" +
+              " values ($1, $2, $3, $4, $5)",
+            [randomUUID(), poll, voter, castAt, code],
+          );
+        }
+        await pool.query(
+          "insert into vote_choice (vote_id, choice_id)" +
+            " select v.id, c.id from vote v join poll_choice c" +
+            " on c.poll_id = v.poll_id",
+        );
+
+        assert.deepEqual((await migrate(pool, { clock: () => AT })).applied, [
+          "011",
+        ]);
+
+        const { rows } = await pool.query<{
+          poll_id: string;
+          voter_id: string;
+        }>(
+          'select poll_id, voter_id from vote order by poll_id, voter_id collate "C"',
+        );
+        assert.deepEqual(
+          rows.map((r) => `${r.poll_id} ${r.voter_id}`),
+          [
+            "open b:anon-1",
+            "open b:anon-2",
+            "open b:bo",
+            "open b:late",
+            "shut b:a",
+          ],
+        );
+        // The deleted ballots' choices went with them.
+        const { rows: picks } = await pool.query<{ n: number }>(
+          "select count(*)::int as n from vote_choice",
+        );
+        assert.equal(picks[0]?.n, 5);
+        // And from now on the database refuses a second one.
+        await assert.rejects(
+          pool.query(
+            "update vote set confirmation = $1 where voter_id = 'b:anon-1'",
+            [ada],
+          ),
+          /vote_poll_confirmation_key/,
+        );
       });
     });
   },

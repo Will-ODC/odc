@@ -5,7 +5,9 @@
   recent). Two rules were proposed by the implementer and **confirmed by
   the operator on 2026-10-12**: what "most recent" is measured by
   (decision 5), and that closed polls are not confirmed at sign-in
-  (decision 3).
+  (decision 3). Decisions 4–6 are amended by ADR-0046 (2026-11-11): a
+  confirmed person keeps one ballot per poll, so the totals count them once
+  too.
 - **Date:** 2026-10-12
 - **Phase:** 0 (pulse workstream, charter-exempt; issue #352)
 

@@ -13,6 +13,7 @@ import type {
 } from "../authoring/store.js";
 import { isStorageUnavailable } from "../db/unavailable.js";
 import type { Voter } from "../identity/store.js";
+import { ORIGIN_REFUSAL, originAllowed } from "./origin.js";
 
 /** ADR-0037: a creation request is at most 32 KiB of UTF-8. */
 export const CREATION_BODY_LIMIT = 32 * 1024;
@@ -62,9 +63,9 @@ const BAD_REQUEST = () =>
 const SIGNED_OUT = () => new Refusal(401, "signed_out", "Sign in to do that.");
 const FOREIGN_ORIGIN = () =>
   new Refusal(
-    403,
-    "origin_not_allowed",
-    "That request did not come from Pulse.",
+    ORIGIN_REFUSAL.status,
+    ORIGIN_REFUSAL.error,
+    ORIGIN_REFUSAL.message,
   );
 const TOO_MANY = () =>
   new Refusal(
@@ -177,9 +178,7 @@ export async function registerCreationRoutes(
       ): Promise<T> {
         if (!deps.creation) throw UNAVAILABLE();
         if (kind !== "read") {
-          const origin = request.headers.origin;
-          if (deps.webOrigin === undefined || origin !== deps.webOrigin)
-            throw FOREIGN_ORIGIN();
+          if (!originAllowed(request, deps.webOrigin)) throw FOREIGN_ORIGIN();
         }
         const voter = await deps.currentVoter(request);
         if (!voter) throw SIGNED_OUT();

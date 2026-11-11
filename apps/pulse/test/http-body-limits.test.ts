@@ -95,6 +95,11 @@ test("every_body_taking_route_returns_the_full_413_error", async (t) => {
     origin: ORIGIN,
     "content-type": "application/json",
   };
+  // Sign-in and redemption refuse any other origin before reading the body.
+  const fromTheWebOrigin = {
+    origin: ORIGIN,
+    "content-type": "application/json",
+  };
   const routes: readonly {
     name: string;
     method: "POST" | "PUT";
@@ -107,12 +112,14 @@ test("every_body_taking_route_returns_the_full_413_error", async (t) => {
       method: "POST",
       url: "/api/sign-in",
       limit: DEFAULT_BODY_LIMIT,
+      headers: fromTheWebOrigin,
     },
     {
       name: "redeem",
       method: "POST",
       url: "/api/sign-in/redeem",
       limit: DEFAULT_BODY_LIMIT,
+      headers: fromTheWebOrigin,
     },
     {
       name: "cast vote",

@@ -164,6 +164,7 @@ test(
       "008",
       "009",
       "010",
+      "011",
     ]);
     assert.deepEqual(
       (await pool.query("select * from community order by id")).rows,
