@@ -10,7 +10,12 @@ import {
 import userEvent from "@testing-library/user-event";
 import { afterEach, beforeAll, describe, expect, it, vi } from "vitest";
 import { ApiError } from "../src/api/types.js";
-import type { Ballot, CastOutcome, Poll } from "../src/api/types.js";
+import type {
+  Ballot,
+  CastOutcome,
+  MyVotesPage,
+  Poll,
+} from "../src/api/types.js";
 import { App } from "../src/App.js";
 import { closingNote } from "../src/flow/conversation.js";
 import { Conversation } from "../src/screens/Conversation.js";
@@ -2197,21 +2202,31 @@ describe("the Answered list (#484)", () => {
   });
 
   it("keeps focus in the rail after Try again", async () => {
+    let finishRetry!: (page: MyVotesPage) => void;
     const myVotes = vi
       .fn()
       .mockRejectedValueOnce(new ApiError(500, "Something went wrong."))
-      .mockResolvedValue({ votes: [fromServer], nextCursor: null });
+      .mockImplementationOnce(
+        () => new Promise<MyVotesPage>((resolve) => (finishRetry = resolve)),
+      );
     render(<Conversation api={stubApi({ myVotes })} pollId="ads-free" />);
+    // Initial question focus is independent of the rail's failed read.
+    const heading = await main().findByRole("heading", {
+      name: poll().question,
+      level: 1,
+    });
+    await waitFor(() => expect(document.activeElement).toBe(heading));
     await userEvent.click(
       await rail().findByRole("button", { name: "Try again" }),
     );
-    expect(document.activeElement).toBe(
-      rail().getByRole("link", { name: "My votes" }),
+    const myVotesLink = rail().getByRole("link", { name: "My votes" });
+    await waitFor(() => expect(document.activeElement).toBe(myVotesLink));
+    expect(rail().getByRole("status").textContent).toContain("Loading…");
+    await act(async () =>
+      finishRetry({ votes: [fromServer], nextCursor: null }),
     );
     await rail().findByRole("link", { name: "More parks?" });
-    expect(document.activeElement).toBe(
-      rail().getByRole("link", { name: "My votes" }),
-    );
+    await waitFor(() => expect(document.activeElement).toBe(myVotesLink));
   });
 
   it("links to more saved votes instead of claiming an unfinished page is empty", async () => {

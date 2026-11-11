@@ -1,10 +1,16 @@
 // @vitest-environment jsdom
-import { cleanup, render, screen, within } from "@testing-library/react";
+import {
+  cleanup,
+  render,
+  screen,
+  waitFor,
+  within,
+} from "@testing-library/react";
 import userEvent from "@testing-library/user-event";
 import { afterEach, expect, it } from "vitest";
 import { App } from "../src/App.js";
 import type { Route } from "../src/flow/route.js";
-import { stubApi } from "./stub-api.js";
+import { poll, stubApi } from "./stub-api.js";
 
 afterEach(() => {
   cleanup();
@@ -48,19 +54,30 @@ it.each(routes)(
     expect(nav.getByRole("link", { name: "About" }).getAttribute("href")).toBe(
       "/about",
     );
+    if (route.kind === "conversation") {
+      // The question takes focus when its initial reads settle. Finish that
+      // arrival before opening a menu that closes when focus leaves it.
+      const heading = await within(screen.getByRole("main")).findByRole(
+        "heading",
+        { name: poll().question, level: 1 },
+      );
+      await waitFor(() => expect(document.activeElement).toBe(heading));
+    }
     await user.click(
       await nav.findByRole("button", { name: "Your communities" }),
     );
     expect(
-      nav.getByRole("link", { name: "demo-community" }).getAttribute("href"),
+      (await nav.findByRole("link", { name: "demo-community" })).getAttribute(
+        "href",
+      ),
     ).toBe("/browse?community=demo-community");
     expect(
       header
         .getByRole("link", { name: "Post a question" })
         .getAttribute("href"),
     ).toBe("/new");
-    await user.click(header.getByRole("button", { name: "Account" }));
-    expect(header.getByText("alice@example.test")).toBeTruthy();
+    await user.click(await header.findByRole("button", { name: "Account" }));
+    expect(await header.findByText("alice@example.test")).toBeTruthy();
   },
 );
 
