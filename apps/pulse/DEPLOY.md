@@ -106,7 +106,9 @@ Blank values count as unset. The production server reads only the variables
 below; it ignores ambient `DATABASE_URL`, `RESEND_API_KEY`, and `PORT`.
 
 - `PULSE_SESSION_SECRET` (required): stable secret that signs session and ballot
-  cookies. Store it as a secret; changing it signs everyone out.
+  cookies. It must be at least 32 characters; the API refuses to start with a
+  shorter one. Generate one with `openssl rand -base64 48`. Store it as a
+  secret; changing it signs everyone out.
 - `PULSE_CONFIRMATION_KEY` (required): HMAC key for confirmed-voter codes. It
   must be at least 32 characters and different from the session secret.
   Changing it makes earlier confirmations unrecognisable.
@@ -116,7 +118,8 @@ below; it ignores ambient `DATABASE_URL`, `RESEND_API_KEY`, and `PORT`.
   sign-in mail. Store it as a secret.
 - `PULSE_WEB_ORIGIN` (required): exact public bare origin, such as
   `https://pulse.onlinedemocracy.org`; no path or trailing slash. It is used in
-  emailed links and is the only accepted Origin for poll-creation mutations.
+  emailed links and is the only accepted Origin for sign-in, link redemption,
+  sign-out and poll-creation mutations.
 - `PULSE_MAIL_FROM` (required): From identity on the verified sending domain,
   for example `Pulse <sign-in@mail.onlinedemocracy.org>`.
 - `PULSE_MAIL_REPLY_TO` (optional): Reply-To address. If unset, no Reply-To is

@@ -8,8 +8,25 @@ import { test, type TestContext } from "node:test";
 import type { Pool } from "pg";
 import { databaseUrl } from "../src/db/config.js";
 import { migrate } from "../src/db/migrate.js";
-import { DEFAULT_PORT, buildDevServer, devConfig } from "../src/dev-server.js";
+import {
+  DEFAULT_PORT,
+  buildDevServer as buildUnwrappedDevServer,
+  devConfig,
+} from "../src/dev-server.js";
 import { databaseSkip, throwawaySchema } from "./support/database.js";
+import { sendOriginLikeABrowser } from "./support/origin.js";
+
+/**
+ * The dev server as the pulse-web client meets it: every POST carries the
+ * configured web origin, as a browser page on that origin sends it.
+ */
+async function buildDevServer(
+  ...args: Parameters<typeof buildUnwrappedDevServer>
+): ReturnType<typeof buildUnwrappedDevServer> {
+  const built = await buildUnwrappedDevServer(...args);
+  sendOriginLikeABrowser(built.app, args[0].webOrigin);
+  return built;
+}
 
 test("defaults to the port the client's dev proxy calls", () => {
   const config = devConfig({});
@@ -43,7 +60,7 @@ test("generates_a_confirmation_key_of_its_own_never_the_session_secret", () => {
   assert.notEqual(devConfig({}).confirmationKey, config.confirmationKey);
 
   const given = devConfig({
-    PULSE_SESSION_SECRET: "a-secret-long-enough",
+    PULSE_SESSION_SECRET: "a-secret-long-enough-x-x-x-x-x-x",
     PULSE_CONFIRMATION_KEY: "a-confirmation-key-long-enough-0123456789",
   });
   assert.equal(
@@ -86,7 +103,7 @@ test("refuses to start anywhere but development, secret or no secret", () => {
       () =>
         devConfig({
           NODE_ENV,
-          PULSE_SESSION_SECRET: "a-secret-long-enough-for-anyone",
+          PULSE_SESSION_SECRET: "a-secret-long-enough-for-anyone-x",
         }),
       /only in development/,
     );
@@ -120,9 +137,24 @@ test("sends its session cookie without Secure, which is why it is development-on
 });
 
 test("uses the secret it was given rather than one of its own", () => {
-  const config = devConfig({ PULSE_SESSION_SECRET: "a-secret-long-enough" });
-  assert.equal(config.secret, "a-secret-long-enough");
+  const config = devConfig({
+    PULSE_SESSION_SECRET: "a-secret-long-enough-x-x-x-x-x-x",
+  });
+  assert.equal(config.secret, "a-secret-long-enough-x-x-x-x-x-x");
   assert.equal(config.secretSource, "env");
+});
+
+test("holds a secret it was given to the same 32-character floor", () => {
+  assert.throws(
+    () => devConfig({ PULSE_SESSION_SECRET: "s".repeat(31) }),
+    /PULSE_SESSION_SECRET must be at least 32 characters/,
+  );
+  assert.equal(
+    devConfig({ PULSE_SESSION_SECRET: "s".repeat(32) }).secret,
+    "s".repeat(32),
+  );
+  // The generated default clears it with room to spare.
+  assert.ok(devConfig({}).secret.length >= 32);
 });
 
 test("refuses to build the insecure server outside development too", async () => {

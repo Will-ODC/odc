@@ -14,12 +14,19 @@ import { createServer, type ServerDeps } from "../src/http/server.js";
 import { SESSION_COOKIE, SessionSigner } from "../src/http/session.js";
 import { InMemorySuggestionStore } from "../src/voting/suggestions.js";
 import { InMemoryVotingStore } from "../src/voting/store.js";
+import { sendOriginLikeABrowser } from "./support/origin.js";
 
-const SECRET = "test-secret-that-is-long-enough";
+const SECRET = "test-secret-that-is-long-enough-x";
+/** The web origin the server trusts, and so the one a browser page sends. */
+const WEB_ORIGIN = "https://pulse.test";
 const START = new Date("2026-08-09T12:00:00.000Z");
 
 async function setup(
-  overrides: Partial<ServerDeps> = {},
+  // `noWebOrigin` builds the server with no web origin configured at all.
+  {
+    noWebOrigin,
+    ...overrides
+  }: Partial<ServerDeps> & { noWebOrigin?: true } = {},
   omitSecureFlag = false,
 ) {
   let now = START;
@@ -43,25 +50,29 @@ async function setup(
     { clock },
   );
 
-  const app = await createServer({
-    claims,
-    voters,
-    votes: new InMemoryVotingStore(clock),
-    suggestions: new InMemorySuggestionStore({ clock }),
-    signer,
-    clock,
-    // Omitted in the one test that pins the safe default.
-    ...(omitSecureFlag ? {} : { secureCookies: false }),
-    ...overrides,
-  });
+  const app = sendOriginLikeABrowser(
+    await createServer({
+      claims,
+      voters,
+      votes: new InMemoryVotingStore(clock),
+      suggestions: new InMemorySuggestionStore({ clock }),
+      signer,
+      clock,
+      ...(noWebOrigin === true ? {} : { webOrigin: WEB_ORIGIN }),
+      // Omitted in the one test that pins the safe default.
+      ...(omitSecureFlag ? {} : { secureCookies: false }),
+      ...overrides,
+    }),
+    WEB_ORIGIN,
+  );
 
   return {
     app,
     mailer,
     voters,
     signer,
-    peer(offsetMs: number) {
-      return createServer({
+    async peer(offsetMs: number) {
+      const peer = await createServer({
         claims,
         voters,
         votes: new InMemoryVotingStore(
@@ -73,8 +84,10 @@ async function setup(
           clock: () => new Date(now.getTime() + offsetMs),
         }),
         clock: () => new Date(now.getTime() + offsetMs),
+        webOrigin: WEB_ORIGIN,
         secureCookies: false,
       });
+      return sendOriginLikeABrowser(peer, WEB_ORIGIN);
     },
     after(seconds: number) {
       now = new Date(now.getTime() + seconds * 1000);
@@ -356,7 +369,7 @@ test("forged_and_foreign_cookies_are_signed_out", async () => {
   const [version, voterId, generation, iat, exp, mac] = value.split(".");
   assert.equal(version, "v1");
   assert.ok(voterId && generation && iat && exp && mac);
-  const other = new SessionSigner("a-completely-different-secret");
+  const other = new SessionSigner("a-completely-different-secret-x-x");
 
   for (const forged of [
     `${SESSION_COOKIE}=v1.${voterId}.${generation}.${iat}.${exp}.not-a-signature`,
@@ -404,4 +417,107 @@ test("no_response_mentions_hashes_chains_or_how_anything_is_counted", async () =
       `response mentions "${word}"`,
     );
   }
+});
+
+const ORIGIN_REFUSED = {
+  error: "origin_not_allowed",
+  message: "That request did not come from Pulse.",
+};
+
+// Sign-out also uses Fastify's default 1 MiB body limit, even though its
+// handler needs no body.
+for (const [bodyName, payload, bodyStatus] of [
+  ["malformed_json", "{", 400],
+  [
+    "an_oversized_body",
+    JSON.stringify({ padding: "x".repeat(1024 * 1024) }),
+    413,
+  ],
+] as const) {
+  test(`sign_out_refuses_a_foreign_origin_before_reading_${bodyName}`, async (t) => {
+    const h = await setup();
+    t.after(() => h.app.close());
+    const refused = await h.app.inject({
+      method: "POST",
+      url: "/api/sign-out",
+      headers: {
+        origin: "https://elsewhere.example",
+        "content-type": "application/json",
+      },
+      payload,
+    });
+    assert.equal(refused.statusCode, 403);
+    assert.deepEqual(refused.json(), ORIGIN_REFUSED);
+
+    // Confirm this body would otherwise fail parsing or the size limit.
+    const parsed = await h.app.inject({
+      method: "POST",
+      url: "/api/sign-out",
+      headers: { origin: WEB_ORIGIN, "content-type": "application/json" },
+      payload,
+    });
+    assert.equal(parsed.statusCode, bodyStatus);
+  });
+}
+
+for (const [name, origin] of [
+  ["a_foreign_origin", "https://elsewhere.example"],
+  ["no_origin_at_all", undefined],
+  ["a_lookalike_origin_with_a_trailing_slash", `${WEB_ORIGIN}/`],
+] as const) {
+  test(`sign_out_from_${name}_is_refused_and_clears_nothing`, async () => {
+    const h = await setup();
+    const session = await h.signIn("ada@student.ubc.ca");
+    const ballot = `pulse_ballot=${h.signer.sign("b:this-browser")}`;
+    const cookie = `${session}; ${ballot}`;
+
+    // The shape a plain cross-site form can send: text/plain, empty body.
+    const out = await h.app.inject({
+      method: "POST",
+      url: "/api/sign-out",
+      headers: { cookie, origin, "content-type": "text/plain" },
+      payload: "",
+    });
+
+    assert.equal(out.statusCode, 403);
+    assert.deepEqual(out.json(), ORIGIN_REFUSED);
+    assert.equal(out.headers["set-cookie"], undefined, "a cookie was touched");
+    assert.equal(out.cookies.length, 0);
+    // The session generation did not move: the same cookie still works.
+    assert.equal(
+      (await h.app.inject({ url: "/api/me", headers: { cookie: session } }))
+        .statusCode,
+      200,
+    );
+  });
+}
+
+test("sign_out_from_the_web_origin_clears_both_cookies", async () => {
+  const h = await setup();
+  const session = await h.signIn("ada@student.ubc.ca");
+  const ballot = `pulse_ballot=${h.signer.sign("b:this-browser")}`;
+  const out = await h.app.inject({
+    method: "POST",
+    url: "/api/sign-out",
+    headers: { cookie: `${session}; ${ballot}`, origin: WEB_ORIGIN },
+  });
+  assert.equal(out.statusCode, 200);
+  assert.deepEqual(out.json(), { status: "signed_out" });
+  assert.equal(out.cookies.find((c) => c.name === SESSION_COOKIE)?.value, "");
+  assert.equal(out.cookies.find((c) => c.name === "pulse_ballot")?.value, "");
+  assert.equal(
+    (await h.app.inject({ url: "/api/me", headers: { cookie: session } }))
+      .statusCode,
+    401,
+  );
+});
+
+test("sign_out_without_a_configured_web_origin_is_refused", async () => {
+  // No origin can match one that was never configured, the same rule the
+  // creation routes follow.
+  const h = await setup({ noWebOrigin: true });
+  const out = await h.app.inject({ method: "POST", url: "/api/sign-out" });
+  assert.equal(out.statusCode, 403);
+  assert.deepEqual(out.json(), ORIGIN_REFUSED);
+  assert.equal(out.headers["set-cookie"], undefined);
 });

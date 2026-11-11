@@ -103,7 +103,9 @@ for (const kind of ["memory", "postgres"] as const) {
         claims,
         clock,
         suggestions: new InMemorySuggestionStore({ clock }),
-        signer: new SessionSigner("listing-test-secret-long-enough", { clock }),
+        signer: new SessionSigner("listing-test-secret-long-enough-x", {
+          clock,
+        }),
       });
       t.after(() => app.close());
       const origin = await app.listen({ port: 0, host: "127.0.0.1" });

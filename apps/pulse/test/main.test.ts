@@ -7,7 +7,7 @@ import {
   DEFAULT_HOST,
   DEFAULT_PORT,
   SERVED_LOGGER,
-  buildServer,
+  buildServer as buildUnwrappedServer,
   serveConfig,
   stopOnSignals,
   type ServeConfig,
@@ -18,10 +18,23 @@ import { allowDomain } from "../src/identity/pg-store.js";
 import { ConfirmationKey } from "../src/voting/confirmation.js";
 import { PostgresVotingStore } from "../src/voting/pg-store.js";
 import { databaseSkip, throwawaySchema } from "./support/database.js";
+import { sendOriginLikeABrowser } from "./support/origin.js";
+
+/**
+ * The served server as the pulse-web client meets it: every POST carries the
+ * configured web origin, as a browser page on that origin sends it.
+ */
+async function buildServer(
+  ...args: Parameters<typeof buildUnwrappedServer>
+): ReturnType<typeof buildUnwrappedServer> {
+  const built = await buildUnwrappedServer(...args);
+  sendOriginLikeABrowser(built.app, args[0].webOrigin);
+  return built;
+}
 
 /** Everything a served pulse refuses to start without. */
 const COMPLETE: NodeJS.ProcessEnv = {
-  PULSE_SESSION_SECRET: "a-secret-that-is-long-enough",
+  PULSE_SESSION_SECRET: "a-secret-that-is-long-enough-x-x",
   PULSE_CONFIRMATION_KEY: "a-confirmation-key-that-is-long-enough-1234",
   PULSE_DATABASE_URL: "postgres://pulse:pulse@127.0.0.1:5433/pulse_test",
   PULSE_WEB_ORIGIN: "https://pulse.example.org",
@@ -40,7 +53,7 @@ test("a_complete_environment_is_read_into_a_configuration", () => {
 
   assert.equal(config.port, DEFAULT_PORT);
   assert.equal(config.host, DEFAULT_HOST);
-  assert.equal(config.secret, "a-secret-that-is-long-enough");
+  assert.equal(config.secret, "a-secret-that-is-long-enough-x-x");
   assert.equal(config.webOrigin, "https://pulse.example.org");
   assert.equal(config.databaseUrl, COMPLETE["PULSE_DATABASE_URL"]);
   // The real provider is wired. `not instanceof ConsoleMailer` was the first
@@ -136,6 +149,31 @@ test("the_confirmation_key_is_read_and_is_not_the_session_secret", () => {
       /PULSE_CONFIRMATION_KEY/.test(error.message) &&
       /at least 32/.test(error.message) &&
       !error.message.includes(short),
+  );
+});
+
+test("a_session_secret_under_32_characters_is_refused_at_startup", () => {
+  // 31 is refused with a sentence naming the variable and how to make one;
+  // the value itself is never echoed back.
+  const short = "s".repeat(31);
+  assert.throws(
+    () => serveConfig({ ...COMPLETE, PULSE_SESSION_SECRET: short }),
+    (error: Error) =>
+      /PULSE_SESSION_SECRET must be at least 32 characters/.test(
+        error.message,
+      ) &&
+      /openssl rand -base64 48/.test(error.message) &&
+      !error.message.includes(short),
+  );
+  // Measured after trimming, as every value here is: padding does not count.
+  assert.throws(
+    () => serveConfig({ ...COMPLETE, PULSE_SESSION_SECRET: ` ${short} ` }),
+    /PULSE_SESSION_SECRET must be at least 32 characters/,
+  );
+  const exact = "s".repeat(32);
+  assert.equal(
+    serveConfig({ ...COMPLETE, PULSE_SESSION_SECRET: exact }).secret,
+    exact,
   );
 });
 
@@ -319,7 +357,7 @@ function servedConfig(schema: string): ServeConfig {
   return {
     port: 0,
     host: "127.0.0.1",
-    secret: "a-secret-that-is-long-enough",
+    secret: "a-secret-that-is-long-enough-x-x",
     confirmationKey: "a-confirmation-key-that-is-long-enough-1234",
     databaseUrl: process.env["PULSE_DATABASE_URL"] as string,
     webOrigin: "https://pulse.example.org",
@@ -351,7 +389,7 @@ test(
     const config: ServeConfig = {
       port: 0,
       host: "127.0.0.1",
-      secret: "a-secret-that-is-long-enough",
+      secret: "a-secret-that-is-long-enough-x-x",
       confirmationKey: "a-confirmation-key-that-is-long-enough-1234",
       databaseUrl: process.env["PULSE_DATABASE_URL"] as string,
       webOrigin: "https://pulse.example.org",
@@ -540,7 +578,7 @@ test(
     const config: ServeConfig = {
       port: 0,
       host: "127.0.0.1",
-      secret: "a-secret-that-is-long-enough",
+      secret: "a-secret-that-is-long-enough-x-x",
       confirmationKey: "a-confirmation-key-that-is-long-enough-1234",
       databaseUrl: process.env["PULSE_DATABASE_URL"] as string,
       webOrigin: "https://pulse.example.org",
