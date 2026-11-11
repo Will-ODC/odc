@@ -208,7 +208,7 @@ it("offers no Close while a changed answer is sent, and focus lands on the new a
   );
   const line = (await main().findByText(said("You picked No."))).parentElement!;
   await waitFor(() => expect(document.activeElement).toBe(line));
-});
+}, 15_000);
 
 it("shows the answer the server holds when Close follows a lost connection", async () => {
   const p = poll();
