@@ -23,12 +23,11 @@ import type { Confirmation } from "../flow/vote-card.js";
 import { VoteCard } from "../components/VoteCard.js";
 import { ClosedResults } from "../components/ClosedResults.js";
 import { ViewState } from "../components/ViewState.js";
-import { AnsweredList } from "../components/AnsweredList.js";
+import { AnsweredRail } from "../components/AnsweredRail.js";
 import { PostedBanner } from "../components/PostedBanner.js";
 import { CopyLink } from "../components/CopyLink.js";
 import { useSession } from "../hooks/use-session.js";
 import type { Session } from "../hooks/use-session.js";
-import type { ViewData } from "../hooks/view-data.js";
 import { SiteBanner } from "../components/SiteBanner.js";
 import "./Conversation.css";
 
@@ -89,10 +88,6 @@ async function savedAnswer(
   }
 }
 
-/** Rail copy when the saved answers cannot be read (#488). */
-const RAIL_ERROR = "We couldn't load your votes.";
-const RAIL_PARTIAL_ERROR = "We couldn't load all your votes.";
-const RAIL_RELOADED = "Your votes are loaded.";
 /**
  * How long a question waits for its saved answer before it is asked anyway.
  * A stalled read must not leave a question that has loaded on "Loading…".
@@ -294,21 +289,6 @@ export function Conversation({
     answers,
     recentAnswers,
   );
-  const railHeading = useRef<HTMLAnchorElement>(null);
-  // One status region for the rail, mounted throughout, so each change is read
-  // out: Loading… while the list is read (with answers already listed too),
-  // then an error, the empty message, or nothing to show.
-  const railState: ViewData<null> =
-    mine.data.status === "error"
-      ? {
-          status: "error",
-          message: answered.length > 0 ? RAIL_PARTIAL_ERROR : RAIL_ERROR,
-        }
-      : mine.data.status === "loading"
-        ? { status: "loading" }
-        : mine.data.status === "empty" && answered.length === 0
-          ? { status: "empty", message: mine.data.message }
-          : { status: "ready", value: null };
   const main = useRef<HTMLElement>(null);
   // "Your question is live" belongs to the question just posted. Leaving it
   // for another question ends the line.
@@ -331,52 +311,19 @@ export function Conversation({
           onCancel={dismiss}
         />
       </header>
-      <aside className="conversation__sidebar">
-        <nav aria-label="My votes">
-          <h2>
-            <a ref={railHeading} href={pathOf({ kind: "myVotes" })}>
-              My votes
-            </a>
-          </h2>
-          {answered.length > 0 ? (
-            <AnsweredList
-              votes={answered}
-              current={at}
-              compact
-              disabled={busy}
-              onOpen={go}
-            />
-          ) : null}
-          <ViewState
-            data={railState}
-            variant="compact"
-            persistent
-            {...(railRetried ? { readyNote: RAIL_RELOADED } : {})}
-          >
-            {() => null}
-          </ViewState>
-          {mine.data.status === "error" ? (
-            <button
-              className="button"
-              type="button"
-              onClick={() => {
-                // The button goes while the list is read again; focus stays in
-                // the rail rather than falling to the page.
-                railHeading.current?.focus();
-                setRailRetried(true);
-                mine.retry();
-              }}
-            >
-              Try again
-            </button>
-          ) : null}
-          {mine.data.status === "ready" && mine.data.value.nextCursor ? (
-            <p>
-              <a href={pathOf({ kind: "myVotes" })}>See all my votes</a>
-            </p>
-          ) : null}
-        </nav>
-      </aside>
+      <AnsweredRail
+        className="conversation__sidebar"
+        data={mine.data}
+        votes={answered}
+        current={at}
+        disabled={busy}
+        onOpen={go}
+        railRetried={railRetried}
+        onRetry={() => {
+          setRailRetried(true);
+          mine.retry();
+        }}
+      />
       <main className="conversation__main" ref={main}>
         {posted && at === pollId ? (
           <PostedBanner

@@ -1,8 +1,8 @@
 import { useEffect, useRef } from "react";
 import { pathOf } from "../flow/route.js";
-import { TopBanner } from "../components/TopBanner.js";
-import { SignedIn } from "../components/SignedIn.js";
-import { ForgetVotes } from "../components/ForgetVotes.js";
+import { TopBanner } from "./TopBanner.js";
+import { SignedIn } from "./SignedIn.js";
+import { ForgetVotes } from "./ForgetVotes.js";
 import type { VoteRead } from "../hooks/use-my-votes.js";
 import type { Session, SignOutProgress } from "../hooks/use-session.js";
 
