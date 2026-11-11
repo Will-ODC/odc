@@ -89,7 +89,7 @@ describe("poll creation against the real server", () => {
       voters,
       votes,
       suggestions: new InMemorySuggestionStore(),
-      signer: new SessionSigner("a-test-secret-long-enough"),
+      signer: new SessionSigner("a-test-secret-long-enough-x-x-x-x"),
       creation: new InMemoryCreationStore(voters, votes),
       webOrigin: WEB_ORIGIN,
       secureCookies: false,

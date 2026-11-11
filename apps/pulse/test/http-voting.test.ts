@@ -24,10 +24,13 @@ import { ConfirmationKey } from "../src/voting/confirmation.js";
 import { InMemoryVotingStore, UnknownPollError } from "../src/voting/store.js";
 import type { Publication } from "../src/voting/poll.js";
 import { InMemoryCreationStore } from "../src/authoring/memory-store.js";
+import { sendOriginLikeABrowser } from "./support/origin.js";
 
-const SECRET = "test-secret-that-is-long-enough";
+const SECRET = "test-secret-that-is-long-enough-x";
 /** The confirmation key every server here is given (ADR-0040). */
 const CONFIRMATION_KEY = "a-confirmation-key-for-tests-0123456789";
+/** The web origin the server trusts, and so the one a browser page sends. */
+const WEB_ORIGIN = "https://pulse.test";
 const START = new Date("2026-08-09T12:00:00.000Z");
 
 async function setup(
@@ -65,19 +68,23 @@ async function setup(
     { clock },
   );
 
-  const app = await createServer({
-    claims,
-    voters,
-    votes,
-    suggestions: suggestions ?? new InMemorySuggestionStore({ clock }),
-    signer,
-    clock,
-    secureCookies: false,
-    ...(withoutConfirmationKey
-      ? {}
-      : { confirmationKey: new ConfirmationKey(CONFIRMATION_KEY) }),
-    ...overrides,
-  });
+  const app = sendOriginLikeABrowser(
+    await createServer({
+      claims,
+      voters,
+      votes,
+      suggestions: suggestions ?? new InMemorySuggestionStore({ clock }),
+      signer,
+      clock,
+      secureCookies: false,
+      webOrigin: WEB_ORIGIN,
+      ...(withoutConfirmationKey
+        ? {}
+        : { confirmationKey: new ConfirmationKey(CONFIRMATION_KEY) }),
+      ...overrides,
+    }),
+    WEB_ORIGIN,
+  );
 
   await votes.createPoll({
     id: "p1",
@@ -926,7 +933,9 @@ test("signing_in_on_another_browser_does_not_confirm_this_ones_vote", async () =
   );
 });
 
-test("one_person_on_two_browsers_counts_once_as_confirmed_and_their_latest_vote_is_the_one", async () => {
+test("one_person_on_two_browsers_keeps_one_ballot_and_their_latest_vote_is_the_one", async () => {
+  // ADR-0046: a vote cast while signed in replaces the person's vote on the
+  // same poll in their other browser. The totals count them once.
   const time = movableClock();
   const { app, browser, signInOn } = await setup(undefined, undefined, {
     clock: time.clock,
@@ -943,23 +952,33 @@ test("one_person_on_two_browsers_counts_once_as_confirmed_and_their_latest_vote_
   time.advance(60);
   await signInOn(laptop, "ada@student.ubc.ca");
   const second = (await castOn(laptop, [1])).json().results;
-  assert.equal(second.voters, 2);
+  assert.equal(second.voters, 1);
   assert.equal(second.confirmedVoters, 1);
   assert.deepEqual(
     second.choices.map((c: { count: number }) => c.count),
-    [1, 1, 0],
+    [0, 1, 0],
   );
   assert.deepEqual(
     second.choices.map((c: { confirmedCount: number }) => c.confirmedCount),
     [0, 1, 0],
   );
+  // The phone no longer holds a vote on this poll; the laptop does.
+  assert.equal(
+    (await phone({ url: "/api/polls/p1/ballot" })).json().ballot,
+    null,
+  );
+  assert.deepEqual((await phone({ url: "/api/my-votes" })).json().votes, []);
+  assert.deepEqual(
+    (await laptop({ url: "/api/polls/p1/ballot" })).json().ballot,
+    [1],
+  );
 
-  // Then they change the phone's answer: it is their latest, so it is the
-  // confirmed one now, and still one confirmed voter.
+  // Then they vote again on the phone, still signed in: that replaces the
+  // laptop's, and is a first ballot for the phone.
   time.advance(60);
   const third = (await castOn(phone, [2])).json();
-  assert.equal(third.status, "changed");
-  assert.equal(third.results.voters, 2);
+  assert.equal(third.status, "counted");
+  assert.equal(third.results.voters, 1);
   assert.equal(third.results.confirmedVoters, 1);
   assert.deepEqual(
     third.results.choices.map(
@@ -967,9 +986,123 @@ test("one_person_on_two_browsers_counts_once_as_confirmed_and_their_latest_vote_
     ),
     [0, 0, 1],
   );
+  assert.equal(
+    (await laptop({ url: "/api/polls/p1/ballot" })).json().ballot,
+    null,
+  );
 
   const read = (await app.inject({ url: "/api/polls/p1/results" })).json();
   assert.deepEqual(read, third.results);
+});
+
+test("vote_signed_in_sign_out_sign_in_vote_again_counts_once_with_the_new_answer", async () => {
+  // #532: signing out clears the ballot cookie, so the second vote is filed
+  // under a new ballot on the same browser. It replaces the first.
+  const { app, browser, signInOn } = await setup(undefined, undefined, {
+    newBallotId: countingBallots(),
+  });
+  const visit = browser();
+  await signInOn(visit, "ada@student.ubc.ca");
+  await castOn(visit, [0]);
+  await visit({ method: "POST", url: "/api/sign-out" });
+  await signInOn(visit, "ada@student.ubc.ca");
+  const again = (await castOn(visit, [1])).json();
+
+  assert.equal(again.results.voters, 1);
+  assert.equal(again.results.confirmedVoters, 1);
+  assert.deepEqual(
+    again.results.choices.map((c: { count: number }) => c.count),
+    [0, 1, 0],
+  );
+  assert.deepEqual(
+    (await visit({ url: "/api/my-votes" }))
+      .json()
+      .votes.map((v: { ballot: number[] }) => v.ballot),
+    [[1]],
+  );
+  assert.deepEqual(
+    (await app.inject({ url: "/api/polls/p1/results" })).json(),
+    again.results,
+  );
+});
+
+test("signing_in_on_a_browser_with_an_older_vote_brings_the_newer_answer_here", async () => {
+  // ADR-0046 decision 4, option A: the laptop voted first without signing
+  // in; the person later voted on the phone signed in. When the laptop signs
+  // in, the phone's newer answer moves to the laptop.
+  const time = movableClock();
+  const { app, browser, signInOn } = await setup(undefined, undefined, {
+    clock: time.clock,
+    newBallotId: countingBallots(),
+  });
+  const laptop = browser();
+  const phone = browser();
+  await castOn(laptop, [0]);
+  time.advance(60);
+  await signInOn(phone, "ada@student.ubc.ca");
+  await castOn(phone, [2]);
+
+  time.advance(60);
+  await signInOn(laptop, "ada@student.ubc.ca");
+
+  assert.deepEqual(
+    (await laptop({ url: "/api/polls/p1/ballot" })).json().ballot,
+    [2],
+  );
+  const mine = (await laptop({ url: "/api/my-votes" })).json().votes;
+  assert.deepEqual(
+    mine.map((v: { pollId: string; ballot: number[]; castAt: string }) => [
+      v.pollId,
+      v.ballot,
+      v.castAt,
+    ]),
+    [["p1", [2], new Date(START.getTime() + 60_000).toISOString()]],
+  );
+  assert.equal(
+    (await phone({ url: "/api/polls/p1/ballot" })).json().ballot,
+    null,
+  );
+  assert.deepEqual((await phone({ url: "/api/my-votes" })).json().votes, []);
+
+  const results = (await app.inject({ url: "/api/polls/p1/results" })).json();
+  assert.equal(results.voters, 1);
+  assert.equal(results.confirmedVoters, 1);
+  assert.deepEqual(
+    results.choices.map((c: { count: number }) => c.count),
+    [0, 0, 1],
+  );
+});
+
+test("signing_in_on_a_browser_with_the_newer_vote_keeps_it_and_drops_the_older", async () => {
+  const time = movableClock();
+  const { app, browser, signInOn } = await setup(undefined, undefined, {
+    clock: time.clock,
+    newBallotId: countingBallots(),
+  });
+  const phone = browser();
+  const laptop = browser();
+  await signInOn(phone, "ada@student.ubc.ca");
+  await castOn(phone, [0]);
+  time.advance(60);
+  await castOn(laptop, [1]);
+
+  time.advance(60);
+  await signInOn(laptop, "ada@student.ubc.ca");
+
+  assert.deepEqual(
+    (await laptop({ url: "/api/polls/p1/ballot" })).json().ballot,
+    [1],
+  );
+  assert.equal(
+    (await phone({ url: "/api/polls/p1/ballot" })).json().ballot,
+    null,
+  );
+  const results = (await app.inject({ url: "/api/polls/p1/results" })).json();
+  assert.equal(results.voters, 1);
+  assert.deepEqual(
+    results.choices.map((c: { count: number }) => c.count),
+    [0, 1, 0],
+  );
 });
 
 test("signing_out_does_not_remove_a_confirmation", async () => {

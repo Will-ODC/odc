@@ -17,7 +17,9 @@ import { SessionSigner } from "../src/http/session.js";
 import { SERVED_LOGGER } from "../src/main.js";
 import { InMemoryVotingStore } from "../src/voting/store.js";
 import { InMemorySuggestionStore } from "../src/voting/suggestions.js";
+import { sendOriginLikeABrowser } from "./support/origin.js";
 
+const WEB_ORIGIN = "https://pulse.test";
 const PRIVATE = "private-person@example.test";
 const MESSAGE = `unexpected failure involving ${PRIVATE}`;
 
@@ -47,11 +49,12 @@ async function harness(t: TestContext, fault?: unknown, mailer?: Mailer) {
     voters,
     votes,
     suggestions: new InMemorySuggestionStore(),
-    signer: new SessionSigner("test-secret-that-is-long-enough"),
+    signer: new SessionSigner("test-secret-that-is-long-enough-x"),
+    webOrigin: WEB_ORIGIN,
     logger: { ...SERVED_LOGGER, level: "info", stream },
   });
   t.after(() => app.close());
-  return { app, lines };
+  return { app: sendOriginLikeABrowser(app, WEB_ORIGIN), lines };
 }
 
 for (const code of [undefined, "23505", `not-a-sqlstate-${PRIVATE}`]) {

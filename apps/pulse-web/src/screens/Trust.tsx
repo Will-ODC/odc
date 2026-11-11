@@ -28,14 +28,16 @@ export function Trust({ banner }: { banner?: ReactNode }) {
             </li>
             <li>
               Votes follow this browser&rsquo;s cookie (a file that remembers
-              you). Using another browser, clearing cookies or signing out lets
-              you add votes to the full total.
+              you). Without signing in, using another browser or clearing
+              cookies lets you add votes to the full total.
             </li>
             <li>
-              Email-confirmed votes count once per account per question. Your
-              most recent answer counts. Vote signed in, or sign in on that
-              browser before the question closes. Two emails count twice; this
-              does not prove each voter is a different person.
+              Email-confirmed votes count once per account per question, in the
+              full total too. Your most recent answer counts and replaces the
+              others. Vote signed in, or sign in on that browser before the
+              question closes. Signing in shows your most recent answer on that
+              browser. Two emails count twice; this does not prove each voter is
+              a different person.
             </li>
             <li>
               Email-confirmed votes store a code instead of your email. The

@@ -18,7 +18,8 @@ import {
  * A ballot is an array of choice indices, not one index: `single` polls carry
  * at most one entry, `approval` polls carry several. The array is the shape in
  * both cases (the client calls it `ballot` on the wire). One row per voter per
- * poll — casting again replaces it.
+ * poll — casting again replaces it — and, among confirmed votes, one per person
+ * per poll (ADR-0046).
  */
 export interface Vote {
   pollId: string;
@@ -69,11 +70,14 @@ export interface Results {
   question: string;
   method: PollMethod;
   choices: readonly ChoiceResult[];
-  /** Distinct people who voted — not the number of selections made. */
+  /**
+   * Ballots on the poll — not the number of selections made. A confirmed
+   * person holds one ballot per poll (ADR-0046) and counts once; a vote nobody
+   * confirmed counts once per browser.
+   */
   voters: number;
   /**
-   * People who confirmed by email, counted once each (ADR-0040). A person who
-   * confirmed from two browsers is one here and two in `voters`. Always at
+   * People who confirmed by email, counted once each (ADR-0040). Always at
    * most `voters`; 0 when nobody has confirmed.
    */
   confirmedVoters: number;
@@ -96,16 +100,30 @@ export interface ChoiceResult {
 }
 
 /**
- * How a cast relates to confirmation (ADR-0040).
+ * How a cast relates to confirmation (ADR-0040, ADR-0046).
  *
  * `confirmation` is the one-way code from `ConfirmationKey.codeFor` for the
  * signed-in account and this poll. The store never sees the account id or the
- * address, only this code. Given, it replaces whatever code the vote held;
- * left out (nobody signed in), the vote keeps the code it had, so changing an
- * answer keeps it confirmed.
+ * address, only this code. Given, it replaces whatever code the vote held, and
+ * the person's ballot in any other browser on this poll is deleted: this cast
+ * is their latest answer. Left out (nobody signed in), the vote keeps the code
+ * it had, so changing an answer keeps it confirmed, and nothing else changes.
+ *
+ * `lockKey` is `ConfirmationKey.lockKeyFor` for the same account, and comes
+ * with every confirmation: the store serializes one person's confirming
+ * writes on it. Never stored.
  */
-export interface CastOptions {
-  confirmation?: string;
+export type CastOptions =
+  | { confirmation?: undefined; lockKey?: undefined }
+  | { confirmation: string; lockKey: bigint };
+
+/**
+ * The person signing in, as `confirmVotes` sees them (ADR-0046): the code for
+ * each poll and the key of their vote lock, never the account id.
+ */
+export interface ConfirmingPerson {
+  codeFor: (pollId: string) => string;
+  lockKey: bigint;
 }
 
 export interface VotingStore {
@@ -123,15 +141,18 @@ export interface VotingStore {
   ): Promise<CastResult>;
   /**
    * Confirm every vote filed under this ballot identity on a poll that is
-   * still open, with the code `codeFor(pollId)` gives for each — what signing
-   * in does for a browser that voted first (ADR-0040). A closed poll's votes
-   * are left alone, so its results stop changing when it closes. Returns how
-   * many votes were confirmed.
+   * still open, with the code `person.codeFor(pollId)` gives for each — what
+   * signing in does for a browser that voted first (ADR-0040). A closed poll's
+   * votes are left alone, so its results stop changing when it closes.
+   *
+   * When the person already holds a ballot on that poll in another browser,
+   * one survives (ADR-0046): the later cast, an exact tie going to the greater
+   * ballot identity (`moreRecent`). It is filed under THIS ballot identity
+   * either way: if the other one wins, its answer and cast time move here and
+   * the other browser no longer holds a vote. Returns how many votes were
+   * confirmed.
    */
-  confirmVotes(
-    voterId: string,
-    codeFor: (pollId: string) => string,
-  ): Promise<number>;
+  confirmVotes(voterId: string, person: ConfirmingPerson): Promise<number>;
   /** The voter's own ballot, so the UI can show what they picked. */
   voteOf(pollId: string, voterId: string): Promise<Vote | undefined>;
   /**
@@ -278,7 +299,7 @@ export class InMemoryVotingStore implements VotingStore {
     const poll = this.#requirePoll(pollId);
     if (voterId.trim() === "") throw new TypeError("voterId must not be empty");
     validateBallot(poll, ballot);
-    assertConfirmation(options.confirmation);
+    assertCastOptions(options);
 
     const now = this.#clock();
     // Checked before the replacement so a late cast reads as "closed", which is
@@ -294,33 +315,50 @@ export class InMemoryVotingStore implements VotingStore {
     // in `vote_choice.value`, not in the order of this array.
     const choices = [...ballot].sort((a, b) => a - b);
     const vote: Vote = { pollId, voterId, choices, castAt: now };
-    this.#votes.set(key, vote);
     // Left out means "keep what it had", never "unconfirm": changing an answer
-    // keeps it confirmed.
+    // keeps it confirmed. Given, this cast is the person's latest answer and
+    // replaces their ballot in any other browser (ADR-0046).
     if (options.confirmation !== undefined) {
+      const other = this.#confirmedAs(pollId, options.confirmation, key);
+      if (other !== undefined) this.#forget(other);
       this.#confirmations.set(key, options.confirmation);
     }
+    this.#votes.set(key, vote);
     return { status: replacing ? "changed" : "counted", vote };
   }
 
   async confirmVotes(
     voterId: string,
-    codeFor: (pollId: string) => string,
+    person: ConfirmingPerson,
   ): Promise<number> {
+    assertLockKey(person.lockKey);
     const now = this.#clock();
     // Every code is made and checked before any is written, so a bad one
     // leaves nothing half-confirmed — all or nothing, as Postgres's
     // transaction is.
-    const writes: [string, string][] = [];
+    const writes: [string, Vote, string][] = [];
     for (const [key, vote] of this.#votes) {
       if (vote.voterId !== voterId) continue;
       const poll = this.#polls.get(vote.pollId);
       if (!poll || !isOpen(poll, now)) continue;
-      const code = codeFor(vote.pollId);
+      const code = person.codeFor(vote.pollId);
       assertConfirmation(code);
-      writes.push([key, code]);
+      writes.push([key, vote, code]);
     }
-    for (const [key, code] of writes) this.#confirmations.set(key, code);
+    for (const [key, vote, code] of writes) {
+      // One ballot per person per poll (ADR-0046): the later cast survives,
+      // and under this ballot identity either way.
+      const other = this.#confirmedAs(vote.pollId, code, key);
+      const rival = other === undefined ? undefined : this.#votes.get(other);
+      if (other !== undefined && rival !== undefined) {
+        this.#forget(other);
+        if (!moreRecent(vote, rival)) {
+          // The other browser's answer is newer: it moves here.
+          this.#votes.set(key, { ...rival, voterId });
+        }
+      }
+      this.#confirmations.set(key, code);
+    }
     return writes.length;
   }
 
@@ -406,6 +444,20 @@ export class InMemoryVotingStore implements VotingStore {
     if (!poll) throw new UnknownPollError(pollId);
     return poll;
   }
+
+  /** The key of the vote on this poll that carries `code`, other than `not`. */
+  #confirmedAs(pollId: string, code: string, not: string): string | undefined {
+    for (const [key, held] of this.#confirmations) {
+      if (key === not || held !== code) continue;
+      if (this.#votes.get(key)?.pollId === pollId) return key;
+    }
+    return undefined;
+  }
+
+  #forget(key: string): void {
+    this.#votes.delete(key);
+    this.#confirmations.delete(key);
+  }
 }
 
 /**
@@ -443,6 +495,23 @@ export function moreRecent(a: Vote, b: Vote): boolean {
  * right beside the answer.
  */
 export const CONFIRMATION_CODE = /^[0-9a-f]{64}$/;
+
+/**
+ * Every store's check of a cast's options: a code of the right shape, and the
+ * person's lock key with it (ADR-0046), so no store can confirm a vote outside
+ * that person's lock.
+ */
+export function assertCastOptions(options: CastOptions): void {
+  assertConfirmation(options.confirmation);
+  if (options.confirmation !== undefined) assertLockKey(options.lockKey);
+}
+
+/** A lock key is a signed 64-bit integer: what `pg_advisory_xact_lock` takes. */
+export function assertLockKey(key: unknown): void {
+  if (typeof key !== "bigint" || key < -(2n ** 63n) || key >= 2n ** 63n) {
+    throw new TypeError("a confirmation needs the person's lock key");
+  }
+}
 
 /** Every store's check of a code before writing it. */
 export function assertConfirmation(code: string | undefined): void {

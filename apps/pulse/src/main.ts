@@ -8,7 +8,7 @@ import { databaseUrl } from "./db/config.js";
 import { migrate } from "./db/migrate.js";
 import { createPool } from "./db/pool.js";
 import { createServer } from "./http/server.js";
-import { SessionSigner } from "./http/session.js";
+import { MIN_SESSION_SECRET_LENGTH, SessionSigner } from "./http/session.js";
 import { DomainAllowlist } from "./identity/allowlist.js";
 import { ClaimService } from "./identity/claim.js";
 import type { Mailer } from "./identity/mailer.js";
@@ -156,6 +156,12 @@ export function serveConfig(env: NodeJS.ProcessEnv = process.env): ServeConfig {
       "PULSE_CONFIRMATION_KEY must not be the same as PULSE_SESSION_SECRET",
     );
   }
+  // Refused at boot with a sentence that names the variable, rather than as
+  // the cookie signer's own error once the server is half built. The value is
+  // never put in the message.
+  if (checked.secret.length < MIN_SESSION_SECRET_LENGTH) {
+    throw new Error(sessionSecretTooShort());
+  }
   // Its own length rule, refused here at boot rather than on the first vote.
   try {
     new ConfirmationKey(checked.confirmationKey);
@@ -176,6 +182,17 @@ export function serveConfig(env: NodeJS.ProcessEnv = process.env): ServeConfig {
     ...(schema === undefined || schema === "" ? {} : { schema }),
     ...(owner === undefined ? {} : { ownerEmail: owner }),
   };
+}
+
+/**
+ * The startup refusal for a session secret under the minimum. Shared with
+ * `dev-server`, which applies the same floor to a secret it is given.
+ */
+export function sessionSecretTooShort(): string {
+  return (
+    `PULSE_SESSION_SECRET must be at least ${MIN_SESSION_SECRET_LENGTH} ` +
+    "characters. Generate one with: openssl rand -base64 48"
+  );
 }
 
 /**

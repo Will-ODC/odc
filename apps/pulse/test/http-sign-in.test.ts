@@ -15,12 +15,19 @@ import { createServer, type ServerDeps } from "../src/http/server.js";
 import { SESSION_COOKIE, SessionSigner } from "../src/http/session.js";
 import { InMemorySuggestionStore } from "../src/voting/suggestions.js";
 import { InMemoryVotingStore } from "../src/voting/store.js";
+import { sendOriginLikeABrowser } from "./support/origin.js";
 
-const SECRET = "test-secret-that-is-long-enough";
+const SECRET = "test-secret-that-is-long-enough-x";
+/** The web origin the server trusts, and so the one a browser page sends. */
+const WEB_ORIGIN = "https://pulse.test";
 const START = new Date("2026-08-09T12:00:00.000Z");
 
 async function setup(
-  overrides: Partial<ServerDeps> = {},
+  // `noWebOrigin` builds the server with no web origin configured at all.
+  {
+    noWebOrigin,
+    ...overrides
+  }: Partial<ServerDeps> & { noWebOrigin?: true } = {},
   omitSecureFlag = false,
   rows: readonly AllowedDomain[] = [
     { community: "ubc-students", domain: "student.ubc.ca" },
@@ -43,17 +50,21 @@ async function setup(
     { clock },
   );
 
-  const app = await createServer({
-    claims,
-    voters,
-    votes: new InMemoryVotingStore(clock),
-    suggestions: new InMemorySuggestionStore({ clock }),
-    signer,
-    clock,
-    // Omitted in the one test that pins the safe default.
-    ...(omitSecureFlag ? {} : { secureCookies: false }),
-    ...overrides,
-  });
+  const app = sendOriginLikeABrowser(
+    await createServer({
+      claims,
+      voters,
+      votes: new InMemoryVotingStore(clock),
+      suggestions: new InMemorySuggestionStore({ clock }),
+      signer,
+      clock,
+      ...(noWebOrigin === true ? {} : { webOrigin: WEB_ORIGIN }),
+      // Omitted in the one test that pins the safe default.
+      ...(omitSecureFlag ? {} : { secureCookies: false }),
+      ...overrides,
+    }),
+    WEB_ORIGIN,
+  );
 
   return {
     app,
@@ -744,4 +755,138 @@ test("identity_and_redeem_responses_are_never_stored", async (t) => {
     assert.ok(response.statusCode >= 400);
     assert.equal(response.headers["cache-control"], "no-store");
   }
+});
+
+const ORIGIN_REFUSED = {
+  error: "origin_not_allowed",
+  message: "That request did not come from Pulse.",
+};
+
+// These routes use Fastify's default 1 MiB body limit. Valid oversized JSON
+// distinguishes the size check from the malformed-JSON check.
+for (const [bodyName, payload, bodyStatus] of [
+  ["malformed_json", "{", 400],
+  [
+    "an_oversized_body",
+    JSON.stringify({ padding: "x".repeat(1024 * 1024) }),
+    413,
+  ],
+] as const) {
+  for (const [routeName, url] of [
+    ["sign_in", "/api/sign-in"],
+    ["redeem", "/api/sign-in/redeem"],
+  ] as const) {
+    test(`${routeName}_refuses_a_foreign_origin_before_reading_${bodyName}`, async (t) => {
+      const h = await setup();
+      t.after(() => h.app.close());
+      const refused = await h.app.inject({
+        method: "POST",
+        url,
+        headers: {
+          origin: "https://elsewhere.example",
+          "content-type": "application/json",
+        },
+        payload,
+      });
+      assert.equal(refused.statusCode, 403);
+      assert.deepEqual(refused.json(), ORIGIN_REFUSED);
+      if (routeName === "redeem") {
+        assert.equal(refused.headers["cache-control"], "no-store");
+      }
+
+      // The identical body reaches the parser only with a trusted Origin.
+      const parsed = await h.app.inject({
+        method: "POST",
+        url,
+        headers: { origin: WEB_ORIGIN, "content-type": "application/json" },
+        payload,
+      });
+      assert.equal(parsed.statusCode, bodyStatus);
+    });
+  }
+}
+
+const NOT_THE_WEB_ORIGIN = [
+  ["a_foreign_origin", "https://elsewhere.example"],
+  ["no_origin_at_all", undefined],
+  ["a_lookalike_origin_with_a_trailing_slash", `${WEB_ORIGIN}/`],
+] as const;
+
+for (const [name, origin] of NOT_THE_WEB_ORIGIN) {
+  test(`sign_in_from_${name}_is_refused_and_sends_nothing`, async () => {
+    const h = await setup();
+    const asked = await h.app.inject({
+      method: "POST",
+      url: "/api/sign-in",
+      headers: { origin },
+      payload: { email: "ada@student.ubc.ca" },
+    });
+    assert.equal(asked.statusCode, 403);
+    assert.deepEqual(asked.json(), ORIGIN_REFUSED);
+    assert.equal(h.mailer.sent.length, 0);
+  });
+
+  test(`redeem_from_${name}_is_refused_and_leaves_the_link_unspent`, async () => {
+    const h = await setup();
+    await h.app.inject({
+      method: "POST",
+      url: "/api/sign-in",
+      payload: { email: "ada@student.ubc.ca" },
+    });
+    const token = h.tokenFor("ada@student.ubc.ca");
+
+    const refused = await h.app.inject({
+      method: "POST",
+      url: "/api/sign-in/redeem",
+      headers: { origin },
+      payload: { token },
+    });
+    assert.equal(refused.statusCode, 403);
+    assert.deepEqual(refused.json(), ORIGIN_REFUSED);
+    assert.equal(refused.cookies.length, 0, "nobody may be signed in");
+    // Refused before the token is read, so it is not spent.
+    assert.equal(refused.headers["cache-control"], "no-store");
+
+    const clicked = await h.app.inject({
+      method: "POST",
+      url: "/api/sign-in/redeem",
+      headers: { origin: WEB_ORIGIN },
+      payload: { token },
+    });
+    assert.equal(clicked.statusCode, 200);
+    assert.ok(clicked.cookies.find((c) => c.name === SESSION_COOKIE));
+  });
+}
+
+test("sign_in_and_redeem_from_the_web_origin_are_answered_as_before", async () => {
+  const h = await setup();
+  const asked = await h.app.inject({
+    method: "POST",
+    url: "/api/sign-in",
+    headers: { origin: WEB_ORIGIN },
+    payload: { email: "ada@student.ubc.ca" },
+  });
+  assert.equal(asked.statusCode, 200);
+  assert.equal(asked.json().status, "sent");
+
+  const clicked = await h.app.inject({
+    method: "POST",
+    url: "/api/sign-in/redeem",
+    headers: { origin: WEB_ORIGIN },
+    payload: { token: h.tokenFor("ada@student.ubc.ca") },
+  });
+  assert.equal(clicked.statusCode, 200);
+  assert.equal(clicked.json().status, "signed_in");
+});
+
+test("sign_in_without_a_configured_web_origin_is_refused", async () => {
+  const h = await setup({ noWebOrigin: true });
+  const asked = await h.app.inject({
+    method: "POST",
+    url: "/api/sign-in",
+    payload: { email: "ada@student.ubc.ca" },
+  });
+  assert.equal(asked.statusCode, 403);
+  assert.deepEqual(asked.json(), ORIGIN_REFUSED);
+  assert.equal(h.mailer.sent.length, 0);
 });

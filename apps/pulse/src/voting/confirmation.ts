@@ -16,6 +16,12 @@ export const MIN_CONFIRMATION_KEY_LENGTH = 32;
 const DOMAIN = "pulse-vote-confirmation/v1";
 
 /**
+ * The label for a person's vote lock (ADR-0046), so a lock key can never equal
+ * a code, or a code's prefix, made from the same key and account.
+ */
+const LOCK_DOMAIN = "pulse-vote-lock/v1";
+
+/**
  * Turns "this account confirmed a vote on this poll" into a one-way code
  * (ADR-0040).
  *
@@ -56,5 +62,23 @@ export class ConfirmationKey {
     return createHmac("sha256", this.#key)
       .update(JSON.stringify([DOMAIN, accountId, pollId]))
       .digest("hex");
+  }
+
+  /**
+   * The key of one person's vote lock (ADR-0046): a signed 64-bit integer, the
+   * width `pg_advisory_xact_lock` takes, from the first eight bytes of an HMAC
+   * of the account id under its own label.
+   *
+   * Every write that confirms a vote takes this lock first, so two casts, a
+   * cast and a sign-in, or two sign-ins by one person never interleave. It is
+   * per person, not per poll, because signing in confirms votes on many polls.
+   * It is never stored. While a write holds it, `pg_locks` shows the number,
+   * which nobody without the key can link to an account, as with the code.
+   */
+  lockKeyFor(accountId: string): bigint {
+    return createHmac("sha256", this.#key)
+      .update(JSON.stringify([LOCK_DOMAIN, accountId]))
+      .digest()
+      .readBigInt64BE(0);
   }
 }

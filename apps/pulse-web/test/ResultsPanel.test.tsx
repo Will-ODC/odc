@@ -45,8 +45,9 @@ describe("showing where a question stands", () => {
   });
 
   /*
-   * "Votes", not "people": the full total counts one vote per browser, and
-   * one person on two browsers is two votes (ADR-0040, /trust).
+   * "Votes", not "people": the full total counts a vote nobody confirmed once
+   * per browser, so one person on two browsers without signing in is two
+   * votes (ADR-0040, ADR-0046, /trust).
    */
   it("says how many votes there are and how many are confirmed", () => {
     show();

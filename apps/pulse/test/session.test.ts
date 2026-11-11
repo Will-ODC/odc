@@ -3,7 +3,7 @@ import { createHmac } from "node:crypto";
 import { test } from "node:test";
 import { SessionSigner } from "../src/http/session.js";
 
-const SECRET = "test-secret-that-is-long-enough";
+const SECRET = "test-secret-that-is-long-enough-x";
 const START = new Date("2026-08-09T12:00:00.000Z");
 
 function signerAt(start = START, ttlSeconds = 3600) {
@@ -82,7 +82,7 @@ test("a_tampered_voter_id_or_signature_does_not_verify", () => {
 
 test("a_cookie_from_another_secret_does_not_verify", () => {
   const { signer } = signerAt();
-  const other = new SessionSigner("a-completely-different-secret");
+  const other = new SessionSigner("a-completely-different-secret-x-x");
   assert.equal(signer.verify(other.sign("voter-1")), undefined);
 });
 
@@ -158,5 +158,13 @@ test("a_signed_cookie_with_no_timestamps_at_all_does_not_verify", () => {
 });
 
 test("a_short_secret_is_refused_outright", () => {
-  assert.throws(() => new SessionSigner("too-short"), /at least 16/);
+  assert.throws(() => new SessionSigner("too-short"), /at least 32/);
+});
+
+test("the_secret_floor_is_32_characters", () => {
+  assert.throws(
+    () => new SessionSigner("s".repeat(31)),
+    /at least 32 characters/,
+  );
+  assert.doesNotThrow(() => new SessionSigner("s".repeat(32)));
 });
