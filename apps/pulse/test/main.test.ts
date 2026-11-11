@@ -14,7 +14,9 @@ import {
 } from "../src/main.js";
 import { MailSendError } from "../src/identity/mailer.js";
 import { ResendMailer } from "../src/identity/resend-mailer.js";
-import { allowDomain } from "../src/identity/pg-store.js";
+import { PostgresClaimStore, allowDomain } from "../src/identity/pg-store.js";
+import { LINK_TTL_MS, USED_CLAIM_MARGIN_MS } from "../src/identity/claim.js";
+import { migrate } from "../src/db/migrate.js";
 import { ConfirmationKey } from "../src/voting/confirmation.js";
 import { PostgresVotingStore } from "../src/voting/pg-store.js";
 import { databaseSkip, throwawaySchema } from "./support/database.js";
@@ -494,6 +496,60 @@ test(
       new ConfirmationKey(config.confirmationKey).codeFor(voterId, "served"),
     );
     assert.notEqual(stored.rows[0]?.voter_id, voterId);
+  },
+);
+
+test(
+  "served_startup_purges_claim_rows_with_the_app_clock",
+  { skip: databaseSkip },
+  async (t) => {
+    const { pool: seedPool, schema } = await throwawaySchema(t);
+    const now = new Date("2026-11-11T12:00:00.123Z");
+    const cutoff = new Date(now.getTime() - LINK_TTL_MS - USED_CLAIM_MARGIN_MS);
+    await migrate(seedPool, { clock: () => now });
+    const claims = new PostgresClaimStore(seedPool);
+    const pending = async (tokenHash: string, expiresAt: Date): Promise<void> =>
+      claims.put({
+        tokenHash,
+        kind: "email",
+        subject: `${tokenHash}@example.test`,
+        community: null,
+        proofEmailsOptIn: false,
+        createdAt: new Date(now.getTime() - LINK_TTL_MS),
+        expiresAt,
+      });
+
+    await pending("expired", now);
+    await pending("live", new Date(now.getTime() + 1));
+    await pending("old-used", new Date(now.getTime() + 1));
+    assert.equal(await claims.markUsed("old-used", cutoff), true);
+    await pending("recent-used", new Date(now.getTime() + 1));
+    assert.equal(
+      await claims.markUsed("recent-used", new Date(cutoff.getTime() + 1)),
+      true,
+    );
+    await seedPool.query(
+      "insert into used_claim (token_hash, used_at) values ('legacy', null)",
+    );
+
+    const { app } = await buildServer(servedConfig(schema), {
+      clock: () => now,
+      log: () => undefined,
+    });
+    t.after(async () => app.close());
+
+    assert.equal(await claims.byTokenHash("expired"), undefined);
+    assert.ok(await claims.byTokenHash("live"));
+    assert.equal(await claims.wasUsed("old-used"), false);
+    assert.equal(await claims.wasUsed("recent-used"), true);
+    assert.deepEqual(
+      (
+        await seedPool.query<{ used_at: Date }>(
+          "select used_at from used_claim where token_hash = 'legacy'",
+        )
+      ).rows,
+      [{ used_at: now }],
+    );
   },
 );
 

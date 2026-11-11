@@ -8,6 +8,8 @@ import {
 } from "../src/identity/allowlist.js";
 import {
   ClaimService,
+  LINK_TTL_MS,
+  USED_CLAIM_MARGIN_MS,
   hashToken,
   type ClaimOptions,
 } from "../src/identity/claim.js";
@@ -892,4 +894,30 @@ test("a_redeem_paused_after_read_cannot_use_a_link_deleted_by_the_expiry_sweep",
     await h.voters.byCredential("email", "ada@student.ubc.ca"),
     undefined,
   );
+});
+
+test("redeem_purges_expired_pending_and_old_used_claims_with_the_app_clock", async () => {
+  const h = setup();
+  await h.service.requestLink("old-used@student.ubc.ca");
+  const oldUsed = h.lastToken("old-used@student.ubc.ca");
+  assert.equal((await h.service.redeem(oldUsed)).status, "signed_in");
+
+  await h.service.requestLink("expired@student.ubc.ca");
+  const expired = h.lastToken("expired@student.ubc.ca");
+  h.after(LINK_TTL_MS - 60_000);
+  await h.service.requestLink("live@student.ubc.ca");
+  const live = h.lastToken("live@student.ubc.ca");
+  h.after(USED_CLAIM_MARGIN_MS + 60_000);
+
+  assert.equal((await h.service.redeem(live)).status, "signed_in");
+  assert.equal(await h.claims.byTokenHash(hashToken(expired)), undefined);
+  assert.equal(await h.claims.wasUsed(hashToken(oldUsed)), false);
+  assert.equal(await h.claims.wasUsed(hashToken(live)), true);
+
+  // The just-spent link remains recognisable throughout its own lifetime plus
+  // the margin; only a later redeem at the exact cutoff forgets the marker.
+  h.after(LINK_TTL_MS + USED_CLAIM_MARGIN_MS - 1);
+  assert.equal((await h.service.redeem(live)).status, "already_used");
+  h.after(1);
+  assert.equal((await h.service.redeem(live)).status, "unknown_link");
 });

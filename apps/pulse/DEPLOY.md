@@ -89,15 +89,18 @@ and new code.
 ### Sign-in link retention
 
 `pending_claim` rows are deleted when redeemed. Expired, unused rows are
-swept on the next sign-in-link write; with no new sign-in links, expired rows
-remain until that next write. No scheduler or extra environment variable is
-required. The sweep uses the same application clock as link expiry, and does
-not change the 15-minute link lifetime.
+swept at API startup, on redemption and on the next sign-in-link write. No
+scheduler or extra environment variable is required. The sweep uses the same
+application clock as link expiry, and does not change the 15-minute link
+lifetime.
 
 Migration 010 removes previously used pending rows. A separate `used_claim`
-table retains only spent token digests, with no address, community, opt-in or
-timestamp, to preserve the "already used" response. Those hash-only markers
-have no expiry. Account email credentials and database backups have separate
+table retains only spent token digests and application timestamps, with no
+address, community or opt-in, to preserve the "already used" response.
+Migration 012 adds the timestamp. Markers are removed 20 minutes after use —
+the link's 15-minute lifetime plus a five-minute margin. A pre-012 marker is
+dated at the first startup or redemption after upgrading and retained for that
+full window. Account email credentials and database backups have separate
 retention; this cleanup does not erase them from backups.
 
 ## API environment

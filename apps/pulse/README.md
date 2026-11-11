@@ -34,14 +34,16 @@ discovery remain separate work; see [API.md](./API.md) for the query contract.
 ## Sign-in link retention
 
 A redeemed link's `pending_claim` row is deleted as it is spent. Expired,
-unused rows are deleted on the next sign-in-link write, across all addresses;
-there is no periodic sweep while sign-in traffic is idle. Links still last
-15 minutes and work once. Only the spent token's SHA-256 digest is kept in
-`used_claim`, without an address or other claim data, so a repeat click can
-still be answered "already used". These hash-only replay markers have no
-expiry, as before; they cannot be used to sign in. Upgrading also removes
-personal data from previously used links. This does not delete the email
-credential belonging to an account that signed in.
+unused rows are deleted at startup, on redemption and on the next sign-in-link
+write, across all addresses. Links still last 15 minutes and work once. Only
+the spent token's SHA-256 digest and its application-clock timestamp are kept
+in `used_claim`, without an address or other claim data, so a repeat click can
+still be answered "already used". Replay markers are removed 20 minutes after
+use: the full 15-minute link lifetime plus a five-minute margin. An older
+marker created before timestamps existed is conservatively dated at the first
+startup or redemption after upgrading, then gets the same 20-minute retention.
+This does not delete the email credential belonging to an account that signed
+in.
 
 ## Error-log privacy
 

@@ -201,7 +201,8 @@ export class PostgresClaimStore implements ClaimStore {
         "delete from pending_claim" +
         " where token_hash = $1 and used_at is null and expires_at > $2" +
         " returning token_hash)" +
-        " insert into used_claim (token_hash) select token_hash from spent",
+        " insert into used_claim (token_hash, used_at)" +
+        " select token_hash, $2 from spent",
       [tokenHash, usedAt],
     );
     return rowCount === 1;
@@ -214,6 +215,24 @@ export class PostgresClaimStore implements ClaimStore {
       "delete from pending_claim where token_hash = $1 and used_at is null",
       [tokenHash],
     );
+  }
+
+  async purgeExpired(now: Date, usedBefore: Date): Promise<void> {
+    await inTransaction(this.#pool, async (client) => {
+      await client.query("delete from pending_claim where expires_at <= $1", [
+        now,
+      ]);
+      // Migration 012 cannot know when pre-existing hash-only rows were used.
+      // Date them from this application clock before deleting old markers, so
+      // an upgrade retains every one for a complete safe window.
+      await client.query(
+        "update used_claim set used_at = $1 where used_at is null",
+        [now],
+      );
+      await client.query("delete from used_claim where used_at <= $1", [
+        usedBefore,
+      ]);
+    });
   }
 
   async liveFor(
