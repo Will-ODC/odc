@@ -244,6 +244,8 @@ describe("showing where a question stands", () => {
     const { onClose } = show();
     const close = screen.getByRole("button", { name: "Close" });
     expect(close.textContent).toBe("×");
+    // The shared secondary Button, kept small by its modifier (#534).
+    expect(close.className).toBe("btn btn--secondary results__close");
     fireEvent.click(close);
     expect(onClose).toHaveBeenCalledTimes(1);
   });
@@ -473,5 +475,12 @@ describe("compact question-page results (#453)", () => {
     expect(screen.getByText("Nobody answered this one.")).toBeTruthy();
     expect(screen.queryByRole("figure")).toBeNull();
     expect(screen.queryByText("Loading chart…")).toBeNull();
+  });
+
+  it("draws Hide results with the shared quiet Button (#534)", () => {
+    show({ compact: true, ended: true, results: results({ voters: 0 }) });
+    const toggle = screen.getByRole("button", { name: "Hide results" });
+    expect(toggle.className).toBe("btn btn--quiet results__toggle");
+    expect(toggle.getAttribute("aria-expanded")).toBe("true");
   });
 });

@@ -4,6 +4,7 @@ import { pathOf } from "../flow/route.js";
 import { SiteBanner } from "../components/SiteBanner.js";
 import { AnsweredRail } from "../components/AnsweredRail.js";
 import { ViewState } from "../components/ViewState.js";
+import { Button } from "../components/Button.js";
 import { usePollList } from "../hooks/use-poll-list.js";
 import { useMyVotes } from "../hooks/use-my-votes.js";
 import { useSession } from "../hooks/use-session.js";
@@ -92,14 +93,20 @@ export function Browse({
             )}
           </ViewState>
           {data.status === "error" ? (
-            <button className="button" type="button" onClick={retry}>
+            <Button
+              variant="secondary"
+              className="browse__action"
+              type="button"
+              onClick={retry}
+            >
               Try again
-            </button>
+            </Button>
           ) : null}
           {more.status === "error" ? <p role="alert">{more.message}</p> : null}
           {data.status === "ready" && data.value.nextCursor ? (
-            <button
-              className="button"
+            <Button
+              variant="secondary"
+              className="browse__action"
               type="button"
               disabled={more.status === "loading"}
               onClick={() => {
@@ -112,7 +119,7 @@ export function Browse({
                 : more.status === "error"
                   ? "Try loading more again"
                   : "Load more"}
-            </button>
+            </Button>
           ) : null}
         </main>
       </div>

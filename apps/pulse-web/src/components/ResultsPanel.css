@@ -149,11 +149,6 @@
   color: var(--green-hover);
 }
 
-.results__link:focus-visible {
-  outline: calc(var(--hairline) * 2) solid var(--focus);
-  outline-offset: calc(var(--hairline) * 2);
-}
-
 .results__fine {
   margin: var(--step) 0 0;
   font-size: var(--t-small);
@@ -186,12 +181,13 @@
   background: var(--hover);
 }
 
-.results__close:focus-visible {
-  outline: 2px solid var(--focus);
-  outline-offset: 2px;
-}
-
-.results__close {
+/*
+ * The panel's own Close is the shared secondary Button (#534); the doubled
+ * class outranks `.btn--secondary`'s padding whatever the import order.
+ * ClosedResults' loading and error states still draw a plain button here.
+ */
+.results__close,
+.btn.results__close {
   position: absolute;
   inset-block-start: 0;
   inset-inline-end: 0;
@@ -203,10 +199,6 @@
 }
 .results:has(> .results__close) > :not(.results__close) {
   margin-inline-end: calc(var(--step) * 6.5);
-}
-.results__retry:focus-visible {
-  outline: calc(var(--hairline) * 2) solid var(--focus);
-  outline-offset: calc(var(--hairline) * 2);
 }
 
 /* Holds the chart's place while its code loads, so the page does not jump. */
@@ -250,6 +242,8 @@
   font-weight: 500;
   color: var(--ink-soft);
 }
+/* The shared quiet Button (#534) as a small borderless control; two classes
+   outrank `.btn--quiet`, and the ring is the shared one. */
 .results .results__toggle {
   display: inline-flex;
   align-items: center;
@@ -263,15 +257,12 @@
   font: inherit;
   font-size: var(--t-small);
   font-weight: 600;
+  text-decoration: none;
   cursor: pointer;
 }
 .results .results__toggle:hover {
   background: var(--hover);
   color: var(--ink);
-}
-.results__toggle:focus-visible {
-  outline: calc(var(--hairline) * 2) solid var(--focus);
-  outline-offset: 0;
 }
 .results__chevron {
   inline-size: calc(var(--step) * 1.75);
