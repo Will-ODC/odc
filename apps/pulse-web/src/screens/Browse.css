@@ -92,10 +92,14 @@
     align-items: stretch;
     flex: 1;
   }
+  /* Keep the Explore column at the design's centred stage beside the rail,
+     rather than stretching to fill wide screens. */
   .browse .browse__main {
     box-sizing: border-box;
     width: 100%;
+    max-width: calc(var(--rail) * 3);
     min-width: 0;
+    margin: 0 auto;
   }
 }
 

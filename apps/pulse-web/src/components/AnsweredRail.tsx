@@ -47,7 +47,7 @@ export function AnsweredRail({
           ? { status: "empty", message: data.message }
           : { status: "ready", value: null };
   return (
-    <aside className={`answered-rail ${className}`}>
+    <aside className={["answered-rail", className].filter(Boolean).join(" ")}>
       <nav aria-label="My votes">
         <h2>
           <a ref={railHeading} href={pathOf({ kind: "myVotes" })}>
