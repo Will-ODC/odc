@@ -16,6 +16,14 @@ import type {
 } from "./types.js";
 
 /**
+ * The one sentence for a request that got no complete answer: the connection
+ * failed before a reply, or the reply was cut off part way. Shared so the
+ * same failure reads the same wherever it is caught.
+ */
+export const UNREACHABLE =
+  "Couldn't reach pulse. Check your connection and try again.";
+
+/**
  * Talks to the pulse API over the same origin, so the session cookie travels
  * without CORS or SameSite special-casing. In dev, vite proxies /api to the
  * server (see vite.config.ts).
@@ -205,13 +213,17 @@ export class HttpPulseApi implements PulseApi {
       // A dropped connection would otherwise reach callers as a bare TypeError,
       // forcing every one of them to handle two error shapes. Status 0 means
       // "the request never got an answer".
-      throw new ApiError(
-        0,
-        "Couldn't reach pulse. Check your connection and try again.",
-      );
+      throw new ApiError(0, UNREACHABLE);
     }
 
-    const text = await response.text();
+    let text: string;
+    try {
+      text = await response.text();
+    } catch {
+      // The reply started but was cut off: no complete answer either, so it
+      // is the same failure, with the same status and sentence.
+      throw new ApiError(0, UNREACHABLE);
+    }
     const parsed: unknown = text === "" ? null : safeJson(text);
 
     if (!response.ok) {

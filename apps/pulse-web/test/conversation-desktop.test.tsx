@@ -9,6 +9,7 @@ import {
 } from "@testing-library/react";
 import userEvent from "@testing-library/user-event";
 import { afterAll, afterEach, beforeAll, expect, it, vi } from "vitest";
+import { HttpPulseApi } from "../src/api/http.js";
 import type { Ballot, CastOutcome, Poll } from "../src/api/types.js";
 import { WIDE } from "../src/hooks/use-wide.js";
 import { Conversation } from "../src/screens/Conversation.js";
@@ -269,6 +270,80 @@ it("shows the earlier answer when Close follows a lost connection that stored no
   await main().findByText(said("You picked Yes."));
   expect(main().queryByRole("radio")).toBeNull();
 });
+
+/**
+ * A pulse server behind a fetch, for the real http client: the ballot it
+ * holds, and a lost connection on the send the test marks. Browsers reject a
+ * fetch that gets no reply with a TypeError, not an Error.
+ */
+function pulseServer(p: Poll) {
+  let held: Ballot | null = null;
+  let dropNext = false;
+  const asked: string[] = [];
+  const reply = (body: unknown, status = 200) =>
+    new Response(JSON.stringify(body), {
+      status,
+      headers: { "content-type": "application/json" },
+    });
+  const doFetch = vi.fn(
+    async (input: RequestInfo | URL, init?: RequestInit) => {
+      const url = String(input);
+      const method = init?.method ?? "GET";
+      asked.push(`${method} ${url}`);
+      const at = `/api/polls/${p.id}`;
+      if (method === "GET" && url === "/api/me")
+        return reply({ error: "signed_out", message: "Sign in." }, 401);
+      if (method === "GET" && url === "/api/my-votes")
+        return reply({ votes: [], nextCursor: null });
+      if (method === "GET" && url === at) return reply(p);
+      if (method === "GET" && url === `${at}/ballot`)
+        return reply({ ballot: held });
+      if (method === "GET" && url === `${at}/results`)
+        return reply(tally(p, held ?? []));
+      if (method === "POST" && url === `${at}/votes`) {
+        const { ballot } = JSON.parse(String(init?.body)) as {
+          ballot: Ballot;
+        };
+        const status = held ? "changed" : "counted";
+        held = ballot;
+        // Stored, but the reply never arrives.
+        if (dropNext) throw new TypeError("Failed to fetch");
+        return reply({ status, ballot, results: tally(p, ballot) });
+      }
+      throw new Error(`the server does not answer ${method} ${url}`);
+    },
+  );
+  return {
+    api: new HttpPulseApi("/api", doFetch as typeof fetch),
+    asked,
+    dropNextSend: () => (dropNext = true),
+  };
+}
+
+it("asks the server on Close after the real client loses the connection (#527)", async () => {
+  const p = poll();
+  const server = pulseServer(p);
+  const user = userEvent.setup();
+  render(<Conversation api={server.api} pollId={p.id} />);
+  await main().findByRole("heading", { name: p.question, level: 1 });
+  await user.click(main().getByRole("radio", { name: "Yes" }));
+  await user.click(main().getByRole("button", { name: "Submit" }));
+  await main().findByText(said("You picked Yes."));
+  await user.click(main().getByRole("button", { name: "Change my answer" }));
+  await user.click(main().getByRole("radio", { name: "No" }));
+  server.dropNextSend();
+  server.asked.length = 0;
+  await user.click(main().getByRole("button", { name: "Submit" }));
+  // One sentence for a lost connection, wherever it is caught.
+  await main().findByText(
+    "Couldn't reach pulse. Check your connection and try again.",
+  );
+  await user.click(await main().findByRole("button", { name: "Close" }));
+  // The send was stored: Close asks, and shows No rather than the old Yes.
+  await main().findByText(said("You picked No."));
+  expect(server.asked).toContain(`GET /api/polls/${p.id}/ballot`);
+  expect(main().queryByRole("radio")).toBeNull();
+}, 15_000);
 
 it("shows a question whose send is still out after 5 s in the page, without Submit", async () => {
   const first = poll();

@@ -1,5 +1,6 @@
 import { useCallback, useState } from "react";
 import type { Ballot, PulseApi, Results } from "../api/types.js";
+import { UNREACHABLE } from "../api/http.js";
 import { ApiError } from "../api/types.js";
 
 /** Keeps the whole ballot through sending, results and retries.
@@ -27,8 +28,9 @@ export type CastState =
   | { status: "closed" }
   /**
    * `refused` when the server answered and turned the vote down, so the
-   * earlier answer certainly still stands. A lost connection is not refused:
-   * the vote may have been stored before the reply went missing.
+   * earlier answer certainly still stands. Anything else is unknown - the
+   * vote may have been stored before the reply went missing - and the screen
+   * asks the server which answer it holds. See `refusal`.
    */
   | { status: "failed"; message: string; refused: boolean };
 
@@ -90,7 +92,7 @@ export function useCastVote(api: PulseApi, pollId: string): CastVote {
           const settled: CastState = {
             status: "failed",
             message: reason(err),
-            refused: err instanceof ApiError,
+            refused: refusal(err),
           };
           setState(settled);
           return settled;
@@ -106,10 +108,31 @@ export function useCastVote(api: PulseApi, pollId: string): CastVote {
 }
 
 /**
- * The sentence to show for a refusal. The server's own sentence where it sent
- * one - every refusal from this API is already written to be shown as-is.
+ * Whether a failed send certainly stored nothing (#527).
+ *
+ * Only a 4xx is. Every 4xx this route can answer - a bad ballot (400), the
+ * origin check (403), no such poll (404), a body too large (413), too many
+ * tries (429) - is decided before anything is written, whether pulse or nginx
+ * in front of it sent it, so the earlier answer still stands.
+ *
+ * Everything else is unknown, and the screen asks the server:
+ * - status 0: the connection failed or the reply was cut off (`http.ts`);
+ *   the vote may have been stored before it went missing.
+ * - 5xx: the server, or nginx in front of it (502, 504), failed - possibly
+ *   after the vote was written, or while the upstream was still writing it.
+ * - a 2xx the app could not read: the server said yes.
+ * - anything that is not an ApiError: nothing answered at all.
+ */
+function refusal(err: unknown): boolean {
+  return err instanceof ApiError && err.status >= 400 && err.status < 500;
+}
+
+/**
+ * The sentence to show for a failure. The server's own sentence where it sent
+ * one - every refusal from this API is already written to be shown as-is -
+ * and otherwise the app-wide one for a lost connection.
  */
 function reason(err: unknown): string {
   if (err instanceof ApiError) return err.message;
-  return "We could not reach the ballot. Check your connection and try again.";
+  return UNREACHABLE;
 }

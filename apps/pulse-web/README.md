@@ -62,8 +62,9 @@ handle opens the choices again without casting. Closing the drawer during a
 change keeps the saved answer and its results. Closing an unsent ballot keeps
 its selection and leaves the Vote handle available; on a closed question the
 handle reads Show question. The drawer uses a downward chevron to close, with
-the accessible button name Close. The page and popout scroll independently, with space to scroll the last page
-content above the floating button. Closed-question results also open in the main content. The small
+the accessible button name Close. The page and popout scroll independently. Closed to its
+one button, the drawer takes its own row under the page instead of floating over it, so it
+never covers Next or the page's last content. Closed-question results also open in the main content. The small
 circular info link beside Change my answer opens How votes count in a new tab.
 Results omit the repeated answer summary, extra privacy reminder and nested
 card framing. The live page has no tutorial button.
@@ -122,7 +123,10 @@ a counted answer moves to the top; after a lost connection the page reads the
 saved answer from the server again. Coming back before the send settles shows
 Loading… for up to 5 seconds, then the question with "Your answer is still
 being sent." and no way to answer it again, until the send settles and the
-question is drawn with its outcome.
+question is drawn with its outcome. Only a 4xx refusal counts as storing
+nothing; a lost connection, a reply cut off part way or a 5xx may have stored
+the answer, so on desktop Close after one asks the server which answer it
+holds (#527).
 The rail keeps one status line for screen readers, which reads out Loading…,
 an error, or "Your votes are loaded." after Try again. Signing out or
 forgetting votes here clears the browser's saved-answer list.
