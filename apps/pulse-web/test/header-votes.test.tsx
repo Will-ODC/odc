@@ -70,6 +70,11 @@ describe.each(pages)("$name header (#487)", ({ route }) => {
       await act(async () => {});
       expect(header.queryByRole("button", { name: "Account" })).toBeNull();
       expect(header.queryByRole("link", { name: "Sign in" })).toBeNull();
+      const reserved = header
+        .getByRole("link", { name: "Post a question" })
+        .parentElement?.querySelector(".banner__account-space");
+      expect(reserved).not.toBeNull();
+      expect(reserved?.getAttribute("aria-hidden")).toBe("true");
       await act(async () =>
         finish({ votes: hasVotes ? [saved] : [], nextCursor: null }),
       );
@@ -106,6 +111,11 @@ describe.each(pages)("$name header (#487)", ({ route }) => {
     expect(await header.findByRole("link", { name: "Sign in" })).toBeTruthy();
     expect(header.queryByRole("button", { name: "Account" })).toBeNull();
     expect(signOut).toHaveBeenCalledTimes(1);
+    await waitFor(() =>
+      expect(document.activeElement).toBe(
+        header.getByRole("link", { name: "Sign in" }),
+      ),
+    );
   });
   it("still offers Account when an empty page has more saved votes", async () => {
     const { header } = show(route, { votes: [], nextCursor: "next" });
@@ -347,3 +357,40 @@ it("does not steal focus when someone moves away during a header retry", async (
   await act(async () => finish({ votes: [], nextCursor: null }));
   expect(document.activeElement).toBe(home);
 });
+
+it.each([false, true])(
+  "finishes Forget with focus on Sign in unless focus moved away (%s)",
+  async (moveAway) => {
+    let finish!: () => void;
+    render(
+      <App
+        route={{ kind: "about" }}
+        api={stubApi({
+          myVotes: async () => ({ votes: [saved], nextCursor: null }),
+          signOut: () =>
+            new Promise<void>((resolve) => {
+              finish = resolve;
+            }),
+        })}
+      />,
+    );
+    const user = userEvent.setup();
+    const header = within(screen.getByRole("banner"));
+    await user.click(await header.findByRole("button", { name: "Account" }));
+    await user.tab();
+    await user.tab();
+    expect(document.activeElement).toBe(
+      header.getByRole("button", { name: "Forget my votes here" }),
+    );
+    await user.keyboard("{Enter}");
+    await user.keyboard("{Enter}");
+    expect(document.activeElement).toBe(
+      header.getByRole("button", { name: "Forgetting…" }),
+    );
+    const home = header.getByRole("link", { name: "Home" });
+    if (moveAway) act(() => home.focus());
+    await act(async () => finish());
+    const signIn = await header.findByRole("link", { name: "Sign in" });
+    expect(document.activeElement).toBe(moveAway ? home : signIn);
+  },
+);

@@ -102,8 +102,8 @@ const RESTORE_WAIT_MS = 5000;
 /**
  * A whole run stays in one conversation; only its active card changes.
  *
- * Opening another question from the rail, or going Back to one, keeps this
- * conversation on screen: App does not remount it per question, and the
+ * Opening another question with Next, from the rail, or by going Back keeps
+ * this conversation on screen: App does not remount it per question, and the
  * question shown follows `pollId` when the address changes (#488).
  */
 export function Conversation({

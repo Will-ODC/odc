@@ -46,3 +46,17 @@
 .account-menu__panel[hidden] {
   display: none;
 }
+
+/* Keep Post in place while the account read resolves, at every viewport.
+   The slot fits the padded Sign in link as well as the Account trigger. */
+.banner__actions > .account-menu,
+.banner__actions > .banner__sign-in,
+.banner__actions > .banner__account-space {
+  box-sizing: border-box;
+  inline-size: calc(var(--step) * 10);
+  flex: none;
+}
+.banner__actions > .account-menu {
+  display: flex;
+  justify-content: flex-end;
+}
