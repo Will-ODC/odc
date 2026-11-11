@@ -152,6 +152,11 @@ export class PostgresClaimStore implements ClaimStore {
 
   async put(claim: PendingClaim): Promise<void> {
     await inTransaction(this.#pool, async (client) => {
+      // No server-clock dependency: this write supplies the same clock used
+      // to decide whether a sign-in link is live.
+      await client.query("delete from pending_claim where expires_at <= $1", [
+        claim.createdAt,
+      ]);
       await registerCommunity(client, claim.community);
       await client.query(
         `insert into pending_claim (${CLAIM_COLUMNS})` +
@@ -179,12 +184,24 @@ export class PostgresClaimStore implements ClaimStore {
     return row ? toClaim(row) : undefined;
   }
 
-  async markUsed(tokenHash: string, usedAt: Date): Promise<boolean> {
-    // Check and spend in one statement: of two clicks at once, the row lock
-    // lets exactly one see `used_at is null`.
+  async wasUsed(tokenHash: string): Promise<boolean> {
     const { rowCount } = await this.#pool.query(
-      "update pending_claim set used_at = $2" +
-        " where token_hash = $1 and used_at is null",
+      "select 1 from used_claim where token_hash = $1",
+      [tokenHash],
+    );
+    return rowCount === 1;
+  }
+
+  async markUsed(tokenHash: string, usedAt: Date): Promise<boolean> {
+    // Delete and leave a hash-only replay marker in one statement. Row locks
+    // serialize competing redeems and the expiry sweep; a deleted link cannot
+    // be spent from a snapshot the service read before the sweep.
+    const { rowCount } = await this.#pool.query(
+      "with spent as (" +
+        "delete from pending_claim" +
+        " where token_hash = $1 and used_at is null and expires_at > $2" +
+        " returning token_hash)" +
+        " insert into used_claim (token_hash) select token_hash from spent",
       [tokenHash, usedAt],
     );
     return rowCount === 1;

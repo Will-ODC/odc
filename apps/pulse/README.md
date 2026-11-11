@@ -31,6 +31,18 @@ without signing in. It returns open and closed question summaries, newest first,
 with cursor pagination. Hidden polls are excluded. The browser list and MCP
 discovery remain separate work; see [API.md](./API.md) for the query contract.
 
+## Sign-in link retention
+
+A redeemed link's `pending_claim` row is deleted as it is spent. Expired,
+unused rows are deleted on the next sign-in-link write, across all addresses;
+there is no periodic sweep while sign-in traffic is idle. Links still last
+15 minutes and work once. Only the spent token's SHA-256 digest is kept in
+`used_claim`, without an address or other claim data, so a repeat click can
+still be answered "already used". These hash-only replay markers have no
+expiry, as before; they cannot be used to sign in. Upgrading also removes
+personal data from previously used links. This does not delete the email
+credential belonging to an account that signed in.
+
 ## Run it on your computer
 
 ```bash

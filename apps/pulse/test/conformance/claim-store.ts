@@ -69,16 +69,13 @@ export function claimStoreConformance(
         assert.deepEqual(await store.byTokenHash("hash-1"), claim());
       });
 
-      test("discard_never_removes_a_link_that_was_already_used", async (t) => {
-        // A spent link is the record that it was spent: "already used" is
-        // what a second click must hear, not "not one of ours".
+      test("discard_keeps_the_hash_only_record_that_a_link_was_used", async (t) => {
         const store = await fresh(t);
         await store.put(claim());
         assert.equal(await store.markUsed("hash-1", AT), true);
         await store.discard("hash-1");
-        const kept = await store.byTokenHash("hash-1");
-        assert.ok(kept);
-        assert.deepEqual(kept.usedAt, AT);
+        assert.equal(await store.byTokenHash("hash-1"), undefined);
+        assert.equal(await store.wasUsed("hash-1"), true);
       });
 
       test("a_claim_with_no_community_reads_back_as_null_everywhere", async (t) => {
@@ -94,20 +91,48 @@ export function claimStoreConformance(
         assert.deepEqual(live, [stored]);
 
         await store.markUsed("hash-1", AT);
-        const spent = await store.byTokenHash("hash-1");
-        assert.ok(spent && "community" in spent);
-        assert.equal(spent.community, null);
+        assert.equal(await store.byTokenHash("hash-1"), undefined);
+        assert.equal(await store.wasUsed("hash-1"), true);
       });
 
-      test("marking_a_claim_used_records_when", async (t) => {
+      test("spending_a_link_deletes_its_pending_data_and_keeps_only_its_hash", async (t) => {
         const store = await fresh(t);
         await store.put(claim());
-        const usedAt = new Date(AT.getTime() + 60_000);
-        assert.equal(await store.markUsed("hash-1", usedAt), true);
-        assert.equal(
-          (await store.byTokenHash("hash-1"))?.usedAt?.getTime(),
-          usedAt.getTime(),
+        assert.equal(await store.wasUsed("hash-1"), false);
+        assert.equal(await store.markUsed("hash-1", AT), true);
+        assert.equal(await store.byTokenHash("hash-1"), undefined);
+        assert.equal(await store.wasUsed("hash-1"), true);
+        assert.equal(await store.wasUsed("unknown"), false);
+      });
+
+      test("the_next_write_sweeps_expired_claims_for_all_subjects_at_the_boundary", async (t) => {
+        const store = await fresh(t);
+        await store.put(claim({ tokenHash: "expired" }));
+        await store.put(
+          claim({
+            tokenHash: "still-live",
+            expiresAt: new Date(LATER.getTime() + 1),
+          }),
         );
+        await store.put(
+          claim({
+            tokenHash: "new",
+            subject: "other@example.test",
+            createdAt: LATER,
+            expiresAt: new Date(LATER.getTime() + 15 * 60_000),
+          }),
+        );
+        assert.equal(await store.byTokenHash("expired"), undefined);
+        assert.equal(await store.wasUsed("expired"), false);
+        assert.ok(await store.byTokenHash("still-live"));
+        assert.ok(await store.byTokenHash("new"));
+      });
+
+      test("an_expired_claim_cannot_be_spent_even_before_the_next_sweep", async (t) => {
+        const store = await fresh(t);
+        await store.put(claim());
+        assert.equal(await store.markUsed("hash-1", LATER), false);
+        assert.equal(await store.wasUsed("hash-1"), false);
       });
 
       test("marking_an_unknown_claim_used_changes_nothing", async (t) => {
@@ -117,7 +142,7 @@ export function claimStoreConformance(
       });
 
       test("a_link_can_be_spent_only_once", async (t) => {
-        // The second spend answers false and leaves the first moment standing.
+        // The second spend answers false; no pending personal data remains.
         // ClaimService relies on this answer, not on a read taken before it —
         // that read is what two simultaneous clicks both get wrong.
         const store = await fresh(t);
@@ -128,10 +153,8 @@ export function claimStoreConformance(
           await store.markUsed("hash-1", new Date(first.getTime() + 60_000)),
           false,
         );
-        assert.equal(
-          (await store.byTokenHash("hash-1"))?.usedAt?.getTime(),
-          first.getTime(),
-        );
+        assert.equal(await store.byTokenHash("hash-1"), undefined);
+        assert.equal(await store.wasUsed("hash-1"), true);
       });
 
       test("live_links_are_the_unused_unexpired_ones_for_that_address", async (t) => {
