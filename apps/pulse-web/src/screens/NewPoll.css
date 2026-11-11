@@ -72,7 +72,7 @@
   border: none;
 }
 
-.post__lock > .field {
+.post__lock .field {
   gap: var(--step);
 }
 
