@@ -36,8 +36,8 @@
 }
 
 .two-press__action:focus-visible {
-  outline: 2px solid var(--focus);
-  outline-offset: 2px;
+  outline: var(--focus-ring-width) solid var(--focus);
+  outline-offset: var(--focus-ring-offset);
 }
 
 .two-press__action:disabled,
@@ -96,8 +96,8 @@
 
 .two-press__action--primary:focus-visible,
 .two-press__action--secondary:focus-visible {
-  outline: 2px solid var(--focus);
-  outline-offset: 2px;
+  outline: var(--focus-ring-width) solid var(--focus);
+  outline-offset: var(--focus-ring-offset);
 }
 
 .two-press__action--primary[aria-disabled="true"],

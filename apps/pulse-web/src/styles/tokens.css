@@ -36,6 +36,8 @@
 
   /* Keyboard focus uses the accent at 5:1 on white, without a black frame. */
   --focus: var(--green);
+  --focus-ring-width: calc(var(--hairline) * 2);
+  --focus-ring-offset: calc(var(--hairline) * 2);
 
   /* Bars in results: the other answers gray (3.4:1), yours green. */
   --track: #858d89;
