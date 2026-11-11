@@ -762,6 +762,50 @@ const ORIGIN_REFUSED = {
   message: "That request did not come from Pulse.",
 };
 
+// These routes use Fastify's default 1 MiB body limit. Valid oversized JSON
+// distinguishes the size check from the malformed-JSON check.
+for (const [bodyName, payload, bodyStatus] of [
+  ["malformed_json", "{", 400],
+  [
+    "an_oversized_body",
+    JSON.stringify({ padding: "x".repeat(1024 * 1024) }),
+    413,
+  ],
+] as const) {
+  for (const [routeName, url] of [
+    ["sign_in", "/api/sign-in"],
+    ["redeem", "/api/sign-in/redeem"],
+  ] as const) {
+    test(`${routeName}_refuses_a_foreign_origin_before_reading_${bodyName}`, async (t) => {
+      const h = await setup();
+      t.after(() => h.app.close());
+      const refused = await h.app.inject({
+        method: "POST",
+        url,
+        headers: {
+          origin: "https://elsewhere.example",
+          "content-type": "application/json",
+        },
+        payload,
+      });
+      assert.equal(refused.statusCode, 403);
+      assert.deepEqual(refused.json(), ORIGIN_REFUSED);
+      if (routeName === "redeem") {
+        assert.equal(refused.headers["cache-control"], "no-store");
+      }
+
+      // The identical body reaches the parser only with a trusted Origin.
+      const parsed = await h.app.inject({
+        method: "POST",
+        url,
+        headers: { origin: WEB_ORIGIN, "content-type": "application/json" },
+        payload,
+      });
+      assert.equal(parsed.statusCode, bodyStatus);
+    });
+  }
+}
+
 const NOT_THE_WEB_ORIGIN = [
   ["a_foreign_origin", "https://elsewhere.example"],
   ["no_origin_at_all", undefined],

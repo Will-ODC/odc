@@ -424,6 +424,42 @@ const ORIGIN_REFUSED = {
   message: "That request did not come from Pulse.",
 };
 
+// Sign-out also uses Fastify's default 1 MiB body limit, even though its
+// handler needs no body.
+for (const [bodyName, payload, bodyStatus] of [
+  ["malformed_json", "{", 400],
+  [
+    "an_oversized_body",
+    JSON.stringify({ padding: "x".repeat(1024 * 1024) }),
+    413,
+  ],
+] as const) {
+  test(`sign_out_refuses_a_foreign_origin_before_reading_${bodyName}`, async (t) => {
+    const h = await setup();
+    t.after(() => h.app.close());
+    const refused = await h.app.inject({
+      method: "POST",
+      url: "/api/sign-out",
+      headers: {
+        origin: "https://elsewhere.example",
+        "content-type": "application/json",
+      },
+      payload,
+    });
+    assert.equal(refused.statusCode, 403);
+    assert.deepEqual(refused.json(), ORIGIN_REFUSED);
+
+    // Confirm this body would otherwise fail parsing or the size limit.
+    const parsed = await h.app.inject({
+      method: "POST",
+      url: "/api/sign-out",
+      headers: { origin: WEB_ORIGIN, "content-type": "application/json" },
+      payload,
+    });
+    assert.equal(parsed.statusCode, bodyStatus);
+  });
+}
+
 for (const [name, origin] of [
   ["a_foreign_origin", "https://elsewhere.example"],
   ["no_origin_at_all", undefined],

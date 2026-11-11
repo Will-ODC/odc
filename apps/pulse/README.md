@@ -154,7 +154,8 @@ Optional: `PULSE_MAIL_REPLY_TO`, `PULSE_PORT` (8080), `PULSE_HOST` (`0.0.0.0`),
 `PULSE_DATABASE_SCHEMA`, `PULSE_OWNER_EMAIL` (the owner, who may grant
 unlimited posting; unset means nobody, and a value that is not an address
 stops the start). `PULSE_WEB_ORIGIN` is also the only `Origin` that sign-in,
-link redemption, sign-out and poll creation accept. Plain `RESEND_API_KEY` and `DATABASE_URL` are ignored.
+link redemption, sign-out and poll creation accept. Plain `RESEND_API_KEY` and
+`DATABASE_URL` are ignored.
 
 **`PULSE_SESSION_SECRET` must be at least 32 characters**
 (`openssl rand -base64 48`); the server refuses to start with a shorter one.
