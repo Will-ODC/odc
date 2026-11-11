@@ -15,6 +15,12 @@ is the default Home/browser listing.
 They retain no author attribution. Community listing otherwise follows the same
 rules as created questions; legacy polls without a community remain excluded.
 
+Unexpected API faults use generic response messages and are logged by error
+class and valid SQLSTATE only. Mail-provider failures may additionally log the
+HTTP status; provider response text, error messages, stacks, causes, row details
+and request bodies are never part of fault diagnostics (#503). Planned 4xx
+responses and request-log formatting are unchanged.
+
 ## Signing in
 
 ### Local development mailbox
@@ -223,6 +229,13 @@ the community of someone who already signed in.
 Two clicks on one link at once — a double click — sign in once: the first sets the
 cookie and the second is answered 410 `already_used`. A client should not show that
 second answer as a failure to someone who is, in fact, signed in.
+
+The pending row containing the address is deleted atomically when the link is
+spent; only a token-hash replay marker remains, preserving `already_used` for
+repeat clicks without retaining the pending address. Expired, unused rows are
+removed on the next sign-in-link write, so an expired link whose row has been
+swept answers `unknown_link`. Both remain 410 and cannot sign anyone in. Link
+lifetime and the success response are unchanged.
 
 ### `POST /api/sign-out`
 

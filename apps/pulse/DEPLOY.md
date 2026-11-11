@@ -67,6 +67,20 @@ out-of-order migrations. For an upgrade, stop all old API instances before
 starting the new version; do not use a rolling API deployment that overlaps old
 and new code.
 
+### Sign-in link retention
+
+`pending_claim` rows are deleted when redeemed. Expired, unused rows are
+swept on the next sign-in-link write; with no new sign-in links, expired rows
+remain until that next write. No scheduler or extra environment variable is
+required. The sweep uses the same application clock as link expiry, and does
+not change the 15-minute link lifetime.
+
+Migration 010 removes previously used pending rows. A separate `used_claim`
+table retains only spent token digests, with no address, community, opt-in or
+timestamp, to preserve the "already used" response. Those hash-only markers
+have no expiry. Account email credentials and database backups have separate
+retention; this cleanup does not erase them from backups.
+
 ## API environment
 
 Blank values count as unset. The production server reads only the variables

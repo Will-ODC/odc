@@ -1,4 +1,7 @@
 import assert from "node:assert/strict";
+import { spawnSync } from "node:child_process";
+import { createRequire } from "node:module";
+import { fileURLToPath, pathToFileURL } from "node:url";
 import { randomUUID } from "node:crypto";
 import { readFileSync } from "node:fs";
 import { test, type TestContext } from "node:test";
@@ -504,8 +507,15 @@ test(
       {},
       { log: (message) => messages.push(message) },
     );
-    pool?.emit("error", new Error("the database went away"));
-    assert.match(messages.join("\n"), /the database went away/);
+    pool?.emit(
+      "error",
+      new Error("database error for private-person@example.test"),
+    );
+    assert.match(messages.join("\n"), /"type":"Error"/);
+    assert.doesNotMatch(
+      messages.join("\n"),
+      /private-person@example.test|database error for/,
+    );
     await app.close();
   },
 );
@@ -680,5 +690,46 @@ test("dev_config_refuses_a_web_origin_that_is_not_a_bare_origin", () => {
   assert.equal(
     devConfig({ PULSE_WEB_ORIGIN: "http://localhost:4000" }).webOrigin,
     "http://localhost:4000",
+  );
+});
+
+test("unexpected_dev_startup_fault_is_logged_without_personal_message_detail_or_cause", () => {
+  // Drive the actual entry point without needing a database or opening a port.
+  // A preload replaces only the pool connection and throws the fault it would
+  // normally receive from Postgres, before any migration or seed can run.
+  const pg = pathToFileURL(createRequire(import.meta.url).resolve("pg")).href;
+  const preload = `import pg from ${JSON.stringify(pg)};
+    pg.Pool.prototype.connect = async () => {
+      throw Object.assign(new Error("startup-fault-message private-person@example.test"), {
+        code: "XX000", detail: "private-detail private-person@example.test",
+        cause: new Error("private-cause private-person@example.test")
+      });
+    };`;
+  const child = spawnSync(
+    process.execPath,
+    [
+      "--import",
+      `data:text/javascript,${encodeURIComponent(preload)}`,
+      fileURLToPath(new URL("../src/dev-server.js", import.meta.url)),
+    ],
+    {
+      encoding: "utf8",
+      timeout: 10_000,
+      env: {
+        ...process.env,
+        NODE_ENV: "test",
+        PULSE_DATABASE_URL: "postgres://test@127.0.0.1:1/test",
+        PULSE_SESSION_SECRET: "a-dev-session-secret-long-enough",
+        PULSE_CONFIRMATION_KEY: "a-separate-dev-confirmation-key-long-enough",
+        PULSE_WEB_ORIGIN: "http://localhost:5173",
+      },
+    },
+  );
+  assert.equal(child.status, 1, child.stderr);
+  assert.match(child.stderr, /pulse dev could not start/);
+  assert.match(child.stderr, /XX000/);
+  assert.doesNotMatch(
+    child.stdout + child.stderr,
+    /private-person@example.test|startup-fault-message|private-detail|private-cause/,
   );
 });

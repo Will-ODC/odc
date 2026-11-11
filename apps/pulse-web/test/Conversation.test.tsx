@@ -1193,7 +1193,7 @@ describe("the Answered list (#484)", () => {
     expect(onNavigate).not.toHaveBeenCalled();
   });
 
-  it("reopens the address-named question after Next without pushing it again", async () => {
+  it("pushes Next and reopens an address-named rail question without pushing it again", async () => {
     const first = poll({ next: [null, "parks"] });
     const parks = poll({ id: "parks", question: "More parks?" });
     const onNavigate = vi.fn();
@@ -1208,9 +1208,13 @@ describe("the Answered list (#484)", () => {
     const user = await answer("Yes");
     await user.click(within(card()).getByRole("button", { name: "Next" }));
     await main().findByRole("heading", { name: parks.question, level: 1 });
+    expect(onNavigate).toHaveBeenCalledExactlyOnceWith({
+      kind: "conversation",
+      pollId: parks.id,
+    });
     await user.click(rail().getByRole("link", { name: first.question }));
     await main().findByRole("heading", { name: first.question, level: 1 });
-    expect(onNavigate).not.toHaveBeenCalled();
+    expect(onNavigate).toHaveBeenCalledTimes(1);
   });
 
   it("says when the list could not be read, and tries again", async () => {

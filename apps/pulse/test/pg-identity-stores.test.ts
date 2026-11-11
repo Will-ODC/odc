@@ -491,3 +491,81 @@ test(
     );
   },
 );
+
+test(
+  "a_sweep_that_deletes_a_link_before_its_queued_redeem_prevents_the_spend",
+  { skip: databaseSkip },
+  async (t) => {
+    const pool = await migratedSchema(t);
+    const store = new PostgresClaimStore(pool);
+    const expiresAt = new Date(AT.getTime() + 15 * 60_000);
+    const claim = {
+      tokenHash: "expired-link",
+      kind: "email" as const,
+      subject: "ada@student.ubc.ca",
+      community: null,
+      proofEmailsOptIn: false,
+      createdAt: AT,
+      expiresAt,
+    };
+    await store.put(claim);
+    const hold = await pool.connect();
+    let sweep: Promise<void> | undefined;
+    let spend: Promise<boolean> | undefined;
+    try {
+      await hold.query("begin");
+      await hold.query(
+        "select 1 from pending_claim where token_hash = 'expired-link' for update",
+      );
+      const holdPid = await backendPid(hold);
+      // Queue the sweep first, then a redeem that read the link earlier. The
+      // lock waits prove the intended ordering instead of relying on sleeps.
+      sweep = store.put({
+        ...claim,
+        tokenHash: "new-link",
+        subject: "sam@student.ubc.ca",
+        createdAt: expiresAt,
+        expiresAt: new Date(expiresAt.getTime() + 15 * 60_000),
+      });
+      await until(async () => (await blockedBy(pool, holdPid)) >= 1);
+      spend = store.markUsed("expired-link", AT);
+      await until(async () => (await blockedBy(pool, holdPid)) >= 2);
+      await hold.query("commit");
+      await sweep;
+      assert.equal(await spend, false);
+      assert.equal(await store.byTokenHash("expired-link"), undefined);
+      assert.equal(await store.wasUsed("expired-link"), false);
+      assert.ok(await store.byTokenHash("new-link"));
+    } finally {
+      await hold.query("rollback").catch(() => null);
+      hold.release();
+      await Promise.allSettled([sweep, spend]);
+    }
+  },
+);
+
+test(
+  "spending_a_link_deletes_the_database_row_and_keeps_a_hash_only_marker",
+  { skip: databaseSkip },
+  async (t) => {
+    const pool = await migratedSchema(t);
+    const store = new PostgresClaimStore(pool);
+    await store.put({
+      tokenHash: "hash-private-address",
+      kind: "email",
+      subject: "private@example.test",
+      community: null,
+      proofEmailsOptIn: true,
+      createdAt: AT,
+      expiresAt: new Date(AT.getTime() + 15 * 60_000),
+    });
+    assert.equal(await store.markUsed("hash-private-address", AT), true);
+    assert.deepEqual(
+      (await pool.query("select * from pending_claim")).rows,
+      [],
+    );
+    assert.deepEqual((await pool.query("select * from used_claim")).rows, [
+      { token_hash: "hash-private-address" },
+    ]);
+  },
+);

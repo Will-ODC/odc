@@ -1,4 +1,5 @@
 import { createHash, randomBytes, randomUUID } from "node:crypto";
+import { logFault, type Fault } from "../logging.js";
 import type { VerificationMethod } from "./allowlist.js";
 import { assuranceOf } from "./assurance.js";
 import { InvalidEmailError, parseEmail } from "./email.js";
@@ -51,12 +52,10 @@ export interface ClaimOptions {
    * Where a mail provider's refusal goes.
    *
    * A failed send is answered to the person as a refusal they can retry
-   * (ADR-0027), which means the provider's explanation reaches nobody unless
-   * something writes it down here. Without it, a revoked key or an unverified
-   * sending domain refuses every sign-in forever and looks exactly like a
-   * passing outage — and the one person who could fix it is told to try again.
+   * (ADR-0027). Only its class and HTTP status may be logged (#503): a provider
+   * reply, error message or cause can quote a person's address or live link.
    */
-  log?: (message: string, error: unknown) => void;
+  log?: (message: string, fault: Fault) => void;
 }
 
 const FIFTEEN_MINUTES = 15 * 60 * 1000;
@@ -81,7 +80,7 @@ export class ClaimService {
   readonly #maxLive: number;
   readonly #clock: () => Date;
   readonly #newToken: () => string;
-  readonly #log: (message: string, error: unknown) => void;
+  readonly #log: (message: string, fault: Fault) => void;
 
   constructor(
     deps: {
@@ -178,10 +177,13 @@ export class ClaimService {
       // NOT this is a real fault and keeps its 500 — a rejected key or an
       // unverified sending domain among them.
       if (!(error instanceof MailSendError)) throw error;
-      // Not a fault does not mean not worth knowing. This is the only place the
-      // provider's own explanation exists, and the person who sees the 503
-      // cannot act on it.
-      this.#log("pulse: a sign-in link could not be sent", error);
+      // Record only safe diagnostics; the provider's reply can contain the
+      // person's address or sign-in link (#503).
+      logFault(
+        ({ fault }, message) => this.#log(message, fault),
+        error,
+        "pulse: a sign-in link could not be sent",
+      );
       // When the provider says it never took the message, no email exists and
       // nobody can hold this link: forget it, or it counts against
       // `maxLiveLinksPerEmail` and the next request after the outage is told
@@ -197,9 +199,10 @@ export class ClaimService {
         } catch (discardError) {
           // Freeing the cap is best-effort. The person still hears the 503
           // and its "try again"; the claim expires on its own.
-          this.#log(
-            "pulse: a refused sign-in link could not be discarded",
+          logFault(
+            ({ fault }, message) => this.#log(message, fault),
             discardError,
+            "pulse: a refused sign-in link could not be discarded",
           );
         }
       }
@@ -218,7 +221,12 @@ export class ClaimService {
    */
   async inspect(token: string): Promise<InspectResult> {
     const claim = await this.#claims.byTokenHash(hashToken(token));
-    if (!claim) return { status: "unknown_link" };
+    if (!claim)
+      return {
+        status: (await this.#claims.wasUsed(hashToken(token)))
+          ? "already_used"
+          : "unknown_link",
+      };
     if (claim.usedAt !== undefined) return { status: "already_used" };
     if (claim.expiresAt <= this.#clock()) return { status: "expired" };
     return { status: "live", email: claim.subject, expiresAt: claim.expiresAt };
@@ -231,7 +239,12 @@ export class ClaimService {
    */
   async redeem(token: string): Promise<RedeemResult> {
     const claim = await this.#claims.byTokenHash(hashToken(token));
-    if (!claim) return { status: "unknown_link" };
+    if (!claim)
+      return {
+        status: (await this.#claims.wasUsed(hashToken(token)))
+          ? "already_used"
+          : "unknown_link",
+      };
 
     const now = this.#clock();
     // Used before expired: a link someone already clicked should say so, even
@@ -239,9 +252,9 @@ export class ClaimService {
     if (claim.usedAt !== undefined) return { status: "already_used" };
     if (claim.expiresAt <= now) return { status: "expired" };
 
-    // The checks above read the link before any concurrent click could mark
-    // it. Spending is one step that says whether THIS request spent it, so a
-    // second click that got this far is told here instead of signed in twice.
+    // A successful spend deletes the pending address and leaves only a hash
+    // marker. This atomic check must still succeed after the read above: a
+    // competing click or expiry sweep may already have removed the row.
     if (!(await this.#claims.markUsed(claim.tokenHash, now))) {
       return { status: "already_used" };
     }

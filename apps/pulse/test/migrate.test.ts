@@ -55,6 +55,7 @@ const TABLES = [
   "publication_acknowledgement",
   "schema_migrations",
   "suggestion",
+  "used_claim",
   "vote",
   "vote_choice",
   "voter",
@@ -95,6 +96,7 @@ test("applies_a_fresh_schema", { skip }, async () => {
       "007",
       "008",
       "009",
+      "010",
     ]);
     assert.deepEqual(await tablesIn(pool, schema), TABLES);
   });
@@ -511,6 +513,7 @@ test(
       assert.deepEqual(await indexesIn(pool, schema), [
         "allowed_domain_pkey",
         "community_pkey",
+        "pending_claim_expiry_idx",
         "pending_claim_kind_subject_idx",
         "pending_claim_pkey",
         "poll_choice_pkey",
@@ -527,6 +530,7 @@ test(
         "schema_migrations_pkey",
         "suggestion_pkey",
         "suggestion_poll_id_idx",
+        "used_claim_pkey",
         "vote_choice_choice_id_idx",
         "vote_choice_pkey",
         "vote_history_idx",
@@ -591,3 +595,32 @@ async function tablesIn(pool: Pool, schema: string): Promise<string[]> {
   );
   return rows.map((row) => row.table_name);
 }
+
+test(
+  "upgrading_deletes_legacy_used_link_emails_and_preserves_their_replay_marker",
+  { skip },
+  async () => {
+    await inTempDir(async (dir) => {
+      await writeMigrations(dir, await loadMigrations(), (v) => v < "010");
+      await inThrowawaySchema(async (pool) => {
+        await migrate(pool, { dir, clock: () => AT });
+        await pool.query(
+          "insert into pending_claim (token_hash, kind, subject, community, proof_emails_opt_in, created_at, expires_at, used_at)" +
+            " values ('used', 'email', 'private@example.test', null, true, $1, $2, $1)," +
+            " ('live', 'email', 'live@example.test', null, false, $1, $2, null)",
+          [AT, new Date(AT.getTime() + 15 * 60_000)],
+        );
+        assert.deepEqual((await migrate(pool, { clock: () => AT })).applied, [
+          "010",
+        ]);
+        const store = new PostgresClaimStore(pool);
+        assert.equal(await store.byTokenHash("used"), undefined);
+        assert.equal(await store.wasUsed("used"), true);
+        assert.ok(await store.byTokenHash("live"));
+        assert.deepEqual((await pool.query("select * from used_claim")).rows, [
+          { token_hash: "used" },
+        ]);
+      });
+    });
+  },
+);

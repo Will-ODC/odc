@@ -482,11 +482,11 @@ test("a_mail_provider_that_is_down_is_an_answer_the_person_can_act_on", async ()
   const result = await h.service.requestLink("ada@student.ubc.ca");
   assert.equal(result.status, "send_failed");
 
-  // The person is told to try again and nothing else. This is the ONLY place
-  // the reason survives, and the one person who could act on it — whoever set
-  // the sending domain — is not the person looking at the screen.
+  // A provider's response can name the recipient; only safe diagnostics
+  // reach even an injected logger (#503).
   assert.equal(logged.length, 1);
-  assert.match(String(logged[0]), /domain is not verified/);
+  assert.doesNotMatch(JSON.stringify(logged[0]), /domain is not verified/);
+  assert.deepEqual(logged[0], { type: "MailSendError" });
 });
 
 /**
@@ -590,20 +590,44 @@ for (const status of [500, 502, 504]) {
   });
 }
 
-test("a_discard_that_fails_still_answers_send_failed_not_a_fault", async () => {
-  // Freeing the cap is best-effort; the person must still hear "try again".
+test("a_discard_that_fails_logs_only_safe_diagnostics_and_still_answers_send_failed", async () => {
   const logged: string[] = [];
   const mailer = flakyMailer(
     1,
     () => new MailSendError("provider unavailable", { status: 503 }),
   );
-  const h = setup({ log: (message) => logged.push(message) }, { mailer });
-  h.claims.discard = () => Promise.reject(new Error("database went away"));
+  const h = setup(
+    {
+      log: (message, fault) =>
+        logged.push(`${message}: ${JSON.stringify(fault)}`),
+    },
+    { mailer },
+  );
+  h.claims.discard = () =>
+    Promise.reject(
+      Object.assign(
+        new Error("discard-fault-message private-person@example.test"),
+        {
+          code: "23505",
+          detail: "private-detail private-person@example.test",
+          cause: new Error("private-cause private-person@example.test"),
+        },
+      ),
+    );
   assert.equal(
     (await h.service.requestLink("ada@student.ubc.ca")).status,
     "send_failed",
   );
-  assert.ok(logged.some((m) => /could not be discarded/.test(m)));
+  const discard = logged.find((message) =>
+    /could not be discarded/.test(message),
+  );
+  assert.ok(discard);
+  assert.match(discard, /"type":"Error"/);
+  assert.match(discard, /"code":"23505"/);
+  assert.doesNotMatch(
+    logged.join("\n"),
+    /private-person@example.test|discard-fault-message|private-detail|private-cause/,
+  );
 });
 
 test("a_send_that_got_no_answer_keeps_its_link_live", async () => {
@@ -810,4 +834,62 @@ test("a_returning_voter_keeps_their_first_community_whatever_they_pick_later", a
   if (again.status !== "signed_in") return;
   assert.equal(again.firstTime, false);
   assert.equal(again.voter.community, "ubc-staff");
+});
+
+test("redeeming_a_link_removes_the_pending_email_row", async () => {
+  const h = setup();
+  await h.service.requestLink("ada@student.ubc.ca");
+  const token = h.lastToken("ada@student.ubc.ca");
+  assert.equal((await h.service.redeem(token)).status, "signed_in");
+  assert.equal(await h.claims.byTokenHash(hashToken(token)), undefined);
+  assert.equal((await h.service.inspect(token)).status, "already_used");
+  assert.equal((await h.service.redeem(token)).status, "already_used");
+});
+
+test("the_next_link_write_removes_expired_rows_for_every_address", async () => {
+  const h = setup();
+  await h.service.requestLink("ada@student.ubc.ca");
+  const token = h.lastToken("ada@student.ubc.ca");
+  h.after(15 * 60_000);
+  await h.service.requestLink("sam@student.ubc.ca");
+  assert.equal(await h.claims.byTokenHash(hashToken(token)), undefined);
+  assert.equal((await h.service.redeem(token)).status, "unknown_link");
+  assert.equal(
+    (await h.service.redeem(h.lastToken("sam@student.ubc.ca"))).status,
+    "signed_in",
+  );
+});
+
+test("a_redeem_paused_after_read_cannot_use_a_link_deleted_by_the_expiry_sweep", async () => {
+  const h = setup();
+  await h.service.requestLink("ada@student.ubc.ca");
+  const token = h.lastToken("ada@student.ubc.ca");
+  const spend = h.claims.markUsed.bind(h.claims);
+  let release!: () => void;
+  let read!: () => void;
+  const reached = new Promise<void>((resolve) => {
+    read = resolve;
+  });
+  const resume = new Promise<void>((resolve) => {
+    release = resolve;
+  });
+  h.claims.markUsed = async (hash, at) => {
+    read();
+    await resume;
+    return spend(hash, at);
+  };
+  const redeeming = h.service.redeem(token);
+  await reached;
+  try {
+    h.after(15 * 60_000);
+    await h.service.requestLink("sam@student.ubc.ca");
+    assert.equal(await h.claims.byTokenHash(hashToken(token)), undefined);
+  } finally {
+    release();
+  }
+  assert.notEqual((await redeeming).status, "signed_in");
+  assert.equal(
+    await h.voters.byCredential("email", "ada@student.ubc.ca"),
+    undefined,
+  );
 });

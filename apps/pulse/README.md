@@ -31,6 +31,28 @@ without signing in. It returns open and closed question summaries, newest first,
 with cursor pagination. Hidden polls are excluded. The browser list and MCP
 discovery remain separate work; see [API.md](./API.md) for the query contract.
 
+## Sign-in link retention
+
+A redeemed link's `pending_claim` row is deleted as it is spent. Expired,
+unused rows are deleted on the next sign-in-link write, across all addresses;
+there is no periodic sweep while sign-in traffic is idle. Links still last
+15 minutes and work once. Only the spent token's SHA-256 digest is kept in
+`used_claim`, without an address or other claim data, so a repeat click can
+still be answered "already used". These hash-only replay markers have no
+expiry, as before; they cannot be used to sign in. Upgrading also removes
+personal data from previously used links. This does not delete the email
+credential belonging to an account that signed in.
+
+## Error-log privacy
+
+Unexpected API and storage faults are logged only by error class and, for
+Postgres faults, SQLSTATE. Mail failures record their HTTP status when one was
+received. Messages, stacks, database row details, causes and provider response
+text are excluded because they can quote addresses or sign-in links. This
+also applies to background connection, shutdown and unexpected startup faults;
+planned configuration refusals retain their setup instructions. The deliberate
+local-development mailbox and `ConsoleMailer` output still show test messages.
+
 ## Run it on your computer
 
 ```bash
