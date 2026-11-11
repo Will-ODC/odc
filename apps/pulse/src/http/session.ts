@@ -20,6 +20,12 @@ export const SESSION_COOKIE = "pulse_session";
 /** 30 days. Long enough that voting in a later story need not mean another email. */
 export const SESSION_TTL_SECONDS = 30 * 24 * 60 * 60;
 
+/**
+ * The shortest secret the cookie signer accepts. 32 characters is the floor,
+ * not the advice: generate one with `openssl rand -base64 48`.
+ */
+export const MIN_SESSION_SECRET_LENGTH = 32;
+
 /** What a valid cookie proves. */
 export interface SessionClaims {
   voterId: string;
@@ -38,8 +44,10 @@ export class SessionSigner {
     secret: string,
     options: { ttlSeconds?: number; clock?: () => Date } = {},
   ) {
-    if (secret.length < 16) {
-      throw new Error("session secret must be at least 16 characters");
+    if (secret.length < MIN_SESSION_SECRET_LENGTH) {
+      throw new Error(
+        `session secret must be at least ${MIN_SESSION_SECRET_LENGTH} characters`,
+      );
     }
     this.#secret = secret;
     this.#ttlSeconds = options.ttlSeconds ?? SESSION_TTL_SECONDS;

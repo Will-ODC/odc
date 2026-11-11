@@ -285,7 +285,9 @@ describe("signing in while a counted vote is on screen", () => {
     }
     expect(fetchMe).not.toHaveBeenCalled();
     expect(fetchResults).not.toHaveBeenCalled();
-    expect(main.getByRole("status").textContent).toBe("Counted");
+    expect(
+      await main.findByText("Counted", { selector: '[role="status"]' }),
+    ).toBeTruthy();
     act(() => {
       window.dispatchEvent(new StorageEvent("storage", { key: SIGNED_IN_KEY }));
     });

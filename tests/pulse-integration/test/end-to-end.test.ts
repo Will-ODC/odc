@@ -50,6 +50,9 @@ const SUGGESTS_ID = "p2";
  * and a client that asked for `omit` — losing its session in a real browser the
  * moment it signed in — would still pass everything here.
  */
+/** The web origin the server trusts, and so the one a browser page would send. */
+const WEB_ORIGIN = "http://localhost:5173";
+
 function cookieJar(): { fetch: typeof fetch; header(): string | undefined } {
   const jar = new Map<string, string>();
   const header = () =>
@@ -59,6 +62,12 @@ function cookieJar(): { fetch: typeof fetch; header(): string | undefined } {
 
   const doFetch: typeof fetch = async (input, init) => {
     const headers = new Headers(init?.headers);
+    // A browser sends Origin on every POST, same-origin included; Node's fetch
+    // does not, and sign-in, redemption and sign-out refuse a request without.
+    const method = init?.method?.toUpperCase() ?? "GET";
+    if (method !== "GET" && method !== "HEAD" && !headers.has("origin")) {
+      headers.set("origin", WEB_ORIGIN);
+    }
     const cookie = header();
     if (cookie !== undefined && init?.credentials !== "omit") {
       headers.set("cookie", cookie);
@@ -127,12 +136,13 @@ describe("the client against the real server", () => {
         claims: new InMemoryClaimStore(),
         mailer,
         linkFor: (token) =>
-          `http://localhost:5173/sign-in?token=${encodeURIComponent(token)}`,
+          `${WEB_ORIGIN}/sign-in?token=${encodeURIComponent(token)}`,
       }),
       voters,
       votes,
       suggestions: new InMemorySuggestionStore(),
-      signer: new SessionSigner("a-test-secret-long-enough"),
+      signer: new SessionSigner("a-test-secret-long-enough-x-x-x-x"),
+      webOrigin: WEB_ORIGIN,
       secureCookies: false,
     });
 
@@ -148,6 +158,40 @@ describe("the client against the real server", () => {
 
   afterEach(async () => {
     await app.close();
+  });
+
+  it("sign-out from another origin is refused over HTTP and keeps the session and ballot", async () => {
+    await api.requestLink("jo@student.ubc.ca", true);
+    const me = await api.redeem(
+      tokenFromLink(mailer.lastTo("jo@student.ubc.ca")?.body ?? ""),
+    );
+    await api.cast(POLL_ID, [1]);
+    const held = jar.header();
+    expect(held).toContain("pulse_session=");
+    expect(held).toContain("pulse_ballot=");
+
+    for (const origin of ["https://elsewhere.example", undefined]) {
+      const headers: Record<string, string> = {
+        cookie: held ?? "",
+        "content-type": "text/plain",
+      };
+      if (origin !== undefined) headers.origin = origin;
+      const refused = await globalThis.fetch(`${baseUrl}/sign-out`, {
+        method: "POST",
+        headers,
+        body: "",
+      });
+      expect(refused.status).toBe(403);
+      expect(await refused.json()).toEqual({
+        error: "origin_not_allowed",
+        message: "That request did not come from Pulse.",
+      });
+      expect(refused.headers.getSetCookie()).toEqual([]);
+    }
+
+    // Both cookies still do what they did.
+    expect(await api.me()).toEqual(me);
+    expect(await api.myBallot(POLL_ID)).toEqual([1]);
   });
 
   it("signs a member in from an emailed link, votes, and signs out again", async () => {

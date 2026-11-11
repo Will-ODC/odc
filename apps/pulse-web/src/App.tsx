@@ -5,7 +5,7 @@ import type { Route } from "./flow/route.js";
 import { FIRST_POLL_ID, pathOf } from "./flow/route.js";
 import { browserStore, takeReturn } from "./flow/sign-in-return.js";
 import { AppShell } from "./components/AppShell.js";
-import { PageBanner } from "./screens/PageBanner.js";
+import { PageBanner } from "./components/PageBanner.js";
 import { useRoute } from "./hooks/use-route.js";
 import { Conversation } from "./screens/Conversation.js";
 import { ChatPreview } from "./screens/ChatPreview.js";
@@ -84,14 +84,21 @@ export function App({
       case "about":
         return (
           <About
-            banner={<PageBanner api={api} currentHref="/about" />}
+            banner={
+              <PageBanner api={api} currentHref={pathOf({ kind: "about" })} />
+            }
             onStart={() => browser.go({ kind: "progress" })}
           />
         );
       case "progress":
         return (
           <Progress
-            banner={<PageBanner api={api} currentHref="/start" />}
+            banner={
+              <PageBanner
+                api={api}
+                currentHref={pathOf({ kind: "progress" })}
+              />
+            }
             onContinue={() => browser.go({ kind: "questions" })}
           />
         );
@@ -102,7 +109,12 @@ export function App({
       case "questions":
         return (
           <FoundationQuestions
-            banner={<PageBanner api={api} currentHref="/questions" />}
+            banner={
+              <PageBanner
+                api={api}
+                currentHref={pathOf({ kind: "questions" })}
+              />
+            }
             {...(firstPollId ? { firstPollId } : {})}
             {...(relatedPollIds ? { relatedPollIds } : {})}
             onChoose={(id) => browser.go({ kind: "conversation", pollId: id })}
@@ -175,7 +187,13 @@ export function App({
         return <ChatPreview />;
       case "trust":
         // Static copy: like the prototype, it never touches `api`.
-        return <Trust banner={<PageBanner api={api} currentHref="/trust" />} />;
+        return (
+          <Trust
+            banner={
+              <PageBanner api={api} currentHref={pathOf({ kind: "trust" })} />
+            }
+          />
+        );
       case "newPoll":
         return (
           <NewPoll

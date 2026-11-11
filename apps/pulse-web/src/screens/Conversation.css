@@ -10,9 +10,6 @@
 .conversation__banner {
   grid-column: 1 / -1;
 }
-.conversation__sidebar {
-  display: none;
-}
 .conversation__main {
   min-width: 0;
   min-height: 0;
@@ -53,17 +50,10 @@
 .conversation__hero h1:focus {
   outline: none;
 }
-.conversation__hero > p,
-.conversation__sidebar p {
+.conversation__hero > p {
   font-size: var(--t-small);
   color: var(--muted);
   line-height: 1.5;
-}
-/* The rail's status line sits a step clear of the list and of Try again,
-   only while it shows something: empty, or holding only the note read out
-   after a reload, it adds no space. */
-.conversation__sidebar .viewstate--compact:has(> :not(.visually-hidden)) {
-  margin-block: var(--step);
 }
 /* "Loading…" sits a step clear of what follows it. */
 .conversation__column > .viewstate {
@@ -131,38 +121,9 @@
   outline: calc(var(--hairline) * 2) solid var(--focus);
   outline-offset: calc(var(--hairline) * 2);
 }
-@media (min-width: 1100px) {
+@media (min-width: 700px) {
   .conversation {
     grid-template-columns: var(--rail) minmax(0, 1fr);
-  }
-  .conversation__sidebar {
-    display: flex;
-    flex-direction: column;
-    padding: calc(var(--step) * 2);
-    border-right: var(--hairline) solid var(--line);
-    overflow-y: auto;
-    min-height: 0;
-  }
-  .conversation__sidebar h2 {
-    font-size: var(--t-eyebrow);
-    font-weight: 700;
-    letter-spacing: 0.06em;
-    text-transform: uppercase;
-    color: var(--muted);
-  }
-  .conversation__sidebar h2 a {
-    box-sizing: border-box;
-    display: inline-flex;
-    align-items: center;
-    min-height: calc(var(--step) * 3);
-    padding-block: calc(var(--step) / 2);
-    color: inherit;
-    text-decoration: underline;
-    text-underline-offset: calc(var(--hairline) * 2);
-  }
-  .conversation__sidebar h2 a:hover {
-    color: var(--green-hover);
-    text-decoration: underline;
   }
 }
 

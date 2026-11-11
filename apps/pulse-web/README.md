@@ -127,6 +127,12 @@ question is drawn with its outcome. Only a 4xx refusal counts as storing
 nothing; a lost connection, a reply cut off part way or a 5xx may have stored
 the answer, so on desktop Close after one asks the server which answer it
 holds (#527).
+Home and community browsing reuse the same rail beside Explore at 700px and
+wider. The question page keeps it beside voting and results at those widths,
+including after Submit. Below 700px, saved answers remain behind My votes;
+the rail is hidden and its links are outside the keyboard order. Both rails
+reuse `AnsweredRail` and the screen’s existing `useMyVotes` read, including
+loading, empty, retry and See all my votes states.
 The rail keeps one status line for screen readers, which reads out Loading…,
 an error, or "Your votes are loaded." after Try again. Signing out or
 forgetting votes here clears the browser's saved-answer list.

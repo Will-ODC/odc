@@ -29,6 +29,27 @@ responses and request-log formatting are unchanged.
 `Cache-Control: no-store`, including error responses. Browsers and shared
 caches must not retain identity details or sign-in-link state.
 
+### Request origin
+
+`POST /api/sign-in`, `POST /api/sign-in/redeem` and `POST /api/sign-out` accept a
+request only when its `Origin` header exactly matches the configured web origin
+(`PULSE_WEB_ORIGIN`), the same check the poll-creation mutations use. A missing or
+foreign `Origin` is answered 403 before the body is read and before anything is
+sent, spent, set or cleared:
+
+```json
+{
+  "error": "origin_not_allowed",
+  "message": "That request did not come from Pulse."
+}
+```
+
+Browsers send `Origin` on every POST, same-origin included, so the pulse-web client
+needs nothing extra. Non-browser callers must send it themselves. The origin comes
+from trusted server configuration, never from `Host` or a forwarded header; a server
+built without a web origin refuses all three. `GET /api/sign-in/redeem` changes
+nothing and needs no `Origin`.
+
 ### Local development mailbox
 
 Development uses the ordinary `POST /api/sign-in` and redemption endpoints for
@@ -78,6 +99,7 @@ any other non-string rather than read as "no pick". It is the person's answer to
 | 400    | `error: "bad_request"`                      | no `email`, a non-boolean opt-in, or a non-string `community`  |
 | 400    | `error: "unknown_community"`                | `community` names one this address does not belong to          |
 | 422    | `error: "choose_community"` + `communities` | the address belongs to several communities and none was picked |
+| 403    | `error: "origin_not_allowed"`               | missing or foreign `Origin` (see "Request origin")             |
 | 429    | `error: "link_already_sent"`                | a link is already outstanding for this address                 |
 | 429    | `error: "too_many_requests"`                | too many attempts from this client                             |
 | 503    | `error: "send_failed"`                      | the mail provider would not take the message                   |
@@ -206,7 +228,8 @@ arrive to find it already used.
 ```
 
 The click. Spends the link and sets the session cookie. Same 400/410 answers as the
-GET. On success:
+GET, plus 403 `origin_not_allowed` for a missing or foreign `Origin` (see "Request
+origin"), which spends nothing. On success:
 
 ```json
 {
@@ -245,8 +268,10 @@ lifetime and the success response are unchanged.
 
 ### `POST /api/sign-out`
 
-No body. Always answers `200 { "status": "signed_out" }`, whether or not anyone was
-signed in — asking to be signed out is not something to refuse. It clears the session
+No body. From the web origin it always answers `200 { "status": "signed_out" }`,
+whether or not anyone was signed in — asking to be signed out is not something to
+refuse. A missing or foreign `Origin` is answered 403 `origin_not_allowed` (see
+"Request origin") and changes nothing: no cookie is cleared and no session ends. It clears the session
 cookie **and** atomically advances that voter's session generation in shared
 storage, so every earlier session stops working on every server instance,
 regardless of differences between their clocks.
