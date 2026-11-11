@@ -250,6 +250,14 @@ export type RequestLinkResult =
   | { status: "choose_community"; communities: CommunityChoice[] };
 
 /**
+ * The one sentence for a request that got no complete answer: the connection
+ * failed before a reply, or the reply was cut off part way. Shared so the
+ * same failure reads the same wherever it is caught.
+ */
+export const UNREACHABLE =
+  "Couldn't reach pulse. Check your connection and try again.";
+
+/**
  * How every implementation of `PulseApi` reports a refusal.
  *
  * It lives here, beside the shapes, because it is part of what the client

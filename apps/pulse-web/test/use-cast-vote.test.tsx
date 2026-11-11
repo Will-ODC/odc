@@ -1,7 +1,7 @@
 // @vitest-environment jsdom
 import { act, cleanup, renderHook, waitFor } from "@testing-library/react";
 import { afterEach, expect, it, vi } from "vitest";
-import { ApiError } from "../src/api/types.js";
+import { ApiError, UNREACHABLE } from "../src/api/types.js";
 import { useCastVote } from "../src/hooks/use-cast-vote.js";
 import { results, stubApi } from "./stub-api.js";
 
@@ -40,6 +40,52 @@ it("marks a failure refused only when the server answered", async () => {
       status: "failed",
       refused: false,
     }),
+  );
+});
+
+it.each([
+  // Decided before anything is written: the earlier answer stands.
+  [400, true],
+  [403, true],
+  [404, true],
+  [413, true],
+  [429, true],
+  // No complete answer, a fault possibly after the write, or a yes the app
+  // could not read: the vote may be stored, so the screen asks (#527).
+  [0, false],
+  [500, false],
+  [502, false],
+  [504, false],
+  [200, false],
+])(
+  "reads a failed send with status %i as refused: %s",
+  async (status, refused) => {
+    const cast = vi.fn().mockRejectedValueOnce(new ApiError(status, "Said"));
+    const { result } = renderHook(() => useCastVote(stubApi({ cast }), "p1"));
+    act(() => void result.current.cast([0]));
+    await waitFor(() =>
+      expect(result.current.state).toEqual({
+        status: "failed",
+        message: "Said",
+        refused,
+      }),
+    );
+  },
+);
+
+it("says a failure with no answer in the app-wide sentence (#527)", async () => {
+  const cast = vi.fn().mockRejectedValueOnce(new TypeError("network"));
+  const { result } = renderHook(() => useCastVote(stubApi({ cast }), "p1"));
+  act(() => void result.current.cast([0]));
+  await waitFor(() =>
+    expect(result.current.state).toEqual({
+      status: "failed",
+      message: UNREACHABLE,
+      refused: false,
+    }),
+  );
+  expect(UNREACHABLE).toBe(
+    "Couldn't reach pulse. Check your connection and try again.",
   );
 });
 

@@ -213,6 +213,17 @@
   .conversation__help > button {
     flex: 1;
   }
+  /*
+   * Closed to its one button, the dock takes its own row under the page
+   * rather than floating over it, so it never covers what the page ends with
+   * - Next under the results (#527). The open sheet still floats.
+   */
+  .conversation__dock:has(.conversation__help) {
+    position: static;
+  }
+  .conversation__question:has(.conversation__help) .conversation__scroll {
+    padding-bottom: var(--gutter);
+  }
   .conversation button {
     min-height: var(--touch);
   }
