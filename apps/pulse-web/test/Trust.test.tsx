@@ -129,7 +129,7 @@ describe("what the page says", () => {
     expect(today).toMatch(/most recent answer counts and replaces the others/);
     expect(today).toMatch(/once per account per question, in the full total/);
     expect(today).toMatch(
-      /vote signed in, or sign in on the browser you voted on before the question closes/,
+      /sign in before you vote, or sign in later on the same browser before the question closes/,
     );
     expect(today).toMatch(/Signing in there shows your most recent answer/);
     // The confirm step is its own bullet, apart from the counting rule (#558).
@@ -140,7 +140,7 @@ describe("what the page says", () => {
       /Signing in there/.test(b.textContent ?? ""),
     );
     expect(confirm).toBeDefined();
-    expect(confirm?.textContent).toMatch(/vote signed in/);
+    expect(confirm?.textContent).toMatch(/sign in before you vote/);
     expect(confirm?.textContent).not.toMatch(/once per account/);
     expect(today).toMatch(/Two emails count twice/);
     expect(today).toMatch(/does not prove each voter is a different person/);

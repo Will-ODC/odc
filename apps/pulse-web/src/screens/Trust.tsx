@@ -38,9 +38,9 @@ export function Trust({ banner }: { banner?: ReactNode }) {
               a different person.
             </li>
             <li>
-              To confirm a vote, vote signed in, or sign in on the browser you
-              voted on before the question closes. Signing in there shows your
-              most recent answer.
+              To confirm a vote, sign in before you vote, or sign in later on
+              the same browser before the question closes. Signing in there
+              shows your most recent answer.
             </li>
             <li>
               Email-confirmed votes store a code instead of your email. The
