@@ -41,10 +41,6 @@
   color: var(--muted);
   font-size: var(--t-small);
 }
-.browse__list a:focus-visible {
-  outline: calc(var(--hairline) * 2) solid var(--focus);
-  outline-offset: calc(var(--hairline) * 2);
-}
 
 .browse .browse__main {
   max-width: calc(var(--rail) * 4);
@@ -111,8 +107,26 @@
   }
 }
 
+/*
+ * Try again and Load more: the shared secondary Button (#534) at the smaller
+ * size of the `.button` utility they used before, which My votes still uses.
+ * Two classes, so these outrank `.btn--secondary` whatever the import order.
+ */
+.btn.browse__action {
+  font-size: var(--t-small);
+  padding: var(--step) calc(var(--step) * 2);
+}
+.btn.browse__action:hover:not(:disabled) {
+  background: var(--hover);
+}
+.btn.browse__action:disabled {
+  opacity: 1;
+  color: var(--muted);
+}
+
 /* Try again and Load more, centred under the list or its message. */
-.browse__main > .button {
+.browse__main > .button,
+.browse__main > .browse__action {
   display: block;
   margin: calc(var(--step) * 2) auto 0;
 }

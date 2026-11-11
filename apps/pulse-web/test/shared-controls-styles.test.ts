@@ -52,3 +52,71 @@ it("styles the info button above the shared secondary variant, whatever the impo
   expect(css).not.toMatch(/(^|\n)\.post__info(\s|:|,|\{)/);
   expect(css).toMatch(/\.btn\.post__info \{/);
 });
+
+// #534 part 2: Browse, AccountMenu and ResultsPanel draw their buttons with the
+// shared Button and rely on the shared ring (`.btn:focus-visible`, App.css).
+const part2 = [
+  ["screens/Browse.tsx", "screens/Browse.css"],
+  ["components/AccountMenu.tsx", "components/AccountMenu.css"],
+  ["components/ResultsPanel.tsx", "components/ResultsPanel.css"],
+] as const;
+
+it.each(part2)("%s builds no button of its own", (tsx) => {
+  const source = read(`../src/${tsx}`);
+  expect(source).not.toMatch(/<button[\s>]/);
+  expect(source).toMatch(/<Button\b/);
+});
+
+it.each(part2)("%s's stylesheet copies no focus ring", (_tsx, css) => {
+  const sheet = read(`../src/${css}`);
+  // Any rule for a :focus-visible state that draws its own outline.
+  const copies = [...sheet.matchAll(/([^{}]*:focus-visible[^{}]*)\{([^}]*)\}/g)]
+    .filter(([, , body]) => /outline(-width|-color|-style)?\s*:/.test(body!))
+    .map(([, selector]) => selector!.trim());
+  expect(copies).toEqual([]);
+  expect(sheet).not.toMatch(/outline:\s*\d+px/);
+});
+
+it("keeps the account trigger plain text in the banner, not an underlined quiet button", () => {
+  const css = read("../src/components/AccountMenu.css");
+  const rule = /\.banner \.account-menu__button \{([^}]*)\}/.exec(css)?.[1];
+  expect(rule).toBeDefined();
+  // Two classes outrank `.btn--quiet`; `font: inherit` resets its weight.
+  expect(rule).toContain("font: inherit;");
+  expect(rule).toContain("font-size: var(--t-small);");
+  expect(rule).toContain("color: var(--ink-soft);");
+  expect(rule).toContain("text-decoration: none;");
+});
+
+it("keeps Try again and Load more on Explore at the smaller utility size", () => {
+  const css = read("../src/screens/Browse.css");
+  expect(css).toMatch(
+    /\.btn\.browse__action \{\s*font-size: var\(--t-small\);\s*padding: var\(--step\) calc\(var\(--step\) \* 2\);/,
+  );
+  expect(css).toMatch(
+    /\.btn\.browse__action:hover:not\(:disabled\) \{\s*background: var\(--hover\);/,
+  );
+  // Muted text while loading, not the shared variant's faded button.
+  expect(css).toMatch(
+    /\.btn\.browse__action:disabled \{\s*opacity: 1;\s*color: var\(--muted\);/,
+  );
+  // Centred block on every width; outranks the phone rule's `display: flex`.
+  expect(css).toMatch(
+    /\.browse__main > \.browse__action \{\s*display: block;\s*margin: calc\(var\(--step\) \* 2\) auto 0;/,
+  );
+  // My votes still uses the utility class under the same layout.
+  expect(css).toMatch(/\.browse__main > \.button,/);
+});
+
+it("keeps the results toggle borderless and the panel's Close small", () => {
+  const css = read("../src/components/ResultsPanel.css");
+  const toggle = /\.results \.results__toggle \{([^}]*)\}/.exec(css)?.[1];
+  expect(toggle).toBeDefined();
+  expect(toggle).toContain("border: none;");
+  expect(toggle).toContain("background: none;");
+  expect(toggle).toContain("text-decoration: none;");
+  expect(toggle).toContain("font-size: var(--t-small);");
+  expect(css).toMatch(
+    /\.results__close,\s*\.btn\.results__close \{\s*position: absolute;[^}]*padding: var\(--step\);/,
+  );
+});

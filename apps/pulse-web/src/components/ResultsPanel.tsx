@@ -2,6 +2,7 @@ import { Fragment, Suspense, lazy, useId, useState } from "react";
 import type { CSSProperties, RefObject } from "react";
 import type { ChoiceResult, Results } from "../api/types.js";
 import { percent, resultsChart } from "../flow/results-chart.js";
+import { Button } from "./Button.js";
 import { LoadBoundary } from "./LoadBoundary.js";
 import "./ResultsPanel.css";
 
@@ -147,8 +148,9 @@ export function ResultsPanel({
           ) : (
             <p className="results__title">How people answered</p>
           )}
-          <button
+          <Button
             type="button"
+            variant="quiet"
             className="results__toggle"
             aria-expanded={!hidden}
             aria-controls={bodyId}
@@ -166,18 +168,19 @@ export function ResultsPanel({
             >
               <path d={hidden ? "M4 6l4 4 4-4" : "M4 10l4-4 4 4"} />
             </svg>
-          </button>
+          </Button>
         </div>
       ) : null}
       {onClose && !compact ? (
-        <button
+        <Button
           type="button"
+          variant="secondary"
           className="results__close"
           aria-label="Close"
           onClick={onClose}
         >
           <span aria-hidden="true">×</span>
-        </button>
+        </Button>
       ) : null}
       {compact ? null : <p className="ballot__eyebrow">WHERE IT STANDS</p>}
       {compact ? null : (
