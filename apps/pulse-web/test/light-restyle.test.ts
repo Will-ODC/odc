@@ -18,6 +18,20 @@ function rules(file: string, selector: string): string[] {
 }
 
 describe("the light look's invariants (#482)", () => {
+  it("sizes dropdowns with the shared menu width range and viewport cap", () => {
+    const tokens = css("styles/tokens.css");
+    const panel = css("components/AccountMenu.css");
+    expect(tokens).toMatch(/--menu-min:\s*\d+px;/);
+    expect(tokens).toMatch(/--menu-max:\s*\d+px;/);
+    expect(panel).toMatch(/width:\s*max-content;/);
+    expect(panel).toMatch(/min-width:\s*var\(--menu-min\);/);
+    expect(panel).toMatch(
+      /max-width:\s*min\(var\(--menu-max\),\s*calc\(100vw - var\(--gutter\) \* 2\)\);/,
+    );
+    expect(panel).toMatch(/inset-inline-end:\s*0;/);
+    expect(panel).not.toMatch(/(?:min-)?width:\s*\d+px/);
+  });
+
   it("has a real focus colour, and no ring on the results focused by script", () => {
     const focus = css("styles/tokens.css").match(/--focus:\s*([^;]+);/);
     expect(focus?.[1]).toBeDefined();
