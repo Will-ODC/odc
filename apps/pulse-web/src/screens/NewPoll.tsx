@@ -32,7 +32,6 @@ import { useSession } from "../hooks/use-session.js";
 import { SiteBanner } from "./SiteBanner.js";
 import { browserStore } from "../flow/sign-in-return.js";
 import { forgetDraft, keepDraft, readDraft } from "../flow/draft-store.js";
-import "./SignIn.css";
 import "./NewPoll.css";
 
 /** ADR-0037's interim wording, until authorised moderator access exists. */
@@ -150,20 +149,20 @@ export function NewPoll({
 function SignedOut({ href, kept }: { href: string; kept: boolean }) {
   return (
     <>
-      <h1 className="signin__title">Post a question</h1>
-      <p className="signin__lede">
+      <h1 className="post__title">Post a question</h1>
+      <p className="post__lede">
         Sign in with your email to post a question. You come back here after.
         Anyone can vote without signing in.
       </p>
       {kept ? (
-        <p className="signin__lede" role="status">
+        <p className="post__lede" role="status">
           Your question was not posted. What you wrote is kept in this browser
           for an hour, and will be here after you sign in.
         </p>
       ) : null}
-      <a className="button button--primary post__link-button" href={href}>
+      <Button variant="primary" className="post__link-button" href={href}>
         Sign in to post
-      </a>
+      </Button>
     </>
   );
 }
@@ -316,13 +315,13 @@ function PostForm({
     >
       <h1
         id={`${id}-title`}
-        className="signin__title"
+        className="post__title"
         ref={heading}
         tabIndex={-1}
       >
         Post a question
       </h1>
-      <p className="signin__lede">
+      <p className="post__lede">
         Posting in <b>{context.community.label}</b>.
       </p>
 
@@ -331,7 +330,6 @@ function PostForm({
           id={`${id}-question`}
           label="Your question"
           problem={shown.question}
-          className="post__field"
         >
           {(described) => (
             <textarea
@@ -535,7 +533,6 @@ function PostForm({
                   id={`${id}-closes`}
                   label="Closing time"
                   problem={shown.closing}
-                  className="post__field"
                 >
                   {(described) => (
                     <input
@@ -621,7 +618,6 @@ function PostForm({
                   label="Name to show"
                   hint="Shown exactly as you type it. Pulse does not check it, so readers cannot tell whether it is your real name."
                   problem={shown.name}
-                  className="post__field"
                 >
                   {(described) => (
                     <input
@@ -662,7 +658,7 @@ function PostForm({
         {needsPromise ? (
           <div className="post__purpose">
             <div className="post__promise-row">
-              <label className="signin__optin post__promise">
+              <label className="post__optin post__promise">
                 <input
                   type="checkbox"
                   checked={draft.promised}
@@ -765,8 +761,8 @@ function Setting({
 }
 
 /**
- * A labelled field with its hint and problem. The control is a render
- * function so it gets the right `aria-describedby` without repeating it.
+ * Explain the error returned when publishing fails, including retry timing
+ * when the server reports a posting limit.
  */
 function failureOf(err: unknown): string {
   if (!(err instanceof ApiError) || err.status === 0)

@@ -54,7 +54,7 @@ describe("the light look's invariants (#482)", () => {
       ["components/CopyLink.css", ".copy-link button"],
       ["components/TopBanner.css", ".banner__actions > .banner__sign-in"],
       ["screens/Conversation.css", ".conversation button"],
-      ["components/Button.css", ".button--secondary"],
+      ["components/Button.css", ".btn--secondary"],
     ];
     for (const [file, selector] of buttons) {
       const found = rules(file, selector);

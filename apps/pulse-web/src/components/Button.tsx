@@ -9,14 +9,19 @@ export const Button = forwardRef<
   ButtonHTMLAttributes<HTMLButtonElement> & {
     variant: ButtonVariant;
     children: ReactNode;
+    href?: string;
   }
->(function Button({ variant, className, children, ...props }, ref) {
+>(function Button({ variant, className, children, href, ...props }, ref) {
+  const classNames = `btn btn--${variant}${className ? ` ${className}` : ""}`;
+  if (href !== undefined) {
+    return (
+      <a className={classNames} href={href}>
+        {children}
+      </a>
+    );
+  }
   return (
-    <button
-      ref={ref}
-      className={`button button--${variant}${className ? ` ${className}` : ""}`}
-      {...props}
-    >
+    <button ref={ref} className={classNames} {...props}>
       {children}
     </button>
   );

@@ -228,7 +228,12 @@ export function SignIn({
       </p>
 
       <form className="signin__form" onSubmit={submit} noValidate>
-        <Field id={emailId} label="Your email" problem={problem ?? undefined}>
+        <Field
+          id={emailId}
+          label="Your email"
+          problem={problem ?? undefined}
+          announceProblem
+        >
           {(described) => (
             <input
               id={emailId}

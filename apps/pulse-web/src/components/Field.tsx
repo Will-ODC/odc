@@ -7,6 +7,7 @@ export function Field({
   label,
   hint,
   problem,
+  announceProblem = false,
   className,
   children,
 }: {
@@ -14,6 +15,7 @@ export function Field({
   label: string;
   hint?: string;
   problem: string | undefined;
+  announceProblem?: boolean;
   className?: string;
   children: (described: { "aria-describedby"?: string }) => ReactNode;
 }) {
@@ -33,7 +35,11 @@ export function Field({
       ) : null}
       {children(ids.length ? { "aria-describedby": ids.join(" ") } : {})}
       {problem ? (
-        <p className="field__problem" id={`${id}-problem`} role="alert">
+        <p
+          className="field__problem"
+          id={`${id}-problem`}
+          {...(announceProblem ? { role: "alert" as const } : {})}
+        >
           {problem}
         </p>
       ) : null}

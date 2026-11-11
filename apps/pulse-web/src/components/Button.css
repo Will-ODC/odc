@@ -1,4 +1,4 @@
-.button {
+.btn {
   box-sizing: border-box;
   padding: 15px 18px;
   font: inherit;
@@ -6,24 +6,30 @@
   border-radius: var(--r-control);
   cursor: pointer;
 }
-.button--primary {
+.btn[href] {
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  text-decoration: none;
+}
+.btn--primary {
   font-weight: 700;
   letter-spacing: -0.01em;
   color: var(--on-accent);
   background: var(--green);
   border: none;
 }
-.button--primary:hover:not(:disabled) {
+.btn--primary:hover:not(:disabled) {
   background: var(--green-hover);
 }
-.button--secondary {
+.btn--secondary {
   padding: 13px 18px;
   font-weight: 600;
   color: var(--ink);
   background: var(--surface);
   border: var(--hairline) solid var(--line);
 }
-.button--quiet {
+.btn--quiet {
   padding: 0;
   font-weight: 600;
   color: var(--ink);
@@ -32,16 +38,16 @@
   text-decoration: underline;
   text-underline-offset: 0.2em;
 }
-.button:focus-visible {
+.btn:focus-visible {
   outline: var(--focus-ring-width) solid var(--focus);
   outline-offset: var(--focus-ring-offset);
 }
-.button:disabled {
+.btn:disabled {
   opacity: 0.55;
   cursor: default;
 }
 @media (max-width: 699px) {
-  .button {
+  .btn {
     display: flex;
     align-items: center;
     justify-content: center;
