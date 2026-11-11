@@ -412,8 +412,9 @@ test("trusts_only_the_private_proxy_peer_and_one_forwarded_hop", async () => {
 });
 
 test("two_trusted_hops_take_the_address_the_host_edge_observed", async () => {
-  // A host edge in front of nginx (#549): nginx's peer is the edge, a private
-  // address, and the edge appended the client it saw.
+  // A host edge in front of nginx (#549): the API's peer is nginx
+  // (172.20.0.4); nginx appended the edge (10.0.0.7), and the edge appended
+  // the client it saw.
   const h = await setup({ trustProxy: 2 });
   h.app.get("/test/ip", (request) => ({ ip: request.ip }));
 

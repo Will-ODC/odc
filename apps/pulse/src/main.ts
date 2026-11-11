@@ -87,7 +87,9 @@ export interface ServeConfig {
    * How many private proxy hops in front of the API to trust for the client
    * address (#549). One nginx in front, the shipped shape, is `1`; a host
    * edge in front of that nginx is `2`. Each trusted hop must still be a
-   * private address (`createServer`'s `trustProxy`).
+   * private address (`createServer`'s `trustProxy`). Never `0` here: the
+   * served API is reached only through nginx, and trusting no hop would make
+   * nginx's address every visitor's.
    */
   trustedProxyHops: number;
 }
@@ -95,8 +97,9 @@ export interface ServeConfig {
 /** The hop count when `PULSE_TRUSTED_PROXY_HOPS` is unset: one nginx. */
 export const DEFAULT_TRUSTED_PROXY_HOPS = 1;
 /**
- * More hops than any real chain. A larger count only widens who may write
- * the address the rate limits key on.
+ * More hops than any real chain. The private-address check already stops
+ * the walk at the first public address, so over-counting only matters for a
+ * client that is itself on a private network; the cap is defence in depth.
  */
 export const MAX_TRUSTED_PROXY_HOPS = 4;
 
@@ -258,16 +261,16 @@ function port(raw: string | undefined): number {
 
 /**
  * The trusted proxy hop count, or the default. Refused rather than coerced,
- * like `port`: a typo here would silently put every visitor in one
- * rate-limit bucket (too few hops) or let a client choose its own address
- * (too many), and neither shows until it bites.
+ * like `port`: too few hops silently puts every visitor in one rate-limit
+ * bucket, and that does not show until it bites. `0` is refused for the same
+ * reason — behind nginx it makes nginx's address everyone's.
  */
 function trustedProxyHops(raw: string | undefined): number {
   if (raw === undefined || raw.trim() === "") return DEFAULT_TRUSTED_PROXY_HOPS;
-  const value = Number(raw);
-  if (!Number.isInteger(value) || value < 0 || value > MAX_TRUSTED_PROXY_HOPS) {
+  const value = /^\d+$/.test(raw.trim()) ? Number(raw.trim()) : NaN;
+  if (!Number.isInteger(value) || value < 1 || value > MAX_TRUSTED_PROXY_HOPS) {
     throw new Error(
-      `PULSE_TRUSTED_PROXY_HOPS must be a whole number from 0 to ${MAX_TRUSTED_PROXY_HOPS}, not "${raw}"`,
+      `PULSE_TRUSTED_PROXY_HOPS must be a whole number from 1 to ${MAX_TRUSTED_PROXY_HOPS}, not "${raw}"`,
     );
   }
   return value;

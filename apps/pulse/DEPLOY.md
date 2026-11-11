@@ -28,12 +28,14 @@ address (default `1`: the shipped nginx; `src/main.ts`,
 `src/http/server.ts`). With a host edge in front of nginx, one hop identifies
 the edge as the client and puts every user in one shared rate-limit bucket.
 Before using Render, Fly.io or another edge proxy, set
-`PULSE_TRUSTED_PROXY_HOPS=2` — this works only when both nginx's peer and the
-edge address it forwards pass the API's private address check — or configure
-nginx's real-IP handling for the host's trusted edge addresses and keep `1`.
-The value must be a whole number from 0 to 4; anything else stops the start.
-Do not trust arbitrary forwarded headers. Verify that two clients get distinct
-rate-limit buckets and cannot spoof their address.
+`PULSE_TRUSTED_PROXY_HOPS=2` — this works only when both nginx's address as
+the API sees it and the edge address nginx appends to `X-Forwarded-For` pass
+the API's private address check — or configure nginx's real-IP handling for
+the host's trusted edge addresses and keep `1`. The value must be a whole
+number from 1 to 4; anything else, including `0`, stops the start (the served
+API is only reached through nginx, so trusting no hop would make nginx's
+address everyone's). Do not trust arbitrary forwarded headers. Verify that two
+clients get distinct rate-limit buckets and cannot spoof their address.
 
 ## HTTPS and browser security headers
 

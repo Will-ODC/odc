@@ -151,8 +151,8 @@ The server will not start without these:
 | `PULSE_MAIL_FROM`        | the sender, e.g. `pulse <sign-in@your-domain.org>`     |
 
 Optional: `PULSE_MAIL_REPLY_TO`, `PULSE_PORT` (8080), `PULSE_HOST` (`0.0.0.0`),
-`PULSE_TRUSTED_PROXY_HOPS` (1, the shipped nginx; 2 behind a host edge — see
-DEPLOY.md),
+`PULSE_TRUSTED_PROXY_HOPS` (1, the shipped nginx; 2 behind a host edge; 1–4 —
+see DEPLOY.md),
 `PULSE_DATABASE_SCHEMA`, `PULSE_OWNER_EMAIL` (the owner, who may grant
 unlimited posting; unset means nobody, and a value that is not an address
 stops the start). `PULSE_WEB_ORIGIN` is also the only `Origin` that sign-in,
