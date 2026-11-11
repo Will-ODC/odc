@@ -12,8 +12,8 @@ import { databaseUrl } from "./db/config.js";
 import { migrate } from "./db/migrate.js";
 import { createPool } from "./db/pool.js";
 import { createServer } from "./http/server.js";
-import { assertOrigin } from "./main.js";
-import { SessionSigner } from "./http/session.js";
+import { assertOrigin, sessionSecretTooShort } from "./main.js";
+import { MIN_SESSION_SECRET_LENGTH, SessionSigner } from "./http/session.js";
 import {
   DomainAllowlist,
   StaticDomainSource,
@@ -252,6 +252,14 @@ export function devConfig(env: NodeJS.ProcessEnv): DevConfig {
   assertDevelopment(env);
 
   const secretFromEnv = env.PULSE_SESSION_SECRET;
+  // A secret that is given is held to the served floor. A generated one is
+  // 43 characters, so the default run never meets this.
+  if (
+    secretFromEnv !== undefined &&
+    secretFromEnv.length < MIN_SESSION_SECRET_LENGTH
+  ) {
+    throw new Error(sessionSecretTooShort());
+  }
   const keyFromEnv = env.PULSE_CONFIRMATION_KEY;
   // Read by the one function that decides what "unset" means (src/db/config.ts).
   const url = databaseUrl(env);

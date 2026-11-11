@@ -577,7 +577,7 @@ test(
     const { app } = await buildDevServer(
       devConfig({
         PULSE_DATABASE_URL: url.href,
-        PULSE_SESSION_SECRET: "mcp-test-secret-long-enough",
+        PULSE_SESSION_SECRET: "mcp-test-secret-long-enough-x-x-x",
       }),
       {},
       { log: () => {} },
@@ -611,7 +611,7 @@ test(
     const { app, pool } = await buildDevServer(
       devConfig({
         PULSE_DATABASE_URL: url.href,
-        PULSE_SESSION_SECRET: "mcp-test-secret-long-enough",
+        PULSE_SESSION_SECRET: "mcp-test-secret-long-enough-x-x-x",
       }),
       {},
       { log: () => {} },

@@ -1,6 +1,22 @@
 import assert from "node:assert/strict";
 import { test } from "node:test";
-import { buildDevServer, devConfig } from "../src/dev-server.js";
+import {
+  buildDevServer as buildUnwrappedDevServer,
+  devConfig,
+} from "../src/dev-server.js";
+import { sendOriginLikeABrowser } from "./support/origin.js";
+
+/**
+ * The dev server as the pulse-web client meets it: every POST carries the
+ * configured web origin, as a browser page on that origin sends it.
+ */
+async function buildDevServer(
+  ...args: Parameters<typeof buildUnwrappedDevServer>
+): ReturnType<typeof buildUnwrappedDevServer> {
+  const built = await buildUnwrappedDevServer(...args);
+  sendOriginLikeABrowser(built.app, args[0].webOrigin);
+  return built;
+}
 
 const headers = { host: "localhost:5173", "sec-fetch-site": "same-origin" };
 

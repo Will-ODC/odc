@@ -84,7 +84,9 @@ pnpm --filter @odc/pulse-web dev   # app on http://localhost:5173
 | `PULSE_DATABASE_URL`     | unset, so data is kept in memory                 |
 | `PULSE_OWNER_EMAIL`      | unset, so nobody is owner                        |
 
-`PULSE_WEB_ORIGIN` is also the only `Origin` that poll creation accepts.
+`PULSE_WEB_ORIGIN` is also the only `Origin` that sign-in, link redemption,
+sign-out and poll creation accept. A `PULSE_SESSION_SECRET` you set must be at
+least 32 characters.
 
 Use `localhost:5173` consistently. If the port is occupied, stop the other web
 server first; changing the port also requires matching `PULSE_WEB_ORIGIN`.
@@ -151,8 +153,11 @@ The server will not start without these:
 Optional: `PULSE_MAIL_REPLY_TO`, `PULSE_PORT` (8080), `PULSE_HOST` (`0.0.0.0`),
 `PULSE_DATABASE_SCHEMA`, `PULSE_OWNER_EMAIL` (the owner, who may grant
 unlimited posting; unset means nobody, and a value that is not an address
-stops the start). `PULSE_WEB_ORIGIN` is also the only `Origin` poll creation
-accepts. Plain `RESEND_API_KEY` and `DATABASE_URL` are ignored.
+stops the start). `PULSE_WEB_ORIGIN` is also the only `Origin` that sign-in,
+link redemption, sign-out and poll creation accept. Plain `RESEND_API_KEY` and `DATABASE_URL` are ignored.
+
+**`PULSE_SESSION_SECRET` must be at least 32 characters**
+(`openssl rand -base64 48`); the server refuses to start with a shorter one.
 
 **`PULSE_CONFIRMATION_KEY` is as secret as the database.** Anyone with both can
 work out who voted what. Make it at least 32 characters
