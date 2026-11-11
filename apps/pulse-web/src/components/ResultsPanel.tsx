@@ -28,8 +28,9 @@ const BarChart = lazy(() =>
  * card; this panel stays about the answers, and must never claim a public
  * record or a check that pulse does not have yet (`apps/pulse/CLAUDE.md`).
  *
- * Two numbers, side by side (#353, ADR-0040): every vote, one per browser,
- * and the votes confirmed by email, one per person who signed in. The
+ * Two numbers, side by side (#353, ADR-0040): every vote — one per person
+ * who signed in (ADR-0046), one per browser for everyone else — and the votes
+ * confirmed by email, one per person who signed in. The
  * confirmed figures sit under each choice's full figures rather than in a
  * second list, so the two can be read against each other on a phone without
  * scrolling between them. "Confirmed by email" and never "verified": an email
@@ -325,8 +326,9 @@ function separatorBefore(at: number, count: number): string {
  * given is in the count - but a closed question's results are open to people
  * who did not vote, and a question can close with nobody having answered it.
  *
- * "Votes", not "people": the full total counts browsers, and one person on
- * two browsers is two votes (see `/trust`). Zero confirmed is said as zero -
+ * "Votes", not "people": the full total counts a vote nobody confirmed once
+ * per browser, so one person voting on two browsers without signing in is two
+ * votes (see `/trust`). Zero confirmed is said as zero -
  * it is an ordinary answer, not a missing one.
  */
 function howMany(results: Results, ended: boolean): string {

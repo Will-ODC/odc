@@ -118,12 +118,19 @@ describe("what the page says", () => {
     expect(today).toMatch(/new answer replaces the old one/);
     expect(today).toMatch(/browser.s cookie/);
     expect(today).toMatch(
-      /another browser, clearing cookies or signing out.*add votes to the full total/,
+      /Without signing in, using another browser or clearing cookies.*add votes to the full total/,
     );
+    // Signing out no longer adds a vote for someone who votes signed in
+    // (ADR-0046): their new vote replaces the old one.
+    expect(today).not.toMatch(/signing out lets you add votes/);
     expect(today).toMatch(
       /Email-confirmed votes count once per account per question/,
     );
-    expect(today).toMatch(/most recent answer counts/);
+    expect(today).toMatch(/most recent answer counts and replaces the others/);
+    expect(today).toMatch(/once per account per question, in the full total/);
+    expect(today).toMatch(
+      /Signing in shows your most recent answer on that browser/,
+    );
     expect(today).toMatch(
       /Vote signed in, or sign in on that browser before the question closes/,
     );

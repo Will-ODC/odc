@@ -435,17 +435,20 @@ export async function createServer(deps: ServerDeps): Promise<FastifyInstance> {
       if (result.status !== "signed_in") return gone(reply, result.status);
 
       // The browser that voted before signing in now has a person behind its
-      // votes, so they become confirmed (ADR-0040). Only a ballot this browser
-      // already holds — none is minted here — and the store is handed one-way
-      // codes, never the account id. Before the cookie is set, so a failure is
-      // the ordinary 500 rather than a signed-in reply hiding it.
+      // votes, so they become confirmed (ADR-0040), and the person keeps one
+      // ballot per poll, filed under this browser (ADR-0046). Only a ballot
+      // this browser already holds — none is minted here — and the store is
+      // handed one-way codes and a lock key, never the account id. Before the
+      // cookie is set, so a failure is the ordinary 500 rather than a
+      // signed-in reply hiding it.
       const ballot = heldBallot(request);
       const key = deps.confirmationKey;
       if (ballot !== undefined && key) {
         const accountId = result.voter.id;
-        await deps.votes.confirmVotes(ballot, (poll) =>
-          key.codeFor(accountId, poll),
-        );
+        await deps.votes.confirmVotes(ballot, {
+          codeFor: (poll) => key.codeFor(accountId, poll),
+          lockKey: key.lockKeyFor(accountId),
+        });
       }
 
       reply.setCookie(
@@ -576,7 +579,9 @@ export async function createServer(deps: ServerDeps): Promise<FastifyInstance> {
    *
    * A session, when there is one, makes the vote confirmed (ADR-0040): the
    * store is given the one-way code for this account and poll, never the
-   * account id. With no session the vote keeps whatever confirmation it had.
+   * account id, and the vote replaces the person's ballot on this poll in any
+   * other browser (ADR-0046). With no session the vote keeps whatever
+   * confirmation it had.
    */
   app.post("/api/polls/:id/votes", async (request, reply) => {
     const ballot = (request.body as { ballot?: unknown } | undefined)?.ballot;
@@ -597,7 +602,10 @@ export async function createServer(deps: ServerDeps): Promise<FastifyInstance> {
         ballotIdentity(request, reply),
         ballot as number[],
         key && voter
-          ? { confirmation: key.codeFor(voter.id, pollId(request)) }
+          ? {
+              confirmation: key.codeFor(voter.id, pollId(request)),
+              lockKey: key.lockKeyFor(voter.id),
+            }
           : {},
       );
       if (outcome.status === "closed") {

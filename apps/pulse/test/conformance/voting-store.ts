@@ -18,6 +18,16 @@ const AT = new Date("2026-08-09T12:00:00.123Z");
 const ADA = "a".repeat(64);
 const BO = "b".repeat(64);
 
+/**
+ * A cast by someone signed in: their code and, as every confirmation must
+ * carry, their lock key (`ConfirmationKey.lockKeyFor`, ADR-0046). The in-memory
+ * store only checks the key; the Postgres one locks on it.
+ */
+const asAda = { confirmation: ADA, lockKey: 1001n } as const;
+const asBo = { confirmation: BO, lockKey: 1002n } as const;
+/** Signing in, as `confirmVotes` is handed the person. */
+const adaSignsIn = { codeFor: () => ADA, lockKey: asAda.lockKey };
+
 /** `AT` plus some seconds, for tests where cast order is the point. */
 const later = (seconds: number) => new Date(AT.getTime() + seconds * 1000);
 
@@ -487,8 +497,8 @@ export function votingStoreConformance(
       test("a_vote_cast_with_a_confirmation_counts_as_confirmed", async (t) => {
         const store = await storeAt(t);
         await pollWith(store, "approval", ["Park", "Library", "Rink"]);
-        await store.castVote("p1", "b:1", [0, 2], { confirmation: ADA });
-        await store.castVote("p1", "b:2", [0], { confirmation: BO });
+        await store.castVote("p1", "b:1", [0, 2], asAda);
+        await store.castVote("p1", "b:2", [0], asBo);
         await store.castVote("p1", "b:3", [1]);
 
         const results = await store.results("p1");
@@ -513,76 +523,181 @@ export function votingStoreConformance(
         );
       });
 
-      test("one_person_confirming_from_two_browsers_is_one_confirmed_vote_their_most_recent", async (t) => {
+      test("one_person_voting_from_two_browsers_keeps_one_ballot_the_latest", async (t) => {
+        // ADR-0046: a cast while signed in replaces the person's ballot in
+        // any other browser. The totals count them once, not twice.
         let now = AT;
         const store = await make(() => now, t);
         await pollWith(store);
-        await store.castVote("p1", "b:phone", [0], { confirmation: ADA });
+        await store.castVote("p1", "b:phone", [0], asAda);
         now = later(60);
-        await store.castVote("p1", "b:laptop", [1], { confirmation: ADA });
+        const second = await store.castVote("p1", "b:laptop", [1], asAda);
+        // A first ballot for this browser, whatever it replaced elsewhere.
+        assert.equal(second.status, "counted");
 
         const results = await store.results("p1");
-        // Twice in the totals, once as confirmed — and the laptop's, cast last.
-        assert.equal(results.voters, 2);
+        assert.equal(results.voters, 1);
         assert.equal(results.confirmedVoters, 1);
         assert.deepEqual(
-          results.choices.map((c) => c.count),
-          [1, 1],
+          results.choices.map((c) => [c.count, c.confirmedCount]),
+          [
+            [0, 0],
+            [1, 1],
+          ],
         );
+        assert.equal(await store.voteOf("p1", "b:phone"), undefined);
+        assert.deepEqual((await store.voteOf("p1", "b:laptop"))?.choices, [1]);
         assert.deepEqual(
-          results.choices.map((c) => c.confirmedCount),
-          [0, 1],
+          (await store.voteHistory("b:phone", 10)).map((v) => v.pollId),
+          [],
         );
       });
 
-      test("the_most_recent_vote_stays_the_confirmed_one_whichever_browser_is_written_second", async (t) => {
-        // The mirror of the test above, so a store that keeps "the first one
-        // written" or "the last one written" instead of "the last one cast"
-        // fails one of the two.
+      test("vote_signed_in_sign_out_sign_in_vote_again_is_one_ballot_with_the_latest_answer", async (t) => {
+        // #532's case: signing out clears the ballot cookie, so the second
+        // vote comes from a new ballot identity on the same browser.
+        let now = AT;
+        const store = await make(() => now, t);
+        await pollWith(store);
+        await store.castVote("p1", "b:first-cookie", [0], asAda);
+        now = later(60);
+        await store.castVote("p1", "b:second-cookie", [1], asAda);
+        now = later(120);
+        await store.castVote("p1", "b:second-cookie", [0], asAda);
+
+        const results = await store.results("p1");
+        assert.equal(results.voters, 1);
+        assert.deepEqual(
+          results.choices.map((c) => [c.count, c.confirmedCount]),
+          [
+            [1, 1],
+            [0, 0],
+          ],
+        );
+        assert.deepEqual(
+          (await store.voteOf("p1", "b:second-cookie"))?.choices,
+          [0],
+        );
+        assert.equal(await store.voteOf("p1", "b:first-cookie"), undefined);
+      });
+
+      test("a_cast_while_signed_in_replaces_even_a_ballot_stamped_later", async (t) => {
+        // ADR-0046 decision 2: the cast is the person's latest answer by
+        // definition, so it does not compare times. Another instance's clock
+        // running ahead cannot make a new vote lose to an older one.
         let now = later(60);
         const store = await make(() => now, t);
         await pollWith(store);
-        await store.castVote("p1", "b:laptop", [1], { confirmation: ADA });
+        await store.castVote("p1", "b:laptop", [1], asAda);
         now = AT;
-        await store.castVote("p1", "b:phone", [0], { confirmation: ADA });
-
-        assert.deepEqual(
-          (await store.results("p1")).choices.map((c) => c.confirmedCount),
-          [0, 1],
-        );
-      });
-
-      test("changing_an_answer_keeps_it_confirmed_and_makes_it_the_most_recent", async (t) => {
-        let now = AT;
-        const store = await make(() => now, t);
-        await pollWith(store);
-        await store.castVote("p1", "b:phone", [0], { confirmation: ADA });
-        now = later(60);
-        await store.castVote("p1", "b:laptop", [1], { confirmation: ADA });
-
-        // The phone changes its answer with nobody signed in: it keeps its
-        // confirmation, and is now this person's most recent vote.
-        now = later(120);
-        const changed = await store.castVote("p1", "b:phone", [1]);
-        assert.equal(changed.status, "changed");
-        now = later(180);
-        await store.castVote("p1", "b:phone", [0]);
+        await store.castVote("p1", "b:phone", [0], asAda);
 
         const results = await store.results("p1");
-        assert.equal(results.voters, 2);
-        assert.equal(results.confirmedVoters, 1);
+        assert.equal(results.voters, 1);
         assert.deepEqual(
           results.choices.map((c) => c.confirmedCount),
           [1, 0],
         );
+        assert.equal(await store.voteOf("p1", "b:laptop"), undefined);
+      });
+
+      test("a_cast_while_signed_in_replaces_only_that_persons_ballot_on_that_poll", async (t) => {
+        const store = await storeAt(t);
+        await pollWith(store);
+        await store.createPoll({
+          id: "p2",
+          question: "When?",
+          choices: ["Fri", "Sat"],
+          method: "single",
+        });
+        await store.castVote("p1", "b:ada-old", [0], asAda);
+        await store.castVote("p2", "b:ada-old", [0], asAda);
+        await store.castVote("p1", "b:bo", [0], asBo);
+        await store.castVote("p1", "b:anonymous", [0]);
+
+        await store.castVote("p1", "b:ada-new", [1], asAda);
+
+        assert.equal(await store.voteOf("p1", "b:ada-old"), undefined);
+        // Another poll, another person, and a vote nobody confirmed stay.
+        assert.deepEqual((await store.voteOf("p2", "b:ada-old"))?.choices, [0]);
+        assert.deepEqual((await store.voteOf("p1", "b:bo"))?.choices, [0]);
+        assert.deepEqual(
+          (await store.voteOf("p1", "b:anonymous"))?.choices,
+          [0],
+        );
+        const results = await store.results("p1");
+        assert.equal(results.voters, 3);
+        assert.equal(results.confirmedVoters, 2);
+      });
+
+      test("votes_nobody_confirmed_still_count_once_per_browser", async (t) => {
+        const store = await storeAt(t);
+        await pollWith(store);
+        await store.castVote("p1", "b:1", [0]);
+        await store.castVote("p1", "b:2", [0]);
+        await store.castVote("p1", "b:3", [1]);
+        await store.castVote("p1", "b:1", [1]);
+
+        const results = await store.results("p1");
+        assert.equal(results.voters, 3);
+        assert.deepEqual(
+          results.choices.map((c) => c.count),
+          [1, 2],
+        );
+      });
+
+      test("changing_an_answer_while_signed_out_keeps_it_confirmed", async (t) => {
+        let now = AT;
+        const store = await make(() => now, t);
+        await pollWith(store);
+        await store.castVote("p1", "b:phone", [0], asAda);
+
+        // The phone changes its answer with nobody signed in: it keeps its
+        // confirmation, and replaces nothing.
+        now = later(60);
+        const changed = await store.castVote("p1", "b:phone", [1]);
+        assert.equal(changed.status, "changed");
+        await store.castVote("p1", "b:laptop", [0]);
+
+        const results = await store.results("p1");
+        assert.equal(results.voters, 2);
+        assert.equal(results.confirmedVoters, 1);
+        assert.deepEqual(
+          results.choices.map((c) => c.confirmedCount),
+          [0, 1],
+        );
+      });
+
+      test("a_confirmation_needs_the_persons_lock_key", async (t) => {
+        // Every confirming write is serialized on the person's lock
+        // (ADR-0046); a store handed a code without one refuses to write.
+        const store = await storeAt(t);
+        await pollWith(store);
+        await assert.rejects(
+          () =>
+            store.castVote("p1", "b:1", [0], {
+              confirmation: ADA,
+            } as unknown as typeof asAda),
+          TypeError,
+        );
+        assert.equal((await store.results("p1")).voters, 0);
+        await store.castVote("p1", "b:1", [0]);
+        await assert.rejects(
+          () =>
+            store.confirmVotes("b:1", {
+              codeFor: () => ADA,
+            } as unknown as typeof adaSignsIn),
+          TypeError,
+        );
+        assert.equal((await store.results("p1")).confirmedVoters, 0);
       });
 
       test("a_new_confirmation_replaces_the_one_a_vote_held", async (t) => {
         // A different person signed in on the same browser and voted again.
         const store = await storeAt(t);
         await pollWith(store);
-        await store.castVote("p1", "b:shared", [0], { confirmation: ADA });
-        await store.castVote("p1", "b:shared", [1], { confirmation: BO });
+        await store.castVote("p1", "b:shared", [0], asAda);
+        await store.castVote("p1", "b:shared", [1], asBo);
 
         const results = await store.results("p1");
         assert.equal(results.voters, 1);
@@ -617,9 +732,12 @@ export function votingStoreConformance(
         // "shut" closes between the vote and the sign-in.
         now = later(60);
         const seen: string[] = [];
-        const confirmed = await store.confirmVotes("b:1", (poll) => {
-          seen.push(poll);
-          return ADA;
+        const confirmed = await store.confirmVotes("b:1", {
+          codeFor: (poll) => {
+            seen.push(poll);
+            return ADA;
+          },
+          lockKey: asAda.lockKey,
         });
 
         assert.equal(confirmed, 1);
@@ -630,53 +748,138 @@ export function votingStoreConformance(
         // Another browser's vote is not touched.
         assert.equal((await store.results("p3")).confirmedVoters, 0);
         // A browser with no votes confirms nothing.
-        assert.equal(await store.confirmVotes("b:nobody", () => ADA), 0);
+        assert.equal(await store.confirmVotes("b:nobody", adaSignsIn), 0);
       });
 
-      test("confirming_after_the_fact_counts_by_when_the_vote_was_cast_not_when_it_was_confirmed", async (t) => {
+      test("signing_in_on_an_older_ballot_moves_the_newer_answer_to_this_browser", async (t) => {
+        // ADR-0046 decision 4, option A: the person voted on b:new more
+        // recently, then signs in on b:old. The later cast survives, and is
+        // now filed under b:old with its own answer and cast time.
         let now = AT;
         const store = await make(() => now, t);
         await pollWith(store);
         await store.castVote("p1", "b:old", [0]);
         now = later(60);
-        await store.castVote("p1", "b:new", [1], { confirmation: ADA });
+        await store.castVote("p1", "b:new", [1], asAda);
 
-        // The older browser signs in last. Its vote is confirmed, but the
-        // person's most recent vote is still the one cast on b:new.
         now = later(120);
-        assert.equal(await store.confirmVotes("b:old", () => ADA), 1);
+        assert.equal(await store.confirmVotes("b:old", adaSignsIn), 1);
+
+        const moved = await store.voteOf("p1", "b:old");
+        assert.deepEqual(moved?.choices, [1]);
+        assert.equal(moved?.castAt.getTime(), later(60).getTime());
+        assert.equal(await store.voteOf("p1", "b:new"), undefined);
+        assert.deepEqual(
+          (await store.voteHistory("b:old", 10)).map((v) => [
+            v.pollId,
+            v.ballot,
+          ]),
+          [["p1", [1]]],
+        );
+        assert.deepEqual(await store.voteHistory("b:new", 10), []);
 
         const results = await store.results("p1");
+        assert.equal(results.voters, 1);
         assert.equal(results.confirmedVoters, 1);
         assert.deepEqual(
-          results.choices.map((c) => c.confirmedCount),
-          [0, 1],
+          results.choices.map((c) => [c.count, c.confirmedCount]),
+          [
+            [0, 0],
+            [1, 1],
+          ],
+        );
+
+        // It is this browser's ballot now: changing it changes the one vote.
+        now = later(180);
+        assert.equal(
+          (await store.castVote("p1", "b:old", [0])).status,
+          "changed",
+        );
+        assert.equal((await store.results("p1")).confirmedVoters, 1);
+      });
+
+      test("signing_in_on_a_newer_ballot_deletes_the_older_one_elsewhere", async (t) => {
+        let now = AT;
+        const store = await make(() => now, t);
+        await pollWith(store);
+        await store.castVote("p1", "b:old", [0], asAda);
+        now = later(60);
+        await store.castVote("p1", "b:new", [1]);
+
+        now = later(120);
+        assert.equal(await store.confirmVotes("b:new", adaSignsIn), 1);
+
+        assert.deepEqual((await store.voteOf("p1", "b:new"))?.choices, [1]);
+        assert.equal(await store.voteOf("p1", "b:old"), undefined);
+        const results = await store.results("p1");
+        assert.equal(results.voters, 1);
+        assert.deepEqual(
+          results.choices.map((c) => [c.count, c.confirmedCount]),
+          [
+            [0, 0],
+            [1, 1],
+          ],
         );
       });
 
-      test("two_votes_cast_in_the_same_millisecond_settle_on_the_same_one_in_every_store", async (t) => {
-        // Ties go to the greater ballot identity (`moreRecent` in store.ts).
-        // Arbitrary, but both stores must make the same arbitrary choice.
+      test("signing_in_leaves_a_closed_polls_ballots_alone", async (t) => {
+        // ADR-0040 decision 3: a closed poll's results stop changing. The
+        // person's two ballots on it, one confirmed, both stay.
+        let now = AT;
+        const store = await make(() => now, t);
+        await store.createPoll({
+          id: "shut",
+          question: "Closed already?",
+          choices: ["Yes", "No"],
+          method: "single",
+          closesAt: later(90),
+        });
+        await store.castVote("shut", "b:old", [0]);
+        now = later(60);
+        await store.castVote("shut", "b:new", [1], asAda);
+
+        now = later(120);
+        assert.equal(await store.confirmVotes("b:old", adaSignsIn), 0);
+
+        assert.deepEqual((await store.voteOf("shut", "b:old"))?.choices, [0]);
+        assert.deepEqual((await store.voteOf("shut", "b:new"))?.choices, [1]);
+        const results = await store.results("shut");
+        assert.equal(results.voters, 2);
+        assert.equal(results.confirmedVoters, 1);
+      });
+
+      test("a_same_millisecond_tie_at_sign_in_moves_the_greater_ballots_answer_here", async (t) => {
+        // Ties go to the greater ballot identity (`moreRecent` in store.ts;
+        // `collate "C"` in Postgres). Here the other browser's is greater, so
+        // its answer moves to the browser signing in.
         const store = await storeAt(t);
         await pollWith(store);
-        await store.castVote("p1", "b:2", [1], { confirmation: ADA });
-        await store.castVote("p1", "b:1", [0], { confirmation: ADA });
+        await store.castVote("p1", "b:2", [1], asAda);
+        await store.castVote("p1", "b:1", [0]);
 
+        await store.confirmVotes("b:1", adaSignsIn);
+
+        assert.deepEqual((await store.voteOf("p1", "b:1"))?.choices, [1]);
+        assert.equal(await store.voteOf("p1", "b:2"), undefined);
         assert.deepEqual(
           (await store.results("p1")).choices.map((c) => c.confirmedCount),
           [0, 1],
         );
       });
 
-      test("the_same_millisecond_tie_goes_to_the_greater_ballot_whichever_is_written_first", async (t) => {
+      test("a_same_millisecond_tie_at_sign_in_keeps_this_ballot_when_it_is_the_greater", async (t) => {
         // The mirror of the test above. Together they pin the tie-break
-        // itself: a store that keeps the first or the last row written, or
-        // whatever order its rows happen to sit in, fails one of the two.
+        // itself: a store that always keeps this browser's answer, or always
+        // the other's, fails one of the two.
         const store = await storeAt(t);
         await pollWith(store);
-        await store.castVote("p1", "b:1", [0], { confirmation: ADA });
-        await store.castVote("p1", "b:2", [1], { confirmation: ADA });
+        await store.castVote("p1", "b:1", [0], asAda);
+        await store.castVote("p1", "b:2", [1]);
 
+        await store.confirmVotes("b:2", adaSignsIn);
+
+        assert.deepEqual((await store.voteOf("p1", "b:2"))?.choices, [1]);
+        assert.equal(await store.voteOf("p1", "b:1"), undefined);
         assert.deepEqual(
           (await store.results("p1")).choices.map((c) => c.confirmedCount),
           [0, 1],
@@ -698,9 +901,10 @@ export function votingStoreConformance(
 
         await assert.rejects(
           () =>
-            store.confirmVotes("b:1", (poll) =>
-              poll === "p2" ? "voter-123" : ADA,
-            ),
+            store.confirmVotes("b:1", {
+              codeFor: (poll) => (poll === "p2" ? "voter-123" : ADA),
+              lockKey: asAda.lockKey,
+            }),
           TypeError,
         );
         assert.equal((await store.results("p1")).confirmedVoters, 0);
@@ -716,8 +920,8 @@ export function votingStoreConformance(
           choices: ["Fri", "Sat"],
           method: "single",
         });
-        await store.castVote("p1", "b:1", [0], { confirmation: ADA });
-        await store.castVote("p2", "b:1", [1], { confirmation: ADA });
+        await store.castVote("p1", "b:1", [0], asAda);
+        await store.castVote("p2", "b:1", [1], asAda);
 
         assert.equal((await store.results("p1")).confirmedVoters, 1);
         assert.equal((await store.results("p2")).confirmedVoters, 1);
@@ -735,7 +939,11 @@ export function votingStoreConformance(
           "",
         ]) {
           await assert.rejects(
-            () => store.castVote("p1", "b:1", [0], { confirmation: bad }),
+            () =>
+              store.castVote("p1", "b:1", [0], {
+                confirmation: bad,
+                lockKey: asAda.lockKey,
+              }),
             TypeError,
           );
         }
@@ -743,7 +951,11 @@ export function votingStoreConformance(
 
         await store.castVote("p1", "b:1", [0]);
         await assert.rejects(
-          () => store.confirmVotes("b:1", () => "ada@example.org"),
+          () =>
+            store.confirmVotes("b:1", {
+              codeFor: () => "ada@example.org",
+              lockKey: asAda.lockKey,
+            }),
           TypeError,
         );
         assert.equal((await store.results("p1")).confirmedVoters, 0);
