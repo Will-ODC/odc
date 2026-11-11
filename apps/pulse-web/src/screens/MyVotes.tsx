@@ -4,7 +4,8 @@ import { AnsweredList } from "../components/AnsweredList.js";
 import { ViewState } from "../components/ViewState.js";
 import { useMyVotes } from "../hooks/use-my-votes.js";
 import { useSession } from "../hooks/use-session.js";
-import { SiteBanner } from "./SiteBanner.js";
+import { pathOf } from "../flow/route.js";
+import { SiteBanner } from "../components/SiteBanner.js";
 import "./Browse.css";
 
 /** This browser's current ballots, read from the server on every visit (#329). */
@@ -30,7 +31,7 @@ export function MyVotes({ api }: { api: PulseApi }) {
     <div className="welcome browse">
       <header className="browse__header">
         <SiteBanner
-          currentHref="/my-votes"
+          currentHref={pathOf({ kind: "myVotes" })}
           session={session}
           progress={progress}
           holdsVotes={holdsVotes}

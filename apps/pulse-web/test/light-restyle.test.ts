@@ -98,8 +98,8 @@ it("shows rail questions as unavailable while an answer is sent (#488)", () => {
 });
 
 it("makes the My votes rail heading a visible, padded link (#488)", () => {
-  expect(css("screens/Conversation.css")).toMatch(
-    /\.conversation__sidebar h2 a \{[^}]*display: inline-flex;[^}]*min-height: calc\(var\(--step\) \* 3\);[^}]*padding-block: calc\(var\(--step\) \/ 2\);[^}]*text-decoration: underline;/s,
+  expect(css("components/AnsweredRail.css")).toMatch(
+    /\.answered-rail h2 a \{[^}]*display: inline-flex;[^}]*min-height: calc\(var\(--step\) \* 3\);[^}]*padding-block: calc\(var\(--step\) \/ 2\);[^}]*text-decoration: underline;/s,
   );
 });
 
@@ -124,12 +124,11 @@ function blocksFor(source: string, selector: string): string[] {
 }
 
 it("keeps the closing note and rail notes small and muted (#488)", () => {
-  const source = css("screens/Conversation.css");
-  for (const selector of [
-    ".conversation__hero > p",
-    ".conversation__sidebar p",
-  ]) {
-    const blocks = blocksFor(source, selector);
+  for (const [file, selector] of [
+    ["screens/Conversation.css", ".conversation__hero > p"],
+    ["components/AnsweredRail.css", ".answered-rail p"],
+  ] as const) {
+    const blocks = blocksFor(css(file), selector);
     expect(blocks.length, selector).toBeGreaterThan(0);
     for (const block of blocks) {
       expect(block, selector).toContain("font-size: var(--t-small);");
@@ -141,13 +140,29 @@ it("keeps the closing note and rail notes small and muted (#488)", () => {
 });
 
 it("spaces the rail's status line only when it shows something (#488)", () => {
-  const source = css("screens/Conversation.css");
+  const source = css("components/AnsweredRail.css");
   // A region holding only the visually hidden "Your votes are loaded." is
   // not empty, so `:not(:empty)` alone would still open a gap.
   const selector =
-    ".conversation__sidebar .viewstate--compact:has(> :not(.visually-hidden))";
+    ".answered-rail .viewstate--compact:has(> :not(.visually-hidden))";
   const blocks = blocksFor(source, selector);
   expect(blocks).toHaveLength(1);
   expect(blocks[0]).toContain("margin-block: var(--step);");
   expect(source).not.toMatch(/viewstate--compact:not\(:empty\)/);
+});
+
+it("hides the shared rail on phones and gives both desktop pages a flexible second column (#498)", () => {
+  const rail = css("components/AnsweredRail.css");
+  expect(rail).toMatch(/\.answered-rail \{\s*display: none;/);
+  expect(rail).toMatch(
+    /@media \(min-width: 700px\) \{\s*\.answered-rail \{\s*display: flex;/,
+  );
+  for (const [file, selector] of [
+    ["screens/Browse.css", ".browse__layout"],
+    ["screens/Conversation.css", ".conversation"],
+  ] as const) {
+    expect(css(file)).toContain(`@media (min-width: 700px) {
+  ${selector} {
+    ${selector === ".browse__layout" ? "display: grid;\n    " : ""}grid-template-columns: var(--rail) minmax(0, 1fr);`);
+  }
 });
