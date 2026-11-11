@@ -1,5 +1,5 @@
 import { useEffect, useId, useRef, useState } from "react";
-import type { FocusEvent, KeyboardEvent, ReactNode } from "react";
+import type { FocusEvent, KeyboardEvent, ReactNode, RefObject } from "react";
 import "./AccountMenu.css";
 
 /**
@@ -19,13 +19,16 @@ import "./AccountMenu.css";
 export function AccountMenu({
   label = "Account",
   children,
+  triggerRef,
 }: {
   label?: string;
   children: ReactNode;
+  triggerRef?: RefObject<HTMLButtonElement | null>;
 }) {
   const [open, setOpen] = useState(false);
   const root = useRef<HTMLDivElement>(null);
-  const button = useRef<HTMLButtonElement>(null);
+  const localButton = useRef<HTMLButtonElement>(null);
+  const button = triggerRef ?? localButton;
   const panelId = useId();
 
   useEffect(() => {

@@ -1,4 +1,4 @@
-import { useEffect, useId, useRef, useState } from "react";
+import { useCallback, useEffect, useId, useRef, useState } from "react";
 import type { ReactNode } from "react";
 import type { CreationContext, Poll, PulseApi } from "../api/types.js";
 import { ApiError } from "../api/types.js";
@@ -24,6 +24,7 @@ import {
 } from "../flow/new-poll.js";
 import type { Draft, Problems } from "../flow/new-poll.js";
 import { useCreationContext } from "../hooks/use-creation-context.js";
+import { useMyVotes } from "../hooks/use-my-votes.js";
 import { useSession } from "../hooks/use-session.js";
 import { SiteBanner } from "./SiteBanner.js";
 import { browserStore } from "../flow/sign-in-return.js";
@@ -78,14 +79,24 @@ export function NewPoll({
   const [kept, setKept] = useState(false);
   // The app's own bar, at every width, so a phone has a way home (operator
   // walkthrough, 2026-10-21). Signing out there shows the way back in.
-  const bar = useSession(api, { onSignedOut: signedOut });
+  const mine = useMyVotes(api);
+  const clearMine = mine.clear;
+  const onSignedOut = useCallback(() => {
+    clearMine();
+    signedOut();
+  }, [clearMine, signedOut]);
+  const bar = useSession(api, {
+    onSignedOut,
+    onForgotten: mine.clear,
+  });
   return (
     <div className="post-page">
       <header className="post__bar">
         <SiteBanner
           session={bar.session}
           progress={bar.progress}
-          holdsVotes={false}
+          holdsVotes={mine.holdsVotes}
+          {...(mine.voteRead ? { voteRead: mine.voteRead } : {})}
           onPostPage
           signInHref={signInHref}
           onSignOut={bar.signOut}

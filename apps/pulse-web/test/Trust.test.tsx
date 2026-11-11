@@ -37,7 +37,7 @@ function watchedApi(): { api: PulseApi; calls: () => string[] } {
 const REPO = "https://github.com/Will-ODC/odc";
 
 describe("the trust page's own address (#351)", () => {
-  it("opens without sign-in and only reads the session for shared navigation", async () => {
+  it("opens without sign-in and only reads account state for shared navigation", async () => {
     const fetchSpy = vi.spyOn(globalThis, "fetch");
     const { api, calls } = watchedApi();
     globalThis.history.replaceState(null, "", "/trust");
@@ -52,7 +52,7 @@ describe("the trust page's own address (#351)", () => {
     ).toBeTruthy();
     // Let any effect that might fetch get its chance before counting.
     await Promise.resolve();
-    expect(calls()).toEqual(["me"]);
+    expect(calls().sort()).toEqual(["me", "myVotes"]);
     expect(fetchSpy).not.toHaveBeenCalled();
     expect(screen.queryByLabelText("Your email")).toBeNull();
   });

@@ -9,7 +9,8 @@ import "./Browse.css";
 
 /** This browser's current ballots, read from the server on every visit (#329). */
 export function MyVotes({ api }: { api: PulseApi }) {
-  const { data, more, loadMore, clear, retry } = useMyVotes(api);
+  const { data, more, loadMore, clear, retry, holdsVotes, voteRead } =
+    useMyVotes(api);
   const { session, progress, signOut, dismiss } = useSession(api, {
     onSignedOut: clear,
     onForgotten: clear,
@@ -32,7 +33,8 @@ export function MyVotes({ api }: { api: PulseApi }) {
           currentHref="/my-votes"
           session={session}
           progress={progress}
-          holdsVotes={data.status === "ready" && data.value.votes.length > 0}
+          holdsVotes={holdsVotes}
+          {...(voteRead ? { voteRead } : {})}
           onSignOut={signOut}
           onCancel={dismiss}
         />
