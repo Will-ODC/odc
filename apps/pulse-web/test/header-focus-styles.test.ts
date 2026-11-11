@@ -42,6 +42,6 @@ it("draws Next question as quiet text with the standard focus ring, not a green 
   expect(css).not.toMatch(/\.vote-card__next > button/);
   expect(css).not.toMatch(/\.vote-card__actions > button:last-child/);
   expect(css).toMatch(
-    /\.vote-card button:focus-visible \{\s*outline: calc\(var\(--hairline\) \* 2\) solid var\(--focus\);/,
+    /\.vote-card button:focus-visible \{\s*outline: var\(--focus-ring-width\) solid var\(--focus\);/,
   );
 });
