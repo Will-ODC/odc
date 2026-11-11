@@ -12,18 +12,13 @@ import type { Route } from "../flow/route.js";
 import { cardStatus, closingNote, nextFor } from "../flow/conversation.js";
 import { byline } from "../flow/new-poll.js";
 import { pathOf } from "../flow/route.js";
-import {
-  answeredList,
-  mergedVotes,
-  myVotesPlace,
-  type MyVotesPlace,
-} from "../flow/answered.js";
+import { answeredList, type MyVotesPlace } from "../flow/answered.js";
 import { usePoll } from "../hooks/use-poll.js";
 import { useCastVote } from "../hooks/use-cast-vote.js";
 import type { CastState } from "../hooks/use-cast-vote.js";
 import { useClosedResults } from "../hooks/use-closed-results.js";
 import { useFreshResults } from "../hooks/use-fresh-results.js";
-import { useLaterVotes, useMyVotes } from "../hooks/use-my-votes.js";
+import { useMyVotes, useMyVotesPlace } from "../hooks/use-my-votes.js";
 import { useWide } from "../hooks/use-wide.js";
 import { useSwipeLeft } from "../hooks/use-swipe.js";
 import type { Confirmation } from "../flow/vote-card.js";
@@ -169,12 +164,6 @@ export function Conversation({
   // survives navigation and reload (#484); this page's answers join it below.
   const mine = useMyVotes(api);
   const { clear: clearMine } = mine;
-  // Questions answered here or restored, as of when the open one was
-  // opened: once left and opened again, a first answer is in My votes too.
-  const [listedFor, setListedFor] = useState<{ at: string; ids: string[] }>({
-    at,
-    ids: [],
-  });
   // Set by the rail's Try again, so a reload that ends well is read out too.
   const [railRetried, setRailRetried] = useState(false);
   // Counts forgettings, so a send from before one changes nothing after it.
@@ -196,7 +185,6 @@ export function Conversation({
     setHeldBefore(false);
     setRailRetried(false);
     setAt(pollId);
-    setListedFor({ at: pollId, ids: [] });
     setRound((n) => n + 1);
     clearMine();
   }, [pollId, clearMine]);
@@ -306,46 +294,16 @@ export function Conversation({
   const serverVotes = firstPage?.votes ?? [];
   // The rail draws the first page and this page's answers, nothing more.
   const answered = answeredList(serverVotes, answers, recentAnswers);
-  // A saved answer read back for this question when it was opened: in
-  // `answers` without having been cast here.
-  const restoredHere =
-    answers.some((one) => one.poll.id === at) && !recentAnswers.includes(at);
-  if (listedFor.at !== at)
-    setListedFor({
-      at,
-      ids: [
-        ...new Set([...listedFor.ids, ...answers.map((one) => one.poll.id)]),
-      ],
-    });
-  else if (restoredHere && !listedFor.ids.includes(at))
-    setListedFor({ at, ids: [...listedFor.ids, at] });
-  const listed =
-    serverVotes.some((vote) => vote.pollId === at) ||
-    restoredHere ||
-    (listedFor.at === at && listedFor.ids.includes(at));
-  // Previous and Next follow My votes (#528). An older saved answer's row, or
-  // the row below the last one read, can be on a later page: those pages are
-  // read for this alone and never drawn, so the rail keeps See all my votes.
-  // An unanswered question reads nothing more.
-  const [wanted, setWanted] = useState(false);
-  const later = useLaterVotes(api, firstPage, wanted);
-  const loaded = mergedVotes(serverVotes, later.rows);
-  const found = myVotesPlace({
-    ordered:
-      later.rows.length > 0
-        ? answeredList(loaded, answers, recentAnswers)
-        : answered,
-    loaded,
+  // Previous and Next follow My votes (#528).
+  const place = useMyVotesPlace({
+    api,
+    first: firstPage,
+    firstLoading: mine.data.status === "loading",
+    answers,
     recent: recentAnswers,
-    current: at,
-    listed,
-    more: mine.data.status === "loading" || later.more,
+    at,
+    round,
   });
-  // A page that could not be read: the answer-selected Next, as before.
-  const place: MyVotesPlace =
-    found.kind === "finding" && later.failed ? { kind: "none" } : found;
-  const looking = place.kind === "finding" && firstPage !== undefined;
-  if (looking !== wanted) setWanted(looking);
   const main = useRef<HTMLElement>(null);
   // "Your question is live" belongs to the question just posted. Leaving it
   // for another question ends the line.

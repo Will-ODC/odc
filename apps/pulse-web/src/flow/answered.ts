@@ -30,7 +30,8 @@ export type MyVotesPlace =
  * and opened again later. A first answer keeps its answer-selected Next.
  * `more` says rows after `loaded` may exist (a cursor, or a list still being
  * read). A row the server has not listed yet is not placed: a restored answer
- * is only appended after the loaded rows, which is not its place.
+ * is only appended after the loaded rows, which is not its place, so it is
+ * neither found itself nor offered as another row's neighbour.
  */
 export function myVotesPlace({
   ordered,
@@ -48,16 +49,19 @@ export function myVotesPlace({
   more: boolean;
 }): MyVotesPlace {
   if (!listed) return { kind: "none" };
-  const placed =
-    recent.includes(current) || loaded.some((vote) => vote.pollId === current);
-  const index = ordered.findIndex((vote) => vote.pollId === current);
-  if (!placed || index < 0)
-    return more ? { kind: "finding" } : { kind: "none" };
-  if (index === ordered.length - 1 && more) return { kind: "finding" };
+  // Only rows in their real place: read from the server, or moved to the top
+  // here. A restored row appended after them is nobody's neighbour.
+  const loadedIds = new Set(loaded.map((vote) => vote.pollId));
+  const placed = ordered.filter(
+    (vote) => recent.includes(vote.pollId) || loadedIds.has(vote.pollId),
+  );
+  const index = placed.findIndex((vote) => vote.pollId === current);
+  if (index < 0) return more ? { kind: "finding" } : { kind: "none" };
+  if (index === placed.length - 1 && more) return { kind: "finding" };
   return {
     kind: "found",
-    previous: ordered[index - 1] ?? null,
-    next: ordered[index + 1] ?? null,
+    previous: placed[index - 1] ?? null,
+    next: placed[index + 1] ?? null,
   };
 }
 

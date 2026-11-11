@@ -196,6 +196,17 @@ describe("myVotesPlace (#528)", () => {
     });
   });
 
+  it("never offers a restored row appended after the loaded rows as a neighbour", () => {
+    const restored = saved({ pollId: "older" });
+    const ordered = [...rows, restored];
+    expect(at("last", { ordered, more: true })).toEqual({ kind: "finding" });
+    expect(at("last", { ordered })).toEqual({
+      kind: "found",
+      previous: rows[1],
+      next: null,
+    });
+  });
+
   it("follows a changed row to the top", () => {
     const changed = [rows[1]!, rows[0]!, rows[2]!];
     expect(at("middle", { ordered: changed, recent: ["middle"] })).toEqual({

@@ -5,6 +5,13 @@ import {
   type MyVotesPage,
   type PulseApi,
 } from "../api/types.js";
+import {
+  answeredList,
+  mergedVotes,
+  myVotesPlace,
+  type LocalAnswer,
+  type MyVotesPlace,
+} from "../flow/answered.js";
 import type { ViewData } from "./view-data.js";
 
 type More =
@@ -119,14 +126,15 @@ interface Later {
   first: MyVotesPage | undefined;
   rows: MyVote[];
   cursor: string | null;
-  failed: boolean;
+  /** The open question a read failed or stuck for, if any. */
+  failedFor: string | null;
 }
 
 const startOf = (first: MyVotesPage | undefined): Later => ({
   first,
   rows: [],
   cursor: first?.nextCursor ?? null,
-  failed: false,
+  failedFor: null,
 });
 
 /**
@@ -134,12 +142,16 @@ const startOf = (first: MyVotesPage | undefined): Later => ({
  * saved answer's place and the row below it (#528). Nothing draws them: the
  * rail keeps its first page and See all my votes. While `wanted`, it reads
  * one page at a time, and starts over when `first` is read again. `more` is
- * whether a cursor is left; a failed or stuck read stops it (`failed`).
+ * whether a cursor is left. A failed or stuck read stops it for `question`,
+ * the open question (`failed`); opening another question tries once more, so
+ * one blip does not last the visit and a page that always fails is asked
+ * for once per question, never in a loop.
  */
 export function useLaterVotes(
   api: PulseApi,
   first: MyVotesPage | undefined,
   wanted: boolean,
+  question: string,
 ) {
   const [later, setLater] = useState<Later>(() => startOf(first));
   let current = later;
@@ -147,7 +159,8 @@ export function useLaterVotes(
     current = startOf(first);
     setLater(current);
   }
-  const { cursor, failed } = current;
+  const { cursor } = current;
+  const failed = current.failedFor === question;
   // The read in flight, so a re-render never asks for the same page twice.
   const reading = useRef<{ first: MyVotesPage; cursor: string } | null>(null);
   useEffect(() => {
@@ -161,25 +174,96 @@ export function useLaterVotes(
         old.first === first && old.cursor === cursor ? next(old) : old,
       );
     };
+    const stop = (old: Later) => ({ ...old, failedFor: question });
     api.myVotes(cursor).then(
       (page) =>
         settle((old) =>
           page.nextCursor === cursor
-            ? { ...old, failed: true }
+            ? stop(old)
             : {
                 ...old,
                 rows: [...old.rows, ...page.votes],
                 cursor: page.nextCursor,
+                failedFor: null,
               },
         ),
-      () => settle((old) => ({ ...old, failed: true })),
+      () => settle(stop),
     );
-  }, [api, first, cursor, failed, wanted]);
-  return {
-    rows: current.rows,
-    more: current.cursor !== null,
-    failed: current.failed,
-  };
+  }, [api, first, cursor, failed, wanted, question]);
+  return { rows: current.rows, more: current.cursor !== null, failed };
+}
+
+/**
+ * Where the open question `at` stands in My votes, for its Previous and Next
+ * (#528); see `myVotesPlace`. `first` is the rail's first page (undefined
+ * until read), `answers` and `recent` this page's answers, and `round` counts
+ * forgettings, which start the list of questions answered here over.
+ */
+export function useMyVotesPlace({
+  api,
+  first,
+  firstLoading,
+  answers,
+  recent,
+  at,
+  round,
+}: {
+  api: PulseApi;
+  first: MyVotesPage | undefined;
+  firstLoading: boolean;
+  answers: readonly LocalAnswer[];
+  recent: readonly string[];
+  at: string;
+  round: number;
+}): MyVotesPlace {
+  // Questions answered here or restored, as of when the open one was
+  // opened: once left and opened again, a first answer is in My votes too.
+  const [listedFor, setListedFor] = useState({
+    at,
+    round,
+    ids: [] as string[],
+  });
+  // A saved answer read back for this question when it was opened: in
+  // `answers` without having been cast here.
+  const restoredHere =
+    answers.some((one) => one.poll.id === at) && !recent.includes(at);
+  if (listedFor.round !== round) setListedFor({ at, round, ids: [] });
+  else if (listedFor.at !== at)
+    setListedFor({
+      at,
+      round,
+      ids: [
+        ...new Set([...listedFor.ids, ...answers.map((one) => one.poll.id)]),
+      ],
+    });
+  else if (restoredHere && !listedFor.ids.includes(at))
+    setListedFor({ at, round, ids: [...listedFor.ids, at] });
+  const serverVotes = first?.votes ?? [];
+  const listed =
+    serverVotes.some((vote) => vote.pollId === at) ||
+    restoredHere ||
+    (listedFor.round === round &&
+      listedFor.at === at &&
+      listedFor.ids.includes(at));
+  // Later pages are read only while a saved answer's row, or the row below
+  // the last one read, may be on one. An unanswered question reads nothing.
+  const [wanted, setWanted] = useState(false);
+  const later = useLaterVotes(api, first, wanted, at);
+  const loaded = mergedVotes(serverVotes, later.rows);
+  const found = myVotesPlace({
+    ordered: answeredList(loaded, answers, recent),
+    loaded,
+    recent,
+    current: at,
+    listed,
+    more: firstLoading || later.more,
+  });
+  // A page that could not be read: the answer-selected Next, as before.
+  const place: MyVotesPlace =
+    found.kind === "finding" && later.failed ? { kind: "none" } : found;
+  const looking = place.kind === "finding" && first !== undefined;
+  if (looking !== wanted) setWanted(looking);
+  return place;
 }
 
 function asView(page: MyVotesPage): ViewData<MyVotesPage> {

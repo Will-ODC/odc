@@ -157,7 +157,9 @@ never while the choices are open for a change. When that row, or the row below
 the last one read, is on a later page, the question page reads further pages
 for the pager alone: the rail still draws its first page and See all my votes.
 Until the neighbours are known no Next is offered; if a page cannot be read the
-question falls back to the answer-selected Next. A question answered for the
+question falls back to the answer-selected Next, and opening another question
+tries that page once more. A row added to the rail without its server row is
+never offered as another row's neighbour. A question answered for the
 first time keeps its answer-selected Next, and an unanswered one reads no more
 pages. Changing a saved answer moves it to the top before its neighbours are
 chosen.

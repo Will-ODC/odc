@@ -9,7 +9,7 @@ import {
   within,
 } from "@testing-library/react";
 import userEvent from "@testing-library/user-event";
-import { afterEach, beforeAll, expect, it, vi } from "vitest";
+import { afterEach, beforeAll, describe, expect, it, vi } from "vitest";
 import type { MyVote, MyVotesPage, Poll } from "../src/api/types.js";
 import { App } from "../src/App.js";
 import { graph, poll, results, stubApi } from "./stub-api.js";
@@ -408,4 +408,105 @@ it("never swipes away from a change being made, but swipes from the results and 
   swipeLeft(main().getByRole("heading", { name: closed.question, level: 1 }));
   await main().findByRole("heading", { name: middle.question, level: 1 });
   expect(location.search).toBe("?poll=middle");
+});
+
+describe("when a later My votes page cannot be read (#528)", () => {
+  const j = poll({ id: "j", question: "Repaint the old bridge?" });
+  const k = poll({ id: "k", question: "Light the river path?" });
+  const y = poll({
+    id: "y",
+    question: "Move the farmers market?",
+    // Where the answer-selected Next leads.
+    next: [first.id, first.id],
+  });
+  const all = [first, j, k, y];
+  const held = { myBallot: async () => [1] };
+  const page1 = {
+    votes: [votes[0]!, saved(j, "2026-11-11T02:50:00.000Z")],
+    nextCursor: "older",
+  };
+  const page2 = {
+    votes: [
+      saved(k, "2026-11-11T02:40:00.000Z"),
+      saved(y, "2026-11-11T02:30:00.000Z"),
+    ],
+    nextCursor: null,
+  };
+  const quiet = () => new Promise((done) => setTimeout(done, 50));
+
+  it.each([
+    ["rejects", () => Promise.reject(new Error("offline"))],
+    ["returns the same cursor", () => Promise.resolve(page1)],
+  ])(
+    "brings back the answer-selected Next and asks no more when it %s",
+    async (_, later: () => Promise<MyVotesPage>) => {
+      const myVotes = vi.fn((cursor?: string) =>
+        cursor ? later() : Promise.resolve(page1),
+      );
+      show(y.id, myVotes, all, held);
+      expect(
+        await main().findByRole("button", { name: "Next question" }),
+      ).toBeTruthy();
+      expect(
+        main().queryByRole("button", { name: /Previous question/ }),
+      ).toBeNull();
+      await act(quiet);
+      expect(myVotes.mock.calls).toEqual([[], ["older"]]);
+    },
+  );
+
+  it("names no wrong neighbour after a failed read, and tries again for another question", async () => {
+    let reads = 0;
+    const myVotes = vi.fn((cursor?: string) =>
+      !cursor
+        ? Promise.resolve(page1)
+        : ++reads === 1
+          ? Promise.reject(new Error("offline"))
+          : Promise.resolve(page2),
+    );
+    show(y.id, myVotes, all, held);
+    const user = userEvent.setup();
+    await main().findByRole("button", { name: "Next question" });
+
+    // J ends the first page; Y, appended to the rail after the failed read,
+    // is not the row below it.
+    await user.click(rail().getByRole("link", { name: j.question }));
+    await main().findByRole("heading", { name: j.question, level: 1 });
+    expect(
+      await main().findByRole("button", {
+        name: `Next question: ${k.question}`,
+      }),
+    ).toBeTruthy();
+    expect(
+      main().queryByRole("button", { name: `Next question: ${y.question}` }),
+    ).toBeNull();
+    expect(myVotes.mock.calls).toEqual([[], ["older"], ["older"]]);
+  });
+
+  it("asks for a later page once while that read is still out", async () => {
+    let finish!: (page: MyVotesPage) => void;
+    const myVotes = vi.fn((cursor?: string) =>
+      cursor
+        ? new Promise<MyVotesPage>((resolve) => (finish = resolve))
+        : Promise.resolve(page1),
+    );
+    show(y.id, myVotes, all, held);
+    const user = userEvent.setup();
+    await waitFor(() => expect(myVotes).toHaveBeenCalledWith("older"));
+    await main().findByRole("heading", { name: y.question, level: 1 });
+
+    // First is on the first page: nothing more is wanted there. Back on Y
+    // the page is wanted again while the first read is still out.
+    await user.click(rail().getByRole("link", { name: first.question }));
+    await main().findByRole("button", { name: `Next question: ${j.question}` });
+    await user.click(rail().getByRole("link", { name: y.question }));
+    await main().findByRole("heading", { name: y.question, level: 1 });
+    act(() => finish(page2));
+    expect(
+      await main().findByRole("button", {
+        name: `Previous question: ${k.question}`,
+      }),
+    ).toBeTruthy();
+    expect(myVotes.mock.calls).toEqual([[], ["older"]]);
+  });
 });

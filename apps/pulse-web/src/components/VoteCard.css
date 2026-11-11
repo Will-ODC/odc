@@ -294,12 +294,10 @@
   margin-top: calc(var(--step) * 1.5);
 }
 /*
- * A quiet text control at the end of the row (#554), not a big green button:
- * moving on is offered, not pushed. Phones can also swipe left.
- */
-/*
- * The one quiet green step between questions: "Next question" (#554), and
- * Previous/Next through My votes (#528), in the card or under a closed one.
+ * The one quiet green step between questions, at the end of the row:
+ * "Next question" (#554), and Previous/Next through My votes (#528), in the
+ * card or under a closed one. Not a big green button: moving on is offered,
+ * not pushed. Phones can also swipe left.
  */
 .question-pager button.vote-card__next,
 .vote-card button.vote-card__next {
