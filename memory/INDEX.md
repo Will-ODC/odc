@@ -35,7 +35,8 @@ Do not apply charter rules to `apps/**`, and do not relax them anywhere else.
   Next address updates, shared headers, sign-in retention, private fault logs,
   security headers, one ballot per signed-in person (ADR-0046), an origin check
   on sign-in and shared Button/Field/Choice are merged. Open follow-ups: #528,
-  #533, #535, #536-#538, #549, #550 and the rest of #534.
+  #533, #535, #536-#538, #549, #550, the rest of #534, #539 step 2, and
+  #499/#500 (mockups merged, not built).
   Comments/replies, abuse reporting and MCP discovery remain unbuilt. Deployment
   needs a host, DNS, a verified sending domain and the runbook prerequisites.
   → `memory/pulse.md`

@@ -163,7 +163,9 @@ the same CI runs.
 2. Open follow-ups: #528 Previous/Next follow My votes, #533 ViewState Try
    again, #535 one paged-list hook, #536 Conversation logic into flow/ and
    hooks, #537 VoteCard split, #538 CSS encapsulation and tokens, #549
-   trusted proxy hops, #550 purge expired sign-in rows, and the rest of #534.
+   trusted proxy hops, #550 purge expired sign-in rows, the rest of #534,
+   #539 step 2 (one session provider; operator decision), and #499 dark mode
+   and #500 compact posted notice (mockups merged in #521, not built).
 3. Prepare a small invited pilot only after choosing a host, configuring DNS,
    verifying a sending domain and satisfying `apps/pulse/DEPLOY.md`'s
    proxy-hop and rate-limit prerequisites. This is not authorization to deploy.
