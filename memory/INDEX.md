@@ -25,19 +25,18 @@ Do not apply charter rules to `apps/**`, and do not relax them anywhere else.
 > entry, the entry wins — and fix the line.** You read this file first and it is
 > smaller, so on a divergence you would otherwise trust the wrong one.
 
-- **ODC core:** Phase 1. ADR-0043 (separate signer, v2 registration) and the
-  charter §10 split are merged (#438, #439, #443). Ledger wave 1 merged
-  (#444-#448); wave 2 append core, read API and operator write path are merged
-  (#460-#463), including the batcher; final wiring remains pending.
-  Identity and the signer are unstarted.
+- **ODC core:** Phase 1. Ledger append, read/operator APIs, batching, startup
+  recovery and server wiring are merged; CI checks batched exports with both
+  verifiers. Deterministic batcher/writer-lock and HTTP limit tests are merged.
+  Registration v2 contracts, identity and the signer remain unbuilt.
+  PR #515 awaits the operator.
   → `memory/STATE.md`
 - **Pulse:** sign-in, voting, confirmed votes, poll creation and public browsing
-  are built. #467 added private My votes history, #468 compact results charts,
-  #485 the white-and-green restyle and phone layout, and #491 a sha-pinned
-  Trivy action plus a host-neutral deployment runbook. The open stack is #488, #489 and #492;
-  #487 is open and unstarted. Comments/replies, abuse reporting and MCP
-  discovery remain unbuilt. Deployment needs a host, DNS, a verified sending
-  domain and the runbook's proxy-hop and rate-limit prerequisites.
+  are built. Answered sync, simpler results, desktop voting under the question,
+  Next address updates, shared headers, sign-in retention and private fault
+  logs are merged. Follow-ups are #517-#520.
+  Comments/replies, abuse reporting and MCP discovery remain unbuilt. Deployment
+  needs a host, DNS, a verified sending domain and the runbook prerequisites.
   → `memory/pulse.md`
 
 ## Load order

@@ -4,7 +4,7 @@
 > Read `memory/INDEX.md` first. Agent rules are in `apps/pulse/CLAUDE.md`, the
 > served API is in `apps/pulse/API.md`, and the work queue is GitHub
 > issues (design detail an issue links to is in `docs/plans/pulse.md`). This file holds current state only, and history is in
-> git. Slimmed 2026-10-10, refreshed 2026-11-08. The long ledger it replaced is in
+> git. Slimmed 2026-10-10, refreshed 2026-11-10. The long ledger it replaced is in
 > `git log -p -- memory/pulse.md`.
 >
 > The operator's development-feedback loop, the trust and reporting decisions,
@@ -27,7 +27,7 @@ and do not import charter machinery into `apps/**`. Two boundaries still hold
 absolutely:
 
 - **No reads or writes into `services/` or `contracts/`.** Pulse votes will reach
-  the core ledger only through the ledger's public HTTP API, once it exists;
+  the core ledger only through the ledger's public HTTP API;
   there will be no separate pulse chain (operator, 2026-10-12).
 - **Never claim more than is built (ADR-0039).** Pulse may explain how votes are
   counted (the old "counting is never the subject" rule is dropped), but no copy
@@ -37,7 +37,7 @@ Repo discipline still applies: tests ship with the change, there is one small
 branch per change, named for its ticket (`pulse/<issue>-<short>`, #310), and
 the same CI runs.
 
-## Where it stands (2026-11-08)
+## Where it stands (2026-11-10)
 
 - **Pillar 1 (identity) is built.** Magic-link sign-in and redeem (#81-#87,
   #116, #149). Open sign-up lets anyone sign in, and community is an optional
@@ -46,7 +46,10 @@ the same CI runs.
   ADR-0033). Sessions are revoked across instances by a shared generation (#200,
   ADR-0031). Community labels are real keys, registered atomically (#358,
   migration 006). Sign-out (#344) and "Forget my votes here" for someone who
-  never signed in (#349) both clear the ballot cookie.
+  never signed in (#349) both clear the ballot cookie. Used sign-in links
+  delete their pending personal data atomically, retaining only a hash replay
+  marker; expired unused links are swept on the next link write (#507 / PR #512,
+  migration 010).
 - **Confirmed votes are built** (#360, ADR-0040, migration 007). A vote cast while
   signed in, or by a browser that signs in later, is confirmed. Results carry
   all votes plus confirmed votes counted once per email account. A confirmed vote stores
@@ -58,16 +61,24 @@ the same CI runs.
   default and retired the swipe ballot, `Run` and `ChoiceBallot`. Around it:
   Home is the General poll browser at `/`; the introduction and Start voting
   are at `/about` (#449 / PR #452, `1570690`). Progress remains at `/start`,
-  with four starting questions at `/questions` (#341/PR #347). #422 / PR #451
-  (`46f9158`, ADR-0044) puts voting in a permanent bottom drawer on phone and
-  desktop, with results below the saved answer in main content. After voting,
-  the drawer handle says Change my answer. The live tutorial was removed.
+  with four starting questions at `/questions` (#341/PR #347). At 700px and
+  wider, voting sits under the question and folds into the saved answer after
+  Submit; Change my answer reopens it in place (#490 / PR #492, ADR-0044).
+  Phones retain the bottom sheet. Results stay below the saved answer.
+  The live tutorial was removed.
   The trust page remains at `/trust` (#351/PR #357, ADR-0039); sign-in has a
   plain heading with no focus box (PR #373). The starting questions need published poll IDs
   (`VITE_PULSE_*_POLL_ID`); until then they show Coming soon.
   #453 / PR #468 adds compact results charts. #482 / PR #485 restyles the web
   app in white and green and adds a phone layout below 700px; the approved
   mockup is `docs/mockups/pulse-light-v1.html`.
+  The Answered rail shares My votes rows, stays in sync and restores saved
+  answers on reload (#484 / PR #488). The saved answer leads a single results
+  card with Hide/Show results and a short sign-in confirmation offer
+  (#478/#480 / PR #489). Next updates the address and browser history
+  (#502 / PR #511). Headers share saved-vote state and history-error recovery
+  across pages (#487 / PR #513). The sign-in column stays 400px wide from
+  the 700px breakpoint (#508 / PR #509).
 - **MCP public reads are built** (#300 read slice, PR #323): `get_poll` and
   `get_results` at `/api/mcp`. ADR-0036 (voting from AI apps) is still marked
   proposed; no casting, sign-in or own-answer tools exist.
@@ -91,6 +102,8 @@ the same CI runs.
   first-post purpose promise, date and attribution controls, explicit posting
   confirmation and sign-in recovery. Ordinary visits clear abandoned drafts;
   an expired recovered closing time opens and focuses its validation error.
+  Real-HTTP integration coverage publishes through `HttpPulseApi.createPoll`
+  with a browser-like Origin, then checks replay, read and vote (PR #506).
 - **Demo feedback is merged:** #401 / PR #403 opens each question's vote card
   by default; #400 / PR #404 adds space around tutorial highlights; #402 /
   PR #405 shortens the trust link/title to "How votes count" and the page from
@@ -101,6 +114,15 @@ the same CI runs.
   Resend mail (#164, ADR-0027), and two images on one origin (#165, ADR-0028),
   built and scanned in CI with a sha-pinned Trivy action (#212, PR #491).
   Dependabot alerts are on. `apps/pulse/DEPLOY.md` is the host-neutral deployment runbook (#491).
+  The API image excludes package managers and image scanning also runs weekly
+  and on manual dispatch (PR #495).
+- **Test audit follow-ups are merged:** forced-lock Postgres sign-out overlap
+  and full 413 responses on all seven body-taking routes (PR #496); fake
+  timers and call assertions replace the unrelated-storage-event sleep
+  (PR #505).
+- **Fault logs exclude personal data** (#503 / PR #514): unexpected faults
+  use generic responses and log only error class, valid SQLSTATE and mail
+  HTTP status where applicable, including startup/background faults.
 
 ## What stands between this and a usable deploy
 
@@ -114,16 +136,13 @@ the same CI runs.
 5. **The proxy-hop and rate-limit prerequisites** in `apps/pulse/DEPLOY.md`
    must be satisfied before go-live.
 
-## Current operator direction and next work (2026-11-08)
+## Current operator direction and next work (2026-11-10)
 
-1. **Recent UI work is merged:** private My votes history (#329 / PR #467),
-   compact results charts (#453 / PR #468), and the light restyle with phone
-   layout (#482 / PR #485).
-2. **The open stack starts at PR #488:** #484 Answered list sync has fixes in
-   progress; PR #489 simplifies results (#478/#480) on top of #488; PR #492
-   adds the desktop layout (#490) on top of #489.
-3. #487 remains open and has not started.
-4. Prepare a small invited pilot only after choosing a host, configuring DNS,
+1. The recent Answered, results, desktop voting, sign-in and header changes
+   are merged; there is no remaining UI stack awaiting merge.
+2. Open follow-ups: #517 pulse-web CI flakes, #518 header nits, #519 the late
+   Close reply race (Opus), and #520 nginx headers and self-hosted font.
+3. Prepare a small invited pilot only after choosing a host, configuring DNS,
    verifying a sending domain and satisfying `apps/pulse/DEPLOY.md`'s
    proxy-hop and rate-limit prerequisites. This is not authorization to deploy.
 
@@ -173,7 +192,7 @@ the same CI runs.
   no algorithm, personalization or inferred relationship rule is selected.
 - #453's open/closed poll chart presentation is merged in PR #468; #332 owns
   linked action progress and evidence, reusing the same results. #303 and #297
-  reflect the results-before-comments layout and merged drawer.
+  reflect the results-before-comments layout and current voting placement.
 - #291 owns discovery/listing in the existing public MCP adapter, not another
   implementation of PR #323's get_poll/get_results. #397 owns posts,
   post-to-poll relationships and the mixed feed; reuse #427's poll previews.
@@ -188,8 +207,8 @@ the same CI runs.
 
 - **The authoring and demo-feedback slices are complete** (#393/#403–#405).
   Browse #260, the #451/#452 layout, #453 / PR #468 results charts and #482 /
-  PR #485 light restyle are merged. The current stack is #488, #489 and #492;
-  #487 is open and unstarted. #457/#458 add community paths and lifecycle
+  PR #485 light restyle are merged, as are the later UI refinements above.
+  #457/#458 add community paths and lifecycle
   deliberation. Poll-creation refinements are an open operator request whose particular
   changes still need scoping; reuse the built creation flow. A local demo is
   available, but there is no public deploy.
@@ -241,9 +260,6 @@ the same CI runs.
 - **Signing out clears the ballot cookie**, so a person who votes, signs out,
   signs back in and votes again is counted twice in the full totals. Confirmed
   totals count each account once (ADR-0040). That cost is accepted.
-- **How long `pending_claim` rows are kept, and what a mail-provider error may
-  write to logs.** Both from #315; filed in `memory/OPEN-QUESTIONS.md` under
-  "Pulse sign-in data: retention and logging (2026-10-11)".
 - `polls` is the only plural table, inherited from ADR-0021. Renaming it needs a
   new migration, never an edit to `001`. No decision has been taken.
 - `diff-size.sh` says the 400-line WARN "still fires for pulse", but it excludes
@@ -282,9 +298,8 @@ the same CI runs.
 - **A re-cast is an upsert** (`voting/pg-store.ts`). Any "stamped once" rule
   describes the answer currently standing.
 - **ADR-0035 / ADR-0044:** the vote page is a conversation; ADR-0044
-  supersedes the historical mockup's placement with a permanent bottom voting
-  drawer and results beneath the saved answer in main content. Next stays
-  with results. #453's compact chart refinement is built in PR #468.
+  records voting under the question on desktop and a bottom sheet on phones,
+  with results beneath the saved answer. Next stays with results.
 - **ADR-0037:** poll creation: closes after seven days unless the poster picks a
   later time; suggestions off (#336); five publications per rolling hour per
   account; Owner and narrow grants; community or General posting; anonymous by
