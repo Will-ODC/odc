@@ -167,6 +167,14 @@ export function Conversation({
   const [railRetried, setRailRetried] = useState(false);
   // Counts forgettings, so a send from before one changes nothing after it.
   const generation = useRef(0);
+  // Counts sends per question, so the server's answer to "which ballot do you
+  // hold" changes nothing once a newer send for that question has started:
+  // it may describe the server from before that send was stored (#519).
+  const sends = useRef(new Map<string, number>());
+  const stamp = useCallback(
+    (id: string) => `${generation.current}:${sends.current.get(id) ?? 0}`,
+    [],
+  );
   const forgotten = useCallback(() => {
     generation.current += 1;
     setAnswers([]);
@@ -214,12 +222,13 @@ export function Conversation({
   });
   // After a lost connection the answer may have been stored: ask the server
   // which one it holds, and list that one. A changed one counts as a cast.
-  // Undefined when the server could not say, or the votes were forgotten.
+  // Undefined when the server could not say, the votes were forgotten, or
+  // the question was sent again while it was asked.
   const readBack = useCallback(
     async (poll: Poll): Promise<Answer | undefined> => {
-      const askedIn = generation.current;
+      const askedAt = stamp(poll.id);
       const found = await savedAnswer(api, poll);
-      if (!found || generation.current !== askedIn) return undefined;
+      if (!found || stamp(poll.id) !== askedAt) return undefined;
       const before = latest.current.answers.find(
         (one) => one.poll.id === poll.id,
       );
@@ -227,12 +236,13 @@ export function Conversation({
       else counted(found);
       return found;
     },
-    [api, counted, remembered],
+    [api, counted, remembered, stamp],
   );
   const sent = useCallback(
     (poll: Poll, outcome: Promise<CastState>) => {
       const sentIn = generation.current;
       const current = () => generation.current === sentIn;
+      sends.current.set(poll.id, (sends.current.get(poll.id) ?? 0) + 1);
       setSending((old) => [...old, poll.id]);
       void outcome.then(async (state) => {
         if (!current()) return;
