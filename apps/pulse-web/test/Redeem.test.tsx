@@ -186,6 +186,28 @@ describe("when the link has run out", () => {
     );
     expect(onAskAgain).toHaveBeenCalledTimes(1);
   });
+
+  // SignIn.css no longer draws `.signin__go`; the shared Button does (#534).
+  it("draws the way out as the shared primary button", async () => {
+    render(
+      <Redeem
+        api={stubApi({
+          redeem: () =>
+            Promise.reject(
+              new ApiError(410, "That link has expired.", "expired"),
+            ),
+        })}
+        token="abc"
+        onSignedIn={noop}
+        onAskAgain={noop}
+      />,
+    );
+    const button = await screen.findByRole("button", {
+      name: "Ask for a new link",
+    });
+    expect(button.classList).toContain("btn");
+    expect(button.classList).toContain("btn--primary");
+  });
 });
 
 /*

@@ -37,6 +37,7 @@
   border: 0;
   text-decoration: underline;
   text-underline-offset: 0.2em;
+  border-radius: 0;
 }
 .btn:focus-visible {
   outline: var(--focus-ring-width) solid var(--focus);
@@ -46,8 +47,13 @@
   opacity: 0.55;
   cursor: default;
 }
+/*
+ * Phone: full-height touch targets for the boxed variants only. A quiet button
+ * sits inline in a sentence ("… Change"), so it keeps its text height.
+ */
 @media (max-width: 699px) {
-  .btn {
+  .btn--primary,
+  .btn--secondary {
     display: flex;
     align-items: center;
     justify-content: center;
