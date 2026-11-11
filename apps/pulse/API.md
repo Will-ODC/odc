@@ -23,6 +23,12 @@ responses and request-log formatting are unchanged.
 
 ## Signing in
 
+### Identity response caching
+
+`GET /api/me` and both `GET` and `POST /api/sign-in/redeem` send
+`Cache-Control: no-store`, including error responses. Browsers and shared
+caches must not retain identity details or sign-in-link state.
+
 ### Local development mailbox
 
 Development uses the ordinary `POST /api/sign-in` and redemption endpoints for
