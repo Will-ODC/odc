@@ -128,6 +128,31 @@ export function claimStoreConformance(
         assert.ok(await store.byTokenHash("new"));
       });
 
+      test("purge_removes_expired_pending_and_old_used_rows_but_keeps_live_rows", async (t) => {
+        const store = await fresh(t);
+        await store.put(claim({ tokenHash: "expired" }));
+        await store.put(
+          claim({
+            tokenHash: "live",
+            expiresAt: new Date(LATER.getTime() + 1),
+          }),
+        );
+        await store.put(claim({ tokenHash: "old-used" }));
+        await store.put(claim({ tokenHash: "recent-used" }));
+        assert.equal(await store.markUsed("old-used", AT), true);
+        assert.equal(
+          await store.markUsed("recent-used", new Date(AT.getTime() + 1)),
+          true,
+        );
+
+        await store.purgeExpired(LATER, AT);
+
+        assert.equal(await store.byTokenHash("expired"), undefined);
+        assert.ok(await store.byTokenHash("live"));
+        assert.equal(await store.wasUsed("old-used"), false);
+        assert.equal(await store.wasUsed("recent-used"), true);
+      });
+
       test("an_expired_claim_cannot_be_spent_even_before_the_next_sweep", async (t) => {
         const store = await fresh(t);
         await store.put(claim());

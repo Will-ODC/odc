@@ -565,7 +565,7 @@ test(
       [],
     );
     assert.deepEqual((await pool.query("select * from used_claim")).rows, [
-      { token_hash: "hash-private-address" },
+      { token_hash: "hash-private-address", used_at: AT },
     ]);
   },
 );

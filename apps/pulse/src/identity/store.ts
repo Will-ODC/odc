@@ -129,6 +129,12 @@ export interface ClaimStore {
    * hears "already used"; an unknown hash changes nothing.
    */
   discard(tokenHash: string): Promise<void>;
+  /**
+   * Remove expired pending links and replay markers at or before the supplied
+   * cutoff. Legacy markers with no timestamp are dated `now` first, so an
+   * upgrade preserves them for a complete retention window.
+   */
+  purgeExpired(now: Date, usedBefore: Date): Promise<void>;
 }
 
 /** The address a credential gives its voter: only an `email` one gives one. */
@@ -225,7 +231,7 @@ export function voterWith(voter: NewVoter, email: string | null): Voter {
 
 export class InMemoryClaimStore implements ClaimStore {
   readonly #claims = new Map<string, PendingClaim>();
-  readonly #used = new Set<string>();
+  readonly #used = new Map<string, Date>();
 
   async put(claim: PendingClaim): Promise<void> {
     // A sign-in-link write sweeps expired rows for every address. The same
@@ -248,8 +254,17 @@ export class InMemoryClaimStore implements ClaimStore {
     if (!claim || claim.usedAt !== undefined || claim.expiresAt <= usedAt)
       return false;
     this.#claims.delete(tokenHash);
-    this.#used.add(tokenHash);
+    this.#used.set(tokenHash, usedAt);
     return true;
+  }
+
+  async purgeExpired(now: Date, usedBefore: Date): Promise<void> {
+    for (const [hash, claim] of this.#claims) {
+      if (claim.expiresAt <= now) this.#claims.delete(hash);
+    }
+    for (const [hash, usedAt] of this.#used) {
+      if (usedAt <= usedBefore) this.#used.delete(hash);
+    }
   }
 
   async discard(tokenHash: string): Promise<void> {

@@ -98,6 +98,7 @@ test("applies_a_fresh_schema", { skip }, async () => {
       "009",
       "010",
       "011",
+      "012",
     ]);
     assert.deepEqual(await tablesIn(pool, schema), TABLES);
   });
@@ -532,6 +533,7 @@ test(
         "suggestion_pkey",
         "suggestion_poll_id_idx",
         "used_claim_pkey",
+        "used_claim_used_at_idx",
         "vote_choice_choice_id_idx",
         "vote_choice_pkey",
         "vote_history_idx",
@@ -614,13 +616,14 @@ test(
         assert.deepEqual((await migrate(pool, { clock: () => AT })).applied, [
           "010",
           "011",
+          "012",
         ]);
         const store = new PostgresClaimStore(pool);
         assert.equal(await store.byTokenHash("used"), undefined);
         assert.equal(await store.wasUsed("used"), true);
         assert.ok(await store.byTokenHash("live"));
         assert.deepEqual((await pool.query("select * from used_claim")).rows, [
-          { token_hash: "used" },
+          { token_hash: "used", used_at: null },
         ]);
       });
     });
@@ -688,6 +691,7 @@ test(
 
         assert.deepEqual((await migrate(pool, { clock: () => AT })).applied, [
           "011",
+          "012",
         ]);
 
         const { rows } = await pool.query<{

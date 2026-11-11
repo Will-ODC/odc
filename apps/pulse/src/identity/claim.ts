@@ -58,7 +58,13 @@ export interface ClaimOptions {
   log?: (message: string, fault: Fault) => void;
 }
 
-const FIFTEEN_MINUTES = 15 * 60 * 1000;
+export const LINK_TTL_MS = 15 * 60 * 1000;
+/**
+ * Replay markers outlive a link by this much to absorb clock and request lag.
+ * The margin only keeps the "already used" wording stable: single use is
+ * enforced by the atomic pending-row delete in `markUsed`, not by this marker.
+ */
+export const USED_CLAIM_MARGIN_MS = 5 * 60 * 1000;
 
 /**
  * Claiming an identity in pulse: enter an email, click the link it sends, and
@@ -98,7 +104,7 @@ export class ClaimService {
     this.#claims = deps.claims;
     this.#mailer = deps.mailer;
     this.#linkFor = deps.linkFor;
-    this.#ttlMs = options.linkTtlMs ?? FIFTEEN_MINUTES;
+    this.#ttlMs = options.linkTtlMs ?? LINK_TTL_MS;
     this.#maxLive = options.maxLiveLinksPerEmail ?? 3;
     this.#clock = options.clock ?? (() => new Date());
     this.#newToken =
@@ -238,15 +244,29 @@ export class ClaimService {
    * "sign up" and "log in" for anyone to be confused by.
    */
   async redeem(token: string): Promise<RedeemResult> {
-    const claim = await this.#claims.byTokenHash(hashToken(token));
+    const hash = hashToken(token);
+    const claim = await this.#claims.byTokenHash(hash);
+    const now = this.#clock();
+    // Read this claim first so an expired link still receives the documented
+    // `expired` answer while its row, and every other expired row, is removed.
+    // The sweep is housekeeping: a failure in it must never turn a valid
+    // sign-in into an error, so it is logged and the redeem carries on.
+    try {
+      await this.#purgeExpired(now);
+    } catch (purgeError) {
+      logFault(
+        ({ fault }, message) => this.#log(message, fault),
+        purgeError,
+        "pulse: expired sign-in links could not be removed",
+      );
+    }
     if (!claim)
       return {
-        status: (await this.#claims.wasUsed(hashToken(token)))
+        status: (await this.#claims.wasUsed(hash))
           ? "already_used"
           : "unknown_link",
       };
 
-    const now = this.#clock();
     // Used before expired: a link someone already clicked should say so, even
     // if it has since aged out.
     if (claim.usedAt !== undefined) return { status: "already_used" };
@@ -288,6 +308,18 @@ export class ClaimService {
       if (!winner) throw error;
       return this.#signInExisting(winner, claim);
     }
+  }
+
+  /** Sweep claims using the same clock that creates and redeems links. */
+  async purgeExpired(): Promise<void> {
+    await this.#purgeExpired(this.#clock());
+  }
+
+  async #purgeExpired(now: Date): Promise<void> {
+    await this.#claims.purgeExpired(
+      now,
+      new Date(now.getTime() - this.#ttlMs - USED_CLAIM_MARGIN_MS),
+    );
   }
 
   async #signInExisting(
