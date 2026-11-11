@@ -25,3 +25,23 @@ it("shows the system ring when the saved answer receives programmatic focus", ()
     /\.vote-card--page \.vote-card__yours:focus\s*\{\s*outline: none/,
   );
 });
+
+it("draws Next question as quiet text with the standard focus ring, not a green block (#554)", () => {
+  const css = readFileSync(
+    new URL("../src/components/VoteCard.css", import.meta.url),
+    "utf8",
+  );
+  const rule = /\.vote-card button\.vote-card__next \{([^}]*)\}/.exec(css)?.[1];
+  expect(rule).toBeDefined();
+  expect(rule).toContain("margin-inline-start: auto;");
+  expect(rule).toContain("background: transparent;");
+  expect(rule).toContain("white-space: nowrap;");
+  expect(rule).not.toMatch(/#[0-9a-f]{3,6}|\d+px/i);
+  expect(rule).not.toContain("var(--on-accent)");
+  // The old full-width green Next, and the green last button in the row, are gone.
+  expect(css).not.toMatch(/\.vote-card__next > button/);
+  expect(css).not.toMatch(/\.vote-card__actions > button:last-child/);
+  expect(css).toMatch(
+    /\.vote-card button:focus-visible \{\s*outline: calc\(var\(--hairline\) \* 2\) solid var\(--focus\);/,
+  );
+});

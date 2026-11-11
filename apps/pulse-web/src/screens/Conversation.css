@@ -185,6 +185,39 @@
 }
 
 /*
+ * Moving between questions (#554). Each question's page is drawn afresh, so
+ * its column slides in a little from the right, the way a left swipe moves.
+ * An answered question with a next one takes sideways swipes; the browser
+ * keeps vertical scrolling and pinch zoom.
+ */
+.conversation__scroll {
+  /* The slide never shows a sideways scrollbar. */
+  overflow-x: hidden;
+}
+.conversation__scroll > .conversation__column {
+  animation: question-arrive var(--motion-quick) ease-out;
+}
+@keyframes question-arrive {
+  from {
+    opacity: 0;
+    transform: translateX(calc(var(--step) * 3));
+  }
+  to {
+    opacity: 1;
+    transform: translateX(0);
+  }
+}
+@media (prefers-reduced-motion: reduce) {
+  .conversation__scroll > .conversation__column {
+    animation: none;
+  }
+}
+.conversation__question--swipe,
+.conversation__question--swipe :is(.conversation__scroll, .conversation__dock) {
+  touch-action: pan-y pinch-zoom;
+}
+
+/*
  * The phone version (#482): under 700px the voting window is a sheet along
  * the bottom edge, full width, and closes to one full-width button.
  */

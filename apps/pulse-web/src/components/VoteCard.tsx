@@ -240,7 +240,7 @@ export function VoteCard({
       ?.focus();
   }
 
-  // What to do next. In the page (#490), Next sits under the results card.
+  // What to do next: a quiet "Next question" at the end of the row (#554).
   const actions = (
     <div className="vote-card__actions">
       {onChangeAnswer && !inPage ? (
@@ -260,9 +260,9 @@ export function VoteCard({
           <span aria-hidden="true">i</span>
         </a>
       ) : null}
-      {onNext && !inPage ? (
-        <button type="button" onClick={onNext}>
-          Next
+      {onNext ? (
+        <button type="button" className="vote-card__next" onClick={onNext}>
+          Next question<span aria-hidden="true"> ›</span>
         </button>
       ) : null}
     </div>
@@ -440,13 +440,6 @@ export function VoteCard({
             )}
             {actions}
           </div>
-          {inPage && onNext ? (
-            <div className="vote-card__next">
-              <button type="button" onClick={onNext}>
-                Next
-              </button>
-            </div>
-          ) : null}
           {presentation === "card" ? (
             <p className="vote-card__note">{privacyNote}</p>
           ) : null}

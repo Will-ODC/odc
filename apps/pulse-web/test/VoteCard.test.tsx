@@ -271,7 +271,7 @@ describe("status", () => {
     expect(screen.queryByRole("checkbox")).toBeNull();
     await user.click(button("Change my answer"));
     expect(change).toHaveBeenCalledOnce();
-    await user.click(button("Next"));
+    await user.click(button("Next question"));
     expect(next).toHaveBeenCalledOnce();
     expect(screen.queryByRole("button", { name: "Hide" })).toBeNull();
     await user.click(button("Close"));
@@ -286,7 +286,7 @@ describe("status", () => {
     );
     expect(screen.getByText("Nobody has answered yet.")).toBeTruthy();
     expect(screen.getByText("Counted")).toBeTruthy();
-    expect(screen.queryByRole("button", { name: "Next" })).toBeNull();
+    expect(screen.queryByRole("button", { name: "Next question" })).toBeNull();
     expect(
       screen.queryByRole("button", { name: "Change my answer" }),
     ).toBeNull();
@@ -311,7 +311,7 @@ describe("status", () => {
     render(<VoteCard {...base} trustHref="/trust" />);
     expect(screen.queryByRole("link")).toBeNull();
   });
-  it("tabs from Change my answer to the info link, then Next", async () => {
+  it("tabs from Change my answer to the info link, then Next question", async () => {
     const user = userEvent.setup();
     render(
       <VoteCard
@@ -333,7 +333,7 @@ describe("status", () => {
       screen.getByRole("link", { name: /How votes count/ }),
     );
     await user.tab();
-    expect(document.activeElement).toBe(button("Next"));
+    expect(document.activeElement).toBe(button("Next question"));
   });
   it("moves focus to the pending status when Submit becomes disabled", () => {
     const { rerender } = render(<VoteCard {...base} picked={[2]} />);
@@ -424,5 +424,38 @@ it.each([
     close.focus();
     await userEvent.setup().keyboard("{Enter}");
     expect(onClose).toHaveBeenCalledOnce();
+  },
+);
+it.each([
+  { layout: "in the page", presentation: "results" as const, inPage: true },
+  { layout: "as a card", presentation: "card" as const, inPage: false },
+])(
+  "offers a quiet Next question at the end of the actions row $layout (#554)",
+  async ({ presentation, inPage }) => {
+    const onNext = vi.fn();
+    const { container } = render(
+      <VoteCard
+        {...base}
+        presentation={presentation}
+        inPage={inPage}
+        trustHref="/trust"
+        status={{ kind: "answered", results: results(), changed: false }}
+        onNext={onNext}
+      />,
+    );
+    const next = button("Next question");
+    expect(screen.getAllByRole("button", { name: /next/i })).toHaveLength(1);
+    expect(next.textContent).toBe("Next question ›");
+    expect(next.querySelector('[aria-hidden="true"]')?.textContent).toBe(" ›");
+    expect(next.className).toBe("vote-card__next");
+    // In the row beside the "i" link, last, and not a block of its own.
+    const row = next.parentElement;
+    expect(row?.className).toBe("vote-card__actions");
+    expect(row?.lastElementChild).toBe(next);
+    expect(row?.querySelector(".vote-card__info")).toBeTruthy();
+    expect(container.querySelector("div.vote-card__next")).toBeNull();
+    next.focus();
+    await userEvent.setup().keyboard("{Enter}");
+    expect(onNext).toHaveBeenCalledOnce();
   },
 );

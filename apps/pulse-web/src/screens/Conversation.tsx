@@ -19,6 +19,7 @@ import { useClosedResults } from "../hooks/use-closed-results.js";
 import { useFreshResults } from "../hooks/use-fresh-results.js";
 import { useMyVotes } from "../hooks/use-my-votes.js";
 import { useWide } from "../hooks/use-wide.js";
+import { useSwipeLeft } from "../hooks/use-swipe.js";
 import type { Confirmation } from "../flow/vote-card.js";
 import { VoteCard } from "../components/VoteCard.js";
 import { ClosedResults } from "../components/ClosedResults.js";
@@ -928,8 +929,19 @@ function LiveCard({
     : !visible || showing.kind === "answered"
       ? handle
       : card;
+  // On a phone or tablet, a left swipe over an answered question does what
+  // "Next question" does (#554); the button stays for everyone else.
+  const swipeable = !shut && next !== null;
+  const swipe = useSwipeLeft(swipeable ? () => onGo(next) : undefined);
   return (
-    <div className="conversation__question">
+    <div
+      className={
+        swipeable
+          ? "conversation__question conversation__question--swipe"
+          : "conversation__question"
+      }
+      {...swipe}
+    >
       {renderPage(standing, vote, shut)}
     </div>
   );
