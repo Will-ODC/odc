@@ -34,10 +34,13 @@ export function Trust({ banner }: { banner?: ReactNode }) {
             <li>
               Email-confirmed votes count once per account per question, in the
               full total too. Your most recent answer counts and replaces the
-              others. Vote signed in, or sign in on that browser before the
-              question closes. Signing in shows your most recent answer on that
-              browser. Two emails count twice; this does not prove each voter is
+              others. Two emails count twice; this does not prove each voter is
               a different person.
+            </li>
+            <li>
+              To confirm a vote, sign in before you vote, or sign in later on
+              the same browser before the question closes. Signing in there
+              shows your most recent answer.
             </li>
             <li>
               Email-confirmed votes store a code instead of your email. The
