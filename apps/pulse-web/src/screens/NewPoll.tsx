@@ -29,7 +29,7 @@ import type { Draft, Problems } from "../flow/new-poll.js";
 import { useCreationContext } from "../hooks/use-creation-context.js";
 import { useMyVotes } from "../hooks/use-my-votes.js";
 import { useSession } from "../hooks/use-session.js";
-import { SiteBanner } from "./SiteBanner.js";
+import { SiteBanner } from "../components/SiteBanner.js";
 import { browserStore } from "../flow/sign-in-return.js";
 import { forgetDraft, keepDraft, readDraft } from "../flow/draft-store.js";
 import "./NewPoll.css";
