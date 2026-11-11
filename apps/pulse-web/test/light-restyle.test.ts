@@ -39,10 +39,25 @@ describe("the light look's invariants (#482)", () => {
     // On a phone the trigger is centred in its own row, so the panel opens
     // centred under it rather than at the screen edge.
     const phone = css("components/TopBanner.css").match(
-      /@media[^{]*\{[\s\S]*?\n\s{2}\.banner__nav > \.account-menu \.account-menu__panel \{([^}]*)\}/,
+      /@media \(max-width: 699px\) \{[^@]*?\n\s{2}\.banner__nav > \.account-menu \.account-menu__panel \{([^}]*)\}/,
     );
     expect(phone?.[1]).toMatch(/inset-inline-start:\s*50%;/);
     expect(phone?.[1]).toMatch(/transform:\s*translateX\(-50%\);/);
+    // .account-menu already positions its panel; the phone row adds nothing (#561).
+    const phoneRow = css("components/TopBanner.css").match(
+      /@media \(max-width: 699px\) \{[^@]*?\n\s{2}\.banner__nav > \.account-menu \{([^}]*)\}/,
+    );
+    expect(phoneRow?.[1]).toMatch(/flex:\s*1 0 100%;/);
+    expect(phoneRow?.[1]).not.toMatch(/position:/);
+    // The account panel's width does not change when Forget asks (#561).
+    expect(
+      rules(
+        "components/TopBanner.css",
+        ".banner__actions .account-menu__panel",
+      ).join("\n"),
+    ).toMatch(
+      /(?:^|[;\s])width:\s*min\(var\(--menu-max\),\s*calc\(100vw - var\(--gutter\) \* 2\)\);/,
+    );
   });
 
   it("has a real focus colour, and no ring on the results focused by script", () => {
