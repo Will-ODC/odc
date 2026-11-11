@@ -35,9 +35,7 @@ describe("the light look's invariants (#482)", () => {
       "components/TopBanner.css",
       ".banner__nav .account-menu__panel",
     ).join("\n");
-    expect(banner).not.toMatch(
-      /(?:min-|max-)?(?:inline-size|width|inline-size):/,
-    );
+    expect(banner).not.toMatch(/(?:min-|max-)?(?:inline-size|width):/);
   });
 
   it("has a real focus colour, and no ring on the results focused by script", () => {
