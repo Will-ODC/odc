@@ -921,3 +921,35 @@ test("redeem_purges_expired_pending_and_old_used_claims_with_the_app_clock", asy
   h.after(1);
   assert.equal((await h.service.redeem(live)).status, "unknown_link");
 });
+
+test("a_redeem_time_sweep_that_fails_still_signs_in_and_logs_only_safe_diagnostics", async () => {
+  const logged: string[] = [];
+  const h = setup({
+    log: (message, fault) =>
+      logged.push(`${message}: ${JSON.stringify(fault)}`),
+  });
+  await h.service.requestLink("ada@student.ubc.ca");
+  const token = h.lastToken("ada@student.ubc.ca");
+  h.claims.purgeExpired = () =>
+    Promise.reject(
+      Object.assign(new Error(`sweep-fault ${token} ada@student.ubc.ca`), {
+        code: "40P01",
+        detail: `private-detail ${token} ada@student.ubc.ca`,
+      }),
+    );
+
+  assert.equal((await h.service.redeem(token)).status, "signed_in");
+  // The link was still spent once: the sweep failing does not weaken that.
+  assert.equal((await h.service.redeem(token)).status, "already_used");
+
+  const sweep = logged.find((message) =>
+    /expired sign-in links could not be removed/.test(message),
+  );
+  assert.ok(sweep);
+  assert.match(sweep, /"type":"Error"/);
+  assert.match(sweep, /"code":"40P01"/);
+  assert.doesNotMatch(
+    logged.join("\n"),
+    new RegExp(`${token}|ada@student\\.ubc\\.ca|sweep-fault|private-detail`),
+  );
+});

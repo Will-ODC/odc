@@ -554,6 +554,48 @@ test(
 );
 
 test(
+  "a_startup_sweep_that_fails_is_logged_and_the_server_still_builds",
+  { skip: databaseSkip },
+  async (t) => {
+    // The sweep is housekeeping. A lock timeout or a transient failure in it
+    // must not exit the process: expired rows are retried on the next redeem
+    // or startup. Make the sweep's first statement fail inside Postgres.
+    const { pool: seedPool, schema } = await throwawaySchema(t);
+    await migrate(seedPool);
+    await seedPool.query(
+      "create function refuse_claim_sweep() returns trigger language plpgsql" +
+        " as $$ begin raise exception using errcode = '55P03'," +
+        " message = 'sweep-fault private-person@example.test'; end $$",
+    );
+    await seedPool.query(
+      "create trigger refuse_claim_sweep before delete on pending_claim" +
+        " for each statement execute function refuse_claim_sweep()",
+    );
+    const warnings: string[] = [];
+
+    const { app } = await buildServer(servedConfig(schema), {
+      log: (message) => warnings.push(message),
+    });
+    t.after(async () => app.close());
+
+    const failure = warnings.find((message) =>
+      /the startup sign-in sweep failed/.test(message),
+    );
+    assert.ok(failure, warnings.join("\n"));
+    assert.match(failure, /"code":"55P03"/);
+    assert.doesNotMatch(
+      warnings.join("\n"),
+      /sweep-fault|private-person@example\.test/,
+    );
+    // Started and serving.
+    assert.equal(
+      (await app.inject({ method: "GET", url: "/api/polls" })).statusCode,
+      200,
+    );
+  },
+);
+
+test(
   "closing_the_server_closes_the_pool_it_opened",
   { skip: databaseSkip },
   async (t) => {

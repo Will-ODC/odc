@@ -33,17 +33,21 @@ discovery remain separate work; see [API.md](./API.md) for the query contract.
 
 ## Sign-in link retention
 
-A redeemed link's `pending_claim` row is deleted as it is spent. Expired,
-unused rows are deleted at startup, on redemption and on the next sign-in-link
-write, across all addresses. Links still last 15 minutes and work once. Only
-the spent token's SHA-256 digest and its application-clock timestamp are kept
-in `used_claim`, without an address or other claim data, so a repeat click can
-still be answered "already used". Replay markers are removed 20 minutes after
-use: the full 15-minute link lifetime plus a five-minute margin. An older
-marker created before timestamps existed is conservatively dated at the first
-startup or redemption after upgrading, then gets the same 20-minute retention.
-This does not delete the email credential belonging to an account that signed
-in.
+A redeemed link's `pending_claim` row is deleted as it is spent. Links still
+last 15 minutes and work once. Only the spent token's SHA-256 digest and its
+application-clock timestamp are kept in `used_claim`, without an address or
+other claim data, so a repeat click can still be answered "already used".
+
+An expired, unused link becomes eligible for removal when it expires; a replay
+marker becomes eligible 20 minutes after use (the 15-minute link lifetime plus
+a five-minute margin). Eligible rows, across all addresses, are removed at the
+next API startup or link redemption; the next sign-in-link request also
+removes expired pending links, but not markers. There is no periodic sweep, so
+on an idle deployment that is not restarted, rows can stay past their time.
+A failed sweep is logged and never fails a startup or a sign-in. An older
+marker created before timestamps existed is dated at the first sweep after
+upgrading, then gets the same 20-minute window. This does not delete the email
+credential belonging to an account that signed in.
 
 ## Error-log privacy
 

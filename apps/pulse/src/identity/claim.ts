@@ -59,7 +59,11 @@ export interface ClaimOptions {
 }
 
 export const LINK_TTL_MS = 15 * 60 * 1000;
-/** Replay markers outlive a link by this much to absorb clock and request lag. */
+/**
+ * Replay markers outlive a link by this much to absorb clock and request lag.
+ * The margin only keeps the "already used" wording stable: single use is
+ * enforced by the atomic pending-row delete in `markUsed`, not by this marker.
+ */
 export const USED_CLAIM_MARGIN_MS = 5 * 60 * 1000;
 
 /**
@@ -245,7 +249,17 @@ export class ClaimService {
     const now = this.#clock();
     // Read this claim first so an expired link still receives the documented
     // `expired` answer while its row, and every other expired row, is removed.
-    await this.#purgeExpired(now);
+    // The sweep is housekeeping: a failure in it must never turn a valid
+    // sign-in into an error, so it is logged and the redeem carries on.
+    try {
+      await this.#purgeExpired(now);
+    } catch (purgeError) {
+      logFault(
+        ({ fault }, message) => this.#log(message, fault),
+        purgeError,
+        "pulse: expired sign-in links could not be removed",
+      );
+    }
     if (!claim)
       return {
         status: (await this.#claims.wasUsed(hash))

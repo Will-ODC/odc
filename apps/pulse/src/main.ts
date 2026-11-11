@@ -329,7 +329,17 @@ export async function buildServer(
         log: (message, fault) => log(`${message}: ${JSON.stringify(fault)}`),
       },
     );
-    await claims.purgeExpired();
+    // Housekeeping only: a failed sweep must not keep pulse from starting.
+    // Expired rows are retried at the next redemption or startup.
+    try {
+      await claims.purgeExpired();
+    } catch (error) {
+      logFault(
+        textFaultLogger(log),
+        error,
+        "pulse: the startup sign-in sweep failed",
+      );
+    }
 
     const app = await createServer({
       claims,
