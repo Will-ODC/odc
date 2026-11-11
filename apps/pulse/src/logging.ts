@@ -9,6 +9,15 @@ export interface Fault {
 
 type FaultLogger = (fields: { fault: Fault }, message: string) => void;
 
+/** Error metadata can be an accessor or proxy; failed reads carry no detail. */
+function readFaultField<T>(read: () => T): T | undefined {
+  try {
+    return read();
+  } catch {
+    return undefined;
+  }
+}
+
 /** One allow-listed projection for every unexpected fault (#503). */
 export function logFault(
   log: FaultLogger,
@@ -17,39 +26,45 @@ export function logFault(
 ): void {
   // Error.name is mutable and can contain input. The prototype's constructor
   // names the error class instead, without the message, stack or cause.
-  const constructorName =
-    error instanceof Error
-      ? Object.getPrototypeOf(error)?.constructor?.name
-      : undefined;
+  const isError = readFaultField(() => error instanceof Error) ?? false;
+  const constructorName = readFaultField(() =>
+    isError ? Object.getPrototypeOf(error)?.constructor?.name : undefined,
+  );
   const type =
     typeof constructorName === "string" &&
     /^[A-Za-z][A-Za-z0-9_]{0,79}$/.test(constructorName)
       ? constructorName
-      : error instanceof Error
+      : isError
         ? "Error"
         : typeof error;
-  const code = (error as { code?: unknown } | null)?.code;
-  const status =
+  const code = readFaultField(() => (error as { code?: unknown } | null)?.code);
+  const status = readFaultField(() =>
     error instanceof MailSendError || error instanceof MailRejectedError
       ? error.status
-      : undefined;
-  log(
-    {
-      fault: {
-        type,
-        ...(typeof code === "string" && /^[0-9A-Z]{5}$/.test(code)
-          ? { code }
-          : {}),
-        ...(typeof status === "number" &&
-        Number.isInteger(status) &&
-        status >= 100 &&
-        status <= 599
-          ? { status }
-          : {}),
-      },
-    },
-    message,
+      : undefined,
   );
+  try {
+    log(
+      {
+        fault: {
+          type,
+          ...(typeof code === "string" && /^[0-9A-Z]{5}$/.test(code)
+            ? { code }
+            : {}),
+          ...(typeof status === "number" &&
+          Number.isInteger(status) &&
+          status >= 100 &&
+          status <= 599
+            ? { status }
+            : {}),
+        },
+      },
+      message,
+    );
+  } catch {
+    // A broken sink must not make the HTTP handler fall back to logging and
+    // returning a raw error. There is no safe secondary logger here.
+  }
 }
 
 /** The same projection for entry-point warnings that use a line sink. */

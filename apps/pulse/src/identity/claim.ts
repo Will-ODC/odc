@@ -1,5 +1,5 @@
 import { createHash, randomBytes, randomUUID } from "node:crypto";
-import { logFault } from "../logging.js";
+import { logFault, type Fault } from "../logging.js";
 import type { VerificationMethod } from "./allowlist.js";
 import { assuranceOf } from "./assurance.js";
 import { InvalidEmailError, parseEmail } from "./email.js";
@@ -55,7 +55,7 @@ export interface ClaimOptions {
    * (ADR-0027). Only its class and HTTP status may be logged (#503): a provider
    * reply, error message or cause can quote a person's address or live link.
    */
-  log?: (message: string, error: unknown) => void;
+  log?: (message: string, fault: Fault) => void;
 }
 
 const FIFTEEN_MINUTES = 15 * 60 * 1000;
@@ -80,7 +80,7 @@ export class ClaimService {
   readonly #maxLive: number;
   readonly #clock: () => Date;
   readonly #newToken: () => string;
-  readonly #log: (message: string, error: unknown) => void;
+  readonly #log: (message: string, fault: Fault) => void;
 
   constructor(
     deps: {
