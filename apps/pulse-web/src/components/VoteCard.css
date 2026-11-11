@@ -340,8 +340,10 @@
   min-height: calc(var(--touch) + var(--step) / 2);
   align-items: center;
 }
-.vote-card--page .vote-card__yours:focus {
-  outline: none;
+/* The saved answer receives programmatic focus after Submit too. */
+.vote-card__yours[tabindex="-1"]:focus {
+  outline: calc(var(--hairline) * 2) solid var(--focus);
+  outline-offset: calc(var(--hairline) * 2);
 }
 .vote-card--page .vote-card__yours .vote-card__note {
   flex: 1;

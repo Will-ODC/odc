@@ -76,7 +76,9 @@ export function TopBanner({
           <a ref={signInRef} className="banner__sign-in" href={signInHref}>
             Sign in
           </a>
-        ) : null}
+        ) : (
+          <span className="banner__account-space" aria-hidden="true" />
+        )}
       </span>
     </div>
   );

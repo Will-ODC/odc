@@ -1,8 +1,8 @@
 import { useEffect, useRef } from "react";
 import { pathOf } from "../flow/route.js";
-import { TopBanner } from "../components/TopBanner.js";
-import { SignedIn } from "../components/SignedIn.js";
-import { ForgetVotes } from "../components/ForgetVotes.js";
+import { TopBanner } from "./TopBanner.js";
+import { SignedIn } from "./SignedIn.js";
+import { ForgetVotes } from "./ForgetVotes.js";
 import type { VoteRead } from "../hooks/use-my-votes.js";
 import type { Session, SignOutProgress } from "../hooks/use-session.js";
 
@@ -48,6 +48,19 @@ export function SiteBanner({
   const accountTrigger = useRef<HTMLButtonElement>(null);
   const signInLink = useRef<HTMLAnchorElement>(null);
   const retryFocus = useRef(false);
+  const forgetFocus = useRef(false);
+  useEffect(() => {
+    if (!forgetFocus.current || progress.status === "sending") return;
+    if (progress.status === "failed") {
+      forgetFocus.current = false;
+      return;
+    }
+    if (holdsVotes || voteRead) return;
+    forgetFocus.current = false;
+    // Forget removes the account controls. Follow them to Sign in only
+    // when focus was lost, preserving any move elsewhere during the request.
+    if (document.activeElement === document.body) signInLink.current?.focus();
+  }, [holdsVotes, voteRead, progress.status]);
   useEffect(() => {
     if (!retryFocus.current || voteRead) return;
     retryFocus.current = false;
@@ -61,7 +74,7 @@ export function SiteBanner({
     homeHref: pathOf({ kind: "browse", community: "pulse-general" }),
     postHref: pathOf({ kind: "newPoll" }),
     ...(onPostPage
-      ? { currentHref: "/new" }
+      ? { currentHref: pathOf({ kind: "newPoll" }) }
       : currentHref
         ? { currentHref }
         : {}),
@@ -109,7 +122,9 @@ export function SiteBanner({
                       <>
                         <p
                           role={
-                            currentHref === "/my-votes" ? "status" : "alert"
+                            currentHref === pathOf({ kind: "myVotes" })
+                              ? "status"
+                              : "alert"
                           }
                         >
                           {voteRead.message}
@@ -129,7 +144,10 @@ export function SiteBanner({
                     ) : null}
                     <ForgetVotes
                       progress={progress}
-                      onForget={onSignOut}
+                      onForget={() => {
+                        forgetFocus.current = true;
+                        onSignOut();
+                      }}
                       onCancel={onCancel}
                     />
                   </>
