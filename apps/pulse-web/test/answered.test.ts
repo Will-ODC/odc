@@ -1,6 +1,6 @@
 import { describe, expect, it } from "vitest";
 import type { MyVote } from "../src/api/types.js";
-import { answeredList } from "../src/flow/answered.js";
+import { answeredList, answeredNeighbors } from "../src/flow/answered.js";
 import { poll } from "./stub-api.js";
 
 const NOW = Date.parse("2026-11-07T12:00:00.000Z");
@@ -131,5 +131,39 @@ describe("answeredList (#484)", () => {
     expect(vote!.ballot).toEqual([0, 2]);
     expect(vote!.choices).toEqual(["Park", "Rink"]);
     expect(vote!.open).toBe(false);
+  });
+});
+
+describe("answeredNeighbors (#528)", () => {
+  const rows = [
+    saved({ pollId: "first" }),
+    saved({ pollId: "middle" }),
+    saved({ pollId: "last" }),
+  ];
+
+  it("uses the rows above and below in the drawn newest-first order", () => {
+    expect(answeredNeighbors(rows, rows, "middle")).toEqual({
+      previous: rows[0],
+      next: rows[2],
+    });
+    expect(answeredNeighbors(rows, rows, "first")).toEqual({
+      previous: null,
+      next: rows[1],
+    });
+    expect(answeredNeighbors(rows, rows, "last")).toEqual({
+      previous: rows[1],
+      next: null,
+    });
+  });
+
+  it("keeps first-time answers out, but follows a changed row to the top", () => {
+    const changed = [rows[1]!, rows[0]!, rows[2]!];
+    expect(answeredNeighbors(rows, changed, "middle")).toEqual({
+      previous: null,
+      next: rows[0],
+    });
+    expect(
+      answeredNeighbors(rows, [saved({ pollId: "new" }), ...rows], "new"),
+    ).toBeUndefined();
   });
 });

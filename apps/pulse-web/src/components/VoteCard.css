@@ -287,7 +287,7 @@
   outline-offset: var(--focus-ring-offset);
 }
 
-/* The results card's footer: How votes count on the left, Next on the right. */
+/* The results card's footer: How votes count on the left, navigation on the right. */
 .vote-card--results .vote-card__actions {
   margin-top: calc(var(--step) * 1.5);
 }

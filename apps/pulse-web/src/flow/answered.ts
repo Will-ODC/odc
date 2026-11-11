@@ -6,6 +6,32 @@ export interface LocalAnswer {
   ballot: readonly number[];
 }
 
+export interface AnsweredNeighbors {
+  previous: MyVote | null;
+  next: MyVote | null;
+}
+
+/**
+ * Previous and Next around a saved answer, in the newest-first My votes order.
+ *
+ * `saved` decides whether this question was already in My votes when the page
+ * read it. A first answer joins the drawn rail immediately, but keeps the
+ * answer-selected Next that brought the person through an unanswered run.
+ */
+export function answeredNeighbors(
+  saved: readonly MyVote[],
+  ordered: readonly MyVote[],
+  current: string,
+): AnsweredNeighbors | undefined {
+  if (!saved.some((vote) => vote.pollId === current)) return undefined;
+  const index = ordered.findIndex((vote) => vote.pollId === current);
+  if (index < 0) return undefined;
+  return {
+    previous: index > 0 ? (ordered[index - 1] ?? null) : null,
+    next: ordered[index + 1] ?? null,
+  };
+}
+
 /**
  * The Answered list (#484): the server's saved answers, kept in step with
  * what was answered on this page since they were read.

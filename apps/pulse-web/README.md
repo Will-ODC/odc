@@ -147,6 +147,12 @@ loading, empty, retry and See all my votes states.
 The rail keeps one status line for screen readers, which reads out Loading…,
 an error, or "Your votes are loaded." after Try again. Signing out or
 forgetting votes here clears the browser's saved-answer list.
+When the open question is already in My votes, Previous and Next follow that
+newest-first list, with disabled controls at its ends. Their accessible names
+include the question they open. The question page follows cursors far enough to
+find an older current row and the row below it. A first-time answer keeps its
+answer-selected Next; changing a saved answer moves it to the top before these
+neighbors are chosen.
 
 ## Browse questions (#260)
 

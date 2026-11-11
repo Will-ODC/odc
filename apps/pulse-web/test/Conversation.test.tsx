@@ -1294,15 +1294,11 @@ describe("the Answered list (#484)", () => {
     ).toBeNull();
     await userEvent.click(retry);
     expect(rail().getByRole("status").textContent).toContain("Loading…");
-    finishRetry({ votes: [fromServer], nextCursor: "next" });
+    finishRetry({ votes: [fromServer], nextCursor: null });
     expect(
       await rail().findByRole("link", { name: "More parks?" }),
     ).toBeTruthy();
-    expect(
-      rail()
-        .getByRole("link", { name: "See all my votes" })
-        .getAttribute("href"),
-    ).toBe("/my-votes");
+    expect(rail().queryByRole("link", { name: "See all my votes" })).toBeNull();
   });
 
   it("reads out a rail retry from one status region, with no answers yet", async () => {
