@@ -28,7 +28,7 @@ import { PostedBanner } from "../components/PostedBanner.js";
 import { CopyLink } from "../components/CopyLink.js";
 import { useSession } from "../hooks/use-session.js";
 import type { Session } from "../hooks/use-session.js";
-import { SiteBanner } from "./SiteBanner.js";
+import { SiteBanner } from "../components/SiteBanner.js";
 import "./Conversation.css";
 
 /**

@@ -1,7 +1,7 @@
 import { useEffect, useRef, useState } from "react";
 import type { PulseApi } from "../api/types.js";
 import { pathOf } from "../flow/route.js";
-import { SiteBanner } from "./SiteBanner.js";
+import { SiteBanner } from "../components/SiteBanner.js";
 import { AnsweredRail } from "../components/AnsweredRail.js";
 import { ViewState } from "../components/ViewState.js";
 import { usePollList } from "../hooks/use-poll-list.js";
