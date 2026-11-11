@@ -88,8 +88,8 @@
   background: var(--green-wash);
 }
 .vote-card__choice:has(input:focus-visible) {
-  outline: calc(var(--hairline) * 2) solid var(--focus);
-  outline-offset: calc(var(--hairline) * 2);
+  outline: var(--focus-ring-width) solid var(--focus);
+  outline-offset: var(--focus-ring-offset);
 }
 .vote-card__choices:disabled .vote-card__choice {
   color: var(--muted);
@@ -144,8 +144,8 @@
   cursor: default;
 }
 .vote-card button:focus-visible {
-  outline: calc(var(--hairline) * 2) solid var(--focus);
-  outline-offset: calc(var(--hairline) * 2);
+  outline: var(--focus-ring-width) solid var(--focus);
+  outline-offset: var(--focus-ring-offset);
 }
 .vote-card__link {
   color: var(--green);
@@ -156,8 +156,8 @@
   color: var(--green-hover);
 }
 .vote-card__link:focus-visible {
-  outline: calc(var(--hairline) * 2) solid var(--focus);
-  outline-offset: calc(var(--hairline) * 2);
+  outline: var(--focus-ring-width) solid var(--focus);
+  outline-offset: var(--focus-ring-offset);
 }
 .vote-card__summary {
   flex: 1;
@@ -222,8 +222,8 @@
   background: var(--hover);
 }
 .vote-card__info:focus-visible {
-  outline: calc(var(--hairline) * 2) solid var(--focus);
-  outline-offset: calc(var(--hairline) * 2);
+  outline: var(--focus-ring-width) solid var(--focus);
+  outline-offset: var(--focus-ring-offset);
 }
 
 /* The phone version (#482): answers and buttons sized for a thumb. */
@@ -283,8 +283,8 @@
   background: var(--hover);
 }
 .vote-card__signin:focus-visible {
-  outline: calc(var(--hairline) * 2) solid var(--focus);
-  outline-offset: calc(var(--hairline) * 2);
+  outline: var(--focus-ring-width) solid var(--focus);
+  outline-offset: var(--focus-ring-offset);
 }
 
 /* The results card's footer: How votes count on the left, Next on the right. */
@@ -349,8 +349,8 @@
 }
 /* The saved answer receives programmatic focus after Submit too. */
 .vote-card__yours[tabindex="-1"]:focus {
-  outline: calc(var(--hairline) * 2) solid var(--focus);
-  outline-offset: calc(var(--hairline) * 2);
+  outline: var(--focus-ring-width) solid var(--focus);
+  outline-offset: var(--focus-ring-offset);
 }
 .vote-card--page .vote-card__yours .vote-card__note {
   flex: 1;

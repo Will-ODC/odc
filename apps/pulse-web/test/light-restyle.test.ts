@@ -29,7 +29,7 @@ describe("the light look's invariants (#482)", () => {
 
   it("edges every text field with --line-strong, the 3:1 control edge", () => {
     const fields: Array<readonly [string, string]> = [
-      ["screens/SignIn.css", ".signin__field"],
+      ["components/Field.css", ".field__control"],
       ["components/CopyLink.css", ".copy-link input"],
       ["components/PostedBanner.css", ".posted__field"],
       ["screens/ChatPreview.css", ".chatpreview__select"],
@@ -54,7 +54,7 @@ describe("the light look's invariants (#482)", () => {
       ["components/CopyLink.css", ".copy-link button"],
       ["components/TopBanner.css", ".banner__actions > .banner__sign-in"],
       ["screens/Conversation.css", ".conversation button"],
-      ["screens/SignIn.css", ".signin__again"],
+      ["components/Button.css", ".btn--secondary"],
     ];
     for (const [file, selector] of buttons) {
       const found = rules(file, selector);

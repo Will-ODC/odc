@@ -106,6 +106,30 @@ describe("fitting a phone", () => {
     );
   });
 
+  it("gives the closed voting button its own row on a phone, so it covers nothing (#527)", () => {
+    const css = readFileSync(
+      new URL("../src/screens/Conversation.css", import.meta.url),
+      "utf8",
+    );
+    const phone = css.slice(css.indexOf("@media (max-width: 699px)"));
+    // Measured in headless Chrome at 375x812: with the button floating, Next
+    // under the results sat behind "Change my answer" until scrolled clear.
+    expect(phone).toMatch(
+      /\.conversation__dock:has\(\.conversation__help\) \{\s*position: static;/,
+    );
+    expect(phone).toMatch(
+      /\.conversation__question:has\(\.conversation__help\) \.conversation__scroll \{\s*padding-bottom: var\(--gutter\);/,
+    );
+  });
+
+  it("lets the chart's axis text overhang its drawing (#527)", () => {
+    // At 375 the phone's 14px "100%" ran 5px past the SVG's left edge and
+    // was clipped to "00%" (headless Chrome, 375x812).
+    expect(rule("components/BarChart.css", ".bar-chart__plot svg")).toMatch(
+      /overflow:\s*visible/,
+    );
+  });
+
   it("keeps the top bar's controls on one line", () => {
     expect(rule("components/TopBanner.css", ".banner__actions")).toMatch(
       /flex-wrap:\s*nowrap/,

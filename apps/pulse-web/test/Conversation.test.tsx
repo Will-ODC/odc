@@ -9,7 +9,7 @@ import {
 } from "@testing-library/react";
 import userEvent from "@testing-library/user-event";
 import { afterEach, beforeAll, describe, expect, it, vi } from "vitest";
-import { ApiError } from "../src/api/types.js";
+import { ApiError, UNREACHABLE } from "../src/api/types.js";
 import type {
   Ballot,
   CastOutcome,
@@ -19,6 +19,7 @@ import type {
 import { App } from "../src/App.js";
 import { closingNote } from "../src/flow/conversation.js";
 import { Conversation } from "../src/screens/Conversation.js";
+import { pulseServer } from "./pulse-server.js";
 import { graph, poll, results, stubApi } from "./stub-api.js";
 
 afterEach(cleanup);
@@ -137,7 +138,7 @@ it("shows loading, empty and errors with a working retry", async () => {
     await screen.findByText("There is nothing to vote on yet."),
   ).toBeTruthy();
   await userEvent.click(screen.getByRole("button", { name: "Try again" }));
-  expect(await screen.findByText(/We could not reach the ballot/)).toBeTruthy();
+  expect(await screen.findByText(/Couldn't reach pulse/)).toBeTruthy();
   await userEvent.click(screen.getByRole("button", { name: "Try again" }));
   expect(
     await main().findByRole("heading", { name: poll().question, level: 1 }),
@@ -295,12 +296,47 @@ it.each([
         within(drawer).getByRole("button", { name: "Change my answer" }),
       ).toBeTruthy();
     } else {
-      // The new answer may have been stored: show no counts that claim Yes.
+      // The new answer may have been stored, and the server could not say:
+      // show no counts that claim Yes, and keep the sheet open saying so.
       expect(results).toBeNull();
-      expect(within(drawer).getByRole("button", { name: "Vote" })).toBeTruthy();
+      const alert = await within(drawer).findByRole("alert");
+      expect(alert.textContent).toBe(UNREACHABLE);
+      const close = within(drawer).getByRole("button", { name: "Close" });
+      await waitFor(() => expect(document.activeElement).toBe(close));
     }
   },
 );
+
+it("on a phone, Close after a lost reply asks the server and shows the answer it stored (#527)", async () => {
+  const p = poll();
+  const server = pulseServer(p);
+  const user = userEvent.setup();
+  render(<Conversation api={server.api} pollId={p.id} />);
+  await main().findByRole("heading", { name: p.question, level: 1 });
+  const drawer = screen.getByRole("complementary", { name: "Voting" });
+  await user.click(within(drawer).getByRole("radio", { name: "Yes" }));
+  await user.click(within(drawer).getByRole("button", { name: "Submit" }));
+  await main().findByText("Counted");
+  await user.click(
+    within(drawer).getByRole("button", { name: "Change my answer" }),
+  );
+  await user.click(within(drawer).getByRole("radio", { name: "No" }));
+  server.dropNextSend();
+  server.asked.length = 0;
+  await user.click(within(drawer).getByRole("button", { name: "Submit" }));
+  expect((await within(drawer).findByRole("alert")).textContent).toBe(
+    UNREACHABLE,
+  );
+  await user.click(within(drawer).getByRole("button", { name: "Close" }));
+  // The send was stored: Close asks, and the page shows No, not a bare Vote.
+  await main().findByText(said("You picked No."));
+  expect(server.asked).toContain(`GET /api/polls/${p.id}/ballot`);
+  const handle = within(drawer).getByRole("button", {
+    name: "Change my answer",
+  });
+  await waitFor(() => expect(document.activeElement).toBe(handle));
+  expect(within(drawer).queryByRole("button", { name: "Vote" })).toBeNull();
+}, 15_000);
 
 it("names the closed question's handle Show question, not Vote", async () => {
   const p = poll({ open: false });
@@ -1572,7 +1608,7 @@ describe("the Answered list (#484)", () => {
     await user.click(within(card()).getByRole("radio", { name: "No" }));
     await user.click(within(card()).getByRole("button", { name: "Submit" }));
     view.rerender(<Conversation api={api} pollId="missing" />);
-    await main().findByText(/We could not reach the ballot/);
+    await main().findByText(/Couldn't reach pulse/);
     expect(
       rail()
         .getByRole("link", { name: first.question })

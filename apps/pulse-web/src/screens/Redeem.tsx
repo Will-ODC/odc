@@ -1,5 +1,6 @@
 import { useEffect, useRef } from "react";
 import type { PulseApi } from "../api/types.js";
+import { Button } from "../components/Button.js";
 import { ScreenFrame } from "../components/ScreenFrame.js";
 import { ViewState } from "../components/ViewState.js";
 import { useRedeem } from "../hooks/use-redeem.js";
@@ -119,9 +120,14 @@ function Stopped({
         </h1>
         <p className="signin__lede">{sentence}</p>
       </div>
-      <button className="signin__go" type="button" onClick={onAct}>
+      <Button
+        variant="primary"
+        className="signin__go"
+        type="button"
+        onClick={onAct}
+      >
         {action}
-      </button>
+      </Button>
     </ScreenFrame>
   );
 }

@@ -54,6 +54,15 @@
   width: 100%;
   min-width: 0;
 }
+/*
+ * Let axis text overhang the drawing into the card's padding. An SVG in a
+ * page clips to its box by default, and the value axis's width is an estimate
+ * made for 13px text: at the phone's 14px, "100%" ran past the left edge and
+ * showed as "00%" (#527).
+ */
+.bar-chart__plot svg {
+  overflow: visible;
+}
 .bar-chart__series--1 .recharts-rectangle {
   fill: var(--chart-series-1);
 }
