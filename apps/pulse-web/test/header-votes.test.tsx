@@ -12,7 +12,7 @@ import { afterEach, describe, expect, it, vi } from "vitest";
 import { App } from "../src/App.js";
 import { ApiError, type MyVote, type MyVotesPage } from "../src/api/types.js";
 import type { Route } from "../src/flow/route.js";
-import { stubApi } from "./stub-api.js";
+import { poll, stubApi } from "./stub-api.js";
 
 afterEach(cleanup);
 const saved: MyVote = {
@@ -70,6 +70,11 @@ describe.each(pages)("$name header (#487)", ({ route }) => {
       await act(async () => {});
       expect(header.queryByRole("button", { name: "Account" })).toBeNull();
       expect(header.queryByRole("link", { name: "Sign in" })).toBeNull();
+      const reserved = header
+        .getByRole("link", { name: "Post a question" })
+        .parentElement?.querySelector(".banner__account-space");
+      expect(reserved).not.toBeNull();
+      expect(reserved?.getAttribute("aria-hidden")).toBe("true");
       await act(async () =>
         finish({ votes: hasVotes ? [saved] : [], nextCursor: null }),
       );
@@ -106,6 +111,11 @@ describe.each(pages)("$name header (#487)", ({ route }) => {
     expect(await header.findByRole("link", { name: "Sign in" })).toBeTruthy();
     expect(header.queryByRole("button", { name: "Account" })).toBeNull();
     expect(signOut).toHaveBeenCalledTimes(1);
+    await waitFor(() =>
+      expect(document.activeElement).toBe(
+        header.getByRole("link", { name: "Sign in" }),
+      ),
+    );
   });
   it("still offers Account when an empty page has more saved votes", async () => {
     const { header } = show(route, { votes: [], nextCursor: "next" });
@@ -346,4 +356,66 @@ it("does not steal focus when someone moves away during a header retry", async (
   act(() => home.focus());
   await act(async () => finish({ votes: [], nextCursor: null }));
   expect(document.activeElement).toBe(home);
+});
+
+describe.each([
+  { name: "About", route: { kind: "about" } as Route },
+  {
+    name: "question",
+    route: { kind: "conversation", pollId: "ads-free" } as Route,
+  },
+])("$name pending Forget", ({ route }) => {
+  it.each([false, true])(
+    "finishes Forget with focus on Sign in unless focus moved away (%s)",
+    async (moveAway) => {
+      let finish!: () => void;
+      let forgetting = false;
+      let reload!: (value: ReturnType<typeof poll>) => void;
+      render(
+        <App
+          route={route}
+          api={stubApi({
+            myVotes: async () => ({ votes: [saved], nextCursor: null }),
+            poll: () =>
+              forgetting
+                ? new Promise((resolve) => {
+                    reload = resolve;
+                  })
+                : Promise.resolve(poll()),
+            signOut: () =>
+              new Promise<void>((resolve) => {
+                finish = resolve;
+              }),
+          })}
+        />,
+      );
+      const user = userEvent.setup();
+      const header = within(screen.getByRole("banner"));
+      await user.click(await header.findByRole("button", { name: "Account" }));
+      await user.tab();
+      await user.tab();
+      expect(document.activeElement).toBe(
+        header.getByRole("button", { name: "Forget my votes here" }),
+      );
+      await user.keyboard("{Enter}");
+      await user.keyboard("{Enter}");
+      expect(document.activeElement).toBe(
+        header.getByRole("button", { name: "Forgetting…" }),
+      );
+      const home = header.getByRole("link", { name: "Home" });
+      if (moveAway) act(() => home.focus());
+      forgetting = true;
+      await act(async () => finish());
+      const signIn = await header.findByRole("link", { name: "Sign in" });
+      expect(document.activeElement).toBe(moveAway ? home : signIn);
+      if (route.kind === "conversation") {
+        // Forget reloads the question. Check focus after that request and
+        // its heading effect have settled, as well as before it resolves.
+        expect(screen.queryByRole("heading", { level: 1 })).toBeNull();
+        await act(async () => reload(poll()));
+        expect(screen.getByRole("heading", { level: 1 })).toBeTruthy();
+        expect(document.activeElement).toBe(moveAway ? home : signIn);
+      }
+    },
+  );
 });

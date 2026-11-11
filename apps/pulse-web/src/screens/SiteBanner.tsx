@@ -48,6 +48,19 @@ export function SiteBanner({
   const accountTrigger = useRef<HTMLButtonElement>(null);
   const signInLink = useRef<HTMLAnchorElement>(null);
   const retryFocus = useRef(false);
+  const forgetFocus = useRef(false);
+  useEffect(() => {
+    if (!forgetFocus.current || progress.status === "sending") return;
+    if (progress.status === "failed") {
+      forgetFocus.current = false;
+      return;
+    }
+    if (holdsVotes || voteRead) return;
+    forgetFocus.current = false;
+    // Forget removes the account controls. Follow them to Sign in only
+    // when focus was lost, preserving any move elsewhere during the request.
+    if (document.activeElement === document.body) signInLink.current?.focus();
+  }, [holdsVotes, voteRead, progress.status]);
   useEffect(() => {
     if (!retryFocus.current || voteRead) return;
     retryFocus.current = false;
@@ -129,7 +142,10 @@ export function SiteBanner({
                     ) : null}
                     <ForgetVotes
                       progress={progress}
-                      onForget={onSignOut}
+                      onForget={() => {
+                        forgetFocus.current = true;
+                        onSignOut();
+                      }}
                       onCancel={onCancel}
                     />
                   </>
