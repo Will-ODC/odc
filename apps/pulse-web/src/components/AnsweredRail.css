@@ -1,0 +1,45 @@
+.answered-rail {
+  display: none;
+}
+.answered-rail p {
+  font-size: var(--t-small);
+  color: var(--muted);
+  line-height: 1.5;
+}
+/* The rail's status line sits a step clear of the list and of Try again,
+   only while it shows something: empty, or holding only the note read out
+   after a reload, it adds no space. */
+.answered-rail .viewstate--compact:has(> :not(.visually-hidden)) {
+  margin-block: var(--step);
+}
+@media (min-width: 700px) {
+  .answered-rail {
+    display: flex;
+    flex-direction: column;
+    padding: calc(var(--step) * 2);
+    border-right: var(--hairline) solid var(--line);
+    overflow-y: auto;
+    min-height: 0;
+  }
+  .answered-rail h2 {
+    font-size: var(--t-eyebrow);
+    font-weight: 700;
+    letter-spacing: 0.06em;
+    text-transform: uppercase;
+    color: var(--muted);
+  }
+  .answered-rail h2 a {
+    box-sizing: border-box;
+    display: inline-flex;
+    align-items: center;
+    min-height: calc(var(--step) * 3);
+    padding-block: calc(var(--step) / 2);
+    color: inherit;
+    text-decoration: underline;
+    text-underline-offset: calc(var(--hairline) * 2);
+  }
+  .answered-rail h2 a:hover {
+    color: var(--green-hover);
+    text-decoration: underline;
+  }
+}

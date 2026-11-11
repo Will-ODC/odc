@@ -123,6 +123,12 @@ saved answer from the server again. Coming back before the send settles shows
 Loading… for up to 5 seconds, then the question with "Your answer is still
 being sent." and no way to answer it again, until the send settles and the
 question is drawn with its outcome.
+Home and community browsing reuse the same rail beside Explore at 700px and
+wider. The question page keeps it beside voting and results at those widths,
+including after Submit. Below 700px, saved answers remain behind My votes;
+the rail is hidden and its links are outside the keyboard order. Both rails
+reuse `AnsweredRail` and the screen’s existing `useMyVotes` read, including
+loading, empty, retry and See all my votes states.
 The rail keeps one status line for screen readers, which reads out Loading…,
 an error, or "Your votes are loaded." after Try again. Signing out or
 forgetting votes here clears the browser's saved-answer list.
