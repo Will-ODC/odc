@@ -411,6 +411,44 @@ test("trusts_only_the_private_proxy_peer_and_one_forwarded_hop", async () => {
   assert.deepEqual(direct.json(), { ip: "198.51.100.30" });
 });
 
+test("two_trusted_hops_take_the_address_the_host_edge_observed", async () => {
+  // A host edge in front of nginx (#549): the API's peer is nginx
+  // (172.20.0.4); nginx appended the edge (10.0.0.7), and the edge appended
+  // the client it saw.
+  const h = await setup({ trustProxy: 2 });
+  h.app.get("/test/ip", (request) => ({ ip: request.ip }));
+
+  const throughEdge = await h.app.inject({
+    method: "GET",
+    url: "/test/ip",
+    remoteAddress: "172.20.0.4",
+    headers: { "x-forwarded-for": "203.0.113.10, 198.51.100.20, 10.0.0.7" },
+  });
+  assert.deepEqual(throughEdge.json(), { ip: "198.51.100.20" });
+
+  // The second hop is trusted only when it is private: a public address there
+  // is the client, not a proxy, whatever it forwarded.
+  const publicSecondHop = await h.app.inject({
+    method: "GET",
+    url: "/test/ip",
+    remoteAddress: "172.20.0.4",
+    headers: { "x-forwarded-for": "203.0.113.10, 198.51.100.20" },
+  });
+  assert.deepEqual(publicSecondHop.json(), { ip: "198.51.100.20" });
+
+  // With one hop the same chain reads the edge as the client, which is the
+  // shared bucket #549 exists to avoid.
+  const one = await setup({ trustProxy: 1 });
+  one.app.get("/test/ip", (request) => ({ ip: request.ip }));
+  const oneHop = await one.app.inject({
+    method: "GET",
+    url: "/test/ip",
+    remoteAddress: "172.20.0.4",
+    headers: { "x-forwarded-for": "203.0.113.10, 198.51.100.20, 10.0.0.7" },
+  });
+  assert.deepEqual(oneHop.json(), { ip: "10.0.0.7" });
+});
+
 test("forged_forwarded_prefixes_share_the_observed_clients_sign_in_limit", async () => {
   const h = await setup({
     trustProxy: 1,
