@@ -747,7 +747,6 @@ function Setting({
           <Button
             variant="quiet"
             type="button"
-            className="post__change"
             aria-label={`Change ${label}`}
             {...(describedBy ? { "aria-describedby": describedBy } : {})}
             onClick={onOpen}

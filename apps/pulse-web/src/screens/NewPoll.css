@@ -270,7 +270,8 @@
 .post__promise-row .post__promise {
   flex: 1;
 }
-.post__info {
+/* .btn. raises specificity above .btn--secondary so import order cannot matter. */
+.btn.post__info {
   display: grid;
   place-items: center;
   flex: none;
@@ -284,7 +285,7 @@
   font: inherit;
   cursor: pointer;
 }
-.post__info span {
+.btn.post__info span {
   display: grid;
   place-items: center;
   width: calc(var(--step) * 3);
@@ -294,10 +295,10 @@
   font-size: var(--t-small);
   font-weight: 700;
 }
-.post__info:hover {
+.btn.post__info:hover {
   background: var(--hover);
 }
-.post__info:focus-visible {
+.btn.post__info:focus-visible {
   outline: var(--focus-ring-width) solid var(--focus);
   outline-offset: var(--focus-ring-offset);
 }
