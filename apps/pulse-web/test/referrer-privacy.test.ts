@@ -9,7 +9,7 @@ describe("sign-in link privacy during page load", () => {
     const policy = html.indexOf(
       '<meta name="referrer" content="no-referrer" />',
     );
-    const firstResource = html.indexOf('<link rel="preconnect"');
+    const firstResource = html.search(/<(?:link|script)\b/);
     expect(policy).toBeGreaterThan(0);
     expect(policy).toBeLessThan(firstResource);
   });

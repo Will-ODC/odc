@@ -370,3 +370,47 @@ it("ignores the server's answer to Close once the answer is sent again", async (
   );
   await main().findByText(said("You picked No."));
 });
+
+it("ignores the server's late answer to Close once the answer sent again is counted (#519)", async () => {
+  const p = poll();
+  const sends = heldCasts();
+  let held: Ballot | null = null;
+  let answer!: () => void;
+  const myBallot = vi.fn(
+    () =>
+      new Promise<Ballot | null>((resolve) => {
+        if (held === null) resolve(null);
+        else answer = () => resolve(held);
+      }),
+  );
+  const user = userEvent.setup();
+  render(
+    <Conversation
+      api={stubApi({
+        cast: sends.cast,
+        myBallot,
+        results: async () => tally(p, [1]),
+      })}
+      pollId={p.id}
+    />,
+  );
+  await changeToNo(sends, p, user);
+  // The lost send stored nothing: asked now, the server would say Yes.
+  held = [1];
+  await act(async () => sends.lose());
+  await user.click(await main().findByRole("button", { name: "Close" }));
+  expect(myBallot).toHaveBeenCalledTimes(2);
+  // Sent again, and counted, before the server's answer to Close arrives.
+  await user.click(main().getByRole("button", { name: "Try again" }));
+  await act(async () =>
+    sends.finish({ status: "changed", ballot: [0], results: tally(p, [0]) }),
+  );
+  await main().findByText(said("You picked No."));
+  await act(async () => answer());
+  // The late reply describes the server before the retry: it changes nothing.
+  expect(main().getByText(said("You picked No."))).toBeTruthy();
+  expect(main().queryByText(said("You picked Yes."))).toBeNull();
+  const rail = screen.getByRole("navigation", { name: "My votes" });
+  expect(rail.textContent?.includes("Your answer: No")).toBe(true);
+  expect(rail.textContent?.includes("Your answer: Yes")).toBe(false);
+});

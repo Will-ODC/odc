@@ -698,3 +698,50 @@ test("production server has no local mailbox or shortcut and still emails every 
   assert.equal(normal.headers["set-cookie"], undefined);
   assert.equal(h.mailer.sent.length, 1);
 });
+
+test("identity_and_redeem_responses_are_never_stored", async (t) => {
+  const h = await setup();
+  t.after(() => h.app.close());
+  await h.app.inject({
+    method: "POST",
+    url: "/api/sign-in",
+    payload: { email: "ada@student.ubc.ca" },
+  });
+  const token = h.tokenFor("ada@student.ubc.ca");
+  const ready = await h.app.inject({
+    url: `/api/sign-in/redeem?token=${token}`,
+  });
+  assert.equal(ready.statusCode, 200);
+  assert.equal(ready.headers["cache-control"], "no-store");
+  const signedIn = await h.app.inject({
+    method: "POST",
+    url: "/api/sign-in/redeem",
+    payload: { token },
+  });
+  assert.equal(signedIn.statusCode, 200);
+  assert.equal(signedIn.headers["cache-control"], "no-store");
+  const session = signedIn.cookies.find((c) => c.name === SESSION_COOKIE);
+  assert.ok(session);
+  const me = await h.app.inject({
+    url: "/api/me",
+    headers: { cookie: `${SESSION_COOKIE}=${session.value}` },
+  });
+  assert.equal(me.statusCode, 200);
+  assert.equal(me.headers["cache-control"], "no-store");
+  for (const options of [
+    { url: "/api/me" },
+    { url: "/api/sign-in/redeem" },
+    { url: `/api/sign-in/redeem?token=${token}` },
+    { method: "POST" as const, url: "/api/sign-in/redeem", payload: { token } },
+    {
+      method: "POST" as const,
+      url: "/api/sign-in/redeem",
+      headers: { "content-type": "application/json" },
+      payload: "{",
+    },
+  ]) {
+    const response = await h.app.inject(options);
+    assert.ok(response.statusCode >= 400);
+    assert.equal(response.headers["cache-control"], "no-store");
+  }
+});

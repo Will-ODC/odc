@@ -45,5 +45,6 @@ RUN apk upgrade --no-cache
 
 COPY --from=build /repo/apps/pulse-web/dist /usr/share/nginx/html
 COPY apps/pulse-web/nginx.conf /etc/nginx/conf.d/default.conf
+COPY apps/pulse-web/security-headers.conf /etc/nginx/pulse-security-headers.conf
 
 EXPOSE 8080
