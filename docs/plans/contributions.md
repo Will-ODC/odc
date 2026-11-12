@@ -29,3 +29,7 @@ integration is deferred under #398.
 
 Run the local demo in memory or use a disposable Postgres database.
 Migration 013 adds contribution records. Migration 014 adds private messages and stores retry revisions.
+Migration 014 also drops `public_response`. A binary from before migration 014
+fails against the new schema during a rolling deploy or rollback. That
+incompatibility is accepted because this is a replay table; deployments must
+drain the old API binary before applying the migration.
