@@ -4,6 +4,7 @@ import {
   ContributionError,
   creationSchema,
   participationSchema,
+  messageSchema,
   updateSchema,
   parse,
   requestKey,
@@ -22,9 +23,19 @@ export interface Contribution extends ContributionInput {
   updates: (UpdateInput & { id: string; createdAt: string })[];
 }
 export type Summary = Omit<Contribution, "participations" | "updates">;
+interface OrganizerMessage {
+  id: string;
+  message: string;
+  createdAt: string;
+}
+interface StoredMessage extends OrganizerMessage {
+  senderId: string;
+  key: string;
+}
 export interface StoredContribution {
   ownerId: string;
   public: Contribution;
+  privateMessages?: StoredMessage[];
 }
 export interface MutationResult {
   contribution: Contribution;
@@ -156,6 +167,57 @@ export class ContributionsStore {
       return record.public;
     });
   }
+  async messages(actor: PublicationActor, id: string) {
+    return this.repository.transaction(actor, async (tx) => {
+      const record = await this.required(tx, id);
+      if (record.ownerId !== actor.voterId)
+        throw new ContributionError("organizer_required");
+      return {
+        messages: (record.privateMessages ?? []).map(
+          ({ id, message, createdAt }) => ({
+            id,
+            message,
+            createdAt,
+          }),
+        ),
+      };
+    });
+  }
+
+  async sendMessage(
+    actor: PublicationActor,
+    id: string,
+    key: string,
+    raw: unknown,
+  ) {
+    const { message } = parse(messageSchema, raw);
+    key = requestKey(key);
+    return this.repository.transaction(actor, async (tx) => {
+      const record = await this.required(tx, id);
+      const messages = record.privateMessages ?? [];
+      const existing = messages.find(
+        (entry) => entry.senderId === actor.voterId && entry.key === key,
+      );
+      if (existing) {
+        if (existing.message !== message)
+          throw new ContributionError("idempotency_conflict");
+        return { id: existing.id, replayed: true };
+      }
+      if (messages.length >= 500) throw new ContributionError("record_full");
+      const messageId = randomUUID();
+      messages.push({
+        id: messageId,
+        message,
+        createdAt: this.clock().toISOString(),
+        senderId: actor.voterId,
+        key,
+      });
+      record.privateMessages = messages;
+      await tx.save(record, false);
+      return { id: messageId, replayed: false };
+    });
+  }
+
   private async required(tx: ContributionTransaction, id: string) {
     const record = await tx.get(id);
     if (!record) throw new ContributionError("not_found");

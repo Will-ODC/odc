@@ -191,8 +191,9 @@ for poll `ads-free`. Details are in [API.md](./API.md#mcp-public-reads).
 
 Contributions lets signed-in people publish projects, fundraising requests,
 group buys and offers with a title, description and public organizer name. Anyone can browse
-records and progress. Participants post public offers of help, pledges and
-reports. Organizers publish status updates and evidence links. Named labels
+records and progress. Signed-in members can send private messages to the
+organizer. Organizers read those messages and publish status updates and
+evidence links. Named labels
 are self-selected, and completion is reported by the organizer.
 
 When an API caller includes commercial pricing, it must show at least 20%

@@ -125,6 +125,41 @@ for (const kind of ["memory", "postgres"] as const) {
     },
   );
   test(
+    `${kind}: private messages survive other writes and are visible only to the organizer`,
+    opts,
+    async (t) => {
+      const { store, other } = await setup(t, kind);
+      const { contribution } = await store.create(owner, randomUUID(), project);
+      const { id } = contribution;
+      const key = randomUUID();
+      const input = { message: "Private question" };
+      const first = await store.sendMessage(helper, id, key, input);
+      assert.equal(first.replayed, false);
+      assert.deepEqual(await other.sendMessage(helper, id, key, input), {
+        id: first.id,
+        replayed: true,
+      });
+      await assert.rejects(store.messages(helper, id), {
+        message: "organizer_required",
+      });
+      await other.update(owner, id, randomUUID(), {
+        message: "Public update",
+        status: "in_progress",
+      });
+      assert.deepEqual((await store.messages(owner, id)).messages, [
+        { id: first.id, message: input.message, createdAt: at.toISOString() },
+      ]);
+      assert.doesNotMatch(
+        JSON.stringify(await store.detail(id)),
+        /Private question/,
+      );
+      assert.doesNotMatch(
+        JSON.stringify(await store.list({})),
+        /Private question/,
+      );
+    },
+  );
+  test(
     `${kind}: concurrent retries save once and replay original results after closure`,
     opts,
     async (t) => {

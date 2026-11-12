@@ -16,15 +16,16 @@ integration is deferred under #398.
 
 ## What to test
 
-- Browse Contributions from Home or the dedicated list.
+- Browse Contributions in the mixed Home feed or with its Contributions only filter.
 - Sign in and publish a project, fundraiser, group buy or offer with a title,
   description and public organizer name.
-- Offer help, record a pledge or report work. The confirmation says that the
-  chosen name and message will be public.
+- Open Message the organizer and send a private message. Verify that the
+  organizer can read it and other visitors cannot.
 - Publish progress or evidence as the organiser. Reviewed impact is tracked
   separately in #248.
   Profile pages are tracked in #576. Linking organizers and their contributions
-  to those profiles is tracked in #577.
+  to those profiles, including posting and management from the owner’s profile,
+  is tracked in #577.
 
 Run the local demo in memory or use a disposable Postgres database.
 Migration 013 adds the contribution records and idempotency data.

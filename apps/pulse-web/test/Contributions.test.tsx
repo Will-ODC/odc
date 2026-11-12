@@ -8,7 +8,6 @@ import {
 } from "@testing-library/react";
 import userEvent from "@testing-library/user-event";
 import { afterEach, expect, it, vi } from "vitest";
-import { Contributions } from "../src/screens/Contributions.js";
 import { Browse } from "../src/screens/Browse.js";
 import { NewContribution } from "../src/screens/NewContribution.js";
 import { ContributionDetail } from "../src/screens/ContributionDetail.js";
@@ -44,6 +43,8 @@ const fixture = (over: Partial<Contribution> = {}): Contribution => ({
 });
 const client = (over: Partial<ContributionsApi> = {}): ContributionsApi => ({
   list: async () => ({ contributions: [fixture()], nextCursor: null }),
+  sendMessage: async () => {},
+  messages: async () => [],
   detail: async () => ({ contribution: fixture(), canManage: false }),
   create: async () => fixture(),
   participate: async () => fixture(),
@@ -53,11 +54,16 @@ const client = (over: Partial<ContributionsApi> = {}): ContributionsApi => ({
 
 it("round trips contribution routes and sign-in returns including case-sensitive IDs", () => {
   const routes = [
-    { kind: "contributions" as const },
+    {
+      kind: "browse" as const,
+      community: "pulse-general",
+      filter: "contributions" as const,
+    },
     { kind: "newContribution" as const },
     { kind: "contribution" as const, id: "Ab/C" },
   ];
   for (const route of routes) expect(routeFrom(pathOf(route))).toEqual(route);
+  expect(routeFrom("/contributions")).toEqual(routes[0]);
   for (const to of routes.slice(1) as ReturnTo[]) {
     const store = new Map<string, string>();
     const storage = {
@@ -77,45 +83,43 @@ it("round trips contribution routes and sign-in returns including case-sensitive
     expect(takeReturn(storage, 101)).toEqual(to);
   }
 });
-it("shows loading, readable cards and an empty path to creation", async () => {
-  const never = new Promise<never>(() => {});
-  const { unmount } = render(
-    <Contributions api={stubApi()} client={client({ list: () => never })} />,
-  );
-  expect(screen.getByText("Loading…")).toBeTruthy();
-  unmount();
-  const ready = render(<Contributions api={stubApi()} client={client()} />);
-  const link = await screen.findByRole("link", {
-    name: "Make the park accessible",
-  });
-  link.focus();
-  expect(document.activeElement).toBe(link);
-  expect(link.getAttribute("href")).toBe("/contributions/park");
-  ready.unmount();
-  render(
-    <Contributions
-      api={stubApi()}
-      client={client({
-        list: async () => ({ contributions: [], nextCursor: null }),
-      })}
-    />,
-  );
-  expect(
-    await screen.findByRole("link", { name: "Post the first contribution" }),
-  ).toBeTruthy();
-});
-it("retries failed contribution loads without replacing the page", async () => {
+it("filters Home to contributions and can load older results", async () => {
+  const listPolls = vi.fn();
   const list = vi
     .fn()
-    .mockRejectedValueOnce(new Error("Connection lost."))
-    .mockResolvedValue({ contributions: [fixture()], nextCursor: null });
-  render(<Contributions api={stubApi()} client={client({ list })} />);
-  await userEvent.click(
-    await screen.findByRole("button", { name: "Try again" }),
+    .mockResolvedValueOnce({ contributions: [fixture()], nextCursor: "older" })
+    .mockResolvedValueOnce({
+      contributions: [
+        fixture({
+          id: "old",
+          title: "An older project",
+          createdAt: "2026-11-10T12:00:00.000Z",
+        }),
+      ],
+      nextCursor: null,
+    });
+  render(
+    <Browse
+      api={stubApi({ listPolls })}
+      community="pulse-general"
+      contributionsOnly
+      contributionsClient={client({ list })}
+    />,
   );
   expect(
     await screen.findByRole("link", { name: "Make the park accessible" }),
   ).toBeTruthy();
+  expect(listPolls).not.toHaveBeenCalled();
+  expect(
+    screen.getByRole("link", { name: "Show all" }).getAttribute("href"),
+  ).toBe("/");
+  await userEvent.click(
+    screen.getByRole("button", { name: "Load more contributions" }),
+  );
+  expect(
+    await screen.findByRole("link", { name: "An older project" }),
+  ).toBeTruthy();
+  expect(list).toHaveBeenLastCalledWith("older");
 });
 it("lists tagged contributions between newer and older polls on Home", async () => {
   const user = userEvent.setup();
@@ -168,8 +172,10 @@ it("lists tagged contributions between newer and older polls on Home", async () 
   ).toBeTruthy();
   expect(screen.queryByRole("tablist")).toBeNull();
   expect(
-    screen.getByRole("link", { name: "Contributions" }).getAttribute("href"),
-  ).toBe("/contributions");
+    screen
+      .getByRole("link", { name: "Contributions only" })
+      .getAttribute("href"),
+  ).toBe("/?filter=contributions");
 
   await user.click(screen.getByRole("button", { name: "Load more questions" }));
   const oldest = await within(list).findByRole("link", { name: "Oldest poll" });
@@ -230,47 +236,49 @@ it("requires sign-in before creating and retains the intended return", async () 
     ),
   ).toBe(true);
 });
-it("confirms a public participation and reuses its key after uncertain failure", async () => {
+it("opens a private message only on request and reuses the key on retry", async () => {
   const user = userEvent.setup();
-  const participate = vi
+  const sendMessage = vi
     .fn()
     .mockRejectedValueOnce(new Error("Connection lost. Please try again."))
-    .mockResolvedValue(fixture());
+    .mockResolvedValue(undefined);
   render(
     <ContributionDetail
-      api={stubApi()}
+      api={stubApi({
+        me: async () => ({
+          id: "reader",
+          email: "reader@example.test",
+          community: null,
+        }),
+      })}
       id="park"
-      client={client({ participate })}
+      client={client({ sendMessage })}
     />,
   );
-  await screen.findByRole("heading", { name: "Make the park accessible" });
-  await user.type(screen.getByLabelText("Your public name"), "Test helper");
+  const disclosure = await screen.findByText("Message the organizer");
+  expect(disclosure.closest("details")?.open).toBe(false);
+  await user.click(disclosure);
   await user.type(
-    screen.getByLabelText(/Your contribution/),
+    await screen.findByLabelText("Private message"),
     "I can help build the ramp.",
   );
-  await user.click(
-    screen.getByRole("button", { name: "Publish my contribution" }),
-  );
-  expect(participate).not.toHaveBeenCalled();
-  await user.click(
-    screen.getByRole("checkbox", { name: /I confirm this contribution/ }),
-  );
-  await user.click(
-    screen.getByRole("button", { name: "Publish my contribution" }),
-  );
+  await user.click(screen.getByRole("button", { name: "Send message" }));
   expect(await screen.findByRole("alert")).toHaveProperty(
     "textContent",
     "Connection lost. Please try again.",
   );
-  await user.click(
-    screen.getByRole("button", { name: "Publish my contribution" }),
+  await user.click(screen.getByRole("button", { name: "Send message" }));
+  expect(
+    await screen.findByText("Message sent to the organizer."),
+  ).toBeTruthy();
+  expect(sendMessage).toHaveBeenCalledWith(
+    "park",
+    "I can help build the ramp.",
+    expect.any(String),
   );
-  await waitFor(() => expect(participate).toHaveBeenCalledTimes(2));
-  expect(participate.mock.calls[0]?.[2]).toBe(participate.mock.calls[1]?.[2]);
-  expect(await screen.findByRole("status", { name: "" })).toBeTruthy();
+  expect(sendMessage.mock.calls[0]?.[2]).toBe(sendMessage.mock.calls[1]?.[2]);
 });
-it("closed contributions allow reports and display commercial/fund claims honestly", async () => {
+it("closed contributions can still be contacted and display existing price and fund details", async () => {
   render(
     <ContributionDetail
       api={stubApi()}
@@ -295,13 +303,9 @@ it("closed contributions allow reports and display commercial/fund claims honest
   );
   expect(await screen.findByText("25% advertised savings")).toBeTruthy();
   expect(screen.getByText(/organizer pledges 10%/)).toBeTruthy();
-  const select = screen.getByLabelText("How would you like to contribute?");
   expect(
-    within(select).queryByRole("option", { name: "Offer help" }),
-  ).toBeNull();
-  expect(
-    within(select).getByRole("option", { name: "Report work done" }),
-  ).toBeTruthy();
+    screen.getByText("Message the organizer").closest("details")?.open,
+  ).toBe(false);
 });
 it("rejects malformed successful responses and sends credentials/idempotency keys", async () => {
   const doFetch = vi

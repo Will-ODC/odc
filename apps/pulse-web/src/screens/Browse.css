@@ -157,3 +157,15 @@
 .browse__main--message .browse__more {
   text-align: left;
 }
+
+.browse__filters {
+  display: flex;
+  flex-wrap: wrap;
+  gap: var(--step) var(--gutter);
+  margin-top: calc(var(--step) * 2);
+  font-size: var(--t-small);
+}
+
+.browse__filters a {
+  color: var(--green-hover);
+}

@@ -30,9 +30,9 @@ export function NewContribution({
   const load = useCallback(() => api.me(), [api]);
   const { data, reload } = useContributionRead(load);
   return (
-    <AppShell banner={<PageBanner api={api} currentHref="/contributions" />}>
+    <AppShell banner={<PageBanner api={api} />}>
       <section className="contributions-page">
-        <a className="contribution-back" href="/contributions">
+        <a className="contribution-back" href="/?filter=contributions">
           ← Contributions
         </a>
         <h1>Start a contribution</h1>

@@ -196,6 +196,7 @@ it("loads the final page by keyboard and focuses its first new question", async 
     />,
   );
   await screen.findByRole("button", { name: "Load more questions" });
+  await user.tab(); // Contributions filter
   await user.tab(); // First question
   await user.tab(); // Load more
   expect(document.activeElement).toBe(
@@ -308,6 +309,10 @@ it("shows saved answers beside Explore using the header's single read and keyboa
   await user.tab({ shift: true });
   expect(document.activeElement).toBe(saved);
   await user.tab();
+  await user.tab();
+  expect(document.activeElement).toBe(
+    screen.getByRole("link", { name: "Contributions only" }),
+  );
   await user.tab();
   expect(document.activeElement).toBe(
     screen.getByRole("link", { name: "Question one" }),

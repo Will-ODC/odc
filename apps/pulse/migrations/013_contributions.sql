@@ -3,6 +3,7 @@ create table contribution (
   id text collate "C" primary key,
   owner_id text not null references voter(id),
   created_at timestamptz(3) not null,
+  private_messages jsonb not null default '[]',
   public_record jsonb not null
 );
 create index contribution_newest on contribution(created_at desc, id desc);

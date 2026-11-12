@@ -18,7 +18,7 @@ const errors = {
     "Check the fields and try again. Commercial offers need at least 20% savings.",
   ],
   signed_out: [401, "Sign in to contribute."],
-  organizer_required: [403, "Only the organizer can post progress updates."],
+  organizer_required: [403, "Only the organizer can do that."],
   origin_not_allowed: [403, "Open this site to send that request."],
   not_found: [404, "That contribution could not be found."],
   poll_not_found: [404, "Check the related poll ID or leave that field blank."],
@@ -126,6 +126,40 @@ export async function registerContributionRoutes(
       const voter = await deps.currentVoter(request);
       return store().detail(id(request), voter?.id);
     });
+    scope.get(
+      "/api/contributions/:id/messages",
+      readOptions,
+      async (request) => {
+        const voter = await deps.currentVoter(request);
+        if (!voter) throw new ContributionError("signed_out");
+        return store().messages(
+          {
+            voterId: voter.id,
+            sessionGeneration: voter.sessionGeneration ?? 0,
+          },
+          id(request),
+        );
+      },
+    );
+    scope.post(
+      "/api/contributions/:id/messages",
+      writeOptions,
+      async (request, reply) => {
+        const voter = (request as Authenticated)[actor];
+        if (!voter) throw new ContributionError("signed_out");
+        const key = request.headers["idempotency-key"];
+        const result = await store().sendMessage(
+          {
+            voterId: voter.id,
+            sessionGeneration: voter.sessionGeneration ?? 0,
+          },
+          id(request),
+          typeof key === "string" ? key : "",
+          request.body,
+        );
+        return reply.code(result.replayed ? 200 : 201).send(result);
+      },
+    );
     for (const operation of ["create", "participate", "update"] as const) {
       const path =
         operation === "create"

@@ -5,7 +5,6 @@ import {
   contributionsApi,
   type ContributionsApi,
   type Contribution,
-  type ParticipationInput,
   type ParticipationKind,
   type UpdateInput,
   type ContributionStatus,
@@ -43,9 +42,9 @@ export function ContributionDetail({
       setData({ status: "ready", value: { ...data.value, contribution } });
   }
   return (
-    <AppShell banner={<PageBanner api={api} currentHref="/contributions" />}>
+    <AppShell banner={<PageBanner api={api} />}>
       <section className="contributions-page">
-        <a className="contribution-back" href="/contributions">
+        <a className="contribution-back" href="/?filter=contributions">
           ← Contributions
         </a>
         <ViewState data={data}>
@@ -130,17 +129,25 @@ export function ContributionDetail({
                 </p>
               ) : null}
               <section className="contribution-section">
-                <h2>Take part</h2>
-                <ParticipationForm
-                  key={item.id}
-                  client={client}
-                  item={item}
-                  changed={changed}
-                />
+                {canManage ? (
+                  <OrganizerInbox key={item.id} client={client} id={item.id} />
+                ) : (
+                  <details className="contribution-disclosure">
+                    <summary className="contribution-button contribution-button--secondary">
+                      Message the organizer
+                    </summary>
+                    <MessageForm
+                      key={item.id}
+                      api={api}
+                      client={client}
+                      id={item.id}
+                    />
+                  </details>
+                )}
               </section>
-              <section className="contribution-section">
-                <h2>People contributing</h2>
-                {item.participations.length ? (
+              {item.participations.length ? (
+                <section className="contribution-section">
+                  <h2>People contributing</h2>
                   <ul className="contribution-timeline">
                     {item.participations.map((entry) => (
                       <li key={entry.id}>
@@ -155,12 +162,8 @@ export function ContributionDetail({
                       </li>
                     ))}
                   </ul>
-                ) : (
-                  <p className="contribution-note">
-                    Be the first to offer help or share what you have done.
-                  </p>
-                )}
-              </section>
+                </section>
+              ) : null}
               <section className="contribution-section">
                 <h2>Progress and evidence</h2>
                 <p className="contribution-note">
@@ -194,7 +197,12 @@ export function ContributionDetail({
                   <p>No progress updates yet.</p>
                 )}
                 {canManage ? (
-                  <UpdateForm client={client} item={item} changed={changed} />
+                  <details className="contribution-disclosure">
+                    <summary className="contribution-button contribution-button--secondary">
+                      Post an update
+                    </summary>
+                    <UpdateForm client={client} item={item} changed={changed} />
+                  </details>
                 ) : null}
               </section>
             </>
@@ -217,95 +225,124 @@ const participationLabels: Record<ParticipationKind, string> = {
   pledge: "Pledge",
   report: "Reported contribution",
 };
-function ParticipationForm({
+function MessageForm({
+  api,
   client,
-  item,
-  changed,
+  id,
 }: {
+  api: PulseApi;
   client: ContributionsApi;
-  item: Contribution;
-  changed: (item: Contribution) => void;
+  id: string;
 }) {
-  const closed = item.status === "completed" || item.status === "cancelled";
-  const [kind, setKind] = useState<ParticipationKind>(
-    closed ? "report" : "help",
-  );
+  const load = useCallback(() => api.me(), [api]);
+  const { data, reload } = useContributionRead(load);
   const formRef = useRef<HTMLFormElement>(null);
-  const save = useContributionSave<ParticipationInput>(
-    async (input, key) =>
-      changed(await client.participate(item.id, input, key)),
+  const save = useContributionSave<string>(
+    (message, key) => client.sendMessage(id, message, key),
     () => formRef.current?.reset(),
   );
+  const signInHref = `/sign-in?contribution=${encodeURIComponent(id)}`;
   function submit(event: FormEvent<HTMLFormElement>) {
     event.preventDefault();
-    const form = new FormData(event.currentTarget);
-    void save.submit({
-      kind: closed ? "report" : kind,
-      displayName: String(form.get("name") ?? "").trim(),
-      message: String(form.get("message") ?? "").trim(),
-    });
+    const message = String(
+      new FormData(event.currentTarget).get("message") ?? "",
+    ).trim();
+    if (message) void save.submit(message);
   }
   return (
-    <form className="contribution-form" ref={formRef} onSubmit={submit}>
-      <p>
-        Sign in to publish an offer, pledge or report. Your name and message
-        will be public.
-      </p>
-      <a
-        href={`/sign-in?contribution=${encodeURIComponent(item.id)}`}
-        target="_blank"
-        rel="noreferrer"
-      >
-        Sign in (opens in a new tab)
-      </a>
-      <fieldset disabled={save.pending}>
-        <Field label="How would you like to contribute?">
-          <select
-            value={closed ? "report" : kind}
-            onChange={(event) =>
-              setKind(event.target.value as ParticipationKind)
-            }
-          >
-            {!closed ? (
-              <>
-                <option value="help">Offer help</option>
-                <option value="pledge">Make a pledge</option>
-              </>
-            ) : null}
-            <option value="report">Report work done</option>
-          </select>
-        </Field>
-        <Field label="Your public name">
-          <input name="name" required maxLength={80} autoComplete="nickname" />
-        </Field>
-        <Field
-          label="Your contribution"
-          hint="Describe what you can provide or what you have done. Keep contact and payment details private."
-        >
-          <textarea name="message" rows={3} required maxLength={2000} />
-        </Field>
-        {kind === "pledge" && !closed ? (
-          <p className="contribution-note">
-            A pledge records your intention. No money is collected on this page.
-          </p>
-        ) : null}
-        <label className="contribution-check">
-          <input type="checkbox" required />I confirm this contribution may be
-          published with my name.
-        </label>
-      </fieldset>
-      {save.error ? (
-        <p role="alert" className="contribution-error">
-          {save.error}
-        </p>
+    <>
+      <ViewState data={data}>
+        {(me) =>
+          me ? (
+            <form className="contribution-form" ref={formRef} onSubmit={submit}>
+              <Field label="Private message">
+                <textarea
+                  name="message"
+                  rows={3}
+                  required
+                  maxLength={2000}
+                  disabled={save.pending}
+                />
+              </Field>
+              {save.error ? <p role="alert">{save.error}</p> : null}
+              {save.errorStatus === 401 ? (
+                <a href={signInHref}>Sign in again</a>
+              ) : null}
+              {save.saved ? (
+                <p role="status">Message sent to the organizer.</p>
+              ) : null}
+              <button className="contribution-button" disabled={save.pending}>
+                {save.pending ? "Sending…" : "Send message"}
+              </button>
+            </form>
+          ) : (
+            <a href={signInHref}>Sign in to send a message</a>
+          )
+        }
+      </ViewState>
+      {data.status === "error" ? (
+        <button type="button" onClick={reload}>
+          Try again
+        </button>
       ) : null}
-      {save.saved ? (
-        <p role="status">Your contribution has been published.</p>
+    </>
+  );
+}
+function OrganizerInbox({
+  client,
+  id,
+}: {
+  client: ContributionsApi;
+  id: string;
+}) {
+  const [open, setOpen] = useState(false);
+  return (
+    <details
+      className="contribution-disclosure"
+      onToggle={(event) => setOpen(event.currentTarget.open)}
+    >
+      <summary className="contribution-button contribution-button--secondary">
+        Private messages
+      </summary>
+      {open ? <OrganizerMessages client={client} id={id} /> : null}
+    </details>
+  );
+}
+function OrganizerMessages({
+  client,
+  id,
+}: {
+  client: ContributionsApi;
+  id: string;
+}) {
+  const load = useCallback(() => client.messages(id), [client, id]);
+  const { data, reload } = useContributionRead(load);
+  return (
+    <>
+      <ViewState data={data}>
+        {(messages) =>
+          messages.length ? (
+            <ul className="contribution-timeline">
+              {messages.map((entry) => (
+                <li key={entry.id}>
+                  <p className="contribution-prose">{entry.message}</p>
+                  <time dateTime={entry.createdAt}>
+                    {new Date(entry.createdAt).toLocaleDateString()}
+                  </time>
+                </li>
+              ))}
+            </ul>
+          ) : (
+            <p>No messages yet.</p>
+          )
+        }
+      </ViewState>
+      {data.status === "error" ? (
+        <button type="button" onClick={reload}>
+          Try again
+        </button>
       ) : null}
-      <button className="contribution-button" disabled={save.pending}>
-        {save.pending ? "Publishing…" : "Publish my contribution"}
-      </button>
-    </form>
+    </>
   );
 }
 function UpdateForm({
@@ -338,7 +375,6 @@ function UpdateForm({
       ref={formRef}
       onSubmit={submit}
     >
-      <h3>Post an organizer update</h3>
       <fieldset disabled={save.pending}>
         <Field label="Current status">
           <select name="status" defaultValue={item.status}>

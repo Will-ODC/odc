@@ -1120,6 +1120,19 @@ Completion and evidence are organizer-reported, never independently verified.
 URLs must be HTTP(S), without embedded credentials, at most 2000 characters.
 Each record supports 500 participations and 500 updates.
 
+### Private messages to the organizer
+
+`POST /api/contributions/:id/messages` accepts `{message}` with 1–2000
+characters and a UUID `Idempotency-Key`. It returns `{id,replayed}` with 201
+for a new message or 200 for a repeat with the same sender, contribution, key
+and text. Reusing that key with different text returns 409. Each contribution
+can receive up to 500 messages.
+
+`GET /api/contributions/:id/messages` returns `{messages:[{id,message,createdAt}]}`
+to the organizer. A signed-in non-organizer receives 403. Both routes require
+sign-in and return 404 for an unknown contribution. Public responses never
+include messages or sender information.
+
 All POSTs require a valid session, configured web Origin, application/json and
 UUID `Idempotency-Key`. The key is account-scoped across contribution mutations. Pulse stores a
 revision reference with each key to reconstruct the original response.

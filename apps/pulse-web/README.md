@@ -213,16 +213,15 @@ for HTTPS and HSTS at the TLS terminator.
 ## Contributions
 
 Home lists questions and the four newest contributions together, newest first.
-Each contribution has a tag naming its type. Contributions in the main
-navigation opens the full directory.
-`/contributions` lists public community projects,
-fundraisers, group buys and offers. After sign-in, `/contributions/new`
+Each contribution has a tag naming its type. The Contributions only filter
+on Home lists projects, fundraisers, group buys and offers. Old directory
+links open the filtered view. After sign-in, `/contributions/new`
 asks for a type, title, description and public organizer name before
 confirming publication. Detail pages show the description, participation and
 organizer updates, along with any extra details already on the record.
 
-Participants can publish offers of help, pledges and reports with a public display
-name. Only the organizer can publish status updates. Completion is labeled as
-reported, and closed contributions accept reports while help and pledges stop.
+Choose Message the organizer on a detail page to send a private message.
+The organizer reads messages there and can publish progress updates.
+Completion is labeled as reported.
 Sign-in links return to the contribution page or creation form. Failed submissions
 keep entered fields and reuse their request key for an unchanged retry.

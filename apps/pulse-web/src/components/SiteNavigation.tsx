@@ -11,7 +11,6 @@ export function SiteNavigation({
   const links = [
     { href: "/", label: "Home" },
     { href: "/about", label: "About" },
-    { href: "/contributions", label: "Contributions" },
     { href: "/my-votes", label: "My votes" },
   ];
   return (

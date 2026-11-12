@@ -198,6 +198,35 @@ describe("Contributions through the browser HTTP adapter", () => {
     expect((await guest.detail(created.id)).contribution.status).toBe("open");
   });
 
+  it("delivers private messages only to the organizer and retries without duplicates", async () => {
+    const owner = await signIn("organizer@example.test");
+    const sender = await signIn("sender@example.test");
+    const guest = new HttpContributionsApi(browserFetch(origin));
+    const item = await owner.api.create(project, randomUUID());
+    const key = randomUUID();
+    const message = "Could we meet at the north gate?";
+    await expect(
+      guest.sendMessage(item.id, message, key),
+    ).rejects.toMatchObject({ status: 401 });
+    await sender.api.sendMessage(item.id, message, key);
+    await sender.api.sendMessage(item.id, message, key);
+    await expect(
+      sender.api.sendMessage(item.id, "Different text", key),
+    ).rejects.toMatchObject({ status: 409 });
+    await expect(sender.api.messages(item.id)).rejects.toMatchObject({
+      status: 403,
+    });
+    await expect(guest.messages(item.id)).rejects.toMatchObject({
+      status: 401,
+    });
+    const inbox = await owner.api.messages(item.id);
+    expect(inbox).toEqual([
+      { id: expect.any(String), message, createdAt: expect.any(String) },
+    ]);
+    expect(JSON.stringify(await guest.detail(item.id))).not.toContain(message);
+    expect(JSON.stringify(await guest.list())).not.toContain(message);
+  });
+
   it("publishes a group buy without separate benefit, needs, pricing or poll fields", async () => {
     const owner = await signIn("organizer@example.test");
     const created = await owner.api.create(

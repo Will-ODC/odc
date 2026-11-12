@@ -60,7 +60,14 @@ export interface ContributionPage {
   contributions: ContributionSummary[];
   nextCursor: string | null;
 }
+export interface OrganizerMessage {
+  id: string;
+  message: string;
+  createdAt: string;
+}
 export interface ContributionsApi {
+  sendMessage(id: string, message: string, key: string): Promise<void>;
+  messages(id: string): Promise<OrganizerMessage[]>;
   list(cursor?: string): Promise<ContributionPage>;
   detail(id: string): Promise<ContributionDetail>;
   create(input: ContributionInput, key: string): Promise<Contribution>;
@@ -203,6 +210,30 @@ export class HttpContributionsApi implements ContributionsApi {
         "The response could not be read. Please try again.",
       );
     return data;
+  }
+  async sendMessage(id: string, message: string, key: string): Promise<void> {
+    const data = await this.request(
+      `/${encodeURIComponent(id)}/messages`,
+      { message },
+      key,
+    );
+    if (!text(data.id) || typeof data.replayed !== "boolean")
+      throw new ContributionsError(0, "Could not confirm delivery. Try again.");
+  }
+  async messages(id: string): Promise<OrganizerMessage[]> {
+    const data = await this.request(`/${encodeURIComponent(id)}/messages`);
+    if (
+      !Array.isArray(data.messages) ||
+      !data.messages.every(
+        (entry): entry is OrganizerMessage =>
+          isRecord(entry) &&
+          text(entry.id) &&
+          text(entry.message) &&
+          text(entry.createdAt),
+      )
+    )
+      throw new ContributionsError(0, "Could not load messages. Try again.");
+    return data.messages;
   }
   async list(cursor?: string): Promise<ContributionPage> {
     const data = await this.request(

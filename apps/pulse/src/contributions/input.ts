@@ -77,6 +77,7 @@ export const participationSchema = z
     message: text(2000),
   })
   .strict();
+export const messageSchema = z.object({ message: text(2000) }).strict();
 export const updateSchema = z
   .object({
     message: text(2000),

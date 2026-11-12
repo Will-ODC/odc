@@ -90,8 +90,12 @@ class PostgresRepository implements ContributionRepository {
             );
           else
             await client.query(
-              "update contribution set public_record=$2 where id=$1",
-              [record.public.id, JSON.stringify(record.public)],
+              "update contribution set public_record=$2, private_messages=$3 where id=$1",
+              [
+                record.public.id,
+                JSON.stringify(record.public),
+                JSON.stringify(record.privateMessages ?? []),
+              ],
             );
         },
         remember: async (key, replay) => {
@@ -117,12 +121,24 @@ async function read(
   lock: boolean,
 ): Promise<StoredContribution | undefined> {
   const row = (
-    await client.query<{ owner_id: string; public_record: Contribution }>(
-      `select owner_id, public_record from contribution where id=$1${lock ? " for update" : ""}`,
+    await client.query<{
+      owner_id: string;
+      public_record: Contribution;
+      private_messages?: NonNullable<StoredContribution["privateMessages"]>;
+    }>(
+      `select owner_id, public_record${lock ? ", private_messages" : ""} from contribution where id=$1${lock ? " for update" : ""}`,
       [id],
     )
   ).rows[0];
-  return row ? { ownerId: row.owner_id, public: row.public_record } : undefined;
+  return row
+    ? {
+        ownerId: row.owner_id,
+        public: row.public_record,
+        ...(row.private_messages
+          ? { privateMessages: row.private_messages }
+          : {}),
+      }
+    : undefined;
 }
 export class PostgresContributionsStore extends ContributionsStore {
   constructor(pool: Pool, clock?: () => Date) {

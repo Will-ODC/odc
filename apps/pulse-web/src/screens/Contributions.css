@@ -30,21 +30,6 @@
   color: var(--green);
   text-underline-offset: calc(var(--hairline) * 3);
 }
-.contributions-heading {
-  display: flex;
-  flex-wrap: wrap;
-  align-items: flex-start;
-  gap: var(--gutter);
-  margin-bottom: var(--gutter);
-}
-.contributions-heading > div {
-  flex: 1;
-  min-width: min(100%, var(--rail));
-}
-.contributions-heading p,
-.contribution-intro {
-  color: var(--muted);
-}
 .contribution-button {
   display: inline-flex;
   justify-content: center;
@@ -80,29 +65,10 @@
   opacity: 0.65;
   cursor: wait;
 }
-.contributions-list,
 .contribution-timeline {
   list-style: none;
   padding: 0;
   margin: 0;
-}
-.contribution-row {
-  padding: var(--gutter) 0;
-  border-top: var(--hairline) solid var(--line);
-}
-.contribution-row h2 {
-  font-size: var(--t-brand);
-  margin-top: var(--step);
-}
-.contribution-row h2 a {
-  color: var(--ink);
-  text-decoration: none;
-}
-.contribution-row h2 a:hover {
-  text-decoration: underline;
-}
-.contribution-row > p {
-  color: var(--ink-soft);
 }
 .contribution-meta {
   display: flex;
@@ -112,8 +78,8 @@
   color: var(--muted);
 }
 .contribution-price {
-  font-size: var(--t-word);
-  font-weight: 700;
+  font-size: var(--t-body);
+  font-weight: 600;
   line-height: 1.4;
 }
 .contribution-price span {
@@ -254,19 +220,17 @@
 .contribution-update {
   padding-top: var(--gutter);
 }
-.contributions-page :is(a, button, input, select, textarea):focus-visible {
+.contributions-page
+  :is(a, button, input, select, textarea, summary):focus-visible {
   outline: calc(var(--hairline) * 2) solid var(--focus);
   outline-offset: calc(var(--hairline) * 3);
 }
 @media (max-width: 699px) {
-  .contributions-heading {
-    display: block;
-  }
-  .contributions-heading .contribution-button {
-    margin-top: var(--step);
-  }
-
   .contribution-form > .contribution-button {
     width: 100%;
   }
+}
+
+.contribution-disclosure[open] > summary {
+  margin-bottom: var(--gutter);
 }

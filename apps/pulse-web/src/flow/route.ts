@@ -17,7 +17,7 @@ export type Route =
   | { kind: "myVotes" }
   | { kind: "progress" }
   | { kind: "questions" }
-  | { kind: "browse"; community: string }
+  | { kind: "browse"; community: string; filter?: "contributions" }
   /**
    * Asking for a sign-in link. `returnTo` is where to come back to once the
    * emailed link is clicked: the confirm offer's Sign in (#480) on a vote card names
@@ -38,7 +38,6 @@ export type Route =
   | { kind: "conversation"; pollId: string }
   /** Posting a question (ADR-0037). Signed in only; the screen says so. */
   | { kind: "newPoll" }
-  | { kind: "contributions" }
   | { kind: "newContribution" }
   | { kind: "contribution"; id: string };
 
@@ -105,7 +104,12 @@ export function routeFrom(href: string): Route {
       : { kind: "signIn" };
   }
 
-  if (path === "/contributions") return { kind: "contributions" };
+  if (path === "/contributions")
+    return {
+      kind: "browse",
+      community: "pulse-general",
+      filter: "contributions",
+    };
   if (path === "/contributions/new") return { kind: "newContribution" };
   if (path.startsWith("/contributions/")) {
     try {
@@ -116,7 +120,11 @@ export function routeFrom(href: string): Route {
         ),
       };
     } catch {
-      return { kind: "contributions" };
+      return {
+        kind: "browse",
+        community: "pulse-general",
+        filter: "contributions",
+      };
     }
   }
   if (path === CHAT_PREVIEW_PATH) return { kind: "chatPreview" };
@@ -130,6 +138,11 @@ export function routeFrom(href: string): Route {
     return {
       kind: "browse",
       community: url.searchParams.get("community")?.trim() || "pulse-general",
+      ...(url.searchParams.get("filter") === "contributions" &&
+      (url.searchParams.get("community")?.trim() || "pulse-general") ===
+        "pulse-general"
+        ? { filter: "contributions" as const }
+        : {}),
     };
 
   // `?poll=` so a conversation can be started anywhere in the graph without a rebuild.
@@ -142,8 +155,6 @@ export function routeFrom(href: string): Route {
 /** The URL a route should show. The inverse of `routeFrom` for every route. */
 export function pathOf(route: Route): string {
   switch (route.kind) {
-    case "contributions":
-      return "/contributions";
     case "newContribution":
       return "/contributions/new";
     case "contribution":
@@ -158,7 +169,9 @@ export function pathOf(route: Route): string {
       return "/questions";
     case "browse":
       return route.community === "pulse-general"
-        ? "/"
+        ? route.filter === "contributions"
+          ? "/?filter=contributions"
+          : "/"
         : `/browse?community=${encodeURIComponent(route.community)}`;
     case "signIn":
       switch (route.returnTo?.kind) {
