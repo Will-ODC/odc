@@ -85,6 +85,20 @@ Processed picture bytes are stored in Pulse's own Postgres, in a table
 separate from the picture's metadata, so bytes can be purged while the audit
 row stays.
 
+**The storage is neutral; the routes are about polls.** The tables are
+`image` (metadata) and `image_bytes` (the two variants), not `poll_image`.
+A picture is linked to what shows it by `owner_kind` and `owner_id`: `poll`
+(a poll's own picture) or `community` (a category default, section 6); both
+are null while the picture is pending. Whether a picture may be served is
+decided per owner kind in one server function (section 4). The routes,
+report kind and API names stay poll-specific (`/api/poll-images`,
+`poll_image`). Reason: community defaults already make a second owner, so a
+polls-only table would need a second link column at once, and a later owner
+(for example a contribution) then needs a new owner kind and its own ADR
+amendment for visibility, removal and reporting rather than a table
+migration. Only polls and community defaults are in scope; pictures on
+contributions are not planned.
+
 | Option                                          | Why not                                                                                                                                                                                                                               |
 | ----------------------------------------------- | ------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- |
 | **Postgres `bytea` (chosen)**                   | —                                                                                                                                                                                                                                     |
@@ -121,7 +135,11 @@ server must parse the file anyway to trust it).
 
 - **Accepted input:** JPEG, PNG and WebP, identified by decoding the file,
   never by the declared type or file name. SVG, GIF, HEIC and animated images
-  are refused (`unsupported_image`). SVG can carry script; HEIC needs a
+  are refused (`unsupported_image`). Animation is detected, not assumed:
+  WebP when `sharp` reports more than one page, PNG when an `acTL` chunk
+  appears before the first `IDAT` (a chunk walk over the upload, no extra
+  dependency). Animated files are refused, never cut to their first frame.
+  SVG can carry script; HEIC needs a
   patented decoder the standard build lacks. The form's
   `accept="image/jpeg,image/png,image/webp"` makes iOS convert HEIC photos to
   JPEG before upload.
@@ -147,16 +165,20 @@ server must parse the file anyway to trust it).
 ### 4. Serving
 
 - `GET /api/poll-images/:id/display.webp` and `/thumb.webp`, no session.
-  Only a picture attached to a visible poll, or set as a category default, is
-  served; pending, removed, replaced, auto-hidden and unknown pictures answer
-  the same 404.
+  `:id` is checked to be a UUID before any query. A picture is served only if
+  its owner allows it: for `poll`, the picture is the poll's current picture
+  and the poll is visible; for `community`, it is that community's current
+  default. Malformed IDs and pending, removed, replaced, auto-hidden and
+  unknown pictures all answer the same 404, with the same body.
 - Headers: `Content-Type: image/webp` (set by the server, which produced the
   bytes), `X-Content-Type-Options: nosniff` (already sent by nginx),
-  `Content-Security-Policy: default-src 'none'`, `Cross-Origin-Resource-Policy:
-same-origin`, a strong `ETag` (SHA-256 of the stored bytes) and
+  `Content-Security-Policy: default-src 'none'`,
+  `Cross-Origin-Resource-Policy: same-origin`, a strong `ETag` (the SHA-256
+  of that variant's stored, re-encoded bytes) and
   `Cache-Control: public, max-age=3600`. An hour, not a year: a removed
   picture disappears from browsers within the hour, and revalidation is a
-  cheap 304.
+  cheap 304. This hash is public by nature, since anyone can compute it from
+  the served bytes. No hash of the original upload is ever computed or kept.
 - Same origin, through the existing nginx `/api/` location: no CSP change for
   served pictures. The posting form's local preview needs
   `img-src 'self' blob:` added to `security-headers.conf`.
@@ -173,8 +195,13 @@ carry a description too.
 
 ### 6. Defaults are resolved by the server, in one order
 
-Every poll's public body and every listing row carries an `image` object. The
-server picks the first that applies:
+Every poll's public body and every poll row in a listing carries an `image`
+object. Contribution rows in the mixed Home/Browse list (PR #572) carry no
+`image` object, and the web client gives them an empty slot of the thumbnail's
+size, so titles stay aligned. The slot is empty rather than a tile because a
+tile means "this poll's community default"; on a contribution it would claim
+a picture or category that does not exist. The server picks the first that
+applies:
 
 1. **`upload`** — the poster's visible picture.
 2. **`category`** — the poll's category has a default picture uploaded by the
@@ -188,7 +215,11 @@ All default pictures are uploaded by the site owner through an owner-only
 route that uses the same upload pipeline, limits and description rule. Nothing
 is shipped as a static asset, so a new category needs no deploy. The site
 owner may set or clear a category's default at any time; clearing falls back
-to the tile.
+to the tile. Setting a new default or clearing one detaches the old default
+picture and deletes its bytes in the same transaction, with an audit row
+(section 9); polls in that community show the new default or the tile at
+once, and browsers within the hour (section 4). Default pictures cannot be
+reported: they are the site owner's, not a poster's.
 
 **What a category is (D4a).** Category = community: the community row gains
 a nullable `default_image_id`, and the poll's existing community picks its
@@ -232,7 +263,13 @@ at this community.
   "no edits after publication": the question, choices, close time and
   attribution stay fixed.
 - The old picture's bytes are deleted at once, in the same transaction; the
-  poll shows the new picture or falls back to its default.
+  poll shows the new picture or falls back to its default. **Exception:** a
+  picture that is auto-hidden, or has an unresolved report, when it is removed
+  or replaced keeps its bytes, never served, until the 30-day purge of
+  section 9 (counted from the hide or from the removal, whichever is later).
+  The retention rule wins so that the site owner's review (section 9) still
+  has the reported picture as context. Step 6 of the plan adds this exception;
+  before reporting exists, every removal deletes at once.
 - Replacing counts toward the same upload quota. Each remove or replace is an
   audit row (section 9). Voters who answered before a replace are not told:
   the picture is presentation, not part of the ballot, and the question and
@@ -252,7 +289,8 @@ at this community.
   automatically; the poll falls back to its default and stays visible.
   Nobody restores an auto-hidden picture (the site owner does not moderate
   pictures, D0); the poster may replace it, and reports on the new picture
-  start from zero. An auto-hidden picture's bytes are purged after 30 days.
+  start from zero. An auto-hidden picture's bytes are purged after 30 days,
+  also when the poster replaces or removes it meanwhile (section 8).
   This applies ADR-0024 3c to pictures with a threshold of 3.
 - **Poll reports never hide a poll automatically.** They go to the site
   owner's review list, together with picture reports as context. ADR-0024
@@ -267,10 +305,13 @@ at this community.
   soft deletes only. My votes already omits a poll deleted while paging.
 - **Contributions** (PR #572) get the same soft delete, restore window and
   purge, in a separate step that waits for #572 to land.
-- **Audit:** every attach, replace, remove, automatic hide, soft delete,
-  restore and purge is a row in an append-only change table: target, action,
-  actor kind (`poster`, `site_owner`, `auto`), private actor account where
-  there is one, reason, time. Purging keeps the row and the picture's SHA-256.
+- **Audit:** every attach, replace, remove, automatic hide, category default
+  set or clear, soft delete, restore and purge is a row in an append-only
+  change table: target, action, actor kind (`poster`, `site_owner`, `auto`),
+  private actor account where there is one, reason, time. Purging keeps the
+  row and the SHA-256 of the picture's stored `display` variant (the
+  re-encoded bytes, the same value as its ETag); no hash of the original
+  upload exists.
 
 ### 10. Launch order and the accepted interim risk
 
@@ -298,7 +339,9 @@ owner's soft delete follow as the next steps, not as a launch gate.
 The `image` object contains only: `kind`; for `upload` and `category`, the
 two URLs and the `width` and `height` of the display variant, and the `alt`
 text. Never the uploading account, original file name, original type or
-size, upload time, SHA-256, report count or state. A hidden or removed
+size, upload time, report count or state. The stored variants' SHA-256 is
+not in the body; it appears only as the ETag of the picture's own response
+(section 4), where anyone could compute it anyway. A hidden or removed
 picture simply resolves to the next default. Errors and logs follow the
 existing rules: no bytes, no file names, no account IDs; a processing failure
 logs the error class only.
@@ -323,13 +366,22 @@ logs the error class only.
   ADR-0036's public-origin rule applies before absolute links are advertised.
 - The plain-text context excerpt of #296/#427 is **not** decided here; it is a
   separate small text field.
-- Migrations: the next free number at implementation time (013 today). Never
+- Migrations: PR #572 (Contributions) adds `013_contributions.sql` and
+  `014_contribution_messages_and_replay_revisions.sql`, so this work uses the
+  next free number after #572 merges: 015 or later, never 013 or 014. Never
   edit an applied migration.
+- Pictures depend on Contributions in one more way: #572 turns Home/Browse
+  into one date-ordered list of polls and contributions, so the thumbnail
+  column (#427) and the Home banner (#586) are built on that list, after
+  #572 merges.
 
 ### Documents reconciled
 
-- `docs/plans/pulse.md`: gains "P12 — Poll thumbnails" with the ordered steps.
-  **Updated in this PR.**
+- `docs/plans/pulse.md`: gains "P12 — Poll thumbnails" with the ordered steps
+  and their tickets (#579–#586, #296, #427, #581). **Updated in this PR.**
+  Its #246–#248 section is left alone; PR #572 edits it.
+- `docs/plans/contributions.md` (arrives with PR #572): nothing conflicts;
+  contribution rows carry no picture (section 6). No change.
 - `apps/pulse/API.md`: says photos are "not writable inputs" and documents the
   listing and poll bodies without `image`. **Changed by step 1** (and steps
   5–9 for their routes), in the same PR as the code, in the ADR-0037 style.
