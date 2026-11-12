@@ -28,6 +28,7 @@ import {
   type SuggestionStore,
 } from "../voting/suggestions.js";
 import { registerCreationRoutes } from "./creation.js";
+import { registerImageRoutes, type ImageRouteDeps } from "./images.js";
 import { registerMcpReads, type McpReadOptions } from "./mcp/route.js";
 import { requireWebOrigin } from "./origin.js";
 import { SESSION_COOKIE, SessionSigner } from "./session.js";
@@ -77,6 +78,17 @@ export interface ServerDeps {
    * creation routes answer 503 `creation_unavailable` and nothing is created.
    */
   creation?: CreationStore;
+  /**
+   * Poll pictures (ADR-0047). Optional like `creation`: without one, uploads
+   * answer 503 `images_unavailable` and every picture URL is the one 404.
+   */
+  images?: ImageRouteDeps["images"];
+  /** Picture processing and its queue; tests may replace or slow them. */
+  imageProcessor?: ImageRouteDeps["processor"];
+  imageQueue?: ImageRouteDeps["queue"];
+  /** Picture uploads, and picture reads, per client per window. */
+  uploadRateLimit?: { max: number; timeWindow: string };
+  imageReadRateLimit?: { max: number; timeWindow: string };
   /**
    * The web client's origin, exactly as a browser sends it in `Origin`. Every
    * creation mutation, sign-in, link redemption and sign-out must come from
@@ -719,6 +731,17 @@ export async function createServer(deps: ServerDeps): Promise<FastifyInstance> {
     webOrigin: deps.webOrigin,
     currentVoter,
     ...(deps.creationRateLimit ? { rateLimit: deps.creationRateLimit } : {}),
+  });
+  await registerImageRoutes(app, {
+    images: deps.images,
+    webOrigin: deps.webOrigin,
+    currentVoter,
+    ...(deps.imageProcessor ? { processor: deps.imageProcessor } : {}),
+    ...(deps.imageQueue ? { queue: deps.imageQueue } : {}),
+    ...(deps.uploadRateLimit ? { uploadRateLimit: deps.uploadRateLimit } : {}),
+    ...(deps.imageReadRateLimit
+      ? { readRateLimit: deps.imageReadRateLimit }
+      : {}),
   });
   registerMcpReads(app, deps.mcp);
   return app;
