@@ -1,5 +1,6 @@
 import { useEffect, useId, useRef, useState } from "react";
 import type { FocusEvent, KeyboardEvent, ReactNode, RefObject } from "react";
+import { Button } from "./Button.js";
 import "./AccountMenu.css";
 
 /**
@@ -61,16 +62,17 @@ export function AccountMenu({
       onKeyDown={onKeyDown}
       onBlur={onBlur}
     >
-      <button
+      <Button
         ref={button}
         type="button"
+        variant="quiet"
         className="account-menu__button"
         aria-expanded={open}
         aria-controls={panelId}
         onClick={() => setOpen((was) => !was)}
       >
         {label}
-      </button>
+      </Button>
       <div id={panelId} className="account-menu__panel" hidden={!open}>
         {children}
       </div>
