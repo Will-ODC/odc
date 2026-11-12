@@ -128,8 +128,8 @@ It has three jobs, and the third is new:
 the community-scoped listing API (#259 / PR #419). Current behavior is recorded
 in `memory/pulse.md` and `apps/pulse-web/README.md`.
 
-Remaining work is separate: thumbnails/context excerpts (#427, depends on
-#296), the mixed post/poll feed (#397), related-vote continuation (#425), and
+Remaining work is separate: thumbnails/context excerpts (#427; thumbnails
+are planned in P12 below, ADR-0047), the mixed post/poll feed (#397), related-vote continuation (#425), and
 MCP discovery (#291). ADR-0025's related storage/read step remains accepted but
 unimplemented; a community listing does not supply those relationships.
 Query-selected browsing order (ADR-0021) and answer-independent related
@@ -456,6 +456,98 @@ they sign in; whether one admin acts for any community or only their own; and
 whether this is a screen in `apps/pulse-web` or a separate surface. Read P6
 before starting and reuse its established posting authority where applicable;
 do not silently broaden those permissions to links or assurance gates.
+
+## P12 — Poll thumbnails · READY TO BUILD (step 9 BLOCKED ON A DECISION)
+
+Operator direction, 2026-11-12: every poll gets a thumbnail, Reddit-style.
+The poster can upload one with the question; otherwise a default shows: one
+the site owner uploaded for the poll's category, or a generated tile. ODC
+governing decisions have one central default, and Home invites everyone to
+vote on them. A picture shows at once; signed-in people can report it.
+
+The design is **ADR-0047 (accepted)**, including the operator's decisions
+D0–D9. Pictures ship first; reporting and the site owner's soft delete follow
+and are not a launch gate (D9, reversed). A category is the community (D4a).
+
+The plain-text context excerpt that #296 and #427 also mention is not part of
+this item; it is its own ticket.
+
+Steps, in order. Each is one PR on `pulse/<issue>-<short>`, with tests,
+fresh review (plus `odc-ui-reviewer` for screens) and green CI before the
+next dependent step starts.
+
+1. **Picture store, upload and public `image` field (server).** New ticket.
+   Depends on nothing.
+   - Migration (next free number) adds picture metadata, a separate bytes
+     table and the append-only change table.
+   - `POST /api/poll-images` accepts JPEG/PNG/WebP up to 10 MiB, refuses SVG,
+     GIF, HEIC, animated and oversized files with distinct errors, and stores
+     only the re-encoded `display` and `thumb` (256 square, centre crop) WebP.
+   - A test uploads a JPEG carrying GPS EXIF and proves neither variant holds
+     any metadata; a mislabelled file is judged by its content.
+   - `POST /api/polls` accepts `image: { id, alt }` (alt required) for the
+     uploader's own pending picture; replay attaches once.
+   - Picture routes serve only attached pictures with ADR-0047's headers;
+     pending and unknown IDs are the same 404.
+   - Poll body, listing and MCP `get_poll` carry `image` (`upload` or `tile`)
+     from one projection; no uploader data in any body or log line.
+   - Upload quotas and the 24-hour pending sweep, with Postgres and in-memory
+     conformance tests; nginx upload location; `DEPLOY.md` and `API.md`
+     updated; CI builds the musl image.
+2. **Add a picture in the posting form.** New ticket. Depends on 1.
+   - Optional picture on `/new` with local preview (`img-src 'self' blob:`),
+     required description and Remove before publishing.
+   - Publish waits for the upload; type, size, busy and network errors are
+     recoverable without losing the draft.
+   - Keyboard, screen reader and real phone/desktop checks.
+3. **Thumbnails in the question browser.** #427 (retitled). Depends on 1.
+   - Thumbnail or tile beside each title, decorative to screen readers; a
+     failed picture never hides the title, state or link.
+   - One listing request per page, checked by a test; mockup approved first.
+4. **Picture on the question page.** #296 (retitled). Depends on 1.
+   - Display picture under the question with its description; defaults show
+     as a small tile; failures leave no empty frame and voting stays usable.
+5. **Poster removes or replaces the picture.** New ticket. Depends on 1, 2, 4.
+   - `DELETE` and `PUT /api/polls/:id/image`, poster only; old bytes deleted
+     in the same transaction; audit row for each; question and choices stay
+     fixed.
+   - An authenticated `no-store` route tells the poster they may do this; no
+     response reveals an anonymous poster.
+6. **Report a picture or a poll; automatic picture hiding.** New ticket;
+   builds #233 and covers #236. Depends on 1, 4.
+   - Shared report store with `poll_image` and `poll` targets; signed-in
+     only, ten an hour, one unresolved report per reporter and target.
+   - A picture with 3 distinct reporters hides; the poll shows its default;
+     bytes purged after 30 days; the poster may replace it.
+   - Poll reports never hide a poll; they wait for the site owner (step 7).
+7. **Site owner soft-deletes polls.** New ticket; minimal #234. Depends on 6.
+   - Site-owner review list of poll and picture reports, without reporter
+     identities.
+   - Soft delete hides the poll everywhere at once; restore within 30 days;
+     purge afterwards deletes poll, choices, votes and picture bytes and keeps
+     an audit row without content.
+8. **Site owner soft-deletes contributions.** New ticket. Depends on 7 and
+   on PR #572 (contributions) being merged.
+   - Same soft delete, 30-day restore and purge for a whole contribution,
+     reusing step 7's review list and audit table.
+9. **Category defaults, ODC decisions and the Home banner.** New ticket.
+   Depends on 1 and 3.
+   - Category = community (D4a); owner-only route sets or
+     clears a category's default picture through the upload pipeline;
+     resolution adds `category`.
+   - Migration reserves `odc-decisions` ("ODC decisions"), refusing a
+     collision like `pulse-general`; owner-only `governance_posting` grant
+     with audit; creation accepts `community: "odc-decisions"` only from the
+     site owner or a grantee.
+   - Home shows one dismissible banner while ODC decisions are open, with the
+     governance picture and a link to their list; it never casts a vote.
+
+Steps 3 and 4 can run in parallel after 1; step 9 can start once
+steps 1 and 3 are merged. Until step 7, the only emergency path
+is a database operator setting the poll's `hidden` flag (ADR-0047 §10).
+
+Afterwards, not scheduled: point `/questions` at `odc-decisions` instead of
+build variables; reuse previews in #397's mixed feed.
 
 ---
 
