@@ -97,8 +97,10 @@ API startup, link redemption or sign-in-link request. There is no scheduler
 and no extra environment variable: with no restart, redemptions or sign-in
 link requests, expired rows remain until the next one. The sweep uses the same
 application clock as link expiry, and does not change the 15-minute link
-lifetime. A failed sweep is logged as a fault and does not stop the API
-starting or fail the sign-in that triggered it.
+lifetime. A failed sweep at startup or redemption is logged as a fault and
+does not stop the API starting or fail that redemption; the sweep inside a
+sign-in-link request runs in the request's own transaction, so a failure there
+fails that request.
 
 Migration 010 removes previously used pending rows. A separate `used_claim`
 table retains only spent token digests and application timestamps, with no
