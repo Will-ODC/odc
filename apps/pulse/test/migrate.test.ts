@@ -46,6 +46,7 @@ const AT = new Date("2026-09-11T09:30:00.123Z");
 const TABLES = [
   "allowed_domain",
   "community",
+  "member_profile",
   "pending_claim",
   "poll_choice",
   "poll_creation_replay",
@@ -99,6 +100,7 @@ test("applies_a_fresh_schema", { skip }, async () => {
       "010",
       "011",
       "012",
+      "015",
     ]);
     assert.deepEqual(await tablesIn(pool, schema), TABLES);
   });
@@ -515,6 +517,8 @@ test(
       assert.deepEqual(await indexesIn(pool, schema), [
         "allowed_domain_pkey",
         "community_pkey",
+        "member_profile_pkey",
+        "member_profile_public_id_key",
         "pending_claim_expiry_idx",
         "pending_claim_kind_subject_idx",
         "pending_claim_pkey",
@@ -547,6 +551,17 @@ test(
     });
   },
 );
+
+/**
+ * Every shipped migration from `first` on. An upgrade test checks what the
+ * upgrade does to old rows, not the list of later migrations, so it must not
+ * break each time a migration is added; `applies_a_fresh_schema` pins the list.
+ */
+async function versionsFrom(first: string): Promise<string[]> {
+  return (await loadMigrations())
+    .map((m) => m.version)
+    .filter((v) => v >= first);
+}
 
 async function inTempDir(run: (dir: string) => Promise<void>): Promise<void> {
   const dir = await mkdtemp(path.join(tmpdir(), "pulse-migrations-"));
@@ -613,11 +628,10 @@ test(
             " ('live', 'email', 'live@example.test', null, false, $1, $2, null)",
           [AT, new Date(AT.getTime() + 15 * 60_000)],
         );
-        assert.deepEqual((await migrate(pool, { clock: () => AT })).applied, [
-          "010",
-          "011",
-          "012",
-        ]);
+        assert.deepEqual(
+          (await migrate(pool, { clock: () => AT })).applied,
+          await versionsFrom("010"),
+        );
         const store = new PostgresClaimStore(pool);
         assert.equal(await store.byTokenHash("used"), undefined);
         assert.equal(await store.wasUsed("used"), true);
@@ -689,10 +703,10 @@ test(
             " on c.poll_id = v.poll_id",
         );
 
-        assert.deepEqual((await migrate(pool, { clock: () => AT })).applied, [
-          "011",
-          "012",
-        ]);
+        assert.deepEqual(
+          (await migrate(pool, { clock: () => AT })).applied,
+          await versionsFrom("011"),
+        );
 
         const { rows } = await pool.query<{
           poll_id: string;
