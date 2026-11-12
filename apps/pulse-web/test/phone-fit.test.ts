@@ -18,6 +18,18 @@ function rule(file: string, selector: string): string {
 }
 
 describe("fitting a phone", () => {
+  it("pads the conversation by the open Voting drawer's measured height, never less than before (#528)", () => {
+    const padding =
+      /padding-bottom:([^;]*);/.exec(
+        rule("screens/Conversation.css", ".conversation__scroll"),
+      )?.[1] ?? "";
+    expect(padding).toMatch(/^\s*max\(/);
+    expect(padding).toContain(
+      "var(--gutter) + var(--step) * 8 + env(safe-area-inset-bottom)",
+    );
+    expect(padding).toContain("calc(var(--dock-space, 0px) + var(--gutter))");
+  });
+
   it("gives the phone version thumb-sized targets and a full-width sheet (#482)", () => {
     const css = readFileSync(
       new URL("../src/screens/Conversation.css", import.meta.url),

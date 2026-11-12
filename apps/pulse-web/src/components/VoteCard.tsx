@@ -9,6 +9,7 @@ import {
 } from "../flow/vote-card.js";
 import type { Confirmation } from "../flow/vote-card.js";
 import { ClosedNotice } from "./ClosedNotice.js";
+import { QuestionPager, type MyVotesNavigation } from "./QuestionPager.js";
 import { ResultsPanel } from "./ResultsPanel.js";
 import { ViewState } from "./ViewState.js";
 import "./VoteCard.css";
@@ -77,6 +78,8 @@ export interface VoteCardProps {
   onClose: () => void;
   onChangeAnswer?: () => void;
   onNext?: () => void;
+  /** Previous/Next in My votes order; null ends stay visibly disabled. */
+  myVotesNavigation?: MyVotesNavigation;
   /**
    * Where "Why you can trust your vote" points (#351). Shown only once a vote
    * is counted, and opened in a new tab so the conversation, whose history is
@@ -126,6 +129,7 @@ export function VoteCard({
   onClose,
   onChangeAnswer,
   onNext,
+  myVotesNavigation,
   trustHref,
   confirmation = "unknown",
   confirmHref,
@@ -276,7 +280,9 @@ export function VoteCard({
           <span aria-hidden="true">i</span>
         </a>
       ) : null}
-      {onNext ? (
+      {myVotesNavigation ? (
+        <QuestionPager navigation={myVotesNavigation} />
+      ) : onNext ? (
         <button type="button" className="vote-card__next" onClick={onNext}>
           Next question<span aria-hidden="true"> ›</span>
         </button>

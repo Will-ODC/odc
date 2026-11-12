@@ -1,5 +1,17 @@
 import { useCallback, useEffect, useRef, useState } from "react";
-import { ApiError, type MyVotesPage, type PulseApi } from "../api/types.js";
+import {
+  ApiError,
+  type MyVote,
+  type MyVotesPage,
+  type PulseApi,
+} from "../api/types.js";
+import {
+  answeredList,
+  mergedVotes,
+  myVotesPlace,
+  type LocalAnswer,
+  type MyVotesPlace,
+} from "../flow/answered.js";
 import type { ViewData } from "./view-data.js";
 
 type More =
@@ -108,6 +120,159 @@ export function useMyVotes(api: PulseApi) {
     voteRead,
     retry: retryRead,
   };
+}
+
+interface Later {
+  first: MyVotesPage | undefined;
+  rows: MyVote[];
+  cursor: string | null;
+  /** The open question a read failed or stuck for, if any. */
+  failedFor: string | null;
+}
+
+const startOf = (first: MyVotesPage | undefined): Later => ({
+  first,
+  rows: [],
+  cursor: first?.nextCursor ?? null,
+  failedFor: null,
+});
+
+/**
+ * My votes rows after `first`, read only so a question page can find an older
+ * saved answer's place and the row below it (#528). Nothing draws them: the
+ * rail keeps its first page and See all my votes. While `wanted`, it reads
+ * one page at a time, and starts over when `first` is read again. `more` is
+ * whether a cursor is left. A failed or stuck read stops it for `question`,
+ * the open question (`failed`); opening another question tries once more, so
+ * one blip does not last the visit and a page that always fails is asked
+ * for once per question, never in a loop.
+ */
+export function useLaterVotes(
+  api: PulseApi,
+  first: MyVotesPage | undefined,
+  wanted: boolean,
+  question: string,
+) {
+  const [later, setLater] = useState<Later>(() => startOf(first));
+  let current = later;
+  if (later.first !== first) {
+    current = startOf(first);
+    setLater(current);
+  }
+  const { cursor } = current;
+  const failed = current.failedFor === question;
+  // The read in flight, so a re-render never asks for the same page twice.
+  const reading = useRef<{ first: MyVotesPage; cursor: string } | null>(null);
+  // The question open when a read settles, which the failure is recorded
+  // against: a read started for one question can end on another that was
+  // waiting for the same page.
+  const open = useRef(question);
+  open.current = question;
+  useEffect(() => {
+    if (!wanted || !first || !cursor || failed) return;
+    const asked = reading.current;
+    if (asked && asked.first === first && asked.cursor === cursor) return;
+    reading.current = { first, cursor };
+    const settle = (next: (old: Later) => Later) => {
+      if (reading.current?.first === first) reading.current = null;
+      setLater((old) =>
+        old.first === first && old.cursor === cursor ? next(old) : old,
+      );
+    };
+    const stop = (old: Later) => ({ ...old, failedFor: open.current });
+    api.myVotes(cursor).then(
+      (page) =>
+        settle((old) =>
+          page.nextCursor === cursor
+            ? stop(old)
+            : {
+                ...old,
+                rows: [...old.rows, ...page.votes],
+                cursor: page.nextCursor,
+                failedFor: null,
+              },
+        ),
+      () => settle(stop),
+    );
+  }, [api, first, cursor, failed, wanted]);
+  return { rows: current.rows, more: current.cursor !== null, failed };
+}
+
+/**
+ * Where the open question `at` stands in My votes, for its Previous and Next
+ * (#528); see `myVotesPlace`. `first` is the rail's first page (undefined
+ * until read), `answers` and `recent` this page's answers, and `round` counts
+ * forgettings, which start the list of questions answered here over.
+ */
+export function useMyVotesPlace({
+  api,
+  first,
+  firstLoading,
+  answers,
+  recent,
+  at,
+  round,
+}: {
+  api: PulseApi;
+  first: MyVotesPage | undefined;
+  firstLoading: boolean;
+  answers: readonly LocalAnswer[];
+  recent: readonly string[];
+  at: string;
+  round: number;
+}): MyVotesPlace {
+  // Questions answered here or restored, as of when the open one was
+  // opened: once left and opened again, a first answer is in My votes too.
+  const [listedFor, setListedFor] = useState({
+    at,
+    round,
+    ids: [] as string[],
+  });
+  // A saved answer read back for this question when it was opened: in
+  // `answers` without having been cast here.
+  const restoredHere =
+    answers.some((one) => one.poll.id === at) && !recent.includes(at);
+  if (listedFor.round !== round) setListedFor({ at, round, ids: [] });
+  else if (listedFor.at !== at)
+    setListedFor({
+      at,
+      round,
+      ids: [
+        ...new Set([...listedFor.ids, ...answers.map((one) => one.poll.id)]),
+      ],
+    });
+  else if (restoredHere && !listedFor.ids.includes(at))
+    setListedFor({ at, round, ids: [...listedFor.ids, at] });
+  const serverVotes = first?.votes ?? [];
+  // Later pages are read only while a saved answer's row, or the row below
+  // the last one read, may be on one. An unanswered question reads nothing.
+  const [wanted, setWanted] = useState(false);
+  const later = useLaterVotes(api, first, wanted, at);
+  const loaded = mergedVotes(serverVotes, later.rows);
+  // Saved when opened: its row has been read from any page (so a question
+  // opened by Next from a later page keeps its pager even when its ballot or
+  // results could not be read back), its ballot was read back, or it was
+  // answered here and opened again.
+  const listed =
+    loaded.some((vote) => vote.pollId === at) ||
+    restoredHere ||
+    (listedFor.round === round &&
+      listedFor.at === at &&
+      listedFor.ids.includes(at));
+  const found = myVotesPlace({
+    ordered: answeredList(loaded, answers, recent),
+    loaded,
+    recent,
+    current: at,
+    listed,
+    more: firstLoading || later.more,
+  });
+  // A page that could not be read: the answer-selected Next, as before.
+  const place: MyVotesPlace =
+    found.kind === "finding" && later.failed ? { kind: "none" } : found;
+  const looking = place.kind === "finding" && first !== undefined;
+  if (looking !== wanted) setWanted(looking);
+  return place;
 }
 
 function asView(page: MyVotesPage): ViewData<MyVotesPage> {
