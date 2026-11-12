@@ -19,7 +19,9 @@ export function AppShell({
   return (
     <div className="shell">
       {banner ? <header className="shell__banner">{banner}</header> : null}
-      <div className="shell__body">
+      <div
+        className={nav ? "shell__body shell__body--with-nav" : "shell__body"}
+      >
         {/*
          * `aria-hidden` is deliberately NOT set on these: the rails carry real
          * navigation and real content, and hiding them from a screen reader

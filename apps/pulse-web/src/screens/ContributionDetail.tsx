@@ -10,7 +10,11 @@ import {
   type ContributionStatus,
 } from "../api/contributions.js";
 import { AppShell } from "../components/AppShell.js";
-import { PageBanner } from "../components/PageBanner.js";
+import { SiteBanner } from "../components/SiteBanner.js";
+import { AnsweredRail } from "../components/AnsweredRail.js";
+import { SuggestedVotesRail } from "../components/SuggestedVotesRail.js";
+import { useMyVotes } from "../hooks/use-my-votes.js";
+import { useSession } from "../hooks/use-session.js";
 import { ViewState } from "../components/ViewState.js";
 import { ContributionField as Field } from "../components/ContributionField.js";
 import {
@@ -35,6 +39,16 @@ export function ContributionDetail({
   id: string;
   client?: ContributionsApi;
 }) {
+  const mine = useMyVotes(api);
+  const [railRetried, setRailRetried] = useState(false);
+  const clearVotes = () => {
+    setRailRetried(false);
+    mine.clear();
+  };
+  const { session, progress, signOut, dismiss } = useSession(api, {
+    onSignedOut: clearVotes,
+    onForgotten: clearVotes,
+  });
   const load = useCallback(() => client.detail(id), [client, id]);
   const { data, reload, setData } = useContributionRead(load);
   function changed(contribution: Contribution) {
@@ -42,7 +56,30 @@ export function ContributionDetail({
       setData({ status: "ready", value: { ...data.value, contribution } });
   }
   return (
-    <AppShell banner={<PageBanner api={api} />}>
+    <AppShell
+      banner={
+        <SiteBanner
+          session={session}
+          progress={progress}
+          holdsVotes={mine.holdsVotes}
+          {...(mine.voteRead ? { voteRead: mine.voteRead } : {})}
+          onSignOut={signOut}
+          onCancel={dismiss}
+        />
+      }
+      nav={
+        <AnsweredRail
+          data={mine.data}
+          votes={mine.data.status === "ready" ? mine.data.value.votes : []}
+          railRetried={railRetried}
+          onRetry={() => {
+            setRailRetried(true);
+            mine.retry();
+          }}
+        />
+      }
+      aside={<SuggestedVotesRail api={api} />}
+    >
       <section className="contributions-page">
         <a className="contribution-back" href="/?filter=contributions">
           ← Contributions

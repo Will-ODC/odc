@@ -6,6 +6,7 @@ import {
 import type { PulseApi } from "../api/types.js";
 import { pathOf } from "../flow/route.js";
 import { SiteBanner } from "../components/SiteBanner.js";
+import { SuggestedVotesRail } from "../components/SuggestedVotesRail.js";
 import { AnsweredRail } from "../components/AnsweredRail.js";
 import { ViewState } from "../components/ViewState.js";
 import { Button } from "../components/Button.js";
@@ -144,7 +145,7 @@ export function Browse({
           onCancel={dismiss}
         />
       </header>
-      <main className="browse__layout">
+      <main className="browse__layout with-suggested-votes">
         <AnsweredRail
           data={mine.data}
           votes={mine.data.status === "ready" ? mine.data.value.votes : []}
@@ -281,6 +282,12 @@ export function Browse({
             </Button>
           ) : null}
         </div>
+        <SuggestedVotesRail
+          api={api}
+          {...(isGeneral && !contributionsOnly
+            ? { source: { data, retry } }
+            : {})}
+        />
       </main>
     </div>
   );

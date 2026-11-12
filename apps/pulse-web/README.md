@@ -210,6 +210,14 @@ for HTTPS and HSTS at the TLS terminator.
 - **`/start` is written by hand.** It is not a live feed and does not mean the
   work is deployed.
 
+## Desktop sidebars
+
+Home, poll details and contribution details share My votes on the left from
+700px. From 1100px, Suggested votes appears on the right. It lists up to five
+open General questions in newest-first order and skips the question already
+on screen. The sidebar opens a question without casting a vote. See #529
+for suggested votes and #331 for desktop layout.
+
 ## Contributions
 
 Home lists questions and the four newest contributions together, newest first.
