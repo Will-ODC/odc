@@ -37,7 +37,7 @@ Repo discipline still applies: tests ship with the change, there is one small
 branch per change, named for its ticket (`pulse/<issue>-<short>`, #310), and
 the same CI runs.
 
-## Where it stands (2026-11-11)
+## Where it stands (2026-11-12)
 
 - **Merged since 2026-11-10:** #521 mockups for dark mode and the compact
   posted notice (#499/#500); #522 steady header width, focus after Forget and
@@ -67,8 +67,23 @@ the same CI runs.
   Conversation); #571 docs say a failed sweep never fails startup or
   redemption, while a link-request sweep failure fails that request (#570,
   `fabb23c`).
-- **New tickets 2026-11-11:** #569 small Button size and retire `.button`
-  (open, in progress); #557 and #560 review nits (open).
+- **Merged 2026-11-12:** #574 small size for the shared Button, `.button`
+  utility retired (#569, `28bfee3`); #566 Previous and Next follow the My votes
+  list (#528, `9ff9678`; nits left: render-time ref write in `useLaterVotes`,
+  suggest `useLayoutEffect`; no cleanup test for `useDockSpace`; later pages
+  re-read after reload); #578 closed-question fixes: compact results fit the
+  column, rail says Closed, one "Sending…" (#575, `429465b`; UI nits in #589);
+  #587 ADR-0047 poll pictures accepted and plan P12 (`aa97cf6`).
+- **Poll pictures are planned, not built** (ADR-0047, P12 in
+  `docs/plans/pulse.md`, READY TO BUILD; tickets #579-#586). Neutral
+  `image`/`image_bytes` storage keyed by `owner_kind`/`owner_id`. Migrations
+  take 015+, after Contributions #572 lands; #427, #585 and #586 wait for
+  #572. Purging a poll tombstones its replay rows (an ADR-0037 amendment for
+  purged polls only); ADR-0037's broad-posting launch gate is unchanged.
+- **Open PRs 2026-11-12:** Contributions #246 is PR #572. #535 is PR #588,
+  held until #572 merges (they conflict in Browse files).
+- **New tickets:** #557, #560 review nits and #589 closed-question UI nits
+  (open).
 - **One ballot per signed-in person** (#532 / PR #552, ADR-0046, migration
   011). Operator decision 2026-11-11: a signed-in person's new vote replaces
   their earlier vote on a poll, and on sign-in the newer answer moves to that
@@ -174,15 +189,15 @@ the same CI runs.
 5. **The proxy-hop and rate-limit prerequisites** in `apps/pulse/DEPLOY.md`
    must be satisfied before go-live.
 
-## Current operator direction and next work (2026-11-11)
+## Current operator direction and next work (2026-11-12)
 
 1. The recent Answered, results, desktop voting, sign-in and header changes
    are merged; there is no remaining UI stack awaiting merge.
-2. Open follow-ups: #528 Previous/Next follow My votes, #533 ViewState Try
-   again, #535 one paged-list hook, #536 Conversation logic into flow/ and
-   hooks, #537 VoteCard split, #538 CSS encapsulation and tokens, #557 and
-   #560 review nits, #569 small Button size and retire `.button` (in
-   progress), #534 part 3 (Conversation),
+2. Open follow-ups: #533 ViewState Try again, #535 one paged-list hook
+   (PR #588, held for #572), #536 Conversation logic into flow/ and
+   hooks, #537 VoteCard split, #538 CSS encapsulation and tokens, #557,
+   #560 and #589 review nits, #534 part 3 (Conversation), P12 poll pictures
+   (#579-#586, ADR-0047),
    #539 step 2 (one session provider; operator decision), and #499 dark mode
    and #500 compact posted notice (mockups merged in #521, not built).
 3. Prepare a small invited pilot only after choosing a host, configuring DNS,
@@ -344,6 +359,9 @@ the same CI runs.
   later time; suggestions off (#336); five publications per rolling hour per
   account; Owner and narrow grants; community or General posting; anonymous by
   default, naming optional. General is posting-only and never an account's community.
+- **ADR-0047:** poll pictures: neutral `image`/`image_bytes` storage with
+  `owner_kind`/`owner_id`; purging a poll tombstones its replay rows (amends
+  ADR-0037 for purged polls only). Planned as P12; not built.
 - **ADR-0039:** pulse may explain counting, on `/trust`, and never claims more
   than is built.
 - **ADR-0040:** confirmed votes store a keyed code only. "Most recent" means most
