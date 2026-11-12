@@ -21,6 +21,21 @@ function object(value: unknown): Record<string, unknown> {
   return row;
 }
 
+/**
+ * The display-name rule. `apps/pulse-web/src/flow/profile-name.ts` repeats it
+ * so the editor can say what is wrong before saving; the parity test in
+ * `tests/pulse-integration` keeps the two identical.
+ *
+ * A name needs at least one character people can see. It may not contain
+ * control or format characters — which covers the bidi overrides and isolates
+ * (U+202A–U+202E, U+2066–U+2069) that can make a name read as something else —
+ * except the zero-width joiner and non-joiner (U+200D, U+200C), which emoji
+ * sequences and Persian and Indic names need. A name made only of those two
+ * still has nothing visible and is refused.
+ */
+const VISIBLE = /[\p{L}\p{N}\p{P}\p{S}]/u;
+const HIDDEN = /(?![\u200C\u200D])[\p{Cc}\p{Cf}]/u;
+
 function text(
   value: unknown,
   limit: number,
@@ -31,11 +46,7 @@ function text(
   const normalized = value.trim();
   if (normalized.includes("\u0000") || /[\uD800-\uDFFF]/u.test(normalized))
     throw new ProfileInputError();
-  if (
-    displayName &&
-    (/[\p{Cc}\p{Cf}]/u.test(normalized) ||
-      !/[\p{L}\p{N}\p{P}\p{S}]/u.test(normalized))
-  )
+  if (displayName && (HIDDEN.test(normalized) || !VISIBLE.test(normalized)))
     throw new ProfileInputError();
   if ((!empty && normalized === "") || [...normalized].length > limit)
     throw new ProfileInputError();

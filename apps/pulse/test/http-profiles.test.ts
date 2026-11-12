@@ -127,11 +127,15 @@ test("owner_can_create_read_update_hide_and_reshare_a_stable_profile", async (t)
     createdAt: AT.toISOString(),
   });
   assert.equal(shared.headers["cache-control"], "no-store");
+  // A public read never starts or refreshes a session.
+  assert.equal(shared.headers["set-cookie"], undefined);
 
   const hidden = await h.put({ displayName: "Ada", bio: "", visible: false });
   assert.equal(hidden.json().profile.publicId, publicId);
   const unavailable = await h.app.inject({ url: `/api/profiles/${publicId}` });
   assert.equal(unavailable.statusCode, 404);
+  assert.equal(unavailable.headers["cache-control"], "no-store");
+  assert.equal(unavailable.headers["set-cookie"], undefined);
 
   const reshared = await h.put({
     displayName: "Ada Lovelace",
@@ -160,6 +164,11 @@ test("malformed_missing_and_hidden_public_profiles_are_indistinguishable", async
       '{"error":"not_found","message":"That profile is unavailable."}',
     ]),
   );
+  // Not cached either: a hidden profile shown again must not stay "missing".
+  for (const response of responses) {
+    assert.equal(response.headers["cache-control"], "no-store");
+    assert.equal(response.headers["set-cookie"], undefined);
+  }
 });
 
 test("owner_routes_refuse_signed_out_foreign_origin_and_other_accounts", async (t) => {
