@@ -10,22 +10,25 @@ import { ViewState } from "./ViewState.js";
  * Unlike `<VoteCard>`, the counts are not already in hand - they are fetched
  * when "See results" is pressed - so this owes the other states too: loading,
  * and a failure with a way to try again. The empty state is the panel's own:
- * nobody answering is said in `<ResultsPanel>`, which keeps its way out.
+ * nobody answering is said in `<ResultsPanel>`.
  *
- * Every state carries Close, so someone who asked and then changed their mind
- * is never stuck waiting on a request to get back to the question.
+ * Loading and failure carry Close, so someone who asked and then changed
+ * their mind is never stuck waiting on a request to get back to the question.
+ * Once the results are in they are the question page's compact panel, which
+ * has never drawn a Close of its own; the full panel's Close, reached only
+ * through a `compact={false}` no page passed, went in #569.
  */
 export function ClosedResults({
   data,
-  compact = false,
+  compact,
   onRetry,
   onClose,
   panelRef,
   explainHref,
 }: {
   data: ViewData<Standing>;
-  /** Use the question page's compact results layout. */
-  compact?: boolean;
+  /** The question page's compact results layout, the only one this draws. */
+  compact: true;
   onRetry: () => void;
   onClose: () => void;
   /** Focus lands here on open, and on each change of state while open. */
@@ -40,7 +43,6 @@ export function ClosedResults({
         compact={compact}
         yourChoices={data.value.yourChoices}
         ended
-        onClose={onClose}
         panelRef={panelRef}
         explainHref={explainHref}
       />

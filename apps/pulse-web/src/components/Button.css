@@ -48,6 +48,25 @@
   cursor: default;
 }
 /*
+ * The small secondary button (#569): smaller text and padding, a hover fill,
+ * and muted text at full opacity while disabled ("Loading more…") rather than
+ * the faded button. Single classes after `.btn--secondary` and `.btn:disabled`
+ * in this file, so they win on order; a screen's own two-class rule (such as
+ * `.conversation button`) still outranks them. The phone touch height is the
+ * secondary variant's, below.
+ */
+.btn--small {
+  font-size: var(--t-small);
+  padding: var(--step) calc(var(--step) * 2);
+}
+.btn--small:hover:not(:disabled) {
+  background: var(--hover);
+}
+.btn--small:disabled {
+  opacity: 1;
+  color: var(--muted);
+}
+/*
  * Phone: full-height touch targets for the boxed variants only. A quiet button
  * sits inline in a sentence ("… Change"), so it keeps its text height.
  */

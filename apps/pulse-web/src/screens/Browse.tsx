@@ -95,6 +95,7 @@ export function Browse({
           {data.status === "error" ? (
             <Button
               variant="secondary"
+              size="small"
               className="browse__action"
               type="button"
               onClick={retry}
@@ -106,6 +107,7 @@ export function Browse({
           {data.status === "ready" && data.value.nextCursor ? (
             <Button
               variant="secondary"
+              size="small"
               className="browse__action"
               type="button"
               disabled={more.status === "loading"}
