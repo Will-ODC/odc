@@ -61,18 +61,22 @@ export function ContributionDetail({
                   Organized by {item.organizerName} · {item.community.label}
                 </p>
               </header>
-              <section className="contribution-benefit">
-                <h2>Community benefit</h2>
-                <p>{item.communityBenefit}</p>
-              </section>
               <section className="contribution-section">
-                <h2>The plan</h2>
+                <h2>Description</h2>
                 <p className="contribution-prose">{item.description}</p>
               </section>
-              <section className="contribution-section">
-                <h2>What’s needed</h2>
-                <p className="contribution-prose">{item.needs}</p>
-              </section>
+              {item.communityBenefit ? (
+                <section className="contribution-benefit">
+                  <h2>Community benefit</h2>
+                  <p>{item.communityBenefit}</p>
+                </section>
+              ) : null}
+              {item.needs ? (
+                <section className="contribution-section">
+                  <h2>What’s needed</h2>
+                  <p className="contribution-prose">{item.needs}</p>
+                </section>
+              ) : null}
               {item.commercial ? (
                 <section className="contribution-offer">
                   <h2>Community savings</h2>

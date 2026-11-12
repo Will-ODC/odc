@@ -254,7 +254,7 @@ for (const kind of ["memory", "postgres"] as const) {
 }
 test("input rejects unsafe links, invalid Unicode and invalid cursors", () => {
   for (const data of [
-    { ...project, kind: "offer" },
+    { ...project, kind: "offer", fund: { name: "Fund", percentage: 5 } },
     { ...project, commercial },
     { ...project, fund: { name: "Fund", percentage: 5 } },
     { ...project, title: "\ud800" },

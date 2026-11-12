@@ -216,14 +216,10 @@ Home lists questions and the four newest contributions together, newest first.
 Each contribution has a tag naming its type. Contributions in the main
 navigation opens the full directory.
 `/contributions` lists public community projects,
-fundraisers, group buys and offers. `/contributions/new` publishes a contribution
-after sign-in and explicit confirmation. Each `/contributions/:id` page shows the
-community benefit, needs, optional linked poll, participation and organizer updates.
-
-Offers and group buys require a comparable regular price, community price saving
-at least 20%, source link and terms. An optional named fund records a pledged share
-of sales proceeds. Pledges and reports are public statements. Money collection,
-fund transfers and independent evidence review are future work.
+fundraisers, group buys and offers. After sign-in, `/contributions/new`
+asks for a type, title, description and public organizer name before
+confirming publication. Detail pages show the description, participation and
+organizer updates, along with any extra details already on the record.
 
 Participants can publish offers of help, pledges and reports with a public display
 name. Only the organizer can publish status updates. Completion is labeled as

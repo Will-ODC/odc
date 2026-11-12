@@ -190,18 +190,16 @@ for poll `ads-free`. Details are in [API.md](./API.md#mcp-public-reads).
 ## Contributions
 
 Contributions lets signed-in people publish projects, fundraising requests,
-group buys and offers with an explicit community benefit. Anyone can browse
+group buys and offers with a title, description and public organizer name. Anyone can browse
 records and progress. Participants post public offers of help, pledges and
 reports. Organizers publish status updates and evidence links. Named labels
 are self-selected, and completion is reported by the organizer.
 
-Commercial offers require at least 20% advertised savings against a linked
-comparison price in the same currency. The terms explain what both prices
-include. An optional named collective fund receives a declared percentage
-pledge of sales proceeds. The service records these commitments without
-processing payments or verifying donations, savings or impact.
+When an API caller includes commercial pricing, it must show at least 20%
+advertised savings. Pulse records the declared prices and pledges. Payments
+and independent verification are future work.
 
-The API is documented in [API.md](./API.md#contributions-246-247-252-test-branch).
+The API is documented in [API.md](./API.md#contributions-246-247-252).
 Migration 013 adds contribution records and durable retry responses. Production
 uses Postgres. Development follows its existing storage selection, so the default
 in-memory demonstration loses records on restart. User text and public names

@@ -45,8 +45,8 @@ export const creationSchema = z
   .object({
     title: text(160),
     description: text(4000),
-    communityBenefit: text(2000),
-    needs: text(2000),
+    communityBenefit: text(2000).or(z.literal("")).default(""),
+    needs: text(2000).or(z.literal("")).default(""),
     organizerName: text(80),
     kind: z.enum(["project", "fundraiser", "group_buy", "offer"]),
     pollId: text(128)
@@ -67,10 +67,8 @@ export const creationSchema = z
   .strict()
   .refine((v) => {
     const isCommercial = v.kind === "group_buy" || v.kind === "offer";
-    return (
-      isCommercial === (v.commercial !== null) &&
-      (isCommercial || v.fund === null)
-    );
+    if (!isCommercial) return v.commercial === null && v.fund === null;
+    return v.fund === null || v.commercial !== null;
   });
 export const participationSchema = z
   .object({

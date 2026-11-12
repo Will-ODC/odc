@@ -123,7 +123,7 @@ function ContributionRow({ item }: { item: ContributionSummary }) {
           {item.title}
         </a>
       </h2>
-      <p>{item.communityBenefit}</p>
+      <p>{item.communityBenefit || item.description}</p>
       {item.commercial ? (
         <p className="contribution-price">
           {money(item.commercial.offeredPriceMinor, item.commercial.currency)}{" "}

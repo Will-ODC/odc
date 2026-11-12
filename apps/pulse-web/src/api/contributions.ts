@@ -12,8 +12,8 @@ export interface CommercialOffer {
 export interface ContributionInput {
   title: string;
   description: string;
-  communityBenefit: string;
-  needs: string;
+  communityBenefit?: string;
+  needs?: string;
   kind: ContributionKind;
   organizerName: string;
   pollId?: string;
@@ -22,9 +22,11 @@ export interface ContributionInput {
 }
 export interface ContributionSummary extends Omit<
   ContributionInput,
-  "pollId" | "commercial" | "fund"
+  "pollId" | "commercial" | "fund" | "communityBenefit" | "needs"
 > {
   id: string;
+  communityBenefit: string;
+  needs: string;
   community: { id: string; label: string };
   pollId: string | null;
   commercial: CommercialOffer | null;

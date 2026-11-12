@@ -220,11 +220,7 @@
 .contribution-field textarea {
   resize: vertical;
 }
-.contribution-fields-row {
-  display: grid;
-  grid-template-columns: repeat(3, minmax(0, 1fr));
-  gap: calc(var(--step) * 2);
-}
+
 .contribution-check {
   display: flex;
   align-items: flex-start;
@@ -269,9 +265,7 @@
   .contributions-heading .contribution-button {
     margin-top: var(--step);
   }
-  .contribution-fields-row {
-    grid-template-columns: 1fr;
-  }
+
   .contribution-form > .contribution-button {
     width: 100%;
   }

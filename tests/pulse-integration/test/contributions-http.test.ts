@@ -198,6 +198,30 @@ describe("Contributions through the browser HTTP adapter", () => {
     expect((await guest.detail(created.id)).contribution.status).toBe("open");
   });
 
+  it("publishes a group buy without separate benefit, needs, pricing or poll fields", async () => {
+    const owner = await signIn("organizer@example.test");
+    const created = await owner.api.create(
+      {
+        title: "Bulk order for neighbours",
+        description: "Join the order for shared delivery.",
+        organizerName: "Neighbourhood group",
+        kind: "group_buy",
+      },
+      randomUUID(),
+    );
+    expect(created).toMatchObject({
+      kind: "group_buy",
+      communityBenefit: "",
+      needs: "",
+      commercial: null,
+      fund: null,
+      pollId: null,
+    });
+    expect((await owner.api.detail(created.id)).contribution.description).toBe(
+      "Join the order for shared delivery.",
+    );
+  });
+
   it("enforces the advertised savings threshold and carries a declared fund share", async () => {
     const owner = await signIn("organizer@example.test");
     const commercial = {

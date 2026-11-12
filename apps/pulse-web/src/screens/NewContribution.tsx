@@ -1,5 +1,5 @@
-import { useCallback, useRef, useState } from "react";
-import type { FormEvent, FocusEvent } from "react";
+import { useCallback, useRef } from "react";
+import type { FormEvent } from "react";
 import type { PulseApi } from "../api/types.js";
 import {
   contributionsApi,
@@ -36,10 +36,6 @@ export function NewContribution({
           ← Contributions
         </a>
         <h1>Start a contribution</h1>
-        <p className="contribution-intro">
-          Describe something useful for your community and how people can take
-          part.
-        </p>
         <ViewState data={data}>
           {(me) =>
             me ? (
@@ -72,9 +68,6 @@ function ContributionForm({
   client: ContributionsApi;
   onCreated: (id: string) => void;
 }) {
-  const [kind, setKind] = useState<ContributionKind>("project");
-  const [fund, setFund] = useState(false);
-  const [validation, setValidation] = useState("");
   const resultId = useRef("");
   const save = useContributionSave<ContributionInput>(
     async (input, key) => {
@@ -82,80 +75,22 @@ function ContributionForm({
     },
     () => onCreated(resultId.current),
   );
-  const commercial = kind === "group_buy" || kind === "offer";
-  function validatePrices(event: FocusEvent<HTMLInputElement>) {
-    const form = event.currentTarget.form;
-    if (!form) return;
-    const values = new FormData(form);
-    const regular = String(values.get("regular") ?? "");
-    const offered = String(values.get("offered") ?? "");
-    if (!regular || !offered) return;
-    setValidation(
-      Number(offered) > Number(regular) * 0.8
-        ? "The community price must save at least 20% against the comparable regular price."
-        : "",
-    );
-  }
   function submit(event: FormEvent<HTMLFormElement>) {
     event.preventDefault();
     const form = new FormData(event.currentTarget);
     const value = (key: string) => String(form.get(key) ?? "").trim();
-    const input: ContributionInput = {
+    void save.submit({
       title: value("title"),
       description: value("description"),
-      communityBenefit: value("benefit"),
-      needs: value("needs"),
       organizerName: value("organizer"),
-      kind,
-    };
-    if (value("poll")) input.pollId = value("poll");
-    if (commercial) {
-      const regularPriceMinor = Math.round(Number(value("regular")) * 100);
-      const offeredPriceMinor = Math.round(Number(value("offered")) * 100);
-      if (
-        !Number.isSafeInteger(regularPriceMinor) ||
-        !Number.isSafeInteger(offeredPriceMinor) ||
-        regularPriceMinor <= 0 ||
-        offeredPriceMinor < 0 ||
-        offeredPriceMinor > regularPriceMinor * 0.8
-      ) {
-        setValidation(
-          "The community price must save at least 20% against the comparable regular price.",
-        );
-        return;
-      }
-      input.commercial = {
-        currency: value("currency"),
-        regularPriceMinor,
-        offeredPriceMinor,
-        referenceUrl: value("reference"),
-        terms: value("terms"),
-      };
-    }
-    if (commercial && fund)
-      input.fund = {
-        name: value("fundName"),
-        percentage: Number(value("fundPercent")),
-      };
-    setValidation("");
-    void save.submit(input);
+      kind: value("kind") as ContributionKind,
+    });
   }
   return (
     <form className="contribution-form" onSubmit={submit}>
       <fieldset disabled={save.pending}>
-        <legend>Tell us about it</legend>
         <Field label="Contribution type">
-          <select
-            value={kind}
-            onChange={(event) => {
-              const next = event.target.value as ContributionKind;
-              setKind(next);
-              if (next !== "group_buy" && next !== "offer") {
-                setFund(false);
-                setValidation("");
-              }
-            }}
-          >
+          <select name="kind" defaultValue="project">
             {Object.entries(contributionKinds).map(([value, label]) => (
               <option key={value} value={value}>
                 {label}
@@ -171,17 +106,11 @@ function ContributionForm({
             placeholder="What would you like to make happen?"
           />
         </Field>
-        <Field label="Description">
-          <textarea name="description" required maxLength={4000} rows={5} />
-        </Field>
-        <Field label="How will the community benefit?">
-          <textarea name="benefit" required maxLength={2000} rows={3} />
-        </Field>
         <Field
-          label="What help or resources are needed?"
-          hint="Include the skills, time, materials or funding you need."
+          label="Description"
+          hint="Explain what you’re offering or asking for and how people can take part."
         >
-          <textarea name="needs" required maxLength={2000} rows={3} />
+          <textarea name="description" required maxLength={4000} rows={5} />
         </Field>
         <Field
           label="Organizer’s public name"
@@ -194,117 +123,13 @@ function ContributionForm({
             autoComplete="nickname"
           />
         </Field>
-        <Field
-          label="Related poll ID (optional)"
-          hint="Use the ID after ?poll= in a question’s address."
-        >
-          <input name="poll" maxLength={128} />
-        </Field>
       </fieldset>
-      {commercial ? (
-        <fieldset disabled={save.pending}>
-          <legend>Community savings</legend>
-          <p>
-            Offers and group buys must provide at least 20% savings on a
-            comparable regular price. Include required fees in the prices.
-          </p>
-          <div className="contribution-fields-row">
-            <Field label="Currency">
-              <select name="currency">
-                <option>CAD</option>
-                <option>USD</option>
-                <option>GBP</option>
-                <option>EUR</option>
-              </select>
-            </Field>
-            <Field label="Regular price">
-              <input
-                name="regular"
-                onBlur={validatePrices}
-                type="number"
-                min="0.01"
-                step="0.01"
-                required
-              />
-            </Field>
-            <Field label="Community price">
-              <input
-                name="offered"
-                onBlur={validatePrices}
-                aria-invalid={Boolean(validation)}
-                aria-describedby={validation ? "savings-error" : undefined}
-                type="number"
-                min="0"
-                step="0.01"
-                required
-              />
-            </Field>
-          </div>
-          {validation ? (
-            <p id="savings-error" role="alert" className="contribution-error">
-              {validation}
-            </p>
-          ) : null}
-          <Field label="Comparable price source">
-            <input
-              name="reference"
-              type="url"
-              required
-              maxLength={2000}
-              placeholder="https://"
-            />
-          </Field>
-          <Field
-            label="Offer terms"
-            hint="Explain what is included, minimum group size, delivery, expiry and any conditions."
-          >
-            <textarea name="terms" required maxLength={2000} rows={3} />
-          </Field>
-        </fieldset>
-      ) : null}
-      {commercial ? (
-        <fieldset disabled={save.pending}>
-          <legend>Collective funds</legend>
-          <label className="contribution-check">
-            <input
-              type="checkbox"
-              checked={fund}
-              onChange={(event) => setFund(event.target.checked)}
-            />
-            Pledge a share of sales proceeds to a collective fund
-          </label>
-          {fund ? (
-            <>
-              <Field label="Fund or beneficiary name">
-                <input name="fundName" required maxLength={160} />
-              </Field>
-              <Field label="Share of sales proceeds (%)">
-                <input
-                  name="fundPercent"
-                  type="number"
-                  min="1"
-                  max="100"
-                  step="1"
-                  required
-                />
-              </Field>
-              <p className="contribution-note">
-                This records your pledge. Payments and transfers are arranged
-                outside Pulse.
-              </p>
-            </>
-          ) : null}
-        </fieldset>
-      ) : null}
       <div className="contribution-confirm">
         <label className="contribution-check">
           <input type="checkbox" required disabled={save.pending} />I confirm
-          these details are accurate and may be published with my name.
+          this post may be published with my name.
         </label>
-        <p>
-          Contributions and pledges are public. Keep personal contact and
-          payment details out of your post.
-        </p>
+        <p>Keep personal contact and payment details out of your post.</p>
       </div>
       {save.error ? (
         <p role="alert" className="contribution-error">

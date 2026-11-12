@@ -1088,20 +1088,19 @@ session determines whether the reader is the organizer. All responses use
 `Cache-Control: no-store`. Reading never creates a ballot or changes a vote.
 
 Signed-in `POST /api/contributions` publishes a community contribution. Strict
-JSON fields are `title` (160 characters), `description` (4000),
-`communityBenefit` (2000), `needs` (2000), `organizerName` (80), and `kind`
-(`project`, `fundraiser`, `group_buy`, `offer`). Text is trimmed and nonempty.
-Optional `pollId` must identify an existing visible poll. A missing or hidden
-poll returns 404 `poll_not_found`. Optional `commercial`
-is required for group buys and offers and forbidden for other kinds. It has
+JSON requires `title` (160 characters), `description` (4000),
+`organizerName` (80), and `kind` (`project`, `fundraiser`, `group_buy`, `offer`).
+Text is trimmed and nonempty. Optional `communityBenefit` and `needs` accept
+up to 2000 characters each and default to empty strings.
+
+The short posting form sends only the required fields. API callers may still
+supply `pollId` for a visible poll. A missing or hidden poll returns 404
+`poll_not_found`. Group buys and offers may include `commercial` pricing with
 `currency` (CAD/USD/GBP/EUR), integer `regularPriceMinor` (1–1000000000),
 `offeredPriceMinor` (0–1000000000), `referenceUrl` and `terms` (2000).
-The initial minimum advertised savings is 20%. Prices use the same
-currency and include all mandatory charges for comparable products. The
-organizer supplies the comparison source and conditions. These claims are
-unverified. Optional `fund` is `{name,percentage}` with a 1–160 character name
-and integer 1–100 percentage of sales proceeds pledged to that collective fund.
-It applies only to commercial offers. Optional fields accept null or omission.
+When prices are provided, they must show at least 20% advertised savings.
+An optional `fund` requires pricing and contains a `name` (1–160 characters)
+and a whole-number `percentage` (1–100). These claims are unverified.
 
 The public record adds `id`, `community:{id,label}`, `createdAt` ISO timestamp,
 `status` (`open`,`in_progress`,`completed`,`cancelled`), `participations` and
