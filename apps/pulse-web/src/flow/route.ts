@@ -37,7 +37,9 @@ export type Route =
   /** Live conversation page; explicit poll links bypass the browser. */
   | { kind: "conversation"; pollId: string }
   /** Posting a question (ADR-0037). Signed in only; the screen says so. */
-  | { kind: "newPoll" };
+  | { kind: "newPoll" }
+  | { kind: "memberProfile"; publicId: string }
+  | { kind: "profileEditor" };
 
 /** The places a sign-in can return to. */
 export type ReturnTo = Extract<Route, { kind: "conversation" | "newPoll" }>;
@@ -56,6 +58,7 @@ const SIGN_IN_PATH = "/sign-in";
 const CHAT_PREVIEW_PATH = "/preview/chat";
 export const TRUST_PATH = "/trust";
 const NEW_POLL_PATH = "/new";
+const PROFILE_EDITOR_PATH = "/profile";
 
 /**
  * A base for parsing, never for navigating.
@@ -94,6 +97,9 @@ export function routeFrom(href: string): Route {
   if (path === CHAT_PREVIEW_PATH) return { kind: "chatPreview" };
   if (path === TRUST_PATH) return { kind: "trust" };
   if (path === NEW_POLL_PATH) return { kind: "newPoll" };
+  if (path === PROFILE_EDITOR_PATH) return { kind: "profileEditor" };
+  if (/^\/u\/[^/]+$/.test(path))
+    return { kind: "memberProfile", publicId: path.slice(3) };
   if (path === "/my-votes") return { kind: "myVotes" };
   if (path === "/start") return { kind: "progress" };
   if (path === "/questions") return { kind: "questions" };
@@ -146,5 +152,9 @@ export function pathOf(route: Route): string {
       return `/?poll=${encodeURIComponent(route.pollId)}`;
     case "newPoll":
       return NEW_POLL_PATH;
+    case "memberProfile":
+      return `/u/${encodeURIComponent(route.publicId)}`;
+    case "profileEditor":
+      return PROFILE_EDITOR_PATH;
   }
 }

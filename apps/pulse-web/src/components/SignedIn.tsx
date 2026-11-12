@@ -24,6 +24,9 @@ export function SignedIn({
   return (
     <div className="signed-in">
       <span className="signed-in__who">{email}</span>
+      <a className="signed-in__profile" href="/profile">
+        Your profile
+      </a>
       <TwoPress
         label="Sign out"
         question="Sign out on every device? This browser will stop showing your answers. They still count."

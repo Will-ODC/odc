@@ -21,6 +21,8 @@ import { Trust } from "./screens/Trust.js";
 import { Browse } from "./screens/Browse.js";
 import { MyVotes } from "./screens/MyVotes.js";
 import { NewPoll } from "./screens/NewPoll.js";
+import { MemberProfile } from "./screens/MemberProfile.js";
+import { ProfileEditor } from "./screens/ProfileEditor.js";
 import "./styles/tokens.css";
 import "./styles/utilities.css";
 import "./App.css";
@@ -209,6 +211,10 @@ export function App({
             restoreDraft={restoreDraft}
           />
         );
+      case "memberProfile":
+        return <MemberProfile api={api} publicId={at.publicId} />;
+      case "profileEditor":
+        return <ProfileEditor api={api} />;
     }
   }
 }

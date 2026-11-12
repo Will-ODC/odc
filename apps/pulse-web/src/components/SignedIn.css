@@ -14,3 +14,13 @@
   min-width: 0;
   overflow-wrap: anywhere;
 }
+
+.signed-in__profile {
+  color: var(--green);
+  font-weight: 600;
+}
+
+.signed-in__profile:focus-visible {
+  outline: var(--focus-ring-width) solid var(--focus);
+  outline-offset: var(--focus-ring-offset);
+}
