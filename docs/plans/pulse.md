@@ -488,7 +488,8 @@ fresh review (plus `odc-ui-reviewer` for screens) and green CI before the
 next dependent step starts.
 
 1. **Picture store, upload and public `image` field (server).** #579.
-   Depends on nothing; its migration number is taken after #572 merges.
+   Build now; merge after #572, because its migration number is the next
+   free one after #572's.
    - Migration (next free number after #572: 015 or later) adds the neutral
      `image` and `image_bytes` tables (owner link `owner_kind`, `owner_id`;
      ADR-0047 §1) and the append-only change table.
@@ -515,14 +516,14 @@ next dependent step starts.
    - Publish waits for the upload; type, size, busy and network errors are
      recoverable without losing the draft.
    - Keyboard, screen reader and real phone/desktop checks.
-3. **Thumbnails in the question browser.** #427 (retitled). Depends on 1
+3. **Thumbnails in the question browser.** #427 (rescoped). Depends on 1
    and on PR #572 being merged.
    - Built on #572's mixed list: thumbnail or tile beside each poll title,
      decorative to screen readers; contribution rows get an empty slot of the
      same size, so all titles stay aligned. A failed picture never hides the
      title, state or link.
    - One listing request per page, checked by a test; mockup approved first.
-4. **Picture on the question page.** #296 (retitled). Depends on 1.
+4. **Picture on the question page.** #296 (rescoped). Depends on 1.
    - Display picture under the question with its description; defaults show
      as a small tile; failures leave no empty frame and voting stays usable.
 5. **Poster removes or replaces the picture.** #582. Depends on 1, 2, 4.
@@ -548,8 +549,9 @@ next dependent step starts.
    - Site-owner review list of poll and picture reports, without reporter
      identities.
    - Soft delete hides the poll everywhere at once; restore within 30 days;
-     purge afterwards deletes poll, choices, votes and picture bytes and keeps
-     an audit row without content.
+     purge afterwards deletes poll, choices, suggestions, votes and the
+     picture's `image` row and bytes, and keeps only a change-table audit row
+     without content.
    - Purge turns the poll's `poll_creation_replay` row into a tombstone in
      the same transaction: only `voter_id` and `request_key` stay,
      `poll_id` becomes null, the stored input and response are emptied. A
@@ -560,6 +562,15 @@ next dependent step starts.
    on PR #572 (contributions) being merged.
    - Same soft delete, 30-day restore and purge for a whole contribution,
      reusing step 7's review list and audit table.
+   - Purge deletes the contribution row (public record and private messages)
+     and turns its `contribution_replay` row into a tombstone in the same
+     transaction: migration makes `contribution_id` nullable and adds
+     `purged_at`; only `voter_id` and `request_key` keep meaning, `canonical`
+     is emptied and the counts zeroed. A late retry is refused without
+     content and never re-publishes the contribution (ADR-0047 §9).
+   - Re-check #572's migrations as merged (013, 014 today: `contribution_id`
+     `not null`, `no action` reference) and list in the PR every reference to
+     a contribution and what purge does to it.
 9. **Category defaults, ODC decisions and the Home banner.** #586.
    Depends on 1, 3 and PR #572 being merged.
    - Category = community (D4a); owner-only route sets or clears a

@@ -84,8 +84,11 @@ Constraints that shape the choice:
 ### 1. Bytes live in Postgres
 
 Processed picture bytes are stored in Pulse's own Postgres, in a table
-separate from the picture's metadata, so bytes can be purged while the audit
-row stays.
+separate from the picture's metadata (`image`: owner link, size, alt text).
+Neither is the audit record: that is a row in the append-only change table
+(section 9), which holds no picture content. When a picture is purged, its
+bytes row and its `image` row are both deleted, and only the change-table
+row survives.
 
 **The storage is neutral; the routes are about polls.** The tables are
 `image` (metadata) and `image_bytes` (the two variants), not `poll_image`.
@@ -304,9 +307,12 @@ at this community.
   3c's automatic poll hiding stays unbuilt and its threshold unchosen.
 - **Soft delete (D0, D8):** the site owner may soft-delete a whole poll, for
   example when it is inappropriate. A soft-deleted poll disappears from every
-  public read and listing at once (its picture with it). The site owner may
+  public read and listing at once (its picture with it, from browsers within
+  the hour, section 4). The site owner may
   restore it within 30 days. After 30 days it is purged: the poll, its
-  choices, its votes and its picture bytes are deleted; the audit row keeps
+  choices, its suggestions (free text), its votes, and its picture's `image`
+  row (with the alt text) and bytes are deleted; the change-table audit row
+  keeps
   the poll ID, action, reason and times, without content. This amends
   ADR-0024 3b and ADR-0037 ("removal hides; never deletes") for site-owner
   soft deletes only. My votes already omits a poll deleted while paging.
@@ -325,7 +331,17 @@ at this community.
   ADR-0037's "do not expire" replay rule for purged polls only. The step also
   lists every other reference to `polls` and states its fate in the PR.
 - **Contributions** (PR #572) get the same soft delete, restore window and
-  purge, in a separate step that waits for #572 to land.
+  purge, in a separate step that waits for #572 to land. Their replay row
+  gets the same tombstone. In #572's migrations as they stand (013, 014),
+  `contribution_replay.contribution_id` is `not null` and references
+  `contribution (id)` with the default `no action`, and `canonical` holds the
+  submitted content. The purge empties that row instead of deleting it: it
+  keeps `voter_id` and `request_key`, sets `contribution_id` to null, empties
+  `canonical`, zeroes the counts and records `purged_at`, so a late retry is
+  refused without content and never publishes the contribution again. The
+  contribution row (public record and private messages) is deleted. That
+  step re-checks #572's migrations as merged and lists every reference to a
+  contribution, as the poll step does for polls.
 - **Audit:** every attach, replace, remove, automatic hide, category default
   set or clear, soft delete, restore and purge is a row in an append-only
   change table: target, action, actor kind (`poster`, `site_owner`, `auto`),
@@ -402,7 +418,7 @@ logs the error class only.
 ### Documents reconciled
 
 - `docs/plans/pulse.md`: gains "P12 — Poll thumbnails" with the ordered steps
-  and their tickets (#579–#586, #296, #427, #581). **Updated in this PR.**
+  and their tickets (#579–#586, #296, #427). **Updated in this PR.**
   Its #246–#248 section is left alone; PR #572 edits it.
 - `docs/plans/contributions.md` (arrives with PR #572): nothing conflicts;
   contribution rows carry no picture (section 6). No change.
