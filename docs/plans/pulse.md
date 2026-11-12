@@ -527,9 +527,9 @@ next dependent step starts.
    - Display picture under the question with its description; defaults show
      as a small tile; failures leave no empty frame and voting stays usable.
 5. **Poster removes or replaces the picture.** #582. Depends on 1, 2, 4.
-   - `DELETE` and `PUT /api/polls/:id/image`, poster only; old bytes deleted
-     in the same transaction; audit row for each; question and choices stay
-     fixed.
+   - `DELETE` and `PUT /api/polls/:id/image`, poster only; the old
+     picture's `image` row and bytes deleted in the same transaction; audit
+     row for each; question and choices stay fixed.
    - Both answer the unknown-poll 404 when the poll is hidden, soft-deleted
      or purged.
    - An authenticated `no-store` route tells the poster they may do this; no
@@ -539,7 +539,8 @@ next dependent step starts.
    - Shared report store with `poll_image` and `poll` targets; signed-in
      only, ten an hour, one unresolved report per reporter and target.
    - A picture with 3 distinct reporters hides; the poll shows its default;
-     bytes purged after 30 days; the poster may replace it.
+     its `image` row and bytes purged after 30 days; the poster may replace
+     it.
    - A picture that is auto-hidden or has an unresolved report keeps its
      bytes (never served) for 30 days even if the poster removes or replaces
      it, counted from when it stopped being shown (the hide, or else the
@@ -549,9 +550,9 @@ next dependent step starts.
    - Site-owner review list of poll and picture reports, without reporter
      identities.
    - Soft delete hides the poll everywhere at once; restore within 30 days;
-     purge afterwards deletes poll, choices, suggestions, votes and the
-     picture's `image` row and bytes, and keeps only a change-table audit row
-     without content.
+     purge afterwards deletes poll, choices, suggestions, votes and every
+     `image` row owned by the poll (with any bytes left), and keeps only a
+     change-table audit row without content.
    - Purge turns the poll's `poll_creation_replay` row into a tombstone in
      the same transaction: only `voter_id` and `request_key` stay,
      `poll_id` becomes null, the stored input and response are emptied. A
@@ -575,8 +576,8 @@ next dependent step starts.
    Depends on 1, 3 and PR #572 being merged.
    - Category = community (D4a); owner-only route sets or clears a
      category's default picture through the upload pipeline (owner kind
-     `community`); the old default's bytes are deleted in the same
-     transaction, with an audit row; resolution adds `category`.
+     `community`); the old default's `image` row and bytes are deleted in
+     the same transaction, with an audit row; resolution adds `category`.
    - Migration reserves `odc-decisions` ("ODC decisions"), refusing a
      collision like `pulse-general`; owner-only `governance_posting` grant
      with audit; creation accepts `community: "odc-decisions"` only from the

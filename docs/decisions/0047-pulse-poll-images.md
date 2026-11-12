@@ -86,9 +86,13 @@ Constraints that shape the choice:
 Processed picture bytes are stored in Pulse's own Postgres, in a table
 separate from the picture's metadata (`image`: owner link, size, alt text).
 Neither is the audit record: that is a row in the append-only change table
-(section 9), which holds no picture content. When a picture is purged, its
-bytes row and its `image` row are both deleted, and only the change-table
-row survives.
+(section 9), which holds no picture content. **Bytes and `image` row go
+together:** whenever a picture's bytes are deleted (remove, replace, a
+default cleared or replaced, a retention purge, a poll purge), its `image`
+row with the alt text is deleted in the same transaction, and only the
+change-table rows survive. A poll can own several `image` rows only while
+earlier pictures are kept for review (section 8); a poll purge deletes every
+`image` row whose owner is that poll, with any bytes left.
 
 **The storage is neutral; the routes are about polls.** The tables are
 `image` (metadata) and `image_bytes` (the two variants), not `poll_image`.
@@ -221,7 +225,8 @@ route that uses the same upload pipeline, limits and description rule. Nothing
 is shipped as a static asset, so a new category needs no deploy. The site
 owner may set or clear a category's default at any time; clearing falls back
 to the tile. Setting a new default or clearing one detaches the old default
-picture and deletes its bytes in the same transaction, with an audit row
+picture and deletes its `image` row and bytes in the same transaction
+(section 1), with an audit row
 (section 9); polls in that community show the new default or the tile at
 once, and browsers within the hour (section 4). Default pictures cannot be
 reported: they are the site owner's, not a poster's.
@@ -270,12 +275,14 @@ at this community.
 - Both answer the same 404 as an unknown poll when the poll is not visible
   (hidden, soft-deleted or purged), so a poster cannot remove what the site
   owner is reviewing.
-- The old picture's bytes are deleted at once, in the same transaction; the
+- The old picture's `image` row and bytes are deleted at once, in the same
+  transaction (section 1); the
   poll shows the new picture or falls back to its default. **Exception:** a
   picture that is auto-hidden, or has an unresolved report, when it is removed
-  or replaced keeps its bytes, never served, until the 30-day purge of
-  section 9. The clock starts when the picture stopped being shown: at the
-  automatic hide if it was hidden, otherwise at the poster's removal.
+  or replaced keeps its `image` row and bytes, never served, until the 30-day
+  purge of section 9, which deletes both. The clock starts when the picture
+  stopped being shown: at the automatic hide if it was hidden, otherwise at
+  the poster's removal.
   The retention rule wins so that the site owner's review (section 9) still
   has the reported picture as context. Step 6 of the plan adds this exception;
   before reporting exists, every removal deletes at once.
@@ -298,7 +305,8 @@ at this community.
   automatically; the poll falls back to its default and stays visible.
   Nobody restores an auto-hidden picture (the site owner does not moderate
   pictures, D0); the poster may replace it, and reports on the new picture
-  start from zero. An auto-hidden picture's bytes are purged 30 days after the
+  start from zero. An auto-hidden picture's `image` row and bytes are purged
+  30 days after the
   automatic hide, also when the poster replaces or removes it meanwhile
   (section 8; the clock starts when the picture stopped being shown).
   This applies ADR-0024 3c to pictures with a threshold of 3.
@@ -310,8 +318,9 @@ at this community.
   public read and listing at once (its picture with it, from browsers within
   the hour, section 4). The site owner may
   restore it within 30 days. After 30 days it is purged: the poll, its
-  choices, its suggestions (free text), its votes, and its picture's `image`
-  row (with the alt text) and bytes are deleted; the change-table audit row
+  choices, its suggestions (free text), its votes, and every `image` row
+  whose owner is the poll (current and still-retained earlier pictures, with
+  their alt text) and any bytes left are deleted; the change-table audit row
   keeps
   the poll ID, action, reason and times, without content. This amends
   ADR-0024 3b and ADR-0037 ("removal hides; never deletes") for site-owner
@@ -348,7 +357,9 @@ at this community.
   private actor account where there is one, reason, time. Purging keeps the
   row and the SHA-256 of the picture's stored `display` variant (the
   re-encoded bytes, the same value as its ETag); no hash of the original
-  upload exists.
+  upload exists. This fits D8's "without content" because a hash cannot
+  rebuild the picture or its alt text; it only matches a copy someone
+  already holds.
 
 ### 10. Launch order and the accepted interim risk
 
