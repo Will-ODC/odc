@@ -148,7 +148,8 @@ The rail keeps one status line for screen readers, which reads out Loading…,
 an error, or "Your votes are loaded." after Try again. Signing out or
 forgetting votes here clears the browser's saved-answer list.
 When the open question was already a saved answer when it was opened (its row
-is on the rail's first page, its saved ballot was read back, or it was answered
+has been read from My votes (the rail's first page, or a later page read for
+the pager), its saved ballot was read back, or it was answered
 on this page and then opened again), Previous and Next follow the newest-first
 My votes list (#528), with disabled controls at its ends, on open and closed
 questions. Their accessible names include the question they open, and a left

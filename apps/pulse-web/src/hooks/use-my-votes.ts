@@ -244,17 +244,21 @@ export function useMyVotesPlace({
   else if (restoredHere && !listedFor.ids.includes(at))
     setListedFor({ at, round, ids: [...listedFor.ids, at] });
   const serverVotes = first?.votes ?? [];
-  const listed =
-    serverVotes.some((vote) => vote.pollId === at) ||
-    restoredHere ||
-    (listedFor.round === round &&
-      listedFor.at === at &&
-      listedFor.ids.includes(at));
   // Later pages are read only while a saved answer's row, or the row below
   // the last one read, may be on one. An unanswered question reads nothing.
   const [wanted, setWanted] = useState(false);
   const later = useLaterVotes(api, first, wanted, at);
   const loaded = mergedVotes(serverVotes, later.rows);
+  // Saved when opened: its row has been read from any page (so a question
+  // opened by Next from a later page keeps its pager even when its ballot or
+  // results could not be read back), its ballot was read back, or it was
+  // answered here and opened again.
+  const listed =
+    loaded.some((vote) => vote.pollId === at) ||
+    restoredHere ||
+    (listedFor.round === round &&
+      listedFor.at === at &&
+      listedFor.ids.includes(at));
   const found = myVotesPlace({
     ordered: answeredList(loaded, answers, recent),
     loaded,

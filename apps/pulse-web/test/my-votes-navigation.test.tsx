@@ -611,3 +611,93 @@ it("forgets which questions were answered here along with the votes", async () =
     main().queryByRole("button", { name: /Previous question|No previous/ }),
   ).toBeNull();
 });
+
+describe("a later-page row whose saved answer cannot be read back (#528)", () => {
+  const j = poll({ id: "j", question: "Repaint the old bridge?" });
+  const k = poll({
+    id: "k",
+    question: "Light the river path?",
+    // Where the answer-selected Next would lead.
+    next: [first.id, first.id],
+  });
+  const gone = poll({
+    id: "gone",
+    question: "Keep the night bus?",
+    open: false,
+  });
+  const y = poll({ id: "y", question: "Move the farmers market?" });
+  const page1 = {
+    votes: [votes[0]!, saved(j, "2026-11-11T02:50:00.000Z")],
+    nextCursor: "older",
+  };
+  const page2 = {
+    votes: [
+      saved(k, "2026-11-11T02:40:00.000Z"),
+      saved(gone, "2026-11-11T02:35:00.000Z"),
+      saved(y, "2026-11-11T02:30:00.000Z"),
+    ],
+    nextCursor: null,
+  };
+  // J's ballot reads back; K's and the closed question's do not.
+  const over = {
+    myBallot: async (id: string) =>
+      id === j.id ? [1] : Promise.reject(new Error("offline")),
+    cast: async () => ({
+      status: "counted" as const,
+      ballot: [1],
+      results: answerResults(k),
+    }),
+  };
+  // Opens J, which reads the later page, then K by J's Next.
+  async function openK() {
+    show(
+      j.id,
+      async (cursor?: string) => (cursor ? page2 : page1),
+      [first, j, k, gone, y],
+      over,
+    );
+    const user = userEvent.setup();
+    await main().findByRole("heading", { name: j.question, level: 1 });
+    await user.click(
+      await main().findByRole("button", {
+        name: `Next question: ${k.question}`,
+      }),
+    );
+    await main().findByRole("heading", { name: k.question, level: 1 });
+    return user;
+  }
+
+  it("keeps its My votes neighbours, not the answer-selected Next, once answered again", async () => {
+    const user = await openK();
+    await user.click(main().getByRole("radio", { name: "Yes" }));
+    await user.click(main().getByRole("button", { name: "Submit" }));
+    // Answering moved K to the top, above the newest row.
+    expect(
+      await main().findByRole("button", {
+        name: `Next question: ${first.question}`,
+      }),
+    ).toBeTruthy();
+    expect(
+      main().getByRole("button", { name: "No previous question" }),
+    ).toHaveProperty("disabled", true);
+    expect(main().queryByRole("button", { name: "Next question" })).toBeNull();
+  });
+
+  it("keeps a closed question's pager", async () => {
+    await openK();
+    // The closed row is opened by its address, as from the My votes tab.
+    act(() => {
+      history.pushState(null, "", `/?poll=${gone.id}`);
+      dispatchEvent(new PopStateEvent("popstate"));
+    });
+    await main().findByRole("heading", { name: gone.question, level: 1 });
+    expect(
+      await main().findByRole("button", {
+        name: `Previous question: ${k.question}`,
+      }),
+    ).toBeTruthy();
+    expect(
+      main().getByRole("button", { name: `Next question: ${y.question}` }),
+    ).toBeTruthy();
+  });
+});
