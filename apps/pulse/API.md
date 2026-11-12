@@ -1114,8 +1114,10 @@ Signed-in only. The body is the raw file, with `Content-Type: image/jpeg`,
 origin. Checks run in this order: the per-client rate limit (10 a minute,
 429 `too_many_requests`); pictures configured (503 `images_unavailable`);
 `Origin` (403 `origin_not_allowed`); session (401 `signed_out`); declared type
-one of the three (415 `unsupported_image`), all before the body is read. The
-body is then read up to 10 MiB.
+one of the three (415 `unsupported_image`), all before the API reads the body.
+The API then reads it up to 10 MiB. In the served deployment nginx receives
+and buffers the whole body (up to 10 MiB) before forwarding the request, so
+these checks save the API's work, not the upload's bandwidth.
 
 The file is judged by its content, never its declared type or name: a PNG sent
 as `image/jpeg` is accepted as a PNG. JPEG, PNG and WebP are accepted; SVG,
@@ -1158,7 +1160,9 @@ each upload (best-effort; a failed sweep never refuses an upload).
 | 503    | `images_unavailable` | Pictures not configured, or storage unavailable                                  |
 | 500    | `server_error`       | Unexpected fault                                                                 |
 
-The account quotas are counted in Postgres and checked before the file is
+The hourly quota counts accepted uploads from a record kept apart from the
+picture, so deleting a picture never refunds an upload. The account quotas
+are counted in Postgres and checked before the file is
 decoded, then again when it is stored. Nothing logs the body, the bytes or the
 account; a processing fault is logged by error class only.
 

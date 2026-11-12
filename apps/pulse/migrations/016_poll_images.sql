@@ -27,7 +27,7 @@ create table image (
 );
 -- The pending sweep and the per-account pending count.
 create index image_pending_idx on image (uploaded_at) where owner_kind is null;
--- The hourly upload quota.
+-- One account's pictures (the pending count).
 create index image_uploader_idx on image (uploaded_by, uploaded_at);
 create index image_owner_idx on image (owner_kind, owner_id);
 
@@ -70,6 +70,28 @@ end $$;
 create constraint trigger image_has_variants after insert on image
   deferrable initially deferred
   for each row execute function image_has_variants();
+
+-- The hourly upload quota (ADR-0047 section 11) counts these rows, not
+-- `image` rows: removing, replacing or sweeping a picture deletes its `image`
+-- row and must never refund an upload. Deliberately no link to the picture.
+-- Rows are never updated, and the store deletes one only once it is older
+-- than the quota's one-hour window, so no account's upload history is kept
+-- beyond what the quota needs.
+create table image_upload (
+  id uuid primary key,
+  uploaded_by text not null references voter (id),
+  uploaded_at timestamptz(3) not null
+);
+create index image_upload_uploader_idx
+  on image_upload (uploaded_by, uploaded_at);
+
+create function image_upload_no_update() returns trigger
+language plpgsql as $$
+begin
+  raise exception 'image_upload rows are never updated';
+end $$;
+create trigger image_upload_no_update before update on image_upload
+  for each row execute function image_upload_no_update();
 
 -- A poll's current picture. The store keeps it consistent with the image's
 -- owner link; one picture belongs to at most one poll.

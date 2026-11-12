@@ -46,7 +46,8 @@ export interface ServedVariant {
 export interface ImageStore {
   /**
    * Refuse early when this account may not upload now: signed out, 20
-   * accepted uploads in the rolling hour, or 5 pictures already pending. Read
+   * accepted uploads in the rolling hour (counted from upload records that
+   * deleting a picture never removes), or 5 pictures already pending. Read
    * only; the route calls it before spending a decode on the file.
    */
   checkAllowance(actor: ImageActor): Promise<void>;
@@ -60,8 +61,9 @@ export interface ImageStore {
   servable(id: string, variant: Variant): Promise<ServedVariant | undefined>;
   /**
    * Delete every pending picture uploaded 24 hours or more ago, with its
-   * bytes. Best-effort housekeeping: run at startup and on each upload.
-   * Returns how many went.
+   * bytes, and the upload records older than the hourly quota's window.
+   * Best-effort housekeeping: run at startup and on each upload. Returns how
+   * many pictures went.
    */
   sweepPending(): Promise<number>;
 }
@@ -101,6 +103,11 @@ export interface MemoryContentChange {
 export interface MemoryImageDatabase {
   images: Map<string, MemoryImage>;
   changes: MemoryContentChange[];
+  /**
+   * One record per accepted upload, as Postgres's `image_upload`: what the
+   * hourly quota counts, so deleting a picture never refunds an upload.
+   */
+  uploads: { uploadedBy: string; uploadedAt: number }[];
 }
 
 // One voting store is one ephemeral database, as in the creation store.
@@ -112,7 +119,7 @@ export function memoryImageDatabase(
 ): MemoryImageDatabase {
   let found = databases.get(voting);
   if (!found) {
-    found = { images: new Map(), changes: [] };
+    found = { images: new Map(), changes: [], uploads: [] };
     databases.set(voting, found);
   }
   return found;
@@ -224,6 +231,10 @@ export class InMemoryImageStore implements ImageStore {
           thumb: copy(image.thumb),
         },
       });
+      this.#db.uploads.push({
+        uploadedBy: actor.voterId,
+        uploadedAt: now.getTime(),
+      });
       return { id, width: image.width, height: image.height };
     });
   }
@@ -254,7 +265,12 @@ export class InMemoryImageStore implements ImageStore {
   }
 
   async sweepPending(): Promise<number> {
-    const cutoff = this.#clock().getTime() - PENDING_TTL_MS;
+    const now = this.#clock().getTime();
+    // Upload records the hourly quota can no longer count.
+    this.#db.uploads = this.#db.uploads.filter(
+      (upload) => upload.uploadedAt > now - UPLOAD_WINDOW_MS,
+    );
+    const cutoff = now - PENDING_TTL_MS;
     let swept = 0;
     for (const [id, image] of this.#db.images) {
       if (image.ownerKind === null && image.uploadedAt <= cutoff) {
@@ -267,11 +283,10 @@ export class InMemoryImageStore implements ImageStore {
   }
 
   #allowance(voterId: string, now: Date): void {
-    const mine = [...this.#db.images.values()].filter(
-      (image) => image.uploadedBy === voterId,
-    );
-    const recent = mine
-      .map((image) => image.uploadedAt)
+    // The upload records, not the pictures: deleting a picture never refunds.
+    const recent = this.#db.uploads
+      .filter((upload) => upload.uploadedBy === voterId)
+      .map((upload) => upload.uploadedAt)
       .filter((at) => at > now.getTime() - UPLOAD_WINDOW_MS)
       .sort((a, b) => a - b);
     if (recent.length >= UPLOADS_PER_HOUR) {
@@ -284,8 +299,9 @@ export class InMemoryImageStore implements ImageStore {
         ),
       );
     }
-    const pending = mine.filter(
+    const pending = [...this.#db.images.values()].filter(
       (image) =>
+        image.uploadedBy === voterId &&
         image.ownerKind === null &&
         image.uploadedAt > now.getTime() - PENDING_TTL_MS,
     );

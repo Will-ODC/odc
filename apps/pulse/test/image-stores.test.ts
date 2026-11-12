@@ -8,7 +8,11 @@ import { PostgresCreationStore } from "../src/authoring/pg-store.js";
 import { PostgresVoterStore } from "../src/identity/pg-store.js";
 import { InMemoryVoterStore } from "../src/identity/store.js";
 import { PostgresImageStore } from "../src/images/pg-store.js";
-import { InMemoryImageStore } from "../src/images/store.js";
+import {
+  ImageStoreError,
+  InMemoryImageStore,
+  memoryImageDatabase,
+} from "../src/images/store.js";
 import { PostgresVotingStore } from "../src/voting/pg-store.js";
 import { InMemoryVotingStore } from "../src/voting/store.js";
 import {
@@ -19,6 +23,7 @@ import {
   imageStoreConformance,
   type ImageFixture,
 } from "./conformance/image-store.js";
+import { atBarrier } from "./support/barrier.js";
 import { databaseSkip, migratedSchema } from "./support/database.js";
 
 imageStoreConformance("in memory", async () => {
@@ -39,6 +44,10 @@ imageStoreConformance("in memory", async () => {
     setTime: (time) => {
       now = time;
     },
+    deleteImage: async (id) => {
+      memoryImageDatabase(voting).images.delete(id);
+    },
+    uploadRecords: async () => memoryImageDatabase(voting).uploads.length,
   };
 });
 
@@ -66,10 +75,61 @@ async function postgresFixture(
     setTime: (time) => {
       now = time;
     },
+    deleteImage: async (id) => {
+      await pool.query("delete from image where id = $1", [id]);
+    },
+    uploadRecords: async () => count(pool, "image_upload"),
   };
 }
 
 imageStoreConformance("postgres", postgresFixture, { skip: databaseSkip });
+
+test("in memory: a poll body and listing show a picture only while mayServe allows it", async () => {
+  const voters = new InMemoryVoterStore();
+  await addAccounts(voters);
+  const voting = new InMemoryVotingStore(() => AT);
+  const creation = new InMemoryCreationStore(voters, voting, {
+    clock: () => AT,
+    communityLabels: new Map([["campus", "Campus"]]),
+  });
+  const images = new InMemoryImageStore(voters, voting, { clock: () => AT });
+  const saved = await images.savePending(
+    { voterId: ACCOUNTS.member.id, sessionGeneration: 0 },
+    processed(),
+  );
+  const { poll } = await creation.publish(
+    { voterId: ACCOUNTS.member.id, sessionGeneration: 0 },
+    randomUUID(),
+    {
+      question: "Plant a garden?",
+      choices: ["Yes", "No"],
+      method: "single",
+      purposeAcknowledgement: PURPOSE_VERSION,
+      image: { id: saved.id, alt: "Plot" },
+    },
+  );
+  assert.equal((await voting.getPoll(poll.id))?.image?.id, saved.id);
+  // The picture's own owner link no longer names this poll: not shown.
+  const row = memoryImageDatabase(voting).images.get(saved.id);
+  assert.ok(row);
+  row.ownerId = "another-poll";
+  assert.equal((await voting.getPoll(poll.id))?.image, undefined);
+  const listed = await voting.listPolls({ community: "campus", limit: 10 });
+  assert.equal(listed[0]?.image, undefined);
+  // Owned by this poll's id but as another kind of owner: not shown.
+  row.ownerId = poll.id;
+  row.ownerKind = "community";
+  assert.equal((await voting.getPoll(poll.id))?.image, undefined);
+  assert.equal(
+    (await voting.listPolls({ community: "campus", limit: 10 }))[0]?.image,
+    undefined,
+  );
+  // And once the picture is gone altogether.
+  row.ownerKind = "poll";
+  assert.ok((await voting.getPoll(poll.id))?.image);
+  memoryImageDatabase(voting).images.delete(saved.id);
+  assert.equal((await voting.getPoll(poll.id))?.image, undefined);
+});
 
 // Postgres alone: what its schema promises beyond the shared behaviour.
 
@@ -289,14 +349,39 @@ test(
     const f = await postgresFixture(t);
     for (let n = 0; n < 4; n++) await f.images.savePending(member, processed());
     const other = new PostgresImageStore(f.pool, { clock: () => AT });
-    const results = await Promise.allSettled([
-      f.images.savePending(member, processed()),
-      other.savePending(member, processed()),
-    ]);
+    // Both uploads must be waiting on the account row before either may
+    // proceed, so they provably overlap; only the account lock then decides.
+    const results = await atBarrier(
+      f.pool,
+      "select 1 from voter where id = $1 for update",
+      [member.voterId],
+      2,
+      () =>
+        Promise.allSettled([
+          f.images.savePending(member, processed()),
+          other.savePending(member, processed()),
+        ]),
+    );
     assert.deepEqual(results.map((r) => r.status).sort(), [
       "fulfilled",
       "rejected",
     ]);
+    const refusal = results.find((r) => r.status === "rejected");
+    assert.ok(
+      refusal?.status === "rejected" &&
+        refusal.reason instanceof ImageStoreError &&
+        refusal.reason.code === "pending_limit",
+    );
     assert.equal(await count(f.pool, "image"), 5);
+    assert.equal(await count(f.pool, "image_upload"), 5);
   },
 );
+
+test("postgres: upload records are never updated", opt, async (t) => {
+  const f = await postgresFixture(t);
+  await f.images.savePending(member, processed());
+  await assert.rejects(
+    f.pool.query("update image_upload set uploaded_at = $1", [AT]),
+    /never updated/,
+  );
+});

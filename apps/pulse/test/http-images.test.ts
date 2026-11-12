@@ -35,6 +35,7 @@ import { SERVED_LOGGER } from "../src/main.js";
 import { PostgresVotingStore } from "../src/voting/pg-store.js";
 import { InMemorySuggestionStore } from "../src/voting/suggestions.js";
 import { InMemoryVotingStore } from "../src/voting/store.js";
+import { atBarrier } from "./support/barrier.js";
 import { databaseSkip, migratedSchema } from "./support/database.js";
 import {
   LEAKY_MAKE,
@@ -399,7 +400,7 @@ for (const kind of ["memory", "postgres"] as const) {
       );
   });
 
-  it("signed_out_foreign_origin_and_no_store_are_refused_before_the_body_is_read", async (t) => {
+  it("signed_out_foreign_origin_and_no_store_are_refused_before_the_api_reads_the_body", async (t) => {
     const h = await harness(t, kind);
     // An oversized body would be 413 if it were read; these never read it.
     const huge = Buffer.alloc(MAX_UPLOAD_BYTES + 1);
@@ -659,6 +660,43 @@ for (const kind of ["memory", "postgres"] as const) {
     assert.equal(decoded, 5);
   });
 }
+
+test(
+  "postgres: two concurrent publications attaching one picture: one wins, one is refused",
+  { skip: databaseSkip },
+  async (t) => {
+    const h = await harness(t, "postgres");
+    const pool = h.pool as Pool;
+    const id = (await h.upload("member", await picture("jpeg"))).json().image
+      ?.id as string;
+    // Both publications must be waiting at the account row before either may
+    // run, so they provably overlap when they reach the picture.
+    const replies = await atBarrier(
+      pool,
+      "select 1 from voter where id = $1 for update",
+      [ACCOUNTS.member.id],
+      2,
+      () =>
+        Promise.all([
+          h.publish("member", { id, alt: "first" }),
+          h.publish("member", { id, alt: "second" }),
+        ]),
+    );
+    assert.deepEqual(replies.map((r) => r.statusCode).sort(), [201, 422]);
+    const loser = replies.find((r) => r.statusCode === 422) as Reply;
+    refused(loser, 422, "image_unavailable");
+    const linked = await pool.query(
+      "select count(*)::int as n from polls where image_id = $1",
+      [id],
+    );
+    assert.equal(linked.rows[0]?.n, 1);
+    const audit = await pool.query(
+      "select count(*)::int as n from content_change where image_id = $1",
+      [id],
+    );
+    assert.equal(audit.rows[0]?.n, 1);
+  },
+);
 
 test("the_hourly_upload_limit_answers_429_with_retry_after", async (t) => {
   const quota = {

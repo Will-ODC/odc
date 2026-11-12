@@ -64,6 +64,11 @@ export class PostgresImageStore implements ImageStore {
           " values ($1, $2, $3, $4, $5)",
         [id, actor.voterId, now, image.width, image.height],
       );
+      await client.query(
+        "insert into image_upload (id, uploaded_by, uploaded_at)" +
+          " values ($1, $2, $3)",
+        [this.#newId(), actor.voterId, now],
+      );
       for (const variant of ["display", "thumb"] as const)
         await client.query(
           "insert into image_bytes (image_id, variant, bytes, sha256)" +
@@ -116,11 +121,16 @@ export class PostgresImageStore implements ImageStore {
   }
 
   async sweepPending(): Promise<number> {
+    const now = this.#clock().getTime();
     // Bytes cascade with their row: both go in this one statement.
     const result = await this.#pool.query(
       "delete from image where owner_kind is null and uploaded_at <= $1",
-      [new Date(this.#clock().getTime() - PENDING_TTL_MS)],
+      [new Date(now - PENDING_TTL_MS)],
     );
+    // Upload records the hourly quota can no longer count.
+    await this.#pool.query("delete from image_upload where uploaded_at <= $1", [
+      new Date(now - UPLOAD_WINDOW_MS),
+    ]);
     return result.rowCount ?? 0;
   }
 }
@@ -221,7 +231,9 @@ async function allowance(
   now: Date,
 ): Promise<void> {
   const recent = await client.query<{ uploaded_at: Date }>(
-    "select uploaded_at from image where uploaded_by = $1 and uploaded_at > $2" +
+    // The upload records, not the pictures: deleting a picture never refunds.
+    "select uploaded_at from image_upload where uploaded_by = $1" +
+      " and uploaded_at > $2" +
       " order by uploaded_at",
     [voterId, new Date(now.getTime() - UPLOAD_WINDOW_MS)],
   );

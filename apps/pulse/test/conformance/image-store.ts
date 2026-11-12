@@ -28,6 +28,10 @@ export interface ImageFixture {
   voting: VotingStore;
   voters: VoterStore;
   setTime(time: Date): void;
+  /** Delete a picture row (with its bytes) as a later remove or replace will. */
+  deleteImage(id: string): Promise<void>;
+  /** How many upload records the store still keeps, for every account. */
+  uploadRecords(): Promise<number>;
 }
 
 /** Add the three accounts to a fresh voter store. */
@@ -316,6 +320,44 @@ export function imageStoreConformance(
         // The first upload leaves the hour exactly at its boundary.
         f.setTime(new Date(AT.getTime() + HOUR));
         await f.images.savePending(owner, processed());
+      });
+
+      test("deleting_a_picture_never_refunds_the_hourly_upload_quota", async (t) => {
+        const f = await fresh(t);
+        // Twenty uploads, each picture deleted again, so none stays pending.
+        for (let n = 0; n < 20; n++) {
+          f.setTime(new Date(AT.getTime() + n * 1000));
+          const saved = await f.images.savePending(member, processed());
+          await f.deleteImage(saved.id);
+        }
+        f.setTime(new Date(AT.getTime() + 20_000));
+        await assert.rejects(
+          f.images.savePending(member, processed()),
+          (error: unknown) =>
+            error instanceof ImageStoreError &&
+            error.code === "upload_limit" &&
+            error.retryAfter === HOUR / 1000 - 20,
+        );
+        await refusedWith(f.images.checkAllowance(member), "upload_limit");
+        // The sweep never refunds either: records inside the hour stay.
+        await f.images.sweepPending();
+        await refusedWith(f.images.checkAllowance(member), "upload_limit");
+      });
+
+      test("the_sweep_forgets_upload_records_only_once_they_leave_the_hour", async (t) => {
+        const f = await fresh(t);
+        await f.images.savePending(member, processed());
+        f.setTime(new Date(AT.getTime() + 1000));
+        await f.images.savePending(other, processed());
+        f.setTime(new Date(AT.getTime() + HOUR - 1));
+        await f.images.sweepPending();
+        assert.equal(await f.uploadRecords(), 2);
+        f.setTime(new Date(AT.getTime() + HOUR));
+        await f.images.sweepPending();
+        assert.equal(await f.uploadRecords(), 1);
+        f.setTime(new Date(AT.getTime() + HOUR + 1000));
+        await f.images.sweepPending();
+        assert.equal(await f.uploadRecords(), 0);
       });
 
       test("a_stale_session_generation_is_signed_out", async (t) => {

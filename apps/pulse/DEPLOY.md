@@ -78,6 +78,12 @@ Compose setup; using another major version needs separate verification. Do not
 use the Compose database for a deployment: its data directory is a temporary
 filesystem.
 
+The database must use the UTF8 server encoding. Pulse's text limits
+(question, choices, names, picture descriptions) are counted in code points,
+and under `SQL_ASCII` Postgres counts bytes instead, so valid non-ASCII text
+can break a check constraint and fail as a 500. Check with `show
+server_encoding;`.
+
 The database user needs permission to create and change tables in the selected
 schema. Set `PULSE_DATABASE_SCHEMA` only when Pulse should use a non-default
 schema. Backups, retention, restore testing, TLS requirements, and connection
@@ -125,6 +131,8 @@ Plan backup size and retention with that in mind.
 A picture uploaded but not attached to a poll within 24 hours is deleted with
 its bytes at the next API startup or upload. Like the sign-in sweep there is
 no scheduler; a failed sweep is logged and never stops startup or an upload.
+The same sweep removes `image_upload` rows (an account id and upload time,
+which the hourly upload quota counts) once they are more than an hour old.
 
 The API image includes `sharp` (libvips) with prebuilt `linuxmusl-x64`
 binaries for the Alpine runtime; a libvips advisory means rebuilding the
