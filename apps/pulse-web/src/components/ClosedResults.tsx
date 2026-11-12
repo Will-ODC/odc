@@ -15,8 +15,7 @@ import { ViewState } from "./ViewState.js";
  * Loading and failure carry Close, so someone who asked and then changed
  * their mind is never stuck waiting on a request to get back to the question.
  * Once the results are in they are the question page's compact panel, which
- * has never drawn a Close of its own; the full panel's Close, reached only
- * through a `compact={false}` no page passed, went in #569.
+ * draws no Close of its own.
  */
 export function ClosedResults({
   data,

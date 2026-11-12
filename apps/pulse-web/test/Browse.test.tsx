@@ -87,7 +87,12 @@ it("shows loading, retry and empty states with useful destinations", async () =>
   expect(within(screen.getByRole("main")).getByText("Loading…")).toBeTruthy();
   await act(async () => reject(new ApiError(503, "Please try later.")));
   expect(await screen.findByText("Please try later.")).toBeTruthy();
-  await userEvent.click(screen.getByRole("button", { name: "Try again" }));
+  const retry = within(screen.getByRole("main")).getByRole("button", {
+    name: "Try again",
+  });
+  // The shared small size, not a local copy of it (#569).
+  expect(retry.classList.contains("btn--small")).toBe(true);
+  await userEvent.click(retry);
   expect(await screen.findByText(/No questions here yet/)).toBeTruthy();
   expect(screen.queryByRole("link", { name: "Starting questions" })).toBeNull();
   expect(

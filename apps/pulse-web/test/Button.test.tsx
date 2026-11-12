@@ -18,6 +18,24 @@ it("draws the small secondary size as one more modifier class (#569)", () => {
   );
 });
 
+it("offers the small size only on the secondary variant", () => {
+  // Typecheck runs over test/, so these lines fail the build if the
+  // restriction is ever loosened.
+  const primarySmall = (
+    // @ts-expect-error small is a secondary-only size
+    <Button variant="primary" size="small" type="button">
+      x
+    </Button>
+  );
+  const quietSmall = (
+    // @ts-expect-error small is a secondary-only size
+    <Button variant="quiet" size="small" type="button">
+      x
+    </Button>
+  );
+  expect([primarySmall, quietSmall]).toHaveLength(2);
+});
+
 it("adds no size class at the default size", () => {
   render(
     <Button variant="secondary" type="button">
