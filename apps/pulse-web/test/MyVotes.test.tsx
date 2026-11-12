@@ -135,6 +135,28 @@ it("keeps Load more on an empty page that still has more after it", async () => 
   expect(screen.queryByText("No votes saved in this browser yet.")).toBeNull();
 });
 
+it("shows the empty view when cursor-only pages reach the end", async () => {
+  const user = userEvent.setup();
+  const myVotes = vi
+    .fn<(cursor?: string) => Promise<MyVotesPage>>()
+    .mockResolvedValueOnce(page([], "next"))
+    .mockResolvedValueOnce(page([], null));
+  show(myVotes);
+  await user.click(await screen.findByRole("button", { name: "Load more" }));
+  expect(
+    await screen.findByText("No votes saved in this browser yet."),
+  ).toBeTruthy();
+  expect(
+    screen
+      .getByRole("link", { name: "Explore questions" })
+      .getAttribute("href"),
+  ).toBe("/");
+  expect(screen.queryByRole("button", { name: "Load more" })).toBeNull();
+  expect(
+    screen.queryByRole("button", { name: "Forget my votes here" }),
+  ).toBeNull();
+});
+
 it("keeps the list and offers to retry when loading more fails", async () => {
   const user = userEvent.setup();
   const myVotes = vi

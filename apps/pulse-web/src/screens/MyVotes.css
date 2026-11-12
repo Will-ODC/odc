@@ -10,7 +10,7 @@
   box-sizing: border-box;
   width: 100%;
   max-width: calc(var(--rail) * 4);
-  margin: auto;
+  margin: 0 auto;
   padding: calc(var(--step) * 3) var(--gutter);
 }
 
@@ -20,6 +20,7 @@
   line-height: 1.1;
   letter-spacing: -0.03em;
   overflow-wrap: anywhere;
+  text-wrap: balance;
 }
 
 .my-votes__note {

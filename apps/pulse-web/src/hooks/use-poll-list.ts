@@ -18,7 +18,10 @@ export function usePollList(api: PulseApi, community: string) {
       // Explore has always treated an empty first page as its empty view.
       return {
         items: page.polls,
-        nextCursor: page.polls.length === 0 ? null : page.nextCursor,
+        nextCursor:
+          cursor === undefined && page.polls.length === 0
+            ? null
+            : page.nextCursor,
       };
     },
     [api, community],

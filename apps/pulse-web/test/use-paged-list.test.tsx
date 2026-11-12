@@ -91,3 +91,14 @@ it("ignores a first page from a stale generation", async () => {
     value: { items: [row("new")], nextCursor: null },
   });
 });
+
+it("keeps retry stable across renders", async () => {
+  const fetchPage = vi.fn(async () => page([row("one")], null));
+  const { result, rerender } = renderHook(() =>
+    usePagedList(options(fetchPage)),
+  );
+  await waitFor(() => expect(result.current.data.status).toBe("ready"));
+  const retry = result.current.retry;
+  rerender();
+  expect(result.current.retry).toBe(retry);
+});

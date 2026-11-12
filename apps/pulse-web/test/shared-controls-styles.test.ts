@@ -108,6 +108,12 @@ it("keeps screen retry and shared Load more controls aligned under their lists",
   );
 });
 
+it("keeps My votes at the top and balances its heading", () => {
+  const css = read("../src/screens/MyVotes.css");
+  expect(css).toMatch(/\.my-votes__main \{[^}]*margin: 0 auto;/s);
+  expect(css).toMatch(/\.my-votes__main h1 \{[^}]*text-wrap: balance;/s);
+});
+
 it("keeps the results toggle borderless and ClosedResults' Close small", () => {
   const css = read("../src/components/ResultsPanel.css");
   const toggle = /\.results \.results__toggle \{([^}]*)\}/.exec(css)?.[1];

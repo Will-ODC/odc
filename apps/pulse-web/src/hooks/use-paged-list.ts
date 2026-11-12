@@ -33,7 +33,7 @@ export function usePagedList<T>({
     status: "loading",
   });
   const [more, setMore] = useState<PagedListMore>({ status: "idle" });
-  const [attempt, retry] = useState(0);
+  const [attempt, setAttempt] = useState(0);
   const generation = useRef(0);
   const busy = useRef(false);
 
@@ -84,10 +84,15 @@ export function usePagedList<T>({
           previous.items.map((item) => [keyOf(item), item]),
         );
         page.items.forEach((item) => items.set(keyOf(item), item));
-        setData({
-          status: "ready",
-          value: { items: [...items.values()], nextCursor: page.nextCursor },
-        });
+        const merged = [...items.values()];
+        setData(
+          merged.length === 0 && page.nextCursor === null
+            ? { status: "empty", message: emptyMessage }
+            : {
+                status: "ready",
+                value: { items: merged, nextCursor: page.nextCursor },
+              },
+        );
         setMore({ status: "idle" });
       },
       (error: unknown) => {
@@ -99,7 +104,7 @@ export function usePagedList<T>({
         });
       },
     );
-  }, [data, errorMessage, fetchPage, keyOf, moreErrorMessage]);
+  }, [data, emptyMessage, errorMessage, fetchPage, keyOf, moreErrorMessage]);
 
   const clear = useCallback(() => {
     ++generation.current;
@@ -108,12 +113,14 @@ export function usePagedList<T>({
     setData({ status: "empty", message: emptyMessage });
   }, [emptyMessage]);
 
+  const retry = useCallback(() => setAttempt((value) => value + 1), []);
+
   return {
     data,
     more,
     loadMore,
     clear,
-    retry: () => retry((value) => value + 1),
+    retry,
     retrying: attempt > 0,
   };
 }
