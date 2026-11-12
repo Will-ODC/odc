@@ -209,8 +209,8 @@ describe("status", () => {
       expect(pick).not.toHaveBeenCalled();
       expect(submit).not.toHaveBeenCalled();
       if (kind === "sending") {
-        expect((button("Sending…") as HTMLButtonElement).disabled).toBe(true);
-        await user.dblClick(button("Sending…"));
+        expect((button("Submit") as HTMLButtonElement).disabled).toBe(true);
+        await user.dblClick(button("Submit"));
         expect(submit).not.toHaveBeenCalled();
       } else {
         expect(screen.queryByRole("button", { name: "Submit" })).toBeNull();
@@ -340,7 +340,13 @@ describe("status", () => {
     button("Submit").focus();
     rerender(<VoteCard {...base} picked={[2]} status={{ kind: "sending" }} />);
     expect(document.activeElement).toBe(screen.getByRole("status"));
-    expect((button("Sending…") as HTMLButtonElement).disabled).toBe(true);
+    expect((button("Submit") as HTMLButtonElement).disabled).toBe(true);
+  });
+  it("says Sending… once, in the status line, while an answer is sent (#575)", () => {
+    render(<VoteCard {...base} picked={[2]} status={{ kind: "sending" }} />);
+    expect(screen.getAllByText("Sending…")).toHaveLength(1);
+    expect(screen.getByRole("status").textContent).toBe("Sending…");
+    expect(screen.queryByRole("button", { name: "Sending…" })).toBeNull();
   });
   it("focus follows a standalone send into retry and a closed refusal", () => {
     const { rerender } = render(<VoteCard {...base} picked={[2]} />);

@@ -194,7 +194,7 @@ describe("answering", () => {
 
     await user.dblClick(screen.getByRole("button", { name: "Submit" }));
 
-    const sending = screen.getByRole("button", { name: "Sending…" });
+    const sending = screen.getByRole("button", { name: "Submit" });
     expect(sending.getAttribute("aria-disabled")).toBe("true");
     // Native disabling removes button focus in a browser. The pending status
     // takes it instead, so Sending is announced and focus stays in the dialog.
@@ -251,7 +251,7 @@ describe("closing without answering", () => {
     const user = await openIt();
     await user.click(screen.getByRole("radio", { name: "Thursday" }));
     await user.click(screen.getByRole("button", { name: "Submit" }));
-    expect(screen.getByRole("button", { name: "Sending…" })).toBeTruthy();
+    expect(screen.getByRole("status").textContent).toBe("Sending…");
 
     await user.keyboard("{Escape}");
     send.release();

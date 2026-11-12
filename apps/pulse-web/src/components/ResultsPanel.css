@@ -212,8 +212,11 @@
 /*
  * The question page's results card (#478): one edge, a header that names it
  * and can minimize it to one line, then the count and the chart.
+ * `.results` is `width: 100%`; the padding and edge sit inside it, so the
+ * card fits its column at every width (#575).
  */
 .results--compact {
+  box-sizing: border-box;
   gap: var(--step);
   margin-top: calc(var(--step) * 1.5);
   padding: calc(var(--step) * 1.5) calc(var(--step) * 2);
