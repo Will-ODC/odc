@@ -15,9 +15,23 @@
   overflow-wrap: anywhere;
 }
 
+/*
+ * Its own row, styled as the Sign out link below it (TwoPress's
+ * `.two-press__action`): a quiet underlined link, not a coloured bold one on
+ * the email's line.
+ */
+.signed-in__row {
+  flex-basis: 100%;
+  text-align: end;
+}
+
 .signed-in__profile {
-  color: var(--green);
-  font-weight: 600;
+  color: var(--muted);
+  text-decoration: underline;
+}
+
+.signed-in__profile:hover {
+  color: var(--ink);
 }
 
 .signed-in__profile:focus-visible {

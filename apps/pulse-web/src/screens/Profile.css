@@ -1,6 +1,7 @@
 .profile {
   box-sizing: border-box;
   width: 100%;
+  min-inline-size: 0;
   max-inline-size: var(--prose-measure);
   margin-inline: auto;
   padding: var(--gutter);
@@ -29,7 +30,9 @@
   text-transform: uppercase;
 }
 
+/* A long unbroken name or bio wraps instead of widening the page. */
 .profile__title {
+  overflow-wrap: anywhere;
   margin: 0 0 calc(var(--step) * 2);
   font-size: var(--t-hero);
   line-height: 1.2;
@@ -91,11 +94,28 @@
   border: 0;
 }
 
+/* No padding: a legend's default inline padding sets it off the labels. */
 .profile__visibility legend {
+  padding: 0;
   margin-bottom: var(--step);
   font-size: var(--t-small);
   font-weight: 600;
   color: var(--ink-soft);
+}
+
+.profile__status--error {
+  color: var(--red);
+}
+
+.profile__view {
+  font-size: var(--t-small);
+  color: var(--ink);
+  text-decoration: underline;
+}
+
+.profile__view:focus-visible {
+  outline: var(--focus-ring-width) solid var(--focus);
+  outline-offset: var(--focus-ring-offset);
 }
 
 .profile__form .copy-link {

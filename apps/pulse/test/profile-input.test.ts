@@ -35,6 +35,30 @@ test("profile_input_enforces_exact_shape_types_and_code_point_limits", () => {
   );
 });
 
+test("display_names_keep_joiners_beside_visible_text_and_refuse_bidi_controls", () => {
+  const name = (displayName: string) =>
+    normalizeProfile({ displayName, bio: "", visible: true }).displayName;
+  // ZWJ in an emoji sequence, ZWNJ in Persian and in Hindi.
+  for (const ok of [
+    "\u{1F469}\u200D\u{1F4BB} Ada",
+    "\u0645\u06CC\u200C\u062E\u0648\u0627\u0647\u0645",
+    "\u0915\u094D\u200C\u0937",
+    "Zoë",
+  ])
+    assert.equal(name(ok), ok);
+  for (const refused of [
+    "\u200D",
+    "\u200C\u200D",
+    "\u200B",
+    "Ada\u202A",
+    "Ada\u202E",
+    "\u2066Ada\u2069",
+    "Ada\u200E",
+    "Ada\u00AD",
+  ])
+    assert.throws(() => name(refused), { message: "bad_request" }, refused);
+});
+
 test("public_profile_ids_are_canonical_random_uuid_shapes", () => {
   assert.equal(isPublicProfileId("f8cdca64-0d4f-4b99-b5bc-e6b749843ad8"), true);
   assert.equal(isPublicProfileId("internal-voter-id"), false);
