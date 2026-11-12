@@ -36,5 +36,14 @@ export function closingNote(poll: Poll): string {
   const date = new Date(poll.closesAt);
   return Number.isNaN(date.getTime())
     ? "You can change your answer while this question is open."
-    : `Closes ${date.toLocaleDateString(undefined, { month: "short", day: "numeric", year: "numeric" })} · you can change your answer until then.`;
+    : `Closes ${readableDate(date)} · you can change your answer until then.`;
+}
+
+/** A calendar date in the same short style used by the poll page. */
+export function readableDate(date: Date): string {
+  return date.toLocaleDateString(undefined, {
+    month: "short",
+    day: "numeric",
+    year: "numeric",
+  });
 }

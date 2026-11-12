@@ -10,12 +10,13 @@ import {
 import { AppShell } from "../components/AppShell.js";
 import { PageBanner } from "../components/PageBanner.js";
 import { ViewState } from "../components/ViewState.js";
-import { ContributionField as Field } from "../components/ContributionField.js";
+import { Field } from "../components/Field.js";
+import { Button } from "../components/Button.js";
 import {
   useContributionRead,
   useContributionSave,
 } from "../hooks/use-contributions.js";
-import { contributionKinds } from "../flow/contributions.js";
+import { contributionKinds, pollReference } from "../flow/contributions.js";
 import "./Contributions.css";
 
 export function NewContribution({
@@ -55,7 +56,15 @@ export function NewContribution({
           }
         </ViewState>
         {data.status === "error" ? (
-          <button onClick={reload}>Try again</button>
+          <Button
+            variant="secondary"
+            size="small"
+            className="contribution-retry"
+            type="button"
+            onClick={reload}
+          >
+            Try again
+          </Button>
         ) : null}
       </section>
     </AppShell>
@@ -79,49 +88,104 @@ function ContributionForm({
     event.preventDefault();
     const form = new FormData(event.currentTarget);
     const value = (key: string) => String(form.get(key) ?? "").trim();
+    const pollId = pollReference(value("pollId"));
     void save.submit({
       title: value("title"),
       description: value("description"),
       organizerName: value("organizer"),
       kind: value("kind") as ContributionKind,
+      ...(pollId ? { pollId } : {}),
     });
   }
   return (
     <form className="contribution-form" onSubmit={submit}>
       <fieldset disabled={save.pending}>
-        <Field label="Contribution type">
-          <select name="kind" defaultValue="project">
-            {Object.entries(contributionKinds).map(([value, label]) => (
-              <option key={value} value={value}>
-                {label}
-              </option>
-            ))}
-          </select>
+        <Field
+          id="contribution-kind"
+          label="Contribution type"
+          problem={undefined}
+        >
+          {(described) => (
+            <select
+              id="contribution-kind"
+              name="kind"
+              defaultValue="project"
+              {...described}
+            >
+              {Object.entries(contributionKinds).map(([value, label]) => (
+                <option key={value} value={value}>
+                  {label}
+                </option>
+              ))}
+            </select>
+          )}
         </Field>
-        <Field label="Title">
-          <input
-            name="title"
-            required
-            maxLength={160}
-            placeholder="What would you like to make happen?"
-          />
+        <Field id="contribution-title" label="Title" problem={undefined}>
+          {(described) => (
+            <input
+              id="contribution-title"
+              name="title"
+              required
+              maxLength={160}
+              placeholder="What would you like to make happen?"
+              {...described}
+            />
+          )}
         </Field>
         <Field
+          id="contribution-description"
           label="Description"
           hint="Explain what you’re offering or asking for and how people can take part."
+          problem={undefined}
         >
-          <textarea name="description" required maxLength={4000} rows={5} />
+          {(described) => (
+            <textarea
+              id="contribution-description"
+              name="description"
+              required
+              maxLength={4000}
+              rows={5}
+              {...described}
+            />
+          )}
         </Field>
         <Field
+          id="contribution-organizer"
           label="Organizer’s public name"
           hint="This name will appear with your contribution."
+          problem={undefined}
         >
-          <input
-            name="organizer"
-            required
-            maxLength={80}
-            autoComplete="nickname"
-          />
+          {(described) => (
+            <input
+              id="contribution-organizer"
+              name="organizer"
+              required
+              maxLength={80}
+              autoComplete="nickname"
+              {...described}
+            />
+          )}
+        </Field>
+        <Field
+          id="contribution-poll"
+          label="Related question (optional)"
+          hint="Paste the link to a Pulse question, or its ID."
+          problem={
+            save.errorStatus === 404
+              ? "We could not find that question. Check the link, or leave this blank."
+              : undefined
+          }
+        >
+          {(described) => (
+            <input
+              id="contribution-poll"
+              name="pollId"
+              maxLength={2000}
+              autoComplete="off"
+              aria-invalid={save.errorStatus === 404 || undefined}
+              {...described}
+            />
+          )}
         </Field>
       </fieldset>
       <div className="contribution-confirm">
@@ -145,9 +209,9 @@ function ContributionForm({
           Sign in (opens in a new tab), then retry here
         </a>
       ) : null}
-      <button className="contribution-button" disabled={save.pending}>
+      <Button variant="primary" disabled={save.pending}>
         {save.pending ? "Publishing…" : "Publish contribution"}
-      </button>
+      </Button>
     </form>
   );
 }

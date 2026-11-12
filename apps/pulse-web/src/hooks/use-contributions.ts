@@ -20,6 +20,9 @@ export function useContributionRead<T>(load: () => Promise<T>) {
               error instanceof Error
                 ? error.message
                 : "Could not load this page. Please try again.",
+            ...(error instanceof ContributionsError
+              ? { statusCode: error.status }
+              : {}),
           });
       },
     );

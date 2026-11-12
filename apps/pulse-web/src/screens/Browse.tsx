@@ -41,17 +41,26 @@ export function Browse({
     setData: setContributions,
   } = useContributionRead(loadContributions);
   const contributionPaging = useRef(false);
+  const contributionGeneration = useRef(0);
   const [loadingContributions, setLoadingContributions] = useState(false);
   const [contributionPageError, setContributionPageError] = useState(false);
+  useEffect(() => {
+    ++contributionGeneration.current;
+    contributionPaging.current = false;
+    setLoadingContributions(false);
+    setContributionPageError(false);
+  }, [contributionsClient, isGeneral]);
   async function loadMoreContributions() {
     const page = contributions.status === "ready" ? contributions.value : null;
     const cursor = page?.nextCursor;
     if (!page || !cursor || contributionPaging.current) return;
     contributionPaging.current = true;
+    const generation = contributionGeneration.current;
     setLoadingContributions(true);
     setContributionPageError(false);
     try {
       const next = await contributionsClient.list(cursor);
+      if (contributionGeneration.current !== generation) return;
       if (next.nextCursor === cursor) throw new Error("Cursor did not advance");
       const ids = new Set(page.contributions.map((item) => item.id));
       setContributions({
@@ -65,10 +74,13 @@ export function Browse({
         },
       });
     } catch {
-      setContributionPageError(true);
+      if (contributionGeneration.current === generation)
+        setContributionPageError(true);
     } finally {
-      contributionPaging.current = false;
-      setLoadingContributions(false);
+      if (contributionGeneration.current === generation) {
+        contributionPaging.current = false;
+        setLoadingContributions(false);
+      }
     }
   }
   const { data, more, loadMore, retry } = usePollList(

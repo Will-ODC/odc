@@ -155,7 +155,7 @@
   font-weight: 600;
   padding: var(--gutter) 0 calc(var(--step) * 2);
 }
-.contribution-form > .contribution-button {
+.contribution-form > :is(.contribution-button, .btn) {
   align-self: flex-start;
 }
 .contribution-field {
@@ -226,11 +226,16 @@
   outline-offset: calc(var(--hairline) * 3);
 }
 @media (max-width: 699px) {
-  .contribution-form > .contribution-button {
+  .contribution-form > :is(.contribution-button, .btn) {
     width: 100%;
   }
 }
 
 .contribution-disclosure[open] > summary {
   margin-bottom: var(--gutter);
+}
+/* Try again, centred under the centred message it answers, as on Browse. */
+.contribution-retry {
+  display: block;
+  margin: calc(var(--step) * 2) auto 0;
 }

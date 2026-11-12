@@ -17,6 +17,9 @@ import { useMyVotes } from "../hooks/use-my-votes.js";
 import { useSession, type Session } from "../hooks/use-session.js";
 import { ViewState } from "../components/ViewState.js";
 import { ContributionField as Field } from "../components/ContributionField.js";
+import { Field as SharedField } from "../components/Field.js";
+import { Button } from "../components/Button.js";
+import { Choice } from "../components/Choice.js";
 import {
   useContributionRead,
   useContributionSave,
@@ -28,6 +31,7 @@ import {
   savings,
   safeExternalLink,
 } from "../flow/contributions.js";
+import { readableDate } from "../flow/conversation.js";
 import "./Contributions.css";
 
 export function ContributionDetail({
@@ -48,6 +52,7 @@ export function ContributionDetail({
   const { session, progress, signOut, dismiss } = useSession(api, {
     onSignedOut: clearVotes,
     onForgotten: clearVotes,
+    recheckSignedIn: true,
   });
   const accountId = session.status === "signedIn" ? session.me.id : null;
   const load = useCallback(async () => {
@@ -181,6 +186,15 @@ export function ContributionDetail({
                 </p>
               ) : null}
               <section className="contribution-section">
+                <ParticipationForm
+                  key={item.id}
+                  session={session}
+                  client={client}
+                  item={item}
+                  changed={changed}
+                />
+              </section>
+              <section className="contribution-section">
                 {canManage ? (
                   <OrganizerInbox key={item.id} client={client} id={item.id} />
                 ) : (
@@ -206,11 +220,11 @@ export function ContributionDetail({
                         <div className="contribution-meta">
                           <strong>{entry.displayName}</strong>
                           <span>{participationLabels[entry.kind]}</span>
+                          <time dateTime={entry.createdAt}>
+                            {readableDate(new Date(entry.createdAt))}
+                          </time>
                         </div>
                         <p className="contribution-prose">{entry.message}</p>
-                        <time dateTime={entry.createdAt}>
-                          {new Date(entry.createdAt).toLocaleDateString()}
-                        </time>
                       </li>
                     ))}
                   </ul>
@@ -229,7 +243,7 @@ export function ContributionDetail({
                         <div className="contribution-meta">
                           <strong>{contributionStatuses[entry.status]}</strong>
                           <time dateTime={entry.createdAt}>
-                            {new Date(entry.createdAt).toLocaleDateString()}
+                            {readableDate(new Date(entry.createdAt))}
                           </time>
                         </div>
                         <p className="contribution-prose">{entry.message}</p>
@@ -253,20 +267,28 @@ export function ContributionDetail({
                     <summary className="contribution-button contribution-button--secondary">
                       Post an update
                     </summary>
-                    <UpdateForm client={client} item={item} changed={changed} />
+                    <UpdateForm
+                      key={item.id}
+                      client={client}
+                      item={item}
+                      changed={changed}
+                    />
                   </details>
                 ) : null}
               </section>
             </>
           )}
         </ViewState>
-        {data.status === "error" ? (
-          <button
-            className="contribution-button contribution-button--secondary"
+        {data.status === "error" && data.statusCode !== 404 ? (
+          <Button
+            variant="secondary"
+            size="small"
+            className="contribution-retry"
+            type="button"
             onClick={reload}
           >
             Try again
-          </button>
+          </Button>
         ) : null}
       </section>
     </AppShell>
@@ -301,9 +323,16 @@ function MessageForm({
   }
   if (session.status === "loading") return <p role="status">Loading…</p>;
   if (session.status !== "signedIn")
-    return <a href={signInHref}>Sign in to send a message</a>;
+    return (
+      <a href={signInHref} target="_blank" rel="noreferrer">
+        Sign in to send a message
+      </a>
+    );
   return (
     <form className="contribution-form" ref={formRef} onSubmit={submit}>
+      <p className="contribution-note">
+        Only the organizer can read this. They can&apos;t reply here.
+      </p>
       <Field label="Private message">
         <textarea
           name="message"
@@ -320,9 +349,9 @@ function MessageForm({
         </a>
       ) : null}
       {save.saved ? <p role="status">Message sent to the organizer.</p> : null}
-      <button className="contribution-button" disabled={save.pending}>
+      <Button variant="primary" disabled={save.pending}>
         {save.pending ? "Sending…" : "Send message"}
-      </button>
+      </Button>
     </form>
   );
 }
@@ -365,7 +394,7 @@ function OrganizerMessages({
                 <li key={entry.id}>
                   <p className="contribution-prose">{entry.message}</p>
                   <time dateTime={entry.createdAt}>
-                    {new Date(entry.createdAt).toLocaleDateString()}
+                    {readableDate(new Date(entry.createdAt))}
                   </time>
                 </li>
               ))}
@@ -376,9 +405,15 @@ function OrganizerMessages({
         }
       </ViewState>
       {data.status === "error" ? (
-        <button type="button" onClick={reload}>
+        <Button
+          variant="secondary"
+          size="small"
+          className="contribution-retry"
+          type="button"
+          onClick={reload}
+        >
           Try again
-        </button>
+        </Button>
       ) : null}
     </>
   );
@@ -393,9 +428,20 @@ function UpdateForm({
   changed: (item: Contribution) => void;
 }) {
   const formRef = useRef<HTMLFormElement>(null);
+  // Controlled from the record: after a publish the select shows the status
+  // just published, never the one the page loaded with, so the next update
+  // cannot quietly reopen the record.
+  const [status, setStatus] = useState(item.status);
+  const [shown, setShown] = useState(item.status);
+  if (shown !== item.status) {
+    setShown(item.status);
+    setStatus(item.status);
+  }
   const save = useContributionSave<UpdateInput>(
     async (input, key) => changed(await client.update(item.id, input, key)),
-    () => formRef.current?.reset(),
+    // Clear what was written, not the status: `reset()` would put the
+    // select back to the status this form first rendered with.
+    () => clearWritten(formRef.current, ["message", "evidence"]),
   );
   function submit(event: FormEvent<HTMLFormElement>) {
     event.preventDefault();
@@ -403,7 +449,7 @@ function UpdateForm({
     const evidenceUrl = String(form.get("evidence") ?? "").trim();
     void save.submit({
       message: String(form.get("message") ?? "").trim(),
-      status: String(form.get("status")) as ContributionStatus,
+      status,
       ...(evidenceUrl ? { evidenceUrl } : {}),
     });
   }
@@ -415,7 +461,13 @@ function UpdateForm({
     >
       <fieldset disabled={save.pending}>
         <Field label="Current status">
-          <select name="status" defaultValue={item.status}>
+          <select
+            name="status"
+            value={status}
+            onChange={(event) =>
+              setStatus(event.currentTarget.value as ContributionStatus)
+            }
+          >
             {Object.entries(contributionStatuses).map(([value, label]) => (
               <option key={value} value={value}>
                 {label}
@@ -440,10 +492,189 @@ function UpdateForm({
         </label>
       </fieldset>
       {save.error ? <p role="alert">{save.error}</p> : null}
+      {save.errorStatus === 401 ? (
+        <a
+          href={`/sign-in?contribution=${encodeURIComponent(item.id)}`}
+          target="_blank"
+          rel="noreferrer"
+        >
+          Sign in again in a new tab
+        </a>
+      ) : null}
       {save.saved ? <p role="status">Your update has been published.</p> : null}
-      <button className="contribution-button" disabled={save.pending}>
+      <Button variant="primary" disabled={save.pending}>
         {save.pending ? "Publishing…" : "Publish update"}
-      </button>
+      </Button>
     </form>
   );
+}
+
+type Offer = Exclude<ParticipationKind, "report">;
+const offerLabels: Record<
+  Offer,
+  { choice: string; field: string; send: string }
+> = {
+  help: {
+    choice: "Offer help",
+    field: "How you can help",
+    send: "Offer help",
+  },
+  pledge: {
+    choice: "Make a pledge",
+    field: "What you pledge",
+    send: "Make pledge",
+  },
+};
+
+/** Offer help or pledge: the participation kinds open records accept. */
+function ParticipationForm({
+  session,
+  client,
+  item,
+  changed,
+}: {
+  session: Session;
+  client: ContributionsApi;
+  item: Contribution;
+  changed: (item: Contribution) => void;
+}) {
+  const [kind, setKind] = useState<Offer>("help");
+  const formRef = useRef<HTMLFormElement>(null);
+  const save = useContributionSave<{
+    displayName: string;
+    kind: Offer;
+    message: string;
+  }>(
+    async (input, key) =>
+      changed(await client.participate(item.id, input, key)),
+    // The name and the chosen kind stay for a second entry; `reset()` would
+    // also clear the controlled kind behind React's back.
+    () => clearWritten(formRef.current, ["message"]),
+  );
+  const signInHref = `/sign-in?contribution=${encodeURIComponent(item.id)}`;
+  const heading = <h2 id="participate-heading">Offer help / Pledge</h2>;
+  if (item.status === "completed" || item.status === "cancelled")
+    return (
+      <>
+        {heading}
+        <p className="contribution-note">
+          This contribution is closed to new offers of help and pledges.
+        </p>
+      </>
+    );
+  if (session.status === "loading")
+    return (
+      <>
+        {heading}
+        <p role="status">Loading…</p>
+      </>
+    );
+  if (session.status !== "signedIn")
+    return (
+      <>
+        {heading}
+        <a href={signInHref} target="_blank" rel="noreferrer">
+          Sign in to offer help or make a pledge
+        </a>
+      </>
+    );
+  function submit(event: FormEvent<HTMLFormElement>) {
+    event.preventDefault();
+    const form = new FormData(event.currentTarget);
+    void save.submit({
+      displayName: String(form.get("displayName") ?? "").trim(),
+      kind,
+      message: String(form.get("message") ?? "").trim(),
+    });
+  }
+  return (
+    <>
+      {heading}
+      <form
+        className="contribution-form"
+        ref={formRef}
+        onSubmit={submit}
+        aria-labelledby="participate-heading"
+      >
+        <fieldset disabled={save.pending}>
+          <legend className="visually-hidden">What you are offering</legend>
+          <div className="choice-list">
+            {(Object.keys(offerLabels) as Offer[]).map((value) => (
+              <Choice
+                key={value}
+                name="participation-kind"
+                value={value}
+                checked={kind === value}
+                onPick={() => setKind(value)}
+              >
+                {offerLabels[value].choice}
+              </Choice>
+            ))}
+          </div>
+          <SharedField
+            id="participation-name"
+            label="Public name"
+            hint="Shown with your entry on this page."
+            problem={undefined}
+          >
+            {(described) => (
+              <input
+                id="participation-name"
+                name="displayName"
+                required
+                maxLength={80}
+                autoComplete="nickname"
+                {...described}
+              />
+            )}
+          </SharedField>
+          <SharedField
+            id="participation-message"
+            label={offerLabels[kind].field}
+            problem={undefined}
+          >
+            {(described) => (
+              <textarea
+                id="participation-message"
+                name="message"
+                required
+                maxLength={2000}
+                rows={3}
+                {...described}
+              />
+            )}
+          </SharedField>
+        </fieldset>
+        {save.error ? <p role="alert">{save.error}</p> : null}
+        {save.errorStatus === 401 ? (
+          <a href={signInHref} target="_blank" rel="noreferrer">
+            Sign in again in a new tab
+          </a>
+        ) : null}
+        {save.saved ? (
+          <p role="status">Thank you. Your entry is on this page.</p>
+        ) : null}
+        <Button variant="primary" disabled={save.pending}>
+          {save.pending ? "Sending…" : offerLabels[kind].send}
+        </Button>
+      </form>
+    </>
+  );
+}
+
+/** Empty the named text fields and untick confirmations after a save. */
+function clearWritten(form: HTMLFormElement | null, names: string[]) {
+  if (!form) return;
+  for (const name of names) {
+    const field = form.elements.namedItem(name);
+    if (
+      field instanceof HTMLInputElement ||
+      field instanceof HTMLTextAreaElement
+    )
+      field.value = "";
+  }
+  for (const confirm of form.querySelectorAll<HTMLInputElement>(
+    'input[type="checkbox"]',
+  ))
+    confirm.checked = false;
 }

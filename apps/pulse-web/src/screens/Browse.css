@@ -153,5 +153,8 @@
 }
 
 .browse__filters a {
+  display: inline-flex;
+  align-items: center;
+  min-height: calc(var(--step) * 3);
   color: var(--green-hover);
 }

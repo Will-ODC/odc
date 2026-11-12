@@ -1,5 +1,6 @@
 // @vitest-environment jsdom
 import {
+  act,
   cleanup,
   render,
   screen,
@@ -15,7 +16,10 @@ import type {
   Contribution,
   ContributionsApi,
 } from "../src/api/contributions.js";
-import { HttpContributionsApi } from "../src/api/contributions.js";
+import {
+  ContributionsError,
+  HttpContributionsApi,
+} from "../src/api/contributions.js";
 import { routeFrom, pathOf, type ReturnTo } from "../src/flow/route.js";
 import { rememberReturn, takeReturn } from "../src/flow/sign-in-return.js";
 import { stubApi } from "./stub-api.js";
@@ -120,6 +124,52 @@ it("filters Home to contributions and can load older results", async () => {
     await screen.findByRole("link", { name: "An older project" }),
   ).toBeTruthy();
   expect(list).toHaveBeenLastCalledWith("older");
+});
+it("ignores a late contribution page after the list source changes", async () => {
+  let finish!: (value: {
+    contributions: Contribution[];
+    nextCursor: null;
+  }) => void;
+  const oldList = vi
+    .fn()
+    .mockResolvedValueOnce({ contributions: [fixture()], nextCursor: "older" })
+    .mockImplementationOnce(
+      () =>
+        new Promise((resolve) => {
+          finish = resolve;
+        }),
+    );
+  const newList = vi.fn().mockResolvedValue({
+    contributions: [fixture({ id: "new", title: "New source" })],
+    nextCursor: null,
+  });
+  const view = render(
+    <Browse
+      api={stubApi()}
+      community="pulse-general"
+      contributionsOnly
+      contributionsClient={{ list: oldList }}
+    />,
+  );
+  await userEvent.click(
+    await screen.findByRole("button", { name: "Load more contributions" }),
+  );
+  view.rerender(
+    <Browse
+      api={stubApi()}
+      community="pulse-general"
+      contributionsOnly
+      contributionsClient={{ list: newList }}
+    />,
+  );
+  expect(await screen.findByRole("link", { name: "New source" })).toBeTruthy();
+  await act(async () =>
+    finish({
+      contributions: [fixture({ id: "late", title: "Late old page" })],
+      nextCursor: null,
+    }),
+  );
+  expect(screen.queryByRole("link", { name: "Late old page" })).toBeNull();
 });
 it("lists tagged contributions between newer and older polls on Home", async () => {
   const user = userEvent.setup();
@@ -258,6 +308,11 @@ it("opens a private message only on request and reuses the key on retry", async 
   const disclosure = await screen.findByText("Message the organizer");
   expect(disclosure.closest("details")?.open).toBe(false);
   await user.click(disclosure);
+  expect(
+    screen.getByText(
+      "Only the organizer can read this. They can't reply here.",
+    ),
+  ).toBeTruthy();
   await user.type(
     await screen.findByLabelText("Private message"),
     "I can help build the ramp.",
@@ -277,6 +332,295 @@ it("opens a private message only on request and reuses the key on retry", async 
     expect.any(String),
   );
   expect(sendMessage.mock.calls[0]?.[2]).toBe(sendMessage.mock.calls[1]?.[2]);
+});
+it("offers signed-out people a new-tab sign-in for help and messages", async () => {
+  render(<ContributionDetail api={stubApi()} id="park" client={client()} />);
+  const help = await screen.findByRole("link", {
+    name: "Sign in to offer help or make a pledge",
+  });
+  expect(help.getAttribute("target")).toBe("_blank");
+  await userEvent.click(screen.getByText("Message the organizer"));
+  expect(
+    screen
+      .getByRole("link", { name: "Sign in to send a message" })
+      .getAttribute("target"),
+  ).toBe("_blank");
+});
+
+it("reopens the message form after signing in from its new tab", async () => {
+  let me: { id: string; email: string; community: null } | null = null;
+  render(
+    <ContributionDetail
+      api={stubApi({ me: async () => me })}
+      id="park"
+      client={client()}
+    />,
+  );
+  await userEvent.click(await screen.findByText("Message the organizer"));
+  expect(
+    screen.getByRole("link", { name: "Sign in to send a message" }),
+  ).toBeTruthy();
+  me = { id: "reader", email: "reader@example.test", community: null };
+  window.dispatchEvent(new Event("focus"));
+  expect(await screen.findByLabelText("Private message")).toBeTruthy();
+  expect(
+    screen.getByText("Message the organizer").closest("details")?.open,
+  ).toBe(true);
+});
+
+it("records an offer of help and shows the shared date style", async () => {
+  const participate = vi.fn().mockResolvedValue(
+    fixture({
+      participations: [
+        {
+          id: "help-1",
+          displayName: "Jo",
+          kind: "help",
+          message: "I can build the ramp.",
+          createdAt: "2026-11-15T12:00:00.000Z",
+        },
+      ],
+    }),
+  );
+  render(
+    <ContributionDetail
+      api={stubApi({
+        me: async () => ({
+          id: "helper",
+          email: "helper@example.test",
+          community: null,
+        }),
+      })}
+      id="park"
+      client={client({ participate })}
+    />,
+  );
+  const user = userEvent.setup();
+  await user.type(await screen.findByLabelText("Public name"), "Jo");
+  await user.type(
+    screen.getByLabelText("How you can help"),
+    "I can build the ramp.",
+  );
+  await user.click(screen.getByRole("button", { name: "Offer help" }));
+  expect(await screen.findByText("I can build the ramp.")).toBeTruthy();
+  expect(screen.getByText("Nov 15, 2026")).toBeTruthy();
+  expect(participate).toHaveBeenCalledWith(
+    "park",
+    { displayName: "Jo", kind: "help", message: "I can build the ramp." },
+    expect.any(String),
+  );
+});
+
+it("keeps the chosen kind and name for a second pledge, and says when one person has given enough", async () => {
+  const participate = vi
+    .fn()
+    .mockResolvedValueOnce(
+      fixture({
+        participations: [
+          {
+            id: "pledge-1",
+            displayName: "Jo",
+            kind: "pledge",
+            message: "Two bags of soil.",
+            createdAt: "2026-11-15T12:00:00.000Z",
+          },
+        ],
+      }),
+    )
+    .mockRejectedValueOnce(
+      new ContributionsError(
+        409,
+        "You have added as many entries to this contribution as one person can.",
+      ),
+    );
+  render(
+    <ContributionDetail
+      api={stubApi({
+        me: async () => ({
+          id: "helper",
+          email: "helper@example.test",
+          community: null,
+        }),
+      })}
+      id="park"
+      client={client({ participate })}
+    />,
+  );
+  const user = userEvent.setup();
+  await user.click(await screen.findByRole("radio", { name: "Make a pledge" }));
+  await user.type(screen.getByLabelText("Public name"), "Jo");
+  await user.type(
+    screen.getByLabelText("What you pledge"),
+    "Two bags of soil.",
+  );
+  await user.click(screen.getByRole("button", { name: "Make pledge" }));
+  expect(
+    await screen.findByText("Thank you. Your entry is on this page."),
+  ).toBeTruthy();
+  expect(participate).toHaveBeenLastCalledWith(
+    "park",
+    { displayName: "Jo", kind: "pledge", message: "Two bags of soil." },
+    expect.any(String),
+  );
+  expect(
+    (screen.getByRole("radio", { name: "Make a pledge" }) as HTMLInputElement)
+      .checked,
+  ).toBe(true);
+  expect((screen.getByLabelText("Public name") as HTMLInputElement).value).toBe(
+    "Jo",
+  );
+  const message = screen.getByLabelText(
+    "What you pledge",
+  ) as HTMLTextAreaElement;
+  expect(message.value).toBe("");
+  await user.type(message, "One more bag.");
+  await user.click(screen.getByRole("button", { name: "Make pledge" }));
+  expect(await screen.findByRole("alert")).toHaveProperty(
+    "textContent",
+    "You have added as many entries to this contribution as one person can.",
+  );
+  expect(message.value).toBe("One more bag.");
+});
+
+it("does not offer help or pledges on a closed contribution", async () => {
+  render(
+    <ContributionDetail
+      api={stubApi({
+        me: async () => ({
+          id: "helper",
+          email: "helper@example.test",
+          community: null,
+        }),
+      })}
+      id="park"
+      client={client({
+        detail: async () => ({
+          contribution: fixture({ status: "completed" }),
+          canManage: false,
+        }),
+      })}
+    />,
+  );
+  expect(
+    await screen.findByText(
+      "This contribution is closed to new offers of help and pledges.",
+    ),
+  ).toBeTruthy();
+  expect(screen.queryByLabelText("Public name")).toBeNull();
+});
+
+it("keeps the organizer's new status selected after publishing an update", async () => {
+  const update = vi.fn().mockResolvedValue(
+    fixture({
+      status: "in_progress",
+      updates: [
+        {
+          id: "update-1",
+          message: "Work started.",
+          status: "in_progress",
+          evidenceUrl: null,
+          createdAt: "2026-11-15T12:00:00.000Z",
+        },
+      ],
+    }),
+  );
+  render(
+    <ContributionDetail
+      api={stubApi({
+        me: async () => ({
+          id: "owner",
+          email: "owner@example.test",
+          community: null,
+        }),
+      })}
+      id="park"
+      client={client({
+        detail: async () => ({ contribution: fixture(), canManage: true }),
+        update,
+      })}
+    />,
+  );
+  const user = userEvent.setup();
+  await user.click(await screen.findByText("Post an update"));
+  await user.selectOptions(
+    screen.getByLabelText("Current status"),
+    "in_progress",
+  );
+  await user.type(screen.getByLabelText("Progress update"), "Work started.");
+  await user.click(
+    screen.getByRole("checkbox", { name: /confirm this status/ }),
+  );
+  await user.click(screen.getByRole("button", { name: "Publish update" }));
+  await screen.findByText("Work started.");
+  expect(screen.getByText("Your update has been published.")).toBeTruthy();
+  expect(
+    (screen.getByLabelText("Current status") as HTMLSelectElement).value,
+  ).toBe("in_progress");
+  expect(screen.getByText("Nov 15, 2026")).toBeTruthy();
+});
+
+it("offers a new-tab sign-in after an organizer update loses authentication", async () => {
+  const update = vi
+    .fn()
+    .mockRejectedValue(
+      new ContributionsError(
+        401,
+        "Sign in to continue. Your entries are still here.",
+      ),
+    );
+  render(
+    <ContributionDetail
+      api={stubApi({
+        me: async () => ({
+          id: "owner",
+          email: "owner@example.test",
+          community: null,
+        }),
+      })}
+      id="park"
+      client={client({
+        detail: async () => ({ contribution: fixture(), canManage: true }),
+        update,
+      })}
+    />,
+  );
+  const user = userEvent.setup();
+  await user.click(await screen.findByText("Post an update"));
+  await user.type(screen.getByLabelText("Progress update"), "Work started.");
+  await user.click(
+    screen.getByRole("checkbox", { name: /confirm this status/ }),
+  );
+  await user.click(screen.getByRole("button", { name: "Publish update" }));
+  expect(
+    await screen.findByRole("link", { name: "Sign in again in a new tab" }),
+  ).toHaveProperty("target", "_blank");
+});
+
+it("removes organizer controls when account A changes directly to account B", async () => {
+  let account = "owner";
+  const api = stubApi({
+    me: async () => ({
+      id: account,
+      email: `${account}@example.test`,
+      community: null,
+    }),
+  });
+  const detail = vi.fn(async () => ({
+    contribution: fixture(),
+    canManage: account === "owner",
+  }));
+  render(
+    <ContributionDetail api={api} id="park" client={client({ detail })} />,
+  );
+  expect(
+    await screen.findByText("Private messages", { exact: true }),
+  ).toBeTruthy();
+  account = "other";
+  window.dispatchEvent(new Event("focus"));
+  expect(await screen.findByText("Message the organizer")).toBeTruthy();
+  await waitFor(() =>
+    expect(screen.queryByText("Private messages", { exact: true })).toBeNull(),
+  );
 });
 it("removes an open private inbox as soon as the organizer signs out", async () => {
   const user = userEvent.setup();
@@ -370,7 +714,84 @@ it("rejects malformed successful responses and sends credentials/idempotency key
   });
 });
 
-it("publishes a group buy with the short form after public confirmation", async () => {
+it("uses load wording for GET failures and save wording for writes", async () => {
+  const doFetch = vi
+    .fn<typeof fetch>()
+    .mockImplementation(async () => new Response("{}", { status: 500 }));
+  const api = new HttpContributionsApi(doFetch);
+  await expect(api.list()).rejects.toThrow("Could not load this. Try again.");
+  await expect(api.detail("park")).rejects.toThrow(
+    "Could not load this. Try again.",
+  );
+  await expect(api.messages("park")).rejects.toThrow(
+    "Could not load this. Try again.",
+  );
+  await expect(
+    api.create(
+      {
+        kind: "project",
+        title: "Park",
+        description: "Fix the park.",
+        organizerName: "Ada",
+      },
+      crypto.randomUUID(),
+    ),
+  ).rejects.toThrow("Could not save this change. Please try again.");
+  await expect(
+    api.participate(
+      "park",
+      { displayName: "Jo", kind: "help", message: "I can help." },
+      crypto.randomUUID(),
+    ),
+  ).rejects.toThrow("Could not save this change. Please try again.");
+});
+
+it("says what a refused entry means for each conflict code", async () => {
+  const refuse = (error: string) =>
+    new HttpContributionsApi(
+      async () => new Response(JSON.stringify({ error }), { status: 409 }),
+    ).participate(
+      "park",
+      { displayName: "Jo", kind: "help", message: "I can help." },
+      crypto.randomUUID(),
+    );
+  await expect(refuse("sender_limit")).rejects.toThrow(
+    "You have added as many entries to this contribution as one person can.",
+  );
+  await expect(refuse("closed")).rejects.toThrow(
+    "This contribution is closed to new offers of help and pledges.",
+  );
+  await expect(refuse("record_full")).rejects.toThrow(
+    "This contribution has reached its entry limit.",
+  );
+  await expect(refuse("idempotency_conflict")).rejects.toThrow(
+    "This contribution has changed. Reload it before trying again.",
+  );
+});
+
+it("does not offer retry when a contribution is not found", async () => {
+  render(
+    <ContributionDetail
+      api={stubApi()}
+      id="missing"
+      client={client({
+        detail: async () => {
+          throw new ContributionsError(
+            404,
+            "This contribution could not be found.",
+          );
+        },
+      })}
+    />,
+  );
+  expect(
+    await screen.findByText("This contribution could not be found."),
+  ).toBeTruthy();
+  expect(screen.queryByRole("button", { name: "Try again" })).toBeNull();
+  expect(screen.getByRole("link", { name: "← Contributions" })).toBeTruthy();
+});
+
+it("publishes a group buy linked to a poll after public confirmation", async () => {
   const user = userEvent.setup();
   const create = vi.fn().mockResolvedValue(fixture());
   const onCreated = vi.fn();
@@ -391,9 +812,10 @@ it("publishes a group buy with the short form after public confirmation", async 
     await screen.findByLabelText("Contribution type"),
     "group_buy",
   );
-  expect(
-    screen.queryByLabelText(/poll id|regular price|community price/i),
-  ).toBeNull();
+  await user.type(
+    screen.getByLabelText("Related question (optional)"),
+    "https://pulse.example/?poll=garden-poll",
+  );
   await user.type(screen.getByLabelText("Title"), "Community tool purchase");
   await user.type(screen.getByLabelText(/Description/), "Buy tools together.");
   await user.type(
@@ -416,5 +838,65 @@ it("publishes a group buy with the short form after public confirmation", async 
     description: "Buy tools together.",
     organizerName: "Test organizer",
     kind: "group_buy",
+    pollId: "garden-poll",
   });
+});
+
+it("keeps every contribution field after an unknown related poll is rejected", async () => {
+  const create = vi
+    .fn()
+    .mockRejectedValue(
+      new ContributionsError(
+        404,
+        "Check the related question or leave that field blank.",
+      ),
+    );
+  render(
+    <NewContribution
+      api={stubApi({
+        me: async () => ({
+          id: "test",
+          email: "test@example.test",
+          community: null,
+        }),
+      })}
+      client={client({ create })}
+      onCreated={vi.fn()}
+    />,
+  );
+  const user = userEvent.setup();
+  await user.type(await screen.findByLabelText("Title"), "Community garden");
+  await user.type(screen.getByLabelText("Description"), "Grow food together.");
+  await user.type(screen.getByLabelText("Organizer’s public name"), "Ada");
+  await user.type(
+    screen.getByLabelText("Related question (optional)"),
+    "missing",
+  );
+  await user.click(
+    screen.getByRole("checkbox", { name: /I confirm this post/ }),
+  );
+  await user.click(
+    screen.getByRole("button", { name: "Publish contribution" }),
+  );
+  expect(await screen.findByRole("alert")).toHaveProperty(
+    "textContent",
+    "Check the related question or leave that field blank.",
+  );
+  const related = screen.getByLabelText("Related question (optional)");
+  expect(related.getAttribute("aria-invalid")).toBe("true");
+  expect(related.getAttribute("aria-describedby")).toContain(
+    "contribution-poll-problem",
+  );
+  expect(
+    screen.getByText(
+      "We could not find that question. Check the link, or leave this blank.",
+    ),
+  ).toBeTruthy();
+  expect((screen.getByLabelText("Title") as HTMLInputElement).value).toBe(
+    "Community garden",
+  );
+  expect(
+    (screen.getByLabelText("Related question (optional)") as HTMLInputElement)
+      .value,
+  ).toBe("missing");
 });

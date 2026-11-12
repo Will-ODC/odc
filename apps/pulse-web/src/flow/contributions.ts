@@ -38,3 +38,22 @@ export function safeExternalLink(value: string): string | undefined {
     return undefined;
   }
 }
+
+/**
+ * The poll ID in what someone typed for "Related question": either the ID
+ * itself or a question link (`/?poll=<id>`), which is what people can copy.
+ * Blank stays blank, so the field stays optional.
+ */
+export function pollReference(value: string): string {
+  const typed = value.trim();
+  if (!typed.includes("poll=")) return typed;
+  try {
+    return (
+      new URL(typed, "https://pulse.invalid").searchParams
+        .get("poll")
+        ?.trim() || typed
+    );
+  } catch {
+    return typed;
+  }
+}

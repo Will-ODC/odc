@@ -148,6 +148,13 @@ function contribution(value: unknown): value is Contribution {
     )
   );
 }
+/** 409 codes that are not "someone else changed this": each says what to do. */
+const conflicts: Record<string, string> = {
+  sender_limit:
+    "You have added as many entries to this contribution as one person can.",
+  record_full: "This contribution has reached its entry limit.",
+  closed: "This contribution is closed to new offers of help and pledges.",
+};
 export class ContributionsError extends Error {
   constructor(
     readonly status: number,
@@ -186,21 +193,31 @@ export class HttpContributionsApi implements ContributionsApi {
       throw new ContributionsError(0, "Connection lost. Please try again.");
     }
     if (!response.ok) {
+      const code = await response
+        .json()
+        .then((value: unknown) =>
+          isRecord(value) && typeof value.error === "string" ? value.error : "",
+        )
+        .catch(() => "");
       const messages: Record<number, string> = {
         400: "Check the details and try again.",
         401: "Sign in to continue. Your entries are still here.",
         403: "You do not have permission to make this change.",
         404:
           path === "" && body !== undefined
-            ? "Check the related poll ID or leave that field blank."
+            ? "Check the related question or leave that field blank."
             : "This contribution could not be found.",
-        409: "This contribution has changed. Reload it before trying again.",
+        409:
+          conflicts[code] ??
+          "This contribution has changed. Reload it before trying again.",
         429: "Please wait a moment before trying again.",
       };
       throw new ContributionsError(
         response.status,
         messages[response.status] ??
-          "Could not save this change. Please try again.",
+          (body === undefined
+            ? "Could not load this. Try again."
+            : "Could not save this change. Please try again."),
       );
     }
     const data: unknown = await response.json().catch(() => null);

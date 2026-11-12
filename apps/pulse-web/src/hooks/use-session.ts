@@ -37,7 +37,16 @@ export type SignOutProgress = TwoPressProgress;
  */
 export function useSession(
   api: PulseApi,
-  after: { onSignedOut?: () => void; onForgotten?: () => void } = {},
+  after: {
+    onSignedOut?: () => void;
+    onForgotten?: () => void;
+    /**
+     * Keep asking while signed in, so a switch from account A straight to
+     * account B in another tab reaches this page. For pages that show one
+     * account's private data, such as a contribution's organizer inbox.
+     */
+    recheckSignedIn?: boolean;
+  } = {},
 ): {
   session: Session;
   progress: SignOutProgress;
@@ -79,9 +88,14 @@ export function useSession(
    *
    * Only upgrades: a failed or signed-out answer leaves the session as it
    * was, so a dropped connection never shows a signed-in person as signed out.
+   * With `recheckSignedIn` it also asks while signed in, and takes a
+   * different account's answer; the same account's answer changes nothing.
    */
+  const recheckSignedIn = after.recheckSignedIn === true;
   const settled =
-    session.status === "signedOut" || session.status === "unknown";
+    recheckSignedIn ||
+    session.status === "signedOut" ||
+    session.status === "unknown";
   useEffect(() => {
     if (!settled) return;
     let live = true;
@@ -89,7 +103,12 @@ export function useSession(
       if (document.visibilityState === "hidden") return;
       api.me().then(
         (me) => {
-          if (live && me) setSession({ status: "signedIn", me });
+          if (live && me)
+            setSession((current) =>
+              current.status === "signedIn" && current.me.id === me.id
+                ? current
+                : { status: "signedIn", me },
+            );
         },
         () => {},
       );
