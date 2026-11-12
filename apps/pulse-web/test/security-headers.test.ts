@@ -22,12 +22,21 @@ describe("production security policy", () => {
     }
   });
 
+  it("allows a larger body on the picture upload route only", () => {
+    const sizes = [...nginx.matchAll(/client_max_body_size\s+([^;]+);/g)];
+    expect(sizes.map((match) => match[1])).toEqual(["10m"]);
+    const upload = nginx.match(/location = \/api\/poll-images \{([^{}]*)\}/);
+    expect(upload?.[1]).toContain("client_max_body_size 10m;");
+    expect(upload?.[1]).toContain("proxy_pass http://api:8080;");
+  });
+
   it("includes the policy at server level and in every location", () => {
     const locations = [...nginx.matchAll(/location\s+([^{}]+)\{([^{}]*)\}/g)];
     expect(locations.map((match) => match[1]?.trim())).toEqual([
       "= /index.html",
       "/assets/",
       "/api/",
+      "= /api/poll-images",
       "/",
     ]);
     for (const location of locations) {
