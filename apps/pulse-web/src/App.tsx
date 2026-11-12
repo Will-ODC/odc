@@ -20,6 +20,9 @@ import {
 import { Trust } from "./screens/Trust.js";
 import { Browse } from "./screens/Browse.js";
 import { MyVotes } from "./screens/MyVotes.js";
+import { Contributions } from "./screens/Contributions.js";
+import { NewContribution } from "./screens/NewContribution.js";
+import { ContributionDetail } from "./screens/ContributionDetail.js";
 import { NewPoll } from "./screens/NewPoll.js";
 import "./styles/tokens.css";
 import "./styles/utilities.css";
@@ -81,6 +84,17 @@ export function App({
 
   function screenFor() {
     switch (at.kind) {
+      case "contributions":
+        return <Contributions api={api} />;
+      case "newContribution":
+        return (
+          <NewContribution
+            api={api}
+            onCreated={(id) => browser.go({ kind: "contribution", id })}
+          />
+        );
+      case "contribution":
+        return <ContributionDetail key={at.id} api={api} id={at.id} />;
       case "about":
         return (
           <About

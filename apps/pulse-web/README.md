@@ -209,3 +209,24 @@ for HTTPS and HSTS at the TLS terminator.
   or ledger until they are. Update its plan steps as that work moves.
 - **`/start` is written by hand.** It is not a live feed and does not mean the
   work is deployed.
+
+## Contributions
+
+Home lists questions and the four newest contributions together, newest first.
+Each contribution has a tag naming its type. Contributions in the main
+navigation opens the full directory.
+`/contributions` lists public community projects,
+fundraisers, group buys and offers. `/contributions/new` publishes a contribution
+after sign-in and explicit confirmation. Each `/contributions/:id` page shows the
+community benefit, needs, optional linked poll, participation and organizer updates.
+
+Offers and group buys require a comparable regular price, community price saving
+at least 20%, source link and terms. An optional named fund records a pledged share
+of sales proceeds. Pledges and reports are public statements. Money collection,
+fund transfers and independent evidence review are future work.
+
+Participants can publish offers of help, pledges and reports with a public display
+name. Only the organizer can publish status updates. Completion is labeled as
+reported, and closed contributions accept reports while help and pledges stop.
+Sign-in links return to the contribution page or creation form. Failed submissions
+keep entered fields and reuse their request key for an unchanged retry.

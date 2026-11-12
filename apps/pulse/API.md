@@ -1078,3 +1078,61 @@ non-owner learns nothing about which accounts exist), 413 `body_too_large` (PUT
 body over 1 KiB), 503 `creation_unavailable`, 500 `server_error`. All changes are atomic and
 attributed to the owner. Context exposes only the caller's effective posting
 permission. No public grant listing or author/account inspection is introduced.
+
+## Contributions (#246, #247, #252)
+
+Public `GET /api/contributions?cursor=...` returns `{contributions,nextCursor}`,
+20 newest records at a time. Summaries omit participation and update arrays.
+`GET /api/contributions/:id` returns `{contribution,canManage}`. The optional
+session determines whether the reader is the organizer. All responses use
+`Cache-Control: no-store`. Reading never creates a ballot or changes a vote.
+
+Signed-in `POST /api/contributions` publishes a community contribution. Strict
+JSON fields are `title` (160 characters), `description` (4000),
+`communityBenefit` (2000), `needs` (2000), `organizerName` (80), and `kind`
+(`project`, `fundraiser`, `group_buy`, `offer`). Text is trimmed and nonempty.
+Optional `pollId` must identify an existing visible poll. Optional `commercial`
+is required for group buys and offers and forbidden for other kinds. It has
+`currency` (CAD/USD/GBP/EUR), integer `regularPriceMinor` (1–1000000000),
+`offeredPriceMinor` (0–1000000000), `referenceUrl` and `terms` (2000).
+The initial minimum advertised savings is 20%. Prices use the same
+currency and include all mandatory charges for comparable products. The
+organizer supplies the comparison source and conditions. These claims are
+unverified. Optional `fund` is `{name,percentage}` with a 1–160 character name
+and integer 1–100 percentage of sales proceeds pledged to that collective fund.
+It applies only to commercial offers. Optional fields accept null or omission.
+
+The public record adds `id`, `community:{id,label}`, `createdAt` ISO timestamp,
+`status` (`open`,`in_progress`,`completed`,`cancelled`), `participations` and
+`updates`. Community comes from the organizer's account, or General. Names are
+self-selected public labels. Account IDs, email and request keys remain private.
+Five new contributions per account per rolling hour are allowed.
+
+`POST /api/contributions/:id/participations` accepts `{displayName,kind,message}`
+with lengths 80/2000 and kind `help`, `pledge`, or `report`. Entries add `id` and
+`createdAt`. Help/pledges require open/in-progress status. Reports can be added
+after closure. Text and labels are public. A pledge moves no money.
+
+Organizer-only `POST /api/contributions/:id/updates` accepts `{message,status,
+evidenceUrl?}`. Message is 1–2000 characters. It appends a public update with
+`id` and `createdAt` and changes status. The organizer may reopen a record.
+Completion and evidence are organizer-reported, never independently verified.
+URLs must be HTTP(S), without embedded credentials, at most 2000 characters.
+Each record supports 500 participations and 500 updates.
+
+All POSTs require a valid session, configured web Origin, application/json and
+UUID `Idempotency-Key`. The key is account-scoped across contribution mutations.
+Identical retries return the original `{contribution,replayed:true}` with 200.
+First writes return 201 with `replayed:false`. Changed inputs or targets using
+the same key return 409. Session generation is checked in the transaction under
+the account lock shared with sign-out. Mutation body limit is 32 KiB strict UTF-8.
+Reads allow 120 requests/minute, mutations 30/minute, per route and client IP.
+
+Errors use `{error,message}`. 400 `bad_request`; 401 `signed_out`; 403
+`origin_not_allowed` or `organizer_required`; 404 `not_found`; 409
+`idempotency_conflict`, `closed`, `record_full`; 413 `body_too_large`; 429
+`too_many_requests`, `posting_limit`; 503 `contributions_unavailable`; 500
+`server_error`. Origin/session checks precede body parsing. Required storage
+failures leave no partial writes. Production persists in Postgres, development
+uses its selected database or ephemeral memory. Payments, investments,
+independent evidence reviews and automatic reputation remain future work.

@@ -84,7 +84,8 @@ it("shows loading, retry and empty states with useful destinations", async () =>
     )
     .mockResolvedValue(page([]));
   render(<Browse api={stubApi({ listPolls })} community="missing" />);
-  expect(within(screen.getByRole("main")).getByText("Loading…")).toBeTruthy();
+  const explore = screen.getByRole("region", { name: "Explore questions" });
+  expect(within(explore).getByText("Loading…")).toBeTruthy();
   await act(async () => reject(new ApiError(503, "Please try later.")));
   expect(await screen.findByText("Please try later.")).toBeTruthy();
   await userEvent.click(screen.getByRole("button", { name: "Try again" }));
@@ -185,18 +186,28 @@ it("loads the final page by keyboard and focuses its first new question", async 
     .fn()
     .mockResolvedValueOnce(page([row("first")], "next"))
     .mockResolvedValueOnce(page([row("second")]));
-  render(<Browse api={stubApi({ listPolls })} community="pulse-general" />);
-  await screen.findByRole("button", { name: "Load more" });
+  render(
+    <Browse
+      api={stubApi({ listPolls })}
+      community="pulse-general"
+      contributionsClient={{
+        list: async () => ({ contributions: [], nextCursor: null }),
+      }}
+    />,
+  );
+  await screen.findByRole("button", { name: "Load more questions" });
   await user.tab(); // First question
   await user.tab(); // Load more
   expect(document.activeElement).toBe(
-    screen.getByRole("button", { name: "Load more" }),
+    screen.getByRole("button", { name: "Load more questions" }),
   );
   await user.keyboard("{Enter}");
   const next = await screen.findByRole("link", { name: "Question second" });
   await waitFor(() => expect(document.activeElement).toBe(next));
   expect(listPolls).toHaveBeenLastCalledWith("pulse-general", "next");
-  expect(screen.queryByRole("button", { name: "Load more" })).toBeNull();
+  expect(
+    screen.queryByRole("button", { name: "Load more questions" }),
+  ).toBeNull();
 });
 
 it("keeps Home, About and posting in the top navigation", async () => {
@@ -288,7 +299,7 @@ it("shows saved answers beside Explore using the header's single read and keyboa
   // The initial heading keeps focus. Shift+Tab reaches the preceding rail,
   // in the same left-to-right order as the desktop columns.
   expect(document.activeElement).toBe(
-    screen.getByRole("heading", { name: "Explore questions" }),
+    screen.getByRole("heading", { name: "Explore" }),
   );
   await user.tab({ shift: true });
   expect(document.activeElement).toBe(

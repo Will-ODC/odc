@@ -37,10 +37,16 @@ export type Route =
   /** Live conversation page; explicit poll links bypass the browser. */
   | { kind: "conversation"; pollId: string }
   /** Posting a question (ADR-0037). Signed in only; the screen says so. */
-  | { kind: "newPoll" };
+  | { kind: "newPoll" }
+  | { kind: "contributions" }
+  | { kind: "newContribution" }
+  | { kind: "contribution"; id: string };
 
 /** The places a sign-in can return to. */
-export type ReturnTo = Extract<Route, { kind: "conversation" | "newPoll" }>;
+export type ReturnTo = Extract<
+  Route,
+  { kind: "conversation" | "newPoll" | "newContribution" | "contribution" }
+>;
 
 /**
  * The conversation an unrecognised path opens when it carries no `?poll=`.
@@ -85,12 +91,34 @@ export function routeFrom(href: string): Route {
     if (token) return { kind: "redeem", token };
     if (url.searchParams.get("next") === "new")
       return { kind: "signIn", returnTo: { kind: "newPoll" } };
+    if (url.searchParams.get("next") === "contribution-new")
+      return { kind: "signIn", returnTo: { kind: "newContribution" } };
+    const contributionId = url.searchParams.get("contribution");
+    if (contributionId)
+      return {
+        kind: "signIn",
+        returnTo: { kind: "contribution", id: contributionId },
+      };
     const pollId = url.searchParams.get("poll");
     return pollId
       ? { kind: "signIn", returnTo: { kind: "conversation", pollId } }
       : { kind: "signIn" };
   }
 
+  if (path === "/contributions") return { kind: "contributions" };
+  if (path === "/contributions/new") return { kind: "newContribution" };
+  if (path.startsWith("/contributions/")) {
+    try {
+      return {
+        kind: "contribution",
+        id: decodeURIComponent(
+          url.pathname.replace(/\/+$/, "").slice("/contributions/".length),
+        ),
+      };
+    } catch {
+      return { kind: "contributions" };
+    }
+  }
   if (path === CHAT_PREVIEW_PATH) return { kind: "chatPreview" };
   if (path === TRUST_PATH) return { kind: "trust" };
   if (path === NEW_POLL_PATH) return { kind: "newPoll" };
@@ -114,6 +142,12 @@ export function routeFrom(href: string): Route {
 /** The URL a route should show. The inverse of `routeFrom` for every route. */
 export function pathOf(route: Route): string {
   switch (route.kind) {
+    case "contributions":
+      return "/contributions";
+    case "newContribution":
+      return "/contributions/new";
+    case "contribution":
+      return `/contributions/${encodeURIComponent(route.id)}`;
     case "about":
       return "/about";
     case "myVotes":
@@ -130,6 +164,10 @@ export function pathOf(route: Route): string {
       switch (route.returnTo?.kind) {
         case undefined:
           return SIGN_IN_PATH;
+        case "newContribution":
+          return `${SIGN_IN_PATH}?next=contribution-new`;
+        case "contribution":
+          return `${SIGN_IN_PATH}?contribution=${encodeURIComponent(route.returnTo.id)}`;
         case "newPoll":
           return `${SIGN_IN_PATH}?next=new`;
         case "conversation":
