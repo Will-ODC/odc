@@ -457,7 +457,7 @@ whether this is a screen in `apps/pulse-web` or a separate surface. Read P6
 before starting and reuse its established posting authority where applicable;
 do not silently broaden those permissions to links or assurance gates.
 
-## P12 — Poll thumbnails · READY TO BUILD (step 9 BLOCKED ON A DECISION)
+## P12 — Poll thumbnails · READY TO BUILD
 
 Operator direction, 2026-11-12: every poll gets a thumbnail, Reddit-style.
 The poster can upload one with the question; otherwise a default shows: one
