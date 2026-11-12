@@ -28,4 +28,4 @@ integration is deferred under #398.
   is tracked in #577.
 
 Run the local demo in memory or use a disposable Postgres database.
-Migration 013 adds the contribution records and idempotency data.
+Migration 013 adds contribution records. Migration 014 adds private messages and stores retry revisions.

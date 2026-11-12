@@ -14,7 +14,7 @@ import { SiteBanner } from "../components/SiteBanner.js";
 import { AnsweredRail } from "../components/AnsweredRail.js";
 import { SuggestedVotesRail } from "../components/SuggestedVotesRail.js";
 import { useMyVotes } from "../hooks/use-my-votes.js";
-import { useSession } from "../hooks/use-session.js";
+import { useSession, type Session } from "../hooks/use-session.js";
 import { ViewState } from "../components/ViewState.js";
 import { ContributionField as Field } from "../components/ContributionField.js";
 import {
@@ -49,8 +49,17 @@ export function ContributionDetail({
     onSignedOut: clearVotes,
     onForgotten: clearVotes,
   });
-  const load = useCallback(() => client.detail(id), [client, id]);
+  const accountId = session.status === "signedIn" ? session.me.id : null;
+  const load = useCallback(async () => {
+    const detail = await client.detail(id);
+    return { ...detail, accountId };
+  }, [client, id, accountId]);
   const { data, reload, setData } = useContributionRead(load);
+  const canManage =
+    accountId !== null &&
+    data.status === "ready" &&
+    data.value.accountId === accountId &&
+    data.value.canManage;
   function changed(contribution: Contribution) {
     if (data.status === "ready")
       setData({ status: "ready", value: { ...data.value, contribution } });
@@ -91,7 +100,7 @@ export function ContributionDetail({
           ← Contributions
         </a>
         <ViewState data={data}>
-          {({ contribution: item, canManage }) => (
+          {({ contribution: item }) => (
             <>
               <header className="contribution-detail-heading">
                 <div className="contribution-meta">
@@ -181,7 +190,7 @@ export function ContributionDetail({
                     </summary>
                     <MessageForm
                       key={item.id}
-                      api={api}
+                      session={session}
                       client={client}
                       id={item.id}
                     />
@@ -269,16 +278,14 @@ const participationLabels: Record<ParticipationKind, string> = {
   report: "Reported contribution",
 };
 function MessageForm({
-  api,
+  session,
   client,
   id,
 }: {
-  api: PulseApi;
+  session: Session;
   client: ContributionsApi;
   id: string;
 }) {
-  const load = useCallback(() => api.me(), [api]);
-  const { data, reload } = useContributionRead(load);
   const formRef = useRef<HTMLFormElement>(null);
   const save = useContributionSave<string>(
     (message, key) => client.sendMessage(id, message, key),
@@ -292,43 +299,31 @@ function MessageForm({
     ).trim();
     if (message) void save.submit(message);
   }
+  if (session.status === "loading") return <p role="status">Loading…</p>;
+  if (session.status !== "signedIn")
+    return <a href={signInHref}>Sign in to send a message</a>;
   return (
-    <>
-      <ViewState data={data}>
-        {(me) =>
-          me ? (
-            <form className="contribution-form" ref={formRef} onSubmit={submit}>
-              <Field label="Private message">
-                <textarea
-                  name="message"
-                  rows={3}
-                  required
-                  maxLength={2000}
-                  disabled={save.pending}
-                />
-              </Field>
-              {save.error ? <p role="alert">{save.error}</p> : null}
-              {save.errorStatus === 401 ? (
-                <a href={signInHref}>Sign in again</a>
-              ) : null}
-              {save.saved ? (
-                <p role="status">Message sent to the organizer.</p>
-              ) : null}
-              <button className="contribution-button" disabled={save.pending}>
-                {save.pending ? "Sending…" : "Send message"}
-              </button>
-            </form>
-          ) : (
-            <a href={signInHref}>Sign in to send a message</a>
-          )
-        }
-      </ViewState>
-      {data.status === "error" ? (
-        <button type="button" onClick={reload}>
-          Try again
-        </button>
+    <form className="contribution-form" ref={formRef} onSubmit={submit}>
+      <Field label="Private message">
+        <textarea
+          name="message"
+          rows={3}
+          required
+          maxLength={2000}
+          disabled={save.pending}
+        />
+      </Field>
+      {save.error ? <p role="alert">{save.error}</p> : null}
+      {save.errorStatus === 401 ? (
+        <a href={signInHref} target="_blank" rel="noreferrer">
+          Sign in again in a new tab
+        </a>
       ) : null}
-    </>
+      {save.saved ? <p role="status">Message sent to the organizer.</p> : null}
+      <button className="contribution-button" disabled={save.pending}>
+        {save.pending ? "Sending…" : "Send message"}
+      </button>
+    </form>
   );
 }
 function OrganizerInbox({

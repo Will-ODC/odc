@@ -201,7 +201,7 @@ advertised savings. Pulse records the declared prices and pledges. Payments
 and independent verification are future work.
 
 The API is documented in [API.md](./API.md#contributions-246-247-252).
-Migration 013 adds contribution records and durable retry responses. Production
+Migration 013 adds contribution records and durable retries. Migration 014 adds private messages and stores retry revisions. Production
 uses Postgres. Development follows its existing storage selection, so the default
 in-memory demonstration loses records on restart. User text and public names
 are visible to everyone. Account IDs, email and session data stay private.

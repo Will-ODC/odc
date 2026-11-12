@@ -278,6 +278,46 @@ it("opens a private message only on request and reuses the key on retry", async 
   );
   expect(sendMessage.mock.calls[0]?.[2]).toBe(sendMessage.mock.calls[1]?.[2]);
 });
+it("removes an open private inbox as soon as the organizer signs out", async () => {
+  const user = userEvent.setup();
+  const signOut = vi.fn(async () => {});
+  render(
+    <ContributionDetail
+      api={stubApi({
+        me: async () => ({
+          id: "owner",
+          email: "owner@example.test",
+          community: null,
+        }),
+        signOut,
+      })}
+      id="park"
+      client={client({
+        detail: async () => ({ contribution: fixture(), canManage: true }),
+        messages: async () => [
+          {
+            id: "message",
+            message: "Only the organizer can read this.",
+            createdAt: fixture().createdAt,
+          },
+        ],
+      })}
+    />,
+  );
+  await user.click(
+    await screen.findByText("Private messages", { exact: true }),
+  );
+  expect(
+    await screen.findByText("Only the organizer can read this."),
+  ).toBeTruthy();
+  await user.click(screen.getByRole("button", { name: "Account" }));
+  await user.click(screen.getByRole("button", { name: "Sign out" }));
+  await user.click(screen.getByRole("button", { name: "Sign out everywhere" }));
+  await waitFor(() =>
+    expect(screen.queryByText("Only the organizer can read this.")).toBeNull(),
+  );
+  expect(screen.queryByText("Private messages", { exact: true })).toBeNull();
+});
 it("closed contributions can still be contacted and display existing price and fund details", async () => {
   render(
     <ContributionDetail
