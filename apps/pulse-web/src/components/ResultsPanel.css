@@ -181,13 +181,8 @@
   background: var(--hover);
 }
 
-/*
- * The panel's own Close is the shared secondary Button (#534); the doubled
- * class outranks `.btn--secondary`'s padding whatever the import order.
- * ClosedResults' loading and error states still draw a plain button here.
- */
-.results__close,
-.btn.results__close {
+/* ClosedResults' Close while its results load or fail to. */
+.results__close {
   position: absolute;
   inset-block-start: 0;
   inset-inline-end: 0;

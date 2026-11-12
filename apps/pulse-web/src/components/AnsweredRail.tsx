@@ -1,6 +1,7 @@
 import { useRef, type ComponentProps } from "react";
 import { AnsweredList } from "./AnsweredList.js";
 import { ViewState } from "./ViewState.js";
+import { Button } from "./Button.js";
 import type { ViewData } from "../hooks/view-data.js";
 import { pathOf } from "../flow/route.js";
 import "./AnsweredRail.css";
@@ -72,8 +73,9 @@ export function AnsweredRail({
           {() => null}
         </ViewState>
         {data.status === "error" ? (
-          <button
-            className="button"
+          <Button
+            variant="secondary"
+            size="small"
             type="button"
             onClick={() => {
               // The button goes while the list is read again; focus stays in
@@ -83,7 +85,7 @@ export function AnsweredRail({
             }}
           >
             Try again
-          </button>
+          </Button>
         ) : null}
         {data.status === "ready" && data.value.nextCursor ? (
           <p>

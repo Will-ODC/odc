@@ -6,6 +6,7 @@ import { useMyVotes } from "../hooks/use-my-votes.js";
 import { useSession } from "../hooks/use-session.js";
 import { pathOf } from "../flow/route.js";
 import { SiteBanner } from "../components/SiteBanner.js";
+import { Button } from "../components/Button.js";
 import "./Browse.css";
 
 /** This browser's current ballots, read from the server on every visit (#329). */
@@ -61,14 +62,22 @@ export function MyVotes({ api }: { api: PulseApi }) {
           </p>
         ) : null}
         {data.status === "error" ? (
-          <button className="button" type="button" onClick={retry}>
+          <Button
+            variant="secondary"
+            size="small"
+            className="browse__action"
+            type="button"
+            onClick={retry}
+          >
             Try again
-          </button>
+          </Button>
         ) : null}
         {more.status === "error" ? <p role="alert">{more.message}</p> : null}
         {data.status === "ready" && data.value.nextCursor ? (
-          <button
-            className="button"
+          <Button
+            variant="secondary"
+            size="small"
+            className="browse__action"
             type="button"
             disabled={more.status === "loading"}
             onClick={() => {
@@ -81,7 +90,7 @@ export function MyVotes({ api }: { api: PulseApi }) {
               : more.status === "error"
                 ? "Try loading more again"
                 : "Load more"}
-          </button>
+          </Button>
         ) : null}
       </main>
     </div>

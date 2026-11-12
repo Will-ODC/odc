@@ -217,7 +217,7 @@ describe.each(recoveryPages)(
       expect(
         header
           .getByRole("button", { name: "Try again" })
-          .classList.contains("button"),
+          .classList.contains("btn--small"),
       ).toBe(true);
       if (route.kind === "myVotes") {
         expect(header.queryByRole("alert")).toBeNull();

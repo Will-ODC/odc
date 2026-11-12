@@ -33,7 +33,6 @@ it("falls back to the per-answer rows when the chart cannot load", async () => {
         ],
       })}
       yourChoices={[0]}
-      onClose={() => {}}
     />,
   );
   // The rows give every figure: the count and share beside the answer.
