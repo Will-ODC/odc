@@ -240,7 +240,7 @@ export function Browse({
           {isGeneral && contributions.status === "error" ? (
             <>
               {contributionsOnly ? null : (
-                <p role="status">We couldn’t load contributions.</p>
+                <p role="status">Could not load this. Try again.</p>
               )}
               <Button
                 variant="secondary"

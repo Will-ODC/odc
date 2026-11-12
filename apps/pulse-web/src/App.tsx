@@ -73,6 +73,13 @@ export function App({
     !(at.kind === "conversation" && at.pollId === justPosted)
   )
     setJustPosted(null);
+  /** The contribution this browser has just published, while it is shown. */
+  const [justPublished, setJustPublished] = useState<string | null>(null);
+  if (
+    justPublished !== null &&
+    !(at.kind === "contribution" && at.id === justPublished)
+  )
+    setJustPublished(null);
 
   return (
     <>
@@ -89,11 +96,21 @@ export function App({
         return (
           <NewContribution
             api={api}
-            onCreated={(id) => browser.go({ kind: "contribution", id })}
+            onCreated={(id) => {
+              setJustPublished(id);
+              browser.go({ kind: "contribution", id });
+            }}
           />
         );
       case "contribution":
-        return <ContributionDetail key={at.id} api={api} id={at.id} />;
+        return (
+          <ContributionDetail
+            key={at.id}
+            api={api}
+            id={at.id}
+            focusHeading={justPublished === at.id}
+          />
+        );
       case "about":
         return (
           <About

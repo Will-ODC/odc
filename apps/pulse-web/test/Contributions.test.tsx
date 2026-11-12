@@ -289,6 +289,7 @@ it("keeps Home polls available when the contribution feed fails", async () => {
   const retry = await screen.findByRole("button", {
     name: "Try contributions again",
   });
+  expect(screen.getByText("Could not load this. Try again.")).toBeTruthy();
   const question = await screen.findByRole("link", { name: "A park poll" });
   await userEvent.click(retry);
   expect(document.activeElement).toBe(
@@ -377,23 +378,49 @@ it("offers signed-out people a new-tab sign-in for help and messages", async () 
 
 it("reopens the message form after signing in from its new tab", async () => {
   let me: { id: string; email: string; community: null } | null = null;
+  // The reload for the new account waits until the test lets it answer, so
+  // the test can see what is on screen meanwhile; without that, act() batches
+  // the "Loading…" state away and this would pass against a page that hides.
+  let answer: () => void = () => {};
+  const detail = vi
+    .fn()
+    .mockResolvedValueOnce({ contribution: fixture(), canManage: false })
+    .mockImplementation(
+      () =>
+        new Promise((resolve) => {
+          answer = () => resolve({ contribution: fixture(), canManage: false });
+        }),
+    );
   render(
     <ContributionDetail
       api={stubApi({ me: async () => me })}
       id="park"
-      client={client()}
+      client={client({ detail })}
     />,
   );
   await userEvent.click(await screen.findByText("Message the organizer"));
   expect(
     screen.getByRole("link", { name: "Sign in to send a message" }),
   ).toBeTruthy();
+  const box = screen.getByText("Message the organizer").closest("details");
+  const title = screen.getByRole("heading", { level: 1 });
   me = { id: "reader", email: "reader@example.test", community: null };
   window.dispatchEvent(new Event("focus"));
+  await waitFor(() => expect(detail).toHaveBeenCalledTimes(2));
+  // While it reloads for the new account, the page stays: the same box,
+  // still open, and no "Loading…" in its place.
+  expect(screen.queryByText("Loading…")).toBeNull();
+  expect(screen.getByText("Message the organizer").closest("details")).toBe(
+    box,
+  );
+  expect(box?.open).toBe(true);
+  await act(async () => answer());
   expect(await screen.findByLabelText("Private message")).toBeTruthy();
-  expect(
-    screen.getByText("Message the organizer").closest("details")?.open,
-  ).toBe(true);
+  expect(screen.getByText("Message the organizer").closest("details")).toBe(
+    box,
+  );
+  expect(box?.open).toBe(true);
+  expect(screen.getByRole("heading", { level: 1 })).toBe(title);
 });
 
 it("records an offer of help and shows the shared date style", async () => {
@@ -690,6 +717,155 @@ it("removes an open private inbox as soon as the organizer signs out", async () 
   );
   expect(screen.queryByText("Private messages", { exact: true })).toBeNull();
 });
+it("removes an open private inbox when the organizer signs out in another tab", async () => {
+  const user = userEvent.setup();
+  let answer: "owner" | "nobody" | "offline" = "owner";
+  const me = vi.fn(async () => {
+    if (answer === "offline") throw new Error("Offline");
+    return answer === "owner"
+      ? { id: "owner", email: "owner@example.test", community: null }
+      : null;
+  });
+  render(
+    <ContributionDetail
+      api={stubApi({ me })}
+      id="park"
+      client={client({
+        detail: async () => ({ contribution: fixture(), canManage: true }),
+        messages: async () => [
+          {
+            id: "message",
+            message: "Only the organizer can read this.",
+            createdAt: fixture().createdAt,
+          },
+        ],
+      })}
+    />,
+  );
+  await user.click(
+    await screen.findByText("Private messages", { exact: true }),
+  );
+  expect(
+    await screen.findByText("Only the organizer can read this."),
+  ).toBeTruthy();
+  // A failed check is not an answer: the inbox stays.
+  answer = "offline";
+  const calls = me.mock.calls.length;
+  window.dispatchEvent(new Event("focus"));
+  await waitFor(() => expect(me.mock.calls.length).toBe(calls + 1));
+  await act(async () => {});
+  expect(screen.getByText("Only the organizer can read this.")).toBeTruthy();
+  // A definite "nobody is signed in" is: the inbox goes.
+  answer = "nobody";
+  window.dispatchEvent(new Event("focus"));
+  await waitFor(() =>
+    expect(screen.queryByText("Only the organizer can read this.")).toBeNull(),
+  );
+  expect(screen.queryByText("Private messages", { exact: true })).toBeNull();
+  expect(screen.getByText("Message the organizer")).toBeTruthy();
+});
+
+it("lists each private message under a line with its date", async () => {
+  render(
+    <ContributionDetail
+      api={stubApi({
+        me: async () => ({
+          id: "owner",
+          email: "owner@example.test",
+          community: null,
+        }),
+      })}
+      id="park"
+      client={client({
+        detail: async () => ({ contribution: fixture(), canManage: true }),
+        messages: async () => [
+          {
+            id: "message",
+            message: "I can bring wood.",
+            createdAt: "2026-11-15T12:00:00.000Z",
+          },
+        ],
+      })}
+    />,
+  );
+  await userEvent.click(
+    await screen.findByText("Private messages", { exact: true }),
+  );
+  const message = await screen.findByText("I can bring wood.");
+  const entry = message.closest("li");
+  const meta = entry?.querySelector(".contribution-meta");
+  expect(meta?.textContent).toBe("Nov 15, 2026");
+  expect(entry?.firstElementChild).toBe(meta);
+});
+
+it("styles every control on the contribution page as a shared field", async () => {
+  const user = userEvent.setup();
+  render(
+    <ContributionDetail
+      api={stubApi({
+        me: async () => ({
+          id: "owner",
+          email: "owner@example.test",
+          community: null,
+        }),
+      })}
+      id="park"
+      client={client({
+        detail: async () => ({ contribution: fixture(), canManage: true }),
+      })}
+    />,
+  );
+  await user.click(await screen.findByText("Post an update"));
+  for (const label of [
+    "Public name",
+    "How you can help",
+    "Current status",
+    "Progress update",
+    "Evidence link (optional)",
+  ])
+    expect(screen.getByLabelText(label).classList).toContain("field__control");
+  cleanup();
+  render(
+    <ContributionDetail
+      api={stubApi({
+        me: async () => ({
+          id: "reader",
+          email: "reader@example.test",
+          community: null,
+        }),
+      })}
+      id="park"
+      client={client()}
+    />,
+  );
+  await user.click(await screen.findByText("Message the organizer"));
+  expect(screen.getByLabelText("Private message").classList).toContain(
+    "field__control",
+  );
+});
+
+it("moves focus to the title of a contribution just published", async () => {
+  render(
+    <ContributionDetail
+      api={stubApi()}
+      id="park"
+      client={client()}
+      focusHeading
+    />,
+  );
+  const title = await screen.findByRole("heading", {
+    level: 1,
+    name: "Make the park accessible",
+  });
+  await waitFor(() => expect(document.activeElement).toBe(title));
+});
+
+it("leaves focus alone on a contribution opened any other way", async () => {
+  render(<ContributionDetail api={stubApi()} id="park" client={client()} />);
+  await screen.findByRole("heading", { level: 1 });
+  expect(document.activeElement).toBe(document.body);
+});
+
 it("closed contributions can still be contacted and display existing price and fund details", async () => {
   render(
     <ContributionDetail
@@ -892,6 +1068,82 @@ it("publishes a group buy linked to a poll after public confirmation", async () 
   });
 });
 
+it("styles every control on the new contribution form as a shared field", async () => {
+  render(
+    <NewContribution
+      api={stubApi({
+        me: async () => ({
+          id: "test",
+          email: "test@example.test",
+          community: null,
+        }),
+      })}
+      client={client()}
+      onCreated={vi.fn()}
+    />,
+  );
+  for (const label of [
+    "Contribution type",
+    "Title",
+    "Description",
+    "Organizer’s public name",
+    "Related question (optional)",
+  ])
+    expect((await screen.findByLabelText(label)).classList).toContain(
+      "field__control",
+    );
+});
+
+it("refuses a related question that is not a question link or ID, at the field", async () => {
+  const create = vi.fn().mockResolvedValue(fixture());
+  render(
+    <NewContribution
+      api={stubApi({
+        me: async () => ({
+          id: "test",
+          email: "test@example.test",
+          community: null,
+        }),
+      })}
+      client={client({ create })}
+      onCreated={vi.fn()}
+    />,
+  );
+  const user = userEvent.setup();
+  await user.type(await screen.findByLabelText("Title"), "Community garden");
+  await user.type(screen.getByLabelText("Description"), "Grow food together.");
+  await user.type(screen.getByLabelText("Organizer’s public name"), "Ada");
+  const related = screen.getByLabelText("Related question (optional)");
+  await user.type(related, "https://pulse.example/questions/garden");
+  await user.click(
+    screen.getByRole("checkbox", { name: /I confirm this post/ }),
+  );
+  await user.click(
+    screen.getByRole("button", { name: "Publish contribution" }),
+  );
+  expect(create).not.toHaveBeenCalled();
+  expect(document.activeElement).toBe(related);
+  expect(related.getAttribute("aria-invalid")).toBe("true");
+  expect(related.getAttribute("aria-describedby")).toContain(
+    "contribution-poll-problem",
+  );
+  expect(
+    screen.getByText(
+      "This is not a question link or ID. Paste the question’s link, or leave this blank.",
+    ),
+  ).toBeTruthy();
+  await user.clear(related);
+  await user.type(related, "garden");
+  await user.tab();
+  expect(related.getAttribute("aria-invalid")).toBeNull();
+  await user.click(
+    screen.getByRole("button", { name: "Publish contribution" }),
+  );
+  await waitFor(() =>
+    expect(create.mock.calls[0]?.[0]).toMatchObject({ pollId: "garden" }),
+  );
+});
+
 it("keeps every contribution field after an unknown related poll is rejected", async () => {
   const create = vi
     .fn()
@@ -933,6 +1185,7 @@ it("keeps every contribution field after an unknown related poll is rejected", a
     "Check the related question or leave that field blank.",
   );
   const related = screen.getByLabelText("Related question (optional)");
+  await waitFor(() => expect(document.activeElement).toBe(related));
   expect(related.getAttribute("aria-invalid")).toBe("true");
   expect(related.getAttribute("aria-describedby")).toContain(
     "contribution-poll-problem",

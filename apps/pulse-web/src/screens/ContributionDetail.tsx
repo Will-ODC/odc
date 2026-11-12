@@ -1,4 +1,4 @@
-import { useCallback, useRef, useState } from "react";
+import { useCallback, useEffect, useRef, useState } from "react";
 import type { FormEvent } from "react";
 import type { PulseApi } from "../api/types.js";
 import {
@@ -16,8 +16,7 @@ import { SuggestedVotesRail } from "../components/SuggestedVotesRail.js";
 import { useMyVotes } from "../hooks/use-my-votes.js";
 import { useSession, type Session } from "../hooks/use-session.js";
 import { ViewState } from "../components/ViewState.js";
-import { ContributionField as Field } from "../components/ContributionField.js";
-import { Field as SharedField } from "../components/Field.js";
+import { Field } from "../components/Field.js";
 import { Button } from "../components/Button.js";
 import { Choice } from "../components/Choice.js";
 import {
@@ -38,10 +37,16 @@ export function ContributionDetail({
   api,
   id,
   client = contributionsApi,
+  focusHeading = false,
 }: {
   api: PulseApi;
   id: string;
   client?: ContributionsApi;
+  /**
+   * Move focus to the title once it loads: the page someone lands on after
+   * publishing, where focus would otherwise be left on nothing.
+   */
+  focusHeading?: boolean;
 }) {
   const mine = useMyVotes(api);
   const [railRetried, setRailRetried] = useState(false);
@@ -59,12 +64,25 @@ export function ContributionDetail({
     const detail = await client.detail(id);
     return { ...detail, accountId };
   }, [client, id, accountId]);
-  const { data, reload, setData } = useContributionRead(load);
+  // Keep the page while it reloads for a new account: the open message box
+  // and the scroll position must survive signing in from another tab.
+  // `canManage` below still needs the reloaded answer for this account.
+  const { data, reload, setData } = useContributionRead(load, {
+    keepReady: true,
+  });
   const canManage =
     accountId !== null &&
     data.status === "ready" &&
     data.value.accountId === accountId &&
     data.value.canManage;
+  const heading = useRef<HTMLHeadingElement>(null);
+  const headingFocused = useRef(false);
+  const ready = data.status === "ready";
+  useEffect(() => {
+    if (!focusHeading || !ready || headingFocused.current) return;
+    headingFocused.current = true;
+    heading.current?.focus();
+  }, [focusHeading, ready]);
   function changed(contribution: Contribution) {
     if (data.status === "ready")
       setData({ status: "ready", value: { ...data.value, contribution } });
@@ -112,7 +130,9 @@ export function ContributionDetail({
                   <span>{contributionKinds[item.kind]}</span>
                   <span>{contributionStatuses[item.status]}</span>
                 </div>
-                <h1>{item.title}</h1>
+                <h1 ref={heading} tabIndex={-1}>
+                  {item.title}
+                </h1>
                 <p>
                   Organized by{" "}
                   {item.organizerProfile ? (
@@ -343,14 +363,23 @@ function MessageForm({
       <p className="contribution-note">
         Only the organizer can read this. They can&apos;t reply here.
       </p>
-      <Field label="Private message">
-        <textarea
-          name="message"
-          rows={3}
-          required
-          maxLength={2000}
-          disabled={save.pending}
-        />
+      <Field
+        id="contribution-message"
+        label="Private message"
+        problem={undefined}
+      >
+        {(described) => (
+          <textarea
+            id="contribution-message"
+            className="field__control"
+            name="message"
+            rows={3}
+            required
+            maxLength={2000}
+            disabled={save.pending}
+            {...described}
+          />
+        )}
       </Field>
       {save.error ? <p role="alert">{save.error}</p> : null}
       {save.errorStatus === 401 ? (
@@ -402,10 +431,12 @@ function OrganizerMessages({
             <ul className="contribution-timeline">
               {messages.map((entry) => (
                 <li key={entry.id}>
+                  <div className="contribution-meta">
+                    <time dateTime={entry.createdAt}>
+                      {readableDate(new Date(entry.createdAt))}
+                    </time>
+                  </div>
                   <p className="contribution-prose">{entry.message}</p>
-                  <time dateTime={entry.createdAt}>
-                    {readableDate(new Date(entry.createdAt))}
-                  </time>
                 </li>
               ))}
             </ul>
@@ -470,31 +501,55 @@ function UpdateForm({
       onSubmit={submit}
     >
       <fieldset disabled={save.pending}>
-        <Field label="Current status">
-          <select
-            name="status"
-            value={status}
-            onChange={(event) =>
-              setStatus(event.currentTarget.value as ContributionStatus)
-            }
-          >
-            {Object.entries(contributionStatuses).map(([value, label]) => (
-              <option key={value} value={value}>
-                {label}
-              </option>
-            ))}
-          </select>
+        <Field id="update-status" label="Current status" problem={undefined}>
+          {(described) => (
+            <select
+              id="update-status"
+              className="field__control"
+              name="status"
+              value={status}
+              onChange={(event) =>
+                setStatus(event.currentTarget.value as ContributionStatus)
+              }
+              {...described}
+            >
+              {Object.entries(contributionStatuses).map(([value, label]) => (
+                <option key={value} value={value}>
+                  {label}
+                </option>
+              ))}
+            </select>
+          )}
         </Field>
-        <Field label="Progress update">
-          <textarea name="message" required maxLength={2000} rows={3} />
+        <Field id="update-message" label="Progress update" problem={undefined}>
+          {(described) => (
+            <textarea
+              id="update-message"
+              className="field__control"
+              name="message"
+              required
+              maxLength={2000}
+              rows={3}
+              {...described}
+            />
+          )}
         </Field>
-        <Field label="Evidence link (optional)">
-          <input
-            name="evidence"
-            type="url"
-            maxLength={2000}
-            placeholder="https://"
-          />
+        <Field
+          id="update-evidence"
+          label="Evidence link (optional)"
+          problem={undefined}
+        >
+          {(described) => (
+            <input
+              id="update-evidence"
+              className="field__control"
+              name="evidence"
+              type="url"
+              maxLength={2000}
+              placeholder="https://"
+              {...described}
+            />
+          )}
         </Field>
         <label className="contribution-check">
           <input type="checkbox" required />I confirm this status and update may
@@ -621,7 +676,7 @@ function ParticipationForm({
               </Choice>
             ))}
           </div>
-          <SharedField
+          <Field
             id="participation-name"
             label="Public name"
             hint="Shown with your entry on this page."
@@ -630,6 +685,7 @@ function ParticipationForm({
             {(described) => (
               <input
                 id="participation-name"
+                className="field__control"
                 name="displayName"
                 required
                 maxLength={80}
@@ -637,8 +693,8 @@ function ParticipationForm({
                 {...described}
               />
             )}
-          </SharedField>
-          <SharedField
+          </Field>
+          <Field
             id="participation-message"
             label={offerLabels[kind].field}
             problem={undefined}
@@ -646,6 +702,7 @@ function ParticipationForm({
             {(described) => (
               <textarea
                 id="participation-message"
+                className="field__control"
                 name="message"
                 required
                 maxLength={2000}
@@ -653,7 +710,7 @@ function ParticipationForm({
                 {...described}
               />
             )}
-          </SharedField>
+          </Field>
         </fieldset>
         {save.error ? <p role="alert">{save.error}</p> : null}
         {save.errorStatus === 401 ? (

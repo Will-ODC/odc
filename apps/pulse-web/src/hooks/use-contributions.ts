@@ -2,12 +2,26 @@ import { useCallback, useEffect, useRef, useState } from "react";
 import { ContributionsError } from "../api/contributions.js";
 import type { ViewData } from "./view-data.js";
 
-export function useContributionRead<T>(load: () => Promise<T>) {
+/**
+ * Load a contribution view, and load it again when `load` changes.
+ *
+ * With `keepReady`, a reload caused by a new `load` (someone signing in from
+ * another tab, say) keeps the page on screen until the answer arrives, rather
+ * than swapping it for "Loading…". Swapping it would unmount whatever the
+ * person had open on it and lose their scroll position. "Try again" after an
+ * error still shows "Loading…", since there is nothing on screen to keep.
+ */
+export function useContributionRead<T>(
+  load: () => Promise<T>,
+  { keepReady = false }: { keepReady?: boolean } = {},
+) {
   const [revision, setRevision] = useState(0);
   const [data, setData] = useState<ViewData<T>>({ status: "loading" });
   useEffect(() => {
     let live = true;
-    setData({ status: "loading" });
+    setData((current) =>
+      keepReady && current.status === "ready" ? current : { status: "loading" },
+    );
     load().then(
       (value) => {
         if (live) setData({ status: "ready", value });
@@ -29,7 +43,7 @@ export function useContributionRead<T>(load: () => Promise<T>) {
     return () => {
       live = false;
     };
-  }, [load, revision]);
+  }, [load, revision, keepReady]);
   const reload = useCallback(() => setRevision((value) => value + 1), []);
   return { data, reload, setData };
 }
@@ -78,6 +92,8 @@ export function useContributionSave<T>(
   }
   return {
     pending,
+    /** A new object per failure, so an effect can react to each one. */
+    failure,
     error: failure?.message,
     errorStatus: failure?.status,
     saved,

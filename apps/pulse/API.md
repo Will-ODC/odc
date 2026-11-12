@@ -1211,8 +1211,9 @@ JSON requires `title` (160 characters), `description` (4000),
 Text is trimmed and nonempty. Optional `communityBenefit` and `needs` accept
 up to 2000 characters each and default to empty strings.
 
-The short posting form sends only the required fields. API callers may still
-supply `pollId` for a visible poll. A missing or hidden poll returns 404
+The short posting form sends the required fields, plus `pollId` when the
+author links a related question (it accepts a question link or ID and sends
+only the ID). Any caller may supply `pollId` for a visible poll. A missing or hidden poll returns 404
 `poll_not_found`. Group buys and offers may include `commercial` pricing with
 `currency` (CAD/USD/GBP/EUR), integer `regularPriceMinor` (1–1000000000),
 `offeredPriceMinor` (0–1000000000), `referenceUrl` and `terms` (2000).
@@ -1255,8 +1256,12 @@ sign-in and return 404 for an unknown contribution. Public responses never
 include messages or sender information.
 
 All POSTs require a valid session, configured web Origin, application/json and
-UUID `Idempotency-Key`. The key is account-scoped across contribution mutations. Pulse stores a
-revision reference with each key to reconstruct the original response.
+UUID `Idempotency-Key`. For the three routes that return a contribution
+(create, participate, update), the key is account-scoped across those three:
+Pulse stores a revision reference with each key to reconstruct the original
+response. A message key is separate: it is stored with that message, so it is
+scoped to the sender and the contribution, and is never compared with keys
+used on the other three routes.
 Identical retries return the original `{contribution,replayed:true}` with 200.
 First writes return 201 with `replayed:false`. Changed inputs or targets using
 the same key return 409. Session generation is checked in the transaction under

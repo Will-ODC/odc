@@ -88,8 +88,10 @@ export function useSession(
    *
    * Only upgrades: a failed or signed-out answer leaves the session as it
    * was, so a dropped connection never shows a signed-in person as signed out.
-   * With `recheckSignedIn` it also asks while signed in, and takes a
-   * different account's answer; the same account's answer changes nothing.
+   * With `recheckSignedIn` it also asks while signed in, takes a different
+   * account's answer, and takes a definite signed-out answer (the person
+   * signed out in another tab); the same account's answer changes nothing,
+   * and a failed request still changes nothing.
    */
   const recheckSignedIn = after.recheckSignedIn === true;
   const settled =
@@ -103,11 +105,18 @@ export function useSession(
       if (document.visibilityState === "hidden") return;
       api.me().then(
         (me) => {
-          if (live && me)
+          if (!live) return;
+          if (me)
             setSession((current) =>
               current.status === "signedIn" && current.me.id === me.id
                 ? current
                 : { status: "signedIn", me },
+            );
+          // A definite "nobody" while signed in: signed out in another tab.
+          // A page showing one account's private data must stop showing it.
+          else if (recheckSignedIn)
+            setSession((current) =>
+              current.status === "signedIn" ? { status: "signedOut" } : current,
             );
         },
         () => {},
@@ -125,7 +134,7 @@ export function useSession(
       window.removeEventListener("storage", announced);
       document.removeEventListener("visibilitychange", ask);
     };
-  }, [api, settled]);
+  }, [api, settled, recheckSignedIn]);
 
   // The hook's own guard, not only the button's: one request at a time.
   const sending = useRef(false);
