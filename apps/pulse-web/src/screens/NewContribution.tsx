@@ -132,7 +132,7 @@ function ContributionForm({
         terms: value("terms"),
       };
     }
-    if (fund)
+    if (commercial && fund)
       input.fund = {
         name: value("fundName"),
         percentage: Number(value("fundPercent")),
@@ -147,9 +147,14 @@ function ContributionForm({
         <Field label="Contribution type">
           <select
             value={kind}
-            onChange={(event) =>
-              setKind(event.target.value as ContributionKind)
-            }
+            onChange={(event) => {
+              const next = event.target.value as ContributionKind;
+              setKind(next);
+              if (next !== "group_buy" && next !== "offer") {
+                setFund(false);
+                setValidation("");
+              }
+            }}
           >
             {Object.entries(contributionKinds).map(([value, label]) => (
               <option key={value} value={value}>
@@ -193,7 +198,7 @@ function ContributionForm({
           label="Related poll ID (optional)"
           hint="Use the ID after ?poll= in a question’s address."
         >
-          <input name="poll" maxLength={200} />
+          <input name="poll" maxLength={128} />
         </Field>
       </fieldset>
       {commercial ? (
@@ -257,38 +262,40 @@ function ContributionForm({
           </Field>
         </fieldset>
       ) : null}
-      <fieldset disabled={save.pending}>
-        <legend>Collective funds</legend>
-        <label className="contribution-check">
-          <input
-            type="checkbox"
-            checked={fund}
-            onChange={(event) => setFund(event.target.checked)}
-          />
-          Pledge a share of sales proceeds to a collective fund
-        </label>
-        {fund ? (
-          <>
-            <Field label="Fund or beneficiary name">
-              <input name="fundName" required maxLength={160} />
-            </Field>
-            <Field label="Share of sales proceeds (%)">
-              <input
-                name="fundPercent"
-                type="number"
-                min="1"
-                max="100"
-                step="1"
-                required
-              />
-            </Field>
-            <p className="contribution-note">
-              This records your pledge. Payments and transfers are arranged
-              outside Pulse.
-            </p>
-          </>
-        ) : null}
-      </fieldset>
+      {commercial ? (
+        <fieldset disabled={save.pending}>
+          <legend>Collective funds</legend>
+          <label className="contribution-check">
+            <input
+              type="checkbox"
+              checked={fund}
+              onChange={(event) => setFund(event.target.checked)}
+            />
+            Pledge a share of sales proceeds to a collective fund
+          </label>
+          {fund ? (
+            <>
+              <Field label="Fund or beneficiary name">
+                <input name="fundName" required maxLength={160} />
+              </Field>
+              <Field label="Share of sales proceeds (%)">
+                <input
+                  name="fundPercent"
+                  type="number"
+                  min="1"
+                  max="100"
+                  step="1"
+                  required
+                />
+              </Field>
+              <p className="contribution-note">
+                This records your pledge. Payments and transfers are arranged
+                outside Pulse.
+              </p>
+            </>
+          ) : null}
+        </fieldset>
+      ) : null}
       <div className="contribution-confirm">
         <label className="contribution-check">
           <input type="checkbox" required disabled={save.pending} />I confirm
@@ -304,7 +311,7 @@ function ContributionForm({
           {save.error}
         </p>
       ) : null}
-      {save.error ? (
+      {save.errorStatus === 401 ? (
         <a
           href="/sign-in?next=contribution-new"
           target="_blank"

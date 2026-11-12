@@ -1091,7 +1091,8 @@ Signed-in `POST /api/contributions` publishes a community contribution. Strict
 JSON fields are `title` (160 characters), `description` (4000),
 `communityBenefit` (2000), `needs` (2000), `organizerName` (80), and `kind`
 (`project`, `fundraiser`, `group_buy`, `offer`). Text is trimmed and nonempty.
-Optional `pollId` must identify an existing visible poll. Optional `commercial`
+Optional `pollId` must identify an existing visible poll. A missing or hidden
+poll returns 404 `poll_not_found`. Optional `commercial`
 is required for group buys and offers and forbidden for other kinds. It has
 `currency` (CAD/USD/GBP/EUR), integer `regularPriceMinor` (1–1000000000),
 `offeredPriceMinor` (0–1000000000), `referenceUrl` and `terms` (2000).
@@ -1121,7 +1122,8 @@ URLs must be HTTP(S), without embedded credentials, at most 2000 characters.
 Each record supports 500 participations and 500 updates.
 
 All POSTs require a valid session, configured web Origin, application/json and
-UUID `Idempotency-Key`. The key is account-scoped across contribution mutations.
+UUID `Idempotency-Key`. The key is account-scoped across contribution mutations. Pulse stores a
+revision reference with each key to reconstruct the original response.
 Identical retries return the original `{contribution,replayed:true}` with 200.
 First writes return 201 with `replayed:false`. Changed inputs or targets using
 the same key return 409. Session generation is checked in the transaction under
@@ -1129,7 +1131,7 @@ the account lock shared with sign-out. Mutation body limit is 32 KiB strict UTF-
 Reads allow 120 requests/minute, mutations 30/minute, per route and client IP.
 
 Errors use `{error,message}`. 400 `bad_request`; 401 `signed_out`; 403
-`origin_not_allowed` or `organizer_required`; 404 `not_found`; 409
+`origin_not_allowed` or `organizer_required`; 404 `not_found` or `poll_not_found`; 409
 `idempotency_conflict`, `closed`, `record_full`; 413 `body_too_large`; 429
 `too_many_requests`, `posting_limit`; 503 `contributions_unavailable`; 500
 `server_error`. Origin/session checks precede body parsing. Required storage

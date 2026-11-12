@@ -100,6 +100,7 @@ export class ContributionError extends Error {
       | "signed_out"
       | "organizer_required"
       | "not_found"
+      | "poll_not_found"
       | "idempotency_conflict"
       | "posting_limit"
       | "closed"

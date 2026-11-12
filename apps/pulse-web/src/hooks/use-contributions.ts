@@ -1,4 +1,5 @@
 import { useCallback, useEffect, useRef, useState } from "react";
+import { ContributionsError } from "../api/contributions.js";
 import type { ViewData } from "./view-data.js";
 
 export function useContributionRead<T>(load: () => Promise<T>) {
@@ -36,7 +37,10 @@ export function useContributionSave<T>(
   done: () => void,
 ) {
   const [pending, setPending] = useState(false);
-  const [error, setError] = useState("");
+  const [failure, setFailure] = useState<{
+    message: string;
+    status?: number;
+  }>();
   const [saved, setSaved] = useState(false);
   const sending = useRef(false);
   const attempt = useRef<{ payload: string; key: string } | null>(null);
@@ -48,22 +52,32 @@ export function useContributionSave<T>(
     sending.current = true;
     setPending(true);
     setSaved(false);
-    setError("");
+    setFailure(undefined);
     try {
       await save(input, attempt.current.key);
       attempt.current = null;
       setSaved(true);
       done();
     } catch (reason) {
-      setError(
-        reason instanceof Error
-          ? reason.message
-          : "Could not save. Please try again.",
-      );
+      setFailure({
+        message:
+          reason instanceof Error
+            ? reason.message
+            : "Could not save. Please try again.",
+        ...(reason instanceof ContributionsError
+          ? { status: reason.status }
+          : {}),
+      });
     } finally {
       sending.current = false;
       setPending(false);
     }
   }
-  return { pending, error, saved, submit };
+  return {
+    pending,
+    error: failure?.message,
+    errorStatus: failure?.status,
+    saved,
+    submit,
+  };
 }

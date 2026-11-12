@@ -20,7 +20,8 @@ const errors = {
   signed_out: [401, "Sign in to contribute."],
   organizer_required: [403, "Only the organizer can post progress updates."],
   origin_not_allowed: [403, "Open this site to send that request."],
-  not_found: [404, "That contribution or linked question could not be found."],
+  not_found: [404, "That contribution could not be found."],
+  poll_not_found: [404, "Check the related poll ID or leave that field blank."],
   idempotency_conflict: [
     409,
     "That request was already used. Start a new submission.",

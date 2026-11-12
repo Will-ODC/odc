@@ -205,7 +205,7 @@ for (const kind of ["memory", "postgres"] as const) {
       const { store } = await setup(t, kind);
       await assert.rejects(
         store.create(owner, randomUUID(), { ...project, pollId: "absent" }),
-        { message: "not_found" },
+        { message: "poll_not_found" },
       );
       await assert.rejects(
         store.create(owner, randomUUID(), {

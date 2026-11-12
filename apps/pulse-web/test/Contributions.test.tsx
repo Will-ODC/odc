@@ -326,83 +326,104 @@ it("rejects malformed successful responses and sends credentials/idempotency key
   });
 });
 
-it("requires meaningful savings and confirms publishing an offer with a fund pledge", async () => {
-  const user = userEvent.setup();
-  const create = vi.fn().mockResolvedValue(fixture());
-  const onCreated = vi.fn();
-  render(
-    <NewContribution
-      api={stubApi({
-        me: async () => ({
-          id: "test",
-          email: "test@example.test",
-          community: null,
-        }),
-      })}
-      client={client({ create })}
-      onCreated={onCreated}
-    />,
-  );
-  await user.selectOptions(
-    await screen.findByLabelText("Contribution type"),
-    "group_buy",
-  );
-  await user.type(screen.getByLabelText("Title"), "Community tool purchase");
-  await user.type(screen.getByLabelText("Description"), "Buy tools together.");
-  await user.type(
-    screen.getByLabelText("How will the community benefit?"),
-    "Lower prices for neighbours.",
-  );
-  await user.type(
-    screen.getByLabelText(/What help or resources/),
-    "Ten buyers",
-  );
-  await user.type(
-    screen.getByLabelText(/Organizer’s public name/),
-    "Test organizer",
-  );
-  await user.type(screen.getByLabelText("Regular price"), "100");
-  await user.type(screen.getByLabelText("Community price"), "95");
-  await user.tab();
-  expect(await screen.findByRole("alert")).toHaveProperty(
-    "textContent",
-    "The community price must save at least 20% against the comparable regular price.",
-  );
-  await user.clear(screen.getByLabelText("Community price"));
-  await user.type(screen.getByLabelText("Community price"), "75");
-  await user.type(
-    screen.getByLabelText("Comparable price source"),
-    "https://example.com/price",
-  );
-  await user.type(
-    screen.getByLabelText(/Offer terms/),
-    "Ten orders required. Collection included.",
-  );
-  await user.click(screen.getByRole("checkbox", { name: /Pledge a share/ }));
-  await user.type(
-    screen.getByLabelText("Fund or beneficiary name"),
-    "Garden fund",
-  );
-  await user.type(screen.getByLabelText("Share of sales proceeds (%)"), "10");
-  await user.click(
-    screen.getByRole("button", { name: "Publish contribution" }),
-  );
-  expect(create).not.toHaveBeenCalled();
-  await user.click(
-    screen.getByRole("checkbox", { name: /I confirm these details/ }),
-  );
-  await user.click(
-    screen.getByRole("button", { name: "Publish contribution" }),
-  );
-  await waitFor(() => expect(create).toHaveBeenCalledOnce());
-  expect(create.mock.calls[0]?.[0]).toMatchObject({
-    kind: "group_buy",
-    commercial: {
-      regularPriceMinor: 10000,
-      offeredPriceMinor: 7500,
-      currency: "CAD",
-    },
-    fund: { name: "Garden fund", percentage: 10 },
-  });
-  expect(onCreated).toHaveBeenCalledWith("park");
-});
+it.each(["group_buy", "project"] as const)(
+  "validates a commercial pledge before publishing as %s",
+  async (finalKind) => {
+    const user = userEvent.setup();
+    const create = vi.fn().mockResolvedValue(fixture());
+    const onCreated = vi.fn();
+    render(
+      <NewContribution
+        api={stubApi({
+          me: async () => ({
+            id: "test",
+            email: "test@example.test",
+            community: null,
+          }),
+        })}
+        client={client({ create })}
+        onCreated={onCreated}
+      />,
+    );
+    await user.selectOptions(
+      await screen.findByLabelText("Contribution type"),
+      "group_buy",
+    );
+    await user.type(screen.getByLabelText("Title"), "Community tool purchase");
+    await user.type(
+      screen.getByLabelText("Description"),
+      "Buy tools together.",
+    );
+    await user.type(
+      screen.getByLabelText("How will the community benefit?"),
+      "Lower prices for neighbours.",
+    );
+    await user.type(
+      screen.getByLabelText(/What help or resources/),
+      "Ten buyers",
+    );
+    await user.type(
+      screen.getByLabelText(/Organizer’s public name/),
+      "Test organizer",
+    );
+    await user.type(screen.getByLabelText("Regular price"), "100");
+    await user.type(screen.getByLabelText("Community price"), "95");
+    await user.tab();
+    expect(await screen.findByRole("alert")).toHaveProperty(
+      "textContent",
+      "The community price must save at least 20% against the comparable regular price.",
+    );
+    await user.clear(screen.getByLabelText("Community price"));
+    await user.type(screen.getByLabelText("Community price"), "75");
+    await user.type(
+      screen.getByLabelText("Comparable price source"),
+      "https://example.com/price",
+    );
+    await user.type(
+      screen.getByLabelText(/Offer terms/),
+      "Ten orders required. Collection included.",
+    );
+    await user.click(screen.getByRole("checkbox", { name: /Pledge a share/ }));
+    await user.type(
+      screen.getByLabelText("Fund or beneficiary name"),
+      "Garden fund",
+    );
+    await user.type(screen.getByLabelText("Share of sales proceeds (%)"), "10");
+    if (finalKind === "project") {
+      await user.selectOptions(
+        screen.getByLabelText("Contribution type"),
+        "project",
+      );
+      expect(
+        screen.queryByRole("checkbox", { name: /Pledge a share/ }),
+      ).toBeNull();
+    }
+    await user.click(
+      screen.getByRole("button", { name: "Publish contribution" }),
+    );
+    expect(create).not.toHaveBeenCalled();
+    await user.click(
+      screen.getByRole("checkbox", { name: /I confirm these details/ }),
+    );
+    await user.click(
+      screen.getByRole("button", { name: "Publish contribution" }),
+    );
+    await waitFor(() => expect(create).toHaveBeenCalledOnce());
+    const payload = create.mock.calls[0]?.[0];
+    expect(payload.kind).toBe(finalKind);
+    if (finalKind === "group_buy") {
+      expect(payload).toMatchObject({
+        commercial: {
+          regularPriceMinor: 10000,
+          offeredPriceMinor: 7500,
+          currency: "CAD",
+        },
+        fund: { name: "Garden fund", percentage: 10 },
+      });
+    } else {
+      expect(payload).not.toHaveProperty("fund");
+      expect(payload).not.toHaveProperty("commercial");
+    }
+    expect(onCreated).toHaveBeenCalledWith("park");
+  },
+);

@@ -56,7 +56,7 @@ class PostgresRepository implements ContributionRepository {
         replay: async (key) =>
           (
             await client.query<Replay>(
-              "select canonical, public_response as contribution from contribution_replay where voter_id=$1 and request_key=$2",
+              `select canonical, contribution_id as "contributionId", participation_count as "participationCount", update_count as "updateCount" from contribution_replay where voter_id=$1 and request_key=$2`,
               [actor.voterId, key],
             )
           ).rows[0],
@@ -96,12 +96,14 @@ class PostgresRepository implements ContributionRepository {
         },
         remember: async (key, replay) => {
           await client.query(
-            "insert into contribution_replay (voter_id,request_key,canonical,public_response) values ($1,$2,$3,$4)",
+            "insert into contribution_replay (voter_id,request_key,canonical,contribution_id,participation_count,update_count) values ($1,$2,$3,$4,$5,$6)",
             [
               actor.voterId,
               key,
               replay.canonical,
-              JSON.stringify(replay.contribution),
+              replay.contributionId,
+              replay.participationCount,
+              replay.updateCount,
             ],
           );
         },

@@ -32,7 +32,9 @@ export interface MutationResult {
 }
 export interface Replay {
   canonical: string;
-  contribution: Contribution;
+  contributionId: string;
+  participationCount: number;
+  updateCount: number;
 }
 export interface ContributionTransaction {
   community: { id: string; label: string };
@@ -92,7 +94,7 @@ export class ContributionsStore {
       )
         throw new ContributionError("posting_limit");
       if (input.pollId && !(await tx.visiblePoll(input.pollId)))
-        throw new ContributionError("not_found");
+        throw new ContributionError("poll_not_found");
       const contribution: Contribution = {
         ...input,
         id: randomUUID(),
@@ -172,10 +174,29 @@ export class ContributionsStore {
       if (replay) {
         if (replay.canonical !== canonical)
           throw new ContributionError("idempotency_conflict");
-        return { contribution: replay.contribution, replayed: true };
+        const record = await this.required(tx, replay.contributionId);
+        const participations = record.public.participations.slice(
+          0,
+          replay.participationCount,
+        );
+        const updates = record.public.updates.slice(0, replay.updateCount);
+        return {
+          contribution: {
+            ...record.public,
+            status: updates.at(-1)?.status ?? "open",
+            participations,
+            updates,
+          },
+          replayed: true,
+        };
       }
       const contribution = await work(tx);
-      await tx.remember(key, { canonical, contribution });
+      await tx.remember(key, {
+        canonical,
+        contributionId: contribution.id,
+        participationCount: contribution.participations.length,
+        updateCount: contribution.updates.length,
+      });
       return { contribution, replayed: false };
     });
   }

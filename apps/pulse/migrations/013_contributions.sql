@@ -11,6 +11,8 @@ create table contribution_replay (
   voter_id text not null references voter(id),
   request_key uuid not null,
   canonical text not null,
-  public_response jsonb not null,
+  contribution_id text not null references contribution(id),
+  participation_count integer not null check (participation_count between 0 and 500),
+  update_count integer not null check (update_count between 0 and 500),
   primary key (voter_id, request_key)
 );

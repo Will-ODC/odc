@@ -181,7 +181,10 @@ export class HttpContributionsApi implements ContributionsApi {
         400: "Check the details and try again.",
         401: "Sign in to continue. Your entries are still here.",
         403: "You do not have permission to make this change.",
-        404: "This contribution could not be found.",
+        404:
+          path === "" && body !== undefined
+            ? "Check the related poll ID or leave that field blank."
+            : "This contribution could not be found.",
         409: "This contribution has changed. Reload it before trying again.",
         429: "Please wait a moment before trying again.",
       };
@@ -227,23 +230,33 @@ export class HttpContributionsApi implements ContributionsApi {
     path: string,
     input: unknown,
     key: string,
+    existingId?: string,
   ): Promise<Contribution> {
     const data = await this.request(path, input, key);
-    if (!contribution(data.contribution))
+    if (!contribution(data.contribution) || typeof data.replayed !== "boolean")
       throw new ContributionsError(
         0,
         "The saved contribution could not be read. Retry to check it.",
       );
+    // The original result proves the write succeeded. A replay may predate
+    // later organizer updates or contributions, so refresh the current record.
+    if (data.replayed && existingId)
+      return (await this.detail(existingId)).contribution;
     return data.contribution;
   }
   create(input: ContributionInput, key: string) {
     return this.save("", input, key);
   }
   participate(id: string, input: ParticipationInput, key: string) {
-    return this.save(`/${encodeURIComponent(id)}/participations`, input, key);
+    return this.save(
+      `/${encodeURIComponent(id)}/participations`,
+      input,
+      key,
+      id,
+    );
   }
   update(id: string, input: UpdateInput, key: string) {
-    return this.save(`/${encodeURIComponent(id)}/updates`, input, key);
+    return this.save(`/${encodeURIComponent(id)}/updates`, input, key, id);
   }
 }
 export const contributionsApi = new HttpContributionsApi();

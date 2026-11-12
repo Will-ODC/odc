@@ -153,9 +153,9 @@ describe("Contributions through the browser HTTP adapter", () => {
     expect(await owner.api.update(created.id, progress, updateKey)).toEqual(
       completed,
     );
-    // A saved participation still replays after the project closes.
+    // A successful retry refreshes the detail after the project closes.
     expect(await member.api.participate(created.id, help, helpKey)).toEqual(
-      joined,
+      completed,
     );
     await expect(
       member.api.participate(created.id, help, randomUUID()),
