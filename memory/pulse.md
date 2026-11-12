@@ -52,6 +52,23 @@ the same CI runs.
   Conversation and ResultsPanel); #553 menu width tokens, with the communities
   menu centred on phones (#530); #555 a quiet "Next question" link, left swipe
   on phones and a subtle slide (#554).
+- **Merged 2026-11-11 (later):** #562 the Trust page "Today" list splits the
+  confirm step into its own bullet (#558, `49d9fae`); #563 shared-controls
+  follow-ups: unused `post__change` removed, `.btn.post__info`, phone-rules
+  test (#559, `4c387a2`); #564 the Account panel keeps a fixed width (menu
+  max) so Forget's question does not widen it (#561, `224cd94`); #565 expired
+  sign-in rows are purged at startup and on redeem as well as on link request,
+  and `used_claim` markers are kept 20 minutes (15 + 5) via migration 012
+  (`used_at`); the startup and redeem sweeps are best-effort (#550,
+  `307847c`); #567 `PULSE_TRUSTED_PROXY_HOPS` sets the trusted proxy hop
+  count (default 1, allowed 1-4, 0 refused) (#549, `f4cc0c5`); #568
+  AccountMenu, Explore and ResultsPanel controls use the shared Button, copied
+  focus rings removed (#534 part 2, `51d0c9f`; #534 stays open for part 3,
+  Conversation); #571 docs say a failed sweep never fails startup or
+  redemption, while a link-request sweep failure fails that request (#570,
+  `fabb23c`).
+- **New tickets 2026-11-11:** #569 small Button size and retire `.button`
+  (open, in progress); #557 and #560 review nits (open).
 - **One ballot per signed-in person** (#532 / PR #552, ADR-0046, migration
   011). Operator decision 2026-11-11: a signed-in person's new vote replaces
   their earlier vote on a poll, and on sign-in the newer answer moves to that
@@ -69,7 +86,8 @@ the same CI runs.
   never signed in (#349) both clear the ballot cookie. Used sign-in links
   delete their pending personal data atomically, retaining only a hash replay
   marker; expired unused links are swept on the next link write (#507 / PR #512,
-  migration 010).
+  migration 010), and also at startup and on redeem (#550 / PR #565,
+  migration 012).
 - **Confirmed votes are built** (#360, ADR-0040, migration 007). A vote cast while
   signed in, or by a browser that signs in later, is confirmed. Results carry
   all votes plus confirmed votes counted once per email account. A confirmed vote stores
@@ -162,8 +180,9 @@ the same CI runs.
    are merged; there is no remaining UI stack awaiting merge.
 2. Open follow-ups: #528 Previous/Next follow My votes, #533 ViewState Try
    again, #535 one paged-list hook, #536 Conversation logic into flow/ and
-   hooks, #537 VoteCard split, #538 CSS encapsulation and tokens, #549
-   trusted proxy hops, #550 purge expired sign-in rows, the rest of #534,
+   hooks, #537 VoteCard split, #538 CSS encapsulation and tokens, #557 and
+   #560 review nits, #569 small Button size and retire `.button` (in
+   progress), #534 part 3 (Conversation),
    #539 step 2 (one session provider; operator decision), and #499 dark mode
    and #500 compact posted notice (mockups merged in #521, not built).
 3. Prepare a small invited pilot only after choosing a host, configuring DNS,
@@ -260,7 +279,7 @@ the same CI runs.
   built and no migration implementation is authorized now.
 - `@fastify/rate-limit` uses an in-memory store, so N instances means N times the
   limit. This is the first thing that breaks when pulse scales out.
-  (`trustProxy: 1` is a different fix.)
+  (`trustProxy` hops, now `PULSE_TRUSTED_PROXY_HOPS`, is a different fix.)
 
 ## Open decisions (operator)
 
@@ -354,7 +373,8 @@ the same CI runs.
 - **A sign-in token in a log is a sign-in token given away.** Redeem carries it
   in the query string. `SERVED_LOGGER` and nginx `pulse_no_query` strip it, and
   #184 keeps it out of referrers. Check any new log line that includes a URL.
-- `trustProxy` is the hop count `1`, never `true`.
+- `trustProxy` is a hop count, never `true`: `PULSE_TRUSTED_PROXY_HOPS`
+  (default 1, allowed 1-4, 0 refused; #549 / PR #567).
 - `.dockerignore` patterns need `**/`.
 - Compose interpolates the whole file before profiles filter it, so a `${VAR:?}`
   on a profiled service breaks `up db`.
