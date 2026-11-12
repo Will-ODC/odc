@@ -23,6 +23,12 @@ export interface Contribution extends ContributionInput {
   updates: (UpdateInput & { id: string; createdAt: string })[];
 }
 export type Summary = Omit<Contribution, "participations" | "updates">;
+/**
+ * How many participations, and separately how many private messages, one
+ * account may add to one contribution. The 500-entry record caps are shared,
+ * so without this one account could fill a record for everyone.
+ */
+export const SENDER_LIMIT = 20;
 interface OrganizerMessage {
   id: string;
   message: string;
@@ -52,6 +58,8 @@ export interface ContributionTransaction {
   replay(key: string): Promise<Replay | undefined>;
   recent(since: string): Promise<number>;
   visiblePoll(id: string): Promise<boolean>;
+  /** Participations this actor has already added to one contribution. */
+  senderEntries(kind: "participate", contributionId: string): Promise<number>;
   get(id: string): Promise<StoredContribution | undefined>;
   save(record: StoredContribution, isNew: boolean): Promise<void>;
   remember(key: string, replay: Replay): Promise<void>;
@@ -135,6 +143,8 @@ export class ContributionsStore {
         throw new ContributionError("closed");
       if (record.public.participations.length >= 500)
         throw new ContributionError("record_full");
+      if ((await tx.senderEntries("participate", id)) >= SENDER_LIMIT)
+        throw new ContributionError("sender_limit");
       record.public.participations.push({
         ...input,
         id: randomUUID(),
@@ -203,6 +213,11 @@ export class ContributionsStore {
           throw new ContributionError("idempotency_conflict");
         return { id: existing.id, replayed: true };
       }
+      if (
+        messages.filter((entry) => entry.senderId === actor.voterId).length >=
+        SENDER_LIMIT
+      )
+        throw new ContributionError("sender_limit");
       if (messages.length >= 500) throw new ContributionError("record_full");
       const messageId = randomUUID();
       messages.push({

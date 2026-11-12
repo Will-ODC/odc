@@ -35,6 +35,10 @@ const errors = {
     "This contribution is closed to new offers of help and pledges.",
   ],
   record_full: [409, "This contribution has reached its entry limit."],
+  sender_limit: [
+    409,
+    "You have reached your entry limit for this contribution.",
+  ],
   body_too_large: [413, "That request is too large to send."],
   too_many_requests: [429, "Too many tries just now. Try again later."],
   contributions_unavailable: [

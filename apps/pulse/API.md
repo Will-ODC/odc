@@ -1118,7 +1118,9 @@ evidenceUrl?}`. Message is 1–2000 characters. It appends a public update with
 `id` and `createdAt` and changes status. The organizer may reopen a record.
 Completion and evidence are organizer-reported, never independently verified.
 URLs must be HTTP(S), without embedded credentials, at most 2000 characters.
-Each record supports 500 participations and 500 updates.
+Each record supports 500 participations and 500 updates. One account may add at
+most 20 participations to one contribution, so one person cannot fill the
+shared record. Identical idempotent retries do not consume another entry.
 
 ### Private messages to the organizer
 
@@ -1126,7 +1128,8 @@ Each record supports 500 participations and 500 updates.
 characters and a UUID `Idempotency-Key`. It returns `{id,replayed}` with 201
 for a new message or 200 for a repeat with the same sender, contribution, key
 and text. Reusing that key with different text returns 409. Each contribution
-can receive up to 500 messages.
+can receive up to 500 messages, with at most 20 from one account. Identical
+idempotent retries do not consume another entry.
 
 `GET /api/contributions/:id/messages` returns `{messages:[{id,message,createdAt}]}`
 to the organizer. A signed-in non-organizer receives 403. Both routes require
@@ -1144,7 +1147,7 @@ Reads allow 120 requests/minute, mutations 30/minute, per route and client IP.
 
 Errors use `{error,message}`. 400 `bad_request`; 401 `signed_out`; 403
 `origin_not_allowed` or `organizer_required`; 404 `not_found` or `poll_not_found`; 409
-`idempotency_conflict`, `closed`, `record_full`; 413 `body_too_large`; 429
+`idempotency_conflict`, `closed`, `record_full`, `sender_limit`; 413 `body_too_large`; 429
 `too_many_requests`, `posting_limit`; 503 `contributions_unavailable`; 500
 `server_error`. Origin/session checks precede body parsing. Required storage
 failures leave no partial writes. Production persists in Postgres, development

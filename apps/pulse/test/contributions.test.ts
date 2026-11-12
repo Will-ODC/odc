@@ -16,6 +16,7 @@ import { databaseSkip, migratedSchema } from "./support/database.js";
 const at = new Date("2026-11-10T12:00:00.000Z");
 const owner = { voterId: "private-owner", sessionGeneration: 0 };
 const helper = { voterId: "private-helper", sessionGeneration: 0 };
+const otherHelper = { voterId: "private-other-helper", sessionGeneration: 0 };
 const project = {
   title: "Community garden",
   description: "Grow vegetables together",
@@ -38,7 +39,7 @@ async function setup(t: TestContext, kind: "memory" | "postgres") {
   const votes = pool
     ? new PostgresVotingStore(pool)
     : new InMemoryVotingStore();
-  for (const actor of [owner, helper])
+  for (const actor of [owner, helper, otherHelper])
     await voters.create(
       {
         id: actor.voterId,
@@ -51,11 +52,10 @@ async function setup(t: TestContext, kind: "memory" | "postgres") {
     );
   const store = pool
     ? new PostgresContributionsStore(pool, () => clock)
-    : new InMemoryContributionsStore(
-        voters as InMemoryVoterStore,
-        votes,
-        () => clock,
-      );
+    : new InMemoryContributionsStore(voters as InMemoryVoterStore, votes, {
+        clock: () => clock,
+        communityLabels: new Map([["campus", "Campus"]]),
+      });
   const other = pool
     ? new PostgresContributionsStore(pool, () => clock)
     : store;
@@ -156,6 +156,82 @@ for (const kind of ["memory", "postgres"] as const) {
       assert.doesNotMatch(
         JSON.stringify(await store.list({})),
         /Private question/,
+      );
+    },
+  );
+  test(
+    `${kind}: one sender is capped without filling the contribution for everyone`,
+    opts,
+    async (t) => {
+      const { store } = await setup(t, kind);
+      const { contribution } = await store.create(owner, randomUUID(), project);
+      let lastParticipationKey = "";
+      let lastMessageKey = "";
+      for (let i = 0; i < 20; i++) {
+        lastParticipationKey = randomUUID();
+        lastMessageKey = randomUUID();
+        await store.participate(helper, contribution.id, lastParticipationKey, {
+          displayName: "Jo",
+          kind: "help",
+          message: `Help ${i}`,
+        });
+        await store.sendMessage(helper, contribution.id, lastMessageKey, {
+          message: `Question ${i}`,
+        });
+      }
+      assert.equal(
+        (
+          await store.participate(
+            helper,
+            contribution.id,
+            lastParticipationKey,
+            {
+              displayName: "Jo",
+              kind: "help",
+              message: "Help 19",
+            },
+          )
+        ).replayed,
+        true,
+      );
+      assert.equal(
+        (
+          await store.sendMessage(helper, contribution.id, lastMessageKey, {
+            message: "Question 19",
+          })
+        ).replayed,
+        true,
+      );
+      await assert.rejects(
+        store.participate(helper, contribution.id, randomUUID(), {
+          displayName: "Jo",
+          kind: "help",
+          message: "One too many",
+        }),
+        { message: "sender_limit" },
+      );
+      await assert.rejects(
+        store.sendMessage(helper, contribution.id, randomUUID(), {
+          message: "One too many",
+        }),
+        { message: "sender_limit" },
+      );
+      await store.participate(otherHelper, contribution.id, randomUUID(), {
+        displayName: "Sam",
+        kind: "pledge",
+        message: "I can still join.",
+      });
+      await store.sendMessage(otherHelper, contribution.id, randomUUID(), {
+        message: "I can still write.",
+      });
+      assert.equal(
+        (await store.detail(contribution.id)).contribution.participations
+          .length,
+        21,
+      );
+      assert.equal(
+        (await store.messages(owner, contribution.id)).messages.length,
+        21,
       );
     },
   );
@@ -287,6 +363,89 @@ for (const kind of ["memory", "postgres"] as const) {
     },
   );
 }
+test("memory contribution publications use configured community labels", async () => {
+  const voters = new InMemoryVoterStore();
+  const votes = new InMemoryVotingStore();
+  const member = { voterId: "campus-member", sessionGeneration: 0 };
+  await voters.create(
+    {
+      id: member.voterId,
+      community: "campus",
+      assurance: "email",
+      claimedAt: at,
+      proofEmailsOptIn: false,
+    },
+    { kind: "email", value: "campus@example.test", verifiedAt: at },
+  );
+  const store = new InMemoryContributionsStore(voters, votes, {
+    clock: () => at,
+    communityLabels: new Map([["campus", "Campus"]]),
+  });
+  assert.deepEqual(
+    (await store.create(member, randomUUID(), project)).contribution.community,
+    { id: "campus", label: "Campus" },
+  );
+});
+
+test(
+  "postgres keeps contributions from two different senders that overlap on one row",
+  { skip: databaseSkip },
+  async (t) => {
+    const { store, other, pool } = await setup(t, "postgres");
+    const { contribution } = await store.create(owner, randomUUID(), project);
+    const barrier = await pool!.connect();
+    try {
+      await barrier.query("begin");
+      await barrier.query(
+        "select id from contribution where id=$1 for update",
+        [contribution.id],
+      );
+      const pid = (
+        await barrier.query<{ pid: number }>("select pg_backend_pid() as pid")
+      ).rows[0]!.pid;
+      const writes = Promise.all([
+        store.participate(helper, contribution.id, randomUUID(), {
+          displayName: "Jo",
+          kind: "help",
+          message: "First helper",
+        }),
+        other.participate(otherHelper, contribution.id, randomUUID(), {
+          displayName: "Sam",
+          kind: "help",
+          message: "Second helper",
+        }),
+      ]);
+      const deadline = Date.now() + 5_000;
+      while (true) {
+        const waiting = (
+          await pool!.query<{ count: number }>(
+            "with recursive blocked(pid) as (select pid from pg_stat_activity where $1 = any(pg_blocking_pids(pid)) union select a.pid from pg_stat_activity a join blocked b on b.pid = any(pg_blocking_pids(a.pid))) select count(*)::int as count from blocked",
+            [pid],
+          )
+        ).rows[0]?.count;
+        if ((waiting ?? 0) >= 2) break;
+        if (Date.now() > deadline)
+          throw new Error(
+            "contribution writes did not reach the row-lock barrier",
+          );
+        await new Promise((resolve) => setTimeout(resolve, 10));
+      }
+      await barrier.query("commit");
+      await writes;
+    } finally {
+      await barrier.query("rollback");
+      barrier.release();
+    }
+    assert.deepEqual(
+      new Set(
+        (await store.detail(contribution.id)).contribution.participations.map(
+          (entry) => entry.message,
+        ),
+      ),
+      new Set(["First helper", "Second helper"]),
+    );
+  },
+);
 test("input rejects unsafe links, invalid Unicode and invalid cursors", () => {
   for (const data of [
     { ...project, kind: "offer", fund: { name: "Fund", percentage: 5 } },

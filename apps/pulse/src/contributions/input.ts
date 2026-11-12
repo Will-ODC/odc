@@ -103,7 +103,8 @@ export class ContributionError extends Error {
       | "idempotency_conflict"
       | "posting_limit"
       | "closed"
-      | "record_full",
+      | "record_full"
+      | "sender_limit",
   ) {
     super(code);
     this.name = "ContributionError";

@@ -16,6 +16,7 @@ class MemoryRepository implements ContributionRepository {
   constructor(
     private readonly voters: InMemoryVoterStore,
     private readonly votes: VotingStore,
+    private readonly labels: ReadonlyMap<string, string>,
   ) {}
   async read(id: string) {
     return structuredClone(this.records.get(id));
@@ -56,7 +57,10 @@ class MemoryRepository implements ContributionRepository {
       const result = await work({
         community: {
           id: communityId,
-          label: communityId === "pulse-general" ? "General" : communityId,
+          label:
+            communityId === "pulse-general"
+              ? "General"
+              : (this.labels.get(communityId) ?? communityId),
         },
         replay: async (key) => structuredClone(replays.get(replayKey(key))),
         recent: async (since) =>
@@ -64,6 +68,17 @@ class MemoryRepository implements ContributionRepository {
             (r) => r.ownerId === actor.voterId && r.public.createdAt > since,
           ).length,
         visiblePoll: async (id) => !!(await this.votes.getPoll(id)),
+        senderEntries: async (kind, contributionId) =>
+          [...replays.entries()].filter(([encodedActor, replay]) => {
+            const [voterId] = JSON.parse(encodedActor) as [string, string];
+            if (
+              voterId !== actor.voterId ||
+              replay.contributionId !== contributionId
+            )
+              return false;
+            const canonical = JSON.parse(replay.canonical) as unknown[];
+            return canonical[0] === kind;
+          }).length,
         get: async (id) => structuredClone(records.get(id)),
         save: async (record) => {
           records.set(record.public.id, structuredClone(record));
@@ -82,8 +97,14 @@ export class InMemoryContributionsStore extends ContributionsStore {
   constructor(
     voters: InMemoryVoterStore,
     votes: VotingStore,
-    clock?: () => Date,
+    options: {
+      clock?: () => Date;
+      communityLabels?: ReadonlyMap<string, string>;
+    } = {},
   ) {
-    super(new MemoryRepository(voters, votes), clock);
+    super(
+      new MemoryRepository(voters, votes, new Map(options.communityLabels)),
+      options.clock,
+    );
   }
 }

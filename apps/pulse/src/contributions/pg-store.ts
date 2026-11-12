@@ -76,6 +76,15 @@ class PostgresRepository implements ContributionRepository {
               [id],
             )
           ).rowCount === 1,
+        senderEntries: async (kind, contributionId) =>
+          Number(
+            (
+              await client.query<{ count: string }>(
+                "select count(*) from contribution_replay where voter_id=$1 and contribution_id=$2 and canonical::jsonb->>0=$3",
+                [actor.voterId, contributionId, kind],
+              )
+            ).rows[0]?.count ?? 0,
+          ),
         get: async (id) => read(client, id, true),
         save: async (record, isNew) => {
           if (isNew)

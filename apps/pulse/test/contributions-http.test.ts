@@ -133,6 +133,19 @@ test(
         .status,
       409,
     );
+    // One account may send 20 messages to one contribution; the 21st is
+    // refused with its own code, not the shared record_full.
+    for (let i = 1; i < 20; i++)
+      assert.equal(
+        (await post(inboxUrl, { message: `Question ${i}` }, sender)).status,
+        201,
+      );
+    const capped = await post(inboxUrl, { message: "One too many" }, sender);
+    assert.equal(capped.status, 409);
+    assert.equal(
+      ((await capped.json()) as { error: string }).error,
+      "sender_limit",
+    );
 
     const update = { status: "completed", message: "Garden beds are ready." };
     assert.equal(
@@ -160,9 +173,12 @@ test(
     const { messages } = (await inbox.json()) as Awaited<
       ReturnType<ContributionsStore["messages"]>
     >;
-    assert.deepEqual(messages, [
-      { id: sent.id, message, createdAt: messages[0]?.createdAt },
-    ]);
+    assert.equal(messages.length, 20);
+    assert.deepEqual(messages[0], {
+      id: sent.id,
+      message,
+      createdAt: messages[0]?.createdAt,
+    });
 
     assert.ok(Number.isFinite(Date.parse(messages[0]!.createdAt)));
 
