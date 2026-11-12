@@ -468,7 +468,9 @@ vote on them. A picture shows at once; signed-in people can report it.
 
 The design is **ADR-0047 (accepted)**, including the operator's decisions
 D0–D9. Pictures ship first; reporting and the site owner's soft delete follow
-and are not a launch gate (D9, reversed). A category is the community (D4a).
+and pictures add no launch gate of their own (D9, reversed). ADR-0037's gate
+on broad public posting launch (reporting/review first) is unchanged. A
+category is the community (D4a).
 
 The plain-text context excerpt that #296 and #427 also mention is not part of
 this item; it is #581, which does not depend on pictures.
@@ -491,9 +493,10 @@ next dependent step starts.
      `image` and `image_bytes` tables (owner link `owner_kind`, `owner_id`;
      ADR-0047 §1) and the append-only change table.
    - `POST /api/poll-images` accepts JPEG/PNG/WebP up to 10 MiB, refuses SVG,
-     GIF, HEIC, animated (multi-page WebP, PNG with `acTL`) and oversized
-     files with distinct errors, and stores
-     only the re-encoded `display` and `thumb` (256 square, centre crop) WebP.
+     GIF, HEIC and animated files (multi-page WebP, PNG with `acTL`) with
+     `unsupported_image` and files outside the size limits with a separate
+     error, and stores only the re-encoded `display` and `thumb` (256
+     square, centre crop) WebP.
    - A test uploads a JPEG carrying GPS EXIF and proves neither variant holds
      any metadata; a mislabelled file is judged by its content.
    - `POST /api/polls` accepts `image: { id, alt }` (alt required) for the
@@ -526,17 +529,20 @@ next dependent step starts.
    - `DELETE` and `PUT /api/polls/:id/image`, poster only; old bytes deleted
      in the same transaction; audit row for each; question and choices stay
      fixed.
+   - Both answer the unknown-poll 404 when the poll is hidden, soft-deleted
+     or purged.
    - An authenticated `no-store` route tells the poster they may do this; no
      response reveals an anonymous poster.
 6. **Report a picture or a poll; automatic picture hiding.** #583; builds
-   #233 and covers #236. Depends on 1, 4.
+   #233 and covers #236. Depends on 1, 4 and 5.
    - Shared report store with `poll_image` and `poll` targets; signed-in
      only, ten an hour, one unresolved report per reporter and target.
    - A picture with 3 distinct reporters hides; the poll shows its default;
      bytes purged after 30 days; the poster may replace it.
    - A picture that is auto-hidden or has an unresolved report keeps its
-     bytes (never served) until that 30-day purge even if the poster removes
-     or replaces it; this overrides step 5's immediate delete.
+     bytes (never served) for 30 days even if the poster removes or replaces
+     it, counted from when it stopped being shown (the hide, or else the
+     removal); this overrides step 5's immediate delete.
    - Poll reports never hide a poll; they wait for the site owner (step 7).
 7. **Site owner soft-deletes polls.** #584; minimal #234. Depends on 6.
    - Site-owner review list of poll and picture reports, without reporter
@@ -544,6 +550,12 @@ next dependent step starts.
    - Soft delete hides the poll everywhere at once; restore within 30 days;
      purge afterwards deletes poll, choices, votes and picture bytes and keeps
      an audit row without content.
+   - Purge turns the poll's `poll_creation_replay` row into a tombstone in
+     the same transaction: only `voter_id` and `request_key` stay,
+     `poll_id` becomes null, the stored input and response are emptied. A
+     late retry with that key is refused without content and never
+     re-creates the poll (ADR-0047 §9, amending ADR-0037's replay rule). The
+     PR lists every other reference to `polls` and what purge does to it.
 8. **Site owner soft-deletes contributions.** #585. Depends on 7 and
    on PR #572 (contributions) being merged.
    - Same soft delete, 30-day restore and purge for a whole contribution,

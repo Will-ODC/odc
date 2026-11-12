@@ -5,8 +5,10 @@
 - **Date:** 2026-11-12
 - **Phase:** 0 (Pulse, charter-exempt; issues #296, #427)
 - **Amends:** ADR-0037 (no edits after publication; community not writable;
-  removal hides and never deletes) and ADR-0024 3b/3c, narrowly, as stated in
-  sections 7–9. Builds on ADR-0028 and ADR-0030.
+  removal hides and never deletes; replay records never expire) and ADR-0024
+  3b/3c, narrowly, as stated in sections 7–9. ADR-0037's gate on broad public
+  posting launch is **not** amended (section 10). Builds on ADR-0028 and
+  ADR-0030.
 
 ## Context
 
@@ -262,11 +264,15 @@ at this community.
   published the poll may do either (D0, D1). This narrowly amends ADR-0037's
   "no edits after publication": the question, choices, close time and
   attribution stay fixed.
+- Both answer the same 404 as an unknown poll when the poll is not visible
+  (hidden, soft-deleted or purged), so a poster cannot remove what the site
+  owner is reviewing.
 - The old picture's bytes are deleted at once, in the same transaction; the
   poll shows the new picture or falls back to its default. **Exception:** a
   picture that is auto-hidden, or has an unresolved report, when it is removed
   or replaced keeps its bytes, never served, until the 30-day purge of
-  section 9 (counted from the hide or from the removal, whichever is later).
+  section 9. The clock starts when the picture stopped being shown: at the
+  automatic hide if it was hidden, otherwise at the poster's removal.
   The retention rule wins so that the site owner's review (section 9) still
   has the reported picture as context. Step 6 of the plan adds this exception;
   before reporting exists, every removal deletes at once.
@@ -289,8 +295,9 @@ at this community.
   automatically; the poll falls back to its default and stays visible.
   Nobody restores an auto-hidden picture (the site owner does not moderate
   pictures, D0); the poster may replace it, and reports on the new picture
-  start from zero. An auto-hidden picture's bytes are purged after 30 days,
-  also when the poster replaces or removes it meanwhile (section 8).
+  start from zero. An auto-hidden picture's bytes are purged 30 days after the
+  automatic hide, also when the poster replaces or removes it meanwhile
+  (section 8; the clock starts when the picture stopped being shown).
   This applies ADR-0024 3c to pictures with a threshold of 3.
 - **Poll reports never hide a poll automatically.** They go to the site
   owner's review list, together with picture reports as context. ADR-0024
@@ -303,6 +310,20 @@ at this community.
   the poll ID, action, reason and times, without content. This amends
   ADR-0024 3b and ADR-0037 ("removal hides; never deletes") for site-owner
   soft deletes only. My votes already omits a poll deleted while paging.
+- **The creation replay row becomes a tombstone.** `poll_creation_replay`
+  references the poll `on delete restrict` and holds `canonical_input` (the
+  question and choices), which ADR-0037 keeps without expiry. The purge,
+  in the same transaction, empties that row instead of deleting it: it keeps
+  only `voter_id` and `request_key` (the primary key, both private), sets
+  `poll_id` to null, replaces `canonical_input` and `public_response` with
+  empty objects and records `purged_at`. A late retry with that key is then
+  refused with a conflict that carries no content, and never re-creates the
+  purged poll. Deleting the row was rejected for that reason: the retry
+  would look new and publish the purged question again. The step that builds
+  the purge adds the migration (nullable `poll_id`, `purged_at`, and a check
+  that a row is either live with content or purged without it). This amends
+  ADR-0037's "do not expire" replay rule for purged polls only. The step also
+  lists every other reference to `polls` and states its fate in the PR.
 - **Contributions** (PR #572) get the same soft delete, restore window and
   purge, in a separate step that waits for #572 to land.
 - **Audit:** every attach, replace, remove, automatic hide, category default
@@ -322,7 +343,10 @@ the site owner has no product tool yet. Until soft delete ships, the only
 emergency path is a database operator setting the poll's existing `hidden`
 flag, which already hides the poll and therefore its picture; whoever does
 this records it by hand. Reporting (with automatic hiding) and the site
-owner's soft delete follow as the next steps, not as a launch gate.
+owner's soft delete follow as the next steps; pictures add no launch gate of
+their own. ADR-0037's existing rule is unchanged: broad public posting launch
+still waits for reporting/review and automatic-hide design, and this ADR does
+not relax it.
 
 ### 11. Rate limits
 
@@ -391,7 +415,9 @@ logs the error class only.
 blob:` and the upload location. **Changed by steps 1 and 2.**
 - ADR-0037: amended by sections 7–9 (picture remove/replace after
   publication; writable community for governance only; site-owner soft delete
-  with purge). Not edited, as a historical record.
+  with purge; a purged poll's creation replay row becomes a content-free
+  tombstone instead of being kept forever). Its gate on broad public posting
+  launch is unchanged (section 10). Not edited, as a historical record.
 - ADR-0024: 3c applied to pictures (threshold 3); poll auto-hide stays
   unbuilt; 3b amended for site-owner soft delete with purge. Not edited.
 - ADR-0028: unchanged; pictures are served through the existing `/api` proxy.
