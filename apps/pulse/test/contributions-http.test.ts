@@ -116,6 +116,32 @@ test(
     const detailUrl = `${root}/${created.contribution.id}`;
     const inboxUrl = `${detailUrl}/messages`;
 
+    // Every write route refuses a foreign Origin before it reads the body,
+    // so a valid signed-in request from elsewhere changes nothing.
+    for (const [url, body] of [
+      [root, project],
+      [
+        `${detailUrl}/participations`,
+        { kind: "help", displayName: "Sam", message: "I can dig." },
+      ],
+      [`${detailUrl}/updates`, { status: "in_progress", message: "Started." }],
+      [inboxUrl, { message: "Hello" }],
+    ] as const) {
+      const refused = await post(
+        url,
+        body,
+        organizer,
+        randomUUID(),
+        "https://elsewhere.test",
+      );
+      assert.equal(refused.status, 403, url);
+      assert.equal(
+        ((await refused.json()) as { error: string }).error,
+        "origin_not_allowed",
+        url,
+      );
+    }
+
     const message = "Can I bring tools on Saturday?";
     const messageKey = randomUUID();
     assert.equal((await post(inboxUrl, { message })).status, 401);
