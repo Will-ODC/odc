@@ -59,6 +59,8 @@ export function rememberReturn(
       store.setItem(KEY, JSON.stringify({ newContribution: true, at: now }));
     } else if (to?.kind === "contribution" && to.id.length <= MAX_ID_LENGTH) {
       store.setItem(KEY, JSON.stringify({ contributionId: to.id, at: now }));
+    } else if (to?.kind === "profileEditor") {
+      store.setItem(KEY, JSON.stringify({ profileEditor: true, at: now }));
     } else if (
       to?.kind === "conversation" &&
       to.pollId.length <= MAX_ID_LENGTH
@@ -98,6 +100,8 @@ export function takeReturn(
       kept.contributionId.length <= MAX_ID_LENGTH
     )
       return { kind: "contribution", id: kept.contributionId };
+    if ("profileEditor" in kept && kept.profileEditor === true)
+      return { kind: "profileEditor" };
     if (!("pollId" in kept)) return null;
     const { pollId } = kept;
     if (

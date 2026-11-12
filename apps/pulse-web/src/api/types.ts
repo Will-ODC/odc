@@ -186,7 +186,28 @@ export interface MyVotesPage {
   nextCursor: string | null;
 }
 
+export interface PublicMemberProfile {
+  publicId: string;
+  displayName: string;
+  bio: string;
+  createdAt: string;
+}
+
+export interface MemberProfile extends PublicMemberProfile {
+  visible: boolean;
+  updatedAt: string;
+}
+
+export interface ProfileRequest {
+  displayName: string;
+  bio: string;
+  visible: boolean;
+}
+
 export interface PulseApi {
+  profile(publicId: string): Promise<PublicMemberProfile>;
+  myProfile(): Promise<MemberProfile | null>;
+  saveProfile(request: ProfileRequest): Promise<MemberProfile>;
   listPolls(community: string, cursor?: string): Promise<PollPage>;
   myVotes(cursor?: string): Promise<MyVotesPage>;
   /**
