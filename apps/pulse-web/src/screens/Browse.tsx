@@ -284,6 +284,8 @@ export function Browse({
         </div>
         <SuggestedVotesRail
           api={api}
+          history={mine.data}
+          retryHistory={mine.retry}
           {...(isGeneral && !contributionsOnly
             ? { source: { data, retry } }
             : {})}

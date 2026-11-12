@@ -78,7 +78,13 @@ export function ContributionDetail({
           }}
         />
       }
-      aside={<SuggestedVotesRail api={api} />}
+      aside={
+        <SuggestedVotesRail
+          api={api}
+          history={mine.data}
+          retryHistory={mine.retry}
+        />
+      }
     >
       <section className="contributions-page">
         <a className="contribution-back" href="/?filter=contributions">

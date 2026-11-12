@@ -354,7 +354,15 @@ export function Conversation({
           shareable={!(posted && at === pollId)}
         />
       </main>
-      <SuggestedVotesRail api={api} current={at} disabled={busy} onOpen={go} />
+      <SuggestedVotesRail
+        api={api}
+        history={mine.data}
+        retryHistory={mine.retry}
+        justAnswered={answered}
+        current={at}
+        disabled={busy}
+        onOpen={go}
+      />
     </div>
   );
 }

@@ -214,8 +214,8 @@ for HTTPS and HSTS at the TLS terminator.
 
 Home, poll details and contribution details share My votes on the left from
 700px. From 1100px, Suggested votes appears on the right. It lists up to five
-open General questions in newest-first order and skips the question already
-on screen. The sidebar opens a question without casting a vote. See #529
+unanswered General questions from the newest open candidates. It skips the
+question on screen and any question already voted on in this browser. The sidebar opens a question without casting a vote. See #529
 for suggested votes and #331 for desktop layout.
 
 ## Contributions
