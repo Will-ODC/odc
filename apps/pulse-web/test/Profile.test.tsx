@@ -200,4 +200,164 @@ describe("owner profile editor", () => {
     await user.click(screen.getByRole("button", { name: "Save profile" }));
     expect(saveProfile).not.toHaveBeenCalled();
   });
+
+  it("explains an invisible name under the field instead of sending it", async () => {
+    const user = userEvent.setup();
+    const saveProfile = vi.fn();
+    render(
+      <ProfileEditor
+        api={stubApi({ myProfile: () => Promise.resolve(null), saveProfile })}
+      />,
+    );
+    const name = await screen.findByLabelText("Public display name");
+    await user.click(name);
+    await user.keyboard("\u200B\u200D");
+    await user.tab();
+    expect(screen.getByText("Enter a name people can see.")).toBeTruthy();
+    expect(name.getAttribute("aria-invalid")).toBe("true");
+    await user.click(screen.getByRole("button", { name: "Save profile" }));
+    expect(saveProfile).not.toHaveBeenCalled();
+  });
+
+  it("puts a refused save in plain words and the error colour, then clears it on edit", async () => {
+    const user = userEvent.setup();
+    render(
+      <ProfileEditor
+        api={stubApi({
+          myProfile: () => Promise.resolve(PROFILE),
+          saveProfile: () =>
+            Promise.reject(
+              new ApiError(400, "That request could not be read."),
+            ),
+        })}
+      />,
+    );
+    await user.click(
+      await screen.findByRole("button", { name: "Save profile" }),
+    );
+    const status = await screen.findByText(
+      "We couldn't save that name or bio. Check them and try again.",
+    );
+    expect(status.className).toContain("profile__status--error");
+    expect(screen.queryByText("That request could not be read.")).toBeNull();
+
+    await user.type(screen.getByLabelText("Public display name"), "!");
+    expect(
+      screen.queryByText(
+        "We couldn't save that name or bio. Check them and try again.",
+      ),
+    ).toBeNull();
+    expect(screen.getByRole("status").className).not.toContain("--error");
+  });
+
+  it("keeps keyboard focus on Save while saving and after", async () => {
+    const user = userEvent.setup();
+    let finish!: (profile: MemberProfile) => void;
+    const saveProfile = vi.fn(
+      () => new Promise<MemberProfile>((resolve) => (finish = resolve)),
+    );
+    render(
+      <ProfileEditor
+        api={stubApi({
+          myProfile: () => Promise.resolve(PROFILE),
+          saveProfile,
+        })}
+      />,
+    );
+    const save = await screen.findByRole("button", { name: "Save profile" });
+    save.focus();
+    await user.keyboard("{Enter}");
+    const saving = await screen.findByRole("button", { name: "Saving…" });
+    // Disabling the focused control is what threw focus to the top of the page.
+    expect(saving).toBe(save);
+    expect((saving as HTMLButtonElement).disabled).toBe(false);
+    expect(saving.getAttribute("aria-disabled")).toBe("true");
+    expect(screen.getByRole("group", { name: "Who can see it?" })).toBeTruthy();
+    expect(
+      (screen.getByLabelText("Public display name") as HTMLInputElement)
+        .readOnly,
+    ).toBe(true);
+    expect(document.activeElement).toBe(save);
+    await user.keyboard("{Enter}");
+    expect(saveProfile).toHaveBeenCalledOnce();
+
+    finish(PROFILE);
+    expect(await screen.findByText(/ready to share/)).toBeTruthy();
+    expect(document.activeElement).toBe(save);
+    expect(save.textContent).toBe("Save profile");
+  });
+
+  it("says Not saved yet until a change is saved, and links a shared profile", async () => {
+    const user = userEvent.setup();
+    render(
+      <ProfileEditor
+        api={stubApi({
+          myProfile: () => Promise.resolve({ ...PROFILE, visible: false }),
+        })}
+      />,
+    );
+    expect(await screen.findByText("Your profile is hidden.")).toBeTruthy();
+    expect(
+      screen.queryByRole("link", { name: "View your profile" }),
+    ).toBeNull();
+    await user.click(screen.getByRole("radio", { name: /Public/ }));
+    expect(screen.getByRole("status").textContent).toBe("Not saved yet.");
+    expect(
+      screen.queryByRole("link", { name: "View your profile" }),
+    ).toBeNull();
+    await user.click(screen.getByRole("radio", { name: /Hidden/ }));
+    expect(screen.getByRole("status").textContent).toBe(
+      "Your profile is hidden.",
+    );
+    cleanup();
+
+    render(
+      <ProfileEditor
+        api={stubApi({ myProfile: () => Promise.resolve(PROFILE) })}
+      />,
+    );
+    expect(
+      (
+        await screen.findByRole("link", { name: "View your profile" })
+      ).getAttribute("href"),
+    ).toBe(`/u/${PROFILE.publicId}`);
+  });
+});
+
+describe("compact states", () => {
+  it("keeps the public empty and error states and the signed-out editor compact", async () => {
+    const missing = render(
+      <MemberProfileScreen
+        api={stubApi({
+          profile: () => Promise.reject(new ApiError(404, "unavailable")),
+        })}
+        publicId="missing"
+      />,
+    );
+    await screen.findByText(/This profile is unavailable/);
+    expect(missing.container.querySelector(".viewstate--compact")).toBeTruthy();
+    missing.unmount();
+
+    const failed = render(
+      <MemberProfileScreen
+        api={stubApi({ profile: () => Promise.reject(new Error("offline")) })}
+        publicId={PROFILE.publicId}
+      />,
+    );
+    await screen.findByRole("button", { name: "Try again" });
+    expect(failed.container.querySelector(".viewstate--compact")).toBeTruthy();
+    failed.unmount();
+
+    const signedOut = render(
+      <ProfileEditor
+        api={stubApi({
+          myProfile: () => Promise.reject(new ApiError(401, "signed out")),
+        })}
+      />,
+    );
+    await screen.findByText(/Sign in to create/);
+    expect(
+      signedOut.container.querySelector(".viewstate--compact"),
+    ).toBeTruthy();
+  });
 });

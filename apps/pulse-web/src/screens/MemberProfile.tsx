@@ -19,7 +19,7 @@ export function MemberProfile({
   return (
     <AppShell banner={<PageBanner api={api} currentHref={href} />}>
       <article className="profile profile--public">
-        <ViewState data={state}>
+        <ViewState data={state} variant="compact">
           {(profile) => (
             <>
               <p className="profile__eyebrow">Pulse member</p>
