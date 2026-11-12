@@ -1,5 +1,5 @@
 alter table contribution
-  add column private_messages jsonb not null default '[]';
+  add column private_messages jsonb not null default '[]'::jsonb;
 
 -- The original response identifies an immutable prefix of the contribution.
 alter table contribution_replay

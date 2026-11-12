@@ -4,6 +4,7 @@ import { pathOf } from "../flow/route.js";
 import { usePollList } from "../hooks/use-poll-list.js";
 import { useWide } from "../hooks/use-wide.js";
 import type { ViewData } from "../hooks/view-data.js";
+import { Button } from "./Button.js";
 import { ViewState } from "./ViewState.js";
 import "./SuggestedVotesRail.css";
 
@@ -156,8 +157,9 @@ export function SuggestedVotesRail({
           )}
         </ViewState>
         {failed ? (
-          <button
-            className="button"
+          <Button
+            variant="secondary"
+            size="small"
             type="button"
             onClick={() => {
               heading.current?.focus();
@@ -167,7 +169,7 @@ export function SuggestedVotesRail({
             }}
           >
             Try suggestions again
-          </button>
+          </Button>
         ) : null}
       </nav>
     </aside>

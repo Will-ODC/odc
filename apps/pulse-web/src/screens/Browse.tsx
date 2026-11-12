@@ -213,6 +213,7 @@ export function Browse({
               {items.length ? <p role="status">{data.message}</p> : null}
               <Button
                 variant="secondary"
+                size="small"
                 className="browse__action"
                 type="button"
                 onClick={retry}
@@ -231,6 +232,7 @@ export function Browse({
               )}
               <Button
                 variant="secondary"
+                size="small"
                 className="browse__action"
                 type="button"
                 onClick={() => {
