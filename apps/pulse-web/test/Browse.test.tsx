@@ -115,7 +115,9 @@ it("keeps earlier rows through a failed page and retries the same cursor once", 
   render(<Browse api={stubApi({ listPolls })} community="campus" />);
   const more = await screen.findByRole("button", { name: "Load more" });
   // The shared secondary Button at its small size (#569).
-  expect(more.className).toBe("btn btn--secondary btn--small browse__action");
+  expect(more.className).toBe(
+    "btn btn--secondary btn--small load-more__button",
+  );
   await userEvent.click(more);
   expect(await screen.findByRole("alert")).toBeTruthy();
   expect(screen.getByRole("link", { name: "Question one" })).toBeTruthy();

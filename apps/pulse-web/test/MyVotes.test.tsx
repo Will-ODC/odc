@@ -49,7 +49,9 @@ it("shows server-backed answers, loads another page, and moves focus to it", asy
   expect(await screen.findByText("Your answer: Yes")).toBeTruthy();
   expect(screen.getByText("Open · You can change your answer")).toBeTruthy();
   const more = screen.getByRole("button", { name: "Load more" });
-  expect(more.className).toBe("btn btn--secondary btn--small browse__action");
+  expect(more.className).toBe(
+    "btn btn--secondary btn--small load-more__button",
+  );
   await user.click(more);
   expect(await screen.findByText("Your answer: Park")).toBeTruthy();
   expect(myVotes).toHaveBeenCalledWith("next");
@@ -82,11 +84,13 @@ it("explains a failed load and tries again on request", async () => {
     ),
   ).toBeTruthy();
   expect(
-    screen.getByRole("main").classList.contains("browse__main--message"),
+    screen.getByRole("main").classList.contains("my-votes__main--message"),
   ).toBe(true);
   const retry = screen.getByRole("button", { name: "Try again" });
   // The small secondary Button, centred by the list's layout class (#569).
-  expect(retry.className).toBe("btn btn--secondary btn--small browse__action");
+  expect(retry.className).toBe(
+    "btn btn--secondary btn--small my-votes__action",
+  );
   await user.click(retry);
   expect(await screen.findByText("Your answer: Yes")).toBeTruthy();
   expect(myVotes).toHaveBeenCalledTimes(2);
@@ -109,7 +113,7 @@ it("offers a way to start voting when nothing is saved", async () => {
     await screen.findByText("No votes saved in this browser yet."),
   ).toBeTruthy();
   expect(
-    screen.getByRole("main").classList.contains("browse__main--message"),
+    screen.getByRole("main").classList.contains("my-votes__main--message"),
   ).toBe(true);
   expect(
     screen

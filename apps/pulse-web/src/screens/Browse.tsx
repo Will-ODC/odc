@@ -5,6 +5,7 @@ import { SiteBanner } from "../components/SiteBanner.js";
 import { AnsweredRail } from "../components/AnsweredRail.js";
 import { ViewState } from "../components/ViewState.js";
 import { Button } from "../components/Button.js";
+import { LoadMore } from "../components/LoadMore.js";
 import { usePollList } from "../hooks/use-poll-list.js";
 import { useMyVotes } from "../hooks/use-my-votes.js";
 import { useSession } from "../hooks/use-session.js";
@@ -33,18 +34,6 @@ export function Browse({
     heading.current?.focus();
   }, []);
   const list = useRef<HTMLUListElement>(null);
-  const focusAt = useRef<number | null>(null);
-  useEffect(() => {
-    if (
-      data.status !== "ready" ||
-      more.status !== "idle" ||
-      focusAt.current === null
-    )
-      return;
-    const links = list.current?.querySelectorAll("a");
-    links?.[Math.min(focusAt.current, links.length - 1)]?.focus();
-    focusAt.current = null;
-  }, [data, more]);
   return (
     <div className="welcome browse">
       <header className="browse__header">
@@ -103,26 +92,13 @@ export function Browse({
               Try again
             </Button>
           ) : null}
-          {more.status === "error" ? <p role="alert">{more.message}</p> : null}
-          {data.status === "ready" && data.value.nextCursor ? (
-            <Button
-              variant="secondary"
-              size="small"
-              className="browse__action"
-              type="button"
-              disabled={more.status === "loading"}
-              onClick={() => {
-                focusAt.current = data.value.polls.length;
-                loadMore();
-              }}
-            >
-              {more.status === "loading"
-                ? "Loading more…"
-                : more.status === "error"
-                  ? "Try loading more again"
-                  : "Load more"}
-            </Button>
-          ) : null}
+          <LoadMore
+            more={more}
+            hasMore={data.status === "ready" && data.value.nextCursor !== null}
+            itemCount={data.status === "ready" ? data.value.polls.length : 0}
+            listRef={list}
+            onLoadMore={loadMore}
+          />
         </main>
       </div>
     </div>
