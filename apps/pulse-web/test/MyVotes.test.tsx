@@ -48,7 +48,9 @@ it("shows server-backed answers, loads another page, and moves focus to it", asy
   show(myVotes);
   expect(await screen.findByText("Your answer: Yes")).toBeTruthy();
   expect(screen.getByText("Open · You can change your answer")).toBeTruthy();
-  await user.click(screen.getByRole("button", { name: "Load more" }));
+  const more = screen.getByRole("button", { name: "Load more" });
+  expect(more.className).toBe("btn btn--secondary btn--small browse__action");
+  await user.click(more);
   expect(await screen.findByText("Your answer: Park")).toBeTruthy();
   expect(myVotes).toHaveBeenCalledWith("next");
   expect(screen.getByText("Closed · View results")).toBeTruthy();
@@ -82,7 +84,10 @@ it("explains a failed load and tries again on request", async () => {
   expect(
     screen.getByRole("main").classList.contains("browse__main--message"),
   ).toBe(true);
-  await user.click(screen.getByRole("button", { name: "Try again" }));
+  const retry = screen.getByRole("button", { name: "Try again" });
+  // The small secondary Button, centred by the list's layout class (#569).
+  expect(retry.className).toBe("btn btn--secondary btn--small browse__action");
+  await user.click(retry);
   expect(await screen.findByText("Your answer: Yes")).toBeTruthy();
   expect(myVotes).toHaveBeenCalledTimes(2);
 });
