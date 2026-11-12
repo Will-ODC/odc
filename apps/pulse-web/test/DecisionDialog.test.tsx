@@ -145,7 +145,7 @@ describe("the decision popup", () => {
     }
     expect(
       screen
-        .getByRole("button", { name: "Sending…" })
+        .getByRole("button", { name: "Submit" })
         .getAttribute("aria-disabled"),
     ).toBe("true");
   });

@@ -153,12 +153,9 @@ export function VoteCard({
       if (!checking) onClose();
     },
   };
-  const submitLabel =
-    status.kind === "sending"
-      ? "Sending…"
-      : status.kind === "failed"
-        ? "Try again"
-        : "Submit";
+  // While sending, Submit keeps its name and is unavailable: "Sending…" is
+  // said once, by the status line under it that takes focus (#575).
+  const submitLabel = status.kind === "failed" ? "Try again" : "Submit";
 
   useEffect(() => {
     const before = previous.current;
