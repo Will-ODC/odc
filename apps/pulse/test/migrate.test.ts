@@ -782,9 +782,10 @@ test(
           "insert into contribution_replay (voter_id, request_key, canonical, public_response) values ($1, $2, $3, $4)",
           ["organizer", key, "original request", JSON.stringify(snapshot)],
         );
-        assert.deepEqual((await migrate(pool, { clock: () => AT })).applied, [
-          "014",
-        ]);
+        assert.deepEqual(
+          (await migrate(pool, { clock: () => AT })).applied,
+          await versionsFrom("014"),
+        );
         assert.deepEqual(
           (
             await pool.query(
