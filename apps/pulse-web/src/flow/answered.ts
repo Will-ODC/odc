@@ -114,7 +114,7 @@ export function answeredList(
         const localAnswer = answers.get(vote.pollId);
         return localAnswer
           ? { ...asVote(localAnswer, now), castAt: vote.castAt }
-          : vote;
+          : { ...vote, open: vote.open && notClosedBy(vote.closesAt, now) };
       }),
     ...restored.map((answer) => asVote(answer, now)),
   ];
@@ -131,7 +131,16 @@ function asVote({ poll, ballot }: LocalAnswer, now: number): MyVote {
     ballot: positions,
     castAt: new Date(now).toISOString(),
     closesAt: poll.closesAt,
-    open:
-      poll.open && (poll.closesAt === null || Date.parse(poll.closesAt) > now),
+    open: poll.open && notClosedBy(poll.closesAt, now),
   };
+}
+
+/**
+ * A row's `open` says whether the question was open when it was read (API.md,
+ * `GET /api/my-votes`). The page keeps that page for the whole visit, so a
+ * question that has closed since is closed here too: its row must not offer
+ * a change the server would refuse (#575).
+ */
+function notClosedBy(closesAt: string | null, now: number): boolean {
+  return closesAt === null || Date.parse(closesAt) > now;
 }

@@ -136,6 +136,24 @@ describe("answeredList (#484)", () => {
     expect(vote!.choices).toEqual(["Park", "Rink"]);
     expect(vote!.open).toBe(false);
   });
+
+  it("marks a saved row closed once its closing time has passed since it was read (#575)", () => {
+    // Read while open, kept for the visit: the row must not still offer a
+    // change after the question closes.
+    const closedSince = saved({ closesAt: "2026-11-07T11:00:00.000Z" });
+    const stillOpen = saved({
+      pollId: "fixes",
+      closesAt: "2026-11-08T12:00:00.000Z",
+    });
+    const list = answeredList([closedSince, stillOpen], [], [], NOW);
+    expect(list.map((vote) => vote.open)).toEqual([false, true]);
+    expect(list[0]).toEqual({ ...closedSince, open: false });
+  });
+
+  it("keeps a row the server read as closed closed", () => {
+    const [vote] = answeredList([saved({ open: false })], [], [], NOW);
+    expect(vote!.open).toBe(false);
+  });
 });
 
 describe("myVotesPlace (#528)", () => {

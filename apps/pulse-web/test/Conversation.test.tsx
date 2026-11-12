@@ -1062,6 +1062,25 @@ describe("the Answered list (#484)", () => {
     expect(rail().getAllByText("Your answer: Yes")).toHaveLength(2);
   });
 
+  it("says a question that has closed since My votes was read is closed (#575)", async () => {
+    // The row was read while the question was open; it has closed since.
+    const closedSince = {
+      ...fromServer,
+      closesAt: new Date(Date.now() - 60_000).toISOString(),
+    };
+    render(
+      <Conversation
+        api={stubApi({
+          myVotes: async () => ({ votes: [closedSince], nextCursor: null }),
+        })}
+        pollId="ads-free"
+      />,
+    );
+    await rail().findByRole("link", { name: "More parks?" });
+    expect(rail().getByText("Closed · View results")).toBeTruthy();
+    expect(rail().queryByText(/You can change your answer/)).toBeNull();
+  });
+
   it("offers to forget votes found only in saved history", async () => {
     render(
       <Conversation

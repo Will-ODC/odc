@@ -128,10 +128,11 @@ It has three jobs, and the third is new:
 the community-scoped listing API (#259 / PR #419). Current behavior is recorded
 in `memory/pulse.md` and `apps/pulse-web/README.md`.
 
-Remaining work is separate: thumbnails/context excerpts (#427, depends on
-#296), the mixed post/poll feed (#397), related-vote continuation (#425), and
-MCP discovery (#291). ADR-0025's related storage/read step remains accepted but
-unimplemented; a community listing does not supply those relationships.
+Remaining work is separate: thumbnails/context excerpts (#427; thumbnails
+are planned in P12 below, ADR-0047), the mixed post/poll feed (#397),
+related-vote continuation (#425), and MCP discovery (#291). ADR-0025's
+related storage/read step remains accepted but unimplemented; a community
+listing does not supply those relationships.
 Query-selected browsing order (ADR-0021) and answer-independent related
 membership (ADR-0025) remain distinct.
 
@@ -459,6 +460,142 @@ they sign in; whether one admin acts for any community or only their own; and
 whether this is a screen in `apps/pulse-web` or a separate surface. Read P6
 before starting and reuse its established posting authority where applicable;
 do not silently broaden those permissions to links or assurance gates.
+
+## P12 — Poll thumbnails · READY TO BUILD
+
+Operator direction, 2026-11-12: every poll gets a thumbnail, Reddit-style.
+The poster can upload one with the question; otherwise a default shows: one
+the site owner uploaded for the poll's category, or a generated tile. ODC
+governing decisions have one central default, and Home invites everyone to
+vote on them. A picture shows at once; signed-in people can report it.
+
+The design is **ADR-0047 (accepted)**, including the operator's decisions
+D0–D9. Pictures ship first; reporting and the site owner's soft delete follow
+and pictures add no launch gate of their own (D9, reversed). ADR-0037's gate
+on broad public posting launch (reporting/review first) is unchanged. A
+category is the community (D4a).
+
+The plain-text context excerpt that #296 and #427 also mention is not part of
+this item; it is #581, which does not depend on pictures.
+
+**Coordinates with Contributions (#246, PR #572).** #572 is not merged yet.
+It adds migrations 013 and 014, so every P12 migration takes the next free
+number after #572 merges (015 or later, never 013 or 014). It also turns
+Home/Browse into one date-ordered list of polls and contributions, so the
+thumbnail column (step 3) and the Home banner (step 9) are built on that list
+and wait for #572. Contribution rows carry no picture; they get an empty slot
+of the thumbnail's size so titles stay aligned (ADR-0047 §6).
+
+Steps, in order. Each is one PR on `pulse/<issue>-<short>`, with tests,
+fresh review (plus `odc-ui-reviewer` for screens) and green CI before the
+next dependent step starts.
+
+1. **Picture store, upload and public `image` field (server).** #579.
+   Build now; merge after #572, because its migration number is the next
+   free one after #572's.
+   - Migration (next free number after #572: 015 or later) adds the neutral
+     `image` and `image_bytes` tables (owner link `owner_kind`, `owner_id`;
+     ADR-0047 §1) and the append-only change table.
+   - `POST /api/poll-images` accepts JPEG/PNG/WebP up to 10 MiB, refuses SVG,
+     GIF, HEIC and animated files (multi-page WebP, PNG with `acTL`) with
+     `unsupported_image` and files outside the size limits with a separate
+     error, and stores only the re-encoded `display` and `thumb` (256
+     square, centre crop) WebP.
+   - A test uploads a JPEG carrying GPS EXIF and proves neither variant holds
+     any metadata; a mislabelled file is judged by its content.
+   - `POST /api/polls` accepts `image: { id, alt }` (alt required) for the
+     uploader's own pending picture; replay attaches once.
+   - Picture routes serve only attached pictures with ADR-0047's headers;
+     malformed (checked as a UUID before any query), pending and unknown IDs
+     are the same 404.
+   - Poll body, listing and MCP `get_poll` carry `image` (`upload` or `tile`)
+     from one projection; no uploader data in any body or log line.
+   - Upload quotas and the 24-hour pending sweep, with Postgres and in-memory
+     conformance tests; nginx upload location; `DEPLOY.md` and `API.md`
+     updated; CI builds the musl image.
+2. **Add a picture in the posting form.** #580. Depends on 1.
+   - Optional picture on `/new` with local preview (`img-src 'self' blob:`),
+     required description and Remove before publishing.
+   - Publish waits for the upload; type, size, busy and network errors are
+     recoverable without losing the draft.
+   - Keyboard, screen reader and real phone/desktop checks.
+3. **Thumbnails in the question browser.** #427 (rescoped). Depends on 1
+   and on PR #572 being merged.
+   - Built on #572's mixed list: thumbnail or tile beside each poll title,
+     decorative to screen readers; contribution rows get an empty slot of the
+     same size, so all titles stay aligned. A failed picture never hides the
+     title, state or link.
+   - One listing request per page, checked by a test; mockup approved first.
+4. **Picture on the question page.** #296 (rescoped). Depends on 1.
+   - Display picture under the question with its description; defaults show
+     as a small tile; failures leave no empty frame and voting stays usable.
+5. **Poster removes or replaces the picture.** #582. Depends on 1, 2, 4.
+   - `DELETE` and `PUT /api/polls/:id/image`, poster only; the old
+     picture's `image` row and bytes deleted in the same transaction; audit
+     row for each; question and choices stay fixed.
+   - Both answer the unknown-poll 404 when the poll is hidden, soft-deleted
+     or purged.
+   - An authenticated `no-store` route tells the poster they may do this; no
+     response reveals an anonymous poster.
+6. **Report a picture or a poll; automatic picture hiding.** #583; builds
+   #233 and covers #236. Depends on 1, 4 and 5.
+   - Shared report store with `poll_image` and `poll` targets; signed-in
+     only, ten an hour, one unresolved report per reporter and target.
+   - A picture with 3 distinct reporters hides; the poll shows its default;
+     its `image` row and bytes purged after 30 days; the poster may replace
+     it.
+   - A picture that is auto-hidden or has an unresolved report keeps its
+     bytes (never served) for 30 days even if the poster removes or replaces
+     it, counted from when it stopped being shown (the hide, or else the
+     removal); this overrides step 5's immediate delete.
+   - Poll reports never hide a poll; they wait for the site owner (step 7).
+7. **Site owner soft-deletes polls.** #584; minimal #234. Depends on 6.
+   - Site-owner review list of poll and picture reports, without reporter
+     identities.
+   - Soft delete hides the poll everywhere at once; restore within 30 days;
+     purge afterwards deletes poll, choices, suggestions, votes and every
+     `image` row owned by the poll (with any bytes left), and keeps only a
+     change-table audit row without content.
+   - Purge turns the poll's `poll_creation_replay` row into a tombstone in
+     the same transaction: only `voter_id` and `request_key` stay,
+     `poll_id` becomes null, the stored input and response are emptied. A
+     late retry with that key is refused without content and never
+     re-creates the poll (ADR-0047 §9, amending ADR-0037's replay rule). The
+     PR lists every other reference to `polls` and what purge does to it.
+8. **Site owner soft-deletes contributions.** #585. Depends on 7 and
+   on PR #572 (contributions) being merged.
+   - Same soft delete, 30-day restore and purge for a whole contribution,
+     reusing step 7's review list and audit table.
+   - Purge deletes the contribution row (public record and private messages)
+     and turns its `contribution_replay` row into a tombstone in the same
+     transaction: migration makes `contribution_id` nullable and adds
+     `purged_at`; only `voter_id` and `request_key` keep meaning, `canonical`
+     is emptied and the counts zeroed. A late retry is refused without
+     content and never re-publishes the contribution (ADR-0047 §9).
+   - Re-check #572's migrations as merged (013, 014 today: `contribution_id`
+     `not null`, `no action` reference) and list in the PR every reference to
+     a contribution and what purge does to it.
+9. **Category defaults, ODC decisions and the Home banner.** #586.
+   Depends on 1, 3 and PR #572 being merged.
+   - Category = community (D4a); owner-only route sets or clears a
+     category's default picture through the upload pipeline (owner kind
+     `community`); the old default's `image` row and bytes are deleted in
+     the same transaction, with an audit row; resolution adds `category`.
+   - Migration reserves `odc-decisions` ("ODC decisions"), refusing a
+     collision like `pulse-general`; owner-only `governance_posting` grant
+     with audit; creation accepts `community: "odc-decisions"` only from the
+     site owner or a grantee.
+   - Home shows one dismissible banner while ODC decisions are open, with the
+     governance picture and a link to their list; it never casts a vote. It
+     sits above #572's mixed list and leaves that list's order and rows
+     unchanged.
+
+Steps 3 and 4 can run in parallel after 1 (step 3 also after #572); step 9
+can start once steps 1 and 3 are merged. Until step 7, the only emergency path
+is a database operator setting the poll's `hidden` flag (ADR-0047 §10).
+
+Afterwards, not scheduled: point `/questions` at `odc-decisions` instead of
+build variables; reuse previews in #397's mixed feed.
 
 ---
 
