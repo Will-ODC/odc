@@ -16,6 +16,11 @@ import { MemberProfile as MemberProfileScreen } from "../src/screens/MemberProfi
 import { ProfileEditor } from "../src/screens/ProfileEditor.js";
 import { stubApi } from "./stub-api.js";
 
+const EMPTY_CONTRIBUTIONS = {
+  forProfile: () => Promise.resolve({ contributions: [], nextCursor: null }),
+  mine: () => Promise.resolve({ contributions: [], nextCursor: null }),
+};
+
 afterEach(cleanup);
 beforeEach(() => globalThis.history.replaceState(null, "", "/"));
 beforeAll(() =>
@@ -44,6 +49,7 @@ describe("public member profile", () => {
           profile: () => new Promise((resolve) => (finish = resolve)),
         })}
         publicId={PROFILE.publicId}
+        contributions={EMPTY_CONTRIBUTIONS}
       />,
     );
     expect(screen.getByText("Loading…")).toBeTruthy();
@@ -61,6 +67,7 @@ describe("public member profile", () => {
           profile: () => Promise.reject(new ApiError(404, "unavailable")),
         })}
         publicId="missing"
+        contributions={EMPTY_CONTRIBUTIONS}
       />,
     );
     expect(await screen.findByText(/This profile is unavailable/)).toBeTruthy();
@@ -79,6 +86,7 @@ describe("public member profile", () => {
             }),
         })}
         publicId={PROFILE.publicId}
+        contributions={EMPTY_CONTRIBUTIONS}
       />,
     );
     expect(
@@ -98,6 +106,7 @@ describe("public member profile", () => {
       <MemberProfileScreen
         api={stubApi({ profile })}
         publicId={PROFILE.publicId}
+        contributions={EMPTY_CONTRIBUTIONS}
       />,
     );
     const retry = await screen.findByRole("button", { name: "Try again" });
@@ -105,6 +114,81 @@ describe("public member profile", () => {
     await user.keyboard("{Enter}");
     expect(await screen.findByRole("heading", { name: "Ada" })).toBeTruthy();
     expect(profile).toHaveBeenCalledTimes(2);
+  });
+
+  it("lists contributions and shows management only to its owner", async () => {
+    const page = {
+      contributions: [
+        {
+          id: "garden",
+          title: "Community garden",
+          description: "Grow food together.",
+          communityBenefit: "",
+          needs: "",
+          kind: "project" as const,
+          organizerName: "Ada",
+          community: { id: "pulse-general", label: "General" },
+          pollId: null,
+          commercial: null,
+          fund: null,
+          status: "open" as const,
+          createdAt: "2026-11-12T13:00:00.000Z",
+        },
+      ],
+      nextCursor: null,
+    };
+    const sameNameDifferentAccount = render(
+      <MemberProfileScreen
+        api={stubApi({
+          profile: () => Promise.resolve(PROFILE),
+          myProfile: () =>
+            Promise.resolve({ ...PROFILE, publicId: "another-public-id" }),
+        })}
+        publicId={PROFILE.publicId}
+        contributions={{
+          forProfile: () => Promise.resolve(page),
+          mine: () => Promise.reject(new Error("must stay private")),
+        }}
+      />,
+    );
+    expect(
+      (
+        await screen.findByRole("link", { name: "Community garden" })
+      ).getAttribute("href"),
+    ).toBe("/contributions/garden");
+    expect(
+      screen.queryByRole("link", { name: "Start a contribution" }),
+    ).toBeNull();
+    expect(screen.queryByText("Your contributions")).toBeNull();
+    sameNameDifferentAccount.unmount();
+
+    render(
+      <MemberProfileScreen
+        api={stubApi({
+          profile: () => Promise.resolve(PROFILE),
+          myProfile: () => Promise.resolve(PROFILE),
+        })}
+        publicId={PROFILE.publicId}
+        contributions={{
+          forProfile: () => Promise.resolve(page),
+          mine: () => Promise.resolve(page),
+        }}
+      />,
+    );
+    expect(
+      (
+        await screen.findByRole("link", { name: "Start a contribution" })
+      ).getAttribute("href"),
+    ).toBe("/contributions/new");
+    expect(await screen.findByText("Your contributions")).toBeTruthy();
+    expect(
+      screen.getByRole("link", { name: "Post an update" }).getAttribute("href"),
+    ).toBe("/contributions/garden#updates");
+    expect(
+      screen
+        .getByRole("link", { name: "Organizer inbox" })
+        .getAttribute("href"),
+    ).toBe("/contributions/garden#messages");
   });
 });
 

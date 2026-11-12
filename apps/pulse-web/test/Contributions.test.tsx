@@ -47,6 +47,8 @@ const fixture = (over: Partial<Contribution> = {}): Contribution => ({
 });
 const client = (over: Partial<ContributionsApi> = {}): ContributionsApi => ({
   list: async () => ({ contributions: [fixture()], nextCursor: null }),
+  forProfile: async () => ({ contributions: [fixture()], nextCursor: null }),
+  mine: async () => ({ contributions: [fixture()], nextCursor: null }),
   sendMessage: async () => {},
   messages: async () => [],
   detail: async () => ({ contribution: fixture(), canManage: false }),
@@ -54,6 +56,32 @@ const client = (over: Partial<ContributionsApi> = {}): ContributionsApi => ({
   participate: async () => fixture(),
   update: async () => fixture(),
   ...over,
+});
+
+it("links the organizer by profile id while keeping the contribution byline", async () => {
+  render(
+    <ContributionDetail
+      api={stubApi()}
+      id="park"
+      client={client({
+        detail: async () => ({
+          contribution: fixture({
+            organizerName: "Contribution byline",
+            organizerProfile: {
+              publicId: "profile-id",
+              displayName: "Current profile name",
+            },
+          }),
+          canManage: false,
+        }),
+      })}
+    />,
+  );
+  const link = await screen.findByRole("link", {
+    name: "Contribution byline",
+  });
+  expect(link.getAttribute("href")).toBe("/u/profile-id");
+  expect(screen.queryByText("Current profile name")).toBeNull();
 });
 
 it("round trips contribution routes and sign-in returns including case-sensitive IDs", () => {
@@ -711,6 +739,28 @@ it("rejects malformed successful responses and sends credentials/idempotency key
     method: "POST",
     credentials: "same-origin",
     headers: { "Idempotency-Key": "request-key" },
+  });
+});
+
+it("reads public-profile and owner contribution pages from separate endpoints", async () => {
+  const doFetch = vi
+    .fn<typeof fetch>()
+    .mockImplementation(
+      async () =>
+        new Response(
+          JSON.stringify({ contributions: [fixture()], nextCursor: null }),
+        ),
+    );
+  const api = new HttpContributionsApi(doFetch);
+  await api.forProfile("public/id", "next page");
+  await api.mine();
+  expect(doFetch.mock.calls[0]?.[0]).toBe(
+    "/api/profiles/public%2Fid/contributions?cursor=next%20page",
+  );
+  expect(doFetch.mock.calls[1]?.[0]).toBe("/api/me/contributions");
+  expect(doFetch.mock.calls[1]?.[1]).toMatchObject({
+    method: "GET",
+    credentials: "same-origin",
   });
 });
 

@@ -66,7 +66,7 @@ export interface ContributionTransaction {
 }
 export interface ContributionRepository {
   read(id: string): Promise<StoredContribution | undefined>;
-  list(query: ListQuery): Promise<Summary[]>;
+  list(query: ListQuery, ownerId?: string): Promise<Summary[]>;
   transaction<T>(
     actor: PublicationActor,
     work: (tx: ContributionTransaction) => Promise<T>,
@@ -78,7 +78,17 @@ export class ContributionsStore {
     private readonly clock: () => Date = () => new Date(),
   ) {}
   async list(query: ListQuery) {
-    const rows = await this.repository.list(query);
+    return this.page(await this.repository.list(query));
+  }
+  async listByOwner(ownerId: string, query: ListQuery) {
+    return this.page(await this.repository.list(query, ownerId));
+  }
+  async ownerId(id: string): Promise<string> {
+    const record = await this.repository.read(id);
+    if (!record) throw new ContributionError("not_found");
+    return record.ownerId;
+  }
+  private page(rows: Summary[]) {
     const contributions = rows.slice(0, 20);
     const last = contributions.at(-1);
     return {

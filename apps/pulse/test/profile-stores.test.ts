@@ -120,6 +120,21 @@ for (const kind of ["memory", "postgres"] as const) {
         bio: "Neighbour",
         createdAt: AT,
       });
+      assert.deepEqual(await f.store.publicByOwnerId(actor.voterId), {
+        publicId: PUBLIC_ID,
+        displayName: "Ada",
+        bio: "Neighbour",
+        createdAt: AT,
+      });
+      assert.deepEqual(await f.store.visibleOwnerById(PUBLIC_ID), {
+        voterId: actor.voterId,
+        profile: {
+          publicId: PUBLIC_ID,
+          displayName: "Ada",
+          bio: "Neighbour",
+          createdAt: AT,
+        },
+      });
       assert.doesNotMatch(
         JSON.stringify(await f.store.publicById(PUBLIC_ID)),
         /private-voter-id|private@example\.test|visible|updatedAt/,
@@ -136,6 +151,8 @@ for (const kind of ["memory", "postgres"] as const) {
       assert.equal(hidden.createdAt.getTime(), AT.getTime());
       assert.equal(hidden.updatedAt.getTime(), later.getTime());
       assert.equal(await f.store.publicById(PUBLIC_ID), undefined);
+      assert.equal(await f.store.publicByOwnerId(actor.voterId), undefined);
+      assert.equal(await f.store.visibleOwnerById(PUBLIC_ID), undefined);
     },
   );
 

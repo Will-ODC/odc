@@ -21,6 +21,15 @@ export interface PublicMemberProfile {
   createdAt: Date;
 }
 
+/**
+ * Internal lookup result. The voter id must never be copied into an HTTP
+ * response.
+ */
+export interface VisibleProfileOwner {
+  voterId: string;
+  profile: PublicMemberProfile;
+}
+
 export class ProfileStoreError extends Error {
   constructor(readonly code: "signed_out") {
     super(code);
@@ -30,6 +39,8 @@ export class ProfileStoreError extends Error {
 
 export interface MemberProfileStore {
   publicById(publicId: string): Promise<PublicMemberProfile | undefined>;
+  visibleOwnerById(publicId: string): Promise<VisibleProfileOwner | undefined>;
+  publicByOwnerId(voterId: string): Promise<PublicMemberProfile | undefined>;
   byOwner(actor: ProfileActor): Promise<MemberProfile | undefined>;
   save(actor: ProfileActor, input: ProfileInput): Promise<MemberProfile>;
 }

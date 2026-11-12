@@ -1,5 +1,7 @@
 import type { FastifyInstance, FastifyReply, FastifyRequest } from "fastify";
 import type { Voter } from "../identity/store.js";
+import { ContributionError, listQuery } from "../contributions/input.js";
+import type { ContributionsStore } from "../contributions/store.js";
 import { logFault } from "../logging.js";
 import {
   isPublicProfileId,
@@ -18,6 +20,7 @@ export const PROFILE_BODY_LIMIT = 2 * 1024;
 
 export interface ProfileRouteDeps {
   profiles: MemberProfileStore | undefined;
+  contributions: ContributionsStore | undefined;
   webOrigin: string | undefined;
   currentVoter: (request: FastifyRequest) => Promise<Voter | undefined>;
   rateLimit?: { max: number; timeWindow: string };
@@ -50,6 +53,40 @@ export async function registerProfileRoutes(
   app: FastifyInstance,
   deps: ProfileRouteDeps,
 ): Promise<void> {
+  app.get("/api/profiles/:publicId/contributions", async (request, reply) => {
+    const publicId = (request.params as { publicId: string }).publicId;
+    if (!isPublicProfileId(publicId) || !deps.profiles)
+      return answerRefusal(reply, NOT_FOUND());
+    const owner = await deps.profiles.visibleOwnerById(publicId.toLowerCase());
+    if (!owner) return answerRefusal(reply, NOT_FOUND());
+    if (!deps.contributions)
+      return answerRefusal(
+        reply,
+        new Refusal(
+          503,
+          "contributions_unavailable",
+          "Contributions are unavailable just now. Try again.",
+        ),
+      );
+    reply.header("cache-control", "no-store");
+    try {
+      const page = await deps.contributions.listByOwner(
+        owner.voterId,
+        listQuery(request.query),
+      );
+      const stillVisible = await deps.profiles.visibleOwnerById(
+        publicId.toLowerCase(),
+      );
+      if (!stillVisible || stillVisible.voterId !== owner.voterId)
+        return answerRefusal(reply, NOT_FOUND());
+      return reply.send(page);
+    } catch (error) {
+      if (error instanceof ContributionError)
+        return answerRefusal(reply, BAD_REQUEST());
+      throw error;
+    }
+  });
+
   app.get("/api/profiles/:publicId", async (request, reply) => {
     const publicId = (request.params as { publicId: string }).publicId;
     if (!isPublicProfileId(publicId) || !deps.profiles)
@@ -82,6 +119,8 @@ export async function registerProfileRoutes(
     scope.setErrorHandler((error, request, reply) => {
       if (error instanceof Refusal) return answerRefusal(reply, error);
       if (error instanceof ProfileInputError)
+        return answerRefusal(reply, BAD_REQUEST());
+      if (error instanceof ContributionError)
         return answerRefusal(reply, BAD_REQUEST());
       if (error instanceof ProfileStoreError)
         return answerRefusal(reply, SIGNED_OUT());
@@ -150,6 +189,23 @@ export async function registerProfileRoutes(
         return reply
           .header("cache-control", "no-store")
           .send({ profile: profile ? ownerProfile(profile) : null });
+      },
+    );
+
+    scope.get(
+      "/api/me/contributions",
+      { config: limit, preParsing: guard(false) },
+      async (request, reply) => {
+        if (!deps.contributions)
+          throw new Error("contribution storage unavailable");
+        return reply
+          .header("cache-control", "no-store")
+          .send(
+            await deps.contributions.listByOwner(
+              actorOf(request).voterId,
+              listQuery(request.query),
+            ),
+          );
       },
     );
 

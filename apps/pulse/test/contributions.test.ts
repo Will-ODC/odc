@@ -125,6 +125,26 @@ for (const kind of ["memory", "postgres"] as const) {
     },
   );
   test(
+    `${kind}: owner listing keys by account rather than organizer name`,
+    opts,
+    async (t) => {
+      const { store, setTime } = await setup(t, kind);
+      const first = await store.create(owner, randomUUID(), project);
+      setTime(new Date(at.getTime() + 1));
+      await store.create(helper, randomUUID(), {
+        ...project,
+        title: "Someone else's project",
+        organizerName: project.organizerName,
+      });
+      const page = await store.listByOwner(owner.voterId, {});
+      assert.deepEqual(
+        page.contributions.map((row) => row.id),
+        [first.contribution.id],
+      );
+      assert.doesNotMatch(JSON.stringify(page), /private-owner|private-helper/);
+    },
+  );
+  test(
     `${kind}: private messages survive other writes and are visible only to the organizer`,
     opts,
     async (t) => {

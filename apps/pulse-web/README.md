@@ -252,3 +252,9 @@ The organizer reads messages there and can publish progress updates.
 Completion is labeled as reported.
 Sign-in links return to the contribution page or creation form. Failed submissions
 keep entered fields and reuse their request key for an unchanged retry.
+
+A contribution organizer name links to the owning member profile only while
+that profile is visible. Public profiles list that account's contributions,
+newest first. On their own visible profile, the owner can start a contribution
+and use an owner-only list to open each contribution's progress-update form or
+private organizer inbox. Matching display names do not grant those controls.

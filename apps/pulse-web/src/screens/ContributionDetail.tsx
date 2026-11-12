@@ -114,7 +114,17 @@ export function ContributionDetail({
                 </div>
                 <h1>{item.title}</h1>
                 <p>
-                  Organized by {item.organizerName} · {item.community.label}
+                  Organized by{" "}
+                  {item.organizerProfile ? (
+                    <a
+                      href={`/u/${encodeURIComponent(item.organizerProfile.publicId)}`}
+                    >
+                      {item.organizerName}
+                    </a>
+                  ) : (
+                    item.organizerName
+                  )}{" "}
+                  · {item.community.label}
                 </p>
               </header>
               <section className="contribution-section">
@@ -194,7 +204,7 @@ export function ContributionDetail({
                   changed={changed}
                 />
               </section>
-              <section className="contribution-section">
+              <section id="messages" className="contribution-section">
                 {canManage ? (
                   <OrganizerInbox key={item.id} client={client} id={item.id} />
                 ) : (
@@ -230,7 +240,7 @@ export function ContributionDetail({
                   </ul>
                 </section>
               ) : null}
-              <section className="contribution-section">
+              <section id="updates" className="contribution-section">
                 <h2>Progress and evidence</h2>
                 <p className="contribution-note">
                   Updates and completion are reported by the organizer. Evidence

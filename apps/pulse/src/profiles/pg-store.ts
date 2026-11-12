@@ -9,9 +9,11 @@ import {
   type ProfileActor,
   type ProfileStoreOptions,
   type PublicMemberProfile,
+  type VisibleProfileOwner,
 } from "./store.js";
 
 interface ProfileRow {
+  voter_id?: string;
   public_id: string;
   display_name: string;
   bio: string;
@@ -32,19 +34,33 @@ export class PostgresMemberProfileStore implements MemberProfileStore {
   }
 
   async publicById(publicId: string): Promise<PublicMemberProfile | undefined> {
+    return (await this.visibleOwnerById(publicId))?.profile;
+  }
+
+  async visibleOwnerById(
+    publicId: string,
+  ): Promise<VisibleProfileOwner | undefined> {
     const result = await this.#pool.query<ProfileRow>(
-      "select public_id, display_name, bio, visible, created_at, updated_at from member_profile where public_id = $1 and visible = true",
+      "select voter_id, public_id, display_name, bio, visible, created_at, updated_at from member_profile where public_id = $1 and visible = true",
       [publicId],
     );
     const row = result.rows[0];
-    if (!row) return undefined;
+    if (!row?.voter_id) return undefined;
     const profile = fromRow(row);
     return {
-      publicId: profile.publicId,
-      displayName: profile.displayName,
-      bio: profile.bio,
-      createdAt: profile.createdAt,
+      voterId: row.voter_id,
+      profile: publicProfile(profile),
     };
+  }
+
+  async publicByOwnerId(
+    voterId: string,
+  ): Promise<PublicMemberProfile | undefined> {
+    const result = await this.#pool.query<ProfileRow>(
+      "select public_id, display_name, bio, visible, created_at, updated_at from member_profile where voter_id = $1 and visible = true",
+      [voterId],
+    );
+    return result.rows[0] ? publicProfile(fromRow(result.rows[0])) : undefined;
   }
 
   byOwner(actor: ProfileActor): Promise<MemberProfile | undefined> {
@@ -106,5 +122,14 @@ function fromRow(row: ProfileRow): MemberProfile {
     visible: row.visible,
     createdAt: row.created_at,
     updatedAt: row.updated_at,
+  };
+}
+
+function publicProfile(profile: MemberProfile): PublicMemberProfile {
+  return {
+    publicId: profile.publicId,
+    displayName: profile.displayName,
+    bio: profile.bio,
+    createdAt: profile.createdAt,
   };
 }
