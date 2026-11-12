@@ -480,6 +480,7 @@ function LoadedQuestion({
   // On desktop (#490) voting sits in the page under the question; on a phone
   // it is the sheet along the bottom edge.
   const wide = useWide();
+  const { scrollRef, dockRef } = useDockSpace();
   const renderPage = (
     standing: ReactNode,
     vote: ReactNode,
@@ -487,7 +488,7 @@ function LoadedQuestion({
   ) => {
     return (
       <>
-        <div className="conversation__scroll">
+        <div className="conversation__scroll" ref={scrollRef}>
           <div className="conversation__column">
             <ViewState data={loaded}>
               {(poll) => (
@@ -539,7 +540,11 @@ function LoadedQuestion({
           </div>
         </div>
         {vote && !wide ? (
-          <aside className="conversation__dock" aria-label="Voting">
+          <aside
+            className="conversation__dock"
+            aria-label="Voting"
+            ref={dockRef}
+          >
             <div className="conversation__column">
               <div className="conversation__vote">{vote}</div>
             </div>
@@ -648,6 +653,33 @@ function useRestoredAnswer(
     };
   }, [api, poll, settled, waiting, onHeldBallot]);
   return settled ? "settled" : slow ? "stillSending" : "pending";
+}
+
+/**
+ * Keeps the page's bottom space as tall as the open Voting drawer on a phone,
+ * so everything under the question, the closed question's Previous and Next
+ * too, can scroll clear of it. The drawer's height, which changes as it opens
+ * and closes, is measured and handed to the CSS as `--dock-space`.
+ */
+function useDockSpace() {
+  const scrollRef = useRef<HTMLDivElement>(null);
+  const dockRef = useCallback((dock: HTMLElement | null) => {
+    if (!dock) return;
+    const fit = () =>
+      scrollRef.current?.style.setProperty(
+        "--dock-space",
+        `${dock.getBoundingClientRect().height}px`,
+      );
+    fit();
+    const watch =
+      typeof ResizeObserver === "undefined" ? null : new ResizeObserver(fit);
+    watch?.observe(dock);
+    return () => {
+      watch?.disconnect();
+      scrollRef.current?.style.removeProperty("--dock-space");
+    };
+  }, []);
+  return { scrollRef, dockRef };
 }
 
 /** A My votes row as one end of the pager, or a disabled end. */
@@ -991,9 +1023,14 @@ function LiveCard({
         onResultsHidden={setResultsHidden}
       />
     ) : null;
+  const pager = myVotesNavigation ? (
+    <QuestionPager navigation={myVotesNavigation} />
+  ) : null;
+  // A closed question: See results, then Previous and Next on the same row,
+  // or under the results once they are open (#528).
   const standing = shut ? (
-    <>
-      {closed.showing ? (
+    closed.showing ? (
+      <>
         <ClosedResults
           data={closed.data}
           compact
@@ -1002,17 +1039,16 @@ function LiveCard({
           panelRef={closed.panelRef}
           explainHref={pathOf({ kind: "trust" })}
         />
-      ) : (
+        {pager ? <div className="conversation__pager">{pager}</div> : null}
+      </>
+    ) : (
+      <div className="conversation__closed">
         <button type="button" ref={closed.triggerRef} onClick={closed.open}>
           See results
         </button>
-      )}
-      {myVotesNavigation ? (
-        <div className="conversation__pager">
-          <QuestionPager navigation={myVotesNavigation} />
-        </div>
-      ) : null}
-    </>
+        {pager}
+      </div>
+    )
   ) : showing.kind === "answered" ? (
     card
   ) : wide ? (

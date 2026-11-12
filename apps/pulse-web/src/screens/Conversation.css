@@ -21,8 +21,14 @@
   min-height: 0;
   overflow-y: auto;
   padding: var(--gutter);
-  padding-bottom: calc(
-    var(--gutter) + var(--step) * 8 + env(safe-area-inset-bottom)
+  /*
+   * Room to scroll the last of the page clear of the Voting drawer, which on
+   * a phone sits on the bottom edge: its measured height (`--dock-space`, set
+   * by the page as it opens and closes) and a gutter, never less than before.
+   */
+  padding-bottom: max(
+    calc(var(--gutter) + var(--step) * 8 + env(safe-area-inset-bottom)),
+    calc(var(--dock-space, 0px) + var(--gutter))
   );
 }
 .conversation__question {
@@ -78,6 +84,13 @@
 /* Previous and Next under a closed question's results (#528). */
 .conversation__pager {
   margin-block-start: calc(var(--step) * 1.5);
+}
+/* See results, with Previous and Next at the end of the same row (#528). */
+.conversation__closed {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: center;
+  gap: var(--step);
 }
 .conversation__dock {
   position: fixed;
