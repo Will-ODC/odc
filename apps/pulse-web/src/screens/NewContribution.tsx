@@ -1,4 +1,4 @@
-import { useCallback, useRef } from "react";
+import { useCallback, useEffect, useRef, useState } from "react";
 import type { FormEvent } from "react";
 import type { PulseApi } from "../api/types.js";
 import {
@@ -78,17 +78,43 @@ function ContributionForm({
   onCreated: (id: string) => void;
 }) {
   const resultId = useRef("");
+  const pollField = useRef<HTMLInputElement>(null);
+  /** The related question was not a link or ID, judged here before sending. */
+  const [pollUnreadable, setPollUnreadable] = useState(false);
   const save = useContributionSave<ContributionInput>(
     async (input, key) => {
       resultId.current = (await client.create(input, key)).id;
     },
     () => onCreated(resultId.current),
   );
+  const pollNotFound = save.errorStatus === 404;
+  const pollProblem = pollUnreadable
+    ? "This is not a question link or ID. Paste the question’s link, or leave this blank."
+    : pollNotFound
+      ? "We could not find that question. Check the link, or leave this blank."
+      : undefined;
+  // The server could not find the question: take the person to the field
+  // that says so. Runs after the form is enabled again, so focus can land.
+  const { failure } = save;
+  useEffect(() => {
+    if (failure?.status === 404) pollField.current?.focus();
+  }, [failure]);
+  function checkPoll() {
+    setPollUnreadable(
+      pollReference(pollField.current?.value ?? "") === undefined,
+    );
+  }
   function submit(event: FormEvent<HTMLFormElement>) {
     event.preventDefault();
     const form = new FormData(event.currentTarget);
     const value = (key: string) => String(form.get(key) ?? "").trim();
     const pollId = pollReference(value("pollId"));
+    if (pollId === undefined) {
+      setPollUnreadable(true);
+      pollField.current?.focus();
+      return;
+    }
+    setPollUnreadable(false);
     void save.submit({
       title: value("title"),
       description: value("description"),
@@ -108,6 +134,7 @@ function ContributionForm({
           {(described) => (
             <select
               id="contribution-kind"
+              className="field__control"
               name="kind"
               defaultValue="project"
               {...described}
@@ -124,6 +151,7 @@ function ContributionForm({
           {(described) => (
             <input
               id="contribution-title"
+              className="field__control"
               name="title"
               required
               maxLength={160}
@@ -141,6 +169,7 @@ function ContributionForm({
           {(described) => (
             <textarea
               id="contribution-description"
+              className="field__control"
               name="description"
               required
               maxLength={4000}
@@ -158,6 +187,7 @@ function ContributionForm({
           {(described) => (
             <input
               id="contribution-organizer"
+              className="field__control"
               name="organizer"
               required
               maxLength={80}
@@ -170,19 +200,18 @@ function ContributionForm({
           id="contribution-poll"
           label="Related question (optional)"
           hint="Paste the link to a Pulse question, or its ID."
-          problem={
-            save.errorStatus === 404
-              ? "We could not find that question. Check the link, or leave this blank."
-              : undefined
-          }
+          problem={pollProblem}
         >
           {(described) => (
             <input
               id="contribution-poll"
+              ref={pollField}
+              className="field__control"
               name="pollId"
               maxLength={2000}
               autoComplete="off"
-              aria-invalid={save.errorStatus === 404 || undefined}
+              aria-invalid={pollProblem !== undefined || undefined}
+              onBlur={checkPoll}
               {...described}
             />
           )}

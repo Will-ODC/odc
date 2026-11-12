@@ -12,9 +12,13 @@ describe("pollReference", () => {
     expect(pollReference(" garden ")).toBe("garden");
     expect(pollReference("   ")).toBe("");
   });
-  it("leaves text it cannot read as a link for the server to judge", () => {
-    expect(pollReference("https://pulse.example/?poll=")).toBe(
-      "https://pulse.example/?poll=",
+  it("rejects text that is neither a question link nor an ID", () => {
+    expect(pollReference("https://pulse.example/?poll=")).toBeUndefined();
+    expect(pollReference("https://pulse.example/questions/garden")).toBe(
+      undefined,
     );
+    expect(pollReference("not an id")).toBeUndefined();
+    expect(pollReference("x".repeat(129))).toBeUndefined();
+    expect(pollReference("x".repeat(128))).toBe("x".repeat(128));
   });
 });
