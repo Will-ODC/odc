@@ -61,6 +61,18 @@ describe("fitting a phone", () => {
     );
   });
 
+  it("draws the compact results card's edge inside its column (#575)", () => {
+    // `.results` is `width: 100%`. With the card's padding and border
+    // outside that width, a closed question's results at 375 ended 34px past
+    // the column, clipping "Hide results", and spilled past it at 1280 too.
+    expect(rule("components/ResultsPanel.css", ".results")).toMatch(
+      /width:\s*100%/,
+    );
+    expect(rule("components/ResultsPanel.css", ".results--compact")).toMatch(
+      /box-sizing:\s*border-box/,
+    );
+  });
+
   it("floats voting at the bottom right without reserving a full-width row", () => {
     const dock = rule("screens/Conversation.css", ".conversation__dock");
     expect(dock).toMatch(/position:\s*fixed/);
