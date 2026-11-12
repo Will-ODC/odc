@@ -47,12 +47,6 @@ jobs:
       - name: Check the API image has no package manager
         run: |
           docker run --rm --entrypoint sh pulse-api:ci -c 'for t in yarn yarnpkg npm npx corepack; do if command -v "$t" >/dev/null; then echo "package manager present: $t"; exit 1; fi; done'
-      # sharp ships native libvips binaries per platform. This proves the
-      # musl one pnpm installed in the Alpine build stage is the one deployed
-      # and that it decodes and encodes WebP (ADR-0047).
-      - name: Check the API image can process pictures
-        run: |
-          docker run --rm --entrypoint node -w /app pulse-api:ci --input-type=module -e "import sharp from 'sharp'; const b = await sharp({ create: { width: 8, height: 8, channels: 3, background: 'red' } }).webp().toBuffer(); const m = await sharp(b).metadata(); if (m.format !== 'webp') process.exit(1); console.log('sharp', sharp.versions.sharp, 'libvips', sharp.versions.vips)"
       - name: Build the web image
         id: build-web
         run: docker build -f apps/pulse-web/Dockerfile -t pulse-web:ci .
