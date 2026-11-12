@@ -46,6 +46,9 @@ const AT = new Date("2026-09-11T09:30:00.123Z");
 const TABLES = [
   "allowed_domain",
   "community",
+  "content_change",
+  "image",
+  "image_bytes",
   "pending_claim",
   "poll_choice",
   "poll_creation_replay",
@@ -99,6 +102,7 @@ test("applies_a_fresh_schema", { skip }, async () => {
       "010",
       "011",
       "012",
+      "016",
     ]);
     assert.deepEqual(await tablesIn(pool, schema), TABLES);
   });
@@ -515,6 +519,13 @@ test(
       assert.deepEqual(await indexesIn(pool, schema), [
         "allowed_domain_pkey",
         "community_pkey",
+        "content_change_pkey",
+        "content_change_target_idx",
+        "image_bytes_pkey",
+        "image_owner_idx",
+        "image_pending_idx",
+        "image_pkey",
+        "image_uploader_idx",
         "pending_claim_expiry_idx",
         "pending_claim_kind_subject_idx",
         "pending_claim_pkey",
@@ -524,6 +535,7 @@ test(
         "poll_creation_replay_poll_id_key",
         "polls_author_created_idx",
         "polls_id_author_unique",
+        "polls_image_id_key",
         "polls_pkey",
         "polls_public_listing_idx",
         "posting_permission_change_pkey",
@@ -617,6 +629,7 @@ test(
           "010",
           "011",
           "012",
+          "016",
         ]);
         const store = new PostgresClaimStore(pool);
         assert.equal(await store.byTokenHash("used"), undefined);
@@ -692,6 +705,7 @@ test(
         assert.deepEqual((await migrate(pool, { clock: () => AT })).applied, [
           "011",
           "012",
+          "016",
         ]);
 
         const { rows } = await pool.query<{
