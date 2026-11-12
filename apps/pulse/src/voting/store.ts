@@ -1,4 +1,6 @@
 import type { PollImage } from "../images/public.js";
+import { memoryImageDatabase } from "../images/store.js";
+import { mayServe } from "../images/visibility.js";
 import {
   comparePolls,
   type PollListQuery,
@@ -279,7 +281,30 @@ export class InMemoryVotingStore implements VotingStore {
   }
 
   async getPoll(pollId: string): Promise<Poll | undefined> {
-    return this.#polls.get(pollId);
+    const poll = this.#polls.get(pollId);
+    if (!poll) return undefined;
+    const { image: _stored, ...rest } = poll;
+    void _stored;
+    const image = this.#shownImage(poll);
+    return image ? { ...rest, image } : rest;
+  }
+
+  /**
+   * The poll's picture only while `mayServe` would serve it, read against
+   * the picture's own owner link in the in-memory picture tables, as the
+   * Postgres store reads it against `image`. The in-memory store has no
+   * hidden polls.
+   */
+  #shownImage(poll: Poll): PollImage | undefined {
+    if (poll.image === undefined) return undefined;
+    const link = memoryImageDatabase(this).images.get(poll.image.id);
+    if (link === undefined || link.ownerId !== poll.id) return undefined;
+    const shown = mayServe(link, {
+      kind: "poll",
+      currentImageId: poll.image.id,
+      visible: true,
+    });
+    return shown ? { ...poll.image } : undefined;
   }
 
   async listPolls(query: PollListQuery): Promise<PollSummary[]> {
@@ -292,14 +317,17 @@ export class InMemoryVotingStore implements VotingStore {
       )
       .sort((a, b) => comparePolls(b, a))
       .slice(0, query.limit + 1)
-      .map((p) => ({
-        id: p.id,
-        question: p.question,
-        method: p.method,
-        createdAt: p.createdAt,
-        ...(p.closesAt ? { closesAt: p.closesAt } : {}),
-        ...(p.image ? { image: { ...p.image } } : {}),
-      }));
+      .map((p) => {
+        const image = this.#shownImage(p);
+        return {
+          id: p.id,
+          question: p.question,
+          method: p.method,
+          createdAt: p.createdAt,
+          ...(p.closesAt ? { closesAt: p.closesAt } : {}),
+          ...(image ? { image } : {}),
+        };
+      });
   }
 
   async castVote(

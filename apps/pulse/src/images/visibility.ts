@@ -1,8 +1,9 @@
 /**
  * Whether a picture may be served, decided per owner kind in this one
- * function (ADR-0047 sections 1 and 4). Both stores call it for the picture
- * routes and for the `image` field of poll bodies and listings, so a body
- * never points at a picture its route would refuse.
+ * function (ADR-0047 sections 1 and 4). The in-memory and Postgres picture
+ * stores call it for the picture routes, and the in-memory and Postgres
+ * voting stores call it for the `image` field of poll bodies and listings,
+ * so a body never points at a picture its route would refuse.
  */
 
 export type OwnerKind = "poll" | "community";

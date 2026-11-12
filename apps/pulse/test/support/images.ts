@@ -98,6 +98,22 @@ export async function animatedPng(): Promise<Buffer> {
 }
 
 /**
+ * A still PNG carrying an `acTL` chunk only after its image data, just before
+ * `IEND`. Not an APNG by the rule (acTL before the first IDAT), so accepted.
+ */
+export async function pngWithLateActl(): Promise<Buffer> {
+  const png = await picture("png", 300, 300);
+  const iend = png.length - 12;
+  const actl = Buffer.alloc(8);
+  actl.writeUInt32BE(1, 0);
+  return Buffer.concat([
+    png.subarray(0, iend),
+    chunk("acTL", actl),
+    png.subarray(iend),
+  ]);
+}
+
+/**
  * A PNG whose header claims this size, with a token image body. Enough for
  * any check that reads the header only, and nothing that decodes it, so the
  * size refusals can be tested without making a 40-megapixel picture.

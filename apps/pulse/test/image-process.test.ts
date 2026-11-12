@@ -21,6 +21,7 @@ import {
   jpegWithMetadata,
   picture,
   pngClaimingSize,
+  pngWithLateActl,
   svg,
 } from "./support/images.js";
 
@@ -111,6 +112,14 @@ test("refuses_an_animated_png_whose_actl_comes_before_idat", async () => {
   assert.equal(isAnimatedPng(apng), true);
   assert.equal(isAnimatedPng(await picture("png")), false);
   await refusedAs(apng, "unsupported_image");
+});
+
+test("accepts_a_still_png_whose_actl_comes_only_after_idat", async () => {
+  const late = await pngWithLateActl();
+  assert.ok(late.includes("acTL"));
+  assert.equal(isAnimatedPng(late), false);
+  const out = await processImage(late);
+  assert.deepEqual([out.width, out.height], [300, 300]);
 });
 
 test("refuses_a_multi_page_webp_rather_than_keeping_its_first_frame", async () => {

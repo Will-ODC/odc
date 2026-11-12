@@ -124,10 +124,11 @@ const NOT_FOUND = { error: "not_found", message: "There is nothing here." };
  * Poll pictures (ADR-0047 sections 2 to 4 and 11).
  *
  * `POST /api/poll-images` takes the raw file as the body. Every request is
- * first counted by the per-client rate limit, then passes, before a byte of
- * the body is read: pictures configured (503), `Origin` (403), a current
- * session (401), and a declared type of JPEG, PNG or WebP (415). The body is
- * then read up to 10 MiB (413). Pending pictures past their 24 hours are
+ * first counted by the per-client rate limit, then passes, before this API
+ * reads a byte of the body: pictures configured (503), `Origin` (403), a
+ * current session (401), and a declared type of JPEG, PNG or WebP (415). The
+ * body is then read up to 10 MiB (413). nginx in front buffers the whole body
+ * before forwarding, so these spare the API, not the upload's bandwidth. Pending pictures past their 24 hours are
  * swept, the account's quota is checked before any decode, and only then is
  * the file decoded — judged by its content, never its declared type —
  * re-encoded and stored as a pending picture.
