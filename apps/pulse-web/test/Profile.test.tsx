@@ -67,6 +67,27 @@ describe("public member profile", () => {
     expect(screen.getByRole("link", { name: "Go to Pulse home" })).toBeTruthy();
   });
 
+  it("renders profile markup-looking text literally", async () => {
+    const { container } = render(
+      <MemberProfileScreen
+        api={stubApi({
+          profile: () =>
+            Promise.resolve({
+              ...PROFILE,
+              displayName: "<b>x</b>",
+              bio: "<script>",
+            }),
+        })}
+        publicId={PROFILE.publicId}
+      />,
+    );
+    expect(
+      await screen.findByRole("heading", { name: "<b>x</b>" }),
+    ).toBeTruthy();
+    expect(screen.getByText("<script>")).toBeTruthy();
+    expect(container.querySelector("b, script")).toBeNull();
+  });
+
   it("shows an error and retries from the keyboard", async () => {
     const user = userEvent.setup();
     const profile = vi
@@ -105,6 +126,11 @@ describe("owner profile editor", () => {
     );
     expect(await screen.findByText(/Sign in to create/)).toBeTruthy();
     expect(screen.getAllByRole("link", { name: "Sign in" })).toHaveLength(2);
+    expect(
+      screen
+        .getAllByRole("link", { name: "Sign in" })
+        .some((link) => link.getAttribute("href") === "/sign-in?next=profile"),
+    ).toBe(true);
     signedOut.unmount();
 
     const myProfile = vi

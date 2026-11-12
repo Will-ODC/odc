@@ -1,5 +1,6 @@
 import assert from "node:assert/strict";
 import { test, type TestContext } from "node:test";
+import type { Pool, PoolClient } from "pg";
 import { InMemoryVoterStore, type VoterStore } from "../src/identity/store.js";
 import { InMemoryMemberProfileStore } from "../src/profiles/memory-store.js";
 import { PostgresMemberProfileStore } from "../src/profiles/pg-store.js";
@@ -12,6 +13,7 @@ import { databaseSkip, migratedSchema } from "./support/database.js";
 
 const AT = new Date("2026-11-12T12:00:00.000Z");
 const PUBLIC_ID = "f8cdca64-0d4f-4b99-b5bc-e6b749843ad8";
+const OTHER_PUBLIC_ID = "b94ecf7f-fcf6-4131-a637-6ce4f4d671e2";
 const actor: ProfileActor = {
   voterId: "private-voter-id",
   sessionGeneration: 0,
@@ -20,17 +22,55 @@ const actor: ProfileActor = {
 interface Fixture {
   store: MemberProfileStore;
   voters: VoterStore;
+  pool?: Pool;
+  memoryVoters?: LockableInMemoryVoterStore | undefined;
   setTime(value: Date): void;
+}
+
+class LockableInMemoryVoterStore extends InMemoryVoterStore {
+  #firstRead:
+    | {
+        reached(): void;
+        resume: Promise<void>;
+      }
+    | undefined;
+
+  holdFirstRead(): { reached: Promise<void>; release(): void } {
+    let reached!: () => void;
+    let release!: () => void;
+    const waiting = new Promise<void>((resolve) => (reached = resolve));
+    this.#firstRead = {
+      reached,
+      resume: new Promise<void>((resolve) => (release = resolve)),
+    };
+    return { reached: waiting, release };
+  }
+
+  override async byId(id: string) {
+    const hold = this.#firstRead;
+    this.#firstRead = undefined;
+    if (hold) {
+      hold.reached();
+      await hold.resume;
+    }
+    return super.byId(id);
+  }
 }
 
 for (const kind of ["memory", "postgres"] as const) {
   const skip = kind === "postgres" ? databaseSkip : false;
-  const fresh = async (t: TestContext): Promise<Fixture> => {
+  const fresh = async (
+    t: TestContext,
+    sequences?: { ids: string[]; times: Date[] },
+  ): Promise<Fixture> => {
     let now = AT;
+    let nextId = 0;
+    let nextTime = 0;
     const pool = kind === "postgres" ? await migratedSchema(t) : undefined;
-    const voters = pool
+    const memoryVoters = pool ? undefined : new LockableInMemoryVoterStore();
+    const voters: VoterStore = pool
       ? new PostgresVoterStore(pool)
-      : new InMemoryVoterStore();
+      : (memoryVoters as LockableInMemoryVoterStore);
     await voters.create(
       {
         id: actor.voterId,
@@ -41,12 +81,19 @@ for (const kind of ["memory", "postgres"] as const) {
       },
       { kind: "email", value: "private@example.test", verifiedAt: AT },
     );
-    const options = { clock: () => now, newId: () => PUBLIC_ID };
+    const options = {
+      clock: () => sequences?.times[nextTime++] ?? now,
+      newId: () => sequences?.ids[nextId++] ?? PUBLIC_ID,
+    };
     return {
       store: pool
         ? new PostgresMemberProfileStore(pool, options)
-        : new InMemoryMemberProfileStore(voters as InMemoryVoterStore, options),
+        : new InMemoryMemberProfileStore(
+            memoryVoters as LockableInMemoryVoterStore,
+            options,
+          ),
       voters,
+      ...(pool ? { pool } : { memoryVoters }),
       setTime(value) {
         now = value;
       },
@@ -93,6 +140,82 @@ for (const kind of ["memory", "postgres"] as const) {
   );
 
   test(
+    `${kind}: overlapping_first_saves_keep_one_id_and_the_first_creation_time`,
+    { skip },
+    async (t) => {
+      const later = new Date(AT.getTime() + 1000);
+      const f = await fresh(t, {
+        ids: [PUBLIC_ID, OTHER_PUBLIC_ID],
+        times: [AT, later],
+      });
+
+      let release: () => Promise<void> | void;
+      let firstBlocked: Promise<void>;
+      let secondBlocked: Promise<void>;
+      let held: PoolClient | undefined;
+      if (f.pool) {
+        held = await f.pool.connect();
+        await held.query("begin");
+        await held.query("select 1 from voter where id = $1 for update", [
+          actor.voterId,
+        ]);
+        const pid = await backendPid(held);
+        firstBlocked = until(async () => (await blockedBy(f.pool!, pid)) >= 1);
+        secondBlocked = until(async () => (await blockedBy(f.pool!, pid)) >= 2);
+        release = () => held!.query("commit").then(() => undefined);
+      } else {
+        const hold = f.memoryVoters!.holdFirstRead();
+        firstBlocked = hold.reached;
+        secondBlocked = Promise.resolve();
+        release = hold.release;
+      }
+
+      try {
+        const first = f.store.save(actor, {
+          displayName: "First",
+          bio: "",
+          visible: true,
+        });
+        await firstBlocked;
+        const second = f.store.save(actor, {
+          displayName: "Second",
+          bio: "",
+          visible: true,
+        });
+        await secondBlocked;
+        await release();
+
+        const results = await Promise.all([first, second]);
+        assert.deepEqual(
+          results.map((profile) => profile.publicId),
+          [PUBLIC_ID, PUBLIC_ID],
+        );
+        assert.deepEqual(
+          results.map((profile) => profile.createdAt),
+          [AT, AT],
+        );
+        assert.equal((await f.store.byOwner(actor))?.displayName, "Second");
+        const publicRows = await Promise.all(
+          [PUBLIC_ID, OTHER_PUBLIC_ID].map((id) => f.store.publicById(id)),
+        );
+        assert.equal(publicRows.filter(Boolean).length, 1);
+        if (f.pool) {
+          const count = await f.pool.query<{ count: number }>(
+            "select count(*)::int as count from member_profile where voter_id = $1",
+            [actor.voterId],
+          );
+          assert.equal(count.rows[0]?.count, 1);
+        }
+      } finally {
+        if (held) {
+          await held.query("rollback").catch(() => null);
+          held.release();
+        }
+      }
+    },
+  );
+
+  test(
     `${kind}: only_the_current_owner_session_can_read_or_write`,
     { skip },
     async (t) => {
@@ -108,4 +231,32 @@ for (const kind of ["memory", "postgres"] as const) {
       );
     },
   );
+}
+
+async function backendPid(client: PoolClient): Promise<number> {
+  const { rows } = await client.query<{ pid: number }>(
+    "select pg_backend_pid() as pid",
+  );
+  return rows[0]?.pid ?? -1;
+}
+
+async function blockedBy(pool: Pool, pid: number): Promise<number> {
+  const { rows } = await pool.query<{ n: number }>(
+    "with recursive waiting(pid) as (" +
+      " select pid from pg_stat_activity where $1 = any(pg_blocking_pids(pid))" +
+      " union" +
+      " select a.pid from pg_stat_activity a join waiting w" +
+      " on w.pid = any(pg_blocking_pids(a.pid))" +
+      ") select count(*)::int as n from waiting",
+    [pid],
+  );
+  return rows[0]?.n ?? 0;
+}
+
+async function until(ready: () => Promise<boolean>): Promise<void> {
+  const deadline = Date.now() + 5_000;
+  while (!(await ready())) {
+    if (Date.now() > deadline) throw new Error("timed out waiting");
+    await new Promise((resolve) => setTimeout(resolve, 10));
+  }
 }

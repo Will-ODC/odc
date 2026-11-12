@@ -55,6 +55,8 @@ export function rememberReturn(
   try {
     if (to?.kind === "newPoll") {
       store.setItem(KEY, JSON.stringify({ newPoll: true, at: now }));
+    } else if (to?.kind === "profileEditor") {
+      store.setItem(KEY, JSON.stringify({ profileEditor: true, at: now }));
     } else if (to && to.pollId.length <= MAX_ID_LENGTH) {
       store.setItem(KEY, JSON.stringify({ pollId: to.pollId, at: now }));
     } else {
@@ -82,6 +84,8 @@ export function takeReturn(
     if (typeof at !== "number" || now - at > RETURN_LIFETIME_MS || at > now)
       return null;
     if ("newPoll" in kept && kept.newPoll === true) return { kind: "newPoll" };
+    if ("profileEditor" in kept && kept.profileEditor === true)
+      return { kind: "profileEditor" };
     if (!("pollId" in kept)) return null;
     const { pollId } = kept;
     if (

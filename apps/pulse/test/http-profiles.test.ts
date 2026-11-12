@@ -126,6 +126,7 @@ test("owner_can_create_read_update_hide_and_reshare_a_stable_profile", async (t)
     bio: "Neighbour",
     createdAt: AT.toISOString(),
   });
+  assert.equal(shared.headers["cache-control"], "no-store");
 
   const hidden = await h.put({ displayName: "Ada", bio: "", visible: false });
   assert.equal(hidden.json().profile.publicId, publicId);

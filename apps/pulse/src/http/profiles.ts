@@ -56,7 +56,7 @@ export async function registerProfileRoutes(
       return answerRefusal(reply, NOT_FOUND());
     const profile = await deps.profiles.publicById(publicId.toLowerCase());
     if (!profile) return answerRefusal(reply, NOT_FOUND());
-    return reply.send({
+    return reply.header("cache-control", "no-store").send({
       publicId: profile.publicId,
       displayName: profile.displayName,
       bio: profile.bio,

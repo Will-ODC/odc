@@ -42,7 +42,10 @@ export type Route =
   | { kind: "profileEditor" };
 
 /** The places a sign-in can return to. */
-export type ReturnTo = Extract<Route, { kind: "conversation" | "newPoll" }>;
+export type ReturnTo = Extract<
+  Route,
+  { kind: "conversation" | "newPoll" | "profileEditor" }
+>;
 
 /**
  * The conversation an unrecognised path opens when it carries no `?poll=`.
@@ -88,6 +91,8 @@ export function routeFrom(href: string): Route {
     if (token) return { kind: "redeem", token };
     if (url.searchParams.get("next") === "new")
       return { kind: "signIn", returnTo: { kind: "newPoll" } };
+    if (url.searchParams.get("next") === "profile")
+      return { kind: "signIn", returnTo: { kind: "profileEditor" } };
     const pollId = url.searchParams.get("poll");
     return pollId
       ? { kind: "signIn", returnTo: { kind: "conversation", pollId } }
@@ -138,6 +143,8 @@ export function pathOf(route: Route): string {
           return SIGN_IN_PATH;
         case "newPoll":
           return `${SIGN_IN_PATH}?next=new`;
+        case "profileEditor":
+          return `${SIGN_IN_PATH}?next=profile`;
         case "conversation":
           return `${SIGN_IN_PATH}?poll=${encodeURIComponent(route.returnTo.pollId)}`;
       }

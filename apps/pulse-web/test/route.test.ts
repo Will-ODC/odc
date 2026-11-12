@@ -80,6 +80,12 @@ describe("reading a URL", () => {
     ).toBe("/u/f8cdca64-0d4f-4b99-b5bc-e6b749843ad8");
     expect(routeFrom("/profile")).toEqual({ kind: "profileEditor" });
     expect(pathOf({ kind: "profileEditor" })).toBe("/profile");
+    const signIn = {
+      kind: "signIn" as const,
+      returnTo: { kind: "profileEditor" as const },
+    };
+    expect(pathOf(signIn)).toBe("/sign-in?next=profile");
+    expect(routeFrom(pathOf(signIn))).toEqual(signIn);
   });
 
   /*

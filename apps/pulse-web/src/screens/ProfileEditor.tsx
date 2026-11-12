@@ -32,7 +32,13 @@ export function ProfileEditor({ api }: { api: PulseApi }) {
           </Button>
         ) : null}
         {state.status === "empty" ? (
-          <Button variant="primary" href="/sign-in">
+          <Button
+            variant="primary"
+            href={pathOf({
+              kind: "signIn",
+              returnTo: { kind: "profileEditor" },
+            })}
+          >
             Sign in
           </Button>
         ) : null}

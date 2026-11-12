@@ -21,10 +21,21 @@ function object(value: unknown): Record<string, unknown> {
   return row;
 }
 
-function text(value: unknown, limit: number, empty: boolean): string {
+function text(
+  value: unknown,
+  limit: number,
+  empty: boolean,
+  displayName = false,
+): string {
   if (typeof value !== "string") throw new ProfileInputError();
   const normalized = value.trim();
   if (normalized.includes("\u0000") || /[\uD800-\uDFFF]/u.test(normalized))
+    throw new ProfileInputError();
+  if (
+    displayName &&
+    (/[\p{Cc}\p{Cf}]/u.test(normalized) ||
+      !/[\p{L}\p{N}\p{P}\p{S}]/u.test(normalized))
+  )
     throw new ProfileInputError();
   if ((!empty && normalized === "") || [...normalized].length > limit)
     throw new ProfileInputError();
@@ -35,7 +46,7 @@ export function normalizeProfile(value: unknown): ProfileInput {
   const row = object(value);
   if (typeof row.visible !== "boolean") throw new ProfileInputError();
   return {
-    displayName: text(row.displayName, 80, false),
+    displayName: text(row.displayName, 80, false, true),
     bio: text(row.bio, 280, true),
     visible: row.visible,
   };
