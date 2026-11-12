@@ -1,13 +1,7 @@
 // @vitest-environment jsdom
-import {
-  cleanup,
-  render,
-  screen,
-  fireEvent,
-  within,
-} from "@testing-library/react";
+import { cleanup, render, screen, within } from "@testing-library/react";
 import { createRef } from "react";
-import { afterEach, beforeAll, describe, expect, it, vi } from "vitest";
+import { afterEach, beforeAll, describe, expect, it } from "vitest";
 import { ResultsPanel } from "../src/components/ResultsPanel.js";
 import { results } from "./stub-api.js";
 
@@ -25,16 +19,7 @@ const COUNTED = results({
 });
 
 function show(over: Partial<Parameters<typeof ResultsPanel>[0]> = {}) {
-  const onClose = vi.fn();
-  render(
-    <ResultsPanel
-      results={COUNTED}
-      yourChoices={[1]}
-      onClose={onClose}
-      {...over}
-    />,
-  );
-  return { onClose };
+  render(<ResultsPanel results={COUNTED} yourChoices={[1]} {...over} />);
 }
 
 describe("showing where a question stands", () => {
@@ -215,8 +200,6 @@ describe("showing where a question stands", () => {
     expect(document.querySelector(".results__bar")).toBeNull();
     expect(screen.queryByText(/0 votes/)).toBeNull();
     expect(screen.queryByText(/confirmed/)).toBeNull();
-    // Still a way out.
-    expect(screen.getByRole("button", { name: "Close" })).toBeTruthy();
   });
 
   it("says nobody has answered yet while the question is open", () => {
@@ -240,14 +223,12 @@ describe("showing where a question stands", () => {
     expect(screen.queryByText("yours")).toBeNull();
   });
 
-  it("gives a way out that is not called Back", () => {
-    const { onClose } = show();
-    const close = screen.getByRole("button", { name: "Close" });
-    expect(close.textContent).toBe("×");
-    // The shared secondary Button, kept small by its modifier (#534).
-    expect(close.className).toBe("btn btn--secondary results__close");
-    fireEvent.click(close);
-    expect(onClose).toHaveBeenCalledTimes(1);
+  // The full panel's own Close was never drawn on any page; it went in #569.
+  // The card or page around the panel owns the way out.
+  it("draws no close control of its own", () => {
+    show();
+    expect(screen.queryByRole("button", { name: "Close" })).toBeNull();
+    expect(document.querySelector(".results__close")).toBeNull();
   });
 
   /**

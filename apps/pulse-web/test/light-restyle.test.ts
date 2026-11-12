@@ -88,7 +88,6 @@ describe("the light look's invariants (#482)", () => {
 
   it("draws every secondary button with a visible edge", () => {
     const buttons: Array<readonly [string, string]> = [
-      ["styles/utilities.css", ".button"],
       ["components/VoteCard.css", ".vote-card button"],
       ["components/TwoPress.css", ".two-press__action--secondary"],
       ["components/ResultsPanel.css", ".results__retry"],

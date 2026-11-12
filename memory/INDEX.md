@@ -34,9 +34,10 @@ Do not apply charter rules to `apps/**`, and do not relax them anywhere else.
   are built. Answered sync, simpler results, desktop voting under the question,
   Next address updates, shared headers, sign-in retention, private fault logs,
   security headers, one ballot per signed-in person (ADR-0046), an origin check
-  on sign-in and shared Button/Field/Choice are merged. Open follow-ups: #528,
-  #533, #535, #536-#538, #549, #550, the rest of #534, #539 step 2, and
-  #499/#500 (mockups merged, not built).
+  on sign-in, shared Button/Field/Choice (Account, Explore and results controls
+  now use it), configurable proxy hops (#549) and sign-in row purging (#550)
+  are merged. Open follow-ups: #528, #533, #535, #536-#538, #557, #560, #569,
+  #534 part 3, #539 step 2, and #499/#500 (mockups merged, not built).
   Comments/replies, abuse reporting and MCP discovery remain unbuilt. Deployment
   needs a host, DNS, a verified sending domain and the runbook prerequisites.
   → `memory/pulse.md`

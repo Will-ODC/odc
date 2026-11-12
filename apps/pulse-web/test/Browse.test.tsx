@@ -88,7 +88,12 @@ it("shows loading, retry and empty states with useful destinations", async () =>
   expect(within(explore).getByText("Loading…")).toBeTruthy();
   await act(async () => reject(new ApiError(503, "Please try later.")));
   expect(await screen.findByText("Please try later.")).toBeTruthy();
-  await userEvent.click(screen.getByRole("button", { name: "Try again" }));
+  const retry = within(screen.getByRole("main")).getByRole("button", {
+    name: "Try again",
+  });
+  // The shared small size, not a local copy of it (#569).
+  expect(retry.classList.contains("btn--small")).toBe(true);
+  await userEvent.click(retry);
   expect(await screen.findByText(/No questions here yet/)).toBeTruthy();
   expect(screen.queryByRole("link", { name: "Starting questions" })).toBeNull();
   expect(
@@ -110,8 +115,8 @@ it("keeps earlier rows through a failed page and retries the same cursor once", 
     );
   render(<Browse api={stubApi({ listPolls })} community="campus" />);
   const more = await screen.findByRole("button", { name: "Load more" });
-  // The shared secondary Button at the list's smaller size (#534).
-  expect(more.className).toBe("btn btn--secondary browse__action");
+  // The shared secondary Button at its small size (#569).
+  expect(more.className).toBe("btn btn--secondary btn--small browse__action");
   await userEvent.click(more);
   expect(await screen.findByRole("alert")).toBeTruthy();
   expect(screen.getByRole("link", { name: "Question one" })).toBeTruthy();
@@ -348,7 +353,10 @@ it("keeps the Answered loading, error, retry focus and empty states separate fro
   await act(async () => reject(new Error("offline")));
   expect(rail.getByText("We couldn't load your votes.")).toBeTruthy();
   const user = userEvent.setup();
-  rail.getByRole("button", { name: "Try again" }).focus();
+  const retry = rail.getByRole("button", { name: "Try again" });
+  // The rail's retry is the small secondary Button too (#569).
+  expect(retry.className).toBe("btn btn--secondary btn--small");
+  retry.focus();
   await user.keyboard("{Enter}");
   expect(document.activeElement).toBe(
     rail.getByRole("link", { name: "My votes" }),

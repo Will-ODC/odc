@@ -250,6 +250,7 @@ export function Browse({
           contributions.value?.nextCursor ? (
             <Button
               variant="secondary"
+              size="small"
               className="browse__action"
               type="button"
               disabled={loadingContributions}
@@ -266,6 +267,7 @@ export function Browse({
           data.value.nextCursor ? (
             <Button
               variant="secondary"
+              size="small"
               className="browse__action"
               type="button"
               disabled={more.status === "loading"}

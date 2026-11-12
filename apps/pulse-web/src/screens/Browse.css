@@ -117,24 +117,10 @@
 }
 
 /*
- * Try again and Load more: the shared secondary Button (#534) at the smaller
- * size of the `.button` utility they used before, which My votes still uses.
- * Two classes, so these outrank `.btn--secondary` whatever the import order.
+ * Try again and Load more (Explore and My votes), the small secondary Button
+ * (#569), centred under the list or its message. Two classes, so `display:
+ * block` outranks the phone rule's `display: flex` on `.btn--secondary`.
  */
-.btn.browse__action {
-  font-size: var(--t-small);
-  padding: var(--step) calc(var(--step) * 2);
-}
-.btn.browse__action:hover:not(:disabled) {
-  background: var(--hover);
-}
-.btn.browse__action:disabled {
-  opacity: 1;
-  color: var(--muted);
-}
-
-/* Try again and Load more, centred under the list or its message. */
-.browse__main > .button,
 .browse__main > .browse__action {
   display: block;
   margin: calc(var(--step) * 2) auto 0;
@@ -151,7 +137,7 @@
   margin-top: calc(var(--step) * 3);
 }
 /* My votes' left-aligned message: Try again and the way on line up under it. */
-.browse__main--message > .button {
+.browse__main--message > .browse__action {
   margin-inline: 0;
 }
 .browse__main--message .browse__more {

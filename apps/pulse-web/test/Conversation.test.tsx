@@ -1288,7 +1288,7 @@ describe("the Answered list (#484)", () => {
       "We couldn't load your votes.",
     );
     const retry = rail().getByRole("button", { name: "Try again" });
-    expect(retry.classList.contains("button")).toBe(true);
+    expect(retry.classList.contains("btn--small")).toBe(true);
     expect(
       screen.queryByText("More questions will appear here as you answer."),
     ).toBeNull();

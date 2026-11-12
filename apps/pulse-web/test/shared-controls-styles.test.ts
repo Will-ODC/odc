@@ -1,4 +1,4 @@
-import { readFileSync } from "node:fs";
+import { readFileSync, readdirSync } from "node:fs";
 import { expect, it } from "vitest";
 
 // jsdom cannot lay out media queries or paint outlines; assert the rules (#534).
@@ -89,27 +89,22 @@ it("keeps the account trigger plain text in the banner, not an underlined quiet 
   expect(rule).toContain("text-decoration: none;");
 });
 
-it("keeps Try again and Load more on Explore at the smaller utility size", () => {
+it("keeps Try again and Load more centred under the list on Explore and My votes", () => {
   const css = read("../src/screens/Browse.css");
-  expect(css).toMatch(
-    /\.btn\.browse__action \{\s*font-size: var\(--t-small\);\s*padding: var\(--step\) calc\(var\(--step\) \* 2\);/,
-  );
-  expect(css).toMatch(
-    /\.btn\.browse__action:hover:not\(:disabled\) \{\s*background: var\(--hover\);/,
-  );
-  // Muted text while loading, not the shared variant's faded button.
-  expect(css).toMatch(
-    /\.btn\.browse__action:disabled \{\s*opacity: 1;\s*color: var\(--muted\);/,
-  );
+  // Size, hover and disabled now come from `.btn--small` (#569); only layout
+  // stays on the screen.
+  expect(css).not.toMatch(/\.btn\.browse__action/);
   // Centred block on every width; outranks the phone rule's `display: flex`.
   expect(css).toMatch(
-    /\.browse__main > \.browse__action \{\s*display: block;\s*margin: calc\(var\(--step\) \* 2\) auto 0;/,
+    /\.browse__main > \.browse__action \{\s*display: block;\s*margin: calc\(var\(--step\) \* 2\) auto 0;\s*\}/,
   );
-  // My votes still uses the utility class under the same layout.
-  expect(css).toMatch(/\.browse__main > \.button,/);
+  // My votes' left-aligned message keeps them at the start of the line.
+  expect(css).toMatch(
+    /\.browse__main--message > \.browse__action \{\s*margin-inline: 0;\s*\}/,
+  );
 });
 
-it("keeps the results toggle borderless and the panel's Close small", () => {
+it("keeps the results toggle borderless and ClosedResults' Close small", () => {
   const css = read("../src/components/ResultsPanel.css");
   const toggle = /\.results \.results__toggle \{([^}]*)\}/.exec(css)?.[1];
   expect(toggle).toBeDefined();
@@ -117,7 +112,72 @@ it("keeps the results toggle borderless and the panel's Close small", () => {
   expect(toggle).toContain("background: none;");
   expect(toggle).toContain("text-decoration: none;");
   expect(toggle).toContain("font-size: var(--t-small);");
+  // ResultsPanel's own Close went in #569; ClosedResults' plain one remains.
+  expect(css).not.toContain(".btn.results__close");
   expect(css).toMatch(
-    /\.results__close,\s*\.btn\.results__close \{\s*position: absolute;[^}]*padding: var\(--step\);/,
+    /\n\.results__close \{\s*position: absolute;[^}]*padding: var\(--step\);/,
   );
+});
+
+// #569: one small secondary button. Explore, My votes, the rail and the
+// account menu use the shared Button's small size, and the `.button` utility
+// (with its own focus ring) is gone.
+it("draws the small secondary size from tokens, after the rules it overrides", () => {
+  const css = read("../src/components/Button.css");
+  const small = /\.btn--small \{([^}]*)\}/.exec(css)?.[1];
+  expect(small).toBeDefined();
+  expect(small).toContain("font-size: var(--t-small);");
+  expect(small).toContain("padding: var(--step) calc(var(--step) * 2);");
+  expect(small).not.toMatch(/\d+px/);
+  expect(css).toMatch(
+    /\.btn--small:hover:not\(:disabled\) \{\s*background: var\(--hover\);\s*\}/,
+  );
+  // Muted text while loading, not the shared variant's faded button.
+  expect(css).toMatch(
+    /\.btn--small:disabled \{\s*opacity: 1;\s*color: var\(--muted\);\s*\}/,
+  );
+  // Same specificity as what they override, so they must come later.
+  const at = (s: string) => css.indexOf(s);
+  expect(at(".btn--small {")).toBeGreaterThan(at(".btn--secondary {"));
+  expect(at(".btn--small:disabled")).toBeGreaterThan(at(".btn:disabled"));
+  // The 44px phone target is the secondary variant's, which small always is.
+  expect(phoneRules(css)).toMatch(
+    /\.btn--secondary \{[^}]*min-height: var\(--touch\);/,
+  );
+});
+
+const small = [
+  "screens/Browse.tsx",
+  "screens/MyVotes.tsx",
+  "components/AnsweredRail.tsx",
+  "components/SiteBanner.tsx",
+] as const;
+
+it.each(small)(
+  "%s uses the small shared Button, not the old utility",
+  (tsx) => {
+    const source = read(`../src/${tsx}`);
+    expect(source).not.toMatch(/<button[\s>]/);
+    expect(source).not.toMatch(/className=["'{`][^"'}`]*\bbutton\b/);
+    expect(source).toMatch(/<Button\b[^>]*\bsize="small"/);
+  },
+);
+
+it("has no `.button` utility left, focus ring included", () => {
+  const css = read("../src/styles/utilities.css");
+  expect(css).not.toMatch(/\.button\b/);
+  expect(css).not.toContain(":focus-visible");
+  // Nowhere in the app: no stylesheet rule for it, no element wearing it.
+  const files = readdirSync(new URL("../src/", import.meta.url), {
+    recursive: true,
+  })
+    .map(String)
+    .filter((file) => /\.(css|tsx?)$/.test(file));
+  expect(files).toContain("screens/MyVotes.tsx");
+  const users = files.filter((file) =>
+    /\.button(?![-\w])|className=["'`][^"'`]*(?<![-\w])button(?![-\w])/.test(
+      read(`../src/${file}`),
+    ),
+  );
+  expect(users).toEqual([]);
 });

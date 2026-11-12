@@ -42,7 +42,6 @@ export function ResultsPanel({
   yourChoices = [],
   ended = false,
   compact = false,
-  onClose,
   panelRef,
   explainHref,
   hidden: hiddenProp,
@@ -66,8 +65,6 @@ export function ResultsPanel({
    * promise more answers to come on a question that can take no more.
    */
   ended?: boolean | undefined;
-  /** Omit when the containing card already supplies its close control. */
-  onClose?: () => void;
   /**
    * Focus lands here when the panel opens. The control that was pressed is
    * unmounted by the same render, so without this focus falls to the document
@@ -170,17 +167,6 @@ export function ResultsPanel({
             </svg>
           </Button>
         </div>
-      ) : null}
-      {onClose && !compact ? (
-        <Button
-          type="button"
-          variant="secondary"
-          className="results__close"
-          aria-label="Close"
-          onClick={onClose}
-        >
-          <span aria-hidden="true">×</span>
-        </Button>
       ) : null}
       {compact ? null : <p className="ballot__eyebrow">WHERE IT STANDS</p>}
       {compact ? null : (
