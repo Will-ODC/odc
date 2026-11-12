@@ -1,0 +1,11 @@
+/*
+ * Previous and Next sit together at the end of a row. Their look is the
+ * card's quiet "Next question" (`vote-card__next` in VoteCard.css), so the
+ * pager reads the same in the results card and under a closed question.
+ */
+.question-pager {
+  display: flex;
+  gap: var(--step);
+  inline-size: fit-content;
+  margin-inline-start: auto;
+}

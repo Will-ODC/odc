@@ -6,19 +6,19 @@ import {
   useState,
 } from "react";
 import type { ReactNode } from "react";
-import type { Ballot, Poll, PulseApi, Results } from "../api/types.js";
+import type { Ballot, MyVote, Poll, PulseApi, Results } from "../api/types.js";
 import { UNREACHABLE } from "../api/types.js";
 import type { Route } from "../flow/route.js";
 import { cardStatus, closingNote, nextFor } from "../flow/conversation.js";
 import { byline } from "../flow/new-poll.js";
 import { pathOf } from "../flow/route.js";
-import { answeredList } from "../flow/answered.js";
+import { answeredList, type MyVotesPlace } from "../flow/answered.js";
 import { usePoll } from "../hooks/use-poll.js";
 import { useCastVote } from "../hooks/use-cast-vote.js";
 import type { CastState } from "../hooks/use-cast-vote.js";
 import { useClosedResults } from "../hooks/use-closed-results.js";
 import { useFreshResults } from "../hooks/use-fresh-results.js";
-import { useMyVotes } from "../hooks/use-my-votes.js";
+import { useMyVotes, useMyVotesPlace } from "../hooks/use-my-votes.js";
 import { useWide } from "../hooks/use-wide.js";
 import { useSwipeLeft } from "../hooks/use-swipe.js";
 import type { Confirmation } from "../flow/vote-card.js";
@@ -28,6 +28,10 @@ import { ViewState } from "../components/ViewState.js";
 import { AnsweredRail } from "../components/AnsweredRail.js";
 import { PostedBanner } from "../components/PostedBanner.js";
 import { CopyLink } from "../components/CopyLink.js";
+import {
+  QuestionPager,
+  type MyVotesNavigation,
+} from "../components/QuestionPager.js";
 import { useSession } from "../hooks/use-session.js";
 import type { Session } from "../hooks/use-session.js";
 import { SiteBanner } from "../components/SiteBanner.js";
@@ -286,11 +290,20 @@ export function Conversation({
     (one) => !unsettled.includes(one.poll.id),
   );
   const saved = settledAnswers.find((one) => one.poll.id === at);
-  const answered = answeredList(
-    mine.data.status === "ready" ? mine.data.value.votes : [],
+  const firstPage = mine.data.status === "ready" ? mine.data.value : undefined;
+  const serverVotes = firstPage?.votes ?? [];
+  // The rail draws the first page and this page's answers, nothing more.
+  const answered = answeredList(serverVotes, answers, recentAnswers);
+  // Previous and Next follow My votes (#528).
+  const place = useMyVotesPlace({
+    api,
+    first: firstPage,
+    firstLoading: mine.data.status === "loading",
     answers,
-    recentAnswers,
-  );
+    recent: recentAnswers,
+    at,
+    round,
+  });
   const main = useRef<HTMLElement>(null);
   // "Your question is live" belongs to the question just posted. Leaving it
   // for another question ends the line.
@@ -349,6 +362,7 @@ export function Conversation({
           onHeldBallot={foundHeldBallot}
           onSent={sent}
           onGo={go}
+          myVotesPlace={place}
           // The posting banner already offers Copy link; one is enough.
           shareable={!(posted && at === pollId)}
         />
@@ -367,6 +381,7 @@ function Question({
   onHeldBallot,
   onSent,
   onGo,
+  myVotesPlace,
   shareable,
 }: {
   api: PulseApi;
@@ -380,6 +395,7 @@ function Question({
   onHeldBallot: () => void;
   onSent: Sent;
   onGo: (id: string) => void;
+  myVotesPlace: MyVotesPlace;
   shareable: boolean;
 }) {
   const [attempt, setAttempt] = useState(0);
@@ -397,6 +413,7 @@ function Question({
       onHeldBallot={onHeldBallot}
       onSent={onSent}
       onGo={onGo}
+      myVotesPlace={myVotesPlace}
       shareable={shareable}
       onRetry={() => setAttempt((one) => one + 1)}
     />
@@ -414,6 +431,7 @@ function LoadedQuestion({
   onHeldBallot,
   onSent,
   onGo,
+  myVotesPlace,
   shareable,
   onRetry,
 }: {
@@ -429,6 +447,7 @@ function LoadedQuestion({
   onHeldBallot: () => void;
   onSent: Sent;
   onGo: (id: string) => void;
+  myVotesPlace: MyVotesPlace;
   /** Whether to offer Copy link under the question. */
   shareable: boolean;
   onRetry: () => void;
@@ -461,6 +480,7 @@ function LoadedQuestion({
   // On desktop (#490) voting sits in the page under the question; on a phone
   // it is the sheet along the bottom edge.
   const wide = useWide();
+  const { scrollRef, dockRef } = useDockSpace();
   const renderPage = (
     standing: ReactNode,
     vote: ReactNode,
@@ -468,7 +488,7 @@ function LoadedQuestion({
   ) => {
     return (
       <>
-        <div className="conversation__scroll">
+        <div className="conversation__scroll" ref={scrollRef}>
           <div className="conversation__column">
             <ViewState data={loaded}>
               {(poll) => (
@@ -520,7 +540,11 @@ function LoadedQuestion({
           </div>
         </div>
         {vote && !wide ? (
-          <aside className="conversation__dock" aria-label="Voting">
+          <aside
+            className="conversation__dock"
+            aria-label="Voting"
+            ref={dockRef}
+          >
             <div className="conversation__column">
               <div className="conversation__vote">{vote}</div>
             </div>
@@ -549,6 +573,7 @@ function LoadedQuestion({
       onReadBack={onReadBack}
       onSent={onSent}
       onGo={onGo}
+      myVotesPlace={myVotesPlace}
       wide={wide}
       renderPage={renderPage}
     />
@@ -630,6 +655,43 @@ function useRestoredAnswer(
   return settled ? "settled" : slow ? "stillSending" : "pending";
 }
 
+/**
+ * Keeps the page's bottom space as tall as the open Voting drawer on a phone,
+ * so everything under the question, the closed question's Previous and Next
+ * too, can scroll clear of it. The drawer's height, which changes as it opens
+ * and closes, is measured and handed to the CSS as `--dock-space`.
+ */
+function useDockSpace() {
+  const scrollRef = useRef<HTMLDivElement>(null);
+  const dockRef = useCallback((dock: HTMLElement | null) => {
+    if (!dock) return;
+    const fit = () =>
+      scrollRef.current?.style.setProperty(
+        "--dock-space",
+        `${dock.getBoundingClientRect().height}px`,
+      );
+    fit();
+    const watch =
+      typeof ResizeObserver === "undefined" ? null : new ResizeObserver(fit);
+    watch?.observe(dock);
+    return () => {
+      watch?.disconnect();
+      scrollRef.current?.style.removeProperty("--dock-space");
+    };
+  }, []);
+  return { scrollRef, dockRef };
+}
+
+/** A My votes row as one end of the pager, or a disabled end. */
+function opener(
+  row: MyVote | null,
+  onGo: (id: string) => void,
+): MyVotesNavigation["next"] {
+  return row
+    ? { question: row.question, onOpen: () => onGo(row.pollId) }
+    : null;
+}
+
 function LiveCard({
   api,
   poll,
@@ -639,6 +701,7 @@ function LiveCard({
   onReadBack,
   onSent,
   onGo,
+  myVotesPlace,
   wide,
   renderPage,
 }: {
@@ -651,6 +714,7 @@ function LiveCard({
   onReadBack: (poll: Poll) => Promise<Answer | undefined>;
   onSent: Sent;
   onGo: (id: string) => void;
+  myVotesPlace: MyVotesPlace;
   /** The desktop layout (#490): voting in the page, no drawer. */
   wide: boolean;
   renderPage: (
@@ -768,8 +832,29 @@ function LiveCard({
     backedOut.current = false;
     hadResults.current = resultView;
   }, [resultView, saved, visible, wide]);
-  const next = showing.kind === "answered" ? nextFor(poll, ballot) : null;
   const shut = status.kind === "closed";
+  // A saved answer moves through My votes with Previous and Next (#528).
+  // Any other question keeps the answer-selected Next (#502), and while a
+  // saved answer's neighbours are still being read there is no Next at all.
+  const myVotesNavigation: MyVotesNavigation | undefined =
+    myVotesPlace.kind === "found"
+      ? {
+          previous: opener(myVotesPlace.previous, onGo),
+          next: opener(myVotesPlace.next, onGo),
+        }
+      : undefined;
+  const answerNext =
+    myVotesPlace.kind === "none" && showing.kind === "answered"
+      ? nextFor(poll, ballot)
+      : null;
+  // What a left swipe opens on a phone (#554): only over the results, or a
+  // closed question, so a change being made or sent is never dropped.
+  const next =
+    showing.kind === "answered" || (shut && myVotesNavigation)
+      ? myVotesPlace.kind === "found"
+        ? (myVotesPlace.next?.pollId ?? null)
+        : answerNext
+      : null;
   // Desktop only: the choices are open again over a saved answer.
   const changing = wide && !shut && !resultView && Boolean(saved);
   // Close is not offered while a change is being sent: the outcome decides
@@ -902,7 +987,11 @@ function LiveCard({
         onClose={close}
         resultsHidden={resultsHidden}
         onResultsHidden={setResultsHidden}
-        {...(next ? { onNext: () => onGo(next) } : {})}
+        {...(myVotesNavigation
+          ? { myVotesNavigation }
+          : answerNext
+            ? { onNext: () => onGo(answerNext) }
+            : {})}
       />
     </div>
   );
@@ -934,20 +1023,31 @@ function LiveCard({
         onResultsHidden={setResultsHidden}
       />
     ) : null;
+  const pager = myVotesNavigation ? (
+    <QuestionPager navigation={myVotesNavigation} />
+  ) : null;
+  // A closed question: See results, then Previous and Next on the same row,
+  // or under the results once they are open (#528).
   const standing = shut ? (
     closed.showing ? (
-      <ClosedResults
-        data={closed.data}
-        compact
-        onRetry={closed.retry}
-        onClose={closed.close}
-        panelRef={closed.panelRef}
-        explainHref={pathOf({ kind: "trust" })}
-      />
+      <>
+        <ClosedResults
+          data={closed.data}
+          compact
+          onRetry={closed.retry}
+          onClose={closed.close}
+          panelRef={closed.panelRef}
+          explainHref={pathOf({ kind: "trust" })}
+        />
+        {pager ? <div className="conversation__pager">{pager}</div> : null}
+      </>
     ) : (
-      <button type="button" ref={closed.triggerRef} onClick={closed.open}>
-        See results
-      </button>
+      <div className="conversation__closed">
+        <button type="button" ref={closed.triggerRef} onClick={closed.open}>
+          See results
+        </button>
+        {pager}
+      </div>
     )
   ) : showing.kind === "answered" ? (
     card
@@ -963,7 +1063,7 @@ function LiveCard({
       : card;
   // On a phone or tablet, a left swipe over an answered question does what
   // "Next question" does (#554); the button stays for everyone else.
-  const swipeable = !shut && next !== null;
+  const swipeable = next !== null;
   const swipe = useSwipeLeft(swipeable ? () => onGo(next) : undefined);
   return (
     <div className="conversation__question" {...swipe}>
