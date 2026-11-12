@@ -1,3 +1,4 @@
+import type { PollImage } from "../images/public.js";
 import {
   comparePolls,
   type PollListQuery,
@@ -247,15 +248,25 @@ export class InMemoryVotingStore implements VotingStore {
    * alone — the author's account stays in the creation store — and is copied,
    * so the caller cannot change it afterwards. Not on `VotingStore`: seed
    * polls have no author and none is invented for them.
+   *
+   * `image` is likewise the in-memory creation store's: the picture it
+   * attached in the same publication, the equivalent of `polls.image_id`.
    */
-  async createPoll(input: NewPoll, publication?: Publication): Promise<Poll> {
+  async createPoll(
+    input: NewPoll,
+    publication?: Publication,
+    image?: PollImage,
+  ): Promise<Poll> {
     if (this.#polls.has(input.id))
       throw new TypeError(`poll already exists: ${input.id}`);
     const created = createPoll(input, this.#clock());
-    const poll: Poll =
-      publication === undefined
-        ? created
-        : { ...created, publication: structuredClone(publication) };
+    const poll: Poll = {
+      ...created,
+      ...(publication === undefined
+        ? {}
+        : { publication: structuredClone(publication) }),
+      ...(image === undefined ? {} : { image: { ...image } }),
+    };
     this.#polls.set(poll.id, poll);
     return poll;
   }
@@ -287,6 +298,7 @@ export class InMemoryVotingStore implements VotingStore {
         method: p.method,
         createdAt: p.createdAt,
         ...(p.closesAt ? { closesAt: p.closesAt } : {}),
+        ...(p.image ? { image: { ...p.image } } : {}),
       }));
   }
 

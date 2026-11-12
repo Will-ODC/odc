@@ -192,6 +192,7 @@ test("reads_a_poll_in_the_clients_wire_shape_without_a_session", async () => {
     acceptsSuggestions: false,
     closesAt: "2026-08-10T12:00:00.000Z",
     open: true,
+    image: { kind: "tile" },
   });
 });
 
@@ -349,6 +350,7 @@ test("an_anonymous_authored_poll_reads_with_kind_alone_and_its_community", async
     acceptsSuggestions: false,
     closesAt: new Date(START.getTime() + 604_800_000).toISOString(),
     open: true,
+    image: { kind: "tile" },
     community: { id: "ubc-students", label: "UBC students" },
     attribution: { kind: "anonymous" },
   });

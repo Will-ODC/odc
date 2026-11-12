@@ -1,3 +1,4 @@
+import { publicPollImage, type PublicPollImage } from "../images/public.js";
 import {
   isOpen,
   type Attribution,
@@ -25,6 +26,8 @@ export interface PublicPoll {
   acceptsSuggestions: boolean;
   closesAt: string | null;
   open: boolean;
+  /** The poster's picture or the tile (ADR-0047); always present. */
+  image: PublicPollImage;
   community?: PollCommunity;
   attribution?: Attribution;
 }
@@ -57,6 +60,7 @@ export function publicPoll(poll: Poll, now: Date): PublicPoll {
     acceptsSuggestions: poll.acceptsSuggestions,
     closesAt: poll.closesAt ? poll.closesAt.toISOString() : null,
     open: isOpen(poll, now),
+    image: publicPollImage(poll.image),
   };
   if (poll.publication === undefined) return body;
   const { community, attribution } = poll.publication;
