@@ -144,17 +144,24 @@ function ContributionForm({
     },
     () => onCreated(resultId.current),
   );
+  const outcome = useRef<HTMLParagraphElement>(null);
   const pollNotFound = save.errorStatus === 404;
   const pollProblem = pollUnreadable
     ? "This is not a question link or ID. Paste the question’s link, or leave this blank."
     : pollNotFound
       ? "We could not find that question. Check the link, or leave this blank."
       : undefined;
-  // The server could not find the question: take the person to the field
-  // that says so. Runs after the form is enabled again, so focus can land.
+  // A rejected question goes to its field. Other failures recover focus lost
+  // when publishing disabled the button, unless the person has moved on.
   const { failure } = save;
   useEffect(() => {
-    if (failure?.status === 404) pollField.current?.focus();
+    if (!failure) return;
+    if (failure.status === 404) pollField.current?.focus();
+    else if (
+      document.activeElement === null ||
+      document.activeElement === document.body
+    )
+      outcome.current?.focus();
   }, [failure]);
   function checkPoll() {
     setPollUnreadable(
@@ -191,6 +198,19 @@ function ContributionForm({
       noValidate
       onSubmit={submit}
     >
+      {expired || save.errorStatus === 401 ? (
+        <p className="contribution-note" role="status">
+          Your sign-in has ended. What you wrote stays here.{" "}
+          <a
+            href="/sign-in?next=contribution-new"
+            target="_blank"
+            rel="noreferrer"
+          >
+            Sign in again in a new tab
+          </a>{" "}
+          to send it.
+        </p>
+      ) : null}
       <fieldset disabled={save.pending || expired}>
         <Field
           id="contribution-kind"
@@ -313,19 +333,15 @@ function ContributionForm({
         </Field>
         <p>Keep personal contact and payment details out of your post.</p>
       </div>
-      {save.error ? (
-        <p role="alert" className="contribution-error">
+      {save.error && !pollNotFound ? (
+        <p
+          ref={outcome}
+          role="alert"
+          tabIndex={-1}
+          className="contribution-error"
+        >
           {save.error}
         </p>
-      ) : null}
-      {expired || save.errorStatus === 401 ? (
-        <a
-          href="/sign-in?next=contribution-new"
-          target="_blank"
-          rel="noreferrer"
-        >
-          Sign in again in a new tab
-        </a>
       ) : null}
       <Button variant="primary" disabled={save.pending || expired}>
         {save.pending ? "Publishing…" : "Publish contribution"}

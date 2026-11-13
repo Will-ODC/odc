@@ -2,6 +2,7 @@
 import { cleanup, render, screen, waitFor } from "@testing-library/react";
 import userEvent from "@testing-library/user-event";
 import { afterEach, expect, it, vi } from "vitest";
+import { ContributionsError } from "../src/api/contributions.js";
 import type {
   Contribution,
   ContributionsApi,
@@ -141,6 +142,14 @@ it("keeps the draft and confirmation through expiry and the same account signing
   });
   expect(link.getAttribute("target")).toBe("_blank");
   expect(link.getAttribute("href")).toBe("/sign-in?next=contribution-new");
+  const notice = link.closest("p")!;
+  expect(notice.getAttribute("role")).toBe("status");
+  expect(notice.className).toBe("contribution-note");
+  expect(notice.textContent).toBe(
+    "Your sign-in has ended. What you wrote stays here. Sign in again in a new tab to send it.",
+  );
+  expect(notice.closest("form")?.firstElementChild).toBe(notice);
+  expect(link.getAttribute("rel")).toBe("noreferrer");
   expectDraft();
   expect(
     (
@@ -277,4 +286,76 @@ it("focuses the first missing field before an invalid related question", async (
     "https://pulse.example/questions/garden",
   );
   expect(create).not.toHaveBeenCalled();
+});
+
+it.each([503, 401, undefined])(
+  "focuses the outcome after a deferred keyboard submission fails (%s)",
+  async (status) => {
+    const { user, create } = setup();
+    let reject!: (reason: Error) => void;
+    create.mockImplementationOnce(
+      () =>
+        new Promise((_, fail) => {
+          reject = fail;
+        }),
+    );
+    await writeDraft(user);
+    await user.tab();
+    expect(document.activeElement).toBe(
+      screen.getByRole("button", { name: "Publish contribution" }),
+    );
+    await user.keyboard("{Enter}");
+    expect(create).toHaveBeenCalledOnce();
+    expect(
+      (screen.getByRole("button", { name: "Publishing…" }) as HTMLButtonElement)
+        .disabled,
+    ).toBe(true);
+    document.body.setAttribute("tabindex", "-1");
+    document.body.focus();
+    document.body.removeAttribute("tabindex");
+    expect(document.activeElement).toBe(document.body);
+    reject(
+      status === undefined
+        ? new Error("Connection lost. Try again.")
+        : new ContributionsError(status, "Could not publish. Try again."),
+    );
+    const alert = await screen.findByRole("alert");
+    await waitFor(() => expect(document.activeElement).toBe(alert));
+    expect(alert.getAttribute("tabindex")).toBe("-1");
+    expectDraft();
+    if (status === 401) {
+      const notice = screen.getByRole("status");
+      expect(notice.textContent).toBe(
+        "Your sign-in has ended. What you wrote stays here. Sign in again in a new tab to send it.",
+      );
+      expect(notice.closest("form")?.firstElementChild).toBe(notice);
+    }
+  },
+);
+
+it("shows a rejected related question only beside the field and focuses it", async () => {
+  const { user, create } = setup();
+  create.mockRejectedValueOnce(
+    new ContributionsError(
+      404,
+      "Check the related question or leave that field blank.",
+    ),
+  );
+  await writeDraft(user);
+  await user.click(
+    screen.getByRole("button", { name: "Publish contribution" }),
+  );
+  const poll = screen.getByLabelText("Related question (optional)");
+  await waitFor(() => expect(document.activeElement).toBe(poll));
+  expect(poll.getAttribute("aria-invalid")).toBe("true");
+  expect(
+    screen.getByText(
+      "We could not find that question. Check the link, or leave this blank.",
+    ),
+  ).toBeTruthy();
+  expect(screen.queryByRole("alert")).toBeNull();
+  expect(
+    screen.queryByText("Check the related question or leave that field blank."),
+  ).toBeNull();
+  expectDraft();
 });
