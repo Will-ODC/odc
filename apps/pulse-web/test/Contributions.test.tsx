@@ -1277,7 +1277,7 @@ it("keeps the page and its drafts when a background reload fails", async () => {
     .fn()
     .mockResolvedValueOnce({ contribution: fixture(), canManage: false })
     .mockResolvedValueOnce({ contribution: fixture(), canManage: false })
-    .mockRejectedValue(new ContributionsError("Could not load.", 503));
+    .mockRejectedValue(new ContributionsError(503, "Could not load."));
   render(
     <ContributionDetail
       api={stubApi({ me })}
