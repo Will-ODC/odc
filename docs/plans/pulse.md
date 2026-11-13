@@ -157,8 +157,11 @@ Reuse the action record work (#246), contributions/claimed results (#247), and
 reviewed evidence (#248), rather than introducing duplicate records. Related
 poll reads and action read APIs are dependencies, not shipped features.
 
-**Still to settle before implementation:** publishing authority and action record
-rules from #246–#248; which recipients are associated with which poll; whether
+[Contributions (#246)](contributions.md) defines signed-in publishing, public
+discovery and private organizer messages.
+
+**Still to settle before poll-linked outcomes and notifications:** reviewed
+evidence rules from #247–#248; which recipients are associated with which poll; whether
 existing `proofEmailsOptIn` covers these messages; consent withdrawal, opt-out
 and delivery rules. The preference is collected at sign-in but no outcome mail
 is sent today. Soliciting donations/volunteers and funding remain separate work;

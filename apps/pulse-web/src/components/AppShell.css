@@ -51,6 +51,17 @@
   }
 }
 
+@media (min-width: 700px) {
+  .shell__body--with-nav {
+    grid-template-columns: var(--rail) minmax(0, 1fr);
+  }
+
+  .shell__rail--start {
+    display: grid;
+    min-height: 0;
+  }
+}
+
 /* ---- the website: 1100px and up ---- */
 
 @media (min-width: 1100px) {
@@ -96,19 +107,8 @@
   }
 
   .shell__rail {
-    display: flex;
-    flex-direction: column;
-    gap: var(--gutter);
-    padding: var(--rail-gap);
-    box-sizing: border-box;
-    /*
-     * Scrolling inside itself rather than lengthening the page: the ballot is
-     * the height of the window, and a page that scrolled past it would move
-     * the vote off screen.
-     */
+    display: grid;
     min-height: 0;
     overflow-y: auto;
-    color: var(--ink-soft);
-    font-size: var(--t-body);
   }
 }
