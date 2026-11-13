@@ -150,3 +150,48 @@ it("ignores an identity answer already on its way when another tab signs out", a
     ended: "elsewhere",
   });
 });
+
+it.each([
+  ["a newer check says nobody is signed in", "nobody"],
+  ["a newer check fails", "fails"],
+  ["another tab announces a sign-out", "announced"],
+] as const)(
+  "settles a page still loading its first answer when %s",
+  async (_label, how) => {
+    const pending: Array<{
+      resolve: (value: ReturnType<typeof person> | null) => void;
+      reject: (reason: unknown) => void;
+    }> = [];
+    const me = vi.fn(
+      () =>
+        new Promise<ReturnType<typeof person> | null>((resolve, reject) => {
+          pending.push({ resolve, reject });
+        }),
+    );
+    const api = stubApi({ me });
+    const { result } = renderHook(() =>
+      useSession(api, { recheckSignedIn: true }),
+    );
+    expect(result.current.session).toEqual({ status: "loading" });
+    const first = pending[0]!;
+    if (how === "announced")
+      await act(async () =>
+        window.dispatchEvent(
+          new StorageEvent("storage", { key: SIGNED_OUT_KEY }),
+        ),
+      );
+    else {
+      await act(async () => window.dispatchEvent(new Event("focus")));
+      const newer = pending[pending.length - 1]!;
+      await act(async () =>
+        how === "nobody" ? newer.resolve(null) : newer.reject(new Error("x")),
+      );
+    }
+    expect(result.current.session).toEqual(
+      how === "fails" ? { status: "unknown" } : { status: "signedOut" },
+    );
+    // The first answer, arriving late, no longer counts.
+    await act(async () => first.resolve(person("a")));
+    expect(result.current.session.status).not.toBe("signedIn");
+  },
+);

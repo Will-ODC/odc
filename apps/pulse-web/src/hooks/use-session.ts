@@ -142,14 +142,25 @@ export function useSession(
           // A page showing one account's private data must stop showing it.
           // With no sign-out announced, the session ran out (or was revoked):
           // "expired", which the page may let the person recover from.
+          // While the first answer is still loading, this newer one has
+          // replaced it, so it settles the page: nobody is signed in.
           else if (recheckSignedIn)
             setSession((current) =>
               current.status === "signedIn"
                 ? { status: "signedOut", ended: "expired" }
-                : current,
+                : current.status === "loading"
+                  ? { status: "signedOut" }
+                  : current,
             );
         },
-        () => {},
+        () => {
+          // A failure changes nothing, except that a page still loading
+          // (its first answer replaced by this one) must not wait forever.
+          if (live && isLatest(ticket))
+            setSession((current) =>
+              current.status === "loading" ? { status: "unknown" } : current,
+            );
+        },
       );
     };
     const announced = (event: StorageEvent) => {
@@ -161,7 +172,11 @@ export function useSession(
           current.status === "signedIn" ||
           (current.status === "signedOut" && current.ended === "expired")
             ? { status: "signedOut", ended: "elsewhere" }
-            : current,
+            : // The first answer was still on its way and no longer counts:
+              // nobody is signed in now.
+              current.status === "loading"
+              ? { status: "signedOut" }
+              : current,
         );
       }
     };
