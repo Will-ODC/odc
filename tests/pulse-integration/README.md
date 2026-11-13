@@ -8,6 +8,9 @@ Postgres, mail service or running application is required.
 - `test/conversation-http.test.tsx` runs the React app in jsdom against HTTP.
 - `test/poll-creation-http.test.ts` publishes a question, reads it and votes
   through the real HTTP boundary.
+- `test/contributions-http.test.ts` exercises contribution publication, discovery,
+  participation and progress through the browser HTTP adapter, including owner
+  permissions, retries, public identity projection and commercial savings rules.
 
 Both apps are explicit workspace development dependencies. Deep source imports
 are test setup only; the browser app uses the public HTTP API. This package is

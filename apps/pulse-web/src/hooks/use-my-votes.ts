@@ -228,3 +228,27 @@ export function useMyVotesPlace({
   if (looking !== wanted) setWanted(looking);
   return place;
 }
+
+/**
+ * Votes that follow who is signed in: `cleared()` empties them when a person
+ * leaves (pass it as `onSignedOut`), and the next account to sign in, the same
+ * person recovering an expired session included, gets them read again.
+ */
+export function useVotesFollowSession(mine: {
+  clear: () => void;
+  retry: () => void;
+}) {
+  const emptied = useRef(false);
+  const { clear } = mine;
+  const cleared = useCallback(() => {
+    emptied.current = true;
+    clear();
+  }, [clear]);
+  const signedInAs = (accountId: string | null) => {
+    if (accountId !== null && emptied.current) {
+      emptied.current = false;
+      mine.retry();
+    }
+  };
+  return { cleared, signedInAs };
+}

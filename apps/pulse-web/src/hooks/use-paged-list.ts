@@ -11,6 +11,7 @@ export type PagedListMore =
   { status: "idle" | "loading" } | { status: "error"; message: string };
 
 interface PagedListOptions<T> {
+  enabled?: boolean;
   fetchPage: (cursor?: string) => Promise<PagedListPage<T>>;
   keyOf: (item: T) => string;
   emptyMessage: string;
@@ -23,6 +24,7 @@ const messageFor = (error: unknown, fallback: string) =>
 
 /** Shared cursor paging, including stale-read, duplicate and stuck-cursor guards. */
 export function usePagedList<T>({
+  enabled = true,
   fetchPage,
   keyOf,
   emptyMessage,
@@ -38,6 +40,7 @@ export function usePagedList<T>({
   const busy = useRef(false);
 
   useEffect(() => {
+    if (!enabled) return;
     const current = ++generation.current;
     busy.current = false;
     setData({ status: "loading" });
@@ -62,10 +65,15 @@ export function usePagedList<T>({
     return () => {
       ++generation.current;
     };
-  }, [attempt, emptyMessage, errorMessage, fetchPage]);
+  }, [attempt, emptyMessage, enabled, errorMessage, fetchPage]);
 
   const loadMore = useCallback(() => {
-    if (busy.current || data.status !== "ready" || !data.value.nextCursor)
+    if (
+      !enabled ||
+      busy.current ||
+      data.status !== "ready" ||
+      !data.value.nextCursor
+    )
       return;
     const cursor = data.value.nextCursor;
     busy.current = true;
@@ -104,7 +112,15 @@ export function usePagedList<T>({
         });
       },
     );
-  }, [data, emptyMessage, errorMessage, fetchPage, keyOf, moreErrorMessage]);
+  }, [
+    data,
+    emptyMessage,
+    enabled,
+    errorMessage,
+    fetchPage,
+    keyOf,
+    moreErrorMessage,
+  ]);
 
   const clear = useCallback(() => {
     ++generation.current;

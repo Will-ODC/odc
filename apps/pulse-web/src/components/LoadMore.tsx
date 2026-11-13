@@ -10,7 +10,11 @@ export function LoadMore({
   itemCount,
   listRef,
   onLoadMore,
+  itemSelector = "a",
+  moreLabel = "more",
 }: {
+  itemSelector?: string;
+  moreLabel?: string;
   more: PagedListMore;
   hasMore: boolean;
   itemCount: number;
@@ -20,10 +24,11 @@ export function LoadMore({
   const focusAt = useRef<number | null>(null);
   useEffect(() => {
     if (more.status !== "idle" || focusAt.current === null) return;
-    const links = listRef.current?.querySelectorAll("a");
+    const links =
+      listRef.current?.querySelectorAll<HTMLAnchorElement>(itemSelector);
     links?.[Math.min(focusAt.current, links.length - 1)]?.focus();
     focusAt.current = null;
-  }, [itemCount, listRef, more]);
+  }, [itemCount, itemSelector, listRef, more]);
 
   if (!hasMore) return null;
   return (
@@ -45,10 +50,10 @@ export function LoadMore({
         }}
       >
         {more.status === "loading"
-          ? "Loading more…"
+          ? `Loading ${moreLabel}…`
           : more.status === "error"
-            ? "Try loading more again"
-            : "Load more"}
+            ? `Try loading ${moreLabel} again`
+            : `Load ${moreLabel}`}
       </Button>
     </div>
   );

@@ -8,7 +8,7 @@ const ERROR = "We couldn't load the questions. Try again.";
 const MORE_ERROR = "We couldn't load more questions. Try again.";
 const keyOf = (poll: PollSummary) => poll.id;
 
-export function usePollList(api: PulseApi, community: string) {
+export function usePollList(api: PulseApi, community: string, enabled = true) {
   const fetchPage = useCallback(
     async (cursor?: string) => {
       const page =
@@ -27,6 +27,7 @@ export function usePollList(api: PulseApi, community: string) {
     [api, community],
   );
   const paged = usePagedList({
+    enabled,
     fetchPage,
     keyOf,
     emptyMessage: EMPTY,

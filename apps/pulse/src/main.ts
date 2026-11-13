@@ -1,3 +1,4 @@
+import { PostgresContributionsStore } from "./contributions/pg-store.js";
 import { logFault, textFaultLogger } from "./logging.js";
 import { pathToFileURL } from "node:url";
 import type { FastifyInstance } from "fastify";
@@ -384,6 +385,7 @@ export async function buildServer(
       suggestions: new PostgresSuggestionStore(pool),
       signer: new SessionSigner(config.secret),
       confirmationKey: new ConfirmationKey(config.confirmationKey),
+      contributions: new PostgresContributionsStore(pool),
       creation: new PostgresCreationStore(
         pool,
         config.ownerEmail === undefined

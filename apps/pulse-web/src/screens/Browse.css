@@ -35,10 +35,19 @@
   font-size: var(--t-body);
   line-height: 1.5;
 }
-.browse__list span {
+.browse__status {
   display: block;
   margin-top: calc(var(--step) / 2);
   color: var(--muted);
+  font-size: var(--t-small);
+}
+.browse__tag {
+  display: inline-block;
+  margin-bottom: calc(var(--step) / 2);
+  padding: calc(var(--step) / 2) var(--step);
+  border-radius: var(--r-control);
+  background: var(--green-wash);
+  color: var(--green-hover);
   font-size: var(--t-small);
 }
 
@@ -122,4 +131,32 @@
 /* Loading, empty and error sit clear of the subtitle, not tight under it. */
 .browse__main > .viewstate {
   margin-top: calc(var(--step) * 3);
+}
+/* My votes' left-aligned message: Try again and the way on line up under it. */
+.browse__main--message > .browse__action {
+  margin-inline: 0;
+}
+.browse__main--message .browse__more {
+  text-align: left;
+}
+
+.browse__filters {
+  display: flex;
+  flex-wrap: wrap;
+  gap: var(--step) var(--gutter);
+  margin-top: calc(var(--step) * 2);
+  font-size: var(--t-small);
+}
+
+.browse__filters a {
+  display: inline-flex;
+  align-items: center;
+  min-height: calc(var(--step) * 3);
+  color: var(--green-hover);
+}
+
+@media (max-width: 699px) {
+  .browse__filters a {
+    min-height: var(--touch);
+  }
 }

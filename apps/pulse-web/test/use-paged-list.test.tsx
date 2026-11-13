@@ -102,3 +102,87 @@ it("keeps retry stable across renders", async () => {
   rerender();
   expect(result.current.retry).toBe(retry);
 });
+
+it("waits until enabled before reading the first page", async () => {
+  const fetchPage = vi.fn(async () => page([row("one")], "next"));
+  const { result, rerender } = renderHook(
+    ({ enabled }) => usePagedList({ ...options(fetchPage), enabled }),
+    { initialProps: { enabled: false } },
+  );
+  act(() => result.current.loadMore());
+  expect(fetchPage).not.toHaveBeenCalled();
+  rerender({ enabled: true });
+  await waitFor(() => expect(result.current.data.status).toBe("ready"));
+  expect(fetchPage).toHaveBeenCalledExactlyOnceWith();
+});
+
+it("drops an in-flight later page when disabled and reads fresh on re-enable", async () => {
+  let finish!: (value: PagedListPage<Row>) => void;
+  const fetchPage = vi
+    .fn<(cursor?: string) => Promise<PagedListPage<Row>>>()
+    .mockResolvedValueOnce(page([row("one")], "next"))
+    .mockImplementationOnce(
+      () =>
+        new Promise((resolve) => {
+          finish = resolve;
+        }),
+    )
+    .mockResolvedValueOnce(page([row("fresh")]));
+  const { result, rerender } = renderHook(
+    ({ enabled }) => usePagedList({ ...options(fetchPage), enabled }),
+    { initialProps: { enabled: true } },
+  );
+  await waitFor(() => expect(result.current.data.status).toBe("ready"));
+  act(() => result.current.loadMore());
+  rerender({ enabled: false });
+  await act(async () => finish(page([row("late")])));
+  expect(result.current.data).toMatchObject({
+    status: "ready",
+    value: { items: [row("one")] },
+  });
+  act(() => result.current.loadMore());
+  expect(fetchPage).toHaveBeenCalledTimes(2);
+  rerender({ enabled: true });
+  await waitFor(() =>
+    expect(result.current.data).toMatchObject({
+      status: "ready",
+      value: { items: [row("fresh")], nextCursor: null },
+    }),
+  );
+});
+
+it.each(["first", "later"])(
+  "clear drops an in-flight %s page until retry",
+  async (which) => {
+    let finish!: (value: PagedListPage<Row>) => void;
+    const pending = () =>
+      new Promise<PagedListPage<Row>>((resolve) => {
+        finish = resolve;
+      });
+    const fetchPage = vi.fn<(cursor?: string) => Promise<PagedListPage<Row>>>();
+    if (which === "later")
+      fetchPage.mockResolvedValueOnce(page([row("one")], "next"));
+    fetchPage
+      .mockImplementationOnce(pending)
+      .mockResolvedValueOnce(page([row("fresh")]));
+    const { result } = renderHook(() => usePagedList(options(fetchPage)));
+    if (which === "later") {
+      await waitFor(() => expect(result.current.data.status).toBe("ready"));
+      act(() => result.current.loadMore());
+    }
+    act(() => result.current.clear());
+    await act(async () => finish(page([row("late")])));
+    expect(result.current.data).toEqual({
+      status: "empty",
+      message: "Nothing here.",
+    });
+    expect(result.current.more).toEqual({ status: "idle" });
+    act(() => result.current.retry());
+    await waitFor(() =>
+      expect(result.current.data).toMatchObject({
+        status: "ready",
+        value: { items: [row("fresh")] },
+      }),
+    );
+  },
+);

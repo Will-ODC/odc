@@ -55,7 +55,14 @@ export function rememberReturn(
   try {
     if (to?.kind === "newPoll") {
       store.setItem(KEY, JSON.stringify({ newPoll: true, at: now }));
-    } else if (to && to.pollId.length <= MAX_ID_LENGTH) {
+    } else if (to?.kind === "newContribution") {
+      store.setItem(KEY, JSON.stringify({ newContribution: true, at: now }));
+    } else if (to?.kind === "contribution" && to.id.length <= MAX_ID_LENGTH) {
+      store.setItem(KEY, JSON.stringify({ contributionId: to.id, at: now }));
+    } else if (
+      to?.kind === "conversation" &&
+      to.pollId.length <= MAX_ID_LENGTH
+    ) {
       store.setItem(KEY, JSON.stringify({ pollId: to.pollId, at: now }));
     } else {
       store.removeItem(KEY);
@@ -82,6 +89,15 @@ export function takeReturn(
     if (typeof at !== "number" || now - at > RETURN_LIFETIME_MS || at > now)
       return null;
     if ("newPoll" in kept && kept.newPoll === true) return { kind: "newPoll" };
+    if ("newContribution" in kept && kept.newContribution === true)
+      return { kind: "newContribution" };
+    if (
+      "contributionId" in kept &&
+      typeof kept.contributionId === "string" &&
+      kept.contributionId.length > 0 &&
+      kept.contributionId.length <= MAX_ID_LENGTH
+    )
+      return { kind: "contribution", id: kept.contributionId };
     if (!("pollId" in kept)) return null;
     const { pollId } = kept;
     if (
