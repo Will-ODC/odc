@@ -73,15 +73,26 @@ export function useSession(
     status: "idle",
   });
 
+  /*
+   * Every "who is signed in?" request takes a number, and only the newest
+   * one's answer counts: an older answer arriving late (account A, after B
+   * has signed in, or after a sign-out) must not put an earlier person back.
+   * A sign-out bumps the number too, so answers already on their way lose.
+   */
+  const identity = useRef(0);
+  const nextIdentity = () => ++identity.current;
+  const isLatest = (ticket: number) => ticket === identity.current;
+
   useEffect(() => {
     let live = true;
+    const ticket = nextIdentity();
     api.me().then(
       (me) => {
-        if (live)
+        if (live && isLatest(ticket))
           setSession(me ? { status: "signedIn", me } : { status: "signedOut" });
       },
       () => {
-        if (live) setSession({ status: "unknown" });
+        if (live && isLatest(ticket)) setSession({ status: "unknown" });
       },
     );
     return () => {
@@ -117,9 +128,10 @@ export function useSession(
     let live = true;
     const ask = () => {
       if (document.visibilityState === "hidden") return;
+      const ticket = nextIdentity();
       api.me().then(
         (me) => {
-          if (!live) return;
+          if (!live || !isLatest(ticket)) return;
           if (me)
             setSession((current) =>
               current.status === "signedIn" && current.me.id === me.id
@@ -143,13 +155,15 @@ export function useSession(
     const announced = (event: StorageEvent) => {
       if (event.key === SIGNED_IN_KEY) ask();
       // Another tab signed out on purpose: not an expiry to recover from.
-      else if (event.key === SIGNED_OUT_KEY && recheckSignedIn)
+      else if (event.key === SIGNED_OUT_KEY && recheckSignedIn) {
+        nextIdentity();
         setSession((current) =>
           current.status === "signedIn" ||
           (current.status === "signedOut" && current.ended === "expired")
             ? { status: "signedOut", ended: "elsewhere" }
             : current,
         );
+      }
     };
     window.addEventListener("focus", ask);
     window.addEventListener("storage", announced);
@@ -161,6 +175,28 @@ export function useSession(
       document.removeEventListener("visibilitychange", ask);
     };
   }, [api, settled, recheckSignedIn]);
+
+  /*
+   * Whoever was signed in here is gone without this page's own Sign out: it
+   * expired, they signed out in another tab, or another account replaced
+   * them. What this page holds for them (their votes, say) must go as it
+   * would after Sign out here, which runs `onSignedOut` itself.
+   */
+  const departed = useRef(after.onSignedOut);
+  useEffect(() => {
+    departed.current = after.onSignedOut;
+  });
+  const previous = useRef<string | null>(null);
+  useEffect(() => {
+    const now = session.status === "signedIn" ? session.me.id : null;
+    const left =
+      previous.current !== null &&
+      previous.current !== now &&
+      !(session.status === "signedOut" && session.ended === "here");
+    if (session.status !== "loading" && session.status !== "unknown")
+      previous.current = now;
+    if (left) departed.current?.();
+  }, [session]);
 
   // The hook's own guard, not only the button's: one request at a time.
   const sending = useRef(false);
@@ -175,6 +211,7 @@ export function useSession(
       () => {
         sending.current = false;
         setProgress({ status: "idle" });
+        nextIdentity();
         setSession(
           signedIn
             ? { status: "signedOut", ended: "here" }
