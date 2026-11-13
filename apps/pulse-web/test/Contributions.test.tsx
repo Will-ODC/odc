@@ -1357,3 +1357,182 @@ it("does not let a read that started before a participation undo it", async () =
   await act(async () => {});
   expect(screen.getByText("Bring tools", { selector: "p" })).toBeTruthy();
 });
+
+it("keeps an organizer's unsent update through an expired session and same-account sign-in", async () => {
+  const user = userEvent.setup();
+  const { state, me } = switchableMe("owner");
+  render(
+    <ContributionDetail
+      api={stubApi({ me })}
+      id="park"
+      client={client({
+        detail: async () => ({
+          contribution: fixture(),
+          canManage: state.who === "owner",
+        }),
+      })}
+    />,
+  );
+  await user.click(await screen.findByText("Post an update"));
+  await user.type(
+    screen.getByLabelText("Progress update"),
+    "Ramp is half built",
+  );
+  state.who = null;
+  window.dispatchEvent(new Event("focus"));
+  expect(
+    await screen.findAllByRole("link", { name: "Sign in again in a new tab" }),
+  ).toHaveLength(3);
+  // The private inbox needs a live session; the draft does not.
+  expect(screen.queryByText("Private messages", { exact: true })).toBeNull();
+  expect(
+    (screen.getByLabelText("Progress update") as HTMLTextAreaElement).value,
+  ).toBe("Ramp is half built");
+  state.who = "owner";
+  window.dispatchEvent(new Event("focus"));
+  expect(
+    await screen.findByText("Private messages", { exact: true }),
+  ).toBeTruthy();
+  expect(
+    (screen.getByLabelText("Progress update") as HTMLTextAreaElement).value,
+  ).toBe("Ramp is half built");
+});
+
+it("says when a background reload fails and offers to try again without hiding the page", async () => {
+  const user = userEvent.setup();
+  const { state, me } = switchableMe(null);
+  let failing = false;
+  const detail = vi.fn(async () => {
+    if (failing) throw new ContributionsError(503, "Could not load.");
+    return { contribution: fixture(), canManage: state.who === "owner" };
+  });
+  render(
+    <ContributionDetail
+      api={stubApi({ me })}
+      id="park"
+      client={client({ detail })}
+    />,
+  );
+  const title = await screen.findByRole("heading", { level: 1 });
+  failing = true;
+  state.who = "owner";
+  window.dispatchEvent(new Event("focus"));
+  expect(
+    await screen.findByText(/This page could not be brought up to date/),
+  ).toBeTruthy();
+  expect(screen.getByRole("heading", { level: 1 })).toBe(title);
+  failing = false;
+  await user.click(screen.getByRole("button", { name: "Try again" }));
+  expect(await screen.findByText("Post an update")).toBeTruthy();
+  expect(
+    screen.queryByText(/This page could not be brought up to date/),
+  ).toBeNull();
+  expect(screen.getByRole("heading", { level: 1 })).toBe(title);
+});
+
+it("puts keyboard focus on the outcome after a send, not on the page", async () => {
+  const user = userEvent.setup();
+  let finish: () => void = () => {};
+  const sendMessage = vi.fn(
+    () =>
+      new Promise<void>((resolve) => {
+        finish = resolve;
+      }),
+  );
+  render(
+    <ContributionDetail
+      api={stubApi({ me: switchableMe("reader").me })}
+      id="park"
+      client={client({ sendMessage })}
+    />,
+  );
+  await user.click(await screen.findByText("Message the organizer"));
+  await user.type(screen.getByLabelText("Private message"), "Hello");
+  await user.tab();
+  expect(document.activeElement).toBe(
+    screen.getByRole("button", { name: "Send message" }),
+  );
+  await user.keyboard("{Enter}");
+  // A browser drops focus to the page when a focused button becomes
+  // disabled; jsdom keeps it there (and will not blur a disabled button), so
+  // put focus on the page the way the browser would.
+  document.body.tabIndex = -1;
+  document.body.focus();
+  document.body.removeAttribute("tabindex");
+  await act(async () => finish());
+  expect(document.activeElement).toBe(
+    screen.getByText("Message sent to the organizer."),
+  );
+});
+
+it("says beside each field what is missing instead of a browser bubble", async () => {
+  const user = userEvent.setup();
+  const participate = vi.fn(async () => fixture());
+  const update = vi.fn(async () => fixture());
+  const sendMessage = vi.fn(async () => {});
+  render(
+    <ContributionDetail
+      api={stubApi({ me: switchableMe("owner").me })}
+      id="park"
+      client={client({
+        detail: async () => ({ contribution: fixture(), canManage: true }),
+        participate,
+        update,
+        sendMessage,
+      })}
+    />,
+  );
+  await user.click(await screen.findByRole("button", { name: "Offer help" }));
+  expect(screen.getByText("Enter the name to show.")).toBeTruthy();
+  expect(screen.getByText("Say how you can help.")).toBeTruthy();
+  expect(document.activeElement).toBe(screen.getByLabelText("Public name"));
+  expect(participate).not.toHaveBeenCalled();
+
+  await user.click(screen.getByText("Post an update"));
+  await user.type(screen.getByLabelText("Progress update"), "Done");
+  await user.type(
+    screen.getByLabelText("Evidence link (optional)"),
+    "photos/fence",
+  );
+  await user.click(screen.getByRole("button", { name: "Publish update" }));
+  expect(
+    screen.getByText("Enter a full link that starts with https://."),
+  ).toBeTruthy();
+  expect(
+    screen.getByText("Confirm this status and update may be published."),
+  ).toBeTruthy();
+  expect(document.activeElement).toBe(
+    screen.getByLabelText("Evidence link (optional)"),
+  );
+  expect(update).not.toHaveBeenCalled();
+});
+
+it("forgets a sign-in error once the same person has signed in again", async () => {
+  const user = userEvent.setup();
+  const { state, me } = switchableMe("helper");
+  const participate = vi
+    .fn()
+    .mockRejectedValue(new ContributionsError(401, "Sign in to continue."));
+  render(
+    <ContributionDetail
+      api={stubApi({ me })}
+      id="park"
+      client={client({ participate })}
+    />,
+  );
+  await user.type(await screen.findByLabelText("Public name"), "Jo");
+  await user.type(screen.getByLabelText("How you can help"), "Tools");
+  await user.click(screen.getByRole("button", { name: "Offer help" }));
+  expect(await screen.findByText("Sign in to continue.")).toBeTruthy();
+  state.who = null;
+  window.dispatchEvent(new Event("focus"));
+  await screen.findAllByRole("link", { name: "Sign in again in a new tab" });
+  state.who = "helper";
+  window.dispatchEvent(new Event("focus"));
+  await waitFor(() =>
+    expect(screen.queryByText("Sign in to continue.")).toBeNull(),
+  );
+  expect(
+    (screen.getByLabelText("How you can help") as HTMLTextAreaElement).value,
+  ).toBe("Tools");
+});

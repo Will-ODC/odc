@@ -96,7 +96,7 @@ export function ContributionDetail({
   // Keep the page while it reloads for a new account: the open message box
   // and the scroll position must survive signing in from another tab.
   // `canManage` below still needs the reloaded answer for this account.
-  const { data, reload, replace } = useContributionRead(load, {
+  const { data, reload, replace, refreshError } = useContributionRead(load, {
     keepReady: true,
   });
   const canManage =
@@ -104,6 +104,29 @@ export function ContributionDetail({
     data.status === "ready" &&
     data.value.accountId === accountId &&
     data.value.canManage;
+  // The account last seen managing this record. If its session expires while
+  // an update is being written, the update form stays with its draft (the
+  // private inbox does not: that needs a live session to show).
+  const [managedBy, setManagedBy] = useState<string | null>(null);
+  if (canManage && managedBy !== accountId) setManagedBy(accountId);
+  else if (
+    !canManage &&
+    managedBy !== null &&
+    accountId !== null &&
+    data.status === "ready" &&
+    data.value.accountId === accountId
+  )
+    setManagedBy(null);
+  // Keep it too while the page reloads for that same account after signing
+  // in again, until the reloaded answer says whether it may still manage.
+  const canUpdate =
+    canManage ||
+    (managedBy !== null &&
+      managedBy === drafts.owner &&
+      (access === "expired" ||
+        (access === "signedIn" &&
+          data.status === "ready" &&
+          data.value.accountId !== accountId)));
   const heading = useRef<HTMLHeadingElement>(null);
   const headingFocused = useRef(false);
   const ready = data.status === "ready";
@@ -150,6 +173,22 @@ export function ContributionDetail({
         <a className="contribution-back" href="/?filter=contributions">
           ← Contributions
         </a>
+        {data.status === "ready" && refreshError ? (
+          <div className="contribution-refresh" role="alert">
+            <p className="contribution-error">
+              This page could not be brought up to date. {refreshError}
+            </p>
+            <Button
+              variant="secondary"
+              size="small"
+              className="contribution-retry"
+              type="button"
+              onClick={reload}
+            >
+              Try again
+            </Button>
+          </div>
+        ) : null}
         <ViewState data={data}>
           {({ contribution: item }) => (
             <>
@@ -310,13 +349,14 @@ export function ContributionDetail({
                 ) : (
                   <p>No progress updates yet.</p>
                 )}
-                {canManage ? (
+                {canUpdate ? (
                   <details className="contribution-disclosure">
                     <summary className="contribution-button contribution-button--secondary">
                       Post an update
                     </summary>
                     <UpdateForm
-                      key={item.id}
+                      key={`${item.id}:${drafts.generation}`}
+                      access={access}
                       client={client}
                       item={item}
                       changed={changed}
@@ -348,10 +388,19 @@ export function ContributionDetail({
  */
 type Access = "loading" | "signedIn" | "expired" | "signedOut";
 
-/** Says the session ended and offers the new-tab sign-in; the form stays. */
-function SignInAgain({ href }: { href: string }) {
+/**
+ * Says the session ended and offers the new-tab sign-in; the form stays.
+ * Only one copy on the page announces itself, so a screen reader hears it once.
+ */
+function SignInAgain({
+  href,
+  announce = true,
+}: {
+  href: string;
+  announce?: boolean;
+}) {
   return (
-    <p className="contribution-note" role="status">
+    <p className="contribution-note" {...(announce ? { role: "status" } : {})}>
       Your sign-in has ended. What you wrote stays here.{" "}
       <a href={href} target="_blank" rel="noreferrer">
         Sign in again in a new tab
@@ -359,6 +408,60 @@ function SignInAgain({ href }: { href: string }) {
       to send it.
     </p>
   );
+}
+
+/**
+ * After a send, the button is disabled while it is pending, so the browser
+ * drops keyboard focus to the page. Put it on the outcome instead (the
+ * thank-you or the error), unless the person has moved on to something else.
+ * Also forgets a "sign in" error once signing in again has fixed it.
+ */
+function useSendOutcome(
+  save: {
+    saved: boolean;
+    failure: unknown;
+    errorStatus?: number | undefined;
+    clearFailure: () => void;
+  },
+  access: Access,
+) {
+  const status = useRef<HTMLParagraphElement>(null);
+  const alert = useRef<HTMLParagraphElement>(null);
+  useEffect(() => {
+    if (save.saved && focusLost()) status.current?.focus();
+  }, [save.saved]);
+  useEffect(() => {
+    if (save.failure && focusLost()) alert.current?.focus();
+  }, [save.failure]);
+  const before = useRef(access);
+  const { errorStatus, clearFailure } = save;
+  useEffect(() => {
+    if (
+      before.current === "expired" &&
+      access === "signedIn" &&
+      errorStatus === 401
+    )
+      clearFailure();
+    before.current = access;
+  }, [access, errorStatus, clearFailure]);
+  return { status, alert };
+}
+function focusLost() {
+  const active = document.activeElement;
+  return active === null || active === document.body;
+}
+/** Move focus to a field the form refused, by id. */
+function focusField(id: string) {
+  document.getElementById(id)?.focus();
+}
+/** A full http(s) link, the only kind the API takes as evidence. */
+function isWebLink(value: string) {
+  try {
+    const url = new URL(value);
+    return url.protocol === "https:" || url.protocol === "http:";
+  } catch {
+    return false;
+  }
 }
 
 const participationLabels: Record<ParticipationKind, string> = {
@@ -380,13 +483,21 @@ function MessageForm({
     (message, key) => client.sendMessage(id, message, key),
     () => formRef.current?.reset(),
   );
+  const outcome = useSendOutcome(save, access);
+  const [problem, setProblem] = useState<string>();
   const signInHref = `/sign-in?contribution=${encodeURIComponent(id)}`;
   function submit(event: FormEvent<HTMLFormElement>) {
     event.preventDefault();
     const message = String(
       new FormData(event.currentTarget).get("message") ?? "",
     ).trim();
-    if (message) void save.submit(message);
+    if (!message) {
+      setProblem("Write a message to send.");
+      focusField("contribution-message");
+      return;
+    }
+    setProblem(undefined);
+    void save.submit(message);
   }
   if (access === "loading") return <p role="status">Loading…</p>;
   if (access === "signedOut")
@@ -396,15 +507,23 @@ function MessageForm({
       </a>
     );
   return (
-    <form className="contribution-form" ref={formRef} onSubmit={submit}>
+    <form
+      className="contribution-form"
+      ref={formRef}
+      onSubmit={submit}
+      noValidate
+    >
       <p className="contribution-note">
         Only the organizer can read this. They can&apos;t reply here.
       </p>
-      {access === "expired" ? <SignInAgain href={signInHref} /> : null}
+      {access === "expired" ? (
+        // The offer form above already announces the expiry.
+        <SignInAgain href={signInHref} announce={false} />
+      ) : null}
       <Field
         id="contribution-message"
         label="Private message"
-        problem={undefined}
+        problem={problem}
       >
         {(described) => (
           <textarea
@@ -412,20 +531,32 @@ function MessageForm({
             className="field__control"
             name="message"
             rows={3}
-            required
             maxLength={2000}
             disabled={save.pending}
             {...described}
           />
         )}
       </Field>
-      {save.error ? <p role="alert">{save.error}</p> : null}
+      {save.error ? (
+        <p
+          role="alert"
+          className="contribution-error"
+          ref={outcome.alert}
+          tabIndex={-1}
+        >
+          {save.error}
+        </p>
+      ) : null}
       {save.errorStatus === 401 && access !== "expired" ? (
         <a href={signInHref} target="_blank" rel="noreferrer">
           Sign in again in a new tab
         </a>
       ) : null}
-      {save.saved ? <p role="status">Message sent to the organizer.</p> : null}
+      {save.saved ? (
+        <p role="status" ref={outcome.status} tabIndex={-1}>
+          Message sent to the organizer.
+        </p>
+      ) : null}
       <Button variant="primary" disabled={save.pending}>
         {save.pending ? "Sending…" : "Send message"}
       </Button>
@@ -498,10 +629,12 @@ function OrganizerMessages({
   );
 }
 function UpdateForm({
+  access,
   client,
   item,
   changed,
 }: {
+  access: Access;
   client: ContributionsApi;
   item: Contribution;
   changed: (item: Contribution) => void;
@@ -522,10 +655,36 @@ function UpdateForm({
     // select back to the status this form first rendered with.
     () => clearWritten(formRef.current, ["message", "evidence"]),
   );
+  const outcome = useSendOutcome(save, access);
+  const [problems, setProblems] = useState<{
+    message?: string;
+    evidence?: string;
+    confirm?: string;
+  }>({});
+  const signInHref = `/sign-in?contribution=${encodeURIComponent(item.id)}`;
   function submit(event: FormEvent<HTMLFormElement>) {
     event.preventDefault();
     const form = new FormData(event.currentTarget);
     const evidenceUrl = String(form.get("evidence") ?? "").trim();
+    const found = {
+      ...(String(form.get("message") ?? "").trim()
+        ? {}
+        : { message: "Write the progress update." }),
+      ...(evidenceUrl && !isWebLink(evidenceUrl)
+        ? { evidence: "Enter a full link that starts with https://." }
+        : {}),
+      ...(form.get("confirm")
+        ? {}
+        : { confirm: "Confirm this status and update may be published." }),
+    };
+    setProblems(found);
+    const first = (["message", "evidence", "confirm"] as const).find(
+      (name) => found[name],
+    );
+    if (first) {
+      focusField(`update-${first}`);
+      return;
+    }
     void save.submit({
       message: String(form.get("message") ?? "").trim(),
       status,
@@ -537,7 +696,9 @@ function UpdateForm({
       className="contribution-form contribution-update"
       ref={formRef}
       onSubmit={submit}
+      noValidate
     >
+      {access === "expired" ? <SignInAgain href={signInHref} /> : null}
       <fieldset disabled={save.pending}>
         <Field id="update-status" label="Current status" problem={undefined}>
           {(described) => (
@@ -559,13 +720,16 @@ function UpdateForm({
             </select>
           )}
         </Field>
-        <Field id="update-message" label="Progress update" problem={undefined}>
+        <Field
+          id="update-message"
+          label="Progress update"
+          problem={problems.message}
+        >
           {(described) => (
             <textarea
               id="update-message"
               className="field__control"
               name="message"
-              required
               maxLength={2000}
               rows={3}
               {...described}
@@ -575,7 +739,7 @@ function UpdateForm({
         <Field
           id="update-evidence"
           label="Evidence link (optional)"
-          problem={undefined}
+          problem={problems.evidence}
         >
           {(described) => (
             <input
@@ -590,21 +754,42 @@ function UpdateForm({
           )}
         </Field>
         <label className="contribution-check">
-          <input type="checkbox" required />I confirm this status and update may
-          be published.
+          <input
+            type="checkbox"
+            id="update-confirm"
+            name="confirm"
+            {...(problems.confirm
+              ? { "aria-describedby": "update-confirm-problem" }
+              : {})}
+          />
+          I confirm this status and update may be published.
         </label>
+        {problems.confirm ? (
+          <p className="field__problem" id="update-confirm-problem">
+            {problems.confirm}
+          </p>
+        ) : null}
       </fieldset>
-      {save.error ? <p role="alert">{save.error}</p> : null}
-      {save.errorStatus === 401 ? (
-        <a
-          href={`/sign-in?contribution=${encodeURIComponent(item.id)}`}
-          target="_blank"
-          rel="noreferrer"
+      {save.error ? (
+        <p
+          role="alert"
+          className="contribution-error"
+          ref={outcome.alert}
+          tabIndex={-1}
         >
+          {save.error}
+        </p>
+      ) : null}
+      {save.errorStatus === 401 && access !== "expired" ? (
+        <a href={signInHref} target="_blank" rel="noreferrer">
           Sign in again in a new tab
         </a>
       ) : null}
-      {save.saved ? <p role="status">Your update has been published.</p> : null}
+      {save.saved ? (
+        <p role="status" ref={outcome.status} tabIndex={-1}>
+          Your update has been published.
+        </p>
+      ) : null}
       <Button variant="primary" disabled={save.pending}>
         {save.pending ? "Publishing…" : "Publish update"}
       </Button>
@@ -654,6 +839,11 @@ function ParticipationForm({
     // also clear the controlled kind behind React's back.
     () => clearWritten(formRef.current, ["message"]),
   );
+  const outcome = useSendOutcome(save, access);
+  const [problems, setProblems] = useState<{
+    displayName?: string;
+    message?: string;
+  }>({});
   const signInHref = `/sign-in?contribution=${encodeURIComponent(item.id)}`;
   const heading = <h2 id="participate-heading">Offer help / Pledge</h2>;
   if (item.status === "completed" || item.status === "cancelled")
@@ -684,11 +874,23 @@ function ParticipationForm({
   function submit(event: FormEvent<HTMLFormElement>) {
     event.preventDefault();
     const form = new FormData(event.currentTarget);
-    void save.submit({
-      displayName: String(form.get("displayName") ?? "").trim(),
-      kind,
-      message: String(form.get("message") ?? "").trim(),
-    });
+    const displayName = String(form.get("displayName") ?? "").trim();
+    const message = String(form.get("message") ?? "").trim();
+    const found = {
+      ...(displayName ? {} : { displayName: "Enter the name to show." }),
+      ...(message
+        ? {}
+        : {
+            message:
+              kind === "help"
+                ? "Say how you can help."
+                : "Say what you pledge.",
+          }),
+    };
+    setProblems(found);
+    if (found.displayName) return focusField("participation-name");
+    if (found.message) return focusField("participation-message");
+    void save.submit({ displayName, kind, message });
   }
   return (
     <>
@@ -699,6 +901,7 @@ function ParticipationForm({
         ref={formRef}
         onSubmit={submit}
         aria-labelledby="participate-heading"
+        noValidate
       >
         <fieldset disabled={save.pending}>
           <legend className="visually-hidden">What you are offering</legend>
@@ -719,14 +922,13 @@ function ParticipationForm({
             id="participation-name"
             label="Public name"
             hint="Shown with your entry on this page."
-            problem={undefined}
+            problem={problems.displayName}
           >
             {(described) => (
               <input
                 id="participation-name"
                 className="field__control"
                 name="displayName"
-                required
                 maxLength={80}
                 autoComplete="nickname"
                 {...described}
@@ -736,14 +938,13 @@ function ParticipationForm({
           <Field
             id="participation-message"
             label={offerLabels[kind].field}
-            problem={undefined}
+            problem={problems.message}
           >
             {(described) => (
               <textarea
                 id="participation-message"
                 className="field__control"
                 name="message"
-                required
                 maxLength={2000}
                 rows={3}
                 {...described}
@@ -751,14 +952,25 @@ function ParticipationForm({
             )}
           </Field>
         </fieldset>
-        {save.error ? <p role="alert">{save.error}</p> : null}
+        {save.error ? (
+          <p
+            role="alert"
+            className="contribution-error"
+            ref={outcome.alert}
+            tabIndex={-1}
+          >
+            {save.error}
+          </p>
+        ) : null}
         {save.errorStatus === 401 && access !== "expired" ? (
           <a href={signInHref} target="_blank" rel="noreferrer">
             Sign in again in a new tab
           </a>
         ) : null}
         {save.saved ? (
-          <p role="status">Thank you. Your entry is on this page.</p>
+          <p role="status" ref={outcome.status} tabIndex={-1}>
+            Thank you. Your entry is on this page.
+          </p>
         ) : null}
         <Button variant="primary" disabled={save.pending}>
           {save.pending ? "Sending…" : offerLabels[kind].send}

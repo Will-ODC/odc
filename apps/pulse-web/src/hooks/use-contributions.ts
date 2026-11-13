@@ -10,8 +10,9 @@ import type { ViewData } from "./view-data.js";
  * than swapping it for "Loading…". Swapping it would unmount whatever the
  * person had open on it, with anything they had typed, and lose their scroll
  * position. If that background reload fails, the page stays as it was too:
- * the failure is no reason to throw away a draft. "Try again" after an error
- * still shows "Loading…", since there is nothing on screen to keep.
+ * the failure is no reason to throw away a draft. `refreshError` says so,
+ * and `reload` tries again without hiding the page. "Try again" after an
+ * error with nothing on screen still shows "Loading…".
  *
  * `replace` installs a newer value the page got from a write (a successful
  * participation, say). A read that started before it carries an older
@@ -25,12 +26,15 @@ export function useContributionRead<T>(
   const [data, setData] = useState<ViewData<T>>({ status: "loading" });
   // Bumped to read again after a stale answer: still a background read.
   const [refresh, setRefresh] = useState(0);
+  const [refreshError, setRefreshError] = useState<string>();
   const writes = useRef(0);
-  const lastRevision = useRef(revision);
+  // What is on screen, for the read's failure handler below.
+  const shown = useRef(data);
+  useEffect(() => {
+    shown.current = data;
+  }, [data]);
   useEffect(() => {
     let live = true;
-    const background = keepReady && lastRevision.current === revision;
-    lastRevision.current = revision;
     const writesAtStart = writes.current;
     setData((current) =>
       keepReady && current.status === "ready" ? current : { status: "loading" },
@@ -42,6 +46,7 @@ export function useContributionRead<T>(
           setRefresh((count) => count + 1);
           return;
         }
+        setRefreshError(undefined);
         setData({ status: "ready", value });
       },
       (error) => {
@@ -56,9 +61,10 @@ export function useContributionRead<T>(
             ? { statusCode: error.status }
             : {}),
         };
-        setData((current) =>
-          background && current.status === "ready" ? current : failure,
-        );
+        // Something is on screen: keep it, and say the update failed.
+        if (keepReady && shown.current.status === "ready")
+          setRefreshError(failure.message);
+        else setData(failure);
       },
     );
     return () => {
@@ -70,7 +76,7 @@ export function useContributionRead<T>(
     writes.current += 1;
     setData({ status: "ready", value });
   }, []);
-  return { data, reload, setData, replace };
+  return { data, reload, setData, replace, refreshError };
 }
 
 /** Retains a request key across uncertain retries, rotating when the payload changes. */
@@ -115,8 +121,11 @@ export function useContributionSave<T>(
       setPending(false);
     }
   }
+  /** Forget the last failure, e.g. once signing in again has fixed it. */
+  const clearFailure = useCallback(() => setFailure(undefined), []);
   return {
     pending,
+    clearFailure,
     /** A new object per failure, so an effect can react to each one. */
     failure,
     error: failure?.message,
