@@ -91,7 +91,7 @@ async function setup(rateLimit?: { max: number; timeWindow: string }) {
             : { origin: options.origin ?? ORIGIN }),
           "content-type": options.contentType ?? "application/json",
         },
-        payload: body,
+        payload: { ownerAccountId: "owner-private-id", ...body },
       });
       return response as unknown as TestResponse;
     },
@@ -248,4 +248,41 @@ test("profile_http_limits_body_and_request_rate", async (t) => {
   });
   assert.equal(large.statusCode, 413);
   assert.equal(large.json().error, "body_too_large");
+});
+
+test("stale_account_draft_is_refused_before_creating_or_overwriting_another_profile", async (t) => {
+  const h = await setup();
+  t.after(() => h.app.close());
+  await h.put({ displayName: "A", bio: "Private A", visible: false });
+  const request = {
+    ownerAccountId: "owner-private-id",
+    displayName: "A draft",
+    bio: "A bio",
+    visible: true,
+  };
+  const read = (id: string) =>
+    h.app.inject({ url: "/api/me/profile", headers: { cookie: h.cookie(id) } });
+  const a = (await read("owner-private-id")).json();
+  const refuse = async () => {
+    const before = (await read("other-private-id")).json();
+    const result = await h.put(request, {
+      cookie: h.cookie("other-private-id"),
+    });
+    assert.equal(result.statusCode, 409);
+    assert.equal(result.json().error, "account_changed");
+    assert.equal(result.headers["cache-control"], "no-store");
+    assert.deepEqual((await read("other-private-id")).json(), before);
+    assert.deepEqual((await read("owner-private-id")).json(), a);
+  };
+  await refuse();
+  await h.put(
+    {
+      ownerAccountId: "other-private-id",
+      displayName: "B",
+      bio: "B bio",
+      visible: false,
+    },
+    { cookie: h.cookie("other-private-id") },
+  );
+  await refuse();
 });

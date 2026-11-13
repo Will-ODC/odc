@@ -16,7 +16,12 @@ import type { ViewData } from "./view-data.js";
 export type OwnerProfileValue = MemberProfile | null;
 
 /** One account's profile; the caller remounts this owner when accounts change. */
-export function useOwnerProfile(api: PulseApi, active: boolean) {
+export function useOwnerProfile(
+  api: PulseApi,
+  active: boolean,
+  ownerAccountId: string,
+  onAccountChanged: () => void,
+) {
   const [attempt, setAttempt] = useState(0);
   const [state, setState] = useState<ViewData<OwnerProfileValue>>({
     status: "loading",
@@ -68,19 +73,31 @@ export function useOwnerProfile(api: PulseApi, active: boolean) {
     setAttempt((value) => value + 1);
   }, []);
   const save = useCallback(
-    async (request: ProfileRequest) => {
+    async (request: Omit<ProfileRequest, "ownerAccountId">) => {
       if (!signedIn.current) return;
       const ticket = identity.current;
       try {
-        const profile = await api.saveProfile(request);
+        const profile = await api.saveProfile({ ...request, ownerAccountId });
         if (ticket !== identity.current) return;
         setState({ status: "ready", value: profile });
         return profile;
       } catch (error) {
-        if (ticket === identity.current) throw error;
+        if (ticket !== identity.current) return;
+        if (
+          error instanceof ApiError &&
+          error.status === 409 &&
+          error.code === "account_changed"
+        ) {
+          signedIn.current = false;
+          identity.current += 1;
+          setState({ status: "loading" });
+          onAccountChanged();
+          return;
+        }
+        throw error;
       }
     },
-    [api],
+    [api, ownerAccountId, onAccountChanged],
   );
   return { state, retry, save };
 }

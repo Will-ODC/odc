@@ -199,6 +199,8 @@ export interface MemberProfile extends PublicMemberProfile {
 }
 
 export interface ProfileRequest {
+  /** Account the editor loaded; the server refuses a different session owner. */
+  ownerAccountId: string;
   displayName: string;
   bio: string;
   visible: boolean;

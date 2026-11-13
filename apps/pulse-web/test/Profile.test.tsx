@@ -183,6 +183,7 @@ describe("owner profile editor", () => {
 
     await waitFor(() => expect(saveProfile).toHaveBeenCalledOnce());
     expect(saveProfile).toHaveBeenCalledWith({
+      ownerAccountId: "ada",
       displayName: "Ada",
       bio: "Neighbour and gardener.",
       visible: false,

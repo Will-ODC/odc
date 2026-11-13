@@ -9,7 +9,11 @@ import {
 } from "@testing-library/react";
 import userEvent from "@testing-library/user-event";
 import { afterEach, expect, it, vi } from "vitest";
-import type { MemberProfile } from "../src/api/types.js";
+import {
+  ApiError,
+  type MemberProfile,
+  type ProfileRequest,
+} from "../src/api/types.js";
 import { SIGNED_IN_KEY } from "../src/flow/sign-in-return.js";
 import { SIGNED_OUT_KEY } from "../src/hooks/use-session.js";
 import { ProfileEditor } from "../src/screens/ProfileEditor.js";
@@ -143,6 +147,7 @@ it("keeps an expired draft, blocks save, and restores saving for the same accoun
   fireEvent.submit(name().closest("form")!);
   await waitFor(() =>
     expect(app.saveProfile).toHaveBeenCalledWith({
+      ownerAccountId: "a",
       displayName: "My draft",
       bio: "Draft bio",
       visible: false,
@@ -175,4 +180,49 @@ it("ignores A's profile read when it arrives after B signed in", async () => {
   await act(async () => a.resolve(profile("a")));
   await loaded("b");
   expect(screen.queryByDisplayValue("Bio a")).toBeNull();
+});
+
+it("refuses A's draft with B's cookie while the session recheck is pending, then clears and reloads", async () => {
+  const recheck = deferred<ReturnType<typeof person>>();
+  const reload = deferred<ReturnType<typeof person>>();
+  let cookieOwner = "a";
+  const stored = { a: profile("a"), b: profile("b") };
+  const before = structuredClone(stored);
+  const me = vi
+    .fn()
+    .mockResolvedValueOnce(person("a"))
+    .mockReturnValueOnce(recheck.promise)
+    .mockReturnValueOnce(reload.promise);
+  const saveProfile = vi.fn(async (request: ProfileRequest) => {
+    if (request.ownerAccountId !== cookieOwner)
+      throw new ApiError(409, "Account changed", "account_changed");
+    stored.b = { ...stored.b, ...request };
+    return stored.b;
+  });
+  setup({
+    me,
+    myProfile: async () => stored[cookieOwner as "a" | "b"],
+    saveProfile,
+  });
+  await loaded();
+  fireEvent.change(name(), { target: { value: "A private draft" } });
+  cookieOwner = "b";
+  fireEvent(window, new StorageEvent("storage", { key: SIGNED_IN_KEY }));
+  expect(me).toHaveBeenCalledTimes(2);
+  fireEvent.submit(name().closest("form")!);
+  await waitFor(() => expect(me).toHaveBeenCalledTimes(3));
+  expect(saveProfile).toHaveBeenCalledWith({
+    ownerAccountId: "a",
+    displayName: "A private draft",
+    bio: "Bio a",
+    visible: false,
+  });
+  expect(screen.queryByLabelText("Public display name")).toBeNull();
+  expect(screen.getByText(/Your account changed/)).toBeTruthy();
+  expect(stored).toEqual(before);
+  await act(async () => reload.resolve(person("b")));
+  await loaded("b");
+  await act(async () => recheck.resolve(person("a")));
+  expect(name().value).toBe("Name b");
+  expect(stored).toEqual(before);
 });

@@ -396,13 +396,21 @@ Requires the current signed-in member, `Content-Type: application/json`, and an
 
 ```json
 {
+  "ownerAccountId": "account-id-from-api-me",
   "displayName": "Ada",
   "bio": "Neighbour and community gardener.",
   "visible": true
 }
 ```
 
-All three fields are required. The first successful write generates the stable
+All four fields are required. `ownerAccountId` is the nonempty account id from
+`GET /api/me` that the editor loaded, including before a profile exists. It is
+a write precondition, never a target account chosen by the caller. If it differs
+from the authenticated session account, the server returns 409 `account_changed`
+without writing anything. The editor clears the draft, reloads the session and
+profile, and tells the person their account changed.
+
+The first successful write generates the stable
 public id and creation time; later writes update the same row. Setting
 `visible` to `false` makes the public route unavailable without discarding the
 id, text or creation time. The response is `200` with the same `{ profile }`
@@ -416,6 +424,7 @@ minute by default, including refused requests. The PUT body limit is 2 KiB.
 | 400    | `bad_request`        | Invalid JSON, shape, fields, text or type    |
 | 401    | `signed_out`         | Missing, expired or revoked session          |
 | 403    | `origin_not_allowed` | PUT has a missing or foreign Origin          |
+| 409    | `account_changed`    | PUT draft owner differs from session account |
 | 413    | `body_too_large`     | PUT body exceeds 2 KiB                       |
 | 429    | `too_many_requests`  | More than the per-client route limit         |
 | 500    | `server_error`       | Unexpected storage fault; safe generic reply |

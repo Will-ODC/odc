@@ -51,6 +51,7 @@ export async function registerProfileRoutes(
   deps: ProfileRouteDeps,
 ): Promise<void> {
   app.get("/api/profiles/:publicId", async (request, reply) => {
+    reply.header("cache-control", "no-store");
     const publicId = (request.params as { publicId: string }).publicId;
     if (!isPublicProfileId(publicId) || !deps.profiles)
       return answerRefusal(reply, NOT_FOUND());
@@ -161,10 +162,23 @@ export async function registerProfileRoutes(
         preParsing: guard(true),
       },
       async (request, reply) => {
-        const profile = await deps.profiles?.save(
-          actorOf(request),
-          normalizeProfile(request.body),
-        );
+        const body = request.body;
+        if (!body || typeof body !== "object" || Array.isArray(body))
+          throw BAD_REQUEST();
+        const { ownerAccountId, ...fields } = body as Record<string, unknown>;
+        if (typeof ownerAccountId !== "string" || ownerAccountId.length === 0)
+          throw BAD_REQUEST();
+        const input = normalizeProfile(fields);
+        const actor = actorOf(request);
+        // The draft's owner is a precondition, never a choice of write target.
+        // This also protects the first save, when no public profile id exists.
+        if (ownerAccountId !== actor.voterId)
+          throw new Refusal(
+            409,
+            "account_changed",
+            "Your account changed. Reload your profile before saving.",
+          );
+        const profile = await deps.profiles?.save(actor, input);
         if (!profile) throw new Error("profile storage unavailable");
         return reply
           .header("cache-control", "no-store")

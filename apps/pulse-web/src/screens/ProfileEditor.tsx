@@ -1,4 +1,4 @@
-import { useEffect, useId, useRef, useState } from "react";
+import { useCallback, useEffect, useId, useRef, useState } from "react";
 import type { FormEvent } from "react";
 import { ApiError, type MemberProfile, type PulseApi } from "../api/types.js";
 import { AppShell } from "../components/AppShell.js";
@@ -17,6 +17,30 @@ import "./Profile.css";
 import "./Contributions.css";
 
 export function ProfileEditor({ api }: { api: PulseApi }) {
+  const [generation, setGeneration] = useState(0);
+  const accountChanged = useCallback(
+    () => setGeneration((value) => value + 1),
+    [],
+  );
+  return (
+    <ProfileEditorSession
+      key={generation}
+      api={api}
+      accountChanged={generation > 0}
+      onAccountChanged={accountChanged}
+    />
+  );
+}
+
+function ProfileEditorSession({
+  api,
+  accountChanged,
+  onAccountChanged,
+}: {
+  api: PulseApi;
+  accountChanged: boolean;
+  onAccountChanged: () => void;
+}) {
   const mine = useMyVotes(api);
   const votes = useVotesFollowSession(mine);
   const { session, progress, signOut, dismiss } = useSession(api, {
@@ -59,8 +83,19 @@ export function ProfileEditor({ api }: { api: PulseApi }) {
           Choose what anyone with your profile link can see. Your email and
           votes stay private.
         </p>
+        {accountChanged ? (
+          <p role="status">
+            Your account changed. Your unsaved profile was cleared.
+          </p>
+        ) : null}
         {draft.owner !== null ? (
-          <OwnerEditor key={draft.generation} api={api} expired={expired} />
+          <OwnerEditor
+            key={draft.generation}
+            api={api}
+            expired={expired}
+            ownerAccountId={draft.owner}
+            onAccountChanged={onAccountChanged}
+          />
         ) : session.status === "loading" ? (
           <ViewState data={{ status: "loading" }}>{() => null}</ViewState>
         ) : (
@@ -93,8 +128,23 @@ function ProfileSignIn() {
   );
 }
 
-function OwnerEditor({ api, expired }: { api: PulseApi; expired: boolean }) {
-  const { state, retry, save } = useOwnerProfile(api, !expired);
+function OwnerEditor({
+  api,
+  expired,
+  ownerAccountId,
+  onAccountChanged,
+}: {
+  api: PulseApi;
+  expired: boolean;
+  ownerAccountId: string;
+  onAccountChanged: () => void;
+}) {
+  const { state, retry, save } = useOwnerProfile(
+    api,
+    !expired,
+    ownerAccountId,
+    onAccountChanged,
+  );
   return (
     <>
       <ViewState data={state} variant="compact">
