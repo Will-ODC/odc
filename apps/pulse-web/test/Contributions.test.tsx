@@ -735,7 +735,11 @@ it("removes an open private inbox when the organizer signs out in another tab", 
     expect(screen.queryByText("Only the organizer can read this.")).toBeNull(),
   );
   expect(screen.queryByText("Private messages", { exact: true })).toBeNull();
-  expect(screen.getByText("Message the organizer")).toBeTruthy();
+  // Still their own post: no "Message the organizer" form in its place.
+  expect(
+    screen.getByText("Sign in again to read your private messages."),
+  ).toBeTruthy();
+  expect(screen.queryByText("Message the organizer")).toBeNull();
 });
 
 it("lists each private message under a line with its date", async () => {
@@ -1385,7 +1389,7 @@ it("keeps an organizer's unsent update through an expired session and same-accou
   window.dispatchEvent(new Event("focus"));
   expect(
     await screen.findAllByRole("link", { name: "Sign in again in a new tab" }),
-  ).toHaveLength(3);
+  ).toHaveLength(2);
   // The private inbox needs a live session; the draft does not.
   expect(screen.queryByText("Private messages", { exact: true })).toBeNull();
   expect(
@@ -1596,4 +1600,46 @@ it("puts the thank-you away when the person switches to start another entry", as
   expect(
     screen.queryByText("Thank you. Your entry is on this page."),
   ).toBeNull();
+});
+
+it("puts the sign-in notice first in the message form and keeps the organizer off their own message form while expired", async () => {
+  const user = userEvent.setup();
+  const { state, me } = switchableMe("owner");
+  render(
+    <ContributionDetail
+      api={stubApi({ me })}
+      id="park"
+      client={client({
+        detail: async () => ({
+          contribution: fixture(),
+          canManage: state.who === "owner",
+        }),
+      })}
+    />,
+  );
+  await user.click(await screen.findByText("Post an update"));
+  state.who = null;
+  window.dispatchEvent(new Event("focus"));
+  expect(
+    await screen.findByText("Sign in again to read your private messages."),
+  ).toBeTruthy();
+  expect(screen.queryByText("Message the organizer")).toBeNull();
+});
+
+it("shows the expiry notice above the message form's privacy note", async () => {
+  const user = userEvent.setup();
+  const { state, me } = switchableMe("reader");
+  render(
+    <ContributionDetail api={stubApi({ me })} id="park" client={client()} />,
+  );
+  await user.click(await screen.findByText("Message the organizer"));
+  await user.type(screen.getByLabelText("Private message"), "Hi");
+  state.who = null;
+  window.dispatchEvent(new Event("focus"));
+  const form = (await screen.findByLabelText("Private message")).closest(
+    "form",
+  )!;
+  await waitFor(() =>
+    expect(form.firstElementChild?.className).toBe("contribution-expired"),
+  );
 });
