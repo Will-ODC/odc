@@ -1131,11 +1131,14 @@ it("keeps every contribution field after an unknown related poll is rejected", a
   await user.click(
     screen.getByRole("button", { name: "Publish contribution" }),
   );
-  expect(await screen.findByRole("alert")).toHaveProperty(
-    "textContent",
-    "Check the related question or leave that field blank.",
-  );
+  // One message, beside the field: no second, form-level alert.
   const related = screen.getByLabelText("Related question (optional)");
+  await waitFor(() =>
+    expect(related.getAttribute("aria-invalid")).toBe("true"),
+  );
+  expect(
+    screen.queryByText("Check the related question or leave that field blank."),
+  ).toBeNull();
   await waitFor(() => expect(document.activeElement).toBe(related));
   expect(related.getAttribute("aria-invalid")).toBe("true");
   expect(related.getAttribute("aria-describedby")).toContain(
