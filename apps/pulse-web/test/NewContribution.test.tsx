@@ -394,3 +394,29 @@ it("shows a rejected related question only beside the field and focuses it", asy
   ).toBeNull();
   expectDraft();
 });
+
+it("stops saying the sign-in has ended once a 401 is recovered by the same person", async () => {
+  const { state, create, user } = setup();
+  create.mockRejectedValueOnce(
+    new ContributionsError(401, "Sign in to continue."),
+  );
+  await writeDraft(user);
+  await user.click(
+    screen.getByRole("button", { name: "Publish contribution" }),
+  );
+  expect(await screen.findByText(/Your sign-in has ended/)).toBeTruthy();
+  // The page then learns the session has ended, and the person signs in again.
+  state.who = null;
+  window.dispatchEvent(new Event("focus"));
+  await waitFor(() =>
+    expect(screen.getByLabelText("Title").closest("fieldset")?.disabled).toBe(
+      true,
+    ),
+  );
+  state.who = "ada";
+  window.dispatchEvent(new Event("focus"));
+  await waitFor(() =>
+    expect(screen.queryByText(/Your sign-in has ended/)).toBeNull(),
+  );
+  expectDraft();
+});

@@ -13,7 +13,7 @@ import { AppShell } from "../components/AppShell.js";
 import { SiteBanner } from "../components/SiteBanner.js";
 import { AnsweredRail } from "../components/AnsweredRail.js";
 import { SuggestedVotesRail } from "../components/SuggestedVotesRail.js";
-import { useMyVotes } from "../hooks/use-my-votes.js";
+import { useMyVotes, useVotesFollowSession } from "../hooks/use-my-votes.js";
 import { useSession } from "../hooks/use-session.js";
 import { ViewState } from "../components/ViewState.js";
 import { Field } from "../components/Field.js";
@@ -50,9 +50,10 @@ export function ContributionDetail({
 }) {
   const mine = useMyVotes(api);
   const [railRetried, setRailRetried] = useState(false);
+  const votes = useVotesFollowSession(mine);
   const clearVotes = () => {
     setRailRetried(false);
-    mine.clear();
+    votes.cleared();
   };
   const { session, progress, signOut, dismiss } = useSession(api, {
     onSignedOut: clearVotes,
@@ -60,6 +61,8 @@ export function ContributionDetail({
     recheckSignedIn: true,
   });
   const accountId = session.status === "signedIn" ? session.me.id : null;
+  // Read the votes again once someone is signed in after they were cleared.
+  useEffect(() => votes.signedInAs(accountId));
   // Whose drafts the forms hold. A new generation remounts the forms empty:
   // after someone chooses to sign out, or when a different account signs in.
   // An expired session keeps them, so signing in again as the same person

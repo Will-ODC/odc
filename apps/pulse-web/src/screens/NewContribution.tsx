@@ -9,7 +9,7 @@ import {
 } from "../api/contributions.js";
 import { AppShell } from "../components/AppShell.js";
 import { SiteBanner } from "../components/SiteBanner.js";
-import { useMyVotes } from "../hooks/use-my-votes.js";
+import { useMyVotes, useVotesFollowSession } from "../hooks/use-my-votes.js";
 import { useSession } from "../hooks/use-session.js";
 import { Field } from "../components/Field.js";
 import { Button } from "../components/Button.js";
@@ -27,12 +27,15 @@ export function NewContribution({
   onCreated: (id: string) => void;
 }) {
   const mine = useMyVotes(api);
+  const votes = useVotesFollowSession(mine);
   const { session, progress, signOut, dismiss } = useSession(api, {
-    onSignedOut: mine.clear,
-    onForgotten: mine.clear,
+    onSignedOut: votes.cleared,
+    onForgotten: votes.cleared,
     recheckSignedIn: true,
   });
   const accountId = session.status === "signedIn" ? session.me.id : null;
+  // Read the votes again once someone is signed in after they were cleared.
+  useEffect(() => votes.signedInAs(accountId));
   // Keep an expired account's draft for recovery, but never pass it to
   // another account or retain it after someone deliberately signs out.
   const [draft, setDraft] = useState({ owner: accountId, generation: 0 });

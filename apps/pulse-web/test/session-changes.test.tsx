@@ -195,3 +195,28 @@ it.each([
     expect(result.current.session.status).not.toBe("signedIn");
   },
 );
+
+it("reads the votes again when the same person signs back in after an expiry", async () => {
+  let who: string | null = "voter";
+  const myVotes = vi.fn(async () =>
+    who
+      ? { votes: [savedVote], nextCursor: null }
+      : { votes: [], nextCursor: null },
+  );
+  render(
+    <ContributionDetail
+      api={stubApi({ me: async () => (who ? person(who) : null), myVotes })}
+      id="park"
+      client={client}
+    />,
+  );
+  expect(await rail().findByText("Your answer: Yes")).toBeTruthy();
+  who = null;
+  window.dispatchEvent(new Event("focus"));
+  await waitFor(() =>
+    expect(rail().queryByText("Your answer: Yes")).toBeNull(),
+  );
+  who = "voter";
+  window.dispatchEvent(new Event("focus"));
+  expect(await rail().findByText("Your answer: Yes")).toBeTruthy();
+});
