@@ -40,6 +40,10 @@ export function Browse({
     reload: retryContributions,
     setData: setContributions,
   } = useContributionRead(loadContributions);
+  const focusAt = useRef<{
+    kind: "poll" | "contribution";
+    index: number;
+  } | null>(null);
   const contributionPaging = useRef(false);
   const contributionGeneration = useRef(0);
   const [loadingContributions, setLoadingContributions] = useState(false);
@@ -49,6 +53,7 @@ export function Browse({
     contributionPaging.current = false;
     setLoadingContributions(false);
     setContributionPageError(false);
+    if (focusAt.current?.kind === "contribution") focusAt.current = null;
   }, [contributionsClient, isGeneral]);
   async function loadMoreContributions() {
     const page = contributions.status === "ready" ? contributions.value : null;
@@ -103,19 +108,23 @@ export function Browse({
     heading.current?.focus();
   }, []);
   const list = useRef<HTMLUListElement>(null);
-  const focusAt = useRef<number | null>(null);
   useEffect(() => {
-    if (
-      data.status !== "ready" ||
-      more.status !== "idle" ||
-      focusAt.current === null
+    const target = focusAt.current;
+    if (!target) return;
+    if (target.kind === "poll") {
+      if (data.status !== "ready" || more.status !== "idle") return;
+    } else if (
+      contributions.status !== "ready" ||
+      loadingContributions ||
+      contributionPageError
     )
       return;
-    const links =
-      list.current?.querySelectorAll<HTMLAnchorElement>("a[data-poll]");
-    links?.[Math.min(focusAt.current, links.length - 1)]?.focus();
+    const links = list.current?.querySelectorAll<HTMLAnchorElement>(
+      target.kind === "poll" ? "a[data-poll]" : "a[data-contribution]",
+    );
+    links?.[Math.min(target.index, links.length - 1)]?.focus();
     focusAt.current = null;
-  }, [data, more]);
+  }, [data, more, contributions, loadingContributions, contributionPageError]);
   const contributionRows =
     isGeneral && contributions.status === "ready"
       ? (contributions.value?.contributions ?? [])
@@ -211,6 +220,9 @@ export function Browse({
                         row.tag ? `browse-tag-${row.key}` : undefined
                       }
                       data-poll={row.kind === "poll" ? "" : undefined}
+                      data-contribution={
+                        row.kind === "contribution" ? "" : undefined
+                      }
                     >
                       {row.title}
                     </a>
@@ -268,7 +280,13 @@ export function Browse({
               className="browse__action"
               type="button"
               disabled={loadingContributions}
-              onClick={() => void loadMoreContributions()}
+              onClick={() => {
+                focusAt.current = {
+                  kind: "contribution",
+                  index: contributionRows.length,
+                };
+                void loadMoreContributions();
+              }}
             >
               {loadingContributions ? "Loading…" : "Load more contributions"}
             </Button>
@@ -286,7 +304,10 @@ export function Browse({
               type="button"
               disabled={more.status === "loading"}
               onClick={() => {
-                focusAt.current = data.value.polls.length;
+                focusAt.current = {
+                  kind: "poll",
+                  index: data.value.polls.length,
+                };
                 loadMore();
               }}
             >

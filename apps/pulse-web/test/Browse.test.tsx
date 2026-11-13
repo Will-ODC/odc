@@ -19,6 +19,10 @@ import {
   type PollSummary,
 } from "../src/api/types.js";
 import { stubApi } from "./stub-api.js";
+import type {
+  ContributionSummary,
+  ContributionPage,
+} from "../src/api/contributions.js";
 afterEach(cleanup);
 const row = (id: string, open = true): PollSummary => ({
   id,
@@ -370,5 +374,71 @@ it("keeps the Answered loading, error, retry focus and empty states separate fro
   ).toBe("/my-votes");
   expect(document.activeElement).toBe(
     rail.getByRole("link", { name: "My votes" }),
+  );
+});
+
+it("loads the final contributions page by keyboard and focuses its first new contribution", async () => {
+  const user = userEvent.setup();
+  const contribution = (
+    id: string,
+    createdAt: string,
+  ): ContributionSummary => ({
+    id,
+    title: `Contribution ${id}`,
+    description: "A community project",
+    organizerName: "Garden group",
+    kind: "project",
+    status: "open",
+    createdAt,
+    community: { id: "pulse-general", label: "General" },
+    communityBenefit: "",
+    needs: "",
+    pollId: null,
+    commercial: null,
+    fund: null,
+  });
+  let finish!: (value: ContributionPage) => void;
+  const first = contribution("first", "2026-11-12T12:00:00.000Z");
+  const second = contribution("second", "2026-11-11T12:00:00.000Z");
+  const third = contribution("third", "2026-11-10T12:00:00.000Z");
+  const list = vi
+    .fn()
+    .mockResolvedValueOnce({ contributions: [first], nextCursor: "next" })
+    .mockImplementationOnce(
+      () =>
+        new Promise<ContributionPage>((resolve) => {
+          finish = resolve;
+        }),
+    );
+  render(
+    <Browse
+      api={stubApi()}
+      community="pulse-general"
+      contributionsOnly
+      contributionsClient={{ list }}
+    />,
+  );
+  const more = await screen.findByRole("button", {
+    name: "Load more contributions",
+  });
+  await user.tab(); // Show all
+  await user.tab(); // Start a contribution
+  await user.tab(); // First contribution
+  await user.tab(); // Load more contributions
+  expect(document.activeElement).toBe(more);
+  await user.keyboard("{Enter}");
+  expect(list).toHaveBeenLastCalledWith("next");
+  expect(more.hasAttribute("disabled")).toBe(true);
+  await act(async () =>
+    finish({ contributions: [second, third], nextCursor: null }),
+  );
+  const next = await screen.findByRole("link", { name: "Contribution second" });
+  await waitFor(() => expect(document.activeElement).toBe(next));
+  expect(
+    screen.queryByRole("button", { name: "Load more contributions" }),
+  ).toBeNull();
+  await user.tab();
+  expect(document.activeElement).toBe(
+    screen.getByRole("link", { name: "Contribution third" }),
   );
 });
