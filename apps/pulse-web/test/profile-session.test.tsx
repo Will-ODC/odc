@@ -249,3 +249,73 @@ it("reads the profile again when the same account signs back in after the first 
   await switchTo("a", SIGNED_IN_KEY);
   await waitFor(() => expect(name().value).toBe("Name a"));
 });
+
+it.each(["storage", "focus", "visibilitychange"])(
+  "recovers the first owner read's 401 on %s without observing a sign-out",
+  async (trigger) => {
+    const me = vi.fn(async () => person("a"));
+    const myProfile = vi
+      .fn()
+      .mockRejectedValueOnce(new ApiError(401, "Sign in to continue."))
+      .mockResolvedValueOnce(profile("a"));
+    setup({ me, myProfile });
+    expect(
+      (
+        await screen.findAllByText(
+          "Sign in to create or change your public profile.",
+        )
+      ).length,
+    ).toBeGreaterThan(0);
+    expect(myProfile).toHaveBeenCalledTimes(1);
+
+    // The same account signs in elsewhere before any session recheck saw
+    // the expiry: every me() answer still reports account A.
+    await act(async () => {
+      if (trigger === "storage")
+        window.dispatchEvent(
+          new StorageEvent("storage", { key: SIGNED_IN_KEY }),
+        );
+      else if (trigger === "focus") window.dispatchEvent(new Event("focus"));
+      else document.dispatchEvent(new Event("visibilitychange"));
+    });
+    await loaded();
+    expect(bio().value).toBe("Bio a");
+    expect(myProfile).toHaveBeenCalledTimes(2);
+    expect(me).toHaveBeenCalledTimes(2);
+
+    // Once loaded, a return to the tab must preserve the current draft.
+    fireEvent.change(name(), { target: { value: "Recovered draft" } });
+    await act(async () => window.dispatchEvent(new Event("focus")));
+    expect(myProfile).toHaveBeenCalledTimes(2);
+    expect(name().value).toBe("Recovered draft");
+  },
+);
+
+it.each([null, "b"])(
+  "ignores a recovery read answered after the account changes to %s",
+  async (nextAccount) => {
+    const recovery = deferred<MemberProfile>();
+    const myProfile = vi
+      .fn()
+      .mockRejectedValueOnce(new ApiError(401, "Sign in to continue."))
+      .mockReturnValueOnce(recovery.promise)
+      .mockResolvedValueOnce(profile("b"));
+    const app = setup({ myProfile });
+    await screen.findAllByText(
+      "Sign in to create or change your public profile.",
+    );
+    await app.switchTo("a", SIGNED_IN_KEY);
+    expect(myProfile).toHaveBeenCalledTimes(2);
+    await app.switchTo(
+      nextAccount,
+      nextAccount === null ? SIGNED_OUT_KEY : SIGNED_IN_KEY,
+    );
+    if (nextAccount !== null) await loaded("b");
+    await act(async () => recovery.resolve(profile("a")));
+    expect(screen.queryByDisplayValue("Name a")).toBeNull();
+    expect(screen.queryByDisplayValue("Bio a")).toBeNull();
+    if (nextAccount === null)
+      expect(screen.queryByLabelText("Public display name")).toBeNull();
+    else expect(name().value).toBe("Name b");
+  },
+);

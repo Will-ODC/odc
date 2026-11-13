@@ -11,6 +11,7 @@ import {
   type ProfileRequest,
   type PulseApi,
 } from "../api/types.js";
+import { SIGNED_IN_KEY } from "../flow/sign-in-return.js";
 import type { ViewData } from "./view-data.js";
 
 export type OwnerProfileValue = MemberProfile | null;
@@ -46,6 +47,29 @@ export function useOwnerProfile(
     if (active && !wasActive.current && status === "empty")
       setState({ status: "loading" });
     wasActive.current = active;
+  }, [active, status]);
+  // The session may still report this account after the owner read got a
+  // 401. Reauthentication then leaves `active` unchanged. Retry that empty
+  // read on the same announcements as useSession, without replacing a draft.
+  useEffect(() => {
+    if (!active || status !== "empty") return;
+    const ask = () => {
+      if (document.visibilityState === "hidden") return;
+      setState((current) =>
+        current.status === "empty" ? { status: "loading" } : current,
+      );
+    };
+    const announced = (event: StorageEvent) => {
+      if (event.key === SIGNED_IN_KEY) ask();
+    };
+    window.addEventListener("focus", ask);
+    window.addEventListener("storage", announced);
+    document.addEventListener("visibilitychange", ask);
+    return () => {
+      window.removeEventListener("focus", ask);
+      window.removeEventListener("storage", announced);
+      document.removeEventListener("visibilitychange", ask);
+    };
   }, [active, status]);
   useEffect(() => {
     if (!active || status !== "loading") return;
