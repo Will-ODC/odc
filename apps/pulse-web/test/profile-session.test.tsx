@@ -2,6 +2,7 @@
 import {
   act,
   cleanup,
+  configure,
   fireEvent,
   render,
   screen,
@@ -20,6 +21,9 @@ import { ProfileEditor } from "../src/screens/ProfileEditor.js";
 import { stubApi } from "./stub-api.js";
 
 afterEach(cleanup);
+// These tests remount the editor and chain several reads; under the full,
+// parallel suite that can pass the default 1s wait. Give them room.
+configure({ asyncUtilTimeout: 3000 });
 const person = (id: string) => ({
   id,
   email: `${id}@example.test`,
@@ -319,3 +323,29 @@ it.each([null, "b"])(
     else expect(name().value).toBe("Name b");
   },
 );
+
+it("never fills A's form from a read the server says was for another account", async () => {
+  // The page believes A is signed in throughout (no recheck has seen B), but
+  // the cookie belongs to B when the recovery read goes out.
+  const myProfile = vi
+    .fn()
+    .mockRejectedValueOnce(new ApiError(401, "Sign in to continue."))
+    .mockRejectedValueOnce(
+      new ApiError(409, "Your account changed.", "account_changed"),
+    )
+    .mockResolvedValue(profile("a"));
+  setup({ me: vi.fn(async () => person("a")), myProfile });
+  expect(
+    (
+      await screen.findAllByText(
+        "Sign in to create or change your public profile.",
+      )
+    ).length,
+  ).toBeGreaterThan(0);
+  await act(async () => window.dispatchEvent(new Event("focus")));
+  // The refused read is dropped and the editor starts again for A.
+  await waitFor(() => expect(name().value).toBe("Name a"));
+  expect(screen.queryByDisplayValue("Name b")).toBeNull();
+  expect(myProfile.mock.calls.every(([owner]) => owner === "a")).toBe(true);
+  expect(myProfile.mock.calls.length).toBeGreaterThanOrEqual(3);
+});

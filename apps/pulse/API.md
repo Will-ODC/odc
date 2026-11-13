@@ -389,6 +389,12 @@ No `Origin` is required because this route changes nothing. A missing, expired
 or revoked session returns 401 `signed_out`. Storage failures return 500
 `server_error`.
 
+Optional query `ownerAccountId`: the account the editor is reading for (the
+`id` from `/api/me`). The web client always sends it. If another account is
+signed in, the route returns 409 `account_changed` and no profile, so a page
+that missed an account switch never shows one account's profile in another's
+form. An empty value returns 400 `bad_request`.
+
 ### `PUT /api/me/profile`
 
 Requires the current signed-in member, `Content-Type: application/json`, and an

@@ -96,10 +96,12 @@ export class HttpPulseApi implements PulseApi {
     return this.#send("GET", `/profiles/${encodeURIComponent(publicId)}`);
   }
 
-  async myProfile(): Promise<MemberProfile | null> {
+  async myProfile(ownerAccountId?: string): Promise<MemberProfile | null> {
     const body = await this.#send<{ profile: MemberProfile | null }>(
       "GET",
-      "/me/profile",
+      ownerAccountId === undefined
+        ? "/me/profile"
+        : `/me/profile?ownerAccountId=${encodeURIComponent(ownerAccountId)}`,
     );
     return body.profile;
   }

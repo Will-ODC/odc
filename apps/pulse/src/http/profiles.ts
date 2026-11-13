@@ -147,6 +147,22 @@ export async function registerProfileRoutes(
       "/api/me/profile",
       { config: limit, preParsing: guard(false) },
       async (request, reply) => {
+        // Optional precondition, as on PUT: the account the editor is reading
+        // for. A mismatch means the signed-in account changed underneath it,
+        // so nothing is returned that could land in the wrong person's form.
+        const { ownerAccountId } = (request.query ?? {}) as {
+          ownerAccountId?: unknown;
+        };
+        if (ownerAccountId !== undefined) {
+          if (typeof ownerAccountId !== "string" || ownerAccountId.length === 0)
+            throw BAD_REQUEST();
+          if (ownerAccountId !== actorOf(request).voterId)
+            throw new Refusal(
+              409,
+              "account_changed",
+              "Your account changed. Reload your profile.",
+            );
+        }
         const profile = await deps.profiles?.byOwner(actorOf(request));
         return reply
           .header("cache-control", "no-store")

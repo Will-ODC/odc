@@ -40,6 +40,14 @@ export function useOwnerProfile(
     };
   }, [api, active]);
   const status = state.status;
+  // The server said another account is signed in: drop everything this owner
+  // holds and let the page reload the session (it remounts for the new one).
+  const accountChanged = useCallback(() => {
+    signedIn.current = false;
+    identity.current += 1;
+    setState({ status: "loading" });
+    onAccountChanged();
+  }, [onAccountChanged]);
   // A 401 on the first read leaves "Sign in" on screen. Once the same account
   // is signed in again (this owner was not remounted), read it again.
   const wasActive = useRef(active);
@@ -75,13 +83,18 @@ export function useOwnerProfile(
     if (!active || status !== "loading") return;
     let live = true;
     const ticket = identity.current;
-    api.myProfile().then(
+    api.myProfile(ownerAccountId).then(
       (profile) => {
         if (live && ticket === identity.current)
           setState({ status: "ready", value: profile });
       },
       (error: unknown) => {
         if (!live || ticket !== identity.current) return;
+        // Read for another account than this editor's: never show it here.
+        if (isAccountChanged(error)) {
+          accountChanged();
+          return;
+        }
         setState(
           error instanceof ApiError && error.status === 401
             ? {
@@ -99,7 +112,7 @@ export function useOwnerProfile(
     return () => {
       live = false;
     };
-  }, [api, attempt, active, status]);
+  }, [api, attempt, active, status, ownerAccountId, accountChanged]);
   const retry = useCallback(() => {
     setState({ status: "loading" });
     setAttempt((value) => value + 1);
@@ -115,21 +128,22 @@ export function useOwnerProfile(
         return profile;
       } catch (error) {
         if (ticket !== identity.current) return;
-        if (
-          error instanceof ApiError &&
-          error.status === 409 &&
-          error.code === "account_changed"
-        ) {
-          signedIn.current = false;
-          identity.current += 1;
-          setState({ status: "loading" });
-          onAccountChanged();
+        if (isAccountChanged(error)) {
+          accountChanged();
           return;
         }
         throw error;
       }
     },
-    [api, ownerAccountId, onAccountChanged],
+    [api, ownerAccountId, accountChanged],
   );
   return { state, retry, save };
+}
+
+function isAccountChanged(error: unknown) {
+  return (
+    error instanceof ApiError &&
+    error.status === 409 &&
+    error.code === "account_changed"
+  );
 }

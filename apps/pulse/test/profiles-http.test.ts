@@ -279,3 +279,35 @@ test(
     );
   },
 );
+
+test(
+  "Postgres HTTP owner read refuses a read made for another account",
+  options,
+  async (t) => {
+    const f = await fixture(t);
+    await response(
+      await f.put({ ...draft(), visible: false }),
+      200,
+      ownerSchema,
+    );
+    // The editor reading for `owner` while `other` is signed in gets nothing.
+    await errorResponse(
+      await f.get(`/me/profile?ownerAccountId=${owner}`, {
+        cookie: f.cookie(other),
+      }),
+      409,
+      "account_changed",
+    );
+    await errorResponse(
+      await f.get("/me/profile?ownerAccountId=", { cookie: f.cookie() }),
+      400,
+      "bad_request",
+    );
+    const own = await response(
+      await f.get(`/me/profile?ownerAccountId=${owner}`),
+      200,
+      ownerSchema,
+    );
+    assert.equal(own.profile?.displayName, draft().displayName);
+  },
+);
