@@ -1499,6 +1499,13 @@ it("says beside each field what is missing instead of a browser bubble", async (
     screen.getByLabelText("How you can help").getAttribute("aria-invalid"),
   ).toBe("true");
   expect(participate).not.toHaveBeenCalled();
+  // Fixing a field takes its complaint back straight away.
+  await user.type(screen.getByLabelText("Public name"), "Jo");
+  expect(screen.queryByText("Enter the name to show.")).toBeNull();
+  expect(
+    screen.getByLabelText("Public name").getAttribute("aria-invalid"),
+  ).toBeNull();
+  expect(screen.getByText("Say how you can help.")).toBeTruthy();
 
   await user.click(screen.getByText("Post an update"));
   await user.type(screen.getByLabelText("Progress update"), "Done");
@@ -1527,6 +1534,17 @@ it("says beside each field what is missing instead of a browser bubble", async (
     screen.getByLabelText("Progress update").getAttribute("aria-invalid"),
   ).toBeNull();
   expect(update).not.toHaveBeenCalled();
+  await user.click(
+    screen.getByLabelText("I confirm this status and update may be published."),
+  );
+  expect(
+    screen.queryByText("Confirm this status and update may be published."),
+  ).toBeNull();
+  // A link still not a web link keeps its complaint.
+  await user.type(screen.getByLabelText("Evidence link (optional)"), "x");
+  expect(
+    screen.getByText("Enter a full link, starting with https://"),
+  ).toBeTruthy();
 });
 
 it("forgets a sign-in error once the same person has signed in again", async () => {

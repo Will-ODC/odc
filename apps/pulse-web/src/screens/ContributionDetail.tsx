@@ -412,7 +412,10 @@ function SignInAgain({
   announce?: boolean;
 }) {
   return (
-    <p className="contribution-note" {...(announce ? { role: "status" } : {})}>
+    <p
+      className="contribution-expired"
+      {...(announce ? { role: "status" } : {})}
+    >
       Your sign-in has ended. What you wrote stays here.{" "}
       <a href={href} target="_blank" rel="noreferrer">
         Sign in again in a new tab
@@ -461,6 +464,28 @@ function useSendOutcome(
 function focusLost() {
   const active = document.activeElement;
   return active === null || active === document.body;
+}
+/**
+ * A form's change handler that takes back a field's complaint as soon as the
+ * person has fixed it, rather than leaving it red until the next send.
+ */
+function clearWhenFixed<K extends string>(
+  problems: Partial<Record<K, string>>,
+  setProblems: (next: Partial<Record<K, string>>) => void,
+  fixed: (name: K, field: HTMLInputElement | HTMLTextAreaElement) => boolean,
+) {
+  return (event: FormEvent<HTMLFormElement>) => {
+    const field = event.target;
+    if (!(
+      field instanceof HTMLInputElement || field instanceof HTMLTextAreaElement
+    ))
+      return;
+    const name = field.name as K;
+    if (problems[name] === undefined || !fixed(name, field)) return;
+    const next = { ...problems };
+    delete next[name];
+    setProblems(next);
+  };
 }
 /** Move focus to a field the form refused, by id. */
 function focusField(id: string) {
@@ -523,6 +548,11 @@ function MessageForm({
       className="contribution-form"
       ref={formRef}
       onSubmit={submit}
+      onChange={clearWhenFixed<"message">(
+        problem === undefined ? {} : { message: problem },
+        (next) => setProblem(next.message),
+        (_name, field) => field.value.trim() !== "",
+      )}
       noValidate
     >
       <p className="contribution-note">
@@ -709,6 +739,16 @@ function UpdateForm({
       className="contribution-form contribution-update"
       ref={formRef}
       onSubmit={submit}
+      onChange={clearWhenFixed<"message" | "evidence" | "confirm">(
+        problems,
+        setProblems,
+        (name, field) =>
+          name === "confirm"
+            ? field instanceof HTMLInputElement && field.checked
+            : name === "evidence"
+              ? field.value.trim() === "" || isWebLink(field.value.trim())
+              : field.value.trim() !== "",
+      )}
       noValidate
     >
       {access === "expired" ? <SignInAgain href={signInHref} /> : null}
@@ -916,6 +956,11 @@ function ParticipationForm({
         className="contribution-form"
         ref={formRef}
         onSubmit={submit}
+        onChange={clearWhenFixed<"displayName" | "message">(
+          problems,
+          setProblems,
+          (_name, field) => field.value.trim() !== "",
+        )}
         aria-labelledby="participate-heading"
         noValidate
       >
