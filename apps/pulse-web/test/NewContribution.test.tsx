@@ -1,5 +1,5 @@
 // @vitest-environment jsdom
-import { cleanup, render, screen, waitFor } from "@testing-library/react";
+import { act, cleanup, render, screen, waitFor } from "@testing-library/react";
 import userEvent from "@testing-library/user-event";
 import { afterEach, expect, it, vi } from "vitest";
 import { ContributionsError } from "../src/api/contributions.js";
@@ -354,16 +354,21 @@ it.each([503, 401, undefined])(
         ? new Error("Connection lost. Try again.")
         : new ContributionsError(status, "Could not publish. Try again."),
     );
-    const alert = await screen.findByRole("alert");
-    await waitFor(() => expect(document.activeElement).toBe(alert));
-    expect(alert.getAttribute("tabindex")).toBe("-1");
+    // After a 401 the one message is the notice with the sign-in link at
+    // the top; any other failure is the alert beside Publish.
+    const outcome =
+      status === 401
+        ? await screen.findByRole("status")
+        : await screen.findByRole("alert");
+    await waitFor(() => expect(document.activeElement).toBe(outcome));
+    expect(outcome.getAttribute("tabindex")).toBe("-1");
     expectDraft();
     if (status === 401) {
-      const notice = screen.getByRole("status");
-      expect(notice.textContent).toBe(
+      expect(outcome.textContent).toBe(
         "Your sign-in has ended. What you wrote stays here. Sign in again in a new tab to send it.",
       );
-      expect(notice.closest("form")?.firstElementChild).toBe(notice);
+      expect(outcome.closest("form")?.firstElementChild).toBe(outcome);
+      expect(screen.queryByRole("alert")).toBeNull();
     }
   },
 );
@@ -419,4 +424,26 @@ it("stops saying the sign-in has ended once a 401 is recovered by the same perso
     expect(screen.queryByText(/Your sign-in has ended/)).toBeNull(),
   );
   expectDraft();
+});
+
+it("takes back the confirm complaint as soon as the box is ticked, and a field's as it is typed", async () => {
+  const { user } = setup();
+  await screen.findByLabelText("Title");
+  await user.click(
+    screen.getByRole("button", { name: "Publish contribution" }),
+  );
+  const confirm = screen.getByRole("checkbox", { name: /I confirm this post/ });
+  expect(confirm.getAttribute("aria-invalid")).toBe("true");
+  expect(screen.getByLabelText("Title").getAttribute("aria-invalid")).toBe(
+    "true",
+  );
+  // Tick it without the box ever taking focus, as Safari does on a click.
+  await act(async () => {
+    confirm.click();
+  });
+  expect(confirm.getAttribute("aria-invalid")).toBeNull();
+  await user.type(screen.getByLabelText("Title"), "G");
+  expect(
+    screen.getByLabelText("Title").getAttribute("aria-invalid"),
+  ).toBeNull();
 });
