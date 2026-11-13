@@ -3,6 +3,7 @@ import type { FormEvent } from "react";
 import type { PulseApi } from "../api/types.js";
 import {
   contributionsApi,
+  ContributionsError,
   type ContributionsApi,
   type ContributionInput,
   type ContributionKind,
@@ -33,6 +34,7 @@ export function NewContribution({
     onForgotten: votes.cleared,
     recheckSignedIn: true,
   });
+  const [accountChanged, setAccountChanged] = useState(false);
   const accountId = session.status === "signedIn" ? session.me.id : null;
   // Read the votes again once someone is signed in after they were cleared.
   useEffect(() => votes.signedInAs(accountId));
@@ -73,12 +75,26 @@ export function NewContribution({
           ← Contributions
         </a>
         <h1>Start a contribution</h1>
+        {accountChanged ? (
+          <p role="alert" className="contribution-error">
+            Your account changed, so this wasn&apos;t sent.
+          </p>
+        ) : null}
         {session.status === "loading" ? (
           <p role="status">Loading…</p>
         ) : accountId !== null || expired ? (
           <ContributionForm
             key={draft.generation}
             client={client}
+            accountId={accountId ?? ""}
+            onAccountChanged={() => {
+              setAccountChanged(true);
+              setDraft((current) => ({
+                ...current,
+                generation: current.generation + 1,
+              }));
+              window.dispatchEvent(new Event("focus"));
+            }}
             onCreated={onCreated}
             expired={expired}
           />
@@ -110,10 +126,14 @@ function ContributionForm({
   client,
   onCreated,
   expired,
+  accountId,
+  onAccountChanged,
 }: {
   client: ContributionsApi;
   onCreated: (id: string) => void;
   expired: boolean;
+  accountId: string;
+  onAccountChanged: () => void;
 }) {
   const resultId = useRef("");
   const formRef = useRef<HTMLFormElement>(null);
@@ -143,7 +163,17 @@ function ContributionForm({
   const [pollUnreadable, setPollUnreadable] = useState(false);
   const save = useContributionSave<ContributionInput>(
     async (input, key) => {
-      resultId.current = (await client.create(input, key)).id;
+      try {
+        resultId.current = (await client.create(input, key, accountId)).id;
+      } catch (error) {
+        if (
+          error instanceof ContributionsError &&
+          error.status === 409 &&
+          error.code === "account_changed"
+        )
+          onAccountChanged();
+        throw error;
+      }
     },
     () => onCreated(resultId.current),
   );

@@ -332,6 +332,7 @@ it("opens a private message only on request and reuses the key on retry", async 
     "park",
     "I can help build the ramp.",
     expect.any(String),
+    "reader",
   );
   expect(sendMessage.mock.calls[0]?.[2]).toBe(sendMessage.mock.calls[1]?.[2]);
 });
@@ -436,6 +437,7 @@ it("records an offer of help and shows the shared date style", async () => {
     "park",
     { displayName: "Jo", kind: "help", message: "I can build the ramp." },
     expect.any(String),
+    "helper",
   );
 });
 
@@ -489,6 +491,7 @@ it("keeps the chosen kind and name for a second pledge, and says when one person
     "park",
     { displayName: "Jo", kind: "pledge", message: "Two bags of soil." },
     expect.any(String),
+    "helper",
   );
   expect(
     (screen.getByRole("radio", { name: "Make a pledge" }) as HTMLInputElement)
@@ -883,6 +886,7 @@ it("rejects malformed successful responses and sends credentials/idempotency key
     "park",
     { kind: "help", displayName: "Helper", message: "Help" },
     "request-key",
+    "helper",
   );
   expect(doFetch.mock.calls[1]?.[1]).toMatchObject({
     method: "POST",
@@ -912,6 +916,7 @@ it("uses load wording for GET failures and save wording for writes", async () =>
         organizerName: "Ada",
       },
       crypto.randomUUID(),
+      "helper",
     ),
   ).rejects.toThrow("Could not save this change. Please try again.");
   await expect(
@@ -919,6 +924,7 @@ it("uses load wording for GET failures and save wording for writes", async () =>
       "park",
       { displayName: "Jo", kind: "help", message: "I can help." },
       crypto.randomUUID(),
+      "helper",
     ),
   ).rejects.toThrow("Could not save this change. Please try again.");
 });
@@ -931,6 +937,7 @@ it("says what a refused entry means for each conflict code", async () => {
       "park",
       { displayName: "Jo", kind: "help", message: "I can help." },
       crypto.randomUUID(),
+      "helper",
     );
   await expect(refuse("sender_limit")).rejects.toThrow(
     "You have added as many entries to this contribution as one person can.",
@@ -1231,6 +1238,7 @@ it("keeps what was written when the session expires, and sends it after signing 
     "park",
     { displayName: "Jo", kind: "help", message: "Bring tools" },
     expect.any(String),
+    "helper",
   );
 });
 
@@ -1596,4 +1604,171 @@ it("puts the thank-you away when the person switches to start another entry", as
   expect(
     screen.queryByText("Thank you. Your entry is on this page."),
   ).toBeNull();
+});
+
+it.each(["help", "pledge", "message", "update"] as const)(
+  "clears a refused %s draft before a pending session recheck resolves",
+  async (form) => {
+    const ada = { id: "ada", email: "ada@example.test", community: null };
+    const bea = { id: "bea", email: "bea@example.test", community: null };
+    let oldAnswer!: (value: typeof ada) => void;
+    let newAnswer!: (value: typeof ada) => void;
+    const me = vi
+      .fn()
+      .mockResolvedValueOnce(ada)
+      .mockImplementationOnce(
+        () =>
+          new Promise((resolve) => {
+            oldAnswer = resolve;
+          }),
+      )
+      .mockImplementationOnce(
+        () =>
+          new Promise((resolve) => {
+            newAnswer = resolve;
+          }),
+      );
+    const refused = new ContributionsError(
+      409,
+      "Your account changed, so this wasn't sent.",
+      "account_changed",
+    );
+    const participate = vi.fn().mockRejectedValue(refused);
+    const sendMessage = vi.fn().mockRejectedValue(refused);
+    const update = vi.fn().mockRejectedValue(refused);
+    render(
+      <ContributionDetail
+        api={stubApi({ me })}
+        id="park"
+        client={client({
+          detail: async () => ({
+            contribution: fixture(),
+            canManage: form === "update",
+          }),
+          participate,
+          sendMessage,
+          update,
+        })}
+      />,
+    );
+    const user = userEvent.setup();
+    await screen.findByLabelText("Public name");
+    let label: string;
+    let button: string;
+    if (form === "message") {
+      await user.click(screen.getByText("Message the organizer"));
+      label = "Private message";
+      button = "Send message";
+    } else if (form === "update") {
+      await user.click(await screen.findByText("Post an update"));
+      label = "Progress update";
+      button = "Publish update";
+      await user.click(
+        screen.getByLabelText(
+          "I confirm this status and update may be published.",
+        ),
+      );
+      await user.selectOptions(
+        screen.getByLabelText("Current status"),
+        "completed",
+      );
+    } else {
+      await user.type(screen.getByLabelText("Public name"), "Ada");
+      if (form === "pledge")
+        await user.click(screen.getByRole("radio", { name: "Make a pledge" }));
+      label = form === "help" ? "How you can help" : "What you pledge";
+      button = form === "help" ? "Offer help" : "Make pledge";
+    }
+    await user.type(screen.getByLabelText(label), "Draft written by Ada");
+    window.dispatchEvent(new Event("focus"));
+    await waitFor(() => expect(me).toHaveBeenCalledTimes(2));
+    await user.click(screen.getByRole("button", { name: button }));
+    expect(
+      await screen.findByText("Your account changed, so this wasn't sent."),
+    ).toBeTruthy();
+    await waitFor(() => expect(me).toHaveBeenCalledTimes(3));
+    const send =
+      form === "message"
+        ? sendMessage
+        : form === "update"
+          ? update
+          : participate;
+    expect(send).toHaveBeenCalledOnce();
+    expect(send.mock.calls[0]?.[3]).toBe("ada");
+    // Remount immediately, while both /me answers are still pending.
+    const emptyLabel = form === "pledge" ? "How you can help" : label;
+    expect(
+      (screen.getByLabelText(emptyLabel) as HTMLTextAreaElement).value,
+    ).toBe("");
+    if (form === "update") {
+      expect(
+        (
+          screen.getByLabelText(
+            "I confirm this status and update may be published.",
+          ) as HTMLInputElement
+        ).checked,
+      ).toBe(false);
+      expect(
+        (screen.getByLabelText("Current status") as HTMLSelectElement).value,
+      ).toBe("open");
+    }
+    await act(async () => {
+      newAnswer(bea);
+    });
+    await act(async () => {
+      oldAnswer(ada);
+    });
+    expect(screen.queryByDisplayValue("Draft written by Ada")).toBeNull();
+    expect(
+      screen.queryByText(
+        /Your .* has been published|Message sent to the organizer/,
+      ),
+    ).toBeNull();
+  },
+);
+
+it("sends the page account on every write and preserves account_changed as a distinct refusal", async () => {
+  const doFetch = vi.fn<typeof fetch>().mockImplementation(
+    async () =>
+      new Response(JSON.stringify({ error: "account_changed" }), {
+        status: 409,
+      }),
+  );
+  const api = new HttpContributionsApi(doFetch);
+  const calls = [
+    () =>
+      api.create(
+        {
+          title: "Garden",
+          description: "Build",
+          organizerName: "Ada",
+          kind: "project",
+        },
+        "key",
+        "ada",
+      ),
+    () =>
+      api.participate(
+        "park",
+        { displayName: "Ada", kind: "help", message: "Build" },
+        "key",
+        "ada",
+      ),
+    () => api.sendMessage("park", "Private", "key", "ada"),
+    () =>
+      api.update(
+        "park",
+        { message: "Done", status: "completed" },
+        "key",
+        "ada",
+      ),
+  ];
+  for (const send of calls)
+    await expect(send()).rejects.toMatchObject({
+      status: 409,
+      code: "account_changed",
+      message: "Your account changed, so this wasn't sent.",
+    });
+  for (const [, init] of doFetch.mock.calls)
+    expect(JSON.parse(String(init?.body)).accountId).toBe("ada");
 });

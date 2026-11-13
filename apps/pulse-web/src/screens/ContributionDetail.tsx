@@ -3,6 +3,7 @@ import type { FormEvent } from "react";
 import type { PulseApi } from "../api/types.js";
 import {
   contributionsApi,
+  ContributionsError,
   type ContributionsApi,
   type Contribution,
   type ParticipationKind,
@@ -60,6 +61,27 @@ export function ContributionDetail({
     onForgotten: clearVotes,
     recheckSignedIn: true,
   });
+  type WriteForm = "participation" | "message" | "update";
+  const [refusals, setRefusals] = useState({
+    participation: 0,
+    message: 0,
+    update: 0,
+  });
+  async function write<T>(form: WriteForm, send: () => Promise<T>): Promise<T> {
+    try {
+      return await send();
+    } catch (error) {
+      if (
+        error instanceof ContributionsError &&
+        error.status === 409 &&
+        error.code === "account_changed"
+      ) {
+        setRefusals((current) => ({ ...current, [form]: current[form] + 1 }));
+        window.dispatchEvent(new Event("focus"));
+      }
+      throw error;
+    }
+  }
   const accountId = session.status === "signedIn" ? session.me.id : null;
   // Read the votes again once someone is signed in after they were cleared.
   useEffect(() => votes.signedInAs(accountId));
@@ -288,15 +310,27 @@ export function ContributionDetail({
                 </p>
               ) : null}
               <section className="contribution-section">
+                {refusals.participation ? (
+                  <p role="alert" className="contribution-error">
+                    Your account changed, so this wasn&apos;t sent.
+                  </p>
+                ) : null}
                 <ParticipationForm
-                  key={`${item.id}:${drafts.generation}`}
+                  key={`${item.id}:${drafts.generation}:${refusals.participation}`}
                   access={access}
+                  accountId={accountId ?? ""}
+                  write={(send) => write("participation", send)}
                   client={client}
                   item={item}
                   changed={changed}
                 />
               </section>
               <section className="contribution-section">
+                {refusals.message ? (
+                  <p role="alert" className="contribution-error">
+                    Your account changed, so this wasn&apos;t sent.
+                  </p>
+                ) : null}
                 {canManage ? (
                   <OrganizerInbox key={item.id} client={client} id={item.id} />
                 ) : (
@@ -305,8 +339,10 @@ export function ContributionDetail({
                       Message the organizer
                     </summary>
                     <MessageForm
-                      key={`${item.id}:${drafts.generation}`}
+                      key={`${item.id}:${drafts.generation}:${refusals.message}`}
                       access={access}
+                      accountId={accountId ?? ""}
+                      write={(send) => write("message", send)}
                       client={client}
                       id={item.id}
                     />
@@ -364,14 +400,21 @@ export function ContributionDetail({
                 ) : (
                   <p>No progress updates yet.</p>
                 )}
+                {refusals.update ? (
+                  <p role="alert" className="contribution-error">
+                    Your account changed, so this wasn&apos;t sent.
+                  </p>
+                ) : null}
                 {canUpdate ? (
                   <details className="contribution-disclosure">
                     <summary className="contribution-button contribution-button--secondary">
                       Post an update
                     </summary>
                     <UpdateForm
-                      key={`${item.id}:${drafts.generation}`}
+                      key={`${item.id}:${drafts.generation}:${refusals.update}`}
                       access={access}
+                      accountId={accountId ?? ""}
+                      write={(send) => write("update", send)}
                       client={client}
                       item={item}
                       changed={changed}
@@ -511,16 +554,21 @@ const participationLabels: Record<ParticipationKind, string> = {
 };
 function MessageForm({
   access,
+  accountId,
+  write,
   client,
   id,
 }: {
   access: Access;
+  accountId: string;
+  write: <T>(send: () => Promise<T>) => Promise<T>;
   client: ContributionsApi;
   id: string;
 }) {
   const formRef = useRef<HTMLFormElement>(null);
   const save = useContributionSave<string>(
-    (message, key) => client.sendMessage(id, message, key),
+    (message, key) =>
+      write(() => client.sendMessage(id, message, key, accountId)),
     () => formRef.current?.reset(),
   );
   const outcome = useSendOutcome(save, access);
@@ -676,11 +724,15 @@ function OrganizerMessages({
 }
 function UpdateForm({
   access,
+  accountId,
+  write,
   client,
   item,
   changed,
 }: {
   access: Access;
+  accountId: string;
+  write: <T>(send: () => Promise<T>) => Promise<T>;
   client: ContributionsApi;
   item: Contribution;
   changed: (item: Contribution) => void;
@@ -696,7 +748,8 @@ function UpdateForm({
     setStatus(item.status);
   }
   const save = useContributionSave<UpdateInput>(
-    async (input, key) => changed(await client.update(item.id, input, key)),
+    async (input, key) =>
+      changed(await write(() => client.update(item.id, input, key, accountId))),
     // Clear what was written, not the status: `reset()` would put the
     // select back to the status this form first rendered with.
     () => clearWritten(formRef.current, ["message", "evidence"]),
@@ -876,11 +929,15 @@ const offerLabels: Record<
 /** Offer help or pledge: the participation kinds open records accept. */
 function ParticipationForm({
   access,
+  accountId,
+  write,
   client,
   item,
   changed,
 }: {
   access: Access;
+  accountId: string;
+  write: <T>(send: () => Promise<T>) => Promise<T>;
   client: ContributionsApi;
   item: Contribution;
   changed: (item: Contribution) => void;
@@ -893,7 +950,9 @@ function ParticipationForm({
     message: string;
   }>(
     async (input, key) =>
-      changed(await client.participate(item.id, input, key)),
+      changed(
+        await write(() => client.participate(item.id, input, key, accountId)),
+      ),
     // The name and the chosen kind stay for a second entry; `reset()` would
     // also clear the controlled kind behind React's back.
     () => clearWritten(formRef.current, ["message"]),

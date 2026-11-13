@@ -228,7 +228,11 @@ export async function fixture(t: TestContext, storage = true) {
         ...(key === null ? {} : { "idempotency-key": key }),
         ...headers,
       },
-      body: JSON.stringify(body),
+      body: JSON.stringify(
+        body && typeof body === "object" && !Array.isArray(body)
+          ? { accountId: actor, ...body }
+          : body,
+      ),
     });
   }
   async function snapshot() {

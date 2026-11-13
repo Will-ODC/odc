@@ -420,3 +420,62 @@ it("stops saying the sign-in has ended once a 401 is recovered by the same perso
   );
   expectDraft();
 });
+
+it("clears a refused draft and rechecks the session while the focus recheck is pending", async () => {
+  let resolveRecheck!: (value: {
+    id: string;
+    email: string;
+    community: null;
+  }) => void;
+  const me = vi
+    .fn()
+    .mockResolvedValueOnce({
+      id: "ada",
+      email: "ada@example.test",
+      community: null,
+    })
+    .mockImplementationOnce(
+      () =>
+        new Promise((resolve) => {
+          resolveRecheck = resolve;
+        }),
+    )
+    .mockResolvedValue({
+      id: "bea",
+      email: "bea@example.test",
+      community: null,
+    });
+  const create = vi
+    .fn()
+    .mockRejectedValue(
+      new ContributionsError(
+        409,
+        "Your account changed, so this wasn't sent.",
+        "account_changed",
+      ),
+    );
+  const onCreated = vi.fn();
+  render(
+    <NewContribution
+      api={stubApi({ me })}
+      client={client({ create })}
+      onCreated={onCreated}
+    />,
+  );
+  const user = userEvent.setup();
+  await writeDraft(user);
+  window.dispatchEvent(new Event("focus"));
+  await waitFor(() => expect(me).toHaveBeenCalledTimes(2));
+  await user.click(
+    screen.getByRole("button", { name: "Publish contribution" }),
+  );
+  expect(
+    await screen.findByText("Your account changed, so this wasn't sent."),
+  ).toBeTruthy();
+  await waitFor(() => expect(me).toHaveBeenCalledTimes(3));
+  expect(create.mock.calls[0]?.[2]).toBe("ada");
+  expectDraft(true);
+  expect(onCreated).not.toHaveBeenCalled();
+  resolveRecheck({ id: "ada", email: "ada@example.test", community: null });
+  await waitFor(() => expectDraft(true));
+});
