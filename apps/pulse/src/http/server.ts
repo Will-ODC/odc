@@ -1,3 +1,5 @@
+import { registerContributionRoutes } from "./contributions.js";
+import type { ContributionsStore } from "../contributions/store.js";
 import { randomUUID } from "node:crypto";
 import { logFault } from "../logging.js";
 import { BlockList, isIP } from "node:net";
@@ -79,6 +81,7 @@ export interface ServerDeps {
    * creation routes answer 503 `creation_unavailable` and nothing is created.
    */
   creation?: CreationStore;
+  contributions?: ContributionsStore;
   /**
    * The web client's origin, exactly as a browser sends it in `Origin`. Every
    * creation mutation, sign-in, link redemption and sign-out must come from
@@ -724,6 +727,11 @@ export async function createServer(deps: ServerDeps): Promise<FastifyInstance> {
     webOrigin: deps.webOrigin,
     currentVoter,
     ...(deps.creationRateLimit ? { rateLimit: deps.creationRateLimit } : {}),
+  });
+  await registerContributionRoutes(app, {
+    contributions: deps.contributions,
+    webOrigin: deps.webOrigin,
+    currentVoter,
   });
   await registerProfileRoutes(app, {
     profiles: deps.profiles,

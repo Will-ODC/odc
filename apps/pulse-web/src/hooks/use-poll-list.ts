@@ -9,13 +9,14 @@ const message = (err: unknown) =>
     ? err.message
     : "We couldn't load the questions. Try again.";
 
-export function usePollList(api: PulseApi, community: string) {
+export function usePollList(api: PulseApi, community: string, enabled = true) {
   const [data, setData] = useState<ViewData<PollPage>>({ status: "loading" });
   const [more, setMore] = useState<More>({ status: "idle" });
   const [attempt, retry] = useState(0);
   const generation = useRef(0);
   const busy = useRef(false);
   useEffect(() => {
+    if (!enabled) return;
     const current = ++generation.current;
     busy.current = false;
     setData({ status: "loading" });
@@ -41,7 +42,7 @@ export function usePollList(api: PulseApi, community: string) {
     return () => {
       ++generation.current;
     };
-  }, [api, community, attempt]);
+  }, [api, community, attempt, enabled]);
 
   function loadMore() {
     if (busy.current || data.status !== "ready" || !data.value.nextCursor)

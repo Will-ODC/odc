@@ -10,5 +10,5 @@ export type ViewData<T> =
   /** Nothing to show, and a sentence saying what happens instead. Never blank. */
   | { status: "empty"; message: string }
   /** One plain sentence: what happened, and what to do about it. */
-  | { status: "error"; message: string }
+  | { status: "error"; message: string; statusCode?: number }
   | { status: "ready"; value: T };

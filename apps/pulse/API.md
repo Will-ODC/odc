@@ -1178,3 +1178,83 @@ non-owner learns nothing about which accounts exist), 413 `body_too_large` (PUT
 body over 1 KiB), 503 `creation_unavailable`, 500 `server_error`. All changes are atomic and
 attributed to the owner. Context exposes only the caller's effective posting
 permission. No public grant listing or author/account inspection is introduced.
+
+## Contributions (#246, #247, #252)
+
+Public `GET /api/contributions?cursor=...` returns `{contributions,nextCursor}`,
+20 newest records at a time. Summaries omit participation and update arrays.
+`GET /api/contributions/:id` returns `{contribution,canManage}`. The optional
+session determines whether the reader is the organizer. All responses use
+`Cache-Control: no-store`. Reading never creates a ballot or changes a vote.
+
+Signed-in `POST /api/contributions` publishes a community contribution. Strict
+JSON requires `title` (160 characters), `description` (4000),
+`organizerName` (80), and `kind` (`project`, `fundraiser`, `group_buy`, `offer`).
+Text is trimmed and nonempty. Optional `communityBenefit` and `needs` accept
+up to 2000 characters each and default to empty strings.
+
+The short posting form sends the required fields, plus `pollId` when the
+author links a related question (it accepts a question link or ID and sends
+only the ID). Any caller may supply `pollId` for a visible poll. A missing or hidden poll returns 404
+`poll_not_found`. Group buys and offers may include `commercial` pricing with
+`currency` (CAD/USD/GBP/EUR), integer `regularPriceMinor` (1–1000000000),
+`offeredPriceMinor` (0–1000000000), `referenceUrl` and `terms` (2000).
+When prices are provided, they must show at least 20% advertised savings.
+An optional `fund` requires pricing and contains a `name` (1–160 characters)
+and a whole-number `percentage` (1–100). These claims are unverified.
+
+The public record adds `id`, `community:{id,label}`, `createdAt` ISO timestamp,
+`status` (`open`,`in_progress`,`completed`,`cancelled`), `participations` and
+`updates`. Community comes from the organizer's account, or General. Names are
+self-selected public labels. Account IDs, email and request keys remain private.
+Five new contributions per account per rolling hour are allowed.
+
+`POST /api/contributions/:id/participations` accepts `{displayName,kind,message}`
+with lengths 80/2000 and kind `help`, `pledge`, or `report`. Entries add `id` and
+`createdAt`. Help/pledges require open/in-progress status. Reports can be added
+after closure. Text and labels are public. A pledge moves no money.
+
+Organizer-only `POST /api/contributions/:id/updates` accepts `{message,status,
+evidenceUrl?}`. Message is 1–2000 characters. It appends a public update with
+`id` and `createdAt` and changes status. The organizer may reopen a record.
+Completion and evidence are organizer-reported, never independently verified.
+URLs must be HTTP(S), without embedded credentials, at most 2000 characters.
+Each record supports 500 participations and 500 updates. One account may add at
+most 20 participations to one contribution, so one person cannot fill the
+shared record. Identical idempotent retries do not consume another entry.
+
+### Private messages to the organizer
+
+`POST /api/contributions/:id/messages` accepts `{message}` with 1–2000
+characters and a UUID `Idempotency-Key`. It returns `{id,replayed}` with 201
+for a new message or 200 for a repeat with the same sender, contribution, key
+and text. Reusing that key with different text returns 409. Each contribution
+can receive up to 500 messages, with at most 20 from one account. Identical
+idempotent retries do not consume another entry.
+
+`GET /api/contributions/:id/messages` returns `{messages:[{id,message,createdAt}]}`
+to the organizer. A signed-in non-organizer receives 403. Both routes require
+sign-in and return 404 for an unknown contribution. Public responses never
+include messages or sender information.
+
+All POSTs require a valid session, configured web Origin, application/json and
+UUID `Idempotency-Key`. For the three routes that return a contribution
+(create, participate, update), the key is account-scoped across those three:
+Pulse stores a revision reference with each key to reconstruct the original
+response. A message key is separate: it is stored with that message, so it is
+scoped to the sender and the contribution, and is never compared with keys
+used on the other three routes.
+Identical retries return the original `{contribution,replayed:true}` with 200.
+First writes return 201 with `replayed:false`. Changed inputs or targets using
+the same key return 409. Session generation is checked in the transaction under
+the account lock shared with sign-out. Mutation body limit is 32 KiB strict UTF-8.
+Reads allow 120 requests/minute, mutations 30/minute, per route and client IP.
+
+Errors use `{error,message}`. 400 `bad_request`; 401 `signed_out`; 403
+`origin_not_allowed` or `organizer_required`; 404 `not_found` or `poll_not_found`; 409
+`idempotency_conflict`, `closed`, `record_full`, `sender_limit`; 413 `body_too_large`; 429
+`too_many_requests`, `posting_limit`; 503 `contributions_unavailable`; 500
+`server_error`. Origin/session checks precede body parsing. Required storage
+failures leave no partial writes. Production persists in Postgres, development
+uses its selected database or ephemeral memory. Payments, investments,
+independent evidence reviews and automatic reputation remain future work.

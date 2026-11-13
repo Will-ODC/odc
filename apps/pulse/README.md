@@ -194,3 +194,22 @@ sign-out, fail on new community labels, or record votes without confirmation.
 `POST /api/mcp` offers two read-only tools: `get_poll` and `get_results`. With
 `dev` running, point an MCP client at `http://127.0.0.1:8080/api/mcp` and ask
 for poll `ads-free`. Details are in [API.md](./API.md#mcp-public-reads).
+
+## Contributions
+
+Contributions lets signed-in people publish projects, fundraising requests,
+group buys and offers with a title, description and public organizer name. Anyone can browse
+records and progress. Signed-in members can send private messages to the
+organizer. Organizers read those messages and publish status updates and
+evidence links. Named labels
+are self-selected, and completion is reported by the organizer.
+
+When an API caller includes commercial pricing, it must show at least 20%
+advertised savings. Pulse records the declared prices and pledges. Payments
+and independent verification are future work.
+
+The API is documented in [API.md](./API.md#contributions-246-247-252).
+Migration 013 adds contribution records and durable retries. Migration 014 adds private messages and stores retry revisions. Production
+uses Postgres. Development follows its existing storage selection, so the default
+in-memory demonstration loses records on restart. User text and public names
+are visible to everyone. Account IDs, email and session data stay private.

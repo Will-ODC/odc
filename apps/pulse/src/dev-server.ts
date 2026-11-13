@@ -1,3 +1,6 @@
+import { InMemoryContributionsStore } from "./contributions/memory-store.js";
+import { PostgresContributionsStore } from "./contributions/pg-store.js";
+import type { ContributionsStore } from "./contributions/store.js";
 import { logFault, textFaultLogger } from "./logging.js";
 import { randomBytes } from "node:crypto";
 import { registerDevMailbox } from "./dev-mailbox.js";
@@ -312,6 +315,7 @@ interface Storage {
   claims: ClaimStore;
   domains: AllowedDomainSource;
   creation: CreationStore;
+  contributions: ContributionsStore;
   profiles: MemberProfileStore;
   /** Only when the rows are in Postgres. */
   pool?: Pool;
@@ -402,6 +406,7 @@ export async function buildDevServer(
       signer: new SessionSigner(config.secret),
       confirmationKey: new ConfirmationKey(config.confirmationKey),
       creation: storage.creation,
+      contributions: storage.contributions,
       profiles: storage.profiles,
       // The client's origin, which is where creation requests come from.
       webOrigin: config.webOrigin,
@@ -442,6 +447,7 @@ function inMemory(creation: { ownerEmail?: string }): Storage {
     claims: new InMemoryClaimStore(),
     domains: new StaticDomainSource(SEED_DOMAINS),
     creation: new InMemoryCreationStore(voters, votes, creation),
+    contributions: new InMemoryContributionsStore(voters, votes),
     profiles: new InMemoryMemberProfileStore(voters),
   };
 }
@@ -482,6 +488,7 @@ async function inPostgres(
     claims: new PostgresClaimStore(pool),
     domains: new PostgresDomainSource(pool),
     creation: new PostgresCreationStore(pool, creation),
+    contributions: new PostgresContributionsStore(pool),
     profiles: new PostgresMemberProfileStore(pool),
     pool,
   };
