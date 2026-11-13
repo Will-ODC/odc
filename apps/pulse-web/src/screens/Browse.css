@@ -158,3 +158,9 @@
   min-height: calc(var(--step) * 3);
   color: var(--green-hover);
 }
+
+@media (max-width: 699px) {
+  .browse__filters a {
+    min-height: var(--touch);
+  }
+}

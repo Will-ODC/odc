@@ -23,7 +23,7 @@
   font-size: var(--t-body);
   margin: calc(var(--step) * 2) 0 var(--step);
 }
-.contributions-page p {
+.contributions-page :where(p:not(.field__hint, .field__problem)) {
   margin: 0 0 calc(var(--step) * 2);
 }
 .contributions-page a {
@@ -127,7 +127,7 @@
   white-space: pre-wrap;
 }
 .contribution-note,
-.contribution-confirm p {
+.contribution-confirm :where(p:not(.field__hint, .field__problem)) {
   color: var(--muted);
   font-size: var(--t-small);
 }
@@ -157,6 +157,11 @@
 }
 .contribution-form > :is(.contribution-button, .btn) {
   align-self: flex-start;
+}
+/* Native selects can ignore line-height. Match the text input's inherited
+   line box, vertical padding and borders explicitly. */
+.contribution-form select.field__control {
+  min-height: calc(1.6em + var(--step) * 3.5 + var(--hairline) * 2);
 }
 .contribution-form textarea.field__control {
   resize: vertical;
