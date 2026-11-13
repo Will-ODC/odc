@@ -1301,7 +1301,6 @@ it("keeps the page and its drafts when a background reload fails", async () => {
 it("does not let a read that started before a participation undo it", async () => {
   const user = userEvent.setup();
   const { state, me } = switchableMe("helper");
-  let answerStale: () => void = () => {};
   const entry = {
     id: "help-1",
     displayName: "Jo",
@@ -1309,46 +1308,52 @@ it("does not let a read that started before a participation undo it", async () =
     message: "Bring tools",
     createdAt: "2026-11-15T12:00:00.000Z",
   };
-  const detail = vi
-    .fn()
-    .mockResolvedValueOnce({ contribution: fixture(), canManage: false })
-    .mockImplementationOnce(
-      () =>
-        new Promise((resolve) => {
-          answerStale = () =>
-            resolve({ contribution: fixture(), canManage: false });
-        }),
-    )
-    .mockResolvedValue({
-      contribution: fixture({ participations: [entry] }),
-      canManage: false,
-    });
+  // Reads that start before the participation stay pending until the test
+  // lets them answer, and then answer with the older record.
+  let written = false;
+  const stale: Array<() => void> = [];
+  const detail = vi.fn(async () => {
+    if (written || detail.mock.calls.length === 1)
+      return {
+        contribution: fixture(written ? { participations: [entry] } : {}),
+        canManage: false,
+      };
+    return new Promise<{ contribution: Contribution; canManage: boolean }>(
+      (resolve) =>
+        stale.push(() =>
+          resolve({ contribution: fixture(), canManage: false }),
+        ),
+    );
+  });
   render(
     <ContributionDetail
       api={stubApi({ me })}
       id="park"
       client={client({
         detail,
-        participate: async () => fixture({ participations: [entry] }),
+        participate: async () => {
+          written = true;
+          return fixture({ participations: [entry] });
+        },
       })}
     />,
   );
-  await user.type(await screen.findByLabelText("Public name"), "Jo");
-  await user.type(screen.getByLabelText("How you can help"), "Bring tools");
+  await screen.findByLabelText("Public name");
   // A switch to another account starts a reload that stays pending...
   state.who = "helper-2";
   window.dispatchEvent(new Event("focus"));
-  await waitFor(() => expect(detail).toHaveBeenCalledTimes(2));
-  // ...the form is new for that account; it offers help and succeeds...
+  await waitFor(() => expect(stale.length).toBeGreaterThan(0));
+  // ...meanwhile that account offers help, and it succeeds...
   await user.type(await screen.findByLabelText("Public name"), "Jo");
   await user.type(screen.getByLabelText("How you can help"), "Bring tools");
   await user.click(screen.getByRole("button", { name: "Offer help" }));
   expect(
     await screen.findByText("Bring tools", { selector: "p" }),
   ).toBeTruthy();
-  // ...and the older read, answering last, does not take the entry away.
-  await act(async () => answerStale());
-  await waitFor(() => expect(detail).toHaveBeenCalledTimes(3));
+  // ...and the older reads, answering last, do not take the entry away.
+  await act(async () => {
+    for (const answer of stale) answer();
+  });
   await act(async () => {});
   expect(screen.getByText("Bring tools", { selector: "p" })).toBeTruthy();
 });
