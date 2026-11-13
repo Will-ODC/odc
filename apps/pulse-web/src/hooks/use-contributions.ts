@@ -8,8 +8,14 @@ import type { ViewData } from "./view-data.js";
  * With `keepReady`, a reload caused by a new `load` (someone signing in from
  * another tab, say) keeps the page on screen until the answer arrives, rather
  * than swapping it for "Loading…". Swapping it would unmount whatever the
- * person had open on it and lose their scroll position. "Try again" after an
- * error still shows "Loading…", since there is nothing on screen to keep.
+ * person had open on it, with anything they had typed, and lose their scroll
+ * position. If that background reload fails, the page stays as it was too:
+ * the failure is no reason to throw away a draft. "Try again" after an error
+ * still shows "Loading…", since there is nothing on screen to keep.
+ *
+ * `replace` installs a newer value the page got from a write (a successful
+ * participation, say). A read that started before it carries an older
+ * snapshot, so its answer is dropped and the view is read again.
  */
 export function useContributionRead<T>(
   load: () => Promise<T>,
@@ -17,35 +23,54 @@ export function useContributionRead<T>(
 ) {
   const [revision, setRevision] = useState(0);
   const [data, setData] = useState<ViewData<T>>({ status: "loading" });
+  // Bumped to read again after a stale answer: still a background read.
+  const [refresh, setRefresh] = useState(0);
+  const writes = useRef(0);
+  const lastRevision = useRef(revision);
   useEffect(() => {
     let live = true;
+    const background = keepReady && lastRevision.current === revision;
+    lastRevision.current = revision;
+    const writesAtStart = writes.current;
     setData((current) =>
       keepReady && current.status === "ready" ? current : { status: "loading" },
     );
     load().then(
       (value) => {
-        if (live) setData({ status: "ready", value });
+        if (!live) return;
+        if (writes.current !== writesAtStart) {
+          setRefresh((count) => count + 1);
+          return;
+        }
+        setData({ status: "ready", value });
       },
       (error) => {
-        if (live)
-          setData({
-            status: "error",
-            message:
-              error instanceof Error
-                ? error.message
-                : "Could not load this page. Please try again.",
-            ...(error instanceof ContributionsError
-              ? { statusCode: error.status }
-              : {}),
-          });
+        if (!live) return;
+        const failure: ViewData<T> = {
+          status: "error",
+          message:
+            error instanceof Error
+              ? error.message
+              : "Could not load this page. Please try again.",
+          ...(error instanceof ContributionsError
+            ? { statusCode: error.status }
+            : {}),
+        };
+        setData((current) =>
+          background && current.status === "ready" ? current : failure,
+        );
       },
     );
     return () => {
       live = false;
     };
-  }, [load, revision, keepReady]);
+  }, [load, revision, refresh, keepReady]);
   const reload = useCallback(() => setRevision((value) => value + 1), []);
-  return { data, reload, setData };
+  const replace = useCallback((value: T) => {
+    writes.current += 1;
+    setData({ status: "ready", value });
+  }, []);
+  return { data, reload, setData, replace };
 }
 
 /** Retains a request key across uncertain retries, rotating when the payload changes. */

@@ -23,6 +23,7 @@ import {
 import { routeFrom, pathOf, type ReturnTo } from "../src/flow/route.js";
 import { rememberReturn, takeReturn } from "../src/flow/sign-in-return.js";
 import { stubApi } from "./stub-api.js";
+import { SIGNED_OUT_KEY } from "../src/hooks/use-session.js";
 afterEach(() => {
   cleanup();
   vi.restoreAllMocks();
@@ -1152,4 +1153,202 @@ it("keeps every contribution field after an unknown related poll is rejected", a
     (screen.getByLabelText("Related question (optional)") as HTMLInputElement)
       .value,
   ).toBe("missing");
+});
+
+/** A `me()` the test can switch between accounts, nobody, or offline. */
+function switchableMe(start: string | null) {
+  const state = { who: start as string | null | "offline" };
+  const me = vi.fn(async () => {
+    if (state.who === "offline") throw new Error("Offline");
+    return state.who === null
+      ? null
+      : { id: state.who, email: `${state.who}@example.test`, community: null };
+  });
+  return { state, me };
+}
+async function writeDrafts(user: ReturnType<typeof userEvent.setup>) {
+  await user.type(await screen.findByLabelText("Public name"), "Jo");
+  await user.type(screen.getByLabelText("How you can help"), "Bring tools");
+  await user.click(screen.getByText("Message the organizer"));
+  await user.type(screen.getByLabelText("Private message"), "Hello there");
+}
+function draftValues() {
+  return [
+    (screen.getByLabelText("Public name") as HTMLInputElement).value,
+    (screen.getByLabelText("How you can help") as HTMLTextAreaElement).value,
+    (screen.getByLabelText("Private message") as HTMLTextAreaElement).value,
+  ];
+}
+
+it("keeps what was written when the session expires, and sends it after signing in again", async () => {
+  const user = userEvent.setup();
+  const { state, me } = switchableMe("helper");
+  const participate = vi.fn().mockResolvedValue(
+    fixture({
+      participations: [
+        {
+          id: "help-1",
+          displayName: "Jo",
+          kind: "help",
+          message: "Bring tools",
+          createdAt: "2026-11-15T12:00:00.000Z",
+        },
+      ],
+    }),
+  );
+  render(
+    <ContributionDetail
+      api={stubApi({ me })}
+      id="park"
+      client={client({ participate })}
+    />,
+  );
+  await writeDrafts(user);
+  // The server no longer knows the session, and no tab announced a sign-out.
+  state.who = null;
+  window.dispatchEvent(new Event("focus"));
+  expect(
+    await screen.findAllByRole("link", { name: "Sign in again in a new tab" }),
+  ).toHaveLength(2);
+  expect(draftValues()).toEqual(["Jo", "Bring tools", "Hello there"]);
+  // Signing in again as the same person keeps every draft.
+  state.who = "helper";
+  window.dispatchEvent(new Event("focus"));
+  await waitFor(() =>
+    expect(
+      screen.queryByRole("link", { name: "Sign in again in a new tab" }),
+    ).toBeNull(),
+  );
+  expect(draftValues()).toEqual(["Jo", "Bring tools", "Hello there"]);
+  await user.click(screen.getByRole("button", { name: "Offer help" }));
+  expect(
+    await screen.findByText("Thank you. Your entry is on this page."),
+  ).toBeTruthy();
+  expect(participate).toHaveBeenCalledWith(
+    "park",
+    { displayName: "Jo", kind: "help", message: "Bring tools" },
+    expect.any(String),
+  );
+});
+
+it("clears what was written when another tab signs out on purpose", async () => {
+  const user = userEvent.setup();
+  const { state, me } = switchableMe("helper");
+  render(
+    <ContributionDetail api={stubApi({ me })} id="park" client={client()} />,
+  );
+  await writeDrafts(user);
+  state.who = null;
+  window.dispatchEvent(new StorageEvent("storage", { key: SIGNED_OUT_KEY }));
+  expect(
+    await screen.findByRole("link", {
+      name: "Sign in to offer help or make a pledge",
+    }),
+  ).toBeTruthy();
+  expect(
+    screen.getByRole("link", { name: "Sign in to send a message" }),
+  ).toBeTruthy();
+  // Signing back in starts from empty forms.
+  state.who = "helper";
+  window.dispatchEvent(new Event("focus"));
+  expect(await screen.findByLabelText("Public name")).toBeTruthy();
+  expect(draftValues()).toEqual(["", "", ""]);
+});
+
+it("clears what was written when a different account signs in after an expiry", async () => {
+  const user = userEvent.setup();
+  const { state, me } = switchableMe("helper");
+  render(
+    <ContributionDetail api={stubApi({ me })} id="park" client={client()} />,
+  );
+  await writeDrafts(user);
+  state.who = null;
+  window.dispatchEvent(new Event("focus"));
+  await screen.findAllByRole("link", { name: "Sign in again in a new tab" });
+  state.who = "someone-else";
+  window.dispatchEvent(new Event("focus"));
+  await waitFor(() => expect(draftValues()).toEqual(["", "", ""]));
+});
+
+it("keeps the page and its drafts when a background reload fails", async () => {
+  const user = userEvent.setup();
+  const { state, me } = switchableMe(null);
+  const detail = vi
+    .fn()
+    .mockResolvedValueOnce({ contribution: fixture(), canManage: false })
+    .mockResolvedValueOnce({ contribution: fixture(), canManage: false })
+    .mockRejectedValue(new ContributionsError("Could not load.", 503));
+  render(
+    <ContributionDetail
+      api={stubApi({ me })}
+      id="park"
+      client={client({ detail })}
+    />,
+  );
+  await screen.findByRole("link", { name: "Sign in to send a message" });
+  state.who = "helper";
+  window.dispatchEvent(new Event("focus"));
+  await writeDrafts(user);
+  // Expiry changes the account, which reloads the page; that read fails.
+  state.who = null;
+  window.dispatchEvent(new Event("focus"));
+  await waitFor(() => expect(detail).toHaveBeenCalledTimes(3));
+  await act(async () => {});
+  expect(screen.queryByText("Could not load.")).toBeNull();
+  expect(draftValues()).toEqual(["Jo", "Bring tools", "Hello there"]);
+});
+
+it("does not let a read that started before a participation undo it", async () => {
+  const user = userEvent.setup();
+  const { state, me } = switchableMe("helper");
+  let answerStale: () => void = () => {};
+  const entry = {
+    id: "help-1",
+    displayName: "Jo",
+    kind: "help" as const,
+    message: "Bring tools",
+    createdAt: "2026-11-15T12:00:00.000Z",
+  };
+  const detail = vi
+    .fn()
+    .mockResolvedValueOnce({ contribution: fixture(), canManage: false })
+    .mockImplementationOnce(
+      () =>
+        new Promise((resolve) => {
+          answerStale = () =>
+            resolve({ contribution: fixture(), canManage: false });
+        }),
+    )
+    .mockResolvedValue({
+      contribution: fixture({ participations: [entry] }),
+      canManage: false,
+    });
+  render(
+    <ContributionDetail
+      api={stubApi({ me })}
+      id="park"
+      client={client({
+        detail,
+        participate: async () => fixture({ participations: [entry] }),
+      })}
+    />,
+  );
+  await user.type(await screen.findByLabelText("Public name"), "Jo");
+  await user.type(screen.getByLabelText("How you can help"), "Bring tools");
+  // A switch to another account starts a reload that stays pending...
+  state.who = "helper-2";
+  window.dispatchEvent(new Event("focus"));
+  await waitFor(() => expect(detail).toHaveBeenCalledTimes(2));
+  // ...the form is new for that account; it offers help and succeeds...
+  await user.type(await screen.findByLabelText("Public name"), "Jo");
+  await user.type(screen.getByLabelText("How you can help"), "Bring tools");
+  await user.click(screen.getByRole("button", { name: "Offer help" }));
+  expect(
+    await screen.findByText("Bring tools", { selector: "p" }),
+  ).toBeTruthy();
+  // ...and the older read, answering last, does not take the entry away.
+  await act(async () => answerStale());
+  await waitFor(() => expect(detail).toHaveBeenCalledTimes(3));
+  await act(async () => {});
+  expect(screen.getByText("Bring tools", { selector: "p" })).toBeTruthy();
 });

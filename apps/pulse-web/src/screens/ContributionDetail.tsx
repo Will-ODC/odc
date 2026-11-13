@@ -14,7 +14,7 @@ import { SiteBanner } from "../components/SiteBanner.js";
 import { AnsweredRail } from "../components/AnsweredRail.js";
 import { SuggestedVotesRail } from "../components/SuggestedVotesRail.js";
 import { useMyVotes } from "../hooks/use-my-votes.js";
-import { useSession, type Session } from "../hooks/use-session.js";
+import { useSession } from "../hooks/use-session.js";
 import { ViewState } from "../components/ViewState.js";
 import { Field } from "../components/Field.js";
 import { Button } from "../components/Button.js";
@@ -60,6 +60,35 @@ export function ContributionDetail({
     recheckSignedIn: true,
   });
   const accountId = session.status === "signedIn" ? session.me.id : null;
+  // Whose drafts the forms hold. A new generation remounts the forms empty:
+  // after someone chooses to sign out, or when a different account signs in.
+  // An expired session keeps them, so signing in again as the same person
+  // (in a new tab) can still send what was written.
+  const [drafts, setDrafts] = useState<{
+    owner: string | null;
+    generation: number;
+  }>({ owner: accountId, generation: 0 });
+  if (accountId !== null && drafts.owner !== accountId)
+    setDrafts({
+      owner: accountId,
+      generation: drafts.generation + (drafts.owner === null ? 0 : 1),
+    });
+  else if (
+    session.status === "signedOut" &&
+    session.ended !== "expired" &&
+    drafts.owner !== null
+  )
+    setDrafts({ owner: null, generation: drafts.generation + 1 });
+  const access: Access =
+    session.status === "signedIn"
+      ? "signedIn"
+      : session.status === "signedOut" &&
+          session.ended === "expired" &&
+          drafts.owner !== null
+        ? "expired"
+        : session.status === "loading"
+          ? "loading"
+          : "signedOut";
   const load = useCallback(async () => {
     const detail = await client.detail(id);
     return { ...detail, accountId };
@@ -67,7 +96,7 @@ export function ContributionDetail({
   // Keep the page while it reloads for a new account: the open message box
   // and the scroll position must survive signing in from another tab.
   // `canManage` below still needs the reloaded answer for this account.
-  const { data, reload, setData } = useContributionRead(load, {
+  const { data, reload, replace } = useContributionRead(load, {
     keepReady: true,
   });
   const canManage =
@@ -84,8 +113,7 @@ export function ContributionDetail({
     heading.current?.focus();
   }, [focusHeading, ready]);
   function changed(contribution: Contribution) {
-    if (data.status === "ready")
-      setData({ status: "ready", value: { ...data.value, contribution } });
+    if (data.status === "ready") replace({ ...data.value, contribution });
   }
   return (
     <AppShell
@@ -207,8 +235,8 @@ export function ContributionDetail({
               ) : null}
               <section className="contribution-section">
                 <ParticipationForm
-                  key={item.id}
-                  session={session}
+                  key={`${item.id}:${drafts.generation}`}
+                  access={access}
                   client={client}
                   item={item}
                   changed={changed}
@@ -223,8 +251,8 @@ export function ContributionDetail({
                       Message the organizer
                     </summary>
                     <MessageForm
-                      key={item.id}
-                      session={session}
+                      key={`${item.id}:${drafts.generation}`}
+                      access={access}
                       client={client}
                       id={item.id}
                     />
@@ -314,17 +342,36 @@ export function ContributionDetail({
     </AppShell>
   );
 }
+/**
+ * Whether the forms may be filled in. "expired": the session ran out while
+ * someone may have been writing; the form stays, with a way to sign in again.
+ */
+type Access = "loading" | "signedIn" | "expired" | "signedOut";
+
+/** Says the session ended and offers the new-tab sign-in; the form stays. */
+function SignInAgain({ href }: { href: string }) {
+  return (
+    <p className="contribution-note" role="status">
+      Your sign-in has ended. What you wrote stays here.{" "}
+      <a href={href} target="_blank" rel="noreferrer">
+        Sign in again in a new tab
+      </a>{" "}
+      to send it.
+    </p>
+  );
+}
+
 const participationLabels: Record<ParticipationKind, string> = {
   help: "Offer of help",
   pledge: "Pledge",
   report: "Reported contribution",
 };
 function MessageForm({
-  session,
+  access,
   client,
   id,
 }: {
-  session: Session;
+  access: Access;
   client: ContributionsApi;
   id: string;
 }) {
@@ -341,8 +388,8 @@ function MessageForm({
     ).trim();
     if (message) void save.submit(message);
   }
-  if (session.status === "loading") return <p role="status">Loading…</p>;
-  if (session.status !== "signedIn")
+  if (access === "loading") return <p role="status">Loading…</p>;
+  if (access === "signedOut")
     return (
       <a href={signInHref} target="_blank" rel="noreferrer">
         Sign in to send a message
@@ -353,6 +400,7 @@ function MessageForm({
       <p className="contribution-note">
         Only the organizer can read this. They can&apos;t reply here.
       </p>
+      {access === "expired" ? <SignInAgain href={signInHref} /> : null}
       <Field
         id="contribution-message"
         label="Private message"
@@ -372,7 +420,7 @@ function MessageForm({
         )}
       </Field>
       {save.error ? <p role="alert">{save.error}</p> : null}
-      {save.errorStatus === 401 ? (
+      {save.errorStatus === 401 && access !== "expired" ? (
         <a href={signInHref} target="_blank" rel="noreferrer">
           Sign in again in a new tab
         </a>
@@ -583,12 +631,12 @@ const offerLabels: Record<
 
 /** Offer help or pledge: the participation kinds open records accept. */
 function ParticipationForm({
-  session,
+  access,
   client,
   item,
   changed,
 }: {
-  session: Session;
+  access: Access;
   client: ContributionsApi;
   item: Contribution;
   changed: (item: Contribution) => void;
@@ -617,14 +665,14 @@ function ParticipationForm({
         </p>
       </>
     );
-  if (session.status === "loading")
+  if (access === "loading")
     return (
       <>
         {heading}
         <p role="status">Loading…</p>
       </>
     );
-  if (session.status !== "signedIn")
+  if (access === "signedOut")
     return (
       <>
         {heading}
@@ -645,6 +693,7 @@ function ParticipationForm({
   return (
     <>
       {heading}
+      {access === "expired" ? <SignInAgain href={signInHref} /> : null}
       <form
         className="contribution-form"
         ref={formRef}
@@ -703,7 +752,7 @@ function ParticipationForm({
           </Field>
         </fieldset>
         {save.error ? <p role="alert">{save.error}</p> : null}
-        {save.errorStatus === 401 ? (
+        {save.errorStatus === 401 && access !== "expired" ? (
           <a href={signInHref} target="_blank" rel="noreferrer">
             Sign in again in a new tab
           </a>

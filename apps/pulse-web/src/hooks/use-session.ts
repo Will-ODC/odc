@@ -13,9 +13,23 @@ import { forgetDraft } from "../flow/draft-store.js";
  */
 export type Session =
   | { status: "loading" }
-  | { status: "signedOut" }
+  | {
+      status: "signedOut";
+      /**
+       * How a session this page had came to an end. Absent when this page
+       * never saw anyone signed in. "here" and "elsewhere" are someone
+       * choosing to sign out (on this page, or in another tab of this
+       * browser); "expired" is the server no longer knowing the session with
+       * no sign-out announced, which signing in again as the same person can
+       * recover from.
+       */
+      ended?: "here" | "elsewhere" | "expired";
+    }
   | { status: "signedIn"; me: Me }
   | { status: "unknown" };
+
+/** Set by a tab that signed out, so other tabs can tell it from an expiry. */
+export const SIGNED_OUT_KEY = "pulse.signedOut";
 
 /** How far a sign-out has got: the shape `TwoPress` renders. */
 export type SignOutProgress = TwoPressProgress;
@@ -114,9 +128,13 @@ export function useSession(
             );
           // A definite "nobody" while signed in: signed out in another tab.
           // A page showing one account's private data must stop showing it.
+          // With no sign-out announced, the session ran out (or was revoked):
+          // "expired", which the page may let the person recover from.
           else if (recheckSignedIn)
             setSession((current) =>
-              current.status === "signedIn" ? { status: "signedOut" } : current,
+              current.status === "signedIn"
+                ? { status: "signedOut", ended: "expired" }
+                : current,
             );
         },
         () => {},
@@ -124,6 +142,14 @@ export function useSession(
     };
     const announced = (event: StorageEvent) => {
       if (event.key === SIGNED_IN_KEY) ask();
+      // Another tab signed out on purpose: not an expiry to recover from.
+      else if (event.key === SIGNED_OUT_KEY && recheckSignedIn)
+        setSession((current) =>
+          current.status === "signedIn" ||
+          (current.status === "signedOut" && current.ended === "expired")
+            ? { status: "signedOut", ended: "elsewhere" }
+            : current,
+        );
     };
     window.addEventListener("focus", ask);
     window.addEventListener("storage", announced);
@@ -149,7 +175,12 @@ export function useSession(
       () => {
         sending.current = false;
         setProgress({ status: "idle" });
-        setSession({ status: "signedOut" });
+        setSession(
+          signedIn
+            ? { status: "signedOut", ended: "here" }
+            : { status: "signedOut" },
+        );
+        if (signedIn) announceSignOut(browserStore());
         // A posting draft kept in this browser is not for whoever is next.
         forgetDraft(browserStore());
         if (signedIn) onSignedOut?.();
@@ -172,4 +203,13 @@ export function useSession(
   }, []);
 
   return { session, progress, signOut, dismiss };
+}
+
+function announceSignOut(store: ReturnType<typeof browserStore>): void {
+  if (!store) return;
+  try {
+    store.setItem(SIGNED_OUT_KEY, String(Date.now()));
+  } catch {
+    // Storage refused: other tabs treat the sign-out as an expiry.
+  }
 }
