@@ -11,7 +11,11 @@ import {
   it,
   vi,
 } from "vitest";
-import { ApiError, type MemberProfile } from "../src/api/types.js";
+import {
+  ApiError,
+  type MemberProfile,
+  type PulseApi,
+} from "../src/api/types.js";
 import { MemberProfile as MemberProfileScreen } from "../src/screens/MemberProfile.js";
 import { ProfileEditor } from "../src/screens/ProfileEditor.js";
 import { stubApi } from "./stub-api.js";
@@ -108,18 +112,27 @@ describe("public member profile", () => {
   });
 });
 
+// Owner routes now wait for the banner's signed-in account before reading.
+function ownerApi(over: Partial<PulseApi>) {
+  return stubApi({
+    me: async () => ({ id: "ada", email: "ada@example.test", community: null }),
+    ...over,
+  });
+}
+
 describe("owner profile editor", () => {
   it("covers loading, signed-out empty and recoverable error states", async () => {
     const pending = new Promise<MemberProfile | null>(() => {});
     const first = render(
-      <ProfileEditor api={stubApi({ myProfile: () => pending })} />,
+      <ProfileEditor api={ownerApi({ myProfile: () => pending })} />,
     );
     expect(screen.getByText("Loading…")).toBeTruthy();
     first.unmount();
 
     const signedOut = render(
       <ProfileEditor
-        api={stubApi({
+        api={ownerApi({
+          me: async () => null,
           myProfile: () => Promise.reject(new ApiError(401, "signed out")),
         })}
       />,
@@ -137,7 +150,7 @@ describe("owner profile editor", () => {
       .fn()
       .mockRejectedValueOnce(new Error("offline"))
       .mockResolvedValueOnce(null);
-    render(<ProfileEditor api={stubApi({ myProfile })} />);
+    render(<ProfileEditor api={ownerApi({ myProfile })} />);
     await screen.findByText(/couldn't load your profile/i);
     await userEvent
       .setup()
@@ -154,7 +167,7 @@ describe("owner profile editor", () => {
     }));
     render(
       <ProfileEditor
-        api={stubApi({
+        api={ownerApi({
           myProfile: () => Promise.resolve(null),
           saveProfile,
         })}
@@ -190,7 +203,7 @@ describe("owner profile editor", () => {
     const saveProfile = vi.fn();
     render(
       <ProfileEditor
-        api={stubApi({ myProfile: () => Promise.resolve(null), saveProfile })}
+        api={ownerApi({ myProfile: () => Promise.resolve(null), saveProfile })}
       />,
     );
     const name = await screen.findByLabelText("Public display name");
@@ -206,7 +219,7 @@ describe("owner profile editor", () => {
     const saveProfile = vi.fn();
     render(
       <ProfileEditor
-        api={stubApi({ myProfile: () => Promise.resolve(null), saveProfile })}
+        api={ownerApi({ myProfile: () => Promise.resolve(null), saveProfile })}
       />,
     );
     const name = await screen.findByLabelText("Public display name");
@@ -223,7 +236,7 @@ describe("owner profile editor", () => {
     const user = userEvent.setup();
     render(
       <ProfileEditor
-        api={stubApi({
+        api={ownerApi({
           myProfile: () => Promise.resolve(PROFILE),
           saveProfile: () =>
             Promise.reject(
@@ -258,7 +271,7 @@ describe("owner profile editor", () => {
     );
     render(
       <ProfileEditor
-        api={stubApi({
+        api={ownerApi({
           myProfile: () => Promise.resolve(PROFILE),
           saveProfile,
         })}
@@ -291,7 +304,7 @@ describe("owner profile editor", () => {
     const user = userEvent.setup();
     render(
       <ProfileEditor
-        api={stubApi({
+        api={ownerApi({
           myProfile: () => Promise.resolve({ ...PROFILE, visible: false }),
         })}
       />,
@@ -313,7 +326,7 @@ describe("owner profile editor", () => {
 
     render(
       <ProfileEditor
-        api={stubApi({ myProfile: () => Promise.resolve(PROFILE) })}
+        api={ownerApi({ myProfile: () => Promise.resolve(PROFILE) })}
       />,
     );
     expect(
@@ -351,6 +364,7 @@ describe("compact states", () => {
     const signedOut = render(
       <ProfileEditor
         api={stubApi({
+          me: async () => null,
           myProfile: () => Promise.reject(new ApiError(401, "signed out")),
         })}
       />,
