@@ -144,6 +144,12 @@ function ContributionForm({
     },
     () => onCreated(resultId.current),
   );
+  const wasExpired = useRef(expired);
+  const { clearFailure } = save;
+  useEffect(() => {
+    if (wasExpired.current && !expired) clearFailure();
+    wasExpired.current = expired;
+  }, [expired, clearFailure]);
   const outcome = useRef<HTMLParagraphElement>(null);
   const pollNotFound = save.errorStatus === 404;
   const pollProblem = pollUnreadable
@@ -199,7 +205,7 @@ function ContributionForm({
       onSubmit={submit}
     >
       {expired || save.errorStatus === 401 ? (
-        <p className="contribution-note" role="status">
+        <p className="contribution-expired" role="status">
           Your sign-in has ended. What you wrote stays here.{" "}
           <a
             href="/sign-in?next=contribution-new"
@@ -333,7 +339,7 @@ function ContributionForm({
         </Field>
         <p>Keep personal contact and payment details out of your post.</p>
       </div>
-      {save.error && !pollNotFound ? (
+      {save.error && !expired && !pollNotFound ? (
         <p
           ref={outcome}
           role="alert"

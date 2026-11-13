@@ -144,7 +144,7 @@ it("keeps the draft and confirmation through expiry and the same account signing
   expect(link.getAttribute("href")).toBe("/sign-in?next=contribution-new");
   const notice = link.closest("p")!;
   expect(notice.getAttribute("role")).toBe("status");
-  expect(notice.className).toBe("contribution-note");
+  expect(notice.className).toBe("contribution-expired");
   expect(notice.textContent).toBe(
     "Your sign-in has ended. What you wrote stays here. Sign in again in a new tab to send it.",
   );
@@ -168,6 +168,41 @@ it("keeps the draft and confirmation through expiry and the same account signing
     screen.getByRole("button", { name: "Publish contribution" }),
   );
   await waitFor(() => expect(create).toHaveBeenCalledOnce());
+});
+
+it("hides a failed Publish during expiry and clears it when the same account returns", async () => {
+  const { state, user, create } = setup();
+  create.mockRejectedValueOnce(new Error("Connection lost. Please try again."));
+  await writeDraft(user);
+  await user.click(
+    screen.getByRole("button", { name: "Publish contribution" }),
+  );
+  expect((await screen.findByRole("alert")).textContent).toBe(
+    "Connection lost. Please try again.",
+  );
+  state.who = null;
+  window.dispatchEvent(new Event("focus"));
+  await screen.findByRole("link", { name: "Sign in again in a new tab" });
+  expect(screen.queryByRole("alert")).toBeNull();
+  expectDraft();
+  state.who = "ada";
+  window.dispatchEvent(new Event("focus"));
+  await waitFor(() =>
+    expect(
+      (
+        screen.getByRole("button", {
+          name: "Publish contribution",
+        }) as HTMLButtonElement
+      ).disabled,
+    ).toBe(false),
+  );
+  await waitFor(() => expect(screen.queryByRole("alert")).toBeNull());
+  expectDraft();
+  await user.click(
+    screen.getByRole("button", { name: "Publish contribution" }),
+  );
+  await waitFor(() => expect(create).toHaveBeenCalledTimes(2));
+  expect(create.mock.calls[1]).toEqual(create.mock.calls[0]);
 });
 
 it.each([false, true])(
