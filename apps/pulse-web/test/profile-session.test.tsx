@@ -226,3 +226,26 @@ it("refuses A's draft with B's cookie while the session recheck is pending, then
   expect(name().value).toBe("Name b");
   expect(stored).toEqual(before);
 });
+
+it("reads the profile again when the same account signs back in after the first read got a 401", async () => {
+  let first = true;
+  const { switchTo } = setup({
+    myProfile: vi.fn(async () => {
+      if (first) {
+        first = false;
+        throw new ApiError(401, "Sign in to continue.");
+      }
+      return profile("a");
+    }),
+  });
+  expect(
+    (
+      await screen.findAllByText(
+        "Sign in to create or change your public profile.",
+      )
+    ).length,
+  ).toBeGreaterThan(0);
+  await switchTo(null);
+  await switchTo("a", SIGNED_IN_KEY);
+  await waitFor(() => expect(name().value).toBe("Name a"));
+});

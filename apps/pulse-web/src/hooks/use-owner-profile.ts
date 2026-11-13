@@ -39,6 +39,14 @@ export function useOwnerProfile(
     };
   }, [api, active]);
   const status = state.status;
+  // A 401 on the first read leaves "Sign in" on screen. Once the same account
+  // is signed in again (this owner was not remounted), read it again.
+  const wasActive = useRef(active);
+  useEffect(() => {
+    if (active && !wasActive.current && status === "empty")
+      setState({ status: "loading" });
+    wasActive.current = active;
+  }, [active, status]);
   useEffect(() => {
     if (!active || status !== "loading") return;
     let live = true;
