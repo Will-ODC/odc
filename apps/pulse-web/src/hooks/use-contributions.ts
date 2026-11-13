@@ -123,9 +123,12 @@ export function useContributionSave<T>(
   }
   /** Forget the last failure, e.g. once signing in again has fixed it. */
   const clearFailure = useCallback(() => setFailure(undefined), []);
+  /** Put away the last thank-you, e.g. once the person starts another entry. */
+  const clearSaved = useCallback(() => setSaved(false), []);
   return {
     pending,
     clearFailure,
+    clearSaved,
     /** A new object per failure, so an effect can react to each one. */
     failure,
     error: failure?.message,

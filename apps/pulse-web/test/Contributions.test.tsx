@@ -1424,6 +1424,8 @@ it("says when a background reload fails and offers to try again without hiding t
   failing = false;
   await user.click(screen.getByRole("button", { name: "Try again" }));
   expect(await screen.findByText("Post an update")).toBeTruthy();
+  // The banner and its button are gone; focus goes to the title, not the page.
+  expect(document.activeElement).toBe(title);
   expect(
     screen.queryByText(/This page could not be brought up to date/),
   ).toBeNull();
@@ -1486,6 +1488,13 @@ it("says beside each field what is missing instead of a browser bubble", async (
   expect(screen.getByText("Enter the name to show.")).toBeTruthy();
   expect(screen.getByText("Say how you can help.")).toBeTruthy();
   expect(document.activeElement).toBe(screen.getByLabelText("Public name"));
+  // Marked invalid, so they show red and a screen reader says so.
+  expect(
+    screen.getByLabelText("Public name").getAttribute("aria-invalid"),
+  ).toBe("true");
+  expect(
+    screen.getByLabelText("How you can help").getAttribute("aria-invalid"),
+  ).toBe("true");
   expect(participate).not.toHaveBeenCalled();
 
   await user.click(screen.getByText("Post an update"));
@@ -1496,7 +1505,7 @@ it("says beside each field what is missing instead of a browser bubble", async (
   );
   await user.click(screen.getByRole("button", { name: "Publish update" }));
   expect(
-    screen.getByText("Enter a full link that starts with https://."),
+    screen.getByText("Enter a full link, starting with https://"),
   ).toBeTruthy();
   expect(
     screen.getByText("Confirm this status and update may be published."),
@@ -1504,6 +1513,16 @@ it("says beside each field what is missing instead of a browser bubble", async (
   expect(document.activeElement).toBe(
     screen.getByLabelText("Evidence link (optional)"),
   );
+  for (const label of [
+    "Evidence link (optional)",
+    "I confirm this status and update may be published.",
+  ])
+    expect(screen.getByLabelText(label).getAttribute("aria-invalid")).toBe(
+      "true",
+    );
+  expect(
+    screen.getByLabelText("Progress update").getAttribute("aria-invalid"),
+  ).toBeNull();
   expect(update).not.toHaveBeenCalled();
 });
 
@@ -1535,4 +1554,25 @@ it("forgets a sign-in error once the same person has signed in again", async () 
   expect(
     (screen.getByLabelText("How you can help") as HTMLTextAreaElement).value,
   ).toBe("Tools");
+});
+
+it("puts the thank-you away when the person switches to start another entry", async () => {
+  const user = userEvent.setup();
+  render(
+    <ContributionDetail
+      api={stubApi({ me: switchableMe("helper").me })}
+      id="park"
+      client={client()}
+    />,
+  );
+  await user.type(await screen.findByLabelText("Public name"), "Jo");
+  await user.type(screen.getByLabelText("How you can help"), "Tools");
+  await user.click(screen.getByRole("button", { name: "Offer help" }));
+  expect(
+    await screen.findByText("Thank you. Your entry is on this page."),
+  ).toBeTruthy();
+  await user.click(screen.getByLabelText("Make a pledge"));
+  expect(
+    screen.queryByText("Thank you. Your entry is on this page."),
+  ).toBeNull();
 });

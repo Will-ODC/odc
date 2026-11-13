@@ -135,6 +135,15 @@ export function ContributionDetail({
     headingFocused.current = true;
     heading.current?.focus();
   }, [focusHeading, ready]);
+  // "Try again" on the refresh banner: once it works the banner (and the
+  // button that had focus) goes, so put focus on the title instead.
+  const retrying = useRef(false);
+  useEffect(() => {
+    if (!retrying.current || refreshError) return;
+    retrying.current = false;
+    const active = document.activeElement;
+    if (active === null || active === document.body) heading.current?.focus();
+  }, [refreshError]);
   function changed(contribution: Contribution) {
     if (data.status === "ready") replace({ ...data.value, contribution });
   }
@@ -183,7 +192,10 @@ export function ContributionDetail({
               size="small"
               className="contribution-retry"
               type="button"
-              onClick={reload}
+              onClick={() => {
+                retrying.current = true;
+                reload();
+              }}
             >
               Try again
             </Button>
@@ -529,6 +541,7 @@ function MessageForm({
           <textarea
             id="contribution-message"
             className="field__control"
+            aria-invalid={problem !== undefined || undefined}
             name="message"
             rows={3}
             maxLength={2000}
@@ -671,7 +684,7 @@ function UpdateForm({
         ? {}
         : { message: "Write the progress update." }),
       ...(evidenceUrl && !isWebLink(evidenceUrl)
-        ? { evidence: "Enter a full link that starts with https://." }
+        ? { evidence: "Enter a full link, starting with https://" }
         : {}),
       ...(form.get("confirm")
         ? {}
@@ -729,6 +742,7 @@ function UpdateForm({
             <textarea
               id="update-message"
               className="field__control"
+              aria-invalid={problems.message !== undefined || undefined}
               name="message"
               maxLength={2000}
               rows={3}
@@ -745,6 +759,7 @@ function UpdateForm({
             <input
               id="update-evidence"
               className="field__control"
+              aria-invalid={problems.evidence !== undefined || undefined}
               name="evidence"
               type="url"
               maxLength={2000}
@@ -758,6 +773,7 @@ function UpdateForm({
             type="checkbox"
             id="update-confirm"
             name="confirm"
+            aria-invalid={problems.confirm !== undefined || undefined}
             {...(problems.confirm
               ? { "aria-describedby": "update-confirm-problem" }
               : {})}
@@ -845,7 +861,7 @@ function ParticipationForm({
     message?: string;
   }>({});
   const signInHref = `/sign-in?contribution=${encodeURIComponent(item.id)}`;
-  const heading = <h2 id="participate-heading">Offer help / Pledge</h2>;
+  const heading = <h2 id="participate-heading">Offer help or pledge</h2>;
   if (item.status === "completed" || item.status === "cancelled")
     return (
       <>
@@ -912,7 +928,10 @@ function ParticipationForm({
                 name="participation-kind"
                 value={value}
                 checked={kind === value}
-                onPick={() => setKind(value)}
+                onPick={() => {
+                  setKind(value);
+                  save.clearSaved();
+                }}
               >
                 {offerLabels[value].choice}
               </Choice>
@@ -928,6 +947,7 @@ function ParticipationForm({
               <input
                 id="participation-name"
                 className="field__control"
+                aria-invalid={problems.displayName !== undefined || undefined}
                 name="displayName"
                 maxLength={80}
                 autoComplete="nickname"
@@ -944,6 +964,7 @@ function ParticipationForm({
               <textarea
                 id="participation-message"
                 className="field__control"
+                aria-invalid={problems.message !== undefined || undefined}
                 name="message"
                 maxLength={2000}
                 rows={3}
