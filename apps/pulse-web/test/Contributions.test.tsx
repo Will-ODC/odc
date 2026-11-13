@@ -647,7 +647,9 @@ it("removes organizer controls when account A changes directly to account B", as
   window.dispatchEvent(new Event("focus"));
   expect(await screen.findByText("Message the organizer")).toBeTruthy();
   await waitFor(() =>
-    expect(screen.queryByText("Private messages", { exact: true })).toBeNull(),
+    expect(
+      screen.queryByText("Private messages", { selector: "summary" }),
+    ).toBeNull(),
   );
 });
 it("removes an open private inbox as soon as the organizer signs out", async () => {
@@ -688,7 +690,9 @@ it("removes an open private inbox as soon as the organizer signs out", async () 
   await waitFor(() =>
     expect(screen.queryByText("Only the organizer can read this.")).toBeNull(),
   );
-  expect(screen.queryByText("Private messages", { exact: true })).toBeNull();
+  expect(
+    screen.queryByText("Private messages", { selector: "summary" }),
+  ).toBeNull();
 });
 it("removes an open private inbox when the organizer signs out in another tab", async () => {
   const user = userEvent.setup();
@@ -734,11 +738,11 @@ it("removes an open private inbox when the organizer signs out in another tab", 
   await waitFor(() =>
     expect(screen.queryByText("Only the organizer can read this.")).toBeNull(),
   );
-  expect(screen.queryByText("Private messages", { exact: true })).toBeNull();
-  // Still their own post: no "Message the organizer" form in its place.
   expect(
-    screen.getByText("Sign in again to read your private messages."),
-  ).toBeTruthy();
+    screen.queryByText("Private messages", { selector: "summary" }),
+  ).toBeNull();
+  // Still their own post: no "Message the organizer" form in its place.
+  expect(screen.getByText(/to read your private messages\./)).toBeTruthy();
   expect(screen.queryByText("Message the organizer")).toBeNull();
 });
 
@@ -1391,7 +1395,9 @@ it("keeps an organizer's unsent update through an expired session and same-accou
     await screen.findAllByRole("link", { name: "Sign in again in a new tab" }),
   ).toHaveLength(2);
   // The private inbox needs a live session; the draft does not.
-  expect(screen.queryByText("Private messages", { exact: true })).toBeNull();
+  expect(
+    screen.queryByText("Private messages", { selector: "summary" }),
+  ).toBeNull();
   expect(
     (screen.getByLabelText("Progress update") as HTMLTextAreaElement).value,
   ).toBe("Ramp is half built");
@@ -1621,7 +1627,7 @@ it("puts the sign-in notice first in the message form and keeps the organizer of
   state.who = null;
   window.dispatchEvent(new Event("focus"));
   expect(
-    await screen.findByText("Sign in again to read your private messages."),
+    await screen.findByText(/to read your private messages\./),
   ).toBeTruthy();
   expect(screen.queryByText("Message the organizer")).toBeNull();
 });
@@ -1642,4 +1648,30 @@ it("shows the expiry notice above the message form's privacy note", async () => 
   await waitFor(() =>
     expect(form.firstElementChild?.className).toBe("contribution-expired"),
   );
+});
+
+it("gives an organizer whose sign-in ended a heading and a sign-in link for their messages", async () => {
+  const user = userEvent.setup();
+  const { state, me } = switchableMe("owner");
+  render(
+    <ContributionDetail
+      api={stubApi({ me })}
+      id="park"
+      client={client({
+        detail: async () => ({
+          contribution: fixture(),
+          canManage: state.who === "owner",
+        }),
+      })}
+    />,
+  );
+  await user.click(await screen.findByText("Post an update"));
+  state.who = null;
+  window.dispatchEvent(new Event("focus"));
+  expect(
+    await screen.findByRole("heading", { name: "Private messages" }),
+  ).toBeTruthy();
+  const link = screen.getByRole("link", { name: "Sign in again" });
+  expect(link.getAttribute("href")).toBe("/sign-in?contribution=park");
+  expect(link.getAttribute("target")).toBe("_blank");
 });
