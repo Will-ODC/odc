@@ -1,4 +1,10 @@
-import { useCallback, useEffect, useRef, useState } from "react";
+import {
+  useCallback,
+  useEffect,
+  useLayoutEffect,
+  useRef,
+  useState,
+} from "react";
 import type { FormEvent } from "react";
 import type { PulseApi } from "../api/types.js";
 import {
@@ -68,6 +74,12 @@ export function ContributionDetail({
     update: 0,
   });
   async function write<T>(form: WriteForm, send: () => Promise<T>): Promise<T> {
+    const submitted = {
+      owner: drafts.owner,
+      generation: drafts.generation,
+      refusal: refusals[form],
+      id,
+    };
     try {
       return await send();
     } catch (error) {
@@ -76,7 +88,16 @@ export function ContributionDetail({
         error.status === 409 &&
         error.code === "account_changed"
       ) {
-        setRefusals((current) => ({ ...current, [form]: current[form] + 1 }));
+        const mounted = mountedDrafts.current;
+        if (
+          mounted &&
+          mounted.forms[form] &&
+          mounted.owner === submitted.owner &&
+          mounted.generation === submitted.generation &&
+          mounted.refusals[form] === submitted.refusal &&
+          mounted.id === submitted.id
+        )
+          setRefusals((current) => ({ ...current, [form]: current[form] + 1 }));
         window.dispatchEvent(new Event("focus"));
       }
       throw error;
@@ -152,6 +173,31 @@ export function ContributionDetail({
         (access === "signedIn" &&
           data.status === "ready" &&
           data.value.accountId !== accountId)));
+  // A late refusal belongs to the submitting draft, even if another account
+  // has already remounted this form and started writing. Track committed forms
+  // so an old request cannot clear a replacement draft or announce its error.
+  const mountedDrafts = useRef<{
+    owner: string | null;
+    generation: number;
+    refusals: typeof refusals;
+    id: string;
+    forms: Record<WriteForm, boolean>;
+  } | null>(null);
+  useLayoutEffect(() => {
+    mountedDrafts.current = {
+      ...drafts,
+      refusals,
+      id,
+      forms: {
+        participation: data.status === "ready",
+        message: data.status === "ready" && !canManage,
+        update: data.status === "ready" && canUpdate,
+      },
+    };
+    return () => {
+      mountedDrafts.current = null;
+    };
+  });
   const heading = useRef<HTMLHeadingElement>(null);
   const headingFocused = useRef(false);
   const ready = data.status === "ready";

@@ -1772,3 +1772,96 @@ it("sends the page account on every write and preserves account_changed as a dis
   for (const [, init] of doFetch.mock.calls)
     expect(JSON.parse(String(init?.body)).accountId).toBe("ada");
 });
+
+it.each(["help", "pledge", "message", "update"] as const)(
+  "keeps the new account's %s draft when the old account's refusal arrives late",
+  async (form) => {
+    const { state, me } = switchableMe("ada");
+    let refuse!: (reason: Error) => void;
+    const send = vi.fn<(...args: unknown[]) => Promise<never>>(
+      () =>
+        new Promise((_, reject) => {
+          refuse = reject;
+        }),
+    );
+    render(
+      <ContributionDetail
+        api={stubApi({ me })}
+        id="park"
+        client={client({
+          detail: async () => ({
+            contribution: fixture(),
+            canManage: form === "update",
+          }),
+          participate: send,
+          sendMessage: send,
+          update: send,
+        })}
+      />,
+    );
+    const user = userEvent.setup();
+    await screen.findByLabelText("Public name");
+    const label = {
+      help: "How you can help",
+      pledge: "What you pledge",
+      message: "Private message",
+      update: "Progress update",
+    }[form];
+    const button = {
+      help: "Offer help",
+      pledge: "Make pledge",
+      message: "Send message",
+      update: "Publish update",
+    }[form];
+    async function openForm() {
+      if (form === "message" || form === "update") {
+        const summary = await screen.findByText(
+          form === "message" ? "Message the organizer" : "Post an update",
+        );
+        if (!summary.closest("details")!.open) await user.click(summary);
+        if (form === "update")
+          await user.click(
+            screen.getByLabelText(
+              "I confirm this status and update may be published.",
+            ),
+          );
+      } else {
+        await user.type(screen.getByLabelText("Public name"), state.who!);
+        if (form === "pledge")
+          await user.click(
+            screen.getByRole("radio", { name: "Make a pledge" }),
+          );
+      }
+    }
+    await openForm();
+    await user.type(screen.getByLabelText(label), "Ada's old draft");
+    await user.click(screen.getByRole("button", { name: button }));
+    expect(send).toHaveBeenCalledOnce();
+    expect(send.mock.calls[0]?.[3]).toBe("ada");
+
+    state.who = "bea";
+    window.dispatchEvent(new Event("focus"));
+    await waitFor(() =>
+      expect(screen.queryByDisplayValue("Ada's old draft")).toBeNull(),
+    );
+    await openForm();
+    await user.type(screen.getByLabelText(label), "Bea's new draft");
+    const rechecks = me.mock.calls.length;
+    await act(async () => {
+      refuse(
+        new ContributionsError(
+          409,
+          "Your account changed, so this wasn't sent.",
+          "account_changed",
+        ),
+      );
+    });
+    await waitFor(() => expect(me.mock.calls.length).toBeGreaterThan(rechecks));
+    expect((screen.getByLabelText(label) as HTMLTextAreaElement).value).toBe(
+      "Bea's new draft",
+    );
+    expect(
+      screen.queryByText("Your account changed, so this wasn't sent."),
+    ).toBeNull();
+  },
+);

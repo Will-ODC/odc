@@ -1,5 +1,5 @@
 // @vitest-environment jsdom
-import { cleanup, render, screen, waitFor } from "@testing-library/react";
+import { act, cleanup, render, screen, waitFor } from "@testing-library/react";
 import userEvent from "@testing-library/user-event";
 import { afterEach, expect, it, vi } from "vitest";
 import { ContributionsError } from "../src/api/contributions.js";
@@ -478,4 +478,72 @@ it("clears a refused draft and rechecks the session while the focus recheck is p
   expect(onCreated).not.toHaveBeenCalled();
   resolveRecheck({ id: "ada", email: "ada@example.test", community: null });
   await waitFor(() => expectDraft(true));
+});
+
+it("keeps the new account's create draft when the old account's refusal arrives late", async () => {
+  const state = { who: "ada" };
+  const me = vi.fn(async () => ({
+    id: state.who,
+    email: `${state.who}@example.test`,
+    community: null,
+  }));
+  let refuse!: (reason: Error) => void;
+  const create = vi.fn<ContributionsApi["create"]>(
+    () =>
+      new Promise((_, reject) => {
+        refuse = reject;
+      }),
+  );
+  render(
+    <NewContribution
+      api={stubApi({ me })}
+      client={client({ create })}
+      onCreated={vi.fn()}
+    />,
+  );
+  const user = userEvent.setup();
+  await writeDraft(user);
+  await user.click(
+    screen.getByRole("button", { name: "Publish contribution" }),
+  );
+  expect(create).toHaveBeenCalledOnce();
+  expect(create.mock.calls[0]?.[2]).toBe("ada");
+  state.who = "bea";
+  window.dispatchEvent(new Event("focus"));
+  await waitFor(() => expectDraft(true));
+  await user.type(screen.getByLabelText("Title"), "Bea's new draft");
+  await user.type(screen.getByLabelText("Description"), "Bea's description");
+  await user.type(screen.getByLabelText("Organizer’s public name"), "Bea");
+  await user.click(
+    screen.getByRole("checkbox", { name: /I confirm this post/ }),
+  );
+  const rechecks = me.mock.calls.length;
+  await act(async () => {
+    refuse(
+      new ContributionsError(
+        409,
+        "Your account changed, so this wasn't sent.",
+        "account_changed",
+      ),
+    );
+  });
+  await waitFor(() => expect(me.mock.calls.length).toBeGreaterThan(rechecks));
+  for (const [label, value] of [
+    ["Title", "Bea's new draft"],
+    ["Description", "Bea's description"],
+    ["Organizer’s public name", "Bea"],
+  ] as const)
+    expect((screen.getByLabelText(label) as HTMLInputElement).value).toBe(
+      value,
+    );
+  expect(
+    (
+      screen.getByRole("checkbox", {
+        name: /I confirm this post/,
+      }) as HTMLInputElement
+    ).checked,
+  ).toBe(true);
+  expect(
+    screen.queryByText("Your account changed, so this wasn't sent."),
+  ).toBeNull();
 });

@@ -1,4 +1,4 @@
-import { useEffect, useRef, useState } from "react";
+import { useEffect, useLayoutEffect, useRef, useState } from "react";
 import type { FormEvent } from "react";
 import type { PulseApi } from "../api/types.js";
 import {
@@ -56,6 +56,15 @@ export function NewContribution({
     session.status === "signedOut" &&
     session.ended === "expired" &&
     draft.owner !== null;
+  // The callback used by a pending write retains its draft's owner/generation.
+  // Compare it with the committed form before clearing anything on refusal.
+  const mountedDraft = useRef<typeof draft | null>(null);
+  useLayoutEffect(() => {
+    mountedDraft.current = accountId !== null || expired ? draft : null;
+    return () => {
+      mountedDraft.current = null;
+    };
+  });
   return (
     <AppShell
       banner={
@@ -88,11 +97,17 @@ export function NewContribution({
             client={client}
             accountId={accountId ?? ""}
             onAccountChanged={() => {
-              setAccountChanged(true);
-              setDraft((current) => ({
-                ...current,
-                generation: current.generation + 1,
-              }));
+              const mounted = mountedDraft.current;
+              if (
+                mounted?.owner === draft.owner &&
+                mounted?.generation === draft.generation
+              ) {
+                setAccountChanged(true);
+                setDraft((current) => ({
+                  ...current,
+                  generation: current.generation + 1,
+                }));
+              }
               window.dispatchEvent(new Event("focus"));
             }}
             onCreated={onCreated}
