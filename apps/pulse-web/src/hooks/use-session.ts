@@ -67,6 +67,8 @@ export function useSession(
   signOut: () => void;
   /** Forget a failure once the person has put the question away. */
   dismiss: () => void;
+  /** Ask the server again who is signed in, now. */
+  recheck: () => void;
 } {
   const [session, setSession] = useState<Session>({ status: "loading" });
   const [progress, setProgress] = useState<SignOutProgress>({
@@ -123,45 +125,59 @@ export function useSession(
     recheckSignedIn ||
     session.status === "signedOut" ||
     session.status === "unknown";
+  // Answers that arrive after the page has gone change nothing.
+  const mounted = useRef(true);
+  useEffect(() => {
+    mounted.current = true;
+    return () => {
+      mounted.current = false;
+    };
+  }, []);
+  /*
+   * Ask who is signed in now, on demand: for a page told by the server that
+   * the account it wrote for is no longer the one signed in. The same
+   * question the focus and storage listeners below ask.
+   */
+  const recheck = useCallback(() => {
+    const ticket = nextIdentity();
+    api.me().then(
+      (me) => {
+        if (!mounted.current || !isLatest(ticket)) return;
+        if (me)
+          setSession((current) =>
+            current.status === "signedIn" && current.me.id === me.id
+              ? current
+              : { status: "signedIn", me },
+          );
+        // A definite "nobody" while signed in: signed out in another tab.
+        // A page showing one account's private data must stop showing it.
+        // With no sign-out announced, the session ran out (or was revoked):
+        // "expired", which the page may let the person recover from.
+        // While the first answer is still loading, this newer one has
+        // replaced it, so it settles the page: nobody is signed in.
+        else if (recheckSignedIn)
+          setSession((current) =>
+            current.status === "signedIn"
+              ? { status: "signedOut", ended: "expired" }
+              : current.status === "loading"
+                ? { status: "signedOut" }
+                : current,
+          );
+      },
+      () => {
+        // A failure changes nothing, except that a page still loading
+        // (its first answer replaced by this one) must not wait forever.
+        if (mounted.current && isLatest(ticket))
+          setSession((current) =>
+            current.status === "loading" ? { status: "unknown" } : current,
+          );
+      },
+    );
+  }, [api, recheckSignedIn]);
   useEffect(() => {
     if (!settled) return;
-    let live = true;
     const ask = () => {
-      if (document.visibilityState === "hidden") return;
-      const ticket = nextIdentity();
-      api.me().then(
-        (me) => {
-          if (!live || !isLatest(ticket)) return;
-          if (me)
-            setSession((current) =>
-              current.status === "signedIn" && current.me.id === me.id
-                ? current
-                : { status: "signedIn", me },
-            );
-          // A definite "nobody" while signed in: signed out in another tab.
-          // A page showing one account's private data must stop showing it.
-          // With no sign-out announced, the session ran out (or was revoked):
-          // "expired", which the page may let the person recover from.
-          // While the first answer is still loading, this newer one has
-          // replaced it, so it settles the page: nobody is signed in.
-          else if (recheckSignedIn)
-            setSession((current) =>
-              current.status === "signedIn"
-                ? { status: "signedOut", ended: "expired" }
-                : current.status === "loading"
-                  ? { status: "signedOut" }
-                  : current,
-            );
-        },
-        () => {
-          // A failure changes nothing, except that a page still loading
-          // (its first answer replaced by this one) must not wait forever.
-          if (live && isLatest(ticket))
-            setSession((current) =>
-              current.status === "loading" ? { status: "unknown" } : current,
-            );
-        },
-      );
+      if (document.visibilityState !== "hidden") recheck();
     };
     const announced = (event: StorageEvent) => {
       if (event.key === SIGNED_IN_KEY) ask();
@@ -184,12 +200,11 @@ export function useSession(
     window.addEventListener("storage", announced);
     document.addEventListener("visibilitychange", ask);
     return () => {
-      live = false;
       window.removeEventListener("focus", ask);
       window.removeEventListener("storage", announced);
       document.removeEventListener("visibilitychange", ask);
     };
-  }, [api, settled, recheckSignedIn]);
+  }, [settled, recheck, recheckSignedIn]);
 
   /*
    * Whoever was signed in here is gone without this page's own Sign out: it
@@ -254,7 +269,7 @@ export function useSession(
     if (!sending.current) setProgress({ status: "idle" });
   }, []);
 
-  return { session, progress, signOut, dismiss };
+  return { session, progress, signOut, dismiss, recheck };
 }
 
 function announceSignOut(store: ReturnType<typeof browserStore>): void {
