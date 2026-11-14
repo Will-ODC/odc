@@ -1393,7 +1393,7 @@ it("keeps an organizer's unsent update through an expired session and same-accou
   window.dispatchEvent(new Event("focus"));
   expect(
     await screen.findAllByRole("link", { name: "Sign in again in a new tab" }),
-  ).toHaveLength(2);
+  ).toHaveLength(3); // the two expired forms and the private-messages note
   // The private inbox needs a live session; the draft does not.
   expect(
     screen.queryByText("Private messages", { selector: "summary" }),
@@ -1671,7 +1671,12 @@ it("gives an organizer whose sign-in ended a heading and a sign-in link for thei
   expect(
     await screen.findByRole("heading", { name: "Private messages" }),
   ).toBeTruthy();
-  const link = screen.getByRole("link", { name: "Sign in again" });
-  expect(link.getAttribute("href")).toBe("/sign-in?contribution=park");
-  expect(link.getAttribute("target")).toBe("_blank");
+  const [link, ...others] = screen
+    .getAllByRole("link", { name: "Sign in again in a new tab" })
+    .filter((a) =>
+      a.closest("p")?.textContent?.includes("to read your private messages"),
+    );
+  expect(others).toHaveLength(0);
+  expect(link?.getAttribute("href")).toBe("/sign-in?contribution=park");
+  expect(link?.getAttribute("target")).toBe("_blank");
 });

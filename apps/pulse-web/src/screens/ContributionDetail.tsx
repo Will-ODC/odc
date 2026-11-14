@@ -305,13 +305,13 @@ export function ContributionDetail({
                   // no "Message the organizer" form in its place.
                   <>
                     <h2>Private messages</h2>
-                    <p className="contribution-note">
+                    <p className="contribution-expired">
                       <a
                         href={`/sign-in?contribution=${encodeURIComponent(item.id)}`}
                         target="_blank"
                         rel="noreferrer"
                       >
-                        Sign in again
+                        Sign in again in a new tab
                       </a>{" "}
                       to read your private messages.
                     </p>
