@@ -1,6 +1,6 @@
 ---
 name: odc-orchestration
-description: How the orchestrator works for the operator in the ODC monorepo — which questions go to the operator and how they are asked, working toward a stated goal, wrapping up at 90% usage and handing off to Codex — and how to dispatch work — which model runs which task (Codex by default, Opus or Sonnet), how to write a subagent brief that works, how to run agents in parallel without corrupting one working tree, and how to run lead sessions that each own one feature and run their own implementers. Use this skill whenever delegating, starting or acting as a lead, spawning a subagent, planning a multi-step task, choosing between Codex, Opus and Sonnet, or deciding whether to do something yourself.
+description: How the orchestrator works for the operator in the ODC monorepo — which questions go to the operator and how they are asked, working toward a stated goal, wrapping up at 90% usage and handing off to Codex — and how to dispatch work — which model runs which task (about half to Codex, the rest to Opus or Sonnet, adjusted by usage), how to write a subagent brief that works, how to run agents in parallel without corrupting one working tree, and how to run lead sessions that each own one feature and run their own implementers. Use this skill whenever delegating, starting or acting as a lead, spawning a subagent, planning a multi-step task, choosing between Codex, Opus and Sonnet, or deciding whether to do something yourself.
 ---
 
 # ODC Orchestration
@@ -18,8 +18,8 @@ everything the operator has not kept for themself. Ask the operator only about:
   private, what is hashed or goes into `contracts/`, and charter rules. This
   covers what these do, not how they are coded; how they are coded is routed
   per the table: `contracts/` work and ADRs to Opus `odc-architect`, either
-  verifier to `odc-verifier-builder`, other complex code to Codex by default
-  with Opus as the Claude fallback.
+  verifier to `odc-verifier-builder`, other complex code split between Codex
+  and Opus.
 - **Goals in tension** — when two goals pull apart and nothing written says
   which wins.
 - **What the operator owns** — merging the PRs listed in "Merging", audits, deploys, spending, a charter
@@ -324,9 +324,9 @@ orchestrator shifts the share toward whichever has usage left. When one runs
 out, the other carries the work. The operator may override the split for a
 session (for example "don't use Codex this session").
 
-Where these conflict with the first instruction, the later ones win: Codex is
-a default route for delegated implementation and lookups, except the merge checklist, which
-stays with `odc-navigator`; `contracts/` work
+Where these conflict with the first instruction, the later ones win: Codex
+takes about half of delegated implementation and lookups, except the merge
+checklist, which stays with `odc-navigator`; `contracts/` work
 and ADRs, which stay with Opus `odc-architect`, and either verifier, which
 stays with `odc-verifier-builder`.
 
@@ -363,17 +363,17 @@ usage (operator, 2026-11-14; see "The standing instruction").
 | Merge mechanics and the merge checklist, memory included       | **Sonnet** (Claude orchestrator) | `odc-navigator`                  |
 | Taking over as orchestrator when Claude usage runs out         | **Codex**                        | (hand-off — see above)           |
 
-**The line between "simple" and "complex" implementation.** Codex is the
-default for both, with one exception: `contracts/` work and ADRs are never
-the Codex default; they go to Opus `odc-architect`. Otherwise this line
-chooses the Claude fallback when Codex cannot do the step. Simple means: the
+**The line between "simple" and "complex" implementation.** Codex takes
+about half of both, with one exception: `contracts/` work and ADRs never go
+to Codex; they go to Opus `odc-architect`. For Claude's share, and whenever
+Codex cannot do the step, this line chooses between Opus and Sonnet. Simple means: the
 change is fully specified before it starts, it touches one file or one
 obvious set, and being wrong is _visible_ — a test fails, a build breaks.
 Complex means anything where being wrong is _silent_: hashing, event schemas,
 storage grants, privacy boundaries, anything a charter rule touches.
-**When the Claude fallback is not obvious, route Opus.** The cost of the
-wrong Sonnet fallback is a subtly wrong artifact that passes CI; the cost of
-the wrong Opus fallback is some tokens.
+**When the Claude route is not obvious, route Opus.** The cost of the
+wrong Sonnet choice is a subtly wrong artifact that passes CI; the cost of
+the wrong Opus choice is some tokens.
 
 ## Writing a brief that actually works
 
