@@ -17,7 +17,7 @@ export type Route =
   | { kind: "myVotes" }
   | { kind: "progress" }
   | { kind: "questions" }
-  | { kind: "browse"; community: string }
+  | { kind: "browse"; community: string; filter?: "contributions" }
   /**
    * Asking for a sign-in link. `returnTo` is where to come back to once the
    * emailed link is clicked: the confirm offer's Sign in (#480) on a vote card names
@@ -37,10 +37,24 @@ export type Route =
   /** Live conversation page; explicit poll links bypass the browser. */
   | { kind: "conversation"; pollId: string }
   /** Posting a question (ADR-0037). Signed in only; the screen says so. */
-  | { kind: "newPoll" };
+  | { kind: "newPoll" }
+  | { kind: "newContribution" }
+  | { kind: "contribution"; id: string }
+  | { kind: "memberProfile"; publicId: string }
+  | { kind: "profileEditor" };
 
 /** The places a sign-in can return to. */
-export type ReturnTo = Extract<Route, { kind: "conversation" | "newPoll" }>;
+export type ReturnTo = Extract<
+  Route,
+  {
+    kind:
+      | "conversation"
+      | "newPoll"
+      | "newContribution"
+      | "contribution"
+      | "profileEditor";
+  }
+>;
 
 /**
  * The conversation an unrecognised path opens when it carries no `?poll=`.
@@ -56,6 +70,7 @@ const SIGN_IN_PATH = "/sign-in";
 const CHAT_PREVIEW_PATH = "/preview/chat";
 export const TRUST_PATH = "/trust";
 const NEW_POLL_PATH = "/new";
+const PROFILE_EDITOR_PATH = "/profile";
 
 /**
  * A base for parsing, never for navigating.
@@ -85,15 +100,51 @@ export function routeFrom(href: string): Route {
     if (token) return { kind: "redeem", token };
     if (url.searchParams.get("next") === "new")
       return { kind: "signIn", returnTo: { kind: "newPoll" } };
+    if (url.searchParams.get("next") === "contribution-new")
+      return { kind: "signIn", returnTo: { kind: "newContribution" } };
+    const contributionId = url.searchParams.get("contribution");
+    if (contributionId)
+      return {
+        kind: "signIn",
+        returnTo: { kind: "contribution", id: contributionId },
+      };
+    if (url.searchParams.get("next") === "profile")
+      return { kind: "signIn", returnTo: { kind: "profileEditor" } };
     const pollId = url.searchParams.get("poll");
     return pollId
       ? { kind: "signIn", returnTo: { kind: "conversation", pollId } }
       : { kind: "signIn" };
   }
 
+  if (path === "/contributions")
+    return {
+      kind: "browse",
+      community: "pulse-general",
+      filter: "contributions",
+    };
+  if (path === "/contributions/new") return { kind: "newContribution" };
+  if (path.startsWith("/contributions/")) {
+    try {
+      return {
+        kind: "contribution",
+        id: decodeURIComponent(
+          url.pathname.replace(/\/+$/, "").slice("/contributions/".length),
+        ),
+      };
+    } catch {
+      return {
+        kind: "browse",
+        community: "pulse-general",
+        filter: "contributions",
+      };
+    }
+  }
   if (path === CHAT_PREVIEW_PATH) return { kind: "chatPreview" };
   if (path === TRUST_PATH) return { kind: "trust" };
   if (path === NEW_POLL_PATH) return { kind: "newPoll" };
+  if (path === PROFILE_EDITOR_PATH) return { kind: "profileEditor" };
+  if (/^\/u\/[^/]+$/.test(path))
+    return { kind: "memberProfile", publicId: path.slice(3) };
   if (path === "/my-votes") return { kind: "myVotes" };
   if (path === "/start") return { kind: "progress" };
   if (path === "/questions") return { kind: "questions" };
@@ -102,6 +153,11 @@ export function routeFrom(href: string): Route {
     return {
       kind: "browse",
       community: url.searchParams.get("community")?.trim() || "pulse-general",
+      ...(url.searchParams.get("filter") === "contributions" &&
+      (url.searchParams.get("community")?.trim() || "pulse-general") ===
+        "pulse-general"
+        ? { filter: "contributions" as const }
+        : {}),
     };
 
   // `?poll=` so a conversation can be started anywhere in the graph without a rebuild.
@@ -114,6 +170,10 @@ export function routeFrom(href: string): Route {
 /** The URL a route should show. The inverse of `routeFrom` for every route. */
 export function pathOf(route: Route): string {
   switch (route.kind) {
+    case "newContribution":
+      return "/contributions/new";
+    case "contribution":
+      return `/contributions/${encodeURIComponent(route.id)}`;
     case "about":
       return "/about";
     case "myVotes":
@@ -124,14 +184,22 @@ export function pathOf(route: Route): string {
       return "/questions";
     case "browse":
       return route.community === "pulse-general"
-        ? "/"
+        ? route.filter === "contributions"
+          ? "/?filter=contributions"
+          : "/"
         : `/browse?community=${encodeURIComponent(route.community)}`;
     case "signIn":
       switch (route.returnTo?.kind) {
         case undefined:
           return SIGN_IN_PATH;
+        case "newContribution":
+          return `${SIGN_IN_PATH}?next=contribution-new`;
+        case "contribution":
+          return `${SIGN_IN_PATH}?contribution=${encodeURIComponent(route.returnTo.id)}`;
         case "newPoll":
           return `${SIGN_IN_PATH}?next=new`;
+        case "profileEditor":
+          return `${SIGN_IN_PATH}?next=profile`;
         case "conversation":
           return `${SIGN_IN_PATH}?poll=${encodeURIComponent(route.returnTo.pollId)}`;
       }
@@ -146,5 +214,9 @@ export function pathOf(route: Route): string {
       return `/?poll=${encodeURIComponent(route.pollId)}`;
     case "newPoll":
       return NEW_POLL_PATH;
+    case "memberProfile":
+      return `/u/${encodeURIComponent(route.publicId)}`;
+    case "profileEditor":
+      return PROFILE_EDITOR_PATH;
   }
 }

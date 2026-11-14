@@ -19,6 +19,10 @@ import {
   type PollSummary,
 } from "../src/api/types.js";
 import { stubApi } from "./stub-api.js";
+import type {
+  ContributionSummary,
+  ContributionPage,
+} from "../src/api/contributions.js";
 afterEach(cleanup);
 const row = (id: string, open = true): PollSummary => ({
   id,
@@ -84,7 +88,8 @@ it("shows loading, retry and empty states with useful destinations", async () =>
     )
     .mockResolvedValue(page([]));
   render(<Browse api={stubApi({ listPolls })} community="missing" />);
-  expect(within(screen.getByRole("main")).getByText("Loading…")).toBeTruthy();
+  const explore = screen.getByRole("region", { name: "Explore questions" });
+  expect(within(explore).getByText("Loading…")).toBeTruthy();
   await act(async () => reject(new ApiError(503, "Please try later.")));
   expect(await screen.findByText("Please try later.")).toBeTruthy();
   const retry = within(screen.getByRole("main")).getByRole("button", {
@@ -115,7 +120,9 @@ it("keeps earlier rows through a failed page and retries the same cursor once", 
   render(<Browse api={stubApi({ listPolls })} community="campus" />);
   const more = await screen.findByRole("button", { name: "Load more" });
   // The shared secondary Button at its small size (#569).
-  expect(more.className).toBe("btn btn--secondary btn--small browse__action");
+  expect(more.className).toBe(
+    "btn btn--secondary btn--small load-more__button",
+  );
   await userEvent.click(more);
   expect(await screen.findByRole("alert")).toBeTruthy();
   expect(screen.getByRole("link", { name: "Question one" })).toBeTruthy();
@@ -131,6 +138,37 @@ it("keeps earlier rows through a failed page and retries the same cursor once", 
   ).toBeTruthy();
   expect(screen.getAllByRole("link", { name: "Question one" })).toHaveLength(1);
   expect(screen.queryByRole("button", { name: "Load more" })).toBeNull();
+});
+
+it("keeps paging after a later empty page advances the cursor", async () => {
+  const user = userEvent.setup();
+  const listPolls = vi
+    .fn()
+    .mockResolvedValueOnce(page([row("one")], "next"))
+    .mockResolvedValueOnce(page([], "last"))
+    .mockResolvedValueOnce(page([row("two")], null));
+  render(<Browse api={stubApi({ listPolls })} community="campus" />);
+  await user.click(await screen.findByRole("button", { name: "Load more" }));
+  await user.click(await screen.findByRole("button", { name: "Load more" }));
+  expect(
+    await screen.findByRole("link", { name: "Question two" }),
+  ).toBeTruthy();
+  expect(listPolls).toHaveBeenNthCalledWith(2, "campus", "next");
+  expect(listPolls).toHaveBeenNthCalledWith(3, "campus", "last");
+});
+
+it("reports a stuck cursor on a later empty page", async () => {
+  const user = userEvent.setup();
+  const listPolls = vi
+    .fn()
+    .mockResolvedValueOnce(page([row("one")], "stuck"))
+    .mockResolvedValueOnce(page([], "stuck"));
+  render(<Browse api={stubApi({ listPolls })} community="campus" />);
+  await user.click(await screen.findByRole("button", { name: "Load more" }));
+  expect((await screen.findByRole("alert")).textContent).toBe(
+    "We couldn't load more questions. Try again.",
+  );
+  expect(screen.getByRole("link", { name: "Question one" })).toBeTruthy();
 });
 
 it("ignores an old community page after navigating to another community", async () => {
@@ -190,18 +228,29 @@ it("loads the final page by keyboard and focuses its first new question", async 
     .fn()
     .mockResolvedValueOnce(page([row("first")], "next"))
     .mockResolvedValueOnce(page([row("second")]));
-  render(<Browse api={stubApi({ listPolls })} community="pulse-general" />);
-  await screen.findByRole("button", { name: "Load more" });
+  render(
+    <Browse
+      api={stubApi({ listPolls })}
+      community="pulse-general"
+      contributionsClient={{
+        list: async () => ({ contributions: [], nextCursor: null }),
+      }}
+    />,
+  );
+  await screen.findByRole("button", { name: "Load more questions" });
+  await user.tab(); // Contributions filter
   await user.tab(); // First question
   await user.tab(); // Load more
   expect(document.activeElement).toBe(
-    screen.getByRole("button", { name: "Load more" }),
+    screen.getByRole("button", { name: "Load more questions" }),
   );
   await user.keyboard("{Enter}");
   const next = await screen.findByRole("link", { name: "Question second" });
   await waitFor(() => expect(document.activeElement).toBe(next));
   expect(listPolls).toHaveBeenLastCalledWith("pulse-general", "next");
-  expect(screen.queryByRole("button", { name: "Load more" })).toBeNull();
+  expect(
+    screen.queryByRole("button", { name: "Load more questions" }),
+  ).toBeNull();
 });
 
 it("keeps Home, About and posting in the top navigation", async () => {
@@ -293,7 +342,7 @@ it("shows saved answers beside Explore using the header's single read and keyboa
   // The initial heading keeps focus. Shift+Tab reaches the preceding rail,
   // in the same left-to-right order as the desktop columns.
   expect(document.activeElement).toBe(
-    screen.getByRole("heading", { name: "Explore questions" }),
+    screen.getByRole("heading", { name: "Explore" }),
   );
   await user.tab({ shift: true });
   expect(document.activeElement).toBe(
@@ -302,6 +351,10 @@ it("shows saved answers beside Explore using the header's single read and keyboa
   await user.tab({ shift: true });
   expect(document.activeElement).toBe(saved);
   await user.tab();
+  await user.tab();
+  expect(document.activeElement).toBe(
+    screen.getByRole("link", { name: "Contributions only" }),
+  );
   await user.tab();
   expect(document.activeElement).toBe(
     screen.getByRole("link", { name: "Question one" }),
@@ -354,5 +407,71 @@ it("keeps the Answered loading, error, retry focus and empty states separate fro
   ).toBe("/my-votes");
   expect(document.activeElement).toBe(
     rail.getByRole("link", { name: "My votes" }),
+  );
+});
+
+it("loads the final contributions page by keyboard and focuses its first new contribution", async () => {
+  const user = userEvent.setup();
+  const contribution = (
+    id: string,
+    createdAt: string,
+  ): ContributionSummary => ({
+    id,
+    title: `Contribution ${id}`,
+    description: "A community project",
+    organizerName: "Garden group",
+    kind: "project",
+    status: "open",
+    createdAt,
+    community: { id: "pulse-general", label: "General" },
+    communityBenefit: "",
+    needs: "",
+    pollId: null,
+    commercial: null,
+    fund: null,
+  });
+  let finish!: (value: ContributionPage) => void;
+  const first = contribution("first", "2026-11-12T12:00:00.000Z");
+  const second = contribution("second", "2026-11-11T12:00:00.000Z");
+  const third = contribution("third", "2026-11-10T12:00:00.000Z");
+  const list = vi
+    .fn()
+    .mockResolvedValueOnce({ contributions: [first], nextCursor: "next" })
+    .mockImplementationOnce(
+      () =>
+        new Promise<ContributionPage>((resolve) => {
+          finish = resolve;
+        }),
+    );
+  render(
+    <Browse
+      api={stubApi()}
+      community="pulse-general"
+      contributionsOnly
+      contributionsClient={{ list }}
+    />,
+  );
+  const more = await screen.findByRole("button", {
+    name: "Load more contributions",
+  });
+  await user.tab(); // Show all
+  await user.tab(); // Start a contribution
+  await user.tab(); // First contribution
+  await user.tab(); // Load more contributions
+  expect(document.activeElement).toBe(more);
+  await user.keyboard("{Enter}");
+  expect(list).toHaveBeenLastCalledWith("next");
+  expect(more.hasAttribute("disabled")).toBe(true);
+  await act(async () =>
+    finish({ contributions: [second, third], nextCursor: null }),
+  );
+  const next = await screen.findByRole("link", { name: "Contribution second" });
+  await waitFor(() => expect(document.activeElement).toBe(next));
+  expect(
+    screen.queryByRole("button", { name: "Load more contributions" }),
+  ).toBeNull();
+  await user.tab();
+  expect(document.activeElement).toBe(
+    screen.getByRole("link", { name: "Contribution third" }),
   );
 });

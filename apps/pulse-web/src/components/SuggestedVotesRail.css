@@ -1,0 +1,55 @@
+@media (min-width: 1100px) {
+  :is(.conversation, .browse__layout).with-suggested-votes {
+    grid-template-columns: var(--rail) minmax(0, 1fr) var(--rail);
+  }
+}
+
+.suggested-votes-rail {
+  min-height: 0;
+  overflow-y: auto;
+  padding: calc(var(--step) * 2);
+  border-left: var(--hairline) solid var(--line);
+}
+
+.suggested-votes-rail h2 {
+  font-size: var(--t-eyebrow);
+  font-weight: 700;
+  letter-spacing: 0.06em;
+  text-transform: uppercase;
+  color: var(--muted);
+  margin: calc(var(--step) * 2) 0 var(--step);
+}
+
+.suggested-votes-rail ul {
+  list-style: none;
+  padding: 0;
+  margin: 0;
+}
+
+.suggested-votes-rail li + li {
+  border-top: var(--hairline) solid var(--line);
+}
+
+.suggested-votes-rail a {
+  display: block;
+  padding-block: var(--step);
+  font-size: var(--t-small);
+  line-height: 1.5;
+  color: var(--ink);
+  text-decoration: none;
+  overflow-wrap: anywhere;
+}
+
+.suggested-votes-rail a:hover {
+  color: var(--green-hover);
+  text-decoration: underline;
+}
+
+.suggested-votes-rail a[aria-disabled="true"],
+.suggested-votes-rail p {
+  color: var(--muted);
+}
+
+.suggested-votes-rail p {
+  font-size: var(--t-small);
+}

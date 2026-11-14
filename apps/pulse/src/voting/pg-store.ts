@@ -1,6 +1,8 @@
 import { randomUUID } from "node:crypto";
 import type { Pool, PoolClient } from "pg";
 import { inTransaction } from "../db/transaction.js";
+import type { PollImage } from "../images/public.js";
+import { mayServe, type OwnerKind } from "../images/visibility.js";
 import type { PollListQuery, PollSummary } from "./listing.js";
 import {
   createPoll,
@@ -63,8 +65,8 @@ export class PostgresVotingStore implements VotingStore {
     await inTransaction(this.#pool, async (client) => {
       const { rowCount } = await client.query(
         "insert into polls" +
-          " (id, question, method, created_at, closes_at, accepts_suggestions)" +
-          " values ($1, $2, $3, $4, $5, $6) on conflict (id) do nothing",
+          " (id, question, method, created_at, closes_at, accepts_suggestions, context)" +
+          " values ($1, $2, $3, $4, $5, $6, $7) on conflict (id) do nothing",
         [
           poll.id,
           poll.question,
@@ -72,6 +74,7 @@ export class PostgresVotingStore implements VotingStore {
           poll.createdAt,
           poll.closesAt ?? null,
           poll.acceptsSuggestions,
+          poll.context ?? null,
         ],
       );
       // The same refusal, and the same error, as the in-memory store.
@@ -109,10 +112,12 @@ export class PostgresVotingStore implements VotingStore {
     // `created_by` is deliberately not selected: the author's account never
     // leaves the creation store, so no projection can copy it by mistake.
     const { rows } = await this.#pool.query<PollRow>(
-      "select p.id, p.question, p.method, p.created_at, p.closes_at," +
+      "select p.id, p.question, p.context, p.method, p.created_at, p.closes_at," +
         " p.accepts_suggestions, p.attribution_kind, p.author_name," +
-        " c.id as community_id, c.label as community_label" +
+        " c.id as community_id, c.label as community_label," +
+        ` ${IMAGE_COLUMNS}` +
         " from polls p left join community c on c.id = p.community" +
+        " left join image i on i.id = p.image_id" +
         " where p.id = $1",
       [pollId],
     );
@@ -127,6 +132,7 @@ export class PostgresVotingStore implements VotingStore {
     const poll: Poll = {
       id: row.id,
       question: row.question,
+      ...(row.context === null ? {} : { context: row.context }),
       choices: choices.rows.map((choice) => choice.label),
       // Plain text in the table on purpose (ADR-0021); `createPoll` checked it
       // against the known methods before this store ever wrote it.
@@ -136,28 +142,34 @@ export class PostgresVotingStore implements VotingStore {
       acceptsSuggestions: row.accepts_suggestions,
     };
     const publication = publicationOf(row);
+    const image = pollImageOf(row);
     // No close time means no `closesAt` key, exactly as `createPoll` builds it;
     // no authorship means no `publication` key, as the in-memory store has it.
     return {
       ...poll,
       ...(row.closes_at ? { closesAt: row.closes_at } : {}),
       ...(publication ? { publication } : {}),
+      ...(image ? { image } : {}),
     };
   }
 
   async listPolls(query: PollListQuery): Promise<PollSummary[]> {
-    const { rows } = await this.#pool.query<{
-      id: string;
-      question: string;
-      method: PollMethod;
-      created_at: Date;
-      closes_at: Date | null;
-    }>(
-      "select id, question, method, created_at, closes_at from polls" +
-        " where community = $1 and not hidden" +
-        ' and ($2::timestamptz is null or (created_at, id collate "C")' +
+    const { rows } = await this.#pool.query<
+      {
+        id: string;
+        question: string;
+        method: PollMethod;
+        created_at: Date;
+        closes_at: Date | null;
+      } & ImageColumns
+    >(
+      "select p.id, p.question, p.method, p.created_at, p.closes_at," +
+        ` ${IMAGE_COLUMNS}` +
+        " from polls p left join image i on i.id = p.image_id" +
+        " where p.community = $1 and not p.hidden" +
+        ' and ($2::timestamptz is null or (p.created_at, p.id collate "C")' +
         ' < ($2::timestamptz, $3::text collate "C"))' +
-        ' order by created_at desc, id collate "C" desc limit $4',
+        ' order by p.created_at desc, p.id collate "C" desc limit $4',
       [
         query.community,
         query.before?.createdAt ?? null,
@@ -165,13 +177,17 @@ export class PostgresVotingStore implements VotingStore {
         query.limit + 1,
       ],
     );
-    return rows.map((p) => ({
-      id: p.id,
-      question: p.question,
-      method: p.method,
-      createdAt: p.created_at,
-      ...(p.closes_at ? { closesAt: p.closes_at } : {}),
-    }));
+    return rows.map((p) => {
+      const image = pollImageOf(p);
+      return {
+        id: p.id,
+        question: p.question,
+        method: p.method,
+        createdAt: p.created_at,
+        ...(p.closes_at ? { closesAt: p.closes_at } : {}),
+        ...(image ? { image } : {}),
+      };
+    });
   }
 
   async castVote(
@@ -466,7 +482,60 @@ export class PostgresVotingStore implements VotingStore {
   }
 }
 
-interface PollRow {
+/**
+ * The poll's picture columns, read beside the poll by a left join on
+ * `polls.image_id`. `hidden` is the poll's own flag.
+ */
+const IMAGE_COLUMNS =
+  "p.hidden, p.image_id, i.owner_kind as image_owner_kind," +
+  " i.owner_id as image_owner_id, i.alt as image_alt," +
+  " i.width as image_width, i.height as image_height";
+
+interface ImageColumns {
+  hidden: boolean;
+  image_id: string | null;
+  image_owner_kind: OwnerKind | null;
+  image_owner_id: string | null;
+  image_alt: string | null;
+  image_width: number | null;
+  image_height: number | null;
+}
+
+/**
+ * The poll's picture, only when `mayServe` would serve it, so a body never
+ * names a picture its route refuses. The alt text is set whenever a picture
+ * is attached (`image_pending_or_attached`).
+ */
+function pollImageOf(
+  row: { id: string } & ImageColumns,
+): PollImage | undefined {
+  if (row.image_id === null) return undefined;
+  const served = mayServe(
+    {
+      id: row.image_id,
+      ownerKind: row.image_owner_kind,
+      ownerId: row.image_owner_id,
+    },
+    { kind: "poll", currentImageId: row.image_id, visible: !row.hidden },
+  );
+  // mayServe checks the owner kind; the owner id must also be this poll.
+  if (!served || row.image_owner_id !== row.id) return undefined;
+  if (
+    row.image_alt === null ||
+    row.image_width === null ||
+    row.image_height === null
+  )
+    return undefined;
+  return {
+    id: row.image_id,
+    width: row.image_width,
+    height: row.image_height,
+    alt: row.image_alt,
+  };
+}
+
+interface PollRow extends ImageColumns {
+  context: string | null;
   id: string;
   question: string;
   method: string;

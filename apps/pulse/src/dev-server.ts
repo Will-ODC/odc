@@ -1,3 +1,6 @@
+import { InMemoryContributionsStore } from "./contributions/memory-store.js";
+import { PostgresContributionsStore } from "./contributions/pg-store.js";
+import type { ContributionsStore } from "./contributions/store.js";
 import { logFault, textFaultLogger } from "./logging.js";
 import { randomBytes } from "node:crypto";
 import { registerDevMailbox } from "./dev-mailbox.js";
@@ -12,6 +15,8 @@ import { databaseUrl } from "./db/config.js";
 import { migrate } from "./db/migrate.js";
 import { createPool } from "./db/pool.js";
 import { createServer } from "./http/server.js";
+import { PostgresImageStore } from "./images/pg-store.js";
+import { InMemoryImageStore, type ImageStore } from "./images/store.js";
 import { assertOrigin, sessionSecretTooShort } from "./main.js";
 import { MIN_SESSION_SECRET_LENGTH, SessionSigner } from "./http/session.js";
 import {
@@ -43,6 +48,9 @@ import {
   type SuggestionStore,
 } from "./voting/suggestions.js";
 import { InMemoryVotingStore, type VotingStore } from "./voting/store.js";
+import { InMemoryMemberProfileStore } from "./profiles/memory-store.js";
+import { PostgresMemberProfileStore } from "./profiles/pg-store.js";
+import type { MemberProfileStore } from "./profiles/store.js";
 
 /**
  * Running pulse on a laptop.
@@ -309,6 +317,9 @@ interface Storage {
   claims: ClaimStore;
   domains: AllowedDomainSource;
   creation: CreationStore;
+  images: ImageStore;
+  contributions: ContributionsStore;
+  profiles: MemberProfileStore;
   /** Only when the rows are in Postgres. */
   pool?: Pool;
 }
@@ -398,6 +409,9 @@ export async function buildDevServer(
       signer: new SessionSigner(config.secret),
       confirmationKey: new ConfirmationKey(config.confirmationKey),
       creation: storage.creation,
+      images: storage.images,
+      contributions: storage.contributions,
+      profiles: storage.profiles,
       // The client's origin, which is where creation requests come from.
       webOrigin: config.webOrigin,
       // Local development is http://, and a Secure cookie would never be
@@ -437,6 +451,9 @@ function inMemory(creation: { ownerEmail?: string }): Storage {
     claims: new InMemoryClaimStore(),
     domains: new StaticDomainSource(SEED_DOMAINS),
     creation: new InMemoryCreationStore(voters, votes, creation),
+    images: new InMemoryImageStore(voters, votes),
+    contributions: new InMemoryContributionsStore(voters, votes),
+    profiles: new InMemoryMemberProfileStore(voters),
   };
 }
 
@@ -476,6 +493,9 @@ async function inPostgres(
     claims: new PostgresClaimStore(pool),
     domains: new PostgresDomainSource(pool),
     creation: new PostgresCreationStore(pool, creation),
+    images: new PostgresImageStore(pool),
+    contributions: new PostgresContributionsStore(pool),
+    profiles: new PostgresMemberProfileStore(pool),
     pool,
   };
 }

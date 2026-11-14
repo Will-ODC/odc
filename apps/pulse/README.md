@@ -31,6 +31,12 @@ without signing in. It returns open and closed question summaries, newest first,
 with cursor pagination. Hidden polls are excluded. The browser list and MCP
 discovery remain separate work; see [API.md](./API.md) for the query contract.
 
+**Member profiles** are opt-in and public. A signed-in member chooses a display
+name and optional bio, then shares the stable opaque `/u/<publicId>` link. They
+can hide the profile again without losing that id. Public responses contain
+only the chosen name, bio and creation time; account and voting data remain
+private. See [API.md](./API.md#member-profiles) for the exact contract.
+
 ## Sign-in link retention
 
 A redeemed link's `pending_claim` row is deleted as it is spent. Links still
@@ -50,6 +56,16 @@ request's transaction, so a failure there fails the request. An older marker
 created before timestamps existed is dated at the first startup or redemption
 after upgrading, then gets the same 20-minute window. This does not delete the email
 credential belonging to an account that signed in.
+
+## Poll pictures
+
+A signed-in poster may upload one picture with a question (ADR-0047). The
+server decodes JPEG, PNG and WebP by their content, refuses SVG, GIF, HEIC
+and animated files, and stores only two re-encoded WebP variants with all
+metadata (EXIF, GPS location, XMP, ICC) removed. Pictures live in Postgres
+beside the polls; one nobody attached within 24 hours is deleted at the next
+startup or upload. See [API.md](./API.md) for the routes and the public
+`image` field, and [DEPLOY.md](./DEPLOY.md) for backups and the nginx limit.
 
 ## Error-log privacy
 
@@ -188,3 +204,22 @@ sign-out, fail on new community labels, or record votes without confirmation.
 `POST /api/mcp` offers two read-only tools: `get_poll` and `get_results`. With
 `dev` running, point an MCP client at `http://127.0.0.1:8080/api/mcp` and ask
 for poll `ads-free`. Details are in [API.md](./API.md#mcp-public-reads).
+
+## Contributions
+
+Contributions lets signed-in people publish projects, fundraising requests,
+group buys and offers with a title, description and public organizer name. Anyone can browse
+records and progress. Signed-in members can send private messages to the
+organizer. Organizers read those messages and publish status updates and
+evidence links. Named labels
+are self-selected, and completion is reported by the organizer.
+
+When an API caller includes commercial pricing, it must show at least 20%
+advertised savings. Pulse records the declared prices and pledges. Payments
+and independent verification are future work.
+
+The API is documented in [API.md](./API.md#contributions-246-247-252).
+Migration 013 adds contribution records and durable retries. Migration 014 adds private messages and stores retry revisions. Production
+uses Postgres. Development follows its existing storage selection, so the default
+in-memory demonstration loses records on restart. User text and public names
+are visible to everyone. Account IDs, email and session data stay private.

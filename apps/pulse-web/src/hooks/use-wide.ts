@@ -8,21 +8,21 @@ export const WIDE = "(min-width: 700px)";
  * Where the browser cannot say (no `matchMedia`, as in tests), it is the
  * phone layout.
  */
-export function useWide(): boolean {
-  const [wide, setWide] = useState(() => query()?.matches ?? false);
+export function useWide(media = WIDE): boolean {
+  const [wide, setWide] = useState(() => query(media)?.matches ?? false);
   useEffect(() => {
-    const list = query();
+    const list = query(media);
     if (!list) return;
     const changed = () => setWide(list.matches);
     changed();
     list.addEventListener("change", changed);
     return () => list.removeEventListener("change", changed);
-  }, []);
+  }, [media]);
   return wide;
 }
 
-function query(): MediaQueryList | null {
+function query(media: string): MediaQueryList | null {
   return typeof window.matchMedia === "function"
-    ? window.matchMedia(WIDE)
+    ? window.matchMedia(media)
     : null;
 }

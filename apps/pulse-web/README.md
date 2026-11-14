@@ -36,6 +36,8 @@ container, so the page and the API share one address.
 | `/questions`           | The four starting questions.                                            |
 | `/?poll=ID`            | The live vote page for one poll. Old `/conversation` links still work.  |
 | `/new`                 | Post a question after signing in, then open its vote page.              |
+| `/profile`             | Create, update, hide or share the signed-in member's public profile.    |
+| `/u/<publicId>`        | A public member profile, or unavailable if it is absent or hidden.      |
 | `/trust`               | "How votes count": a short guide to counting and its limits.            |
 | `/sign-in?token=…`     | Where emailed sign-in links land; goes straight back to where you were. |
 | `/preview/chat`        | A prototype with sample data only.                                      |
@@ -226,3 +228,27 @@ for HTTPS and HSTS at the TLS terminator.
   or ledger until they are. Update its plan steps as that work moves.
 - **`/start` is written by hand.** It is not a live feed and does not mean the
   work is deployed.
+
+## Desktop sidebars
+
+Home, poll details and contribution details share My votes on the left from
+700px. From 1100px, Suggested votes appears on the right. It lists up to five
+unanswered General questions from the newest open candidates. It skips the
+question on screen and any question already voted on in this browser. The sidebar opens a question without casting a vote. See #529
+for suggested votes and #331 for desktop layout.
+
+## Contributions
+
+Home lists questions and the four newest contributions together, newest first.
+Each contribution has a tag naming its type. The Contributions only filter
+on Home lists projects, fundraisers, group buys and offers. Old directory
+links open the filtered view. After sign-in, `/contributions/new`
+asks for a type, title, description and public organizer name before
+confirming publication. Detail pages show the description, participation and
+organizer updates, along with any extra details already on the record.
+
+Choose Message the organizer on a detail page to send a private message.
+The organizer reads messages there and can publish progress updates.
+Completion is labeled as reported.
+Sign-in links return to the contribution page or creation form. Failed submissions
+keep entered fields and reuse their request key for an unchanged retry.
