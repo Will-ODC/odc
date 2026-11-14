@@ -412,7 +412,7 @@ automated gate" — so T7b gates the freeze decision, not T9 or T9a.
   pre-freeze), T7's builder re-runs **in a new fresh context** if
   `hashing.md` changed materially. Loop until one clean pass end-to-end.
 - Wire `just rehearsal` to run the whole loop; keep scripts (they seed
-  `just smoke` and nightly chain-smoke).
+  `just smoke`; a nightly chain-smoke is planned, not built).
 - Acceptance: one fully clean pass, logged as `docs/decisions/0012-genesis-rehearsal.md`
   (what iterations were needed — the record of what the prose got wrong).
 

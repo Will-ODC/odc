@@ -23,8 +23,9 @@ PR, walk the merge checklist in
 squash-merge referencing the issue → update the workstream's memory entry on
 master → move the board card).
 
-Respect the verifier isolation rule: if a task requires opening both
-`services/verifier/` and `services/ledger/`, refuse and split it. Isolation is
+Respect the verifier isolation rule: if a task requires opening either
+verifier (`services/verifier/`, `tools/verifier-ts/`) together with
+`services/ledger/`, or both verifiers together, refuse and split it. Isolation is
 about what a context has seen, not which model runs it, and it binds you exactly
 as it binds an Opus context.
 
