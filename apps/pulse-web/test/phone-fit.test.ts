@@ -69,8 +69,13 @@ describe("fitting a phone", () => {
   it("floats voting clear of the safe areas, scrolling rather than clipping", () => {
     const dock = rule("screens/Conversation.css", ".conversation__dock");
     expect(dock).toMatch(/position:\s*fixed/);
-    expect(dock).toContain("env(safe-area-inset-right)");
-    expect(dock).toContain("env(safe-area-inset-bottom)");
+    // Never flush to the edge: the gutter is the floor even with no inset.
+    expect(dock).toMatch(
+      /right:\s*max\(var\(--gutter\),\s*env\(safe-area-inset-right\)\)/,
+    );
+    expect(dock).toMatch(
+      /bottom:\s*max\(var\(--gutter\),\s*env\(safe-area-inset-bottom\)\)/,
+    );
     expect(rule("screens/Conversation.css", ".conversation__scroll")).toMatch(
       /overflow-y:\s*auto/,
     );
@@ -97,9 +102,20 @@ describe("fitting a phone", () => {
       new URL("../src/screens/Conversation.css", import.meta.url),
       "utf8",
     );
+    // Scoped to the voting reveal's own block: the #554 question slide has a
+    // separate reduced-motion block that must not satisfy this check.
     expect(css).toMatch(
-      /@media \(prefers-reduced-motion: reduce\)[\s\S]*animation: none/,
+      /@media \(prefers-reduced-motion: reduce\) \{\s*\.conversation__dock \.vote-card,\s*\.conversation__help > button \{\s*animation: none;/,
     );
+  });
+
+  it("keeps the shared touch target at least 44px", () => {
+    const tokens = readFileSync(
+      new URL("../src/styles/tokens.css", import.meta.url),
+      "utf8",
+    );
+    const touch = tokens.match(/--touch:\s*(\d+)px;/);
+    expect(Number(touch?.[1])).toBeGreaterThanOrEqual(44);
   });
 
   it("gives the closed voting button its own row on a phone, so it covers nothing (#527)", () => {
