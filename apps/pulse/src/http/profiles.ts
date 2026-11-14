@@ -1,5 +1,7 @@
 import type { FastifyInstance, FastifyReply, FastifyRequest } from "fastify";
 import type { Voter } from "../identity/store.js";
+import { ContributionError, listQuery } from "../contributions/input.js";
+import type { ContributionsStore } from "../contributions/store.js";
 import { logFault } from "../logging.js";
 import {
   isPublicProfileId,
@@ -18,6 +20,7 @@ export const PROFILE_BODY_LIMIT = 2 * 1024;
 
 export interface ProfileRouteDeps {
   profiles: MemberProfileStore | undefined;
+  contributions: ContributionsStore | undefined;
   webOrigin: string | undefined;
   currentVoter: (request: FastifyRequest) => Promise<Voter | undefined>;
   rateLimit?: { max: number; timeWindow: string };
@@ -39,6 +42,12 @@ const NOT_FOUND = () =>
 const SIGNED_OUT = () => new Refusal(401, "signed_out", "Sign in to do that.");
 const BAD_REQUEST = () =>
   new Refusal(400, "bad_request", "That request could not be read.");
+const CONTRIBUTIONS_UNAVAILABLE = () =>
+  new Refusal(
+    503,
+    "contributions_unavailable",
+    "Contributions are unavailable just now. Try again.",
+  );
 const FOREIGN_ORIGIN = () =>
   new Refusal(
     ORIGIN_REFUSAL.status,
@@ -50,6 +59,33 @@ export async function registerProfileRoutes(
   app: FastifyInstance,
   deps: ProfileRouteDeps,
 ): Promise<void> {
+  app.get("/api/profiles/:publicId/contributions", async (request, reply) => {
+    const publicId = (request.params as { publicId: string }).publicId;
+    if (!isPublicProfileId(publicId) || !deps.profiles)
+      return answerRefusal(reply, NOT_FOUND());
+    const owner = await deps.profiles.visibleOwnerById(publicId.toLowerCase());
+    if (!owner) return answerRefusal(reply, NOT_FOUND());
+    if (!deps.contributions)
+      return answerRefusal(reply, CONTRIBUTIONS_UNAVAILABLE());
+    reply.header("cache-control", "no-store");
+    try {
+      const page = await deps.contributions.listByOwner(
+        owner.voterId,
+        listQuery(request.query),
+      );
+      const stillVisible = await deps.profiles.visibleOwnerById(
+        publicId.toLowerCase(),
+      );
+      if (!stillVisible || stillVisible.voterId !== owner.voterId)
+        return answerRefusal(reply, NOT_FOUND());
+      return reply.send(page);
+    } catch (error) {
+      if (error instanceof ContributionError)
+        return answerRefusal(reply, BAD_REQUEST());
+      throw error;
+    }
+  });
+
   app.get("/api/profiles/:publicId", async (request, reply) => {
     reply.header("cache-control", "no-store");
     const publicId = (request.params as { publicId: string }).publicId;
@@ -83,6 +119,8 @@ export async function registerProfileRoutes(
     scope.setErrorHandler((error, request, reply) => {
       if (error instanceof Refusal) return answerRefusal(reply, error);
       if (error instanceof ProfileInputError)
+        return answerRefusal(reply, BAD_REQUEST());
+      if (error instanceof ContributionError)
         return answerRefusal(reply, BAD_REQUEST());
       if (error instanceof ProfileStoreError)
         return answerRefusal(reply, SIGNED_OUT());
@@ -167,6 +205,38 @@ export async function registerProfileRoutes(
         return reply
           .header("cache-control", "no-store")
           .send({ profile: profile ? ownerProfile(profile) : null });
+      },
+    );
+
+    scope.get(
+      "/api/me/contributions",
+      { config: limit, preParsing: guard(false) },
+      async (request, reply) => {
+        if (!deps.contributions) throw CONTRIBUTIONS_UNAVAILABLE();
+        // The same optional precondition as GET /api/me/profile: a page that
+        // missed an account switch never lists another account's records.
+        const { ownerAccountId, ...query } = (request.query ?? {}) as Record<
+          string,
+          unknown
+        >;
+        if (ownerAccountId !== undefined) {
+          if (typeof ownerAccountId !== "string" || ownerAccountId.length === 0)
+            throw BAD_REQUEST();
+          if (ownerAccountId !== actorOf(request).voterId)
+            throw new Refusal(
+              409,
+              "account_changed",
+              "Your account changed. Reload your profile.",
+            );
+        }
+        return reply
+          .header("cache-control", "no-store")
+          .send(
+            await deps.contributions.listByOwner(
+              actorOf(request).voterId,
+              listQuery(query),
+            ),
+          );
       },
     );
 

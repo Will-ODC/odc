@@ -21,8 +21,9 @@ class MemoryRepository implements ContributionRepository {
   async read(id: string) {
     return structuredClone(this.records.get(id));
   }
-  async list(query: ListQuery) {
+  async list(query: ListQuery, ownerId?: string) {
     return [...this.records.values()]
+      .filter((record) => ownerId === undefined || record.ownerId === ownerId)
       .map((r) => summary(r.public))
       .filter(
         (r) =>

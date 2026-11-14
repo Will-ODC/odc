@@ -14,6 +14,7 @@ import { PROFILE_BODY_LIMIT } from "../src/http/profiles.js";
 import { createServer } from "../src/http/server.js";
 import { SESSION_COOKIE, SessionSigner } from "../src/http/session.js";
 import { InMemoryMemberProfileStore } from "../src/profiles/memory-store.js";
+import { InMemoryContributionsStore } from "../src/contributions/memory-store.js";
 import { InMemorySuggestionStore } from "../src/voting/suggestions.js";
 import { InMemoryVotingStore } from "../src/voting/store.js";
 
@@ -44,6 +45,10 @@ async function setup(rateLimit?: { max: number; timeWindow: string }) {
     newId: () => IDS[next++] as string,
   });
   const signer = new SessionSigner(SECRET, { clock: () => AT });
+  const votes = new InMemoryVotingStore(() => AT);
+  const contributions = new InMemoryContributionsStore(voters, votes, {
+    clock: () => AT,
+  });
   const app = await createServer({
     claims: new ClaimService({
       membership: new DomainAllowlist(new StaticDomainSource([])),
@@ -53,10 +58,11 @@ async function setup(rateLimit?: { max: number; timeWindow: string }) {
       linkFor: (token) => `${ORIGIN}/sign-in?token=${token}`,
     }),
     voters,
-    votes: new InMemoryVotingStore(() => AT),
+    votes,
     suggestions: new InMemorySuggestionStore({ clock: () => AT }),
     signer,
     profiles,
+    contributions,
     webOrigin: ORIGIN,
     secureCookies: false,
     ...(rateLimit ? { profileRateLimit: rateLimit } : {}),
@@ -72,6 +78,8 @@ async function setup(rateLimit?: { max: number; timeWindow: string }) {
   }
   return {
     app,
+    profiles,
+    contributions,
     cookie(id = "owner-private-id") {
       return `${SESSION_COOKIE}=${signer.sign(id, 0)}`;
     },
@@ -143,6 +151,123 @@ test("owner_can_create_read_update_hide_and_reshare_a_stable_profile", async (t)
     visible: true,
   });
   assert.equal(reshared.json().profile.publicId, publicId);
+});
+
+test("profile_contributions_are_account_keyed_and_owner_only", async (t) => {
+  const h = await setup();
+  t.after(() => h.app.close());
+  await h.put({ displayName: "Ada", bio: "", visible: true });
+  const owner = { voterId: "owner-private-id", sessionGeneration: 0 };
+  const other = { voterId: "other-private-id", sessionGeneration: 0 };
+  const input = (title: string) => ({
+    title,
+    description: "A public contribution.",
+    organizerName: "Same public name",
+    kind: "project" as const,
+  });
+  const owned = await h.contributions.create(
+    owner,
+    "00000000-0000-4000-8000-000000000001",
+    input("Owner project"),
+  );
+  await h.contributions.create(
+    other,
+    "00000000-0000-4000-8000-000000000002",
+    input("Other project"),
+  );
+
+  const publicList = await h.app.inject({
+    url: `/api/profiles/${IDS[0]}/contributions`,
+  });
+  assert.equal(publicList.statusCode, 200);
+  assert.deepEqual(
+    (publicList.json().contributions as { title: string }[]).map(
+      (row) => row.title,
+    ),
+    ["Owner project"],
+  );
+  assert.doesNotMatch(publicList.body, /owner-private-id|other-private-id/);
+
+  const mine = await h.app.inject({
+    url: "/api/me/contributions",
+    headers: { cookie: h.cookie() },
+  });
+  assert.deepEqual(
+    (mine.json().contributions as { id: string }[]).map((row) => row.id),
+    [owned.contribution.id],
+  );
+  const someoneElse = await h.app.inject({
+    url: "/api/me/contributions",
+    headers: { cookie: h.cookie("other-private-id") },
+  });
+  assert.deepEqual(
+    (someoneElse.json().contributions as { title: string }[]).map(
+      (row) => row.title,
+    ),
+    ["Other project"],
+  );
+  assert.equal(
+    (await h.app.inject({ url: "/api/me/contributions" })).statusCode,
+    401,
+  );
+
+  const forOwner = await h.app.inject({
+    url: "/api/me/contributions?ownerAccountId=owner-private-id",
+    headers: { cookie: h.cookie() },
+  });
+  assert.equal(forOwner.statusCode, 200);
+  assert.deepEqual(
+    (forOwner.json().contributions as { id: string }[]).map((row) => row.id),
+    [owned.contribution.id],
+  );
+  const switched = await h.app.inject({
+    url: "/api/me/contributions?ownerAccountId=owner-private-id",
+    headers: { cookie: h.cookie("other-private-id") },
+  });
+  assert.equal(switched.statusCode, 409);
+  assert.equal(switched.json().error, "account_changed");
+  assert.doesNotMatch(switched.body, /Other project|contributions/);
+  const empty = await h.app.inject({
+    url: "/api/me/contributions?ownerAccountId=",
+    headers: { cookie: h.cookie() },
+  });
+  assert.equal(empty.statusCode, 400);
+});
+
+test("contribution_links_only_a_visible_profile_without_private_ids", async (t) => {
+  const h = await setup();
+  t.after(() => h.app.close());
+  await h.put({ displayName: "Profile name", bio: "", visible: true });
+  const made = await h.contributions.create(
+    { voterId: "owner-private-id", sessionGeneration: 0 },
+    "00000000-0000-4000-8000-000000000003",
+    {
+      title: "Garden",
+      description: "Grow food.",
+      organizerName: "Contribution byline",
+      kind: "project",
+    },
+  );
+  const path = `/api/contributions/${made.contribution.id}`;
+  const linked = await h.app.inject({ url: path });
+  assert.deepEqual(linked.json().contribution.organizerProfile, {
+    publicId: IDS[0],
+    displayName: "Profile name",
+  });
+  assert.doesNotMatch(linked.body, /owner-private-id|example\.test|voter/i);
+
+  await h.put({ displayName: "Profile name", bio: "", visible: false });
+  const hidden = await h.app.inject({ url: path });
+  assert.equal(hidden.json().contribution.organizerName, "Contribution byline");
+  assert.equal("organizerProfile" in hidden.json().contribution, false);
+  const hiddenList = await h.app.inject({
+    url: `/api/profiles/${IDS[0]}/contributions`,
+  });
+  assert.equal(hiddenList.statusCode, 404);
+  assert.equal(
+    hiddenList.body,
+    '{"error":"not_found","message":"That profile is unavailable."}',
+  );
 });
 
 test("malformed_missing_and_hidden_public_profiles_are_indistinguishable", async (t) => {

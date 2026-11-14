@@ -336,8 +336,8 @@ U+2066–U+2069), with one exception: the zero-width non-joiner and joiner
 names use them. A name made only of invisible characters is refused. Bios are trimmed and contain 0–280 Unicode
 code points. NUL characters, malformed Unicode, unknown fields and non-string
 text are refused. No profile response contains an email address, credential,
-internal voter id, session data, votes, ballots, contributions, or other
-account activity.
+internal voter id, session data, votes, ballots, or other private account
+activity. Contributions are read through the separate list routes below.
 
 ### `GET /api/profiles/:publicId`
 
@@ -365,6 +365,17 @@ profile exists:
 ```json
 { "error": "not_found", "message": "That profile is unavailable." }
 ```
+
+### `GET /api/profiles/:publicId/contributions?cursor=…`
+
+Public. Lists contributions published by the account that owns this visible
+profile, newest first, with the same `{ contributions, nextCursor }` page and
+cursor rules as `GET /api/contributions`. A malformed id, missing profile and
+hidden profile all return the same `404 not_found` as the profile route. The
+lookup uses the private owning account id, never the display name, and neither
+that id nor an email is returned. A malformed cursor or any query field besides
+`cursor` returns 400 `bad_request`. When the server has no contribution storage
+configured, a visible profile's list returns 503 `contributions_unavailable`.
 
 ### `GET /api/me/profile`
 
@@ -434,6 +445,23 @@ minute by default, including refused requests. The PUT body limit is 2 KiB.
 | 413    | `body_too_large`     | PUT body exceeds 2 KiB                       |
 | 429    | `too_many_requests`  | More than the per-client route limit         |
 | 500    | `server_error`       | Unexpected storage fault; safe generic reply |
+
+### `GET /api/me/contributions?cursor=…`
+
+Requires the current signed-in member and returns only contributions owned by
+that account, newest first, with the standard contribution page shape. The web
+profile uses this owner-only list for links to the existing progress-update and
+organizer-inbox controls. Another signed-in account receives its own list; a
+signed-out request returns 401 `signed_out`. Responses are `no-store` and
+contain no private account identifier or message body.
+
+Optional query `ownerAccountId`, as on `GET /api/me/profile`: the account the
+page is reading for (the `id` from `/api/me`). The web profile always sends it.
+If another account is signed in, the route returns 409 `account_changed` and no
+list; an empty value returns 400 `bad_request`. A malformed cursor, or any
+other query field besides `cursor`, returns 400 `bad_request`. When the server
+has no contribution storage configured, it returns 503
+`contributions_unavailable`.
 
 ## The session cookie
 
@@ -1356,7 +1384,11 @@ site owner's soft delete.
 Public `GET /api/contributions?cursor=...` returns `{contributions,nextCursor}`,
 20 newest records at a time. Summaries omit participation and update arrays.
 `GET /api/contributions/:id` returns `{contribution,canManage}`. The optional
-session determines whether the reader is the organizer. All responses use
+session determines whether the reader is the organizer. When the owning account
+has a visible profile, `contribution` also contains
+`organizerProfile:{publicId,displayName}`. When that profile is hidden or
+missing, the field is absent and `organizerName` remains unchanged. The join is
+by the private owning account id, never either public name. All responses use
 `Cache-Control: no-store`. Reading never creates a ballot or changes a vote.
 
 Signed-in `POST /api/contributions` publishes a community contribution. Strict

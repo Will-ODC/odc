@@ -45,6 +45,7 @@ export interface UpdateInput {
   evidenceUrl?: string;
 }
 export interface Contribution extends ContributionSummary {
+  organizerProfile?: { publicId: string; displayName: string };
   participations: (ParticipationInput & { id: string; createdAt: string })[];
   updates: (Omit<UpdateInput, "evidenceUrl"> & {
     id: string;
@@ -74,6 +75,12 @@ export interface ContributionsApi {
   ): Promise<void>;
   messages(id: string): Promise<OrganizerMessage[]>;
   list(cursor?: string): Promise<ContributionPage>;
+  forProfile(publicId: string, cursor?: string): Promise<ContributionPage>;
+  /**
+   * The signed-in account's own contributions. `ownerAccountId` (the id from
+   * `/api/me`) makes a missed account switch a 409 `account_changed`.
+   */
+  mine(cursor?: string, ownerAccountId?: string): Promise<ContributionPage>;
   detail(id: string): Promise<ContributionDetail>;
   create(
     input: ContributionInput,
@@ -141,6 +148,10 @@ function contribution(value: unknown): value is Contribution {
   return (
     summary(value) &&
     isRecord(value) &&
+    (value.organizerProfile === undefined ||
+      (isRecord(value.organizerProfile) &&
+        text(value.organizerProfile.publicId) &&
+        text(value.organizerProfile.displayName))) &&
     Array.isArray(value.participations) &&
     value.participations.every(
       (item) =>
@@ -197,10 +208,11 @@ export class HttpContributionsApi implements ContributionsApi {
     path: string,
     body?: unknown,
     key?: string,
+    base = "/api/contributions",
   ): Promise<Record<string, unknown>> {
     let response: Response;
     try {
-      response = await this.doFetch(`/api/contributions${path}`, {
+      response = await this.doFetch(`${base}${path}`, {
         method: body === undefined ? "GET" : "POST",
         credentials: "same-origin",
         signal: AbortSignal.timeout(15000),
@@ -284,8 +296,33 @@ export class HttpContributionsApi implements ContributionsApi {
     return data.messages;
   }
   async list(cursor?: string): Promise<ContributionPage> {
+    return this.listAt("/api/contributions", cursor);
+  }
+  forProfile(publicId: string, cursor?: string): Promise<ContributionPage> {
+    return this.listAt(
+      `/api/profiles/${encodeURIComponent(publicId)}/contributions`,
+      cursor,
+    );
+  }
+  mine(cursor?: string, ownerAccountId?: string): Promise<ContributionPage> {
+    return this.listAt("/api/me/contributions", cursor, ownerAccountId);
+  }
+  private async listAt(
+    base: string,
+    cursor?: string,
+    ownerAccountId?: string,
+  ): Promise<ContributionPage> {
+    const query = [
+      ...(cursor ? [`cursor=${encodeURIComponent(cursor)}`] : []),
+      ...(ownerAccountId !== undefined
+        ? [`ownerAccountId=${encodeURIComponent(ownerAccountId)}`]
+        : []),
+    ].join("&");
     const data = await this.request(
-      cursor ? `?cursor=${encodeURIComponent(cursor)}` : "",
+      query ? `?${query}` : "",
+      undefined,
+      undefined,
+      base,
     );
     if (
       !Array.isArray(data.contributions) ||

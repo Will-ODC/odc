@@ -35,6 +35,8 @@ const fixture = (over: Partial<Contribution> = {}): Contribution => ({
 });
 const client = (over: Partial<ContributionsApi> = {}): ContributionsApi => ({
   list: async () => ({ contributions: [fixture()], nextCursor: null }),
+  forProfile: async () => ({ contributions: [], nextCursor: null }),
+  mine: async () => ({ contributions: [], nextCursor: null }),
   sendMessage: async () => {},
   messages: async () => [],
   detail: async () => ({ contribution: fixture(), canManage: false }),

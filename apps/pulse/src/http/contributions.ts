@@ -2,11 +2,13 @@ import type { FastifyInstance, FastifyRequest, FastifyReply } from "fastify";
 import type { Voter } from "../identity/store.js";
 import { ContributionError, listQuery } from "../contributions/input.js";
 import type { ContributionsStore } from "../contributions/store.js";
+import type { MemberProfileStore } from "../profiles/store.js";
 import { isStorageUnavailable } from "../db/unavailable.js";
 import { logFault } from "../logging.js";
 import { originAllowed } from "./origin.js";
 interface Deps {
   contributions: ContributionsStore | undefined;
+  profiles: MemberProfileStore | undefined;
   webOrigin: string | undefined;
   currentVoter: (request: FastifyRequest) => Promise<Voter | undefined>;
 }
@@ -142,7 +144,25 @@ export async function registerContributionRoutes(
     );
     scope.get("/api/contributions/:id", readOptions, async (request) => {
       const voter = await deps.currentVoter(request);
-      return store().detail(id(request), voter?.id);
+      const contributionId = id(request);
+      const detail = await store().detail(contributionId, voter?.id);
+      const organizerProfile = await deps.profiles?.publicByOwnerId(
+        await store().ownerId(contributionId),
+      );
+      return {
+        ...detail,
+        contribution: {
+          ...detail.contribution,
+          ...(organizerProfile
+            ? {
+                organizerProfile: {
+                  publicId: organizerProfile.publicId,
+                  displayName: organizerProfile.displayName,
+                },
+              }
+            : {}),
+        },
+      };
     });
     scope.get(
       "/api/contributions/:id/messages",
