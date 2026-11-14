@@ -120,7 +120,9 @@ it("keeps earlier rows through a failed page and retries the same cursor once", 
   render(<Browse api={stubApi({ listPolls })} community="campus" />);
   const more = await screen.findByRole("button", { name: "Load more" });
   // The shared secondary Button at its small size (#569).
-  expect(more.className).toBe("btn btn--secondary btn--small browse__action");
+  expect(more.className).toBe(
+    "btn btn--secondary btn--small load-more__button",
+  );
   await userEvent.click(more);
   expect(await screen.findByRole("alert")).toBeTruthy();
   expect(screen.getByRole("link", { name: "Question one" })).toBeTruthy();
@@ -136,6 +138,37 @@ it("keeps earlier rows through a failed page and retries the same cursor once", 
   ).toBeTruthy();
   expect(screen.getAllByRole("link", { name: "Question one" })).toHaveLength(1);
   expect(screen.queryByRole("button", { name: "Load more" })).toBeNull();
+});
+
+it("keeps paging after a later empty page advances the cursor", async () => {
+  const user = userEvent.setup();
+  const listPolls = vi
+    .fn()
+    .mockResolvedValueOnce(page([row("one")], "next"))
+    .mockResolvedValueOnce(page([], "last"))
+    .mockResolvedValueOnce(page([row("two")], null));
+  render(<Browse api={stubApi({ listPolls })} community="campus" />);
+  await user.click(await screen.findByRole("button", { name: "Load more" }));
+  await user.click(await screen.findByRole("button", { name: "Load more" }));
+  expect(
+    await screen.findByRole("link", { name: "Question two" }),
+  ).toBeTruthy();
+  expect(listPolls).toHaveBeenNthCalledWith(2, "campus", "next");
+  expect(listPolls).toHaveBeenNthCalledWith(3, "campus", "last");
+});
+
+it("reports a stuck cursor on a later empty page", async () => {
+  const user = userEvent.setup();
+  const listPolls = vi
+    .fn()
+    .mockResolvedValueOnce(page([row("one")], "stuck"))
+    .mockResolvedValueOnce(page([], "stuck"));
+  render(<Browse api={stubApi({ listPolls })} community="campus" />);
+  await user.click(await screen.findByRole("button", { name: "Load more" }));
+  expect((await screen.findByRole("alert")).textContent).toBe(
+    "We couldn't load more questions. Try again.",
+  );
+  expect(screen.getByRole("link", { name: "Question one" })).toBeTruthy();
 });
 
 it("ignores an old community page after navigating to another community", async () => {
