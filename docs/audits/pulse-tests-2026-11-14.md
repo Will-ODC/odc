@@ -20,7 +20,7 @@ The hook initializes its URL during render but attaches `popstate` only in a pas
 
 ## Repeat testing
 
-All six pre-existing suspect suites passed every run: **0/30 failed runs per file (0% observed failure rate)**, 6,630 assertion executions overall. This supplies no evidence of a natural flake in these selected files on this machine; it does not prove they cover the two controlled event gaps.
+All six pre-existing suspect suites passed every run: **0/30 failed runs per file (0% observed failure rate)**, 6,630 test executions overall. This supplies no evidence of a natural flake in these selected files on this machine; it does not prove they cover the two controlled event gaps.
 
 | Existing test file         | Tests per run | Runs | Failed runs |
 | -------------------------- | ------------- | ---- | ----------- |

@@ -113,17 +113,16 @@ A small invited pilot comes only after 3-6. None of this authorizes a deploy.
 
 ## Current operator direction and next work (2026-11-14)
 
-1. **Handoff.** Codex completed the requested test audit. The requested
-   verbosity and unnecessary over-engineering audit is next, usage permitting.
-   No open Pulse product PRs.
+1. **Handoff.** Codex completed both requested audits. No open Pulse product
+   PRs. The next feature still awaits the operator's answer below.
 2. **Next: #580, a picture in the posting form.** Waiting on the operator's
    answer to "mockup first, or build from the plan and review screenshots?".
    Then #427 (thumbnails and context excerpt length), #296 (picture on the
    question page), #586 after #427.
 3. **Pulse test audit complete (2026-11-14)** at `0bf9c61`, authorized by the
    operator after the #592 profile timing regressions. Fresh Codex audit,
-   report only: [report](../docs/audits/pulse-tests-2026-11-14.md).
-   Six suspect client suites passed all 30 runs each (6,630 assertions).
+   report only, merged in #615: [report](../docs/audits/pulse-tests-2026-11-14.md).
+   Six suspect client suites passed all 30 runs each (6,630 test executions).
    Controlled probes exposed missed session-return and startup-history events
    (#613, #614); their 30/30 failures are separate from ordinary flake rates.
    All six privacy/account/migration guard mutations were caught and restored.
@@ -133,7 +132,13 @@ A small invited pilot comes only after 3-6. None of this authorizes a deploy.
 4. **`pulse-images` is not a required check**, so a red picture-package check
    (#594) only warns. Do not require it as is (it runs only on Pulse paths);
    #612 has the order of steps.
-5. **Open follow-ups:** #533 ViewState Try again; #536 Conversation logic into
+5. **Verbosity and unnecessary complexity audit complete (2026-11-14):**
+   [report](../docs/audits/pulse-simplicity-2026-11-14.md). #616 corrects stale
+   posting/browsing status in the server README and links API details instead
+   of repeating them. No additional runtime refactor was justified beyond the
+   existing owners below. Obsolete routing-history comments are an optional
+   cleanup for a future edit; no product behavior changed.
+6. **Open follow-ups:** #533 ViewState Try again; #536 Conversation logic into
    flow/ and hooks; #537 VoteCard split; #538 CSS encapsulation and tokens;
    #534 part 3 (Conversation); #539 step 2 (one session provider; operator
    decision); review nits #557, #560, #589, #591, #599, #610; #596 Suggested
