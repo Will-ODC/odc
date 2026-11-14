@@ -25,31 +25,41 @@ export function selectImageTests(files, { forceFull = false } = {}) {
   });
 }
 
+// Seams not represented by workspace dependencies: a change in any member
+// selects every member. Core conformance crosses language/package boundaries
+// (the Go verifier); Pulse server tests read pulse-web files (.env.development).
+// select-tests.integration.test.mjs fails when a package reads another
+// package's files without a group or declared dependency covering the pair.
+export const groups = {
+  core: (pkgPath) => /^(services|tools)\//.test(pkgPath),
+  pulse: (pkgPath) => /^apps\/pulse(?:-web)?$/.test(pkgPath),
+};
+
 // Filters include reverse dependencies: e.g. either Pulse app selects its
 // real-HTTP integration workspace. Turbo owns the dependency graph.
 export function selectTests(files, packages, { forceFull = false } = {}) {
   if (forceFull) return full("Scheduled or manual full-suite run");
   if (files === null) return full("Comparison or workspace discovery failed");
   const names = new Set();
-  let core = false;
+  const hit = new Set();
   for (const file of files) {
     if (file.startsWith("contracts/")) return full(`Contracts input: ${file}`);
     if (file === "docs/charter.md") return full("Charter input");
     if (documentation(file)) continue;
     if (file.startsWith("services/verifier/")) {
-      core = true;
+      hit.add("core");
       continue;
     }
     const owner = packages.find((pkg) => file.startsWith(`${pkg.path}/`));
     if (!owner) return full(`Shared or unknown input: ${file}`);
     names.add(owner.name);
-    if (/^(services|tools)\//.test(owner.path)) core = true;
+    for (const [group, member] of Object.entries(groups))
+      if (member(owner.path)) hit.add(group);
   }
-  // Core conformance crosses language/package boundaries not represented by
-  // workspace imports. Keep that seam together without selecting Pulse.
-  if (core)
+  for (const group of hit)
     for (const pkg of packages)
-      if (/^(services|tools)\//.test(pkg.path)) names.add(pkg.name);
+      if (groups[group](pkg.path)) names.add(pkg.name);
+  const core = hit.has("core");
   return {
     mode: names.size || core ? "affected" : "docs",
     filters: [...names].sort().map((name) => `...${name}`),
@@ -92,7 +102,7 @@ export function changedPaths(root, base, head) {
   }
 }
 
-function workspacePackages(root) {
+export function workspacePackages(root) {
   const list = JSON.parse(
     execFileSync("pnpm", ["list", "-r", "--depth", "-1", "--json"], {
       cwd: root,

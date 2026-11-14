@@ -19,6 +19,10 @@ shared-script lint and guard regression tests always run. Package checks use
   inside source/test directories remain runtime inputs.
 - Changed packages select themselves and their transitive dependents through
   Turbo. Either Pulse app therefore selects `tests/pulse-integration/` too.
+- Selection is declared workspace dependencies plus the `groups` in the
+  selector: `core` (all of `services/` and `tools/`) and `pulse` (both Pulse
+  apps). A test that reads another package's files needs a group or a declared
+  dependency; `select-tests.integration.test.mjs` scans for such reads and fails.
 - Core changes keep the ledger/verifier/conformance seam together. Contracts,
   shared configuration, lockfiles, unknown paths or failed change discovery
   select the full suite.

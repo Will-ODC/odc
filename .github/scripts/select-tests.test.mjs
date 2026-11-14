@@ -54,20 +54,28 @@ test("documentation-only changes skip runtime tests, including package guides", 
   assert.deepEqual(result.filters, []);
 });
 
-test("each Pulse package selects itself and transitive dependents through Turbo", () => {
-  for (const [file, name] of [
-    ["apps/pulse/src/http/server.ts", "@odc/pulse"],
-    ["apps/pulse-web/test/SignIn.test.tsx", "@odc/pulse-web"],
-    [
-      "tests/pulse-integration/test/end-to-end.test.ts",
-      "@odc/pulse-integration",
-    ],
+test("either Pulse app selects the Pulse group and its dependents through Turbo", () => {
+  for (const file of [
+    "apps/pulse/src/http/server.ts",
+    "apps/pulse/src/x.ts",
+    "apps/pulse-web/test/SignIn.test.tsx",
+    // apps/pulse/test/dev-server.test.ts reads this file, but @odc/pulse does
+    // not depend on @odc/pulse-web: only the group keeps that seam tested.
+    "apps/pulse-web/.env.development",
   ]) {
     const result = plan([file]);
-    assert.equal(result.mode, "affected");
-    assert.deepEqual(result.filters, [`...${name}`]);
-    assert.equal(result.core, false);
+    assert.equal(result.mode, "affected", file);
+    assert.deepEqual(
+      result.filters,
+      ["...@odc/pulse", "...@odc/pulse-web"],
+      file,
+    );
+    assert.equal(result.core, false, file);
   }
+  assert.deepEqual(
+    plan(["tests/pulse-integration/test/end-to-end.test.ts"]).filters,
+    ["...@odc/pulse-integration"],
+  );
 });
 
 test("Markdown fixtures, SQL, assets and build files inside packages are runtime inputs", () => {
