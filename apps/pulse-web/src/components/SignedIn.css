@@ -14,3 +14,33 @@
   min-width: 0;
   overflow-wrap: anywhere;
 }
+
+/*
+ * Its own row, styled as the Sign out link below it (TwoPress's
+ * `.two-press__action`): a quiet underlined link, not a coloured bold one on
+ * the email's line.
+ */
+.signed-in__row {
+  flex-basis: 100%;
+  text-align: end;
+}
+
+.signed-in__profile {
+  color: var(--muted);
+  text-decoration: underline;
+}
+
+.signed-in__row .signed-in__profile {
+  /* The phone menu makes every panel link a full-width flex row; this one
+     stays the width of its text, at the end of the row like Sign out. */
+  display: inline-flex;
+}
+
+.signed-in__profile:hover {
+  color: var(--ink);
+}
+
+.signed-in__profile:focus-visible {
+  outline: var(--focus-ring-width) solid var(--focus);
+  outline-offset: var(--focus-ring-offset);
+}
