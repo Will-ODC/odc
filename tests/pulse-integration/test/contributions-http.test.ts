@@ -115,8 +115,10 @@ describe("Contributions through the browser HTTP adapter", () => {
     const member = await signIn("helper@example.test");
     const guest = new HttpContributionsApi(browserFetch(origin));
     const key = randomUUID();
-    const created = await owner.api.create(project, key);
-    expect(await owner.api.create(project, key)).toEqual(created);
+    const created = await owner.api.create(project, key, owner.account.id);
+    expect(await owner.api.create(project, key, owner.account.id)).toEqual(
+      created,
+    );
     expect((await guest.list()).contributions.map((item) => item.id)).toEqual([
       created.id,
     ]);
@@ -130,12 +132,22 @@ describe("Contributions through the browser HTTP adapter", () => {
       message: "I can measure the north entrance on Saturday.",
     };
     const helpKey = randomUUID();
-    const joined = await member.api.participate(created.id, help, helpKey);
+    const joined = await member.api.participate(
+      created.id,
+      help,
+      helpKey,
+      member.account.id,
+    );
     expect(joined.participations).toHaveLength(1);
     expect(joined.participations[0]).toMatchObject(help);
-    expect(await member.api.participate(created.id, help, helpKey)).toEqual(
-      joined,
-    );
+    expect(
+      await member.api.participate(
+        created.id,
+        help,
+        helpKey,
+        member.account.id,
+      ),
+    ).toEqual(joined);
 
     const progress = {
       message: "Entrance measurements are published for review.",
@@ -143,22 +155,32 @@ describe("Contributions through the browser HTTP adapter", () => {
       evidenceUrl: "https://example.test/park-survey",
     };
     await expect(
-      member.api.update(created.id, progress, randomUUID()),
+      member.api.update(created.id, progress, randomUUID(), member.account.id),
     ).rejects.toMatchObject({ status: 403 });
     const updateKey = randomUUID();
-    const completed = await owner.api.update(created.id, progress, updateKey);
+    const completed = await owner.api.update(
+      created.id,
+      progress,
+      updateKey,
+      owner.account.id,
+    );
     expect(completed.status).toBe("completed");
     expect(completed.updates).toHaveLength(1);
     expect(completed.updates[0]).toMatchObject(progress);
-    expect(await owner.api.update(created.id, progress, updateKey)).toEqual(
-      completed,
-    );
+    expect(
+      await owner.api.update(created.id, progress, updateKey, owner.account.id),
+    ).toEqual(completed);
     // A successful retry refreshes the detail after the project closes.
-    expect(await member.api.participate(created.id, help, helpKey)).toEqual(
-      completed,
-    );
+    expect(
+      await member.api.participate(
+        created.id,
+        help,
+        helpKey,
+        member.account.id,
+      ),
+    ).toEqual(completed);
     await expect(
-      member.api.participate(created.id, help, randomUUID()),
+      member.api.participate(created.id, help, randomUUID(), member.account.id),
     ).rejects.toMatchObject({ status: 409 });
     const publicRecord = await guest.detail(created.id);
     expect(publicRecord.contribution.status).toBe("completed");
@@ -175,14 +197,20 @@ describe("Contributions through the browser HTTP adapter", () => {
 
   it("requires sign-in and rejects changed retries without making another record", async () => {
     const guest = new HttpContributionsApi(browserFetch(origin));
-    await expect(guest.create(project, randomUUID())).rejects.toMatchObject({
+    await expect(
+      guest.create(project, randomUUID(), "signed-out"),
+    ).rejects.toMatchObject({
       status: 401,
     });
     const owner = await signIn("organizer@example.test");
     const key = randomUUID();
-    const created = await owner.api.create(project, key);
+    const created = await owner.api.create(project, key, owner.account.id);
     await expect(
-      owner.api.create({ ...project, title: "Changed request" }, key),
+      owner.api.create(
+        { ...project, title: "Changed request" },
+        key,
+        owner.account.id,
+      ),
     ).rejects.toMatchObject({ status: 409 });
     expect((await guest.list()).contributions.map((item) => item.id)).toEqual([
       created.id,
@@ -193,6 +221,7 @@ describe("Contributions through the browser HTTP adapter", () => {
         created.id,
         { message: "Closed", status: "cancelled" },
         randomUUID(),
+        owner.account.id,
       ),
     ).rejects.toMatchObject({ status: 401 });
     expect((await guest.detail(created.id)).contribution.status).toBe("open");
@@ -202,16 +231,20 @@ describe("Contributions through the browser HTTP adapter", () => {
     const owner = await signIn("organizer@example.test");
     const sender = await signIn("sender@example.test");
     const guest = new HttpContributionsApi(browserFetch(origin));
-    const item = await owner.api.create(project, randomUUID());
+    const item = await owner.api.create(
+      project,
+      randomUUID(),
+      owner.account.id,
+    );
     const key = randomUUID();
     const message = "Could we meet at the north gate?";
     await expect(
-      guest.sendMessage(item.id, message, key),
+      guest.sendMessage(item.id, message, key, "signed-out"),
     ).rejects.toMatchObject({ status: 401 });
-    await sender.api.sendMessage(item.id, message, key);
-    await sender.api.sendMessage(item.id, message, key);
+    await sender.api.sendMessage(item.id, message, key, sender.account.id);
+    await sender.api.sendMessage(item.id, message, key, sender.account.id);
     await expect(
-      sender.api.sendMessage(item.id, "Different text", key),
+      sender.api.sendMessage(item.id, "Different text", key, sender.account.id),
     ).rejects.toMatchObject({ status: 409 });
     await expect(sender.api.messages(item.id)).rejects.toMatchObject({
       status: 403,
@@ -237,6 +270,7 @@ describe("Contributions through the browser HTTP adapter", () => {
         kind: "group_buy",
       },
       randomUUID(),
+      owner.account.id,
     );
     expect(created).toMatchObject({
       kind: "group_buy",
@@ -267,12 +301,15 @@ describe("Contributions through the browser HTTP adapter", () => {
       commercial,
       fund: { name: "Community repair fund", percentage: 5 },
     };
-    await expect(owner.api.create(offer, randomUUID())).rejects.toMatchObject({
+    await expect(
+      owner.api.create(offer, randomUUID(), owner.account.id),
+    ).rejects.toMatchObject({
       status: 400,
     });
     const created = await owner.api.create(
       { ...offer, commercial: { ...commercial, offeredPriceMinor: 8000 } },
       randomUUID(),
+      owner.account.id,
     );
     const read = await new HttpContributionsApi(browserFetch(origin)).detail(
       created.id,
