@@ -67,6 +67,7 @@ behind a decision, or one of the few deferred entries its index names.
 | Which model to dispatch, and how to brief it       | `.claude/skills/odc-orchestration`                     |
 | Threat models and phase-gate audits                | `docs/security/README.md`, then the dated audit        |
 | What the UI is supposed to look like               | `.claude/skills/odc-design`, then `docs/mockups/`      |
+| Test-quality and simplicity audits                 | `docs/audits/`                                         |
 
 ## Where new information goes — decide this before you write it down
 

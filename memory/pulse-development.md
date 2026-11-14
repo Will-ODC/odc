@@ -73,8 +73,8 @@ and manual-removal authority.
 ## Tickets
 
 - [Epic #227](https://github.com/Will-ODC/odc/issues/227): the bounded
-  development-feedback loop. [#228](https://github.com/Will-ODC/odc/issues/228):
-  chat-popup prototype (sample responses labelled as a preview; live
+  development-feedback loop. [#228](https://github.com/Will-ODC/odc/issues/228)
+  (done): chat-popup prototype (sample responses labelled as a preview; live
   integration waits on eligibility, account ballots and decision rules).
 - Trust and reporting, each with five acceptance checks; open policy values are
   prerequisites, not the ticket author's to choose:
@@ -121,6 +121,6 @@ authorized, and accepted rules need an ADR before enforcement is scoped.
   extension/site integration, author approval, framing, outcome, consent for
   sending page content, cost/spam. Too broad for one issue; do not implement
   from this note.
-- **#205** (open): multiple answers on approval polls. Choose the interaction
+- **#205** (closed as a duplicate 2026-10-11): multiple answers on approval polls. Choose the interaction
   and acceptance criteria first.
-- Newsletter choices and search-language configuration can wait (#217).
+- Newsletter choices and search-language configuration can wait (#217, closed not planned).
