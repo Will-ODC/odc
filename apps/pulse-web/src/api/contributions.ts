@@ -163,9 +163,17 @@ function contribution(value: unknown): value is Contribution {
     )
   );
 }
+/**
+ * What an `account_changed` refusal tells the person: the account the page
+ * wrote for is not the one signed in now. Name what was not sent where the
+ * page knows it ("your update"); the API error itself can only say "this".
+ */
+export function accountChangedMessage(what = "this"): string {
+  return `Your account changed, so ${what} wasn't sent.`;
+}
 /** 409 codes that are not "someone else changed this": each says what to do. */
 const conflicts: Record<string, string> = {
-  account_changed: "Your account changed, so this wasn't sent.",
+  account_changed: accountChangedMessage(),
   sender_limit:
     "You have added as many entries to this contribution as one person can.",
   record_full: "This contribution has reached its entry limit.",

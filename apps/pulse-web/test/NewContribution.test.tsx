@@ -474,15 +474,90 @@ it("clears a refused draft and rechecks the session while the focus recheck is p
   await user.click(
     screen.getByRole("button", { name: "Publish contribution" }),
   );
-  expect(
-    await screen.findByText("Your account changed, so this wasn't sent."),
-  ).toBeTruthy();
+  const alert = await screen.findByText(
+    "Your account changed, so your contribution wasn't sent.",
+  );
+  // Publish went with the emptied form: focus is on the notice.
+  expect(document.activeElement).toBe(alert);
+  expect(alert.getAttribute("tabindex")).toBe("-1");
   await waitFor(() => expect(me).toHaveBeenCalledTimes(3));
   expect(create.mock.calls[0]?.[2]).toBe("ada");
   expectDraft(true);
   expect(onCreated).not.toHaveBeenCalled();
   resolveRecheck({ id: "ada", email: "ada@example.test", community: null });
   await waitFor(() => expectDraft(true));
+  // Bea, now signed in, still sees why the form is empty.
+  expect(screen.getByText(/Your account changed/)).toBe(alert);
+
+  // Her first edit puts it away, and her send shows only its own outcome.
+  create.mockResolvedValue(fixture({ id: "garden" }));
+  await user.type(screen.getByLabelText("Title"), "G");
+  expect(screen.queryByText(/Your account changed/)).toBeNull();
+  await user.type(screen.getByLabelText("Title"), "arden");
+  await user.type(screen.getByLabelText("Description"), "Grow food.");
+  await user.type(screen.getByLabelText("Organizer’s public name"), "Bea");
+  await user.click(
+    screen.getByRole("checkbox", { name: /I confirm this post/ }),
+  );
+  await user.click(
+    screen.getByRole("button", { name: "Publish contribution" }),
+  );
+  await waitFor(() => expect(onCreated).toHaveBeenCalledWith("garden"));
+  expect(create.mock.calls[1]?.[2]).toBe("bea");
+  expect(screen.queryByRole("alert")).toBeNull();
+});
+
+it("puts the refusal notice away when Publish is pressed again or the person signs out", async () => {
+  const state = { who: "ada" as string | null };
+  const me = vi.fn(async () =>
+    state.who === null
+      ? null
+      : { id: state.who, email: `${state.who}@example.test`, community: null },
+  );
+  const create = vi
+    .fn()
+    .mockRejectedValue(
+      new ContributionsError(
+        409,
+        "Your account changed, so this wasn't sent.",
+        "account_changed",
+      ),
+    );
+  render(
+    <NewContribution
+      api={stubApi({ me })}
+      client={client({ create })}
+      onCreated={vi.fn()}
+    />,
+  );
+  const user = userEvent.setup();
+  await writeDraft(user);
+  await user.click(
+    screen.getByRole("button", { name: "Publish contribution" }),
+  );
+  const notice = "Your account changed, so your contribution wasn't sent.";
+  expect(await screen.findByText(notice)).toBeTruthy();
+  // Publish on the empty form: the field complaints replace the notice.
+  await user.click(
+    screen.getByRole("button", { name: "Publish contribution" }),
+  );
+  expect(screen.queryByText(notice)).toBeNull();
+  expect(screen.getByText("Enter a title.")).toBeTruthy();
+
+  await writeDraft(user);
+  await user.click(
+    screen.getByRole("button", { name: "Publish contribution" }),
+  );
+  expect(await screen.findByText(notice)).toBeTruthy();
+  // Signing out on purpose starts a new generation: the notice goes too.
+  state.who = null;
+  await act(async () =>
+    window.dispatchEvent(new StorageEvent("storage", { key: SIGNED_OUT_KEY })),
+  );
+  expect(
+    await screen.findByRole("heading", { name: "Sign in to get started" }),
+  ).toBeTruthy();
+  expect(screen.queryByText(notice)).toBeNull();
 });
 
 it("keeps the new account's create draft when the old account's refusal arrives late", async () => {
@@ -548,9 +623,7 @@ it("keeps the new account's create draft when the old account's refusal arrives 
       }) as HTMLInputElement
     ).checked,
   ).toBe(true);
-  expect(
-    screen.queryByText("Your account changed, so this wasn't sent."),
-  ).toBeNull();
+  expect(screen.queryByText(/Your account changed/)).toBeNull();
 });
 
 it("takes back the confirm complaint as soon as the box is ticked, and a field's as it is typed", async () => {

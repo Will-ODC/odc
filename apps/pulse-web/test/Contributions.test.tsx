@@ -1687,9 +1687,17 @@ it.each(["help", "pledge", "message", "update"] as const)(
     window.dispatchEvent(new Event("focus"));
     await waitFor(() => expect(me).toHaveBeenCalledTimes(2));
     await user.click(screen.getByRole("button", { name: button }));
-    expect(
-      await screen.findByText("Your account changed, so this wasn't sent."),
-    ).toBeTruthy();
+    const notice = `Your account changed, so ${
+      form === "message"
+        ? "your message"
+        : form === "update"
+          ? "your update"
+          : "your entry"
+    } wasn't sent.`;
+    const alert = await screen.findByText(notice);
+    // The button pressed went with the emptied form: focus is on the notice.
+    expect(document.activeElement).toBe(alert);
+    expect(alert.getAttribute("tabindex")).toBe("-1");
     await waitFor(() => expect(me).toHaveBeenCalledTimes(3));
     const send =
       form === "message"
@@ -1728,8 +1736,78 @@ it.each(["help", "pledge", "message", "update"] as const)(
         /Your .* has been published|Message sent to the organizer/,
       ),
     ).toBeNull();
+    // The account the recheck found is the change the notice is about.
+    expect(screen.getByText(notice)).toBe(alert);
+    expect(document.activeElement).toBe(alert);
+    if (form === "message") expect(alert.closest("details")?.open).toBe(true);
+
+    // Bea writes again: the notice goes on her first edit, and her send
+    // shows only its own outcome.
+    send.mockResolvedValue(form === "message" ? undefined : fixture());
+    if (form === "help" || form === "pledge")
+      await user.type(await screen.findByLabelText("Public name"), "Bea");
+    else await user.type(await screen.findByLabelText(label), "B");
+    expect(screen.queryByText(notice)).toBeNull();
+    if (form === "pledge")
+      await user.click(screen.getByRole("radio", { name: "Make a pledge" }));
+    if (form === "update")
+      await user.click(
+        screen.getByLabelText(
+          "I confirm this status and update may be published.",
+        ),
+      );
+    await user.type(screen.getByLabelText(label), "Bea's entry");
+    await user.click(screen.getByRole("button", { name: button }));
+    expect(
+      await screen.findByText(
+        form === "message"
+          ? "Message sent to the organizer."
+          : form === "update"
+            ? "Your update has been published."
+            : "Thank you. Your entry is on this page.",
+      ),
+    ).toBeTruthy();
+    expect(screen.queryByText(notice)).toBeNull();
+    expect(screen.queryByRole("alert")).toBeNull();
+    expect(send).toHaveBeenCalledTimes(2);
+    expect(send.mock.calls[1]?.[3]).toBe("bea");
   },
 );
+
+it("puts the refusal notice away when another account replaces the one it was about", async () => {
+  const { state, me } = switchableMe("ada");
+  const participate = vi
+    .fn()
+    .mockRejectedValue(
+      new ContributionsError(
+        409,
+        "Your account changed, so this wasn't sent.",
+        "account_changed",
+      ),
+    );
+  render(
+    <ContributionDetail
+      api={stubApi({ me })}
+      id="park"
+      client={client({ participate })}
+    />,
+  );
+  const user = userEvent.setup();
+  await user.type(await screen.findByLabelText("Public name"), "Ada");
+  await user.type(screen.getByLabelText("How you can help"), "Tools");
+  state.who = "bea";
+  await user.click(screen.getByRole("button", { name: "Offer help" }));
+  const notice = "Your account changed, so your entry wasn't sent.";
+  expect(await screen.findByText(notice)).toBeTruthy();
+  // The recheck finds Bea: the notice stays for her empty form.
+  await waitFor(() => expect(me.mock.calls.length).toBeGreaterThan(1));
+  await act(async () => {});
+  expect(screen.getByText(notice)).toBeTruthy();
+  // A later switch to yet another account is not what it was about.
+  state.who = "cy";
+  await act(async () => window.dispatchEvent(new Event("focus")));
+  await waitFor(() => expect(screen.queryByText(notice)).toBeNull());
+});
 
 it("sends the page account on every write and preserves account_changed as a distinct refusal", async () => {
   const doFetch = vi.fn<typeof fetch>().mockImplementation(
@@ -1864,9 +1942,7 @@ it.each(["help", "pledge", "message", "update"] as const)(
     expect((screen.getByLabelText(label) as HTMLTextAreaElement).value).toBe(
       "Bea's new draft",
     );
-    expect(
-      screen.queryByText("Your account changed, so this wasn't sent."),
-    ).toBeNull();
+    expect(screen.queryByText(/Your account changed/)).toBeNull();
   },
 );
 
