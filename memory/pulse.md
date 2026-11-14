@@ -4,7 +4,7 @@
 > Read `memory/INDEX.md` first. Agent rules are in `apps/pulse/CLAUDE.md`, the
 > served API is in `apps/pulse/API.md`, and the work queue is GitHub
 > issues (design detail an issue links to is in `docs/plans/pulse.md`). This file holds current state only, and history is in
-> git. Slimmed 2026-10-10, refreshed 2026-11-10. The long ledger it replaced is in
+> git. Slimmed 2026-10-10, refreshed 2026-11-14. The long ledger it replaced is in
 > `git log -p -- memory/pulse.md`.
 >
 > The operator's development-feedback loop, the trust and reporting decisions,
@@ -37,7 +37,7 @@ Repo discipline still applies: tests ship with the change, there is one small
 branch per change, named for its ticket (`pulse/<issue>-<short>`, #310), and
 the same CI runs.
 
-## Where it stands (2026-11-13)
+## Where it stands (2026-11-14)
 
 - **Merged since 2026-11-10:** #521 mockups for dark mode and the compact
   posted notice (#499/#500); #522 steady header width, focus after Forget and
@@ -74,12 +74,26 @@ the same CI runs.
   re-read after reload); #578 closed-question fixes: compact results fit the
   column, rail says Closed, one "Sending…" (#575, `429465b`; UI nits in #589);
   #587 ADR-0047 poll pictures accepted and plan P12 (`aa97cf6`).
-- **Poll pictures are planned, not built** (ADR-0047, P12 in
-  `docs/plans/pulse.md`, READY TO BUILD; tickets #579-#586). Neutral
-  `image`/`image_bytes` storage keyed by `owner_kind`/`owner_id`. Migrations
-  take 015+ (Contributions took 013/014); #427, #585 and #586 can now
-  proceed. Purging a poll tombstones its creation replay row (an ADR-0037 amendment for
-  purged polls only); ADR-0037's broad-posting launch gate is unchanged.
+- **Poll pictures: step 1 is built, the rest is not** (ADR-0047, P12 in
+  `docs/plans/pulse.md`; tickets #579-#586). #593 (#579, `15bdeca`, migration 016) added the neutral `image`/`image_bytes` store keyed by
+  `owner_kind`/`owner_id` and serves pictures; nginx answers uploads over
+  10 MiB with the API's JSON 413. Unblocked: #580 picture in the posting form,
+  #427 thumbnails and context excerpt length, #296 picture on the question
+  page; #586 after #427. Purging a poll tombstones its creation replay row (an
+  ADR-0037 amendment for purged polls only); ADR-0037's broad-posting launch
+  gate is unchanged.
+- **Merged 2026-11-14:** #592 opt-in public profiles at `/u/<id>` (#576,
+  `d2caca2`, migration 015; fixed a clock-behind save and two render-vs-effect
+  races in the editor); #604 organizer expired-session note (#599 item 4,
+  `2e93f20`); #588 one paged-list hook and a shared Load more (#535,
+  `156125a`); #606 contribution writes carry `accountId` and a changed account
+  answers 409 `account_changed` (#603, `8df658d`; the client alert takes focus
+  and clears on the next edit; `useSession.recheck()`); #608 dependency patches
+  from a `pnpm audit`, no ticket (`18b81b5`: zod 4.6.6, ip-address, fast-uri,
+  vitest 4.1.12); #593 above; #607 plain-text poll context (#581, `06f6a71`,
+  migration 017; the excerpt length is handed to #427); #595 organizer
+  profile links (#577, `a9c5baf`; `GET /api/me/contributions`, checked against
+  `ownerAccountId`). **Next free migration: 018.**
 - **Merged 2026-11-13: Contributions** (#246, PR #572, `cd39ef9`). Home mixes
   the four newest contributions with polls; "Contributions only" on Explore
   lists them with Load more. Detail page: offer help or pledge, a private
@@ -92,10 +106,9 @@ the same CI runs.
   new-tab sign-in, a deliberate sign-out (here or announced by another tab) or a
   different account clears them; only the newest `/me` answer counts; votes are
   cleared when a person leaves and read again on the next sign-in.
-- **Open PRs 2026-11-13:** #592 profiles (#576) and #588 paged list (#535), both
-  being updated from master after #572; #595 organizer links (#577) follows
-  #592; #593 picture store (#579, migration 016) follows #592; #594 CI check
-  (operator merges) follows #593.
+- **Open PRs 2026-11-14:** only #594 (CI sharp check, #579): reviewed APPROVE
+  WITH NITS at `c1bdd93`, all checks green. It touches `.github`, so the
+  operator merges it.
 - **New tickets:** #557, #560 review nits, #589 closed-question UI nits, #591
   (#566 nits), #596 Suggested votes reshuffle on open, #597 contribution threads
   with comments (one row per group in browse), #598 creation-form fields, #599
@@ -205,12 +218,12 @@ the same CI runs.
 5. **The proxy-hop and rate-limit prerequisites** in `apps/pulse/DEPLOY.md`
    must be satisfied before go-live.
 
-## Current operator direction and next work (2026-11-13)
+## Current operator direction and next work (2026-11-14)
 
 1. The recent Answered, results, desktop voting, sign-in and header changes
    are merged; there is no remaining UI stack awaiting merge.
-2. Land the PRs held for Contributions: #592, then #595 and #593 (#594 is the
-   operator's), and #588. Open follow-ups: #533 ViewState Try again, #536
+2. The Contributions PRs are merged; #594 waits for the operator. Next: the
+   unblocked P12 steps (#580, #427, #296; #586 after #427). Open follow-ups: #533 ViewState Try again, #536
    Conversation logic into flow/ and
    hooks, #537 VoteCard split, #538 CSS encapsulation and tokens, #557,
    #560, #589, #591 and #599 review nits, #596-#598, #534 part 3 (Conversation), P12 poll pictures
@@ -332,6 +345,9 @@ the same CI runs.
   require an accepted integration ADR before implementation tickets are cut.
 - **P2: should a later community pick move a returning voter?** Today it does
   not (ADR-0030 writes community once). `claim.test.ts` pins the current answer.
+- **Contribution create without an Idempotency-Key or `accountId`** returns a
+  misleading "20% savings" error. Whether to file a bug is the operator's call;
+  none is filed.
 - `polls` is the only plural table, inherited from ADR-0021. Renaming it needs a
   new migration, never an edit to `001`. No decision has been taken.
 - `diff-size.sh` says the 400-line WARN "still fires for pulse", but it excludes
@@ -378,7 +394,7 @@ the same CI runs.
   default, naming optional. General is posting-only and never an account's community.
 - **ADR-0047:** poll pictures: neutral `image`/`image_bytes` storage with
   `owner_kind`/`owner_id`; purging a poll tombstones its creation replay row (amends
-  ADR-0037 for purged polls only). Planned as P12; not built.
+  ADR-0037 for purged polls only). P12 step 1 (store and serving, #593) is built.
 - **ADR-0039:** pulse may explain counting, on `/trust`, and never claims more
   than is built.
 - **ADR-0040:** confirmed votes store a keyed code only. "Most recent" means most
@@ -400,6 +416,9 @@ the same CI runs.
   `CI=false`). turbo 2 strips undeclared env vars, so declare them under the
   task's `env`, and put the must-not-skip guard inside the test. A green tick is
   not evidence a test ran: `gh run view <id> --log | grep -c '# SKIP'`.
+- Next free Pulse migration is **018** (015 profiles, 016 pictures, 017 poll
+  context). Check `apps/pulse/migrations/` before numbering, since open
+  branches may claim it.
 - Do not map host port 5432. A local Postgres wins the race, and the error looks
   like a credentials bug.
 
@@ -425,6 +444,19 @@ the same CI runs.
 
 **Client**
 
+- **Review nits left open (no issues filed).** #592: the profile status line
+  collapses while saving (min-height); a new unsaved profile shows no "Not
+  saved yet."; U+200B/U+FEFF are still raw in the profile-name-parity test.
+  #606: `carry` edge cases (same account returns; two forms refused). #595: the
+  Organizer inbox link lands on a closed "Private messages" disclosure; a failed
+  Load more on profiles shows the first-page error copy (shared hook); the
+  detail route reads the contribution twice.
+- **Poll context allows bidi and zero-width characters** (#607). Handle them
+  when #427 renders the excerpt.
+- **#608 overrides are exact pins, not floors.** Still open on purpose:
+  minimatch (moderate, needs a major) and fastify 5.12.6 (low).
+- **#593:** `apps/pulse/DEPLOY.md` states no memory floor for 40 MP image
+  decodes; add one before deploy.
 - **Local demo handoff (2026-10-20):** API `http://127.0.0.1:8080`, web
   `http://localhost:5173`, served from the attached
   `repo-guidance-cleanup/odc` worktree, now detached at merged master. The old
