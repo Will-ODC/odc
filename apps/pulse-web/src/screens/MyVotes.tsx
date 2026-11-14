@@ -1,13 +1,14 @@
-import { useEffect, useRef } from "react";
+import { useRef } from "react";
 import type { PulseApi } from "../api/types.js";
 import { AnsweredList } from "../components/AnsweredList.js";
 import { ViewState } from "../components/ViewState.js";
+import { LoadMore } from "../components/LoadMore.js";
 import { useMyVotes } from "../hooks/use-my-votes.js";
 import { useSession } from "../hooks/use-session.js";
 import { pathOf } from "../flow/route.js";
 import { SiteBanner } from "../components/SiteBanner.js";
 import { Button } from "../components/Button.js";
-import "./Browse.css";
+import "./MyVotes.css";
 
 /** This browser's current ballots, read from the server on every visit (#329). */
 export function MyVotes({ api }: { api: PulseApi }) {
@@ -18,19 +19,10 @@ export function MyVotes({ api }: { api: PulseApi }) {
     onForgotten: clear,
   });
   const list = useRef<HTMLUListElement>(null);
-  // After Load more, keyboard focus moves to the first new answer, as on Browse.
-  const focusAt = useRef<number | null>(null);
-  useEffect(() => {
-    if (data.status !== "ready" || more.status !== "idle") return;
-    if (focusAt.current === null) return;
-    const links = list.current?.querySelectorAll("a");
-    links?.[Math.min(focusAt.current, links.length - 1)]?.focus();
-    focusAt.current = null;
-  }, [data, more]);
 
   return (
-    <div className="welcome browse">
-      <header className="browse__header">
+    <div className="my-votes">
+      <header className="my-votes__header">
         <SiteBanner
           currentHref={pathOf({ kind: "myVotes" })}
           session={session}
@@ -42,14 +34,14 @@ export function MyVotes({ api }: { api: PulseApi }) {
         />
       </header>
       <main
-        className={`welcome__main browse__main${
+        className={`my-votes__main${
           data.status === "empty" || data.status === "error"
-            ? " browse__main--message"
+            ? " my-votes__main--message"
             : ""
         }`}
       >
         <h1>My votes</h1>
-        <p className="welcome__note">
+        <p className="my-votes__note">
           Answers saved in this browser. Signing out or forgetting votes here
           clears access to them.
         </p>
@@ -57,7 +49,7 @@ export function MyVotes({ api }: { api: PulseApi }) {
           {(page) => <AnsweredList votes={page.votes} listRef={list} />}
         </ViewState>
         {data.status === "empty" ? (
-          <p className="browse__more">
+          <p className="my-votes__more">
             <a href="/">Explore questions</a>
           </p>
         ) : null}
@@ -65,33 +57,20 @@ export function MyVotes({ api }: { api: PulseApi }) {
           <Button
             variant="secondary"
             size="small"
-            className="browse__action"
+            className="my-votes__action"
             type="button"
             onClick={retry}
           >
             Try again
           </Button>
         ) : null}
-        {more.status === "error" ? <p role="alert">{more.message}</p> : null}
-        {data.status === "ready" && data.value.nextCursor ? (
-          <Button
-            variant="secondary"
-            size="small"
-            className="browse__action"
-            type="button"
-            disabled={more.status === "loading"}
-            onClick={() => {
-              focusAt.current = data.value.votes.length;
-              loadMore();
-            }}
-          >
-            {more.status === "loading"
-              ? "Loading more…"
-              : more.status === "error"
-                ? "Try loading more again"
-                : "Load more"}
-          </Button>
-        ) : null}
+        <LoadMore
+          more={more}
+          hasMore={data.status === "ready" && data.value.nextCursor !== null}
+          itemCount={data.status === "ready" ? data.value.votes.length : 0}
+          listRef={list}
+          onLoadMore={loadMore}
+        />
       </main>
     </div>
   );

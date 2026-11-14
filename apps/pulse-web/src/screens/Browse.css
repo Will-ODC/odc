@@ -69,12 +69,6 @@
   text-align: left;
   margin: 0;
 }
-.welcome.browse .browse__main--message .viewstate {
-  align-items: flex-start;
-  margin-top: var(--step);
-  padding: 0;
-  text-align: left;
-}
 .browse__list li + li {
   border-top: none;
 }
@@ -116,11 +110,7 @@
   }
 }
 
-/*
- * Try again and Load more (Explore and My votes), the small secondary Button
- * (#569), centred under the list or its message. Two classes, so `display:
- * block` outranks the phone rule's `display: flex` on `.btn--secondary`.
- */
+/* Try again sits centred under the list or its message. */
 .browse__main > .browse__action {
   display: block;
   margin: calc(var(--step) * 2) auto 0;
@@ -135,13 +125,6 @@
 /* Loading, empty and error sit clear of the subtitle, not tight under it. */
 .browse__main > .viewstate {
   margin-top: calc(var(--step) * 3);
-}
-/* My votes' left-aligned message: Try again and the way on line up under it. */
-.browse__main--message > .browse__action {
-  margin-inline: 0;
-}
-.browse__main--message .browse__more {
-  text-align: left;
 }
 
 .browse__filters {
