@@ -23,7 +23,7 @@
   font-size: var(--t-body);
   margin: calc(var(--step) * 2) 0 var(--step);
 }
-.contributions-page p {
+.contributions-page :where(p:not(.field__hint, .field__problem)) {
   margin: 0 0 calc(var(--step) * 2);
 }
 .contributions-page a {
@@ -127,9 +127,13 @@
   white-space: pre-wrap;
 }
 .contribution-note,
-.contribution-confirm p {
+.contribution-confirm :where(p:not(.field__hint, .field__problem)) {
   color: var(--muted);
   font-size: var(--t-small);
+}
+.contribution-expired {
+  color: var(--ink);
+  font-size: var(--t-body);
 }
 .contributions-empty {
   padding: calc(var(--gutter) * 2) 0;
@@ -158,6 +162,11 @@
 .contribution-form > :is(.contribution-button, .btn) {
   align-self: flex-start;
 }
+/* Native selects can ignore line-height. Match the text input's inherited
+   line box, vertical padding and borders explicitly. */
+.contribution-form select.field__control {
+  min-height: calc(1.6em + var(--step) * 3.5 + var(--hairline) * 2);
+}
 .contribution-form textarea.field__control {
   resize: vertical;
 }
@@ -173,17 +182,25 @@
   accent-color: var(--green);
   flex-shrink: 0;
 }
+.contribution-check input[aria-invalid="true"] {
+  outline: var(--focus-ring-width) solid var(--red);
+  outline-offset: var(--focus-ring-offset);
+}
 .contribution-confirm {
   margin-top: var(--gutter);
   padding-top: var(--gutter);
   border-top: var(--hairline) solid var(--line);
+}
+.contribution-confirm > .field {
+  margin-bottom: var(--step);
 }
 .contribution-error {
   color: var(--red);
 }
 .contribution-timeline li {
   border-left: var(--hairline) solid var(--line);
-  padding: 0 0 var(--gutter) calc(var(--step) * 2);
+  padding-left: calc(var(--step) * 2);
+  margin-bottom: var(--gutter);
 }
 .contribution-timeline li p {
   margin-top: var(--step);
@@ -213,4 +230,18 @@
 .contribution-retry {
   display: block;
   margin: calc(var(--step) * 2) auto 0;
+}
+
+.contribution-refresh {
+  display: flex;
+  flex-direction: column;
+  align-items: flex-start;
+  gap: var(--step);
+  margin-bottom: calc(var(--step) * 2);
+}
+.contribution-refresh > :is(p, .contribution-retry) {
+  margin: 0;
+}
+.contributions-page p[tabindex="-1"]:focus-visible {
+  outline-offset: calc(var(--hairline) * 3);
 }

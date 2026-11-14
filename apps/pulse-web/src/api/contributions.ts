@@ -67,19 +67,38 @@ export interface OrganizerMessage {
   createdAt: string;
 }
 export interface ContributionsApi {
-  sendMessage(id: string, message: string, key: string): Promise<void>;
+  sendMessage(
+    id: string,
+    message: string,
+    key: string,
+    accountId: string,
+  ): Promise<void>;
   messages(id: string): Promise<OrganizerMessage[]>;
   list(cursor?: string): Promise<ContributionPage>;
   forProfile(publicId: string, cursor?: string): Promise<ContributionPage>;
-  mine(cursor?: string): Promise<ContributionPage>;
+  /**
+   * The signed-in account's own contributions. `ownerAccountId` (the id from
+   * `/api/me`) makes a missed account switch a 409 `account_changed`.
+   */
+  mine(cursor?: string, ownerAccountId?: string): Promise<ContributionPage>;
   detail(id: string): Promise<ContributionDetail>;
-  create(input: ContributionInput, key: string): Promise<Contribution>;
+  create(
+    input: ContributionInput,
+    key: string,
+    accountId: string,
+  ): Promise<Contribution>;
   participate(
     id: string,
     input: ParticipationInput,
     key: string,
+    accountId: string,
   ): Promise<Contribution>;
-  update(id: string, input: UpdateInput, key: string): Promise<Contribution>;
+  update(
+    id: string,
+    input: UpdateInput,
+    key: string,
+    accountId: string,
+  ): Promise<Contribution>;
 }
 
 const kinds = ["project", "fundraiser", "group_buy", "offer"];
@@ -155,8 +174,17 @@ function contribution(value: unknown): value is Contribution {
     )
   );
 }
+/**
+ * What an `account_changed` refusal tells the person: the account the page
+ * wrote for is not the one signed in now. Name what was not sent where the
+ * page knows it ("your update"); the API error itself can only say "this".
+ */
+export function accountChangedMessage(what = "this"): string {
+  return `Your account changed, so ${what} wasn't sent.`;
+}
 /** 409 codes that are not "someone else changed this": each says what to do. */
 const conflicts: Record<string, string> = {
+  account_changed: accountChangedMessage(),
   sender_limit:
     "You have added as many entries to this contribution as one person can.",
   record_full: "This contribution has reached its entry limit.",
@@ -166,6 +194,7 @@ export class ContributionsError extends Error {
   constructor(
     readonly status: number,
     message: string,
+    readonly code?: string,
   ) {
     super(message);
   }
@@ -226,6 +255,7 @@ export class HttpContributionsApi implements ContributionsApi {
           (body === undefined
             ? "Could not load this. Try again."
             : "Could not save this change. Please try again."),
+        code,
       );
     }
     const data: unknown = await response.json().catch(() => null);
@@ -236,10 +266,15 @@ export class HttpContributionsApi implements ContributionsApi {
       );
     return data;
   }
-  async sendMessage(id: string, message: string, key: string): Promise<void> {
+  async sendMessage(
+    id: string,
+    message: string,
+    key: string,
+    accountId: string,
+  ): Promise<void> {
     const data = await this.request(
       `/${encodeURIComponent(id)}/messages`,
-      { message },
+      { message, accountId },
       key,
     );
     if (!text(data.id) || typeof data.replayed !== "boolean")
@@ -269,15 +304,22 @@ export class HttpContributionsApi implements ContributionsApi {
       cursor,
     );
   }
-  mine(cursor?: string): Promise<ContributionPage> {
-    return this.listAt("/api/me/contributions", cursor);
+  mine(cursor?: string, ownerAccountId?: string): Promise<ContributionPage> {
+    return this.listAt("/api/me/contributions", cursor, ownerAccountId);
   }
   private async listAt(
     base: string,
     cursor?: string,
+    ownerAccountId?: string,
   ): Promise<ContributionPage> {
+    const query = [
+      ...(cursor ? [`cursor=${encodeURIComponent(cursor)}`] : []),
+      ...(ownerAccountId !== undefined
+        ? [`ownerAccountId=${encodeURIComponent(ownerAccountId)}`]
+        : []),
+    ].join("&");
     const data = await this.request(
-      cursor ? `?cursor=${encodeURIComponent(cursor)}` : "",
+      query ? `?${query}` : "",
       undefined,
       undefined,
       base,
@@ -320,19 +362,29 @@ export class HttpContributionsApi implements ContributionsApi {
       return (await this.detail(existingId)).contribution;
     return data.contribution;
   }
-  create(input: ContributionInput, key: string) {
-    return this.save("", input, key);
+  create(input: ContributionInput, key: string, accountId: string) {
+    return this.save("", { ...input, accountId }, key);
   }
-  participate(id: string, input: ParticipationInput, key: string) {
+  participate(
+    id: string,
+    input: ParticipationInput,
+    key: string,
+    accountId: string,
+  ) {
     return this.save(
       `/${encodeURIComponent(id)}/participations`,
-      input,
+      { ...input, accountId },
       key,
       id,
     );
   }
-  update(id: string, input: UpdateInput, key: string) {
-    return this.save(`/${encodeURIComponent(id)}/updates`, input, key, id);
+  update(id: string, input: UpdateInput, key: string, accountId: string) {
+    return this.save(
+      `/${encodeURIComponent(id)}/updates`,
+      { ...input, accountId },
+      key,
+      id,
+    );
   }
 }
 export const contributionsApi = new HttpContributionsApi();

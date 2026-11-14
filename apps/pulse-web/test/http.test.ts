@@ -73,6 +73,7 @@ describe("member profiles", () => {
 
     calls = stubFetch({ body: JSON.stringify({ profile }) });
     await new HttpPulseApi().saveProfile({
+      ownerAccountId: "ada",
       displayName: "Ada",
       bio: "",
       visible: true,
@@ -80,7 +81,12 @@ describe("member profiles", () => {
     expect(calls[0]?.url).toBe("/api/me/profile");
     expect(calls[0]?.init.method).toBe("PUT");
     expect(calls[0]?.init.body).toBe(
-      JSON.stringify({ displayName: "Ada", bio: "", visible: true }),
+      JSON.stringify({
+        ownerAccountId: "ada",
+        displayName: "Ada",
+        bio: "",
+        visible: true,
+      }),
     );
   });
 });

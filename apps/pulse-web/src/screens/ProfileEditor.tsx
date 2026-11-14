@@ -1,4 +1,4 @@
-import { useEffect, useId, useRef, useState } from "react";
+import { useCallback, useEffect, useId, useRef, useState } from "react";
 import type { FormEvent } from "react";
 import { ApiError, type MemberProfile, type PulseApi } from "../api/types.js";
 import { AppShell } from "../components/AppShell.js";
@@ -6,58 +6,174 @@ import { Button } from "../components/Button.js";
 import { Choice } from "../components/Choice.js";
 import { CopyLink } from "../components/CopyLink.js";
 import { Field } from "../components/Field.js";
-import { PageBanner } from "../components/PageBanner.js";
+import { SiteBanner } from "../components/SiteBanner.js";
+import { useMyVotes, useVotesFollowSession } from "../hooks/use-my-votes.js";
+import { useSession } from "../hooks/use-session.js";
 import { ViewState } from "../components/ViewState.js";
 import { bioProblem, nameProblem } from "../flow/profile-name.js";
 import { pathOf } from "../flow/route.js";
 import { useOwnerProfile } from "../hooks/use-owner-profile.js";
 import "./Profile.css";
+import "./Contributions.css";
 
 export function ProfileEditor({ api }: { api: PulseApi }) {
-  const { state, retry, save } = useOwnerProfile(api);
+  const [generation, setGeneration] = useState(0);
+  const accountChanged = useCallback(
+    () => setGeneration((value) => value + 1),
+    [],
+  );
+  return (
+    <ProfileEditorSession
+      key={generation}
+      api={api}
+      accountChanged={generation > 0}
+      onAccountChanged={accountChanged}
+    />
+  );
+}
+
+function ProfileEditorSession({
+  api,
+  accountChanged,
+  onAccountChanged,
+}: {
+  api: PulseApi;
+  accountChanged: boolean;
+  onAccountChanged: () => void;
+}) {
+  const mine = useMyVotes(api);
+  const votes = useVotesFollowSession(mine);
+  const { session, progress, signOut, dismiss } = useSession(api, {
+    onSignedOut: votes.cleared,
+    onForgotten: votes.cleared,
+    recheckSignedIn: true,
+  });
+  const accountId = session.status === "signedIn" ? session.me.id : null;
+  useEffect(() => votes.signedInAs(accountId));
+  const [draft, setDraft] = useState({ owner: accountId, generation: 0 });
+  // An expiry is recoverable only by the same account. A deliberate sign-out
+  // or another account gives the form a new lifetime, including pending work.
+  if (accountId !== null && accountId !== draft.owner)
+    setDraft({ owner: accountId, generation: draft.generation + 1 });
+  else if (
+    session.status === "signedOut" &&
+    session.ended !== "expired" &&
+    draft.owner !== null
+  )
+    setDraft({ owner: null, generation: draft.generation + 1 });
+  const expired = session.status === "signedOut" && session.ended === "expired";
   const href = pathOf({ kind: "profileEditor" });
   return (
-    <AppShell banner={<PageBanner api={api} currentHref={href} />}>
+    <AppShell
+      banner={
+        <SiteBanner
+          session={session}
+          progress={progress}
+          holdsVotes={mine.holdsVotes}
+          {...(mine.voteRead ? { voteRead: mine.voteRead } : {})}
+          onSignOut={signOut}
+          onCancel={dismiss}
+          currentHref={href}
+        />
+      }
+    >
       <article className="profile">
         <h1 className="profile__title">Your profile</h1>
         <p className="profile__lede">
           Choose what anyone with your profile link can see. Your email and
           votes stay private.
         </p>
-        <ViewState data={state} variant="compact">
-          {(profile) => <ProfileForm initial={profile} save={save} />}
-        </ViewState>
-        {state.status === "error" ? (
-          <Button variant="secondary" type="button" onClick={retry}>
-            Try again
-          </Button>
+        {accountChanged ? (
+          <p role="status">
+            Your account changed. Your unsaved profile was cleared.
+          </p>
         ) : null}
-        {state.status === "empty" ? (
-          <Button
-            variant="primary"
-            href={pathOf({
-              kind: "signIn",
-              returnTo: { kind: "profileEditor" },
-            })}
-          >
-            Sign in
-          </Button>
-        ) : null}
+        {draft.owner !== null ? (
+          <OwnerEditor
+            key={draft.generation}
+            api={api}
+            expired={expired}
+            ownerAccountId={draft.owner}
+            onAccountChanged={onAccountChanged}
+          />
+        ) : session.status === "loading" ? (
+          <ViewState data={{ status: "loading" }}>{() => null}</ViewState>
+        ) : (
+          <ProfileSignIn />
+        )}
       </article>
     </AppShell>
+  );
+}
+
+function ProfileSignIn() {
+  return (
+    <div className="profile__state">
+      <ViewState
+        data={{
+          status: "empty",
+          message: "Sign in to create or change your public profile.",
+        }}
+        variant="compact"
+      >
+        {() => null}
+      </ViewState>
+      <Button
+        variant="primary"
+        href={pathOf({ kind: "signIn", returnTo: { kind: "profileEditor" } })}
+      >
+        Sign in
+      </Button>
+    </div>
+  );
+}
+
+function OwnerEditor({
+  api,
+  expired,
+  ownerAccountId,
+  onAccountChanged,
+}: {
+  api: PulseApi;
+  expired: boolean;
+  ownerAccountId: string;
+  onAccountChanged: () => void;
+}) {
+  const { state, retry, save } = useOwnerProfile(
+    api,
+    !expired,
+    ownerAccountId,
+    onAccountChanged,
+  );
+  return (
+    <>
+      <ViewState data={state} variant="compact">
+        {(profile) => (
+          <ProfileForm initial={profile} save={save} expired={expired} />
+        )}
+      </ViewState>
+      {state.status === "error" ? (
+        <Button variant="secondary" type="button" onClick={retry}>
+          Try again
+        </Button>
+      ) : null}
+      {state.status === "empty" ? <ProfileSignIn /> : null}
+    </>
   );
 }
 
 function ProfileForm({
   initial,
   save,
+  expired,
 }: {
   initial: MemberProfile | null;
+  expired: boolean;
   save: (request: {
     displayName: string;
     bio: string;
     visible: boolean;
-  }) => Promise<MemberProfile>;
+  }) => Promise<MemberProfile | undefined>;
 }) {
   const [name, setName] = useState(initial?.displayName ?? "");
   const [bio, setBio] = useState(initial?.bio ?? "");
@@ -67,11 +183,16 @@ function ProfileForm({
   const [saveError, setSaveError] = useState<string | undefined>();
   const sending = useRef(false);
   const id = useId();
-  useEffect(() => {
+  // A new saved profile (after Save) replaces the fields, in the same render.
+  // An effect would also run after the first render and could overwrite
+  // anything typed between the form appearing and that effect running.
+  const [synced, setSynced] = useState(initial);
+  if (synced !== initial) {
+    setSynced(initial);
     setName(initial?.displayName ?? "");
     setBio(initial?.bio ?? "");
     setVisible(initial?.visible ?? true);
-  }, [initial]);
+  }
   const nameIssue = nameProblem(name);
   const bioIssue = bioProblem(bio);
 
@@ -88,7 +209,7 @@ function ProfileForm({
   async function submit(event: FormEvent) {
     event.preventDefault();
     setShown({ name: true, bio: true });
-    if (nameIssue || bioIssue || sending.current) return;
+    if (expired || nameIssue || bioIssue || sending.current) return;
     sending.current = true;
     setSaving(true);
     setSaveError(undefined);
@@ -112,7 +233,7 @@ function ProfileForm({
   const status = saveError
     ? saveError
     : saving
-      ? "Saving…"
+      ? "" // the Save button already says "Saving…"
       : changed
         ? "Not saved yet."
         : initial === null
@@ -122,6 +243,15 @@ function ProfileForm({
             : "Your profile is hidden.";
   return (
     <form className="profile__form" onSubmit={submit} noValidate>
+      {expired ? (
+        <p className="contribution-expired" role="status">
+          Your sign-in has ended. What you wrote stays here.{" "}
+          <a href="/sign-in?next=profile" target="_blank" rel="noreferrer">
+            Sign in again in a new tab
+          </a>{" "}
+          to save it.
+        </p>
+      ) : null}
       {/*
         Nothing here is disabled while saving: disabling the focused control
         drops focus to the top of the page. The Save button is aria-disabled
@@ -189,6 +319,7 @@ function ProfileForm({
       <Button
         variant="primary"
         type="submit"
+        disabled={expired}
         aria-disabled={saving || undefined}
       >
         {saving ? "Saving…" : "Save profile"}

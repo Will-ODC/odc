@@ -20,10 +20,39 @@ const attributionSchema = z.discriminatedUnion("kind", [
 const communitySchema = z
   .object({ id: z.string().min(1), label: z.string().min(1) })
   .strict();
+/**
+ * The public picture (ADR-0047), strict like attribution: an upstream that
+ * puts an uploader, a file name or a hash inside it is refused whole. Its
+ * URLs are relative and can name only a stored variant of one picture.
+ */
+const pictureUrl = (variant: "display" | "thumb") =>
+  z
+    .string()
+    .regex(
+      new RegExp(
+        `^/api/poll-images/[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}/${variant}\\.webp$`,
+      ),
+    );
+const imageSchema = z.discriminatedUnion("kind", [
+  z
+    .object({
+      kind: z.literal("upload"),
+      displayUrl: pictureUrl("display"),
+      thumbUrl: pictureUrl("thumb"),
+      width: z.number().int().min(1).max(1600),
+      height: z.number().int().min(1).max(1600),
+      alt: z
+        .string()
+        .refine((alt) => alt.trim() !== "" && [...alt].length <= 300),
+    })
+    .strict(),
+  z.object({ kind: z.literal("tile") }).strict(),
+]);
 export const pollSchema = z
   .object({
     id: pollIdSchema,
     question: z.string(),
+    context: z.string().nullable().default(null),
     choices: z.array(z.string()).min(1),
     method,
     next: z.array(pollIdSchema.nullable()),
@@ -34,6 +63,8 @@ export const pollSchema = z
     // send neither.
     community: communitySchema.optional(),
     attribution: attributionSchema.optional(),
+    // Optional: servers from before ADR-0047 send none.
+    image: imageSchema.optional(),
   })
   .strip()
   .refine((p) => p.next.length === p.choices.length);

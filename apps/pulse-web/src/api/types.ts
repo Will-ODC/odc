@@ -199,6 +199,8 @@ export interface MemberProfile extends PublicMemberProfile {
 }
 
 export interface ProfileRequest {
+  /** Account the editor loaded; the server refuses a different session owner. */
+  ownerAccountId: string;
   displayName: string;
   bio: string;
   visible: boolean;
@@ -206,7 +208,8 @@ export interface ProfileRequest {
 
 export interface PulseApi {
   profile(publicId: string): Promise<PublicMemberProfile>;
-  myProfile(): Promise<MemberProfile | null>;
+  /** With `ownerAccountId`, the server refuses (409 account_changed) if another account is signed in. */
+  myProfile(ownerAccountId?: string): Promise<MemberProfile | null>;
   saveProfile(request: ProfileRequest): Promise<MemberProfile>;
   listPolls(community: string, cursor?: string): Promise<PollPage>;
   myVotes(cursor?: string): Promise<MyVotesPage>;

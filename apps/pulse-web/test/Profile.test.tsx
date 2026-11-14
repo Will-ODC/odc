@@ -11,7 +11,11 @@ import {
   it,
   vi,
 } from "vitest";
-import { ApiError, type MemberProfile } from "../src/api/types.js";
+import {
+  ApiError,
+  type MemberProfile,
+  type PulseApi,
+} from "../src/api/types.js";
 import { MemberProfile as MemberProfileScreen } from "../src/screens/MemberProfile.js";
 import { ProfileEditor } from "../src/screens/ProfileEditor.js";
 import { stubApi } from "./stub-api.js";
@@ -162,16 +166,23 @@ describe("public member profile", () => {
     expect(screen.queryByText("Your contributions")).toBeNull();
     sameNameDifferentAccount.unmount();
 
+    const myProfile = vi.fn(() => Promise.resolve(PROFILE));
+    const mine = vi.fn(() => Promise.resolve(page));
     render(
       <MemberProfileScreen
         api={stubApi({
+          me: async () => ({
+            id: "ada",
+            email: "ada@example.test",
+            community: null,
+          }),
           profile: () => Promise.resolve(PROFILE),
-          myProfile: () => Promise.resolve(PROFILE),
+          myProfile,
         })}
         publicId={PROFILE.publicId}
         contributions={{
           forProfile: () => Promise.resolve(page),
-          mine: () => Promise.resolve(page),
+          mine,
         }}
       />,
     );
@@ -189,21 +200,55 @@ describe("public member profile", () => {
         .getByRole("link", { name: "Organizer inbox" })
         .getAttribute("href"),
     ).toBe("/contributions/garden#messages");
+    // The owner list is read for the account the owner check saw, so an
+    // account switch is refused by the server instead of shown here.
+    expect(myProfile).toHaveBeenCalledWith("ada");
+    expect(mine).toHaveBeenCalledWith(undefined, "ada");
+  });
+
+  it("shows no owner controls when nobody is signed in", async () => {
+    const myProfile = vi.fn(() => Promise.resolve(PROFILE));
+    const mine = vi.fn(() =>
+      Promise.resolve({ contributions: [], nextCursor: null }),
+    );
+    render(
+      <MemberProfileScreen
+        api={stubApi({ profile: () => Promise.resolve(PROFILE), myProfile })}
+        publicId={PROFILE.publicId}
+        contributions={{ ...EMPTY_CONTRIBUTIONS, mine }}
+      />,
+    );
+    expect(await screen.findByRole("heading", { name: "Ada" })).toBeTruthy();
+    await waitFor(() =>
+      expect(screen.getByText("No contributions published yet.")).toBeTruthy(),
+    );
+    expect(screen.queryByText("Your contributions")).toBeNull();
+    expect(myProfile).not.toHaveBeenCalled();
+    expect(mine).not.toHaveBeenCalled();
   });
 });
+
+// Owner routes now wait for the banner's signed-in account before reading.
+function ownerApi(over: Partial<PulseApi>) {
+  return stubApi({
+    me: async () => ({ id: "ada", email: "ada@example.test", community: null }),
+    ...over,
+  });
+}
 
 describe("owner profile editor", () => {
   it("covers loading, signed-out empty and recoverable error states", async () => {
     const pending = new Promise<MemberProfile | null>(() => {});
     const first = render(
-      <ProfileEditor api={stubApi({ myProfile: () => pending })} />,
+      <ProfileEditor api={ownerApi({ myProfile: () => pending })} />,
     );
     expect(screen.getByText("Loading…")).toBeTruthy();
     first.unmount();
 
     const signedOut = render(
       <ProfileEditor
-        api={stubApi({
+        api={ownerApi({
+          me: async () => null,
           myProfile: () => Promise.reject(new ApiError(401, "signed out")),
         })}
       />,
@@ -221,7 +266,7 @@ describe("owner profile editor", () => {
       .fn()
       .mockRejectedValueOnce(new Error("offline"))
       .mockResolvedValueOnce(null);
-    render(<ProfileEditor api={stubApi({ myProfile })} />);
+    render(<ProfileEditor api={ownerApi({ myProfile })} />);
     await screen.findByText(/couldn't load your profile/i);
     await userEvent
       .setup()
@@ -238,7 +283,7 @@ describe("owner profile editor", () => {
     }));
     render(
       <ProfileEditor
-        api={stubApi({
+        api={ownerApi({
           myProfile: () => Promise.resolve(null),
           saveProfile,
         })}
@@ -254,6 +299,7 @@ describe("owner profile editor", () => {
 
     await waitFor(() => expect(saveProfile).toHaveBeenCalledOnce());
     expect(saveProfile).toHaveBeenCalledWith({
+      ownerAccountId: "ada",
       displayName: "Ada",
       bio: "Neighbour and gardener.",
       visible: false,
@@ -274,7 +320,7 @@ describe("owner profile editor", () => {
     const saveProfile = vi.fn();
     render(
       <ProfileEditor
-        api={stubApi({ myProfile: () => Promise.resolve(null), saveProfile })}
+        api={ownerApi({ myProfile: () => Promise.resolve(null), saveProfile })}
       />,
     );
     const name = await screen.findByLabelText("Public display name");
@@ -290,7 +336,7 @@ describe("owner profile editor", () => {
     const saveProfile = vi.fn();
     render(
       <ProfileEditor
-        api={stubApi({ myProfile: () => Promise.resolve(null), saveProfile })}
+        api={ownerApi({ myProfile: () => Promise.resolve(null), saveProfile })}
       />,
     );
     const name = await screen.findByLabelText("Public display name");
@@ -307,7 +353,7 @@ describe("owner profile editor", () => {
     const user = userEvent.setup();
     render(
       <ProfileEditor
-        api={stubApi({
+        api={ownerApi({
           myProfile: () => Promise.resolve(PROFILE),
           saveProfile: () =>
             Promise.reject(
@@ -342,7 +388,7 @@ describe("owner profile editor", () => {
     );
     render(
       <ProfileEditor
-        api={stubApi({
+        api={ownerApi({
           myProfile: () => Promise.resolve(PROFILE),
           saveProfile,
         })}
@@ -362,6 +408,8 @@ describe("owner profile editor", () => {
         .readOnly,
     ).toBe(true);
     expect(document.activeElement).toBe(save);
+    // The button already says "Saving…"; the status line does not repeat it.
+    expect(screen.getAllByText("Saving…")).toHaveLength(1);
     await user.keyboard("{Enter}");
     expect(saveProfile).toHaveBeenCalledOnce();
 
@@ -375,7 +423,7 @@ describe("owner profile editor", () => {
     const user = userEvent.setup();
     render(
       <ProfileEditor
-        api={stubApi({
+        api={ownerApi({
           myProfile: () => Promise.resolve({ ...PROFILE, visible: false }),
         })}
       />,
@@ -397,7 +445,7 @@ describe("owner profile editor", () => {
 
     render(
       <ProfileEditor
-        api={stubApi({ myProfile: () => Promise.resolve(PROFILE) })}
+        api={ownerApi({ myProfile: () => Promise.resolve(PROFILE) })}
       />,
     );
     expect(
@@ -435,6 +483,7 @@ describe("compact states", () => {
     const signedOut = render(
       <ProfileEditor
         api={stubApi({
+          me: async () => null,
           myProfile: () => Promise.reject(new ApiError(401, "signed out")),
         })}
       />,

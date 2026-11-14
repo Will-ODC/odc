@@ -9,10 +9,21 @@
   text-align: left;
 }
 
-.profile--public {
+.profile--public,
+.profile__state {
   display: flex;
   flex-direction: column;
   gap: calc(var(--step) * 2);
+}
+
+/* Actions keep their own width instead of stretching across the column. */
+.profile--public > .btn,
+.profile__state > .btn {
+  align-self: flex-start;
+}
+
+.profile__state {
+  margin-block-start: calc(var(--step) * 2);
 }
 
 .profile__eyebrow,

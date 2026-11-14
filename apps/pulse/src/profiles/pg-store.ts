@@ -80,7 +80,7 @@ export class PostgresMemberProfileStore implements MemberProfileStore {
       await verify(client, actor, true);
       const now = this.#clock();
       const result = await client.query<ProfileRow>(
-        "insert into member_profile (voter_id, public_id, display_name, bio, visible, created_at, updated_at) values ($1, $2, $3, $4, $5, $6, $6) on conflict (voter_id) do update set display_name = excluded.display_name, bio = excluded.bio, visible = excluded.visible, updated_at = excluded.updated_at returning public_id, display_name, bio, visible, created_at, updated_at",
+        "insert into member_profile (voter_id, public_id, display_name, bio, visible, created_at, updated_at) values ($1, $2, $3, $4, $5, $6, $6) on conflict (voter_id) do update set display_name = excluded.display_name, bio = excluded.bio, visible = excluded.visible, updated_at = greatest(member_profile.created_at, excluded.updated_at) returning public_id, display_name, bio, visible, created_at, updated_at",
         [
           actor.voterId,
           this.#newId(),

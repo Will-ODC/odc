@@ -398,6 +398,12 @@ No `Origin` is required because this route changes nothing. A missing, expired
 or revoked session returns 401 `signed_out`. Storage failures return 500
 `server_error`.
 
+Optional query `ownerAccountId`: the account the editor is reading for (the
+`id` from `/api/me`). The web client always sends it. If another account is
+signed in, the route returns 409 `account_changed` and no profile, so a page
+that missed an account switch never shows one account's profile in another's
+form. An empty value returns 400 `bad_request`.
+
 ### `PUT /api/me/profile`
 
 Requires the current signed-in member, `Content-Type: application/json`, and an
@@ -405,13 +411,21 @@ Requires the current signed-in member, `Content-Type: application/json`, and an
 
 ```json
 {
+  "ownerAccountId": "account-id-from-api-me",
   "displayName": "Ada",
   "bio": "Neighbour and community gardener.",
   "visible": true
 }
 ```
 
-All three fields are required. The first successful write generates the stable
+All four fields are required. `ownerAccountId` is the nonempty account id from
+`GET /api/me` that the editor loaded, including before a profile exists. It is
+a write precondition, never a target account chosen by the caller. If it differs
+from the authenticated session account, the server returns 409 `account_changed`
+without writing anything. The editor clears the draft, reloads the session and
+profile, and tells the person their account changed.
+
+The first successful write generates the stable
 public id and creation time; later writes update the same row. Setting
 `visible` to `false` makes the public route unavailable without discarding the
 id, text or creation time. The response is `200` with the same `{ profile }`
@@ -425,6 +439,7 @@ minute by default, including refused requests. The PUT body limit is 2 KiB.
 | 400    | `bad_request`        | Invalid JSON, shape, fields, text or type    |
 | 401    | `signed_out`         | Missing, expired or revoked session          |
 | 403    | `origin_not_allowed` | PUT has a missing or foreign Origin          |
+| 409    | `account_changed`    | PUT draft owner differs from session account |
 | 413    | `body_too_large`     | PUT body exceeds 2 KiB                       |
 | 429    | `too_many_requests`  | More than the per-client route limit         |
 | 500    | `server_error`       | Unexpected storage fault; safe generic reply |
@@ -437,6 +452,12 @@ profile uses this owner-only list for links to the existing progress-update and
 organizer-inbox controls. Another signed-in account receives its own list; a
 signed-out request returns 401 `signed_out`. Responses are `no-store` and
 contain no private account identifier or message body.
+
+Optional query `ownerAccountId`, as on `GET /api/me/profile`: the account the
+page is reading for (the `id` from `/api/me`). The web profile always sends it.
+If another account is signed in, the route returns 409 `account_changed` and no
+list; an empty value returns 400 `bad_request`. Any other query field besides
+`cursor` returns 400 `bad_request`.
 
 ## The session cookie
 
@@ -583,12 +604,17 @@ from 1 to 100. Each query parameter may occur once; unknown parameters are refus
       "method": "single",
       "createdAt": "2026-10-20T12:00:00.000Z",
       "closesAt": null,
-      "open": true
+      "open": true,
+      "image": { "kind": "tile" }
     }
   ],
   "nextCursor": null
 }
 ```
+
+Each row carries the same `image` object as `GET /api/polls/:id` (see
+"Poll pictures (ADR-0047)" below), so a page shows thumbnails without a read
+per poll.
 
 Lists open and closed polls in that community, excluding hidden polls and legacy
 polls without a community. No private author, account, ballot or vote data is
@@ -620,17 +646,29 @@ this while moving through the story, and it reveals nothing about a person.
 {
   "id": "ads-free",
   "question": "Should the ODC stay free of paid ads?",
+  "context": null,
   "choices": ["No", "Yes"],
   "method": "single",
   "next": ["ads-allowed", "pay-for-it"],
   "acceptsSuggestions": false,
   "closesAt": "2026-08-28T12:00:00.000Z",
-  "open": true
+  "open": true,
+  "image": { "kind": "tile" }
 }
 ```
 
+`image` is always present: the poster's picture (`kind: "upload"`) or
+`{ "kind": "tile" }`, which the client draws. See "Poll pictures (ADR-0047)"
+below.
+
 `next` has one entry per choice, position for position, and `null` where that choice
 ends the run. Always the same length as `choices`.
+
+`context` is optional background supplied by the poster: a plain-text string, or
+`null` when absent (including seed and legacy polls). Markup-looking characters
+are literal text, never HTML or Markdown. Public poll reads, creation responses
+(first and replayed) and MCP `get_poll` return this field. Poll listing rows do
+not carry it: they carry `image`, not `context`.
 
 `acceptsSuggestions` says whether people may add options of their own — see below.
 
@@ -988,6 +1026,10 @@ anonymous attribution, an unknown kind, or `null` — is refused whole as
 serving the public projection. Unknown keys elsewhere in the poll are still
 stripped as before.
 
+`get_poll` passes `image` through as an optional field in its exact public
+shapes (`upload` with relative picture URLs, or `tile`); anything else inside
+it is refused whole as `upstream_invalid_response`.
+
 `get_results` passes the confirmed numbers through as optional fields, so a body from a
 server older than ADR-0040 still reads, and refuses a body claiming more confirmed
 people than voters, or more confirmed picks of a choice than confirmed people.
@@ -1098,6 +1140,12 @@ Required `Idempotency-Key`: client-generated UUID, scoped to this account
 ```
 
 - `question`: trimmed non-empty string, at most 1,000 Unicode code points.
+- `context`: optional string, trimmed and at most 500 Unicode code points after
+  normalizing CRLF to LF. Omitted, empty or whitespace-only strings mean absent
+  (`null` in public responses); null and non-string inputs are refused. LF
+  newlines are allowed; all other C0/C1 controls (including tab, bare CR and DEL)
+  and lone surrogates are refused before trimming. Markup-looking text is kept
+  literally, without HTML or Markdown processing.
 - `choices`: 2–25 trimmed distinct non-empty strings, each at most 200 code
   points; equality is exact after trim, preserving existing domain rules.
 - `method`: required `single` or `approval`.
@@ -1110,8 +1158,15 @@ Required `Idempotency-Key`: client-generated UUID, scoped to this account
   Names are self-selected, not proof of identity, and never copied from email.
 - `purposeAcknowledgement`: optional exact version string. Required unless v1
   is already recorded for this account; invalid versions are always refused.
+- `image`: optional `{ "id": <uuid>, "alt": <text> }` naming the caller's own
+  pending picture from `POST /api/poll-images` (lowercase UUID). `alt` is a
+  required description: trimmed, 1–300 code points, same text rules as the
+  question. Attaching is part of this transaction; the picture id and
+  description are part of the canonical replay input, and a replay attaches
+  nothing twice. A request without `image` has the same canonical input it
+  always had.
 - `id`, `community`, `createdBy`, `next`, `acceptsSuggestions`, owner/permission
-  fields, photos and summaries are not writable inputs. Suggestions are false,
+  fields and summaries are not writable inputs. Suggestions are false,
   all next entries null, ID is server-generated.
 - All text must be valid Unicode without NUL characters. Invalid encodings
   (malformed UTF-8 bytes, or an escaped lone surrogate) return `bad_request`;
@@ -1133,7 +1188,12 @@ the original creation representation, even after the poll has closed;
 
 Canonical replay input consists of trimmed strings, ordered choices, method,
 normalised attribution, explicit/omitted close time and the acknowledgement
-field. Omitted close time stays a sentinel, not recalculated. Replay is checked
+field. Nonempty normalized context participates in replay comparison; omitted
+and empty context add no canonical key, preserving existing retries. A replay
+returns the saved response's `context` and `image` as first returned. A saved
+creation response from before context existed returns `context: null`, and one
+from before pictures returns `image: { "kind": "tile" }`; every other field keeps
+its original public value. Omitted close time stays a sentinel, not recalculated. Replay is checked
 before expiry/default-time and quota checks, so a valid saved request still
 replays after its poll closes. Changed input with the same key returns 409.
 Records remain durable for the poll's lifetime. Replays require a valid session
@@ -1153,6 +1213,7 @@ Unlimited grants bypass this quota, not resource checks or authentication.
 | 409    | `idempotency_conflict` | Key already used for different canonical input                                      |
 | 413    | `body_too_large`       | Body exceeds 32 KiB                                                                 |
 | 422    | `purpose_required`     | First post needs the v1 promise                                                     |
+| 422    | `image_unavailable`    | `image.id` is not the caller's pending picture (unknown, used or expired)           |
 | 429    | `too_many_requests`    | More than the per-client request limit (above); not a posting-quota answer          |
 | 429    | `posting_limit`        | Five creations in the rolling hour; integer Retry-After seconds                     |
 | 503    | `creation_unavailable` | Required storage unavailable; nothing partially committed                           |
@@ -1196,6 +1257,123 @@ non-owner learns nothing about which accounts exist), 413 `body_too_large` (PUT
 body over 1 KiB), 503 `creation_unavailable`, 500 `server_error`. All changes are atomic and
 attributed to the owner. Context exposes only the caller's effective posting
 permission. No public grant listing or author/account inspection is introduced.
+
+## Poll pictures (ADR-0047)
+
+A poll may carry one picture, uploaded first and then attached with
+`POST /api/polls` (`image` above). Pictures are stored in Pulse's Postgres as
+two re-encoded WebP variants; the original upload is never stored or served.
+
+### `POST /api/poll-images`
+
+Signed-in only. The body is the raw file, with `Content-Type: image/jpeg`,
+`image/png` or `image/webp` (no multipart), and `Origin` exactly the web
+origin. Checks run in this order: the per-client rate limit (10 a minute,
+429 `too_many_requests`); pictures configured (503 `images_unavailable`);
+`Origin` (403 `origin_not_allowed`); session (401 `signed_out`); declared type
+one of the three (415 `unsupported_image`), all before the API reads the body.
+The API then reads it up to 10 MiB. In the served deployment nginx receives
+and buffers the whole body (up to 10 MiB) before forwarding the request, so
+these checks save the API's work, not the upload's bandwidth.
+
+The file is judged by its content, never its declared type or name: a PNG sent
+as `image/jpeg` is accepted as a PNG. JPEG, PNG and WebP are accepted; SVG,
+GIF, HEIC, AVIF, animated PNG (an `acTL` chunk before the first `IDAT`) and
+multi-page WebP are refused, never cut to a first frame. Size limits are read
+from the header before a full decode. The picture is rotated by its EXIF
+orientation, converted to sRGB, and **all metadata is dropped** (EXIF
+including GPS location, XMP, IPTC, ICC). Two variants are stored: `display`
+fits within 1600 × 1600 (aspect kept, never enlarged, WebP quality 80) and
+`thumb` is a 256 × 256 centre crop (quality 75).
+
+`201`, `Cache-Control: no-store`:
+
+```json
+{
+  "image": {
+    "id": "0b8f4c1e-5d7a-4e2b-9c3d-1a2b3c4d5e6f",
+    "width": 1600,
+    "height": 900
+  }
+}
+```
+
+`width` and `height` are the display variant's. The picture is **pending**:
+visible to nobody and attachable only by this account, for 24 hours. Pending
+pictures older than that are deleted with their bytes at API startup and at
+each upload (best-effort; a failed sweep never refuses an upload).
+
+| Status | Error                | Meaning                                                                          |
+| ------ | -------------------- | -------------------------------------------------------------------------------- |
+| 401    | `signed_out`         | No current session                                                               |
+| 403    | `origin_not_allowed` | Missing or foreign Origin                                                        |
+| 413    | `image_too_large`    | Body over 10 MiB (10,485,760 bytes); exactly that size is read                   |
+| 415    | `unsupported_image`  | Declared type not one of the three, or content not a still JPEG, PNG or WebP     |
+| 422    | `image_dimensions`   | Over 8,000 px on a side, over 40 megapixels, or under 200 px on the shorter side |
+| 429    | `too_many_requests`  | Per-client request limit (in memory, per instance)                               |
+| 429    | `upload_limit`       | 20 accepted uploads in the rolling hour for this account; integer `Retry-After`  |
+| 429    | `pending_limit`      | This account already holds 5 pending pictures                                    |
+| 503    | `image_busy`         | This instance is decoding and its short queue is full; retry shortly             |
+| 503    | `images_unavailable` | Pictures not configured, or storage unavailable                                  |
+| 500    | `server_error`       | Unexpected fault                                                                 |
+
+The hourly quota counts accepted uploads from a record kept apart from the
+picture, so deleting a picture never refunds an upload. The account quotas
+are counted in Postgres and checked before the file is
+decoded, then again when it is stored. Nothing logs the body, the bytes or the
+account; a processing fault is logged by error class only.
+
+### `GET /api/poll-images/:id/display.webp` and `/thumb.webp`
+
+No session; no cookie is read or set. `:id` must be a lowercase UUID before
+anything is queried. A picture is served only while its owner allows it: for
+a poll, while it is that poll's current picture and the poll is not hidden.
+Community default pictures arrive with category defaults; none is served yet.
+Malformed, unknown, pending and unservable ids answer the same `404`, with
+the same body as any unknown path:
+`{ "error": "not_found", "message": "There is nothing here." }`.
+
+`200` headers: `Content-Type: image/webp`, `X-Content-Type-Options: nosniff`,
+`Content-Security-Policy: default-src 'none'`,
+`Cross-Origin-Resource-Policy: same-origin`,
+`Cache-Control: public, max-age=3600`, and a strong `ETag` that is the quoted
+SHA-256 of that variant's stored bytes. A matching `If-None-Match` answers
+`304` with the same `ETag` and `Cache-Control`. A removed or hidden picture
+leaves browser caches within the hour. Rate limited per client (300 a minute
+by default).
+
+Behind the production nginx (`apps/pulse-web/nginx.conf`) these responses also
+carry the site's page headers, so a browser sees a second, looser
+`Content-Security-Policy` and a repeated `nosniff`. Browsers enforce every CSP
+they receive, so the stricter `default-src 'none'` still applies. nginx also
+answers an upload body over 10 MiB itself, with the same `413`
+`image_too_large` JSON body as above.
+
+### The public `image` field
+
+Every poll body (`GET /api/polls/:id`, the creation response, MCP `get_poll`)
+and every listing row carries `image`, built by one projection:
+
+```json
+{
+  "kind": "upload",
+  "displayUrl": "/api/poll-images/0b8f4c1e-5d7a-4e2b-9c3d-1a2b3c4d5e6f/display.webp",
+  "thumbUrl": "/api/poll-images/0b8f4c1e-5d7a-4e2b-9c3d-1a2b3c4d5e6f/thumb.webp",
+  "width": 1600,
+  "height": 900,
+  "alt": "A sunny garden plot"
+}
+```
+
+or `{ "kind": "tile" }` when the poll has no servable picture, for which the
+client draws a generated tile. URLs are relative. `upload` appears exactly
+when the picture route would serve it. Nothing else is ever in the object: no
+uploading account, file name, original type or size, upload time or hash. A
+creation response replayed from before pictures existed reads as the tile.
+
+Planned, not served (ADR-0047, plan P12 steps 5–9): category defaults
+(`kind: "category"`), removing or replacing a picture, reporting, and the
+site owner's soft delete.
 
 ## Contributions (#246, #247, #252)
 
@@ -1259,6 +1437,13 @@ to the organizer. A signed-in non-organizer receives 403. Both routes require
 sign-in and return 404 for an unknown contribution. Public responses never
 include messages or sender information.
 
+All POST bodies require `accountId`, a nonempty string containing the `/api/me`
+account ID the page believes it is writing for. A missing or invalid field
+returns 400 `bad_request`. A value different from the session account returns
+409 `account_changed` before any write or idempotency record, including on
+retries. This field is a precondition, never a choice of author. Clients clear
+the refused form’s draft and recheck the session.
+
 All POSTs require a valid session, configured web Origin, application/json and
 UUID `Idempotency-Key`. For the three routes that return a contribution
 (create, participate, update), the key is account-scoped across those three:
@@ -1274,7 +1459,7 @@ Reads allow 120 requests/minute, mutations 30/minute, per route and client IP.
 
 Errors use `{error,message}`. 400 `bad_request`; 401 `signed_out`; 403
 `origin_not_allowed` or `organizer_required`; 404 `not_found` or `poll_not_found`; 409
-`idempotency_conflict`, `closed`, `record_full`, `sender_limit`; 413 `body_too_large`; 429
+`account_changed`, `idempotency_conflict`, `closed`, `record_full`, `sender_limit`; 413 `body_too_large`; 429
 `too_many_requests`, `posting_limit`; 503 `contributions_unavailable`; 500
 `server_error`. Origin/session checks precede body parsing. Required storage
 failures leave no partial writes. Production persists in Postgres, development

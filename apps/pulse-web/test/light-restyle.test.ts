@@ -131,8 +131,8 @@ it("makes the My votes rail heading a visible, padded link (#488)", () => {
 });
 
 it("left-aligns My votes messages with their heading and note (#488)", () => {
-  expect(css("screens/Browse.css")).toMatch(
-    /\.welcome\.browse \.browse__main--message \.viewstate \{[^}]*align-items: flex-start;[^}]*text-align: left;/s,
+  expect(css("screens/MyVotes.css")).toMatch(
+    /\.my-votes__main--message \.viewstate \{[^}]*align-items: flex-start;[^}]*text-align: left;/s,
   );
 });
 

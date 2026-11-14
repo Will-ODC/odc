@@ -25,27 +25,38 @@ export function MemberProfile({
   contributions?: Pick<ContributionsApi, "forProfile" | "mine">;
 }) {
   const { state, retry } = useMemberProfile(api, publicId);
-  const [ownedProfile, setOwnedProfile] = useState<string | null>(null);
-  const owner = ownedProfile === publicId;
+  // The owner view is tied to the account that was signed in when it was
+  // checked; the owner-only list is read for that account and no other.
+  const [owned, setOwned] = useState<{
+    publicId: string;
+    accountId: string;
+  } | null>(null);
+  const owner = owned?.publicId === publicId;
+  const ownerAccountId = owner ? owned.accountId : undefined;
   const loadPublic = useCallback(
     (cursor?: string) => contributions.forProfile(publicId, cursor),
     [contributions, publicId],
   );
   const loadMine = useCallback(
-    (cursor?: string) => contributions.mine(cursor),
-    [contributions],
+    (cursor?: string) => contributions.mine(cursor, ownerAccountId),
+    [contributions, ownerAccountId],
   );
   useEffect(() => {
     let live = true;
-    api.myProfile().then(
-      (profile) => {
+    void (async () => {
+      try {
+        const voter = await api.me();
+        const profile = voter ? await api.myProfile(voter.id) : null;
         if (live)
-          setOwnedProfile(profile?.visible === true ? profile.publicId : null);
-      },
-      () => {
-        if (live) setOwnedProfile(null);
-      },
-    );
+          setOwned(
+            voter && profile?.visible === true
+              ? { publicId: profile.publicId, accountId: voter.id }
+              : null,
+          );
+      } catch {
+        if (live) setOwned(null);
+      }
+    })();
     return () => {
       live = false;
     };

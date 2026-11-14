@@ -88,6 +88,7 @@ export async function registerProfileRoutes(
   });
 
   app.get("/api/profiles/:publicId", async (request, reply) => {
+    reply.header("cache-control", "no-store");
     const publicId = (request.params as { publicId: string }).publicId;
     if (!isPublicProfileId(publicId) || !deps.profiles)
       return answerRefusal(reply, NOT_FOUND());
@@ -185,6 +186,22 @@ export async function registerProfileRoutes(
       "/api/me/profile",
       { config: limit, preParsing: guard(false) },
       async (request, reply) => {
+        // Optional precondition, as on PUT: the account the editor is reading
+        // for. A mismatch means the signed-in account changed underneath it,
+        // so nothing is returned that could land in the wrong person's form.
+        const { ownerAccountId } = (request.query ?? {}) as {
+          ownerAccountId?: unknown;
+        };
+        if (ownerAccountId !== undefined) {
+          if (typeof ownerAccountId !== "string" || ownerAccountId.length === 0)
+            throw BAD_REQUEST();
+          if (ownerAccountId !== actorOf(request).voterId)
+            throw new Refusal(
+              409,
+              "account_changed",
+              "Your account changed. Reload your profile.",
+            );
+        }
         const profile = await deps.profiles?.byOwner(actorOf(request));
         return reply
           .header("cache-control", "no-store")
@@ -198,12 +215,28 @@ export async function registerProfileRoutes(
       async (request, reply) => {
         if (!deps.contributions)
           throw new Error("contribution storage unavailable");
+        // The same optional precondition as GET /api/me/profile: a page that
+        // missed an account switch never lists another account's records.
+        const { ownerAccountId, ...query } = (request.query ?? {}) as Record<
+          string,
+          unknown
+        >;
+        if (ownerAccountId !== undefined) {
+          if (typeof ownerAccountId !== "string" || ownerAccountId.length === 0)
+            throw BAD_REQUEST();
+          if (ownerAccountId !== actorOf(request).voterId)
+            throw new Refusal(
+              409,
+              "account_changed",
+              "Your account changed. Reload your profile.",
+            );
+        }
         return reply
           .header("cache-control", "no-store")
           .send(
             await deps.contributions.listByOwner(
               actorOf(request).voterId,
-              listQuery(request.query),
+              listQuery(query),
             ),
           );
       },
@@ -217,10 +250,23 @@ export async function registerProfileRoutes(
         preParsing: guard(true),
       },
       async (request, reply) => {
-        const profile = await deps.profiles?.save(
-          actorOf(request),
-          normalizeProfile(request.body),
-        );
+        const body = request.body;
+        if (!body || typeof body !== "object" || Array.isArray(body))
+          throw BAD_REQUEST();
+        const { ownerAccountId, ...fields } = body as Record<string, unknown>;
+        if (typeof ownerAccountId !== "string" || ownerAccountId.length === 0)
+          throw BAD_REQUEST();
+        const input = normalizeProfile(fields);
+        const actor = actorOf(request);
+        // The draft's owner is a precondition, never a choice of write target.
+        // This also protects the first save, when no public profile id exists.
+        if (ownerAccountId !== actor.voterId)
+          throw new Refusal(
+            409,
+            "account_changed",
+            "Your account changed. Reload your profile before saving.",
+          );
+        const profile = await deps.profiles?.save(actor, input);
         if (!profile) throw new Error("profile storage unavailable");
         return reply
           .header("cache-control", "no-store")

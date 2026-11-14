@@ -46,8 +46,12 @@ const AT = new Date("2026-09-11T09:30:00.123Z");
 const TABLES = [
   "allowed_domain",
   "community",
+  "content_change",
   "contribution",
   "contribution_replay",
+  "image",
+  "image_bytes",
+  "image_upload",
   "member_profile",
   "pending_claim",
   "poll_choice",
@@ -105,6 +109,8 @@ test("applies_a_fresh_schema", { skip }, async () => {
       "013",
       "014",
       "015",
+      "016",
+      "017",
     ]);
     assert.deepEqual(await tablesIn(pool, schema), TABLES);
   });
@@ -127,6 +133,66 @@ test("applying_twice_changes_nothing", { skip }, async () => {
     assert.equal(rows[0]?.applied_at.getTime(), AT.getTime());
   });
 });
+
+test(
+  "poll_context_migration_keeps_legacy_rows_and_checks_length_and_controls",
+  { skip },
+  async () => {
+    await inTempDir(async (dir) => {
+      await writeMigrations(dir, await loadMigrations(), (v) => v < "017");
+      await inThrowawaySchema(async (pool) => {
+        await migrate(pool, { dir, clock: () => AT });
+        await pool.query(
+          "insert into polls (id, question, method, created_at, accepts_suggestions) values ('legacy-context', 'Legacy?', 'single', $1, false)",
+          [AT],
+        );
+        assert.deepEqual(
+          (await migrate(pool, { clock: () => AT })).applied,
+          await versionsFrom("017"),
+        );
+        assert.deepEqual(
+          (
+            await pool.query(
+              "select question, context from polls where id = 'legacy-context'",
+            )
+          ).rows,
+          [{ question: "Legacy?", context: null }],
+        );
+        for (const context of ["🌱".repeat(500), "First\nSecond"]) {
+          await pool.query(
+            "update polls set context = $1 where id = 'legacy-context'",
+            [context],
+          );
+          assert.equal(
+            (
+              await pool.query(
+                "select context from polls where id = 'legacy-context'",
+              )
+            ).rows[0]?.context,
+            context,
+          );
+        }
+        for (const context of [
+          "",
+          "🌱".repeat(501),
+          "a\tb",
+          "a\rb",
+          "a\u007fb",
+          "a\u0085b",
+          "a\u009fb",
+        ]) {
+          await assert.rejects(
+            pool.query(
+              "update polls set context = $1 where id = 'legacy-context'",
+              [context],
+            ),
+            { code: "23514" },
+          );
+        }
+      });
+    });
+  },
+);
 
 test(
   "upgrading_existing_voters_initializes_session_generation",
@@ -521,10 +587,19 @@ test(
       assert.deepEqual(await indexesIn(pool, schema), [
         "allowed_domain_pkey",
         "community_pkey",
+        "content_change_pkey",
+        "content_change_target_idx",
         "contribution_newest",
         "contribution_owner_recent",
         "contribution_pkey",
         "contribution_replay_pkey",
+        "image_bytes_pkey",
+        "image_owner_idx",
+        "image_pending_idx",
+        "image_pkey",
+        "image_upload_pkey",
+        "image_upload_uploader_idx",
+        "image_uploader_idx",
         "member_profile_pkey",
         "member_profile_public_id_key",
         "pending_claim_expiry_idx",
@@ -536,6 +611,7 @@ test(
         "poll_creation_replay_poll_id_key",
         "polls_author_created_idx",
         "polls_id_author_unique",
+        "polls_image_id_key",
         "polls_pkey",
         "polls_public_listing_idx",
         "posting_permission_change_pkey",

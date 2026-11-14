@@ -10,6 +10,7 @@ import { SuggestedVotesRail } from "../components/SuggestedVotesRail.js";
 import { AnsweredRail } from "../components/AnsweredRail.js";
 import { ViewState } from "../components/ViewState.js";
 import { Button } from "../components/Button.js";
+import { LoadMore } from "../components/LoadMore.js";
 import { usePollList } from "../hooks/use-poll-list.js";
 import { useMyVotes } from "../hooks/use-my-votes.js";
 import { useSession } from "../hooks/use-session.js";
@@ -40,6 +41,10 @@ export function Browse({
     reload: retryContributions,
     setData: setContributions,
   } = useContributionRead(loadContributions);
+  const focusAt = useRef<{
+    kind: "contribution";
+    index: number;
+  } | null>(null);
   const contributionPaging = useRef(false);
   const contributionGeneration = useRef(0);
   const [loadingContributions, setLoadingContributions] = useState(false);
@@ -49,6 +54,7 @@ export function Browse({
     contributionPaging.current = false;
     setLoadingContributions(false);
     setContributionPageError(false);
+    if (focusAt.current?.kind === "contribution") focusAt.current = null;
   }, [contributionsClient, isGeneral]);
   async function loadMoreContributions() {
     const page = contributions.status === "ready" ? contributions.value : null;
@@ -103,19 +109,21 @@ export function Browse({
     heading.current?.focus();
   }, []);
   const list = useRef<HTMLUListElement>(null);
-  const focusAt = useRef<number | null>(null);
   useEffect(() => {
+    const target = focusAt.current;
+    if (!target) return;
     if (
-      data.status !== "ready" ||
-      more.status !== "idle" ||
-      focusAt.current === null
+      contributions.status !== "ready" ||
+      loadingContributions ||
+      contributionPageError
     )
       return;
-    const links =
-      list.current?.querySelectorAll<HTMLAnchorElement>("a[data-poll]");
-    links?.[Math.min(focusAt.current, links.length - 1)]?.focus();
+    const links = list.current?.querySelectorAll<HTMLAnchorElement>(
+      "a[data-contribution]",
+    );
+    links?.[Math.min(target.index, links.length - 1)]?.focus();
     focusAt.current = null;
-  }, [data, more]);
+  }, [contributions, loadingContributions, contributionPageError]);
   const contributionRows =
     isGeneral && contributions.status === "ready"
       ? (contributions.value?.contributions ?? [])
@@ -211,6 +219,9 @@ export function Browse({
                         row.tag ? `browse-tag-${row.key}` : undefined
                       }
                       data-poll={row.kind === "poll" ? "" : undefined}
+                      data-contribution={
+                        row.kind === "contribution" ? "" : undefined
+                      }
                     >
                       {row.title}
                     </a>
@@ -268,34 +279,29 @@ export function Browse({
               className="browse__action"
               type="button"
               disabled={loadingContributions}
-              onClick={() => void loadMoreContributions()}
+              onClick={() => {
+                focusAt.current = {
+                  kind: "contribution",
+                  index: contributionRows.length,
+                };
+                void loadMoreContributions();
+              }}
             >
               {loadingContributions ? "Loading…" : "Load more contributions"}
             </Button>
           ) : null}
-          {!contributionsOnly && more.status === "error" ? (
-            <p role="alert">{more.message}</p>
-          ) : null}
-          {!contributionsOnly &&
-          data.status === "ready" &&
-          data.value.nextCursor ? (
-            <Button
-              variant="secondary"
-              size="small"
-              className="browse__action"
-              type="button"
-              disabled={more.status === "loading"}
-              onClick={() => {
-                focusAt.current = data.value.polls.length;
-                loadMore();
-              }}
-            >
-              {more.status === "loading"
-                ? `Loading ${moreLabel}…`
-                : more.status === "error"
-                  ? `Try loading ${moreLabel} again`
-                  : `Load ${moreLabel}`}
-            </Button>
+          {!contributionsOnly ? (
+            <LoadMore
+              more={more}
+              hasMore={
+                data.status === "ready" && data.value.nextCursor !== null
+              }
+              itemCount={data.status === "ready" ? data.value.polls.length : 0}
+              listRef={list}
+              itemSelector="a[data-poll]"
+              moreLabel={moreLabel}
+              onLoadMore={loadMore}
+            />
           ) : null}
         </div>
         <SuggestedVotesRail

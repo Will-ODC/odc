@@ -1,5 +1,7 @@
+import { IMAGE_ID, MAX_ALT_LENGTH } from "../images/limits.js";
 import {
   createPoll,
+  normalizePollContext,
   type Attribution,
   type PollMethod,
 } from "../voting/poll.js";
@@ -10,11 +12,18 @@ export const WEEK_MS = 604_800_000;
 export const HOUR_MS = 3_600_000;
 export interface CreationInput {
   question: string;
+  context?: string;
   choices: string[];
   method: PollMethod;
   attribution: Attribution;
   closesAt: string | null;
   purposeAcknowledgement: string | null;
+  /**
+   * The uploader's own pending picture and its required description
+   * (ADR-0047 sections 2 and 5). Absent, not null, when there is none, so a
+   * request without a picture keeps the canonical replay input it always had.
+   */
+  image?: { id: string; alt: string };
 }
 export class CreationError extends Error {
   constructor(
@@ -25,7 +34,8 @@ export class CreationError extends Error {
       | "idempotency_conflict"
       | "posting_limit"
       | "owner_required"
-      | "not_found",
+      | "not_found"
+      | "image_unavailable",
     readonly retryAfter?: number,
   ) {
     super(code);
@@ -63,13 +73,23 @@ function text(value: unknown, limit: number): string {
 export function normalizeCreation(value: unknown): CreationInput {
   const row = object(value, [
     "question",
+    "context",
     "choices",
     "method",
     "attribution",
     "closesAt",
     "purposeAcknowledgement",
+    "image",
   ]);
   const question = text(row.question, 1000);
+  let context: string | null = null;
+  if ("context" in row) {
+    try {
+      context = normalizePollContext(row.context);
+    } catch {
+      throw new CreationError("bad_request");
+    }
+  }
   if (!Array.isArray(row.choices)) throw new CreationError("bad_request");
   const choices = row.choices.map((choice: unknown) => text(choice, 200));
   if (row.method !== "single" && row.method !== "approval")
@@ -104,13 +124,24 @@ export function normalizeCreation(value: unknown): CreationInput {
     row.purposeAcknowledgement !== PURPOSE_VERSION
   )
     throw new CreationError("bad_request");
+  let image: { id: string; alt: string } | undefined;
+  if ("image" in row) {
+    const i = object(row.image, ["id", "alt"]);
+    // Lowercase only: picture ids are minted lowercase, and one spelling
+    // keeps the canonical replay input and the picture URL the same.
+    if (typeof i.id !== "string" || !IMAGE_ID.test(i.id))
+      throw new CreationError("bad_request");
+    image = { id: i.id, alt: text(i.alt, MAX_ALT_LENGTH) };
+  }
   return {
     question,
+    ...(context === null ? {} : { context }),
     choices,
     method: row.method,
     attribution,
     closesAt,
     purposeAcknowledgement:
       row.purposeAcknowledgement === PURPOSE_VERSION ? PURPOSE_VERSION : null,
+    ...(image === undefined ? {} : { image }),
   };
 }

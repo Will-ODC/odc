@@ -258,3 +258,5 @@ that profile is visible. Public profiles list that account's contributions,
 newest first. On their own visible profile, the owner can start a contribution
 and use an owner-only list to open each contribution's progress-update form or
 private organizer inbox. Matching display names do not grant those controls.
+The owner-only list is read for the account the owner check saw, so an account
+switch in another tab is refused rather than shown under this profile.
