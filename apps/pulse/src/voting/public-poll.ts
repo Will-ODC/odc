@@ -1,4 +1,9 @@
 import {
+  copyPublicPollImage,
+  publicPollImage,
+  type PublicPollImage,
+} from "../images/public.js";
+import {
   isOpen,
   type Attribution,
   type Poll,
@@ -26,6 +31,8 @@ export interface PublicPoll {
   acceptsSuggestions: boolean;
   closesAt: string | null;
   open: boolean;
+  /** The poster's picture or the tile (ADR-0047); always present. */
+  image: PublicPollImage;
   community?: PollCommunity;
   attribution?: Attribution;
 }
@@ -59,6 +66,7 @@ export function publicPoll(poll: Poll, now: Date): PublicPoll {
     acceptsSuggestions: poll.acceptsSuggestions,
     closesAt: poll.closesAt ? poll.closesAt.toISOString() : null,
     open: isOpen(poll, now),
+    image: publicPollImage(poll.image),
   };
   if (poll.publication === undefined) return body;
   const { community, attribution } = poll.publication;
@@ -82,9 +90,18 @@ function publicAttribution(attribution: Attribution): Attribution {
   }
 }
 
-/** Saved creation snapshots keep their original openness and close time. */
+/**
+ * A saved creation response, rebuilt field by field for a replay. Snapshots
+ * keep their original openness and close time. One saved before poll context
+ * existed has no `context` and reads as `null`; one saved before pictures has
+ * no `image` and reads as the tile. Every other field, `image` and `context`
+ * included, is returned as it was saved.
+ */
 export function publicPollReplay(
-  poll: Omit<PublishedPublicPoll, "context"> & { context?: string | null },
+  poll: Omit<PublishedPublicPoll, "context" | "image"> & {
+    context?: string | null;
+    image?: PublicPollImage;
+  },
 ): PublishedPublicPoll {
   return {
     id: poll.id,
@@ -96,6 +113,7 @@ export function publicPollReplay(
     acceptsSuggestions: poll.acceptsSuggestions,
     closesAt: poll.closesAt,
     open: poll.open,
+    image: copyPublicPollImage(poll.image),
     community: { id: poll.community.id, label: poll.community.label },
     attribution: publicAttribution(poll.attribution),
   };

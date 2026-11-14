@@ -31,6 +31,12 @@ without signing in. It returns open and closed question summaries, newest first,
 with cursor pagination. Hidden polls are excluded. The browser list and MCP
 discovery remain separate work; see [API.md](./API.md) for the query contract.
 
+**Member profiles** are opt-in and public. A signed-in member chooses a display
+name and optional bio, then shares the stable opaque `/u/<publicId>` link. They
+can hide the profile again without losing that id. Public responses contain
+only the chosen name, bio and creation time; account and voting data remain
+private. See [API.md](./API.md#member-profiles) for the exact contract.
+
 ## Sign-in link retention
 
 A redeemed link's `pending_claim` row is deleted as it is spent. Links still
@@ -50,6 +56,16 @@ request's transaction, so a failure there fails the request. An older marker
 created before timestamps existed is dated at the first startup or redemption
 after upgrading, then gets the same 20-minute window. This does not delete the email
 credential belonging to an account that signed in.
+
+## Poll pictures
+
+A signed-in poster may upload one picture with a question (ADR-0047). The
+server decodes JPEG, PNG and WebP by their content, refuses SVG, GIF, HEIC
+and animated files, and stores only two re-encoded WebP variants with all
+metadata (EXIF, GPS location, XMP, ICC) removed. Pictures live in Postgres
+beside the polls; one nobody attached within 24 hours is deleted at the next
+startup or upload. See [API.md](./API.md) for the routes and the public
+`image` field, and [DEPLOY.md](./DEPLOY.md) for backups and the nginx limit.
 
 ## Error-log privacy
 

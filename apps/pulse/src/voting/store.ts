@@ -1,3 +1,6 @@
+import type { PollImage } from "../images/public.js";
+import { memoryImageDatabase } from "../images/store.js";
+import { mayServe } from "../images/visibility.js";
 import {
   comparePolls,
   type PollListQuery,
@@ -247,15 +250,25 @@ export class InMemoryVotingStore implements VotingStore {
    * alone — the author's account stays in the creation store — and is copied,
    * so the caller cannot change it afterwards. Not on `VotingStore`: seed
    * polls have no author and none is invented for them.
+   *
+   * `image` is likewise the in-memory creation store's: the picture it
+   * attached in the same publication, the equivalent of `polls.image_id`.
    */
-  async createPoll(input: NewPoll, publication?: Publication): Promise<Poll> {
+  async createPoll(
+    input: NewPoll,
+    publication?: Publication,
+    image?: PollImage,
+  ): Promise<Poll> {
     if (this.#polls.has(input.id))
       throw new TypeError(`poll already exists: ${input.id}`);
     const created = createPoll(input, this.#clock());
-    const poll: Poll =
-      publication === undefined
-        ? created
-        : { ...created, publication: structuredClone(publication) };
+    const poll: Poll = {
+      ...created,
+      ...(publication === undefined
+        ? {}
+        : { publication: structuredClone(publication) }),
+      ...(image === undefined ? {} : { image: { ...image } }),
+    };
     this.#polls.set(poll.id, poll);
     return poll;
   }
@@ -268,7 +281,30 @@ export class InMemoryVotingStore implements VotingStore {
   }
 
   async getPoll(pollId: string): Promise<Poll | undefined> {
-    return this.#polls.get(pollId);
+    const poll = this.#polls.get(pollId);
+    if (!poll) return undefined;
+    const { image: _stored, ...rest } = poll;
+    void _stored;
+    const image = this.#shownImage(poll);
+    return image ? { ...rest, image } : rest;
+  }
+
+  /**
+   * The poll's picture only while `mayServe` would serve it, read against
+   * the picture's own owner link in the in-memory picture tables, as the
+   * Postgres store reads it against `image`. The in-memory store has no
+   * hidden polls.
+   */
+  #shownImage(poll: Poll): PollImage | undefined {
+    if (poll.image === undefined) return undefined;
+    const link = memoryImageDatabase(this).images.get(poll.image.id);
+    if (link === undefined || link.ownerId !== poll.id) return undefined;
+    const shown = mayServe(link, {
+      kind: "poll",
+      currentImageId: poll.image.id,
+      visible: true,
+    });
+    return shown ? { ...poll.image } : undefined;
   }
 
   async listPolls(query: PollListQuery): Promise<PollSummary[]> {
@@ -281,13 +317,17 @@ export class InMemoryVotingStore implements VotingStore {
       )
       .sort((a, b) => comparePolls(b, a))
       .slice(0, query.limit + 1)
-      .map((p) => ({
-        id: p.id,
-        question: p.question,
-        method: p.method,
-        createdAt: p.createdAt,
-        ...(p.closesAt ? { closesAt: p.closesAt } : {}),
-      }));
+      .map((p) => {
+        const image = this.#shownImage(p);
+        return {
+          id: p.id,
+          question: p.question,
+          method: p.method,
+          createdAt: p.createdAt,
+          ...(p.closesAt ? { closesAt: p.closesAt } : {}),
+          ...(image ? { image } : {}),
+        };
+      });
   }
 
   async castVote(

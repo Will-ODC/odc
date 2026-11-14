@@ -424,6 +424,7 @@ for (const kind of ["memory", "postgres"] as const) {
           START.getTime() + 7 * 24 * HOUR_S * 1000,
         ).toISOString(),
         open: true,
+        image: { kind: "tile" },
         community: { id: "pulse-general", label: "General" },
         attribution: { kind: "anonymous" },
       },

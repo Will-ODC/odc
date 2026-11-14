@@ -30,8 +30,11 @@ import {
   type SuggestionStore,
 } from "../voting/suggestions.js";
 import { registerCreationRoutes } from "./creation.js";
+import { registerImageRoutes, type ImageRouteDeps } from "./images.js";
 import { registerMcpReads, type McpReadOptions } from "./mcp/route.js";
 import { requireWebOrigin } from "./origin.js";
+import { registerProfileRoutes } from "./profiles.js";
+import type { MemberProfileStore } from "../profiles/store.js";
 import { SESSION_COOKIE, SessionSigner } from "./session.js";
 
 /**
@@ -81,6 +84,17 @@ export interface ServerDeps {
   creation?: CreationStore;
   contributions?: ContributionsStore;
   /**
+   * Poll pictures (ADR-0047). Optional like `creation`: without one, uploads
+   * answer 503 `images_unavailable` and every picture URL is the one 404.
+   */
+  images?: ImageRouteDeps["images"];
+  /** Picture processing and its queue; tests may replace or slow them. */
+  imageProcessor?: ImageRouteDeps["processor"];
+  imageQueue?: ImageRouteDeps["queue"];
+  /** Picture uploads, and picture reads, per client per window. */
+  uploadRateLimit?: { max: number; timeWindow: string };
+  imageReadRateLimit?: { max: number; timeWindow: string };
+  /**
    * The web client's origin, exactly as a browser sends it in `Origin`. Every
    * creation mutation, sign-in, link redemption and sign-out must come from
    * it. Trusted configuration only — never derived from `Host` or a forwarded
@@ -88,6 +102,9 @@ export interface ServerDeps {
    * match.
    */
   webOrigin?: string;
+  /** Opt-in public member profiles. Production and development always provide it. */
+  profiles?: MemberProfileStore;
+  profileRateLimit?: { max: number; timeWindow: string };
   /**
    * Makes the one-way code a confirmed vote is stored with (ADR-0040).
    *
@@ -723,10 +740,27 @@ export async function createServer(deps: ServerDeps): Promise<FastifyInstance> {
     currentVoter,
     ...(deps.creationRateLimit ? { rateLimit: deps.creationRateLimit } : {}),
   });
+  await registerImageRoutes(app, {
+    images: deps.images,
+    webOrigin: deps.webOrigin,
+    currentVoter,
+    ...(deps.imageProcessor ? { processor: deps.imageProcessor } : {}),
+    ...(deps.imageQueue ? { queue: deps.imageQueue } : {}),
+    ...(deps.uploadRateLimit ? { uploadRateLimit: deps.uploadRateLimit } : {}),
+    ...(deps.imageReadRateLimit
+      ? { readRateLimit: deps.imageReadRateLimit }
+      : {}),
+  });
   await registerContributionRoutes(app, {
     contributions: deps.contributions,
     webOrigin: deps.webOrigin,
     currentVoter,
+  });
+  await registerProfileRoutes(app, {
+    profiles: deps.profiles,
+    webOrigin: deps.webOrigin,
+    currentVoter,
+    ...(deps.profileRateLimit ? { rateLimit: deps.profileRateLimit } : {}),
   });
   registerMcpReads(app, deps.mcp);
   return app;

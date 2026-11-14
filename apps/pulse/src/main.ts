@@ -19,9 +19,11 @@ import {
   PostgresVoterStore,
 } from "./identity/pg-store.js";
 import { ResendMailer, resendConfig } from "./identity/resend-mailer.js";
+import { PostgresImageStore } from "./images/pg-store.js";
 import { ConfirmationKey } from "./voting/confirmation.js";
 import { PostgresVotingStore } from "./voting/pg-store.js";
 import { PostgresSuggestionStore } from "./voting/pg-suggestions.js";
+import { PostgresMemberProfileStore } from "./profiles/pg-store.js";
 
 /**
  * Serving pulse.
@@ -378,8 +380,22 @@ export async function buildServer(
       );
     }
 
+    // Pending pictures nobody attached within 24 hours (ADR-0047), the same
+    // best-effort pattern: also swept on each upload.
+    const images = new PostgresImageStore(pool, { clock });
+    try {
+      await images.sweepPending();
+    } catch (error) {
+      logFault(
+        textFaultLogger(log),
+        error,
+        "pulse: the startup picture sweep failed",
+      );
+    }
+
     const app = await createServer({
       claims,
+      images,
       voters: new PostgresVoterStore(pool),
       votes: new PostgresVotingStore(pool),
       suggestions: new PostgresSuggestionStore(pool),
@@ -392,6 +408,7 @@ export async function buildServer(
           ? {}
           : { ownerEmail: config.ownerEmail },
       ),
+      profiles: new PostgresMemberProfileStore(pool, { clock }),
       // The only origin creation mutations are accepted from (ADR-0037):
       // trusted configuration, the same origin sign-in links point at.
       webOrigin: config.webOrigin,

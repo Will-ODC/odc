@@ -1,8 +1,10 @@
-import { useEffect, useRef, useState } from "react";
+import { useEffect, useLayoutEffect, useRef, useState } from "react";
 import type { FormEvent } from "react";
 import type { PulseApi } from "../api/types.js";
 import {
+  accountChangedMessage,
   contributionsApi,
+  ContributionsError,
   type ContributionsApi,
   type ContributionInput,
   type ContributionKind,
@@ -28,7 +30,7 @@ export function NewContribution({
 }) {
   const mine = useMyVotes(api);
   const votes = useVotesFollowSession(mine);
-  const { session, progress, signOut, dismiss } = useSession(api, {
+  const { session, progress, signOut, dismiss, recheck } = useSession(api, {
     onSignedOut: votes.cleared,
     onForgotten: votes.cleared,
     recheckSignedIn: true,
@@ -38,22 +40,48 @@ export function NewContribution({
   useEffect(() => votes.signedInAs(accountId));
   // Keep an expired account's draft for recovery, but never pass it to
   // another account or retain it after someone deliberately signs out.
-  const [draft, setDraft] = useState({ owner: accountId, generation: 0 });
+  // `refused`: the server refused the last draft for a different account, so
+  // the page says so above the emptied form until the next edit or send.
+  // `carry`: the session recheck that refusal started has not yet brought in
+  // the account now signed in; when it does, the notice stays for that
+  // account's empty form. Any other new generation puts it away.
+  const [draft, setDraft] = useState({
+    owner: accountId,
+    generation: 0,
+    refused: false,
+    carry: false,
+  });
   if (accountId !== null && accountId !== draft.owner)
     setDraft({
       owner: accountId,
       generation: draft.generation + (draft.owner === null ? 0 : 1),
+      refused: draft.refused && (draft.carry || draft.owner === null),
+      carry: false,
     });
   else if (
     session.status === "signedOut" &&
     session.ended !== "expired" &&
     draft.owner !== null
   )
-    setDraft({ owner: null, generation: draft.generation + 1 });
+    setDraft({
+      owner: null,
+      generation: draft.generation + 1,
+      refused: false,
+      carry: false,
+    });
   const expired =
     session.status === "signedOut" &&
     session.ended === "expired" &&
     draft.owner !== null;
+  // The callback used by a pending write retains its draft's owner/generation.
+  // Compare it with the committed form before clearing anything on refusal.
+  const mountedDraft = useRef<typeof draft | null>(null);
+  useLayoutEffect(() => {
+    mountedDraft.current = accountId !== null || expired ? draft : null;
+    return () => {
+      mountedDraft.current = null;
+    };
+  });
   return (
     <AppShell
       banner={
@@ -73,12 +101,44 @@ export function NewContribution({
           ← Contributions
         </a>
         <h1>Start a contribution</h1>
+        {draft.refused ? (
+          <p
+            ref={focusWhenLost}
+            role="alert"
+            tabIndex={-1}
+            className="contribution-error"
+          >
+            {accountChangedMessage("your contribution")}
+          </p>
+        ) : null}
         {session.status === "loading" ? (
           <p role="status">Loading…</p>
         ) : accountId !== null || expired ? (
           <ContributionForm
             key={draft.generation}
             client={client}
+            accountId={accountId ?? ""}
+            onAccountChanged={() => {
+              const mounted = mountedDraft.current;
+              if (
+                mounted?.owner === draft.owner &&
+                mounted?.generation === draft.generation
+              )
+                setDraft((current) => ({
+                  ...current,
+                  generation: current.generation + 1,
+                  refused: true,
+                  carry: true,
+                }));
+              recheck();
+            }}
+            onEdit={() =>
+              setDraft((current) =>
+                current.refused || current.carry
+                  ? { ...current, refused: false, carry: false }
+                  : current,
+              )
+            }
             onCreated={onCreated}
             expired={expired}
           />
@@ -98,6 +158,15 @@ export function NewContribution({
     </AppShell>
   );
 }
+/**
+ * Put focus on a notice as it appears, when the press that caused it left
+ * focus on nothing (the form it was in was replaced). Runs as the element is
+ * attached, so there is no moment in which the page holds focus on nothing.
+ */
+function focusWhenLost(node: HTMLElement | null) {
+  const active = document.activeElement;
+  if (node && (active === null || active === document.body)) node.focus();
+}
 type RequiredField = "title" | "description" | "organizer" | "confirm";
 const requiredMessages: Record<RequiredField, string> = {
   title: "Enter a title.",
@@ -110,10 +179,17 @@ function ContributionForm({
   client,
   onCreated,
   expired,
+  accountId,
+  onAccountChanged,
+  onEdit,
 }: {
   client: ContributionsApi;
   onCreated: (id: string) => void;
   expired: boolean;
+  accountId: string;
+  onAccountChanged: () => void;
+  /** The person changed a field or pressed Publish. */
+  onEdit: () => void;
 }) {
   const resultId = useRef("");
   const formRef = useRef<HTMLFormElement>(null);
@@ -154,7 +230,17 @@ function ContributionForm({
   const [pollUnreadable, setPollUnreadable] = useState(false);
   const save = useContributionSave<ContributionInput>(
     async (input, key) => {
-      resultId.current = (await client.create(input, key)).id;
+      try {
+        resultId.current = (await client.create(input, key, accountId)).id;
+      } catch (error) {
+        if (
+          error instanceof ContributionsError &&
+          error.status === 409 &&
+          error.code === "account_changed"
+        )
+          onAccountChanged();
+        throw error;
+      }
     },
     () => onCreated(resultId.current),
   );
@@ -190,6 +276,7 @@ function ContributionForm({
   }
   function submit(event: FormEvent<HTMLFormElement>) {
     event.preventDefault();
+    onEdit();
     if (expired) return;
     const form = new FormData(event.currentTarget);
     const value = (key: string) => String(form.get(key) ?? "").trim();
@@ -217,6 +304,7 @@ function ContributionForm({
       className="contribution-form"
       noValidate
       onSubmit={submit}
+      onChange={onEdit}
     >
       {expired || save.errorStatus === 401 ? (
         // After a 401 this is the one message (it carries the sign-in link),

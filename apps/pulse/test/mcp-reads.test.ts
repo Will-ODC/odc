@@ -296,6 +296,55 @@ test("attribution or community with anything beyond the public shape is refused,
   }
 });
 
+const PICTURE = "0b8f4c1e-5d7a-4e2b-9c3d-1a2b3c4d5e6f";
+const upload = {
+  kind: "upload",
+  displayUrl: `/api/poll-images/${PICTURE}/display.webp`,
+  thumbUrl: `/api/poll-images/${PICTURE}/thumb.webp`,
+  width: 1600,
+  height: 900,
+  alt: "A sunny plot",
+};
+
+test("a_polls_picture_passes_through_in_its_public_shapes", async (t) => {
+  for (const image of [upload, { kind: "tile" }]) {
+    const body = { ...publicPoll, image };
+    const source = await upstream(t, 200, body);
+    const { client } = await adapter(t, source.url);
+    const result = await client.callTool({
+      name: "get_poll",
+      arguments: { pollId: "p1" },
+    });
+    assert.notEqual(result.isError, true);
+    assert.deepEqual(result.structuredContent, body);
+  }
+});
+
+test("a_picture_with_anything_beyond_the_public_shape_is_refused_not_trimmed", async (t) => {
+  for (const image of [
+    { ...upload, uploadedBy: "author-account-private" },
+    { ...upload, sha256: "0".repeat(64) },
+    { kind: "tile", fileName: "private.jpg" },
+    { ...upload, displayUrl: "https://elsewhere.example/x.webp" },
+    { ...upload, thumbUrl: `/api/poll-images/${PICTURE}/display.webp` },
+    { ...upload, alt: " " },
+    { kind: "category" },
+    null,
+  ]) {
+    const source = await upstream(t, 200, { ...publicPoll, image });
+    const { client } = await adapter(t, source.url);
+    const result = await client.callTool({
+      name: "get_poll",
+      arguments: { pollId: "p1" },
+    });
+    errorCode(result, "upstream_invalid_response");
+    assert.doesNotMatch(
+      JSON.stringify(result),
+      /author-account-private|private\.jpg/,
+    );
+  }
+});
+
 test("missing, malformed and additional tool arguments are refused before an upstream request", async (t) => {
   const source = await upstream(t);
   const { client } = await adapter(t, source.url);

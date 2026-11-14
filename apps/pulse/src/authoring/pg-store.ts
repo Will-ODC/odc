@@ -2,6 +2,7 @@ import { randomUUID } from "node:crypto";
 import type { Pool, PoolClient } from "pg";
 import { inTransaction } from "../db/transaction.js";
 import { parseEmail } from "../identity/email.js";
+import { attachToPoll, lockAttachablePending } from "../images/pg-store.js";
 import { createPoll } from "../voting/poll.js";
 import {
   publicPoll as projectPoll,
@@ -139,6 +140,19 @@ export class PostgresCreationStore implements CreationStore {
         }
       }
       const community = await this.#community(client, account);
+      // The uploader's own pending picture, locked for this transaction; one
+      // refusal for unknown, foreign, attached and expired.
+      const pending =
+        input.image === undefined
+          ? undefined
+          : await lockAttachablePending(
+              client,
+              input.image.id,
+              account.id,
+              now,
+            );
+      if (input.image !== undefined && pending === undefined)
+        throw new CreationError("image_unavailable");
       const poll = createPoll(
         {
           id: this.#newId(),
@@ -151,7 +165,7 @@ export class PostgresCreationStore implements CreationStore {
         now,
       );
       await client.query(
-        "insert into polls (id, question, method, created_at, closes_at, accepts_suggestions, community, created_by, attribution_kind, author_name, context) values ($1, $2, $3, $4, $5, false, $6, $7, $8, $9, $10)",
+        "insert into polls (id, question, method, created_at, closes_at, accepts_suggestions, community, created_by, attribution_kind, author_name, image_id, context) values ($1, $2, $3, $4, $5, false, $6, $7, $8, $9, $10, $11)",
         [
           poll.id,
           poll.question,
@@ -162,6 +176,7 @@ export class PostgresCreationStore implements CreationStore {
           account.id,
           input.attribution.kind,
           input.attribution.kind === "named" ? input.attribution.name : null,
+          pending?.id ?? null,
           poll.context ?? null,
         ],
       );
@@ -170,9 +185,23 @@ export class PostgresCreationStore implements CreationStore {
           "insert into poll_choice (id, poll_id, position, label) values ($1, $2, $3, $4)",
           [this.#newId(), poll.id, position, label],
         );
+      const image =
+        pending === undefined || input.image === undefined
+          ? undefined
+          : await attachToPoll(client, pending, {
+              pollId: poll.id,
+              alt: input.image.alt,
+              actorId: account.id,
+              now,
+              changeId: this.#newId(),
+            });
       // The same projection GET /api/polls/:id serves, so the two cannot drift.
       const publicPoll: PublicationPoll = projectPoll(
-        { ...poll, publication: { community, attribution: input.attribution } },
+        {
+          ...poll,
+          publication: { community, attribution: input.attribution },
+          ...(image ? { image } : {}),
+        },
         now,
       );
       await client.query(

@@ -12,6 +12,7 @@ import type {
   PublicationPoll,
 } from "../authoring/store.js";
 import { isStorageUnavailable } from "../db/unavailable.js";
+import { copyPublicPollImage } from "../images/public.js";
 import type { Voter } from "../identity/store.js";
 import { ORIGIN_REFUSAL, originAllowed } from "./origin.js";
 
@@ -105,6 +106,12 @@ function fromCreationError(error: CreationError): Refusal {
       return new Refusal(403, "owner_required", "Only the owner can do that.");
     case "not_found":
       return new Refusal(404, "not_found", "There is no such account.");
+    case "image_unavailable":
+      return new Refusal(
+        422,
+        "image_unavailable",
+        "That picture is no longer available. Add it again.",
+      );
   }
 }
 
@@ -323,6 +330,8 @@ function publicPoll(poll: PublicationPoll) {
     acceptsSuggestions: poll.acceptsSuggestions,
     closesAt: poll.closesAt,
     open: poll.open,
+    // A creation stored before pictures has no image; it reads as the tile.
+    image: copyPublicPollImage(poll.image),
     community: { id: poll.community.id, label: poll.community.label },
     attribution:
       poll.attribution.kind === "named"
