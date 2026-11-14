@@ -292,6 +292,8 @@ describe("owner profile editor", () => {
         .readOnly,
     ).toBe(true);
     expect(document.activeElement).toBe(save);
+    // The button already says "Saving…"; the status line does not repeat it.
+    expect(screen.getAllByText("Saving…")).toHaveLength(1);
     await user.keyboard("{Enter}");
     expect(saveProfile).toHaveBeenCalledOnce();
 

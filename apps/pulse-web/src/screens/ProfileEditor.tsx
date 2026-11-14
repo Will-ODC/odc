@@ -108,7 +108,7 @@ function ProfileEditorSession({
 
 function ProfileSignIn() {
   return (
-    <>
+    <div className="profile__state">
       <ViewState
         data={{
           status: "empty",
@@ -124,7 +124,7 @@ function ProfileSignIn() {
       >
         Sign in
       </Button>
-    </>
+    </div>
   );
 }
 
@@ -228,7 +228,7 @@ function ProfileForm({
   const status = saveError
     ? saveError
     : saving
-      ? "Saving…"
+      ? "" // the Save button already says "Saving…"
       : changed
         ? "Not saved yet."
         : initial === null

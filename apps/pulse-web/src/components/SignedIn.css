@@ -30,6 +30,12 @@
   text-decoration: underline;
 }
 
+.signed-in__row .signed-in__profile {
+  /* The phone menu makes every panel link a full-width flex row; this one
+     stays the width of its text, at the end of the row like Sign out. */
+  display: inline-flex;
+}
+
 .signed-in__profile:hover {
   color: var(--ink);
 }
