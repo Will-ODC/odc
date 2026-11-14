@@ -175,10 +175,11 @@ this skill is a CLI command or an interactive terminal tab. To check Codex is
 usable, run `codex login status`, then a one-line `codex exec -s read-only`
 prompt.
 
-#### Delegate to Codex by default
+#### Delegate to Codex for about half the work
 
-To spread token usage, a Claude orchestrator delegates to Codex by default
-with
+To spread token usage, a Claude orchestrator delegates about half of the
+delegated work to Codex (the 2026-11-14 split in "The standing instruction",
+adjusted by usage) with
 `codex exec -c model="<slug>" -s workspace-write -C <worktree> "<brief>" < /dev/null`.
 Keep the `< /dev/null`: run in the background without it, `codex exec` waits
 for input forever. The prompt starts with a `Title:` line, Codex gets its own
@@ -313,8 +314,18 @@ A second instruction, verbatim (operator, 2026-11-08):
 > **"ensure codex is used consistently for spread out token usage, by
 > delegating appropriately"**
 
-Where the two conflict, the 2026-11-08 instruction wins: Codex is the default
-for delegated implementation and lookups, except the merge checklist, which
+A third instruction, verbatim (operator, 2026-11-14), which sets the share:
+
+> **"generally the work split should be 50/50 but adjustable based on usage"**
+
+So delegated implementation, fixes, tests and lookups split about evenly
+between Codex and Claude (Opus or Sonnet per the routing table), and the
+orchestrator shifts the share toward whichever has usage left. When one runs
+out, the other carries the work. The operator may override the split for a
+session (for example "don't use Codex this session").
+
+Where these conflict with the first instruction, the later ones win: Codex is
+a default route for delegated implementation and lookups, except the merge checklist, which
 stays with `odc-navigator`; `contracts/` work
 and ADRs, which stay with Opus `odc-architect`, and either verifier, which
 stays with `odc-verifier-builder`.
@@ -327,27 +338,30 @@ branches, PRs and merging, `odc-pipeline` is the source; this file follows it.
 
 ## Routing table
 
-| Work                                                           | Model                                | Agent                            |
-| -------------------------------------------------------------- | ------------------------------------ | -------------------------------- |
-| Orchestrating a multi-agent task; deciding what to dispatch    | **Opus**                             | (you)                            |
-| Architecture, cross-service planning, phase planning           | **Opus**                             | `odc-architect`                  |
-| Drafting or editing anything in `contracts/`; writing an ADR   | **Opus**                             | `odc-architect`                  |
-| Complex implementation outside `contracts/` (service, feature) | **Codex** (default) / Opus           | `codex exec` / `odc-implementer` |
-| Building either verifier (contracts-only, fresh context)       | **Opus**                             | `odc-verifier-builder`           |
-| Pre-merge review (fresh context)                               | **Opus**                             | `odc-reviewer`                   |
-| Pre-merge review when Codex orchestrates ("Merging")           | **Codex**                            | fresh `codex exec`               |
-| UI and design review of a UI PR (fresh context)                | **Opus**                             | `odc-ui-reviewer`                |
-| Second, independent review of a UI or complex PR               | **Codex**                            | `codex review`                   |
-| Phase-gate security audit (fresh context)                      | **Opus**                             | `odc-security-auditor`           |
-| Resolving a contradiction between two documents                | **Opus**                             | (judgement — see below)          |
-| Exploration, inventory, "where does X live"                    | **Codex** (default) / Sonnet         | `codex exec` / `odc-navigator`   |
-| Verifying cited facts: does this path/commit/PR/line resolve?  | **Codex** (default) / Sonnet         | `codex exec` / `odc-navigator`   |
-| Renames, mechanical find-and-replace, formatting               | **Codex** (default) / Sonnet         | `codex exec` / `odc-navigator`   |
-| Writing tests for delegated implementation                     | **Codex** (default) / Opus or Sonnet | `codex exec` / `odc-implementer` |
-| Running tests or guards and reporting the output               | **Codex** (default) / Sonnet         | `codex exec` / `odc-navigator`   |
-| Simple implementation: a one-behaviour fix with a clear spec   | **Codex** (default) / Sonnet         | `codex exec` / `odc-navigator`   |
-| Merge mechanics and the merge checklist, memory included       | **Sonnet** (Claude orchestrator)     | `odc-navigator`                  |
-| Taking over as orchestrator when Claude usage runs out         | **Codex**                            | (hand-off — see above)           |
+The "~half" rows split about 50/50 between Codex and Claude, shifted by
+usage (operator, 2026-11-14; see "The standing instruction").
+
+| Work                                                           | Model                            | Agent                            |
+| -------------------------------------------------------------- | -------------------------------- | -------------------------------- |
+| Orchestrating a multi-agent task; deciding what to dispatch    | **Opus**                         | (you)                            |
+| Architecture, cross-service planning, phase planning           | **Opus**                         | `odc-architect`                  |
+| Drafting or editing anything in `contracts/`; writing an ADR   | **Opus**                         | `odc-architect`                  |
+| Complex implementation outside `contracts/` (service, feature) | **Codex** ~half / Opus           | `codex exec` / `odc-implementer` |
+| Building either verifier (contracts-only, fresh context)       | **Opus**                         | `odc-verifier-builder`           |
+| Pre-merge review (fresh context)                               | **Opus**                         | `odc-reviewer`                   |
+| Pre-merge review when Codex orchestrates ("Merging")           | **Codex**                        | fresh `codex exec`               |
+| UI and design review of a UI PR (fresh context)                | **Opus**                         | `odc-ui-reviewer`                |
+| Second, independent review of a UI or complex PR               | **Codex**                        | `codex review`                   |
+| Phase-gate security audit (fresh context)                      | **Opus**                         | `odc-security-auditor`           |
+| Resolving a contradiction between two documents                | **Opus**                         | (judgement — see below)          |
+| Exploration, inventory, "where does X live"                    | **Codex** ~half / Sonnet         | `codex exec` / `odc-navigator`   |
+| Verifying cited facts: does this path/commit/PR/line resolve?  | **Codex** ~half / Sonnet         | `codex exec` / `odc-navigator`   |
+| Renames, mechanical find-and-replace, formatting               | **Codex** ~half / Sonnet         | `codex exec` / `odc-navigator`   |
+| Writing tests for delegated implementation                     | **Codex** ~half / Opus or Sonnet | `codex exec` / `odc-implementer` |
+| Running tests or guards and reporting the output               | **Codex** ~half / Sonnet         | `codex exec` / `odc-navigator`   |
+| Simple implementation: a one-behaviour fix with a clear spec   | **Codex** ~half / Sonnet         | `codex exec` / `odc-navigator`   |
+| Merge mechanics and the merge checklist, memory included       | **Sonnet** (Claude orchestrator) | `odc-navigator`                  |
+| Taking over as orchestrator when Claude usage runs out         | **Codex**                        | (hand-off — see above)           |
 
 **The line between "simple" and "complex" implementation.** Codex is the
 default for both, with one exception: `contracts/` work and ADRs are never

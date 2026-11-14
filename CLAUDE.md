@@ -96,9 +96,9 @@ and limitations.
 The operator's standing instruction, verbatim: **"using opus as an orchestrator
 and for complex implementation, and sonnet for routine exploration and simple
 implementation."** Exception: Codex may take over as orchestrator when Claude
-usage runs out (operator, 2026-11-07), and Codex is the default for delegated
-implementation, tests and lookups to spread token usage (operator, 2026-11-08),
-except `contracts/`, ADRs and either verifier;
+usage runs out (operator, 2026-11-07), and delegated implementation, tests and
+lookups split about 50/50 between Codex and Claude, adjusted by usage
+(operator, 2026-11-14), except `contracts/`, ADRs and either verifier;
 see `odc-orchestration`.
 
 **`.claude/skills/odc-orchestration` is the single home** for what that means:
