@@ -36,6 +36,8 @@ container, so the page and the API share one address.
 | `/questions`           | The four starting questions.                                            |
 | `/?poll=ID`            | The live vote page for one poll. Old `/conversation` links still work.  |
 | `/new`                 | Post a question after signing in, then open its vote page.              |
+| `/profile`             | Create, update, hide or share the signed-in member's public profile.    |
+| `/u/<publicId>`        | A public member profile, or unavailable if it is absent or hidden.      |
 | `/trust`               | "How votes count": a short guide to counting and its limits.            |
 | `/sign-in?token=…`     | Where emailed sign-in links land; goes straight back to where you were. |
 | `/preview/chat`        | A prototype with sample data only.                                      |
