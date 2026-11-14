@@ -121,6 +121,7 @@ authorized, and accepted rules need an ADR before enforcement is scoped.
   extension/site integration, author approval, framing, outcome, consent for
   sending page content, cost/spam. Too broad for one issue; do not implement
   from this note.
-- **#205** (closed as a duplicate 2026-10-11): multiple answers on approval polls. Choose the interaction
-  and acceptance criteria first.
-- Newsletter choices and search-language configuration can wait (#217, closed not planned).
+- Multiple answers on approval polls (#205, closed as a duplicate
+  2026-10-11): choose the interaction and acceptance criteria before cutting
+  a new ticket.
+- Newsletter choices and search-language configuration: not planned (#217).

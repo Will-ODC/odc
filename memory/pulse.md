@@ -121,8 +121,9 @@ A small invited pilot comes only after 3-6. None of this authorizes a deploy.
    [targeted tests](../docs/audits/pulse-tests-2026-11-14.md) → #613/#614;
    [simplicity](../docs/audits/pulse-simplicity-2026-11-14.md) → #616;
    [broader quality](../docs/audits/test-quality-2026-11-14/README.md) → #621-#629.
-   A Claude review of the broader audit found the findings real but most
-   tickets over-scoped; the operator decides the narrowed scopes before work.
+   A Claude review found the findings real but most tickets over-scoped; the
+   operator-approved narrowed scope now heads each ticket body (2026-11-14),
+   and the shared verifier gaps moved to contracts ticket #645.
 3. **CI selection #619 awaits operator merge.** `pulse-images` is not a
    required check, so a red picture-package check only warns; #612 has the
    order of steps.
