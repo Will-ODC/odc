@@ -92,6 +92,8 @@ it("keeps the account trigger plain text in the banner, not an underlined quiet 
 it("keeps screen retry and shared Load more controls aligned under their lists", () => {
   const browse = read("../src/screens/Browse.css");
   expect(browse).not.toMatch(/\.btn\.browse__action/);
+  // My votes keeps its own copies in MyVotes.css; Browse holds none of them.
+  expect(browse).not.toMatch(/browse__main--message/);
   expect(browse).toMatch(
     /\.browse__main > \.browse__action \{\s*display: block;\s*margin: calc\(var\(--step\) \* 2\) auto 0;\s*\}/,
   );
