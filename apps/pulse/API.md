@@ -1300,6 +1300,13 @@ SHA-256 of that variant's stored bytes. A matching `If-None-Match` answers
 leaves browser caches within the hour. Rate limited per client (300 a minute
 by default).
 
+Behind the production nginx (`apps/pulse-web/nginx.conf`) these responses also
+carry the site's page headers, so a browser sees a second, looser
+`Content-Security-Policy` and a repeated `nosniff`. Browsers enforce every CSP
+they receive, so the stricter `default-src 'none'` still applies. nginx also
+answers an upload body over 10 MiB itself, with the same `413`
+`image_too_large` JSON body as above.
+
 ### The public `image` field
 
 Every poll body (`GET /api/polls/:id`, the creation response, MCP `get_poll`)
