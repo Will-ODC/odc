@@ -9,10 +9,11 @@ const poll = createPoll(
   AT,
 );
 
-test("a_poll_without_a_publication_has_exactly_the_original_public_keys", () => {
+test("a_poll_without_a_publication_has_only_public_keys_and_null_context", () => {
   assert.deepEqual(Object.keys(publicPoll(poll, AT)), [
     "id",
     "question",
+    "context",
     "choices",
     "method",
     "next",
@@ -20,6 +21,17 @@ test("a_poll_without_a_publication_has_exactly_the_original_public_keys", () => 
     "closesAt",
     "open",
   ]);
+  assert.deepEqual(publicPoll(poll, AT), {
+    id: "p",
+    question: "Q",
+    context: null,
+    choices: ["A", "B"],
+    method: "single",
+    next: [null, null],
+    acceptsSuggestions: false,
+    closesAt: null,
+    open: true,
+  });
 });
 
 test("an_unknown_attribution_kind_is_refused_not_published_as_anonymous", () => {

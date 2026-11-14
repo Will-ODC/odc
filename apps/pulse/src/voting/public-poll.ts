@@ -19,6 +19,7 @@ import {
 export interface PublicPoll {
   id: string;
   question: string;
+  context: string | null;
   choices: string[];
   method: PollMethod;
   next: (string | null)[];
@@ -51,6 +52,7 @@ export function publicPoll(poll: Poll, now: Date): PublicPoll {
   const body: PublicPoll = {
     id: poll.id,
     question: poll.question,
+    context: poll.context ?? null,
     choices: [...poll.choices],
     method: poll.method,
     next: [...poll.next],
@@ -78,4 +80,23 @@ function publicAttribution(attribution: Attribution): Attribution {
       // unknown kind can never be published as if it were anonymous.
       throw new TypeError("unknown poll attribution");
   }
+}
+
+/** Saved creation snapshots keep their original openness and close time. */
+export function publicPollReplay(
+  poll: Omit<PublishedPublicPoll, "context"> & { context?: string | null },
+): PublishedPublicPoll {
+  return {
+    id: poll.id,
+    question: poll.question,
+    context: poll.context ?? null,
+    choices: [...poll.choices],
+    method: poll.method,
+    next: [...poll.next],
+    acceptsSuggestions: poll.acceptsSuggestions,
+    closesAt: poll.closesAt,
+    open: poll.open,
+    community: { id: poll.community.id, label: poll.community.label },
+    attribution: publicAttribution(poll.attribution),
+  };
 }

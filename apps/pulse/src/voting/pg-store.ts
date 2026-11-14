@@ -63,8 +63,8 @@ export class PostgresVotingStore implements VotingStore {
     await inTransaction(this.#pool, async (client) => {
       const { rowCount } = await client.query(
         "insert into polls" +
-          " (id, question, method, created_at, closes_at, accepts_suggestions)" +
-          " values ($1, $2, $3, $4, $5, $6) on conflict (id) do nothing",
+          " (id, question, method, created_at, closes_at, accepts_suggestions, context)" +
+          " values ($1, $2, $3, $4, $5, $6, $7) on conflict (id) do nothing",
         [
           poll.id,
           poll.question,
@@ -72,6 +72,7 @@ export class PostgresVotingStore implements VotingStore {
           poll.createdAt,
           poll.closesAt ?? null,
           poll.acceptsSuggestions,
+          poll.context ?? null,
         ],
       );
       // The same refusal, and the same error, as the in-memory store.
@@ -109,7 +110,7 @@ export class PostgresVotingStore implements VotingStore {
     // `created_by` is deliberately not selected: the author's account never
     // leaves the creation store, so no projection can copy it by mistake.
     const { rows } = await this.#pool.query<PollRow>(
-      "select p.id, p.question, p.method, p.created_at, p.closes_at," +
+      "select p.id, p.question, p.context, p.method, p.created_at, p.closes_at," +
         " p.accepts_suggestions, p.attribution_kind, p.author_name," +
         " c.id as community_id, c.label as community_label" +
         " from polls p left join community c on c.id = p.community" +
@@ -127,6 +128,7 @@ export class PostgresVotingStore implements VotingStore {
     const poll: Poll = {
       id: row.id,
       question: row.question,
+      ...(row.context === null ? {} : { context: row.context }),
       choices: choices.rows.map((choice) => choice.label),
       // Plain text in the table on purpose (ADR-0021); `createPoll` checked it
       // against the known methods before this store ever wrote it.
@@ -467,6 +469,7 @@ export class PostgresVotingStore implements VotingStore {
 }
 
 interface PollRow {
+  context: string | null;
   id: string;
   question: string;
   method: string;

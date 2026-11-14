@@ -24,6 +24,7 @@ export const pollSchema = z
   .object({
     id: pollIdSchema,
     question: z.string(),
+    context: z.string().nullable().default(null),
     choices: z.array(z.string()).min(1),
     method,
     next: z.array(pollIdSchema.nullable()),

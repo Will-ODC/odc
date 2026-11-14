@@ -3,7 +3,10 @@ import type { Pool, PoolClient } from "pg";
 import { inTransaction } from "../db/transaction.js";
 import { parseEmail } from "../identity/email.js";
 import { createPoll } from "../voting/poll.js";
-import { publicPoll as projectPoll } from "../voting/public-poll.js";
+import {
+  publicPoll as projectPoll,
+  publicPollReplay,
+} from "../voting/public-poll.js";
 import {
   CreationError,
   HOUR_MS,
@@ -91,7 +94,10 @@ export class PostgresCreationStore implements CreationStore {
       if (replay.rows[0]) {
         if (!replay.rows[0].same)
           throw new CreationError("idempotency_conflict");
-        return { poll: replay.rows[0].public_response, replayed: true };
+        return {
+          poll: publicPollReplay(replay.rows[0].public_response),
+          replayed: true,
+        };
       }
       const now = this.#clock();
       const closesAt =
@@ -137,6 +143,7 @@ export class PostgresCreationStore implements CreationStore {
         {
           id: this.#newId(),
           question: input.question,
+          ...(input.context === undefined ? {} : { context: input.context }),
           choices: input.choices,
           method: input.method,
           closesAt,
@@ -144,7 +151,7 @@ export class PostgresCreationStore implements CreationStore {
         now,
       );
       await client.query(
-        "insert into polls (id, question, method, created_at, closes_at, accepts_suggestions, community, created_by, attribution_kind, author_name) values ($1, $2, $3, $4, $5, false, $6, $7, $8, $9)",
+        "insert into polls (id, question, method, created_at, closes_at, accepts_suggestions, community, created_by, attribution_kind, author_name, context) values ($1, $2, $3, $4, $5, false, $6, $7, $8, $9, $10)",
         [
           poll.id,
           poll.question,
@@ -155,6 +162,7 @@ export class PostgresCreationStore implements CreationStore {
           account.id,
           input.attribution.kind,
           input.attribution.kind === "named" ? input.attribution.name : null,
+          poll.context ?? null,
         ],
       );
       for (const [position, label] of poll.choices.entries())

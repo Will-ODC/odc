@@ -289,6 +289,98 @@ for (const kind of ["memory", "postgres"] as const) {
   const it = (name: string, body: (t: TestContext) => Promise<void>) =>
     test(`${kind}: ${name}`, { skip }, body);
 
+  it("poll_context_round_trips_as_plain_text_and_participates_in_creation_replay", async (t) => {
+    const h = await harness(t, kind);
+    const key = randomUUID();
+    const context = "First line\n<script>literal text</script> 🌱";
+    const created = await h.publish(
+      "guest",
+      question({ context: `  ${context.replace("\n", "\r\n")}  ` }),
+      { key },
+    );
+    assert.equal(created.statusCode, 201, created.body);
+    const poll = created.json().poll;
+    assert.ok(poll);
+    assert.equal(poll.context, context);
+    const read = await h.app.inject({ url: `/api/polls/${poll.id}` });
+    assert.equal(read.statusCode, 200, read.body);
+    assert.equal(read.json().context, context);
+    assert.doesNotMatch(
+      JSON.stringify(read.json()),
+      /acct-guest|example\.test|created_by/,
+    );
+    const replay = await h.publish("guest", question({ context }), { key });
+    assert.equal(replay.statusCode, 200, replay.body);
+    assert.deepEqual(replay.json().poll, poll);
+    refused(
+      await h.publish("guest", question({ context: "Different context" }), {
+        key,
+      }),
+      409,
+      "idempotency_conflict",
+    );
+    refused(
+      await h.publish("guest", question(), { key }),
+      409,
+      "idempotency_conflict",
+    );
+  });
+
+  it("omitted_and_blank_poll_context_read_as_null_and_replay_equivalently", async (t) => {
+    const h = await harness(t, kind);
+    const key = randomUUID();
+    const created = await h.publish("guest", question(), { key });
+    assert.equal(created.statusCode, 201, created.body);
+    const poll = created.json().poll;
+    assert.ok(poll);
+    assert.equal(poll.context, null);
+    const replay = await h.publish("guest", question({ context: " \n " }), {
+      key,
+    });
+    assert.equal(replay.statusCode, 200, replay.body);
+    assert.deepEqual(replay.json().poll, poll);
+    const read = await h.app.inject({ url: `/api/polls/${poll.id}` });
+    assert.equal(read.json().context, null);
+    await h.votes.createPoll({
+      id: "legacy-context",
+      question: "Legacy?",
+      choices: ["A", "B"],
+      method: "single",
+    });
+    const legacy = await h.app.inject({ url: "/api/polls/legacy-context" });
+    assert.equal(legacy.statusCode, 200, legacy.body);
+    assert.equal(legacy.json().context, null);
+  });
+
+  it("poll_context_accepts_500_code_points_and_refuses_bad_input_without_using_the_replay_key", async (t) => {
+    const h = await harness(t, kind);
+    const key = randomUUID();
+    for (const context of [
+      null,
+      42,
+      [],
+      {},
+      "a".repeat(501),
+      "🌱".repeat(501),
+      "\ttext",
+      "text\t",
+      "a\rb",
+      "a\u0000b",
+      "a\u0085b",
+      "a\ud800",
+    ]) {
+      refused(
+        await h.publish("guest", question({ context }), { key }),
+        400,
+        "bad_request",
+      );
+    }
+    const context = "🌱".repeat(500);
+    const valid = await h.publish("guest", question({ context }), { key });
+    assert.equal(valid.statusCode, 201, valid.body);
+    assert.equal(valid.json().poll?.context, context);
+  });
+
   it("context_reports_the_posting_community_and_the_callers_own_permission", async (t) => {
     const h = await harness(t, kind);
     const guest = await h.context("guest");
@@ -323,6 +415,7 @@ for (const kind of ["memory", "postgres"] as const) {
       {
         id: "x",
         question: "Should we open a community garden?",
+        context: null,
         choices: ["Yes", "No"],
         method: "single",
         next: [null, null],

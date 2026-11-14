@@ -1,5 +1,6 @@
 import {
   createPoll,
+  normalizePollContext,
   type Attribution,
   type PollMethod,
 } from "../voting/poll.js";
@@ -10,6 +11,7 @@ export const WEEK_MS = 604_800_000;
 export const HOUR_MS = 3_600_000;
 export interface CreationInput {
   question: string;
+  context?: string;
   choices: string[];
   method: PollMethod;
   attribution: Attribution;
@@ -63,6 +65,7 @@ function text(value: unknown, limit: number): string {
 export function normalizeCreation(value: unknown): CreationInput {
   const row = object(value, [
     "question",
+    "context",
     "choices",
     "method",
     "attribution",
@@ -70,6 +73,14 @@ export function normalizeCreation(value: unknown): CreationInput {
     "purposeAcknowledgement",
   ]);
   const question = text(row.question, 1000);
+  let context: string | null = null;
+  if ("context" in row) {
+    try {
+      context = normalizePollContext(row.context);
+    } catch {
+      throw new CreationError("bad_request");
+    }
+  }
   if (!Array.isArray(row.choices)) throw new CreationError("bad_request");
   const choices = row.choices.map((choice: unknown) => text(choice, 200));
   if (row.method !== "single" && row.method !== "approval")
@@ -106,6 +117,7 @@ export function normalizeCreation(value: unknown): CreationInput {
     throw new CreationError("bad_request");
   return {
     question,
+    ...(context === null ? {} : { context }),
     choices,
     method: row.method,
     attribution,

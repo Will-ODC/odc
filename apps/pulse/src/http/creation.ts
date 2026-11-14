@@ -316,6 +316,7 @@ function publicPoll(poll: PublicationPoll) {
   return {
     id: poll.id,
     question: poll.question,
+    context: poll.context ?? null,
     choices: [...poll.choices],
     method: poll.method,
     next: [...poll.next],
