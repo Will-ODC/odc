@@ -15,6 +15,8 @@ import { databaseUrl } from "./db/config.js";
 import { migrate } from "./db/migrate.js";
 import { createPool } from "./db/pool.js";
 import { createServer } from "./http/server.js";
+import { PostgresImageStore } from "./images/pg-store.js";
+import { InMemoryImageStore, type ImageStore } from "./images/store.js";
 import { assertOrigin, sessionSecretTooShort } from "./main.js";
 import { MIN_SESSION_SECRET_LENGTH, SessionSigner } from "./http/session.js";
 import {
@@ -315,6 +317,7 @@ interface Storage {
   claims: ClaimStore;
   domains: AllowedDomainSource;
   creation: CreationStore;
+  images: ImageStore;
   contributions: ContributionsStore;
   profiles: MemberProfileStore;
   /** Only when the rows are in Postgres. */
@@ -406,6 +409,7 @@ export async function buildDevServer(
       signer: new SessionSigner(config.secret),
       confirmationKey: new ConfirmationKey(config.confirmationKey),
       creation: storage.creation,
+      images: storage.images,
       contributions: storage.contributions,
       profiles: storage.profiles,
       // The client's origin, which is where creation requests come from.
@@ -447,6 +451,7 @@ function inMemory(creation: { ownerEmail?: string }): Storage {
     claims: new InMemoryClaimStore(),
     domains: new StaticDomainSource(SEED_DOMAINS),
     creation: new InMemoryCreationStore(voters, votes, creation),
+    images: new InMemoryImageStore(voters, votes),
     contributions: new InMemoryContributionsStore(voters, votes),
     profiles: new InMemoryMemberProfileStore(voters),
   };
@@ -488,6 +493,7 @@ async function inPostgres(
     claims: new PostgresClaimStore(pool),
     domains: new PostgresDomainSource(pool),
     creation: new PostgresCreationStore(pool, creation),
+    images: new PostgresImageStore(pool),
     contributions: new PostgresContributionsStore(pool),
     profiles: new PostgresMemberProfileStore(pool),
     pool,

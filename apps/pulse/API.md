@@ -580,12 +580,17 @@ from 1 to 100. Each query parameter may occur once; unknown parameters are refus
       "method": "single",
       "createdAt": "2026-10-20T12:00:00.000Z",
       "closesAt": null,
-      "open": true
+      "open": true,
+      "image": { "kind": "tile" }
     }
   ],
   "nextCursor": null
 }
 ```
+
+Each row carries the same `image` object as `GET /api/polls/:id` (see
+"Poll pictures (ADR-0047)" below), so a page shows thumbnails without a read
+per poll.
 
 Lists open and closed polls in that community, excluding hidden polls and legacy
 polls without a community. No private author, account, ballot or vote data is
@@ -622,9 +627,14 @@ this while moving through the story, and it reveals nothing about a person.
   "next": ["ads-allowed", "pay-for-it"],
   "acceptsSuggestions": false,
   "closesAt": "2026-08-28T12:00:00.000Z",
-  "open": true
+  "open": true,
+  "image": { "kind": "tile" }
 }
 ```
+
+`image` is always present: the poster's picture (`kind: "upload"`) or
+`{ "kind": "tile" }`, which the client draws. See "Poll pictures (ADR-0047)"
+below.
 
 `next` has one entry per choice, position for position, and `null` where that choice
 ends the run. Always the same length as `choices`.
@@ -985,6 +995,10 @@ anonymous attribution, an unknown kind, or `null` — is refused whole as
 serving the public projection. Unknown keys elsewhere in the poll are still
 stripped as before.
 
+`get_poll` passes `image` through as an optional field in its exact public
+shapes (`upload` with relative picture URLs, or `tile`); anything else inside
+it is refused whole as `upstream_invalid_response`.
+
 `get_results` passes the confirmed numbers through as optional fields, so a body from a
 server older than ADR-0040 still reads, and refuses a body claiming more confirmed
 people than voters, or more confirmed picks of a choice than confirmed people.
@@ -1107,8 +1121,15 @@ Required `Idempotency-Key`: client-generated UUID, scoped to this account
   Names are self-selected, not proof of identity, and never copied from email.
 - `purposeAcknowledgement`: optional exact version string. Required unless v1
   is already recorded for this account; invalid versions are always refused.
+- `image`: optional `{ "id": <uuid>, "alt": <text> }` naming the caller's own
+  pending picture from `POST /api/poll-images` (lowercase UUID). `alt` is a
+  required description: trimmed, 1–300 code points, same text rules as the
+  question. Attaching is part of this transaction; the picture id and
+  description are part of the canonical replay input, and a replay attaches
+  nothing twice. A request without `image` has the same canonical input it
+  always had.
 - `id`, `community`, `createdBy`, `next`, `acceptsSuggestions`, owner/permission
-  fields, photos and summaries are not writable inputs. Suggestions are false,
+  fields and summaries are not writable inputs. Suggestions are false,
   all next entries null, ID is server-generated.
 - All text must be valid Unicode without NUL characters. Invalid encodings
   (malformed UTF-8 bytes, or an escaped lone surrogate) return `bad_request`;
@@ -1150,6 +1171,7 @@ Unlimited grants bypass this quota, not resource checks or authentication.
 | 409    | `idempotency_conflict` | Key already used for different canonical input                                      |
 | 413    | `body_too_large`       | Body exceeds 32 KiB                                                                 |
 | 422    | `purpose_required`     | First post needs the v1 promise                                                     |
+| 422    | `image_unavailable`    | `image.id` is not the caller's pending picture (unknown, used or expired)           |
 | 429    | `too_many_requests`    | More than the per-client request limit (above); not a posting-quota answer          |
 | 429    | `posting_limit`        | Five creations in the rolling hour; integer Retry-After seconds                     |
 | 503    | `creation_unavailable` | Required storage unavailable; nothing partially committed                           |
@@ -1193,6 +1215,123 @@ non-owner learns nothing about which accounts exist), 413 `body_too_large` (PUT
 body over 1 KiB), 503 `creation_unavailable`, 500 `server_error`. All changes are atomic and
 attributed to the owner. Context exposes only the caller's effective posting
 permission. No public grant listing or author/account inspection is introduced.
+
+## Poll pictures (ADR-0047)
+
+A poll may carry one picture, uploaded first and then attached with
+`POST /api/polls` (`image` above). Pictures are stored in Pulse's Postgres as
+two re-encoded WebP variants; the original upload is never stored or served.
+
+### `POST /api/poll-images`
+
+Signed-in only. The body is the raw file, with `Content-Type: image/jpeg`,
+`image/png` or `image/webp` (no multipart), and `Origin` exactly the web
+origin. Checks run in this order: the per-client rate limit (10 a minute,
+429 `too_many_requests`); pictures configured (503 `images_unavailable`);
+`Origin` (403 `origin_not_allowed`); session (401 `signed_out`); declared type
+one of the three (415 `unsupported_image`), all before the API reads the body.
+The API then reads it up to 10 MiB. In the served deployment nginx receives
+and buffers the whole body (up to 10 MiB) before forwarding the request, so
+these checks save the API's work, not the upload's bandwidth.
+
+The file is judged by its content, never its declared type or name: a PNG sent
+as `image/jpeg` is accepted as a PNG. JPEG, PNG and WebP are accepted; SVG,
+GIF, HEIC, AVIF, animated PNG (an `acTL` chunk before the first `IDAT`) and
+multi-page WebP are refused, never cut to a first frame. Size limits are read
+from the header before a full decode. The picture is rotated by its EXIF
+orientation, converted to sRGB, and **all metadata is dropped** (EXIF
+including GPS location, XMP, IPTC, ICC). Two variants are stored: `display`
+fits within 1600 × 1600 (aspect kept, never enlarged, WebP quality 80) and
+`thumb` is a 256 × 256 centre crop (quality 75).
+
+`201`, `Cache-Control: no-store`:
+
+```json
+{
+  "image": {
+    "id": "0b8f4c1e-5d7a-4e2b-9c3d-1a2b3c4d5e6f",
+    "width": 1600,
+    "height": 900
+  }
+}
+```
+
+`width` and `height` are the display variant's. The picture is **pending**:
+visible to nobody and attachable only by this account, for 24 hours. Pending
+pictures older than that are deleted with their bytes at API startup and at
+each upload (best-effort; a failed sweep never refuses an upload).
+
+| Status | Error                | Meaning                                                                          |
+| ------ | -------------------- | -------------------------------------------------------------------------------- |
+| 401    | `signed_out`         | No current session                                                               |
+| 403    | `origin_not_allowed` | Missing or foreign Origin                                                        |
+| 413    | `image_too_large`    | Body over 10 MiB (10,485,760 bytes); exactly that size is read                   |
+| 415    | `unsupported_image`  | Declared type not one of the three, or content not a still JPEG, PNG or WebP     |
+| 422    | `image_dimensions`   | Over 8,000 px on a side, over 40 megapixels, or under 200 px on the shorter side |
+| 429    | `too_many_requests`  | Per-client request limit (in memory, per instance)                               |
+| 429    | `upload_limit`       | 20 accepted uploads in the rolling hour for this account; integer `Retry-After`  |
+| 429    | `pending_limit`      | This account already holds 5 pending pictures                                    |
+| 503    | `image_busy`         | This instance is decoding and its short queue is full; retry shortly             |
+| 503    | `images_unavailable` | Pictures not configured, or storage unavailable                                  |
+| 500    | `server_error`       | Unexpected fault                                                                 |
+
+The hourly quota counts accepted uploads from a record kept apart from the
+picture, so deleting a picture never refunds an upload. The account quotas
+are counted in Postgres and checked before the file is
+decoded, then again when it is stored. Nothing logs the body, the bytes or the
+account; a processing fault is logged by error class only.
+
+### `GET /api/poll-images/:id/display.webp` and `/thumb.webp`
+
+No session; no cookie is read or set. `:id` must be a lowercase UUID before
+anything is queried. A picture is served only while its owner allows it: for
+a poll, while it is that poll's current picture and the poll is not hidden.
+Community default pictures arrive with category defaults; none is served yet.
+Malformed, unknown, pending and unservable ids answer the same `404`, with
+the same body as any unknown path:
+`{ "error": "not_found", "message": "There is nothing here." }`.
+
+`200` headers: `Content-Type: image/webp`, `X-Content-Type-Options: nosniff`,
+`Content-Security-Policy: default-src 'none'`,
+`Cross-Origin-Resource-Policy: same-origin`,
+`Cache-Control: public, max-age=3600`, and a strong `ETag` that is the quoted
+SHA-256 of that variant's stored bytes. A matching `If-None-Match` answers
+`304` with the same `ETag` and `Cache-Control`. A removed or hidden picture
+leaves browser caches within the hour. Rate limited per client (300 a minute
+by default).
+
+Behind the production nginx (`apps/pulse-web/nginx.conf`) these responses also
+carry the site's page headers, so a browser sees a second, looser
+`Content-Security-Policy` and a repeated `nosniff`. Browsers enforce every CSP
+they receive, so the stricter `default-src 'none'` still applies. nginx also
+answers an upload body over 10 MiB itself, with the same `413`
+`image_too_large` JSON body as above.
+
+### The public `image` field
+
+Every poll body (`GET /api/polls/:id`, the creation response, MCP `get_poll`)
+and every listing row carries `image`, built by one projection:
+
+```json
+{
+  "kind": "upload",
+  "displayUrl": "/api/poll-images/0b8f4c1e-5d7a-4e2b-9c3d-1a2b3c4d5e6f/display.webp",
+  "thumbUrl": "/api/poll-images/0b8f4c1e-5d7a-4e2b-9c3d-1a2b3c4d5e6f/thumb.webp",
+  "width": 1600,
+  "height": 900,
+  "alt": "A sunny garden plot"
+}
+```
+
+or `{ "kind": "tile" }` when the poll has no servable picture, for which the
+client draws a generated tile. URLs are relative. `upload` appears exactly
+when the picture route would serve it. Nothing else is ever in the object: no
+uploading account, file name, original type or size, upload time or hash. A
+creation response replayed from before pictures existed reads as the tile.
+
+Planned, not served (ADR-0047, plan P12 steps 5–9): category defaults
+(`kind: "category"`), removing or replacing a picture, reporting, and the
+site owner's soft delete.
 
 ## Contributions (#246, #247, #252)
 

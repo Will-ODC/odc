@@ -1,3 +1,4 @@
+import { IMAGE_ID, MAX_ALT_LENGTH } from "../images/limits.js";
 import {
   createPoll,
   type Attribution,
@@ -15,6 +16,12 @@ export interface CreationInput {
   attribution: Attribution;
   closesAt: string | null;
   purposeAcknowledgement: string | null;
+  /**
+   * The uploader's own pending picture and its required description
+   * (ADR-0047 sections 2 and 5). Absent, not null, when there is none, so a
+   * request without a picture keeps the canonical replay input it always had.
+   */
+  image?: { id: string; alt: string };
 }
 export class CreationError extends Error {
   constructor(
@@ -25,7 +32,8 @@ export class CreationError extends Error {
       | "idempotency_conflict"
       | "posting_limit"
       | "owner_required"
-      | "not_found",
+      | "not_found"
+      | "image_unavailable",
     readonly retryAfter?: number,
   ) {
     super(code);
@@ -68,6 +76,7 @@ export function normalizeCreation(value: unknown): CreationInput {
     "attribution",
     "closesAt",
     "purposeAcknowledgement",
+    "image",
   ]);
   const question = text(row.question, 1000);
   if (!Array.isArray(row.choices)) throw new CreationError("bad_request");
@@ -104,6 +113,15 @@ export function normalizeCreation(value: unknown): CreationInput {
     row.purposeAcknowledgement !== PURPOSE_VERSION
   )
     throw new CreationError("bad_request");
+  let image: { id: string; alt: string } | undefined;
+  if ("image" in row) {
+    const i = object(row.image, ["id", "alt"]);
+    // Lowercase only: picture ids are minted lowercase, and one spelling
+    // keeps the canonical replay input and the picture URL the same.
+    if (typeof i.id !== "string" || !IMAGE_ID.test(i.id))
+      throw new CreationError("bad_request");
+    image = { id: i.id, alt: text(i.alt, MAX_ALT_LENGTH) };
+  }
   return {
     question,
     choices,
@@ -112,5 +130,6 @@ export function normalizeCreation(value: unknown): CreationInput {
     closesAt,
     purposeAcknowledgement:
       row.purposeAcknowledgement === PURPOSE_VERSION ? PURPOSE_VERSION : null,
+    ...(image === undefined ? {} : { image }),
   };
 }

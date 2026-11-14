@@ -1,3 +1,5 @@
+import type { PollImage } from "../images/public.js";
+
 /**
  * How a poll is answered. Mirrors `PollMethod` in the client
  * (`apps/pulse-web/src/api/types.ts`); the two must stay in step. `single` is
@@ -59,6 +61,11 @@ export interface Poll {
    * legacy polls have none, and none is ever invented for them.
    */
   publication?: Publication;
+  /**
+   * The poster's picture, present only while it may be served (ADR-0047,
+   * `mayServe`). Absent means the client draws the tile.
+   */
+  image?: PollImage;
 }
 
 export interface NewPoll {

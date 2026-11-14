@@ -19,6 +19,7 @@ test("a_poll_without_a_publication_has_exactly_the_original_public_keys", () => 
     "acceptsSuggestions",
     "closesAt",
     "open",
+    "image",
   ]);
 });
 

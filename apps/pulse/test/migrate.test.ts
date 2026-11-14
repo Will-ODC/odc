@@ -46,8 +46,12 @@ const AT = new Date("2026-09-11T09:30:00.123Z");
 const TABLES = [
   "allowed_domain",
   "community",
+  "content_change",
   "contribution",
   "contribution_replay",
+  "image",
+  "image_bytes",
+  "image_upload",
   "member_profile",
   "pending_claim",
   "poll_choice",
@@ -105,6 +109,7 @@ test("applies_a_fresh_schema", { skip }, async () => {
       "013",
       "014",
       "015",
+      "016",
     ]);
     assert.deepEqual(await tablesIn(pool, schema), TABLES);
   });
@@ -521,10 +526,19 @@ test(
       assert.deepEqual(await indexesIn(pool, schema), [
         "allowed_domain_pkey",
         "community_pkey",
+        "content_change_pkey",
+        "content_change_target_idx",
         "contribution_newest",
         "contribution_owner_recent",
         "contribution_pkey",
         "contribution_replay_pkey",
+        "image_bytes_pkey",
+        "image_owner_idx",
+        "image_pending_idx",
+        "image_pkey",
+        "image_upload_pkey",
+        "image_upload_uploader_idx",
+        "image_uploader_idx",
         "member_profile_pkey",
         "member_profile_public_id_key",
         "pending_claim_expiry_idx",
@@ -536,6 +550,7 @@ test(
         "poll_creation_replay_poll_id_key",
         "polls_author_created_idx",
         "polls_id_author_unique",
+        "polls_image_id_key",
         "polls_pkey",
         "polls_public_listing_idx",
         "posting_permission_change_pkey",
