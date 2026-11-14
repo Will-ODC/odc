@@ -1,81 +1,51 @@
-import { useEffect, useRef, useState } from "react";
-import { ApiError, type PollPage, type PulseApi } from "../api/types.js";
+import { useCallback, useMemo } from "react";
+import type { PollPage, PollSummary, PulseApi } from "../api/types.js";
+import { usePagedList } from "./use-paged-list.js";
 import type { ViewData } from "./view-data.js";
 
-type More =
-  { status: "idle" | "loading" } | { status: "error"; message: string };
-const message = (err: unknown) =>
-  err instanceof ApiError
-    ? err.message
-    : "We couldn't load the questions. Try again.";
+const EMPTY = "No questions here yet. Try the starting questions or post one.";
+const ERROR = "We couldn't load the questions. Try again.";
+const MORE_ERROR = "We couldn't load more questions. Try again.";
+const keyOf = (poll: PollSummary) => poll.id;
 
 export function usePollList(api: PulseApi, community: string, enabled = true) {
-  const [data, setData] = useState<ViewData<PollPage>>({ status: "loading" });
-  const [more, setMore] = useState<More>({ status: "idle" });
-  const [attempt, retry] = useState(0);
-  const generation = useRef(0);
-  const busy = useRef(false);
-  useEffect(() => {
-    if (!enabled) return;
-    const current = ++generation.current;
-    busy.current = false;
-    setData({ status: "loading" });
-    setMore({ status: "idle" });
-    api.listPolls(community).then(
-      (page) => {
-        if (generation.current === current)
-          setData(
-            page.polls.length
-              ? { status: "ready", value: page }
-              : {
-                  status: "empty",
-                  message:
-                    "No questions here yet. Try the starting questions or post one.",
-                },
-          );
-      },
-      (err: unknown) => {
-        if (generation.current === current)
-          setData({ status: "error", message: message(err) });
-      },
-    );
-    return () => {
-      ++generation.current;
-    };
-  }, [api, community, attempt, enabled]);
-
-  function loadMore() {
-    if (busy.current || data.status !== "ready" || !data.value.nextCursor)
-      return;
-    busy.current = true;
-    setMore({ status: "loading" });
-    const current = generation.current;
-    const previous = data.value;
-    api.listPolls(community, previous.nextCursor!).then(
-      (page) => {
-        if (generation.current !== current) return;
-        busy.current = false;
-        if (page.nextCursor === previous.nextCursor) {
-          setMore({
-            status: "error",
-            message: "We couldn't load more questions. Try again.",
-          });
-          return;
-        }
-        const rows = new Map(previous.polls.map((p) => [p.id, p]));
-        page.polls.forEach((p) => rows.set(p.id, p));
-        setData({
-          status: "ready",
-          value: { polls: [...rows.values()], nextCursor: page.nextCursor },
-        });
-        setMore({ status: "idle" });
-      },
-      (err: unknown) => {
-        if (generation.current !== current) return;
-        busy.current = false;
-        setMore({ status: "error", message: message(err) });
-      },
-    );
-  }
-  return { data, more, loadMore, retry: () => retry((n) => n + 1) };
+  const fetchPage = useCallback(
+    async (cursor?: string) => {
+      const page =
+        cursor === undefined
+          ? await api.listPolls(community)
+          : await api.listPolls(community, cursor);
+      // Explore has always treated an empty first page as its empty view.
+      return {
+        items: page.polls,
+        nextCursor:
+          cursor === undefined && page.polls.length === 0
+            ? null
+            : page.nextCursor,
+      };
+    },
+    [api, community],
+  );
+  const paged = usePagedList({
+    enabled,
+    fetchPage,
+    keyOf,
+    emptyMessage: EMPTY,
+    errorMessage: ERROR,
+    moreErrorMessage: MORE_ERROR,
+  });
+  const data = useMemo<ViewData<PollPage>>(
+    () =>
+      paged.data.status === "ready"
+        ? {
+            status: "ready",
+            value: {
+              polls: paged.data.value.items,
+              nextCursor: paged.data.value.nextCursor,
+            },
+          }
+        : paged.data,
+    [paged.data],
+  );
+  return { ...paged, data };
 }

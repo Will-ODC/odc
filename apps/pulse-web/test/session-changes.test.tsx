@@ -128,6 +128,38 @@ it("ignores an older identity answer that arrives after a newer account's", asyn
   expect(result.current.session).toMatchObject({ me: { id: "b" } });
 });
 
+it("asks again on request, and an older focus answer arriving late loses to it", async () => {
+  const { me, pending } = deferredMe();
+  const api = stubApi({ me });
+  const { result } = renderHook(() =>
+    useSession(api, { recheckSignedIn: true }),
+  );
+  await act(async () => pending[0]!(person("a")));
+  await act(async () => window.dispatchEvent(new Event("focus")));
+  const older = pending[pending.length - 1]!;
+  const before = me.mock.calls.length;
+  act(() => result.current.recheck());
+  expect(me.mock.calls.length).toBe(before + 1);
+  await act(async () => pending[pending.length - 1]!(person("b")));
+  expect(result.current.session).toMatchObject({ me: { id: "b" } });
+  await act(async () => older(person("a")));
+  expect(result.current.session).toMatchObject({ me: { id: "b" } });
+});
+
+it("asks again on request even where nothing else rechecks a signed-in page", async () => {
+  const { me, pending } = deferredMe();
+  const api = stubApi({ me });
+  const { result } = renderHook(() => useSession(api));
+  await act(async () => pending[0]!(person("a")));
+  // Without `recheckSignedIn`, coming back to the page asks nothing.
+  await act(async () => window.dispatchEvent(new Event("focus")));
+  expect(me).toHaveBeenCalledOnce();
+  act(() => result.current.recheck());
+  expect(me).toHaveBeenCalledTimes(2);
+  await act(async () => pending[1]!(person("b")));
+  expect(result.current.session).toMatchObject({ me: { id: "b" } });
+});
+
 it("ignores an identity answer already on its way when another tab signs out", async () => {
   const { me, pending } = deferredMe();
   const api = stubApi({ me });

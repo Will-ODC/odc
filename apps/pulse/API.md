@@ -1252,6 +1252,13 @@ to the organizer. A signed-in non-organizer receives 403. Both routes require
 sign-in and return 404 for an unknown contribution. Public responses never
 include messages or sender information.
 
+All POST bodies require `accountId`, a nonempty string containing the `/api/me`
+account ID the page believes it is writing for. A missing or invalid field
+returns 400 `bad_request`. A value different from the session account returns
+409 `account_changed` before any write or idempotency record, including on
+retries. This field is a precondition, never a choice of author. Clients clear
+the refused form’s draft and recheck the session.
+
 All POSTs require a valid session, configured web Origin, application/json and
 UUID `Idempotency-Key`. For the three routes that return a contribution
 (create, participate, update), the key is account-scoped across those three:
@@ -1267,7 +1274,7 @@ Reads allow 120 requests/minute, mutations 30/minute, per route and client IP.
 
 Errors use `{error,message}`. 400 `bad_request`; 401 `signed_out`; 403
 `origin_not_allowed` or `organizer_required`; 404 `not_found` or `poll_not_found`; 409
-`idempotency_conflict`, `closed`, `record_full`, `sender_limit`; 413 `body_too_large`; 429
+`account_changed`, `idempotency_conflict`, `closed`, `record_full`, `sender_limit`; 413 `body_too_large`; 429
 `too_many_requests`, `posting_limit`; 503 `contributions_unavailable`; 500
 `server_error`. Origin/session checks precede body parsing. Required storage
 failures leave no partial writes. Production persists in Postgres, development
