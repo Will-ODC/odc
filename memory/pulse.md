@@ -113,13 +113,15 @@ A small invited pilot comes only after 3-6. None of this authorizes a deploy.
 
 ## Current operator direction and next work (2026-11-14)
 
-1. **Handoff.** Codex completed both requested audits. No open Pulse product
-   PRs. The next feature still awaits the operator's answer below.
+1. **Handoff.** Codex completed the targeted timing/guard audit, verbosity
+   audit and broader test-quality review. CI selection is in #619 (operator
+   merge). No open Pulse product PRs; the next feature still awaits the answer
+   below.
 2. **Next: #580, a picture in the posting form.** Waiting on the operator's
    answer to "mockup first, or build from the plan and review screenshots?".
    Then #427 (thumbnails and context excerpt length), #296 (picture on the
    question page), #586 after #427.
-3. **Pulse test audit complete (2026-11-14)** at `0bf9c61`, authorized by the
+3. **Targeted Pulse test audit complete (2026-11-14)** at `0bf9c61`, authorized by the
    operator after the #592 profile timing regressions. Fresh Codex audit,
    report only, merged in #615: [report](../docs/audits/pulse-tests-2026-11-14.md).
    Six suspect client suites passed all 30 runs each (6,630 test executions).
@@ -138,7 +140,18 @@ A small invited pilot comes only after 3-6. None of this authorizes a deploy.
    of repeating them. No additional runtime refactor was justified beyond the
    existing owners below. Obsolete routing-history comments are an optional
    cleanup for a future edit; no product behavior changed.
-6. **Open follow-ups:** #533 ViewState Try again; #536 Conversation logic into
+6. **Broader test-quality audit complete (2026-11-14)** at `cf07079`:
+   [overview and complete inventories](../docs/audits/test-quality-2026-11-14/README.md).
+   Five isolated contexts reviewed 218 active test/support files across both
+   workstreams. Pulse follow-ups #621-#629 cover inaccurate fixtures, capacity
+   and image boundaries, default timeout wiring, malformed cast replies,
+   profile HTTP preconditions, query-safe logging and stalled closed results.
+   These include test gaps and reproduced robustness defects; none is fixed
+   by the report. No broad test rewrite or mass deletion was justified.
+   #619 implements package/dependent CI selection and safe full fallbacks;
+   its operator merge is still owed. #612 retains the real image-processing
+   smoke test and ruleset update.
+7. **Open follow-ups:** #533 ViewState Try again; #536 Conversation logic into
    flow/ and hooks; #537 VoteCard split; #538 CSS encapsulation and tokens;
    #534 part 3 (Conversation); #539 step 2 (one session provider; operator
    decision); review nits #557, #560, #589, #591, #599, #610; #596 Suggested
