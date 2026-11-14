@@ -11,20 +11,9 @@ what pulse must guarantee, never how we work. The "ODC-specific required
 tests" below are charter-side and apply to `services/` only; the pyramid and
 the rules apply everywhere.
 
-Pulse's two real-HTTP cross-package suites belong in
-`tests/pulse-integration/test/`, not either app's test directory. That test-only
-workspace declares both apps as development dependencies; it does not change
-production import permissions or app build ownership. Browser unit and
-component tests remain with `apps/pulse-web`. Run the integration workspace
-with `pnpm --filter @odc/pulse-integration test`,
-`pnpm --filter @odc/pulse-integration typecheck`, or
-`pnpm --filter @odc/pulse-integration lint`. Root Turbo test commands include
-it, while normal app builds remain independent.
-See [ADR-0041](../../../docs/decisions/0041-pulse-integration-test-workspace.md).
-The import-boundary regression suite is `pnpm test:boundaries`; its limited
-static enforcement scope and the integration workspace exception are described
-in [the service-boundaries skill](../odc-service-boundaries/SKILL.md) and
-[ADR-0042](../../../docs/decisions/0042-import-boundary-enforcement.md).
+Pulse cross-package suites live in `tests/pulse-integration/`
+([ADR-0041](../../../docs/decisions/0041-pulse-integration-test-workspace.md));
+import-boundary rules are in [`odc-service-boundaries`](../odc-service-boundaries/SKILL.md).
 
 ## The pyramid, per service or app
 
@@ -61,5 +50,10 @@ in [the service-boundaries skill](../odc-service-boundaries/SKILL.md) and
 - Test names state behavior: `rejects_vote_with_unregistered_key`, not `test4`.
 - Use builders/factories for test events; no copy-pasted JSON blobs.
 - Don't test the framework, getters, or other services' internals.
+- Pointer, focus, layout and CSS changes need a real-browser check; jsdom
+  tests can pass while the real browser is broken.
+- A concurrency test must force overlap with a database barrier (hold a
+  conflicting lock from another connection, confirm with `pg_blocking_pids`,
+  release); `Promise.all` alone may serialize and pass with the guard removed.
 - Coverage is a smell detector, not a goal: unexplained drops block merge,
   but 100% is not the target — the required cases above are.

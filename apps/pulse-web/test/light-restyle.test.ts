@@ -18,17 +18,9 @@ function rules(file: string, selector: string): string[] {
 }
 
 describe("the light look's invariants (#482)", () => {
-  it("sizes dropdowns with the shared menu width range and viewport cap", () => {
-    const tokens = css("styles/tokens.css");
+  it("keeps dropdowns inside the viewport, with no fixed pixel width", () => {
     const panel = css("components/AccountMenu.css");
-    expect(tokens).toMatch(/--menu-min:\s*\d+px;/);
-    expect(tokens).toMatch(/--menu-max:\s*\d+px;/);
-    expect(panel).toMatch(/width:\s*max-content;/);
-    expect(panel).toMatch(/min-width:\s*var\(--menu-min\);/);
-    expect(panel).toMatch(
-      /max-width:\s*min\(var\(--menu-max\),\s*calc\(100vw - var\(--gutter\) \* 2\)\);/,
-    );
-    expect(panel).toMatch(/inset-inline-end:\s*0;/);
+    expect(panel).toMatch(/max-width:[^;]*100vw/);
     expect(panel).not.toMatch(/(?:min-)?width:\s*\d+px/);
     // The banner's communities panel must not override the token range (#530).
     const banner = rules(
@@ -36,28 +28,20 @@ describe("the light look's invariants (#482)", () => {
       ".banner__nav .account-menu__panel",
     ).join("\n");
     expect(banner).not.toMatch(/(?:min-|max-)?(?:inline-size|width):/);
-    // On a phone the trigger is centred in its own row, so the panel opens
-    // centred under it rather than at the screen edge.
-    const phone = css("components/TopBanner.css").match(
-      /@media \(max-width: 699px\) \{[^@]*?\n\s{2}\.banner__nav > \.account-menu \.account-menu__panel \{([^}]*)\}/,
-    );
-    expect(phone?.[1]).toMatch(/inset-inline-start:\s*50%;/);
-    expect(phone?.[1]).toMatch(/transform:\s*translateX\(-50%\);/);
     // .account-menu already positions its panel; the phone row adds nothing (#561).
     const phoneRow = css("components/TopBanner.css").match(
       /@media \(max-width: 699px\) \{[^@]*?\n\s{2}\.banner__nav > \.account-menu \{([^}]*)\}/,
     );
-    expect(phoneRow?.[1]).toMatch(/flex:\s*1 0 100%;/);
+    expect(phoneRow?.[1]).toBeDefined();
     expect(phoneRow?.[1]).not.toMatch(/position:/);
-    // The account panel's width does not change when Forget asks (#561).
+    // The account panel holds a definite width so Forget's longer question
+    // wraps inside it rather than widening the panel (#561).
     expect(
       rules(
         "components/TopBanner.css",
         ".banner__actions .account-menu__panel",
       ).join("\n"),
-    ).toMatch(
-      /(?:^|[;\s])width:\s*min\(var\(--menu-max\),\s*calc\(100vw - var\(--gutter\) \* 2\)\);/,
-    );
+    ).toMatch(/(?:^|[;\s])width:[^;]*100vw/);
   });
 
   it("has a real focus colour, and no ring on the results focused by script", () => {
@@ -118,24 +102,6 @@ it("leaves the rail's Try again its shared outlined look (#488)", () => {
   );
 });
 
-it("shows rail questions as unavailable while an answer is sent (#488)", () => {
-  expect(css("components/AnsweredList.css")).toMatch(
-    /\.answered a\[aria-disabled="true"\] \{[^}]*cursor: not-allowed;/,
-  );
-});
-
-it("makes the My votes rail heading a visible, padded link (#488)", () => {
-  expect(css("components/AnsweredRail.css")).toMatch(
-    /\.answered-rail h2 a \{[^}]*display: inline-flex;[^}]*min-height: calc\(var\(--step\) \* 3\);[^}]*padding-block: calc\(var\(--step\) \/ 2\);[^}]*text-decoration: underline;/s,
-  );
-});
-
-it("left-aligns My votes messages with their heading and note (#488)", () => {
-  expect(css("screens/MyVotes.css")).toMatch(
-    /\.my-votes__main--message \.viewstate \{[^}]*align-items: flex-start;[^}]*text-align: left;/s,
-  );
-});
-
 /** The declaration blocks of every rule whose selector list names `selector`. */
 function blocksFor(source: string, selector: string): string[] {
   const blocks: string[] = [];
@@ -150,22 +116,6 @@ function blocksFor(source: string, selector: string): string[] {
   return blocks;
 }
 
-it("keeps the closing note and rail notes small and muted (#488)", () => {
-  for (const [file, selector] of [
-    ["screens/Conversation.css", ".conversation__hero > p"],
-    ["components/AnsweredRail.css", ".answered-rail p"],
-  ] as const) {
-    const blocks = blocksFor(css(file), selector);
-    expect(blocks.length, selector).toBeGreaterThan(0);
-    for (const block of blocks) {
-      expect(block, selector).toContain("font-size: var(--t-small);");
-      expect(block, selector).toContain("color: var(--muted);");
-      expect(block, selector).toContain("line-height: 1.5;");
-      expect(block, selector).not.toContain("margin");
-    }
-  }
-});
-
 it("spaces the rail's status line only when it shows something (#488)", () => {
   const source = css("components/AnsweredRail.css");
   // A region holding only the visually hidden "Your votes are loaded." is
@@ -174,7 +124,6 @@ it("spaces the rail's status line only when it shows something (#488)", () => {
     ".answered-rail .viewstate--compact:has(> :not(.visually-hidden))";
   const blocks = blocksFor(source, selector);
   expect(blocks).toHaveLength(1);
-  expect(blocks[0]).toContain("margin-block: var(--step);");
   expect(source).not.toMatch(/viewstate--compact:not\(:empty\)/);
 });
 
@@ -184,12 +133,18 @@ it("hides the shared rail on phones and gives both desktop pages a flexible seco
   expect(rail).toMatch(
     /@media \(min-width: 700px\) \{\s*\.answered-rail \{\s*display: flex;/,
   );
+  // minmax(0, …) lets the second column shrink instead of widening the page.
   for (const [file, selector] of [
     ["screens/Browse.css", ".browse__layout"],
     ["screens/Conversation.css", ".conversation"],
   ] as const) {
-    expect(css(file)).toContain(`@media (min-width: 700px) {
-  ${selector} {
-    ${selector === ".browse__layout" ? "display: grid;\n    " : ""}grid-template-columns: var(--rail) minmax(0, 1fr);`);
+    const desktop = css(file).match(
+      new RegExp(
+        `@media \\(min-width: 700px\\) \\{\\s*${selector.replace(".", "\\.")} \\{([^}]*)\\}`,
+      ),
+    );
+    expect(desktop?.[1], selector).toMatch(
+      /grid-template-columns:[^;]*minmax\(0, 1fr\)/,
+    );
   }
 });

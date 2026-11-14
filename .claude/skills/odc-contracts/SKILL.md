@@ -33,8 +33,9 @@ and where wrong is permanent by the project's own definition. Slow down here.
 
 Every rule gets a vector in `contracts/fixtures/`: canonical events with
 precomputed hashes, plus at least one adversarial vector per pitfall above.
-Fixtures are consumed by every service's CI (`golden-fixtures` stage) and by
-the verifier. **Cross-language gate:** identical fixture hashes must be
+Fixtures are checked by the `checks` job in `.github/workflows/repo.yml`
+(service tests, `go test` in the Go verifier, the rehearsal and
+`fixtures-manifest.sh`). **Cross-language gate:** identical fixture hashes must be
 independently reproduced in TypeScript and Go before freeze.
 
 ## Genesis rehearsal (the gate to RELEASE CANDIDATE — a checklist, not a vibe)
@@ -57,4 +58,5 @@ independently reproduced in TypeScript and Go before freeze.
    append-only; `MANIFEST.sha256` regenerable-not-deletable; `fixtures/README.md`
    exempt), not the blanket "nothing under `fixtures/`" rule that predated it.
 
-Keep the rehearsal scripts: they seed `just smoke` and the nightly chain-smoke.
+Keep the rehearsal scripts (`pnpm --filter @odc/rehearsal rehearse`, run in
+the `checks` job); they seed `just smoke`, still a Phase 2 TODO in the justfile.
