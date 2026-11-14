@@ -242,17 +242,9 @@ the same CI runs.
    red, restoring each; (c) list checks that should be required in the
    `protect-master` ruleset but are not. Findings become one issue per
    concrete defect (`create-issue`).
-4. **`pulse-images` is not a required check.** The ruleset requires only
-   `format / lint / typecheck`, `diff-size`, `guard-tests`, `guard` and
-   `memory-index`, so a red picture-package check (#594) warns and blocks
-   nothing. Do not ask the operator to require it as is: it runs only on Pulse
-   paths, and a required check that never runs leaves other PRs waiting
-   forever. First change `.github/workflows/pulse-images.yml` to run on every
-   PR and pass fast when no Pulse path changed (operator merges); then the
-   operator adds `pulse-images` under Settings → Rules → Rulesets →
-   protect-master → Require status checks. The same follow-up can make #594's
-   step run the server's own picture processing on a small sample JPEG, and
-   correct its comment ("decodes" — it reads only the header).
+4. **`pulse-images` is not a required check**, so a red picture-package check
+   (#594) only warns. Do not require it as is (it runs only on Pulse paths);
+   #612 has the order of steps.
 5. Prepare a small invited pilot only after choosing a host, configuring DNS,
    verifying a sending domain and satisfying `apps/pulse/DEPLOY.md`'s
    proxy-hop and rate-limit prerequisites. This is not authorization to deploy.
