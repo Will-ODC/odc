@@ -1,15 +1,16 @@
 # Pulse — Build State
 
-> Session-to-session truth for the `apps/pulse` + `apps/pulse-web` workstream.
-> Read `memory/INDEX.md` first. Agent rules are in `apps/pulse/CLAUDE.md`, the
-> served API is in `apps/pulse/API.md`, and the work queue is GitHub
-> issues (design detail an issue links to is in `docs/plans/pulse.md`). This file holds current state only, and history is in
-> git. Slimmed 2026-10-10, refreshed 2026-11-14. The long ledger it replaced is in
-> `git log -p -- memory/pulse.md`.
+> Session-to-session truth for `apps/pulse`, `apps/pulse-web` and
+> `tests/pulse-integration`. Read `memory/INDEX.md` first. Agent rules are in
+> `apps/pulse/CLAUDE.md`, the served API is in `apps/pulse/API.md`, the work
+> queue is GitHub issues, and design detail they link to is in
+> `docs/plans/pulse.md`. Current state only; history is in git
+> (`git log -p -- memory/pulse.md`). Audited 2026-11-14.
 >
-> The operator's development-feedback loop, the trust and reporting decisions,
-> and the contained tickets #227-#238 are in **`memory/pulse-development.md`**.
-> Of those, the confirmed-voter requirement is now built (#360, ADR-0040).
+> The development-feedback loop, trust and reporting decisions and tickets
+> #227-#238 are in **`memory/pulse-development.md`**. Note: ADR-0040's
+> "confirmed vote" means signed in with email; the social confirmation that
+> development votes require is not built.
 
 ## What pulse is
 
@@ -39,194 +40,85 @@ the same CI runs.
 
 ## Where it stands (2026-11-14)
 
-- **Merged since 2026-11-10:** #521 mockups for dark mode and the compact
-  posted notice (#499/#500); #522 steady header width, focus after Forget and
-  the You picked ring (#518); #524 and #545 CI-flaky tests wait on the asserted
-  state (#517, #540); #525 security headers, no-store on account routes and
-  self-hosted Inter (#520); #526 a late Close reply is ignored after the answer
-  is sent again (#519); #531 the Answered rail beside Explore on Home (#498);
-  #543 banner components move to `components/` and current links come from
-  `pathOf` (#539 step 1); #544 a lost connection while voting asks the server
-  on Close, on phone and desktop (#527); #546 shared Button, Field and Choice
-  with focus-ring tokens (#534, which stays open for AccountMenu, Browse,
-  Conversation and ResultsPanel); #553 menu width tokens, with the communities
-  menu centred on phones (#530); #555 a quiet "Next question" link, left swipe
-  on phones and a subtle slide (#554).
-- **Merged 2026-11-11 (later):** #562 the Trust page "Today" list splits the
-  confirm step into its own bullet (#558, `49d9fae`); #563 shared-controls
-  follow-ups: unused `post__change` removed, `.btn.post__info`, phone-rules
-  test (#559, `4c387a2`); #564 the Account panel keeps a fixed width (menu
-  max) so Forget's question does not widen it (#561, `224cd94`); #565 expired
-  sign-in rows are purged at startup and on redeem as well as on link request,
-  and `used_claim` markers are kept 20 minutes (15 + 5) via migration 012
-  (`used_at`); the startup and redeem sweeps are best-effort (#550,
-  `307847c`); #567 `PULSE_TRUSTED_PROXY_HOPS` sets the trusted proxy hop
-  count (default 1, allowed 1-4, 0 refused) (#549, `f4cc0c5`); #568
-  AccountMenu, Explore and ResultsPanel controls use the shared Button, copied
-  focus rings removed (#534 part 2, `51d0c9f`; #534 stays open for part 3,
-  Conversation); #571 docs say a failed sweep never fails startup or
-  redemption, while a link-request sweep failure fails that request (#570,
-  `fabb23c`).
-- **Merged 2026-11-12:** #574 small size for the shared Button, `.button`
-  utility retired (#569, `28bfee3`); #566 Previous and Next follow the My votes
-  list (#528, `9ff9678`; nits left: render-time ref write in `useLaterVotes`,
-  suggest `useLayoutEffect`; no cleanup test for `useDockSpace`; later pages
-  re-read after reload); #578 closed-question fixes: compact results fit the
-  column, rail says Closed, one "Sending…" (#575, `429465b`; UI nits in #589);
-  #587 ADR-0047 poll pictures accepted and plan P12 (`aa97cf6`).
-- **Poll pictures: step 1 is built, the rest is not** (ADR-0047, P12 in
-  `docs/plans/pulse.md`; tickets #579-#586). #593 (#579, `15bdeca`, migration 016) added the neutral `image`/`image_bytes` store keyed by
-  `owner_kind`/`owner_id` and serves pictures; nginx answers uploads over
-  10 MiB with the API's JSON 413. Unblocked: #580 picture in the posting form,
-  #427 thumbnails and context excerpt length, #296 picture on the question
-  page; #586 after #427. Purging a poll tombstones its creation replay row (an
-  ADR-0037 amendment for purged polls only); ADR-0037's broad-posting launch
-  gate is unchanged.
-- **Merged 2026-11-14:** #592 opt-in public profiles at `/u/<id>` (#576,
-  `d2caca2`, migration 015); #604 organizer expired-session note (#599,
-  `2e93f20`); #588 shared paged list and Load more (#535, `156125a`); #606
-  contribution writes refuse another account with 409 `account_changed`
-  (#603, `8df658d`); #608 dependency patches from a `pnpm audit` (`18b81b5`);
-  #593 above; #607 plain-text poll context (#581, `06f6a71`, migration 017;
-  excerpt length handed to #427); #595 organizer profile links (#577,
-  `a9c5baf`). Review nits from these are #610.
-- **Merged 2026-11-13: Contributions** (#246, PR #572, `cd39ef9`). Home mixes
-  the four newest contributions with polls; "Contributions only" on Explore
-  lists them with Load more. Detail page: offer help or pledge, a private
-  message to the organizer, the organizer's private inbox and progress updates
-  with evidence links. Own API and storage (migrations 013, 014), real-HTTP
-  Postgres contract tests for every endpoint. The creation form is a short first
-  pass (type, title, description, organizer name, related question); the API's
-  community benefit, needs, commercial price and fund fields reach the form in
-  #598. Sessions on these pages recheck sign-in: an expiry keeps drafts with a
-  new-tab sign-in, a deliberate sign-out (here or announced by another tab) or a
-  different account clears them; only the newest `/me` answer counts; votes are
-  cleared when a person leaves and read again on the next sign-in.
-- **Open PRs 2026-11-14:** none. The operator merged #594 (CI sharp check,
-  #579, `913f0bd`).
-- **New tickets:** #557, #560 review nits, #589 closed-question UI nits, #591
-  (#566 nits), #596 Suggested votes reshuffle on open, #597 contribution threads
-  with comments (one row per group in browse), #598 creation-form fields, #599
-  contribution form nits from #572's last UI review (open).
-- **One ballot per signed-in person** (#532 / PR #552, ADR-0046, migration
-  011). Operator decision 2026-11-11: a signed-in person's new vote replaces
-  their earlier vote on a poll, and on sign-in the newer answer moves to that
+Per-PR history is in `git log origin/master -- apps/pulse apps/pulse-web`.
+**Open PRs: none** besides the memory audit (#611). Next migration: **018**.
+
+- **Sign-in (pillar 1) is built.** Magic-link sign-in and redeem; open sign-up
+  with community as an optional label (ADR-0030); a community picker when an
+  address matches several (P2, #215); identity as a credential (P8 slice 1,
+  ADR-0033); cross-instance session revocation (ADR-0031); sign-out and
+  "Forget my votes here" clear the ballot cookie. Used links keep only a hash
+  replay marker; expired rows are swept on link request, at startup and on
+  redeem (#550, migrations 010/012). Sign-in, redeem and sign-out check the
+  request origin (auth audit 2026-11-11, PR #551; no passwords exist).
+- **Votes.** Confirmed votes (#360, ADR-0040) store only an HMAC code under
+  `PULSE_CONFIRMATION_KEY`; results show all votes and confirmed votes. One
+  ballot per signed-in person (ADR-0046, operator 2026-11-11): a new vote
+  replaces the earlier one, and on sign-in the newer answer moves to that
   browser.
-- **Auth audit 2026-11-11:** Pulse has no passwords. Findings were filed as
-  #548-#550 or fixed in PR #551 (sign-in, redeem and sign-out check the request
-  origin; the session secret must be 32 characters; closes #548).
-- **Pillar 1 (identity) is built.** Magic-link sign-in and redeem (#81-#87,
-  #116, #149). Open sign-up lets anyone sign in, and community is an optional
-  label (#182/#183, ADR-0030). The person picks their community when an address
-  matches several (P2, #215). Identity is a credential (P8 slice 1, #213,
-  ADR-0033). Sessions are revoked across instances by a shared generation (#200,
-  ADR-0031). Community labels are real keys, registered atomically (#358,
-  migration 006). Sign-out (#344) and "Forget my votes here" for someone who
-  never signed in (#349) both clear the ballot cookie. Used sign-in links
-  delete their pending personal data atomically, retaining only a hash replay
-  marker; expired unused links are swept on the next link write (#507 / PR #512,
-  migration 010), and also at startup and on redeem (#550 / PR #565,
-  migration 012).
-- **Confirmed votes are built** (#360, ADR-0040, migration 007). A vote cast while
-  signed in, or by a browser that signs in later, is confirmed. Results carry
-  all votes plus confirmed votes counted once per email account. A confirmed vote stores
-  only an HMAC code under `PULSE_CONFIRMATION_KEY`, never the account or address.
-  **The UI is built** (#353, PR #386): confirmed status, both result numbers,
-  cross-tab refresh after sign-in and accurate `/trust` wording.
-- **Pillar 2 (story UI):** the vote page is a **conversation** (epic #303,
-  ADR-0035): #299/PR #307 vote card, #301/PR #313 page, #302/PR #322 made it the
-  default and retired the swipe ballot, `Run` and `ChoiceBallot`. Around it:
-  Home is the General poll browser at `/`; the introduction and Start voting
-  are at `/about` (#449 / PR #452, `1570690`). Progress remains at `/start`,
-  with four starting questions at `/questions` (#341/PR #347). At 700px and
-  wider, voting sits under the question and folds into the saved answer after
-  Submit; Change my answer reopens it in place (#490 / PR #492, ADR-0044).
-  Phones retain the bottom sheet. Results stay below the saved answer.
-  The live tutorial was removed.
-  The trust page remains at `/trust` (#351/PR #357, ADR-0039); sign-in has a
-  plain heading with no focus box (PR #373). The starting questions need published poll IDs
-  (`VITE_PULSE_*_POLL_ID`); until then they show Coming soon.
-  #453 / PR #468 adds compact results charts. #482 / PR #485 restyles the web
-  app in white and green and adds a phone layout below 700px; the approved
-  mockup is `docs/mockups/pulse-light-v1.html`.
-  The Answered rail shares My votes rows, stays in sync and restores saved
-  answers on reload (#484 / PR #488). The saved answer leads a single results
-  card with Hide/Show results and a short sign-in confirmation offer
-  (#478/#480 / PR #489). Next updates the address and browser history
-  (#502 / PR #511). Headers share saved-vote state and history-error recovery
-  across pages (#487 / PR #513). The sign-in column stays 400px wide from
-  the 700px breakpoint (#508 / PR #509).
-- **MCP public reads are built** (#300 read slice, PR #323): `get_poll` and
-  `get_results` at `/api/mcp`. ADR-0036 (voting from AI apps) is still marked
-  proposed; no casting, sign-in or own-answer tools exist.
-- **Public poll listing is built** (#259 / PR #419, merged 2026-10-21).
-  `GET /api/polls?community=ID` needs no sign-in and returns open and closed
-  question summaries, excluding hidden polls and legacy polls without a
-  community. Newest-first creation time and UTF-8 poll ID ordering use
-  community-bound cursor pagination (20 by default, maximum 100).
-  Migration 008 adds the visible-community listing index. PR validation passed
-  606 API tests with PostgreSQL required and zero skips, independent review
-  returned APPROVE with no findings, and CI passed. **The browser list is merged** (#260 / PR #426); MCP
-  discovery (#291) remains unbuilt, and existing MCP tools still read
-  individual polls/results only.
-- **Poll creation is built, including the form.** ADR-0037
-  (#340) settles the policy and API. Built: migration 005 (#346), the Postgres publication store with
-  quotas, safe retries and owner-only posting grants (#354), and an in-memory
-  equivalent with one shared conformance suite (#367). PR #389 serves creation
-  context, publication and owner posting-permission routes, with startup wiring
-  and optional `PULSE_OWNER_EMAIL`. Public GET and MCP attribution merged in
-  #387; legacy polls gain no invented author. PR #393 merged the creation form,
-  first-post purpose promise, date and attribution controls, explicit posting
-  confirmation and sign-in recovery. Ordinary visits clear abandoned drafts;
-  an expired recovered closing time opens and focuses its validation error.
-  Real-HTTP integration coverage publishes through `HttpPulseApi.createPoll`
-  with a browser-like Origin, then checks replay, read and vote (PR #506).
-- **Demo feedback is merged:** #401 / PR #403 opens each question's vote card
-  by default; #400 / PR #404 adds space around tutorial highlights; #402 /
-  PR #405 shortens the trust link/title to "How votes count" and the page from
-  roughly 976 to 294 words. All three final PR CI runs passed.
-- **Pillar 3 (path to action) is not started.** `proofEmailsOptIn` is collected
-  and leads nowhere. #331-#333 plan it.
-- **Infrastructure is built.** Postgres storage (ADR-0020, ADR-0021, ADR-0023),
-  Resend mail (#164, ADR-0027), and two images on one origin (#165, ADR-0028),
-  built and scanned in CI with a sha-pinned Trivy action (#212, PR #491).
-  Dependabot alerts are on. `apps/pulse/DEPLOY.md` is the host-neutral deployment runbook (#491).
-  The API image excludes package managers and image scanning also runs weekly
-  and on manual dispatch (PR #495).
-- **Test audit follow-ups are merged:** forced-lock Postgres sign-out overlap
-  and full 413 responses on all seven body-taking routes (PR #496); fake
-  timers and call assertions replace the unrelated-storage-event sleep
-  (PR #505).
-- **Fault logs exclude personal data** (#503 / PR #514): unexpected faults
-  use generic responses and log only error class, valid SQLSTATE and mail
-  HTTP status where applicable, including startup/background faults.
+- **Story UI (pillar 2).** The vote page is a conversation (ADR-0035). Home is
+  the General poll browser at `/`; the introduction is at `/about`, progress at
+  `/start`, four starting questions at `/questions` (Coming soon until
+  `VITE_PULSE_*_POLL_ID` are set), "How votes count" at `/trust`. Desktop votes
+  under the question, phones use a bottom sheet (ADR-0044); results sit below
+  the saved answer; Previous/Next follow My votes and update the address; the
+  Answered rail sits beside Explore. White-and-green style (#482), compact
+  results charts (ADR-0045), shared Button/Field/Choice with focus-ring tokens
+  (#534 parts 1-2).
+- **Browse and authoring.** Public listing `GET /api/polls?community=ID`
+  (#259) with the browser list (#260); one shared paged-list hook (#535). Poll
+  creation and its form are built (ADR-0037). Plain-text poll context (#581,
+  migration 017).
+- **Contributions** (#246, PR #572, migrations 013/014): mixed into Home,
+  "Contributions only" on Explore, detail page with offers, pledges, private
+  messages, organizer inbox and updates. Writes refuse another account with
+  409 `account_changed` (#603). The form is a short first pass; the remaining
+  API fields reach it in #598.
+- **Profiles:** opt-in public profiles at `/u/<id>` (#576, migration 015),
+  linked from contribution organizers (#577).
+- **Poll pictures (P12, ADR-0047): step 1 only.** #593 (#579, migration 016)
+  stores pictures in neutral `image`/`image_bytes` keyed by
+  `owner_kind`/`owner_id` and serves them; nginx answers uploads over 10 MiB
+  with the API's JSON 413; #594 checks sharp loads in the API image. Not
+  built: #580, #427, #296, then #586 after #427.
+- **MCP:** public reads `get_poll`/`get_results` at `/api/mcp` (PR #323).
+  ADR-0036 (voting from AI apps) is proposed only; discovery (#291) unbuilt.
+- **Infrastructure:** Postgres (ADR-0020/0021/0023), Resend mail (ADR-0027),
+  two images on one origin (ADR-0028), Trivy-scanned in CI and weekly,
+  Dependabot on, security headers and self-hosted Inter (#520), fault logs
+  without personal data (#503), configurable proxy hops (#549).
+  `apps/pulse/DEPLOY.md` is the host-neutral runbook.
+- **Not started:** pillar 3, the path to action (#331-#333;
+  `proofEmailsOptIn` is collected and leads nowhere); comments (#297);
+  abuse reporting (#233-#237); P8 slice 2 and P9-P11; related polls
+  (ADR-0025 accepted, `GET /api/polls/:id/related` "Planned, not served";
+  P10's declinable gate depends on it); moderator access (the byline uses
+  ADR-0037's interim anonymity disclosure); core integration (deferred by the
+  operator 2026-10-20, epic #398).
 
 ## What stands between this and a usable deploy
 
 1. **Reporting, review and the automatic-hide threshold** remain broad-launch
-   prerequisites. Poll creation itself is merged, including the browser form.
+   prerequisites.
 2. **Published starting questions** for `/questions`, and comments (#297).
    The explainer video (#339) comes later.
 3. **A host and DNS.** The host is not chosen; DNS for `onlinedemocracy.org`
    still needs configuring.
 4. **A sending domain verified with Resend** (SPF/DKIM). DNS work, not code.
-5. **The proxy-hop and rate-limit prerequisites** in `apps/pulse/DEPLOY.md`
-   must be satisfied before go-live.
+5. **The proxy-hop and rate-limit prerequisites** in `apps/pulse/DEPLOY.md`.
 6. **A memory floor for picture decoding.** `apps/pulse/DEPLOY.md` states none
    for 40 MP uploads (#593); add one before deploy.
 
+A small invited pilot comes only after 3-5. None of this authorizes a deploy.
+
 ## Current operator direction and next work (2026-11-14)
 
-1. The recent Answered, results, desktop voting, sign-in and header changes
-   are merged; there is no remaining UI stack awaiting merge.
-2. The Contributions PRs and #594 are merged. Next: the
-   unblocked P12 steps (#580, #427, #296; #586 after #427). Open follow-ups:
-   #533 ViewState Try again, #536 Conversation logic into flow/ and hooks,
-   #537 VoteCard split, #538 CSS encapsulation and tokens, #557, #560, #589,
-   #591, #599 and #610 review nits, #596-#598, #534 part 3 (Conversation), P12
-   poll pictures (#579-#586, ADR-0047), #539 step 2 (one session provider;
-   operator decision), and #499 dark mode and #500 compact posted notice
-   (mockups merged in #521, not built).
+1. **Handoff.** Codex is out of usage; Claude orchestrates. No open PRs other
+   than the memory audit (#611).
+2. **Next: #580, a picture in the posting form.** Waiting on the operator's
+   answer to "mockup first, or build from the plan and review screenshots?".
+   Then #427 (thumbnails and context excerpt length), #296 (picture on the
+   question page), #586 after #427.
 3. **Pulse test audit — deferred by the operator (2026-11-14); run it when
    asked.** Why: on 2026-11-14 two flaky profile tests (#592) hid real bugs
    (a typed draft overwritten, a sign-in return missed) from gaps between React
@@ -245,119 +137,56 @@ the same CI runs.
 4. **`pulse-images` is not a required check**, so a red picture-package check
    (#594) only warns. Do not require it as is (it runs only on Pulse paths);
    #612 has the order of steps.
-5. Prepare a small invited pilot only after choosing a host, configuring DNS,
-   verifying a sending domain and satisfying `apps/pulse/DEPLOY.md`'s
-   proxy-hop and rate-limit prerequisites. This is not authorization to deploy.
+5. **Open follow-ups:** #533 ViewState Try again; #536 Conversation logic into
+   flow/ and hooks; #537 VoteCard split; #538 CSS encapsulation and tokens;
+   #534 part 3 (Conversation); #539 step 2 (one session provider; operator
+   decision); review nits #557, #560, #589, #591, #599, #610; #596 Suggested
+   votes reshuffle; #597 contribution threads; #598 creation-form fields;
+   #499 dark mode and #500 compact posted notice (mockups merged in #521, not
+   built).
 
-## Browse (merged, updated 2026-10-23)
+## Issue owners (reuse these, do not duplicate)
 
-- #260 merged in PR #426 (`ad4288f`), confirmed on GitHub.
-  #449 / PR #452 now puts the General list at Home (`/`), with the former
-  welcome at `/about`. Its Start voting path remains unchanged, and Explore
-  questions returns to Home. Existing community and explicit poll links work.
-  All seven local seed questions appear in General. The public list supports communities, open/closed questions, cursor
-  pagination and recoverable failures; browsing never casts a vote.
-- Current layout: centered main column with space for columns on both sides
-  on desktop, full width on phones, and quiet top text navigation with subtle
-  separators. General is public; Your community uses the existing email-linked
-  community label, not a new membership or social-confirmation system.
-- Independent implementation and layout reviews of #426 returned APPROVE.
-  Validation of the later #451/#452 layout is recorded above; no public
-  deployment has been performed by this chat.
-- Later browse thumbnails and a few context lines per entry are #427, dependent
-  on #296 image/context fields; #397 owns the richer mixed feed. Reuse these
-  issues rather than creating duplicates. Side-column contents remain #331.
-- #453's results presentation is merged in PR #468; #297/#423 own discussion,
-  #424 the opinion-diversity prototype and #425 related-question continuation.
-  Invited-pilot prerequisites remain the current plan above.
-
-## Backlog ownership (reviewed 2026-10-23)
-
-- New community direction: #457 owns readable community paths (proposed
-  `/c/<community-name>`, with old links preserved). #458 owns a linked
-  discussion/voting thread on creation, suspension, banning, restoration and
-  destruction/dissolution under constitutional and foundational rules.
-  These are unbuilt requests; policy questions are recorded once in
-  `memory/pulse-development.md`, "Community paths and lifecycle deliberation".
-  #440 still owns multiple verified memberships. URL work and lifecycle
-  deliberation do not authorize new enforcement or deletion behavior.
-- Reviewed all 73 then-open issues. #186 was closed as a duplicate of #425;
-  its closed-first-question/no-saved-ballot regression is explicitly retained
-  there. This is consolidation, not a claim the defect is fixed. Related order
-  and terminal fallback still need accepted decisions.
-- **Continuation clarification (2026-10-23): #425** now owns left/right page
-  chevrons, with Next following the current thread/story when relevant and
-  otherwise continuing to the next poll in the main feed. #464's brief
-  feed-only navigation ticket was consolidated into #425. The unfinished
-  feed-only edits were removed; no continuation implementation is in progress.
-  This is likely future work; a simple slice is possible only after its
-  navigation semantics are agreed. Feed order may later be algorithmic, but
-  no algorithm, personalization or inferred relationship rule is selected.
-- #453's open/closed poll chart presentation is merged in PR #468; #332 owns
-  linked action progress and evidence, reusing the same results. #303 and #297
-  reflect the results-before-comments layout and current voting placement.
-- #291 owns discovery/listing in the existing public MCP adapter, not another
-  implementation of PR #323's get_poll/get_results. #397 owns posts,
-  post-to-poll relationships and the mixed feed; reuse #427's poll previews.
-- Abuse reporting already has separate owners: #233 shared submission,
-  duplicates and limits; #234 review; #235 user reports; #236 poll reports;
-  #237 private-message reports. Public-comment reporting belongs to #297
-  using #233's shared foundation. These are distinct outcomes, not duplicates.
-  Reporting access, reasons/limits, review authority and enforcement rules
-  remain prerequisites; see `memory/pulse-development.md`.
-
-## Next / not built
-
-- **The authoring and demo-feedback slices are complete** (#393/#403–#405).
-  Browse #260, the #451/#452 layout, #453 / PR #468 results charts and #482 /
-  PR #485 light restyle are merged, as are the later UI refinements above.
-  #457/#458 add community paths and lifecycle
-  deliberation. Poll-creation refinements are an open operator request whose particular
-  changes still need scoping; reuse the built creation flow. A local demo is
-  available, but there is no public deploy.
-- Open feature issues: #296 photo and summary, #297 comments, #336 suggestions in
-  the conversation page, #331-#333 desktop side columns and action follow-through,
-  #314 browser-extension prototype (idea only), and #425 related/closed-question
-  onward navigation (including former #186).
-- P8 slice 2 (the guest upgrade path) and P9-P11 are unstarted. Email assurance
-  does not prove social confirmation or a unique human.
-- **ADR-0025 (related polls) is accepted but NOT built.**
-  `GET /api/polls/:id/related` is "Planned, not served". P10's declinable gate
-  depends on it.
-- P3's richer feed and related-question grouping remain future work. The operator
-  described it (2026-09-06) as "a home screen that browses all polls and batches
-  of related polls, story-style". It is also ADR-0022's route back to a question
-  from outside a run.
-  Its listing API (#259 / PR #419) and minimal browser (#260 / PR #426) are
-  merged, and #452 makes the General browser Home. Richer previews (#427), the mixed feed (#397) and related-vote
-  navigation (#425) remain separate; MCP discovery (#291) is still unbuilt.
-- **Authorised moderator access is not built.** The merged creation form and
-  public byline use ADR-0037's interim anonymity disclosure (#393); do not claim
-  the later moderator-access model exists.
-- **Core integration is deferred** by William (2026-10-20), tracked as bounded
-  future epic #398. ADR-0039 chooses public core APIs, but no integration is
-  built and no migration implementation is authorized now.
-- `@fastify/rate-limit` uses an in-memory store, so N instances means N times the
-  limit. This is the first thing that breaks when pulse scales out.
-  (`trustProxy` hops, now `PULSE_TRUSTED_PROXY_HOPS`, is a different fix.)
+- #457 readable community paths (proposed `/c/<community-name>`, old links
+  kept); #458 one linked thread on community creation, suspension, banning,
+  restoration and dissolution; #440 multiple verified memberships. URL work and
+  lifecycle deliberation authorize no enforcement or deletion.
+- #425 related/closed-question onward navigation, including former #186 (its
+  closed-first-question/no-saved-ballot regression is retained, not fixed) and
+  #464. A simple slice only after its semantics are agreed.
+- #427 previews and thumbnails; #397 posts and the mixed feed (P3, the
+  operator's 2026-09-06 "home screen that browses all polls and batches of
+  related polls, story-style"; ADR-0022's route back to a question); #291 MCP
+  discovery in the existing adapter; #297/#423 discussion; #424
+  opinion-diversity prototype; #332 action progress and evidence; #331 side
+  columns; #336 suggestions in the conversation; #314 browser-extension idea.
+- Reporting: #233 shared submission, duplicates and limits; #234 review; #235
+  user, #236 poll, #237 private-message reports; public-comment reports belong
+  to #297 on #233's foundation. Policy prerequisites are in
+  `memory/pulse-development.md`.
+- Poll-creation refinements are an open operator request still to be scoped;
+  reuse the built flow.
 
 ## Open decisions (operator)
 
+- **#580:** mockup first, or build from the plan and review screenshots?
 - **Continuation (#425):** define relevance and explicit story/thread order,
   precedence with answer-selected Next and related alternatives, source-feed
   scope/order, Previous/history behavior, pagination and end-of-feed fallback.
   Preserve saved answers, discard another question's unsent choices, block
   navigation while casting and never cast automatically. Later algorithmic
-  feed ordering needs its own accepted policy and implementation scope.
+  feed ordering needs its own accepted policy and implementation scope
+  (clarified 2026-10-23).
 - **Community lifecycle (#458):** governing/protected rules, creation and
   moderation authority, eligible voters, decision thresholds, appeals,
-  state semantics and retention remain open. See the community deliberation
-  section in `memory/pulse-development.md`; no lifecycle rule is adopted.
-- **Pulse/core compatibility (#398, deferred):** which responsibilities stay
-  with Pulse; how eligibility and identity cross the API boundary; how mutable
-  recasts and approval choices map to core's v1 ballot rules; what the UI says
-  during batched publication; and how rollout preserves existing polls. These
-  require an accepted integration ADR before implementation tickets are cut.
+  state semantics and retention remain open (`memory/pulse-development.md`);
+  no lifecycle rule is adopted.
+- **Pulse/core compatibility (#398, deferred 2026-10-20):** which
+  responsibilities stay with Pulse; how eligibility and identity cross the API
+  boundary; how mutable recasts and approval choices map to core's v1 ballot
+  rules; what the UI says during batched publication; how rollout preserves
+  existing polls. Needs an accepted integration ADR before tickets.
+- **#539 step 2:** one session provider.
 - **P2: should a later community pick move a returning voter?** Today it does
   not (ADR-0030 writes community once). `claim.test.ts` pins the current answer.
 - **Contribution create without an Idempotency-Key or `accountId`** returns a
@@ -371,120 +200,110 @@ the same CI runs.
 
 ## Standing decisions — one line each, read the ADR before touching
 
-- **ADR-0020:** Postgres, chosen for the high-traffic, many-process goal. SQLite
-  was technically favoured, so do not re-derive the case.
-- **ADR-0021:** votes are `(choice, value)` pairs, and `method` is text, so a new
-  vote type is never a migration. `poll_choice.id` is stable and `position` is
-  display-only. Timestamps come from the app, with no `DEFAULT now()`.
-- **ADR-0022:** one press casts. It is bought with **reversibility**: "You can
-  change your answer…" and "Change my answer" ship together, gated on
-  `poll.open`. Never extend it to anything final, because pillar 3 commitments
-  still confirm. "Never let a double-tap cast twice" still holds.
-- **ADR-0023:** no `is_entry_point`. A domain may serve several communities, and
-  the person picks (built in #215).
+- **ADR-0020:** Postgres, chosen for the high-traffic, many-process goal; do not
+  re-derive the case.
+- **ADR-0021:** votes are `(choice, value)` pairs and `method` is text, so a new
+  vote type is never a migration. `poll_choice.id` is stable, `position` is
+  display-only. Timestamps come from the app, no `DEFAULT now()`.
+- **ADR-0022:** one press casts, bought with **reversibility** ("Change my
+  answer", gated on `poll.open`). Never extend it to anything final; pillar 3
+  commitments still confirm. Never let a double-tap cast twice.
+- **ADR-0023:** no `is_entry_point`; a domain may serve several communities and
+  the person picks.
 - **ADR-0024:** questions are crowdsourced and navigation is computed. Posting
-  requires sign-in and voting does not, and that asymmetry is load-bearing.
-  Duplicates warn rather than refuse, and removal hides instead of deleting.
-- **ADR-0027:** Resend, with no SDK. `MailSendError` (an outage) becomes a
-  retryable 503. `MailRejectedError` (bad key or domain) stays 500.
-  `ConsoleMailer` in `pnpm dev` is deliberate.
-- **ADR-0028:** two processes, **one origin**, and nginx forwards `/api`.
-  Splitting origins means `SameSite=None` and rebuilding cross-site protection by
-  hand. `src/main.ts` is a sibling of `dev-server.ts`. Never make dev-server
-  production-capable.
-- **ADR-0030:** anyone signs in, and community is `null` when no domain matches.
-  The allowlist only labels. No anti-abuse replaces it, by decision.
-- **Product decisions:** a closed poll is a lasting record, shown greyed out.
-  Closed results are shown to non-voters. NEXT stays beside the results panel. A suggestion that matches a choice answers
-  `on_ballot`. Sign-out clears the ballot cookie. The work queue lives in
-  `docs/plans/pulse.md`.
-- **A re-cast is an upsert** (`voting/pg-store.ts`). Any "stamped once" rule
-  describes the answer currently standing.
-- **ADR-0035 / ADR-0044:** the vote page is a conversation; ADR-0044
-  records voting under the question on desktop and a bottom sheet on phones,
-  with results beneath the saved answer. Next stays with results.
-- **ADR-0037:** poll creation: closes after seven days unless the poster picks a
-  later time; suggestions off (#336); five publications per rolling hour per
-  account; Owner and narrow grants; community or General posting; anonymous by
-  default, naming optional. General is posting-only and never an account's community.
-- **ADR-0047:** poll pictures: neutral `image`/`image_bytes` storage with
-  `owner_kind`/`owner_id`; purging a poll tombstones its creation replay row (amends
-  ADR-0037 for purged polls only). P12 step 1 (store and serving, #593) is built.
-- **ADR-0039:** pulse may explain counting, on `/trust`, and never claims more
-  than is built.
-- **ADR-0040:** confirmed votes store a keyed code only. "Most recent" means most
-  recently cast; signing in does not confirm votes on closed polls. Rotating
-  `PULSE_CONFIRMATION_KEY` makes earlier confirmations unrecognisable.
+  requires sign-in, voting does not (load-bearing). Duplicates warn rather than
+  refuse; removal hides, never deletes; auto-hide after enough flags (count
+  unchosen).
+- **ADR-0027:** Resend, no SDK. `MailSendError` is a retryable 503,
+  `MailRejectedError` stays 500. `ConsoleMailer` in `pnpm dev` is deliberate.
+- **ADR-0028:** two processes, **one origin**, nginx forwards `/api`. Splitting
+  origins means `SameSite=None` and hand-built cross-site protection. Never make
+  `dev-server.ts` production-capable.
+- **ADR-0030:** anyone signs in; community is `null` when no domain matches. The
+  allowlist only labels; no anti-abuse replaces it, by decision.
+- **ADR-0033:** identity is a credential (accepted 2026-10-10; upgrade path
+  open).
+- **ADR-0035 / ADR-0044:** the vote page is a conversation; voting under the
+  question on desktop, a bottom sheet on phones; Next stays with results.
+- **ADR-0037:** closes after seven days unless the poster picks later;
+  suggestions off (#336); five publications per rolling hour per account; Owner
+  and narrow grants; community or General posting (General is never an
+  account's community); anonymous by default, naming optional.
+- **ADR-0039:** pulse may explain counting, on `/trust`, never claiming more than
+  is built.
+- **ADR-0040 / ADR-0046:** confirmed votes store a keyed code only. "Most recent"
+  means most recently cast; signing in does not confirm votes on closed polls.
+  Rotating `PULSE_CONFIRMATION_KEY` makes earlier confirmations unrecognisable.
+- **ADR-0047:** pictures in neutral storage; purging a poll tombstones its
+  creation replay row (amends ADR-0037 for purged polls only; its broad-posting
+  launch gate is unchanged).
+- **Product:** a closed poll is a lasting record, shown greyed out; closed
+  results are shown to non-voters; a suggestion matching a choice answers
+  `on_ballot`; a re-cast is an upsert (`voting/pg-store.ts`), so any "stamped
+  once" rule describes the standing answer.
 
 ## Live cautions — do not reintroduce
 
 **Migrations and storage**
 
 - Migrations are forward-only and checksummed. Never edit an applied file, even
-  to fix a number in a comment (ADR-0033 explains migration 004's stale
-  reference). **Drain old API instances before applying 004, 006 or 007**
+  to fix a number in a comment (migration 004 says ADR-0032; it means
+  ADR-0033). **Drain old API instances before applying 004, 006 or 007**
   (README "Upgrading").
+- Check `apps/pulse/migrations/` before numbering, since open branches may
+  claim the next number.
 - `vote_choice` can name a choice from another poll, and only the store stops
-  it. The Postgres test exists. Any new store must refuse a cross-poll pair too.
+  it. Any new store must refuse a cross-poll pair too.
 - Env vars are `PULSE_DATABASE_URL` and `PULSE_REQUIRE_DATABASE`, **never
   `DATABASE_URL` or `CI`** (they aim at the wrong database and misread
   `CI=false`). turbo 2 strips undeclared env vars, so declare them under the
   task's `env`, and put the must-not-skip guard inside the test. A green tick is
   not evidence a test ran: `gh run view <id> --log | grep -c '# SKIP'`.
-- Next free Pulse migration is **018** (015 profiles, 016 pictures, 017 poll
-  context). Check `apps/pulse/migrations/` before numbering, since open
-  branches may claim it.
 - Do not map host port 5432. A local Postgres wins the race, and the error looks
   like a credentials bug.
+- `@fastify/rate-limit` uses an in-memory store, so N instances means N times
+  the limit — the first thing that breaks on scale-out.
 
 **Serving and secrets**
 
 - **A sign-in token in a log is a sign-in token given away.** Redeem carries it
   in the query string. `SERVED_LOGGER` and nginx `pulse_no_query` strip it, and
   #184 keeps it out of referrers. Check any new log line that includes a URL.
+  Never save sign-in tokens in memory.
 - `trustProxy` is a hop count, never `true`: `PULSE_TRUSTED_PROXY_HOPS`
-  (default 1, allowed 1-4, 0 refused; #549 / PR #567).
+  (default 1, allowed 1-4, 0 refused).
 - `.dockerignore` patterns need `**/`.
 - Compose interpolates the whole file before profiles filter it, so a `${VAR:?}`
   on a profiled service breaks `up db`.
 - The client image builds with source-only `tsconfig.build.json`; browser tests
   stay in the app and real-HTTP cross-app suites live in
-  `tests/pulse-integration/` (ADR-0041). Static import boundaries are enforced by
-  lint (ADR-0042); run `pnpm test:boundaries` for the focused guard suite.
-- The root `just up` starts nothing, by design. `just pulse-up` is pulse's
-  command. `pnpm dev` invents a session secret and a confirmation key each run,
-  so a restart signs everyone out and forgets confirmations. That is deliberate.
+  `tests/pulse-integration/` (ADR-0041). Import boundaries are enforced by lint
+  (ADR-0042); `pnpm test:boundaries` runs the focused suite.
+- The root `just up` starts nothing, by design; `just pulse-up` is pulse's.
+  `pnpm dev` invents a session secret and confirmation key each run (a restart
+  signs everyone out; deliberate) and console mail prints sign-in links.
   `src/main.ts` refuses to start without `PULSE_CONFIRMATION_KEY` (32+ chars,
   not equal to the session secret).
+- **Dependencies (#608):** the root `pnpm.overrides` are exact pins, not
+  floors. Still open on purpose: minimatch (moderate, needs a major) and
+  fastify 5.12.6 (low).
 
 **Client**
 
 - **Poll context allows bidi and zero-width characters** (#607). Handle them
   when #427 renders the excerpt.
-- **Dependencies (#608):** the root `pnpm.overrides` are exact pins, not
-  floors. Still open on purpose: minimatch (moderate, needs a major) and
-  fastify 5.12.6 (low).
-- **Local demo handoff (2026-10-20):** API `http://127.0.0.1:8080`, web
-  `http://localhost:5173`, served from the attached
-  `repo-guidance-cleanup/odc` worktree, now detached at merged master. The old
-  local-only `codex/demo-ui-feedback` branch is an earlier combined preview,
-  not the canonical source. Data is in memory and lost on API stop. Console
-  mail prints sign-in links without sending email; request a fresh link for
-  `demo@example.test` when needed and never save tokens in memory. The
-  blue-halo pointer reported during the demo is from Codex browser control,
-  not a Pulse tutorial graphic.
 - **Never index `results.choices` by `yourChoice`.** Match on
   `ChoiceResult.index` (ADR-0021).
 - **Every way of casting must check `poll.open`** (through `locked` plus
-  `disabled`). A new gesture or ballot type that forgets it reopens the "worst of
-  both worlds" ADR-0022 prevents.
+  `disabled`). A new gesture or ballot type that forgets it reopens what
+  ADR-0022 prevents.
 - A tap is `pointerdown`, `pointerup`, then `click`, so test the whole sequence.
   NEXT follows `poll.next`, not whether the preview loaded.
 - State that was safe only because a component remounted breaks when something
-  resets it in place, so audit every ref.
+  resets it in place, so audit every ref. Passive `useEffect` gaps hid real bugs
+  behind flaky tests on 2026-11-14 (next-work item 3).
 - `findByRole("status")` resolves on "Sending…". Wait on the settled words
-  instead. Focus tests flake the same way: #211 fixed `ResultsPanel`. Wait
-  for focus, as #211 does.
+  instead, and wait for focus, as #211 does.
 - `[hidden]` loses to an author `display`, and jsdom cannot see it. Check
   selector specificity when a class "does nothing".
 - **Ask of every guard: which test goes red if I hardcode this?** This file has
@@ -492,15 +311,15 @@ the same CI runs.
 - To screen-check a closed poll, use a throwaway proxy that rewrites
   `"open":true`. Do not edit the seed. The README's demo details drift, so check
   `dev-server.ts` and `API.md`.
-- Mockups are `docs/mockups/pulse-screens/` ("Civic Glass"). `hub-feed-v*.html`
-  is **not** the reference.
+- Mockups are `docs/mockups/pulse-screens/` ("Civic Glass"; `odc-design`
+  decides); the #482 restyle follows `docs/mockups/pulse-light-v1.html`.
+  `hub-feed-v*.html` is **not** the reference.
 
 **Git and process**
 
 - Use `origin/master...HEAD` (three dots) to see what a branch changes. A
   two-dot `D` usually means the branch is stale, so rebase.
-- Stacked-PR rules (no `--delete-branch` under a child, `rebase --onto` after a
-  squash) live in `.claude/skills/odc-pipeline`. Do not copy them back here.
+- Stacked-PR rules live in `.claude/skills/odc-pipeline`. Do not copy them here.
 - Two agents in one worktree will destroy each other's work. Use
   `isolation: "worktree"`.
 - Fresh-context review has returned REQUEST CHANGES on almost every pulse PR,

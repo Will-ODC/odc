@@ -1,269 +1,126 @@
-# Pulse development loop and issue triage
+# Pulse development loop, trust and reporting
 
-Operator directions recorded 2026-10-09. This is session context for Pulse,
-not an implemented feature, a core-contract amendment or a completed security
-review. Read alongside `memory/pulse.md`; implementations still need small
-scopes and accepted technical decisions. Pulse remains independent of the ODC
-hash chain and ledger.
+Operator directions recorded 2026-10-09 (community paths 2026-10-23). Session
+context for Pulse, not built features or a security review. Read alongside
+`memory/pulse.md`. Pulse remains independent of the ODC hash chain and ledger.
+Where things go (issues, memory, ADRs) follows `memory/INDEX.md`.
 
 ## Accepted direction
 
-- Where things go (issues, memory, ADRs) follows the repo-wide rule in
-  `memory/INDEX.md` → "Where new information goes". Not restated here. A request
-  to remember an uncertainty is not automatically an implementation ticket.
-- Develop Pulse through a feedback loop: propose an improvement, gather feedback,
-  select work, implement it, review it, then ask whether it helped.
-- Initially the operator selects features for agents to implement; no vote is
-  needed while there is one participant. Later, solicit feedback on what to
-  build and how it should look and behave.
-- The broader app can use different interfaces; Pulse begins as the primary
-  interface. The interface itself, including its appearance and behavior, is
-  open to public input and voting. A chat-style interface with decision popups,
-  like the prompts in this conversation, is a strong candidate.
-- Support numerous polls while reducing duplicate proposals and questions.
-  ADR-0024 already accepts similar-question warnings using full-text search;
-  they are warnings, not posting refusals.
+- Develop Pulse through a feedback loop: propose an improvement, gather
+  feedback, select work, implement it, review it, then ask whether it helped.
+  While there is one participant the operator selects features; later,
+  solicit feedback on what to build and how it should look and behave.
+- Pulse begins as the primary interface; the interface itself is open to
+  public input and voting. A chat-style interface with decision popups is a
+  strong candidate (#228 prototype).
+- Support numerous polls while reducing duplicates. ADR-0024 accepts
+  similar-question warnings (full-text search); they warn, never refuse.
+  Linking or marking duplicates must not silently merge ballot totals.
 - **Development votes require socially confirmed participants.** A sign-in or
-  verified email alone is insufficient: participants must be confirmed by a
-  community or other verified users. Guest/anonymous voting is excluded from
-  this development decision process. This does not silently change eligibility
-  for every existing Pulse poll.
-- **Choices default to private.** Public attribution can eventually be an
-  optional choice. Private ballots still require verified eligibility; voting
-  privacy and participant verification are separate concerns.
-- **Thresholds cover both participation and support.** Actual numbers and the
-  support calculation are not chosen. A filtered-tally privacy cutoff or a
-  moderation auto-hide threshold is not a development quorum.
-- Cut tickets by distinct behavior and responsibility, not by the message in
-  which an idea appeared. Shared backend work belongs in one ticket; separate
-  interfaces depend on it instead of rebuilding it.
+  verified email alone is insufficient (so ADR-0040 "confirmed" votes do not
+  qualify); guest voting is excluded. This does not change eligibility for
+  existing Pulse polls.
+- **Choices default to private.** Public attribution can later be optional,
+  without exposing other voters' choices. Privacy and verification are
+  separate concerns.
+- **Thresholds cover both participation and support.** Numbers and the support
+  calculation are not chosen. A privacy cutoff or auto-hide threshold is not a
+  development quorum. Never change a published voting rule after votes are cast.
+- Cut tickets by distinct behavior and responsibility. Shared backend work is
+  one ticket; separate interfaces depend on it.
+- Suggested, not ratified: record each design question, options and the
+  operator's decision in memory without a poll while there is one participant;
+  give a proposal one home with linked polls; create issues only when work is
+  selected; record whether work was operator-selected or vote-selected. Voting
+  never bypasses review, tests or release checks.
 
-## Confirmation, trust and abuse decisions
+## Confirmation, trust and abuse decisions (operator, 2026-10-09)
 
-Operator answers recorded 2026-10-09:
+- The operator is the first account with full powers; people the operator
+  approves directly also get full powers. Use plain product language.
+- Beyond that, permissions should depend on trust (closeness to a fully
+  trusted account, contributions, email or in-person confirmation). A
+  direction, not an approved formula.
+- Confirmation needs **one authorised community representative or two
+  authorised individual participants**; two approvals must come from different
+  people. The operator can establish the initial group directly.
+- Removing voting access stops future votes; past votes stay unless evidence of
+  abuse calls for review. Finished decisions do not change.
+- Reporting participants, polls and messages must be easy, with protections
+  against misuse. Submission, review and each entry point are separate work.
 
-- The operator is the first account with full powers. People approved directly
-  by that operator should also have full powers. Use plain product language;
-  the term "super-user" is not required.
-- As approval relationships extend beyond the operator, permissions should
-  depend on trust. Possible factors include how closely someone is connected
-  to a fully trusted account, contributions, and authentication evidence such
-  as email verification or an in-person confirmation through the app. This is
-  a direction for a later rule, not an approved score formula or weighting.
-- The normal confirmation requirement is **one authorised community
-  representative or two authorised individual participants**. The operator
-  can establish the initial group directly. Two approvals must come from
-  different people; repeat submissions by one person cannot supply both.
-- Removing someone's voting access stops future votes. Past votes remain
-  unless evidence of abuse calls for review; removal does not automatically
-  erase their voting history or change finished decisions.
-- People should be able to report participants, polls and messages easily,
-  including abuse and threats. Reporting itself needs protections against
-  misuse. Shared reporting, review and each report entry point are distinct
-  implementation responsibilities.
+Still open: the exact meaning of full powers; permission propagation and trust
+weights; how contributions are established; who counts as a community
+representative and what qualifies a community to confirm; in-person evidence;
+recording, revocation and dispute of confirmations (an endorsement chain alone
+does not prove unique humans); effects of revoked approvals on others; how past
+votes are reviewed while protecting ballot privacy, including from operators
+with database access; participation minimum, support rule, abstentions, ties,
+closing time and when eligibility is measured. Trust-based permissions and vote
+weighting are separate; no weighting change was chosen. Settled since: one
+ballot per signed-in person (ADR-0046) and keyed-code confirmations
+(ADR-0040); development voting still needs social confirmation on top.
 
-Still open: the exact meaning of full application powers; permission propagation
-and trust factors/weights; how contributions are established; approved community
-representatives; the evidence required for in-person confirmation; effects of
-revoked approvals on other people; and how past votes can be reviewed while
-protecting ballot privacy. Trust-based permissions and vote weighting are
-separate questions; no vote-weighting change was chosen.
+Reporting questions put to the operator: who may submit reports, and whether
+penalties need human review. Proposed protections: private reports,
+server-side limits, and repeat submissions not multiplying one complaint.
+Limits, review roles, appeals and evidence remain undecided. ADR-0024 §3c's
+auto-hide after enough flags (count unchosen) stands unless the operator
+changes it and the ADR is amended; moderation still needs flagging eligibility
+and manual-removal authority.
 
-ADR-0024 §3c currently accepts automatic poll hiding after enough flags, with
-the count unchosen. Preserve that rule unless the operator explicitly changes
-it and the architectural decision is amended. The reporting tickets below do
-not choose a new penalty rule.
+## Tickets
 
-Reporting questions currently presented to the operator: who may submit reports,
-and whether penalties require human review or may happen automatically. Proposed
-protections include private reports, server-side submission limits and preventing
-repeat submissions from multiplying the same unresolved complaint. Exact limits,
-review roles, appeal behavior and the evidence needed to act remain undecided.
+- [Epic #227](https://github.com/Will-ODC/odc/issues/227): the bounded
+  development-feedback loop. [#228](https://github.com/Will-ODC/odc/issues/228):
+  chat-popup prototype (sample responses labelled as a preview; live
+  integration waits on eligibility, account ballots and decision rules).
+- Trust and reporting, each with five acceptance checks; open policy values are
+  prerequisites, not the ticket author's to choose:
+  #230 owner-approved full permissions → #231 record confirmations and check
+  eligibility → #232 trust-rule confirmation permissions; #233 report
+  submission with duplicate and rate limits → #234 review and outcomes → #235
+  participant, #236 poll, #237 chat-message reports (each waits for its product
+  surface; #237 needs saved chat messages); #238 stop future development votes
+  without erasing past ballots (waits for account-based development voting and
+  reviewer authority).
+- `/create-issue` (`.claude/skills/create-issue/SKILL.md`, #229, with an
+  `.agents/skills/create-issue` symlink for Codex) writes the tickets.
 
 ## Community paths and lifecycle deliberation (2026-10-23)
 
-The operator requested Reddit-style community URL paths and a connected thread
-of votes discussing community creation, banning, destruction and suspension
-under constitutional and foundational rules. This is a request to deliberate,
-not an adopted lifecycle policy or authorization to enforce one.
+The operator asked for Reddit-style community paths and a connected thread of
+votes on community creation, banning, destruction and suspension under
+constitutional rules. A request to deliberate, not an adopted policy.
 
-- **#457 owns community paths.** Proposed shape: `/c/<community-name>` instead
-  of `/browse?community=ID`. The exact prefix, naming/normalization rules and
-  mapping to stable community IDs remain to be accepted. Keep old links
-  working; a readable URL grants no membership or posting rights. This work
-  can proceed independently of lifecycle enforcement and #440's multiple
-  verified memberships.
-- **#458 owns one linked community-rules discussion/voting thread.** Reuse
-  #255–#258 proposal/decision work, #285/#286 constitution versioning where
-  applicable, #297/#423 public discussion and #425 linked-question navigation.
-  No new voting engine or community-admin implementation is authorized by
-  this thread. Publish real polls only once their content, authority and
-  decision rules are accepted; creating the issue did not create live polls.
+- **#457** community paths: proposed `/c/<community-name>` instead of
+  `/browse?community=ID`; prefix, naming rules and ID mapping to be accepted.
+  Keep old links; a readable URL grants no rights. Independent of lifecycle
+  enforcement and #440.
+- **#458** one linked rules thread, reusing #255–#258 proposal/decision work,
+  #285/#286 constitution versioning, #297/#423 discussion and #425 navigation.
+  No new voting engine or admin implementation; no live polls until content,
+  authority and decision rules are accepted.
 
-Questions for that thread remain open:
+Open for that thread: (1) which foundational text governs, what is protected,
+and how amendments work; (2) who may create a community and initiate, decide,
+review and carry out suspension, ban, restoration or dissolution — community-wide
+versus banning a person in one community; (3) electorate, thresholds, timing,
+evidence, notice, appeal and emergency limits; (4) what each state permits and
+how restrictions end — suspension, banning and dissolution are not
+interchangeable; (5) whether destruction means archive or deletion, and what
+happens to polls, ballots, comments, memberships and links. No destructive
+behavior is chosen. These are Pulse questions; no core charter change is
+authorized, and accepted rules need an ADR before enforcement is scoped.
 
-1. Which constitution/foundational text governs Pulse communities, which
-   provisions are protected, and how conflicts or amendments are handled.
-2. Who may create a community or initiate, decide, review and carry out a
-   suspension, ban, restoration or destruction/dissolution; distinguish a
-   community-wide action from banning a person within one community.
-3. Eligible electorate, participation/support requirements, closing/effective
-   times, evidence, notice, review/appeal and emergency-action limits.
-4. What each lifecycle state permits, how temporary restrictions end and how
-   restoration works. Do not treat suspension, banning and dissolution as
-   interchangeable operations.
-5. Whether destruction means disabling/archive versus deletion, and how
-   existing polls, ballots, comments, membership records and public links are
-   retained, protected or made available. No destructive behavior is chosen.
+## Deferred ideas and kept-open issues
 
-These are Pulse application questions. No core charter change or platform-level
-community-gating rule is authorized; core remains governed by the charter.
-Accepted durable rules need their own ADR before enforcement is scoped.
-
-## Suggested structure, not yet ratified
-
-While there is one participant, record each design question, its options and the
-operator's decision in memory without posting a poll. Later, the same question
-can be put to eligible participants under the published voting rules. Selected
-work becomes a contained implementation ticket; delivery still requires review
-and passing checks.
-
-Give a proposed improvement one home, with linked polls for priority, design
-choices and post-release feedback. Create implementation issues when the work
-is selected and defined; do not create an issue for every poll. Record whether
-work was operator-selected or selected under a published voting rule.
-
-Show similar existing proposals/questions before posting. Offer a link to
-participate there while allowing genuinely different questions. Context matters:
-community, release/version and the decision being asked. Linking or marking
-duplicates must not silently merge ballot totals.
-
-Build in contained slices: author/browse proposals; confirmed-participant
-eligibility and account-level repeat-vote prevention; duplicate warnings;
-published participation/support rules; links from a proposal to implementation
-and release feedback. Their final issue scopes and order still need a plan.
-Voting can select work without bypassing code review, tests or release checks.
-
-## Created work and issue-writing skill
-
-- [Epic #227](https://github.com/Will-ODC/odc/issues/227) tracks the bounded
-  development-feedback loop. The confirmation count is now decided above; trust
-  calculation, ballot privacy and threshold values remain open.
-- [Ticket #228](https://github.com/Will-ODC/odc/issues/228) is a contained
-  interactive chat-popup prototype: a sample conversation, one single-choice
-  poll, eligibility/error states and keyboard/mobile behavior. Sample responses
-  are labelled as a preview. Live integration waits for shared eligibility,
-  account-ballot and decision-rule support.
-- `/create-issue` produces short, bullet-focused Jira-style feature tickets:
-  summary, scope, 3–5 observable acceptance criteria, real dependencies and
-  context links. Search for duplicates and keep decision-only material in
-  memory. The user authorised creating and applying this skill.
-- The skill is `.claude/skills/create-issue/SKILL.md` (#229, merged), with a
-  `.agents/skills/create-issue` symlink for Codex discovery. One copy is
-  maintained. #227 and #228 were written with it.
-
-## Contained trust and reporting tickets
-
-Each is future implementation work with five acceptance checks. Open policy
-values stay in this note and are explicit prerequisites, rather than being
-chosen by the ticket author. These tickets do not start implementation.
-
-- [#230](https://github.com/Will-ODC/odc/issues/230) — Give owner-approved users full application permissions.
-- [#231](https://github.com/Will-ODC/odc/issues/231) — Record confirmations and check participant eligibility.
-- [#232](https://github.com/Will-ODC/odc/issues/232) — Check confirmation permissions using trust rules.
-- [#233](https://github.com/Will-ODC/odc/issues/233) — Submit abuse reports with duplicate and rate limits.
-- [#234](https://github.com/Will-ODC/odc/issues/234) — Review reports and record outcomes.
-- [#235](https://github.com/Will-ODC/odc/issues/235) — Report a participant from their profile or menu.
-- [#236](https://github.com/Will-ODC/odc/issues/236) — Report an abusive poll from its screen.
-- [#237](https://github.com/Will-ODC/odc/issues/237) — Report an individual chat message.
-- [#238](https://github.com/Will-ODC/odc/issues/238) — Stop future development votes without erasing past ballots.
-
-Dependency order: owner grants #230 before confirmation records #231; #231
-uses initial owner-granted authority before the later trust check #232. Shared
-report submission #233 precedes review #234 and entry points #235–#237; those
-entry points also wait for their actual product surfaces. #237 requires saved
-chat messages, which prototype #228 does not supply. Voting restrictions #238
-wait for account-based development voting and accepted reviewer authority.
-
-## Unresolved before voting implementation
-
-1. What qualifies a community to confirm someone and who may act for it.
-   Initial operator/direct approvals and full powers are decided above; later
-   trust rules and their evidence remain open.
-2. The confirmation count is decided above. Its recording, revocation and
-   dispute rules remain open. A chain of endorsements alone does not prove
-   unique humans. Voting-access removal preserves past votes pending an
-   evidence-based review; the review/privacy mechanism still needs a design.
-3. How one eligible account retains one ballot across devices and sign-ins.
-   Current Pulse ballots are browser-cookie identities, separate from signed-in
-   accounts; API.md explicitly describes repeat voting after signing out/in.
-   A sign-in gate alone does not establish account-level uniqueness.
-4. How ballot privacy is protected from public readers and from operators with
-   database/secret access. Publicly hidden choices are not necessarily unlinkable
-   to an account internally. No ballot-linkage design was approved in this chat.
-5. Participation minimum, support rule and denominator, abstentions, ties,
-   closing time, eligible audience, and when eligibility is measured. Avoid
-   changing a published voting rule after votes have been cast.
-6. How optional public attribution is offered without exposing other voters'
-   choices. Private is the accepted default; detailed disclosure behavior waits.
-
-## Issue review and disposition
-
-The operator authorised concluding appropriate issues on 2026-10-09. Closing
-decision/context issues does not settle their questions or cancel their recorded
-ideas. Their original GitHub bodies remain available as provenance.
-
-- **#192 — completed:** #202 supplied the batching conformance vectors. This
-  is historical work, not a pending feature request.
-- **#193 — completed:** #220/#221 supplied chain identity/reporting and #222
-  supplied its fixtures. The reporting/precedence amendment landed as
-  PR #224; closing #193 does not clear T9. See the core audit memory for its gate.
-- **#217 — context transferred:** ADR-0024 settled duplicate warnings, hide
-  rather than delete, community flagging/manual removal, posting to one's
-  community and public reading. PR #218 corrected the plan's stale blocker.
-  Posting still needs defaults for `closesAt` and `acceptsSuggestions`.
-  Moderation still needs flagging eligibility, auto-hide threshold and manual
-  removal authority. Newsletter choices and search-language configuration can
-  wait. None of these values was selected in this conversation.
-- **#214 — decision transferred:** account/ballot linkage remains open. The
-  original options are browser-only ballots, adopting a stable account ballot
-  with a stored mapping, or deriving the mapping using a server secret. Stored
-  mappings allow database readers to associate ballots with accounts; derived
-  mappings change the protection to secret custody. The issue recommended
-  retaining browser-only ballots temporarily, but that cannot satisfy this new
-  development feature's account-level repeat-vote requirement by itself.
-  Preserve existing ballots during any later migration; the exact design needs
-  an ADR before implementation.
-- **#173 — deferred idea transferred:** an unobtrusive popup offers a vote
-  about the page being read, potentially drafted by AI and approved by a human.
-  Still undecided: extension/site integration, author approval, question framing,
-  actionable outcome, consent for sending page content, and cost/spam controls.
-  It depends on poll creation and is too broad for one ready implementation
-  issue. Do not implement it from this memory note.
-- **#205 — keep open:** selecting multiple answers on approval polls is a
-  concrete behavior change. Choose the interaction and narrow acceptance
-  criteria before implementation. PR #206 fixed result highlighting, not
-  multiple-answer selection.
-- **#186 — closed as duplicate of #425 (2026-10-23):** #425 retains the
-  closed-first-question/no-saved-ballot regression; consolidation does not
-  mean it is fixed. Follow the requested thread/story-first continuation,
-  otherwise the main feed, once ordering and terminal-fallback rules are
-  accepted. Do not invent an answer-dependent next step without an answer.
-
-Issue provenance: https://github.com/Will-ODC/odc/issues/217,
-https://github.com/Will-ODC/odc/issues/214,
-https://github.com/Will-ODC/odc/issues/173.
-
-## Merged follow-ups (#213, #215, #239), cautions that remain
-
-- #213 (P8 slice 1) and #215 (P2 picker) are merged. Both stores keep
-  `discard(tokenHash)` **and** `liveFor(kind, subject, now)`.
-- Core #224 took ADR-0032, so the Pulse credential record is **ADR-0033**.
-  Migration 004 still says 0032 in a comment, and it stays byte-for-byte as is,
-  because it is checksum-protected. Drain old API instances before applying 004.
-- ADR-0033 is accepted (2026-10-10); its upgrade path stays open. Email
-  assurance alone does not meet the development-voting rule. Nothing here starts
-  P8 slice 2, social confirmation, trust scoring or account-based development
-  voting.
-- Open: whether a later community pick should move a returning voter (see
-  `memory/pulse.md`).
+- **#173** (closed, idea kept): an unobtrusive popup offering a vote about the
+  page being read, maybe AI-drafted and human-approved. Undecided:
+  extension/site integration, author approval, framing, outcome, consent for
+  sending page content, cost/spam. Too broad for one issue; do not implement
+  from this note.
+- **#205** (open): multiple answers on approval polls. Choose the interaction
+  and acceptance criteria first.
+- Newsletter choices and search-language configuration can wait (#217).

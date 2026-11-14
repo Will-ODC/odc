@@ -25,28 +25,12 @@ Do not apply charter rules to `apps/**`, and do not relax them anywhere else.
 > entry, the entry wins — and fix the line.** You read this file first and it is
 > smaller, so on a divergence you would otherwise trust the wrong one.
 
-- **ODC core:** Phase 1. Ledger append, read/operator APIs, batching, startup
-  recovery and server wiring are merged; CI checks batched exports with both
-  verifiers. Deterministic batcher/writer-lock and HTTP limit tests are merged.
-  Registration v2 contracts, identity and the signer remain unbuilt.
-  → `memory/STATE.md`
-- **Pulse:** sign-in, voting, confirmed votes, poll creation and public browsing
-  are built. Answered sync, simpler results, desktop voting under the question,
-  Next address updates, shared headers, sign-in retention, private fault logs,
-  security headers, one ballot per signed-in person (ADR-0046), an origin check
-  on sign-in, shared Button/Field/Choice (Account, Explore and results controls
-  now use it; small size added), configurable proxy hops (#549), sign-in row
-  purging (#550), Previous/Next following My votes, closed-question fixes and
-  Contributions (#246, PR #572: tagged rows on Home, detail, offers, pledges,
-  organizer updates and a private inbox), public profiles, organizer profile
-  links, one paged-list hook, plain-text poll context and the poll picture store
-  (#593, P12 step 1) and its CI check (#594) are merged. Picture steps #580,
-  #427 and #296 are next. No open PRs. Next migration: 018. Open
-  follow-ups: #533, #536-#538, #557, #560, #589, #591, #596-#599, #610, #612,
-  #534 part 3,
-  #539 step 2, and #499/#500 (mockups merged, not built).
-  Comments/replies, abuse reporting and MCP discovery remain unbuilt. Deployment
-  needs a host, DNS, a verified sending domain and the runbook prerequisites.
+- **ODC core:** Phase 1. The ledger is built and wired, checked in CI by both
+  verifiers. Next: the `participant_registered` v2 contracts PR, then the
+  signer and identity services (both unbuilt). → `memory/STATE.md`
+- **Pulse:** sign-in, voting, browsing, poll creation, Contributions, profiles
+  and picture storage are built; no open PRs. Next is #580 (picture in the
+  posting form), awaiting an operator answer. No public deploy yet.
   → `memory/pulse.md`
 
 ## Load order
