@@ -89,19 +89,31 @@ it("keeps the account trigger plain text in the banner, not an underlined quiet 
   expect(rule).toContain("text-decoration: none;");
 });
 
-it("keeps Try again and Load more centred under the list on Explore and My votes", () => {
-  const css = read("../src/screens/Browse.css");
-  // Size, hover and disabled now come from `.btn--small` (#569); only layout
-  // stays on the screen.
-  expect(css).not.toMatch(/\.btn\.browse__action/);
-  // Centred block on every width; outranks the phone rule's `display: flex`.
-  expect(css).toMatch(
+it("keeps screen retry and shared Load more controls aligned under their lists", () => {
+  const browse = read("../src/screens/Browse.css");
+  expect(browse).not.toMatch(/\.btn\.browse__action/);
+  // My votes keeps its own copies in MyVotes.css; Browse holds none of them.
+  expect(browse).not.toMatch(/browse__main--message/);
+  expect(browse).toMatch(
     /\.browse__main > \.browse__action \{\s*display: block;\s*margin: calc\(var\(--step\) \* 2\) auto 0;\s*\}/,
   );
-  // My votes' left-aligned message keeps them at the start of the line.
-  expect(css).toMatch(
-    /\.browse__main--message > \.browse__action \{\s*margin-inline: 0;\s*\}/,
+  const myVotes = read("../src/screens/MyVotes.css");
+  expect(myVotes).toMatch(
+    /\.my-votes__action \{\s*display: block;\s*margin: calc\(var\(--step\) \* 2\) 0 0;\s*\}/,
   );
+  const loadMore = read("../src/components/LoadMore.css");
+  expect(loadMore).toMatch(
+    /\.load-more \{\s*margin: calc\(var\(--step\) \* 2\) auto 0;\s*text-align: center;/,
+  );
+  expect(loadMore).toMatch(
+    /\.load-more > \.load-more__button \{\s*display: flex;\s*margin-inline: auto;/,
+  );
+});
+
+it("keeps My votes at the top and balances its heading", () => {
+  const css = read("../src/screens/MyVotes.css");
+  expect(css).toMatch(/\.my-votes__main \{[^}]*margin: 0 auto;/s);
+  expect(css).toMatch(/\.my-votes__main h1 \{[^}]*text-wrap: balance;/s);
 });
 
 it("keeps the results toggle borderless and ClosedResults' Close small", () => {
@@ -149,6 +161,7 @@ it("draws the small secondary size from tokens, after the rules it overrides", (
 const small = [
   "screens/Browse.tsx",
   "screens/MyVotes.tsx",
+  "components/LoadMore.tsx",
   "components/AnsweredRail.tsx",
   "components/SiteBanner.tsx",
 ] as const;

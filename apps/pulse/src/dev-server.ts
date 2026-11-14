@@ -48,6 +48,9 @@ import {
   type SuggestionStore,
 } from "./voting/suggestions.js";
 import { InMemoryVotingStore, type VotingStore } from "./voting/store.js";
+import { InMemoryMemberProfileStore } from "./profiles/memory-store.js";
+import { PostgresMemberProfileStore } from "./profiles/pg-store.js";
+import type { MemberProfileStore } from "./profiles/store.js";
 
 /**
  * Running pulse on a laptop.
@@ -316,6 +319,7 @@ interface Storage {
   creation: CreationStore;
   images: ImageStore;
   contributions: ContributionsStore;
+  profiles: MemberProfileStore;
   /** Only when the rows are in Postgres. */
   pool?: Pool;
 }
@@ -407,6 +411,7 @@ export async function buildDevServer(
       creation: storage.creation,
       images: storage.images,
       contributions: storage.contributions,
+      profiles: storage.profiles,
       // The client's origin, which is where creation requests come from.
       webOrigin: config.webOrigin,
       // Local development is http://, and a Secure cookie would never be
@@ -448,6 +453,7 @@ function inMemory(creation: { ownerEmail?: string }): Storage {
     creation: new InMemoryCreationStore(voters, votes, creation),
     images: new InMemoryImageStore(voters, votes),
     contributions: new InMemoryContributionsStore(voters, votes),
+    profiles: new InMemoryMemberProfileStore(voters),
   };
 }
 
@@ -489,6 +495,7 @@ async function inPostgres(
     creation: new PostgresCreationStore(pool, creation),
     images: new PostgresImageStore(pool),
     contributions: new PostgresContributionsStore(pool),
+    profiles: new PostgresMemberProfileStore(pool),
     pool,
   };
 }

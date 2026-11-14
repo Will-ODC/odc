@@ -158,18 +158,12 @@ test(
     await pool.query(
       "insert into allowed_domain values ('late-domain', 'example.test', false), ('known', 'known.test', false)",
     );
-    assert.deepEqual((await migrate(pool)).applied, [
-      "006",
-      "007",
-      "008",
-      "009",
-      "010",
-      "011",
-      "012",
-      "013",
-      "014",
-      "016",
-    ]);
+    // Every shipped migration from 006 on: this test is about the 006
+    // backfill, so a later migration must not break it.
+    assert.deepEqual(
+      (await migrate(pool)).applied,
+      (await loadMigrations()).map((m) => m.version).filter((v) => v >= "006"),
+    );
     assert.deepEqual(
       (await pool.query("select * from community order by id")).rows,
       [
