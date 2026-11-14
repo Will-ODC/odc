@@ -183,11 +183,16 @@ function ProfileForm({
   const [saveError, setSaveError] = useState<string | undefined>();
   const sending = useRef(false);
   const id = useId();
-  useEffect(() => {
+  // A new saved profile (after Save) replaces the fields, in the same render.
+  // An effect would also run after the first render and could overwrite
+  // anything typed between the form appearing and that effect running.
+  const [synced, setSynced] = useState(initial);
+  if (synced !== initial) {
+    setSynced(initial);
     setName(initial?.displayName ?? "");
     setBio(initial?.bio ?? "");
     setVisible(initial?.visible ?? true);
-  }, [initial]);
+  }
   const nameIssue = nameProblem(name);
   const bioIssue = bioProblem(bio);
 

@@ -59,7 +59,9 @@ export function useOwnerProfile(
   // The session may still report this account after the owner read got a
   // 401. Reauthentication then leaves `active` unchanged. Retry that empty
   // read on the same announcements as useSession, without replacing a draft.
-  useEffect(() => {
+  // A layout effect listens from the commit that shows "Sign in": a passive
+  // effect would miss a return to the tab that lands before it runs.
+  useLayoutEffect(() => {
     if (!active || status !== "empty") return;
     const ask = () => {
       if (document.visibilityState === "hidden") return;

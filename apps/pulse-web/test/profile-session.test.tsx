@@ -349,3 +349,65 @@ it("never fills A's form from a read the server says was for another account", a
   expect(myProfile.mock.calls.every(([owner]) => owner === "a")).toBe(true);
   expect(myProfile.mock.calls.length).toBeGreaterThanOrEqual(3);
 });
+
+/**
+ * Run `act` synchronously the first time `shown` finds something on screen,
+ * from a MutationObserver: after React commits that screen, before its passive
+ * effects run. A person can type or switch tabs in that gap too.
+ */
+function onFirstShown<T>(shown: () => T | null, act: (found: T) => void) {
+  let done = false;
+  const observer = new MutationObserver(() => {
+    const found = done ? null : shown();
+    if (found === null) return;
+    done = true;
+    observer.disconnect();
+    act(found);
+  });
+  observer.observe(document.body, {
+    childList: true,
+    subtree: true,
+    characterData: true,
+  });
+  return () => observer.disconnect();
+}
+
+it("keeps a draft typed the moment the form first appears", async () => {
+  let typed = false;
+  const stop = onFirstShown(
+    () =>
+      screen.queryByLabelText("Public display name") as HTMLInputElement | null,
+    (input) => {
+      fireEvent.change(input, { target: { value: "Typed at once" } });
+      typed = true;
+    },
+  );
+  setup();
+  await waitFor(() => expect(typed).toBe(true));
+  stop();
+  await act(async () => {});
+  expect(name().value).toBe("Typed at once");
+  expect(screen.getByText("Not saved yet.")).toBeTruthy();
+});
+
+it("reads again on a return the moment the first read's Sign in appears", async () => {
+  const myProfile = vi
+    .fn()
+    .mockRejectedValueOnce(new ApiError(401, "Sign in to continue."))
+    .mockResolvedValueOnce(profile("a"));
+  let returned = false;
+  const stop = onFirstShown(
+    () =>
+      screen.queryAllByText("Sign in to create or change your public profile.")
+        .length > 0 || null,
+    () => {
+      window.dispatchEvent(new Event("focus"));
+      returned = true;
+    },
+  );
+  setup({ me: vi.fn(async () => person("a")), myProfile });
+  await waitFor(() => expect(returned).toBe(true));
+  stop();
+  await loaded();
+  expect(myProfile).toHaveBeenCalledTimes(2);
+});
