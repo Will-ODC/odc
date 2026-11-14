@@ -157,10 +157,6 @@ test("a_signed_cookie_with_no_timestamps_at_all_does_not_verify", () => {
   assert.equal(signer.verify(sign("")), undefined);
 });
 
-test("a_short_secret_is_refused_outright", () => {
-  assert.throws(() => new SessionSigner("too-short"), /at least 32/);
-});
-
 test("the_secret_floor_is_32_characters", () => {
   assert.throws(
     () => new SessionSigner("s".repeat(31)),

@@ -574,7 +574,7 @@ test(
 );
 
 test(
-  "indexes_the_two_queries_that_would_otherwise_scan",
+  "index_set_after_all_migrations_matches_the_schema_snapshot",
   { skip },
   async () => {
     // suggestion.poll_id serves SuggestionStore.list(pollId); vote_choice

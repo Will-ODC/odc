@@ -54,7 +54,17 @@ function show(route: Route, page: MyVotesPage) {
   return { myVotes, signOut, header: within(screen.getByRole("banner")) };
 }
 
+// One smoke case per page: every route renders the shared header (#487).
 describe.each(pages)("$name header (#487)", ({ route }) => {
+  it("offers Account when this browser holds saved votes", async () => {
+    const { header } = show(route, { votes: [saved], nextCursor: null });
+    expect(await header.findByRole("button", { name: "Account" })).toBeTruthy();
+  });
+});
+
+// The header is shared, so its other states are checked on one page.
+describe("header account states, on Home (#487)", () => {
+  const route = pages[0]!.route;
   it.each([false, true])(
     "keeps the first pending vote read neutral before resolving saved votes (%s)",
     async (hasVotes) => {
@@ -86,10 +96,6 @@ describe.each(pages)("$name header (#487)", ({ route }) => {
       }
     },
   );
-  it("offers Account when this browser holds saved votes", async () => {
-    const { header } = show(route, { votes: [saved], nextCursor: null });
-    expect(await header.findByRole("button", { name: "Account" })).toBeTruthy();
-  });
   it("offers Sign in when this browser holds no votes", async () => {
     const { header, myVotes } = show(route, { votes: [], nextCursor: null });
     expect(await header.findByRole("link", { name: "Sign in" })).toBeTruthy();
