@@ -134,7 +134,10 @@ Check it with one command, which prints nothing when the orchestrator may merge:
   APPROVE or APPROVE WITH NITS from a fresh `odc-ui-reviewer` (a senior UI and
   design reviewer that checks the screens in the real browser) on the same
   sha. Start it in a review worktree at the PR head, like `odc-reviewer`, and
-  tell it the worktree's absolute path for its `launch.json` entry;
+  tell it the worktree's absolute path. First put the main checkout at the PR
+  head and serve it on the one 5173/8080 stack (committed `launch.json`
+  entries); run UI reviews one at a time, and return the stack to `master`
+  afterwards;
 - every CI check green;
 - no blocking or should-fix finding left open, and no open operator question
   on it. Nits may stay if the report lists them.
