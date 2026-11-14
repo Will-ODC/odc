@@ -222,12 +222,39 @@ the same CI runs.
    are merged; there is no remaining UI stack awaiting merge.
 2. The Contributions PRs are merged; #594 waits for the operator. Next: the
    unblocked P12 steps (#580, #427, #296; #586 after #427). Open follow-ups:
-   #533 ViewState Try again, #536 Conversation logic into flow/ and hooks, #537 VoteCard split, #538 CSS encapsulation and tokens, #557,
-   #560, #589, #591, #599 and #610 review nits, #596-#598, #534 part 3 (Conversation), P12 poll pictures
-   (#579-#586, ADR-0047),
-   #539 step 2 (one session provider; operator decision), and #499 dark mode
-   and #500 compact posted notice (mockups merged in #521, not built).
-3. Prepare a small invited pilot only after choosing a host, configuring DNS,
+   #533 ViewState Try again, #536 Conversation logic into flow/ and hooks,
+   #537 VoteCard split, #538 CSS encapsulation and tokens, #557, #560, #589,
+   #591, #599 and #610 review nits, #596-#598, #534 part 3 (Conversation), P12
+   poll pictures (#579-#586, ADR-0047), #539 step 2 (one session provider;
+   operator decision), and #499 dark mode and #500 compact posted notice
+   (mockups merged in #521, not built).
+3. **Pulse test audit — deferred by the operator (2026-11-14); run it when
+   asked.** Why: on 2026-11-14 two flaky profile tests (#592) hid real bugs
+   (a typed draft overwritten, a sign-in return missed) from gaps between React
+   showing a screen and its passive `useEffect`s running; the same pattern is
+   likely elsewhere. How: one fresh `odc-reviewer` (or Codex reviewer) in a
+   worktree from `origin/master`, report only, no code changes, briefed to:
+   (a) find screens and hooks in `apps/pulse-web/src` that reset state from
+   props or attach listeners in passive effects where a person can act in the
+   gap, and tests that pass only by timing — run each suspect test file 30
+   times and report the failure rate; (b) spot-check that tests fail when the
+   code is wrong, by breaking a handful of guarded lines (privacy filters,
+   account checks, migration guards) one at a time and confirming a test goes
+   red, restoring each; (c) list checks that should be required in the
+   `protect-master` ruleset but are not. Findings become one issue per
+   concrete defect (`create-issue`).
+4. **`pulse-images` is not a required check.** The ruleset requires only
+   `format / lint / typecheck`, `diff-size`, `guard-tests`, `guard` and
+   `memory-index`, so a red picture-package check (#594) warns and blocks
+   nothing. Do not ask the operator to require it as is: it runs only on Pulse
+   paths, and a required check that never runs leaves other PRs waiting
+   forever. First change `.github/workflows/pulse-images.yml` to run on every
+   PR and pass fast when no Pulse path changed (operator merges); then the
+   operator adds `pulse-images` under Settings → Rules → Rulesets →
+   protect-master → Require status checks. The same follow-up can make #594's
+   step run the server's own picture processing on a small sample JPEG, and
+   correct its comment ("decodes" — it reads only the header).
+5. Prepare a small invited pilot only after choosing a host, configuring DNS,
    verifying a sending domain and satisfying `apps/pulse/DEPLOY.md`'s
    proxy-hop and rate-limit prerequisites. This is not authorization to deploy.
 
