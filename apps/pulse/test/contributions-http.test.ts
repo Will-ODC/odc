@@ -815,3 +815,51 @@ test(
     assert.deepEqual(await f.snapshot(), before);
   },
 );
+
+for (const route of ["create", "participate", "update", "message"]) {
+  test(
+    `Postgres HTTP ${route} refuses another account or a missing accountId without writes`,
+    options,
+    async (t) => {
+      const f = await fixture(t);
+      const item = await f.create();
+      const write = writes(item.id).find((entry) => entry.name === route)!;
+      // The current session is authorized even for organizer updates. The
+      // draft belongs to someone else, so authorization alone cannot protect it.
+      for (const accountId of [sender, undefined, null, "", 42]) {
+        await f.rejects(
+          () => f.post(write.path, { ...write.body, accountId }, organizer),
+          accountId === sender ? 409 : 400,
+          accountId === sender ? "account_changed" : "bad_request",
+        );
+      }
+      // A stale attempt must not claim this account's request key.
+      const key = randomUUID();
+      await f.rejects(
+        () =>
+          f.post(
+            write.path,
+            { ...write.body, accountId: sender },
+            organizer,
+            key,
+          ),
+        409,
+        "account_changed",
+      );
+      const accepted = await f.post(write.path, write.body, organizer, key);
+      if (route === "message") await response(accepted, 201, messageSchema);
+      else await response(accepted, 201, mutationSchema);
+      await f.rejects(
+        () =>
+          f.post(
+            write.path,
+            { ...write.body, accountId: sender },
+            organizer,
+            key,
+          ),
+        409,
+        "account_changed",
+      );
+    },
+  );
+}

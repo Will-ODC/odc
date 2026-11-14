@@ -1,4 +1,9 @@
 import {
+  copyPublicPollImage,
+  publicPollImage,
+  type PublicPollImage,
+} from "../images/public.js";
+import {
   isOpen,
   type Attribution,
   type Poll,
@@ -19,12 +24,15 @@ import {
 export interface PublicPoll {
   id: string;
   question: string;
+  context: string | null;
   choices: string[];
   method: PollMethod;
   next: (string | null)[];
   acceptsSuggestions: boolean;
   closesAt: string | null;
   open: boolean;
+  /** The poster's picture or the tile (ADR-0047); always present. */
+  image: PublicPollImage;
   community?: PollCommunity;
   attribution?: Attribution;
 }
@@ -51,12 +59,14 @@ export function publicPoll(poll: Poll, now: Date): PublicPoll {
   const body: PublicPoll = {
     id: poll.id,
     question: poll.question,
+    context: poll.context ?? null,
     choices: [...poll.choices],
     method: poll.method,
     next: [...poll.next],
     acceptsSuggestions: poll.acceptsSuggestions,
     closesAt: poll.closesAt ? poll.closesAt.toISOString() : null,
     open: isOpen(poll, now),
+    image: publicPollImage(poll.image),
   };
   if (poll.publication === undefined) return body;
   const { community, attribution } = poll.publication;
@@ -78,4 +88,33 @@ function publicAttribution(attribution: Attribution): Attribution {
       // unknown kind can never be published as if it were anonymous.
       throw new TypeError("unknown poll attribution");
   }
+}
+
+/**
+ * A saved creation response, rebuilt field by field for a replay. Snapshots
+ * keep their original openness and close time. One saved before poll context
+ * existed has no `context` and reads as `null`; one saved before pictures has
+ * no `image` and reads as the tile. Every other field, `image` and `context`
+ * included, is returned as it was saved.
+ */
+export function publicPollReplay(
+  poll: Omit<PublishedPublicPoll, "context" | "image"> & {
+    context?: string | null;
+    image?: PublicPollImage;
+  },
+): PublishedPublicPoll {
+  return {
+    id: poll.id,
+    question: poll.question,
+    context: poll.context ?? null,
+    choices: [...poll.choices],
+    method: poll.method,
+    next: [...poll.next],
+    acceptsSuggestions: poll.acceptsSuggestions,
+    closesAt: poll.closesAt,
+    open: poll.open,
+    image: copyPublicPollImage(poll.image),
+    community: { id: poll.community.id, label: poll.community.label },
+    attribution: publicAttribution(poll.attribution),
+  };
 }

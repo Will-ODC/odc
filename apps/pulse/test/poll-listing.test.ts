@@ -125,6 +125,7 @@ for (const kind of ["memory", "postgres"] as const) {
         "closesAt",
         "createdAt",
         "id",
+        "image",
         "method",
         "open",
         "question",

@@ -23,17 +23,12 @@ is decided, and delete it when it becomes moot. Pulse's open decisions are in
 | `RETIRED.md` valve; EV-5's fixture breadth; an HA-2 fixture                                         | Archive file, three adjacent bullets                         |
 | Sanction/negative events; money/attestation/capability events (Phase 2+)                            | Archive file, deferred, and **not** freeze blockers          |
 
-The four `contracts/` contradictions once listed in `memory/STATE.md` were
-decided in ADR-0038 (#355).
-
-**Settled, kept for the reasoning (archive file):** the six T9 findings F1-F6,
-which became ADR-0013 to ADR-0018. Also archived: the operator-confirmed batch
-floors, the charter §4 anchoring edit (ratified 2026-08-15), and the traps left
-by the ADR pass and by fixture phase 1. All of those traps are now closed. Look
-in the archive under "T9 findings F1-F6 (settled; moved 2026-10-10)". ADRs
-and specs that cite "`memory/OPEN-QUESTIONS.md` Q-A" (or Q-B, Q-D, Q-E or Q-H)
-mean that archive section. Q-F, S-C and NS-2 are archived too, settled by
-ADR-0043.
+**Settled, kept for the reasoning (archive file):** the T9 findings F1-F6
+(ADR-0013 to ADR-0018), the batch floors and the charter §4 anchoring edit,
+under "T9 findings F1-F6 (settled; moved 2026-10-10)". ADRs and specs that cite
+"`memory/OPEN-QUESTIONS.md` Q-A" (or Q-B, Q-D, Q-E or Q-H) mean that archive
+section. Q-F, S-C and NS-2 are archived too, settled by ADR-0043; the four
+`contracts/` contradictions were settled by ADR-0038.
 
 **Where a new question goes:** a new bullet in this file, with a bold title and a
 date, or its own `##` section if it needs one. Once it is settled, move it to the
@@ -57,14 +52,14 @@ archive with a one-line pointer to the ADR or PR that settled it.
   first anchor (`docs/security/t9-reaudit-2026-10-20.md`, S-D).
 
 - **Read-API conformance coverage** (T9 orchestration inventory, 2026-08-15).
-  At T9, 73 of 143 rule ids were cited by no vector. The uncovered half includes
-  **RA-1 to RA-13, the whole of `read-api.md`**. That is the public read
-  surface, where identity leakage would show, and F2 depends on RA-12/RA-13.
-  Open: does the read API need conformance vectors before Phase 1 builds against
-  it, or is it out of scope for a fixture suite whose unit is an export line? An
-  HTTP surface probably needs a different instrument from NDJSON vectors.
-  **Re-counted 2026-10-20 at 145 vectors:** 166 rule ids, 71 cited by none;
-  RA-1 to RA-13 are still all uncited (also T9 re-audit N-6).
+  **RA-1 to RA-13, the whole of `read-api.md`**, are cited by no vector (latest
+  count, 2026-10-21: `memory/STATE.md` → Next, "Conformance coverage"). That is
+  the public read surface, where identity leakage would show, and F2 depends on
+  RA-12/RA-13. Open: does the read API need conformance vectors before Phase 1
+  builds against it, or is it out of scope for a fixture suite whose unit is an
+  export line? An HTTP surface probably needs a different instrument from
+  NDJSON vectors (also T9 re-audit N-6). The ledger's read API (#461) is
+  already built, so its own tests carry this for now.
 
 ## Open entries from the T9 re-audit (2026-10-20)
 

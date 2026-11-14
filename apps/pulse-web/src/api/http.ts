@@ -5,9 +5,12 @@ import type {
   CreationContext,
   Me,
   MyVotesPage,
+  MemberProfile,
   NewPollRequest,
   Poll,
   PollPage,
+  ProfileRequest,
+  PublicMemberProfile,
   PulseApi,
   RequestLinkResult,
   Results,
@@ -87,6 +90,29 @@ export class HttpPulseApi implements PulseApi {
 
   async signOut(): Promise<void> {
     await this.#send("POST", "/sign-out");
+  }
+
+  async profile(publicId: string): Promise<PublicMemberProfile> {
+    return this.#send("GET", `/profiles/${encodeURIComponent(publicId)}`);
+  }
+
+  async myProfile(ownerAccountId?: string): Promise<MemberProfile | null> {
+    const body = await this.#send<{ profile: MemberProfile | null }>(
+      "GET",
+      ownerAccountId === undefined
+        ? "/me/profile"
+        : `/me/profile?ownerAccountId=${encodeURIComponent(ownerAccountId)}`,
+    );
+    return body.profile;
+  }
+
+  async saveProfile(request: ProfileRequest): Promise<MemberProfile> {
+    const body = await this.#send<{ profile: MemberProfile }>(
+      "PUT",
+      "/me/profile",
+      request,
+    );
+    return body.profile;
   }
 
   async listPolls(community: string, cursor?: string): Promise<PollPage> {

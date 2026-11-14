@@ -2,11 +2,13 @@ import type { FastifyInstance, FastifyRequest, FastifyReply } from "fastify";
 import type { Voter } from "../identity/store.js";
 import { ContributionError, listQuery } from "../contributions/input.js";
 import type { ContributionsStore } from "../contributions/store.js";
+import type { MemberProfileStore } from "../profiles/store.js";
 import { isStorageUnavailable } from "../db/unavailable.js";
 import { logFault } from "../logging.js";
 import { originAllowed } from "./origin.js";
 interface Deps {
   contributions: ContributionsStore | undefined;
+  profiles: MemberProfileStore | undefined;
   webOrigin: string | undefined;
   currentVoter: (request: FastifyRequest) => Promise<Voter | undefined>;
 }
@@ -17,6 +19,7 @@ const errors = {
     400,
     "Check the fields and try again. Commercial offers need at least 20% savings.",
   ],
+  account_changed: [409, "Your account changed, so this wasn't sent."],
   signed_out: [401, "Sign in to contribute."],
   organizer_required: [403, "Only the organizer can do that."],
   origin_not_allowed: [403, "Open this site to send that request."],
@@ -120,6 +123,19 @@ export async function registerContributionRoutes(
     };
     const writeOptions = {
       onRequest: mutationGuard,
+      preHandler: async (request: FastifyRequest, reply: FastifyReply) => {
+        const body = request.body;
+        if (!body || typeof body !== "object" || Array.isArray(body))
+          return refuse(reply, "bad_request");
+        const { accountId, ...fields } = body as Record<string, unknown>;
+        if (typeof accountId !== "string" || accountId.length === 0)
+          return refuse(reply, "bad_request");
+        // The draft's account is a precondition, never a choice of author.
+        // Check before entering storage, even for an idempotent retry.
+        if (accountId !== (request as Authenticated)[actor]?.id)
+          return refuse(reply, "account_changed");
+        request.body = fields;
+      },
       bodyLimit: 32 * 1024,
       config: { rateLimit: { max: 30, timeWindow: "1 minute" } },
     };
@@ -128,7 +144,25 @@ export async function registerContributionRoutes(
     );
     scope.get("/api/contributions/:id", readOptions, async (request) => {
       const voter = await deps.currentVoter(request);
-      return store().detail(id(request), voter?.id);
+      const contributionId = id(request);
+      const detail = await store().detail(contributionId, voter?.id);
+      const organizerProfile = await deps.profiles?.publicByOwnerId(
+        await store().ownerId(contributionId),
+      );
+      return {
+        ...detail,
+        contribution: {
+          ...detail.contribution,
+          ...(organizerProfile
+            ? {
+                organizerProfile: {
+                  publicId: organizerProfile.publicId,
+                  displayName: organizerProfile.displayName,
+                },
+              }
+            : {}),
+        },
+      };
     });
     scope.get(
       "/api/contributions/:id/messages",

@@ -78,6 +78,12 @@ Compose setup; using another major version needs separate verification. Do not
 use the Compose database for a deployment: its data directory is a temporary
 filesystem.
 
+The database must use the UTF8 server encoding. Pulse's text limits
+(question, choices, names, picture descriptions) are counted in code points,
+and under `SQL_ASCII` Postgres counts bytes instead, so valid non-ASCII text
+can break a check constraint and fail as a 500. Check with `show
+server_encoding;`.
+
 The database user needs permission to create and change tables in the selected
 schema. Set `PULSE_DATABASE_SCHEMA` only when Pulse should use a non-default
 schema. Backups, retention, restore testing, TLS requirements, and connection
@@ -112,6 +118,36 @@ not remove markers, so on an idle deployment they can likewise remain past
 that window. A pre-012 marker is dated at the first startup or redemption
 after upgrading and retained for the full window from then. Account email credentials and database backups have separate
 retention; this cleanup does not erase them from backups.
+
+### Poll pictures (ADR-0047)
+
+Uploaded poll pictures are stored in this database: `image` holds each
+picture's size, owner link and description, `image_bytes` its two re-encoded
+WebP variants (about 150–300 KB and 15–30 KB). The original upload is never
+stored. **Database backups therefore contain picture bytes and descriptions,
+including pictures later removed or purged, for the backup retention period.**
+Plan backup size and retention with that in mind.
+
+A picture uploaded but not attached to a poll within 24 hours is deleted with
+its bytes at the next API startup or upload. Like the sign-in sweep there is
+no scheduler; a failed sweep is logged and never stops startup or an upload.
+The same sweep removes `image_upload` rows (an account id and upload time,
+which the hourly upload quota counts) once they are more than an hour old.
+
+The API image includes `sharp` (libvips) with prebuilt `linuxmusl-x64`
+binaries for the Alpine runtime; a libvips advisory means rebuilding the
+image. Picture decoding runs one at a time per instance, and a busy instance
+answers 503 `image_busy` rather than slowing votes.
+
+The web image's nginx allows a request body of 10 MiB on `POST
+/api/poll-images` only; every other location keeps nginx's 1 MiB default. A
+proxy or host edge in front of nginx must allow 10 MiB on that path too.
+
+Until reporting and the site owner's soft delete are built, the only
+emergency path for an abusive picture is a database operator setting the
+poll's existing `hidden` flag (`update polls set hidden = true where id =
+…`), which hides the poll and so its picture; served copies leave browser
+caches within an hour. Record by hand that this was done.
 
 ## API environment
 

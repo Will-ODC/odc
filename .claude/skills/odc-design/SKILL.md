@@ -1,6 +1,6 @@
 ---
 name: odc-design
-description: The ODC design of record — which mockup deck is the reference for which surface, how to author or edit a mockup in docs/mockups, what a mockup may and may not depict, and how to publish a design as an Artifact for review. Use this skill whenever designing a screen, creating or editing a mockup, choosing a visual direction or palette, asking "what should this look like", or publishing a design deck for the operator to look at. For writing the actual UI code, use odc-ui.
+description: The ODC design of record — which mockup deck is the reference for which surface, how to author or edit a mockup in docs/mockups, what a mockup may and may not depict, how to show one locally, and how to publish a design as an Artifact for review. Use this skill whenever designing a screen, creating or editing a mockup, choosing a visual direction or palette, asking "what should this look like", or publishing a design deck for the operator to look at. For writing the actual UI code, use odc-ui.
 ---
 
 # ODC Design of Record
@@ -13,33 +13,17 @@ supposed to look like, and where that decision is written down.
 ## What is reference, and what is not
 
 [`docs/mockups/CANDIDATE_CONTEXT.md`](../../../docs/mockups/CANDIDATE_CONTEXT.md)
-is the canonical index of current references, retained alternatives and historical
-decks for Pulse and the separate charter-side ODC candidates. Read it before
-choosing a deck. Update it in the same change that changes a candidate's standing;
-do not duplicate its status table here.
+is the canonical index of current references, retained alternatives and
+historical decks, for Pulse and the charter-side ODC candidates. Read it before
+choosing a deck, and update it in the same change that moves a candidate's
+standing; do not duplicate its status table here.
 
-## The visual languages in the mockup archive
-
-**Civic Glass** — translucent, light. Canvas `#dfe5ec` under soft radial blue
-and teal washes; `--glass` white at 66% with `backdrop-filter: blur(18px)`;
-ink `#111318`; blue / violet / green lane colors with `-wash` and `-deep`
-variants; radii 34 screen / 22 card / 15 control / pill; Inter with tight
-negative letter-spacing on headings; layered soft shadows. The canonical
-`:root` block is `docs/mockups/pulse-screens/_screens.css` — read the values
-from there, never from memory or from this file.
-
-**The retired dark swipe ballot** — `01-claim.html` only. Near-black `#0a0b0e`,
-cardless, question as hero in a black top third, full-height No=red / Yes=green
-layers fading up into it, muted edge chevrons as the swipe affordance, an
-incognito motif meaning "your vote is private". It carries its own page chrome
-and `@import`s Inter because `_screens.css`'s page is light — without that
-override the dark screen floats on a light page and looks broken.
-
-**Historical screens 2–7 are light.** The archive's mixed palette does not
-reopen the current conversation design. Use the canonical index for current
-standing and the app's tokens for implementation (`odc-ui`). The swipe graph's
-up/down exploration is historical; the current conversation card uses explicit
-selection and Submit (ADR-0035).
+Palette and tokens: read the values from
+`docs/mockups/pulse-screens/_screens.css` (the canonical `:root` block), never
+from memory. The app's own tokens are `apps/pulse-web/src/styles/tokens.css`
+(`odc-ui`). The archive's mixed palettes (including the retired dark swipe
+ballot in `01-claim.html`) do not reopen the current conversation design; the
+current card uses explicit selection and Submit (ADR-0035).
 
 ## Authoring a mockup
 
@@ -81,26 +65,24 @@ open locally, publish it as an Artifact.
   skill only says what content is allowed.
 - Self-contained: inline the CSS and any script, embed assets. Google Fonts is
   the one external host that loads, which is how Inter gets in.
-- Theme-aware unless the design deliberately commits to one look — the dark
-  swipe ballot does, and should say so rather than half-adapting.
+- Theme-aware unless the design deliberately commits to one look, in which
+  case say so rather than half-adapting.
 - Fake data only, per above, and label it as illustrative on the page.
-- Artifacts are private until shared; the file still lives in `docs/mockups/`
-  if it is the design of record. A published Artifact is a view of the deck,
-  never the deck itself.
+- A published Artifact is a view of the deck, never the deck itself; the design
+  of record stays in `docs/mockups/`.
 
 ## Showing work locally
 
-The in-app browser pane blocks `localhost` by policy, and renders `file://`
-paths outside the project as a non-screenshotting snapshot. So serve the deck
-and hand over the URL:
+Open a mockup in the browser pane with `preview_start` and a `url`, or serve
+the deck from the repo or worktree root and hand the operator the URL:
 
 ```
-python3 -m http.server 8123 --bind 127.0.0.1     # from the repo or worktree root
+python3 -m http.server 8123 --bind 127.0.0.1
+# then http://127.0.0.1:8123/docs/mockups/pulse-screens/
 ```
 
-Will opens `http://127.0.0.1:8123/docs/mockups/pulse-screens/` himself. Iterate
-**one screen at a time** with feedback between screens — that is the agreed
-working shape for this deck, not a big-bang deck drop.
+Iterate **one screen at a time** with feedback between screens — that is the
+agreed working shape, not a big-bang deck drop.
 
 ## Before you call a design done
 

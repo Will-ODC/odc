@@ -56,15 +56,17 @@ test(
       [AT, new Date(AT.getTime() + 1000)],
     );
     const store = new PostgresVotingStore(pool, () => AT);
-    await store.createPoll({
-      id: "legacy",
-      question: "Q",
-      choices: ["A", "B"],
-      method: "single",
-    });
-    // Written as rows, not through the store: the store is today's, and it
-    // writes and reads columns that migrations after 005 add (007's
-    // `vote.confirmation`), which this pre-005 schema does not have yet.
+    // Seed the old schema directly: today's store writes columns introduced
+    // later, including 017's polls.context and 007's vote.confirmation.
+    await pool.query(
+      "insert into polls (id, question, method, created_at, accepts_suggestions) values ('legacy', 'Q', 'single', $1, false)",
+      [AT],
+    );
+    for (const [position, label] of ["A", "B"].entries())
+      await pool.query(
+        "insert into poll_choice (id, poll_id, position, label) values ($1, 'legacy', $2, $3)",
+        [randomUUID(), position, label],
+      );
     await pool.query(
       "insert into vote (id, poll_id, voter_id, cast_at) values ($1, 'legacy', 'private-browser', $2)",
       [randomUUID(), AT],
@@ -93,7 +95,7 @@ test(
     assert.deepEqual(
       (
         await pool.query(
-          "select community, created_by, attribution_kind, author_name, hidden from polls where id = 'legacy'",
+          "select community, created_by, attribution_kind, author_name, hidden, context from polls where id = 'legacy'",
         )
       ).rows,
       [
@@ -103,6 +105,7 @@ test(
           attribution_kind: null,
           author_name: null,
           hidden: false,
+          context: null,
         },
       ],
     );

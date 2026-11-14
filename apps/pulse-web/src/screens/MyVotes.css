@@ -1,0 +1,57 @@
+.my-votes {
+  min-height: 100dvh;
+  display: flex;
+  flex-direction: column;
+  color: var(--ink);
+  background: var(--page);
+}
+
+.my-votes__main {
+  box-sizing: border-box;
+  width: 100%;
+  max-width: calc(var(--rail) * 4);
+  margin: 0 auto;
+  padding: calc(var(--step) * 3) var(--gutter);
+}
+
+.my-votes__main h1 {
+  margin: 0 0 var(--step);
+  font-size: var(--t-word);
+  line-height: 1.1;
+  letter-spacing: -0.03em;
+  overflow-wrap: anywhere;
+  text-wrap: balance;
+}
+
+.my-votes__note {
+  margin: 0;
+  color: var(--ink-soft);
+  font-size: var(--t-small);
+  line-height: 1.5;
+}
+
+.my-votes__main > .viewstate {
+  margin-top: calc(var(--step) * 3);
+}
+
+.my-votes__main--message .viewstate {
+  align-items: flex-start;
+  margin-top: var(--step);
+  padding: 0;
+  text-align: left;
+}
+
+.my-votes__action {
+  display: block;
+  margin: calc(var(--step) * 2) 0 0;
+}
+
+.my-votes__more {
+  margin: var(--step) 0 0;
+}
+
+@media (min-width: 700px) {
+  .my-votes__main {
+    max-width: calc(var(--rail) * 3);
+  }
+}

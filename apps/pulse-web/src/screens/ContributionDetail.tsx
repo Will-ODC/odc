@@ -1,8 +1,16 @@
-import { useCallback, useEffect, useRef, useState } from "react";
+import {
+  useCallback,
+  useEffect,
+  useLayoutEffect,
+  useRef,
+  useState,
+} from "react";
 import type { FormEvent } from "react";
 import type { PulseApi } from "../api/types.js";
 import {
+  accountChangedMessage,
   contributionsApi,
+  ContributionsError,
   type ContributionsApi,
   type Contribution,
   type ParticipationKind,
@@ -55,11 +63,53 @@ export function ContributionDetail({
     setRailRetried(false);
     votes.cleared();
   };
-  const { session, progress, signOut, dismiss } = useSession(api, {
+  const { session, progress, signOut, dismiss, recheck } = useSession(api, {
     onSignedOut: clearVotes,
     onForgotten: clearVotes,
     recheckSignedIn: true,
   });
+  type WriteForm = "participation" | "message" | "update";
+  const [refusals, setRefusals] = useState({
+    participation: 0,
+    message: 0,
+    update: 0,
+  });
+  async function write<T>(form: WriteForm, send: () => Promise<T>): Promise<T> {
+    const submitted = {
+      owner: drafts.owner,
+      generation: drafts.generation,
+      refusal: refusals[form],
+      id,
+    };
+    try {
+      return await send();
+    } catch (error) {
+      if (
+        error instanceof ContributionsError &&
+        error.status === 409 &&
+        error.code === "account_changed"
+      ) {
+        const mounted = mountedDrafts.current;
+        if (
+          mounted &&
+          mounted.forms[form] &&
+          mounted.owner === submitted.owner &&
+          mounted.generation === submitted.generation &&
+          mounted.refusals[form] === submitted.refusal &&
+          mounted.id === submitted.id
+        ) {
+          setRefusals((current) => ({ ...current, [form]: current[form] + 1 }));
+          setDrafts((current) => ({
+            ...current,
+            refused: { ...current.refused, [form]: true },
+            carry: true,
+          }));
+        }
+        recheck();
+      }
+      throw error;
+    }
+  }
   const accountId = session.status === "signedIn" ? session.me.id : null;
   // Read the votes again once someone is signed in after they were cleared.
   useEffect(() => votes.signedInAs(accountId));
@@ -67,21 +117,47 @@ export function ContributionDetail({
   // after someone chooses to sign out, or when a different account signs in.
   // An expired session keeps them, so signing in again as the same person
   // (in a new tab) can still send what was written.
+  // `refused`: which forms the server refused for a different account; each
+  // says so beside its emptied form until that form's next edit or send.
+  // `carry`: the session recheck a refusal started has not yet brought in the
+  // account now signed in; when it does, the notices stay for that account's
+  // empty forms. Any other new generation puts them away.
   const [drafts, setDrafts] = useState<{
     owner: string | null;
     generation: number;
-  }>({ owner: accountId, generation: 0 });
+    refused: Record<WriteForm, boolean>;
+    carry: boolean;
+  }>({ owner: accountId, generation: 0, refused: noRefusals, carry: false });
   if (accountId !== null && drafts.owner !== accountId)
     setDrafts({
       owner: accountId,
       generation: drafts.generation + (drafts.owner === null ? 0 : 1),
+      refused:
+        drafts.carry || drafts.owner === null ? drafts.refused : noRefusals,
+      carry: false,
     });
   else if (
     session.status === "signedOut" &&
     session.ended !== "expired" &&
     drafts.owner !== null
   )
-    setDrafts({ owner: null, generation: drafts.generation + 1 });
+    setDrafts({
+      owner: null,
+      generation: drafts.generation + 1,
+      refused: noRefusals,
+      carry: false,
+    });
+  /** The person edited or sent this form: its refusal notice has done its job. */
+  const edited = (form: WriteForm) => () =>
+    setDrafts((current) =>
+      current.refused[form]
+        ? {
+            ...current,
+            refused: { ...current.refused, [form]: false },
+            carry: false,
+          }
+        : current,
+    );
   const access: Access =
     session.status === "signedIn"
       ? "signedIn"
@@ -130,13 +206,58 @@ export function ContributionDetail({
         (access === "signedIn" &&
           data.status === "ready" &&
           data.value.accountId !== accountId)));
+  // A late refusal belongs to the submitting draft, even if another account
+  // has already remounted this form and started writing. Track committed forms
+  // so an old request cannot clear a replacement draft or announce its error.
+  const mountedDrafts = useRef<{
+    owner: string | null;
+    generation: number;
+    refusals: typeof refusals;
+    id: string;
+    forms: Record<WriteForm, boolean>;
+  } | null>(null);
+  useLayoutEffect(() => {
+    mountedDrafts.current = {
+      owner: drafts.owner,
+      generation: drafts.generation,
+      refusals,
+      id,
+      forms: {
+        participation: data.status === "ready",
+        message: data.status === "ready" && !canManage,
+        update: data.status === "ready" && canUpdate,
+      },
+    };
+    return () => {
+      mountedDrafts.current = null;
+    };
+  });
   const heading = useRef<HTMLHeadingElement>(null);
   const headingFocused = useRef(false);
   const ready = data.status === "ready";
+  // A link to one section (the profile's "Post an update" and "Organizer
+  // inbox" go to #updates and #messages) arrives before the page has loaded,
+  // so the browser has nothing to scroll to. Once the page is read for the
+  // account now signed in, and so shows the sections it will keep, go to the
+  // section named and put focus on its heading. Layout effect: done before
+  // the page is painted, so nothing can be pressed in between.
+  const landed = useRef(false);
+  const settled =
+    data.status === "ready" &&
+    session.status !== "loading" &&
+    data.value.accountId === accountId;
+  useLayoutEffect(() => {
+    if (!settled || landed.current) return;
+    const target = sectionHeading(globalThis.location.hash);
+    if (!target) return;
+    landed.current = true;
+    target.scrollIntoView?.({ block: "start" });
+    target.focus({ preventScroll: true });
+  }, [settled]);
   useEffect(() => {
     if (!focusHeading || !ready || headingFocused.current) return;
     headingFocused.current = true;
-    heading.current?.focus();
+    if (!landed.current) heading.current?.focus();
   }, [focusHeading, ready]);
   // "Try again" on the refresh banner: once it works the banner (and the
   // button that had focus) goes, so put focus on the title instead.
@@ -216,7 +337,17 @@ export function ContributionDetail({
                   {item.title}
                 </h1>
                 <p>
-                  Organized by {item.organizerName} · {item.community.label}
+                  Organized by{" "}
+                  {item.organizerProfile ? (
+                    <a
+                      href={`/u/${encodeURIComponent(item.organizerProfile.publicId)}`}
+                    >
+                      {item.organizerName}
+                    </a>
+                  ) : (
+                    item.organizerName
+                  )}{" "}
+                  · {item.community.label}
                 </p>
               </header>
               <section className="contribution-section">
@@ -288,25 +419,54 @@ export function ContributionDetail({
                 </p>
               ) : null}
               <section className="contribution-section">
+                {drafts.refused.participation ? (
+                  <AccountChanged what="your entry" />
+                ) : null}
                 <ParticipationForm
-                  key={`${item.id}:${drafts.generation}`}
+                  key={`${item.id}:${drafts.generation}:${refusals.participation}`}
                   access={access}
+                  accountId={accountId ?? ""}
+                  write={(send) => write("participation", send)}
+                  onEdit={edited("participation")}
                   client={client}
                   item={item}
                   changed={changed}
                 />
               </section>
-              <section className="contribution-section">
+              <section id="messages" className="contribution-section">
                 {canManage ? (
                   <OrganizerInbox key={item.id} client={client} id={item.id} />
+                ) : canUpdate ? (
+                  // The organizer, while their sign-in has ended: their inbox
+                  // needs a live session, but this is still their post, so
+                  // no "Message the organizer" form in its place.
+                  <>
+                    <h2 tabIndex={-1}>Private messages</h2>
+                    <p className="contribution-expired">
+                      <a
+                        href={`/sign-in?contribution=${encodeURIComponent(item.id)}`}
+                        target="_blank"
+                        rel="noreferrer"
+                      >
+                        Sign in again in a new tab
+                      </a>{" "}
+                      to read your private messages.
+                    </p>
+                  </>
                 ) : (
                   <details className="contribution-disclosure">
                     <summary className="contribution-button contribution-button--secondary">
                       Message the organizer
                     </summary>
+                    {drafts.refused.message ? (
+                      <AccountChanged what="your message" />
+                    ) : null}
                     <MessageForm
-                      key={`${item.id}:${drafts.generation}`}
+                      key={`${item.id}:${drafts.generation}:${refusals.message}`}
                       access={access}
+                      accountId={accountId ?? ""}
+                      write={(send) => write("message", send)}
+                      onEdit={edited("message")}
                       client={client}
                       id={item.id}
                     />
@@ -332,8 +492,8 @@ export function ContributionDetail({
                   </ul>
                 </section>
               ) : null}
-              <section className="contribution-section">
-                <h2>Progress and evidence</h2>
+              <section id="updates" className="contribution-section">
+                <h2 tabIndex={-1}>Progress and evidence</h2>
                 <p className="contribution-note">
                   Updates and completion are reported by the organizer. Evidence
                   is available for the community to assess.
@@ -364,14 +524,20 @@ export function ContributionDetail({
                 ) : (
                   <p>No progress updates yet.</p>
                 )}
+                {drafts.refused.update ? (
+                  <AccountChanged what="your update" />
+                ) : null}
                 {canUpdate ? (
                   <details className="contribution-disclosure">
                     <summary className="contribution-button contribution-button--secondary">
                       Post an update
                     </summary>
                     <UpdateForm
-                      key={`${item.id}:${drafts.generation}`}
+                      key={`${item.id}:${drafts.generation}:${refusals.update}`}
                       access={access}
+                      accountId={accountId ?? ""}
+                      write={(send) => write("update", send)}
+                      onEdit={edited("update")}
                       client={client}
                       item={item}
                       changed={changed}
@@ -396,6 +562,29 @@ export function ContributionDetail({
       </section>
     </AppShell>
   );
+}
+const noRefusals = { participation: false, message: false, update: false };
+
+/**
+ * Says the server refused a form's send because a different account is
+ * signed in now, and the form was emptied. The press that sent it was in the
+ * form that was replaced, so focus is on nothing: put it here as the notice
+ * is attached, so there is no moment a keyboard user is left on the page.
+ */
+function AccountChanged({ what }: { what: string }) {
+  return (
+    <p
+      ref={focusWhenLost}
+      role="alert"
+      tabIndex={-1}
+      className="contribution-error"
+    >
+      {accountChangedMessage(what)}
+    </p>
+  );
+}
+function focusWhenLost(node: HTMLElement | null) {
+  if (node && focusLost()) node.focus();
 }
 /**
  * Whether the forms may be filled in. "expired": the session ran out while
@@ -464,6 +653,19 @@ function useSendOutcome(
   }, [access, errorStatus, clearFailure]);
   return { status, alert };
 }
+/** Sections a link may name, and where focus goes in each. */
+const LANDING_SECTIONS = new Set(["updates", "messages"]);
+function sectionHeading(hash: string): HTMLElement | null {
+  const name = hash.replace(/^#/, "");
+  if (!LANDING_SECTIONS.has(name)) return null;
+  // The messages section's heading is a disclosure's summary for some readers.
+  return (
+    document
+      .getElementById(name)
+      ?.querySelector<HTMLElement>(":scope > h2, :scope > details > summary") ??
+    null
+  );
+}
 function focusLost() {
   const active = document.activeElement;
   return active === null || active === document.body;
@@ -490,6 +692,16 @@ function clearWhenFixed<K extends string>(
     setProblems(next);
   };
 }
+/** A form change handler that also reports the edit. */
+function editing(
+  onEdit: () => void,
+  handle: (event: FormEvent<HTMLFormElement>) => void,
+) {
+  return (event: FormEvent<HTMLFormElement>) => {
+    onEdit();
+    handle(event);
+  };
+}
 /** Move focus to a field the form refused, by id. */
 function focusField(id: string) {
   document.getElementById(id)?.focus();
@@ -511,16 +723,24 @@ const participationLabels: Record<ParticipationKind, string> = {
 };
 function MessageForm({
   access,
+  accountId,
+  write,
+  onEdit,
   client,
   id,
 }: {
   access: Access;
+  accountId: string;
+  write: <T>(send: () => Promise<T>) => Promise<T>;
+  /** The person changed a field or pressed send. */
+  onEdit: () => void;
   client: ContributionsApi;
   id: string;
 }) {
   const formRef = useRef<HTMLFormElement>(null);
   const save = useContributionSave<string>(
-    (message, key) => client.sendMessage(id, message, key),
+    (message, key) =>
+      write(() => client.sendMessage(id, message, key, accountId)),
     () => formRef.current?.reset(),
   );
   const outcome = useSendOutcome(save, access);
@@ -528,6 +748,7 @@ function MessageForm({
   const signInHref = `/sign-in?contribution=${encodeURIComponent(id)}`;
   function submit(event: FormEvent<HTMLFormElement>) {
     event.preventDefault();
+    onEdit();
     const message = String(
       new FormData(event.currentTarget).get("message") ?? "",
     ).trim();
@@ -551,20 +772,23 @@ function MessageForm({
       className="contribution-form"
       ref={formRef}
       onSubmit={submit}
-      onChange={clearWhenFixed<"message">(
-        problem === undefined ? {} : { message: problem },
-        (next) => setProblem(next.message),
-        (_name, field) => field.value.trim() !== "",
+      onChange={editing(
+        onEdit,
+        clearWhenFixed<"message">(
+          problem === undefined ? {} : { message: problem },
+          (next) => setProblem(next.message),
+          (_name, field) => field.value.trim() !== "",
+        ),
       )}
       noValidate
     >
-      <p className="contribution-note">
-        Only the organizer can read this. They can&apos;t reply here.
-      </p>
       {access === "expired" ? (
         // The offer form above already announces the expiry.
         <SignInAgain href={signInHref} announce={false} />
       ) : null}
+      <p className="contribution-note">
+        Only the organizer can read this. They can&apos;t reply here.
+      </p>
       <Field
         id="contribution-message"
         label="Private message"
@@ -676,11 +900,18 @@ function OrganizerMessages({
 }
 function UpdateForm({
   access,
+  accountId,
+  write,
+  onEdit,
   client,
   item,
   changed,
 }: {
   access: Access;
+  accountId: string;
+  write: <T>(send: () => Promise<T>) => Promise<T>;
+  /** The person changed a field or pressed send. */
+  onEdit: () => void;
   client: ContributionsApi;
   item: Contribution;
   changed: (item: Contribution) => void;
@@ -696,7 +927,8 @@ function UpdateForm({
     setStatus(item.status);
   }
   const save = useContributionSave<UpdateInput>(
-    async (input, key) => changed(await client.update(item.id, input, key)),
+    async (input, key) =>
+      changed(await write(() => client.update(item.id, input, key, accountId))),
     // Clear what was written, not the status: `reset()` would put the
     // select back to the status this form first rendered with.
     () => clearWritten(formRef.current, ["message", "evidence"]),
@@ -710,6 +942,7 @@ function UpdateForm({
   const signInHref = `/sign-in?contribution=${encodeURIComponent(item.id)}`;
   function submit(event: FormEvent<HTMLFormElement>) {
     event.preventDefault();
+    onEdit();
     const form = new FormData(event.currentTarget);
     const evidenceUrl = String(form.get("evidence") ?? "").trim();
     const found = {
@@ -742,15 +975,18 @@ function UpdateForm({
       className="contribution-form contribution-update"
       ref={formRef}
       onSubmit={submit}
-      onChange={clearWhenFixed<"message" | "evidence" | "confirm">(
-        problems,
-        setProblems,
-        (name, field) =>
-          name === "confirm"
-            ? field instanceof HTMLInputElement && field.checked
-            : name === "evidence"
-              ? field.value.trim() === "" || isWebLink(field.value.trim())
-              : field.value.trim() !== "",
+      onChange={editing(
+        onEdit,
+        clearWhenFixed<"message" | "evidence" | "confirm">(
+          problems,
+          setProblems,
+          (name, field) =>
+            name === "confirm"
+              ? field instanceof HTMLInputElement && field.checked
+              : name === "evidence"
+                ? field.value.trim() === "" || isWebLink(field.value.trim())
+                : field.value.trim() !== "",
+        ),
       )}
       noValidate
     >
@@ -876,11 +1112,18 @@ const offerLabels: Record<
 /** Offer help or pledge: the participation kinds open records accept. */
 function ParticipationForm({
   access,
+  accountId,
+  write,
+  onEdit,
   client,
   item,
   changed,
 }: {
   access: Access;
+  accountId: string;
+  write: <T>(send: () => Promise<T>) => Promise<T>;
+  /** The person changed a field or pressed send. */
+  onEdit: () => void;
   client: ContributionsApi;
   item: Contribution;
   changed: (item: Contribution) => void;
@@ -893,7 +1136,9 @@ function ParticipationForm({
     message: string;
   }>(
     async (input, key) =>
-      changed(await client.participate(item.id, input, key)),
+      changed(
+        await write(() => client.participate(item.id, input, key, accountId)),
+      ),
     // The name and the chosen kind stay for a second entry; `reset()` would
     // also clear the controlled kind behind React's back.
     () => clearWritten(formRef.current, ["message"]),
@@ -932,6 +1177,7 @@ function ParticipationForm({
     );
   function submit(event: FormEvent<HTMLFormElement>) {
     event.preventDefault();
+    onEdit();
     const form = new FormData(event.currentTarget);
     const displayName = String(form.get("displayName") ?? "").trim();
     const message = String(form.get("message") ?? "").trim();
@@ -959,10 +1205,13 @@ function ParticipationForm({
         className="contribution-form"
         ref={formRef}
         onSubmit={submit}
-        onChange={clearWhenFixed<"displayName" | "message">(
-          problems,
-          setProblems,
-          (_name, field) => field.value.trim() !== "",
+        onChange={editing(
+          onEdit,
+          clearWhenFixed<"displayName" | "message">(
+            problems,
+            setProblems,
+            (_name, field) => field.value.trim() !== "",
+          ),
         )}
         aria-labelledby="participate-heading"
         noValidate

@@ -64,6 +64,27 @@ async function counts(pool: Pool) {
   );
   return result.rows[0];
 }
+
+test(
+  "legacy_creation_replays_keep_the_saved_response_and_gain_null_context",
+  opt,
+  async (t) => {
+    const { pool, store } = await fresh(t);
+    const key = randomUUID();
+    const first = await store.publish(member, key, body);
+    await pool.query(
+      "update poll_creation_replay set canonical_input = canonical_input - 'context', public_response = jsonb_set(public_response - 'context', '{open}', 'false'::jsonb) where request_key = $1",
+      [key],
+    );
+    const replay = await store.publish(member, key, body);
+    assert.equal(replay.replayed, true);
+    assert.deepEqual(replay.poll, {
+      ...first.poll,
+      context: null,
+      open: false,
+    });
+  },
+);
 async function raced<T>(pool: Pool, run: () => Promise<T>): Promise<T> {
   const barrier = await pool.connect();
   try {

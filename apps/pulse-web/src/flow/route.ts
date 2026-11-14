@@ -39,12 +39,21 @@ export type Route =
   /** Posting a question (ADR-0037). Signed in only; the screen says so. */
   | { kind: "newPoll" }
   | { kind: "newContribution" }
-  | { kind: "contribution"; id: string };
+  | { kind: "contribution"; id: string }
+  | { kind: "memberProfile"; publicId: string }
+  | { kind: "profileEditor" };
 
 /** The places a sign-in can return to. */
 export type ReturnTo = Extract<
   Route,
-  { kind: "conversation" | "newPoll" | "newContribution" | "contribution" }
+  {
+    kind:
+      | "conversation"
+      | "newPoll"
+      | "newContribution"
+      | "contribution"
+      | "profileEditor";
+  }
 >;
 
 /**
@@ -61,6 +70,7 @@ const SIGN_IN_PATH = "/sign-in";
 const CHAT_PREVIEW_PATH = "/preview/chat";
 export const TRUST_PATH = "/trust";
 const NEW_POLL_PATH = "/new";
+const PROFILE_EDITOR_PATH = "/profile";
 
 /**
  * A base for parsing, never for navigating.
@@ -98,6 +108,8 @@ export function routeFrom(href: string): Route {
         kind: "signIn",
         returnTo: { kind: "contribution", id: contributionId },
       };
+    if (url.searchParams.get("next") === "profile")
+      return { kind: "signIn", returnTo: { kind: "profileEditor" } };
     const pollId = url.searchParams.get("poll");
     return pollId
       ? { kind: "signIn", returnTo: { kind: "conversation", pollId } }
@@ -130,6 +142,9 @@ export function routeFrom(href: string): Route {
   if (path === CHAT_PREVIEW_PATH) return { kind: "chatPreview" };
   if (path === TRUST_PATH) return { kind: "trust" };
   if (path === NEW_POLL_PATH) return { kind: "newPoll" };
+  if (path === PROFILE_EDITOR_PATH) return { kind: "profileEditor" };
+  if (/^\/u\/[^/]+$/.test(path))
+    return { kind: "memberProfile", publicId: path.slice(3) };
   if (path === "/my-votes") return { kind: "myVotes" };
   if (path === "/start") return { kind: "progress" };
   if (path === "/questions") return { kind: "questions" };
@@ -183,6 +198,8 @@ export function pathOf(route: Route): string {
           return `${SIGN_IN_PATH}?contribution=${encodeURIComponent(route.returnTo.id)}`;
         case "newPoll":
           return `${SIGN_IN_PATH}?next=new`;
+        case "profileEditor":
+          return `${SIGN_IN_PATH}?next=profile`;
         case "conversation":
           return `${SIGN_IN_PATH}?poll=${encodeURIComponent(route.returnTo.pollId)}`;
       }
@@ -197,5 +214,9 @@ export function pathOf(route: Route): string {
       return `/?poll=${encodeURIComponent(route.pollId)}`;
     case "newPoll":
       return NEW_POLL_PATH;
+    case "memberProfile":
+      return `/u/${encodeURIComponent(route.publicId)}`;
+    case "profileEditor":
+      return PROFILE_EDITOR_PATH;
   }
 }

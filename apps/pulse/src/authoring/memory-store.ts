@@ -1,9 +1,17 @@
 import { randomUUID } from "node:crypto";
 import { parseEmail } from "../identity/email.js";
+import {
+  attachInMemory,
+  attachablePending,
+  memoryImageDatabase,
+} from "../images/store.js";
 import { InMemoryVoterStore, type Voter } from "../identity/store.js";
 import { InMemoryVotingStore } from "../voting/store.js";
 import { createPoll, type Publication } from "../voting/poll.js";
-import { publicPoll as projectPoll } from "../voting/public-poll.js";
+import {
+  publicPoll as projectPoll,
+  publicPollReplay,
+} from "../voting/public-poll.js";
 import {
   CreationError,
   HOUR_MS,
@@ -109,7 +117,7 @@ export class InMemoryCreationStore implements CreationStore {
       if (replay) {
         if (canonical !== replay.canonical)
           throw new CreationError("idempotency_conflict");
-        return { poll: structuredClone(replay.poll), replayed: true };
+        return { poll: publicPollReplay(replay.poll), replayed: true };
       }
       const now = this.#clock();
       const closesAt =
@@ -143,6 +151,7 @@ export class InMemoryCreationStore implements CreationStore {
         {
           id: this.#newId(),
           question: input.question,
+          ...(input.context === undefined ? {} : { context: input.context }),
           choices: input.choices,
           method: input.method,
           closesAt,
@@ -153,16 +162,47 @@ export class InMemoryCreationStore implements CreationStore {
         community: this.#community(account),
         attribution: input.attribution,
       };
+      // The uploader's own pending picture, checked before anything is
+      // written; one refusal for unknown, foreign, attached and expired.
+      const images = memoryImageDatabase(this.#voting);
+      const pending =
+        input.image === undefined
+          ? undefined
+          : attachablePending(images, input.image.id, account.id, now);
+      if (input.image !== undefined && pending === undefined)
+        throw new CreationError("image_unavailable");
+      const changeId = pending === undefined ? undefined : this.#newId();
+      const image =
+        pending === undefined || input.image === undefined
+          ? undefined
+          : {
+              id: pending.id,
+              width: pending.width,
+              height: pending.height,
+              alt: input.image.alt,
+            };
       // The same projection GET /api/polls/:id serves, so the two cannot drift.
       const publicPoll: PublicationPoll = projectPoll(
-        { ...poll, publication },
+        { ...poll, publication, ...(image ? { image } : {}) },
         now,
       );
       // The only fallible write precedes all authoring state changes. It either
       // inserts the validated poll or rejects without inserting. No ballot is read.
       // The voting store keeps the public facts beside the poll, as the
       // Postgres row's columns do; the author's account stays here.
-      await this.#voting.createPoll(poll, publication);
+      await this.#voting.createPoll(poll, publication, image);
+      if (
+        pending !== undefined &&
+        image !== undefined &&
+        changeId !== undefined
+      )
+        attachInMemory(images, pending, {
+          pollId: poll.id,
+          alt: image.alt,
+          actorId: account.id,
+          now,
+          changeId,
+        });
       this.#state.publications.set(poll.id, {
         authorId: account.id,
         createdAt: now.getTime(),

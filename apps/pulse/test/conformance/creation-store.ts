@@ -60,12 +60,14 @@ export function creationConformance(
       assert.deepEqual(poll, {
         id: poll.id,
         question: "Q",
+        context: null,
         choices: ["A", "B"],
         method: "approval",
         next: [null, null],
         acceptsSuggestions: false,
         closesAt: new Date(AT.getTime() + WEEK_MS).toISOString(),
         open: true,
+        image: { kind: "tile" },
         community: { id: "campus", label: "Campus" },
         attribution: { kind: "anonymous" },
       });

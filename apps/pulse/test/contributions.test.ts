@@ -125,6 +125,75 @@ for (const kind of ["memory", "postgres"] as const) {
     },
   );
   test(
+    `${kind}: owner listing keys by account rather than organizer name`,
+    opts,
+    async (t) => {
+      const { store, setTime } = await setup(t, kind);
+      const first = await store.create(owner, randomUUID(), project);
+      setTime(new Date(at.getTime() + 1));
+      await store.create(helper, randomUUID(), {
+        ...project,
+        title: "Someone else's project",
+        organizerName: project.organizerName,
+      });
+      const page = await store.listByOwner(owner.voterId, {});
+      assert.deepEqual(
+        page.contributions.map((row) => row.id),
+        [first.contribution.id],
+      );
+      assert.doesNotMatch(JSON.stringify(page), /private-owner|private-helper/);
+    },
+  );
+  test(
+    `${kind}: owner listing pages one account's rows in order past interleaved rows`,
+    opts,
+    async (t) => {
+      const { store, setTime } = await setup(t, kind);
+      const mine: { id: string; createdAt: string }[] = [];
+      // One publication per hour per account stays under the posting limit;
+      // the other account publishes at the same instants, and one hour has two
+      // of the owner's rows so the id tie-break is crossed too.
+      for (let hour = 0; hour < 24; hour++) {
+        setTime(new Date(at.getTime() + hour * 3_600_001));
+        for (let copy = 0; copy < (hour === 19 ? 2 : 1); copy++)
+          mine.push(
+            (
+              await store.create(owner, randomUUID(), {
+                ...project,
+                title: `Owner ${hour}.${copy}`,
+              })
+            ).contribution,
+          );
+        await store.create(helper, randomUUID(), {
+          ...project,
+          title: `Helper ${hour}`,
+        });
+      }
+      const expected = [...mine]
+        .sort((a, b) => {
+          const [left, right] = [
+            `${a.createdAt} ${a.id}`,
+            `${b.createdAt} ${b.id}`,
+          ];
+          return left < right ? 1 : left > right ? -1 : 0;
+        })
+        .map((row) => row.id);
+      const first = await store.listByOwner(owner.voterId, {});
+      assert.equal(first.contributions.length, 20);
+      assert.ok(first.nextCursor);
+      const second = await store.listByOwner(
+        owner.voterId,
+        listQuery({ cursor: first.nextCursor }),
+      );
+      assert.equal(second.nextCursor, null);
+      assert.deepEqual(
+        [...first.contributions, ...second.contributions].map((row) => row.id),
+        expected,
+      );
+      assert.equal(expected.length, 25);
+    },
+  );
+  test(
     `${kind}: private messages survive other writes and are visible only to the organizer`,
     opts,
     async (t) => {

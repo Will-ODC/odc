@@ -1,10 +1,5 @@
-import { useCallback, useEffect, useRef, useState } from "react";
-import {
-  ApiError,
-  type MyVote,
-  type MyVotesPage,
-  type PulseApi,
-} from "../api/types.js";
+import { useCallback, useEffect, useMemo, useRef, useState } from "react";
+import { type MyVote, type MyVotesPage, type PulseApi } from "../api/types.js";
 import {
   answeredList,
   mergedVotes,
@@ -12,10 +7,8 @@ import {
   type LocalAnswer,
   type MyVotesPlace,
 } from "../flow/answered.js";
+import { usePagedList } from "./use-paged-list.js";
 import type { ViewData } from "./view-data.js";
-
-type More =
-  { status: "idle" | "loading" } | { status: "error"; message: string };
 
 /** First read stays neutral; a retry keeps the error recovery controls. */
 export type VoteRead =
@@ -24,8 +17,8 @@ export type VoteRead =
 
 export const MY_VOTES_EMPTY = "No votes saved in this browser yet.";
 export const MY_VOTES_ERROR = "We couldn't load your votes. Try again.";
-const message = (err: unknown) =>
-  err instanceof ApiError ? err.message : MY_VOTES_ERROR;
+const MY_VOTES_MORE_ERROR = "We couldn't load more of your votes. Try again.";
+const keyOf = (vote: MyVote) => vote.pollId;
 
 /**
  * This browser's saved answers (#329), read from the server on every visit,
@@ -34,86 +27,47 @@ const message = (err: unknown) =>
  * `clear` empties the list at once, for sign-out and forgetting votes.
  */
 export function useMyVotes(api: PulseApi) {
-  const [data, setData] = useState<ViewData<MyVotesPage>>({
-    status: "loading",
+  const fetchPage = useCallback(
+    async (cursor?: string) => {
+      const page =
+        cursor === undefined ? await api.myVotes() : await api.myVotes(cursor);
+      return { items: page.votes, nextCursor: page.nextCursor };
+    },
+    [api],
+  );
+  const paged = usePagedList({
+    fetchPage,
+    keyOf,
+    emptyMessage: MY_VOTES_EMPTY,
+    errorMessage: MY_VOTES_ERROR,
+    moreErrorMessage: MY_VOTES_MORE_ERROR,
   });
-  const [more, setMore] = useState<More>({ status: "idle" });
-  const [attempt, retry] = useState(0);
-  const generation = useRef(0);
-  const busy = useRef(false);
-  useEffect(() => {
-    const current = ++generation.current;
-    busy.current = false;
-    setData({ status: "loading" });
-    setMore({ status: "idle" });
-    api.myVotes().then(
-      (page) => {
-        if (generation.current === current) setData(asView(page));
-      },
-      (err: unknown) => {
-        if (generation.current === current)
-          setData({ status: "error", message: message(err) });
-      },
-    );
-    return () => {
-      ++generation.current;
-    };
-  }, [api, attempt]);
-
-  function loadMore() {
-    if (busy.current || data.status !== "ready" || !data.value.nextCursor)
-      return;
-    busy.current = true;
-    setMore({ status: "loading" });
-    const current = generation.current;
-    const previous = data.value;
-    api.myVotes(previous.nextCursor!).then(
-      (page) => {
-        if (generation.current !== current) return;
-        busy.current = false;
-        if (page.nextCursor === previous.nextCursor) {
-          setMore({
-            status: "error",
-            message: "We couldn't load more of your votes. Try again.",
-          });
-          return;
-        }
-        const rows = new Map(previous.votes.map((vote) => [vote.pollId, vote]));
-        page.votes.forEach((vote) => rows.set(vote.pollId, vote));
-        setData(
-          asView({ votes: [...rows.values()], nextCursor: page.nextCursor }),
-        );
-        setMore({ status: "idle" });
-      },
-      (err: unknown) => {
-        if (generation.current !== current) return;
-        busy.current = false;
-        setMore({ status: "error", message: message(err) });
-      },
-    );
-  }
-
-  const clear = useCallback(() => {
-    // Drops any read still in flight, so it cannot put the votes back.
-    ++generation.current;
-    busy.current = false;
-    setMore({ status: "idle" });
-    setData({ status: "empty", message: MY_VOTES_EMPTY });
-  }, []);
-
-  const retryRead = () => retry((n) => n + 1);
+  const data = useMemo<ViewData<MyVotesPage>>(
+    () =>
+      paged.data.status === "ready"
+        ? {
+            status: "ready",
+            value: {
+              votes: paged.data.value.items,
+              nextCursor: paged.data.value.nextCursor,
+            },
+          }
+        : paged.data,
+    [paged.data],
+  );
+  const retryRead = paged.retry;
   const voteRead: VoteRead | undefined =
     data.status === "loading"
-      ? { status: "loading", retrying: attempt > 0 }
+      ? { status: "loading", retrying: paged.retrying }
       : data.status === "error"
         ? { status: "error", message: data.message, onRetry: retryRead }
         : undefined;
 
   return {
     data,
-    more,
-    loadMore,
-    clear,
+    more: paged.more,
+    loadMore: paged.loadMore,
+    clear: paged.clear,
     // A cursor-only page still means this browser holds saved votes. Every
     // page derives its header from this same server-backed source (#487).
     holdsVotes: data.status === "ready",
@@ -273,12 +227,6 @@ export function useMyVotesPlace({
   const looking = place.kind === "finding" && first !== undefined;
   if (looking !== wanted) setWanted(looking);
   return place;
-}
-
-function asView(page: MyVotesPage): ViewData<MyVotesPage> {
-  return page.votes.length === 0 && page.nextCursor === null
-    ? { status: "empty", message: MY_VOTES_EMPTY }
-    : { status: "ready", value: page };
 }
 
 /**

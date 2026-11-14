@@ -1,5 +1,5 @@
 // @vitest-environment jsdom
-import { cleanup, render, screen, waitFor } from "@testing-library/react";
+import { act, cleanup, render, screen, waitFor } from "@testing-library/react";
 import userEvent from "@testing-library/user-event";
 import { afterEach, expect, it, vi } from "vitest";
 import { ContributionsError } from "../src/api/contributions.js";
@@ -35,6 +35,8 @@ const fixture = (over: Partial<Contribution> = {}): Contribution => ({
 });
 const client = (over: Partial<ContributionsApi> = {}): ContributionsApi => ({
   list: async () => ({ contributions: [fixture()], nextCursor: null }),
+  forProfile: async () => ({ contributions: [], nextCursor: null }),
+  mine: async () => ({ contributions: [], nextCursor: null }),
   sendMessage: async () => {},
   messages: async () => [],
   detail: async () => ({ contribution: fixture(), canManage: false }),
@@ -354,16 +356,21 @@ it.each([503, 401, undefined])(
         ? new Error("Connection lost. Try again.")
         : new ContributionsError(status, "Could not publish. Try again."),
     );
-    const alert = await screen.findByRole("alert");
-    await waitFor(() => expect(document.activeElement).toBe(alert));
-    expect(alert.getAttribute("tabindex")).toBe("-1");
+    // After a 401 the one message is the notice with the sign-in link at
+    // the top; any other failure is the alert beside Publish.
+    const outcome =
+      status === 401
+        ? await screen.findByRole("status")
+        : await screen.findByRole("alert");
+    await waitFor(() => expect(document.activeElement).toBe(outcome));
+    expect(outcome.getAttribute("tabindex")).toBe("-1");
     expectDraft();
     if (status === 401) {
-      const notice = screen.getByRole("status");
-      expect(notice.textContent).toBe(
+      expect(outcome.textContent).toBe(
         "Your sign-in has ended. What you wrote stays here. Sign in again in a new tab to send it.",
       );
-      expect(notice.closest("form")?.firstElementChild).toBe(notice);
+      expect(outcome.closest("form")?.firstElementChild).toBe(outcome);
+      expect(screen.queryByRole("alert")).toBeNull();
     }
   },
 );
@@ -419,4 +426,226 @@ it("stops saying the sign-in has ended once a 401 is recovered by the same perso
     expect(screen.queryByText(/Your sign-in has ended/)).toBeNull(),
   );
   expectDraft();
+});
+
+it("clears a refused draft and rechecks the session while the focus recheck is pending", async () => {
+  let resolveRecheck!: (value: {
+    id: string;
+    email: string;
+    community: null;
+  }) => void;
+  const me = vi
+    .fn()
+    .mockResolvedValueOnce({
+      id: "ada",
+      email: "ada@example.test",
+      community: null,
+    })
+    .mockImplementationOnce(
+      () =>
+        new Promise((resolve) => {
+          resolveRecheck = resolve;
+        }),
+    )
+    .mockResolvedValue({
+      id: "bea",
+      email: "bea@example.test",
+      community: null,
+    });
+  const create = vi
+    .fn()
+    .mockRejectedValue(
+      new ContributionsError(
+        409,
+        "Your account changed, so this wasn't sent.",
+        "account_changed",
+      ),
+    );
+  const onCreated = vi.fn();
+  render(
+    <NewContribution
+      api={stubApi({ me })}
+      client={client({ create })}
+      onCreated={onCreated}
+    />,
+  );
+  const user = userEvent.setup();
+  await writeDraft(user);
+  window.dispatchEvent(new Event("focus"));
+  await waitFor(() => expect(me).toHaveBeenCalledTimes(2));
+  await user.click(
+    screen.getByRole("button", { name: "Publish contribution" }),
+  );
+  const alert = await screen.findByText(
+    "Your account changed, so your contribution wasn't sent.",
+  );
+  // Publish went with the emptied form: focus is on the notice.
+  expect(document.activeElement).toBe(alert);
+  expect(alert.getAttribute("tabindex")).toBe("-1");
+  await waitFor(() => expect(me).toHaveBeenCalledTimes(3));
+  expect(create.mock.calls[0]?.[2]).toBe("ada");
+  expectDraft(true);
+  expect(onCreated).not.toHaveBeenCalled();
+  resolveRecheck({ id: "ada", email: "ada@example.test", community: null });
+  await waitFor(() => expectDraft(true));
+  // Bea, now signed in, still sees why the form is empty.
+  expect(screen.getByText(/Your account changed/)).toBe(alert);
+
+  // Her first edit puts it away, and her send shows only its own outcome.
+  create.mockResolvedValue(fixture({ id: "garden" }));
+  await user.type(screen.getByLabelText("Title"), "G");
+  expect(screen.queryByText(/Your account changed/)).toBeNull();
+  await user.type(screen.getByLabelText("Title"), "arden");
+  await user.type(screen.getByLabelText("Description"), "Grow food.");
+  await user.type(screen.getByLabelText("Organizer’s public name"), "Bea");
+  await user.click(
+    screen.getByRole("checkbox", { name: /I confirm this post/ }),
+  );
+  await user.click(
+    screen.getByRole("button", { name: "Publish contribution" }),
+  );
+  await waitFor(() => expect(onCreated).toHaveBeenCalledWith("garden"));
+  expect(create.mock.calls[1]?.[2]).toBe("bea");
+  expect(screen.queryByRole("alert")).toBeNull();
+});
+
+it("puts the refusal notice away when Publish is pressed again or the person signs out", async () => {
+  const state = { who: "ada" as string | null };
+  const me = vi.fn(async () =>
+    state.who === null
+      ? null
+      : { id: state.who, email: `${state.who}@example.test`, community: null },
+  );
+  const create = vi
+    .fn()
+    .mockRejectedValue(
+      new ContributionsError(
+        409,
+        "Your account changed, so this wasn't sent.",
+        "account_changed",
+      ),
+    );
+  render(
+    <NewContribution
+      api={stubApi({ me })}
+      client={client({ create })}
+      onCreated={vi.fn()}
+    />,
+  );
+  const user = userEvent.setup();
+  await writeDraft(user);
+  await user.click(
+    screen.getByRole("button", { name: "Publish contribution" }),
+  );
+  const notice = "Your account changed, so your contribution wasn't sent.";
+  expect(await screen.findByText(notice)).toBeTruthy();
+  // Publish on the empty form: the field complaints replace the notice.
+  await user.click(
+    screen.getByRole("button", { name: "Publish contribution" }),
+  );
+  expect(screen.queryByText(notice)).toBeNull();
+  expect(screen.getByText("Enter a title.")).toBeTruthy();
+
+  await writeDraft(user);
+  await user.click(
+    screen.getByRole("button", { name: "Publish contribution" }),
+  );
+  expect(await screen.findByText(notice)).toBeTruthy();
+  // Signing out on purpose starts a new generation: the notice goes too.
+  state.who = null;
+  await act(async () =>
+    window.dispatchEvent(new StorageEvent("storage", { key: SIGNED_OUT_KEY })),
+  );
+  expect(
+    await screen.findByRole("heading", { name: "Sign in to get started" }),
+  ).toBeTruthy();
+  expect(screen.queryByText(notice)).toBeNull();
+});
+
+it("keeps the new account's create draft when the old account's refusal arrives late", async () => {
+  const state = { who: "ada" };
+  const me = vi.fn(async () => ({
+    id: state.who,
+    email: `${state.who}@example.test`,
+    community: null,
+  }));
+  let refuse!: (reason: Error) => void;
+  const create = vi.fn<ContributionsApi["create"]>(
+    () =>
+      new Promise((_, reject) => {
+        refuse = reject;
+      }),
+  );
+  render(
+    <NewContribution
+      api={stubApi({ me })}
+      client={client({ create })}
+      onCreated={vi.fn()}
+    />,
+  );
+  const user = userEvent.setup();
+  await writeDraft(user);
+  await user.click(
+    screen.getByRole("button", { name: "Publish contribution" }),
+  );
+  expect(create).toHaveBeenCalledOnce();
+  expect(create.mock.calls[0]?.[2]).toBe("ada");
+  state.who = "bea";
+  window.dispatchEvent(new Event("focus"));
+  await waitFor(() => expectDraft(true));
+  await user.type(screen.getByLabelText("Title"), "Bea's new draft");
+  await user.type(screen.getByLabelText("Description"), "Bea's description");
+  await user.type(screen.getByLabelText("Organizer’s public name"), "Bea");
+  await user.click(
+    screen.getByRole("checkbox", { name: /I confirm this post/ }),
+  );
+  const rechecks = me.mock.calls.length;
+  await act(async () => {
+    refuse(
+      new ContributionsError(
+        409,
+        "Your account changed, so this wasn't sent.",
+        "account_changed",
+      ),
+    );
+  });
+  await waitFor(() => expect(me.mock.calls.length).toBeGreaterThan(rechecks));
+  for (const [label, value] of [
+    ["Title", "Bea's new draft"],
+    ["Description", "Bea's description"],
+    ["Organizer’s public name", "Bea"],
+  ] as const)
+    expect((screen.getByLabelText(label) as HTMLInputElement).value).toBe(
+      value,
+    );
+  expect(
+    (
+      screen.getByRole("checkbox", {
+        name: /I confirm this post/,
+      }) as HTMLInputElement
+    ).checked,
+  ).toBe(true);
+  expect(screen.queryByText(/Your account changed/)).toBeNull();
+});
+
+it("takes back the confirm complaint as soon as the box is ticked, and a field's as it is typed", async () => {
+  const { user } = setup();
+  await screen.findByLabelText("Title");
+  await user.click(
+    screen.getByRole("button", { name: "Publish contribution" }),
+  );
+  const confirm = screen.getByRole("checkbox", { name: /I confirm this post/ });
+  expect(confirm.getAttribute("aria-invalid")).toBe("true");
+  expect(screen.getByLabelText("Title").getAttribute("aria-invalid")).toBe(
+    "true",
+  );
+  // Tick it without the box ever taking focus, as Safari does on a click.
+  await act(async () => {
+    confirm.click();
+  });
+  expect(confirm.getAttribute("aria-invalid")).toBeNull();
+  await user.type(screen.getByLabelText("Title"), "G");
+  expect(
+    screen.getByLabelText("Title").getAttribute("aria-invalid"),
+  ).toBeNull();
 });

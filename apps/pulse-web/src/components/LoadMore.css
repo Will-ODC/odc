@@ -1,0 +1,14 @@
+.load-more {
+  margin: calc(var(--step) * 2) auto 0;
+  text-align: center;
+}
+
+.load-more__error {
+  margin: 0 0 var(--step);
+}
+
+/* Outrank Button's phone display rule while keeping the intrinsic width. */
+.load-more > .load-more__button {
+  display: flex;
+  margin-inline: auto;
+}

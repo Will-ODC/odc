@@ -19,17 +19,26 @@ change, with no signatures or hash chain. It never touches `services/` or
 | Plans                          | `docs/plans/pulse.md`, GitHub issues                    |
 | Screen designs                 | [Mockup index](../../docs/mockups/CANDIDATE_CONTEXT.md) |
 
-**Signed-in people can publish polls over HTTP** (`POST /api/polls`,
-ADR-0037), five an hour unless the owner grants more. There is no screen for
-it yet. The owner is whoever signs in with `PULSE_OWNER_EMAIL`.
+**Signed-in people can publish polls** at `/new` or through `POST /api/polls`
+(ADR-0037). See [API.md](./API.md#poll-creation-adr-0037) for quotas and
+permissions. The owner signs in with `PULSE_OWNER_EMAIL`.
 
 For contributors, see the [Pulse agent guide](./CLAUDE.md). The API reference
 marks planned interfaces separately from routes that are served today.
 
-**Public browsing** is available through `GET /api/polls?community=ID` (#259),
-without signing in. It returns open and closed question summaries, newest first,
-with cursor pagination. Hidden polls are excluded. The browser list and MCP
-discovery remain separate work; see [API.md](./API.md) for the query contract.
+**Browse questions** on Home or `/browse?community=ID` without signing in.
+[API.md](./API.md#polls-ballots-and-results) documents the underlying
+`GET /api/polls?community=ID` listing, including visibility and pagination.
+MCP discovery remains planned (#291).
+
+**Member profiles** are opt-in and public. A signed-in member chooses a display
+name and optional bio, then shares the stable opaque `/u/<publicId>` link. They
+can hide the profile again without losing that id. Public responses contain
+only the chosen name, bio and creation time; account and voting data remain
+private. See [API.md](./API.md#member-profiles) for the exact contract.
+Visible profiles list contributions published by their owning account. A
+contribution links its organizer by that account while the profile is visible;
+the contribution's organizer name remains when no profile is available.
 
 ## Sign-in link retention
 
@@ -50,6 +59,16 @@ request's transaction, so a failure there fails the request. An older marker
 created before timestamps existed is dated at the first startup or redemption
 after upgrading, then gets the same 20-minute window. This does not delete the email
 credential belonging to an account that signed in.
+
+## Poll pictures
+
+A signed-in poster may upload one picture with a question (ADR-0047). The
+server decodes JPEG, PNG and WebP by their content, refuses SVG, GIF, HEIC
+and animated files, and stores only two re-encoded WebP variants with all
+metadata (EXIF, GPS location, XMP, ICC) removed. Pictures live in Postgres
+beside the polls; one nobody attached within 24 hours is deleted at the next
+startup or upload. See [API.md](./API.md) for the routes and the public
+`image` field, and [DEPLOY.md](./DEPLOY.md) for backups and the nginx limit.
 
 ## Error-log privacy
 

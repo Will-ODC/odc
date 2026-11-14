@@ -36,6 +36,8 @@ container, so the page and the API share one address.
 | `/questions`           | The four starting questions.                                            |
 | `/?poll=ID`            | The live vote page for one poll. Old `/conversation` links still work.  |
 | `/new`                 | Post a question after signing in, then open its vote page.              |
+| `/profile`             | Create, update, hide or share the signed-in member's public profile.    |
+| `/u/<publicId>`        | A public member profile, or unavailable if it is absent or hidden.      |
 | `/trust`               | "How votes count": a short guide to counting and its limits.            |
 | `/sign-in?token=…`     | Where emailed sign-in links land; goes straight back to where you were. |
 | `/preview/chat`        | A prototype with sample data only.                                      |
@@ -250,3 +252,14 @@ The organizer reads messages there and can publish progress updates.
 Completion is labeled as reported.
 Sign-in links return to the contribution page or creation form. Failed submissions
 keep entered fields and reuse their request key for an unchanged retry.
+
+A contribution organizer name links to the owning member profile only while
+that profile is visible. Public profiles list that account's contributions,
+newest first. On their own visible profile, the owner can start a contribution
+and sees an owner-only list in place of the public one, with buttons that open
+each contribution's progress updates or private organizer inbox. The
+contribution page goes to that section once it has loaded and puts focus on its
+heading. Matching display names do not grant those controls. The owner-only
+list is read for the account the owner check saw, so an account switch in
+another tab is refused rather than shown under this profile; Try again checks
+the owner again. Load more moves focus to the first new contribution.

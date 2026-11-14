@@ -61,6 +61,7 @@ src/voting/     polls, votes, results — the core domain, storage-agnostic
 src/identity/   email, domain allowlist, magic-link claims, voter store
 src/http/       the Fastify surface and the signed session cookie
 src/authoring/  poll publication rules and storage
+src/images/     poll pictures: processing, storage, visibility (ADR-0047)
 src/db/         database connection and migration runner
 migrations/     versioned SQL migrations
 src/dev-server.ts development entry: seeds a community and poll, then listens

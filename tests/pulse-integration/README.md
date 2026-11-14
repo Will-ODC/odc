@@ -11,6 +11,8 @@ Postgres, mail service or running application is required.
 - `test/contributions-http.test.ts` exercises contribution publication, discovery,
   participation and progress through the browser HTTP adapter, including owner
   permissions, retries, public identity projection and commercial savings rules.
+- `test/profile-name-parity.test.ts` checks that the profile editor's
+  display-name rule gives the same verdict as the server's on every sample.
 
 Both apps are explicit workspace development dependencies. Deep source imports
 are test setup only; the browser app uses the public HTTP API. This package is

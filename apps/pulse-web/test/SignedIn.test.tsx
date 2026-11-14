@@ -19,6 +19,9 @@ describe("who is signed in, and the way out", () => {
       />,
     );
     expect(screen.getByText("voter@example.org")).toBeTruthy();
+    expect(
+      screen.getByRole("link", { name: "Your profile" }).getAttribute("href"),
+    ).toBe("/profile");
     expect(screen.getByRole("button", { name: "Sign out" })).toBeTruthy();
   });
 
@@ -73,6 +76,10 @@ describe("who is signed in, and the way out", () => {
         onSignOut={onSignOut}
         onCancel={vi.fn()}
       />,
+    );
+    await user.tab();
+    expect(document.activeElement).toBe(
+      screen.getByRole("link", { name: "Your profile" }),
     );
     await user.tab();
     expect(document.activeElement).toBe(
