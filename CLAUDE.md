@@ -34,7 +34,8 @@ tests/           # cross-package test workspaces (not runtime owners)
 tools/           # fixtures-gen, rehearsal, verifier-ts (second verifier)
 docs/            # charter.md, implementation-plan.md, plans/, mockups/,
                  # decisions/ (ADRs), security/
-memory/          # INDEX.md (read first), STATE.md, pulse.md, OPEN-QUESTIONS(-archive).md
+memory/          # INDEX.md (read first), STATE.md, pulse.md, pulse-development.md,
+                 # OPEN-QUESTIONS(-archive).md
 .claude/
   skills/        # odc-* skills (contracts, storage, review, testing, pipeline,
                  # boundaries, ui, design, orchestration), create-issue, lead

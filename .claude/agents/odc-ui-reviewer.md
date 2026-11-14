@@ -15,10 +15,11 @@ Read first: `.claude/skills/odc-ui/SKILL.md`, `.claude/skills/odc-design/SKILL.m
 
 Your review worktree is checked out at the PR head; its absolute path is in your
 brief. Run `pnpm install`, then start the client and the API it needs (see
-`apps/pulse-web/CLAUDE.md`). `preview_start` reads `.claude/launch.json` from
-the checkout the session was opened in, not your worktree, so add a temporary
-entry that `cd`s to your worktree's absolute path, use it, then restore the
-file; never commit it. For a mockup-only PR, serve `docs/mockups/` from your
+`apps/pulse-web/CLAUDE.md`). Browser checks use only the committed `pulse-api`
+(8080) and `pulse-web` (5173) entries in `.claude/launch.json`, one UI review at
+a time: never add entries or other ports. Stop the running stack, start it from
+your worktree on those same ports, and stop it when done; if a screen is
+unchanged from master, use the running master stack read-only instead. For a mockup-only PR, serve `docs/mockups/` from your
 worktree the way `odc-design` says.
 
 Then open every screen the diff touches in the real browser (jsdom tests are
@@ -34,10 +35,10 @@ check:
   relies on color alone.
 - **Usable by keyboard** — visible focus rings on every control, a sensible tab
   order, no traps.
-- **The four view states** `odc-ui` requires (loading, empty, error, ready)
+- **The four view states** `odc-ui` requires (loading, empty, error, content)
   still look right.
 - **Plain copy** — user-visible strings are short and plain; in `services/web`,
-  they follow the `odc-ui` dictionary.
+  they follow the dictionary in `odc-ui`'s `services-web.md`.
 - **No regressions** on screens next to the change.
 
 Edit nothing except `REVIEW.diff`, the temporary `launch.json` entry, and
