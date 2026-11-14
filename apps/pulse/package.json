@@ -22,6 +22,6 @@
     "@modelcontextprotocol/server": "2.3.1",
     "fastify": "^5.11.3",
     "pg": "^8.13.0",
-    "zod": "4.3.6"
+    "zod": "4.6.6"
   }
 }
