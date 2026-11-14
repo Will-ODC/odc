@@ -113,45 +113,21 @@ A small invited pilot comes only after 3-6. None of this authorizes a deploy.
 
 ## Current operator direction and next work (2026-11-14)
 
-1. **Handoff.** Codex completed the targeted timing/guard audit, verbosity
-   audit and broader test-quality review. CI selection is in #619 (operator
-   merge). No open Pulse product PRs; the next feature still awaits the answer
-   below.
-2. **Next: #580, a picture in the posting form.** Waiting on the operator's
+1. **Next: #580, a picture in the posting form.** Waiting on the operator's
    answer to "mockup first, or build from the plan and review screenshots?".
    Then #427 (thumbnails and context excerpt length), #296 (picture on the
    question page), #586 after #427.
-3. **Targeted Pulse test audit complete (2026-11-14)** at `0bf9c61`, authorized by the
-   operator after the #592 profile timing regressions. Fresh Codex audit,
-   report only, merged in #615: [report](../docs/audits/pulse-tests-2026-11-14.md).
-   Six suspect client suites passed all 30 runs each (6,630 test executions).
-   Controlled probes exposed missed session-return and startup-history events
-   (#613, #614); their 30/30 failures are separate from ordinary flake rates.
-   All six privacy/account/migration guard mutations were caught and restored.
-   Full baselines passed 967 client and 919 API tests, with no API skips.
-   The missing required image check remains with #612. Product fixes are
-   tracked in those issues; this audit changed no application code.
-4. **`pulse-images` is not a required check**, so a red picture-package check
-   (#594) only warns. Do not require it as is (it runs only on Pulse paths);
-   #612 has the order of steps.
-5. **Verbosity and unnecessary complexity audit complete (2026-11-14):**
-   [report](../docs/audits/pulse-simplicity-2026-11-14.md). #616 corrects stale
-   posting/browsing status in the server README and links API details instead
-   of repeating them. No additional runtime refactor was justified beyond the
-   existing owners below. Obsolete routing-history comments are an optional
-   cleanup for a future edit; no product behavior changed.
-6. **Broader test-quality audit complete (2026-11-14)** at `cf07079`:
-   [overview and complete inventories](../docs/audits/test-quality-2026-11-14/README.md).
-   Five isolated contexts reviewed 218 active test/support files across both
-   workstreams. Pulse follow-ups #621-#629 cover inaccurate fixtures, capacity
-   and image boundaries, default timeout wiring, malformed cast replies,
-   profile HTTP preconditions, query-safe logging and stalled closed results.
-   These include test gaps and reproduced robustness defects; none is fixed
-   by the report. No broad test rewrite or mass deletion was justified.
-   #619 implements package/dependent CI selection and safe full fallbacks;
-   its operator merge is still owed. #612 retains the real image-processing
-   smoke test and ruleset update.
-7. **Open follow-ups:** #533 ViewState Try again; #536 Conversation logic into
+2. **Audits 2026-11-14 are complete; none changed product code:**
+   [targeted tests](../docs/audits/pulse-tests-2026-11-14.md) → #613/#614;
+   [simplicity](../docs/audits/pulse-simplicity-2026-11-14.md) → #616;
+   [broader quality](../docs/audits/test-quality-2026-11-14/README.md) → #621-#629.
+   A Claude review found the findings real but most tickets over-scoped; the
+   operator-approved narrowed scope now heads each ticket body (2026-11-14),
+   and the shared verifier gaps moved to contracts ticket #645.
+3. **CI selection #619 awaits operator merge.** `pulse-images` is not a
+   required check, so a red picture-package check only warns; #612 has the
+   order of steps.
+4. **Open follow-ups:** #533 ViewState Try again; #536 Conversation logic into
    flow/ and hooks; #537 VoteCard split; #538 CSS encapsulation and tokens;
    #534 part 3 (Conversation); #539 step 2 (one session provider; operator
    decision); review nits #557, #560, #589, #591, #599, #610; #596 Suggested
@@ -260,6 +236,9 @@ A small invited pilot comes only after 3-6. None of this authorizes a deploy.
 
 **Migrations and storage**
 
+- A `Promise.all` concurrency test can serialize by chance and pass with the
+  guard removed. Hold a conflicting lock from a separate connection, confirm
+  the queue with `pg_blocking_pids`, then release; mutation-check the lock mode.
 - Both identity stores keep `discard(tokenHash)` and
   `liveFor(kind, subject, now)` (#213/#215); keep them in step.
 - Migrations are forward-only and checksummed. Never edit an applied file, even
