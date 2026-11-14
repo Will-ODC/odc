@@ -68,6 +68,17 @@ README and CLAUDE.md; `services/signer/` does not exist yet.
 
 ## Next
 
+**Test-quality review (2026-11-14):**
+[broader audit and inventories](../docs/audits/test-quality-2026-11-14/README.md)
+at `cf07079` reviewed the active suites in five isolated contexts. Core
+follow-ups: #630 guard discovery must fail closed; #631 production startup
+coverage; #632 signer saved-position tests; #633 rehearsal verdict/exit
+agreement; #634 historical fuzz diagnostics. Independent verifier test-quality
+follow-ups are #635-#639 (Go) and #640-#642 (TS); fixes must preserve verifier
+isolation. No verifier or contract source was changed by the audit. CI selection
+PR #619 awaits operator merge; weekly/manual full checks and the core
+conformance seam are retained.
+
 1. **Contracts PR for `participant_registered` v2**: spec text in
    `event-types.md` with scoped exceptions to ES-32 and HA-16, both verifiers
    (each built in isolation), and vectors. Verifiers land with or before the
