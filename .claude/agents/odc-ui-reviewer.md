@@ -19,8 +19,9 @@ on the one stack, `pulse-web` at http://localhost:5173 with `pulse-api` on 8080
 (the committed `.claude/launch.json` entries, run from the main checkout), before
 it starts you. Open http://localhost:5173 in the browser pane; do not start,
 stop or restart servers, add `launch.json` entries or use other ports. UI
-reviews run one at a time on that stack. For a mockup-only PR, serve
-`docs/mockups/` from your worktree the way `odc-design` says.
+reviews run one at a time on that stack. The one exception is a mockup-only
+PR: serve `docs/mockups/` from your worktree the way `odc-design` says (its
+static file server), and stop it when done.
 
 Then open every screen the diff touches in the real browser (jsdom tests are
 not proof a screen works), at phone width (375 px) and desktop width, and
