@@ -42,6 +42,12 @@ const NOT_FOUND = () =>
 const SIGNED_OUT = () => new Refusal(401, "signed_out", "Sign in to do that.");
 const BAD_REQUEST = () =>
   new Refusal(400, "bad_request", "That request could not be read.");
+const CONTRIBUTIONS_UNAVAILABLE = () =>
+  new Refusal(
+    503,
+    "contributions_unavailable",
+    "Contributions are unavailable just now. Try again.",
+  );
 const FOREIGN_ORIGIN = () =>
   new Refusal(
     ORIGIN_REFUSAL.status,
@@ -60,14 +66,7 @@ export async function registerProfileRoutes(
     const owner = await deps.profiles.visibleOwnerById(publicId.toLowerCase());
     if (!owner) return answerRefusal(reply, NOT_FOUND());
     if (!deps.contributions)
-      return answerRefusal(
-        reply,
-        new Refusal(
-          503,
-          "contributions_unavailable",
-          "Contributions are unavailable just now. Try again.",
-        ),
-      );
+      return answerRefusal(reply, CONTRIBUTIONS_UNAVAILABLE());
     reply.header("cache-control", "no-store");
     try {
       const page = await deps.contributions.listByOwner(
@@ -213,8 +212,7 @@ export async function registerProfileRoutes(
       "/api/me/contributions",
       { config: limit, preParsing: guard(false) },
       async (request, reply) => {
-        if (!deps.contributions)
-          throw new Error("contribution storage unavailable");
+        if (!deps.contributions) throw CONTRIBUTIONS_UNAVAILABLE();
         // The same optional precondition as GET /api/me/profile: a page that
         // missed an account switch never lists another account's records.
         const { ownerAccountId, ...query } = (request.query ?? {}) as Record<

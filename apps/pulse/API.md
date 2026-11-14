@@ -373,7 +373,9 @@ profile, newest first, with the same `{ contributions, nextCursor }` page and
 cursor rules as `GET /api/contributions`. A malformed id, missing profile and
 hidden profile all return the same `404 not_found` as the profile route. The
 lookup uses the private owning account id, never the display name, and neither
-that id nor an email is returned.
+that id nor an email is returned. A malformed cursor or any query field besides
+`cursor` returns 400 `bad_request`. When the server has no contribution storage
+configured, a visible profile's list returns 503 `contributions_unavailable`.
 
 ### `GET /api/me/profile`
 
@@ -456,8 +458,10 @@ contain no private account identifier or message body.
 Optional query `ownerAccountId`, as on `GET /api/me/profile`: the account the
 page is reading for (the `id` from `/api/me`). The web profile always sends it.
 If another account is signed in, the route returns 409 `account_changed` and no
-list; an empty value returns 400 `bad_request`. Any other query field besides
-`cursor` returns 400 `bad_request`.
+list; an empty value returns 400 `bad_request`. A malformed cursor, or any
+other query field besides `cursor`, returns 400 `bad_request`. When the server
+has no contribution storage configured, it returns 503
+`contributions_unavailable`.
 
 ## The session cookie
 

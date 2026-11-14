@@ -1,6 +1,7 @@
 import assert from "node:assert/strict";
 import type { TestContext } from "node:test";
 import { z } from "zod";
+import { PostgresContributionsStore } from "../../src/contributions/pg-store.js";
 import { databaseUrl } from "../../src/db/config.js";
 import { createPool } from "../../src/db/pool.js";
 import { createServer } from "../../src/http/server.js";
@@ -76,6 +77,10 @@ export async function fixture(
   t: TestContext,
   options: {
     storage?: boolean;
+    /** Contribution storage, for the profile contribution lists (default on). */
+    contributions?: boolean;
+    /** The contribution store's clock, to publish past the hourly limit. */
+    clock?: () => Date;
     rateLimit?: { max: number; timeWindow: string };
   } = {},
 ) {
@@ -94,6 +99,10 @@ export async function fixture(
   }
   t.after(stopStorage);
   const signer = new SessionSigner(secret);
+  const contributions =
+    options.contributions === false
+      ? undefined
+      : new PostgresContributionsStore(pool, options.clock);
   const app = await createServer({
     voters,
     votes: new PostgresVotingStore(pool),
@@ -103,6 +112,7 @@ export async function fixture(
     ...(options.storage === false
       ? {}
       : { profiles: new PostgresMemberProfileStore(profilePool) }),
+    ...(contributions ? { contributions } : {}),
     ...(options.rateLimit ? { profileRateLimit: options.rateLimit } : {}),
     claims: new ClaimService({
       membership: new DomainAllowlist(new StaticDomainSource([])),
@@ -170,6 +180,7 @@ export async function fixture(
   return {
     pool,
     voters,
+    contributions,
     get,
     put,
     raw,

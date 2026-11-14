@@ -1,18 +1,21 @@
-import { useCallback, useEffect, useRef, useState } from "react";
+import { useCallback, useRef } from "react";
 import type { PulseApi } from "../api/types.js";
 import {
   contributionsApi,
   type ContributionPage,
+  type ContributionSummary,
   type ContributionsApi,
 } from "../api/contributions.js";
 import { AppShell } from "../components/AppShell.js";
 import { Button } from "../components/Button.js";
+import { LoadMore } from "../components/LoadMore.js";
 import { PageBanner } from "../components/PageBanner.js";
 import { ViewState } from "../components/ViewState.js";
 import { pathOf } from "../flow/route.js";
 import { contributionStatuses } from "../flow/contributions.js";
 import { useMemberProfile } from "../hooks/use-member-profile.js";
-import { useContributionRead } from "../hooks/use-contributions.js";
+import { usePagedList } from "../hooks/use-paged-list.js";
+import { useProfileOwner } from "../hooks/use-profile-owner.js";
 import "./Profile.css";
 
 export function MemberProfile({
@@ -25,42 +28,18 @@ export function MemberProfile({
   contributions?: Pick<ContributionsApi, "forProfile" | "mine">;
 }) {
   const { state, retry } = useMemberProfile(api, publicId);
-  // The owner view is tied to the account that was signed in when it was
-  // checked; the owner-only list is read for that account and no other.
-  const [owned, setOwned] = useState<{
-    publicId: string;
-    accountId: string;
-  } | null>(null);
-  const owner = owned?.publicId === publicId;
-  const ownerAccountId = owner ? owned.accountId : undefined;
+  const owner = useProfileOwner(api, publicId);
+  const ownerAccountId = owner.accountId;
   const loadPublic = useCallback(
     (cursor?: string) => contributions.forProfile(publicId, cursor),
     [contributions, publicId],
   );
+  // `owner.check` is a dependency on purpose: a fresh owner check reads the
+  // owner list again, even when it found the same account.
   const loadMine = useCallback(
     (cursor?: string) => contributions.mine(cursor, ownerAccountId),
-    [contributions, ownerAccountId],
+    [contributions, ownerAccountId, owner.check],
   );
-  useEffect(() => {
-    let live = true;
-    void (async () => {
-      try {
-        const voter = await api.me();
-        const profile = voter ? await api.myProfile(voter.id) : null;
-        if (live)
-          setOwned(
-            voter && profile?.visible === true
-              ? { publicId: profile.publicId, accountId: voter.id }
-              : null,
-          );
-      } catch {
-        if (live) setOwned(null);
-      }
-    })();
-    return () => {
-      live = false;
-    };
-  }, [api, publicId]);
   const href = pathOf({ kind: "memberProfile", publicId });
   return (
     <AppShell banner={<PageBanner api={api} currentHref={href} />}>
@@ -76,19 +55,29 @@ export function MemberProfile({
               <p className="profile__date">
                 Profile created {formatDate(profile.createdAt)}
               </p>
-              {owner ? (
-                <Button variant="primary" href="/contributions/new">
-                  Start a contribution
-                </Button>
-              ) : null}
-              <ProfileContributions title="Contributions" load={loadPublic} />
-              {owner ? (
+              {!owner.checked ? null : ownerAccountId !== undefined ? (
+                <>
+                  <Button variant="primary" href="/contributions/new">
+                    Start a contribution
+                  </Button>
+                  {/* The owner's own list replaces the public one: the same
+                      rows, with the controls to manage each. A refused read
+                      (such as an account switch) checks the owner again. */}
+                  <ProfileContributions
+                    key="mine"
+                    title="Your contributions"
+                    load={loadMine}
+                    onRetry={owner.recheck}
+                    manage
+                  />
+                </>
+              ) : (
                 <ProfileContributions
-                  title="Your contributions"
-                  load={loadMine}
-                  manage
+                  key="public"
+                  title="Contributions"
+                  load={loadPublic}
                 />
-              ) : null}
+              )}
             </>
           )}
         </ViewState>
@@ -107,100 +96,96 @@ export function MemberProfile({
   );
 }
 
+const keyOf = (item: ContributionSummary) => item.id;
+
 function ProfileContributions({
   title,
   load,
+  onRetry,
   manage = false,
 }: {
   title: string;
   load: (cursor?: string) => Promise<ContributionPage>;
+  /** Replaces reading the first page again, when the caller must recheck first. */
+  onRetry?: () => void;
   manage?: boolean;
 }) {
-  const first = useCallback(() => load(), [load]);
-  const { data, reload, setData } = useContributionRead(first);
-  const paging = useRef(false);
-  const [pageError, setPageError] = useState(false);
-  const [loadingMore, setLoadingMore] = useState(false);
-  async function more() {
-    if (data.status !== "ready" || !data.value.nextCursor || paging.current)
-      return;
-    paging.current = true;
-    setLoadingMore(true);
-    setPageError(false);
-    const current = data.value;
-    try {
-      const next = await load(current.nextCursor ?? undefined);
-      if (next.nextCursor === current.nextCursor)
-        throw new Error("Cursor did not advance");
-      const ids = new Set(current.contributions.map((item) => item.id));
-      setData({
-        status: "ready",
-        value: {
-          contributions: [
-            ...current.contributions,
-            ...next.contributions.filter((item) => !ids.has(item.id)),
-          ],
-          nextCursor: next.nextCursor,
-        },
-      });
-    } catch {
-      setPageError(true);
-    } finally {
-      paging.current = false;
-      setLoadingMore(false);
-    }
-  }
+  const fetchPage = useCallback(
+    async (cursor?: string) => {
+      const page = await load(cursor);
+      return { items: page.contributions, nextCursor: page.nextCursor };
+    },
+    [load],
+  );
+  const { data, more, loadMore, retry } = usePagedList({
+    fetchPage,
+    keyOf,
+    emptyMessage: manage
+      ? "You haven’t published a contribution yet."
+      : "No contributions published yet.",
+    errorMessage: "We couldn’t load these contributions. Try again.",
+    moreErrorMessage: "Could not load more contributions. Try again.",
+  });
+  const list = useRef<HTMLUListElement>(null);
   return (
     <section className="profile__contributions">
       <h2>{title}</h2>
       <ViewState data={data} variant="compact">
-        {(page) =>
-          page.contributions.length ? (
-            <ul className="profile__contribution-list">
-              {page.contributions.map((item) => {
-                const href = `/contributions/${encodeURIComponent(item.id)}`;
-                return (
-                  <li key={item.id}>
-                    <a href={href}>{item.title}</a>
-                    <span>{contributionStatuses[item.status]}</span>
-                    {manage ? (
-                      <span className="profile__manage-links">
-                        <a href={`${href}#updates`}>Post an update</a>
-                        <a href={`${href}#messages`}>Organizer inbox</a>
-                      </span>
-                    ) : null}
-                  </li>
-                );
-              })}
-            </ul>
-          ) : (
-            <p>
-              {manage
-                ? "You haven’t published a contribution yet."
-                : "No contributions published yet."}
-            </p>
-          )
-        }
+        {(page) => (
+          <ul className="profile__contribution-list" ref={list}>
+            {page.items.map((item) => {
+              const href = `/contributions/${encodeURIComponent(item.id)}`;
+              return (
+                <li key={item.id}>
+                  <a className="profile__contribution-title" href={href}>
+                    {item.title}
+                  </a>
+                  <span className="profile__contribution-status">
+                    {contributionStatuses[item.status]}
+                  </span>
+                  {manage ? (
+                    <span className="profile__manage-links">
+                      <Button
+                        variant="secondary"
+                        size="small"
+                        href={`${href}#updates`}
+                      >
+                        Post an update
+                      </Button>
+                      <Button
+                        variant="secondary"
+                        size="small"
+                        href={`${href}#messages`}
+                      >
+                        Organizer inbox
+                      </Button>
+                    </span>
+                  ) : null}
+                </li>
+              );
+            })}
+          </ul>
+        )}
       </ViewState>
       {data.status === "error" ? (
-        <Button variant="secondary" size="small" type="button" onClick={reload}>
-          Try again
-        </Button>
-      ) : null}
-      {pageError ? (
-        <p role="alert">Could not load more contributions. Try again.</p>
-      ) : null}
-      {data.status === "ready" && data.value.nextCursor ? (
         <Button
           variant="secondary"
           size="small"
           type="button"
-          disabled={loadingMore}
-          onClick={() => void more()}
+          onClick={onRetry ?? retry}
         >
-          {loadingMore ? "Loading…" : "Load more"}
+          Try again
         </Button>
       ) : null}
+      <LoadMore
+        more={more}
+        hasMore={data.status === "ready" && data.value.nextCursor !== null}
+        itemCount={data.status === "ready" ? data.value.items.length : 0}
+        listRef={list}
+        onLoadMore={loadMore}
+        itemSelector=".profile__contribution-title"
+        moreLabel="more contributions"
+      />
     </section>
   );
 }

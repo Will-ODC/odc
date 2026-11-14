@@ -1,6 +1,7 @@
 import assert from "node:assert/strict";
 import { randomUUID } from "node:crypto";
 import { test } from "node:test";
+import { z } from "zod";
 import { PROFILE_BODY_LIMIT } from "../src/http/profiles.js";
 import { databaseSkip } from "./support/database.js";
 import {
@@ -309,5 +310,142 @@ test(
       ownerSchema,
     );
     assert.equal(own.profile?.displayName, draft().displayName);
+  },
+);
+
+const BAD_LIST_QUERIES = [
+  "?cursor=",
+  "?cursor=invalid",
+  "?cursor=a&cursor=b",
+  `?cursor=${"a".repeat(1025)}`,
+  `?cursor=${Buffer.from(JSON.stringify({ createdAt: "not-a-date", id: randomUUID() })).toString("base64url")}`,
+  "?extra=true",
+];
+
+test(
+  "Postgres HTTP profile contribution lists refuse bad cursors and unknown query fields",
+  options,
+  async (t) => {
+    const f = await fixture(t);
+    const { publicId } = (await response(await f.put(), 200, ownerSchema))
+      .profile!;
+    for (const query of BAD_LIST_QUERIES) {
+      await errorResponse(
+        await f.get(`/profiles/${publicId}/contributions${query}`, {}),
+        400,
+        "bad_request",
+      );
+      await errorResponse(
+        await f.get(`/me/contributions${query}`),
+        400,
+        "bad_request",
+      );
+    }
+    // The account precondition does not excuse another unknown field.
+    await errorResponse(
+      await f.get(`/me/contributions?ownerAccountId=${owner}&extra=true`),
+      400,
+      "bad_request",
+    );
+  },
+);
+
+test(
+  "Postgres HTTP contribution detail with a non-UUID id is not found while profiles are configured",
+  options,
+  async (t) => {
+    const f = await fixture(t);
+    await response(await f.put(), 200, ownerSchema);
+    for (const id of ["not-an-id", "1234", `${randomUUID()}x`])
+      await errorResponse(
+        await f.get(`/contributions/${id}`, {}),
+        404,
+        "not_found",
+      );
+  },
+);
+
+test(
+  "Postgres HTTP profile contribution lists answer 503 without contribution storage",
+  options,
+  async (t) => {
+    const f = await fixture(t, { contributions: false });
+    const { publicId } = (await response(await f.put(), 200, ownerSchema))
+      .profile!;
+    await errorResponse(
+      await f.get(`/profiles/${publicId}/contributions`, {}),
+      503,
+      "contributions_unavailable",
+    );
+    await errorResponse(
+      await f.get(`/me/contributions?ownerAccountId=${owner}`),
+      503,
+      "contributions_unavailable",
+    );
+  },
+);
+
+test(
+  "Postgres HTTP profile contribution lists page through only the owner's rows",
+  options,
+  async (t) => {
+    let clock = new Date("2026-11-10T12:00:00.000Z");
+    const f = await fixture(t, { clock: () => clock });
+    const { publicId } = (await response(await f.put(), 200, ownerSchema))
+      .profile!;
+    const input = (title: string) => ({
+      title,
+      description: "A public contribution.",
+      organizerName: "Same public name",
+      kind: "project" as const,
+    });
+    const mine: string[] = [];
+    for (let hour = 0; hour < 23; hour++) {
+      clock = new Date(clock.getTime() + 3_600_001);
+      mine.unshift(
+        (
+          await f.contributions!.create(
+            { voterId: owner, sessionGeneration: 0 },
+            randomUUID(),
+            input(`Owner ${hour}`),
+          )
+        ).contribution.id,
+      );
+      await f.contributions!.create(
+        { voterId: other, sessionGeneration: 0 },
+        randomUUID(),
+        input(`Other ${hour}`),
+      );
+    }
+    const page = z
+      .object({
+        contributions: z.array(z.object({ id: z.uuid() }).loose()),
+        nextCursor: z.string().nullable(),
+      })
+      .strict();
+    for (const path of [
+      `/profiles/${publicId}/contributions`,
+      `/me/contributions?ownerAccountId=${owner}`,
+    ]) {
+      const headers = path.startsWith("/me") ? { cookie: f.cookie() } : {};
+      const joiner = path.includes("?") ? "&" : "?";
+      const first = await response(await f.get(path, headers), 200, page);
+      assert.equal(first.contributions.length, 20);
+      assert.ok(first.nextCursor);
+      const second = await response(
+        await f.get(
+          `${path}${joiner}cursor=${encodeURIComponent(first.nextCursor)}`,
+          headers,
+        ),
+        200,
+        page,
+      );
+      assert.equal(second.nextCursor, null);
+      assert.deepEqual(
+        [...first.contributions, ...second.contributions].map((row) => row.id),
+        mine,
+        path,
+      );
+    }
   },
 );

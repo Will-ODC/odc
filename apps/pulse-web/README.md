@@ -256,7 +256,10 @@ keep entered fields and reuse their request key for an unchanged retry.
 A contribution organizer name links to the owning member profile only while
 that profile is visible. Public profiles list that account's contributions,
 newest first. On their own visible profile, the owner can start a contribution
-and use an owner-only list to open each contribution's progress-update form or
-private organizer inbox. Matching display names do not grant those controls.
-The owner-only list is read for the account the owner check saw, so an account
-switch in another tab is refused rather than shown under this profile.
+and sees an owner-only list in place of the public one, with buttons that open
+each contribution's progress updates or private organizer inbox. The
+contribution page goes to that section once it has loaded and puts focus on its
+heading. Matching display names do not grant those controls. The owner-only
+list is read for the account the owner check saw, so an account switch in
+another tab is refused rather than shown under this profile; Try again checks
+the owner again. Load more moves focus to the first new contribution.

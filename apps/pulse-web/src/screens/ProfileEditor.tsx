@@ -80,8 +80,10 @@ function ProfileEditorSession({
       <article className="profile">
         <h1 className="profile__title">Your profile</h1>
         <p className="profile__lede">
-          Choose what anyone with your profile link can see. Your email and
-          votes stay private.
+          Choose what anyone with your profile link can see. A public profile
+          also lists every contribution you publish, even under a different
+          organizer name, and each one links back to your profile. Your email
+          and votes stay private.
         </p>
         {accountChanged ? (
           <p role="status">

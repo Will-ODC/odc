@@ -235,10 +235,29 @@ export function ContributionDetail({
   const heading = useRef<HTMLHeadingElement>(null);
   const headingFocused = useRef(false);
   const ready = data.status === "ready";
+  // A link to one section (the profile's "Post an update" and "Organizer
+  // inbox" go to #updates and #messages) arrives before the page has loaded,
+  // so the browser has nothing to scroll to. Once the page is read for the
+  // account now signed in, and so shows the sections it will keep, go to the
+  // section named and put focus on its heading. Layout effect: done before
+  // the page is painted, so nothing can be pressed in between.
+  const landed = useRef(false);
+  const settled =
+    data.status === "ready" &&
+    session.status !== "loading" &&
+    data.value.accountId === accountId;
+  useLayoutEffect(() => {
+    if (!settled || landed.current) return;
+    const target = sectionHeading(globalThis.location.hash);
+    if (!target) return;
+    landed.current = true;
+    target.scrollIntoView?.({ block: "start" });
+    target.focus({ preventScroll: true });
+  }, [settled]);
   useEffect(() => {
     if (!focusHeading || !ready || headingFocused.current) return;
     headingFocused.current = true;
-    heading.current?.focus();
+    if (!landed.current) heading.current?.focus();
   }, [focusHeading, ready]);
   // "Try again" on the refresh banner: once it works the banner (and the
   // button that had focus) goes, so put focus on the title instead.
@@ -422,7 +441,7 @@ export function ContributionDetail({
                   // needs a live session, but this is still their post, so
                   // no "Message the organizer" form in its place.
                   <>
-                    <h2>Private messages</h2>
+                    <h2 tabIndex={-1}>Private messages</h2>
                     <p className="contribution-expired">
                       <a
                         href={`/sign-in?contribution=${encodeURIComponent(item.id)}`}
@@ -474,7 +493,7 @@ export function ContributionDetail({
                 </section>
               ) : null}
               <section id="updates" className="contribution-section">
-                <h2>Progress and evidence</h2>
+                <h2 tabIndex={-1}>Progress and evidence</h2>
                 <p className="contribution-note">
                   Updates and completion are reported by the organizer. Evidence
                   is available for the community to assess.
@@ -633,6 +652,19 @@ function useSendOutcome(
     before.current = access;
   }, [access, errorStatus, clearFailure]);
   return { status, alert };
+}
+/** Sections a link may name, and where focus goes in each. */
+const LANDING_SECTIONS = new Set(["updates", "messages"]);
+function sectionHeading(hash: string): HTMLElement | null {
+  const name = hash.replace(/^#/, "");
+  if (!LANDING_SECTIONS.has(name)) return null;
+  // The messages section's heading is a disclosure's summary for some readers.
+  return (
+    document
+      .getElementById(name)
+      ?.querySelector<HTMLElement>(":scope > h2, :scope > details > summary") ??
+    null
+  );
 }
 function focusLost() {
   const active = document.activeElement;
