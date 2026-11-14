@@ -25,6 +25,7 @@ import type { Confirmation } from "../flow/vote-card.js";
 import { VoteCard } from "../components/VoteCard.js";
 import { ClosedResults } from "../components/ClosedResults.js";
 import { ViewState } from "../components/ViewState.js";
+import { SuggestedVotesRail } from "../components/SuggestedVotesRail.js";
 import { AnsweredRail } from "../components/AnsweredRail.js";
 import { PostedBanner } from "../components/PostedBanner.js";
 import { CopyLink } from "../components/CopyLink.js";
@@ -313,7 +314,7 @@ export function Conversation({
     if (leftPosted) dismissPosted?.();
   }, [leftPosted, dismissPosted]);
   return (
-    <div className="conversation">
+    <div className="conversation with-suggested-votes">
       <header className="conversation__banner">
         <SiteBanner
           session={session}
@@ -367,6 +368,15 @@ export function Conversation({
           shareable={!(posted && at === pollId)}
         />
       </main>
+      <SuggestedVotesRail
+        api={api}
+        history={mine.data}
+        retryHistory={mine.retry}
+        justAnswered={answered}
+        current={at}
+        disabled={busy}
+        onOpen={go}
+      />
     </div>
   );
 }

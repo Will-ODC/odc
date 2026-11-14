@@ -47,6 +47,8 @@ const TABLES = [
   "allowed_domain",
   "community",
   "content_change",
+  "contribution",
+  "contribution_replay",
   "image",
   "image_bytes",
   "image_upload",
@@ -103,6 +105,8 @@ test("applies_a_fresh_schema", { skip }, async () => {
       "010",
       "011",
       "012",
+      "013",
+      "014",
       "016",
     ]);
     assert.deepEqual(await tablesIn(pool, schema), TABLES);
@@ -522,6 +526,10 @@ test(
         "community_pkey",
         "content_change_pkey",
         "content_change_target_idx",
+        "contribution_newest",
+        "contribution_owner_recent",
+        "contribution_pkey",
+        "contribution_replay_pkey",
         "image_bytes_pkey",
         "image_owner_idx",
         "image_pending_idx",
@@ -632,6 +640,8 @@ test(
           "010",
           "011",
           "012",
+          "013",
+          "014",
           "016",
         ]);
         const store = new PostgresClaimStore(pool);
@@ -708,6 +718,8 @@ test(
         assert.deepEqual((await migrate(pool, { clock: () => AT })).applied, [
           "011",
           "012",
+          "013",
+          "014",
           "016",
         ]);
 
@@ -739,6 +751,72 @@ test(
             [ada],
           ),
           /vote_poll_confirmation_key/,
+        );
+      });
+    });
+  },
+);
+
+test(
+  "upgrading_013_preserves_contribution_replay_revisions",
+  { skip },
+  async () => {
+    await inTempDir(async (dir) => {
+      await writeMigrations(dir, await loadMigrations(), (v) => v <= "013");
+      await inThrowawaySchema(async (pool) => {
+        await migrate(pool, { dir, clock: () => AT });
+        await new PostgresVoterStore(pool).create(
+          {
+            id: "organizer",
+            community: null,
+            assurance: "email",
+            claimedAt: AT,
+            proofEmailsOptIn: false,
+          },
+          { kind: "email", value: "organizer@example.test", verifiedAt: AT },
+        );
+        const snapshot = {
+          id: "project",
+          participations: [{ id: "help" }],
+          updates: [],
+        };
+        await pool.query(
+          "insert into contribution (id, owner_id, created_at, public_record) values ($1, $2, $3, $4)",
+          [snapshot.id, "organizer", AT, JSON.stringify(snapshot)],
+        );
+        const key = randomUUID();
+        await pool.query(
+          "insert into contribution_replay (voter_id, request_key, canonical, public_response) values ($1, $2, $3, $4)",
+          ["organizer", key, "original request", JSON.stringify(snapshot)],
+        );
+        assert.deepEqual((await migrate(pool, { clock: () => AT })).applied, [
+          "014",
+          "016",
+        ]);
+        assert.deepEqual(
+          (
+            await pool.query(
+              "select voter_id, request_key, canonical, contribution_id, participation_count, update_count from contribution_replay",
+            )
+          ).rows,
+          [
+            {
+              voter_id: "organizer",
+              request_key: key,
+              canonical: "original request",
+              contribution_id: snapshot.id,
+              participation_count: 1,
+              update_count: 0,
+            },
+          ],
+        );
+        assert.deepEqual(
+          (
+            await pool.query(
+              "select public_record, private_messages from contribution",
+            )
+          ).rows,
+          [{ public_record: snapshot, private_messages: [] }],
         );
       });
     });

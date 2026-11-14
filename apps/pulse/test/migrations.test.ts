@@ -27,7 +27,7 @@ test("migrations_are_numbered_uniquely_and_load_oldest_first", () => {
  * The known column defaults: method params, vote choice value and
  * the explicit non-hidden state of a newly inserted poll (ADR-0037). Adding to this list is how you declare a new one deliberately.
  */
-const DEFAULTS = ["'{}'::jsonb", "1", "false"];
+const DEFAULTS = ["'[]'::jsonb", "'{}'::jsonb", "1", "false"];
 
 test("the_only_column_defaults_are_the_constants_we_chose", () => {
   // ADR-0020: a clock is constructor-injected in five places and every HTTP

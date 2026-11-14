@@ -1,3 +1,5 @@
+import { registerContributionRoutes } from "./contributions.js";
+import type { ContributionsStore } from "../contributions/store.js";
 import { randomUUID } from "node:crypto";
 import { logFault } from "../logging.js";
 import { BlockList, isIP } from "node:net";
@@ -78,6 +80,7 @@ export interface ServerDeps {
    * creation routes answer 503 `creation_unavailable` and nothing is created.
    */
   creation?: CreationStore;
+  contributions?: ContributionsStore;
   /**
    * Poll pictures (ADR-0047). Optional like `creation`: without one, uploads
    * answer 503 `images_unavailable` and every picture URL is the one 404.
@@ -742,6 +745,11 @@ export async function createServer(deps: ServerDeps): Promise<FastifyInstance> {
     ...(deps.imageReadRateLimit
       ? { readRateLimit: deps.imageReadRateLimit }
       : {}),
+  });
+  await registerContributionRoutes(app, {
+    contributions: deps.contributions,
+    webOrigin: deps.webOrigin,
+    currentVoter,
   });
   registerMcpReads(app, deps.mcp);
   return app;

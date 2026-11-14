@@ -112,6 +112,7 @@
    * lines are hard to read back along; this holds at any window width.
    */
   --prose-measure: 64ch;
+  --contributions-measure: 760px;
 
   /*
    * Whether a screen shows its own wordmark.
