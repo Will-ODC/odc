@@ -83,17 +83,13 @@ the same CI runs.
   ADR-0037 amendment for purged polls only); ADR-0037's broad-posting launch
   gate is unchanged.
 - **Merged 2026-11-14:** #592 opt-in public profiles at `/u/<id>` (#576,
-  `d2caca2`, migration 015; fixed a clock-behind save and two render-vs-effect
-  races in the editor); #604 organizer expired-session note (#599 item 4,
-  `2e93f20`); #588 one paged-list hook and a shared Load more (#535,
-  `156125a`); #606 contribution writes carry `accountId` and a changed account
-  answers 409 `account_changed` (#603, `8df658d`; the client alert takes focus
-  and clears on the next edit; `useSession.recheck()`); #608 dependency patches
-  from a `pnpm audit`, no ticket (`18b81b5`: zod 4.6.6, ip-address, fast-uri,
-  vitest 4.1.12); #593 above; #607 plain-text poll context (#581, `06f6a71`,
-  migration 017; the excerpt length is handed to #427); #595 organizer
-  profile links (#577, `a9c5baf`; `GET /api/me/contributions`, checked against
-  `ownerAccountId`). **Next free migration: 018.**
+  `d2caca2`, migration 015); #604 organizer expired-session note (#599,
+  `2e93f20`); #588 shared paged list and Load more (#535, `156125a`); #606
+  contribution writes refuse another account with 409 `account_changed`
+  (#603, `8df658d`); #608 dependency patches from a `pnpm audit` (`18b81b5`);
+  #593 above; #607 plain-text poll context (#581, `06f6a71`, migration 017;
+  excerpt length handed to #427); #595 organizer profile links (#577,
+  `a9c5baf`). Review nits from these are #610.
 - **Merged 2026-11-13: Contributions** (#246, PR #572, `cd39ef9`). Home mixes
   the four newest contributions with polls; "Contributions only" on Explore
   lists them with Load more. Detail page: offer help or pledge, a private
@@ -217,16 +213,17 @@ the same CI runs.
 4. **A sending domain verified with Resend** (SPF/DKIM). DNS work, not code.
 5. **The proxy-hop and rate-limit prerequisites** in `apps/pulse/DEPLOY.md`
    must be satisfied before go-live.
+6. **A memory floor for picture decoding.** `apps/pulse/DEPLOY.md` states none
+   for 40 MP uploads (#593); add one before deploy.
 
 ## Current operator direction and next work (2026-11-14)
 
 1. The recent Answered, results, desktop voting, sign-in and header changes
    are merged; there is no remaining UI stack awaiting merge.
 2. The Contributions PRs are merged; #594 waits for the operator. Next: the
-   unblocked P12 steps (#580, #427, #296; #586 after #427). Open follow-ups: #533 ViewState Try again, #536
-   Conversation logic into flow/ and
-   hooks, #537 VoteCard split, #538 CSS encapsulation and tokens, #557,
-   #560, #589, #591 and #599 review nits, #596-#598, #534 part 3 (Conversation), P12 poll pictures
+   unblocked P12 steps (#580, #427, #296; #586 after #427). Open follow-ups:
+   #533 ViewState Try again, #536 Conversation logic into flow/ and hooks, #537 VoteCard split, #538 CSS encapsulation and tokens, #557,
+   #560, #589, #591, #599 and #610 review nits, #596-#598, #534 part 3 (Conversation), P12 poll pictures
    (#579-#586, ADR-0047),
    #539 step 2 (one session provider; operator decision), and #499 dark mode
    and #500 compact posted notice (mockups merged in #521, not built).
@@ -444,19 +441,11 @@ the same CI runs.
 
 **Client**
 
-- **Review nits left open (no issues filed).** #592: the profile status line
-  collapses while saving (min-height); a new unsaved profile shows no "Not
-  saved yet."; U+200B/U+FEFF are still raw in the profile-name-parity test.
-  #606: `carry` edge cases (same account returns; two forms refused). #595: the
-  Organizer inbox link lands on a closed "Private messages" disclosure; a failed
-  Load more on profiles shows the first-page error copy (shared hook); the
-  detail route reads the contribution twice.
 - **Poll context allows bidi and zero-width characters** (#607). Handle them
   when #427 renders the excerpt.
-- **#608 overrides are exact pins, not floors.** Still open on purpose:
-  minimatch (moderate, needs a major) and fastify 5.12.6 (low).
-- **#593:** `apps/pulse/DEPLOY.md` states no memory floor for 40 MP image
-  decodes; add one before deploy.
+- **Dependencies (#608):** the root `pnpm.overrides` are exact pins, not
+  floors. Still open on purpose: minimatch (moderate, needs a major) and
+  fastify 5.12.6 (low).
 - **Local demo handoff (2026-10-20):** API `http://127.0.0.1:8080`, web
   `http://localhost:5173`, served from the attached
   `repo-guidance-cleanup/odc` worktree, now detached at merged master. The old
