@@ -1,31 +1,12 @@
 name: pulse-images
 
-# Builds both pulse images when their inputs change and on a weekly/manual scan.
-#
-# The images were written in #165 and first built by hand on 2026-10-09; until
-# then "the first docker build is still the test" sat in memory for a month,
-# because nothing ran one. This is that test, on every PR that could break it.
-#
-# A separate, path-filtered workflow rather than a step in repo.yml's `checks`,
-# because two image builds would add minutes to every PR in the repo, core
-# included, for files most PRs never touch. The cost of that choice: a new job
-# is NOT a required check until a repo admin adds `pulse-images` to the
-# `protect-master` ruleset, so until then a red run warns and blocks nothing.
-# The weekly scheduled run fails on master and GitHub notifies the workflow's
-# last editor; until pulse-images is a required check, that is the only signal.
+# Always create the check; build/scan only image inputs or scheduled/manual runs.
+# A repo admin may require this check once #612's processing smoke test is ready.
 on:
   schedule:
     - cron: "0 6 * * 1"
   workflow_dispatch:
   pull_request:
-    paths:
-      - "apps/pulse/**"
-      - "apps/pulse-web/**"
-      - "pnpm-lock.yaml"
-      - "pnpm-workspace.yaml"
-      - "package.json"
-      - ".dockerignore"
-      - ".github/workflows/pulse-images.yml"
 
 permissions:
   contents: read
@@ -40,23 +21,40 @@ jobs:
     runs-on: ubuntu-latest
     steps:
       - uses: actions/checkout@v4
+        with:
+          fetch-depth: 0
+      - uses: actions/setup-node@v4
+        with:
+          node-version: 20
+      - name: Select image checks
+        id: selection
+        env:
+          CI_BASE: ${{ github.event.pull_request.base.sha }}
+          CI_HEAD: ${{ github.sha }}
+          CI_FULL: ${{ github.event_name != 'pull_request' }}
+        run: node .github/scripts/select-tests.mjs --images
       # The context is the repo root, as both Dockerfiles say: pulse is a pnpm
       # workspace and the lockfile lives at the top.
       - name: Build the API image
+        if: steps.selection.outputs.images == 'true'
         run: docker build -f apps/pulse/Dockerfile -t pulse-api:ci .
       - name: Check the API image has no package manager
+        if: steps.selection.outputs.images == 'true'
         run: |
           docker run --rm --entrypoint sh pulse-api:ci -c 'for t in yarn yarnpkg npm npx corepack; do if command -v "$t" >/dev/null; then echo "package manager present: $t"; exit 1; fi; done'
       # sharp ships native libvips binaries per platform. This proves the
       # musl one pnpm installed in the Alpine build stage is the one deployed
       # and that it decodes and encodes WebP (ADR-0047).
       - name: Check the API image can process pictures
+        if: steps.selection.outputs.images == 'true'
         run: |
           docker run --rm --entrypoint node -w /app pulse-api:ci --input-type=module -e "import sharp from 'sharp'; const b = await sharp({ create: { width: 8, height: 8, channels: 3, background: 'red' } }).webp().toBuffer(); const m = await sharp(b).metadata(); if (m.format !== 'webp') process.exit(1); console.log('sharp', sharp.versions.sharp, 'libvips', sharp.versions.vips)"
       - name: Build the web image
+        if: steps.selection.outputs.images == 'true'
         id: build-web
         run: docker build -f apps/pulse-web/Dockerfile -t pulse-web:ci .
       - name: Scan the API image
+        if: steps.selection.outputs.images == 'true'
         uses: aquasecurity/trivy-action@ed142fd0673e97e23eac54620cfb913e5ce36c25 # v0.36.0
         with:
           # Pin the scanner binary independently of the action wrapper.
