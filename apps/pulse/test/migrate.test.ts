@@ -110,6 +110,7 @@ test("applies_a_fresh_schema", { skip }, async () => {
       "014",
       "015",
       "016",
+      "017",
     ]);
     assert.deepEqual(await tablesIn(pool, schema), TABLES);
   });
@@ -132,6 +133,66 @@ test("applying_twice_changes_nothing", { skip }, async () => {
     assert.equal(rows[0]?.applied_at.getTime(), AT.getTime());
   });
 });
+
+test(
+  "poll_context_migration_keeps_legacy_rows_and_checks_length_and_controls",
+  { skip },
+  async () => {
+    await inTempDir(async (dir) => {
+      await writeMigrations(dir, await loadMigrations(), (v) => v < "017");
+      await inThrowawaySchema(async (pool) => {
+        await migrate(pool, { dir, clock: () => AT });
+        await pool.query(
+          "insert into polls (id, question, method, created_at, accepts_suggestions) values ('legacy-context', 'Legacy?', 'single', $1, false)",
+          [AT],
+        );
+        assert.deepEqual(
+          (await migrate(pool, { clock: () => AT })).applied,
+          await versionsFrom("017"),
+        );
+        assert.deepEqual(
+          (
+            await pool.query(
+              "select question, context from polls where id = 'legacy-context'",
+            )
+          ).rows,
+          [{ question: "Legacy?", context: null }],
+        );
+        for (const context of ["🌱".repeat(500), "First\nSecond"]) {
+          await pool.query(
+            "update polls set context = $1 where id = 'legacy-context'",
+            [context],
+          );
+          assert.equal(
+            (
+              await pool.query(
+                "select context from polls where id = 'legacy-context'",
+              )
+            ).rows[0]?.context,
+            context,
+          );
+        }
+        for (const context of [
+          "",
+          "🌱".repeat(501),
+          "a\tb",
+          "a\rb",
+          "a\u007fb",
+          "a\u0085b",
+          "a\u009fb",
+        ]) {
+          await assert.rejects(
+            pool.query(
+              "update polls set context = $1 where id = 'legacy-context'",
+              [context],
+            ),
+            { code: "23514" },
+          );
+        }
+      });
+    });
+  },
+);
 
 test(
   "upgrading_existing_voters_initializes_session_generation",

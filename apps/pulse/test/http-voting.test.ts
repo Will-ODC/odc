@@ -186,6 +186,7 @@ test("reads_a_poll_in_the_clients_wire_shape_without_a_session", async () => {
   assert.deepEqual(reply.json(), {
     id: "p1",
     question: "Where next?",
+    context: null,
     choices: ["Park", "Library", "Rink"],
     method: "approval",
     next: [null, null, null],
@@ -344,6 +345,7 @@ test("an_anonymous_authored_poll_reads_with_kind_alone_and_its_community", async
   assert.deepEqual(reply.json(), {
     id: published.id,
     question: "Open a community garden?",
+    context: null,
     choices: ["Yes", "No"],
     method: "single",
     next: [null, null],

@@ -60,6 +60,7 @@ export function creationConformance(
       assert.deepEqual(poll, {
         id: poll.id,
         question: "Q",
+        context: null,
         choices: ["A", "B"],
         method: "approval",
         next: [null, null],

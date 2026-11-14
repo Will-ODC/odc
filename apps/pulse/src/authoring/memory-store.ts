@@ -8,7 +8,10 @@ import {
 import { InMemoryVoterStore, type Voter } from "../identity/store.js";
 import { InMemoryVotingStore } from "../voting/store.js";
 import { createPoll, type Publication } from "../voting/poll.js";
-import { publicPoll as projectPoll } from "../voting/public-poll.js";
+import {
+  publicPoll as projectPoll,
+  publicPollReplay,
+} from "../voting/public-poll.js";
 import {
   CreationError,
   HOUR_MS,
@@ -114,7 +117,7 @@ export class InMemoryCreationStore implements CreationStore {
       if (replay) {
         if (canonical !== replay.canonical)
           throw new CreationError("idempotency_conflict");
-        return { poll: structuredClone(replay.poll), replayed: true };
+        return { poll: publicPollReplay(replay.poll), replayed: true };
       }
       const now = this.#clock();
       const closesAt =
@@ -148,6 +151,7 @@ export class InMemoryCreationStore implements CreationStore {
         {
           id: this.#newId(),
           question: input.question,
+          ...(input.context === undefined ? {} : { context: input.context }),
           choices: input.choices,
           method: input.method,
           closesAt,

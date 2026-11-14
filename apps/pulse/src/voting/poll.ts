@@ -38,6 +38,8 @@ export interface Publication {
 export interface Poll {
   id: string;
   question: string;
+  /** Optional plain-text background; absent for older and seed polls. */
+  context?: string;
   /** Display order is array order; a vote records the index, never the text. */
   choices: readonly string[];
   method: PollMethod;
@@ -71,6 +73,8 @@ export interface Poll {
 export interface NewPoll {
   id: string;
   question: string;
+  /** Optional plain-text background; absent for older and seed polls. */
+  context?: string;
   choices: readonly string[];
   method: PollMethod;
   /** Defaults to no onward link from any choice. */
@@ -95,6 +99,8 @@ export const MAX_CHOICES = 25;
  */
 export function createPoll(input: NewPoll, now: Date = new Date()): Poll {
   const question = input.question.trim();
+  const context =
+    input.context === undefined ? null : normalizePollContext(input.context);
   if (input.id.trim() === "") throw new TypeError("poll id must not be empty");
   if (question === "") throw new TypeError("poll question must not be empty");
 
@@ -128,6 +134,7 @@ export function createPoll(input: NewPoll, now: Date = new Date()): Poll {
   const poll: Poll = {
     id: input.id,
     question,
+    ...(context === null ? {} : { context }),
     choices,
     method: input.method,
     next: [...next],
@@ -142,4 +149,24 @@ export function isOpen(
   now: Date = new Date(),
 ): boolean {
   return poll.closesAt === undefined || poll.closesAt.getTime() > now.getTime();
+}
+
+/** Normalize optional background without interpreting markup-looking text. */
+export function normalizePollContext(value: unknown): string | null {
+  if (typeof value !== "string")
+    throw new TypeError("poll context must be a string");
+  const normalized = value.replace(/\r\n/g, "\n");
+  // Check before trim: trimming must never silently remove forbidden controls.
+  if (
+    /\p{Cc}/u.test(normalized.replace(/\n/g, "")) ||
+    /[\uD800-\uDFFF]/u.test(normalized)
+  ) {
+    throw new TypeError(
+      "poll context must be valid Unicode without controls other than LF",
+    );
+  }
+  const context = normalized.trim();
+  if ([...context].length > 500)
+    throw new TypeError("poll context must be at most 500 code points");
+  return context || null;
 }

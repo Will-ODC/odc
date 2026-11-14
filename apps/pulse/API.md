@@ -622,6 +622,7 @@ this while moving through the story, and it reveals nothing about a person.
 {
   "id": "ads-free",
   "question": "Should the ODC stay free of paid ads?",
+  "context": null,
   "choices": ["No", "Yes"],
   "method": "single",
   "next": ["ads-allowed", "pay-for-it"],
@@ -638,6 +639,12 @@ below.
 
 `next` has one entry per choice, position for position, and `null` where that choice
 ends the run. Always the same length as `choices`.
+
+`context` is optional background supplied by the poster: a plain-text string, or
+`null` when absent (including seed and legacy polls). Markup-looking characters
+are literal text, never HTML or Markdown. Public poll reads, creation responses
+(first and replayed) and MCP `get_poll` return this field. Poll listing rows do
+not carry it: they carry `image`, not `context`.
 
 `acceptsSuggestions` says whether people may add options of their own — see below.
 
@@ -1109,6 +1116,12 @@ Required `Idempotency-Key`: client-generated UUID, scoped to this account
 ```
 
 - `question`: trimmed non-empty string, at most 1,000 Unicode code points.
+- `context`: optional string, trimmed and at most 500 Unicode code points after
+  normalizing CRLF to LF. Omitted, empty or whitespace-only strings mean absent
+  (`null` in public responses); null and non-string inputs are refused. LF
+  newlines are allowed; all other C0/C1 controls (including tab, bare CR and DEL)
+  and lone surrogates are refused before trimming. Markup-looking text is kept
+  literally, without HTML or Markdown processing.
 - `choices`: 2–25 trimmed distinct non-empty strings, each at most 200 code
   points; equality is exact after trim, preserving existing domain rules.
 - `method`: required `single` or `approval`.
@@ -1151,7 +1164,12 @@ the original creation representation, even after the poll has closed;
 
 Canonical replay input consists of trimmed strings, ordered choices, method,
 normalised attribution, explicit/omitted close time and the acknowledgement
-field. Omitted close time stays a sentinel, not recalculated. Replay is checked
+field. Nonempty normalized context participates in replay comparison; omitted
+and empty context add no canonical key, preserving existing retries. A replay
+returns the saved response's `context` and `image` as first returned. A saved
+creation response from before context existed returns `context: null`, and one
+from before pictures returns `image: { "kind": "tile" }`; every other field keeps
+its original public value. Omitted close time stays a sentinel, not recalculated. Replay is checked
 before expiry/default-time and quota checks, so a valid saved request still
 replays after its poll closes. Changed input with the same key returns 409.
 Records remain durable for the poll's lifetime. Replays require a valid session

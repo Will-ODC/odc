@@ -7,6 +7,7 @@ import type { VoterStore } from "../../src/identity/store.js";
 import type { ProcessedImage } from "../../src/images/process.js";
 import { ImageStoreError, type ImageStore } from "../../src/images/store.js";
 import type { VotingStore } from "../../src/voting/store.js";
+import { publicPoll } from "../../src/voting/public-poll.js";
 
 export const AT = new Date("2026-11-12T12:00:00.000Z");
 const HOUR = 3_600_000;
@@ -236,6 +237,38 @@ export function imageStoreConformance(
             error instanceof CreationError &&
             error.code === "idempotency_conflict",
         );
+      });
+
+      test("a_replay_returns_both_the_picture_and_the_context_it_was_created_with", async (t) => {
+        const f = await fresh(t);
+        const saved = await f.images.savePending(member, processed());
+        const key = randomUUID();
+        const body = {
+          ...question({ id: saved.id, alt: "Plot" }),
+          context: "  The lot on Elm St.\r\nCouncil decides <b>Friday</b>.  ",
+        };
+        const first = await f.creation.publish(member, key, body);
+        const again = await f.creation.publish(member, key, body);
+        assert.equal(first.replayed, false);
+        assert.equal(again.replayed, true);
+        const image = {
+          kind: "upload",
+          displayUrl: `/api/poll-images/${saved.id}/display.webp`,
+          thumbUrl: `/api/poll-images/${saved.id}/thumb.webp`,
+          width: 640,
+          height: 480,
+          alt: "Plot",
+        };
+        const context = "The lot on Elm St.\nCouncil decides <b>Friday</b>.";
+        for (const { poll } of [first, again]) {
+          assert.deepEqual(poll.image, image);
+          assert.equal(poll.context, context);
+        }
+        assert.deepEqual(again.poll, first.poll);
+        // And the poll read back says the same as both responses.
+        const stored = await f.voting.getPoll(first.poll.id);
+        assert.ok(stored);
+        assert.deepEqual(publicPoll(stored, AT), first.poll);
       });
 
       test("a_pending_picture_expires_after_24_hours_and_cannot_be_attached", async (t) => {
