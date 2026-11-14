@@ -11,8 +11,23 @@ replaces CodeRabbit; lefthook provides local hooks.
 
 ## CI (GitHub Actions)
 
-One workflow per service, triggered by path filter
-(`services/ledger/**` → ledger pipeline). Stages, in order, all required:
+The required `format / lint / typecheck` job starts on every PR. Formatting,
+shared-script lint and guard regression tests always run. Package checks use
+`.github/scripts/select-tests.mjs`:
+
+- Documentation-only changes skip package runtime suites; Markdown fixtures
+  inside source/test directories remain runtime inputs.
+- Changed packages select themselves and their transitive dependents through
+  Turbo. Either Pulse app therefore selects `tests/pulse-integration/` too.
+- Core changes keep the ledger/verifier/conformance seam together. Contracts,
+  shared configuration, lockfiles, unknown paths or failed change discovery
+  select the full suite.
+- The weekly schedule and manual `repo` workflow dispatch run the full suite.
+  Every run reports its selection. The `pulse-images` check also starts on every
+  PR, skipping builds/scans when no image input changed; its weekly/manual
+  runs always build and scan.
+
+Stages for selected packages, with builds supplied by Turbo dependencies:
 
 1. `lint` + `format --check`
 2. `typecheck`
@@ -21,13 +36,13 @@ One workflow per service, triggered by path filter
 5. `golden-fixtures` (from `contracts/fixtures/`)
 6. `build`
 
-Plus one repo-wide workflow:
+Additional repository checks:
 
 - `contracts-guard` — fails if any diff touches `contracts/` without a
   version bump and a `CONTRACTS-CHANGE.md` entry; fails on ANY edit to
   frozen hashing rules.
-- `chain-smoke` — nightly: boot ledger, append events, export, run verifier,
-  tamper, expect INVALID.
+- Core/full runs check ledger exports through both independent verifiers,
+  anchor precedence, the rehearsal's tamper cases and fixture manifests.
 
 Merges to `master` require: green CI + one review + linear history. The
 orchestrator merges once a PR is properly reviewed; the operator merges the
@@ -64,6 +79,10 @@ CI. This is the standing loop for every branch:
   a package. See [the boundary policy](../odc-service-boundaries/SKILL.md)
   and [ADR-0042](../../../docs/decisions/0042-import-boundary-enforcement.md)
   for the rule's exact limits.
+- Test-selection changes: `node --test .github/scripts/select-tests.test.mjs`
+  and `node --test .github/scripts/select-tests.integration.test.mjs` after
+  installing dependencies. The latter checks the real workspace dependency
+  graph; new packages or dependency changes must preserve the relevant seams.
 
 **Fresh-clone caveat (Claude Code on the web).** lefthook's hooks are NOT
 installed until `pnpm install` runs, so the pre-commit format/lint hook may not
