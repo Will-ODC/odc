@@ -411,9 +411,19 @@ export function ContributionDetail({
                   // The organizer, while their sign-in has ended: their inbox
                   // needs a live session, but this is still their post, so
                   // no "Message the organizer" form in its place.
-                  <p className="contribution-note">
-                    Sign in again to read your private messages.
-                  </p>
+                  <>
+                    <h2>Private messages</h2>
+                    <p className="contribution-expired">
+                      <a
+                        href={`/sign-in?contribution=${encodeURIComponent(item.id)}`}
+                        target="_blank"
+                        rel="noreferrer"
+                      >
+                        Sign in again in a new tab
+                      </a>{" "}
+                      to read your private messages.
+                    </p>
+                  </>
                 ) : (
                   <details className="contribution-disclosure">
                     <summary className="contribution-button contribution-button--secondary">

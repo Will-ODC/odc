@@ -67,6 +67,27 @@ describe("reading a URL", () => {
     expect(routeFrom("/sign-in?next=elsewhere")).toEqual({ kind: "signIn" });
   });
 
+  it("opens stable public profile links and the owner editor", () => {
+    expect(routeFrom("/u/F8CDCA64-0D4F-4B99-B5BC-E6B749843AD8")).toEqual({
+      kind: "memberProfile",
+      publicId: "f8cdca64-0d4f-4b99-b5bc-e6b749843ad8",
+    });
+    expect(
+      pathOf({
+        kind: "memberProfile",
+        publicId: "f8cdca64-0d4f-4b99-b5bc-e6b749843ad8",
+      }),
+    ).toBe("/u/f8cdca64-0d4f-4b99-b5bc-e6b749843ad8");
+    expect(routeFrom("/profile")).toEqual({ kind: "profileEditor" });
+    expect(pathOf({ kind: "profileEditor" })).toBe("/profile");
+    const signIn = {
+      kind: "signIn" as const,
+      returnTo: { kind: "profileEditor" as const },
+    };
+    expect(pathOf(signIn)).toBe("/sign-in?next=profile");
+    expect(routeFrom(pathOf(signIn))).toEqual(signIn);
+  });
+
   /*
    * An empty token is not a token. Reading `""` as one would send a request
    * that can only come back "that link is incomplete", when the screen the
