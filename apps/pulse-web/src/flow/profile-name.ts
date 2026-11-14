@@ -13,7 +13,7 @@
  * names need.
  */
 const VISIBLE = /[\p{L}\p{N}\p{P}\p{S}]/u;
-const HIDDEN = /(?![‌‍])[\p{Cc}\p{Cf}]/u;
+const HIDDEN = /(?![\u200c\u200d])[\p{Cc}\p{Cf}]/u;
 
 export const NAME_LIMIT = 80;
 export const BIO_LIMIT = 280;

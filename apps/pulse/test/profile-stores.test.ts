@@ -140,6 +140,24 @@ for (const kind of ["memory", "postgres"] as const) {
   );
 
   test(
+    `${kind}: a_save_on_a_clock_behind_the_creation_time_keeps_updated_at_no_earlier`,
+    { skip },
+    async (t) => {
+      const f = await fresh(t);
+      await f.store.save(actor, { displayName: "Ada", bio: "", visible: true });
+      f.setTime(new Date(AT.getTime() - 60_000));
+      const saved = await f.store.save(actor, {
+        displayName: "Ada L",
+        bio: "",
+        visible: true,
+      });
+      assert.equal(saved.displayName, "Ada L");
+      assert.equal(saved.createdAt.getTime(), AT.getTime());
+      assert.equal(saved.updatedAt.getTime(), AT.getTime());
+    },
+  );
+
+  test(
     `${kind}: overlapping_first_saves_keep_one_id_and_the_first_creation_time`,
     { skip },
     async (t) => {

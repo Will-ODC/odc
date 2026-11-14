@@ -56,7 +56,9 @@ export class InMemoryMemberProfileStore implements MemberProfileStore {
         bio: normalized.bio,
         visible: normalized.visible,
         createdAt: current?.createdAt ?? now,
-        updatedAt: now,
+        // A clock that has stepped back (another instance, an NTP step)
+        // never makes the update time earlier than the creation time.
+        updatedAt: current && current.createdAt > now ? current.createdAt : now,
       };
       this.#state.profiles.set(actor.voterId, profile);
       return clone(profile) as MemberProfile;
