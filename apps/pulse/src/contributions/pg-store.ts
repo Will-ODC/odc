@@ -16,10 +16,14 @@ class PostgresRepository implements ContributionRepository {
   async read(id: string) {
     return read(this.pool, id, false);
   }
-  async list(query: ListQuery): Promise<Summary[]> {
+  async list(query: ListQuery, ownerId?: string): Promise<Summary[]> {
     const result = await this.pool.query<{ public: Summary }>(
-      "select public_record - 'participations' - 'updates' as public from contribution where ($1::timestamptz is null or (created_at, id) < ($1, $2)) order by created_at desc, id desc limit 21",
-      [query.before?.createdAt ?? null, query.before?.id ?? null],
+      "select public_record - 'participations' - 'updates' as public from contribution where ($1::timestamptz is null or (created_at, id) < ($1, $2)) and ($3::text is null or owner_id = $3) order by created_at desc, id desc limit 21",
+      [
+        query.before?.createdAt ?? null,
+        query.before?.id ?? null,
+        ownerId ?? null,
+      ],
     );
     return result.rows.map((r) => r.public);
   }

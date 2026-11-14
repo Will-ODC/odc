@@ -20,6 +20,11 @@ import { MemberProfile as MemberProfileScreen } from "../src/screens/MemberProfi
 import { ProfileEditor } from "../src/screens/ProfileEditor.js";
 import { stubApi } from "./stub-api.js";
 
+const EMPTY_CONTRIBUTIONS = {
+  forProfile: () => Promise.resolve({ contributions: [], nextCursor: null }),
+  mine: () => Promise.resolve({ contributions: [], nextCursor: null }),
+};
+
 afterEach(cleanup);
 beforeEach(() => globalThis.history.replaceState(null, "", "/"));
 beforeAll(() =>
@@ -48,6 +53,7 @@ describe("public member profile", () => {
           profile: () => new Promise((resolve) => (finish = resolve)),
         })}
         publicId={PROFILE.publicId}
+        contributions={EMPTY_CONTRIBUTIONS}
       />,
     );
     expect(screen.getByText("Loading…")).toBeTruthy();
@@ -65,6 +71,7 @@ describe("public member profile", () => {
           profile: () => Promise.reject(new ApiError(404, "unavailable")),
         })}
         publicId="missing"
+        contributions={EMPTY_CONTRIBUTIONS}
       />,
     );
     expect(await screen.findByText(/This profile is unavailable/)).toBeTruthy();
@@ -83,6 +90,7 @@ describe("public member profile", () => {
             }),
         })}
         publicId={PROFILE.publicId}
+        contributions={EMPTY_CONTRIBUTIONS}
       />,
     );
     expect(
@@ -102,6 +110,7 @@ describe("public member profile", () => {
       <MemberProfileScreen
         api={stubApi({ profile })}
         publicId={PROFILE.publicId}
+        contributions={EMPTY_CONTRIBUTIONS}
       />,
     );
     const retry = await screen.findByRole("button", { name: "Try again" });
@@ -109,6 +118,273 @@ describe("public member profile", () => {
     await user.keyboard("{Enter}");
     expect(await screen.findByRole("heading", { name: "Ada" })).toBeTruthy();
     expect(profile).toHaveBeenCalledTimes(2);
+  });
+
+  it("lists contributions and shows management only to its owner", async () => {
+    const page = {
+      contributions: [
+        {
+          id: "garden",
+          title: "Community garden",
+          description: "Grow food together.",
+          communityBenefit: "",
+          needs: "",
+          kind: "project" as const,
+          organizerName: "Ada",
+          community: { id: "pulse-general", label: "General" },
+          pollId: null,
+          commercial: null,
+          fund: null,
+          status: "open" as const,
+          createdAt: "2026-11-12T13:00:00.000Z",
+        },
+      ],
+      nextCursor: null,
+    };
+    const sameNameDifferentAccount = render(
+      <MemberProfileScreen
+        api={stubApi({
+          profile: () => Promise.resolve(PROFILE),
+          myProfile: () =>
+            Promise.resolve({ ...PROFILE, publicId: "another-public-id" }),
+        })}
+        publicId={PROFILE.publicId}
+        contributions={{
+          forProfile: () => Promise.resolve(page),
+          mine: () => Promise.reject(new Error("must stay private")),
+        }}
+      />,
+    );
+    expect(
+      (
+        await screen.findByRole("link", { name: "Community garden" })
+      ).getAttribute("href"),
+    ).toBe("/contributions/garden");
+    expect(
+      screen.queryByRole("link", { name: "Start a contribution" }),
+    ).toBeNull();
+    expect(screen.queryByText("Your contributions")).toBeNull();
+    sameNameDifferentAccount.unmount();
+
+    const myProfile = vi.fn(() => Promise.resolve(PROFILE));
+    const mine = vi.fn(() => Promise.resolve(page));
+    const forProfile = vi.fn(() => Promise.resolve(page));
+    render(
+      <MemberProfileScreen
+        api={stubApi({
+          me: async () => ({
+            id: "ada",
+            email: "ada@example.test",
+            community: null,
+          }),
+          profile: () => Promise.resolve(PROFILE),
+          myProfile,
+        })}
+        // A link may carry the public id in capitals; it is the same profile.
+        publicId={PROFILE.publicId.toUpperCase()}
+        contributions={{ forProfile, mine }}
+      />,
+    );
+    expect(
+      (
+        await screen.findByRole("link", { name: "Start a contribution" })
+      ).getAttribute("href"),
+    ).toBe("/contributions/new");
+    expect(await screen.findByText("Your contributions")).toBeTruthy();
+    // The owner sees their own list, with its controls, in place of the
+    // public one: one row per contribution, not two.
+    expect(
+      screen.queryByRole("heading", { level: 2, name: "Contributions" }),
+    ).toBeNull();
+    expect(
+      screen.getAllByRole("link", { name: "Community garden" }),
+    ).toHaveLength(1);
+    expect(forProfile).not.toHaveBeenCalled();
+    const update = screen.getByRole("link", { name: "Post an update" });
+    expect(update.className).toContain("btn--secondary");
+    expect(update.className).toContain("btn--small");
+    expect(update.getAttribute("href")).toBe("/contributions/garden#updates");
+    expect(
+      screen
+        .getByRole("link", { name: "Organizer inbox" })
+        .getAttribute("href"),
+    ).toBe("/contributions/garden#messages");
+    // The owner list is read for the account the owner check saw, so an
+    // account switch is refused by the server instead of shown here.
+    expect(myProfile).toHaveBeenCalledWith("ada");
+    expect(mine).toHaveBeenCalledWith(undefined, "ada");
+  });
+
+  it("moves focus to the first new contribution after Load more, including the last page", async () => {
+    const user = userEvent.setup();
+    const row = (n: number) => ({
+      id: `c${n}`,
+      title: `Contribution ${n}`,
+      description: "A public contribution.",
+      communityBenefit: "",
+      needs: "",
+      kind: "project" as const,
+      organizerName: "Ada",
+      community: { id: "pulse-general", label: "General" },
+      pollId: null,
+      commercial: null,
+      fund: null,
+      status: "open" as const,
+      createdAt: "2026-11-12T13:00:00.000Z",
+    });
+    const pages: Record<
+      string,
+      { contributions: ReturnType<typeof row>[]; nextCursor: string | null }
+    > = {
+      first: { contributions: [row(1), row(2)], nextCursor: "two" },
+      two: { contributions: [row(3)], nextCursor: "three" },
+      three: { contributions: [row(4)], nextCursor: null },
+    };
+    const mine = vi.fn((cursor?: string) =>
+      Promise.resolve(pages[cursor ?? "first"]!),
+    );
+    render(
+      <MemberProfileScreen
+        api={stubApi({
+          me: async () => ({
+            id: "ada",
+            email: "ada@example.test",
+            community: null,
+          }),
+          profile: () => Promise.resolve(PROFILE),
+          myProfile: () => Promise.resolve(PROFILE),
+        })}
+        publicId={PROFILE.publicId}
+        contributions={{ ...EMPTY_CONTRIBUTIONS, mine }}
+      />,
+    );
+    await screen.findByRole("link", { name: "Contribution 2" });
+    screen.getByRole("button", { name: "Load more contributions" }).focus();
+    await user.keyboard("{Enter}");
+    await waitFor(() =>
+      expect(document.activeElement).toBe(
+        screen.getByRole("link", { name: "Contribution 3" }),
+      ),
+    );
+    // The last page: the button goes, and focus is not left on nothing.
+    screen.getByRole("button", { name: "Load more contributions" }).focus();
+    await user.keyboard("{Enter}");
+    await waitFor(() =>
+      expect(document.activeElement).toBe(
+        screen.getByRole("link", { name: "Contribution 4" }),
+      ),
+    );
+    expect(screen.queryByRole("button", { name: /Load more/ })).toBeNull();
+    expect(mine).toHaveBeenLastCalledWith("three", "ada");
+  });
+
+  it("checks the owner again when Try again follows an account change", async () => {
+    const user = userEvent.setup();
+    // The page and its banner both ask who is signed in.
+    let signedIn = "ada";
+    const me = vi.fn(async () => ({
+      id: signedIn,
+      email: `${signedIn}@example.test`,
+      community: null,
+    }));
+    const myProfile = vi.fn((id: string) =>
+      Promise.resolve(
+        id === "ada" ? PROFILE : { ...PROFILE, publicId: "bob-public-id" },
+      ),
+    );
+    const mine = vi.fn(() =>
+      Promise.reject(
+        new ApiError(
+          409,
+          "Your account changed. Reload your profile.",
+          "account_changed",
+        ),
+      ),
+    );
+    const forProfile = vi.fn(() =>
+      Promise.resolve({ contributions: [], nextCursor: null }),
+    );
+    render(
+      <MemberProfileScreen
+        api={stubApi({
+          me,
+          profile: () => Promise.resolve(PROFILE),
+          myProfile,
+        })}
+        publicId={PROFILE.publicId}
+        contributions={{ forProfile, mine }}
+      />,
+    );
+    expect(
+      await screen.findByText("Your account changed. Reload your profile."),
+    ).toBeTruthy();
+    const callsBefore = me.mock.calls.length;
+    signedIn = "bob";
+    await user.click(screen.getByRole("button", { name: "Try again" }));
+    // A fresh check finds Bob, who does not own this profile: the public list.
+    expect(
+      await screen.findByText("No contributions published yet."),
+    ).toBeTruthy();
+    expect(me.mock.calls.length).toBeGreaterThan(callsBefore);
+    expect(myProfile).toHaveBeenLastCalledWith("bob");
+    expect(mine).toHaveBeenCalledTimes(1);
+    expect(screen.queryByText("Your contributions")).toBeNull();
+  });
+
+  it("reads the owner list again when the fresh check finds the same account", async () => {
+    const user = userEvent.setup();
+    const mine = vi
+      .fn()
+      .mockRejectedValueOnce(
+        new ApiError(
+          409,
+          "Your account changed. Reload your profile.",
+          "account_changed",
+        ),
+      )
+      .mockResolvedValue({ contributions: [], nextCursor: null });
+    render(
+      <MemberProfileScreen
+        api={stubApi({
+          me: async () => ({
+            id: "ada",
+            email: "ada@example.test",
+            community: null,
+          }),
+          profile: () => Promise.resolve(PROFILE),
+          myProfile: () => Promise.resolve(PROFILE),
+        })}
+        publicId={PROFILE.publicId}
+        contributions={{ ...EMPTY_CONTRIBUTIONS, mine }}
+      />,
+    );
+    await user.click(await screen.findByRole("button", { name: "Try again" }));
+    expect(
+      await screen.findByText("You haven’t published a contribution yet."),
+    ).toBeTruthy();
+    expect(mine).toHaveBeenCalledTimes(2);
+    expect(mine).toHaveBeenLastCalledWith(undefined, "ada");
+  });
+
+  it("shows no owner controls when nobody is signed in", async () => {
+    const myProfile = vi.fn(() => Promise.resolve(PROFILE));
+    const mine = vi.fn(() =>
+      Promise.resolve({ contributions: [], nextCursor: null }),
+    );
+    render(
+      <MemberProfileScreen
+        api={stubApi({ profile: () => Promise.resolve(PROFILE), myProfile })}
+        publicId={PROFILE.publicId}
+        contributions={{ ...EMPTY_CONTRIBUTIONS, mine }}
+      />,
+    );
+    expect(await screen.findByRole("heading", { name: "Ada" })).toBeTruthy();
+    await waitFor(() =>
+      expect(screen.getByText("No contributions published yet.")).toBeTruthy(),
+    );
+    expect(screen.queryByText("Your contributions")).toBeNull();
+    expect(myProfile).not.toHaveBeenCalled();
+    expect(mine).not.toHaveBeenCalled();
   });
 });
 
@@ -156,6 +432,20 @@ describe("owner profile editor", () => {
       .setup()
       .click(screen.getByRole("button", { name: "Try again" }));
     expect(await screen.findByLabelText("Public display name")).toBeTruthy();
+  });
+
+  it("says before saving that a public profile lists and links every contribution", async () => {
+    render(
+      <ProfileEditor
+        api={ownerApi({ myProfile: () => Promise.resolve(null) })}
+      />,
+    );
+    expect(
+      screen.getByText(
+        "Choose what anyone with your profile link can see. A public profile also lists every contribution you publish, even under a different organizer name, and each one links back to your profile. Your email and votes stay private.",
+      ),
+    ).toBeTruthy();
+    await screen.findByLabelText("Public display name");
   });
 
   it("creates, hides and reshares with labels and keyboard controls", async () => {

@@ -8,6 +8,7 @@ import {
   type ProfileActor,
   type ProfileStoreOptions,
   type PublicMemberProfile,
+  type VisibleProfileOwner,
 } from "./store.js";
 
 interface State {
@@ -30,9 +31,23 @@ export class InMemoryMemberProfileStore implements MemberProfileStore {
   }
 
   async publicById(publicId: string): Promise<PublicMemberProfile | undefined> {
-    const profile = [...this.#state.profiles.values()].find(
-      (candidate) => candidate.publicId === publicId,
+    return (await this.visibleOwnerById(publicId))?.profile;
+  }
+
+  async visibleOwnerById(
+    publicId: string,
+  ): Promise<VisibleProfileOwner | undefined> {
+    const found = [...this.#state.profiles.entries()].find(
+      ([, candidate]) => candidate.publicId === publicId,
     );
+    if (!found?.[1].visible) return undefined;
+    return { voterId: found[0], profile: publicProfile(found[1]) };
+  }
+
+  async publicByOwnerId(
+    voterId: string,
+  ): Promise<PublicMemberProfile | undefined> {
+    const profile = this.#state.profiles.get(voterId);
     return profile?.visible ? publicProfile(profile) : undefined;
   }
 

@@ -36,6 +36,9 @@ name and optional bio, then shares the stable opaque `/u/<publicId>` link. They
 can hide the profile again without losing that id. Public responses contain
 only the chosen name, bio and creation time; account and voting data remain
 private. See [API.md](./API.md#member-profiles) for the exact contract.
+Visible profiles list contributions published by their owning account. A
+contribution links its organizer by that account while the profile is visible;
+the contribution's organizer name remains when no profile is available.
 
 ## Sign-in link retention
 

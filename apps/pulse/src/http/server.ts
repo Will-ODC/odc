@@ -753,11 +753,13 @@ export async function createServer(deps: ServerDeps): Promise<FastifyInstance> {
   });
   await registerContributionRoutes(app, {
     contributions: deps.contributions,
+    profiles: deps.profiles,
     webOrigin: deps.webOrigin,
     currentVoter,
   });
   await registerProfileRoutes(app, {
     profiles: deps.profiles,
+    contributions: deps.contributions,
     webOrigin: deps.webOrigin,
     currentVoter,
     ...(deps.profileRateLimit ? { rateLimit: deps.profileRateLimit } : {}),

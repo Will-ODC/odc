@@ -48,6 +48,8 @@ const fixture = (over: Partial<Contribution> = {}): Contribution => ({
 });
 const client = (over: Partial<ContributionsApi> = {}): ContributionsApi => ({
   list: async () => ({ contributions: [fixture()], nextCursor: null }),
+  forProfile: async () => ({ contributions: [fixture()], nextCursor: null }),
+  mine: async () => ({ contributions: [fixture()], nextCursor: null }),
   sendMessage: async () => {},
   messages: async () => [],
   detail: async () => ({ contribution: fixture(), canManage: false }),
@@ -55,6 +57,32 @@ const client = (over: Partial<ContributionsApi> = {}): ContributionsApi => ({
   participate: async () => fixture(),
   update: async () => fixture(),
   ...over,
+});
+
+it("links the organizer by profile id while keeping the contribution byline", async () => {
+  render(
+    <ContributionDetail
+      api={stubApi()}
+      id="park"
+      client={client({
+        detail: async () => ({
+          contribution: fixture({
+            organizerName: "Contribution byline",
+            organizerProfile: {
+              publicId: "profile-id",
+              displayName: "Current profile name",
+            },
+          }),
+          canManage: false,
+        }),
+      })}
+    />,
+  );
+  const link = await screen.findByRole("link", {
+    name: "Contribution byline",
+  });
+  expect(link.getAttribute("href")).toBe("/u/profile-id");
+  expect(screen.queryByText("Current profile name")).toBeNull();
 });
 
 it("round trips contribution routes and sign-in returns including case-sensitive IDs", () => {
@@ -850,6 +878,112 @@ it("leaves focus alone on a contribution opened any other way", async () => {
   expect(document.activeElement).toBe(document.body);
 });
 
+// jsdom has no scrollIntoView; record which element the page asks to show.
+function stubScroll() {
+  const scrolled: Element[] = [];
+  Object.defineProperty(Element.prototype, "scrollIntoView", {
+    configurable: true,
+    value(this: Element) {
+      scrolled.push(this);
+    },
+  });
+  return {
+    scrolled,
+    restore: () => {
+      delete (Element.prototype as { scrollIntoView?: unknown }).scrollIntoView;
+    },
+  };
+}
+
+const organizerApi = () =>
+  stubApi({
+    me: async () => ({
+      id: "owner",
+      email: "owner@example.test",
+      community: null,
+    }),
+  });
+
+it("goes to the updates section named in the link once the page loads, with focus on its heading", async () => {
+  globalThis.history.replaceState(null, "", "/contributions/park#updates");
+  const scroll = stubScroll();
+  try {
+    render(
+      <ContributionDetail
+        api={organizerApi()}
+        id="park"
+        client={client({
+          detail: async () => ({ contribution: fixture(), canManage: true }),
+        })}
+        focusHeading
+      />,
+    );
+    const heading = await screen.findByRole("heading", {
+      level: 2,
+      name: "Progress and evidence",
+    });
+    await waitFor(() => expect(document.activeElement).toBe(heading));
+    expect(heading.getAttribute("tabindex")).toBe("-1");
+    expect(scroll.scrolled).toEqual([heading]);
+    // The published-page title focus does not take it back afterwards.
+    await act(async () => {});
+    expect(document.activeElement).toBe(heading);
+  } finally {
+    scroll.restore();
+    globalThis.history.replaceState(null, "", "/");
+  }
+});
+
+it("goes to the organizer inbox named in the link, after the session says who is reading", async () => {
+  globalThis.history.replaceState(null, "", "/contributions/park#messages");
+  const scroll = stubScroll();
+  let signIn!: () => void;
+  const signedIn = new Promise<void>((resolve) => (signIn = resolve));
+  try {
+    render(
+      <ContributionDetail
+        api={stubApi({
+          me: async () => {
+            await signedIn;
+            return {
+              id: "owner",
+              email: "owner@example.test",
+              community: null,
+            };
+          },
+        })}
+        id="park"
+        client={client({
+          detail: async () => ({ contribution: fixture(), canManage: true }),
+        })}
+      />,
+    );
+    // Before the session answers, the page shows the public message form:
+    // focus waits rather than landing on a control about to be replaced.
+    await screen.findByText("Message the organizer");
+    expect(document.activeElement).toBe(document.body);
+    signIn();
+    const inbox = await screen.findByText("Private messages");
+    await waitFor(() => expect(document.activeElement).toBe(inbox));
+    expect(screen.queryByText("Message the organizer")).toBeNull();
+    expect(scroll.scrolled).toEqual([inbox]);
+  } finally {
+    scroll.restore();
+    globalThis.history.replaceState(null, "", "/");
+  }
+});
+
+it("ignores a link fragment that names no section", async () => {
+  globalThis.history.replaceState(null, "", "/contributions/park#elsewhere");
+  try {
+    render(<ContributionDetail api={stubApi()} id="park" client={client()} />);
+    await screen.findByRole("heading", { level: 1 });
+    expect(document.activeElement).toBe(document.body);
+  } finally {
+    globalThis.history.replaceState(null, "", "/");
+  }
+});
+
 it("closed contributions can still be contacted and display existing price and fund details", async () => {
   render(
     <ContributionDetail
@@ -901,6 +1035,32 @@ it("rejects malformed successful responses and sends credentials/idempotency key
     credentials: "same-origin",
     headers: { "Idempotency-Key": "request-key" },
   });
+});
+
+it("reads public-profile and owner contribution pages from separate endpoints", async () => {
+  const doFetch = vi
+    .fn<typeof fetch>()
+    .mockImplementation(
+      async () =>
+        new Response(
+          JSON.stringify({ contributions: [fixture()], nextCursor: null }),
+        ),
+    );
+  const api = new HttpContributionsApi(doFetch);
+  await api.forProfile("public/id", "next page");
+  await api.mine();
+  await api.mine("next page", "account/1");
+  expect(doFetch.mock.calls[0]?.[0]).toBe(
+    "/api/profiles/public%2Fid/contributions?cursor=next%20page",
+  );
+  expect(doFetch.mock.calls[1]?.[0]).toBe("/api/me/contributions");
+  expect(doFetch.mock.calls[1]?.[1]).toMatchObject({
+    method: "GET",
+    credentials: "same-origin",
+  });
+  expect(doFetch.mock.calls[2]?.[0]).toBe(
+    "/api/me/contributions?cursor=next%20page&ownerAccountId=account%2F1",
+  );
 });
 
 it("uses load wording for GET failures and save wording for writes", async () => {

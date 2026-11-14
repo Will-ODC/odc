@@ -133,3 +133,61 @@
   align-self: stretch;
   margin-bottom: 0;
 }
+
+.profile__contributions {
+  display: flex;
+  flex-direction: column;
+  align-items: flex-start;
+  gap: var(--step);
+  padding-block-start: calc(var(--step) * 2);
+  border-block-start: thin solid var(--line);
+}
+
+.profile__contributions p {
+  margin: 0;
+}
+
+/* The same heading size as a contribution page's sections. */
+.profile__contributions h2 {
+  margin: 0;
+  font-size: var(--t-brand);
+  line-height: 1.4;
+}
+
+.profile__contribution-list {
+  display: flex;
+  flex-direction: column;
+  align-self: stretch;
+  gap: calc(var(--step) * 2);
+  margin: 0;
+  padding: 0;
+  list-style: none;
+}
+
+/*
+ * Title on the left, status on the right; a long title wraps in its own
+ * column so the status stays beside it. The manage controls take a row below.
+ */
+.profile__contribution-list > li {
+  display: grid;
+  grid-template-columns: minmax(0, 1fr) auto;
+  align-items: baseline;
+  gap: var(--step);
+}
+
+.profile__contribution-title {
+  overflow-wrap: anywhere;
+}
+
+.profile__contribution-status {
+  white-space: nowrap;
+  text-align: end;
+}
+
+/* Small secondary buttons: at phone width each is a full touch target. */
+.profile__manage-links {
+  display: flex;
+  flex-wrap: wrap;
+  grid-column: 1 / -1;
+  gap: var(--step);
+}
