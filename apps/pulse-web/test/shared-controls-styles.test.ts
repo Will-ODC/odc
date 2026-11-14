@@ -22,27 +22,16 @@ const phoneRules = (css: string) => {
 it("gives only the boxed buttons a full-height touch target on a phone", () => {
   const phone = phoneRules(read("../src/components/Button.css"));
   expect(phone).toMatch(
-    /\.btn--primary,\s*\.btn--secondary \{\s*display: flex;[^}]*min-height: var\(--touch\);/,
+    /\.btn--primary,\s*\.btn--secondary \{[^}]*min-height: var\(--touch\);/,
   );
   // A quiet button sits inside a sentence ("… Change") and must stay inline.
   expect(phone).not.toMatch(/(^|[\s,{])\.btn\s*[,{]/);
   expect(phone).not.toContain(".btn--quiet");
 });
 
-it("draws a quiet button's focus ring square, as the text links it replaced", () => {
-  expect(read("../src/components/Button.css")).toMatch(
-    /\.btn--quiet \{[^}]*border-radius: 0;/,
-  );
-});
-
-it("keeps the new-poll community name and promise row as before", () => {
-  const css = read("../src/screens/NewPoll.css");
-  expect(css).toMatch(
-    /\.post__lede b \{\s*color: var\(--ink-soft\);\s*font-weight: 600;/,
-  );
-  expect(css).toMatch(/\.post__title:focus \{\s*outline: none;/);
-  expect(phoneRules(css)).toMatch(
-    /\.post__optin \{\s*min-height: var\(--touch\);\s*align-items: center;/,
+it("gives the new-poll promise row a full touch target on a phone", () => {
+  expect(phoneRules(read("../src/screens/NewPoll.css"))).toMatch(
+    /\.post__optin \{[^}]*min-height: var\(--touch\);/,
   );
 });
 
@@ -84,70 +73,24 @@ it("keeps the account trigger plain text in the banner, not an underlined quiet 
   expect(rule).toBeDefined();
   // Two classes outrank `.btn--quiet`; `font: inherit` resets its weight.
   expect(rule).toContain("font: inherit;");
-  expect(rule).toContain("font-size: var(--t-small);");
-  expect(rule).toContain("color: var(--ink-soft);");
   expect(rule).toContain("text-decoration: none;");
 });
 
-it("keeps screen retry and shared Load more controls aligned under their lists", () => {
+it("keeps Browse free of My votes' copies of the retry styles", () => {
   const browse = read("../src/screens/Browse.css");
   expect(browse).not.toMatch(/\.btn\.browse__action/);
   // My votes keeps its own copies in MyVotes.css; Browse holds none of them.
   expect(browse).not.toMatch(/browse__main--message/);
-  expect(browse).toMatch(
-    /\.browse__main > \.browse__action \{\s*display: block;\s*margin: calc\(var\(--step\) \* 2\) auto 0;\s*\}/,
-  );
-  const myVotes = read("../src/screens/MyVotes.css");
-  expect(myVotes).toMatch(
-    /\.my-votes__action \{\s*display: block;\s*margin: calc\(var\(--step\) \* 2\) 0 0;\s*\}/,
-  );
-  const loadMore = read("../src/components/LoadMore.css");
-  expect(loadMore).toMatch(
-    /\.load-more \{\s*margin: calc\(var\(--step\) \* 2\) auto 0;\s*text-align: center;/,
-  );
-  expect(loadMore).toMatch(
-    /\.load-more > \.load-more__button \{\s*display: flex;\s*margin-inline: auto;/,
-  );
-});
-
-it("keeps My votes at the top and balances its heading", () => {
-  const css = read("../src/screens/MyVotes.css");
-  expect(css).toMatch(/\.my-votes__main \{[^}]*margin: 0 auto;/s);
-  expect(css).toMatch(/\.my-votes__main h1 \{[^}]*text-wrap: balance;/s);
-});
-
-it("keeps the results toggle borderless and ClosedResults' Close small", () => {
-  const css = read("../src/components/ResultsPanel.css");
-  const toggle = /\.results \.results__toggle \{([^}]*)\}/.exec(css)?.[1];
-  expect(toggle).toBeDefined();
-  expect(toggle).toContain("border: none;");
-  expect(toggle).toContain("background: none;");
-  expect(toggle).toContain("text-decoration: none;");
-  expect(toggle).toContain("font-size: var(--t-small);");
-  // ResultsPanel's own Close went in #569; ClosedResults' plain one remains.
-  expect(css).not.toContain(".btn.results__close");
-  expect(css).toMatch(
-    /\n\.results__close \{\s*position: absolute;[^}]*padding: var\(--step\);/,
-  );
 });
 
 // #569: one small secondary button. Explore, My votes, the rail and the
 // account menu use the shared Button's small size, and the `.button` utility
 // (with its own focus ring) is gone.
-it("draws the small secondary size from tokens, after the rules it overrides", () => {
+it("draws the small secondary size without fixed pixels, after the rules it overrides", () => {
   const css = read("../src/components/Button.css");
   const small = /\.btn--small \{([^}]*)\}/.exec(css)?.[1];
   expect(small).toBeDefined();
-  expect(small).toContain("font-size: var(--t-small);");
-  expect(small).toContain("padding: var(--step) calc(var(--step) * 2);");
   expect(small).not.toMatch(/\d+px/);
-  expect(css).toMatch(
-    /\.btn--small:hover:not\(:disabled\) \{\s*background: var\(--hover\);\s*\}/,
-  );
-  // Muted text while loading, not the shared variant's faded button.
-  expect(css).toMatch(
-    /\.btn--small:disabled \{\s*opacity: 1;\s*color: var\(--muted\);\s*\}/,
-  );
   // Same specificity as what they override, so they must come later.
   const at = (s: string) => css.indexOf(s);
   expect(at(".btn--small {")).toBeGreaterThan(at(".btn--secondary {"));

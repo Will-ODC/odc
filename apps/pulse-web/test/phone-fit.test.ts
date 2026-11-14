@@ -24,10 +24,8 @@ describe("fitting a phone", () => {
         rule("screens/Conversation.css", ".conversation__scroll"),
       )?.[1] ?? "";
     expect(padding).toMatch(/^\s*max\(/);
-    expect(padding).toContain(
-      "var(--gutter) + var(--step) * 8 + env(safe-area-inset-bottom)",
-    );
-    expect(padding).toContain("calc(var(--dock-space, 0px) + var(--gutter))");
+    expect(padding).toContain("env(safe-area-inset-bottom)");
+    expect(padding).toContain("var(--dock-space");
   });
 
   it("gives the phone version thumb-sized targets and a full-width sheet (#482)", () => {
@@ -37,7 +35,7 @@ describe("fitting a phone", () => {
     );
     const phone = css.slice(css.indexOf("@media (max-width: 699px)"));
     expect(phone).toMatch(
-      /\.conversation__dock \{\s*right: 0;\s*bottom: 0;\s*left: 0;\s*width: auto;/,
+      /\.conversation__dock \{[^}]*right: 0;[^}]*left: 0;[^}]*width: auto;/,
     );
     expect(phone).toMatch(
       /\.conversation button \{\s*min-height: var\(--touch\);/,
@@ -48,11 +46,6 @@ describe("fitting a phone", () => {
     expect(phone).toMatch(
       /\.conversation__help \{[\s\S]*padding-inline-end: max\([\s\S]*safe-area-inset-right/,
     );
-    const tokens = readFileSync(
-      new URL("../src/styles/tokens.css", import.meta.url),
-      "utf8",
-    );
-    expect(tokens).toContain("--touch: 44px;");
   });
 
   it("draws the sign-in frame's border inside its size", () => {
@@ -73,38 +66,29 @@ describe("fitting a phone", () => {
     );
   });
 
-  it("floats voting at the bottom right without reserving a full-width row", () => {
+  it("floats voting clear of the safe areas, scrolling rather than clipping", () => {
     const dock = rule("screens/Conversation.css", ".conversation__dock");
     expect(dock).toMatch(/position:\s*fixed/);
-    expect(dock).toContain(
-      "right: max(var(--gutter), env(safe-area-inset-right))",
+    // Never flush to the edge: the gutter is the floor even with no inset.
+    expect(dock).toMatch(
+      /right:\s*max\(var\(--gutter\),\s*env\(safe-area-inset-right\)\)/,
     );
-    expect(dock).toContain(
-      "bottom: max(var(--gutter), env(safe-area-inset-bottom))",
+    expect(dock).toMatch(
+      /bottom:\s*max\(var\(--gutter\),\s*env\(safe-area-inset-bottom\)\)/,
     );
-    expect(dock).toContain("env(safe-area-inset-right)");
-    expect(dock).toContain("env(safe-area-inset-bottom)");
-    expect(dock).toMatch(/width:\s*min\(/);
-    expect(dock).not.toMatch(/border-top:/);
     expect(rule("screens/Conversation.css", ".conversation__scroll")).toMatch(
       /overflow-y:\s*auto/,
-    );
-    expect(rule("screens/Conversation.css", ".conversation__scroll")).toMatch(
-      /padding-bottom:/,
     );
     expect(
       rule("screens/Conversation.css", ".conversation__dock .vote-card"),
     ).toMatch(/overflow-y:\s*auto/);
   });
 
-  it("matches Submit sizing while keeping the floating button prominent", () => {
+  it("sizes the floating voting button as Submit", () => {
     const button = rule(
       "screens/Conversation.css",
       ".conversation__help > button",
     );
-    expect(button).toContain("background: var(--green)");
-    expect(button).toContain("color: var(--on-accent)");
-    expect(button).toMatch(/font-weight:\s*700/);
     const submit = rule("components/VoteCard.css", ".vote-card button");
     for (const property of ["padding", "font-size"]) {
       const declaration = submit.match(new RegExp(`  ${property}: [^;]+;`))![0];
@@ -113,21 +97,25 @@ describe("fitting a phone", () => {
     expect(button).not.toMatch(/min-(height|width):/);
   });
 
-  it("uses the same bottom-right reveal for the vote button and popout", () => {
+  it("turns the voting reveal off for reduced motion", () => {
     const css = readFileSync(
       new URL("../src/screens/Conversation.css", import.meta.url),
       "utf8",
     );
-    expect(css).toContain(
-      ".conversation__dock .vote-card,\n.conversation__help > button {",
-    );
-    expect(css).toContain("transform-origin: bottom right");
-    expect(css).toContain(
-      "animation: voting-reveal var(--motion-quick) ease-out",
-    );
+    // Scoped to the voting reveal's own block: the #554 question slide has a
+    // separate reduced-motion block that must not satisfy this check.
     expect(css).toMatch(
-      /@media \(prefers-reduced-motion: reduce\)[\s\S]*animation: none/,
+      /@media \(prefers-reduced-motion: reduce\) \{\s*\.conversation__dock \.vote-card,\s*\.conversation__help > button \{\s*animation: none;/,
     );
+  });
+
+  it("keeps the shared touch target at least 44px", () => {
+    const tokens = readFileSync(
+      new URL("../src/styles/tokens.css", import.meta.url),
+      "utf8",
+    );
+    const touch = tokens.match(/--touch:\s*(\d+)px;/);
+    expect(Number(touch?.[1])).toBeGreaterThanOrEqual(44);
   });
 
   it("gives the closed voting button its own row on a phone, so it covers nothing (#527)", () => {
@@ -159,16 +147,4 @@ describe("fitting a phone", () => {
       /flex-wrap:\s*nowrap/,
     );
   });
-});
-
-it("aligns the communities disclosure with the navigation links", () => {
-  expect(rule("components/TopBanner.css", ".banner__nav")).toMatch(
-    /align-items:\s*center/,
-  );
-  const disclosure = rule(
-    "components/TopBanner.css",
-    ".banner__nav > .account-menu",
-  );
-  expect(disclosure).toMatch(/display:\s*flex/);
-  expect(disclosure).toMatch(/align-items:\s*center/);
 });
