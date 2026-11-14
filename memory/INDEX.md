@@ -29,7 +29,8 @@ Do not apply charter rules to `apps/**`, and do not relax them anywhere else.
   verifiers. Next: the `participant_registered` v2 contracts PR, then the
   signer and identity services (both unbuilt). → `memory/STATE.md`
 - **Pulse:** sign-in, voting, browsing, poll creation, Contributions, profiles
-  and picture storage are built; no open PRs. Next is #580 (picture in the
+  and picture storage are built; no open product PRs. Test audit complete;
+  timing gaps tracked in #613/#614. Next feature is #580 (picture in the
   posting form), awaiting an operator answer. No public deploy yet.
   → `memory/pulse.md`
 

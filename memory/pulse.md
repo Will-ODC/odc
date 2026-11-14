@@ -113,26 +113,23 @@ A small invited pilot comes only after 3-6. None of this authorizes a deploy.
 
 ## Current operator direction and next work (2026-11-14)
 
-1. **Handoff.** Codex is out of usage; Claude orchestrates. No open Pulse PRs.
+1. **Handoff.** Codex completed the requested test audit. The requested
+   verbosity and unnecessary over-engineering audit is next, usage permitting.
+   No open Pulse product PRs.
 2. **Next: #580, a picture in the posting form.** Waiting on the operator's
    answer to "mockup first, or build from the plan and review screenshots?".
    Then #427 (thumbnails and context excerpt length), #296 (picture on the
    question page), #586 after #427.
-3. **Pulse test audit — deferred by the operator (2026-11-14); run it when
-   asked.** Why: on 2026-11-14 two flaky profile tests (#592) hid real bugs
-   (a typed draft overwritten, a sign-in return missed) from gaps between React
-   showing a screen and its passive `useEffect`s running; the same pattern is
-   likely elsewhere. How: one fresh `odc-reviewer` (or Codex reviewer) in a
-   worktree from `origin/master`, report only, no code changes, briefed to:
-   (a) find screens and hooks in `apps/pulse-web/src` that reset state from
-   props or attach listeners in passive effects where a person can act in the
-   gap, and tests that pass only by timing — run each suspect test file 30
-   times and report the failure rate; (b) spot-check that tests fail when the
-   code is wrong, by breaking a handful of guarded lines (privacy filters,
-   account checks, migration guards) one at a time and confirming a test goes
-   red, restoring each; (c) list checks that should be required in the
-   `protect-master` ruleset but are not. Findings become one issue per
-   concrete defect (`create-issue`).
+3. **Pulse test audit complete (2026-11-14)** at `0bf9c61`, authorized by the
+   operator after the #592 profile timing regressions. Fresh Codex audit,
+   report only: [report](../docs/audits/pulse-tests-2026-11-14.md).
+   Six suspect client suites passed all 30 runs each (6,630 assertions).
+   Controlled probes exposed missed session-return and startup-history events
+   (#613, #614); their 30/30 failures are separate from ordinary flake rates.
+   All six privacy/account/migration guard mutations were caught and restored.
+   Full baselines passed 967 client and 919 API tests, with no API skips.
+   The missing required image check remains with #612. Product fixes are
+   tracked in those issues; this audit changed no application code.
 4. **`pulse-images` is not a required check**, so a red picture-package check
    (#594) only warns. Do not require it as is (it runs only on Pulse paths);
    #612 has the order of steps.
