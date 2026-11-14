@@ -68,6 +68,27 @@ looks like. Then:
 - Do work only if it serves the goal. Work that does not serve it is a
   question for the operator, not something to start.
 
+### Track the run in the task list, grouped by Codex and Claude
+
+The task list the app shows under the orchestrator's latest message (the
+`update_plan` tool in the Claude desktop app) is the run's tracker (operator,
+2026-11-13). Keep it current through the whole run, not only at the start:
+
+- **One item per unit of work, named by ticket and PR**, prefixed with who
+  does it: `Codex: #592 resolve merge vs master`, `Claude: #599 form nits`,
+  `Claude: UI review #592`. The prefixes keep it grouped by owner, so the
+  operator can see the Codex/Claude split at a glance. Order the list Codex
+  items first, then Claude items, then queued work.
+- **Queued work stays on the list** as pending items prefixed `Queued:`, in
+  the order it will start, with its blocker in a few words:
+  `Queued: #595 after #592 merges`.
+- Update it when a unit starts, finishes, is handed to the other side, or is
+  paused (say so: `Codex (paused, usage): #593 renumber`). When a turn's
+  reply sums up where things stand, write the same grouping in text: Codex,
+  Claude, Queued.
+- Where the app has no such list (a Codex orchestrator, a cloud run), keep the
+  same three groups in the hand-off note instead.
+
 ### Keep session titles current
 
 Session titles are how the operator finds work in the sidebar (operator,
