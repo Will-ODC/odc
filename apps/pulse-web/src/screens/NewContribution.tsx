@@ -173,6 +173,17 @@ function ContributionForm({
       return next;
     });
   }
+  /** Take a field's complaint back as soon as it is filled in. */
+  function clearIfFixed(field: RequiredField) {
+    if (problems[field] === undefined) return;
+    const form = formRef.current;
+    if (form && String(new FormData(form).get(field) ?? "").trim())
+      setProblems((current) => {
+        const next = { ...current };
+        delete next[field];
+        return next;
+      });
+  }
   const pollField = useRef<HTMLInputElement>(null);
   /** The related question was not a link or ID, judged here before sending. */
   const [pollUnreadable, setPollUnreadable] = useState(false);
@@ -253,7 +264,13 @@ function ContributionForm({
       onSubmit={submit}
     >
       {expired || save.errorStatus === 401 ? (
-        <p className="contribution-expired" role="status">
+        // After a 401 this is the one message (it carries the sign-in link),
+        // so it is also where focus goes.
+        <p
+          className="contribution-expired"
+          role="status"
+          {...(save.errorStatus === 401 ? { ref: outcome, tabIndex: -1 } : {})}
+        >
           Your sign-in has ended. What you wrote stays here.{" "}
           <a
             href="/sign-in?next=contribution-new"
@@ -295,6 +312,7 @@ function ContributionForm({
               name="title"
               aria-invalid={problems.title !== undefined || undefined}
               onBlur={() => checkRequired("title")}
+              onChange={() => clearIfFixed("title")}
               required
               maxLength={160}
               placeholder="What would you like to make happen?"
@@ -315,6 +333,7 @@ function ContributionForm({
               name="description"
               aria-invalid={problems.description !== undefined || undefined}
               onBlur={() => checkRequired("description")}
+              onChange={() => clearIfFixed("description")}
               required
               maxLength={4000}
               rows={5}
@@ -335,6 +354,7 @@ function ContributionForm({
               name="organizer"
               aria-invalid={problems.organizer !== undefined || undefined}
               onBlur={() => checkRequired("organizer")}
+              onChange={() => clearIfFixed("organizer")}
               required
               maxLength={80}
               autoComplete="nickname"
@@ -379,6 +399,9 @@ function ContributionForm({
                 disabled={save.pending || expired}
                 aria-invalid={problems.confirm !== undefined || undefined}
                 onBlur={() => checkRequired("confirm")}
+                // A click does not focus a checkbox in every browser, so do
+                // not wait for blur to take the complaint back.
+                onChange={() => checkRequired("confirm")}
                 {...described}
               />
               I confirm this post may be published with my name.
@@ -387,7 +410,7 @@ function ContributionForm({
         </Field>
         <p>Keep personal contact and payment details out of your post.</p>
       </div>
-      {save.error && !expired && !pollNotFound ? (
+      {save.error && !expired && !pollNotFound && save.errorStatus !== 401 ? (
         <p
           ref={outcome}
           role="alert"

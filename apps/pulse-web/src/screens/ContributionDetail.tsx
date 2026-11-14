@@ -379,6 +379,13 @@ export function ContributionDetail({
                 ) : null}
                 {canManage ? (
                   <OrganizerInbox key={item.id} client={client} id={item.id} />
+                ) : canUpdate ? (
+                  // The organizer, while their sign-in has ended: their inbox
+                  // needs a live session, but this is still their post, so
+                  // no "Message the organizer" form in its place.
+                  <p className="contribution-note">
+                    Sign in again to read your private messages.
+                  </p>
                 ) : (
                   <details className="contribution-disclosure">
                     <summary className="contribution-button contribution-button--secondary">
@@ -652,13 +659,13 @@ function MessageForm({
       )}
       noValidate
     >
-      <p className="contribution-note">
-        Only the organizer can read this. They can&apos;t reply here.
-      </p>
       {access === "expired" ? (
         // The offer form above already announces the expiry.
         <SignInAgain href={signInHref} announce={false} />
       ) : null}
+      <p className="contribution-note">
+        Only the organizer can read this. They can&apos;t reply here.
+      </p>
       <Field
         id="contribution-message"
         label="Private message"
