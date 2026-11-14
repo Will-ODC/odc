@@ -37,7 +37,7 @@ Repo discipline still applies: tests ship with the change, there is one small
 branch per change, named for its ticket (`pulse/<issue>-<short>`, #310), and
 the same CI runs.
 
-## Where it stands (2026-11-12)
+## Where it stands (2026-11-13)
 
 - **Merged since 2026-11-10:** #521 mockups for dark mode and the compact
   posted notice (#499/#500); #522 steady header width, focus after Forget and
@@ -77,13 +77,29 @@ the same CI runs.
 - **Poll pictures are planned, not built** (ADR-0047, P12 in
   `docs/plans/pulse.md`, READY TO BUILD; tickets #579-#586). Neutral
   `image`/`image_bytes` storage keyed by `owner_kind`/`owner_id`. Migrations
-  take 015+, after Contributions #572 lands; #427, #585 and #586 wait for
-  #572. Purging a poll tombstones its replay rows (an ADR-0037 amendment for
+  take 015+ (Contributions took 013/014); #427, #585 and #586 can now
+  proceed. Purging a poll tombstones its creation replay row (an ADR-0037 amendment for
   purged polls only); ADR-0037's broad-posting launch gate is unchanged.
-- **Open PRs 2026-11-12:** Contributions #246 is PR #572. #535 is PR #588,
-  held until #572 merges (they conflict in Browse files).
-- **New tickets:** #557, #560 review nits and #589 closed-question UI nits
-  (open).
+- **Merged 2026-11-13: Contributions** (#246, PR #572, `cd39ef9`). Home mixes
+  the four newest contributions with polls; "Contributions only" on Explore
+  lists them with Load more. Detail page: offer help or pledge, a private
+  message to the organizer, the organizer's private inbox and progress updates
+  with evidence links. Own API and storage (migrations 013, 014), real-HTTP
+  Postgres contract tests for every endpoint. The creation form is a short first
+  pass (type, title, description, organizer name, related question); the API's
+  community benefit, needs, commercial price and fund fields reach the form in
+  #598. Sessions on these pages recheck sign-in: an expiry keeps drafts with a
+  new-tab sign-in, a deliberate sign-out (here or announced by another tab) or a
+  different account clears them; only the newest `/me` answer counts; votes are
+  cleared when a person leaves and read again on the next sign-in.
+- **Open PRs 2026-11-13:** #592 profiles (#576) and #588 paged list (#535), both
+  being updated from master after #572; #595 organizer links (#577) follows
+  #592; #593 picture store (#579, migration 016) follows #592; #594 CI check
+  (operator merges) follows #593.
+- **New tickets:** #557, #560 review nits, #589 closed-question UI nits, #591
+  (#566 nits), #596 Suggested votes reshuffle on open, #597 contribution threads
+  with comments (one row per group in browse), #598 creation-form fields, #599
+  contribution form nits from #572's last UI review (open).
 - **One ballot per signed-in person** (#532 / PR #552, ADR-0046, migration
   011). Operator decision 2026-11-11: a signed-in person's new vote replaces
   their earlier vote on a poll, and on sign-in the newer answer moves to that
@@ -189,14 +205,15 @@ the same CI runs.
 5. **The proxy-hop and rate-limit prerequisites** in `apps/pulse/DEPLOY.md`
    must be satisfied before go-live.
 
-## Current operator direction and next work (2026-11-12)
+## Current operator direction and next work (2026-11-13)
 
 1. The recent Answered, results, desktop voting, sign-in and header changes
    are merged; there is no remaining UI stack awaiting merge.
-2. Open follow-ups: #533 ViewState Try again, #535 one paged-list hook
-   (PR #588, held for #572), #536 Conversation logic into flow/ and
+2. Land the PRs held for Contributions: #592, then #595 and #593 (#594 is the
+   operator's), and #588. Open follow-ups: #533 ViewState Try again, #536
+   Conversation logic into flow/ and
    hooks, #537 VoteCard split, #538 CSS encapsulation and tokens, #557,
-   #560 and #589 review nits, #534 part 3 (Conversation), P12 poll pictures
+   #560, #589, #591 and #599 review nits, #596-#598, #534 part 3 (Conversation), P12 poll pictures
    (#579-#586, ADR-0047),
    #539 step 2 (one session provider; operator decision), and #499 dark mode
    and #500 compact posted notice (mockups merged in #521, not built).
@@ -360,7 +377,7 @@ the same CI runs.
   account; Owner and narrow grants; community or General posting; anonymous by
   default, naming optional. General is posting-only and never an account's community.
 - **ADR-0047:** poll pictures: neutral `image`/`image_bytes` storage with
-  `owner_kind`/`owner_id`; purging a poll tombstones its replay rows (amends
+  `owner_kind`/`owner_id`; purging a poll tombstones its creation replay row (amends
   ADR-0037 for purged polls only). Planned as P12; not built.
 - **ADR-0039:** pulse may explain counting, on `/trust`, and never claims more
   than is built.
