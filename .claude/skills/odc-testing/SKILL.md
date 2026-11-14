@@ -51,7 +51,7 @@ import-boundary rules are in [`odc-service-boundaries`](../odc-service-boundarie
 - Use builders/factories for test events; no copy-pasted JSON blobs.
 - Don't test the framework, getters, or other services' internals.
 - Pointer, focus, layout and CSS changes need a real-browser check; jsdom
-  passes them falsely.
+  tests can pass while the real browser is broken.
 - A concurrency test must force overlap with a database barrier (hold a
   conflicting lock from another connection, confirm with `pg_blocking_pids`,
   release); `Promise.all` alone may serialize and pass with the guard removed.

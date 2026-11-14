@@ -16,7 +16,8 @@ HTTP API like any other outside client. This runs in both directions: nothing in
 
 This skill is the single home for import-boundary rules. Lint enforces the
 source-import part statically (not a sandbox; Go is out of scope). The only
-cross-app exception is `tests/pulse-integration/`, for test code only. Run
+cross-app exception is `tests/pulse-integration/`, for test code only: it
+may import both Pulse apps, never `services/**`, `contracts/**` or `tools/**`. Run
 `pnpm test:boundaries`; scope and limits are in [ADR-0042](../../../docs/decisions/0042-import-boundary-enforcement.md).
 
 ## Every service ships
