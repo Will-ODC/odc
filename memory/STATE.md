@@ -6,8 +6,8 @@
 >
 > Current state only. Per-ticket history is in the cited squash commits, the
 > reasoning is in `docs/decisions/`, and settled questions are in
-> `memory/OPEN-QUESTIONS-archive.md`. Slimmed 2026-10-10. The narrative ledger
-> it replaced is in git (`git log -p -- memory/STATE.md`).
+> `memory/OPEN-QUESTIONS-archive.md`. Audited 2026-11-14; older text is in git
+> (`git log -p -- memory/STATE.md`).
 
 ## Where to jump
 
@@ -42,18 +42,14 @@ services.
 (`tools/verifier-ts`) pass all **150** vectors (VALID 23, PARTIAL 15, INVALID
 112). Vectors `146`-`150` (ill-formed UTF-8, HA-2) came in #410 with EV-26 and
 ET-25. Conformance phases 1 to 4, ADR-0034 and ADR-0038 are in both; detail is
-in the Done list below. The Go CLI takes `<file>` with no subcommand; the TS CLI takes
-`verify <file>` (`.github/workflows/repo.yml`).
+in the Done list below. The Go CLI takes `<file>` with no subcommand; the TS
+CLI takes `verify <file>` (`.github/workflows/repo.yml`).
 
-**The ledger is built through wired ballot batching.** Wave 1 merged
-2026-10-23: storage #444, canonical hashing and parsing #445, Ed25519 #446,
-the EV-26 checker #447 and the signer client #448. Wave 2's append core and
-INSERT-only batching state #460, public read API #461, internal operator
-write/close routes #462 and ballot batching #463 are merged. Final wiring
-landed in #474: startup recovery precedes internal appends, the tick loop runs,
+**The ledger is built through wired ballot batching** (waves 1-2, #444-#463;
+wiring #474): startup recovery precedes internal appends, the tick loop runs,
 close invokes the batcher, and CI has both verifiers judge a batched export
 and tampered lines. The ledger is built from `contracts/` alone and runs both
-verifiers only as outside programs. Identity and the real signer remain unbuilt.
+verifiers only as outside programs.
 
 **ADR-0043 is accepted** (#438, clarified in #443): identity decides who may
 vote; a separate **signer** service (planned, `services/signer/`) holds the
@@ -67,7 +63,8 @@ append (409 if the tail moved; the ledger holds no key), registrations refused
 until v2 is in the contracts, and an operator-signed "close issue" call seals an
 issue's last batch.
 
-**Identity and the signer are unstarted.**
+**Identity and the signer are unstarted.** `services/identity/` holds only its
+README and CLAUDE.md; `services/signer/` does not exist yet.
 
 ## Next
 
@@ -86,8 +83,6 @@ Gates on the way: an `odc-security-auditor` audit before identity's first
 merge; S-D (the anchor record) before the first anchor; S-G (key rotation and
 the published test keys) before the freeze.
 
-PR #515 (odc-orchestration: use the Codex CLI) is open; the operator merges it.
-
 Optional, from ADR-0034 owed item 4: `docs/security/attacks/check-unknown-batching-proposal.py`'s
 `proposed` mode now matches the ratified expectations and could join required CI.
 
@@ -104,7 +99,8 @@ Optional, from ADR-0034 owed item 4: `docs/security/attacks/check-unknown-batchi
   arrays in `fixtures/index.json`. Citation is an upper bound on coverage, not
   coverage itself. **Recount periodically**: a rule can be implemented
   everywhere and covered by nothing, with every suite still green. The read API
-  has no vectors at all, so the ledger's own tests must cover it.
+  has no vectors at all, so the ledger's own tests must cover it (open question
+  "Read-API conformance coverage").
 - **Ballot-expressiveness ADR part B** is owed by the operator, not a session.
   Its old default ("one-choice until argued otherwise") was withdrawn on
   2026-08-19, so the ceiling is deliberately open. v1 is unchanged. Read the
@@ -247,8 +243,8 @@ Optional, from ADR-0034 owed item 4: `docs/security/attacks/check-unknown-batchi
   limit** and timed out on two ledger PRs; #450 gave it 30 s. A red
   `format / lint / typecheck` on a ledger PR can still be another package's
   test: read the log before fixing the PR.
-- **After a squash merge, stacked branches conflict.** Rebase with
-  `git rebase --onto origin/master <old-base-branch>`.
+- **After a squash merge, stacked branches conflict.** The rebase recipe is in
+  `.claude/skills/odc-pipeline`.
 - **Turbo lint caching is disabled** (ADR-0042, #381), because import resolution
   depends on workspace metadata, shared configuration and symlinks.
 - **The untracked root `AGENTS.md`** is switched off by `agentGuidance: false`
@@ -258,7 +254,6 @@ Optional, from ADR-0034 owed item 4: `docs/security/attacks/check-unknown-batchi
   tree.
 - **Reviews:** fifteen of the first sixteen reviewed slices had a real defect.
   Treat a clean review as a surprise.
-- **Remote branches (checked 2026-10-10):** the T9 branches and
-  `claude/review-memory-context-skills-383f6i` are gone, so #98's granular history
-  is lost. `claude/t9-phase3-et24-contiguity` and `claude/t9-phase3-verifier-go`
-  belong to merged PRs and are safe to delete.
+- **#98's granular history is lost** (its branches are gone). Remote
+  `claude/t9-phase3-et24-contiguity` and `claude/t9-phase3-verifier-go` belong
+  to merged PRs and are safe to delete.
