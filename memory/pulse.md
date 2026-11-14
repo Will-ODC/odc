@@ -41,7 +41,7 @@ the same CI runs.
 ## Where it stands (2026-11-14)
 
 Per-PR history is in `git log origin/master -- apps/pulse apps/pulse-web`.
-**Open PRs: none** besides the memory audit (#611). Next migration: **018**.
+**Open Pulse PRs: none.** Next migration: **018**.
 
 - **Sign-in (pillar 1) is built.** Magic-link sign-in and redeem; open sign-up
   with community as an optional label (ADR-0030); a community picker when an
@@ -56,7 +56,7 @@ Per-PR history is in `git log origin/master -- apps/pulse apps/pulse-web`.
   ballot per signed-in person (ADR-0046, operator 2026-11-11): a new vote
   replaces the earlier one, and on sign-in the newer answer moves to that
   browser.
-- **Story UI (pillar 2).** The vote page is a conversation (ADR-0035). Home is
+- **Story UI (pillar 2).** The vote page is a conversation (epic #303, ADR-0035). Home is
   the General poll browser at `/`; the introduction is at `/about`, progress at
   `/start`, four starting questions at `/questions` (Coming soon until
   `VITE_PULSE_*_POLL_ID` are set), "How votes count" at `/trust`. Desktop votes
@@ -109,12 +109,11 @@ Per-PR history is in `git log origin/master -- apps/pulse apps/pulse-web`.
 6. **A memory floor for picture decoding.** `apps/pulse/DEPLOY.md` states none
    for 40 MP uploads (#593); add one before deploy.
 
-A small invited pilot comes only after 3-5. None of this authorizes a deploy.
+A small invited pilot comes only after 3-6. None of this authorizes a deploy.
 
 ## Current operator direction and next work (2026-11-14)
 
-1. **Handoff.** Codex is out of usage; Claude orchestrates. No open PRs other
-   than the memory audit (#611).
+1. **Handoff.** Codex is out of usage; Claude orchestrates. No open Pulse PRs.
 2. **Next: #580, a picture in the posting form.** Waiting on the operator's
    answer to "mockup first, or build from the plan and review screenshots?".
    Then #427 (thumbnails and context excerpt length), #296 (picture on the
@@ -246,6 +245,8 @@ A small invited pilot comes only after 3-5. None of this authorizes a deploy.
 
 **Migrations and storage**
 
+- Both identity stores keep `discard(tokenHash)` and
+  `liveFor(kind, subject, now)` (#213/#215); keep them in step.
 - Migrations are forward-only and checksummed. Never edit an applied file, even
   to fix a number in a comment (migration 004 says ADR-0032; it means
   ADR-0033). **Drain old API instances before applying 004, 006 or 007**

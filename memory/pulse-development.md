@@ -26,7 +26,7 @@ Where things go (issues, memory, ADRs) follows `memory/INDEX.md`.
   separate concerns.
 - **Thresholds cover both participation and support.** Numbers and the support
   calculation are not chosen. A privacy cutoff or auto-hide threshold is not a
-  development quorum. Never change a published voting rule after votes are cast.
+  development quorum. Avoid changing a published voting rule after votes are cast.
 - Cut tickets by distinct behavior and responsibility. Shared backend work is
   one ticket; separate interfaces depend on it.
 - Suggested, not ratified: record each design question, options and the
