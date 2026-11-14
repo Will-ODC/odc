@@ -40,8 +40,8 @@ Do not apply charter rules to `apps/**`, and do not relax them anywhere else.
   Contributions (#246, PR #572: tagged rows on Home, detail, offers, pledges,
   organizer updates and a private inbox), public profiles, organizer profile
   links, one paged-list hook, plain-text poll context and the poll picture store
-  (#593, P12 step 1) are merged. Picture steps #580, #427 and #296 are next. Open
-  PR: #594 (CI check; the operator merges). Next migration: 018. Open
+  (#593, P12 step 1) and its CI check (#594) are merged. Picture steps #580,
+  #427 and #296 are next. No open PRs. Next migration: 018. Open
   follow-ups: #533, #536-#538, #557, #560, #589, #591, #596-#599, #610, #534 part 3,
   #539 step 2, and #499/#500 (mockups merged, not built).
   Comments/replies, abuse reporting and MCP discovery remain unbuilt. Deployment

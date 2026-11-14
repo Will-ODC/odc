@@ -102,9 +102,8 @@ the same CI runs.
   new-tab sign-in, a deliberate sign-out (here or announced by another tab) or a
   different account clears them; only the newest `/me` answer counts; votes are
   cleared when a person leaves and read again on the next sign-in.
-- **Open PRs 2026-11-14:** only #594 (CI sharp check, #579): reviewed APPROVE
-  WITH NITS at `c1bdd93`, all checks green. It touches `.github`, so the
-  operator merges it.
+- **Open PRs 2026-11-14:** none. The operator merged #594 (CI sharp check,
+  #579, `913f0bd`).
 - **New tickets:** #557, #560 review nits, #589 closed-question UI nits, #591
   (#566 nits), #596 Suggested votes reshuffle on open, #597 contribution threads
   with comments (one row per group in browse), #598 creation-form fields, #599
@@ -220,7 +219,7 @@ the same CI runs.
 
 1. The recent Answered, results, desktop voting, sign-in and header changes
    are merged; there is no remaining UI stack awaiting merge.
-2. The Contributions PRs are merged; #594 waits for the operator. Next: the
+2. The Contributions PRs and #594 are merged. Next: the
    unblocked P12 steps (#580, #427, #296; #586 after #427). Open follow-ups:
    #533 ViewState Try again, #536 Conversation logic into flow/ and hooks,
    #537 VoteCard split, #538 CSS encapsulation and tokens, #557, #560, #589,
