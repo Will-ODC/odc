@@ -31,6 +31,12 @@ without signing in. It returns open and closed question summaries, newest first,
 with cursor pagination. Hidden polls are excluded. The browser list and MCP
 discovery remain separate work; see [API.md](./API.md) for the query contract.
 
+**Member profiles** are opt-in and public. A signed-in member chooses a display
+name and optional bio, then shares the stable opaque `/u/<publicId>` link. They
+can hide the profile again without losing that id. Public responses contain
+only the chosen name, bio and creation time; account and voting data remain
+private. See [API.md](./API.md#member-profiles) for the exact contract.
+
 ## Sign-in link retention
 
 A redeemed link's `pending_claim` row is deleted as it is spent. Links still

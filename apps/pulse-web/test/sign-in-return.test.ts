@@ -47,6 +47,12 @@ describe("the question to come back to after signing in (#353)", () => {
     expect(takeReturn(store, 1)).toEqual({ kind: "newPoll" });
   });
 
+  it("can be the profile editor", () => {
+    const store = memory();
+    rememberReturn({ kind: "profileEditor" }, store, 0);
+    expect(takeReturn(store, 1)).toEqual({ kind: "profileEditor" });
+  });
+
   it("is dropped when a later sign-in names no question", () => {
     const store = memory();
     rememberReturn(PARKS, store, 0);

@@ -44,6 +44,53 @@ describe("reading a poll", () => {
   });
 });
 
+describe("member profiles", () => {
+  it("reads a public profile from its escaped stable id", async () => {
+    const profile = {
+      publicId: "profile/id",
+      displayName: "Ada",
+      bio: "Neighbour",
+      createdAt: "2026-11-12T12:00:00.000Z",
+    };
+    const calls = stubFetch({ body: JSON.stringify(profile) });
+    expect(await new HttpPulseApi().profile("profile/id")).toEqual(profile);
+    expect(calls[0]?.url).toBe("/api/profiles/profile%2Fid");
+  });
+
+  it("reads and saves the signed-in owner's profile", async () => {
+    const profile = {
+      publicId: "p1",
+      displayName: "Ada",
+      bio: "",
+      visible: true,
+      createdAt: "2026-11-12T12:00:00.000Z",
+      updatedAt: "2026-11-12T12:00:00.000Z",
+    };
+    let calls = stubFetch({ body: JSON.stringify({ profile }) });
+    expect(await new HttpPulseApi().myProfile()).toEqual(profile);
+    expect(calls[0]?.url).toBe("/api/me/profile");
+    vi.unstubAllGlobals();
+
+    calls = stubFetch({ body: JSON.stringify({ profile }) });
+    await new HttpPulseApi().saveProfile({
+      ownerAccountId: "ada",
+      displayName: "Ada",
+      bio: "",
+      visible: true,
+    });
+    expect(calls[0]?.url).toBe("/api/me/profile");
+    expect(calls[0]?.init.method).toBe("PUT");
+    expect(calls[0]?.init.body).toBe(
+      JSON.stringify({
+        ownerAccountId: "ada",
+        displayName: "Ada",
+        bio: "",
+        visible: true,
+      }),
+    );
+  });
+});
+
 describe("reading this browser's vote history", () => {
   it("sends the ballot cookie and the page cursor", async () => {
     const calls = stubFetch({
