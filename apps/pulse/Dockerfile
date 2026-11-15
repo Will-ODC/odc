@@ -65,3 +65,7 @@ EXPOSE 8080
 # would not, and every deploy would end in SIGKILL with requests still in
 # flight — which is what `stopOnSignals` exists to handle.
 CMD ["node", "dist/src/main.js"]
+
+USER root
+RUN find /app/node_modules -type f -name 'sharp-*.node' -print -delete
+USER node
