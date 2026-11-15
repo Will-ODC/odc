@@ -158,15 +158,18 @@ it("defines the focus ring once, including choice wrappers and saved-answer focu
   );
   expect(rings).toEqual(["App.css"]);
   // Even a non-focus selector can outrank the shared :focus-visible rule.
-  // Only announcement targets and explicitly unfocused validation rings may
-  // own outlines outside App.css. Check each selector in a grouped rule.
-  const announcements = new Set([
-    ".welcome h1:focus",
-    ".vote-card__note:focus",
-    ".signin__title:focus",
-    ".post__title:focus",
-    ".conversation__hero h1:focus",
-    ".results:focus",
+  // Only these announcement targets and unfocused validation rings may own
+  // outlines outside App.css, each in its own file. Check each selector in a
+  // grouped rule.
+  const allowed = new Set([
+    "components/IntroPage.css: .welcome h1:focus",
+    "components/VoteCard.css: .vote-card__note:focus",
+    "screens/SignIn.css: .signin__title:focus",
+    "screens/NewPoll.css: .post__title:focus",
+    "screens/Conversation.css: .conversation__hero h1:focus",
+    "components/ResultsPanel.css: .results:focus",
+    'screens/NewPoll.css: .post__promise input[aria-invalid="true"]:not(:focus-visible)',
+    'screens/Contributions.css: .contribution-check input[aria-invalid="true"]:not(:focus-visible)',
   ]);
   const sharedSelectors = new Set([
     ":focus-visible",
@@ -189,8 +192,7 @@ it("defines the focus ring once, including choice wrappers and saved-answer focu
       .filter((selector) =>
         file === "App.css"
           ? !sharedSelectors.has(selector)
-          : !announcements.has(selector) &&
-            !selector.includes(":not(:focus-visible)"),
+          : !allowed.has(`${file}: ${selector}`),
       )
       .map((selector) => `${file}: ${selector}`),
   );
