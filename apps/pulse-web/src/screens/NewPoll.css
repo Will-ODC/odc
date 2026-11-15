@@ -210,6 +210,7 @@
 
 .post__promise input[aria-invalid="true"]:focus-visible {
   --focus: var(--red);
+  --focus-ring-offset: calc(var(--hairline) * 4);
 }
 .post__promise input[aria-invalid="true"]:not(:focus-visible) {
   outline: var(--focus-ring-width) solid var(--red);

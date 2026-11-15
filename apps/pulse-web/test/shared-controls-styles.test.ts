@@ -218,15 +218,53 @@ it.each([
   },
 );
 
-it("mutes the unavailable Close icon without fading its focus ring", () => {
-  const css = read("../src/components/VoteCard.css");
-  const body =
-    /\.vote-card button\.vote-card__close\[aria-disabled="true"\] \{([^}]*)\}/.exec(
-      css,
-    )?.[1];
-  expect(body).toContain("color: var(--muted);");
-  expect(body).not.toContain("opacity:");
-});
+it.each(["close", "dismiss"])(
+  "mutes the unavailable .vote-card__%s without fading its focus ring",
+  (name) => {
+    const css = read("../src/components/VoteCard.css");
+    const selector = `.vote-card button.vote-card__${name}[aria-disabled="true"]`;
+    const body = [
+      ...css.replace(/\/\*[\s\S]*?\*\//g, "").matchAll(/([^{}]+)\{([^{}]*)\}/g),
+    ].find(([, selectors]) =>
+      selectors!
+        .split(",")
+        .map((s) => s.trim())
+        .includes(selector),
+    )?.[2];
+    expect(body).toContain("color: var(--muted);");
+    expect(body).not.toContain("opacity:");
+  },
+);
+
+it.each([
+  ["screens/NewPoll.css", '.post__promise input[aria-invalid="true"]'],
+  [
+    "screens/Contributions.css",
+    '.contribution-check input[aria-invalid="true"]',
+  ],
+])(
+  "%s visibly separates focused invalid checkboxes from unfocused errors",
+  (file, selector) => {
+    const css = read(`../src/${file}`);
+    const body = (state: string) => {
+      const start = `${selector}${state} {`;
+      expect(css).toContain(start);
+      return css.slice(css.indexOf(start) + start.length).split("}")[0];
+    };
+    const focused = body(":focus-visible");
+    const unfocused = body(":not(:focus-visible)");
+    // Keep the shared red ring, but double its gap when keyboard focus arrives.
+    expect(focused).toContain("--focus: var(--red);");
+    expect(focused).toContain(
+      "--focus-ring-offset: calc(var(--hairline) * 4);",
+    );
+    expect(unfocused).toContain("outline-offset: var(--focus-ring-offset);");
+    expect(unfocused).not.toContain("--focus-ring-offset:");
+    expect(read("../src/styles/tokens.css")).toContain(
+      "--focus-ring-offset: calc(var(--hairline) * 2);",
+    );
+  },
+);
 
 it("draws one ring around a focused choice, without a second ring on its input", () => {
   const app = read("../src/App.css");

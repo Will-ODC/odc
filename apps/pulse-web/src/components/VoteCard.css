@@ -347,7 +347,8 @@
   opacity: 1;
 }
 
-/* Close keeps its name while checking; mute the icon, not the focus ring. */
-.vote-card button.vote-card__close[aria-disabled="true"] {
+/* Close keeps its name while checking; mute its content, not the focus ring. */
+.vote-card button.vote-card__close[aria-disabled="true"],
+.vote-card button.vote-card__dismiss[aria-disabled="true"] {
   color: var(--muted);
 }
