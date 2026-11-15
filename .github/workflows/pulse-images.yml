@@ -1,7 +1,7 @@
 name: pulse-images
 
 # Always create the check; build/scan only image inputs or scheduled/manual runs.
-# A repo admin may require this check once #612's processing smoke test is ready.
+# Keep the check present even when there is nothing to build, so it can be required.
 on:
   schedule:
     - cron: "0 6 * * 1"
@@ -33,6 +33,9 @@ jobs:
           CI_HEAD: ${{ github.sha }}
           CI_FULL: ${{ github.event_name != 'pull_request' }}
         run: node .github/scripts/select-tests.mjs --images
+      - name: No Pulse changes
+        if: steps.selection.outputs.images == 'false'
+        run: echo 'no Pulse changes'
       # The context is the repo root, as both Dockerfiles say: pulse is a pnpm
       # workspace and the lockfile lives at the top.
       - name: Build the API image
@@ -42,13 +45,32 @@ jobs:
         if: steps.selection.outputs.images == 'true'
         run: |
           docker run --rm --entrypoint sh pulse-api:ci -c 'for t in yarn yarnpkg npm npx corepack; do if command -v "$t" >/dev/null; then echo "package manager present: $t"; exit 1; fi; done'
-      # sharp ships native libvips binaries per platform. This proves the
-      # musl one pnpm installed in the Alpine build stage is the one deployed
-      # and that it decodes and encodes WebP (ADR-0047).
+      # Exercise the deployed server's processor: fully decode a sample JPEG
+      # and encode both WebP variants (ADR-0047). metadata() alone reads only
+      # the header and would not prove that the picture can be decoded.
       - name: Check the API image can process pictures
         if: steps.selection.outputs.images == 'true'
         run: |
-          docker run --rm --entrypoint node -w /app pulse-api:ci --input-type=module -e "import sharp from 'sharp'; const b = await sharp({ create: { width: 8, height: 8, channels: 3, background: 'red' } }).webp().toBuffer(); const m = await sharp(b).metadata(); if (m.format !== 'webp') process.exit(1); console.log('sharp', sharp.versions.sharp, 'libvips', sharp.versions.vips)"
+          docker run --rm -i --entrypoint node -w /app \
+            --mount "type=bind,source=$PWD/apps/pulse/test/fixtures/image-smoke.jpg,target=/tmp/image-smoke.jpg,readonly" \
+            pulse-api:ci --input-type=module <<'JS'
+          import assert from 'node:assert/strict';
+          import { readFileSync } from 'node:fs';
+
+          try {
+            const { processImage, sniff } = await import('./dist/src/images/process.js');
+            const result = await processImage(readFileSync('/tmp/image-smoke.jpg'));
+            assert.equal(result.width, 300);
+            assert.equal(result.height, 200);
+            for (const variant of ['display', 'thumb']) {
+              assert.equal(sniff(result[variant].bytes), 'webp', `${variant} must be WebP`);
+            }
+            console.log('Picture processing passed: sample JPEG decoded into display and thumb WebP variants');
+          } catch (error) {
+            console.error('Picture processing FAILED: the API image could not process the sample JPEG into both WebP variants', error);
+            process.exitCode = 1;
+          }
+          JS
       - name: Build the web image
         if: steps.selection.outputs.images == 'true'
         id: build-web
