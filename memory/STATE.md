@@ -31,19 +31,17 @@ audit's T3-1 to T3-3; #430 reconciled the service guidance and
 `docs/implementation-plan.md`; #432 made four operator-approved charter wording
 changes. The T10 freeze and its re-audit stay deferred until real use (ADR-0007).
 
-**Spec versions on master (2026-10-21; read the `Version:` lines, not prose):**
-`event-schema.md` v8, `event-types.md` v17, `evolution.md` v12,
-`export-format.md` v6, `hashing.md` v3, `ids.md` v2, `read-api.md` v4,
-`fixtures/README.md` v18 (all #429). Changes now follow the release-candidate
-rule in `contracts/README.md`: additive, version-bumped, and tolerated by
-services.
+**Spec versions on master (2026-11-15):** `event-schema.md` v9,
+`event-types.md` v18, `evolution.md` v13, `export-format.md` v7,
+`hashing.md` v4 and `fixtures/README.md` v19 (#677). `ids.md` v2 and
+`read-api.md` v4 are from #429. Changes follow the release-candidate rule in
+`contracts/README.md`: additive, version-bumped, and tolerated by services.
 
 **Both verifiers are done for Phase 1.** Go (`services/verifier`) and TS
-(`tools/verifier-ts`) pass all **150** vectors (VALID 23, PARTIAL 15, INVALID
-112). Vectors `146`-`150` (ill-formed UTF-8, HA-2) came in #410 with EV-26 and
-ET-25. Conformance phases 1 to 4, ADR-0034 and ADR-0038 are in both; detail is
-in the Done list below. The Go CLI takes `<file>` with no subcommand; the TS
-CLI takes `verify <file>` (`.github/workflows/repo.yml`).
+(`tools/verifier-ts`) pass all **161** vectors (26 VALID, 15 PARTIAL, 120 INVALID),
+including the 11 registration v2 vectors in #677. Conformance phases 1 to 4,
+ADR-0034 and ADR-0038 are in both. The Go CLI takes `<file>` with no subcommand.
+The TS CLI takes `verify <file>` (`.github/workflows/repo.yml`).
 
 **The ledger is built through wired ballot batching** (waves 1-2, #444-#463;
 wiring #474): startup recovery precedes internal appends, the tick loop runs,
@@ -59,9 +57,10 @@ chains the hashes; registrations move to a position-free
 deterministic Ed25519 from a reproducible build. Charter §10 item 6 says so
 (#439). Ledger choices (operator, 2026-10-21; now documented in
 `services/ledger/API.md`): operator events by conditional
-append (409 if the tail moved; the ledger holds no key), registrations refused
-until v2 is in the contracts, and an operator-signed "close issue" call seals an
-issue's last batch.
+append (409 if the tail moved; the ledger holds no key), and an operator-signed
+"close issue" call seals an issue's last batch. The v2 contract and ledger's
+embedded checker are now in #677. `POST /appends` still refuses registrations
+pending write-path implementation.
 
 **Identity and the signer are unstarted.** `services/identity/` holds only its
 README and CLAUDE.md; `services/signer/` does not exist yet.
@@ -71,24 +70,28 @@ README and CLAUDE.md; `services/signer/` does not exist yet.
 **Test-quality review (2026-11-14):**
 [broader audit and inventories](../docs/audits/test-quality-2026-11-14/README.md)
 at `cf07079` reviewed the active suites in five isolated contexts. Core
-follow-ups: #630 folded into #646 (open, `.github/`, operator-merged); #631,
+follow-ups: #646 (folds #630) merged in #670 (c69412d): PR guards run the base
+sha's scripts, and diff discovery fails closed (demo on #646); #631,
 #632, #633 merged in #661 (2026-11-15); #662 merged in #666 (the rehearsal's
 `voteCast` mutant is now caught); #634 closed. Independent verifier test-quality follow-ups
-still open: #638, #639 (Go) and #641, #642 (TS); #635-#637 and #640 are closed.
+#638, #639 (Go) merged in #669 (5568c48); still open: #641, #642 (TS, not
+started); #635-#637 and #640 are closed.
 Fixes must preserve verifier isolation and are operator-merged. No verifier or contract source was changed by the audit. CI selection
 #619 merged (0d2828c); weekly/manual full checks and the core conformance seam
 are retained.
 
-1. **Contracts PR for `participant_registered` v2**: spec text in
-   `event-types.md` with scoped exceptions to ES-32 and HA-16, both verifiers
-   (each built in isolation), and vectors. Verifiers land with or before the
-   vectors. Until it merges the ledger refuses new registrations.
+1. **Enable ledger writes for `participant_registered` v2** (ADR-0043 step 5).
+   Draft the request and response contract in `services/ledger/API.md` before
+   wiring the append path. The embedded checker already verifies v2 (EV-26).
+   Identity's private linkage and fresh proof-of-possession challenge remain
+   on the identity service track.
 2. **ADR-0043 owes one line**: the ledger-chosen `seal_id` that makes a seal
    call idempotent (in the ledger code, marked "ledger-proposed").
 3. **Signer lead** (`services/signer/`, creates its README and CLAUDE.md) and
    **identity lead** (`services/identity/`). Open signer-API points from the
-   ledger: refusal codes, a cheap "batch at minimum?" read, and whether a
-   timed-out sign call fixes the batch's position.
+   ledger: refusal codes, a cheap "batch at minimum?" read, and when the signer
+   durably records the batch position if the first call times out. ADR-0043
+   already fixes one position per batch and requires identical retries.
 
 Gates on the way: an `odc-security-auditor` audit before identity's first
 merge; S-D (the anchor record) before the first anchor; S-G (key rotation and
@@ -146,6 +149,8 @@ Optional, from ADR-0034 owed item 4: `docs/security/attacks/check-unknown-batchi
 - ADR-0043 (registrar signer, v2 registration): #438, charter §10 #439, one-call
   batch signing #443. Ledger wave 1: #444-#448; wave 2 append core/batching state #460, read API
   #461, operator write path #462 and batcher #463 (2026-10-23).
+- Registration v2 (#677, `b555e59`, 2026-11-15): merged the contract, both
+  independently built verifiers, the ledger checker and vectors `151`–`161`.
 - ADR-0038 (the four contradictions, #355): contract #359, `genesis.contracts`
   cap #361. Go #370 (#364), TS #371 (#365), then ET-9f in both verifiers with
   the `086` flip and vectors `135`-`145` in #372 (#366), merged 2026-10-19.

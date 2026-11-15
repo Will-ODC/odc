@@ -133,13 +133,16 @@ A small invited pilot comes only after 3-6. None of this authorizes a deploy.
    operator-approved narrowed scope now heads each ticket body (2026-11-14),
    and the shared verifier gaps moved to contracts ticket #645.
 3. **CI selection #619 merged (0d2828c).** `pulse-images` is not a
-   required check, so a red picture-package check only warns; #612 has the
-   order of steps.
+   required check yet. #612 merged in #671 (5afc07d, 2026-11-15): it reports
+   on every PR ("no Pulse changes" in seconds otherwise) and runs the server's
+   own `processImage()` in the image (demos on #612). Owed by the operator:
+   add `pulse-images` to the protect-master ruleset.
 4. **Open follow-ups:** #536 Conversation logic into
    flow/ and hooks; #537 VoteCard split; #538 CSS encapsulation and tokens;
-   #534 part 3 (Conversation); #539 step 2 (one session provider; operator
-   decision); #534 also carries the faded focus ring on `aria-disabled`
-   buttons (#659 UI review); #597 contribution threads; #598 creation-form fields;
+   #534 rest (one shared focus ring and the `aria-disabled` ring fix merged
+   in #672, 2026-11-15; left: screens' own button styles, the 375px nav row
+   hiding the ring's bottom edge, optionally a wider ring on a focused invalid
+   checkbox); #539 step 2 (one session provider; operator decision); #597 contribution threads; #598 creation-form fields;
    #499 dark mode and #500 compact posted notice (mockups merged in #521, not
    built).
 
