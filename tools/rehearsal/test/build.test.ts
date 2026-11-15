@@ -451,9 +451,10 @@ describe("interleaving invariant (structural, not pinned to seeds)", () => {
   // `voteCast` releases the held-back last issue once any ballot is on the chain, so the last
   // issue can still take ballots after it. With two issues the forced under-size batch closes the
   // first one and forces the second, which hides a missing `voteCast = true`; with three issues
-  // that forced issue is not the last, so only `voteCast` lets the last issue land before the
-  // final ballot. Measured 2026-11-15: 80/200 seeds of this shape have a ballot after the last
-  // issue; with `voteCast = true` deleted, 0/200.
+  // any forced issue is never the last, so only `voteCast` lets the last issue land before the
+  // final ballot. Without `voteCast` no seed of this shape can have a ballot after the last
+  // issue, by construction; with it, roughly 4 in 10 seeds do (2026-11-15), far above the 10%
+  // floor.
   it("lets ballots follow the last issue once a vote is cast (three issues)", () => {
     const THREE_ISSUES: ChainShape = { participants: 3, issues: 3, votes: 10 };
     let voteAfterCount = 0;
