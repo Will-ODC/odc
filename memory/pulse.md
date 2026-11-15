@@ -122,7 +122,10 @@ A small invited pilot comes only after 3-6. None of this authorizes a deploy.
    [simplicity](../docs/audits/pulse-simplicity-2026-11-14.md) → #616;
    [broader quality](../docs/audits/test-quality-2026-11-14/README.md) → #621-#629.
    All of #613, #614, #621, #622, #624-#629 merged in #657 (2026-11-15), which
-   also made `SessionSigner.verify` refuse empty timestamp fields.
+   also made `SessionSigner.verify` refuse empty timestamp fields. The review
+   nits #557, #560, #589, #591, #599, #605 merged in #659; #596 (the open
+   question stays highlighted in Suggested votes until voted on, operator
+   2026-11-15) and #610 merged in #661.
    A Claude review found the findings real but most tickets over-scoped; the
    operator-approved narrowed scope now heads each ticket body (2026-11-14),
    and the shared verifier gaps moved to contracts ticket #645.
@@ -132,11 +135,8 @@ A small invited pilot comes only after 3-6. None of this authorizes a deploy.
 4. **Open follow-ups:** #533 ViewState Try again; #536 Conversation logic into
    flow/ and hooks; #537 VoteCard split; #538 CSS encapsulation and tokens;
    #534 part 3 (Conversation); #539 step 2 (one session provider; operator
-   decision); #610 (only the server double read in `GET /api/contributions/:id`
-   remains; the review nits #557, #560, #589, #591, #599, #605 merged in #659,
-   2026-11-15); #534 also carries the faded focus ring on `aria-disabled`
-   buttons (#659 UI review); #596 Suggested
-   votes reshuffle; #597 contribution threads; #598 creation-form fields;
+   decision); #534 also carries the faded focus ring on `aria-disabled`
+   buttons (#659 UI review); #653 component props; #597 contribution threads; #598 creation-form fields;
    #499 dark mode and #500 compact posted notice (mockups merged in #521, not
    built).
 
@@ -165,10 +165,10 @@ A small invited pilot comes only after 3-6. None of this authorizes a deploy.
 ## Open decisions (operator)
 
 - **#580:** mockup first, or build from the plan and review screenshots?
-- **#596:** a question opened from Suggested votes: keep it in the rail marked
-  as being viewed, or hold it out for the rest of the visit? Do with or after
-  #653.
-- **Continuation (#425):** define relevance and explicit story/thread order,
+- **Continuation (#425):** operator direction 2026-11-15: Next and Previous
+  move through Suggested votes (detail on the issue). Still open: do answered
+  questions keep My votes Previous/Next, what Next does on a phone (no rail),
+  and the end of the list. Older open points: define relevance and explicit story/thread order,
   precedence with answer-selected Next and related alternatives, source-feed
   scope/order, Previous/history behavior, pagination and end-of-feed fallback.
   Preserve saved answers, discard another question's unsent choices, block
