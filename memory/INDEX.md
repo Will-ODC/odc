@@ -26,10 +26,9 @@ Do not apply charter rules to `apps/**`, and do not relax them anywhere else.
 > smaller, so on a divergence you would otherwise trust the wrong one.
 
 - **ODC core:** Phase 1. The ledger is built and wired, checked in CI by both
-  verifiers. Next: the `participant_registered` v2 contracts PR, then the
-  signer and identity services (both unbuilt). Broader test-quality follow-ups
-  are recorded; CI selection #619 merged (0d2828c); guards run from the base sha
-  (#670). → `memory/STATE.md`
+  verifiers. Registration v2 contracts and verification merged in #677.
+  Next: enable ledger registration writes. The signer and identity services
+  are still unbuilt. → `memory/STATE.md`
 - **Pulse:** sign-in, voting, browsing, poll creation, Contributions, profiles
   and picture storage are built; no open product PRs. Targeted and broader
   audits are complete; timing gaps and quality fixes (#613, #614, #621, #622,
