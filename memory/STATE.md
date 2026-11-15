@@ -71,7 +71,7 @@ README and CLAUDE.md; `services/signer/` does not exist yet.
 **Test-quality review (2026-11-14):**
 [broader audit and inventories](../docs/audits/test-quality-2026-11-14/README.md)
 at `cf07079` reviewed the active suites in five isolated contexts. Core
-follow-ups: #630 guard discovery must fail closed (folded into #646, 2026-11-15); #631 production startup
+follow-ups: #630 guard discovery must fail closed (folded into #646); #631 production startup
 coverage; #632 signer saved-position tests; #633 rehearsal verdict/exit
 agreement; #634 historical fuzz diagnostics. Independent verifier test-quality
 follow-ups are #635-#639 (Go) and #640-#642 (TS); fixes must preserve verifier

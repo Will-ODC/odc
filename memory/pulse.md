@@ -163,6 +163,9 @@ A small invited pilot comes only after 3-6. None of this authorizes a deploy.
 ## Open decisions (operator)
 
 - **#580:** mockup first, or build from the plan and review screenshots?
+- **#596:** a question opened from Suggested votes: keep it in the rail marked
+  as being viewed, or hold it out for the rest of the visit? Do with or after
+  #653.
 - **Continuation (#425):** define relevance and explicit story/thread order,
   precedence with answer-selected Next and related alternatives, source-feed
   scope/order, Previous/history behavior, pagination and end-of-feed fallback.
