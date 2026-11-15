@@ -71,11 +71,12 @@ README and CLAUDE.md; `services/signer/` does not exist yet.
 **Test-quality review (2026-11-14):**
 [broader audit and inventories](../docs/audits/test-quality-2026-11-14/README.md)
 at `cf07079` reviewed the active suites in five isolated contexts. Core
-follow-ups: #630 folded into #646 (PR #670 approved, awaits operator merge); #631,
+follow-ups: #646 (folds #630) merged in #670 (c69412d): PR guards run the base
+sha's scripts, and diff discovery fails closed (demo on #646); #631,
 #632, #633 merged in #661 (2026-11-15); #662 merged in #666 (the rehearsal's
 `voteCast` mutant is now caught); #634 closed. Independent verifier test-quality follow-ups
-still open: #638, #639 (Go; PR #669 approved, awaits operator merge) and #641,
-#642 (TS, not started); #635-#637 and #640 are closed.
+#638, #639 (Go) merged in #669 (5568c48); still open: #641, #642 (TS, not
+started); #635-#637 and #640 are closed.
 Fixes must preserve verifier isolation and are operator-merged. No verifier or contract source was changed by the audit. CI selection
 #619 merged (0d2828c); weekly/manual full checks and the core conformance seam
 are retained.

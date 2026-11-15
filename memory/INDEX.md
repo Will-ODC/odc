@@ -28,11 +28,13 @@ Do not apply charter rules to `apps/**`, and do not relax them anywhere else.
 - **ODC core:** Phase 1. The ledger is built and wired, checked in CI by both
   verifiers. Next: the `participant_registered` v2 contracts PR, then the
   signer and identity services (both unbuilt). Broader test-quality follow-ups
-  are recorded; CI selection #619 merged (0d2828c). → `memory/STATE.md`
+  are recorded; CI selection #619 merged (0d2828c); guards run from the base sha
+  (#670). → `memory/STATE.md`
 - **Pulse:** sign-in, voting, browsing, poll creation, Contributions, profiles
   and picture storage are built; no open product PRs. Targeted and broader
   audits are complete; timing gaps and quality fixes (#613, #614, #621, #622,
-  #624-#629) merged in #657; UI review nits merged in #659; #533 and #653 in #667.
+  #624-#629) merged in #657; UI review nits merged in #659; #533 and #653 in #667;
+  shared focus ring (part of #534) in #672.
   Next feature is #580 (picture in the
   posting form), awaiting an operator answer. No public deploy yet.
   → `memory/pulse.md`

@@ -133,9 +133,10 @@ A small invited pilot comes only after 3-6. None of this authorizes a deploy.
    operator-approved narrowed scope now heads each ticket body (2026-11-14),
    and the shared verifier gaps moved to contracts ticket #645.
 3. **CI selection #619 merged (0d2828c).** `pulse-images` is not a
-   required check yet. #612 → PR #671 is approved (demos on #612) and awaits
-   operator merge; after it merges the operator adds `pulse-images` to the
-   protect-master ruleset.
+   required check yet. #612 merged in #671 (5afc07d, 2026-11-15): it reports
+   on every PR ("no Pulse changes" in seconds otherwise) and runs the server's
+   own `processImage()` in the image (demos on #612). Owed by the operator:
+   add `pulse-images` to the protect-master ruleset.
 4. **Open follow-ups:** #536 Conversation logic into
    flow/ and hooks; #537 VoteCard split; #538 CSS encapsulation and tokens;
    #534 rest (one shared focus ring and the `aria-disabled` ring fix merged
