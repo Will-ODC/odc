@@ -23,14 +23,15 @@ const index = JSON.parse(read("index.json").toString("utf8")) as {
 };
 
 /**
- * The v1 registry (ET-1/ET-2), keyed on the FULL registry key. Keying on the
+ * The event registry (ET-1/ET-2), keyed on the FULL registry key. Keying on the
  * type name alone would wave through a registered name at an unregistered
  * version — which is the one shape EV-18's x_ prefix cannot protect, and so
  * exactly the shape this file has to police (see EV-19).
  */
-const V1_REGISTRY = new Set([
+const REGISTRY = new Set([
   "genesis@1",
   "participant_registered@1",
+  "participant_registered@2",
   "issue_created@1",
   "vote_cast@1",
 ]);
@@ -50,9 +51,9 @@ interface TypeRef {
   version: number;
 }
 
-/** Is this key outside the v1 registry, and so a candidate for PARTIAL? */
+/** Is this key outside the registry, and so a candidate for PARTIAL? */
 const isUnregistered = ({ type, version }: TypeRef): boolean =>
-  !V1_REGISTRY.has(`${type}@${String(version)}`);
+  !REGISTRY.has(`${type}@${String(version)}`);
 
 /**
  * Extracts (type, version) per line by regex rather than JSON.parse: many

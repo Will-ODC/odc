@@ -35,7 +35,7 @@ func encInt(n int64) []byte {
 }
 
 // encPayload encodes a payload object per HA-7. If skipKey is non-empty, that
-// single key is omitted (the signing preimage, HA-15). Keys are emitted in
+// single key is omitted (HA-15/HA-15a). Keys are emitted in
 // stored order, which Stage A has already confirmed is ascending UTF-8-byte
 // order (HA-8 / EX-8), so no re-sort is needed here.
 func encPayload(obj *jobject, skipKey string) []byte {
@@ -76,6 +76,16 @@ func preimage(e *event, skipKey string) []byte {
 	out = append(out, encStr(e.ts)...)
 	out = append(out, encStr(e.prevHash)...) // hex text, not decoded bytes (HA-12)
 	return out
+}
+
+// registrationPreimage builds REG_PRE for participant_registered version 2
+// using the verified genesis hash (HA-15a).
+func registrationPreimage(e *event, genesisHash string) []byte {
+	out := []byte("ODC-REG2")
+	out = append(out, encStr(e.typ)...)
+	out = append(out, encInt(e.version)...)
+	out = append(out, encStr(genesisHash)...)
+	return append(out, encPayload(e.payload, "sig")...)
 }
 
 // hashHex returns the lowercase-hex SHA-256 digest of pre (HA-13).

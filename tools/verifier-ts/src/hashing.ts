@@ -9,6 +9,7 @@ import { createHash } from "node:crypto";
 import type { ParsedEvent, PayloadEntry } from "./parse.js";
 
 const DOMAIN = Buffer.from([0x4f, 0x44, 0x43, 0x31]); // "ODC1" (HA-10)
+const REG_DOMAIN = Buffer.from("ODC-REG2", "ascii"); // HA-15a
 
 // HA-1: U64(n) — 8 octets, big-endian, unsigned. Every event integer is bounded
 // to [0, 2^53-1] (ES-5), so BigInt conversion is exact.
@@ -88,8 +89,22 @@ export function computeHash(ev: ParsedEvent): string {
   return createHash("sha256").update(preimage(ev, false)).digest("hex");
 }
 
-// HA-15/HA-16: the signing preimage is the hash preimage with the "sig" key
-// removed from the payload. Ed25519 consumes these raw octets (not pre-hashed).
+// HA-15/HA-16: the position-bound signing preimage, used by every signed pair
+// except (participant_registered, 2).
 export function signingPreimage(ev: ParsedEvent): Buffer {
   return preimage(ev, true);
+}
+
+// HA-15a: (participant_registered, 2) signs for the export's verified genesis.
+export function registrationSigningPreimage(
+  ev: ParsedEvent,
+  genesisHash: string,
+): Buffer {
+  return Buffer.concat([
+    REG_DOMAIN,
+    encStr(ev.type),
+    encInt(ev.version),
+    encStr(genesisHash),
+    encPayload(ev.payload, true),
+  ]);
 }

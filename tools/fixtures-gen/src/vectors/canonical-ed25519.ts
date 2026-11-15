@@ -77,7 +77,7 @@ const bigToLe32 = (n: bigint): Buffer => {
  * y-coordinate >= p, so ET-4a(ii)/ET-4b reject it. Reused as both the bad key A
  * (078) and the bad R (080).
  */
-const NONCANONICAL_POINT = `ee${"ff".repeat(30)}7f`;
+export const NONCANONICAL_POINT = `ee${"ff".repeat(30)}7f`;
 
 /**
  * A degenerate Ed25519 signature: R = the CANONICAL identity encoding
@@ -87,13 +87,13 @@ const NONCANONICAL_POINT = `ee${"ff".repeat(30)}7f`;
  * so it VERIFIES (measured true in both libraries). ET-10's self-signature check
  * therefore PASSES — leaving ET-4b as the sole fault in 078.
  */
-const DEGENERATE_SIG = `01${"00".repeat(31)}${"00".repeat(32)}`;
+export const DEGENERATE_SIG = `01${"00".repeat(31)}${"00".repeat(32)}`;
 
 /** The self-signing participant key for the S/R vectors (deterministic seed). */
 const SR_SIGNER: Keypair = keypairFromSeed(seedOf(0x07));
 
 /** ET-4a(i): replace S with S + L (still 32 bytes, sign bit clear), keep R. */
-const bumpSByL = (sigHex: string): string => {
+export const bumpSByL = (sigHex: string): string => {
   const sig = Buffer.from(sigHex, "hex");
   const sPlus = leToBig(sig.subarray(32, 64)) + L;
   if (sPlus >= 1n << 255n) throw new Error("S+L set bit 255; pick another S");
@@ -101,7 +101,7 @@ const bumpSByL = (sigHex: string): string => {
 };
 
 /** ET-4a(ii): replace R with a non-canonical encoding (y >= p), keep S. */
-const badR = (sigHex: string): string =>
+export const badR = (sigHex: string): string =>
   NONCANONICAL_POINT +
   Buffer.from(sigHex, "hex").subarray(32, 64).toString("hex");
 
@@ -149,7 +149,7 @@ const participant080 = lines(
  * Reused with the same DEGENERATE_SIG as 078 — measured to verify in both
  * libraries under the identity key, so ET-10 passes and ET-4c is the sole fault.
  */
-const CANONICAL_IDENTITY = `01${"00".repeat(31)}`;
+export const CANONICAL_IDENTITY = `01${"00".repeat(31)}`;
 
 const Point = ed25519.Point;
 /** L = the order of the prime-order subgroup (same value as the constant above). */

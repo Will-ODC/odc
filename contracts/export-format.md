@@ -1,6 +1,6 @@
 # Export Format — contracts/export-format.md
 
-**Version:** 6
+**Version:** 7
 **Status:** RELEASE CANDIDATE (T9a; Phase 0 · T4a, amended T9a/ADR-0013 and ADR-0019). Not
 frozen.
 **Companion specs:** `event-schema.md` (envelope), `hashing.md` (preimage +
@@ -74,8 +74,10 @@ a portable content fingerprint (the `hash`) and a unique on-disk form (this §2)
   the seven (`event-schema.md` ES-2/ES-3). The verifier compares the received
   bytes against the canonical form and MUST NOT rewrite the stored line to make
   it pass (D5) — a mismatch is rejected, never repaired.
-- **EX-11.** The `hash` and any `sig` are verified over the event's content-field
-  **values** per `hashing.md` HA-14 / HA-16, independently of EX-7–EX-10. A line
+- **EX-11.** Verify `hash` over the event's content-field **values** (HA-14)
+  and any `sig` over the applicable signing preimage (HA-16), independently
+  of EX-7–EX-10. The version 2 registration preimage also uses the chain's
+  genesis hash (HA-15a). A line
   therefore faces two independent checks that MUST both hold: it is the canonical
   serialization, and its recomputed `hash`/`sig` match. Because the canonical
   form is unique, a "re-serialized but value-equal" line (reordered envelope

@@ -164,6 +164,15 @@ Two stages (EV-6):
   read (ET-24b). ET-25 (order within a batch) is unverifiable by the
   contract's own statement and is not checked.
 
+### Participant registration (ET-10, ET-10a)
+
+Both registration versions carry exactly `pubkey` and `sig`. The verifier
+checks the signature under the public key in the event. Version 1 signs the position-bound event
+preimage (HA-15). Version 2 signs the registration preimage (HA-15a), which
+includes the verified genesis hash of the export. The same version 2
+signature can appear at multiple positions on that chain. Each line still
+undergoes the ordinary event hash, linkage, and canonical form checks.
+
 ### Ballot batches (ET-23, ET-24, ET-24a, ET-24b, ET-18b — event-types.md v12)
 
 A `vote_cast`'s `ts`, as milliseconds since `1970-01-01T00:00:00.000Z`
@@ -254,12 +263,11 @@ An unresolved check counts as not failed wherever a rule needs every
 registered event's semantic checks to pass: `--head` and `--chain` still
 compare on such a chain (EX-15, EX-22).
 
-The v1 registry is the four types `genesis`, `participant_registered`,
-`issue_created`, `vote_cast`, each at `version` 1 (ET-1/ET-2). A well-formed but
-unregistered `(type, version)` yields `PARTIAL` for that line, never `INVALID`
-(EV-8/EV-9) — with the single exception of `genesis`, which MUST be registered:
-a chain whose first line carries a `(genesis, version)` this verifier does not
-register is `INVALID` at line 1 (EV-20). `genesis` has no version but 1, in
+The registry includes `genesis`, `participant_registered`, `issue_created`,
+and `vote_cast` at version 1, plus `participant_registered` at version 2
+(ET-1/ET-2). A well-formed unregistered `(type, version)` is listed in
+`PARTIAL` (EV-8/EV-9). An unregistered `genesis` version is `INVALID` at
+line 1 (EV-20). `genesis` has no version but 1, in
 this contracts version and every later one (ET-6), so the reason text there
 names the version found and says the chain is corrupt, hostile, or not an ODC
 chain; it does not suggest fetching a newer verifier, because no newer verifier

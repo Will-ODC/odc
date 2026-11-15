@@ -1,10 +1,10 @@
 # contracts/fixtures/ — golden vectors
 
-**Version:** 18
+**Version:** 19
 **Status:** RELEASE CANDIDATE (T9a; Phase 0 · T5, T5j, ADR-0009, ADR-0010, ADR-0011,
 ADR-0038, T9 re-audit #408). Not frozen.
 
-**150 vectors** — 23 `VALID`, 15 `PARTIAL`, 112 `INVALID`. They are numbered in
+**161 vectors** — 26 `VALID`, 15 `PARTIAL`, 120 `INVALID`. They are numbered in
 category order: `VALID` (`001`–`007`), `PARTIAL` (`008`–`011`), then `INVALID` —
 the envelope and Stage A checks (`012`–`042`), the export framing and canonical
 line form (`043`–`052`), `--head` (`053`–`054`), the Stage B type semantics
@@ -93,8 +93,17 @@ substitution, which fails the hash instead. No canonical line can carry an
 ill-formed string, so EX-2 (raw octets) or EX-9 (the escape) also rejects each
 line; the vectors pin the verdict and line, not the rule a verifier names.
 
-**These vectors pin only cases where the conservative rule and the exact
-all-assignments rule agree** (ADR-0034 decision 7), so ET-24b can be tightened
+`151`–`161` add version 2 registration coverage (ADR-0043). The same signature
+is valid directly after genesis (`151`), after an intervening issue (`152`),
+and twice on one chain (`153`). `154` and `155` cross the v1 and v2 signing
+preimages. `156` replays a signature on a chain with the same operator key but
+a different genesis hash. `157` adds an extra signed payload member.
+`158`–`161` exercise ET-4a's S and R bounds, ET-4b's public-key encoding, and
+ET-4c's prime-order check through the v2 path. Each invalid registration is
+on line 2 and has a recomputed event hash.
+
+**The opaque-ballot vectors `116`–`129` and `131`–`134` pin only cases where
+the conservative rule and the exact all-assignments rule agree** (ADR-0034 decision 7), so ET-24b can be tightened
 later without contradicting a frozen vector. `docs/security/attacks/check-adr-0034-agreement.py`
 reads `116`–`129` and `131`–`134` from this directory and evaluates the conservative rule, the exact rule as ET-24b states it, and a chain-wide reading of the exact rule on each; every
 vector must report `ok`. The conservative rule's over-reporting is covered by
