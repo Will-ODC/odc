@@ -127,7 +127,7 @@
   padding: var(--step) calc(var(--step) * 1.5);
   cursor: pointer;
 }
-.conversation button:hover:not(:disabled) {
+.conversation button:hover:not(:disabled):not([aria-disabled="true"]) {
   background: var(--hover);
 }
 .conversation button:disabled {
@@ -217,6 +217,21 @@
 .conversation__question .conversation__scroll > .conversation__column {
   animation: question-arrive var(--motion-quick) ease-out;
 }
+/* Reached with Back, it fades in only: it is not the next one along. */
+.conversation__main--back
+  .conversation__question
+  .conversation__scroll
+  > .conversation__column {
+  animation-name: question-return;
+}
+@keyframes question-return {
+  from {
+    opacity: 0;
+  }
+  to {
+    opacity: 1;
+  }
+}
 @keyframes question-arrive {
   from {
     opacity: 0;
@@ -228,7 +243,11 @@
   }
 }
 @media (prefers-reduced-motion: reduce) {
-  .conversation__question .conversation__scroll > .conversation__column {
+  .conversation__question .conversation__scroll > .conversation__column,
+  .conversation__main--back
+    .conversation__question
+    .conversation__scroll
+    > .conversation__column {
     animation: none;
   }
 }
@@ -248,7 +267,9 @@
     max-height: 70dvh;
     padding-inline-start: max(calc(var(--step) * 2), env(safe-area-inset-left));
     padding-inline-end: max(calc(var(--step) * 2), env(safe-area-inset-right));
-    padding-bottom: calc(var(--step) * 2 + env(safe-area-inset-bottom));
+    /* A step more than the sides: the last line ("Sending…") is text, not a
+       button, and needs room above the screen's edge (#589). */
+    padding-bottom: calc(var(--step) * 3 + env(safe-area-inset-bottom));
     border-bottom: none;
     border-radius: var(--r-sheet) var(--r-sheet) 0 0;
     box-shadow: var(--shadow-sheet);

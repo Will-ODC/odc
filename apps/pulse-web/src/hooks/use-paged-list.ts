@@ -15,12 +15,21 @@ interface PagedListOptions<T> {
   fetchPage: (cursor?: string) => Promise<PagedListPage<T>>;
   keyOf: (item: T) => string;
   emptyMessage: string;
-  errorMessage: string;
+  /**
+   * What a failed first page says: this, or the server's own message for an
+   * `ApiError`. A function decides for itself; keep it stable (module scope).
+   */
+  errorMessage: string | ((error: unknown) => string);
   moreErrorMessage: string;
 }
 
 const messageFor = (error: unknown, fallback: string) =>
   error instanceof ApiError ? error.message : fallback;
+const firstPageMessage = (
+  error: unknown,
+  message: PagedListOptions<unknown>["errorMessage"],
+) =>
+  typeof message === "function" ? message(error) : messageFor(error, message);
 
 /** Shared cursor paging, including stale-read, duplicate and stuck-cursor guards. */
 export function usePagedList<T>({
@@ -58,7 +67,7 @@ export function usePagedList<T>({
         if (generation.current === current)
           setData({
             status: "error",
-            message: messageFor(error, errorMessage),
+            message: firstPageMessage(error, errorMessage),
           });
       },
     );
@@ -106,21 +115,14 @@ export function usePagedList<T>({
       (error: unknown) => {
         if (generation.current !== current) return;
         busy.current = false;
+        // The load-more wording, not the first page's (#610).
         setMore({
           status: "error",
-          message: messageFor(error, errorMessage),
+          message: messageFor(error, moreErrorMessage),
         });
       },
     );
-  }, [
-    data,
-    emptyMessage,
-    enabled,
-    errorMessage,
-    fetchPage,
-    keyOf,
-    moreErrorMessage,
-  ]);
+  }, [data, emptyMessage, enabled, fetchPage, keyOf, moreErrorMessage]);
 
   const clear = useCallback(() => {
     ++generation.current;

@@ -21,7 +21,11 @@ import { AppShell } from "../components/AppShell.js";
 import { SiteBanner } from "../components/SiteBanner.js";
 import { AnsweredRail } from "../components/AnsweredRail.js";
 import { SuggestedVotesRail } from "../components/SuggestedVotesRail.js";
-import { useMyVotes, useVotesFollowSession } from "../hooks/use-my-votes.js";
+import {
+  useMyVotes,
+  useVotesFollowSession,
+  votesWhileExpired,
+} from "../hooks/use-my-votes.js";
 import { useSession } from "../hooks/use-session.js";
 import { ViewState } from "../components/ViewState.js";
 import { Field } from "../components/Field.js";
@@ -102,10 +106,20 @@ export function ContributionDetail({
           setDrafts((current) => ({
             ...current,
             refused: { ...current.refused, [form]: true },
-            carry: true,
+            carry: { ...current.carry, [form]: true },
           }));
         }
-        recheck();
+        void recheck().then((found) => {
+          // Settled on the same account, or on nobody: no switch is coming
+          // for the notices to carry over to (#610). A different account is
+          // left to the switch below, which carries them.
+          if (found.settled)
+            setDrafts((current) =>
+              found.accountId === null || found.accountId === current.owner
+                ? { ...current, carry: noRefusals }
+                : current,
+            );
+        });
       }
       throw error;
     }
@@ -119,22 +133,35 @@ export function ContributionDetail({
   // (in a new tab) can still send what was written.
   // `refused`: which forms the server refused for a different account; each
   // says so beside its emptied form until that form's next edit or send.
-  // `carry`: the session recheck a refusal started has not yet brought in the
-  // account now signed in; when it does, the notices stay for that account's
-  // empty forms. Any other new generation puts them away.
+  // `carry`: per form (#610), the session recheck that form's refusal started
+  // has not yet brought in the account now signed in; when it does, that
+  // notice stays for that account's empty form. Any other new generation
+  // puts the notices away.
   const [drafts, setDrafts] = useState<{
     owner: string | null;
     generation: number;
     refused: Record<WriteForm, boolean>;
-    carry: boolean;
-  }>({ owner: accountId, generation: 0, refused: noRefusals, carry: false });
+    carry: Record<WriteForm, boolean>;
+  }>({
+    owner: accountId,
+    generation: 0,
+    refused: noRefusals,
+    carry: noRefusals,
+  });
   if (accountId !== null && drafts.owner !== accountId)
     setDrafts({
       owner: accountId,
       generation: drafts.generation + (drafts.owner === null ? 0 : 1),
       refused:
-        drafts.carry || drafts.owner === null ? drafts.refused : noRefusals,
-      carry: false,
+        drafts.owner === null
+          ? drafts.refused
+          : {
+              participation:
+                drafts.refused.participation && drafts.carry.participation,
+              message: drafts.refused.message && drafts.carry.message,
+              update: drafts.refused.update && drafts.carry.update,
+            },
+      carry: noRefusals,
     });
   else if (
     session.status === "signedOut" &&
@@ -145,16 +172,16 @@ export function ContributionDetail({
       owner: null,
       generation: drafts.generation + 1,
       refused: noRefusals,
-      carry: false,
+      carry: noRefusals,
     });
   /** The person edited or sent this form: its refusal notice has done its job. */
   const edited = (form: WriteForm) => () =>
     setDrafts((current) =>
-      current.refused[form]
+      current.refused[form] || current.carry[form]
         ? {
             ...current,
             refused: { ...current.refused, [form]: false },
-            carry: false,
+            carry: { ...current.carry, [form]: false },
           }
         : current,
     );
@@ -235,8 +262,8 @@ export function ContributionDetail({
   const heading = useRef<HTMLHeadingElement>(null);
   const headingFocused = useRef(false);
   const ready = data.status === "ready";
-  // A link to one section (the profile's "Post an update" and "Organizer
-  // inbox" go to #updates and #messages) arrives before the page has loaded,
+  // A link to one section (the profile's "Post an update" and "Private
+  // messages" go to #updates and #messages) arrives before the page has loaded,
   // so the browser has nothing to scroll to. Once the page is read for the
   // account now signed in, and so shows the sections it will keep, go to the
   // section named and put focus on its heading. Layout effect: done before
@@ -251,6 +278,10 @@ export function ContributionDetail({
     const target = sectionHeading(globalThis.location.hash);
     if (!target) return;
     landed.current = true;
+    // A section behind a disclosure (the organizer's Private messages) is
+    // opened, so the link lands on what it names (#610).
+    const disclosure = target.parentElement;
+    if (disclosure instanceof HTMLDetailsElement) disclosure.open = true;
     target.scrollIntoView?.({ block: "start" });
     target.focus({ preventScroll: true });
   }, [settled]);
@@ -285,7 +316,7 @@ export function ContributionDetail({
       }
       nav={
         <AnsweredRail
-          data={mine.data}
+          data={votesWhileExpired(mine.data, access === "expired")}
           votes={mine.data.status === "ready" ? mine.data.value.votes : []}
           railRetried={railRetried}
           onRetry={() => {

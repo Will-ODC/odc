@@ -140,7 +140,9 @@ it("asks again on request, and an older focus answer arriving late loses to it",
   await act(async () => window.dispatchEvent(new Event("focus")));
   const older = pending[pending.length - 1]!;
   const before = me.mock.calls.length;
-  act(() => result.current.recheck());
+  act(() => {
+    void result.current.recheck();
+  });
   expect(me.mock.calls.length).toBe(before + 1);
   await act(async () => pending[pending.length - 1]!(person("b")));
   expect(result.current.session).toMatchObject({ me: { id: "b" } });
@@ -156,7 +158,9 @@ it("asks again on request even where nothing else rechecks a signed-in page", as
   // Without `recheckSignedIn`, coming back to the page asks nothing.
   await act(async () => window.dispatchEvent(new Event("focus")));
   expect(me).toHaveBeenCalledOnce();
-  act(() => result.current.recheck());
+  act(() => {
+    void result.current.recheck();
+  });
   expect(me).toHaveBeenCalledTimes(2);
   await act(async () => pending[1]!(person("b")));
   expect(result.current.session).toMatchObject({ me: { id: "b" } });
@@ -250,9 +254,36 @@ it("reads the votes again when the same person signs back in after an expiry", a
   await waitFor(() =>
     expect(rail().queryByText("Your answer: Yes")).toBeNull(),
   );
+  // The votes are not gone, only hidden until signing in again (#599).
+  expect(rail().getByText("Sign in again to see your votes.")).toBeTruthy();
+  expect(rail().queryByText("No votes saved in this browser yet.")).toBeNull();
   who = "voter";
   window.dispatchEvent(new Event("focus"));
   expect(await rail().findByText("Your answer: Yes")).toBeTruthy();
+});
+
+it("says no votes are saved, not to sign in again, after another tab signs out on purpose (#599)", async () => {
+  let who: string | null = "voter";
+  render(
+    <ContributionDetail
+      api={stubApi({
+        me: async () => (who ? person(who) : null),
+        myVotes: async () =>
+          who
+            ? { votes: [savedVote], nextCursor: null }
+            : { votes: [], nextCursor: null },
+      })}
+      id="park"
+      client={client}
+    />,
+  );
+  expect(await rail().findByText("Your answer: Yes")).toBeTruthy();
+  who = null;
+  window.dispatchEvent(new StorageEvent("storage", { key: SIGNED_OUT_KEY }));
+  expect(
+    await rail().findByText("No votes saved in this browser yet."),
+  ).toBeTruthy();
+  expect(rail().queryByText("Sign in again to see your votes.")).toBeNull();
 });
 
 /*

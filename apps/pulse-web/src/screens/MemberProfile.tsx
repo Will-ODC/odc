@@ -157,7 +157,7 @@ function ProfileContributions({
                         size="small"
                         href={`${href}#messages`}
                       >
-                        Organizer inbox
+                        Private messages
                       </Button>
                     </span>
                   ) : null}

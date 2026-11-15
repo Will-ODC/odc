@@ -144,3 +144,22 @@ function asVote({ poll, ballot }: LocalAnswer, now: number): MyVote {
 function notClosedBy(closesAt: string | null, now: number): boolean {
   return closesAt === null || Date.parse(closesAt) > now;
 }
+
+/**
+ * When the next of these rows closes, in epoch milliseconds: the earliest
+ * `closesAt` still ahead of `now` among the rows shown as open. Undefined
+ * when none will close on its own. The rail redraws then, so the row says
+ * Closed without the person moving (#589).
+ */
+export function nextCloseAt(
+  votes: readonly MyVote[],
+  now: number = Date.now(),
+): number | undefined {
+  let soonest: number | undefined;
+  for (const vote of votes) {
+    if (!vote.open || vote.closesAt === null) continue;
+    const at = Date.parse(vote.closesAt);
+    if (at > now && (soonest === undefined || at < soonest)) soonest = at;
+  }
+  return soonest;
+}

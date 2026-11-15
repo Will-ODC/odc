@@ -967,6 +967,9 @@ it("goes to the organizer inbox named in the link, after the session says who is
     await waitFor(() => expect(document.activeElement).toBe(inbox));
     expect(screen.queryByText("Message the organizer")).toBeNull();
     expect(scroll.scrolled).toEqual([inbox]);
+    // The link opens what it names (#610): the inbox is read and shown.
+    expect(inbox.closest("details")?.open).toBe(true);
+    expect(await screen.findByText("No messages yet.")).toBeTruthy();
   } finally {
     scroll.restore();
     globalThis.history.replaceState(null, "", "/");
@@ -1939,6 +1942,84 @@ it.each(["help", "pledge", "message", "update"] as const)(
     expect(send.mock.calls[1]?.[3]).toBe("bea");
   },
 );
+
+it("puts the refusal notice away for a later switch once the recheck finds the same account (#610)", async () => {
+  const { state, me } = switchableMe("ada");
+  const participate = vi
+    .fn()
+    .mockRejectedValue(
+      new ContributionsError(
+        409,
+        "Your account changed, so this wasn't sent.",
+        "account_changed",
+      ),
+    );
+  render(
+    <ContributionDetail
+      api={stubApi({ me })}
+      id="park"
+      client={client({ participate })}
+    />,
+  );
+  const user = userEvent.setup();
+  await user.type(await screen.findByLabelText("Public name"), "Ada");
+  await user.type(screen.getByLabelText("How you can help"), "Tools");
+  await user.click(screen.getByRole("button", { name: "Offer help" }));
+  const notice = "Your account changed, so your entry wasn't sent.";
+  expect(await screen.findByText(notice)).toBeTruthy();
+  // The recheck finds Ada again: nothing changed.
+  await waitFor(() => expect(me.mock.calls.length).toBeGreaterThan(1));
+  await act(async () => {});
+  expect(screen.getByText(notice)).toBeTruthy();
+  // A switch afterwards is not the change the notice was about.
+  state.who = "bea";
+  await act(async () => window.dispatchEvent(new Event("focus")));
+  await waitFor(() => expect(screen.queryByText(notice)).toBeNull());
+});
+
+it("keeps each refused form's notice when another form is edited before the recheck answers (#610)", async () => {
+  const ada = { id: "ada", email: "ada@example.test", community: null };
+  const bea = { id: "bea", email: "bea@example.test", community: null };
+  const answers: ((value: typeof ada) => void)[] = [];
+  const me = vi
+    .fn()
+    .mockResolvedValueOnce(ada)
+    .mockImplementation(() => new Promise((resolve) => answers.push(resolve)));
+  const refused = new ContributionsError(
+    409,
+    "Your account changed, so this wasn't sent.",
+    "account_changed",
+  );
+  render(
+    <ContributionDetail
+      api={stubApi({ me })}
+      id="park"
+      client={client({
+        participate: vi.fn().mockRejectedValue(refused),
+        sendMessage: vi.fn().mockRejectedValue(refused),
+      })}
+    />,
+  );
+  const user = userEvent.setup();
+  await user.type(await screen.findByLabelText("Public name"), "Ada");
+  await user.type(screen.getByLabelText("How you can help"), "Tools");
+  await user.click(screen.getByRole("button", { name: "Offer help" }));
+  const entry = "Your account changed, so your entry wasn't sent.";
+  const message = "Your account changed, so your message wasn't sent.";
+  expect(await screen.findByText(entry)).toBeTruthy();
+  await user.click(screen.getByText("Message the organizer"));
+  await user.type(screen.getByLabelText("Private message"), "Hello");
+  await user.click(screen.getByRole("button", { name: "Send message" }));
+  expect(await screen.findByText(message)).toBeTruthy();
+  // The entry form is edited while the rechecks are still out.
+  await user.type(screen.getByLabelText("Public name"), "B");
+  expect(screen.queryByText(entry)).toBeNull();
+  // The recheck finds Bea: the message form's notice is about her.
+  await act(async () => answers.forEach((answer) => answer(bea)));
+  await act(async () => {});
+  expect(screen.getByText(message)).toBeTruthy();
+  expect(screen.queryByText(entry)).toBeNull();
+});
 
 it("puts the refusal notice away when another account replaces the one it was about", async () => {
   const { state, me } = switchableMe("ada");

@@ -390,6 +390,99 @@ it("keeps Close in place while it asks the server, says so, and holds Try again 
   expect(main().queryByRole("radio")).toBeNull();
 });
 
+it("ignores a read-back that answers after Close gave up waiting (#557)", async () => {
+  const p = poll();
+  const sends = heldCasts();
+  let held: Ballot | null = null;
+  let answer!: () => void;
+  const myBallot = vi.fn(
+    () =>
+      new Promise<Ballot | null>((resolve) => {
+        if (held === null) resolve(null);
+        else answer = () => resolve(held);
+      }),
+  );
+  const user = userEvent.setup();
+  render(
+    <Conversation
+      api={stubApi({
+        cast: sends.cast,
+        myBallot,
+        results: async () => tally(p, [0]),
+      })}
+      pollId={p.id}
+    />,
+  );
+  await changeToNo(sends, p, user);
+  // The lost send was stored, but the server only says so after the wait.
+  held = [0];
+  await act(async () => sends.lose());
+  const rail = screen.getByRole("navigation", { name: "My votes" });
+  expect(rail.textContent?.includes("Your answer: Yes")).toBe(true);
+  vi.useFakeTimers();
+  try {
+    fireEvent.click(main().getByRole("button", { name: "Close" }));
+    await act(async () => {
+      await vi.advanceTimersByTimeAsync(5_000);
+    });
+    expect(main().getByRole("alert").textContent).toBe(UNREACHABLE);
+    await act(async () => answer());
+    await act(async () => {
+      await vi.advanceTimersByTimeAsync(0);
+    });
+  } finally {
+    vi.useRealTimers();
+  }
+  // Nothing on screen moves for the reply that came too late.
+  expect(rail.textContent?.includes("Your answer: Yes")).toBe(true);
+  expect(rail.textContent?.includes("Your answer: No")).toBe(false);
+  expect(main().getByRole("alert").textContent).toBe(UNREACHABLE);
+  expect(main().getByRole("radio", { name: "No" })).toHaveProperty(
+    "checked",
+    true,
+  );
+});
+
+it("turns a rail row to Closed when its question closes, without moving (#589)", async () => {
+  const p = poll();
+  const closesAt = new Date(Date.now() + 60_000).toISOString();
+  const myVotes = vi.fn(async () => ({
+    votes: [
+      {
+        pollId: "parks",
+        question: "More parks?",
+        choices: ["No"],
+        ballot: [0],
+        castAt: "2026-11-09T12:00:00.000Z",
+        closesAt,
+        open: true,
+      },
+    ],
+    nextCursor: null,
+  }));
+  // The page sets its timer when the rail is read, so the clock is fake from
+  // the start; it still runs, for the reads to settle.
+  vi.useFakeTimers({ shouldAdvanceTime: true });
+  try {
+    render(<Conversation api={stubApi({ myVotes })} pollId={p.id} />);
+    const rail = within(screen.getByRole("navigation", { name: "My votes" }));
+    await rail.findByText("Open · You can change your answer");
+    await main().findByRole("radio", { name: "Yes" });
+    await act(async () => {
+      await vi.advanceTimersByTimeAsync(50_000);
+    });
+    expect(rail.getByText("Open · You can change your answer")).toBeTruthy();
+    await act(async () => {
+      await vi.advanceTimersByTimeAsync(10_000);
+    });
+    expect(rail.getByText("Closed · View results")).toBeTruthy();
+    expect(rail.queryByText("Open · You can change your answer")).toBeNull();
+  } finally {
+    vi.useRealTimers();
+  }
+  expect(myVotes).toHaveBeenCalledTimes(1);
+});
+
 it("keeps saved questions beside results and puts the new answer first", async () => {
   const p = poll();
   const user = userEvent.setup();

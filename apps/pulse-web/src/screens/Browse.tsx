@@ -2,6 +2,7 @@ import { useCallback, useEffect, useRef, useState } from "react";
 import {
   contributionsApi,
   type ContributionsApi,
+  type ContributionSummary,
 } from "../api/contributions.js";
 import type { PulseApi } from "../api/types.js";
 import { pathOf } from "../flow/route.js";
@@ -14,10 +15,18 @@ import { LoadMore } from "../components/LoadMore.js";
 import { usePollList } from "../hooks/use-poll-list.js";
 import { useMyVotes } from "../hooks/use-my-votes.js";
 import { useSession } from "../hooks/use-session.js";
-import { useContributionRead } from "../hooks/use-contributions.js";
+import { usePagedList } from "../hooks/use-paged-list.js";
 import { browseItems, type BrowseItem } from "../flow/browse-items.js";
 import type { ViewData } from "../hooks/view-data.js";
 import "./Browse.css";
+
+const NO_CONTRIBUTIONS = "No contributions yet.";
+const contributionKey = (item: ContributionSummary) => item.id;
+// What a failed first page of contributions says, as before #605.
+const contributionsError = (error: unknown) =>
+  error instanceof Error
+    ? error.message
+    : "Could not load this page. Please try again.";
 
 export function Browse({
   api,
@@ -32,63 +41,31 @@ export function Browse({
 }) {
   const isGeneral = community === "pulse-general";
   const moreLabel = isGeneral ? "more questions" : "more";
-  const loadContributions = useCallback(
-    () => (isGeneral ? contributionsClient.list() : Promise.resolve(null)),
-    [contributionsClient, isGeneral],
+  // Contributions page through the shared hook and Load more (#605), as
+  // questions do; only General has them.
+  const fetchContributions = useCallback(
+    async (cursor?: string) => {
+      const page =
+        cursor === undefined
+          ? await contributionsClient.list()
+          : await contributionsClient.list(cursor);
+      return { items: page.contributions, nextCursor: page.nextCursor };
+    },
+    [contributionsClient],
   );
   const {
     data: contributions,
-    reload: retryContributions,
-    setData: setContributions,
-  } = useContributionRead(loadContributions);
-  const focusAt = useRef<{
-    kind: "contribution";
-    index: number;
-  } | null>(null);
-  const contributionPaging = useRef(false);
-  const contributionGeneration = useRef(0);
-  const [loadingContributions, setLoadingContributions] = useState(false);
-  const [contributionPageError, setContributionPageError] = useState(false);
-  useEffect(() => {
-    ++contributionGeneration.current;
-    contributionPaging.current = false;
-    setLoadingContributions(false);
-    setContributionPageError(false);
-    if (focusAt.current?.kind === "contribution") focusAt.current = null;
-  }, [contributionsClient, isGeneral]);
-  async function loadMoreContributions() {
-    const page = contributions.status === "ready" ? contributions.value : null;
-    const cursor = page?.nextCursor;
-    if (!page || !cursor || contributionPaging.current) return;
-    contributionPaging.current = true;
-    const generation = contributionGeneration.current;
-    setLoadingContributions(true);
-    setContributionPageError(false);
-    try {
-      const next = await contributionsClient.list(cursor);
-      if (contributionGeneration.current !== generation) return;
-      if (next.nextCursor === cursor) throw new Error("Cursor did not advance");
-      const ids = new Set(page.contributions.map((item) => item.id));
-      setContributions({
-        status: "ready",
-        value: {
-          contributions: [
-            ...page.contributions,
-            ...next.contributions.filter((item) => !ids.has(item.id)),
-          ],
-          nextCursor: next.nextCursor,
-        },
-      });
-    } catch {
-      if (contributionGeneration.current === generation)
-        setContributionPageError(true);
-    } finally {
-      if (contributionGeneration.current === generation) {
-        contributionPaging.current = false;
-        setLoadingContributions(false);
-      }
-    }
-  }
+    more: moreContributions,
+    loadMore: loadMoreContributions,
+    retry: retryContributions,
+  } = usePagedList({
+    enabled: isGeneral,
+    fetchPage: fetchContributions,
+    keyOf: contributionKey,
+    emptyMessage: NO_CONTRIBUTIONS,
+    errorMessage: contributionsError,
+    moreErrorMessage: "We couldn't load more contributions. Try again.",
+  });
   const { data, more, loadMore, retry } = usePollList(
     api,
     community,
@@ -109,24 +86,9 @@ export function Browse({
     heading.current?.focus();
   }, []);
   const list = useRef<HTMLUListElement>(null);
-  useEffect(() => {
-    const target = focusAt.current;
-    if (!target) return;
-    if (
-      contributions.status !== "ready" ||
-      loadingContributions ||
-      contributionPageError
-    )
-      return;
-    const links = list.current?.querySelectorAll<HTMLAnchorElement>(
-      "a[data-contribution]",
-    );
-    links?.[Math.min(target.index, links.length - 1)]?.focus();
-    focusAt.current = null;
-  }, [contributions, loadingContributions, contributionPageError]);
   const contributionRows =
     isGeneral && contributions.status === "ready"
-      ? (contributions.value?.contributions ?? [])
+      ? contributions.value.items
       : [];
   const items = browseItems(
     !contributionsOnly && data.status === "ready" ? data.value.polls : [],
@@ -139,7 +101,7 @@ export function Browse({
         ? contributions
         : items.length
           ? { status: "ready", value: items }
-          : { status: "empty", message: "No contributions yet." };
+          : { status: "empty", message: NO_CONTRIBUTIONS };
   } else if (items.length || data.status === "ready") {
     feed = { status: "ready", value: items };
   } else if (
@@ -267,28 +229,19 @@ export function Browse({
               </Button>
             </>
           ) : null}
-          {contributionsOnly && contributionPageError ? (
-            <p role="alert">Could not load more contributions. Try again.</p>
-          ) : null}
-          {contributionsOnly &&
-          contributions.status === "ready" &&
-          contributions.value?.nextCursor ? (
-            <Button
-              variant="secondary"
-              size="small"
-              className="browse__action"
-              type="button"
-              disabled={loadingContributions}
-              onClick={() => {
-                focusAt.current = {
-                  kind: "contribution",
-                  index: contributionRows.length,
-                };
-                void loadMoreContributions();
-              }}
-            >
-              {loadingContributions ? "Loading…" : "Load more contributions"}
-            </Button>
+          {contributionsOnly ? (
+            <LoadMore
+              more={moreContributions}
+              hasMore={
+                contributions.status === "ready" &&
+                contributions.value.nextCursor !== null
+              }
+              itemCount={contributionRows.length}
+              listRef={list}
+              itemSelector="a[data-contribution]"
+              moreLabel="more contributions"
+              onLoadMore={loadMoreContributions}
+            />
           ) : null}
           {!contributionsOnly ? (
             <LoadMore

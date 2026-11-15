@@ -130,7 +130,18 @@ export function NewContribution({
                   refused: true,
                   carry: true,
                 }));
-              recheck();
+              void recheck().then((found) => {
+                // Settled on the same account, or on nobody: no switch is
+                // coming for the notice to carry over to (#610).
+                if (found.settled)
+                  setDraft((current) =>
+                    current.carry &&
+                    (found.accountId === null ||
+                      found.accountId === current.owner)
+                      ? { ...current, carry: false }
+                      : current,
+                  );
+              });
             }}
             onEdit={() =>
               setDraft((current) =>

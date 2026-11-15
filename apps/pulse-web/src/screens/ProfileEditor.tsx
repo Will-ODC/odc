@@ -227,11 +227,13 @@ function ProfileForm({
 
   // The status describes only what is saved. Choosing Public is not sharing
   // until Save, so a changed form says so instead of claiming either state.
+  // A profile never saved has changed once a field has text (#610).
   const changed =
-    initial !== null &&
-    (name.trim() !== initial.displayName ||
-      bio.trim() !== initial.bio ||
-      visible !== initial.visible);
+    initial === null
+      ? name.trim() !== "" || bio.trim() !== ""
+      : name.trim() !== initial.displayName ||
+        bio.trim() !== initial.bio ||
+        visible !== initial.visible;
   const status = saveError
     ? saveError
     : saving

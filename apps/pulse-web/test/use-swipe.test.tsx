@@ -1,7 +1,11 @@
 // @vitest-environment jsdom
 import { cleanup, fireEvent, render, screen } from "@testing-library/react";
 import { afterEach, describe, expect, it, vi } from "vitest";
-import { isLeftSwipe, useSwipeLeft } from "../src/hooks/use-swipe.js";
+import {
+  SWIPE_EDGE,
+  isLeftSwipe,
+  useSwipeLeft,
+} from "../src/hooks/use-swipe.js";
 
 afterEach(() => {
   cleanup();
@@ -22,11 +26,11 @@ const finger = (identifier: number, clientX: number, clientY: number) => ({
   clientY,
 });
 
-/** One finger: down at (200, 300), up after moving (dx, dy). */
-function drag(dx: number, dy: number, { cancel = false } = {}) {
+/** One finger: down at (x, 300), x = 200 unless given, then moves (dx, dy). */
+function drag(dx: number, dy: number, { cancel = false, x = 200 } = {}) {
   const area = screen.getByTestId("area");
-  const down = finger(1, 200, 300);
-  const up = finger(1, 200 + dx, 300 + dy);
+  const down = finger(1, x, 300);
+  const up = finger(1, x + dx, 300 + dy);
   fireEvent.touchStart(area, { touches: [down], changedTouches: [down] });
   fireEvent.touchMove(area, { touches: [up], changedTouches: [up] });
   if (cancel)
@@ -65,6 +69,16 @@ describe("useSwipeLeft", () => {
     drag(-80, 70);
     drag(120, 0);
     expect(swiped).not.toHaveBeenCalled();
+  });
+  it("leaves a touch that starts at the right edge to the browser (#560)", () => {
+    const swiped = vi.fn();
+    vi.stubGlobal("innerWidth", 375);
+    render(<Area onSwipeLeft={swiped} />);
+    drag(-120, 0, { x: 375 - SWIPE_EDGE });
+    drag(-120, 0, { x: 374 });
+    expect(swiped).not.toHaveBeenCalled();
+    drag(-120, 0, { x: 375 - SWIPE_EDGE - 1 });
+    expect(swiped).toHaveBeenCalledOnce();
   });
   it("never treats a mouse drag as a swipe", () => {
     const swiped = vi.fn();

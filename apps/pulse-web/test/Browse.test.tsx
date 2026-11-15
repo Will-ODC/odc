@@ -461,7 +461,10 @@ it("loads the final contributions page by keyboard and focuses its first new con
   expect(document.activeElement).toBe(more);
   await user.keyboard("{Enter}");
   expect(list).toHaveBeenLastCalledWith("next");
-  expect(more.hasAttribute("disabled")).toBe(true);
+  // Marked, not disabled, so focus stays on it while it loads (#605).
+  expect(more.getAttribute("aria-disabled")).toBe("true");
+  expect(more.textContent).toBe("Loading more contributions…");
+  expect(document.activeElement).toBe(more);
   await act(async () =>
     finish({ contributions: [second, third], nextCursor: null }),
   );
