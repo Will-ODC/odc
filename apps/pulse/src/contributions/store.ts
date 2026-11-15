@@ -83,11 +83,6 @@ export class ContributionsStore {
   async listByOwner(ownerId: string, query: ListQuery) {
     return this.page(await this.repository.list(query, ownerId));
   }
-  async ownerId(id: string): Promise<string> {
-    const record = await this.repository.read(id);
-    if (!record) throw new ContributionError("not_found");
-    return record.ownerId;
-  }
   private page(rows: Summary[]) {
     const contributions = rows.slice(0, 20);
     const last = contributions.at(-1);
@@ -101,13 +96,22 @@ export class ContributionsStore {
           : null,
     };
   }
-  async detail(id: string, actorId?: string) {
+  /**
+   * One read. `ownerId` is for server-side lookups only (the organizer
+   * profile); callers must never put it in a response.
+   */
+  async detailWithOwner(id: string, actorId?: string) {
     const record = await this.repository.read(id);
     if (!record) throw new ContributionError("not_found");
     return {
       contribution: record.public,
       canManage: record.ownerId === actorId,
+      ownerId: record.ownerId,
     };
+  }
+  async detail(id: string, actorId?: string) {
+    const { contribution, canManage } = await this.detailWithOwner(id, actorId);
+    return { contribution, canManage };
   }
   async create(
     actor: PublicationActor,

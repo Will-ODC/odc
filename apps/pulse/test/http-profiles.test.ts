@@ -249,7 +249,19 @@ test("contribution_links_only_a_visible_profile_without_private_ids", async (t) 
     },
   );
   const path = `/api/contributions/${made.contribution.id}`;
+  const repository = (
+    h.contributions as unknown as {
+      repository: { read(id: string): Promise<unknown> };
+    }
+  ).repository;
+  const read = repository.read.bind(repository);
+  let reads = 0;
+  repository.read = (id) => {
+    reads += 1;
+    return read(id);
+  };
   const linked = await h.app.inject({ url: path });
+  assert.equal(reads, 1, "detail route reads the record once");
   assert.deepEqual(linked.json().contribution.organizerProfile, {
     publicId: IDS[0],
     displayName: "Profile name",
