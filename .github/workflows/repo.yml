@@ -147,7 +147,13 @@ jobs:
       # job rather than a new job, so it takes effect without a
       # branch-protection change (which needs a repo admin).
       # Judge the PR tree with scripts from the immutable PR base.
-      - if: github.event_name == 'pull_request' && steps.selection.outputs.core == 'true'
+      # On pull_request, the workflow YAML comes from the PR; earlier
+      # PR-controlled steps in this job can also write GITHUB_ENV/GITHUB_PATH.
+      # This stops guard-script edits from judging themselves, not workflow
+      # edits: the operator reviews and merges .github/ changes for that reason.
+      # For stacked PRs, base.sha is the parent branch's head: its unmerged
+      # scripts judge the child until the PR is retargeted.
+      - if: github.event_name == 'pull_request'
         uses: actions/checkout@v4
         with:
           ref: ${{ github.event.pull_request.base.sha }}
@@ -155,7 +161,7 @@ jobs:
           sparse-checkout: .github/scripts
           persist-credentials: false
       - run: bash "$GUARD_SCRIPTS/fixtures-manifest.sh"
-        if: steps.selection.outputs.core == 'true'
+        if: github.event_name == 'pull_request' || steps.selection.outputs.core == 'true'
         env:
           GUARD_SCRIPTS: ${{ github.event_name == 'pull_request' && '.guard-base/.github/scripts' || '.github/scripts' }}
 
