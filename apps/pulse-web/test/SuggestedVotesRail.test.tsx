@@ -43,7 +43,7 @@ const history: ViewData<MyVotesPage> = {
 };
 const retryHistory = vi.fn();
 
-it("skips saved and newly answered questions and opens suggestions without voting", async () => {
+it("skips saved and newly answered questions, keeps the open one and opens suggestions without voting", async () => {
   const listPolls = vi.fn().mockResolvedValue({
     polls: [
       row("closed", "A closed question", false),
@@ -73,6 +73,7 @@ it("skips saved and newly answered questions and opens suggestions without votin
     name: "Newest open question",
   });
   expect(sidebar.getAllByRole("link").map((link) => link.textContent)).toEqual([
+    "Current question",
     "Newest open question",
     "Older open question",
   ]);
@@ -140,4 +141,55 @@ it("checks older answers when vote history has another page", async () => {
   ).toBeTruthy();
   expect(sidebar.getAllByRole("link")).toHaveLength(1);
   expect(myBallot.mock.calls.map(([id]) => id)).toEqual(["old-answer", "open"]);
+});
+
+const rows = ["one", "two", "three", "four", "five", "six"].map((id) =>
+  row(id, `Question ${id}`),
+);
+const shown = (sidebar: ReturnType<typeof within>) =>
+  sidebar.getAllByRole("link").map((link: HTMLElement) => ({
+    question: link.textContent,
+    current: link.getAttribute("aria-current"),
+  }));
+const marked = (questions: string[], current: string) =>
+  questions.map((question) => ({
+    question,
+    current: question === current ? "page" : null,
+  }));
+
+it("highlights the open question in its place and keeps the order while browsing", async () => {
+  const api = stubApi({
+    listPolls: vi.fn().mockResolvedValue({ polls: rows, nextCursor: null }),
+  });
+  const rail = (current: string, justAnswered: MyVote[] = []) => (
+    <SuggestedVotesRail
+      api={api}
+      history={history}
+      retryHistory={retryHistory}
+      justAnswered={justAnswered}
+      current={current}
+    />
+  );
+  const { rerender } = render(rail("two"));
+  const sidebar = within(
+    screen.getByRole("navigation", { name: "Suggested votes" }),
+  );
+  await sidebar.findByRole("link", { name: "Question two" });
+  const firstFive = ["one", "two", "three", "four", "five"].map(
+    (id) => `Question ${id}`,
+  );
+  expect(shown(sidebar)).toEqual(marked(firstFive, "Question two"));
+
+  // Opening another suggestion moves only the highlight.
+  rerender(rail("four"));
+  expect(shown(sidebar)).toEqual(marked(firstFive, "Question four"));
+
+  // Answering the open one is what takes it out of the list.
+  rerender(rail("four", [vote("four")]));
+  expect(shown(sidebar)).toEqual(
+    marked(
+      ["one", "two", "three", "five", "six"].map((id) => `Question ${id}`),
+      "",
+    ),
+  );
 });

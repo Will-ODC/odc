@@ -19,6 +19,12 @@ export type Fault =
   | "bad_request" // 400: the signer found the request malformed
   | "seal_under_min" // seals a non-last batch below ballot_batch_min
   | "seal_extra_count" // seals, answering one count more than choice_count
+  // Run-position faults: each run stays internally chained and validly signed,
+  // so only the client's check against the request can catch it.
+  | "drop_ballot" // the last ballot is missing from the run
+  | "shift_seq" // the last ballot is signed one seq later
+  | "shift_ts" // from the second ballot on, signed one minute later
+  | "move_first_prev" // the whole run is chained from another prev_hash
   | "bare_404"; // 404 with no error code, like a wrong path or a proxy
 
 interface IssueBook {
@@ -259,8 +265,42 @@ export class FakeSigner {
       );
       events = [...events.slice(0, -1), ...changed];
     }
+    if (fault === "drop_ballot") events = events.slice(0, -1);
+    if (fault === "shift_seq") {
+      const last = events.at(-1) as Event;
+      events = [
+        ...events.slice(0, -1),
+        ...resign(events.slice(-1), last.seq + 1, last.ts, last.prev_hash),
+      ];
+    }
+    if (fault === "shift_ts") {
+      const [first, second] = events as [Event, Event];
+      const later = new Date(Date.parse(second.ts) + 60_000).toISOString();
+      events = [
+        first,
+        ...resign(events.slice(1), second.seq, later, first.hash),
+      ];
+    }
+    if (fault === "move_first_prev") {
+      const [first] = events as [Event];
+      events = resign(events, first.seq, first.ts, "f".repeat(64));
+    }
     return reply(200, { events });
   }
+}
+
+/** Re-signs `events`' payloads as a fresh run at the given position. */
+function resign(
+  events: Event[],
+  firstSeq: number,
+  ts: string,
+  firstPrevHash: string,
+): Event[] {
+  const payloads = events.map((e) => ({
+    issue_id: String(e.payload.issue_id),
+    choice: Number(e.payload.choice),
+  }));
+  return signRun(payloads, firstSeq, ts, firstPrevHash);
 }
 
 function reply(status: number, body: unknown) {

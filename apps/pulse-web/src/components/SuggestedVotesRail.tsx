@@ -95,11 +95,12 @@ export function SuggestedVotesRail({
     checked.attempt === attempt
       ? checked
       : undefined;
+  // The open question keeps its place, marked as the one being viewed, and
+  // leaves only once it is answered (#596), so browsing never reshuffles.
   const polls = (pollPage?.polls.slice(0, 20) ?? [])
     .filter(
       (poll) =>
         poll.open &&
-        poll.id !== current &&
         !answered.has(poll.id) &&
         (!partialHistory || verification?.unanswered?.has(poll.id)),
     )
@@ -136,6 +137,7 @@ export function SuggestedVotesRail({
                 <li key={poll.id}>
                   <a
                     href={pathOf({ kind: "conversation", pollId: poll.id })}
+                    aria-current={poll.id === current ? "page" : undefined}
                     aria-disabled={disabled || undefined}
                     onClick={(event) => {
                       if (

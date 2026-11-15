@@ -6,6 +6,7 @@ import {
   conformanceVerdict,
   main,
   runRehearsal,
+  type CommandResult,
   type Judge,
 } from "../src/rehearse.js";
 import { selfVerify } from "../src/verify.js";
@@ -156,6 +157,28 @@ describe("runRehearsal", () => {
         }),
       /crashed tool failure \(exit 3\): could not load verifier/,
     );
+  });
+
+  it("fails closed when a verdict's exit status, not its text, is wrong", () => {
+    // The right verdict text with the wrong exit, a judge that never started,
+    // and one killed by a signal (null status). The clean chain runs first,
+    // so each one fails there.
+    const cases: [string, Partial<CommandResult>, RegExp][] = [
+      ["misexit", { status: 1 }, /misexit: VALID exited 1, wanted 0/],
+      ["no start", { error: new Error("ENOENT") }, /failed to start: ENOENT/],
+      ["killed", { status: null }, /killed tool failure \(exit null\)/],
+    ];
+    for (const [name, over, want] of cases) {
+      const right = selfJudge(name);
+      const wrong: Judge = {
+        name,
+        invoke: (file, head) => ({ ...right.invoke(file, head), ...over }),
+      };
+      assert.throws(
+        () => runRehearsal(1, { judges: [selfJudge("right"), wrong] }),
+        want,
+      );
+    }
   });
 
   it("requires two uniquely named judges", () => {

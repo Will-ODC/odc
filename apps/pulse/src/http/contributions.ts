@@ -145,10 +145,11 @@ export async function registerContributionRoutes(
     scope.get("/api/contributions/:id", readOptions, async (request) => {
       const voter = await deps.currentVoter(request);
       const contributionId = id(request);
-      const detail = await store().detail(contributionId, voter?.id);
-      const organizerProfile = await deps.profiles?.publicByOwnerId(
-        await store().ownerId(contributionId),
+      const { ownerId, ...detail } = await store().detailWithOwner(
+        contributionId,
+        voter?.id,
       );
+      const organizerProfile = await deps.profiles?.publicByOwnerId(ownerId);
       return {
         ...detail,
         contribution: {
