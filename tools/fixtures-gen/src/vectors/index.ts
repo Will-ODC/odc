@@ -22,6 +22,7 @@ import { chainIdentityVectors } from "./chain-identity.js";
 import { opaqueBatchingVectors } from "./opaque-batching.js";
 import { limitsVectors } from "./limits.js";
 import { illFormedUtf8Vectors } from "./ill-formed-utf8.js";
+import { registrationV2Vectors } from "./registration-v2.js";
 import type { Vector } from "./shared.js";
 
 export { GENESIS_EVENT, a3 as ISSUE_EVENT } from "./shared.js";
@@ -44,4 +45,5 @@ export const vectors: Vector[] = [
   ...forkAncestryIsolationVectors,
   ...limitsVectors,
   ...illFormedUtf8Vectors,
+  ...registrationV2Vectors,
 ];

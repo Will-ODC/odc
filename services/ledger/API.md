@@ -29,10 +29,10 @@ because they shape the endpoints below.
   `POST /appends`. If the tail has moved, the answer is `409 stale_tail` with
   the current head, and the operator re-signs. The endpoint is on the internal
   port only, and the ledger never holds the operator key.
-- **New registrations are refused until `participant_registered` v2 is in
-  `contracts/` (D3; ADR-0043 decision 2).** `POST /appends` answers
-  `422 type_not_accepted` for `participant_registered`. The ledger's checker
-  still reads v1 registrations already on a chain.
+- **The internal endpoint currently accepts operator events only.**
+  `POST /appends` answers `422 type_not_accepted` for
+  `participant_registered`. The ledger's checker supports v1 and v2
+  registrations in exports (ADR-0043 decision 2).
 - **An operator-signed close call seals an issue's last batch (D4).**
   `POST /issues/{issue_id}/close`, signed by the chain's `operator_pk`, seals
   the issue's open batch as its last (ET-24, ET-25). Without it an issue's
@@ -91,8 +91,8 @@ operator key.
   not match the current tail (another append got there first). Re-read the
   head, re-sign and retry.
 - `422 type_not_accepted`: `vote_cast` (ballots arrive only in batches) or
-  `participant_registered` (refused until `participant_registered` v2 is in
-  `contracts/`; ADR-0043 decision 2).
+  `participant_registered` (registration appends are a later change under
+  ADR-0043 decision 2).
 - `422 rejected`, with `"reason"`: the event would not leave the export `VALID`
   (EV-26), or a line would exceed the EV-25 cap. The reason is advisory text.
 - `422 chain_not_valid`: the stored log does not verify `VALID`, so EV-26 bars

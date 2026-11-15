@@ -46,12 +46,10 @@ func invalid(line int, reason string) Result {
 	return Result{Verdict: INVALID, Line: line, Reason: reason}
 }
 
-// registry is the contracts-v1 (type, version) registry (ET-1/ET-2): the four
-// v1 types, each registered only at version 1. It is the single source of
-// truth for the accept/reject decision (registered).
+// registry lists the registered (type, version) pairs (ET-1/ET-2).
 var registry = map[string][]int64{
 	"genesis":                {1},
-	"participant_registered": {1},
+	"participant_registered": {1, 2},
 	"issue_created":          {1},
 	"vote_cast":              {1},
 }
@@ -76,8 +74,7 @@ func unregisteredGenesisReason(version int64) string {
 		version)
 }
 
-// registered reports whether (typ, version) is in the contracts-v1 registry
-// (ET-1/ET-2), answered from `registry` and from nothing else.
+// registered reports whether (typ, version) is in the registry (ET-1/ET-2).
 func registered(typ string, version int64) bool {
 	for _, v := range registry[typ] {
 		if v == version {
@@ -101,6 +98,8 @@ const (
 
 // vstate carries chain-wide facts gathered during Stage B.
 type vstate struct {
+	genesisHash string // verified genesis hash (ET-7a/HA-15a/EX-21)
+
 	opPK    []byte                // genesis operator_pk, decoded (ET-8/ET-13)
 	regPK   []byte                // genesis registrar_pk, decoded (ET-17)
 	haveKey bool                  // genesis keys captured
@@ -146,7 +145,6 @@ func VerifyWith(data []byte, opts Options) Result {
 	}
 
 	var prev *event
-	var genesisHash string // line 1's stored hash (EX-21), once line 1 parses
 	var partial []int
 
 	for {
@@ -199,10 +197,6 @@ func VerifyWith(data []byte, opts Options) Result {
 			if e.typ == "genesis" {
 				return invalid(ln, "genesis only at seq 1 (ES-33)")
 			}
-		}
-
-		if i == 0 {
-			genesisHash = e.hash
 		}
 
 		// Hash recomputation (HA-14), Stage A, type-agnostic.
@@ -266,7 +260,7 @@ func VerifyWith(data []byte, opts Options) Result {
 	// at line 1 (EX-23) is reported, not the --head mismatch at the last line
 	// (EX-19) — EX-23 v5 says so explicitly. (On a one-line export both name
 	// line 1 anyway.)
-	if chain != nil && *chain != genesisHash {
+	if chain != nil && *chain != st.genesisHash {
 		return invalid(1, "chain mismatch: genesis hash differs from --chain (EX-22/EX-23)")
 	}
 
@@ -289,7 +283,7 @@ func stageB(st *vstate, e *event) (string, bool) {
 	case "genesis":
 		return stageBGenesis(st, e)
 	case "participant_registered":
-		return stageBParticipant(e)
+		return stageBParticipant(e, st.genesisHash)
 	case "issue_created":
 		return stageBIssue(st, e)
 	case "vote_cast":
@@ -453,13 +447,14 @@ func stageBGenesis(st *vstate, e *event) (string, bool) {
 		return "genesis signature invalid under operator_pk (ET-8)", false
 	}
 
+	st.genesisHash = e.hash
 	st.opPK = opBytes
 	st.regPK = regBytes
 	st.haveKey = true
 	return "", true
 }
 
-func stageBParticipant(e *event) (string, bool) {
+func stageBParticipant(e *event, genesisHash string) (string, bool) {
 	if !payloadKeySetEquals(e.payload, []string{"pubkey", "sig"}) {
 		return "participant payload key set (ES-18)", false
 	}
@@ -471,9 +466,17 @@ func stageBParticipant(e *event) (string, bool) {
 	if !isHex128(sig) {
 		return "sig not 128 lowercase hex (ES-31)", false
 	}
-	// ET-10: self-signed (proof of possession) under pubkey.
-	if !verifyEd25519(hexToBytes(pubkey), hexToBytes(sig), preimage(e, "sig")) {
-		return "participant signature invalid under pubkey (ET-10)", false
+	// Both versions use pubkey to verify the signature (ET-10/ET-10a).
+	var message []byte
+	rule := "ET-10"
+	if e.version == 2 {
+		message = registrationPreimage(e, genesisHash)
+		rule = "ET-10a"
+	} else {
+		message = preimage(e, "sig")
+	}
+	if !verifyEd25519(hexToBytes(pubkey), hexToBytes(sig), message) {
+		return "participant signature invalid under pubkey (" + rule + ")", false
 	}
 	return "", true
 }

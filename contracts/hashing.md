@@ -1,6 +1,6 @@
 # Hashing — contracts/hashing.md
 
-**Version:** 3
+**Version:** 4
 **Status:** RELEASE CANDIDATE (T9a; Phase 0 · T4, amended T5j). Not frozen.
 **Companion specs:** `event-schema.md` (envelope), `event-types.md` (payloads),
 `ids.md` (identifiers), `export-format.md` (NDJSON framing), `evolution.md`
@@ -88,7 +88,7 @@ no reference to the event's `type` (ADR-0006).
 ## 3. The preimage
 
 - **HA-10.** `DOMAIN` is the 4 octets `0x4F 0x44 0x43 0x31` (ASCII `ODC1`). It
-  prefixes every preimage so these digests can never collide with bytes hashed
+  prefixes every event hash preimage so these digests can never collide with bytes hashed
   for another purpose or protocol.
 - **HA-11.** The **preimage** of an event `E` is the concatenation, in **exactly
   this field order**:
@@ -137,11 +137,34 @@ signature is produced **before** `sig` exists, over a preimage that omits it;
   absent; every other field is byte-identical to `PRE(E)`. All other fields —
   `DOMAIN`, `seq`, `type`, `version`, the remaining payload keys, `ts`,
   `prev_hash` — are unchanged.
-- **HA-16.** `sig` MUST be the **Ed25519** (D2) signature over `SIGN_PRE(E)`,
-  under the signing key named for the event's `type` (`event-types.md`),
-  encoded as 128 lowercase hex characters (`event-schema.md` ES-31). Ed25519
-  hashes its own input internally; `SIGN_PRE(E)` is passed to Ed25519 as the raw
-  message, **not** pre-hashed with SHA-256.
+- **HA-15a.** For `(participant_registered, 2)` only, the signing preimage
+  MUST be the following concatenation in this order:
+
+  ```
+  REG_PRE(E, G) =  REG_DOMAIN
+                || ENC_STR(E.type)
+                || ENC_INT(E.version)
+                || ENC_STR(G)
+                || ENC_PAYLOAD(E.payload with "sig" omitted)
+  ```
+
+  `REG_DOMAIN` is the eight raw octets `4f 44 43 2d 52 45 47 32` (ASCII
+  `ODC-REG2`), with no length prefix or terminator. It differs from `DOMAIN`
+  in the fourth octet. `G` is the chain's verified genesis event hash
+  (ET-7a, HA-14), in its canonical 64-character lowercase hexadecimal form.
+  A producer signs for the intended chain's genesis hash. A verifier uses the
+  hash of the genesis event of the export it is verifying. With the key set in
+  ET-10a, the payload encoding has one entry: `pubkey`, a string encoded as
+  its 64 lowercase-hex characters. No sequence number, timestamp, or previous
+  hash is part of `REG_PRE`. HA-11 through HA-14 still apply to the complete
+  event, including its `sig`.
+
+- **HA-16.** `sig` MUST be the **Ed25519** (D2) signature over `SIGN_PRE(E)`
+  (HA-15), except for `(participant_registered, 2)`, which MUST use
+  `REG_PRE(E, G)` (HA-15a). Use the signing key specified in `event-types.md`
+  and encode the signature as 128 lowercase hex characters (`event-schema.md`
+  ES-31). Pass the selected preimage to Ed25519 as the raw message without
+  pre-hashing it.
 - **HA-17.** Removing exactly the `"sig"` key (HA-15) is unambiguous because the
   payload key set is otherwise fixed for a signed event and keys are unique
   (HA-6). Because `sig` sorts by its own bytes among the other keys (HA-8), its
@@ -227,6 +250,28 @@ stored six content fields, and an Ed25519 check of `sig` over §6.1's bytes unde
 
 ---
 
+## 7. Worked example — signing a version 2 registration
+
+Use the genesis hash from §6 and the participant public key
+`ed4928c628d1c2c6eae90338905995612959273a5c63f93636c14614ac8737d1`. The rows below are hexadecimal. Concatenate their decoded octets in
+order.
+
+| Component | Octets (hex) |
+| --- | --- |
+| `Registration domain` | `4f44432d52454732` |
+| `ENC_STR(type)` | `00000000000000167061727469636970616e745f72656769737465726564` |
+| `ENC_INT(version)` | `0000000000000002` |
+| `ENC_STR(genesis hash)` | `000000000000004037386564393830626464356636363066643534646466666131303066323330323039343637386538353030313838653866616163633861633537663634303961` |
+| `Payload key count and string tag` | `000000000000000173` |
+| `ENC_STR("pubkey")` | `00000000000000067075626b6579` |
+| `ENC_STR(pubkey)` | `000000000000004065643439323863363238643163326336656165393033333839303539393536313239353932373361356336336639333633366331343631346163383733376431` |
+
+The preimage is **213 octets**. Its SHA-256 is
+`3f06485f5e3e50cdf369a343e7a2df2bdbaef7c791b27b7aab951dffcd2e2751` as a diagnostic only. Sign the
+213 raw octets with Ed25519 (HA-16).
+
+---
+
 ## Degrees of freedom closed (acid-test checklist)
 
 | Degree of freedom                                   | Closed by       |
@@ -242,7 +287,7 @@ stored six content fields, and an Ed25519 check of `sig` over §6.1's bytes unde
 | Domain separation                                   | HA-10           |
 | hex fields hashed as text vs decoded bytes          | HA-12           |
 | Digest algorithm, output case                       | HA-13           |
-| What `sig` covers; pre-hash before Ed25519 or not   | HA-15, HA-16    |
+| What `sig` covers; pre-hash before Ed25519 or not   | HA-15, HA-15a, HA-16 |
 | Whether removing `sig` perturbs other keys          | HA-17           |
 
 ## Acid-test walkthrough

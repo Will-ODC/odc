@@ -53,6 +53,10 @@ not decode as a JSON object with a 64-lowercase-hex `hash` string. Nothing is
 reported for an empty file or on a tool-level error. This is tool output, not
 conformance (EV-17). Exact rules in `API.md`.
 
+The verifier checks both versions of `participant_registered`. Version 2
+signatures bind to the export's genesis hash (HA-15a), so the same signature
+can be included at different positions on that chain.
+
 See `API.md` for the full interface, and `docs/charter.md` §4 for the record
 model this verifier enforces.
 
@@ -78,6 +82,7 @@ internal/verify/
   ballot_test.go            ET-23, ET-24, ET-24a + blamed lines (synthetic)
   ballot_opaque_test.go     ET-24b, ET-18b + a brute-force oracle (synthetic)
   parse_dupkeys_test.go     HA-6 duplicate keys across the parser's threshold
+  registration_test.go      ET-10a and HA-15a signature checks
   report_test.go            EX-24 candidate-record splitting
 chain_report_test.go        --chain/--head precedence and the EX-24 report (CLI)
 limits_cli_test.go          EV-23/EV-24 at the CLI: long and deep lines, panic -> exit 4
@@ -103,12 +108,9 @@ else. Each vector asserts only its verdict token and line number(s). The suite
 also pins the byte-exact preimage construction against
 `contracts/fixtures/preimages/`.
 
-Ten other suites sit alongside them and assert deliberately less. The first
-six are **synthetic**: `contracts/fixtures/` ships no vector for the rules they
-cover, their chains are built by the same hashing and signing code the assertions
-run against, and they are therefore self-consistent by construction and pin no
-preimage shape. What each case demonstrates is differential — one edit to an
-otherwise identical chain moves the verdict in the direction the rule names.
+The first six suites below build synthetic chains using the verifier's own
+hashing and signing code. They test how edits to those chains affect the
+verdict.
 
 - **`internal/verify/genesis_ancestry_test.go`** (synthetic) covers the two
   OPTIONAL `genesis` fork-ancestry keys (ET-9e, and ET-9f's both-or-neither
@@ -164,6 +166,10 @@ otherwise identical chain moves the verdict in the direction the rule names.
   depth measured by a separate transcription of EV-23's byte scan; brackets
   inside strings are not depth; the depth limit never displaces an earlier
   fatal line; and a 200000-line chain reaches its verdict.
+- **`internal/verify/registration_test.go`** compares the version 2 signing
+  preimage to an independent transcription of HA-15a. It exercises both
+  registration signature rules, same-chain signature reuse, rejection on a
+  different chain under the same operator, and the built CLI.
 - **`internal/verify/parse_dupkeys_test.go`** covers HA-6 duplicate-key
   detection across the parser's linear-scan/set threshold, with the duplicate
   placed both before and after the crossing. It is not synthetic in the sense

@@ -1,13 +1,13 @@
 # Event Types — contracts/event-types.md
 
-**Version:** 17
+**Version:** 18
 **Status:** RELEASE CANDIDATE (T9a; Phase 0 · T3, amended T4a, T5i, T5j, ADR-0009, ADR-0010,
 ADR-0011, T9a/ADR-0013, ADR-0014, ADR-0016, ADR-0018, ADR-0019, ADR-0029 with its
 review fixes, ADR-0034, ADR-0038, the T9 re-audits (#408, #415), and T9a). Not frozen.
 **Companion specs:** `event-schema.md` (envelope), `ids.md` (identifiers),
 `hashing.md` (preimage — T4).
 
-The v1 registry of event types and their payloads. The envelope
+The registry of event types, their versions, and their payloads. The envelope
 (`event-schema.md`) is identical for all types; this spec fixes each type's
 `payload` keys, value types, and signing rule. Payload values are integers or
 UTF-8 strings only, flat, per `event-schema.md` ES-16/ES-17 (D4).
@@ -15,13 +15,13 @@ UTF-8 strings only, flat, per `event-schema.md` ES-16/ES-17 (D4).
 Every normative sentence is numbered `ET-n`. RFC-2119 keywords are normative.
 Each payload table column: **key** · **type** · **constraint**.
 
-- **ET-1.** The v1 registry is exactly these four types: `genesis`,
+- **ET-1.** The registry is exactly these four types: `genesis`,
   `participant_registered`, `issue_created`, `vote_cast`. A verifier MUST reject
   any event whose `type` is not one of these (`event-schema.md` ES-11).
-- **ET-2.** Each type below is defined at `version` = 1. An event of a listed
-  type with `version` ≠ 1 has no v1 schema and MUST be rejected until a future
-  contracts version defines it (`evolution.md`, T4).
-- **ET-2a.** **"Reject" in ET-1 and ET-2 is refined by `evolution.md` EV-9.** A
+- **ET-2.** Each type below is registered at `version` = 1.
+  `participant_registered` is also registered at `version` = 2 (ET-10a).
+  Other versions are unregistered and receive the treatment in ET-2a.
+- **ET-2a.** **"Reject" in ET-1 is refined by `evolution.md` EV-9.** A
   *well-formed* (`event-schema.md` ES-10) `type` or `(type, version)` outside this
   registry yields the per-event `PARTIAL` treatment of EV-7/EV-8 — Stage A still
   confirms the event's hash and chain position; only its type-specific semantics
@@ -40,9 +40,8 @@ Each payload table column: **key** · **type** · **constraint**.
 - **ET-3.** A **signed** event carries a `sig` field in its payload: an Ed25519
   signature as 128 lowercase hex characters (`event-schema.md` ES-31).
 - **ET-4.** `sig` MUST be a valid Ed25519 signature, under the event's
-  **signing key** (named per type below), over the event's **signing preimage** —
-  the hash preimage with the `sig` key omitted from `payload`
-  (`event-schema.md` ES-32; bytes in `hashing.md`, T4).
+  **signing key** (named per type and version below), over the event's
+  **signing preimage** (`event-schema.md` ES-32, `hashing.md` HA-15/HA-15a/HA-16).
 - **ET-4a.** _Canonical `sig` encoding._ RFC 8032 leaves the Ed25519
   verification predicate underdetermined for non-canonically encoded inputs, and
   the two v1 verifiers' standard libraries need not agree on such inputs; v1
@@ -71,7 +70,7 @@ Each payload table column: **key** · **type** · **constraint**.
   affects the verification key. For **every** verification key `A` that a
   verifier hex-decodes — `operator_pk` (ET-8, ET-13), `registrar_pk` (ET-17, but
   validated at its genesis declaration per ET-9c), and
-  `participant_registered.pubkey` (ET-10) — a verifier MUST reject the event
+  `participant_registered.pubkey` (ET-10/ET-10a) — a verifier MUST reject the event
   (`INVALID`), never repairing the value (D5), unless the 32 decoded octets of
   `A`, with bit 255 (the most-significant bit of octet 31) cleared and the
   remainder interpreted as an unsigned little-endian integer, are strictly `< p`
@@ -105,7 +104,7 @@ Each payload table column: **key** · **type** · **constraint**.
   has passed on its raw bytes. For **every** verification key `A` a verifier
   decodes — `operator_pk` (ET-8, ET-13), `registrar_pk` (ET-17, but
   validated at its genesis declaration per ET-9c), and
-  `participant_registered.pubkey` (ET-10) — a verifier MUST reject the event
+  `participant_registered.pubkey` (ET-10/ET-10a) — a verifier MUST reject the event
   (`INVALID`), never repairing the value (D5), **unless `A` lies in the
   prime-order subgroup**:
 
@@ -220,15 +219,15 @@ declares the operator key that later `issue_created` events are signed with.
   ledger.)
 - **ET-9a.** `registrar_pk` declares the key under which `vote_cast` events on
   this chain are signed (ET-17). It MUST differ from `operator_pk` (ET-9d). The
-  registrar key is held only by the identity service (which admits ballots), and
-  the identity service MUST NOT hold `operator_pk` (which creates issues) —
-  separating "who may vote" from "who sets the questions" (charter §P2, §P3).
-  **Custody** of the two keys remains policy; their **distinctness** is
-  verifier-enforced (ET-9d).
+  registrar private key is held only by the signer service. Identity decides
+  eligibility off-log and holds no registrar private key. Neither identity
+  nor signer MAY hold the operator private key, and the signer MUST NOT hold
+  a linkage map (ADR-0043). Key custody is policy. A verifier checks that the
+  two public keys differ (ET-9d).
 - **ET-9b.** `operator_pk` and `registrar_pk` MUST each be a 32-byte raw Ed25519
   public key (RFC 8032), carried as a string of exactly 64 lowercase hexadecimal
   characters matching `^[0-9a-f]{64}$` — the same key format `ids.md` ID-3 fixes
-  for `participant_registered.pubkey`. An uppercase or mixed-case key MUST be
+  for `participant_registered.pubkey` (ET-10/ET-10a). An uppercase or mixed-case key MUST be
   rejected; it is never lowercased to conform (D5). This is a **distinct check**
   from ET-7 and ET-8: an uppercase key hex-decodes to the same 32 bytes, so
   `chain_id` still derives (ET-7) and the genesis self-signature still verifies
@@ -382,17 +381,25 @@ declares the operator key that later `issue_created` events are signed with.
 
 ## `participant_registered` (self-signed by the registrant)
 
-Adds a public-plane participant. Self-signed to prove possession of the private
-key for the declared public key.
+Adds a public-plane participant. Versions 1 and 2 share this payload schema.
 
 | key      | type   | constraint                                             |
 | -------- | ------ | ------------------------------------------------------ |
 | `pubkey` | string | `^[0-9a-f]{64}$` — Ed25519 public key, 32 bytes (hex)  |
 | `sig`    | string | `^[0-9a-f]{128}$` — Ed25519 signature (ET-4)           |
 
-- **ET-10.** The `participant_registered` signing key is its own `pubkey`. A
-  verifier MUST reject the event if `sig` does not verify under `pubkey`
-  (proof-of-possession).
+- **ET-10.** For version 1, the signing key is the event's own `pubkey`. A
+  verifier MUST reject the event if `sig` does not verify under `pubkey` over
+  the position-bound signing preimage (HA-15/HA-16).
+- **ET-10a.** For version 2, the payload MUST have exactly `pubkey` and `sig`
+  as specified above. The signing key is the event's own `pubkey`. A verifier
+  MUST reject the event if `sig` does not verify under `pubkey` over the
+  genesis-bound registration preimage (HA-15a/HA-16). ET-4 through ET-4c,
+  ET-11 and ET-12 apply. Reusing a valid signature on a later line of the
+  same chain is valid when the event meets the other checks. Identity uses a
+  fresh off-log challenge-response to establish that the submitter controls
+  the private key before recording a linkage (ADR-0043). The public
+  signature can be copied and gives no such evidence about the submitter.
 - **ET-11.** The participant's `participant_id` is derived from `pubkey` per
   `ids.md` ID-4. It is NOT stored in the payload; it is always recomputed.
 - **ET-12.** Structural validity does not imply uniqueness of the human behind
@@ -472,8 +479,8 @@ Opens an issue for voting. Title only — no free-text body (charter §5 MVP; D4
 
 Records one ballot on one issue. Per ADR-0004 the voter holds NO on-log key: a
 voter-held per-ballot key is a demandable receipt (charter §5/§8). The ballot is
-signed by the **registrar** (the identity service), which admits it after an
-off-log eligibility check.
+signed by the signer service with the registrar key after identity decides
+eligibility off-log (ADR-0043).
 
 | key        | type    | constraint                                                          |
 | ---------- | ------- | ------------------------------------------------------------------- |
@@ -530,14 +537,12 @@ off-log eligibility check.
   Receipt-freeness therefore holds structurally (charter §5/§8): "that ballot is
   mine" is unfalsifiable, so it cannot be demanded or sold. Two votes by the
   same voter also share no field, so ballots are unlinkable to one another
-  on-log. **Residuals (per ADR-0004):** the registrar necessarily sees
-  `{voter, issue, choice}` at admission time in v1, and later the final line
-  each ballot lands on, because its `vote_cast` signature (ET-17) covers that
-  line's `seq` and `prev_hash` (`hashing.md` HA-15; ET-25) — trust-by-policy, removed by
-  blind-signature credentials in identity v2 (charter §10 v2, §11); and there is
-  deliberately **no voter-provable inclusion** proof, since any identity-bound
-  inclusion proof would itself be a receipt. Phase-1 identity obligations are in
-  `memory/OPEN-QUESTIONS.md`.
+  on-log. In Phase 1, identity sees the voter, issue and choice at admission.
+  The signer receives unattributed choices and signs at the final positions
+  (ET-17, HA-15, ET-25). This separation is a custody policy. Colluding
+  components can combine observations and infer links, and the signer can
+  stuff or drop ballots (ADR-0043). Voter-provable inclusion would bind a
+  voter to a ballot and is barred by ET-21a.
 
   **Residual addressed by ET-23–ET-25: timing correlation.** ET-21 is correct
   about what it claims — the voter retains no artifact — and was incomplete about
@@ -549,12 +554,10 @@ off-log eligibility check.
   voted, holding the proof themselves. The ballot publication discipline below is
   the rule that addresses that residual (ADR-0014).
 
-  **Residuals it does not close.** Two remain, and neither is a timing problem:
-  the registrar chooses 64 published, permanent signature bytes per ballot and can
-  encode a voter identifier in them undetectably (`memory/OPEN-QUESTIONS.md` Q-F);
-  and a `participant_registered` line adjacent in `seq` to a ballot still
-  correlates the two planes by position, even once the ballot's `ts` no longer
-  confirms the minute.
+  **Residuals it does not close.** A signer that violates ET-21b could use
+  signature bytes as a covert channel. A `participant_registered` line
+  adjacent in `seq` to a ballot can still correlate the two planes by
+  position.
 
   **What the discipline leaves a timing observer.** Take an observer who reads
   only the public log, as often as it likes, and knows when a person voted on an
@@ -570,10 +573,10 @@ off-log eligibility check.
   tally allows: in a batch of 10 with 9 ballots for one choice, the observer is
   90% sure of the person's choice without knowing their line. A unanimous batch
   is the extreme case, where the observer learns the choice outright. The bound holds only if the producer follows ET-25, which the log cannot
-  show. The registrar is not such an observer: it sees each ballot at
-  admission, and each ballot's final line when it signs it (above). Whether it
-  can join the two is an open design question (`memory/OPEN-QUESTIONS.md`,
-  "The registrar signs each ballot's final log position").
+  show. Identity can also match an observed admission time and choice to
+  a published batch. If that choice occurs only once in the batch, this can
+  identify a specific line. The verifier cannot establish from the export
+  that the registrar components are run separately (ADR-0043).
 - **ET-21a.** _No receipt from the write path._ Neither the ledger, nor the
   registrar, nor any other component the operator runs (a web or MCP front
   end, a mail or notification sender, a status or tally page, and the like),
@@ -602,6 +605,13 @@ off-log eligibility check.
   verification stage (`evolution.md` EV-15). It does not reach what the
   submitter can record on their own device, such as a coercer watching them
   vote; that residual belongs to every remote ballot.
+- **ET-21b.** The production signer MUST sign ballots using deterministic
+  Ed25519 as specified in RFC 8032 §5.1.6, deriving the nonce from the private
+  key prefix and message without any random or caller-supplied input.
+  The signer MUST run a reproducible build of published source, and the
+  operator MUST publish the build digest (ADR-0043). The export cannot prove
+  how a signature was produced or which build ran. This operational
+  obligation belongs to neither verification stage (EV-15).
 - **ET-22.** _Permanent evolution constraint (binds `evolution.md`, T4)._ No
   future version of `vote_cast` MAY introduce a voter-held public key, a
   signature produced by a voter-held key, or an unbounded voter-chosen value
@@ -856,7 +866,7 @@ when the chain also holds ballots at a `vote_cast` version it does not register.
   decision MUST be made before admission and is final: the registrar MUST sign
   every ballot admitted to a batch, and refuses a ballot only before it is
   admitted. This fixes when the decision is made, not which component admits or
-  signs, nor what either retains (the open question named in ET-21). So a sealed
+  signs, nor what either retains (ADR-0043). So a sealed
   batch never holds a ballot that fails for a reason the producer did not cause, and never falls short of `ballot_batch_min` (ET-24)
   because a ballot in it is unappendable. A ballot of that issue
   admitted after the seal goes to a batch instant (ET-23) that issue has not
@@ -919,7 +929,7 @@ when the chain also holds ballots at a `vote_cast` version it does not register.
 
 | Degree of freedom                              | Closed by         |
 | ---------------------------------------------- | ----------------- |
-| The exact set of v1 types                      | ET-1              |
+| The exact set of registered types                      | ET-1              |
 | Which version each type is defined at          | ET-2              |
 | How signatures are carried / what they cover   | ET-3, ET-4        |
 | Canonical `sig` encoding (`S < L`, `R < p`)    | ET-4a             |
@@ -935,7 +945,7 @@ when the chain also holds ballots at a `vote_cast` version it does not register.
 | Genesis key validation timing (at declaration) | ET-9c             |
 | Fork ancestry: name + position, claim not link | ET-9e             |
 | Ancestry keys: both or neither                 | ET-9f             |
-| participant self-signing + id derivation       | ET-10, ET-11      |
+| participant self-signing + id derivation       | ET-10, ET-10a, ET-11 |
 | Title length + forbidden characters            | ET-14             |
 | `choice_count` range                           | ET-14a            |
 | Ballot batch parameters + their floors         | ET-14b            |

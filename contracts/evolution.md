@@ -1,6 +1,6 @@
 # Evolution — contracts/evolution.md
 
-**Version:** 12
+**Version:** 13
 **Status:** RELEASE CANDIDATE (T9a; Phase 0 · T5f, amended T9a/ADR-0014, ADR-0015,
 ADR-0017, ADR-0034, ADR-0038, T9 re-audits #408 and #415). Not frozen.
 **Companion specs:** `event-schema.md`, `event-types.md`, `hashing.md`,
@@ -111,7 +111,7 @@ chain, or a fork that added types, charter §8).
   (ET-24b), and the checks of a ballot whose issue the verifier cannot read
   (ET-18b).
 - **EV-9.** **Refinement of "reject" for unregistered types.** Where
-  `event-schema.md` ES-9/ES-11 and `event-types.md` ET-1/ET-2 direct a verifier
+  `event-schema.md` ES-9/ES-11 and `event-types.md` ET-1 direct a verifier
   to *reject* an event of an unregistered `type` or `(type, version)`, that
   rejection means: the event does not receive a `VALID` **semantic** verdict. For
   a **well-formed** unregistered pair (ES-10 satisfied) the outcome is the
@@ -193,7 +193,8 @@ the surface has to live here.
   (EX-1–EX-23 — framing, canonical line form, chain linkage, head, chain
   identity) **except the `sig` clause of EX-11,
   which is Stage B** (verifying `sig` per `hashing.md` HA-16 requires the
-  per-type signing key, ET-8/ET-10/ET-13/ET-17); from `event-schema.md` ES-1–ES-8,
+  signing key and preimage for the registered pair, including HA-15a for
+  version 2 registrations); from `event-schema.md` ES-1–ES-8,
   ES-10, ES-12, ES-15–ES-17, ES-19, ES-20, ES-23–ES-28, and ES-33; and from
   `hashing.md` HA-6 and HA-14. **Stage B is exactly the remainder of the
   per-event checks** — those requiring knowledge of the `(type, version)`: ES-9
@@ -215,7 +216,12 @@ the surface has to live here.
   obligation no reader can check — a shuffled batch and an arrival-ordered one
   are indistinguishable, so no verifier can report it and no stage contains it
   (ADR-0014) — and **ET-21a**, the same kind of obligation on what the ledger
-  and registrar tell a ballot's submitter. **ET-18b** is Stage B; of the unregistered `issue_created` it
+  and registrar tell a ballot's submitter. The custody policy in ET-9a is
+  outside both stages; the public-key distinctness check in ET-9d is Stage B.
+  **ET-21b** is also outside both
+  stages because the export cannot establish how the signer produced a
+  signature. ET-10a's off-log identity challenge is outside both stages.
+  **ET-18b** is Stage B; of the unregistered `issue_created` it
   reads only the envelope (`type`, `version`, `seq` and `hash`), never the
   payload. **ET-24b** is Stage B, a check on registered ballots like ET-24 and
   ET-24a which it qualifies. It reads only the envelope `seq` and `ts` of the
