@@ -453,9 +453,9 @@ func TestExtremeEscapeHeavyStrings(t *testing.T) {
 // the file, and the driver short-circuits at the first fatal line, so a
 // faulting case stops early. No case here walks a long valid chain:
 // line1_rejected_200k_lines is 200k syntactically well-formed genesis lines
-// that all repeat seq 1 with all-zero prev_hash and hash, so line 1's stored
-// hash is wrong and the verdict is INVALID at line 1 (pinned by
-// TestExtremeLineCountsLine1Rejected below). What it exercises is early
+// that all repeat seq 1 with all-zero prev_hash and hash, so line 1 is
+// INVALID (its stored hash, among other checks, is wrong) and the verdict is
+// reached at line 1 (pinned in the loop below). What it exercises is early
 // rejection at line 1 under a large input: the verifier must stop cleanly,
 // whatever lies in the bytes it never reaches. Walking many valid lines is
 // TestManyLines' job (internal/verify/limits_test.go). This is stated here
@@ -480,17 +480,14 @@ func TestExtremeLineCounts(t *testing.T) {
 		name, content := name, content
 		t.Run(name, func(t *testing.T) {
 			t.Parallel()
-			checkCLI(t, writeExport(t, name, content))
+			stdout, stderr, code := runCLI(t, writeExport(t, name, content))
+			checkVerdict(t, stdout, stderr, code)
+			if name == "line1_rejected_200k_lines" {
+				// Pin the claim above, so the name cannot drift false again.
+				wantVerdict(t, stdout, code, reInvalid, 1, "1")
+			}
 		})
 	}
-}
-
-// TestExtremeLineCountsLine1Rejected pins the claim made for
-// line1_rejected_200k_lines above, so its name cannot drift false again.
-func TestExtremeLineCountsLine1Rejected(t *testing.T) {
-	p := writeExport(t, "line1_rejected_200k_lines", repeatLines(200_000, line("1", "1", `{"p":"v"}`)))
-	stdout, _, code := runCLI(t, p)
-	wantVerdict(t, stdout, code, reInvalid, 1, "1")
 }
 
 // Very wide payload objects. The key sequence is genuinely ascending (see

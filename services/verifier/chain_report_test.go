@@ -207,7 +207,9 @@ func TestToolErrorsNeverAVerdict(t *testing.T) {
 		{p, "--chain"},
 		// Malformed --head, = form: a missing value.
 		{p, "--head="},
-		// Usage: no export path at all, even with a well-formed flag.
+		// No positional path, only a well-formed flag pair. This row shows exit
+		// 3 with no verdict; it cannot tell a usage error from an I/O error
+		// (a parser that took "--chain" as the path would also exit 3).
 		{"--chain", otherHash},
 		// Usage: a second export path (both readable, so not an I/O error).
 		{p, p},
