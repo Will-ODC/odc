@@ -96,11 +96,14 @@ export class SessionSigner {
     const voterId = hasGeneration
       ? payload.slice(3, generationDot)
       : payload.slice(0, iatDot);
+    // Digits only: Number("") is 0, so an empty field would otherwise read
+    // back as the epoch.
+    const int = (field: string) => (/^\d+$/.test(field) ? Number(field) : NaN);
     const generation = hasGeneration
-      ? Number(payload.slice(generationDot + 1, iatDot))
+      ? int(payload.slice(generationDot + 1, iatDot))
       : undefined;
-    const iat = Number(payload.slice(iatDot + 1, expDot));
-    const exp = Number(payload.slice(expDot + 1));
+    const iat = int(payload.slice(iatDot + 1, expDot));
+    const exp = int(payload.slice(expDot + 1));
     if (
       voterId === "" ||
       !Number.isSafeInteger(iat) ||

@@ -151,9 +151,15 @@ export class HttpPulseApi implements PulseApi {
   }
 
   async myBallot(pollId: string): Promise<Ballot | null> {
+    // Bounded like the other reads: a closed poll's results wait on this one,
+    // and a reply that never comes must fail rather than hold them (#629).
     const body = await this.#send<{ ballot: Ballot | null }>(
       "GET",
       `/polls/${encodeURIComponent(pollId)}/ballot`,
+      undefined,
+      undefined,
+      {},
+      AbortSignal.timeout(10000),
     );
     return body.ballot;
   }
@@ -175,13 +181,27 @@ export class HttpPulseApi implements PulseApi {
   }
 
   async results(pollId: string): Promise<Results> {
-    return this.#send("GET", `/polls/${encodeURIComponent(pollId)}/results`);
+    return this.#send(
+      "GET",
+      `/polls/${encodeURIComponent(pollId)}/results`,
+      undefined,
+      undefined,
+      {},
+      AbortSignal.timeout(10000),
+    );
   }
 
   async cast(pollId: string, ballot: Ballot): Promise<CastOutcome> {
-    return this.#send("POST", `/polls/${encodeURIComponent(pollId)}/votes`, {
-      ballot,
-    });
+    const body = await this.#send<unknown>(
+      "POST",
+      `/polls/${encodeURIComponent(pollId)}/votes`,
+      { ballot },
+    );
+    // A yes the app cannot read: status 200, so the vote may be stored and
+    // the screen asks which answer the server holds (#626).
+    if (!isCastOutcome(body))
+      throw new ApiError(200, "pulse sent a response the app couldn't read.");
+    return body;
   }
 
   async creationContext(): Promise<CreationContext> {
@@ -421,5 +441,26 @@ function isMyVotesPage(body: unknown): body is MyVotesPage {
         typeof row.open === "boolean"
       );
     })
+  );
+}
+
+/** The documented `POST /api/polls/:id/votes` 200 bodies, read strictly. */
+function isCastOutcome(body: unknown): body is CastOutcome {
+  if (!body || typeof body !== "object") return false;
+  const outcome = body as Record<string, unknown>;
+  if (outcome.status === "closed") return true;
+  if (outcome.status !== "counted" && outcome.status !== "changed")
+    return false;
+  const results = outcome.results;
+  if (!results || typeof results !== "object") return false;
+  const tally = results as Record<string, unknown>;
+  return (
+    Array.isArray(outcome.ballot) &&
+    outcome.ballot.length > 0 &&
+    outcome.ballot.every((n: unknown) => Number.isInteger(n)) &&
+    typeof tally.pollId === "string" &&
+    Array.isArray(tally.choices) &&
+    typeof tally.voters === "number" &&
+    typeof tally.confirmedVoters === "number"
   );
 }

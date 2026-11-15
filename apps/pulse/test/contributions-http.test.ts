@@ -574,16 +574,18 @@ for (const kind of ["participations", "updates", "messages"] as const) {
     async (t) => {
       const f = await fixture(t);
       const record = await f.create();
-      const entries = Array.from({ length: 500 }, () => ({
+      // 499 entries leave exactly one slot. Message entries use other sender
+      // ids so the posting account's own sender limit is not what refuses.
+      const entries = Array.from({ length: 499 }, () => ({
         id: randomUUID(),
         createdAt: record.createdAt,
         ...(kind === "participations"
           ? participation
           : kind === "updates"
             ? update
-            : { ...message, senderId: sender, key: randomUUID() }),
+            : { ...message, senderId: randomUUID(), key: randomUUID() }),
       }));
-      // Seed the boundary directly; 500 HTTP writes would test rate limits instead.
+      // Seed the boundary directly; 499 HTTP writes would test rate limits instead.
       if (kind === "messages")
         await f.pool.query(
           "update contribution set private_messages=$2 where id=$1",
@@ -600,6 +602,10 @@ for (const kind of ["participations", "updates", "messages"] as const) {
           : kind === "updates"
             ? update
             : message;
+      // The 500th entry takes the last slot; the next is refused.
+      const last = await f.post(`/${record.id}/${kind}`, body);
+      if (kind === "messages") await response(last, 201, messageSchema);
+      else await response(last, 201, mutationSchema);
       await f.rejects(
         () => f.post(`/${record.id}/${kind}`, body),
         409,

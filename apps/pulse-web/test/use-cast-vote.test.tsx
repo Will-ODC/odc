@@ -1,6 +1,7 @@
 // @vitest-environment jsdom
 import { act, cleanup, renderHook, waitFor } from "@testing-library/react";
 import { afterEach, expect, it, vi } from "vitest";
+import { HttpPulseApi } from "../src/api/http.js";
 import { ApiError, UNREACHABLE } from "../src/api/types.js";
 import { useCastVote } from "../src/hooks/use-cast-vote.js";
 import { results, stubApi } from "./stub-api.js";
@@ -161,4 +162,34 @@ it("settles each send with its end state, even once the hook is gone (#488)", as
   await expect(second.result.current.cast([])).resolves.toEqual({
     status: "idle",
   });
+});
+
+it("settles an unreadable successful reply as uncertain, then sends again (#626)", async () => {
+  const replies = [
+    "{}",
+    JSON.stringify({ status: "counted", ballot: [0], results: results() }),
+  ];
+  vi.stubGlobal(
+    "fetch",
+    async () =>
+      ({
+        ok: true,
+        status: 200,
+        text: async () => replies.shift(),
+      }) as Response,
+  );
+  try {
+    const { result } = renderHook(() => useCastVote(new HttpPulseApi(), "p1"));
+    await act(() => result.current.cast([0]));
+    // Not stuck on "casting", and not a refusal: the screen asks the server.
+    expect(result.current.state).toEqual({
+      status: "failed",
+      message: "pulse sent a response the app couldn't read.",
+      refused: false,
+    });
+    await act(() => result.current.cast([0]));
+    expect(result.current.state).toMatchObject({ status: "counted" });
+  } finally {
+    vi.unstubAllGlobals();
+  }
 });
