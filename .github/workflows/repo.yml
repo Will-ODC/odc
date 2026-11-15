@@ -152,7 +152,7 @@ jobs:
       # This stops guard-script edits from judging themselves, not workflow
       # edits: the operator reviews and merges .github/ changes for that reason.
       # For stacked PRs, base.sha is the parent branch's head: its unmerged
-      # scripts judge the child until the PR is retargeted.
+      # scripts judge the child until a new push after retargeting.
       - if: github.event_name == 'pull_request'
         uses: actions/checkout@v4
         with:
