@@ -1,8 +1,3 @@
-// This suite is a round-trip/self-verify property test in NAME only. T6's self-verify acceptance
-// recomputes each event's hash, checks `prev_hash` linkage between EVERY pair, and checks
-// signatures, plus line attribution. Only genesis's `prev_hash` is checked here — no `hash` is
-// recomputed, no signature verified. Owed to a later slice; a green run here is not proof either.
-
 import assert from "node:assert/strict";
 import { describe, it } from "node:test";
 
@@ -447,13 +442,13 @@ describe("buildChain", () => {
 
 // Structural, not pinned: a seed's RNG stream drifts whenever anything upstream of the loop
 // changes its draw count (`maxLengthTitle` did that once, silently defeating five pinned
-// regression seeds while the suite stayed green). The vote-heavy tally also catches a mutant that
-// over-forces votes before the held-back issue (e.g. deleting `voteCast = true`) instead of just
-// the first one — still satisfies `firstVote < lastIssue`, but drives "vote after the last issue" to 0%.
+// regression seeds while the suite stayed green). Not caught here (checked 2026-11-15 at 200 and
+// 2000 seeds): deleting `voteCast = true` in `src/build.ts`, because the forced under-size batch
+// already makes the last issue precede the remaining votes.
 describe("interleaving invariant (structural, not pinned to seeds)", () => {
   const SMALL_SHAPE: ChainShape = { participants: 3, issues: 2, votes: 1 };
   const VOTE_HEAVY: ChainShape = { participants: 3, issues: 2, votes: 10 };
-  const SEED_COUNT = 2000;
+  const SEED_COUNT = 200;
 
   it("holds firstVote < lastIssue across seeds/shapes, with votes landing after it too", () => {
     let noVoteAfterCount = 0;

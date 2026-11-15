@@ -65,7 +65,7 @@ test("refusals_are_definite_answers_with_their_code", () =>
     });
   }));
 
-test("sign_returns_the_positioned_run_and_refuses_another_position", () =>
+test("sign_returns_the_positioned_run_and_passes_on_the_signers_position_taken_refusal", () =>
   withFake(async (fake) => {
     const client = createSignerClient({ baseUrl: fake.url });
     for (const c of [1, 0, 1]) fake.addEntry(ISSUE, c);
@@ -134,6 +134,26 @@ test("a_run_whose_payload_differs_from_the_request_is_a_mismatch", () =>
     const r = await client.sign(request(batchId, [0, 0, 1]));
     assert.deepEqual(r, { ok: false, kind: "mismatch", reason: "payload 2" });
   }));
+
+// Each fault keeps the run chained and validly signed: only runMismatch's
+// comparison with the request (count, seq and ts at index i, first prev_hash)
+// can reject it.
+test("a_run_at_another_position_or_of_another_length_is_a_mismatch", async () => {
+  for (const [fault, reason] of [
+    ["drop_ballot", "count"],
+    ["shift_seq", "position 2"],
+    ["shift_ts", "position 1"],
+    ["move_first_prev", "first prev_hash"],
+  ] as const) {
+    await withFake(async (fake) => {
+      const client = createSignerClient({ baseUrl: fake.url });
+      const batchId = await sealed(fake, [0, 1, 2]);
+      fake.inject("sign", fault);
+      const r = await client.sign(request(batchId, [2, 0, 1]));
+      assert.deepEqual(r, { ok: false, kind: "mismatch", reason }, fault);
+    });
+  }
+});
 
 // tamper_sig leaves the run shape-valid, so the client returns it: only the
 // EV-26 checker catches it, before any append. That is tested with the
