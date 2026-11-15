@@ -68,12 +68,14 @@ test("a_sign_in_link_is_posted_to_the_provider_with_the_key_and_the_sender", asy
   assert.notEqual(call.body["subject"], "");
 });
 
-test("with_nothing_overridden_it_posts_to_resend_and_carries_a_timeout", async () => {
+test("with_nothing_overridden_it_posts_to_resend_and_uses_the_default_timeout", async (t) => {
   // Every other test injects an endpoint and a timeout, so without this one the
   // real URL is never exercised and the default timeout can be changed to an
   // hour with the suite still green — the held-open sign-in request the
   // constant exists to prevent.
   const calls: { url: string; init: RequestInit }[] = [];
+  // Observe the timeout the mailer asks for; the mock restores itself with t.
+  const timeout = t.mock.method(AbortSignal, "timeout");
   const mailer = new ResendMailer(CONFIG, {
     fetch: async (input, init) => {
       calls.push({ url: String(input), init: init ?? {} });
@@ -87,6 +89,11 @@ test("with_nothing_overridden_it_posts_to_resend_and_carries_a_timeout", async (
     calls[0]?.init.signal instanceof AbortSignal,
     "the request must carry an abort signal",
   );
+  assert.deepEqual(
+    timeout.mock.calls.map((c) => c.arguments),
+    [[DEFAULT_TIMEOUT_MS]],
+    "the signal must be built from DEFAULT_TIMEOUT_MS",
+  );
 });
 
 test("the_default_timeout_stays_short_enough_that_nobody_waits_on_a_dead_provider", () => {
@@ -97,8 +104,8 @@ test("the_default_timeout_stays_short_enough_that_nobody_waits_on_a_dead_provide
   //
   // The bound is asserted rather than the number, because a test that waited
   // the real default out would add that wait to every run. The limit of this:
-  // it pins the constant, not the `??` that reads it — the abort-signal test
-  // above covers the wiring.
+  // it pins the constant, not the `??` that reads it — the no-override test
+  // above observes the value handed to AbortSignal.timeout.
   assert.ok(
     DEFAULT_TIMEOUT_MS <= 30_000,
     `a sign-in must not hang for ${DEFAULT_TIMEOUT_MS}ms`,

@@ -156,13 +156,26 @@ test("size_limits_are_read_from_the_header_before_any_decode", async () => {
   await refusedAs(pngClaimingSize(8001, 300), "image_dimensions");
   await refusedAs(pngClaimingSize(300, 8001), "image_dimensions");
   await refusedAs(pngClaimingSize(7000, 6000), "image_dimensions"); // 42 MP
+  await refusedAs(pngClaimingSize(8000, 5001), "image_dimensions"); // just over 40 MP
   await refusedAs(pngClaimingSize(199, 4000), "image_dimensions");
   await refusedAs(await picture("png", 199, 300), "image_dimensions");
 });
 
-test("accepts_the_exact_limits", async () => {
+test("accepts_the_smallest_allowed_size_200x200", async () => {
   const out = await processImage(await picture("png", 200, 200));
   assert.deepEqual([out.width, out.height], [200, 200]);
+});
+
+test("accepts_the_widest_and_tallest_allowed_sides_8000x200_and_200x8000", async () => {
+  // 1.6 MP each, so well inside the pixel cap: only the 8000-side limit is in
+  // play. Accepted means processed; the display variant is then fitted to 1600.
+  for (const [w, h, dw, dh] of [
+    [8000, 200, 1600, 40],
+    [200, 8000, 40, 1600],
+  ] as const) {
+    const out = await processImage(await picture("png", w, h));
+    assert.deepEqual([out.width, out.height], [dw, dh]);
+  }
 });
 
 test("the_decode_queue_runs_one_at_a_time_and_refuses_when_full", async () => {

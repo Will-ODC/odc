@@ -108,13 +108,23 @@ test("a_genuinely_signed_cookie_with_unusable_fields_still_does_not_verify", () 
   const sign = (payload: string) =>
     `${payload}.${createHmac("sha256", SECRET).update(payload, "utf8").digest("base64url")}`;
 
+  // Valid future millisecond timestamps, from the test clock, so each case
+  // fails on its one unusable field and not on expiry.
+  const iat = START.getTime();
+  const exp = iat + 3600_000;
+  // Control: the same construction with every field usable does verify, so the
+  // refusals below are down to the one broken field.
+  assert.equal(
+    signer.verify(sign(`voter-1.${iat}.${exp}`))?.voterId,
+    "voter-1",
+  );
   for (const payload of [
-    "voter-1.not-a-number.also-not",
-    "voter-1.1754740800.not-a-number",
-    "voter-1..1754744400",
-    ".1754740800.1754744400", // no voter id
-    "voter-1.1.5.1754744400", // fractional
-    `voter-1.1754740800.${Number.MAX_SAFE_INTEGER + 2}`, // beyond safe integers
+    `voter-1.not-a-number.${exp}`, // iat
+    `voter-1.${iat}.not-a-number`, // exp
+    `voter-1..${exp}`, // empty iat (Number("") would read as 0)
+    `v1.voter-1..${iat}.${exp}`, // empty generation
+    `.${iat}.${exp}`, // no voter id
+    `voter-1.${iat}.${Number.MAX_SAFE_INTEGER + 2}`, // exp beyond safe integers
   ]) {
     assert.equal(
       signer.verify(sign(payload)),
