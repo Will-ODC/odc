@@ -111,7 +111,7 @@ export function NewPoll({
             <SignedOut href={signInHref} kept={kept} />
           ) : (
             <>
-              <ViewState data={state}>
+              <ViewState data={state} onRetry={retry}>
                 {(context) => (
                   <PostForm
                     api={api}
@@ -128,16 +128,6 @@ export function NewPoll({
                   />
                 )}
               </ViewState>
-              {state.status === "error" ? (
-                <Button
-                  variant="secondary"
-                  type="button"
-                  className="post__retry"
-                  onClick={retry}
-                >
-                  Try again
-                </Button>
-              ) : null}
             </>
           )}
         </article>

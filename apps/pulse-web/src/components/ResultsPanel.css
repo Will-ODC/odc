@@ -161,8 +161,7 @@
   color: var(--muted);
 }
 
-.results__close,
-.results__retry {
+.results__close {
   margin-top: var(--step);
   align-self: center;
   padding: 11px 20px;
@@ -176,8 +175,7 @@
   cursor: pointer;
 }
 
-.results__close:hover,
-.results__retry:hover {
+.results__close:hover {
   background: var(--hover);
 }
 

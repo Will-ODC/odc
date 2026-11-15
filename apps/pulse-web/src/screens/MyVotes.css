@@ -41,11 +41,6 @@
   text-align: left;
 }
 
-.my-votes__action {
-  display: block;
-  margin: calc(var(--step) * 2) 0 0;
-}
-
 .my-votes__more {
   margin: var(--step) 0 0;
 }

@@ -1,6 +1,6 @@
 import { useEffect, useRef } from "react";
 import type { PulseApi } from "../api/types.js";
-import { Button } from "../components/Button.js";
+import { Button, type ButtonVariant } from "../components/Button.js";
 import { ScreenFrame } from "../components/ScreenFrame.js";
 import { ViewState } from "../components/ViewState.js";
 import { useRedeem } from "../hooks/use-redeem.js";
@@ -57,6 +57,7 @@ export function Redeem({
         title="That link did not work."
         sentence={redeemed.message}
         action="Ask for a new link"
+        variant="primary"
         onAct={onAskAgain}
       />
     );
@@ -76,6 +77,7 @@ export function Redeem({
         title="We could not reach pulse."
         sentence={`${redeemed.message} Your link is still good.`}
         action="Try again"
+        variant="secondary"
         onAct={retry}
       />
     );
@@ -102,11 +104,13 @@ function Stopped({
   title,
   sentence,
   action,
+  variant,
   onAct,
 }: {
   title: string;
   sentence: string;
   action: string;
+  variant: ButtonVariant;
   onAct: () => void;
 }) {
   const heading = useRef<HTMLHeadingElement>(null);
@@ -121,7 +125,7 @@ function Stopped({
         <p className="signin__lede">{sentence}</p>
       </div>
       <Button
-        variant="primary"
+        variant={variant}
         className="signin__go"
         type="button"
         onClick={onAct}

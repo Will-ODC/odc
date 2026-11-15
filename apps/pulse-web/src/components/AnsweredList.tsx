@@ -1,7 +1,6 @@
 import type { MouseEvent, Ref } from "react";
 import type { MyVote } from "../api/types.js";
 import { pathOf } from "../flow/route.js";
-import "../screens/Browse.css";
 import "./AnsweredList.css";
 
 /**
@@ -33,7 +32,7 @@ export function AnsweredList({
   return (
     <ul
       ref={listRef}
-      className={`browse__list answered${compact ? " answered--compact" : ""}`}
+      className={`answered${compact ? " answered--compact" : ""}`}
     >
       {votes.map((vote) => (
         <li key={vote.pollId}>

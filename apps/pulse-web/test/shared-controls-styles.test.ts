@@ -115,7 +115,9 @@ it.each(small)(
     const source = read(`../src/${tsx}`);
     expect(source).not.toMatch(/<button[\s>]/);
     expect(source).not.toMatch(/className=["'{`][^"'}`]*\bbutton\b/);
-    expect(source).toMatch(/<Button\b[^>]*\bsize="small"/);
+    expect(source).toMatch(
+      /<Button\b[^>]*\bsize="small"|<ViewState\b[^>]*\bonRetry=/,
+    );
   },
 );
 
