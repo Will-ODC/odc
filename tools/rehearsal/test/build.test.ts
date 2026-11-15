@@ -442,13 +442,32 @@ describe("buildChain", () => {
 
 // Structural, not pinned: a seed's RNG stream drifts whenever anything upstream of the loop
 // changes its draw count (`maxLengthTitle` did that once, silently defeating five pinned
-// regression seeds while the suite stayed green). Not caught here (checked 2026-11-15 at 200 and
-// 2000 seeds): deleting `voteCast = true` in `src/build.ts`, because the forced under-size batch
-// already makes the last issue precede the remaining votes.
+// regression seeds while the suite stayed green).
 describe("interleaving invariant (structural, not pinned to seeds)", () => {
   const SMALL_SHAPE: ChainShape = { participants: 3, issues: 2, votes: 1 };
   const VOTE_HEAVY: ChainShape = { participants: 3, issues: 2, votes: 10 };
   const SEED_COUNT = 200;
+
+  // `voteCast` releases the held-back last issue once any ballot is on the chain, so the last
+  // issue can still take ballots after it. With two issues the forced under-size batch closes the
+  // first one and forces the second, which hides a missing `voteCast = true`; with three issues
+  // any forced issue is never the last, so only `voteCast` lets the last issue land before the
+  // final ballot. Without `voteCast` no seed of this shape can have a ballot after the last
+  // issue, by construction; with it, roughly 4 in 10 seeds do (2026-11-15), far above the 10%
+  // floor.
+  it("lets ballots follow the last issue once a vote is cast (three issues)", () => {
+    const THREE_ISSUES: ChainShape = { participants: 3, issues: 3, votes: 10 };
+    let voteAfterCount = 0;
+    for (let seed = 0; seed < SEED_COUNT; seed += 1) {
+      const types = buildChain(seed, THREE_ISSUES).events.map((e) => e.type);
+      const lastIssue = types.lastIndexOf("issue_created");
+      if (types.slice(lastIssue + 1).includes("vote_cast")) voteAfterCount += 1;
+    }
+    assert.ok(
+      voteAfterCount >= SEED_COUNT * 0.1,
+      `only ${String(voteAfterCount)}/${String(SEED_COUNT)} three-issue seeds had a vote after the last issue`,
+    );
+  });
 
   it("holds firstVote < lastIssue across seeds/shapes, with votes landing after it too", () => {
     let noVoteAfterCount = 0;

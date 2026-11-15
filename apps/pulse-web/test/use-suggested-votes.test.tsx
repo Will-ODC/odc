@@ -4,8 +4,31 @@ import userEvent from "@testing-library/user-event";
 import { afterEach, beforeEach, expect, it, vi } from "vitest";
 import type { MyVote, MyVotesPage, PollSummary } from "../src/api/types.js";
 import { SuggestedVotesRail } from "../src/components/SuggestedVotesRail.js";
+import { useSuggestedVotes } from "../src/hooks/use-suggested-votes.js";
+import type { ComponentProps } from "react";
 import type { ViewData } from "../src/hooks/view-data.js";
 import { stubApi } from "./stub-api.js";
+
+function SuggestedVotes({
+  current,
+  disabled,
+  onOpen,
+  ...props
+}: Parameters<typeof useSuggestedVotes>[0] &
+  Pick<
+    ComponentProps<typeof SuggestedVotesRail>,
+    "current" | "disabled" | "onOpen"
+  >) {
+  const suggestions = useSuggestedVotes(props);
+  return (
+    <SuggestedVotesRail
+      {...suggestions}
+      {...(current ? { current } : {})}
+      {...(disabled ? { disabled } : {})}
+      {...(onOpen ? { onOpen } : {})}
+    />
+  );
+}
 
 afterEach(() => {
   cleanup();
@@ -58,7 +81,7 @@ it("skips saved and newly answered questions, keeps the open one and opens sugge
   const cast = vi.fn();
   const api = stubApi({ listPolls, cast });
   const { rerender } = render(
-    <SuggestedVotesRail
+    <SuggestedVotes
       api={api}
       history={history}
       retryHistory={retryHistory}
@@ -81,7 +104,7 @@ it("skips saved and newly answered questions, keeps the open one and opens sugge
   await userEvent.click(newest);
   expect(onOpen).toHaveBeenCalledExactlyOnceWith("newest");
   rerender(
-    <SuggestedVotesRail
+    <SuggestedVotes
       api={api}
       history={history}
       retryHistory={retryHistory}
@@ -93,7 +116,7 @@ it("skips saved and newly answered questions, keeps the open one and opens sugge
   await userEvent.click(newest);
   expect(onOpen).toHaveBeenCalledTimes(1);
   rerender(
-    <SuggestedVotesRail
+    <SuggestedVotes
       api={api}
       history={history}
       retryHistory={retryHistory}
@@ -124,7 +147,7 @@ it("checks older answers when vote history has another page", async () => {
     nextCursor: null,
   });
   render(
-    <SuggestedVotesRail
+    <SuggestedVotes
       api={stubApi({ listPolls, myBallot })}
       history={{
         status: "ready",
@@ -162,7 +185,7 @@ it("highlights the open question in its place and keeps the order while browsing
     listPolls: vi.fn().mockResolvedValue({ polls: rows, nextCursor: null }),
   });
   const rail = (current: string, justAnswered: MyVote[] = []) => (
-    <SuggestedVotesRail
+    <SuggestedVotes
       api={api}
       history={history}
       retryHistory={retryHistory}
@@ -192,4 +215,56 @@ it("highlights the open question in its place and keeps the order while browsing
       "",
     ),
   );
+});
+
+it("waits for every ballot read, keeps candidate order and retries a failed read", async () => {
+  let finish: (ballot: number[] | null) => void = () => {};
+  let fail: (reason: Error) => void = () => {};
+  const myBallot = vi.fn((id: string) =>
+    id === "one"
+      ? new Promise<number[] | null>((resolve, reject) => {
+          finish = resolve;
+          fail = reject;
+        })
+      : Promise.resolve(null),
+  );
+  const api = stubApi({ myBallot });
+  const source = {
+    data: {
+      status: "ready" as const,
+      value: { polls: rows, nextCursor: null },
+    },
+    retry: vi.fn(),
+  };
+  const partialHistory = {
+    status: "ready" as const,
+    value: { ...history.value, nextCursor: "older" },
+  };
+  render(
+    <SuggestedVotes
+      api={api}
+      source={source}
+      history={partialHistory}
+      retryHistory={retryHistory}
+    />,
+  );
+  const sidebar = within(
+    screen.getByRole("navigation", { name: "Suggested votes" }),
+  );
+  expect(sidebar.getByText("Loading…")).toBeTruthy();
+  expect(sidebar.queryAllByRole("link")).toHaveLength(0);
+  fail(new Error("Connection lost"));
+  await sidebar.findByText("Could not load suggested votes.");
+  await userEvent.click(
+    sidebar.getByRole("button", { name: "Try suggestions again" }),
+  );
+  expect(document.activeElement).toBe(sidebar.getByRole("heading"));
+  expect(sidebar.getByText("Loading…")).toBeTruthy();
+  expect(sidebar.queryAllByRole("link")).toHaveLength(0);
+  finish(null);
+  await sidebar.findByRole("link", { name: "Question one" });
+  expect(sidebar.getAllByRole("link").map((link) => link.textContent)).toEqual(
+    rows.slice(0, 5).map((poll) => poll.question),
+  );
+  expect(source.retry).not.toHaveBeenCalled();
 });

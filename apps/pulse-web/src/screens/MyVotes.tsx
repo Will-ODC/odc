@@ -7,7 +7,6 @@ import { useMyVotes } from "../hooks/use-my-votes.js";
 import { useSession } from "../hooks/use-session.js";
 import { pathOf } from "../flow/route.js";
 import { SiteBanner } from "../components/SiteBanner.js";
-import { Button } from "../components/Button.js";
 import "./MyVotes.css";
 
 /** This browser's current ballots, read from the server on every visit (#329). */
@@ -45,24 +44,13 @@ export function MyVotes({ api }: { api: PulseApi }) {
           Answers saved in this browser. Signing out or forgetting votes here
           clears access to them.
         </p>
-        <ViewState data={data}>
+        <ViewState data={data} onRetry={retry}>
           {(page) => <AnsweredList votes={page.votes} listRef={list} />}
         </ViewState>
         {data.status === "empty" ? (
           <p className="my-votes__more">
             <a href="/">Explore questions</a>
           </p>
-        ) : null}
-        {data.status === "error" ? (
-          <Button
-            variant="secondary"
-            size="small"
-            className="my-votes__action"
-            type="button"
-            onClick={retry}
-          >
-            Try again
-          </Button>
         ) : null}
         <LoadMore
           more={more}

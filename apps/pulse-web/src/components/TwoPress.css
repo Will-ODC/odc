@@ -35,11 +35,6 @@
   color: var(--ink);
 }
 
-.two-press__action:focus-visible {
-  outline: var(--focus-ring-width) solid var(--focus);
-  outline-offset: var(--focus-ring-offset);
-}
-
 .two-press__action:disabled,
 .two-press__action[aria-disabled="true"] {
   cursor: default;
@@ -94,13 +89,12 @@
   background: var(--hover);
 }
 
-.two-press__action--primary:focus-visible,
-.two-press__action--secondary:focus-visible {
-  outline: var(--focus-ring-width) solid var(--focus);
-  outline-offset: var(--focus-ring-offset);
-}
-
 .two-press__action--primary[aria-disabled="true"],
 .two-press__action--secondary:disabled {
   opacity: 0.55;
+}
+
+/* Keep the focus indicator at full contrast while the action is unavailable. */
+.two-press__action--primary[aria-disabled="true"]:focus-visible {
+  opacity: 1;
 }

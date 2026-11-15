@@ -1,5 +1,6 @@
 import type { ReactNode } from "react";
 import type { ViewData } from "../hooks/view-data.js";
+import { Button } from "./Button.js";
 import "./ViewState.css";
 
 /**
@@ -16,8 +17,10 @@ export function ViewState<T>({
   variant = "default",
   persistent = false,
   readyNote,
+  onRetry,
 }: {
   data: ViewData<T>;
+  onRetry?: () => void;
   children: (value: T) => ReactNode;
   variant?: "default" | "compact";
   /**
@@ -36,19 +39,31 @@ export function ViewState<T>({
     <>
       {ready ? children(data.value) : null}
       {ready && !persistent ? null : (
-        <div className={className} role="status" aria-live="polite">
-          {data.status === "ready" ? (
-            readyNote ? (
-              <p className="visually-hidden">{readyNote}</p>
-            ) : null
-          ) : data.status === "loading" ? (
-            <>
-              <div className="viewstate__pulse" aria-hidden="true" />
-              <p>Loading…</p>
-            </>
-          ) : (
-            <p>{data.message}</p>
-          )}
+        <div className={className}>
+          <div role="status" aria-live="polite">
+            {data.status === "ready" ? (
+              readyNote ? (
+                <p className="visually-hidden">{readyNote}</p>
+              ) : null
+            ) : data.status === "loading" ? (
+              <>
+                <div className="viewstate__pulse" aria-hidden="true" />
+                <p>Loading…</p>
+              </>
+            ) : (
+              <p>{data.message}</p>
+            )}
+          </div>
+          {data.status === "error" && onRetry ? (
+            <Button
+              variant="secondary"
+              size="small"
+              type="button"
+              onClick={onRetry}
+            >
+              Try again
+            </Button>
+          ) : null}
         </div>
       )}
     </>

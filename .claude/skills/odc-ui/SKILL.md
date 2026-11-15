@@ -69,8 +69,7 @@ components; **components never import screens** (nor a stylesheet from
 2. **Presentational by default.** Components may `import type` from
    `api/types`; they never call the API or receive `api` as a prop — fetching
    lives in `hooks/`. Components never import a stylesheet from `screens/`.
-   Data enters at the screen, which gets it from a hook. (Current exceptions
-   are being removed under #653.)
+   Data enters at the screen, which gets it from a hook.
 3. **No logic in JSX.** Past a single ternary, it moves — pure decisions to
    `flow/`, stateful ones to a hook.
 4. **Name for what it is, not where it sits.** `<ChoiceRow>`, never

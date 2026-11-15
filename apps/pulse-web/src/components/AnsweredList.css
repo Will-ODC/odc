@@ -1,8 +1,58 @@
-/*
- * Your saved answers (#484). Borrows Browse's list (Browse.css) for the rows
- * and owns its detail lines, so a change to how Browse styles its own rows
- * cannot restyle these. One look on the My votes page and in the rail.
- */
+/* Saved-answer rows, shared by My votes and the rail. */
+.answered a {
+  color: var(--ink);
+  font-weight: 600;
+  text-decoration: none;
+  overflow-wrap: anywhere;
+}
+.answered a:hover {
+  color: var(--green-hover);
+  text-decoration: underline;
+}
+.answered a::after {
+  content: "";
+  position: absolute;
+  inset: 0;
+}
+.answered {
+  list-style: none;
+  padding: 0;
+  display: grid;
+  gap: 0;
+}
+.answered li {
+  position: relative;
+  padding: calc(var(--step) * 2);
+  border: var(--hairline) solid var(--line);
+  border-radius: 0;
+  background: var(--surface);
+}
+.answered li:hover {
+  background: var(--hover);
+}
+.answered a {
+  display: block;
+  font-size: var(--t-body);
+  line-height: 1.5;
+}
+.answered li + li {
+  border-top: none;
+}
+.answered li:first-child {
+  border-radius: var(--r-card) var(--r-card) 0 0;
+}
+.answered li:last-child {
+  border-radius: 0 0 var(--r-card) var(--r-card);
+}
+.answered li:only-child {
+  border-radius: var(--r-card);
+}
+@media (max-width: 699px) {
+  .answered li {
+    min-height: calc(var(--touch) + var(--step) * 1.5);
+    box-sizing: border-box;
+  }
+}
 .answered__detail {
   display: block;
   margin-top: calc(var(--step) / 2);

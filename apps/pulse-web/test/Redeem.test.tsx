@@ -271,7 +271,9 @@ describe("when the server cannot be reached", () => {
     );
     await screen.findByText("We could not reach pulse.");
 
-    await userEvent.click(screen.getByRole("button", { name: "Try again" }));
+    const retry = screen.getByRole("button", { name: "Try again" });
+    expect(retry.className).toBe("btn btn--secondary signin__go");
+    await userEvent.click(retry);
 
     await waitFor(() => expect(onSignedIn).toHaveBeenCalledTimes(1));
     expect(redeem).toHaveBeenCalledTimes(2);

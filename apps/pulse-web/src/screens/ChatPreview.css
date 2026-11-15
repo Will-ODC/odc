@@ -78,12 +78,6 @@
   background: var(--surface);
 }
 
-.chatpreview__select:focus-visible,
-.chat__open:focus-visible {
-  outline: var(--focus-ring-width) solid var(--focus);
-  outline-offset: var(--focus-ring-offset);
-}
-
 .chatpreview__proto {
   margin: 0;
   font-size: var(--t-eyebrow);

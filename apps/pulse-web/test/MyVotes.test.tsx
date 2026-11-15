@@ -87,10 +87,8 @@ it("explains a failed load and tries again on request", async () => {
     screen.getByRole("main").classList.contains("my-votes__main--message"),
   ).toBe(true);
   const retry = screen.getByRole("button", { name: "Try again" });
-  // The small secondary Button, centred by the list's layout class (#569).
-  expect(retry.className).toBe(
-    "btn btn--secondary btn--small my-votes__action",
-  );
+  // ViewState uses the small secondary Button (#569).
+  expect(retry.className).toBe("btn btn--secondary btn--small");
   await user.click(retry);
   expect(await screen.findByText("Your answer: Yes")).toBeTruthy();
   expect(myVotes).toHaveBeenCalledTimes(2);

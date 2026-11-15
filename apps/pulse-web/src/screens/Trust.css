@@ -88,7 +88,5 @@
 }
 
 .trust__link:focus-visible {
-  outline: var(--focus-ring-width) solid var(--focus);
-  outline-offset: var(--focus-ring-offset);
   border-radius: calc(var(--step) / 2);
 }

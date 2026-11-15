@@ -28,14 +28,12 @@
 }
 .field__control:focus-visible {
   border-color: var(--green);
-  outline: var(--focus-ring-width) solid var(--focus);
-  outline-offset: var(--focus-ring-offset);
 }
 .field__control[aria-invalid="true"] {
   border-color: var(--red);
 }
 .field__control[aria-invalid="true"]:focus-visible {
-  outline-color: var(--red);
+  --focus: var(--red);
 }
 .field__control:disabled {
   opacity: 0.6;
