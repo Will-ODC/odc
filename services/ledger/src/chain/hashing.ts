@@ -64,6 +64,20 @@ export function signingPreimage(e: UnhashedEvent): Buffer {
   return build(e, true);
 }
 
+/** REG_PRE(E, G), HA-15a. The checker selects it for registration v2 only. */
+export function registrationSigningPreimage(
+  e: UnhashedEvent,
+  genesisHash: string,
+): Buffer {
+  return Buffer.concat([
+    Buffer.from("ODC-REG2", "ascii"),
+    encStr(e.type),
+    u64(e.version),
+    encStr(genesisHash),
+    encodePayload(e.payload, true),
+  ]);
+}
+
 export function sha256Hex(bytes: Uint8Array): string {
   return createHash("sha256").update(bytes).digest("hex");
 }

@@ -27,11 +27,12 @@ import {
 } from "../../src/chain/checker.js";
 import { loadVectors, vectorBytes, type Vector } from "./support/fixtures.js";
 
-// The v1 registry as event-types.md ET-1/ET-2 state it; deliberately not
+// The event registry as event-types.md ET-1/ET-2 state it; deliberately not
 // imported from the code under test.
-const V1_REGISTRY = new Set([
+const FIXTURE_REGISTRY = new Set([
   "genesis/1",
   "participant_registered/1",
+  "participant_registered/2",
   "issue_created/1",
   "vote_cast/1",
 ]);
@@ -48,7 +49,7 @@ function firstUnregisteredLine(records: Uint8Array[]): number | undefined {
         type?: unknown;
         version?: unknown;
       };
-      if (!V1_REGISTRY.has(`${String(e.type)}/${String(e.version)}`))
+      if (!FIXTURE_REGISTRY.has(`${String(e.type)}/${String(e.version)}`))
         return i + 1;
     } catch {
       // Not JSON: the line is INVALID anyway, which is N's business.
@@ -108,7 +109,7 @@ function feed(bytes: Uint8Array): { line: number; kind: string } | undefined {
 describe("golden vectors (contracts/fixtures/index.json)", () => {
   it("every vector is exercised or skipped with a reason, and the checker agrees", (t) => {
     const all = loadVectors();
-    assert.equal(all.length, 150);
+    assert.equal(all.length, 161);
     const tally: Record<string, number> = {};
     const skipped: string[] = [];
     const early: string[] = [];
@@ -171,10 +172,10 @@ describe("golden vectors (contracts/fixtures/index.json)", () => {
     assert.equal(exercised + skipped.length, all.length);
     assert.equal(skipped.length, 1);
     assert.deepEqual(tally, {
-      VALID: 19,
+      VALID: 22,
       "VALID (flags dropped)": 4,
       PARTIAL: 15,
-      INVALID: 105,
+      INVALID: 113,
       "INVALID (flags dropped)": 6,
     });
     assert.equal(early.length, 7);

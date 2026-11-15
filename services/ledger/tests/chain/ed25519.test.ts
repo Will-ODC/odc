@@ -11,7 +11,10 @@ import {
   type VerificationKey,
 } from "../../src/chain/ed25519.js";
 import { parseLine, type Event } from "../../src/chain/canonical.js";
-import { signingPreimage } from "../../src/chain/hashing.js";
+import {
+  registrationSigningPreimage,
+  signingPreimage,
+} from "../../src/chain/hashing.js";
 import { sign, testKey } from "./support/builders.js";
 import { loadVectors, vectorLines } from "./support/fixtures.js";
 
@@ -234,7 +237,7 @@ describe("the golden vectors' keys and signatures", () => {
     assert.equal(ruleOf(decodeVerificationKey(line2Key("082"))), "ET-4c");
   });
 
-  it("verifies every signed event of every VALID vector over SIGN_PRE", () => {
+  it("verifies every signed event of every VALID vector over its signing preimage", () => {
     let checked = 0;
     for (const v of vectors.filter((x) => x.expect.verdict === "VALID")) {
       let genesis: Event | null = null;
@@ -249,9 +252,14 @@ describe("the golden vectors' keys and signatures", () => {
             : e.type === "vote_cast"
               ? genesis?.payload.registrar_pk
               : genesis?.payload.operator_pk;
+        assert.ok(genesis, v.id);
+        const message =
+          e.type === "participant_registered" && e.version === 2
+            ? registrationSigningPreimage(e, genesis.hash)
+            : signingPreimage(e);
         const r = verifySignature(
           key(String(signer)),
-          signingPreimage(e),
+          message,
           String(e.payload.sig),
         );
         assert.ok(r.ok, `${v.id} seq ${e.seq}`);

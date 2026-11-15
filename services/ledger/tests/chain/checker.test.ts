@@ -21,6 +21,8 @@ import {
   type RawPayload,
 } from "./support/builders.js";
 
+import { loadVectors, vectorBytes } from "./support/fixtures.js";
+
 const ALICE = testKey(0x11);
 const IDENTITY_KEY = "01" + "00".repeat(31);
 const T = (n: number): string => minute(n); // a batch instant, n minutes in
@@ -243,6 +245,20 @@ describe("checker: participant_registered and issue_created", () => {
       ),
       "ES-18",
     );
+  });
+
+  it("accepts registration signature reuse on its own genesis and refuses it on another", () => {
+    const vectors = loadVectors();
+    const checkVector = (id: string) => {
+      const vector = vectors.find((entry) => entry.id === id);
+      assert.ok(vector, id);
+      return verifyExport(vectorBytes(vector));
+    };
+    assert.ok(checkVector("153-registration-v2-duplicate").ok);
+    const replay = checkVector("156-registration-v2-other-genesis");
+    assert.ok(!replay.ok);
+    assert.equal(replay.line, 2);
+    assert.equal(replay.refusal.rule, "ET-5");
   });
 
   it("enforces title, choice_count and batching floors (ET-14, ET-14a, ET-14b)", () => {

@@ -3,7 +3,7 @@
 // `checkLine` applies every Stage A and Stage B check (EV-15) the new line
 // faces given the lines before it, and returns the state a verifier carries
 // to the next line. A line is accepted only if the export ending with it is
-// VALID under a verifier registering exactly the v1 pairs, run without
+// VALID under a verifier registering exactly these same pairs, run without
 // --head or --chain. An unregistered (type, version) is therefore refused
 // (that export would be PARTIAL), so the opaque-ballot rules ET-18b and
 // ET-24b never arise on a chain this checker accepts.
@@ -22,12 +22,18 @@ import {
   verifySignature,
   type VerificationKey,
 } from "./ed25519.js";
-import { computeHash, sha256Hex, signingPreimage } from "./hashing.js";
+import {
+  computeHash,
+  registrationSigningPreimage,
+  sha256Hex,
+  signingPreimage,
+} from "./hashing.js";
 
-/** The v1 registry (event-types.md ET-1, ET-2): `type/version`. */
+/** The event registry (event-types.md ET-1, ET-2): `type/version`. */
 export const REGISTERED_PAIRS: ReadonlySet<string> = new Set([
   "genesis/1",
   "participant_registered/1",
+  "participant_registered/2",
   "issue_created/1",
   "vote_cast/1",
 ]);
@@ -100,10 +106,15 @@ function keyOrRefuse(hex: string): VerificationKey {
   return r.key;
 }
 
-function sigOrRefuse(key: VerificationKey, event: Event, rule: string): void {
+function sigOrRefuse(
+  key: VerificationKey | string,
+  event: Event,
+  rule: string,
+  message?: Uint8Array,
+): void {
   const sig = event.payload.sig;
   if (typeof sig !== "string") refuse("ES-30", "sig is not a string");
-  const r = verifySignature(key, signingPreimage(event), sig);
+  const r = verifySignature(key, message ?? signingPreimage(event), sig);
   if (!r.ok) {
     throw new Refused({ ...r.refusal, reason: `${rule}: ${r.refusal.reason}` });
   }
@@ -180,10 +191,23 @@ function checkGenesis(e: Event, state: ChainState): ChainState {
   return { ...state, genesis: { genesisHash: e.hash, operator, registrar } };
 }
 
-function checkParticipant(e: Event, state: ChainState): ChainState {
+function checkParticipant(
+  e: Event,
+  state: ChainState,
+  genesis: GenesisKeys,
+): ChainState {
   checkKeys(e.payload, ["pubkey", "sig"]);
-  const key = keyOrRefuse(str(e.payload, "pubkey")); // ID-3, ET-4b, ET-4c
-  sigOrRefuse(key, e, "ET-10");
+  const pubkey = str(e.payload, "pubkey");
+  if (e.version === 2) {
+    sigOrRefuse(
+      pubkey,
+      e,
+      "ET-10a",
+      registrationSigningPreimage(e, genesis.genesisHash),
+    );
+  } else {
+    sigOrRefuse(keyOrRefuse(pubkey), e, "ET-10");
+  }
   return state;
 }
 
@@ -294,7 +318,7 @@ export function checkLine(state: ChainState, line: Uint8Array): LineResult {
         refusal: {
           kind: e.seq === 1 ? "invalid" : "unregistered",
           rule: e.seq === 1 ? "EV-20" : "EV-26",
-          reason: `(${e.type}, ${e.version}) is not registered in v1`,
+          reason: `(${e.type}, ${e.version}) is not registered`,
         },
       };
     }
@@ -305,7 +329,7 @@ export function checkLine(state: ChainState, line: Uint8Array): LineResult {
       const g = state.genesis;
       if (g === null) return refuse("ES-33", "no genesis");
       if (e.type === "participant_registered")
-        next = checkParticipant(e, state);
+        next = checkParticipant(e, state, g);
       else if (e.type === "issue_created") next = checkIssue(e, state, g);
       else next = checkVote(e, state, g);
     }
