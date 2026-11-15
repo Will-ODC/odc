@@ -219,8 +219,3 @@
   opacity: 0.55;
   cursor: default;
 }
-
-/* Headings receive route focus for announcements, without a control outline. */
-.welcome h1:focus {
-  outline: none;
-}

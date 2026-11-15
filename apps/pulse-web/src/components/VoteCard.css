@@ -346,3 +346,8 @@
 .vote-card button[aria-disabled="true"]:focus-visible {
   opacity: 1;
 }
+
+/* Close keeps its name while checking; mute the icon, not the focus ring. */
+.vote-card button.vote-card__close[aria-disabled="true"] {
+  color: var(--muted);
+}

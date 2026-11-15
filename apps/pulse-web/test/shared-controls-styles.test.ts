@@ -157,22 +157,44 @@ it("defines the focus ring once, including choice wrappers and saved-answer focu
     ),
   );
   expect(rings).toEqual(["App.css"]);
-  // Catch literal/calc copies too, while allowing error colours and local
-  // offset tokens that preserve the existing layouts.
-  const copies = files
-    .filter((file) => file !== "App.css")
-    .flatMap((file) =>
-      [
-        ...read(`../src/${file}`)
-          .replaceAll(":not(:focus-visible)", "")
-          .matchAll(/([^{}]*:focus-visible[^{}]*)\{([^}]*)\}/g),
-      ]
-        .filter(([, , body]) =>
-          /outline(?:-width|-style|-offset)?\s*:/.test(body!),
-        )
-        .map(() => file),
-    );
-  expect(copies).toEqual([]);
+  // Even a non-focus selector can outrank the shared :focus-visible rule.
+  // Only announcement targets and explicitly unfocused validation rings may
+  // own outlines outside App.css. Check each selector in a grouped rule.
+  const announcements = new Set([
+    ".welcome h1:focus",
+    ".vote-card__note:focus",
+    ".signin__title:focus",
+    ".post__title:focus",
+    ".conversation__hero h1:focus",
+    ".results:focus",
+  ]);
+  const sharedSelectors = new Set([
+    ":focus-visible",
+    ".choice:has(input:focus-visible)",
+    ".vote-card__choice:has(input:focus-visible)",
+    '.vote-card__yours[tabindex="-1"]:focus',
+    ".choice input:focus-visible",
+    ".vote-card__choice input:focus-visible",
+  ]);
+  const overrides = files.flatMap((file) =>
+    [
+      ...read(`../src/${file}`)
+        .replace(/\/\*[\s\S]*?\*\//g, "")
+        .matchAll(/([^{}]+)\{([^{}]*)\}/g),
+    ]
+      .filter(([, , body]) => /(?:^|;)\s*outline(?:-[a-z-]+)?\s*:/.test(body!))
+      .flatMap(([, selectors]) =>
+        selectors!.split(",").map((selector) => selector.trim()),
+      )
+      .filter((selector) =>
+        file === "App.css"
+          ? !sharedSelectors.has(selector)
+          : !announcements.has(selector) &&
+            !selector.includes(":not(:focus-visible)"),
+      )
+      .map((selector) => `${file}: ${selector}`),
+  );
+  expect(overrides).toEqual([]);
 });
 
 it.each([
@@ -193,3 +215,40 @@ it.each([
     expect(body).toContain("opacity: 1;");
   },
 );
+
+it("mutes the unavailable Close icon without fading its focus ring", () => {
+  const css = read("../src/components/VoteCard.css");
+  const body =
+    /\.vote-card button\.vote-card__close\[aria-disabled="true"\] \{([^}]*)\}/.exec(
+      css,
+    )?.[1];
+  expect(body).toContain("color: var(--muted);");
+  expect(body).not.toContain("opacity:");
+});
+
+it("draws one ring around a focused choice, without a second ring on its input", () => {
+  const app = read("../src/App.css");
+  expect(app).toMatch(
+    /\.choice input:focus-visible,\s*\.vote-card__choice input:focus-visible \{\s*outline: none;\s*\}/,
+  );
+});
+
+it.each([
+  [
+    "screens/NewPoll.css",
+    '.post__promise input[aria-invalid="true"]:focus-visible',
+  ],
+  [
+    "screens/Contributions.css",
+    '.contribution-check input[aria-invalid="true"]:focus-visible',
+  ],
+  [
+    "components/Field.css",
+    '.field__control[aria-invalid="true"]:focus-visible',
+  ],
+])("%s keeps invalid controls' focused rings red", (file, selector) => {
+  const css = read(`../src/${file}`);
+  const body = css.slice(css.indexOf(`${selector} {`)).split("}")[0];
+  expect(css).toContain(`${selector} {`);
+  expect(body).toContain("--focus: var(--red);");
+});

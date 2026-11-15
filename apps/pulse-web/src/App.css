@@ -40,8 +40,16 @@ a {
 /* One ring for keyboard focus, labelled choices and the saved-answer announcement. */
 :focus-visible,
 .choice:has(input:focus-visible),
+/* VoteCard */
 .vote-card__choice:has(input:focus-visible),
+/* VoteCard */
 .vote-card__yours[tabindex="-1"]:focus {
   outline: var(--focus-ring-width) solid var(--focus);
   outline-offset: var(--focus-ring-offset);
+}
+
+/* The choice wrapper draws the ring around the whole labelled row. */
+.choice input:focus-visible,
+.vote-card__choice input:focus-visible {
+  outline: none;
 }

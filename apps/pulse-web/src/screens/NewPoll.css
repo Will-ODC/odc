@@ -208,6 +208,9 @@
   font-weight: 700;
 }
 
+.post__promise input[aria-invalid="true"]:focus-visible {
+  --focus: var(--red);
+}
 .post__promise input[aria-invalid="true"]:not(:focus-visible) {
   outline: var(--focus-ring-width) solid var(--red);
   outline-offset: var(--focus-ring-offset);

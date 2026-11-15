@@ -33,7 +33,7 @@
   border-color: var(--red);
 }
 .field__control[aria-invalid="true"]:focus-visible {
-  outline-color: var(--red);
+  --focus: var(--red);
 }
 .field__control:disabled {
   opacity: 0.6;

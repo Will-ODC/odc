@@ -182,6 +182,9 @@
   accent-color: var(--green);
   flex-shrink: 0;
 }
+.contribution-check input[aria-invalid="true"]:focus-visible {
+  --focus: var(--red);
+}
 .contribution-check input[aria-invalid="true"]:not(:focus-visible) {
   outline: var(--focus-ring-width) solid var(--red);
   outline-offset: var(--focus-ring-offset);

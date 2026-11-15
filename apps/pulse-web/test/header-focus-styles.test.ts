@@ -42,7 +42,4 @@ it("draws Next question as quiet text with the standard focus ring, not a green 
   // The old full-width green Next, and the green last button in the row, are gone.
   expect(css).not.toMatch(/\.vote-card__next > button/);
   expect(css).not.toMatch(/\.vote-card__actions > button:last-child/);
-  const app = readFileSync(new URL("../src/App.css", import.meta.url), "utf8");
-  expect(app).toContain(":focus-visible,");
-  expect(app).toContain("outline: var(--focus-ring-width) solid var(--focus);");
 });
