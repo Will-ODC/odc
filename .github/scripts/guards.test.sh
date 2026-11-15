@@ -69,7 +69,7 @@ guard_output=""
 # Expected guard failures must be captured explicitly so `set -e` still makes
 # every fixture setup command fail fast.
 run_contract_guard() {
-  if guard_output="$(cd "$1" && BASE=base HEAD=HEAD bash "$GUARD" 2>&1)"; then
+  if guard_output="$(cd "$1" && BASE="${2:-base}" HEAD=HEAD bash "$GUARD" 2>&1)"; then
     guard_status=0
   else
     guard_status=$?
@@ -77,7 +77,7 @@ run_contract_guard() {
 }
 
 run_diff_size() {
-  if guard_output="$(cd "$1" && BASE=base HEAD=HEAD bash "$DIFFSIZE" 2>&1)"; then
+  if guard_output="$(cd "$1" && BASE="${2:-base}" HEAD=HEAD bash "$DIFFSIZE" 2>&1)"; then
     guard_status=0
   else
     guard_status=$?
@@ -131,6 +131,16 @@ cleanup() {
   exit "$status"
 }
 trap 'cleanup $?' EXIT
+
+# Missing comparison refs must fail before an empty discovery can pass.
+R="$TMP/missing-base"
+new_repo "$R"
+run_contract_guard "$R" does-not-exist
+assert_failure "::error::Failed to discover contracts changes." \
+  "contracts-guard rejects a missing base → fail"
+run_diff_size "$R" does-not-exist
+assert_failure "::error::Failed to discover diff size." \
+  "diff-size rejects a missing base → fail"
 
 # --- Scenario 1: contracts/ touched, changelog entry, no spec → PASS (exit 0)
 R="$TMP/s1"
