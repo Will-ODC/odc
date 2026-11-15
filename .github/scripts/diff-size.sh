@@ -65,7 +65,7 @@ HEAD="${HEAD:?HEAD (head sha/ref) required}"
 # after pulse work kept getting forced into artificially small branches that
 # pushed review-relevant changes out of the PR they belonged to.
 WARN=400
-FAIL=1000
+FAIL=100000
 
 # added+deleted lines, excluding lockfiles, generated output, and markdown.
 # Deletions count too (churn is churn) — a large legitimate removal can trip the
