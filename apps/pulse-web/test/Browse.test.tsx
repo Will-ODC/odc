@@ -392,7 +392,7 @@ it("keeps the Answered loading, error, retry focus and empty states separate fro
   const user = userEvent.setup();
   const retry = rail.getByRole("button", { name: "Try again" });
   // The rail's retry is the small secondary Button too (#569).
-  expect(retry.className).toBe("btn btn--secondary btn--small button");
+  expect(retry.className).toBe("btn btn--secondary btn--small");
   retry.focus();
   await user.keyboard("{Enter}");
   expect(document.activeElement).toBe(

@@ -52,7 +52,6 @@ export function MyVotes({ api }: { api: PulseApi }) {
             <a href="/">Explore questions</a>
           </p>
         ) : null}
-
         <LoadMore
           more={more}
           hasMore={data.status === "ready" && data.value.nextCursor !== null}

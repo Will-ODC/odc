@@ -9,7 +9,7 @@ import {
 import { AppShell } from "../components/AppShell.js";
 import { Button } from "../components/Button.js";
 import { LoadMore } from "../components/LoadMore.js";
-import { PageBanner } from "../components/PageBanner.js";
+import { SiteBanner } from "../components/SiteBanner.js";
 import { usePageBanner } from "../hooks/use-page-banner.js";
 import { ViewState } from "../components/ViewState.js";
 import { pathOf } from "../flow/route.js";
@@ -44,7 +44,7 @@ export function MemberProfile({
   const banner = usePageBanner(api);
   const href = pathOf({ kind: "memberProfile", publicId });
   return (
-    <AppShell banner={<PageBanner {...banner} currentHref={href} />}>
+    <AppShell banner={<SiteBanner {...banner} currentHref={href} />}>
       <article className="profile profile--public">
         <ViewState data={state} variant="compact" onRetry={retry}>
           {(profile) => (
@@ -83,7 +83,6 @@ export function MemberProfile({
             </>
           )}
         </ViewState>
-
         {state.status === "empty" ? (
           <Button variant="secondary" href="/">
             Go to Pulse home
@@ -165,7 +164,6 @@ function ProfileContributions({
           </ul>
         )}
       </ViewState>
-
       <LoadMore
         more={more}
         hasMore={data.status === "ready" && data.value.nextCursor !== null}

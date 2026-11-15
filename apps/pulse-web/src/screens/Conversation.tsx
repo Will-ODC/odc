@@ -1,5 +1,3 @@
-import { useSuggestedVotes } from "../hooks/use-suggested-votes.js";
-import { Button } from "../components/Button.js";
 import {
   useCallback,
   useEffect,
@@ -8,6 +6,8 @@ import {
   useState,
 } from "react";
 import type { ReactNode } from "react";
+import { Button } from "../components/Button.js";
+import { useSuggestedVotes } from "../hooks/use-suggested-votes.js";
 import type { Ballot, MyVote, Poll, PulseApi, Results } from "../api/types.js";
 import { UNREACHABLE } from "../api/types.js";
 import type { Route } from "../flow/route.js";
@@ -399,7 +399,6 @@ export function Conversation({
       </main>
       <SuggestedVotesRail
         {...suggestions}
-        onRetry={suggestions.retry}
         current={at}
         disabled={busy}
         onOpen={go}
@@ -565,7 +564,6 @@ function LoadedQuestion({
             </ViewState>
             {loaded.status === "empty" ? (
               <Button
-                className="button"
                 variant="secondary"
                 size="small"
                 type="button"

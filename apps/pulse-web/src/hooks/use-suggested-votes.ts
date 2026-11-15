@@ -112,7 +112,7 @@ export function useSuggestedVotes({
   return {
     visible,
     data: view,
-    retry: () => {
+    onRetry: () => {
       if (data.status === "error") retry();
       if (history.status === "error") retryHistory();
       setAttempt((value) => value + 1);

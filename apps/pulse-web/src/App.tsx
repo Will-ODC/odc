@@ -5,7 +5,7 @@ import type { Route } from "./flow/route.js";
 import { FIRST_POLL_ID, pathOf } from "./flow/route.js";
 import { browserStore, takeReturn } from "./flow/sign-in-return.js";
 import { AppShell } from "./components/AppShell.js";
-import { PageBanner } from "./components/PageBanner.js";
+import { SiteBanner } from "./components/SiteBanner.js";
 import { usePageBanner } from "./hooks/use-page-banner.js";
 import { useRoute } from "./hooks/use-route.js";
 import { Conversation } from "./screens/Conversation.js";
@@ -293,7 +293,7 @@ function PageHeader({
 }) {
   const banner = usePageBanner(api);
   return (
-    <PageBanner
+    <SiteBanner
       {...banner}
       {...(currentHref ? { currentHref } : {})}
       {...(signInHref !== undefined ? { signInHref } : {})}

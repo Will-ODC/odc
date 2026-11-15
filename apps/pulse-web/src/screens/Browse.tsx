@@ -1,5 +1,5 @@
-import { useSuggestedVotes } from "../hooks/use-suggested-votes.js";
 import { useCallback, useEffect, useRef, useState } from "react";
+import { useSuggestedVotes } from "../hooks/use-suggested-votes.js";
 import {
   contributionsApi,
   type ContributionsApi,
@@ -211,7 +211,7 @@ export function Browse({
               <Button
                 variant="secondary"
                 size="small"
-                className="button browse__action"
+                className="browse__action"
                 type="button"
                 onClick={retry}
               >
@@ -269,7 +269,7 @@ export function Browse({
             />
           ) : null}
         </div>
-        <SuggestedVotesRail {...suggestions} onRetry={suggestions.retry} />
+        <SuggestedVotesRail {...suggestions} />
       </main>
     </div>
   );

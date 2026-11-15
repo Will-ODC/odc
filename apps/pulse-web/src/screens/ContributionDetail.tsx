@@ -1,4 +1,3 @@
-import { useSuggestedVotes } from "../hooks/use-suggested-votes.js";
 import {
   useCallback,
   useEffect,
@@ -7,6 +6,7 @@ import {
   useState,
 } from "react";
 import type { FormEvent } from "react";
+import { useSuggestedVotes } from "../hooks/use-suggested-votes.js";
 import type { PulseApi } from "../api/types.js";
 import {
   accountChangedMessage,
@@ -331,9 +331,7 @@ export function ContributionDetail({
           }}
         />
       }
-      aside={
-        <SuggestedVotesRail {...suggestions} onRetry={suggestions.retry} />
-      }
+      aside={<SuggestedVotesRail {...suggestions} />}
     >
       <section className="contributions-page">
         <a className="contribution-back" href="/?filter=contributions">
@@ -347,7 +345,7 @@ export function ContributionDetail({
             <Button
               variant="secondary"
               size="small"
-              className="button contribution-retry"
+              className="contribution-retry"
               type="button"
               onClick={() => {
                 retrying.current = true;

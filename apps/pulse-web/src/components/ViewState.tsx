@@ -56,7 +56,6 @@ export function ViewState<T>({
           </div>
           {data.status === "error" && onRetry ? (
             <Button
-              className="button"
               variant="secondary"
               size="small"
               type="button"

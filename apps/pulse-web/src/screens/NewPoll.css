@@ -176,7 +176,6 @@
   margin-top: 0;
 }
 
-.post__retry,
 .post__info-close {
   margin-top: var(--step);
 }

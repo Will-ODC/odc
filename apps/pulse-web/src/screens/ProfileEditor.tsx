@@ -154,7 +154,6 @@ function OwnerEditor({
           <ProfileForm initial={profile} save={save} expired={expired} />
         )}
       </ViewState>
-
       {state.status === "empty" ? <ProfileSignIn /> : null}
     </>
   );

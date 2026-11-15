@@ -23,7 +23,6 @@ function SuggestedVotes({
   return (
     <SuggestedVotesRail
       {...suggestions}
-      onRetry={suggestions.retry}
       {...(current ? { current } : {})}
       {...(disabled ? { disabled } : {})}
       {...(onOpen ? { onOpen } : {})}

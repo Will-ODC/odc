@@ -74,7 +74,6 @@ describe("the light look's invariants (#482)", () => {
     const buttons: Array<readonly [string, string]> = [
       ["components/VoteCard.css", ".vote-card button"],
       ["components/TwoPress.css", ".two-press__action--secondary"],
-      ["components/ResultsPanel.css", ".results__retry"],
       ["components/DecisionDialog.css", ".decision__close"],
       ["components/CopyLink.css", ".copy-link button"],
       ["components/TopBanner.css", ".banner__actions > .banner__sign-in"],
