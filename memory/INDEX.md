@@ -77,17 +77,17 @@ line of memory recording it** (pulse, PRs #79–#97). That is the failure this
 index exists to prevent, and the fix is not diligence, it is having an obvious
 destination for every kind of fact.
 
-| The thing you learned                          | Goes in                                                         |
-| ---------------------------------------------- | --------------------------------------------------------------- |
-| A ticket landed / a phase moved                | The workstream's memory entry, **at merge time on master**      |
-| A choice with alternatives and consequences    | A new ADR in `docs/decisions/` (copy `0000-template.md`)        |
-| A question you could not settle                | `memory/OPEN-QUESTIONS.md`, under a dated heading               |
-| A Pulse decision waiting on the operator       | `memory/pulse.md` → "Open decisions (operator)"                 |
-| A trap the next session will otherwise re-hit  | "Blockers & live cautions" in the workstream's memory entry     |
-| A rule about how we work                       | The matching `.claude/skills/odc-*` skill — **one place only**  |
-| A feature, bounded epic or defect fix, not a finding on the PR under review | A GitHub issue (`create-issue`, "What gets an issue") — the work queue |
-| Status, a handoff, a deferred idea             | Memory, never an issue                                          |
-| A **new workstream**                           | A new `memory/<name>.md` **and a row in the two tables above**  |
+| The thing you learned                                          | Goes in                                                                |
+| -------------------------------------------------------------- | ---------------------------------------------------------------------- |
+| A ticket landed / a phase moved                                | The workstream's memory entry, **at merge time on master**             |
+| A choice with alternatives and consequences                    | A new ADR in `docs/decisions/` (copy `0000-template.md`)               |
+| A question you could not settle                                | `memory/OPEN-QUESTIONS.md`, under a dated heading                      |
+| A Pulse decision waiting on the operator                       | `memory/pulse.md` → "Open decisions (operator)"                        |
+| A trap the next session will otherwise re-hit                  | "Blockers & live cautions" in the workstream's memory entry            |
+| A rule about how we work                                       | The matching `.claude/skills/odc-*` skill — **one place only**         |
+| A feature, or a bug too big for or unrelated to the PR in hand | A GitHub issue (`create-issue`, "What gets an issue") — the work queue |
+| Status, a handoff, a deferred idea                             | Memory, never an issue                                                 |
+| A **new workstream**                                           | A new `memory/<name>.md` **and a row in the two tables above**         |
 
 **The rule that keeps this file honest, and the CI job that enforces it:** a
 directory that agents commit to and that has no row in the workstream table above

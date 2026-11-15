@@ -137,7 +137,7 @@ A small invited pilot comes only after 3-6. None of this authorizes a deploy.
    order of steps.
 4. **Open follow-ups:** #536 Conversation logic into
    flow/ and hooks; #537 VoteCard split; #538 CSS encapsulation and tokens;
-   #534 part 3 (Conversation, in progress); #539 step 2 (one session provider; operator
+   #534 part 3 (Conversation); #539 step 2 (one session provider; operator
    decision); #534 also carries the faded focus ring on `aria-disabled`
    buttons (#659 UI review); #597 contribution threads; #598 creation-form fields;
    #499 dark mode and #500 compact posted notice (mockups merged in #521, not
