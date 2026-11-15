@@ -152,6 +152,10 @@ func TestChainFlag(t *testing.T) {
 		{"match", []string{p, "--chain", gen}, reValid, 0, ""},
 		{"match-equals-form", []string{p, "--chain=" + gen}, reValid, 0, ""},
 		{"mismatch", []string{p, "--chain", otherHash}, reInvalid, 1, "1"},
+		// API.md: "`--head=<hash>` is also accepted" — same verdicts as the
+		// two-argument form.
+		{"head-match-equals-form", []string{p, "--head=" + head}, reValid, 0, ""},
+		{"head-mismatch-equals-form", []string{p, "--head=" + otherHash}, reInvalid, 1, "4"},
 		{"chain-and-head-both-correct", []string{p, "--chain", gen, "--head", head}, reValid, 0, ""},
 		{"chain-correct-head-wrong", []string{p, "--chain", gen, "--head", otherHash}, reInvalid, 1, "4"},
 		{"chain-wrong-head-correct", []string{p, "--head", head, "--chain", otherHash}, reInvalid, 1, "1"},
@@ -187,7 +191,12 @@ func TestChainFlag(t *testing.T) {
 	}
 }
 
-func TestChainFlagMalformedIsToolError(t *testing.T) {
+// TestToolErrorsNeverAVerdict: a malformed --chain or --head value and bad
+// usage are tool-level errors — exit 3, nothing on stdout, no EX-24 report
+// (API.md "Exit codes" and "Stored-claim report on stderr"). Usage is the
+// invocation line `verify <export.ndjson> [--head <hash>] [--chain
+// <genesis-hash>]`: exactly one path and only those flags.
+func TestToolErrorsNeverAVerdict(t *testing.T) {
 	p := writeExport(t, "valid", string(fixtureVector(t, "002-four-types.ndjson")))
 	for _, args := range [][]string{
 		{p, "--chain", upperHash},
@@ -196,16 +205,24 @@ func TestChainFlagMalformedIsToolError(t *testing.T) {
 		{p, "--chain=xyz"},
 		{p, "--chain="},
 		{p, "--chain"},
+		// Malformed --head, = form: a missing value.
+		{p, "--head="},
+		// Usage: no export path at all, even with a well-formed flag.
+		{"--chain", otherHash},
+		// Usage: a second export path (both readable, so not an I/O error).
+		{p, p},
+		// Usage: a flag the invocation line does not list.
+		{p, "--bogus"},
 	} {
 		stdout, stderr, code := runCLIArgs(t, args...)
 		if code != 3 {
-			t.Errorf("%v: exit %d, want 3", args[1:], code)
+			t.Errorf("%q: exit %d, want 3", args, code)
 		}
 		if stdout != "" {
-			t.Errorf("%v: tool error printed a verdict: %q", args[1:], stdout)
+			t.Errorf("%q: tool error printed a verdict: %q", args, stdout)
 		}
 		if hasReport(stderr) {
-			t.Errorf("%v: EX-24 report on a tool error: %q", args[1:], stderr)
+			t.Errorf("%q: EX-24 report on a tool error: %q", args, stderr)
 		}
 	}
 }
