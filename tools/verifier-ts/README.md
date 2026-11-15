@@ -181,7 +181,11 @@ Two stages, per `evolution.md` EV-6/EV-15:
   ET-9d distinctness of the two `genesis` keys, Ed25519
   signatures under the type's named key (with the ET-4a/ET-4b canonical-encoding
   and ET-4c prime-order checks run on the raw bytes _before_ the verify
-  primitive), title/`choice_count`/`choice` bounds, the `ballot_batch_interval_ms`
+  primitive). Version 2 participant registrations sign the verified genesis
+  hash and public key with the HA-15a preimage. The signature can be reused at
+  another position on that chain (ET-10a). Version 1 participant registrations
+  use the position-bound HA-15 preimage. Stage B also checks
+  title/`choice_count`/`choice` bounds, the `ballot_batch_interval_ms`
   and `ballot_batch_min` floors an `issue_created` declares (ET-14b), `issue_id`
   back-references, and the ballot publication discipline of `event-types.md`
   v12 (`src/batching.ts`):

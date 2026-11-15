@@ -19,6 +19,16 @@ Format (newest first, one entry per merged contracts change):
 
 ---
 
+## event-types.md v18 · event-schema.md v9 · hashing.md v4 · export-format.md v7 · evolution.md v13 · fixtures/README.md v19 — Registration v2 (ADR-0043)
+
+- **ET-10a / HA-15a.** Register a version 2 self-signature tied to the genesis
+  hash. The event hash, payload key set and all version 1 validation are
+  unchanged. ES-32, HA-16, EX-11 and EV-15 distinguish the two preimages.
+- **ET-9a / ET-21 / ET-21b.** Describe the registrar split and deterministic
+  production signing as obligations outside verifier verdicts.
+- **Fixtures 151–161.** Pin registration v2 signing, same-chain reuse,
+  cross-version and cross-genesis rejection, exact keys and canonical checks.
+
 ## event-types.md v17 · event-schema.md v8 · evolution.md v12 · export-format.md v6 · hashing.md v3 · ids.md v2 · read-api.md v4 · fixtures/README.md v18 · README.md — 2026-10-21 — T9a: third re-audit T3-1 to T3-3; RELEASE CANDIDATE
 
 - **README.md**: status DRAFTING → **RELEASE CANDIDATE** (ADR-0007). No tag, so

@@ -11,7 +11,9 @@ CANDIDATE (ADR-0007).
 
 The append-only, hash-chained event log: the single writer of truth. Every
 event is checked before it is stored (`evolution.md` EV-26), so the stored
-log always exports as a file both independent verifiers call `VALID`. It owns
+log always exports as a file both independent verifiers call `VALID`. The
+checker verifies both versions of `participant_registered` in exports.
+It owns
 its Postgres database; no other service reads it. Rules for agents are in
 `CLAUDE.md`; the full spec is `docs/implementation-plan.md` §"ledger".
 

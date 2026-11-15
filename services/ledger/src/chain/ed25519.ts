@@ -88,9 +88,11 @@ export function decodeVerificationKey(hex: string): KeyResult {
  * ET-4 with ET-4a and ET-5: `sig` (128 lowercase hex, ES-31) must have a
  * canonical S and R, and must satisfy [S]B == R + [k]A with
  * k = SHA-512(R || A || M) mod L over the raw message (HA-16).
+ * A key declared on this same line can be passed as hex so its curve checks
+ * follow the signature's raw canonical checks.
  */
 export function verifySignature(
-  key: VerificationKey,
+  key: VerificationKey | string,
   message: Uint8Array,
   sigHex: string,
 ): SigResult {
@@ -102,6 +104,11 @@ export function verifySignature(
   if (s >= L) return invalid("ET-4a", "sig S is not canonical (S >= L)");
   if (!isCanonicalPointEncoding(rBytes)) {
     return invalid("ET-4a", "sig R is not a canonical encoding");
+  }
+  if (typeof key === "string") {
+    const decoded = decodeVerificationKey(key);
+    if (!decoded.ok) return decoded;
+    key = decoded.key;
   }
   let r: Point;
   try {

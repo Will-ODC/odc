@@ -2006,6 +2006,154 @@
         "EX-2"
       ],
       "note": "A title holding the raw octets e2 82 followed by a space: the first two octets of the three-byte sequence for U+20AC, cut short, so the space arrives where a continuation octet is required: INVALID at line 2. A WHATWG decoder (JavaScript's TextDecoder and Buffer) reads one U+FFFD for the cut-short sequence, and line 2 is hashed and signed over that title, so a JavaScript verifier that substitutes instead of rejecting finds the hash, the signature and the link correct. Go's utf8 package substitutes one U+FFFD per octet, two here, so a lenient Go verifier fails the hash check instead, and still reports INVALID at line 2. EX-2 also rejects these octets."
+    },
+    {
+      "id": "151-registration-v2",
+      "export": "vectors/151-registration-v2.ndjson",
+      "expect": {
+        "verdict": "VALID"
+      },
+      "cites": [
+        "ET-2",
+        "ET-10a",
+        "HA-15a",
+        "HA-16"
+      ],
+      "note": "A self-signed version 2 registration over the genesis hash. Uses the key and preimage of the worked example in hashing.md §7."
+    },
+    {
+      "id": "152-registration-v2-delayed",
+      "export": "vectors/152-registration-v2-delayed.ndjson",
+      "expect": {
+        "verdict": "VALID"
+      },
+      "cites": [
+        "ET-10a",
+        "HA-15a"
+      ],
+      "note": "The very same signature as 151 still verifies after an issue changes the registration's seq, ts and prev_hash."
+    },
+    {
+      "id": "153-registration-v2-duplicate",
+      "export": "vectors/153-registration-v2-duplicate.ndjson",
+      "expect": {
+        "verdict": "VALID"
+      },
+      "cites": [
+        "ET-10a",
+        "ET-12",
+        "HA-15a"
+      ],
+      "note": "Two correctly linked events carry the same public key and signature. Reusing the registration signature on the same chain is valid."
+    },
+    {
+      "id": "154-registration-v2-signed-as-v1",
+      "export": "vectors/154-registration-v2-signed-as-v1.ndjson",
+      "expect": {
+        "verdict": "INVALID",
+        "line": 2
+      },
+      "cites": [
+        "ET-10a",
+        "HA-15",
+        "HA-15a",
+        "HA-16"
+      ],
+      "note": "Uses the HA-15 signing construction over the version 2 envelope. The event hash is correct, but the signature fails HA-15a."
+    },
+    {
+      "id": "155-registration-v1-signed-as-v2",
+      "export": "vectors/155-registration-v1-signed-as-v2.ndjson",
+      "expect": {
+        "verdict": "INVALID",
+        "line": 2
+      },
+      "cites": [
+        "ET-10",
+        "HA-15",
+        "HA-15a",
+        "HA-16"
+      ],
+      "note": "Uses the valid version 2 signature from 151 on a version 1 event. Version 1 still requires HA-15."
+    },
+    {
+      "id": "156-registration-v2-other-genesis",
+      "export": "vectors/156-registration-v2-other-genesis.ndjson",
+      "expect": {
+        "verdict": "INVALID",
+        "line": 2
+      },
+      "cites": [
+        "ET-7a",
+        "ET-10a",
+        "HA-15a"
+      ],
+      "note": "The signature from 151 is replayed on a chain with the same operator key and chain_id but a different genesis hash. The line links to the new genesis."
+    },
+    {
+      "id": "157-registration-v2-extra-key",
+      "export": "vectors/157-registration-v2-extra-key.ndjson",
+      "expect": {
+        "verdict": "INVALID",
+        "line": 2
+      },
+      "cites": [
+        "ES-18",
+        "ET-10a"
+      ],
+      "note": "The payload contains an extra scalar. Its signature covers that extra field as well, so the exact payload key-set check is required."
+    },
+    {
+      "id": "158-registration-v2-noncanonical-s",
+      "export": "vectors/158-registration-v2-noncanonical-s.ndjson",
+      "expect": {
+        "verdict": "INVALID",
+        "line": 2
+      },
+      "cites": [
+        "ET-4a",
+        "ET-10a"
+      ],
+      "note": "Replaces S with S + L and recomputes the event hash. The version 2 path still rejects non-canonical S."
+    },
+    {
+      "id": "159-registration-v2-noncanonical-r",
+      "export": "vectors/159-registration-v2-noncanonical-r.ndjson",
+      "expect": {
+        "verdict": "INVALID",
+        "line": 2
+      },
+      "cites": [
+        "ET-4a",
+        "ET-10a"
+      ],
+      "note": "Replaces R with an encoding whose y-coordinate is at least p. The event hash covers the changed signature."
+    },
+    {
+      "id": "160-registration-v2-noncanonical-key",
+      "export": "vectors/160-registration-v2-noncanonical-key.ndjson",
+      "expect": {
+        "verdict": "INVALID",
+        "line": 2
+      },
+      "cites": [
+        "ET-4b",
+        "ET-10a"
+      ],
+      "note": "Uses a non-canonical encoding of the identity point with a canonical degenerate signature. Already-invalid key encoding must be rejected before the subgroup check."
+    },
+    {
+      "id": "161-registration-v2-smallorder-key",
+      "export": "vectors/161-registration-v2-smallorder-key.ndjson",
+      "expect": {
+        "verdict": "INVALID",
+        "line": 2
+      },
+      "cites": [
+        "ET-4c",
+        "ET-10a"
+      ],
+      "note": "Uses the canonical identity point as the public key and a canonical degenerate signature. The prime-order key check still rejects it."
     }
   ]
 }

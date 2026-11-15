@@ -12,7 +12,11 @@ import {
   type ParsedEvent,
   type PayloadEntry,
 } from "./parse.js";
-import { computeHash, signingPreimage } from "./hashing.js";
+import {
+  computeHash,
+  registrationSigningPreimage,
+  signingPreimage,
+} from "./hashing.js";
 import { excerpt } from "./report.js";
 import {
   ed25519Verify,
@@ -56,16 +60,16 @@ const HEX64 = /^[0-9a-f]{64}$/;
 const HEX128 = /^[0-9a-f]{128}$/;
 const CR = 0x0d;
 
-// The v1 registry: only these (type, version) pairs get Stage B (EV-6).
-const REGISTERED = new Map<string, number>([
-  ["genesis", 1],
-  ["participant_registered", 1],
-  ["issue_created", 1],
-  ["vote_cast", 1],
+// Only registered (type, version) pairs get Stage B (ET-2/EV-6).
+const REGISTERED = new Map<string, readonly number[]>([
+  ["genesis", [1]],
+  ["participant_registered", [1, 2]],
+  ["issue_created", [1]],
+  ["vote_cast", [1]],
 ]);
 
 function isRegistered(type: string, version: number): boolean {
-  return REGISTERED.get(type) === version;
+  return REGISTERED.get(type)?.includes(version) ?? false;
 }
 
 // `genesis` payload keys (event-types.md §genesis table, ES-18 / ES-34).
@@ -197,7 +201,11 @@ function titleOk(title: string): boolean {
  * type-specific semantic checks; false (INVALID) otherwise. Mutates `state` for
  * genesis (keys) and issue_created (issue registry) on success.
  */
-function stageB(ev: ParsedEvent, state: ChainState): boolean {
+function stageB(
+  ev: ParsedEvent,
+  state: ChainState,
+  genesisHash: string | null,
+): boolean {
   switch (ev.type) {
     case "genesis": {
       // ES-18 + ES-34: five required keys, two OPTIONAL ancestry keys.
@@ -291,10 +299,16 @@ function stageB(ev: ParsedEvent, state: ChainState): boolean {
       if (sigHex === null || !HEX128.test(sigHex)) return false;
       const pub = Buffer.from(pubHex, "hex");
       const sig = Buffer.from(sigHex, "hex");
-      if (!isCanonicalKeyEncoding(pub) || !isPrimeOrderKey(pub)) return false; // ET-4b/4c
       if (!isCanonicalSigEncoding(sig)) return false; // ET-4a
-      if (!ed25519Verify(signingPreimage(ev), sig, pub)) return false; // ET-10
-      return true;
+      if (!isCanonicalKeyEncoding(pub)) return false; // ET-4b
+      if (!isPrimeOrderKey(pub)) return false; // ET-4c
+      if (ev.version === 2) {
+        return (
+          genesisHash !== null &&
+          ed25519Verify(registrationSigningPreimage(ev, genesisHash), sig, pub)
+        ); // ET-10a
+      }
+      return ed25519Verify(signingPreimage(ev), sig, pub); // ET-10
     }
 
     case "issue_created": {
@@ -614,7 +628,7 @@ export class ExportVerifier {
     if (isRegistered(ev.type, ev.version)) {
       state.unresolved = false;
       state.stageBReason = null;
-      if (!stageB(ev, state)) {
+      if (!stageB(ev, state, this.genesisHash)) {
         // `ev.type` is one of the four registered names on this branch, so
         // `excerpt` cannot bite here; it is applied anyway so that no
         // interpolation of a value read out of the export goes unclipped.

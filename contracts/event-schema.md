@@ -1,6 +1,6 @@
 # Event Schema — contracts/event-schema.md
 
-**Version:** 8
+**Version:** 9
 **Status:** RELEASE CANDIDATE (T9a; Phase 0 · T3, amended T4a, T9a/ADR-0014, ADR-0016,
 ADR-0019, ADR-0029, ADR-0034, and ADR-0038). Not frozen.
 **Companion specs:** `event-types.md` (payloads), `ids.md` (identifiers),
@@ -183,9 +183,10 @@ Some event types are **signed**; which ones, and the exact signing rule, are in
   lowercase hexadecimal characters, matching `^[0-9a-f]{128}$` (D2).
 - **ES-32.** A signature MUST cover the event's **signing preimage** — the same
   six content fields as the hash preimage (ES-27) but with the signature field
-  itself omitted from `payload`. The byte-exact signing preimage is specified
-  in `hashing.md` (T4). This ordering (sign first, then the signature becomes
-  part of what `hash` covers) is deliberate and is fixed here.
+  itself omitted from `payload` (`hashing.md` HA-15). The sole exception is
+  `(participant_registered, 2)`, whose signature MUST cover the registration
+  preimage in HA-15a. In both cases the signature is computed first and then
+  included in the payload covered by the event hash (ES-27).
 
 ## 10. Genesis event
 
