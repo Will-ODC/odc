@@ -38,10 +38,9 @@ Then findings, each tagged:
 - `[NIT]` style/preference — author may ignore
   Every `[BLOCKING]` cites file:line and says concretely what to change.
   Max ~10 findings; prioritize. A wall of nits is a failed review.
-  The owner fixes every `[SHOULD]`, and each `[NIT]` it takes, on the same
-  branch before merge; a finding becomes an issue only when it is too large
-  for the PR or needs an operator decision (`create-issue`, "What gets an
-  issue").
+
+Findings about this PR are fixed on its branch before merge, not filed as
+issues (`create-issue`, "What gets an issue").
 
 ## Scope: which checklist applies
 
