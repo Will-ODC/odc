@@ -30,8 +30,15 @@ jobs:
           # are both resolvable.
           fetch-depth: 0
           fetch-tags: true
+      # Judge the PR tree with scripts from the immutable PR base.
+      - uses: actions/checkout@v4
+        with:
+          ref: ${{ github.event.pull_request.base.sha }}
+          path: .guard-base
+          sparse-checkout: .github/scripts
+          persist-credentials: false
       - name: Guard contracts changes
         env:
           BASE: ${{ github.event.pull_request.base.sha }}
           HEAD: ${{ github.event.pull_request.head.sha }}
-        run: bash .github/scripts/contracts-guard.sh
+        run: bash .guard-base/.github/scripts/contracts-guard.sh

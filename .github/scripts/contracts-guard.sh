@@ -24,11 +24,16 @@ HERE="$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)"
 BASE="${BASE:?BASE (base sha/ref) required}"
 HEAD="${HEAD:?HEAD (head sha/ref) required}"
 
+changed_files="$(git diff --name-only "$BASE...$HEAD" -- 'contracts/')" || {
+  echo "::error::Failed to discover contracts changes."
+  exit 1
+}
+
 # Portable array fill (no mapfile — keep it runnable on bash 3.2 too).
 changed=()
 while IFS= read -r line; do
   [[ -n "$line" ]] && changed+=("$line")
-done < <(git diff --name-only "$BASE...$HEAD" -- 'contracts/')
+done <<<"$changed_files"
 
 if ((${#changed[@]} == 0)); then
   echo "No contracts/ changes; contracts-guard passes."

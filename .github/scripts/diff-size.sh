@@ -70,12 +70,7 @@ FAIL=1000
 # added+deleted lines, excluding lockfiles, generated output, and markdown.
 # Deletions count too (churn is churn) — a large legitimate removal can trip the
 # ceiling and force a split; that's intended, keep removals on their own branch.
-total=0
-while IFS=$'\t' read -r add del _path; do
-  # Binary files report '-' for both counts; skip them.
-  [[ "$add" == "-" || "$del" == "-" ]] && continue
-  total=$((total + add + del))
-done < <(git diff --numstat "$BASE...$HEAD" -- . \
+numstat="$(git diff --numstat "$BASE...$HEAD" -- . \
   ':(exclude)pnpm-lock.yaml' \
   ':(exclude)package-lock.json' \
   ':(exclude)yarn.lock' \
@@ -87,7 +82,17 @@ done < <(git diff --numstat "$BASE...$HEAD" -- . \
   ':(exclude,glob)tools/verifier-ts/**' \
   ':(exclude,glob)apps/pulse/**' \
   ':(exclude,glob)apps/pulse-web/**' \
-  ':(exclude,glob)**/*.md')
+  ':(exclude,glob)**/*.md')" || {
+  echo "::error::Failed to discover diff size."
+  exit 1
+}
+total=0
+while IFS=$'\t' read -r add del _path; do
+  [[ -n "$add" ]] || continue
+  # Binary files report '-' for both counts; skip them.
+  [[ "$add" == "-" || "$del" == "-" ]] && continue
+  total=$((total + add + del))
+done <<<"$numstat"
 
 echo "Changed lines (excluding lockfiles/generated/markdown/mockups/verifiers/pulse): $total"
 
