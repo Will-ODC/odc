@@ -69,6 +69,8 @@
 .profile__date,
 .profile__status {
   font-size: var(--t-small);
+  /* One line even while empty (Saving…), so the links below do not jump. */
+  min-height: 1lh;
 }
 
 .profile__form {

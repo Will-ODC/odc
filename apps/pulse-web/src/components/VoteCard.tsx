@@ -231,6 +231,7 @@ export function VoteCard({
   function onKeyDown(event: KeyboardEvent<HTMLElement>) {
     if (
       !editable ||
+      checking ||
       collapsed ||
       event.defaultPrevented ||
       event.repeat ||
@@ -471,7 +472,7 @@ export function VoteCard({
               ? { "aria-label": question }
               : { "aria-labelledby": `${id}-question` })}
             aria-describedby={why ? `${id}-why ${id}-note` : `${id}-note`}
-            disabled={!editable}
+            disabled={!editable || checking}
           >
             {choices.map((choice, row) => (
               <label key={choice.index} className="vote-card__choice">

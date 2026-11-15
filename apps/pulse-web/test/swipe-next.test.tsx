@@ -66,3 +66,35 @@ it("a left swipe over an answered question opens the next one, like Next questio
   // Focus lands where Next question puts it: the new question's heading.
   await waitFor(() => expect(document.activeElement).toBe(next));
 });
+
+it("fades in a question reached with Back, and slides in the next one again after (#560)", async () => {
+  const first = poll({ next: [null, "parks"] });
+  const parks = poll({ id: "parks", question: "More parks?" });
+  history.replaceState(null, "", "/?poll=ads-free");
+  render(<App api={stubApi({ poll: graph([first, parks]) })} />);
+  const user = userEvent.setup();
+  const back = () =>
+    screen.getByRole("main").classList.contains("conversation__main--back");
+  await main().findByRole("heading", { name: first.question, level: 1 });
+  await user.click(main().getByRole("radio", { name: "Yes" }));
+  await user.click(main().getByRole("button", { name: "Submit" }));
+  await user.click(
+    await main().findByRole("button", { name: "Next question" }),
+  );
+  await main().findByRole("heading", { name: parks.question, level: 1 });
+  expect(back()).toBe(false);
+  await user.click(main().getByRole("radio", { name: "Yes" }));
+  await user.click(main().getByRole("button", { name: "Submit" }));
+  const rail = within(screen.getByRole("navigation", { name: "My votes" }));
+  await rail.findByRole("link", { name: parks.question });
+
+  history.replaceState(null, "", "/?poll=ads-free");
+  fireEvent(window, new PopStateEvent("popstate"));
+  await main().findByRole("heading", { name: first.question, level: 1 });
+  expect(back()).toBe(true);
+
+  // Any question link afterwards moves forward again.
+  await user.click(rail.getByRole("link", { name: parks.question }));
+  await main().findByRole("heading", { name: parks.question, level: 1 });
+  expect(back()).toBe(false);
+});

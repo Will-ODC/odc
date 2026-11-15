@@ -165,14 +165,17 @@ it("keeps the list and offers to retry when loading more fails", async () => {
     .mockRejectedValueOnce(new Error("offline"))
     .mockResolvedValueOnce(page([vote({ pollId: "p2", choices: ["No"] })]));
   show(myVotes);
-  await user.click(await screen.findByRole("button", { name: "Load more" }));
+  const button = await screen.findByRole("button", { name: "Load more" });
+  await user.click(button);
+  // The load-more wording, not the first page's (#610).
   expect((await screen.findByRole("alert")).textContent).toBe(
-    "We couldn't load your votes. Try again.",
+    "We couldn't load more of your votes. Try again.",
   );
   expect(screen.getByText("Your answer: Yes")).toBeTruthy();
-  await user.click(
-    screen.getByRole("button", { name: "Try loading more again" }),
-  );
+  // Focus stayed on the button through the read and its failure (#605).
+  expect(document.activeElement).toBe(button);
+  expect(button.textContent).toBe("Try loading more again");
+  await user.click(button);
   expect(await screen.findByText("Your answer: No")).toBeTruthy();
   expect(myVotes).toHaveBeenLastCalledWith("next");
 });

@@ -61,11 +61,33 @@ describe.each([
     ).toBe(true);
   });
 
+  it("holds the answers while it checks (#557)", async () => {
+    const onPick = vi.fn();
+    const user = userEvent.setup();
+    render(
+      <VoteCard {...base} inPage={inPage} closable checking onPick={onPick} />,
+    );
+    const park = screen.getByRole("radio", { name: "Park" });
+    expect(park.matches(":disabled")).toBe(true);
+    await user.click(park);
+    // The number keys pick nothing either, from Close where focus waits.
+    close().focus();
+    await user.keyboard("1");
+    expect(onPick).not.toHaveBeenCalled();
+    expect(screen.getByRole("radio", { name: "Library" })).toHaveProperty(
+      "checked",
+      true,
+    );
+  });
+
   it("is an ordinary Close and problem once the check is over", async () => {
     const onClose = vi.fn();
     const user = userEvent.setup();
     render(<VoteCard {...base} inPage={inPage} closable onClose={onClose} />);
     expect(close().getAttribute("aria-disabled")).toBeNull();
+    expect(
+      screen.getByRole("radio", { name: "Park" }).matches(":disabled"),
+    ).toBe(false);
     await user.click(close());
     expect(onClose).toHaveBeenCalledOnce();
     expect(screen.getByRole("alert").textContent).toBe("Couldn't reach pulse.");

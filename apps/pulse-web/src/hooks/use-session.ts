@@ -40,6 +40,10 @@ export const SIGNED_OUT_KEY = "pulse.signedOut";
 /** How far a sign-out has got: the shape `TwoPress` renders. */
 export type SignOutProgress = TwoPressProgress;
 
+/** What one `recheck` found: who is signed in now, if it could say. */
+export type Recheck =
+  { settled: true; accountId: string | null } | { settled: false };
+
 /**
  * Ask once who is signed in, and sign them out on request.
  *
@@ -73,8 +77,12 @@ export function useSession(
   signOut: () => void;
   /** Forget a failure once the person has put the question away. */
   dismiss: () => void;
-  /** Ask the server again who is signed in, now. */
-  recheck: () => void;
+  /**
+   * Ask the server again who is signed in, now. Resolves with the account
+   * this answer settled on (`null`: nobody), or `settled: false` when it
+   * failed or a newer question replaced it.
+   */
+  recheck: () => Promise<Recheck>;
 } {
   const [session, setSession] = useState<Session>({ status: "loading" });
   const [progress, setProgress] = useState<SignOutProgress>({
@@ -144,11 +152,11 @@ export function useSession(
    * the account it wrote for is no longer the one signed in. The same
    * question the focus and storage listeners below ask.
    */
-  const recheck = useCallback(() => {
+  const recheck = useCallback((): Promise<Recheck> => {
     const ticket = nextIdentity();
-    api.me().then(
-      (me) => {
-        if (!mounted.current || !isLatest(ticket)) return;
+    return api.me().then(
+      (me): Recheck => {
+        if (!mounted.current || !isLatest(ticket)) return { settled: false };
         if (me)
           setSession((current) =>
             current.status === "signedIn" && current.me.id === me.id
@@ -169,14 +177,16 @@ export function useSession(
                 ? { status: "signedOut" }
                 : current,
           );
+        return { settled: true, accountId: me?.id ?? null };
       },
-      () => {
+      (): Recheck => {
         // A failure changes nothing, except that a page still loading
         // (its first answer replaced by this one) must not wait forever.
         if (mounted.current && isLatest(ticket))
           setSession((current) =>
             current.status === "loading" ? { status: "unknown" } : current,
           );
+        return { settled: false };
       },
     );
   }, [api, recheckSignedIn]);

@@ -120,7 +120,7 @@
   border-radius: var(--r-control);
   cursor: pointer;
 }
-.vote-card button:hover:not(:disabled) {
+.vote-card button:hover:not(:disabled):not([aria-disabled="true"]) {
   background: var(--hover);
 }
 .vote-card button.vote-card__submit {
@@ -140,7 +140,8 @@
   opacity: 1;
 }
 .question-pager button:disabled,
-.vote-card button:disabled {
+.vote-card button:disabled,
+.vote-card button[aria-disabled="true"] {
   opacity: 0.55;
   cursor: default;
 }

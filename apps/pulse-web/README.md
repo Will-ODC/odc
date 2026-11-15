@@ -81,9 +81,11 @@ choose.
 At both widths, moving on is a small text button, "Next question ›", at the
 right end of the results card's footer beside the info link (#554). On a touch
 screen, a left swipe of about 60px over an answered question does the same;
-vertical scrolling, short or diagonal drags and mouse drags do nothing. Each
-question's page slides in briefly from the right, with no animation under
-reduced-motion settings.
+vertical scrolling, short or diagonal drags, mouse drags and a touch that
+starts within 20px of the right edge (the browser's own forward gesture) do
+nothing. Each question's page slides in briefly from the right; one reached
+with the browser's Back or Forward fades in instead (#560). Neither animates
+under reduced-motion settings.
 
 Every product page uses the same browse-style top banner at desktop and phone
 widths: the Pulse home link, Home, About, a Your communities dropdown listing
@@ -262,4 +264,6 @@ contribution page goes to that section once it has loaded and puts focus on its
 heading. Matching display names do not grant those controls. The owner-only
 list is read for the account the owner check saw, so an account switch in
 another tab is refused rather than shown under this profile; Try again checks
-the owner again. Load more moves focus to the first new contribution.
+the owner again. Load more moves focus to the first new contribution; while
+it loads, after a failure, or when a page adds nothing, focus stays on the
+button (#605).

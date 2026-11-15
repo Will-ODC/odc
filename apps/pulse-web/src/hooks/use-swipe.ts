@@ -5,6 +5,11 @@ import type { TouchEvent } from "react";
 export const SWIPE_MIN = 60;
 /** How much more sideways than up or down it must travel. */
 export const SWIPE_RATIO = 1.5;
+/**
+ * A touch that starts this close to the right edge, in CSS pixels, belongs to
+ * the browser: iOS Safari goes forward in history from there (#560).
+ */
+export const SWIPE_EDGE = 20;
 
 /**
  * A left swipe: far enough, and clearly more sideways than vertical, so a
@@ -21,6 +26,11 @@ export interface SwipeHandlers {
   onTouchCancel?: () => void;
 }
 
+/** Whether a touch starts in the browser's own right-edge gesture strip. */
+function atRightEdge(x: number): boolean {
+  return x >= window.innerWidth - SWIPE_EDGE;
+}
+
 /** Zoomed in, a sideways drag pans the page; it is never a swipe. */
 function zoomed(): boolean {
   return (window.visualViewport?.scale ?? 1) > 1;
@@ -29,7 +39,7 @@ function zoomed(): boolean {
 /**
  * Calls `onSwipeLeft` when one finger swipes left over the element the
  * handlers are spread on (#554). A mouse never swipes: it has buttons for
- * that. Left out, the handlers are empty and nothing listens.
+ * that, and a touch starting at the right edge is the browser's (#560). Left out, the handlers are empty and nothing listens.
  *
  * Touch events, not pointer events: React listens to them passively and the
  * browser never cancels them for a scroll, so the page keeps its own
@@ -42,7 +52,10 @@ export function useSwipeLeft(onSwipeLeft?: () => void): SwipeHandlers {
     onTouchStart: (event) => {
       const touch = event.touches[0];
       start.current =
-        event.touches.length !== 1 || !touch || zoomed()
+        event.touches.length !== 1 ||
+        !touch ||
+        zoomed() ||
+        atRightEdge(touch.clientX)
           ? null
           : { id: touch.identifier, x: touch.clientX, y: touch.clientY };
     },

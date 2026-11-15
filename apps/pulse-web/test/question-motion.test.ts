@@ -16,10 +16,19 @@ it("slides a loaded question in briefly, and not at all under reduced motion", (
     /\.conversation__question \.conversation__scroll > \.conversation__column \{\s*animation: question-arrive var\(--motion-quick\) ease-out;/,
   );
   expect(css).toMatch(
-    /@media \(prefers-reduced-motion: reduce\) \{\s*\.conversation__question \.conversation__scroll > \.conversation__column \{\s*animation: none;/,
+    /@media \(prefers-reduced-motion: reduce\) \{\s*\.conversation__question \.conversation__scroll > \.conversation__column,\s*\.conversation__main--back\s+\.conversation__question\s+\.conversation__scroll\s+> \.conversation__column \{\s*animation: none;/,
   );
   // "Loading…" sits in a column outside .conversation__question: no slide.
   expect(css).not.toMatch(
     /(^|\})\s*\.conversation__scroll > \.conversation__column \{\s*animation/,
   );
+});
+
+it("fades a question in, without the slide, when Back reached it (#560)", () => {
+  expect(css).toMatch(
+    /\.conversation__main--back\s+\.conversation__question\s+\.conversation__scroll\s+> \.conversation__column \{\s*animation-name: question-return;/,
+  );
+  const fade = /@keyframes question-return \{([^@]*?)\n\}/.exec(css)?.[1];
+  expect(fade).toContain("opacity: 0");
+  expect(fade).not.toContain("transform");
 });

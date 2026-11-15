@@ -206,7 +206,7 @@ describe("public member profile", () => {
     expect(update.getAttribute("href")).toBe("/contributions/garden#updates");
     expect(
       screen
-        .getByRole("link", { name: "Organizer inbox" })
+        .getByRole("link", { name: "Private messages" })
         .getAttribute("href"),
     ).toBe("/contributions/garden#messages");
     // The owner list is read for the account the owner check saw, so an
@@ -276,6 +276,48 @@ describe("public member profile", () => {
     );
     expect(screen.queryByRole("button", { name: /Load more/ })).toBeNull();
     expect(mine).toHaveBeenLastCalledWith("three", "ada");
+  });
+
+  it("says the next page failed, not the first, when Load more fails (#610)", async () => {
+    const user = userEvent.setup();
+    const forProfile = vi
+      .fn()
+      .mockResolvedValueOnce({
+        contributions: [
+          {
+            id: "c1",
+            title: "Contribution 1",
+            description: "A public contribution.",
+            communityBenefit: "",
+            needs: "",
+            kind: "project" as const,
+            organizerName: "Ada",
+            community: { id: "pulse-general", label: "General" },
+            pollId: null,
+            commercial: null,
+            fund: null,
+            status: "open" as const,
+            createdAt: "2026-11-12T13:00:00.000Z",
+          },
+        ],
+        nextCursor: "two",
+      })
+      .mockRejectedValueOnce(new Error("offline"));
+    render(
+      <MemberProfileScreen
+        api={stubApi({ profile: () => Promise.resolve(PROFILE) })}
+        publicId={PROFILE.publicId}
+        contributions={{ ...EMPTY_CONTRIBUTIONS, forProfile }}
+      />,
+    );
+    await screen.findByRole("link", { name: "Contribution 1" });
+    await user.click(
+      screen.getByRole("button", { name: "Load more contributions" }),
+    );
+    expect((await screen.findByRole("alert")).textContent).toBe(
+      "Could not load more contributions. Try again.",
+    );
+    expect(screen.getByRole("link", { name: "Contribution 1" })).toBeTruthy();
   });
 
   it("checks the owner again when Try again follows an account change", async () => {
@@ -446,6 +488,24 @@ describe("owner profile editor", () => {
       ),
     ).toBeTruthy();
     await screen.findByLabelText("Public display name");
+  });
+
+  it("says Not saved yet for a new profile once a field has text (#610)", async () => {
+    const user = userEvent.setup();
+    render(
+      <ProfileEditor
+        api={ownerApi({ myProfile: () => Promise.resolve(null) })}
+      />,
+    );
+    const name = await screen.findByLabelText("Public display name");
+    expect(screen.getByRole("status").textContent).toBe("");
+    await user.type(name, "  ");
+    expect(screen.getByRole("status").textContent).toBe("");
+    await user.type(name, "Ada");
+    expect(screen.getByRole("status").textContent).toBe("Not saved yet.");
+    await user.clear(name);
+    await user.type(screen.getByLabelText("Bio (optional)"), "Gardener.");
+    expect(screen.getByRole("status").textContent).toBe("Not saved yet.");
   });
 
   it("creates, hides and reshares with labels and keyboard controls", async () => {

@@ -562,6 +562,47 @@ it("puts the refusal notice away when Publish is pressed again or the person sig
   expect(screen.queryByText(notice)).toBeNull();
 });
 
+it("puts the refusal notice away for a later switch once the recheck finds the same account (#610)", async () => {
+  const state = { who: "ada" as string | null };
+  const me = vi.fn(async () =>
+    state.who === null
+      ? null
+      : { id: state.who, email: `${state.who}@example.test`, community: null },
+  );
+  const create = vi
+    .fn()
+    .mockRejectedValue(
+      new ContributionsError(
+        409,
+        "Your account changed, so this wasn't sent.",
+        "account_changed",
+      ),
+    );
+  render(
+    <NewContribution
+      api={stubApi({ me })}
+      client={client({ create })}
+      onCreated={vi.fn()}
+    />,
+  );
+  const user = userEvent.setup();
+  await writeDraft(user);
+  const asked = me.mock.calls.length;
+  await user.click(
+    screen.getByRole("button", { name: "Publish contribution" }),
+  );
+  const notice = "Your account changed, so your contribution wasn't sent.";
+  expect(await screen.findByText(notice)).toBeTruthy();
+  // The recheck finds Ada again: nothing changed.
+  await waitFor(() => expect(me.mock.calls.length).toBeGreaterThan(asked));
+  await act(async () => {});
+  expect(screen.getByText(notice)).toBeTruthy();
+  // A switch afterwards is not the change the notice was about.
+  state.who = "bea";
+  await act(async () => window.dispatchEvent(new Event("focus")));
+  await waitFor(() => expect(screen.queryByText(notice)).toBeNull());
+});
+
 it("keeps the new account's create draft when the old account's refusal arrives late", async () => {
   const state = { who: "ada" };
   const me = vi.fn(async () => ({

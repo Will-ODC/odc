@@ -12,7 +12,12 @@ import type { Route } from "../flow/route.js";
 import { cardStatus, closingNote, nextFor } from "../flow/conversation.js";
 import { byline } from "../flow/new-poll.js";
 import { pathOf } from "../flow/route.js";
-import { answeredList, type MyVotesPlace } from "../flow/answered.js";
+import {
+  answeredList,
+  nextCloseAt,
+  type MyVotesPlace,
+} from "../flow/answered.js";
+import { useRedrawAt } from "../hooks/use-redraw-at.js";
 import { usePoll } from "../hooks/use-poll.js";
 import { useCastVote } from "../hooks/use-cast-vote.js";
 import type { CastState } from "../hooks/use-cast-vote.js";
@@ -224,13 +229,15 @@ export function Conversation({
   });
   // After a lost connection the answer may have been stored: ask the server
   // which one it holds, and list that one. A changed one counts as a cast.
-  // Undefined when the server could not say, the votes were forgotten, or
-  // the question was sent again while it was asked.
+  // Undefined when the server could not say, the votes were forgotten, the
+  // question was sent again while it was asked, or the asker gave up waiting
+  // (`signal`), so a late reply changes nothing on screen (#557).
   const readBack = useCallback(
-    async (poll: Poll): Promise<Answer | undefined> => {
+    async (poll: Poll, signal?: AbortSignal): Promise<Answer | undefined> => {
       const askedAt = stamp(poll.id);
       const found = await savedAnswer(api, poll);
-      if (!found || stamp(poll.id) !== askedAt) return undefined;
+      if (!found || signal?.aborted || stamp(poll.id) !== askedAt)
+        return undefined;
       const before = latest.current.answers.find(
         (one) => one.poll.id === poll.id,
       );
@@ -269,11 +276,20 @@ export function Conversation({
     },
     [counted, readBack],
   );
+  // Whether the question on screen was reached with the browser's Back (or
+  // Forward): it fades in rather than sliding in from the right (#560).
+  const [cameBack, setCameBack] = useState(false);
+  useEffect(() => {
+    const onPop = () => setCameBack(true);
+    globalThis.addEventListener("popstate", onPop);
+    return () => globalThis.removeEventListener("popstate", onPop);
+  }, []);
   // Every question link, including Next, follows the rail's history path
   // (#502). Open locally too for callers without a router; do not push when
   // the address already names the question.
   const go = (id: string) => {
     if (busy || id === at) return;
+    setCameBack(false);
     setAt(id);
     if (id !== pollId) onNavigate?.({ kind: "conversation", pollId: id });
   };
@@ -295,6 +311,8 @@ export function Conversation({
   const serverVotes = firstPage?.votes ?? [];
   // The rail draws the first page and this page's answers, nothing more.
   const answered = answeredList(serverVotes, answers, recentAnswers);
+  // A row whose question closes while this page is open says so then (#589).
+  useRedrawAt(nextCloseAt(answered));
   // Previous and Next follow My votes (#528).
   const place = useMyVotesPlace({
     api,
@@ -340,7 +358,10 @@ export function Conversation({
           mine.retry();
         }}
       />
-      <main className="conversation__main" ref={main}>
+      <main
+        className={`conversation__main${cameBack ? " conversation__main--back" : ""}`}
+        ref={main}
+      >
         {posted && at === pollId ? (
           <PostedBanner
             url={posted.url}
@@ -400,8 +421,11 @@ function Question({
   waiting: boolean;
   confirmation: Confirmation;
   onRemembered: (answer: Answer) => void;
-  /** Asks the server which answer it holds for a poll, and lists it. */
-  onReadBack: (poll: Poll) => Promise<Answer | undefined>;
+  /**
+   * Asks the server which answer it holds for a poll, and lists it, unless
+   * `signal` was aborted before the reply came.
+   */
+  onReadBack: (poll: Poll, signal?: AbortSignal) => Promise<Answer | undefined>;
   onHeldBallot: () => void;
   onSent: Sent;
   onGo: (id: string) => void;
@@ -452,8 +476,11 @@ function LoadedQuestion({
   waiting: boolean;
   confirmation: Confirmation;
   onRemembered: (answer: Answer) => void;
-  /** Asks the server which answer it holds for a poll, and lists it. */
-  onReadBack: (poll: Poll) => Promise<Answer | undefined>;
+  /**
+   * Asks the server which answer it holds for a poll, and lists it, unless
+   * `signal` was aborted before the reply came.
+   */
+  onReadBack: (poll: Poll, signal?: AbortSignal) => Promise<Answer | undefined>;
   onHeldBallot: () => void;
   onSent: Sent;
   onGo: (id: string) => void;
@@ -720,8 +747,11 @@ function LiveCard({
   saved?: Answer;
   confirmation: Confirmation;
   onRemembered: (answer: Answer) => void;
-  /** Asks the server which answer it holds for a poll, and lists it. */
-  onReadBack: (poll: Poll) => Promise<Answer | undefined>;
+  /**
+   * Asks the server which answer it holds for a poll, and lists it, unless
+   * `signal` was aborted before the reply came.
+   */
+  onReadBack: (poll: Poll, signal?: AbortSignal) => Promise<Answer | undefined>;
   onSent: Sent;
   onGo: (id: string) => void;
   myVotesPlace: MyVotesPlace;
@@ -906,12 +936,19 @@ function LiveCard({
       // the same wait as a restore.
       const failed = state;
       setChecking(true);
+      // Given up on after the wait, the read changes nothing when it ends.
+      const wait = new AbortController();
+      let timer: ReturnType<typeof setTimeout> | undefined;
       void Promise.race([
-        onReadBack(poll),
-        new Promise<undefined>((done) =>
-          setTimeout(() => done(undefined), RESTORE_WAIT_MS),
-        ),
+        onReadBack(poll, wait.signal),
+        new Promise<undefined>((done) => {
+          timer = setTimeout(() => {
+            wait.abort();
+            done(undefined);
+          }, RESTORE_WAIT_MS);
+        }),
       ]).then((found) => {
+        clearTimeout(timer);
         setChecking(false);
         if (current.current !== failed) return;
         if (found) {

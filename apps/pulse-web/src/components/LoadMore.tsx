@@ -21,14 +21,20 @@ export function LoadMore({
   listRef: RefObject<HTMLElement | null>;
   onLoadMore: () => void;
 }) {
+  // The first new row, by position, once the page asked for has arrived.
   const focusAt = useRef<number | null>(null);
   useEffect(() => {
-    if (more.status !== "idle" || focusAt.current === null) return;
-    const links =
-      listRef.current?.querySelectorAll<HTMLAnchorElement>(itemSelector);
-    links?.[Math.min(focusAt.current, links.length - 1)]?.focus();
+    if (more.status === "loading" || focusAt.current === null) return;
+    const first = focusAt.current;
     focusAt.current = null;
+    // A failed read leaves focus on the button, which says to try again. A
+    // page that added no rows leaves it there too (#605): moving it to the
+    // last row the person already had would be a jump for nothing.
+    if (more.status === "error" || itemCount <= first) return;
+    const rows = listRef.current?.querySelectorAll<HTMLElement>(itemSelector);
+    rows?.[first]?.focus();
   }, [itemCount, itemSelector, listRef, more]);
+  const loading = more.status === "loading";
 
   if (!hasMore) return null;
   return (
@@ -43,13 +49,16 @@ export function LoadMore({
         size="small"
         className="load-more__button"
         type="button"
-        disabled={more.status === "loading"}
+        // Marked, not disabled, while loading: a disabled button would drop
+        // keyboard focus to the page (#605).
+        aria-disabled={loading || undefined}
         onClick={() => {
+          if (loading) return;
           focusAt.current = itemCount;
           onLoadMore();
         }}
       >
-        {more.status === "loading"
+        {loading
           ? `Loading ${moreLabel}…`
           : more.status === "error"
             ? `Try loading ${moreLabel} again`

@@ -1,4 +1,11 @@
-import { useCallback, useEffect, useMemo, useRef, useState } from "react";
+import {
+  useCallback,
+  useEffect,
+  useLayoutEffect,
+  useMemo,
+  useRef,
+  useState,
+} from "react";
 import { type MyVote, type MyVotesPage, type PulseApi } from "../api/types.js";
 import {
   answeredList,
@@ -16,6 +23,11 @@ export type VoteRead =
   | { status: "error"; message: string; onRetry: () => void };
 
 export const MY_VOTES_EMPTY = "No votes saved in this browser yet.";
+/**
+ * The rail's empty text while a sign-in has expired (#599): the list was
+ * emptied with the session, and the votes come back once signed in again.
+ */
+export const MY_VOTES_SIGNED_OUT = "Sign in again to see your votes.";
 export const MY_VOTES_ERROR = "We couldn't load your votes. Try again.";
 const MY_VOTES_MORE_ERROR = "We couldn't load more of your votes. Try again.";
 const keyOf = (vote: MyVote) => vote.pollId;
@@ -76,6 +88,16 @@ export function useMyVotes(api: PulseApi) {
   };
 }
 
+/** `data`, saying why it is empty while the sign-in has expired (#599). */
+export function votesWhileExpired(
+  data: ViewData<MyVotesPage>,
+  expired: boolean,
+): ViewData<MyVotesPage> {
+  return expired && data.status === "empty"
+    ? { status: "empty", message: MY_VOTES_SIGNED_OUT }
+    : data;
+}
+
 interface Later {
   first: MyVotesPage | undefined;
   rows: MyVote[];
@@ -108,11 +130,14 @@ export function useLaterVotes(
   question: string,
 ) {
   const [later, setLater] = useState<Later>(() => startOf(first));
-  let current = later;
-  if (later.first !== first) {
-    current = startOf(first);
-    setLater(current);
-  }
+  // Read again, `first` starts the list over, and the later pages are read
+  // again too, on purpose (#591): the first page is only read again after a
+  // sign-in, a sign-out or a Try again, and after a sign-in the server may
+  // have moved votes onto this browser (ADR-0046), so rows and cursors read
+  // before may be out of date. A plain page load reads each page once.
+  // Worked out here rather than stored during render; the next stored change
+  // starts from it.
+  const current = later.first === first ? later : startOf(first);
   const { cursor } = current;
   const failed = current.failedFor === question;
   // The read in flight, so a re-render never asks for the same page twice.
@@ -121,7 +146,9 @@ export function useLaterVotes(
   // against: a read started for one question can end on another that was
   // waiting for the same page.
   const open = useRef(question);
-  open.current = question;
+  useLayoutEffect(() => {
+    open.current = question;
+  }, [question]);
   useEffect(() => {
     if (!wanted || !first || !cursor || failed) return;
     const asked = reading.current;
@@ -129,9 +156,10 @@ export function useLaterVotes(
     reading.current = { first, cursor };
     const settle = (next: (old: Later) => Later) => {
       if (reading.current?.first === first) reading.current = null;
-      setLater((old) =>
-        old.first === first && old.cursor === cursor ? next(old) : old,
-      );
+      setLater((stored) => {
+        const old = stored.first === first ? stored : startOf(first);
+        return old.cursor === cursor ? next(old) : stored;
+      });
     };
     const stop = (old: Later) => ({ ...old, failedFor: open.current });
     api.myVotes(cursor).then(

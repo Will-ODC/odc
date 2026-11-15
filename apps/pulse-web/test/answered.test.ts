@@ -4,6 +4,7 @@ import {
   answeredList,
   mergedVotes,
   myVotesPlace,
+  nextCloseAt,
 } from "../src/flow/answered.js";
 import { poll } from "./stub-api.js";
 
@@ -242,5 +243,39 @@ describe("mergedVotes (#528)", () => {
     const newerA = saved({ pollId: "a", choices: ["No"] });
     expect(mergedVotes([a], [b, newerA])).toEqual([newerA, b]);
     expect(mergedVotes([a, b], [])).toEqual([a, b]);
+  });
+});
+
+describe("nextCloseAt (#589)", () => {
+  it("is the soonest close time still ahead among open rows", () => {
+    const soon = "2026-11-07T12:05:00.000Z";
+    expect(
+      nextCloseAt(
+        [
+          saved({ pollId: "a", closesAt: "2026-11-07T13:00:00.000Z" }),
+          saved({ pollId: "b", closesAt: soon }),
+          saved({ pollId: "c" }),
+        ],
+        NOW,
+      ),
+    ).toBe(Date.parse(soon));
+  });
+  it("skips closed rows, rows with no close time, and times already past", () => {
+    expect(
+      nextCloseAt(
+        [
+          saved({
+            pollId: "a",
+            open: false,
+            closesAt: "2026-11-07T12:01:00.000Z",
+          }),
+          saved({ pollId: "b", closesAt: "2026-11-07T11:00:00.000Z" }),
+          saved({ pollId: "c", closesAt: "2026-11-07T12:00:00.000Z" }),
+          saved({ pollId: "d" }),
+        ],
+        NOW,
+      ),
+    ).toBeUndefined();
+    expect(nextCloseAt([], NOW)).toBeUndefined();
   });
 });
