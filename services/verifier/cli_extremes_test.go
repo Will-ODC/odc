@@ -449,31 +449,43 @@ func TestExtremeEscapeHeavyStrings(t *testing.T) {
 	}
 }
 
-// Very large line counts, well-formed and faulting. Framing is checked line by
-// line as the driver walks the file, and the driver short-circuits at the
-// first fatal line, so a faulting case stops early; the well-formed case walks
-// every line. This is stated here rather than pretended away.
+// Very large line counts. Framing is checked line by line as the driver walks
+// the file, and the driver short-circuits at the first fatal line, so a
+// faulting case stops early. No case here walks a long valid chain:
+// line1_rejected_200k_lines is 200k syntactically well-formed genesis lines
+// that all repeat seq 1 with all-zero prev_hash and hash, so line 1 is
+// INVALID (its stored hash, among other checks, is wrong) and the verdict is
+// reached at line 1 (pinned in the loop below). What it exercises is early
+// rejection at line 1 under a large input: the verifier must stop cleanly,
+// whatever lies in the bytes it never reaches. Walking many valid lines is
+// TestManyLines' job (internal/verify/limits_test.go). This is stated here
+// rather than pretended away.
 func TestExtremeLineCounts(t *testing.T) {
-	wellFormed := line("1", "1", `{"p":"v"}`)
+	zeroHashLine := line("1", "1", `{"p":"v"}`)
 	cases := map[string]string{
-		"well_formed_lines_200k":  repeatLines(200_000, wellFormed),
-		"blank_lines_200k":        strings.Repeat("\n", 200_000),
-		"cr_lines_200k":           repeatLines(200_000, wellFormed+"\r"),
-		"garbage_lines_200k":      repeatLines(200_000, "not json at all"),
-		"empty_objects_200k":      repeatLines(200_000, "{}"),
-		"no_final_newline_200k":   strings.TrimSuffix(repeatLines(200_000, wellFormed), "\n"),
-		"one_line_no_newline":     wellFormed,
-		"single_newline":          "\n",
-		"empty_file":              "",
-		"nul_bytes_1mib":          strings.Repeat("\x00", 1<<20) + "\n",
-		"lone_open_braces_200k":   repeatLines(200_000, "{"),
-		"invalid_utf8_lines_200k": repeatLines(200_000, "{\"seq\":1,\"type\":\"\xff\xfe\"}"),
+		"line1_rejected_200k_lines": repeatLines(200_000, zeroHashLine),
+		"blank_lines_200k":          strings.Repeat("\n", 200_000),
+		"cr_lines_200k":             repeatLines(200_000, zeroHashLine+"\r"),
+		"garbage_lines_200k":        repeatLines(200_000, "not json at all"),
+		"empty_objects_200k":        repeatLines(200_000, "{}"),
+		"no_final_newline_200k":     strings.TrimSuffix(repeatLines(200_000, zeroHashLine), "\n"),
+		"one_line_no_newline":       zeroHashLine,
+		"single_newline":            "\n",
+		"empty_file":                "",
+		"nul_bytes_1mib":            strings.Repeat("\x00", 1<<20) + "\n",
+		"lone_open_braces_200k":     repeatLines(200_000, "{"),
+		"invalid_utf8_lines_200k":   repeatLines(200_000, "{\"seq\":1,\"type\":\"\xff\xfe\"}"),
 	}
 	for name, content := range cases {
 		name, content := name, content
 		t.Run(name, func(t *testing.T) {
 			t.Parallel()
-			checkCLI(t, writeExport(t, name, content))
+			stdout, stderr, code := runCLI(t, writeExport(t, name, content))
+			checkVerdict(t, stdout, stderr, code)
+			if name == "line1_rejected_200k_lines" {
+				// Pin the claim above, so the name cannot drift false again.
+				wantVerdict(t, stdout, code, reInvalid, 1, "1")
+			}
 		})
 	}
 }

@@ -146,8 +146,24 @@ jobs:
       # notice a corrupted one. Deliberately a step inside this already-required
       # job rather than a new job, so it takes effect without a
       # branch-protection change (which needs a repo admin).
-      - run: bash .github/scripts/fixtures-manifest.sh
-        if: steps.selection.outputs.core == 'true'
+      # Judge the PR tree with scripts from the immutable PR base.
+      # On pull_request, the workflow YAML comes from the PR; earlier
+      # PR-controlled steps in this job can also write GITHUB_ENV/GITHUB_PATH.
+      # This stops guard-script edits from judging themselves, not workflow
+      # edits: the operator reviews and merges .github/ changes for that reason.
+      # For stacked PRs, base.sha is the parent branch's head: its unmerged
+      # scripts judge the child until a new push after retargeting.
+      - if: github.event_name == 'pull_request'
+        uses: actions/checkout@v4
+        with:
+          ref: ${{ github.event.pull_request.base.sha }}
+          path: .guard-base
+          sparse-checkout: .github/scripts
+          persist-credentials: false
+      - run: bash "$GUARD_SCRIPTS/fixtures-manifest.sh"
+        if: github.event_name == 'pull_request' || steps.selection.outputs.core == 'true'
+        env:
+          GUARD_SCRIPTS: ${{ github.event_name == 'pull_request' && '.guard-base/.github/scripts' || '.github/scripts' }}
 
   diff-size:
     name: diff-size
@@ -157,21 +173,38 @@ jobs:
       - uses: actions/checkout@v4
         with:
           fetch-depth: 0
+      # Judge the PR tree with scripts from the immutable PR base.
+      - uses: actions/checkout@v4
+        with:
+          ref: ${{ github.event.pull_request.base.sha }}
+          path: .guard-base
+          sparse-checkout: .github/scripts
+          persist-credentials: false
       - name: Check diff size
         env:
           BASE: ${{ github.event.pull_request.base.sha }}
           HEAD: ${{ github.event.pull_request.head.sha }}
-        run: bash .github/scripts/diff-size.sh
+        run: bash .guard-base/.github/scripts/diff-size.sh
 
   memory-index:
     name: memory-index
     runs-on: ubuntu-latest
     steps:
       - uses: actions/checkout@v4
+      # Judge the PR tree with scripts from the immutable PR base.
+      - if: github.event_name == 'pull_request'
+        uses: actions/checkout@v4
+        with:
+          ref: ${{ github.event.pull_request.base.sha }}
+          path: .guard-base
+          sparse-checkout: .github/scripts
+          persist-credentials: false
       # Fails when a top-level workstream directory has no row in
       # memory/INDEX.md. apps/pulse ran nineteen PRs unrecorded; this is the
       # enforcement point that makes the omission loud instead of silent.
-      - run: bash .github/scripts/memory-index.sh
+      - run: bash "$GUARD_SCRIPTS/memory-index.sh"
+        env:
+          GUARD_SCRIPTS: ${{ github.event_name == 'pull_request' && '.guard-base/.github/scripts' || '.github/scripts' }}
 
   guard-tests:
     name: guard-tests
@@ -183,6 +216,6 @@ jobs:
           node-version: 20
       - name: Test change selection
         run: node --test .github/scripts/select-tests.test.mjs
-      # Exercises contracts-guard + diff-size against throwaway repos so a
-      # regression in the guard logic itself is caught (odc-testing).
+      # Deliberately test the PR's harness and scripts, including new cases.
+      # Enforcement jobs above use base scripts; this job tests proposed changes.
       - run: bash .github/scripts/guards.test.sh

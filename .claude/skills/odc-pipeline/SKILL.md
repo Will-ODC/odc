@@ -122,8 +122,8 @@ IS the ticket.
    - **Commits:** the message references the ticket.
    - **No ticket, no branch** — cut one first. Memory-only and docs-only
      housekeeping may go without, but still name the ticket they record.
-   - **Planned steps get no ticket** (operator, 2026-10-20: issues are for new
-     features only). A step already written down in `memory/` or an ADR —
+   - **Planned steps get no ticket** (what gets an issue: `create-issue`,
+     "What gets an issue"). A step already written down in `memory/` or an ADR —
      say, the routes ADR-0037 plans — is built without an issue. Its branch
      is `<area>/<short>`, named for the work (`pulse/poll-creation-routes`);
      its PR and commits name that step and where it is written
