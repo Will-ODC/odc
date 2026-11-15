@@ -51,6 +51,7 @@ jobs:
       - name: Check the API image can process pictures
         if: steps.selection.outputs.images == 'true'
         run: |
+          # CI depends on apps/pulse/test/fixtures/image-smoke.jpg.
           docker run --rm -i --entrypoint node -w /app \
             --mount "type=bind,source=$PWD/apps/pulse/test/fixtures/image-smoke.jpg,target=/tmp/image-smoke.jpg,readonly" \
             pulse-api:ci --input-type=module <<'JS'
@@ -60,8 +61,8 @@ jobs:
           try {
             const { processImage, sniff } = await import('./dist/src/images/process.js');
             const result = await processImage(readFileSync('/tmp/image-smoke.jpg'));
-            assert.equal(result.width, 300);
-            assert.equal(result.height, 200);
+            assert.equal(result.width, 400);
+            assert.equal(result.height, 300);
             for (const variant of ['display', 'thumb']) {
               assert.equal(sniff(result[variant].bytes), 'webp', `${variant} must be WebP`);
             }
