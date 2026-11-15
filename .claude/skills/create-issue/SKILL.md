@@ -11,6 +11,16 @@ implement and a reviewer can assess. Use simple words and bullets. The issue
 tracks work; memory preserves session context and unresolved decisions. What belongs
 in an issue is decided in `memory/INDEX.md` → "Where new information goes".
 
+## What gets an issue (operator, 2026-11-14)
+
+Issues are for **features**, **bugs too large for the work in hand**, and
+**bugs unrelated to it** found in passing. A review finding about the PR under
+review — a `[SHOULD]`, or a `[NIT]` worth taking — is fixed on that PR's
+branch before merge, never filed as a "follow-ups from the #N review" ticket.
+Small review-follow-up tickets outlive the context that understood them and
+crowd the queue. When a finding truly cannot fit the PR (too large, or it
+needs an operator decision), file one issue for it and say why in the PR.
+
 ## Workflow
 
 1. Read the relevant workstream memory and search open issues for duplicates.
