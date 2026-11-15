@@ -34,6 +34,10 @@ export function useRoute(): {
   useEffect(() => {
     const onPop = () => setHref(globalThis.location.href);
     globalThis.addEventListener("popstate", onPop);
+    // A history event between the first render and this line had no listener
+    // to hear it (#614). Read the address again now that one is in place; if
+    // nothing moved, the same string changes nothing.
+    onPop();
     return () => globalThis.removeEventListener("popstate", onPop);
   }, []);
 

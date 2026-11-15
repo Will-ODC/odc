@@ -1,6 +1,7 @@
 import { afterEach, describe, expect, it, vi } from "vitest";
 import { HttpPulseApi } from "../src/api/http.js";
 import { ApiError } from "../src/api/types.js";
+import { results } from "./stub-api.js";
 
 /** Replaces fetch with one canned response, and records what was requested. */
 function stubFetch(
@@ -87,6 +88,14 @@ describe("member profiles", () => {
         bio: "",
         visible: true,
       }),
+    );
+  });
+
+  it("escapes the owner account id into the profile query (#627)", async () => {
+    const calls = stubFetch({ body: JSON.stringify({ profile: null }) });
+    expect(await new HttpPulseApi().myProfile("a&b=c d/é")).toBeNull();
+    expect(calls[0]?.url).toBe(
+      "/api/me/profile?ownerAccountId=a%26b%3Dc%20d%2F%C3%A9",
     );
   });
 });
@@ -447,8 +456,13 @@ describe("ballots", () => {
   });
 
   it("posts the ballot as an array", async () => {
-    const calls = stubFetch({ body: JSON.stringify({ status: "counted" }) });
-    await new HttpPulseApi().cast("p1", [0, 2]);
+    const outcome = {
+      status: "counted",
+      ballot: [0, 2],
+      results: results({ method: "approval", voters: 1 }),
+    };
+    const calls = stubFetch({ body: JSON.stringify(outcome) });
+    expect(await new HttpPulseApi().cast("p1", [0, 2])).toEqual(outcome);
     expect(calls[0]?.init.body).toBe(JSON.stringify({ ballot: [0, 2] }));
   });
 });

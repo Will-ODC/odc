@@ -1,4 +1,10 @@
-import { useCallback, useEffect, useRef, useState } from "react";
+import {
+  useCallback,
+  useEffect,
+  useLayoutEffect,
+  useRef,
+  useState,
+} from "react";
 import type { Me, PulseApi } from "../api/types.js";
 import type { TwoPressProgress } from "../components/TwoPress.js";
 import { SIGNED_IN_KEY, browserStore } from "../flow/sign-in-return.js";
@@ -174,7 +180,15 @@ export function useSession(
       },
     );
   }, [api, recheckSignedIn]);
-  useEffect(() => {
+  /*
+   * A layout effect, not a passive one (#613): installed in the same
+   * synchronous commit that first shows the signed-out controls, so no focus,
+   * visibility or storage event can arrive between their appearing and the
+   * listeners. A passive effect runs later, and a return in between was lost.
+   * Asking once on install would also close the gap, at the cost of a second
+   * `me()` on every signed-out page load.
+   */
+  useLayoutEffect(() => {
     if (!settled) return;
     const ask = () => {
       if (document.visibilityState !== "hidden") recheck();

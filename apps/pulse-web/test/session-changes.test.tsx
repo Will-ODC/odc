@@ -11,6 +11,8 @@ import {
 import { afterEach, expect, it, vi } from "vitest";
 import { ContributionDetail } from "../src/screens/ContributionDetail.js";
 import type { ContributionsApi } from "../src/api/contributions.js";
+import { useLayoutEffect, useRef } from "react";
+import { SIGNED_IN_KEY } from "../src/flow/sign-in-return.js";
 import { SIGNED_OUT_KEY, useSession } from "../src/hooks/use-session.js";
 import { stubApi } from "./stub-api.js";
 
@@ -252,3 +254,44 @@ it("reads the votes again when the same person signs back in after an expiry", a
   window.dispatchEvent(new Event("focus"));
   expect(await rail().findByText("Your answer: Yes")).toBeTruthy();
 });
+
+/*
+ * #613: the return can come the moment signed-out controls first appear,
+ * after React commits them and before passive effects run. The probe sends
+ * it from its own layout effect, which runs in exactly that gap.
+ */
+it.each([
+  ["focus", () => window.dispatchEvent(new Event("focus"))],
+  [
+    "a sign-in announcement",
+    () =>
+      window.dispatchEvent(new StorageEvent("storage", { key: SIGNED_IN_KEY })),
+  ],
+  [
+    "a visibility change",
+    () => document.dispatchEvent(new Event("visibilitychange")),
+  ],
+])(
+  "catches %s delivered as signed-out controls first commit (#613)",
+  async (_name, deliver) => {
+    const me = vi
+      .fn()
+      .mockResolvedValueOnce(null)
+      .mockResolvedValue(person("a"));
+    const api = stubApi({ me });
+    function Probe() {
+      const { session } = useSession(api);
+      const sent = useRef(false);
+      useLayoutEffect(() => {
+        if (session.status === "signedOut" && !sent.current) {
+          sent.current = true;
+          deliver();
+        }
+      });
+      return <p>{session.status}</p>;
+    }
+    render(<Probe />);
+    expect(await screen.findByText("signedIn")).toBeTruthy();
+    expect(me).toHaveBeenCalledTimes(2);
+  },
+);
