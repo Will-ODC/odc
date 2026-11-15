@@ -8,8 +8,21 @@ user-invocable: true
 
 Turn an authorised feature request into a short ticket a single developer can
 implement and a reviewer can assess. Use simple words and bullets. The issue
-tracks work; memory preserves session context and unresolved decisions. What belongs
-in an issue is decided in `memory/INDEX.md` → "Where new information goes".
+tracks work; memory preserves session context and unresolved decisions.
+`memory/INDEX.md` → "Where new information goes" routes each kind of fact to
+its home; which work items become issues is decided below, the one home for
+that rule.
+
+## What gets an issue (operator, 2026-11-14)
+
+Issues are for **features**, **bugs too large for the work in hand**, and
+**bugs unrelated to it** found in passing. A review finding about the PR under
+review — a `[SHOULD]`, or a `[NIT]` worth taking — is fixed on that PR's
+branch before merge, never filed as a "follow-ups from the #N review" ticket.
+Small review-follow-up tickets outlive the context that understood them and
+crowd the queue. When a finding is too large for the PR, file one issue for
+it and say why in the PR. When it needs an operator decision, record the
+question where `memory/INDEX.md` routes questions, not in an issue.
 
 ## Workflow
 
