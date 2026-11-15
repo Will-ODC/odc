@@ -182,7 +182,7 @@
   accent-color: var(--green);
   flex-shrink: 0;
 }
-.contribution-check input[aria-invalid="true"] {
+.contribution-check input[aria-invalid="true"]:not(:focus-visible) {
   outline: var(--focus-ring-width) solid var(--red);
   outline-offset: var(--focus-ring-offset);
 }
@@ -214,8 +214,7 @@
 }
 .contributions-page
   :is(a, button, input, select, textarea, summary):focus-visible {
-  outline: calc(var(--hairline) * 2) solid var(--focus);
-  outline-offset: calc(var(--hairline) * 3);
+  --focus-ring-offset: calc(var(--hairline) * 3);
 }
 @media (max-width: 699px) {
   .contribution-form > :is(.contribution-button, .btn) {
@@ -243,5 +242,5 @@
   margin: 0;
 }
 .contributions-page p[tabindex="-1"]:focus-visible {
-  outline-offset: calc(var(--hairline) * 3);
+  --focus-ring-offset: calc(var(--hairline) * 3);
 }

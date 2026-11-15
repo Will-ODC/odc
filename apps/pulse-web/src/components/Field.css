@@ -28,8 +28,6 @@
 }
 .field__control:focus-visible {
   border-color: var(--green);
-  outline: var(--focus-ring-width) solid var(--focus);
-  outline-offset: var(--focus-ring-offset);
 }
 .field__control[aria-invalid="true"] {
   border-color: var(--red);

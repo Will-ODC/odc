@@ -43,7 +43,7 @@ it("styles the info button above the shared secondary variant, whatever the impo
 });
 
 // #534 part 2: Browse, AccountMenu and ResultsPanel draw their buttons with the
-// shared Button and rely on the shared ring (`.btn:focus-visible`, App.css).
+// shared Button and rely on the shared ring (`:focus-visible`, App.css).
 const part2 = [
   ["screens/Browse.tsx", "screens/Browse.css"],
   ["components/AccountMenu.tsx", "components/AccountMenu.css"],
@@ -139,3 +139,57 @@ it("has no `.button` utility left, focus ring included", () => {
   );
   expect(users).toEqual([]);
 });
+
+it("defines the focus ring once, including choice wrappers and saved-answer focus", () => {
+  const app = read("../src/App.css");
+  expect(app).toContain(":focus-visible,");
+  expect(app).toContain(".choice:has(input:focus-visible)");
+  expect(app).toContain(".vote-card__choice:has(input:focus-visible)");
+  expect(app).toContain('.vote-card__yours[tabindex="-1"]:focus');
+  const files = readdirSync(new URL("../src/", import.meta.url), {
+    recursive: true,
+  })
+    .map(String)
+    .filter((file) => file.endsWith(".css"));
+  const rings = files.filter((file) =>
+    /outline:\s*var\(--focus-ring-width\) solid var\(--focus\)/.test(
+      read(`../src/${file}`),
+    ),
+  );
+  expect(rings).toEqual(["App.css"]);
+  // Catch literal/calc copies too, while allowing error colours and local
+  // offset tokens that preserve the existing layouts.
+  const copies = files
+    .filter((file) => file !== "App.css")
+    .flatMap((file) =>
+      [
+        ...read(`../src/${file}`)
+          .replaceAll(":not(:focus-visible)", "")
+          .matchAll(/([^{}]*:focus-visible[^{}]*)\{([^}]*)\}/g),
+      ]
+        .filter(([, , body]) =>
+          /outline(?:-width|-style|-offset)?\s*:/.test(body!),
+        )
+        .map(() => file),
+    );
+  expect(copies).toEqual([]);
+});
+
+it.each([
+  ["components/Button.css", '.btn[aria-disabled="true"]:focus-visible'],
+  [
+    "components/VoteCard.css",
+    '.vote-card button[aria-disabled="true"]:focus-visible',
+  ],
+  [
+    "components/TwoPress.css",
+    '.two-press__action--primary[aria-disabled="true"]:focus-visible',
+  ],
+])(
+  "%s keeps a keyboard-focused unavailable button's ring at full strength",
+  (file, selector) => {
+    const css = read(`../src/${file}`);
+    const body = css.slice(css.indexOf(`${selector} {`)).split("}")[0];
+    expect(body).toContain("opacity: 1;");
+  },
+);

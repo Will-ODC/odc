@@ -126,11 +126,6 @@
   text-decoration: underline;
 }
 
-.profile__view:focus-visible {
-  outline: var(--focus-ring-width) solid var(--focus);
-  outline-offset: var(--focus-ring-offset);
-}
-
 .profile__form .copy-link {
   align-self: stretch;
   margin-bottom: 0;

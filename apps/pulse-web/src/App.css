@@ -37,9 +37,11 @@ a {
   color: var(--green-hover);
 }
 
-/* Anything focusable the screen did not style itself gets the app's ring, not
-   the browser's orange one. */
-:focus-visible {
+/* One ring for keyboard focus, labelled choices and the saved-answer announcement. */
+:focus-visible,
+.choice:has(input:focus-visible),
+.vote-card__choice:has(input:focus-visible),
+.vote-card__yours[tabindex="-1"]:focus {
   outline: var(--focus-ring-width) solid var(--focus);
   outline-offset: var(--focus-ring-offset);
 }
