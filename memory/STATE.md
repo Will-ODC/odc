@@ -89,8 +89,9 @@ are retained.
    call idempotent (in the ledger code, marked "ledger-proposed").
 3. **Signer lead** (`services/signer/`, creates its README and CLAUDE.md) and
    **identity lead** (`services/identity/`). Open signer-API points from the
-   ledger: refusal codes, a cheap "batch at minimum?" read, and whether a
-   timed-out sign call fixes the batch's position.
+   ledger: refusal codes, a cheap "batch at minimum?" read, and when the signer
+   durably records the batch position if the first call times out. ADR-0043
+   already fixes one position per batch and requires identical retries.
 
 Gates on the way: an `odc-security-auditor` audit before identity's first
 merge; S-D (the anchor record) before the first anchor; S-G (key rotation and
