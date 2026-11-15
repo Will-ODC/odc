@@ -45,6 +45,24 @@
   text-decoration: underline;
 }
 
+/*
+ * The question being viewed stays in its place (#596). It is marked by more
+ * than colour: a green bar (5:1 on the wash) and bold text, on the wash Your
+ * answers uses for its current row. The negative margin keeps its text
+ * aligned with the rows around it.
+ */
+.suggested-votes-rail li:has(a[aria-current="page"]) {
+  margin-inline: calc(var(--step) * -1);
+  padding-inline: calc(var(--step) - var(--hairline) * 3) var(--step);
+  border-left: calc(var(--hairline) * 3) solid var(--green);
+  background: var(--green-wash);
+}
+
+.suggested-votes-rail a[aria-current="page"] {
+  font-weight: 700;
+  color: var(--green-hover);
+}
+
 .suggested-votes-rail a[aria-disabled="true"],
 .suggested-votes-rail p {
   color: var(--muted);
