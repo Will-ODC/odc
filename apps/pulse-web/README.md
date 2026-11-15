@@ -270,3 +270,12 @@ another tab is refused rather than shown under this profile; Try again checks
 the owner again. Load more moves focus to the first new contribution; while
 it loads, after a failure, or when a page adds nothing, focus stays on the
 button (#605).
+
+## Shared controls
+
+`components/Button`, `Field` and `Choice` own the shared controls. The focus
+ring is drawn once in `App.css`, using the width and offset in `tokens.css`;
+choice wrappers and the saved-answer announcement use that rule too. Local
+error colours and offset tokens preserve existing form and page styling.
+Keyboard-focused `aria-disabled` buttons in Button, VoteCard and TwoPress use
+full opacity so their focus indicator keeps its contrast.

@@ -233,6 +233,7 @@ describe("status", () => {
     expect(screen.getByRole("alert").textContent).toBe(
       "Try your connection again.",
     );
+    expect(button("Try again").className).toBe("vote-card__submit");
     await userEvent.click(button("Try again"));
     expect(submit).toHaveBeenCalledExactlyOnceWith([2]);
   });

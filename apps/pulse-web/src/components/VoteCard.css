@@ -87,10 +87,6 @@
   border-color: var(--green);
   background: var(--green-wash);
 }
-.vote-card__choice:has(input:focus-visible) {
-  outline: var(--focus-ring-width) solid var(--focus);
-  outline-offset: var(--focus-ring-offset);
-}
 .vote-card__choices:disabled .vote-card__choice {
   color: var(--muted);
   cursor: default;
@@ -145,11 +141,6 @@
   opacity: 0.55;
   cursor: default;
 }
-.question-pager button:focus-visible,
-.vote-card button:focus-visible {
-  outline: var(--focus-ring-width) solid var(--focus);
-  outline-offset: var(--focus-ring-offset);
-}
 .vote-card__link {
   color: var(--green);
   text-decoration: underline;
@@ -157,10 +148,6 @@
 }
 .vote-card__link:hover {
   color: var(--green-hover);
-}
-.vote-card__link:focus-visible {
-  outline: var(--focus-ring-width) solid var(--focus);
-  outline-offset: var(--focus-ring-offset);
 }
 .vote-card__summary {
   flex: 1;
@@ -224,10 +211,6 @@
 .vote-card__info:hover {
   background: var(--hover);
 }
-.vote-card__info:focus-visible {
-  outline: var(--focus-ring-width) solid var(--focus);
-  outline-offset: var(--focus-ring-offset);
-}
 
 /* The phone version (#482): answers and buttons sized for a thumb. */
 @media (max-width: 699px) {
@@ -284,10 +267,6 @@
 }
 .vote-card__signin:hover {
   background: var(--hover);
-}
-.vote-card__signin:focus-visible {
-  outline: var(--focus-ring-width) solid var(--focus);
-  outline-offset: var(--focus-ring-offset);
 }
 
 /* The results card's footer: How votes count on the left, navigation on the right. */
@@ -359,11 +338,17 @@
   min-height: calc(var(--touch) + var(--step) / 2);
   align-items: center;
 }
-/* The saved answer receives programmatic focus after Submit too. */
-.vote-card__yours[tabindex="-1"]:focus {
-  outline: var(--focus-ring-width) solid var(--focus);
-  outline-offset: var(--focus-ring-offset);
-}
 .vote-card--page .vote-card__yours .vote-card__note {
   flex: 1;
+}
+
+/* Keep the focus indicator at full contrast while the action is unavailable. */
+.vote-card button[aria-disabled="true"]:focus-visible {
+  opacity: 1;
+}
+
+/* Close keeps its name while checking; mute its content, not the focus ring. */
+.vote-card button.vote-card__close[aria-disabled="true"],
+.vote-card button.vote-card__dismiss[aria-disabled="true"] {
+  color: var(--muted);
 }

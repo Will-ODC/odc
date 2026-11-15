@@ -5,7 +5,8 @@ import type { Route } from "./flow/route.js";
 import { FIRST_POLL_ID, pathOf } from "./flow/route.js";
 import { browserStore, takeReturn } from "./flow/sign-in-return.js";
 import { AppShell } from "./components/AppShell.js";
-import { PageBanner } from "./components/PageBanner.js";
+import { SiteBanner } from "./components/SiteBanner.js";
+import { usePageBanner } from "./hooks/use-page-banner.js";
 import { useRoute } from "./hooks/use-route.js";
 import { Conversation } from "./screens/Conversation.js";
 import { ChatPreview } from "./screens/ChatPreview.js";
@@ -115,7 +116,7 @@ export function App({
         return (
           <About
             banner={
-              <PageBanner api={api} currentHref={pathOf({ kind: "about" })} />
+              <PageHeader api={api} currentHref={pathOf({ kind: "about" })} />
             }
             onStart={() => browser.go({ kind: "progress" })}
           />
@@ -124,7 +125,7 @@ export function App({
         return (
           <Progress
             banner={
-              <PageBanner
+              <PageHeader
                 api={api}
                 currentHref={pathOf({ kind: "progress" })}
               />
@@ -147,7 +148,7 @@ export function App({
         return (
           <FoundationQuestions
             banner={
-              <PageBanner
+              <PageHeader
                 api={api}
                 currentHref={pathOf({ kind: "questions" })}
               />
@@ -227,7 +228,7 @@ export function App({
         return (
           <Trust
             banner={
-              <PageBanner api={api} currentHref={pathOf({ kind: "trust" })} />
+              <PageHeader api={api} currentHref={pathOf({ kind: "trust" })} />
             }
           />
         );
@@ -262,7 +263,7 @@ export function App({
  */
 function SignInPage({ children, api }: { children: ReactNode; api: PulseApi }) {
   return (
-    <AppShell banner={<PageBanner api={api} signInHref="" />}>
+    <AppShell banner={<PageHeader api={api} signInHref="" />}>
       {children}
     </AppShell>
   );
@@ -279,3 +280,23 @@ function SignInPage({ children, api }: { children: ReactNode; api: PulseApi }) {
  * to the first question, which is at least where the app already opens.
  */
 const LANDS_ON = FIRST_POLL_ID;
+
+/** Account wiring for pages without their own voting or posting session. */
+function PageHeader({
+  api,
+  currentHref,
+  signInHref,
+}: {
+  api: PulseApi;
+  currentHref?: string;
+  signInHref?: string;
+}) {
+  const banner = usePageBanner(api);
+  return (
+    <SiteBanner
+      {...banner}
+      {...(currentHref ? { currentHref } : {})}
+      {...(signInHref !== undefined ? { signInHref } : {})}
+    />
+  );
+}

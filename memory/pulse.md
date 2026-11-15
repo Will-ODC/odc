@@ -125,18 +125,21 @@ A small invited pilot comes only after 3-6. None of this authorizes a deploy.
    also made `SessionSigner.verify` refuse empty timestamp fields. The review
    nits #557, #560, #589, #591, #599, #605 merged in #659; #596 (the open
    question stays highlighted in Suggested votes until voted on, operator
-   2026-11-15) and #610 merged in #661.
+   2026-11-15) and #610 merged in #661. #533 (ViewState `onRetry` renders the
+   shared Try again) and #653 (`use-suggested-votes` and `use-page-banner` own
+   fetching; `PageBanner` removed; no component calls the API or imports a
+   screen stylesheet) merged in #667.
    A Claude review found the findings real but most tickets over-scoped; the
    operator-approved narrowed scope now heads each ticket body (2026-11-14),
    and the shared verifier gaps moved to contracts ticket #645.
 3. **CI selection #619 merged (0d2828c).** `pulse-images` is not a
    required check, so a red picture-package check only warns; #612 has the
    order of steps.
-4. **Open follow-ups:** #533 ViewState Try again; #536 Conversation logic into
+4. **Open follow-ups:** #536 Conversation logic into
    flow/ and hooks; #537 VoteCard split; #538 CSS encapsulation and tokens;
    #534 part 3 (Conversation); #539 step 2 (one session provider; operator
    decision); #534 also carries the faded focus ring on `aria-disabled`
-   buttons (#659 UI review); #653 component props; #597 contribution threads; #598 creation-form fields;
+   buttons (#659 UI review); #597 contribution threads; #598 creation-form fields;
    #499 dark mode and #500 compact posted notice (mockups merged in #521, not
    built).
 

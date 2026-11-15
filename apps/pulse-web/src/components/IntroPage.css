@@ -116,8 +116,7 @@
   cursor: default;
 }
 .welcome__start:focus-visible {
-  outline: var(--focus-ring-width) solid var(--focus);
-  outline-offset: calc(var(--hairline) * 4);
+  --focus-ring-offset: calc(var(--hairline) * 4);
 }
 @media (min-width: 700px) {
   .welcome__main {
@@ -219,14 +218,4 @@
 .welcome__questions button:disabled {
   opacity: 0.55;
   cursor: default;
-}
-.welcome__questions button:focus-visible,
-.welcome__progress a:focus-visible {
-  outline: var(--focus-ring-width) solid var(--focus);
-  outline-offset: var(--focus-ring-offset);
-}
-
-/* Headings receive route focus for announcements, without a control outline. */
-.welcome h1:focus {
-  outline: none;
 }
