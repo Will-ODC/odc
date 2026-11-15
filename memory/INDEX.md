@@ -32,7 +32,7 @@ Do not apply charter rules to `apps/**`, and do not relax them anywhere else.
 - **Pulse:** sign-in, voting, browsing, poll creation, Contributions, profiles
   and picture storage are built; no open product PRs. Targeted and broader
   audits are complete; timing gaps and quality fixes (#613, #614, #621, #622,
-  #624-#629) merged in #657.
+  #624-#629) merged in #657; UI review nits merged in #659.
   Next feature is #580 (picture in the
   posting form), awaiting an operator answer. No public deploy yet.
   → `memory/pulse.md`
