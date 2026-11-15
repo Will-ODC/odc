@@ -121,16 +121,19 @@ A small invited pilot comes only after 3-6. None of this authorizes a deploy.
    [targeted tests](../docs/audits/pulse-tests-2026-11-14.md) → #613/#614;
    [simplicity](../docs/audits/pulse-simplicity-2026-11-14.md) → #616;
    [broader quality](../docs/audits/test-quality-2026-11-14/README.md) → #621-#629.
+   All of #613, #614, #621, #622, #624-#629 merged in #657 (2026-11-15), which
+   also made `SessionSigner.verify` refuse empty timestamp fields.
    A Claude review found the findings real but most tickets over-scoped; the
    operator-approved narrowed scope now heads each ticket body (2026-11-14),
    and the shared verifier gaps moved to contracts ticket #645.
-3. **CI selection #619 awaits operator merge.** `pulse-images` is not a
+3. **CI selection #619 merged (0d2828c).** `pulse-images` is not a
    required check, so a red picture-package check only warns; #612 has the
    order of steps.
 4. **Open follow-ups:** #533 ViewState Try again; #536 Conversation logic into
    flow/ and hooks; #537 VoteCard split; #538 CSS encapsulation and tokens;
    #534 part 3 (Conversation); #539 step 2 (one session provider; operator
-   decision); review nits #557, #560, #589, #591, #599, #610; #596 Suggested
+   decision); review nits #557, #560, #589, #591, #599 (item 5 only), #605
+   (items 1-3), #610, all re-checked open on 2026-11-15; #596 Suggested
    votes reshuffle; #597 contribution threads; #598 creation-form fields;
    #499 dark mode and #500 compact posted notice (mockups merged in #521, not
    built).
