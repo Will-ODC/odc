@@ -39,8 +39,3 @@
 .signed-in__profile:hover {
   color: var(--ink);
 }
-
-.signed-in__profile:focus-visible {
-  outline: var(--focus-ring-width) solid var(--focus);
-  outline-offset: var(--focus-ring-offset);
-}
