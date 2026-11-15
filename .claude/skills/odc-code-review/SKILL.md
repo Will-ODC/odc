@@ -39,6 +39,9 @@ Then findings, each tagged:
   Every `[BLOCKING]` cites file:line and says concretely what to change.
   Max ~10 findings; prioritize. A wall of nits is a failed review.
 
+Findings about this PR are fixed on its branch before merge, not filed as
+issues (`create-issue`, "What gets an issue").
+
 ## Scope: which checklist applies
 
 Check first whether the diff is charter-governed.

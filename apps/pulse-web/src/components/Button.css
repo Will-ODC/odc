@@ -39,10 +39,6 @@
   text-underline-offset: 0.2em;
   border-radius: 0;
 }
-.btn:focus-visible {
-  outline: var(--focus-ring-width) solid var(--focus);
-  outline-offset: var(--focus-ring-offset);
-}
 .btn:disabled,
 .btn[aria-disabled="true"] {
   opacity: 0.55;
@@ -80,4 +76,9 @@
     justify-content: center;
     min-height: var(--touch);
   }
+}
+
+/* Keep the focus indicator at full contrast while the action is unavailable. */
+.btn[aria-disabled="true"]:focus-visible {
+  opacity: 1;
 }

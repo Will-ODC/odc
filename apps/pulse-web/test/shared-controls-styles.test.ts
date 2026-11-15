@@ -43,7 +43,7 @@ it("styles the info button above the shared secondary variant, whatever the impo
 });
 
 // #534 part 2: Browse, AccountMenu and ResultsPanel draw their buttons with the
-// shared Button and rely on the shared ring (`.btn:focus-visible`, App.css).
+// shared Button and rely on the shared ring (`:focus-visible`, App.css).
 const part2 = [
   ["screens/Browse.tsx", "screens/Browse.css"],
   ["components/AccountMenu.tsx", "components/AccountMenu.css"],
@@ -138,4 +138,157 @@ it("has no `.button` utility left, focus ring included", () => {
     ),
   );
   expect(users).toEqual([]);
+});
+
+it("defines the focus ring once, including choice wrappers and saved-answer focus", () => {
+  const app = read("../src/App.css");
+  expect(app).toContain(":focus-visible,");
+  expect(app).toContain(".choice:has(input:focus-visible)");
+  expect(app).toContain(".vote-card__choice:has(input:focus-visible)");
+  expect(app).toContain('.vote-card__yours[tabindex="-1"]:focus');
+  const files = readdirSync(new URL("../src/", import.meta.url), {
+    recursive: true,
+  })
+    .map(String)
+    .filter((file) => file.endsWith(".css"));
+  const rings = files.filter((file) =>
+    /outline:\s*var\(--focus-ring-width\) solid var\(--focus\)/.test(
+      read(`../src/${file}`),
+    ),
+  );
+  expect(rings).toEqual(["App.css"]);
+  // Even a non-focus selector can outrank the shared :focus-visible rule.
+  // Only these announcement targets and unfocused validation rings may own
+  // outlines outside App.css, each in its own file. Check each selector in a
+  // grouped rule.
+  const allowed = new Set([
+    "components/IntroPage.css: .welcome h1:focus",
+    "components/VoteCard.css: .vote-card__note:focus",
+    "screens/SignIn.css: .signin__title:focus",
+    "screens/NewPoll.css: .post__title:focus",
+    "screens/Conversation.css: .conversation__hero h1:focus",
+    "components/ResultsPanel.css: .results:focus",
+    'screens/NewPoll.css: .post__promise input[aria-invalid="true"]:not(:focus-visible)',
+    'screens/Contributions.css: .contribution-check input[aria-invalid="true"]:not(:focus-visible)',
+  ]);
+  const sharedSelectors = new Set([
+    ":focus-visible",
+    ".choice:has(input:focus-visible)",
+    ".vote-card__choice:has(input:focus-visible)",
+    '.vote-card__yours[tabindex="-1"]:focus',
+    ".choice input:focus-visible",
+    ".vote-card__choice input:focus-visible",
+  ]);
+  const overrides = files.flatMap((file) =>
+    [
+      ...read(`../src/${file}`)
+        .replace(/\/\*[\s\S]*?\*\//g, "")
+        .matchAll(/([^{}]+)\{([^{}]*)\}/g),
+    ]
+      .filter(([, , body]) => /(?:^|;)\s*outline(?:-[a-z-]+)?\s*:/.test(body!))
+      .flatMap(([, selectors]) =>
+        selectors!.split(",").map((selector) => selector.trim()),
+      )
+      .filter((selector) =>
+        file === "App.css"
+          ? !sharedSelectors.has(selector)
+          : !allowed.has(`${file}: ${selector}`),
+      )
+      .map((selector) => `${file}: ${selector}`),
+  );
+  expect(overrides).toEqual([]);
+});
+
+it.each([
+  ["components/Button.css", '.btn[aria-disabled="true"]:focus-visible'],
+  [
+    "components/VoteCard.css",
+    '.vote-card button[aria-disabled="true"]:focus-visible',
+  ],
+  [
+    "components/TwoPress.css",
+    '.two-press__action--primary[aria-disabled="true"]:focus-visible',
+  ],
+])(
+  "%s keeps a keyboard-focused unavailable button's ring at full strength",
+  (file, selector) => {
+    const css = read(`../src/${file}`);
+    const body = css.slice(css.indexOf(`${selector} {`)).split("}")[0];
+    expect(body).toContain("opacity: 1;");
+  },
+);
+
+it.each(["close", "dismiss"])(
+  "mutes the unavailable .vote-card__%s without fading its focus ring",
+  (name) => {
+    const css = read("../src/components/VoteCard.css");
+    const selector = `.vote-card button.vote-card__${name}[aria-disabled="true"]`;
+    const body = [
+      ...css.replace(/\/\*[\s\S]*?\*\//g, "").matchAll(/([^{}]+)\{([^{}]*)\}/g),
+    ].find(([, selectors]) =>
+      selectors!
+        .split(",")
+        .map((s) => s.trim())
+        .includes(selector),
+    )?.[2];
+    expect(body).toContain("color: var(--muted);");
+    expect(body).not.toContain("opacity:");
+  },
+);
+
+it.each([
+  ["screens/NewPoll.css", '.post__promise input[aria-invalid="true"]'],
+  [
+    "screens/Contributions.css",
+    '.contribution-check input[aria-invalid="true"]',
+  ],
+])(
+  "%s visibly separates focused invalid checkboxes from unfocused errors",
+  (file, selector) => {
+    const css = read(`../src/${file}`);
+    const body = (state: string) => {
+      const start = `${selector}${state} {`;
+      expect(css).toContain(start);
+      return css.slice(css.indexOf(start) + start.length).split("}")[0];
+    };
+    const focused = body(":focus-visible");
+    const unfocused = body(":not(:focus-visible)");
+    // Keep the shared red ring, but double its gap when keyboard focus arrives.
+    expect(focused).toContain("--focus: var(--red);");
+    expect(focused).toContain(
+      "--focus-ring-offset: calc(var(--hairline) * 4);",
+    );
+    expect(unfocused).toContain("outline-offset: var(--focus-ring-offset);");
+    expect(unfocused).not.toContain("--focus-ring-offset:");
+    expect(read("../src/styles/tokens.css")).toContain(
+      "--focus-ring-offset: calc(var(--hairline) * 2);",
+    );
+  },
+);
+
+it("draws one ring around a focused choice, without a second ring on its input", () => {
+  const app = read("../src/App.css");
+  expect(app).toMatch(
+    /\.choice input:focus-visible,\s*\.vote-card__choice input:focus-visible \{\s*outline: none;\s*\}/,
+  );
+});
+
+it.each([
+  [
+    "screens/NewPoll.css",
+    '.post__promise input[aria-invalid="true"]:focus-visible',
+  ],
+  [
+    "screens/Contributions.css",
+    '.contribution-check input[aria-invalid="true"]:focus-visible',
+  ],
+  [
+    "components/Field.css",
+    '.field__control[aria-invalid="true"]:focus-visible',
+  ],
+])("%s keeps invalid controls' focused rings red", (file, selector) => {
+  const css = read(`../src/${file}`);
+  const body = css.slice(css.indexOf(`${selector} {`)).split("}")[0];
+  expect(css).toContain(`${selector} {`);
+  expect(body).toContain("--focus: var(--red);");
 });
