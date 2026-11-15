@@ -32,7 +32,7 @@ Do not apply charter rules to `apps/**`, and do not relax them anywhere else.
 - **Pulse:** sign-in, voting, browsing, poll creation, Contributions, profiles
   and picture storage are built; no open product PRs. Targeted and broader
   audits are complete; timing gaps and quality fixes (#613, #614, #621, #622,
-  #624-#629) merged in #657; UI review nits merged in #659.
+  #624-#629) merged in #657; UI review nits merged in #659; #533 and #653 in #667.
   Next feature is #580 (picture in the
   posting form), awaiting an operator answer. No public deploy yet.
   → `memory/pulse.md`
@@ -85,7 +85,7 @@ destination for every kind of fact.
 | A Pulse decision waiting on the operator       | `memory/pulse.md` → "Open decisions (operator)"                 |
 | A trap the next session will otherwise re-hit  | "Blockers & live cautions" in the workstream's memory entry     |
 | A rule about how we work                       | The matching `.claude/skills/odc-*` skill — **one place only**  |
-| A feature, bounded epic or concrete defect fix | A GitHub issue (`.claude/skills/create-issue`) — the work queue |
+| A feature, bounded epic or defect fix, not a finding on the PR under review | A GitHub issue (`create-issue`, "What gets an issue") — the work queue |
 | Status, a handoff, a deferred idea             | Memory, never an issue                                          |
 | A **new workstream**                           | A new `memory/<name>.md` **and a row in the two tables above**  |
 
