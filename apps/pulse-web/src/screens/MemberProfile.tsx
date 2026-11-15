@@ -10,6 +10,7 @@ import { AppShell } from "../components/AppShell.js";
 import { Button } from "../components/Button.js";
 import { LoadMore } from "../components/LoadMore.js";
 import { PageBanner } from "../components/PageBanner.js";
+import { usePageBanner } from "../hooks/use-page-banner.js";
 import { ViewState } from "../components/ViewState.js";
 import { pathOf } from "../flow/route.js";
 import { contributionStatuses } from "../flow/contributions.js";
@@ -40,11 +41,12 @@ export function MemberProfile({
     (cursor?: string) => contributions.mine(cursor, ownerAccountId),
     [contributions, ownerAccountId, owner.check],
   );
+  const banner = usePageBanner(api);
   const href = pathOf({ kind: "memberProfile", publicId });
   return (
-    <AppShell banner={<PageBanner api={api} currentHref={href} />}>
+    <AppShell banner={<PageBanner {...banner} currentHref={href} />}>
       <article className="profile profile--public">
-        <ViewState data={state} variant="compact">
+        <ViewState data={state} variant="compact" onRetry={retry}>
           {(profile) => (
             <>
               <p className="profile__eyebrow">Pulse member</p>
@@ -81,11 +83,7 @@ export function MemberProfile({
             </>
           )}
         </ViewState>
-        {state.status === "error" ? (
-          <Button variant="secondary" type="button" onClick={retry}>
-            Try again
-          </Button>
-        ) : null}
+
         {state.status === "empty" ? (
           <Button variant="secondary" href="/">
             Go to Pulse home
@@ -130,7 +128,7 @@ function ProfileContributions({
   return (
     <section className="profile__contributions">
       <h2>{title}</h2>
-      <ViewState data={data} variant="compact">
+      <ViewState data={data} variant="compact" onRetry={onRetry ?? retry}>
         {(page) => (
           <ul className="profile__contribution-list" ref={list}>
             {page.items.map((item) => {
@@ -167,16 +165,7 @@ function ProfileContributions({
           </ul>
         )}
       </ViewState>
-      {data.status === "error" ? (
-        <Button
-          variant="secondary"
-          size="small"
-          type="button"
-          onClick={onRetry ?? retry}
-        >
-          Try again
-        </Button>
-      ) : null}
+
       <LoadMore
         more={more}
         hasMore={data.status === "ready" && data.value.nextCursor !== null}

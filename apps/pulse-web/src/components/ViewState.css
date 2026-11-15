@@ -50,3 +50,10 @@
     animation: none;
   }
 }
+
+.viewstate > [role="status"] {
+  display: flex;
+  flex-direction: column;
+  align-items: inherit;
+  gap: var(--step);
+}

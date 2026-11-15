@@ -79,7 +79,7 @@ it("draws the account menu's Try again as the small secondary Button", async () 
   );
   await user.click(screen.getByRole("button", { name: "Account" }));
   const retry = screen.getByRole("button", { name: "Try again" });
-  expect(retry.className).toBe("btn btn--secondary btn--small");
+  expect(retry.className).toBe("btn btn--secondary btn--small button");
   retry.focus();
   await user.keyboard("{Enter}");
   expect(onRetry).toHaveBeenCalledOnce();

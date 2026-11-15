@@ -1,4 +1,5 @@
 import { Fragment, useEffect, useId, useRef } from "react";
+import "./Button.css";
 import type { KeyboardEvent, ReactNode } from "react";
 import type { PollMethod, Results } from "../api/types.js";
 import {
@@ -436,16 +437,10 @@ export function VoteCard({
               >
                 <ViewState
                   data={{ status: "error", message: resultsProblem.message }}
+                  onRetry={resultsProblem.onRetry}
                 >
                   {() => null}
                 </ViewState>
-                <button
-                  type="button"
-                  className="results__retry"
-                  onClick={resultsProblem.onRetry}
-                >
-                  Try again
-                </button>
               </div>
             ) : (
               <ResultsPanel
@@ -542,7 +537,11 @@ export function VoteCard({
             {editable || status.kind === "sending" ? (
               <button
                 type="button"
-                className="vote-card__submit"
+                className={
+                  status.kind === "failed"
+                    ? "button btn btn--secondary btn--small vote-card__submit"
+                    : "vote-card__submit"
+                }
                 disabled={!allowed}
                 aria-disabled={!allowed}
                 onClick={() => {

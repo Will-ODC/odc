@@ -1,3 +1,4 @@
+import { useSuggestedVotes } from "../hooks/use-suggested-votes.js";
 import { useCallback, useEffect, useRef, useState } from "react";
 import {
   contributionsApi,
@@ -72,6 +73,12 @@ export function Browse({
     !contributionsOnly,
   );
   const mine = useMyVotes(api);
+  const suggestions = useSuggestedVotes({
+    api,
+    history: mine.data,
+    retryHistory: mine.retry,
+    ...(isGeneral && !contributionsOnly ? { source: { data, retry } } : {}),
+  });
   const [railRetried, setRailRetried] = useState(false);
   const clearVotes = () => {
     setRailRetried(false);
@@ -162,7 +169,10 @@ export function Browse({
               ) : null}
             </div>
           ) : null}
-          <ViewState data={feed}>
+          <ViewState
+            data={feed}
+            {...(!contributionsOnly ? { onRetry: retry } : {})}
+          >
             {(rows) => (
               <ul ref={list} className="browse__list">
                 {rows.map((row) => (
@@ -193,13 +203,15 @@ export function Browse({
               </ul>
             )}
           </ViewState>
-          {!contributionsOnly && data.status === "error" ? (
+          {!contributionsOnly &&
+          data.status === "error" &&
+          feed.status !== "error" ? (
             <>
               {items.length ? <p role="status">{data.message}</p> : null}
               <Button
                 variant="secondary"
                 size="small"
-                className="browse__action"
+                className="button browse__action"
                 type="button"
                 onClick={retry}
               >
@@ -257,14 +269,7 @@ export function Browse({
             />
           ) : null}
         </div>
-        <SuggestedVotesRail
-          api={api}
-          history={mine.data}
-          retryHistory={mine.retry}
-          {...(isGeneral && !contributionsOnly
-            ? { source: { data, retry } }
-            : {})}
-        />
+        <SuggestedVotesRail {...suggestions} onRetry={suggestions.retry} />
       </main>
     </div>
   );

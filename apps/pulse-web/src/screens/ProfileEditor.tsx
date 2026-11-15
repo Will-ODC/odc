@@ -149,16 +149,12 @@ function OwnerEditor({
   );
   return (
     <>
-      <ViewState data={state} variant="compact">
+      <ViewState data={state} variant="compact" onRetry={retry}>
         {(profile) => (
           <ProfileForm initial={profile} save={save} expired={expired} />
         )}
       </ViewState>
-      {state.status === "error" ? (
-        <Button variant="secondary" type="button" onClick={retry}>
-          Try again
-        </Button>
-      ) : null}
+
       {state.status === "empty" ? <ProfileSignIn /> : null}
     </>
   );

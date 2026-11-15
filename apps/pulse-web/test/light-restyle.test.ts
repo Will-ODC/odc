@@ -121,7 +121,7 @@ it("spaces the rail's status line only when it shows something (#488)", () => {
   // A region holding only the visually hidden "Your votes are loaded." is
   // not empty, so `:not(:empty)` alone would still open a gap.
   const selector =
-    ".answered-rail .viewstate--compact:has(> :not(.visually-hidden))";
+    '.answered-rail .viewstate:has([role="status"] > :not(.visually-hidden))';
   const blocks = blocksFor(source, selector);
   expect(blocks).toHaveLength(1);
   expect(source).not.toMatch(/viewstate--compact:not\(:empty\)/);

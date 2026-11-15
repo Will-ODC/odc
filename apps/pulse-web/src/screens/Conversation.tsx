@@ -1,3 +1,5 @@
+import { useSuggestedVotes } from "../hooks/use-suggested-votes.js";
+import { Button } from "../components/Button.js";
 import {
   useCallback,
   useEffect,
@@ -331,6 +333,12 @@ export function Conversation({
   useEffect(() => {
     if (leftPosted) dismissPosted?.();
   }, [leftPosted, dismissPosted]);
+  const suggestions = useSuggestedVotes({
+    api,
+    history: mine.data,
+    retryHistory: mine.retry,
+    justAnswered: answered,
+  });
   return (
     <div className="conversation with-suggested-votes">
       <header className="conversation__banner">
@@ -390,10 +398,8 @@ export function Conversation({
         />
       </main>
       <SuggestedVotesRail
-        api={api}
-        history={mine.data}
-        retryHistory={mine.retry}
-        justAnswered={answered}
+        {...suggestions}
+        onRetry={suggestions.retry}
         current={at}
         disabled={busy}
         onOpen={go}
@@ -527,7 +533,7 @@ function LoadedQuestion({
       <>
         <div className="conversation__scroll" ref={scrollRef}>
           <div className="conversation__column">
-            <ViewState data={loaded}>
+            <ViewState data={loaded} onRetry={onRetry}>
               {(poll) => (
                 // One heading node while the card opens and closes, so focus
                 // on it survives; it is drawn afresh once the poll loads.
@@ -557,10 +563,16 @@ function LoadedQuestion({
                 </section>
               )}
             </ViewState>
-            {loaded.status === "error" || loaded.status === "empty" ? (
-              <button type="button" onClick={onRetry}>
+            {loaded.status === "empty" ? (
+              <Button
+                className="button"
+                variant="secondary"
+                size="small"
+                type="button"
+                onClick={onRetry}
+              >
                 Try again
-              </button>
+              </Button>
             ) : null}
             {wide && vote ? (
               <div className="conversation__vote conversation__vote--page">

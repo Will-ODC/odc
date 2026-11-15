@@ -131,6 +131,7 @@ export function SiteBanner({
                           {voteRead.message}
                         </p>
                         <Button
+                          className="button"
                           variant="secondary"
                           size="small"
                           type="button"

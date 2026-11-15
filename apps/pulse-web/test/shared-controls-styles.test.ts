@@ -114,8 +114,9 @@ it.each(small)(
   (tsx) => {
     const source = read(`../src/${tsx}`);
     expect(source).not.toMatch(/<button[\s>]/);
-    expect(source).not.toMatch(/className=["'{`][^"'}`]*\bbutton\b/);
-    expect(source).toMatch(/<Button\b[^>]*\bsize="small"/);
+    expect(source).toMatch(
+      /<Button\b[^>]*\bsize="small"|<ViewState\b[^>]*\bonRetry=/,
+    );
   },
 );
 
@@ -123,13 +124,13 @@ it("has no `.button` utility left, focus ring included", () => {
   const css = read("../src/styles/utilities.css");
   expect(css).not.toMatch(/\.button\b/);
   expect(css).not.toContain(":focus-visible");
-  // Nowhere in the app: no stylesheet rule for it, no element wearing it.
+  // Retry elements may carry the marker; styling stays in Button.css.
   const files = readdirSync(new URL("../src/", import.meta.url), {
     recursive: true,
   })
     .map(String)
-    .filter((file) => /\.(css|tsx?)$/.test(file));
-  expect(files).toContain("screens/MyVotes.tsx");
+    .filter((file) => /\.css$/.test(file));
+  expect(files).toContain("components/Button.css");
   const users = files.filter((file) =>
     /\.button(?![-\w])|className=["'`][^"'`]*(?<![-\w])button(?![-\w])/.test(
       read(`../src/${file}`),

@@ -1,33 +1,7 @@
-import type { PulseApi } from "../api/types.js";
-import { useMyVotes } from "../hooks/use-my-votes.js";
-import { useSession } from "../hooks/use-session.js";
+import type { ComponentProps } from "react";
 import { SiteBanner } from "./SiteBanner.js";
 
-/** Account wiring for pages without their own voting or posting session. */
-export function PageBanner({
-  api,
-  currentHref,
-  signInHref,
-}: {
-  api: PulseApi;
-  currentHref?: string;
-  signInHref?: string;
-}) {
-  const mine = useMyVotes(api);
-  const { session, progress, signOut, dismiss } = useSession(api, {
-    onSignedOut: mine.clear,
-    onForgotten: mine.clear,
-  });
-  return (
-    <SiteBanner
-      session={session}
-      progress={progress}
-      holdsVotes={mine.holdsVotes}
-      {...(mine.voteRead ? { voteRead: mine.voteRead } : {})}
-      onSignOut={signOut}
-      onCancel={dismiss}
-      {...(currentHref ? { currentHref } : {})}
-      {...(signInHref !== undefined ? { signInHref } : {})}
-    />
-  );
+/** Page account display; the page supplies its session and actions. */
+export function PageBanner(props: ComponentProps<typeof SiteBanner>) {
+  return <SiteBanner {...props} />;
 }

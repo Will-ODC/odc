@@ -64,12 +64,9 @@ export function ClosedResults({
       >
         <span aria-hidden="true">×</span>
       </button>
-      <ViewState data={data}>{() => null}</ViewState>
-      {data.status === "error" ? (
-        <button type="button" className="results__retry" onClick={onRetry}>
-          Try again
-        </button>
-      ) : null}
+      <ViewState data={data} onRetry={onRetry}>
+        {() => null}
+      </ViewState>
     </div>
   );
 }

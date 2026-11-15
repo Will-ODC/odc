@@ -121,8 +121,8 @@ function Stopped({
         <p className="signin__lede">{sentence}</p>
       </div>
       <Button
-        variant="primary"
-        className="signin__go"
+        variant={action === "Try again" ? "secondary" : "primary"}
+        className={action === "Try again" ? "button signin__go" : "signin__go"}
         type="button"
         onClick={onAct}
       >
