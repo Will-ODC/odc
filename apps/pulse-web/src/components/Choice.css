@@ -19,10 +19,6 @@
   background: var(--green-wash);
   border-color: var(--green);
 }
-.choice:has(input:focus-visible) {
-  outline: var(--focus-ring-width) solid var(--focus);
-  outline-offset: var(--focus-ring-offset);
-}
 .choice-list {
   display: flex;
   flex-direction: column;

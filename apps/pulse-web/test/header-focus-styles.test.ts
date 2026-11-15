@@ -14,14 +14,15 @@ it("reserves the same account width before and after the first read at all width
 });
 
 it("shows the system ring when the saved answer receives programmatic focus", () => {
-  const css = readFileSync(
-    new URL("../src/components/VoteCard.css", import.meta.url),
-    "utf8",
-  );
+  const css = readFileSync(new URL("../src/App.css", import.meta.url), "utf8");
   expect(css).toMatch(
     /\.vote-card__yours\[tabindex="-1"\]:focus \{\s*outline: var\(--focus-ring-width\) solid var\(--focus\);\s*outline-offset: var\(--focus-ring-offset\);/,
   );
-  expect(css).not.toMatch(
+  const card = readFileSync(
+    new URL("../src/components/VoteCard.css", import.meta.url),
+    "utf8",
+  );
+  expect(card).not.toMatch(
     /\.vote-card--page \.vote-card__yours:focus\s*\{\s*outline: none/,
   );
 });
@@ -41,7 +42,4 @@ it("draws Next question as quiet text with the standard focus ring, not a green 
   // The old full-width green Next, and the green last button in the row, are gone.
   expect(css).not.toMatch(/\.vote-card__next > button/);
   expect(css).not.toMatch(/\.vote-card__actions > button:last-child/);
-  expect(css).toMatch(
-    /\.vote-card button:focus-visible \{\s*outline: var\(--focus-ring-width\) solid var\(--focus\);/,
-  );
 });

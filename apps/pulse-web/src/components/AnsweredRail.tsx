@@ -1,7 +1,6 @@
 import { useRef, type ComponentProps } from "react";
 import { AnsweredList } from "./AnsweredList.js";
 import { ViewState } from "./ViewState.js";
-import { Button } from "./Button.js";
 import type { ViewData } from "../hooks/view-data.js";
 import { pathOf } from "../flow/route.js";
 import "./AnsweredRail.css";
@@ -66,27 +65,16 @@ export function AnsweredRail({
         ) : null}
         <ViewState
           data={railState}
+          onRetry={() => {
+            railHeading.current?.focus();
+            onRetry();
+          }}
           variant="compact"
           persistent
           {...(railRetried ? { readyNote: RAIL_RELOADED } : {})}
         >
           {() => null}
         </ViewState>
-        {data.status === "error" ? (
-          <Button
-            variant="secondary"
-            size="small"
-            type="button"
-            onClick={() => {
-              // The button goes while the list is read again; focus stays in
-              // the rail rather than falling to the page.
-              railHeading.current?.focus();
-              onRetry();
-            }}
-          >
-            Try again
-          </Button>
-        ) : null}
         {data.status === "ready" && data.value.nextCursor ? (
           <p>
             <a href={pathOf({ kind: "myVotes" })}>See all my votes</a>

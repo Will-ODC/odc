@@ -26,11 +26,6 @@
     min-height: var(--touch);
   }
 }
-.copy-link button:focus-visible,
-.copy-link input:focus-visible {
-  outline: var(--focus-ring-width) solid var(--focus);
-  outline-offset: var(--focus-ring-offset);
-}
 .copy-link input {
   box-sizing: border-box;
   min-width: 0;

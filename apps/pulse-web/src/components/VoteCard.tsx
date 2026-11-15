@@ -436,16 +436,10 @@ export function VoteCard({
               >
                 <ViewState
                   data={{ status: "error", message: resultsProblem.message }}
+                  onRetry={resultsProblem.onRetry}
                 >
                   {() => null}
                 </ViewState>
-                <button
-                  type="button"
-                  className="results__retry"
-                  onClick={resultsProblem.onRetry}
-                >
-                  Try again
-                </button>
               </div>
             ) : (
               <ResultsPanel

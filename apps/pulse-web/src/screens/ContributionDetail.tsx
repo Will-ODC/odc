@@ -6,6 +6,7 @@ import {
   useState,
 } from "react";
 import type { FormEvent } from "react";
+import { useSuggestedVotes } from "../hooks/use-suggested-votes.js";
 import type { PulseApi } from "../api/types.js";
 import {
   accountChangedMessage,
@@ -302,6 +303,11 @@ export function ContributionDetail({
   function changed(contribution: Contribution) {
     if (data.status === "ready") replace({ ...data.value, contribution });
   }
+  const suggestions = useSuggestedVotes({
+    api,
+    history: mine.data,
+    retryHistory: mine.retry,
+  });
   return (
     <AppShell
       banner={
@@ -325,13 +331,7 @@ export function ContributionDetail({
           }}
         />
       }
-      aside={
-        <SuggestedVotesRail
-          api={api}
-          history={mine.data}
-          retryHistory={mine.retry}
-        />
-      }
+      aside={<SuggestedVotesRail {...suggestions} />}
     >
       <section className="contributions-page">
         <a className="contribution-back" href="/?filter=contributions">
@@ -356,7 +356,12 @@ export function ContributionDetail({
             </Button>
           </div>
         ) : null}
-        <ViewState data={data}>
+        <ViewState
+          data={data}
+          {...(data.status === "error" && data.statusCode === 404
+            ? {}
+            : { onRetry: reload })}
+        >
           {({ contribution: item }) => (
             <>
               <header className="contribution-detail-heading">
@@ -579,17 +584,6 @@ export function ContributionDetail({
             </>
           )}
         </ViewState>
-        {data.status === "error" && data.statusCode !== 404 ? (
-          <Button
-            variant="secondary"
-            size="small"
-            className="contribution-retry"
-            type="button"
-            onClick={reload}
-          >
-            Try again
-          </Button>
-        ) : null}
       </section>
     </AppShell>
   );
@@ -895,7 +889,7 @@ function OrganizerMessages({
   const { data, reload } = useContributionRead(load);
   return (
     <>
-      <ViewState data={data}>
+      <ViewState data={data} onRetry={reload}>
         {(messages) =>
           messages.length ? (
             <ul className="contribution-timeline">
@@ -915,17 +909,6 @@ function OrganizerMessages({
           )
         }
       </ViewState>
-      {data.status === "error" ? (
-        <Button
-          variant="secondary"
-          size="small"
-          className="contribution-retry"
-          type="button"
-          onClick={reload}
-        >
-          Try again
-        </Button>
-      ) : null}
     </>
   );
 }

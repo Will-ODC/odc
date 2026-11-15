@@ -74,7 +74,6 @@ describe("the light look's invariants (#482)", () => {
     const buttons: Array<readonly [string, string]> = [
       ["components/VoteCard.css", ".vote-card button"],
       ["components/TwoPress.css", ".two-press__action--secondary"],
-      ["components/ResultsPanel.css", ".results__retry"],
       ["components/DecisionDialog.css", ".decision__close"],
       ["components/CopyLink.css", ".copy-link button"],
       ["components/TopBanner.css", ".banner__actions > .banner__sign-in"],
@@ -121,7 +120,7 @@ it("spaces the rail's status line only when it shows something (#488)", () => {
   // A region holding only the visually hidden "Your votes are loaded." is
   // not empty, so `:not(:empty)` alone would still open a gap.
   const selector =
-    ".answered-rail .viewstate--compact:has(> :not(.visually-hidden))";
+    '.answered-rail .viewstate:has([role="status"] > :not(.visually-hidden))';
   const blocks = blocksFor(source, selector);
   expect(blocks).toHaveLength(1);
   expect(source).not.toMatch(/viewstate--compact:not\(:empty\)/);
