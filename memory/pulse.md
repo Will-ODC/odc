@@ -123,9 +123,11 @@ A small invited pilot comes only after 3-6. None of this authorizes a deploy.
    link limit, #680 idle timeout and owner re-sign-in.
    **Per-poll anonymous or visible votes (#685, operator 2026-11-15):** chosen
    once at creation, clearly shown, simple; needs an ADR and #681 first.
-   Answers (operator, 2026-11-15): a visible poll asks for a display name
-   before voting; a hidden profile's visible votes show as "Hidden member";
-   everyone who can see the poll sees the names.
+   Rules (operator, 2026-11-15): the poll's setting decides and the voter
+   never chooses; anonymous polls show nobody's details; visible polls need
+   an email sign-in to vote and show the voter's profile name, which hiding
+   the profile later does not remove; a voter with no profile name shows as
+   an unnamed verified voter, with no prompt for a name.
 
 1. **Next: #580, a picture in the posting form.** Waiting on the operator's
    answer to "mockup first, or build from the plan and review screenshots?".
