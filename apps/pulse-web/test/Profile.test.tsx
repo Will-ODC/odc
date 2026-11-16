@@ -196,8 +196,9 @@ describe("public member profile", () => {
     expect(
       screen.queryByRole("heading", { level: 2, name: "Contributions" }),
     ).toBeNull();
+    // The section heading renders before its contribution request settles.
     expect(
-      screen.getAllByRole("link", { name: "Community garden" }),
+      await screen.findAllByRole("link", { name: "Community garden" }),
     ).toHaveLength(1);
     expect(forProfile).not.toHaveBeenCalled();
     const update = screen.getByRole("link", { name: "Post an update" });
@@ -456,7 +457,10 @@ describe("owner profile editor", () => {
       />,
     );
     expect(await screen.findByText(/Sign in to create/)).toBeTruthy();
-    expect(screen.getAllByRole("link", { name: "Sign in" })).toHaveLength(2);
+    // The banner also waits for the separate saved-votes read.
+    await waitFor(() =>
+      expect(screen.getAllByRole("link", { name: "Sign in" })).toHaveLength(2),
+    );
     expect(
       screen
         .getAllByRole("link", { name: "Sign in" })
