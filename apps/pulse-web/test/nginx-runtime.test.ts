@@ -112,12 +112,32 @@ describe("nginx runtime settings", () => {
     expect(mode).toContain("default $scheme;");
   });
 
-  it("rejects unsupported trust modes and nginx directive injection", () => {
+  it.each(["1", "65535"])(
+    "accepts port %s for upstream and resolver",
+    (port) => {
+      const { config } = render({
+        PULSE_API_UPSTREAM: `api:${port}`,
+        PULSE_DNS_RESOLVER: `[fd12::10]:${port}`,
+      });
+      expect(config).toContain(`set $pulse_api_upstream "api:${port}";`);
+      expect(config).toContain(`resolver [fd12::10]:${port} valid=10s;`);
+    },
+  );
+
+  it("rejects invalid ports, unsupported trust modes and nginx directive injection", () => {
     for (const settings of [
       { PULSE_REAL_IP_HEADER: "X-Forwarded-For" },
       { PULSE_REAL_IP_HEADER: "false" },
       { PULSE_API_UPSTREAM: 'api:8080"; include bad;' },
       { PULSE_API_UPSTREAM: "api:8080\nmalicious:8080" },
+      { PULSE_API_UPSTREAM: "api:0" },
+      { PULSE_API_UPSTREAM: "api:65536" },
+      { PULSE_API_UPSTREAM: "api:99999" },
+      { PULSE_API_UPSTREAM: "api:08080" },
+      { PULSE_DNS_RESOLVER: "127.0.0.11:0" },
+      { PULSE_DNS_RESOLVER: "127.0.0.11:65536" },
+      { PULSE_DNS_RESOLVER: "127.0.0.11:99999" },
+      { PULSE_DNS_RESOLVER: "127.0.0.11:053" },
       { PULSE_DNS_RESOLVER: "127.0.0.11; error_log /tmp/unsafe debug" },
       { PULSE_DNS_RESOLVER: "127.0.0.11\nmalicious" },
     ]) {

@@ -1,9 +1,9 @@
 #!/bin/sh
 # Runtime checks against a built web image; no real API, mail or database.
-# Run from the repository root: sh apps/pulse-web/test/nginx-smoke.sh pulse-web:682
+# Run from the repository root: sh apps/pulse-web/test/nginx-smoke.sh pulse-web:smoke
 set -eu
-image=${1:-pulse-web:682}
-prefix="pulse-nginx-682-$$"
+image=${1:-pulse-web:smoke}
+prefix="pulse-nginx-smoke-$$"
 network="$prefix-net"
 web="$prefix-web"
 api1="$prefix-api1"
@@ -26,7 +26,7 @@ events {}
 http {
     access_log off;
     error_log /var/log/nginx/error.log crit;
-    limit_req_zone $http_x_real_ip zone=clients:1m rate=1r/m;
+    limit_req_zone $http_x_forwarded_for zone=clients:1m rate=1r/m;
     server {
         listen 8080;
         location = /api/limited {

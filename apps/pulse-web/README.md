@@ -202,7 +202,9 @@ service passes these settings through from the operator's environment.
 
 `PULSE_API_UPSTREAM` is one host and port, without `http://`, path or trailing
 slash; IPv6 literals use `[address]:port`. `PULSE_DNS_RESOLVER` is one DNS
-address (IPv6 must be bracketed), optionally followed by `:port`. Both API
+address (IPv6 must be bracketed), optionally followed by `:port`. Explicit
+ports must be 1–65535 without leading zeros; invalid ports stop startup with
+an error naming the setting. Both API
 locations, `/api/` and the exact `/api/poll-images` upload route, use the same
 variable upstream and preserve the path and query. nginx resolves names on
 requests with a 10-second DNS cache, including IPv6 answers. An API redeploy
@@ -237,7 +239,7 @@ routine nginx failure diagnostics; use query-free access statuses and the
 API's sanitized fault logs to investigate failures. Do not lower the level
 on a deployed instance handling real sign-in links.
 
-After building the image, run `sh apps/pulse-web/test/nginx-smoke.sh pulse-web:682`
+After building the image, run `sh apps/pulse-web/test/nginx-smoke.sh pulse-web:smoke`
 from the repository root. This Docker smoke test uses a throwaway private
 upstream to check both proxy locations, path/query preservation, real-IP mode
 on/off, address-based rate-limit buckets, DNS replacement without a web restart,

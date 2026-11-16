@@ -24,6 +24,19 @@ if ! printf '%s\n' "$PULSE_DNS_RESOLVER" | LC_ALL=C grep -Eq '^([A-Za-z0-9][A-Za
     exit 1
 fi
 
+validate_port() {
+    # Bound the digit count before numeric comparison to avoid overflow.
+    if ! printf '%s\n' "$2" | LC_ALL=C grep -Eq '^[1-9][0-9]{0,4}$' || [ "$2" -gt 65535 ]; then
+        echo "Invalid $1: port must be 1-65535 without leading zeros" >&2
+        exit 1
+    fi
+}
+validate_port PULSE_API_UPSTREAM "${PULSE_API_UPSTREAM##*:}"
+case "$PULSE_DNS_RESOLVER" in
+    *\]) ;; # A bracketed IPv6 address without an explicit port.
+    *:*) validate_port PULSE_DNS_RESOLVER "${PULSE_DNS_RESOLVER##*:}" ;;
+esac
+
 case "${PULSE_REAL_IP_HEADER:-}" in
     '')
         cat > "/etc/nginx/pulse-proxy-mode.conf" <<'EOF'
