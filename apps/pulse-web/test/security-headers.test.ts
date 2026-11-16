@@ -30,7 +30,7 @@ describe("production security policy", () => {
     expect(sizes.map((match) => match[1])).toEqual(["10m"]);
     const upload = blocks.match(/location = \/api\/poll-images \{([^{}]*)\}/);
     expect(upload?.[1]).toContain("client_max_body_size 10m;");
-    expect(upload?.[1]).toContain("proxy_pass http://api:8080;");
+    expect(upload?.[1]).toContain("proxy_pass http://$pulse_api_upstream;");
     expect(upload?.[1]).toContain("error_page 413 = @image_too_large;");
   });
 
