@@ -111,7 +111,18 @@ Per-PR history is in `git log origin/master -- apps/pulse apps/pulse-web`.
 
 A small invited pilot comes only after 3-6. None of this authorizes a deploy.
 
-## Current operator direction and next work (2026-11-14)
+## Current operator direction and next work (2026-11-15)
+
+0. **Deploy on Railway (operator, 2026-11-15); work split 50/50 Codex/Claude.**
+   Auth audit `docs/audits/pulse-auth-2026-11-15.md` (Codex, read-only,
+   FIX-BEFORE-PILOT; no passwords exist). Before the pilot: #681 sign in only
+   after a click naming the account (audit finding 1, confirmed by Claude),
+   #682 nginx for Railway (API address, runtime DNS, real client IP, log
+   check), #683 `__Host-` cookies and Origin on votes/suggestions, #684 Railway
+   section in `DEPLOY.md`. After the pilot: #678 ballot revocation, #679 atomic
+   link limit, #680 idle timeout and owner re-sign-in.
+   **Per-poll anonymous or visible votes (#685, operator 2026-11-15):** chosen
+   once at creation, clearly shown, simple; needs an ADR and #681 first.
 
 1. **Next: #580, a picture in the posting form.** Waiting on the operator's
    answer to "mockup first, or build from the plan and review screenshots?".
@@ -169,6 +180,14 @@ A small invited pilot comes only after 3-6. None of this authorizes a deploy.
   reuse the built flow.
 
 ## Open decisions (operator)
+
+- **#685 visible votes:** what a visible vote shows when the voter has no
+  profile name; what happens to visible votes when the profile is hidden; who
+  may see them (everyone, or signed-in people).
+- **Cross-device vote history:** let a signed-in account see its own votes
+  from every device (server computes the ADR-0040 code per poll)? Reverses
+  ADR-0040's "accepted limit" wording; owner-only versus public was asked and
+  not answered.
 
 - **#580:** mockup first, or build from the plan and review screenshots?
 - **Continuation (#425):** operator direction 2026-11-15: Next and Previous

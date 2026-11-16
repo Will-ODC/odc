@@ -29,7 +29,7 @@ Do not apply charter rules to `apps/**`, and do not relax them anywhere else.
   verifiers. Registration v2 contracts and verification merged in #677.
   Next: enable ledger registration writes. The signer and identity services
   are still unbuilt. → `memory/STATE.md`
-- **Pulse:** sign-in, voting, browsing, poll creation, Contributions, profiles
+- **Pulse:** deploying on Railway; pre-pilot fixes #681-#684, visible votes #685 (see entry). Built: sign-in, voting, browsing, poll creation, Contributions, profiles
   and picture storage are built; no open product PRs. Targeted and broader
   audits are complete; timing gaps and quality fixes (#613, #614, #621, #622,
   #624-#629) merged in #657; UI review nits merged in #659; #533 and #653 in #667;
