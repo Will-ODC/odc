@@ -1,14 +1,15 @@
 # Deploy Pulse
 
-This is the operator checklist for a small invited test. It deliberately does
-not choose a host, create an account, buy anything, or change DNS.
+This is the operator checklist for a small invited test. It does not create an
+account, buy anything, or change DNS.
 
 Pulse is two images on one public origin:
 
 - `apps/pulse/Dockerfile` is the private API. It runs on port `8080` by default,
   connects to Postgres, runs migrations, and sends mail through Resend.
 - `apps/pulse-web/Dockerfile` is the public front door. nginx listens on port
-  `8080`, serves the browser app, and proxies `/api` to `http://api:8080`.
+  `8080`, serves the browser app, and proxies `/api` to the configured API
+  upstream (`api:8080` by default).
 
 The API must not be exposed directly. Keep both processes behind the web image
 so the page and API share one origin; the session cookies depend on it.
@@ -47,7 +48,8 @@ at that TLS terminator, including API and error responses, and redirect public
 HTTP traffic to HTTPS there. Enable HSTS only once HTTPS works on the chosen
 hostname. Add `includeSubDomains` only if every subdomain is ready for HTTPS;
 preloading is a separate operator decision. Do not add HSTS to the internal
-HTTP nginx listener.
+HTTP nginx listener. See the Railway section for its current HSTS gap and
+follow-up #691.
 
 nginx sends CSP, `X-Content-Type-Options: nosniff`, `Referrer-Policy: same-origin`
 and a Permissions-Policy denying camera, microphone and geolocation on pages,
@@ -143,6 +145,9 @@ answers 503 `image_busy` rather than slowing votes.
 The web image's nginx allows a request body of 10 MiB on `POST
 /api/poll-images` only; every other location keeps nginx's 1 MiB default. A
 proxy or host edge in front of nginx must allow 10 MiB on that path too.
+[Railway documents](https://docs.railway.com/networking/public-networking/specs-and-limits.md)
+no request-body size limit, only that requests must finish within 5 minutes;
+verify a 10 MiB `POST /api/poll-images` on the first deploy.
 
 Until reporting and the site owner's soft delete are built, the only
 emergency path for an abusive picture is a database operator setting the
@@ -204,9 +209,11 @@ pair can reveal which confirmed person cast a vote.
 
 ## Web image build and port
 
-The web container has no runtime environment variables and listens publicly on
-port `8080`. Four optional build arguments publish the starting-question poll
-IDs used by `/questions`:
+The web container listens publicly on port `8080` and reads the runtime
+settings `PULSE_API_UPSTREAM`, `PULSE_DNS_RESOLVER` and `PULSE_REAL_IP_HEADER`
+(see `apps/pulse-web/README.md`, "Web container runtime settings"). The poll IDs below are build-time only; four
+optional build arguments publish the starting-question poll IDs used by
+`/questions`:
 
 - `VITE_PULSE_FIRST_POLL_ID`
 - `VITE_PULSE_DATA_POLL_ID`
@@ -270,26 +277,29 @@ assigns:
   flattening target; a normal root `CNAME` is not supported by every DNS
   provider.
 
-Attach the hostname to the public web service, not the API service. Wait for the
-host to provision TLS, then set `PULSE_WEB_ORIGIN` to the exact HTTPS origin.
-Verify that `/` and `/api/polls?community=pulse-general` work at that same
-origin before sending an invitation.
+Attach the hostname to the public web service, not the API service. Set
+`PULSE_WEB_ORIGIN` to the exact HTTPS origin from the start; the API requires
+it to start. If the origin changes, change the setting and restart the API.
+Wait for the host to provision TLS, then verify that `/` and
+`/api/polls?community=pulse-general` work at that same origin before sending an
+invitation.
 
 ## Railway
 
-The chosen host (operator, 2026-11-15). Railway documents its private network
-at <https://docs.railway.com/guides/private-networking> and its public edge at
-<https://docs.railway.com/networking/public-networking/specs-and-limits.md>.
-Anything below not tied to one of those pages is marked "verify on the first
-deploy".
+The chosen host (operator, 2026-11-15). Verify the networking and application
+checks below on the first deploy before inviting anyone.
 
 ### Services
 
 Create three services in one Railway project and environment: Postgres, the
 API, and the web.
 
-1. **Postgres:** Railway Postgres, major version 17, UTF8. After it starts, run
-   `show server_encoding;` and confirm `UTF8` (see "Postgres" above).
+1. **Postgres:** Railway Postgres, major version 17 chosen by the Postgres
+   service's image tag, UTF8. After it starts, run `show server_encoding;` and
+   confirm `UTF8` (see "Postgres" above). Give the API the private URL through
+   `PULSE_DATABASE_URL=${{Postgres.DATABASE_URL}}`, not `DATABASE_PUBLIC_URL`;
+   check the variable name on the Postgres service. See Railway's
+   [variable reference syntax](https://docs.railway.com/reference/variables).
 2. **API:** build from the repository root (the Dockerfiles copy workspace
    files from the root) and set the service variable
    `RAILWAY_DOCKERFILE_PATH=apps/pulse/Dockerfile`. Give it **no public
@@ -299,12 +309,19 @@ API, and the web.
    `RAILWAY_DOCKERFILE_PATH=apps/pulse-web/Dockerfile`. This is the only
    service with a public domain; set its target port to `8080`. Attach the
    chosen hostname here (see "Point the public hostname at the host"). Set the
-   health check to `GET /`.
+   health check to `GET /`. Set the service variable `PORT=8080` on the web
+   service so Railway's deploy health check reaches nginx (nginx ignores it).
+   Railway uses the injected `PORT` for the check and runs it only at deploy
+   time; it is not monitoring. Do not add an API health check: it would keep
+   the old API running longer during migrations. See Railway's
+   [health check guide](https://docs.railway.com/guides/healthchecks).
 
 Pass the `VITE_PULSE_*_POLL_ID` build arguments (see "Web image build and
-port") as service variables if the starting questions are published; whether
-Railway passes a service variable to the Docker build as a build argument must
-be verified on the first deploy.
+port") as service variables if the starting questions are published.
+[Railway's Dockerfile guide](https://docs.railway.com/guides/dockerfiles) says
+service variables are available at build time when declared with `ARG` in the
+stage that needs them. `apps/pulse-web/Dockerfile` declares all four `VITE_`
+arguments; verify the starting questions appear on `/questions`.
 
 ### Web service settings
 
@@ -315,10 +332,16 @@ be verified on the first deploy.
 | `PULSE_REAL_IP_HEADER` | `X-Real-IP`                                |
 
 Use the API service's actual name in `PULSE_API_UPSTREAM`; no `http://`, path
-or trailing slash. Railway's private network is IPv6, and environments created
-before 2025-10-16 are IPv6-only; `[fd12::10]` is the resolver address in
-Railway's private-networking guide. The web image serves on IPv4 and IPv6, so
-Railway's edge can reach it either way.
+or trailing slash. `[fd12::10]` is the nameserver in Railway containers'
+`/etc/resolv.conf` according to Railway community answers; it is not in
+Railway's docs and may change. Verify it on the first deploy: use `railway ssh`
+into the web service and run `cat /etc/resolv.conf`. If the resolver is wrong,
+`/` loads but every `/api` request returns 502.
+
+[Railway's private-networking guide](https://docs.railway.com/guides/private-networking)
+says environments created after 2025-10-16 resolve private names to IPv4 and
+IPv6; older environments resolve them to IPv6 only. The web image serves on
+IPv4 and IPv6, so Railway's edge can reach it either way.
 
 ### API service settings
 
@@ -328,46 +351,67 @@ Set every variable under "API environment" above, plus:
 | -------------------------- | ---------------------------------------------------------------------------- |
 | `PULSE_HOST`               | `::` (bind IPv6 so the web service can reach the API on the private network) |
 | `PULSE_TRUSTED_PROXY_HOPS` | `1`                                                                          |
-| `PULSE_DATABASE_URL`       | the Postgres service's private (internal) connection URL                     |
+| `PULSE_DATABASE_URL`       | `${{Postgres.DATABASE_URL}}` (private URL; check the Postgres variable name) |
 
 Leave `PULSE_PORT` unset (`8080`). `PULSE_TRUSTED_PROXY_HOPS=1` is correct here
 because the web nginx replaces the forwarded address with the one real client
 address (below), so the API sees one proxy hop. Do not use `2`.
-`PULSE_WEB_ORIGIN` must be the exact HTTPS public origin; set it after the
-hostname's TLS works. Production cookies are named `__Host-pulse_session` and
+
+In a dual-stack environment, nginx may reach the API over private IPv4.
+[Railway documents no private IPv4 range](https://docs.railway.com/guides/private-networking).
+If the address is outside `10/8`, `172.16/12` and `192.168/16` (for example,
+`100.64/10`), the API's private-proxy check (`src/http/server.ts:65-69`) rejects
+nginx as a trusted proxy and every user shares one rate-limit bucket. The
+post-deploy bucket check below detects this.
+
+`PULSE_WEB_ORIGIN` is required for the API to start. Set it from the start to
+the exact HTTPS origin people will use: the custom hostname, or the generated
+`https://<name>.up.railway.app` domain for a first test. If the origin changes,
+change the setting and restart the API. Sign-in links point at it and
+mutations are accepted only from it, so check HTTPS works there before
+inviting anyone. Production cookies are named `__Host-pulse_session` and
 `__Host-pulse_ballot` (`apps/pulse/API.md`); the browser rejects `__Host-`
-cookies over plain HTTP, so sign-in cannot work until the public origin is
-HTTPS. Railway terminates TLS at its edge; confirm HTTPS on the hostname before
-inviting anyone.
+cookies over plain HTTP.
+
+[Railway's edge](https://docs.railway.com/networking/public-networking/specs-and-limits.md)
+terminates TLS and answers plain-HTTP GET requests with a 301 redirect to
+HTTPS. Railway offers no way to add response headers, so the HSTS requirement
+under "HTTPS and browser security headers" is not met on Railway yet.
+[Ticket #691](https://github.com/Will-ODC/odc/issues/691) covers having nginx
+send HSTS when the edge reports HTTPS.
 
 ### Real client address and what it trusts
 
 With `PULSE_REAL_IP_HEADER=X-Real-IP`, nginx takes the client address from
 `X-Real-IP` from any peer (Railway publishes no edge address ranges), and
-Railway's edge overwrites that header with the actual client address on public
-requests. That is safe only because the edge is the only thing that reaches the
-web port. Any other service in the same Railway environment can reach the web
-service over the private network and send its own `X-Real-IP`, choosing its own
+[Railway's edge](https://docs.railway.com/networking/public-networking/specs-and-limits.md)
+overwrites that header with the actual client address on public requests. That
+is safe only because the edge is the only thing that reaches the web port. Any
+other service in the same Railway environment can reach the web service over
+the private network and send its own `X-Real-IP`, choosing its own
 rate-limit bucket. Keep no untrusted services in this environment, and do not
 give the web service a TCP proxy or any second public route.
 
 ### Deploying a release
 
-Railway starts the new deployment before stopping the old one (verify on the
-first deploy; Railway's deployment-overlap settings may change this). That
-conflicts with the rule under "Postgres": do not overlap old and new API
-versions during a schema change. The old code could write against, or choke on,
-the new schema while the new code runs migrations.
+Turn off automatic deploys on the API service so every API release is started
+by hand. Railway starts the new deployment before stopping the old one, which
+conflicts with the rule under "Postgres" during a schema change: the old code
+could write against, or choke on, the new schema while migrations run.
 
-- **Release with a schema change (any new migration):** scale the API to 0
-  replicas or remove its running deployment first, then deploy the new version
-  and scale back to 1. Accept the short outage. Check the deploy logs to see
-  the migrations finish before opening traffic.
-- **Release with no migration:** a normal redeploy is fine.
-- **Additive migrations still need care.** If the release adds a column or
-  table, the old code that is still running during an overlap must tolerate it
-  (it ignores columns it does not know). Treat a migration as safe to overlap
-  only after reading it for that; when unsure, use the outage procedure.
+Before each API release, check for a new migration:
+
+```sh
+git diff --name-only <deployed-sha> <new-sha> -- apps/pulse/migrations
+```
+
+- **Release with a schema change (any new migration):** remove the API's active
+  deployment first: in the Deployments tab, open its three-dot menu and choose
+  **Remove**, or run `railway down` for the API service. Wait until the
+  deployment shows removed, then deploy the new version. Accept the outage
+  and watch the deploy logs until the migrations finish and the API is
+  listening.
+- **Release with no new migration:** a normal redeploy is fine.
 
 The web service has no schema and may redeploy at any time; nginx re-resolves
 the API address, so no web restart is needed after an API redeploy.
@@ -378,15 +422,27 @@ the API address, so no web restart is needed after an API redeploy.
    returns `200` JSON (see "Health checks").
 2. Request a real sign-in link at an invited address and redeem it; confirm the
    `__Host-pulse_session` cookie is set.
-3. Rate-limit buckets: request sign-in links from two different networks
-   (for example a home connection and a phone off Wi-Fi) until one is limited
-   and confirm the other is still accepted. If both hit the limit together,
-   every user is in one bucket: stop and check the proxy settings above.
-4. Spoofing: from one client, send requests with a forged
-   `X-Real-IP: <other address>` header (and `X-Forwarded-For`) and confirm its
-   own bucket is unchanged, so it is limited at the same point as without the
-   header and the other client is unaffected. Railway's edge should overwrite
-   the header; verify on the first deploy.
+3. Rate-limit buckets: use two different networks (for example a home
+   connection and a phone off Wi-Fi). With fresh buckets, send the following
+   request eleven times from the first network, replacing `https://<origin>`
+   with the exact public origin in both places:
+
+   ```sh
+   curl -s -o /dev/null -w '%{http_code}\n' -X POST https://<origin>/api/sign-in -H 'Origin: https://<origin>' -H 'Content-Type: application/json' -d '{"email":"not-an-address"}'
+   ```
+
+   Expect ten 400s, then 429 `too_many_requests`. The other network must still
+   get 400; send the same request there and complete eleven requests in total
+   to check its own ten-then-429 count. No mail is sent. Each tested network
+   stays limited for an hour. If both networks hit the limit together, every
+   user is in one bucket: check the proxy settings above, including whether
+   nginx's private IPv4 address passes the API's private-proxy check.
+
+4. Spoofing: once the buckets are fresh again (wait an hour), repeat the same
+   test with `-H 'X-Real-IP: 203.0.113.9' -H 'X-Forwarded-For: 203.0.113.9'`
+   added to the curl command. Expect the same ten 400s then 429 count on each
+   network, with the other network still getting 400 after the first is
+   limited. This checks that forged headers cannot change the client's bucket.
 
 ## Render
 
