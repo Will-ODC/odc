@@ -123,6 +123,9 @@ A small invited pilot comes only after 3-6. None of this authorizes a deploy.
    link limit, #680 idle timeout and owner re-sign-in.
    **Per-poll anonymous or visible votes (#685, operator 2026-11-15):** chosen
    once at creation, clearly shown, simple; needs an ADR and #681 first.
+   Answers (operator, 2026-11-15): a visible poll asks for a display name
+   before voting; a hidden profile's visible votes show as "Hidden member";
+   everyone who can see the poll sees the names.
 
 1. **Next: #580, a picture in the posting form.** Waiting on the operator's
    answer to "mockup first, or build from the plan and review screenshots?".
@@ -181,9 +184,6 @@ A small invited pilot comes only after 3-6. None of this authorizes a deploy.
 
 ## Open decisions (operator)
 
-- **#685 visible votes:** what a visible vote shows when the voter has no
-  profile name; what happens to visible votes when the profile is hidden; who
-  may see them (everyone, or signed-in people).
 - **Cross-device vote history:** let a signed-in account see its own votes
   from every device (server computes the ADR-0040 code per poll)? Reverses
   ADR-0040's "accepted limit" wording; owner-only versus public was asked and
