@@ -21,8 +21,7 @@ another private-network name or resolver set `PULSE_API_UPSTREAM` and
 resolves the upstream name on requests with a 10-second cache, so the web
 service can start before the API exists (requests return 502 until it does)
 and an API address change needs no web restart. Changing the settings
-themselves requires restarting the web container. The literal-name and
-restart-on-address-change limits apply only to the compose defaults.
+themselves requires restarting the web container.
 
 ## Proxy configuration required before going live
 
@@ -31,9 +30,10 @@ address (default `1`: the shipped nginx; `src/main.ts`,
 `src/http/server.ts`). With a host edge in front of nginx, one hop identifies
 the edge as the client and puts every user in one shared rate-limit bucket.
 Before using Render, Fly.io or another edge proxy, set
-`PULSE_TRUSTED_PROXY_HOPS=2` — this works only when both nginx's address as
-the API sees it and the edge address nginx appends to `X-Forwarded-For` pass
-the API's private address check — or configure nginx's real-IP handling for
+`PULSE_TRUSTED_PROXY_HOPS=2` (Railway: keep `1` with
+`PULSE_REAL_IP_HEADER`; see the Railway section) — this works only when both
+nginx's address as the API sees it and the edge address nginx appends to
+`X-Forwarded-For` pass the API's private address check — or configure nginx's real-IP handling for
 the host's trusted edge addresses and keep `1`. The value must be a whole
 number from 1 to 4; anything else, including `0`, stops the start (the served
 API is only reached through nginx, so trusting no hop would make nginx's
@@ -279,8 +279,8 @@ assigns:
 
 Attach the hostname to the public web service, not the API service. Set
 `PULSE_WEB_ORIGIN` to the exact HTTPS origin from the start; the API requires
-it to start. If the origin changes, change the setting and restart the API.
-Wait for the host to provision TLS, then verify that `/` and
+it to start. If the origin changes on Railway, change the variable and deploy
+the staged change. Wait for the host to provision TLS, then verify that `/` and
 `/api/polls?community=pulse-general` work at that same origin before sending an
 invitation.
 
@@ -292,7 +292,11 @@ checks below on the first deploy before inviting anyone.
 ### Services
 
 Create three services in one Railway project and environment: Postgres, the
-API, and the web.
+API, and the web. Decide the origin first. If you will test on the generated
+domain, create the web service and generate its domain before setting the API
+variables, or set
+`PULSE_WEB_ORIGIN=https://${{<web-service>.RAILWAY_PUBLIC_DOMAIN}}` using the
+web service's actual name.
 
 1. **Postgres:** Railway Postgres, major version 17 chosen by the Postgres
    service's image tag, UTF8. After it starts, run `show server_encoding;` and
@@ -300,11 +304,20 @@ API, and the web.
    `PULSE_DATABASE_URL=${{Postgres.DATABASE_URL}}`, not `DATABASE_PUBLIC_URL`;
    check the variable name on the Postgres service. See Railway's
    [variable reference syntax](https://docs.railway.com/reference/variables).
+   Remove the Postgres service's public TCP proxy (Settings → Networking)
+   unless you need outside access; the API uses only the private URL.
 2. **API:** build from the repository root (the Dockerfiles copy workspace
    files from the root) and set the service variable
    `RAILWAY_DOCKERFILE_PATH=apps/pulse/Dockerfile`. Give it **no public
    domain**. Run exactly **one replica**: rate limits are per instance, so a
    second replica would let each client have a separate budget per replica.
+   Before the first push after setup, turn off automatic deploys on the API
+   service (service Settings → Source → disable automatic deploys; see
+   [Railway's GitHub auto-deploy guide](https://docs.railway.com/deployments/github-autodeploys)).
+   Set its health check to `GET /api/polls?community=pulse-general` and its
+   service variable `PORT=8080` so Railway checks the API's listening port
+   (the API ignores `PORT`). A failed new API stays unpromoted, so a bad build
+   in a release with no migration does not take the site down.
 3. **Web:** build from the repository root with
    `RAILWAY_DOCKERFILE_PATH=apps/pulse-web/Dockerfile`. This is the only
    service with a public domain; set its target port to `8080`. Attach the
@@ -312,8 +325,7 @@ API, and the web.
    health check to `GET /`. Set the service variable `PORT=8080` on the web
    service so Railway's deploy health check reaches nginx (nginx ignores it).
    Railway uses the injected `PORT` for the check and runs it only at deploy
-   time; it is not monitoring. Do not add an API health check: it would keep
-   the old API running longer during migrations. See Railway's
+   time; it is not monitoring. See Railway's
    [health check guide](https://docs.railway.com/guides/healthchecks).
 
 Pass the `VITE_PULSE_*_POLL_ID` build arguments (see "Web image build and
@@ -338,7 +350,7 @@ Railway's docs and may change. Verify it on the first deploy: use `railway ssh`
 into the web service and run `cat /etc/resolv.conf`. If the resolver is wrong,
 `/` loads but every `/api` request returns 502.
 
-[Railway's private-networking guide](https://docs.railway.com/guides/private-networking)
+[Railway's private-networking guide](https://docs.railway.com/networking/private-networking/how-it-works)
 says environments created after 2025-10-16 resolve private names to IPv4 and
 IPv6; older environments resolve them to IPv6 only. The web image serves on
 IPv4 and IPv6, so Railway's edge can reach it either way.
@@ -358,7 +370,7 @@ because the web nginx replaces the forwarded address with the one real client
 address (below), so the API sees one proxy hop. Do not use `2`.
 
 In a dual-stack environment, nginx may reach the API over private IPv4.
-[Railway documents no private IPv4 range](https://docs.railway.com/guides/private-networking).
+[Railway documents no private IPv4 range](https://docs.railway.com/networking/private-networking/how-it-works).
 If the address is outside `10/8`, `172.16/12` and `192.168/16` (for example,
 `100.64/10`), the API's private-proxy check (`src/http/server.ts:65-69`) rejects
 nginx as a trusted proxy and every user shares one rate-limit bucket. The
@@ -367,26 +379,30 @@ post-deploy bucket check below detects this.
 `PULSE_WEB_ORIGIN` is required for the API to start. Set it from the start to
 the exact HTTPS origin people will use: the custom hostname, or the generated
 `https://<name>.up.railway.app` domain for a first test. If the origin changes,
-change the setting and restart the API. Sign-in links point at it and
-mutations are accepted only from it, so check HTTPS works there before
+change the variable and deploy the staged change. Sign-in links point at it
+and mutations are accepted only from it, so check HTTPS works there before
 inviting anyone. Production cookies are named `__Host-pulse_session` and
 `__Host-pulse_ballot` (`apps/pulse/API.md`); the browser rejects `__Host-`
 cookies over plain HTTP.
 
 [Railway's edge](https://docs.railway.com/networking/public-networking/specs-and-limits.md)
 terminates TLS and answers plain-HTTP GET requests with a 301 redirect to
-HTTPS. Railway offers no way to add response headers, so the HSTS requirement
-under "HTTPS and browser security headers" is not met on Railway yet.
+HTTPS. Railway offers no way to add response headers (not in Railway's docs;
+verify), so the HSTS requirement under "HTTPS and browser security headers"
+is not met on Railway yet.
 [Ticket #691](https://github.com/Will-ODC/odc/issues/691) covers having nginx
-send HSTS when the edge reports HTTPS.
+send HSTS when the edge reports HTTPS. Do not invite anyone until #691 is
+merged and deployed.
 
 ### Real client address and what it trusts
 
 With `PULSE_REAL_IP_HEADER=X-Real-IP`, nginx takes the client address from
-`X-Real-IP` from any peer (Railway publishes no edge address ranges), and
+`X-Real-IP` from any peer (Railway publishes no edge address ranges).
 [Railway's edge](https://docs.railway.com/networking/public-networking/specs-and-limits.md)
-overwrites that header with the actual client address on public requests. That
-is safe only because the edge is the only thing that reaches the web port. Any
+is documented as setting `X-Real-IP` to the client address; replacing a value
+the client sent is not documented. Verify this on the first deploy with check
+4 under "Check after deploy", and do not invite anyone until it passes. This
+also depends on the edge being the only public route to the web port. Any
 other service in the same Railway environment can reach the web service over
 the private network and send its own `X-Real-IP`, choosing its own
 rate-limit bucket. Keep no untrusted services in this environment, and do not
@@ -394,10 +410,12 @@ give the web service a TCP proxy or any second public route.
 
 ### Deploying a release
 
-Turn off automatic deploys on the API service so every API release is started
-by hand. Railway starts the new deployment before stopping the old one, which
-conflicts with the rule under "Postgres" during a schema change: the old code
-could write against, or choke on, the new schema while migrations run.
+With API automatic deploys disabled during setup, start every API release by
+hand. [Railway's deployment teardown docs](https://docs.railway.com/deployments/deployment-teardown)
+say the old deployment stops after the new one deploys, with the overlap set
+by `RAILWAY_DEPLOYMENT_OVERLAP_SECONDS`. This conflicts with the rule under
+"Postgres" during a schema change: the old code could write against, or choke
+on, the new schema while migrations run.
 
 Before each API release, check for a new migration:
 
@@ -407,11 +425,21 @@ git diff --name-only <deployed-sha> <new-sha> -- apps/pulse/migrations
 
 - **Release with a schema change (any new migration):** remove the API's active
   deployment first: in the Deployments tab, open its three-dot menu and choose
-  **Remove**, or run `railway down` for the API service. Wait until the
-  deployment shows removed, then deploy the new version. Accept the outage
-  and watch the deploy logs until the migrations finish and the API is
-  listening.
-- **Release with no new migration:** a normal redeploy is fine.
+  **Remove**, or run `railway down --service <api-service-name>`.
+  [The CLI command](https://docs.railway.com/cli/down) removes the most recent
+  successful deployment. Wait until the deployment shows removed, then deploy
+  the new version as described below. Accept the outage and watch the deploy
+  logs until the migrations finish and the API is listening.
+- **Release with no new migration:** deploy the new version as described
+  below; the old deployment can keep serving until the new API passes its
+  health check.
+
+To deploy the new version, open the command palette (Cmd+K) on the API service
+and choose **Deploy Latest Commit**, which deploys the tip of the connected
+branch. Make sure that tip is the `<new-sha>` you diffed; if the branch moved,
+diff again and follow the matching release procedure above before deploying.
+Do not use **Redeploy** for a new version: it reuses the selected deployment's
+source. See [Railway's deployment reference](https://docs.railway.com/deployments/reference).
 
 The web service has no schema and may redeploy at any time; nginx re-resolves
 the API address, so no web restart is needed after an API redeploy.
