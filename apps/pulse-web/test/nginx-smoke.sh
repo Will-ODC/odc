@@ -63,6 +63,7 @@ start_web() {
         sleep 1
     done
     docker exec "$web" nginx -t
+    docker exec "$web" sh -c 'printf "smoke asset\n" > /usr/share/nginx/html/assets/hsts-smoke.txt'
 }
 
 request() {
@@ -77,11 +78,38 @@ expect_status() {
     [ "$actual" = "$2" ] || { echo "Expected $2, got $actual" >&2; exit 1; }
 }
 
+# Check response headers without treating expected HTTP errors as curl errors.
+expect_hsts() {
+    proto=$1 expected=$2 path=$3 expected_status=$4
+    shift 4
+    actual=$(curl -sS --max-time 15 -D "$work/headers" -o "$work/body" \
+        -w '%{http_code}' -H "X-Forwarded-Proto: $proto" "$@" "$base$path")
+    [ "$actual" = "$expected_status" ] || {
+        echo "Expected $expected_status for $path, got $actual" >&2; exit 1;
+    }
+    value=$(tr -d '\r' < "$work/headers" | sed -n 's/^[Ss][Tt][Rr][Ii][Cc][Tt]-[Tt][Rr][Aa][Nn][Ss][Pp][Oo][Rr][Tt]-[Ss][Ee][Cc][Uu][Rr][Ii][Tt][Yy]:[[:space:]]*//p')
+    [ "$value" = "$expected" ] || {
+        echo "Unexpected HSTS for $path (protocol '$proto'): '$value'" >&2; exit 1;
+    }
+}
+
+check_hsts_routes() {
+    for path in / /sign-in /assets/hsts-smoke.txt /api/ /api/poll-images; do
+        expect_hsts "$1" "$2" "$path" 200
+    done
+    expect_hsts "$1" "$2" /assets/missing-hsts-smoke.js 404
+    expect_hsts "$1" "$2" /api/poll-images 413 \
+        -H 'Content-Type: image/png' --data-binary "@$work/oversized"
+    [ "$(cat "$work/body")" = '{"error":"image_too_large","message":"That picture is over 10 MB. Choose a smaller one."}' ]
+}
+
 docker network create "$network" >/dev/null
+dd if=/dev/zero of="$work/oversized" bs=1048576 count=11 2>/dev/null
 write_upstream first
 write_upstream second
 start_upstream "$api1" first
 start_web ''
+check_hsts_routes https ''
 
 # Direct mode must discard all client-supplied address/protocol assertions.
 body=$(request 198.51.100.1 '/api/check?keep=yes')
@@ -94,6 +122,13 @@ expect_status 198.51.100.2 429
 docker rm -f "$web" >/dev/null
 
 start_web X-Real-IP
+check_hsts_routes https 'max-age=31536000'
+check_hsts_routes http ''
+# Missing, unknown, mixed-case and multi-value protocols must not enable HSTS.
+for proto in '' invalid HTTPS https,http; do
+    expect_hsts "$proto" '' / 200
+    expect_hsts "$proto" '' /api/ 200
+done
 for path in '/api/check?keep=yes' '/api/poll-images?keep=yes'; do
     body=$(request 198.51.100.1 "$path")
     [ "$body" = "first|198.51.100.1|198.51.100.1|https|$path" ]
@@ -119,6 +154,19 @@ body=$(request 198.51.100.1 '/api/poll-images?keep=yes')
 [ "$body" = 'second|198.51.100.1|198.51.100.1|https|/api/poll-images?keep=yes' ]
 
 docker stop "$api2" >/dev/null
+# nginx keeps the stopped API's address for up to its 10 s resolver cache, and
+# a connection to it hangs rather than failing; wait until the name stops
+# resolving and nginx answers 502 at once.
+attempts=0
+until [ "$(curl -s --max-time 3 -o /dev/null -w '%{http_code}' "$base/api/" || true)" = 502 ]; do
+    attempts=$((attempts + 1))
+    [ "$attempts" -lt 30 ] || { echo 'API stop not observed' >&2; exit 1; }
+    sleep 1
+done
+for path in /api/ /api/poll-images; do
+    expect_hsts https 'max-age=31536000' "$path" 502
+    expect_hsts http '' "$path" 502
+done
 token="nginx-smoke-secret-$$"
 for path in /api/sign-in/redeem /api/poll-images; do
     status=$(curl -sS --max-time 15 -o /dev/null -w '%{http_code}' "$base$path?token=$token")
@@ -133,4 +181,4 @@ fi
 # The official image links both logs to stdout/stderr. Confirm the log capture
 # was live, rather than passing simply because no access log was collected.
 grep -q 'GET /api/sign-in/redeem HTTP/1.1" 502' "$work/web.log"
-echo 'PASS: forwarding, trust opt-in, separate buckets, DNS refresh, log privacy'
+echo 'PASS: conditional HSTS, forwarding, trust opt-in, separate buckets, DNS refresh, log privacy'
