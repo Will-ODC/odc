@@ -10,16 +10,18 @@ Pulse is two images on one public origin:
 - `apps/pulse-web/Dockerfile` is the public front door. nginx listens on port
   `8080`, serves the browser app, and proxies `/api` to `http://api:8080`.
 
-The API must not be exposed directly. The host's private network must resolve
-the literal name `api` to the API service, because that name is compiled into
-the current nginx configuration. Keep both processes behind the web image so
-the page and API have one origin; the session cookies depend on it.
+The API must not be exposed directly. Keep both processes behind the web image
+so the page and API share one origin; the session cookies depend on it.
 
-nginx resolves `api` when it starts and will not start if the name does not
-resolve (`host not found in upstream`). Start the API first, or expect the web
-container to restart until the API is up; Fly `.internal` names resolve only
-for running Machines. Restart the web container if the API's address changes;
-the current configuration does not refresh DNS dynamically.
+By default nginx proxies `/api` to `api:8080` and resolves names through
+Docker's DNS (`127.0.0.11`), which is what docker compose provides. Hosts with
+another private-network name or resolver set `PULSE_API_UPSTREAM` and
+`PULSE_DNS_RESOLVER` on the web service (see the Railway section). nginx
+resolves the upstream name on requests with a 10-second cache, so the web
+service can start before the API exists (requests return 502 until it does)
+and an API address change needs no web restart. Changing the settings
+themselves requires restarting the web container. The literal-name and
+restart-on-address-change limits apply only to the compose defaults.
 
 ## Proxy configuration required before going live
 
@@ -60,9 +62,8 @@ stay in every location if cache headers or new locations are added.
 
 Nothing in this runbook answers these questions:
 
-1. **Which host?** Options: Render, Fly.io, or another container host with a
-   private network, managed Postgres, persistent secrets, TLS, and custom
-   domains.
+1. **Which host?** Railway (operator, 2026-11-15). See the Railway section.
+   Render and Fly.io are kept below as alternatives.
 2. **Which public hostname?** Options: the root
    (`https://onlinedemocracy.org`) or a product subdomain such as
    `https://pulse.onlinedemocracy.org`.
@@ -274,7 +275,124 @@ host to provision TLS, then set `PULSE_WEB_ORIGIN` to the exact HTTPS origin.
 Verify that `/` and `/api/polls?community=pulse-general` work at that same
 origin before sending an invitation.
 
+## Railway
+
+The chosen host (operator, 2026-11-15). Railway documents its private network
+at <https://docs.railway.com/guides/private-networking> and its public edge at
+<https://docs.railway.com/networking/public-networking/specs-and-limits.md>.
+Anything below not tied to one of those pages is marked "verify on the first
+deploy".
+
+### Services
+
+Create three services in one Railway project and environment: Postgres, the
+API, and the web.
+
+1. **Postgres:** Railway Postgres, major version 17, UTF8. After it starts, run
+   `show server_encoding;` and confirm `UTF8` (see "Postgres" above).
+2. **API:** build from the repository root (the Dockerfiles copy workspace
+   files from the root) and set the service variable
+   `RAILWAY_DOCKERFILE_PATH=apps/pulse/Dockerfile`. Give it **no public
+   domain**. Run exactly **one replica**: rate limits are per instance, so a
+   second replica would let each client have a separate budget per replica.
+3. **Web:** build from the repository root with
+   `RAILWAY_DOCKERFILE_PATH=apps/pulse-web/Dockerfile`. This is the only
+   service with a public domain; set its target port to `8080`. Attach the
+   chosen hostname here (see "Point the public hostname at the host"). Set the
+   health check to `GET /`.
+
+Pass the `VITE_PULSE_*_POLL_ID` build arguments (see "Web image build and
+port") as service variables if the starting questions are published; whether
+Railway passes a service variable to the Docker build as a build argument must
+be verified on the first deploy.
+
+### Web service settings
+
+| Setting                | Value                                      |
+| ---------------------- | ------------------------------------------ |
+| `PULSE_API_UPSTREAM`   | `<api-service-name>.railway.internal:8080` |
+| `PULSE_DNS_RESOLVER`   | `[fd12::10]`                               |
+| `PULSE_REAL_IP_HEADER` | `X-Real-IP`                                |
+
+Use the API service's actual name in `PULSE_API_UPSTREAM`; no `http://`, path
+or trailing slash. Railway's private network is IPv6, and environments created
+before 2025-10-16 are IPv6-only; `[fd12::10]` is the resolver address in
+Railway's private-networking guide. The web image serves on IPv4 and IPv6, so
+Railway's edge can reach it either way.
+
+### API service settings
+
+Set every variable under "API environment" above, plus:
+
+| Setting                    | Value                                                                        |
+| -------------------------- | ---------------------------------------------------------------------------- |
+| `PULSE_HOST`               | `::` (bind IPv6 so the web service can reach the API on the private network) |
+| `PULSE_TRUSTED_PROXY_HOPS` | `1`                                                                          |
+| `PULSE_DATABASE_URL`       | the Postgres service's private (internal) connection URL                     |
+
+Leave `PULSE_PORT` unset (`8080`). `PULSE_TRUSTED_PROXY_HOPS=1` is correct here
+because the web nginx replaces the forwarded address with the one real client
+address (below), so the API sees one proxy hop. Do not use `2`.
+`PULSE_WEB_ORIGIN` must be the exact HTTPS public origin; set it after the
+hostname's TLS works. Production cookies are named `__Host-pulse_session` and
+`__Host-pulse_ballot` (`apps/pulse/API.md`); the browser rejects `__Host-`
+cookies over plain HTTP, so sign-in cannot work until the public origin is
+HTTPS. Railway terminates TLS at its edge; confirm HTTPS on the hostname before
+inviting anyone.
+
+### Real client address and what it trusts
+
+With `PULSE_REAL_IP_HEADER=X-Real-IP`, nginx takes the client address from
+`X-Real-IP` from any peer (Railway publishes no edge address ranges), and
+Railway's edge overwrites that header with the actual client address on public
+requests. That is safe only because the edge is the only thing that reaches the
+web port. Any other service in the same Railway environment can reach the web
+service over the private network and send its own `X-Real-IP`, choosing its own
+rate-limit bucket. Keep no untrusted services in this environment, and do not
+give the web service a TCP proxy or any second public route.
+
+### Deploying a release
+
+Railway starts the new deployment before stopping the old one (verify on the
+first deploy; Railway's deployment-overlap settings may change this). That
+conflicts with the rule under "Postgres": do not overlap old and new API
+versions during a schema change. The old code could write against, or choke on,
+the new schema while the new code runs migrations.
+
+- **Release with a schema change (any new migration):** scale the API to 0
+  replicas or remove its running deployment first, then deploy the new version
+  and scale back to 1. Accept the short outage. Check the deploy logs to see
+  the migrations finish before opening traffic.
+- **Release with no migration:** a normal redeploy is fine.
+- **Additive migrations still need care.** If the release adds a column or
+  table, the old code that is still running during an overlap must tolerate it
+  (it ignores columns it does not know). Treat a migration as safe to overlap
+  only after reading it for that; when unsure, use the outage procedure.
+
+The web service has no schema and may redeploy at any time; nginx re-resolves
+the API address, so no web restart is needed after an API redeploy.
+
+### Check after deploy
+
+1. `/` loads at the public HTTPS origin and `GET /api/polls?community=pulse-general`
+   returns `200` JSON (see "Health checks").
+2. Request a real sign-in link at an invited address and redeem it; confirm the
+   `__Host-pulse_session` cookie is set.
+3. Rate-limit buckets: request sign-in links from two different networks
+   (for example a home connection and a phone off Wi-Fi) until one is limited
+   and confirm the other is still accepted. If both hit the limit together,
+   every user is in one bucket: stop and check the proxy settings above.
+4. Spoofing: from one client, send requests with a forged
+   `X-Real-IP: <other address>` header (and `X-Forwarded-For`) and confirm its
+   own bucket is unchanged, so it is limited at the same point as without the
+   header and the other client is unaffected. Railway's edge should overwrite
+   the header; verify on the first deploy.
+
 ## Render
+
+Written before the web image's runtime settings (`PULSE_API_UPSTREAM`,
+`PULSE_DNS_RESOLVER`, `PULSE_REAL_IP_HEADER`) existed; check it against them
+before use.
 
 - Create a managed Postgres database and a private Docker service for the API
   using `apps/pulse/Dockerfile`. Configure the API variables above and keep the
@@ -288,6 +406,10 @@ origin before sending an invitation.
   starts and runs its migrations.
 
 ## Fly.io
+
+Written before the web image's runtime settings (`PULSE_API_UPSTREAM`,
+`PULSE_DNS_RESOLVER`, `PULSE_REAL_IP_HEADER`) existed; check it against them
+before use.
 
 - Run the API and web images as separate private-networked apps or Machine
   groups, with managed Postgres reachable only by the API. Expose only the web
