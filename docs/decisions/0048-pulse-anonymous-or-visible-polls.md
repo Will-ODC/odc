@@ -92,8 +92,8 @@ sees the names; the setting never changes after creation.
    `Cache-Control: no-store`. Body:
    `{ "items": [{ "name": "Ada" | null, "choices": [1] }], "nextCursor": … }`.
    `choices` are poll-order indices, matched on `ChoiceResult.index`. `name: null`
-   is the unnamed verified voter. The client shows "Verified voter (no profile
-   name)" and never prompts for a name. An anonymous poll answers 404
+   is the unnamed voter. The client shows "Verified voter" and never prompts
+   for a name. An anonymous poll answers 404
    `error: "anonymous_poll"`. **Never in the body:** email, account id, ballot
    id, vote id, cast time, profile `publicId`, bio. The profile link is left
    out for three reasons: it would expose a hidden profile's stable id, it
@@ -115,19 +115,47 @@ sees the names; the setting never changes after creation.
    `"anonymous"` is the same as omission. `/results` gains `voteVisibility`. Its
    numbers are unchanged; on a visible poll `confirmedVoters` equals `voters`.
 9. **MCP.** `get_poll` and `get_results` pass `voteVisibility` through as an
-   optional strict field. An unknown value is `upstream_invalid_response`. No
-   MCP tool returns names in this ADR. A future tool would read
-   `/visible-votes` and nothing else.
-10. **`/trust` copy (ADR-0039)** must say: a poll's creator picks the kind once,
+   optional strict field. An unknown value is `upstream_invalid_response`. A
+   new tool, `get_visible_votes`, takes `{ pollId, cursor? }` and returns the
+   same `{ items, nextCursor }` as `/visible-votes`. It reads that public route
+   only, like the other tools. Each item is parsed strictly as exactly
+   `{ name: string | null, choices: int[] }`, so an upstream body with any
+   other key (email, an id, a profile link) is refused whole as
+   `upstream_invalid_response`, never trimmed. An anonymous poll is a tool
+   error `anonymous_poll`. It shares the MCP route's 120 requests/minute per
+   IP limit, and `/visible-votes` keeps the same per-route limit as the other
+   public reads. Nothing is added for bulk access.
+10. **Removing your own visible vote.** `DELETE /api/polls/:id/votes/mine`
+    requires a valid session and the request-origin check that sign-in and
+    poll creation use. Order: 404 for no such poll; 404 `anonymous_poll`; 401
+    `sign_in_required`; then 200 `{ "status": "closed" }` when the poll has
+    closed, with nothing changed, because closed polls stay fixed. Otherwise
+    the store takes the person lock (ADR-0046) and runs one statement:
+    `delete from vote where id = (select vote_id from visible_vote where
+poll_id = $1 and account_id = $2)`. `vote_choice` and `visible_vote`
+    cascade from it, so the vote, its answer and the name disappear
+    atomically. The vote is found by account, not by ballot cookie, so it
+    works from any browser the person is signed in on. The response is 200
+    `{ "status": "removed", "results" }`, or `{ "status": "none", "results" }`
+    when there was nothing to remove, so the route is idempotent. `voters`,
+    `confirmedVoters`, and the counts of the choices picked each fall by one.
+    The browser holding the row then reads `ballot: null`, and the person may
+    vote again while the poll is open. It holds one row lock after the person
+    lock, so it cannot close a deadlock cycle. **Anonymous polls get no
+    removal.** There, a ballot is found by cookie or code, not by account, so
+    removal would be different code with its own privacy questions. It is
+    out of scope here.
+11. **`/trust` copy (ADR-0039)** must say: a poll's creator picks the kind once,
     and it cannot change; anonymous polls work exactly as described today; on a
     visible poll you must sign in with email to vote, and your answer is shown
     to everyone who can see the poll next to your current profile name, or as
-    a verified voter with no name; "verified" means only that an email address
-    was confirmed, and the name is self-chosen, not checked; hiding or renaming
-    your profile does not remove your name, and a rename shows the new one;
-    you can change a visible vote until the poll closes but cannot withdraw
-    it; "Forget my votes here" and signing out do not unpublish it; it stays
-    after the poll closes; your email address is never shown. The vote card
+    "Verified voter" when you have none; "verified" means only that an email
+    address was confirmed, and the name is self-chosen, not checked; hiding or
+    renaming your profile does not remove your name, and a rename shows the new
+    one; AI apps can read the names too; you can change or remove a visible
+    vote until the poll closes, and after that it is fixed and stays;
+    "Forget my votes here" and signing out do not remove it; your email
+    address is never shown. The vote card
     and results say "Votes are public" or "Votes are anonymous" (issue
     acceptance), never "posted anonymously", which is attribution.
 
@@ -135,9 +163,13 @@ sees the names; the setting never changes after creation.
 
 - **Risks the operator accepted.** Visible polls make coercion and vote-buying
   checkable, and a public answer next to a name can reveal sensitive views
-  (health, politics, workplace) permanently, since a visible vote cannot be
-  withdrawn. The default stays anonymous, and the notice before voting is the
-  mitigation.
+  (health, politics, workplace). Once the poll closes it cannot be removed.
+  The mitigations are that anonymous stays the default, the notice comes
+  before voting, and removal is possible while the poll is open.
+- **Names are easier to collect in bulk.** The paged route and the MCP tool
+  let anyone, including an AI app, harvest every name and answer on every
+  visible poll. Only the existing rate limits slow this; a name already shown
+  in a scraped copy cannot be taken back by removing the vote.
 - A copy of the database shows visible-poll answers by account, and so by
   email (`voter.email`). This is no worse than the public page except for the
   address. Anonymous polls keep exactly ADR-0040's exposure.
@@ -159,7 +191,8 @@ must update:
   answer" bullet gains "except on visible polls, see ADR-0048"); `GET
 /api/polls/:id` and listing (`voteVisibility`); `/results`; "Confirmed votes"
   and `POST /api/sign-in/redeem` (anonymous polls only); `POST …/votes` (401,
-  409, visible path); the new `/visible-votes` route; `POST /api/polls`; MCP.
+  409, visible path); the new `/visible-votes` and `DELETE …/votes/mine`
+  routes; `POST /api/polls`; MCP (`get_visible_votes`).
 - `apps/pulse-web/src/screens/Trust.tsx`: decision 10. UI review is required.
 - `apps/pulse/README.md`: upgrade note for 018. Drain old API instances first,
   because an old instance's poll insert has no `vote_visibility` and fails.
