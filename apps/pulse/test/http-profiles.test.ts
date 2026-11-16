@@ -12,13 +12,14 @@ import {
 } from "../src/identity/store.js";
 import { PROFILE_BODY_LIMIT } from "../src/http/profiles.js";
 import { createServer } from "../src/http/server.js";
-import { SESSION_COOKIE, SessionSigner } from "../src/http/session.js";
+import { cookieNames, SessionSigner } from "../src/http/session.js";
 import { InMemoryMemberProfileStore } from "../src/profiles/memory-store.js";
 import { InMemoryContributionsStore } from "../src/contributions/memory-store.js";
 import { InMemorySuggestionStore } from "../src/voting/suggestions.js";
 import { InMemoryVotingStore } from "../src/voting/store.js";
 
 const ORIGIN = "https://pulse.example";
+const SESSION_COOKIE = cookieNames(false).session;
 const SECRET = "profile-test-secret-that-is-long-enough";
 const AT = new Date("2026-11-12T12:00:00.000Z");
 const IDS = [

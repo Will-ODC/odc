@@ -4,7 +4,7 @@ import type { TwoPressProgress } from "./TwoPress.js";
 /**
  * "Forget my votes here", for someone who voted without signing in.
  *
- * A browser that votes gets a `pulse_ballot` cookie, signed in or not, and
+ * A browser that votes gets the ballot cookie, signed in or not, and
  * that cookie decides whose ballot it is. On a shared computer the next person
  * would therefore see, and replace, the last person's answers. Signing out
  * clears the cookie, but the way out only shows to a signed-in person; this is

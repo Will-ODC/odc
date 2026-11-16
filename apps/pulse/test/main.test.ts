@@ -521,11 +521,13 @@ test(
       choices: ["A", "B"],
       method: "single",
     });
-    const session = clicked.cookies.find((c) => c.name === "pulse_session");
+    const session = clicked.cookies.find(
+      (c) => c.name === "__Host-pulse_session",
+    );
     const cast = await app.inject({
       method: "POST",
       url: "/api/polls/served/votes",
-      headers: { cookie: `pulse_session=${session?.value as string}` },
+      headers: { cookie: `__Host-pulse_session=${session?.value as string}` },
       payload: { ballot: [1] },
     });
     assert.equal(cast.statusCode, 200);
@@ -870,9 +872,11 @@ test(
         url: "/api/sign-in/redeem",
         payload: { token },
       });
-      const session = redeemed.cookies.find((c) => c.name === "pulse_session");
+      const session = redeemed.cookies.find(
+        (c) => c.name === "__Host-pulse_session",
+      );
       return {
-        cookie: `pulse_session=${session?.value as string}`,
+        cookie: `__Host-pulse_session=${session?.value as string}`,
         id: redeemed.json().voter.id as string,
       };
     };

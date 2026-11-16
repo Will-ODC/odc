@@ -9,7 +9,7 @@ import { PURPOSE_VERSION } from "../src/authoring/input.js";
 import { InMemoryCreationStore } from "../src/authoring/memory-store.js";
 import { PostgresCreationStore } from "../src/authoring/pg-store.js";
 import { createServer, type ServerDeps } from "../src/http/server.js";
-import { SESSION_COOKIE, SessionSigner } from "../src/http/session.js";
+import { cookieNames, SessionSigner } from "../src/http/session.js";
 import {
   DomainAllowlist,
   StaticDomainSource,
@@ -51,6 +51,7 @@ import {
   svg,
 } from "./support/images.js";
 
+const SESSION_COOKIE = cookieNames(false).session;
 const SECRET = "test-secret-that-is-long-enough-x";
 const ORIGIN = "https://pulse.example.org";
 const START = new Date("2026-11-12T12:00:00.000Z");

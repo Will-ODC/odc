@@ -3,7 +3,7 @@ import { test, type TestContext } from "node:test";
 import { InMemoryCreationStore } from "../src/authoring/memory-store.js";
 import { CREATION_BODY_LIMIT } from "../src/http/creation.js";
 import { createServer } from "../src/http/server.js";
-import { SESSION_COOKIE, SessionSigner } from "../src/http/session.js";
+import { cookieNames, SessionSigner } from "../src/http/session.js";
 import {
   DomainAllowlist,
   StaticDomainSource,
@@ -16,6 +16,8 @@ import {
 } from "../src/identity/store.js";
 import { InMemorySuggestionStore } from "../src/voting/suggestions.js";
 import { InMemoryVotingStore } from "../src/voting/store.js";
+
+const SESSION_COOKIE = cookieNames(false).session;
 
 const AT = new Date("2026-11-08T12:00:00.000Z");
 const ORIGIN = "https://pulse.example.org";
@@ -126,12 +128,14 @@ test("every_body_taking_route_returns_the_full_413_error", async (t) => {
       method: "POST",
       url: "/api/polls/p1/votes",
       limit: DEFAULT_BODY_LIMIT,
+      headers: fromTheWebOrigin,
     },
     {
       name: "add suggestion",
       method: "POST",
       url: "/api/polls/p1/suggestions",
       limit: DEFAULT_BODY_LIMIT,
+      headers: fromTheWebOrigin,
     },
     {
       name: "MCP",
