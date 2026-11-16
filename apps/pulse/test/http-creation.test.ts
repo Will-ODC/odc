@@ -11,7 +11,7 @@ import type { CreationStore } from "../src/authoring/store.js";
 import { createPool } from "../src/db/pool.js";
 import { CREATION_BODY_LIMIT } from "../src/http/creation.js";
 import { createServer, type ServerDeps } from "../src/http/server.js";
-import { SESSION_COOKIE, SessionSigner } from "../src/http/session.js";
+import { cookieNames, SessionSigner } from "../src/http/session.js";
 import {
   DomainAllowlist,
   StaticDomainSource,
@@ -30,6 +30,7 @@ import { InMemorySuggestionStore } from "../src/voting/suggestions.js";
 import { InMemoryVotingStore, type VotingStore } from "../src/voting/store.js";
 import { databaseSkip, migratedSchema } from "./support/database.js";
 
+const SESSION_COOKIE = cookieNames(false).session;
 const SECRET = "test-secret-that-is-long-enough-x";
 const ORIGIN = "https://pulse.example.org";
 const START = new Date("2026-10-20T12:00:00.000Z");
@@ -442,6 +443,7 @@ for (const kind of ["memory", "postgres"] as const) {
     const vote = await h.app.inject({
       method: "POST",
       url: `/api/polls/${poll.id}/votes`,
+      headers: { origin: ORIGIN },
       payload: { ballot: [0] },
     });
     assert.equal(vote.statusCode, 200);
