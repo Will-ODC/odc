@@ -102,27 +102,29 @@ Per-PR history is in `git log origin/master -- apps/pulse apps/pulse-web`.
    prerequisites.
 2. **Published starting questions** for `/questions`, and comments (#297).
    The explainer video (#339) comes later.
-3. **A host and DNS.** The host is not chosen; DNS for `onlinedemocracy.org`
-   still needs configuring.
+3. **Railway and DNS.** Railway is the chosen host. Configure the Railway
+   services and DNS for `onlinedemocracy.org` before the pilot.
 4. **A sending domain verified with Resend** (SPF/DKIM). DNS work, not code.
 5. **The proxy-hop and rate-limit prerequisites** in `apps/pulse/DEPLOY.md`.
 6. **A memory floor for picture decoding.** `apps/pulse/DEPLOY.md` states none
    for 40 MP uploads (#593); add one before deploy.
 
-A small invited pilot comes only after 3-6. The operator chose Railway as the
-host (2026-11-15; see the direction below); the pilot still waits for 3-6 and
-the pre-pilot tickets #681-#684.
+The invited pilot waits for 3-6, the sign-in confirmation (#681), the
+Railway guide (#684), and a web deploy with HSTS (#691). Verify HSTS and the
+client rate limits on the public hostname before inviting anyone.
 
 ## Current operator direction and next work (2026-11-15)
 
 0. **Deploy on Railway (operator, 2026-11-15); work split 50/50 Codex/Claude.**
    Auth audit `docs/audits/pulse-auth-2026-11-15.md` (Codex, read-only,
    FIX-BEFORE-PILOT; no passwords exist). Before the pilot: #681 sign in only
-   after a click naming the account (audit finding 1, confirmed by Claude),
-   #682 nginx for Railway (API address, runtime DNS, real client IP, log
-   check), #683 `__Host-` cookies and Origin on votes/suggestions, #684 Railway
-   section in `DEPLOY.md`. After the pilot: #678 ballot revocation, #679 atomic
-   link limit, #680 idle timeout and owner re-sign-in.
+   after a click naming the account (audit finding 1), #684 Railway section
+   in `DEPLOY.md`, and #691 HSTS behind Railway's HTTPS edge. Merged: #682
+   nginx for Railway (upstream address, runtime DNS, real client IP and
+   log privacy) in #688 (`6c48a1e`), and #683 `__Host-` cookies and Origin
+   checks on votes and suggestions in #687 (`f4a27fd`). CI follow-up #692
+   tracks the flaky profile test. After the pilot: #678 ballot revocation,
+   #679 atomic link limit, #680 idle timeout and owner re-sign-in.
    **Per-poll anonymous or visible votes (#685, operator 2026-11-15):** chosen
    once at creation, clearly shown, simple; needs an ADR and #681 first.
    Rules (operator, 2026-11-15): the poll's setting decides and the voter

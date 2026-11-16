@@ -29,15 +29,10 @@ Do not apply charter rules to `apps/**`, and do not relax them anywhere else.
   verifiers. Registration v2 contracts and verification merged in #677.
   Next: enable ledger registration writes. The signer and identity services
   are still unbuilt. → `memory/STATE.md`
-- **Pulse:** deploy on Railway planned; pre-pilot fixes #681-#684, visible
-  votes #685. Sign-in, voting, browsing, poll creation, Contributions, profiles
-  and picture storage are built; no open product PRs. Targeted and broader
-  audits are complete; timing gaps and quality fixes (#613, #614, #621, #622,
-  #624-#629) merged in #657; UI review nits merged in #659; #533 and #653 in #667;
-  shared focus ring (part of #534) in #672.
-  Next feature is #580 (picture in the
-  posting form), awaiting an operator answer. No public deploy yet.
-  → `memory/pulse.md`
+- **Pulse:** Railway is chosen. nginx support and cookie hardening merged in
+  #688 and #687. The pilot still needs #681 sign-in confirmation, #684 the
+  deploy guide, and #691 HSTS on the public hostname. Public-vote polls
+  (#685) wait for their ADR and #681. → `memory/pulse.md`
 
 ## Load order
 
