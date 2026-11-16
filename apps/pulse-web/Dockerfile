@@ -44,7 +44,8 @@ FROM nginx:1.29-alpine AS runtime
 RUN apk upgrade --no-cache
 
 COPY --from=build /repo/apps/pulse-web/dist /usr/share/nginx/html
-COPY apps/pulse-web/nginx.conf /etc/nginx/conf.d/default.conf
+COPY apps/pulse-web/nginx.conf /etc/nginx/pulse-nginx.conf.template
+COPY --chmod=755 apps/pulse-web/40-pulse-config.sh /docker-entrypoint.d/40-pulse-config.sh
 COPY apps/pulse-web/security-headers.conf /etc/nginx/pulse-security-headers.conf
 
 EXPOSE 8080

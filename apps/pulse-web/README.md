@@ -22,8 +22,8 @@ are `pnpm --filter @odc/pulse-integration typecheck` and
 `pnpm --filter @odc/pulse-integration lint`. Root Turbo test commands include
 the integration suites; the browser app's build remains independent.
 
-In production, nginx serves the page on port 8080 and sends `/api` to the `api`
-container, so the page and the API share one address.
+In production, nginx serves the page on port 8080 over IPv4 and IPv6 and sends
+`/api` to the configured API upstream, so the page and API share one address.
 
 ## Pages
 
@@ -185,6 +185,69 @@ Thumbnails/context previews remain future work. Missing communities show an
 empty state with links to the starting questions and posting form.
 
 ## Settings
+
+### Web container runtime settings
+
+The image's `40-pulse-config.sh` startup hook renders `nginx.conf` using a
+strict envsubst allowlist; nginx's own variables survive. These settings take
+effect when the web container starts and do not require an image rebuild.
+The compose defaults require no additional environment variables; its `web`
+service passes these settings through from the operator's environment.
+
+| Setting                | Default (unset or empty)  | Railway value                              |
+| ---------------------- | ------------------------- | ------------------------------------------ |
+| `PULSE_API_UPSTREAM`   | `api:8080`                | `<api-service-name>.railway.internal:8080` |
+| `PULSE_DNS_RESOLVER`   | `127.0.0.11` (Docker DNS) | `[fd12::10]`                               |
+| `PULSE_REAL_IP_HEADER` | empty: real-IP mode off   | `X-Real-IP`                                |
+
+`PULSE_API_UPSTREAM` is one host and port, without `http://`, path or trailing
+slash; IPv6 literals use `[address]:port`. `PULSE_DNS_RESOLVER` is one DNS
+address (IPv6 must be bracketed), optionally followed by `:port`. Explicit
+ports must be 1–65535 without leading zeros; invalid ports stop startup with
+an error naming the setting. Both API
+locations, `/api/` and the exact `/api/poll-images` upload route, use the same
+variable upstream and preserve the path and query. nginx resolves names on
+requests with a 10-second DNS cache, including IPv6 answers. An API redeploy
+that changes DNS addresses needs no web restart; changing the setting itself
+requires restarting the web container. The web can start before API DNS exists;
+requests return 502 until the upstream resolves and accepts connections.
+
+Leave real-IP mode off when clients can reach nginx directly. In that mode,
+caller-supplied `X-Real-IP`, `X-Forwarded-For` and `X-Forwarded-Proto` do not
+control the address/protocol forwarded to the API: nginx sends its peer
+address and `$scheme`. The only accepted opt-in value is `X-Real-IP`;
+unsupported values stop startup.
+
+On Railway, enable it only with the public port reachable through Railway's
+edge, which overwrites `X-Real-IP` with the actual client address. Railway
+publishes no edge address ranges, so this mode trusts that header from any
+peer, over IPv4 or IPv6. A direct/private caller reaching this web port can
+therefore spoof the address in this mode; restrict that access. nginx then
+sets `$remote_addr` from that header and sends both `X-Real-IP` and a fresh
+`X-Forwarded-For` containing just that one address. Keep the **API** setting
+`PULSE_TRUSTED_PROXY_HOPS=1`, so two clients have distinct rate-limit buckets.
+The API must remain private and nginx's peer address must pass its private
+proxy check. Real-IP mode also forwards Railway's `X-Forwarded-Proto` when
+it is `http` or `https`, falling back to `$scheme` otherwise. Terminate TLS
+and set HSTS at the edge; point Railway's web target port at `8080`.
+
+The access log stays query/referrer-free. The global nginx error log uses
+`crit` because ordinary upstream failures at `error` level include the full
+original request line, which can contain a live sign-in token. Applying this
+globally also covers `/sign-in`, assets and internal redirects. This suppresses
+routine nginx failure diagnostics; use query-free access statuses and the
+API's sanitized fault logs to investigate failures. Do not lower the level
+on a deployed instance handling real sign-in links.
+
+After building the image, run `sh apps/pulse-web/test/nginx-smoke.sh pulse-web:smoke`
+from the repository root. This Docker smoke test uses a throwaway private
+upstream to check both proxy locations, path/query preservation, real-IP mode
+on/off, address-based rate-limit buckets, DNS replacement without a web restart,
+and token-free stdout/stderr after forced upstream failures. It needs Docker,
+curl and the `nginx:1.29-alpine` image; cleanup removes its containers/network.
+The normal Pulse integration suites separately check the actual API behavior.
+
+### Browser build settings
 
 The four starting questions need published poll IDs at build time. Pass them as
 Docker build arguments:
