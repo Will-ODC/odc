@@ -37,24 +37,7 @@ import { registerProfileRoutes } from "./profiles.js";
 import type { MemberProfileStore } from "../profiles/store.js";
 import { cookieNames, SessionSigner } from "./session.js";
 
-/**
- * Who cast a ballot, as far as the ballot is concerned.
- *
- * Deliberately not the signed-in voter. Votes are keyed by this and by nothing
- * else, whether or not the person has ever given an address, which is what lets
- * a vote count the moment it is cast and what keeps the record from holding a
- * connection between an address and an answer. Signing in verifies a person; it
- * is not how their vote is found. A verified vote carries a one-way keyed code
- * (ADR-0040), never the account id or the address.
- *
- * Signed by the session signer, so each cookie is refused in the other's
- * place. This one presented as a session names a voter the store does not
- * have. A session presented as this one is ignored (`heldBallot`): it carries
- * a generation, which no ballot ever has, and its id lacks the `b:` prefix
- * every ballot has had since the cookie was introduced (#128). Accepting it
- * would file a vote under the account id, beside the answer.
- * The prefix marks a ballot identity so it cannot be mistaken for a voter id.
- */
+// Marks a ballot identity so it cannot be mistaken for a voter id.
 const BALLOT_PREFIX = "b:";
 
 // The served API is only reached from nginx on its private container network.
@@ -278,6 +261,22 @@ export async function createServer(deps: ServerDeps): Promise<FastifyInstance> {
   };
 
   /**
+   * Who cast a ballot, as far as the ballot cookie is concerned.
+   *
+   * Deliberately not the signed-in voter. Votes are keyed by this and by nothing
+   * else, whether or not the person has ever given an address, which is what lets
+   * a vote count the moment it is cast and what keeps the record from holding a
+   * connection between an address and an answer. Signing in verifies a person; it
+   * is not how their vote is found. A verified vote carries a one-way keyed code
+   * (ADR-0040), never the account id or the address.
+   *
+   * Signed by the session signer, so each cookie is refused in the other's
+   * place. This one presented as a session names a voter the store does not
+   * have. A session presented as this one carries a generation, which no ballot
+   * ever has, and its id lacks the `b:` prefix every ballot has had since the
+   * cookie was introduced (#128). Accepting it would file a vote under the
+   * account id, beside the answer.
+   *
    * The ballot identity this browser holds, or undefined. A validly signed
    * value that is not a ballot — a session copied into the ballot cookie, which
    * carries a generation and no `b:` prefix — is treated as no ballot at all,

@@ -1328,6 +1328,44 @@ for (const [route, payload] of [
   ["votes", { ballot: [0] }],
   ["suggestions", { text: "More walking paths" }],
 ] as const) {
+  for (const body of ["malformed_json", "oversized_json"] as const) {
+    test(`${route}_refuses_foreign_origin_before_parsing_${body}`, async (t) => {
+      const { app } = await setup();
+      t.after(() => app.close());
+      const bodyLimit = app.initialConfig.bodyLimit;
+      assert.ok(bodyLimit, "the server exposes its configured body limit");
+      const raw =
+        body === "malformed_json"
+          ? "{"
+          : JSON.stringify({ padding: "x".repeat(bodyLimit) });
+      const request = {
+        method: "POST" as const,
+        url: `/api/polls/open-ended/${route}`,
+        payload: raw,
+      };
+      const refused = await app.inject({
+        ...request,
+        headers: {
+          origin: "https://foreign.test",
+          "content-type": "application/json",
+        },
+      });
+      assert.equal(refused.statusCode, 403);
+      assert.deepEqual(refused.json(), {
+        error: "origin_not_allowed",
+        message: "That request did not come from Pulse.",
+      });
+      assert.deepEqual(refused.cookies, []);
+
+      // Prove this same body reaches a parser failure when the origin passes.
+      const parsed = await app.inject({
+        ...request,
+        headers: { origin: WEB_ORIGIN, "content-type": "application/json" },
+      });
+      assert.equal(parsed.statusCode, body === "malformed_json" ? 400 : 413);
+    });
+  }
+
   for (const origin of [
     undefined,
     "https://foreign.test",
