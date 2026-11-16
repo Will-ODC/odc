@@ -5,7 +5,7 @@ import { PostgresContributionsStore } from "../../src/contributions/pg-store.js"
 import { databaseUrl } from "../../src/db/config.js";
 import { createPool } from "../../src/db/pool.js";
 import { createServer } from "../../src/http/server.js";
-import { SESSION_COOKIE, SessionSigner } from "../../src/http/session.js";
+import { cookieNames, SessionSigner } from "../../src/http/session.js";
 import {
   DomainAllowlist,
   StaticDomainSource,
@@ -20,6 +20,8 @@ import { PostgresMemberProfileStore } from "../../src/profiles/pg-store.js";
 import { PostgresVotingStore } from "../../src/voting/pg-store.js";
 import { InMemorySuggestionStore } from "../../src/voting/suggestions.js";
 import { migratedSchema } from "./database.js";
+
+const SESSION_COOKIE = cookieNames(true).session;
 
 // Independent API.md wire schemas: strict projections also detect private leaks.
 export const publicSchema = z

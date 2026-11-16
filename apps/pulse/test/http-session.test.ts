@@ -11,11 +11,12 @@ import {
   InMemoryVoterStore,
 } from "../src/identity/store.js";
 import { createServer, type ServerDeps } from "../src/http/server.js";
-import { SESSION_COOKIE, SessionSigner } from "../src/http/session.js";
+import { cookieNames, SessionSigner } from "../src/http/session.js";
 import { InMemorySuggestionStore } from "../src/voting/suggestions.js";
 import { InMemoryVotingStore } from "../src/voting/store.js";
 import { sendOriginLikeABrowser } from "./support/origin.js";
 
+const SESSION_COOKIE = cookieNames(false).session;
 const SECRET = "test-secret-that-is-long-enough-x";
 /** The web origin the server trusts, and so the one a browser page sends. */
 const WEB_ORIGIN = "https://pulse.test";
@@ -108,7 +109,9 @@ async function setup(
         url: "/api/sign-in/redeem",
         payload: { token: new URL(link).searchParams.get("token") },
       });
-      const cookie = redeemed.cookies.find((c) => c.name === SESSION_COOKIE);
+      // The served default is secure, so it uses the __Host- name.
+      const name = cookieNames(omitSecureFlag === true).session;
+      const cookie = redeemed.cookies.find((c) => c.name === name);
       assert.ok(cookie, "no session cookie was set");
       return cookie;
     },
@@ -394,6 +397,8 @@ test("the_session_cookie_is_http_only_same_site_and_secure_by_default", async ()
   const h = await setup({}, true);
   const cookie = await h.signOutOfBandCookie("ada@student.ubc.ca");
 
+  assert.equal(cookie.name, "__Host-pulse_session");
+  assert.equal(cookie.domain, undefined);
   assert.equal(cookie.httpOnly, true);
   assert.equal(cookie.sameSite, "Lax");
   assert.equal(cookie.secure, true);

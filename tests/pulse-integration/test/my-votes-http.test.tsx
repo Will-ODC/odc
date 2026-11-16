@@ -18,6 +18,9 @@ import { InMemorySuggestionStore } from "../../../apps/pulse/src/voting/suggesti
 import { HttpPulseApi } from "../../../apps/pulse-web/src/api/http.js";
 import { App } from "../../../apps/pulse-web/src/App.js";
 
+/** The web origin the server trusts, which a browser page would send. */
+const WEB_ORIGIN = "http://localhost";
+
 // ResultsPanel lazy-loads the chart; load its module up front so a cold
 // test run does not outwait findBy's default timeout transforming Recharts.
 beforeAll(() => import("../../../apps/pulse-web/src/components/BarChart.js"));
@@ -33,6 +36,8 @@ function browser(base: string) {
   const request: typeof fetch = async (input, init) => {
     const headers = new Headers(init?.headers);
     if (cookie) headers.set("cookie", cookie);
+    // A browser page sends its Origin on every POST; the server requires it.
+    if ((init?.method ?? "GET") !== "GET") headers.set("origin", WEB_ORIGIN);
     const response = await fetch(input, { ...init, headers });
     const set = response.headers.getSetCookie();
     if (set.length) cookie = set.map((value) => value.split(";")[0]).join("; ");
@@ -63,6 +68,7 @@ it("My votes lists this browser's saved answers over the real HTTP API, and only
     suggestions: new InMemorySuggestionStore(),
     signer: new SessionSigner("my-votes-test-secret-long-enough"),
     secureCookies: false,
+    webOrigin: WEB_ORIGIN,
     claims: new ClaimService({
       membership: new DomainAllowlist(new StaticDomainSource([])),
       voters,
@@ -120,6 +126,7 @@ it("the Answered list and the saved answer survive a reload over the real HTTP A
     suggestions: new InMemorySuggestionStore(),
     signer: new SessionSigner("answered-test-secret-long-enough"),
     secureCookies: false,
+    webOrigin: WEB_ORIGIN,
     claims: new ClaimService({
       membership: new DomainAllowlist(new StaticDomainSource([])),
       voters,

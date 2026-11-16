@@ -15,7 +15,7 @@ import {
   InMemoryVoterStore,
 } from "../src/identity/store.js";
 import { createServer, type ServerDeps } from "../src/http/server.js";
-import { SESSION_COOKIE, SessionSigner } from "../src/http/session.js";
+import { SessionSigner } from "../src/http/session.js";
 import {
   InMemorySuggestionStore,
   type SuggestionStore,
@@ -44,6 +44,9 @@ async function setup(
     withoutConfirmationKey?: boolean;
   } = {},
 ) {
+  const sessionCookieName = overrides.secureCookies
+    ? "__Host-pulse_session"
+    : "pulse_session";
   const now = START;
   // A test that needs time to pass hands in its own clock; every part of the
   // server — stores, signer, routes — then reads that one.
@@ -108,8 +111,18 @@ async function setup(
       url: "/api/sign-in/redeem",
       payload: { token },
     });
-    const cookie = redeemed.cookies.find((c) => c.name === SESSION_COOKIE);
-    return `${SESSION_COOKIE}=${cookie?.value as string}`;
+    const cookie = redeemed.cookies.find((c) => c.name === sessionCookieName);
+    assert.ok(cookie, "no session cookie was set");
+    assert.equal(Boolean(cookie.secure), overrides.secureCookies ?? false);
+    assert.equal(cookie.httpOnly, true);
+    assert.equal(cookie.sameSite, "Lax");
+    assert.equal(cookie.path, "/");
+    assert.equal(cookie.domain, undefined);
+    assert.deepEqual(
+      redeemed.cookies.map((c) => c.name),
+      [sessionCookieName],
+    );
+    return `${sessionCookieName}=${cookie.value}`;
   }
 
   /**
@@ -1309,4 +1322,196 @@ test("a_throwing_fault_getter_keeps_the_generic_500_and_private_text_out_of_logs
     .filter((line) => line.fault);
   assert.equal(faults.length, 1);
   assert.deepEqual(faults[0].fault, { type: "Error" });
+});
+
+for (const [route, payload] of [
+  ["votes", { ballot: [0] }],
+  ["suggestions", { text: "More walking paths" }],
+] as const) {
+  for (const body of ["malformed_json", "oversized_json"] as const) {
+    test(`${route}_refuses_foreign_origin_before_parsing_${body}`, async (t) => {
+      const { app } = await setup();
+      t.after(() => app.close());
+      const bodyLimit = app.initialConfig.bodyLimit;
+      assert.ok(bodyLimit, "the server exposes its configured body limit");
+      const raw =
+        body === "malformed_json"
+          ? "{"
+          : JSON.stringify({ padding: "x".repeat(bodyLimit) });
+      const request = {
+        method: "POST" as const,
+        url: `/api/polls/open-ended/${route}`,
+        payload: raw,
+      };
+      const refused = await app.inject({
+        ...request,
+        headers: {
+          origin: "https://foreign.test",
+          "content-type": "application/json",
+        },
+      });
+      assert.equal(refused.statusCode, 403);
+      assert.deepEqual(refused.json(), {
+        error: "origin_not_allowed",
+        message: "That request did not come from Pulse.",
+      });
+      assert.deepEqual(refused.cookies, []);
+
+      // Prove this same body reaches a parser failure when the origin passes.
+      const parsed = await app.inject({
+        ...request,
+        headers: { origin: WEB_ORIGIN, "content-type": "application/json" },
+      });
+      assert.equal(parsed.statusCode, body === "malformed_json" ? 400 : 413);
+    });
+  }
+
+  for (const origin of [
+    undefined,
+    "https://foreign.test",
+    "null",
+    `${WEB_ORIGIN}/`,
+  ]) {
+    test(`${route}_refuses_untrusted_origin_${origin}`, async (t) => {
+      const { app, votes } = await setup();
+      t.after(() => app.close());
+      const refused = await app.inject({
+        method: "POST",
+        url: `/api/polls/open-ended/${route}`,
+        headers: { origin },
+        payload,
+      });
+      assert.equal(refused.statusCode, 403);
+      assert.deepEqual(refused.json(), {
+        error: "origin_not_allowed",
+        message: "That request did not come from Pulse.",
+      });
+      assert.deepEqual(refused.cookies, []);
+      assert.equal((await votes.results("open-ended")).voters, 0);
+      const listed = await app.inject({
+        url: "/api/polls/open-ended/suggestions",
+      });
+      assert.deepEqual(listed.json().suggestions, []);
+    });
+  }
+
+  for (const contentType of [
+    undefined,
+    "text/plain",
+    "application/x-www-form-urlencoded",
+    "application/jsonp",
+  ]) {
+    test(`${route}_requires_json_${contentType}`, async (t) => {
+      const { app } = await setup();
+      t.after(() => app.close());
+      const refused = await app.inject({
+        method: "POST",
+        url: `/api/polls/open-ended/${route}`,
+        headers: contentType ? { "content-type": contentType } : {},
+        ...(contentType ? { payload: JSON.stringify(payload) } : {}),
+      });
+      assert.equal(refused.statusCode, 400);
+      assert.equal(refused.json().error, "bad_request");
+      assert.deepEqual(refused.cookies, []);
+    });
+  }
+
+  test(`${route}_accepts_json_with_charset_from_web_origin`, async (t) => {
+    const { app } = await setup();
+    t.after(() => app.close());
+    const accepted = await app.inject({
+      method: "POST",
+      url: `/api/polls/open-ended/${route}`,
+      headers: { "content-type": "application/json; charset=utf-8" },
+      payload: JSON.stringify(payload),
+    });
+    assert.equal(accepted.statusCode, 200);
+    assert.equal(
+      accepted.json().status,
+      route === "votes" ? "counted" : "added",
+    );
+  });
+}
+
+for (const secureCookies of [true, false]) {
+  test(`cookie_names_and_attributes_follow_secureCookies_${secureCookies}`, async (t) => {
+    const { app, signIn } = await setup(undefined, undefined, {
+      secureCookies,
+    });
+    t.after(() => app.close());
+    const sessionName = secureCookies
+      ? "__Host-pulse_session"
+      : "pulse_session";
+    const ballotName = secureCookies ? "__Host-pulse_ballot" : "pulse_ballot";
+    const session = await signIn("ada@student.ubc.ca");
+    assert.ok(session.startsWith(`${sessionName}=`));
+    const me = await app.inject({
+      url: "/api/me",
+      headers: { cookie: session },
+    });
+    assert.equal(me.statusCode, 200);
+    const cast = await app.inject({
+      method: "POST",
+      url: "/api/polls/p1/votes",
+      payload: { ballot: [0] },
+    });
+    assert.deepEqual(
+      cast.cookies.map((c) => c.name),
+      [ballotName],
+    );
+    const ballot = `${ballotName}=${cast.cookies[0]!.value}`;
+    const read = await app.inject({
+      url: "/api/polls/p1/ballot",
+      headers: { cookie: ballot },
+    });
+    assert.deepEqual(read.json().ballot, [0]);
+    assert.deepEqual(read.cookies, []);
+    const cleared = await app.inject({
+      method: "POST",
+      url: "/api/sign-out",
+      headers: { cookie: session },
+    });
+    assert.deepEqual(
+      cleared.cookies.map((c) => c.name).sort(),
+      [sessionName, ballotName].sort(),
+    );
+    for (const cookie of [...cast.cookies, ...cleared.cookies]) {
+      assert.equal(Boolean(cookie.secure), secureCookies);
+      assert.equal(cookie.httpOnly, true);
+      assert.equal(cookie.sameSite, "Lax");
+      assert.equal(cookie.path, "/");
+      assert.equal(cookie.domain, undefined);
+    }
+    assert.ok(cleared.cookies.every((c) => c.value === ""));
+  });
+}
+
+test("production_ignores_old_session_and_ballot_cookie_names", async (t) => {
+  const { app, signIn } = await setup(undefined, undefined, {
+    secureCookies: true,
+  });
+  t.after(() => app.close());
+  const session = await signIn("ada@student.ubc.ca");
+  const cast = await app.inject({
+    method: "POST",
+    url: "/api/polls/p1/votes",
+    payload: { ballot: [0] },
+  });
+  const cookie = `${session.replace("__Host-", "")}; pulse_ballot=${cast.cookies[0]!.value}`;
+  const me = await app.inject({ url: "/api/me", headers: { cookie } });
+  assert.equal(me.statusCode, 401);
+  const history = await app.inject({
+    url: "/api/my-votes",
+    headers: { cookie },
+  });
+  assert.deepEqual(history.json().votes, []);
+  const read = await app.inject({
+    url: "/api/polls/p1/ballot",
+    headers: { cookie },
+  });
+  assert.equal(read.json().ballot, null);
+  assert.deepEqual(
+    read.cookies.map((c) => c.name),
+    ["__Host-pulse_ballot"],
+  );
 });

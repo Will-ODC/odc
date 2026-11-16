@@ -202,7 +202,7 @@ test(
   async (t) => {
     const f = await fixture(t);
     await response(await f.put(), 200, ownerSchema);
-    for (const cookie of ["", "pulse_session=forged", f.expiredCookie]) {
+    for (const cookie of ["", "__Host-pulse_session=forged", f.expiredCookie]) {
       await f.rejects(
         () => f.get("/me/profile", { cookie }),
         401,
