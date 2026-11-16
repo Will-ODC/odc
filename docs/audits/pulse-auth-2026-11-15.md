@@ -96,4 +96,5 @@ No tests, package commands, network calls or database commands were run; no file
 
 Railway configuration, live headers, proxy addressing, nginx inherited configuration, TLS, DNS/mail delivery, secret values/entropy, database grants and backups were not inspected.
 
-Current OWASP ASVS v4/v5 text and cheat-sheet revisions were not fetched because network access was prohibited. This is an assessment against established authentication/session principles, not a complete ASVS compliance certification or dependency-vulnerability audit.```
+Current OWASP ASVS v4/v5 text and cheat-sheet revisions were not fetched because network access was prohibited. This is an assessment against established authentication/session principles, not a complete ASVS compliance certification or dependency-vulnerability audit.
+```

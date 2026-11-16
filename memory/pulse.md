@@ -109,7 +109,9 @@ Per-PR history is in `git log origin/master -- apps/pulse apps/pulse-web`.
 6. **A memory floor for picture decoding.** `apps/pulse/DEPLOY.md` states none
    for 40 MP uploads (#593); add one before deploy.
 
-A small invited pilot comes only after 3-6. None of this authorizes a deploy.
+A small invited pilot comes only after 3-6. The operator chose Railway as the
+host (2026-11-15; see the direction below); the pilot still waits for 3-6 and
+the pre-pilot tickets #681-#684.
 
 ## Current operator direction and next work (2026-11-15)
 
@@ -189,8 +191,7 @@ A small invited pilot comes only after 3-6. None of this authorizes a deploy.
 - **Cross-device vote history:** let a signed-in account see its own votes
   from every device (server computes the ADR-0040 code per poll)? Reverses
   ADR-0040's "accepted limit" wording; owner-only versus public was asked and
-  not answered.
-
+  not answered. Separate from #685, whose rules are settled.
 - **#580:** mockup first, or build from the plan and review screenshots?
 - **Continuation (#425):** operator direction 2026-11-15: Next and Previous
   move through Suggested votes (detail on the issue). Still open: do answered
