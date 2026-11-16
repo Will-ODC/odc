@@ -41,7 +41,7 @@ the same CI runs.
 ## Where it stands (2026-11-14)
 
 Per-PR history is in `git log origin/master -- apps/pulse apps/pulse-web`.
-**Open Pulse PRs: none.** Next migration: **018**.
+**See [open pull requests](https://github.com/Will-ODC/odc/pulls) for current review status.** Next migration: **018**.
 
 - **Sign-in (pillar 1) is built.** Magic-link sign-in and redeem; open sign-up
   with community as an optional label (ADR-0030); a community picker when an
