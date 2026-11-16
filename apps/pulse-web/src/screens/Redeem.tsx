@@ -10,14 +10,16 @@ import "./SignIn.css";
 /**
  * What the emailed link opens.
  *
- * Spending the token is the only thing this screen does, and it does it once,
- * on arrival — the person already pressed the button, in their mail client.
+ * Opening the link signs nobody in (#681). The screen asks the server which
+ * address the link is for, says so, and signs in only when the person presses
+ * "Continue as <address>". Otherwise anyone could request a link for their own
+ * address, get someone else to open it, and have that person's browser and
+ * votes silently signed into the sender's account.
  *
- * Success goes straight on (operator walkthrough, 2026-10-21): the "You are
- * in · Continue" screen that used to stand here was one press between the
- * person and the form or question they came from. `onSignedIn` decides where
- * that is, replaces the spent link in the history, and says "Signed in"
- * through a status region; the bar there shows the account.
+ * After the press, success goes straight on (operator walkthrough,
+ * 2026-10-21): `onSignedIn` decides where, replaces the spent link in the
+ * history, and says "Signed in" through a status region; the bar there shows
+ * the account.
  */
 export function Redeem({
   api,
@@ -30,10 +32,10 @@ export function Redeem({
   onSignedIn: () => void;
   onAskAgain: () => void;
 }) {
-  const { redeemed, retry } = useRedeem(api, token);
+  const { view, confirm, retry } = useRedeem(api, token);
   // Tell this browser's other pulse tabs, so a vote card waiting there says
   // "confirmed by email" without a reload (#353).
-  const signedIn = redeemed.status === "ready";
+  const signedIn = view.status === "signedIn";
   // Once only: `onSignedIn` reads and forgets where to return.
   const gone = useRef(false);
   useEffect(() => {
@@ -49,13 +51,13 @@ export function Redeem({
    * Only the server knows which of the three, and it already writes the
    * sentence that says so and tells the person to ask for a new one. This adds
    * the control that sentence points at — which spends nothing, because there
-   * is nothing left to spend.
+   * is nothing left to spend. No Continue: there is nothing to sign in to.
    */
-  if (redeemed.status === "empty") {
+  if (view.status === "empty") {
     return (
       <Stopped
         title="That link did not work."
-        sentence={redeemed.message}
+        sentence={view.message}
         action="Ask for a new link"
         variant="primary"
         onAct={onAskAgain}
@@ -63,19 +65,13 @@ export function Redeem({
     );
   }
 
-  /*
-   * The request did not get through — the server is down, a proxy answered, the
-   * connection dropped. **The link is still good**, and this is the one branch
-   * that must not offer to replace it: the token is unspent and sitting in the
-   * URL, so throwing it away costs a person their working link and can then run
-   * them into the outstanding-link cap, which answers 429. Retrying re-runs the
-   * redeem with the token still in hand.
-   */
-  if (redeemed.status === "error") {
+  // Retry checks the link again. A lost response may follow a successful
+  // redemption, so the screen cannot promise the link is still usable.
+  if (view.status === "error") {
     return (
       <Stopped
         title="We could not reach pulse."
-        sentence={`${redeemed.message} Your link is still good.`}
+        sentence={view.message}
         action="Try again"
         variant="secondary"
         onAct={retry}
@@ -83,10 +79,67 @@ export function Redeem({
     );
   }
 
+  if (view.status === "ready") {
+    return (
+      <Confirm
+        email={view.value.email}
+        signingIn={view.value.signingIn}
+        onConfirm={confirm}
+      />
+    );
+  }
+
   return (
     <ScreenFrame>
       {/* Signed in is gone from here at once; only loading is ever seen. */}
-      <ViewState data={redeemed}>{() => null}</ViewState>
+      <ViewState data={{ status: "loading" }}>{() => null}</ViewState>
+    </ScreenFrame>
+  );
+}
+
+/**
+ * The question the link asks before it spends itself: sign in as this address?
+ *
+ * The address is in the button's own name, not only in the line above it, so
+ * a screen reader landing on the button hears whom it signs in as. Focus goes
+ * to the heading, not the button, so a stray Enter on arrival signs nobody in.
+ * While the press is answered the button stays focusable and says so through
+ * `aria-disabled`; a second press is dropped by the hook.
+ */
+function Confirm({
+  email,
+  signingIn,
+  onConfirm,
+}: {
+  email: string;
+  signingIn: boolean;
+  onConfirm: () => void;
+}) {
+  const heading = useRef<HTMLHeadingElement>(null);
+  useEffect(() => heading.current?.focus(), []);
+
+  return (
+    <ScreenFrame>
+      <div role="status" aria-live="polite">
+        <h1 className="signin__title" tabIndex={-1} ref={heading}>
+          Sign in to Pulse
+        </h1>
+        <p className="signin__lede">
+          This link signs you in as{" "}
+          <span className="signin__address">{email}</span>.
+        </p>
+        {signingIn ? <p className="signin__lede">Signing in…</p> : null}
+      </div>
+      <Button
+        variant="primary"
+        className="signin__go signin__continue"
+        type="button"
+        aria-disabled={signingIn ? "true" : undefined}
+        onClick={onConfirm}
+      >
+        Continue as {email}
+      </Button>
+      <p className="signin__aside">Not you? Close this page.</p>
     </ScreenFrame>
   );
 }

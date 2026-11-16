@@ -12,6 +12,7 @@ import {
   InMemoryVoterStore,
 } from "../../../apps/pulse/src/identity/store.js";
 import { InMemorySuggestionStore } from "../../../apps/pulse/src/voting/suggestions.js";
+import { ConfirmationKey } from "../../../apps/pulse/src/voting/confirmation.js";
 import { InMemoryVotingStore } from "../../../apps/pulse/src/voting/store.js";
 import { createServer } from "../../../apps/pulse/src/http/server.js";
 import { SessionSigner } from "../../../apps/pulse/src/http/session.js";
@@ -142,6 +143,9 @@ describe("the client against the real server", () => {
       votes,
       suggestions: new InMemorySuggestionStore(),
       signer: new SessionSigner("a-test-secret-long-enough-x-x-x-x"),
+      confirmationKey: new ConfirmationKey(
+        "a-test-confirmation-key-long-enough",
+      ),
       webOrigin: WEB_ORIGIN,
       secureCookies: false,
     });
@@ -205,19 +209,26 @@ describe("the client against the real server", () => {
     const link = mailer.lastTo("jo@student.ubc.ca");
     expect(link?.kind).toBe("claim-link");
 
-    const me = await api.redeem(tokenFromLink(link?.body ?? ""));
+    const token = tokenFromLink(link?.body ?? "");
+    const outcome = await api.cast(POLL_ID, [1]);
+    expect(outcome.status).toBe("counted");
+    expect(outcome.status === "counted" && outcome.results.voters).toBe(1);
+
+    const cookiesBeforeCheck = jar.header();
+    expect(await api.checkLink(token)).toBe("jo@student.ubc.ca");
+    expect(jar.header()).toBe(cookiesBeforeCheck);
+    expect(await api.me()).toBeNull();
+    expect((await api.results(POLL_ID)).confirmedVoters).toBe(0);
+
+    const me = await api.redeem(token);
     expect(me).toEqual({
       id: expect.any(String),
       email: "jo@student.ubc.ca",
       community: COMMUNITY,
     });
 
-    // The session cookie the redeem set is what carries the next calls.
     expect(await api.me()).toEqual(me);
-
-    const outcome = await api.cast(POLL_ID, [1]);
-    expect(outcome.status).toBe("counted");
-    expect(outcome.status === "counted" && outcome.results.voters).toBe(1);
+    expect((await api.results(POLL_ID)).confirmedVoters).toBe(1);
     expect(await api.myBallot(POLL_ID)).toEqual([1]);
 
     // Kept before signing out, so the assertion below can present it again the

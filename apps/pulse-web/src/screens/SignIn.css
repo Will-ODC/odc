@@ -64,6 +64,19 @@
   margin-top: var(--step);
 }
 
+/* "Continue as <address>": a long address wraps rather than widening the page. */
+.signin__address,
+.signin__continue {
+  overflow-wrap: anywhere;
+}
+
+.signin__aside {
+  margin: var(--step) 0 0;
+  font-size: var(--t-small);
+  line-height: 1.45;
+  color: var(--muted);
+}
+
 /* The phone version (#482): a 16px field, so the phone does not zoom in. */
 @media (max-width: 699px) {
   .signin__optin {
