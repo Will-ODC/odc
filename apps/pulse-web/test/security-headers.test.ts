@@ -34,6 +34,12 @@ describe("production security policy", () => {
     expect(upload?.[1]).toContain("error_page 413 = @image_too_large;");
   });
 
+  it("sends conditional HSTS from the shared policy even on errors", () => {
+    expect(read("../security-headers.conf")).toContain(
+      "add_header Strict-Transport-Security $pulse_hsts always;",
+    );
+  });
+
   it("answers an oversized upload with the API's JSON refusal, not nginx's page", () => {
     const refusal = blocks.match(/location @image_too_large \{([^{}]*)\}/)?.[1];
     expect(refusal).toContain("default_type application/json;");
