@@ -14,8 +14,16 @@ import { createHmac, timingSafeEqual } from "node:crypto";
  *   that generation in shared storage, so clock skew cannot revive a cookie.
  * Legacy cookies remain readable for ballot identities, but cannot authorize
  * a voter session because they carry no generation.
+ *
+ * Select both names together: __Host- cookies require Secure.
  */
-export const SESSION_COOKIE = "pulse_session";
+export function cookieNames(secureCookies: boolean) {
+  const prefix = secureCookies ? "__Host-" : "";
+  return {
+    session: `${prefix}pulse_session`,
+    ballot: `${prefix}pulse_ballot`,
+  };
+}
 
 /** 30 days. Long enough that voting in a later story need not mean another email. */
 export const SESSION_TTL_SECONDS = 30 * 24 * 60 * 60;

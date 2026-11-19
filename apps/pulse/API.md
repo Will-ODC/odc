@@ -31,7 +31,8 @@ caches must not retain identity details or sign-in-link state.
 
 ### Request origin
 
-`POST /api/sign-in`, `POST /api/sign-in/redeem` and `POST /api/sign-out` accept a
+`POST /api/sign-in`, `POST /api/sign-in/redeem`, `POST /api/sign-out`,
+`POST /api/polls/:id/votes` and `POST /api/polls/:id/suggestions` accept a
 request only when its `Origin` header exactly matches the configured web origin
 (`PULSE_WEB_ORIGIN`), the same check the poll-creation mutations use. A missing or
 foreign `Origin` is answered 403 before the body is read and before anything is
@@ -47,8 +48,8 @@ sent, spent, set or cleared:
 Browsers send `Origin` on every POST, same-origin included, so the pulse-web client
 needs nothing extra. Non-browser callers must send it themselves. The origin comes
 from trusted server configuration, never from `Host` or a forwarded header; a server
-built without a web origin refuses all three. `GET /api/sign-in/redeem` changes
-nothing and needs no `Origin`.
+built without a web origin refuses all of these writes.
+`GET /api/sign-in/redeem` changes nothing and needs no `Origin`.
 
 ### Local development mailbox
 
@@ -243,8 +244,8 @@ One door: this creates the identity the first time and signs the same person bac
 every time after. There is no separate sign-up.
 
 **It also confirms this browser's votes** (ADR-0040). If the browser making the click
-holds a `pulse_ballot` cookie, every vote filed under it on a poll that is still open
-becomes a confirmed vote of the person signing in — see "Confirmed votes" below. A
+holds a `__Host-pulse_ballot` cookie, every vote filed under it on a poll that
+is still open becomes a confirmed vote of the person signing in — see "Confirmed votes" below. A
 closed poll's votes are left as they are, so its results stop changing when it closes.
 Nothing about this shows in the response, and no ballot cookie is minted here.
 
@@ -290,8 +291,8 @@ cookie **and** atomically advances that voter's session generation in shared
 storage, so every earlier session stops working on every server instance,
 regardless of differences between their clocks.
 
-It also clears **`pulse_ballot`** — see "The ballot cookie" below. Signing out ends
-this browser's ability to read or change the vote it cast. The vote itself is not
+It also clears **`__Host-pulse_ballot`** — see "The ballot cookie" below.
+Signing out ends this browser's ability to read or change the vote it cast. The vote itself is not
 withdrawn; it stays counted under the identity that cast it, and **a confirmed vote
 stays confirmed** (ADR-0040), until the same person votes on that poll again, which
 replaces it (ADR-0046).
@@ -465,8 +466,12 @@ has no contribution storage configured, it returns 503
 
 ## The session cookie
 
-`pulse_session`, `HttpOnly`, `SameSite=Lax`, `Secure` (off only in local development),
-path `/`, 30 days.
+`__Host-pulse_session`, `HttpOnly`, `SameSite=Lax`, `Secure`, path `/`,
+no Domain, 30 days. Local HTTP development (`secureCookies: false`) uses
+`pulse_session` without Secure. Both cookie names are selected together from
+`secureCookies` (true by default). Production never reads the old unprefixed
+`pulse_session` or `pulse_ballot` cookies: deployment requires a fresh sign-in
+and loses access to earlier browser ballots; their votes remain counted.
 
 It carries the voter id, a session generation, issue and expiry times, and a
 signature over them. Expiry is checked on the server, not left to the browser.
@@ -477,8 +482,8 @@ sign-out may receive an older generation and need a fresh link; it cannot
 restore a session that sign-out revoked.
 
 Session cookies issued before the generation format are refused and require a
-new sign-in. Existing ballot cookies keep working, so deploying this change
-does not erase a browser's access to its ballot.
+new sign-in. Ballot cookie values retain their format, but production only
+reads them under the `__Host-pulse_ballot` name.
 
 ## Polls, ballots, and results
 
@@ -497,8 +502,10 @@ opens. Answering is also navigating.
 
 ### The ballot cookie, and why voting needs no session
 
-`pulse_ballot`, `HttpOnly`, `SameSite=Lax`, `Secure` (off only in local development),
-path `/`, 30 days. It is minted the first time this browser reads or casts a ballot.
+`__Host-pulse_ballot`, `HttpOnly`, `SameSite=Lax`, `Secure`, path `/`,
+no Domain, 30 days. Local HTTP development uses `pulse_ballot` without Secure.
+It is minted the first time this browser reads or casts a ballot. Sign-out
+clears both selected cookies with the same security and path attributes.
 
 **A vote is filed under this cookie and under nothing else**, whether or not the
 person has ever given an address. Two consequences, both deliberate:
@@ -526,8 +533,8 @@ nobody in. Presented as a ballot, a session cookie is **ignored**: every ballot 
 has started with `b:` since the cookie was introduced and carries no session
 generation, and a value without the prefix or with a generation is treated as no
 ballot. The browser is minted a fresh ballot, as if it had none, and sign-in confirms
-nothing for it. So copying a session into `pulse_ballot` can never file a vote under an
-account id.
+nothing for it. So copying a session into `__Host-pulse_ballot` can never file
+a vote under an account id.
 
 Deduplication is therefore per browser, which is weak on its own. That is the accepted
 trade for counting a vote before anyone has been asked for anything.
@@ -548,7 +555,7 @@ once per browser.
 ### `GET /api/my-votes?limit=20&cursor=…`
 
 The current browser's saved answers, newest cast first. This route reads only
-the signed `pulse_ballot` cookie, including for someone who has not signed in.
+the signed `__Host-pulse_ballot` cookie, including for someone who has not signed in.
 It never creates a cookie. With no valid ballot cookie it returns an empty page,
 even if a separate account session exists. `POST /api/sign-out` clears the ballot
 cookie, so this history disappears from that browser. A poll also leaves this list
@@ -861,6 +868,11 @@ only methods today — a ballot says which choices, not a ranking of them.
 
 ### `POST /api/polls/:id/votes`
 
+Requires `Origin` exactly matching `PULSE_WEB_ORIGIN` (403
+`origin_not_allowed` otherwise, before body parsing) and
+`Content-Type: application/json` (parameters such as `charset=utf-8` allowed;
+missing or other types return 400 `bad_request`). Refused requests change nothing.
+
 Cast or change a ballot. **No session required**, on purpose — see the ballot cookie
 above.
 
@@ -888,20 +900,21 @@ results, so the client need not ask again:
 
 When the poll has closed, the body is just `{ "status": "closed" }`.
 
-A session is still not required. When one is present (the `pulse_session` cookie, valid
-as for `/api/me`), the vote is **confirmed** as that person's (ADR-0040; see "Confirmed
+A session is still not required. When one is present (the `__Host-pulse_session`
+cookie, valid as for `/api/me`), the vote is **confirmed** as that person's (ADR-0040; see "Confirmed
 votes" above), and it **replaces** that person's vote on this poll in any other browser
 (ADR-0046). `status` still describes this browser's ballot: `counted` when this browser
 had none, even if it replaced one elsewhere. Without a session, the vote keeps whatever
 confirmation it already had and replaces nothing elsewhere.
 
-| Status | Body                                                | When                                          |
-| ------ | --------------------------------------------------- | --------------------------------------------- |
-| 200    | `status: "counted" \| "changed"` + ballot + results | the ballot was recorded                       |
-| 200    | `status: "closed"`                                  | the poll is past its closing time             |
-| 400    | `error: "bad_request"`                              | body has no ballot array of whole numbers     |
-| 400    | `error: "bad_ballot"`                               | the ballot is not a valid answer to this poll |
-| 404    | `error: "not_found"`                                | no such poll                                  |
+| Status | Body                                                | When                                                           |
+| ------ | --------------------------------------------------- | -------------------------------------------------------------- |
+| 200    | `status: "counted" \| "changed"` + ballot + results | the ballot was recorded                                        |
+| 200    | `status: "closed"`                                  | the poll is past its closing time                              |
+| 400    | `error: "bad_request"`                              | missing/wrong Content-Type or no ballot array of whole numbers |
+| 403    | `error: "origin_not_allowed"`                       | missing or foreign Origin                                      |
+| 400    | `error: "bad_ballot"`                               | the ballot is not a valid answer to this poll                  |
+| 404    | `error: "not_found"`                                | no such poll                                                   |
 
 ## Options people add themselves
 
@@ -928,6 +941,11 @@ Most-said first.
 ```
 
 ### `POST /api/polls/:id/suggestions`
+
+Requires `Origin` exactly matching `PULSE_WEB_ORIGIN` (403
+`origin_not_allowed` otherwise, before body parsing) and
+`Content-Type: application/json` (parameters such as `charset=utf-8` allowed;
+missing or other types return 400 `bad_request`). Refused requests change nothing.
 
 ```json
 { "text": "we could charge members" }
@@ -975,17 +993,18 @@ to that list would silently change what earlier ballots meant.
 Ties go to the ballot: when the text matches both a choice and an existing suggestion
 closely enough, the choice wins, because the choice is the one that can be voted for.
 
-| Status | Body                         | When                                      |
-| ------ | ---------------------------- | ----------------------------------------- |
-| 200    | `status: "added"`            | nobody had said it                        |
-| 200    | `status: "seconded"`         | someone had; the count rose               |
-| 200    | `status: "on_ballot"`        | the poll already offers it; nothing added |
-| 400    | `error: "bad_request"`       | no `text` string in the body              |
-| 400    | `error: "bad_suggestion"`    | empty, all filler, or over 120 characters |
-| 409    | `error: "no_suggestions"`    | this poll has a fixed set of answers      |
-| 409    | `error: "closed"`            | the poll is past its closing time         |
-| 429    | `error: "too_many_requests"` | too many additions from one client        |
-| 404    | `error: "not_found"`         | no such poll                              |
+| Status | Body                          | When                                           |
+| ------ | ----------------------------- | ---------------------------------------------- |
+| 200    | `status: "added"`             | nobody had said it                             |
+| 200    | `status: "seconded"`          | someone had; the count rose                    |
+| 200    | `status: "on_ballot"`         | the poll already offers it; nothing added      |
+| 400    | `error: "bad_request"`        | missing/wrong Content-Type or no `text` string |
+| 403    | `error: "origin_not_allowed"` | missing or foreign Origin                      |
+| 400    | `error: "bad_suggestion"`     | empty, all filler, or over 120 characters      |
+| 409    | `error: "no_suggestions"`     | this poll has a fixed set of answers           |
+| 409    | `error: "closed"`             | the poll is past its closing time              |
+| 429    | `error: "too_many_requests"`  | too many additions from one client             |
+| 404    | `error: "not_found"`          | no such poll                                   |
 
 Closure is enforced by the store, not by this route: the check sits in `decide`, which
 every implementation runs, so a question that shuts mid-request is refused rather than

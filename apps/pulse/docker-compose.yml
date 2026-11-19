@@ -83,6 +83,11 @@ services:
     build:
       context: ../..
       dockerfile: apps/pulse-web/Dockerfile
+    environment:
+      # Empty values use the image's compose-compatible startup defaults.
+      PULSE_API_UPSTREAM: ${PULSE_API_UPSTREAM:-}
+      PULSE_DNS_RESOLVER: ${PULSE_DNS_RESOLVER:-}
+      PULSE_REAL_IP_HEADER: ${PULSE_REAL_IP_HEADER:-}
     ports:
       - "127.0.0.1:8080:8080"
     depends_on:

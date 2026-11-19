@@ -35,28 +35,9 @@ import { registerMcpReads, type McpReadOptions } from "./mcp/route.js";
 import { requireWebOrigin } from "./origin.js";
 import { registerProfileRoutes } from "./profiles.js";
 import type { MemberProfileStore } from "../profiles/store.js";
-import { SESSION_COOKIE, SessionSigner } from "./session.js";
+import { cookieNames, SessionSigner } from "./session.js";
 
-/**
- * Who cast a ballot, as far as the ballot is concerned.
- *
- * Deliberately not the signed-in voter. Votes are keyed by this and by nothing
- * else, whether or not the person has ever given an address, which is what lets
- * a vote count the moment it is cast and what keeps the record from holding a
- * connection between an address and an answer. Signing in verifies a person; it
- * is not how their vote is found. A verified vote carries a one-way keyed code
- * (ADR-0040), never the account id or the address.
- *
- * Signed by the session signer, so each cookie is refused in the other's
- * place. This one presented as a session names a voter the store does not
- * have. A session presented as this one is ignored (`heldBallot`): it carries
- * a generation, which no ballot ever has, and its id lacks the `b:` prefix
- * every ballot has had since the cookie was introduced (#128). Accepting it
- * would file a vote under the account id, beside the answer.
- */
-const BALLOT_COOKIE = "pulse_ballot";
-
-/** Marks a ballot identity so it can never be mistaken for a voter id. */
+// Marks a ballot identity so it cannot be mistaken for a voter id.
 const BALLOT_PREFIX = "b:";
 
 // The served API is only reached from nginx on its private container network.
@@ -96,7 +77,7 @@ export interface ServerDeps {
   imageReadRateLimit?: { max: number; timeWindow: string };
   /**
    * The web client's origin, exactly as a browser sends it in `Origin`. Every
-   * creation mutation, sign-in, link redemption and sign-out must come from
+   * mutation, including voting and suggestions, must come from
    * it. Trusted configuration only — never derived from `Host` or a forwarded
    * header. Without it every one of those is refused, since no origin can
    * match.
@@ -185,6 +166,14 @@ export async function createServer(deps: ServerDeps): Promise<FastifyInstance> {
         }),
   });
   const now = deps.clock ?? (() => new Date());
+  const secureCookies = deps.secureCookies ?? true;
+  const names = cookieNames(secureCookies);
+  const cookieOptions = {
+    httpOnly: true,
+    sameSite: "lax" as const,
+    secure: secureCookies,
+    path: "/",
+  };
 
   // Awaited, not fire-and-forget: a plugin's onRoute hook only sees routes
   // registered after it has loaded, so registering these lazily would leave the
@@ -238,7 +227,7 @@ export async function createServer(deps: ServerDeps): Promise<FastifyInstance> {
   const currentVoter = async (
     request: FastifyRequest,
   ): Promise<Voter | undefined> => {
-    const claims = deps.signer.verify(request.cookies[SESSION_COOKIE]);
+    const claims = deps.signer.verify(request.cookies[names.session]);
     if (!claims) return undefined;
 
     const voter = await deps.voters.byId(claims.voterId);
@@ -272,13 +261,29 @@ export async function createServer(deps: ServerDeps): Promise<FastifyInstance> {
   };
 
   /**
+   * Who cast a ballot, as far as the ballot cookie is concerned.
+   *
+   * Deliberately not the signed-in voter. Votes are keyed by this and by nothing
+   * else, whether or not the person has ever given an address, which is what lets
+   * a vote count the moment it is cast and what keeps the record from holding a
+   * connection between an address and an answer. Signing in verifies a person; it
+   * is not how their vote is found. A verified vote carries a one-way keyed code
+   * (ADR-0040), never the account id or the address.
+   *
+   * Signed by the session signer, so each cookie is refused in the other's
+   * place. This one presented as a session names a voter the store does not
+   * have. A session presented as this one carries a generation, which no ballot
+   * ever has, and its id lacks the `b:` prefix every ballot has had since the
+   * cookie was introduced (#128). Accepting it would file a vote under the
+   * account id, beside the answer.
+   *
    * The ballot identity this browser holds, or undefined. A validly signed
-   * value that is not a ballot — a session copied into `pulse_ballot`, which
+   * value that is not a ballot — a session copied into the ballot cookie, which
    * carries a generation and no `b:` prefix — is treated as no ballot at all,
    * so a vote is never filed under an account id.
    */
   const heldBallot = (request: FastifyRequest): string | undefined => {
-    const held = deps.signer.verify(request.cookies[BALLOT_COOKIE]);
+    const held = deps.signer.verify(request.cookies[names.ballot]);
     if (!held || held.generation !== undefined) return undefined;
     if (!held.voterId.startsWith(BALLOT_PREFIX)) return undefined;
     return held.voterId;
@@ -297,11 +302,8 @@ export async function createServer(deps: ServerDeps): Promise<FastifyInstance> {
     if (held !== undefined) return held;
 
     const minted = `${BALLOT_PREFIX}${(deps.newBallotId ?? randomUUID)()}`;
-    reply.setCookie(BALLOT_COOKIE, deps.signer.sign(minted), {
-      httpOnly: true,
-      sameSite: "lax",
-      secure: deps.secureCookies ?? true,
-      path: "/",
+    reply.setCookie(names.ballot, deps.signer.sign(minted), {
+      ...cookieOptions,
       maxAge: deps.signer.ttlSeconds,
     });
     return minted;
@@ -472,13 +474,10 @@ export async function createServer(deps: ServerDeps): Promise<FastifyInstance> {
       }
 
       reply.setCookie(
-        SESSION_COOKIE,
+        names.session,
         deps.signer.sign(result.voter.id, result.voter.sessionGeneration ?? 0),
         {
-          httpOnly: true,
-          sameSite: "lax",
-          secure: deps.secureCookies ?? true,
-          path: "/",
+          ...cookieOptions,
           maxAge: deps.signer.ttlSeconds,
         },
       );
@@ -493,7 +492,7 @@ export async function createServer(deps: ServerDeps): Promise<FastifyInstance> {
   /**
    * Sign out everywhere by advancing the shared session generation.
    *
-   * The ballot identity goes with it. It has to: `pulse_ballot` lasts thirty
+   * The ballot identity goes with it. It has to: the ballot cookie lasts thirty
    * days and is what a ballot is filed under, so a browser that kept it after
    * a sign-out would hand the next person the previous person's ballot to read
    * and to overwrite. On a shared or public machine that is the one way pulse
@@ -521,8 +520,8 @@ export async function createServer(deps: ServerDeps): Promise<FastifyInstance> {
       if (voter) {
         await deps.voters.advanceSessionGeneration(voter.id);
       }
-      reply.clearCookie(SESSION_COOKIE, { path: "/" });
-      reply.clearCookie(BALLOT_COOKIE, { path: "/" });
+      reply.clearCookie(names.session, cookieOptions);
+      reply.clearCookie(names.ballot, cookieOptions);
       return reply.send({ status: "signed_out" });
     },
   );
@@ -603,52 +602,56 @@ export async function createServer(deps: ServerDeps): Promise<FastifyInstance> {
    * other browser (ADR-0046). With no session the vote keeps whatever
    * confirmation it had.
    */
-  app.post("/api/polls/:id/votes", async (request, reply) => {
-    const ballot = (request.body as { ballot?: unknown } | undefined)?.ballot;
-    // Shape first: the body must carry a list of whole numbers. Whether those
-    // numbers are a *valid* answer to this poll is the store's call, below.
-    if (!Array.isArray(ballot) || !ballot.every((n) => Number.isInteger(n))) {
-      return reply.code(400).send({
-        error: "bad_request",
-        message: "A ballot is a list of the choices you picked.",
-      });
-    }
+  app.post(
+    "/api/polls/:id/votes",
+    { onRequest: [sameOrigin, requireJson] },
+    async (request, reply) => {
+      const ballot = (request.body as { ballot?: unknown } | undefined)?.ballot;
+      // Shape first: the body must carry a list of whole numbers. Whether those
+      // numbers are a *valid* answer to this poll is the store's call, below.
+      if (!Array.isArray(ballot) || !ballot.every((n) => Number.isInteger(n))) {
+        return reply.code(400).send({
+          error: "bad_request",
+          message: "A ballot is a list of the choices you picked.",
+        });
+      }
 
-    try {
-      const key = deps.confirmationKey;
-      const voter = key ? await currentVoter(request) : undefined;
-      const outcome = await deps.votes.castVote(
-        pollId(request),
-        ballotIdentity(request, reply),
-        ballot as number[],
-        key && voter
-          ? {
-              confirmation: key.codeFor(voter.id, pollId(request)),
-              lockKey: key.lockKeyFor(voter.id),
-            }
-          : {},
-      );
-      if (outcome.status === "closed") {
-        return reply.send({ status: "closed" });
+      try {
+        const key = deps.confirmationKey;
+        const voter = key ? await currentVoter(request) : undefined;
+        const outcome = await deps.votes.castVote(
+          pollId(request),
+          ballotIdentity(request, reply),
+          ballot as number[],
+          key && voter
+            ? {
+                confirmation: key.codeFor(voter.id, pollId(request)),
+                lockKey: key.lockKeyFor(voter.id),
+              }
+            : {},
+        );
+        if (outcome.status === "closed") {
+          return reply.send({ status: "closed" });
+        }
+        // counted | changed — hand back the stored ballot and the fresh tally so
+        // the client can show the result without a second round trip.
+        const results = await deps.votes.results(pollId(request));
+        return reply.send({
+          status: outcome.status,
+          ballot: outcome.vote.choices,
+          results,
+        });
+      } catch (error) {
+        if (error instanceof UnknownPollError) return notFoundPoll(reply);
+        if (error instanceof BallotError) {
+          return reply
+            .code(400)
+            .send({ error: "bad_ballot", message: error.message });
+        }
+        throw error;
       }
-      // counted | changed — hand back the stored ballot and the fresh tally so
-      // the client can show the result without a second round trip.
-      const results = await deps.votes.results(pollId(request));
-      return reply.send({
-        status: outcome.status,
-        ballot: outcome.vote.choices,
-        results,
-      });
-    } catch (error) {
-      if (error instanceof UnknownPollError) return notFoundPoll(reply);
-      if (error instanceof BallotError) {
-        return reply
-          .code(400)
-          .send({ error: "bad_ballot", message: error.message });
-      }
-      throw error;
-    }
-  });
+    },
+  );
 
   app.get("/api/polls/:id/suggestions", async (request, reply) => {
     const poll = await deps.votes.getPoll(pollId(request));
@@ -674,6 +677,7 @@ export async function createServer(deps: ServerDeps): Promise<FastifyInstance> {
   app.post(
     "/api/polls/:id/suggestions",
     {
+      onRequest: [sameOrigin, requireJson],
       config: {
         rateLimit: deps.suggestRateLimit ?? { max: 20, timeWindow: "1 hour" },
       },
@@ -813,4 +817,20 @@ function gone(
         ? "That link has expired. Ask for a new one."
         : "That link is not one of ours. Ask for a new one.";
   return reply.code(410).send({ error: status, message });
+}
+
+/** JSON only, checked before parsing, like the other JSON mutation routes. */
+async function requireJson(
+  request: FastifyRequest,
+  reply: FastifyReply,
+): Promise<void> {
+  const type = request.headers["content-type"]
+    ?.split(";")[0]
+    ?.trim()
+    .toLowerCase();
+  if (type === "application/json") return;
+  await reply.code(400).send({
+    error: "bad_request",
+    message: "That request could not be read.",
+  });
 }

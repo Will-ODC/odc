@@ -40,6 +40,13 @@ Visible profiles list contributions published by their owning account. A
 contribution links its organizer by that account while the profile is visible;
 the contribution's organizer name remains when no profile is available.
 
+Production cookies are `__Host-pulse_session` and `__Host-pulse_ballot`, with
+Secure, HttpOnly, SameSite=Lax, Path=/ and no Domain. Local HTTP development
+uses `pulse_session` and `pulse_ballot` without Secure. Production ignores
+the old names, so upgrading signs everyone out and ends access to earlier
+browser ballots; those votes remain counted. Voting and suggestions require
+JSON and the configured web Origin, including for anonymous voters.
+
 ## Sign-in link retention
 
 A redeemed link's `pending_claim` row is deleted as it is spent. Links still
@@ -112,8 +119,8 @@ pnpm --filter @odc/pulse-web dev   # app on http://localhost:5173
 | `PULSE_OWNER_EMAIL`      | unset, so nobody is owner                        |
 
 `PULSE_WEB_ORIGIN` is also the only `Origin` that sign-in, link redemption,
-sign-out and poll creation accept. A `PULSE_SESSION_SECRET` you set must be at
-least 32 characters.
+sign-out, voting, suggestions and poll creation accept. A `PULSE_SESSION_SECRET`
+you set must be at least 32 characters.
 
 Use `localhost:5173` consistently. If the port is occupied, stop the other web
 server first; changing the port also requires matching `PULSE_WEB_ORIGIN`.
@@ -183,8 +190,8 @@ see DEPLOY.md),
 `PULSE_DATABASE_SCHEMA`, `PULSE_OWNER_EMAIL` (the owner, who may grant
 unlimited posting; unset means nobody, and a value that is not an address
 stops the start). `PULSE_WEB_ORIGIN` is also the only `Origin` that sign-in,
-link redemption, sign-out and poll creation accept. Plain `RESEND_API_KEY` and
-`DATABASE_URL` are ignored.
+link redemption, sign-out, voting, suggestions and poll creation accept.
+Plain `RESEND_API_KEY` and `DATABASE_URL` are ignored.
 
 **`PULSE_SESSION_SECRET` must be at least 32 characters**
 (`openssl rand -base64 48`); the server refuses to start with a shorter one.
