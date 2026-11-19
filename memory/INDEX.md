@@ -29,10 +29,10 @@ Do not apply charter rules to `apps/**`, and do not relax them anywhere else.
   verifiers. Registration v2 contracts and verification merged in #677.
   Next: enable ledger registration writes. The signer and identity services
   are still unbuilt. → `memory/STATE.md`
-- **Pulse:** Railway is chosen. nginx support and cookie hardening merged in
-  #688 and #687. The pilot still needs #681 sign-in confirmation, #684 the
-  deploy guide, and #691 HSTS on the public hostname. Public-vote polls
-  (#685) wait for their ADR and #681. → `memory/pulse.md`
+- **Pulse:** Railway is chosen. All pre-pilot code fixes (#681-#684, #691)
+  are merged; no Railway deploy yet. Still needed: the operator's Railway
+  setup, DNS and the DEPLOY.md live checks. Anonymous or public-vote polls:
+  ADR-0048 merged, build starting at step 1 (#685). → `memory/pulse.md`
 
 ## Load order
 

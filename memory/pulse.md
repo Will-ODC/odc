@@ -109,24 +109,30 @@ Per-PR history is in `git log origin/master -- apps/pulse apps/pulse-web`.
 6. **A memory floor for picture decoding.** `apps/pulse/DEPLOY.md` states none
    for 40 MP uploads (#593); add one before deploy.
 
-The invited pilot waits for 3-6, the sign-in confirmation (#681), the
-Railway guide (#684), and a web deploy with HSTS (#691). Verify HSTS and the
-client rate limits on the public hostname before inviting anyone.
+All pre-pilot code fixes (#681-#684, #691) are merged; no Railway deploy has
+happened. The pilot waits for 3-6 above: the operator's Railway setup, DNS and
+the live checks in `apps/pulse/DEPLOY.md` (HSTS, client rate limits) on the
+public hostname, before inviting anyone.
 
 ## Current operator direction and next work (2026-11-15)
 
 0. **Deploy on Railway (operator, 2026-11-15); work split 50/50 Codex/Claude.**
    Auth audit `docs/audits/pulse-auth-2026-11-15.md` (Codex, read-only,
-   FIX-BEFORE-PILOT; no passwords exist). Before the pilot: #681 sign in only
-   after a click naming the account (audit finding 1), #684 Railway section
-   in `DEPLOY.md`, and #691 HSTS behind Railway's HTTPS edge. Merged: #682
-   nginx for Railway (upstream address, runtime DNS, real client IP and
-   log privacy) in #688 (`6c48a1e`), and #683 `__Host-` cookies and Origin
-   checks on votes and suggestions in #687 (`f4a27fd`). CI follow-up #692
-   tracks the flaky profile test. After the pilot: #678 ballot revocation,
-   #679 atomic link limit, #680 idle timeout and owner re-sign-in.
+   FIX-BEFORE-PILOT; no passwords exist). All pre-pilot fixes merged
+   (2026-11-18 unless noted): #682 nginx for Railway in #688 (`6c48a1e`) and
+   #683 `__Host-` cookies and Origin checks in #687 (`f4a27fd`); #684 Railway
+   section of `apps/pulse/DEPLOY.md` in #689 (`ad5b15d`); #691 nginx sends HSTS
+   in real-IP mode when the edge reports https in #693 (`0cb347e`), #691
+   closed; #681 sign-in only after a click naming the account, with lost-answer
+   recovery via `/api/me` and a GET-only Try again, in #695 (`9e17d8d`); #692
+   flaky `Profile.test.tsx` in #694 (`eaa5f88`). After the pilot: #678 ballot
+   revocation, #679 atomic link limit, #680 idle timeout and owner re-sign-in.
+   New ticket #697 (home list spans width between rails). Skill PR #698 (keep
+   a healthy queued backlog) awaits the operator's merge.
    **Per-poll anonymous or visible votes (#685, operator 2026-11-15):** chosen
-   once at creation, clearly shown, simple; needs an ADR and #681 first.
+   once at creation, clearly shown, simple. ADR-0048 (#690, `3289d74`) decided
+   it; the build follows its decision 14 ship order, step 1 (migration 018 +
+   stores) starting.
    Rules (operator, 2026-11-15): the poll's setting decides and the voter
    never chooses; anonymous polls show nobody's details; visible polls need
    an email sign-in to vote and show the voter's profile name, which hiding
