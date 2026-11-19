@@ -149,7 +149,10 @@ test("official SDK reads match dev API in modern and legacy modes without ballot
         arguments: { pollId: "ads-free" },
       });
       const direct = await fetch(`${url}/api/polls/ads-free${suffix}`);
-      assert.deepEqual(result.structuredContent, await direct.json());
+      assert.deepEqual(
+        result.structuredContent,
+        beforeStep3(await direct.json()),
+      );
       assert.equal(direct.headers.get("set-cookie"), null);
       assert.notEqual(result.isError, true);
     }
@@ -671,7 +674,9 @@ test(
       });
       assert.deepEqual(
         result.structuredContent,
-        await (await fetch(`${address}/api/polls/ads-free${suffix}`)).json(),
+        beforeStep3(
+          await (await fetch(`${address}/api/polls/ads-free${suffix}`)).json(),
+        ),
       );
     }
   },
@@ -724,8 +729,8 @@ test(
     });
     const direct = await fetch(`${address}/api/polls/${poll.id}`);
     const raw = await direct.text();
-    assert.deepEqual(result.structuredContent, JSON.parse(raw));
-    assert.deepEqual(result.structuredContent, poll);
+    assert.deepEqual(result.structuredContent, beforeStep3(JSON.parse(raw)));
+    assert.deepEqual(result.structuredContent, beforeStep3(poll));
     assert.deepEqual(JSON.parse(raw).attribution, {
       kind: "named",
       name: "Ada",
@@ -740,3 +745,14 @@ test(
     );
   },
 );
+
+/**
+ * The API body as MCP passes it on today. The API names `votePrivacy`
+ * (ADR-0048) one step before MCP does (decision 11, step 3); until then the
+ * MCP schemas strip it like any key they do not name.
+ */
+function beforeStep3(body: unknown): unknown {
+  const { votePrivacy, ...rest } = body as { votePrivacy?: unknown };
+  assert.ok(votePrivacy === "anonymous" || votePrivacy === "public");
+  return rest;
+}

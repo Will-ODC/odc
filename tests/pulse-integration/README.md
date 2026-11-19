@@ -11,6 +11,11 @@ Postgres, mail service or running application is required.
 - `test/contributions-http.test.ts` exercises contribution publication, discovery,
   participation and progress through the browser HTTP adapter, including owner
   permissions, retries, public identity projection and commercial savings rules.
+- `test/public-votes-http.test.ts` checks public-vote polls (ADR-0048) over a
+  real socket: today's client is refused a named vote, an acknowledged vote is
+  the account's from any browser, the per-cookie reads tell caches so, the
+  public list pages through opaque cursors and is never cached, and removing
+  one's own vote works only from the web origin.
 - `test/profile-name-parity.test.ts` checks that the profile editor's
   display-name rule gives the same verdict as the server's on every sample.
 

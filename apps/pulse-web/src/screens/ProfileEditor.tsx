@@ -178,6 +178,10 @@ function ProfileForm({
   const [shown, setShown] = useState({ name: false, bio: false });
   const [saving, setSaving] = useState(false);
   const [saveError, setSaveError] = useState<string | undefined>();
+  // A name the server refused for itself (the reserved name), shown beside
+  // the field like the client's own checks, until the name is edited.
+  const [nameRefused, setNameRefused] = useState<string | undefined>();
+  const nameInput = useRef<HTMLInputElement>(null);
   const sending = useRef(false);
   const id = useId();
   // A new saved profile (after Save) replaces the fields, in the same render.
@@ -190,7 +194,7 @@ function ProfileForm({
     setBio(initial?.bio ?? "");
     setVisible(initial?.visible ?? true);
   }
-  const nameIssue = nameProblem(name);
+  const nameIssue = nameProblem(name) ?? nameRefused;
   const bioIssue = bioProblem(bio);
 
   // A save error is about what was sent. Once the person changes a field it no
@@ -213,7 +217,10 @@ function ProfileForm({
     try {
       await save({ displayName: name, bio, visible });
     } catch (error) {
-      setSaveError(saveMessage(error));
+      if (error instanceof ApiError && error.code === "reserved_name") {
+        setNameRefused(RESERVED_NAME);
+        nameInput.current?.focus();
+      } else setSaveError(saveMessage(error));
     } finally {
       sending.current = false;
       setSaving(false);
@@ -271,7 +278,12 @@ function ProfileForm({
               value={name}
               readOnly={saving}
               aria-invalid={shown.name && nameIssue ? true : undefined}
-              onChange={(event) => edit(setName)(event.target.value)}
+              ref={nameInput}
+              onChange={(event) => {
+                if (sending.current) return;
+                setNameRefused(undefined);
+                edit(setName)(event.target.value);
+              }}
               onBlur={() => setShown((value) => ({ ...value, name: true }))}
             />
           )}
@@ -346,6 +358,10 @@ function ProfileForm({
     </form>
   );
 }
+
+/** What a public vote shows without a profile name, so no profile takes it. */
+const RESERVED_NAME =
+  "That name is kept for voters without a profile name. Choose another.";
 
 /** Plain words for a refused save; the server's own sentence is for developers. */
 function saveMessage(error: unknown): string {

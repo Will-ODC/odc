@@ -5,6 +5,7 @@ import type { ContributionsStore } from "../contributions/store.js";
 import { logFault } from "../logging.js";
 import {
   isPublicProfileId,
+  isReservedName,
   normalizeProfile,
   ProfileInputError,
 } from "../profiles/input.js";
@@ -255,6 +256,14 @@ export async function registerProfileRoutes(
         if (typeof ownerAccountId !== "string" || ownerAccountId.length === 0)
           throw BAD_REQUEST();
         const input = normalizeProfile(fields);
+        // What a public vote shows for an account with no name (ADR-0048
+        // decision 8), refused before anything else is checked or written.
+        if (isReservedName(input.displayName))
+          throw new Refusal(
+            400,
+            "reserved_name",
+            "That name is kept for voters without a profile name. Choose another.",
+          );
         const actor = actorOf(request);
         // The draft's owner is a precondition, never a choice of write target.
         // This also protects the first save, when no public profile id exists.

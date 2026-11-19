@@ -129,6 +129,7 @@ for (const kind of ["memory", "postgres"] as const) {
         "method",
         "open",
         "question",
+        "votePrivacy",
       ]);
       assert.equal(first.polls[0]!.createdAt, AT.toISOString());
       // A newer insertion must not move the page boundary and repeat a row.

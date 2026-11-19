@@ -332,6 +332,7 @@ function publicPoll(poll: PublicationPoll) {
     open: poll.open,
     // A creation stored before pictures has no image; it reads as the tile.
     image: copyPublicPollImage(poll.image),
+    votePrivacy: poll.votePrivacy,
     community: { id: poll.community.id, label: poll.community.label },
     attribution:
       poll.attribution.kind === "named"

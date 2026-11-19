@@ -618,6 +618,47 @@ describe("owner profile editor", () => {
     expect(screen.getByRole("status").className).not.toContain("--error");
   });
 
+  it("marks the reserved name on its field, moves focus there, and clears it on edit", async () => {
+    const user = userEvent.setup();
+    const saveProfile = vi.fn(() =>
+      Promise.reject(
+        new ApiError(
+          400,
+          "That name is kept for voters without a profile name. Choose another.",
+          "reserved_name",
+        ),
+      ),
+    );
+    render(
+      <ProfileEditor
+        api={ownerApi({ myProfile: () => Promise.resolve(null), saveProfile })}
+      />,
+    );
+    const name = await screen.findByLabelText("Public display name");
+    await user.type(name, "Verified voter");
+    await user.click(screen.getByRole("button", { name: "Save profile" }));
+    await waitFor(() => expect(saveProfile).toHaveBeenCalledOnce());
+
+    const problem = await screen.findByText(
+      "That name is kept for voters without a profile name. Choose another.",
+    );
+    expect(problem.className).toContain("field__problem");
+    expect(name.getAttribute("aria-invalid")).toBe("true");
+    expect(name.getAttribute("aria-describedby")).toContain(problem.id);
+    expect(document.activeElement).toBe(name);
+    // Beside the field, not the generic message below Save.
+    expect(
+      screen.queryByText(
+        "We couldn't save that name or bio. Check them and try again.",
+      ),
+    ).toBeNull();
+    expect(screen.getByRole("status").className).not.toContain("--error");
+
+    await user.type(name, "s");
+    expect(problem.isConnected).toBe(false);
+    expect(name.getAttribute("aria-invalid")).toBeNull();
+  });
+
   it("keeps keyboard focus on Save while saving and after", async () => {
     const user = userEvent.setup();
     let finish!: (profile: MemberProfile) => void;

@@ -287,7 +287,7 @@ export function publicVoteConformance(
           [0, 1, 0],
         );
         assert.deepEqual(
-          (await store.listPublicVotes("p1", 20)).map((e) => e.name),
+          (await store.listPublicVotes("p1", 20))?.map((e) => e.name),
           [null],
         );
         assert.deepEqual(
@@ -340,7 +340,8 @@ export function publicVoteConformance(
         await store.castPublic("p1", "cy", [0], asCy);
         await store.castPublic("other", "ada", [1], asAda);
 
-        const all = await store.listPublicVotes("p1", 20);
+        const all =
+          (await store.listPublicVotes("p1", 20)) ?? assert.fail("listed");
         assert.equal(all.length, 3);
         for (const entry of all)
           assert.deepEqual(Object.keys(entry).sort(), [
@@ -374,7 +375,8 @@ export function publicVoteConformance(
         // A rename relabels the vote, and a re-cast keeps its place.
         await w.name("ada", "Ada Lovelace");
         await store.castPublic("p1", "ada", [1], asAda);
-        const renamed = await store.listPublicVotes("p1", 20);
+        const renamed =
+          (await store.listPublicVotes("p1", 20)) ?? assert.fail("listed");
         assert.deepEqual(
           renamed.map((e) => e.listKey),
           all.map((e) => e.listKey),
@@ -390,18 +392,23 @@ export function publicVoteConformance(
         );
       });
 
-      test("the_public_list_is_empty_for_anonymous_hidden_and_unknown_polls", async (t) => {
+      test("the_public_list_is_undefined_for_anonymous_hidden_and_unknown_polls", async (t) => {
         const w = await world(t);
         const { store } = w;
         await poll(store, "anonymous", { id: "anon" });
         await store.castVote("anon", "b:browser", [0], asAda);
-        assert.deepEqual(await store.listPublicVotes("anon", 20), []);
-        assert.deepEqual(await store.listPublicVotes("missing", 20), []);
+        assert.equal(await store.listPublicVotes("anon", 20), undefined);
+        assert.equal(await store.listPublicVotes("missing", 20), undefined);
+        // A listed poll with no votes is an empty page, not undefined.
+        await poll(store, "public", { id: "empty" });
+        assert.deepEqual(await store.listPublicVotes("empty", 20), []);
         if (!w.hide) return;
         await poll(store);
         await store.castPublic("p1", "ada", [0], asAda);
         await w.hide("p1");
-        assert.deepEqual(await store.listPublicVotes("p1", 20), []);
+        assert.equal(await store.listPublicVotes("p1", 20), undefined);
+        await w.hide("empty");
+        assert.equal(await store.listPublicVotes("empty", 20), undefined);
       });
 
       test("my_votes_holds_an_accounts_public_votes_beside_this_browsers", async (t) => {
@@ -454,6 +461,8 @@ export function publicVoteConformance(
           "Verified voter",
           "VERIFIED   Voter",
           " verified  voter ",
+          "Verified\u200D voter",
+          "Verified \u200Cvoter",
         ])
           await assert.rejects(
             w.name("ada", name),

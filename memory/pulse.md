@@ -38,10 +38,10 @@ Repo discipline still applies: tests ship with the change, there is one small
 branch per change, named for its ticket (`pulse/<issue>-<short>`, #310), and
 the same CI runs.
 
-## Where it stands (2026-11-18)
+## Where it stands (2026-11-19)
 
 Per-PR history is in `git log origin/master -- apps/pulse apps/pulse-web`.
-**Open Pulse-related PRs:** #696 (this memory PR), #698 (skill rule, operator merges), #699 for #697 (home list width, in review). Next migration: **018**.
+**Open Pulse-related PRs:** #698 (skill rule, operator merges), and this memory PR. Next migration: **020** (019 merged in #706). New ticket #707 (open polls from the main page without a reload; no urgency). #425 Next/Previous is on hold (operator, 2026-11-19).
 
 - **Sign-in (pillar 1) is built.** Magic-link sign-in and redeem; open sign-up
   with community as an optional label (ADR-0030); a community picker when an
@@ -128,12 +128,23 @@ public hostname, before inviting anyone.
    recovery via `/api/me` and a GET-only Try again, in #695 (`9e17d8d`); #692
    flaky `Profile.test.tsx` in #694 (`eaa5f88`). After the pilot: #678 ballot
    revocation, #679 atomic link limit, #680 idle timeout and owner re-sign-in.
-   New ticket #697 (home list spans width between rails), PR #699 in review. Skill PR #698 (keep
-   a healthy queued backlog) awaits the operator's merge.
+   #697 (home list spans the width between rails) merged in #699 (`bb8f265`).
+   Skill PR #698 (keep a healthy queued backlog) awaits the operator's merge.
    **Per-poll anonymous or visible votes (#685, operator 2026-11-15):** chosen
    once at creation, clearly shown, simple. ADR-0048 (#690, `3289d74`) decided
-   it; the build follows its decision 14 ship order, step 1 (migration 018 +
-   stores) starting.
+   it; the build follows its decision 14 ship order. Step 1 (migration 018 +
+   both stores) merged in #703 (`2a7b644`, 2026-11-18). Step 2 merged
+   2026-11-19 in two PRs: #706 (`592681c`) public-vote casting, `/ballot` and
+   `/my-votes` private no-store, `votePrivacy` on reads, and a structural
+   "Verified voter" rule (app plus migration 019, locale-free, shown on the
+   profile name field); #708 (`1939bac`) the public vote list (sealed
+   cursor, hidden filter, live names, capped per-address limiter) and
+   removing your own public vote. Creation still refuses `"public"`. Next:
+   step 3 (MCP, `$http_host`, proxy smoke test). Step 4a must reword two
+   server messages: "Choose a valid page of votes." → "Start again from the
+   first page of votes."; the anonymous-poll removal message should add "You
+   can still change your answer." ADR-0048 still quotes two messages #706
+   reworded.
    Rules (operator, 2026-11-15): the poll's setting decides and the voter
    never chooses; anonymous polls show nobody's details; visible polls need
    an email sign-in to vote and show the voter's profile name, which hiding
@@ -143,8 +154,10 @@ public hostname, before inviting anyone.
 1. **Next: pictures on every main-page item.** Operator direction
    2026-11-18: "All polls, posts, questions or whatever goes on main page
    should take images as well, like Rediit." ADR-0047 covered polls only, so
-   ADR-0049 (in progress) extends it to contributions and discussion topics.
-   Order: ADR-0049 → #700 (one shared picture field, mockup first, for
+   ADR-0049 (#704, `b614808`, accepted) extends it to contributions and
+   discussion topics. Operator answers E1-E3 (2026-11-18): no upload shows the
+   community default, then a tile; one picture per item; site-owner soft
+   delete covers topics. Order: #700 (one shared picture field, mockup first, for
    operator review) → #580 (poll form) and #701 (contributions take a
    picture) → #427 (thumbnails for every item in the main list), #296
    (picture on the question page), #586 after #427. #541 topics use #700.

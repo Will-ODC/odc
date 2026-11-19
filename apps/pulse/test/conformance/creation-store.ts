@@ -68,6 +68,7 @@ export function creationConformance(
         closesAt: new Date(AT.getTime() + WEEK_MS).toISOString(),
         open: true,
         image: { kind: "tile" },
+        votePrivacy: "anonymous",
         community: { id: "campus", label: "Campus" },
         attribution: { kind: "anonymous" },
       });

@@ -22,6 +22,12 @@ const DOMAIN = "pulse-vote-confirmation/v1";
 const LOCK_DOMAIN = "pulse-vote-lock/v1";
 
 /**
+ * The label for the key that seals a public-vote list's cursors (ADR-0048
+ * decision 7), so that key is never a code or a lock key.
+ */
+const CURSOR_DOMAIN = "pulse-public-votes-cursor/v1";
+
+/**
  * Turns "this account confirmed a vote on this poll" into a one-way code
  * (ADR-0040).
  *
@@ -80,5 +86,16 @@ export class ConfirmationKey {
       .update(JSON.stringify([LOCK_DOMAIN, accountId]))
       .digest()
       .readBigInt64BE(0);
+  }
+
+  /**
+   * The 32-byte AES-256-GCM key that seals public-vote list cursors
+   * (ADR-0048 decision 7): an HMAC of its own label, so it changes with the
+   * confirmation key and equals nothing else made from it.
+   */
+  cursorKey(): Buffer {
+    return createHmac("sha256", this.#key)
+      .update(JSON.stringify([CURSOR_DOMAIN]))
+      .digest();
   }
 }

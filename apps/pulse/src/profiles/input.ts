@@ -64,13 +64,28 @@ export function normalizeProfile(value: unknown): ProfileInput {
 }
 
 /**
+ * What may not tell a name apart from the reserved one: every mark,
+ * format character, separator, punctuation and whitespace, and the blank
+ * letters and symbols that stand in for a space (U+3164, U+115F, U+1160,
+ * U+FFA0, the blank braille pattern U+2800 and the null notehead U+1D159).
+ * Other letters, digits and symbols are kept.
+ * Migration 019 writes the same set out as code point ranges.
+ */
+export const IGNORED_IN_NAME =
+  /[\p{M}\p{Cf}\p{Z}\p{P}\s\u3164\u115F\u1160\uFFA0\u2800\u{1D159}]/gu;
+
+/**
  * "Verified voter" is what a public vote shows for an account with no profile
- * name (ADR-0048 decision 8), so no profile may take it, in any case or
- * spacing. The same rule as `member_profile_name_not_reserved` (018).
+ * name (ADR-0048 decision 8), so no profile may take it in any spelling that
+ * reads the same. Structural, not a list of tricks: NFKC-normalize,
+ * lower-case, drop `IGNORED_IN_NAME`, and compare with "verifiedvoter". The
+ * same rule as `pulse_reserved_name_key` and
+ * `member_profile_name_not_reserved` (migration 019).
  */
 export function isReservedName(displayName: string): boolean {
   return (
-    displayName.trim().replace(/\s+/g, " ").toLowerCase() === "verified voter"
+    displayName.normalize("NFKC").toLowerCase().replace(IGNORED_IN_NAME, "") ===
+    "verifiedvoter"
   );
 }
 

@@ -6,11 +6,16 @@ import path from "node:path";
 import { test, type TestContext } from "node:test";
 import type { Pool } from "pg";
 import { loadMigrations, migrate } from "../src/db/migrate.js";
+import { isReservedName } from "../src/profiles/input.js";
 import {
   databaseSkip,
   migratedSchema,
   throwawaySchema,
 } from "./support/database.js";
+import {
+  ALLOWED_SPELLINGS,
+  RESERVED_SPELLINGS,
+} from "./support/reserved-names.js";
 
 /**
  * ADR-0048 decision 3: the storage layer refuses what the stores above it
@@ -22,10 +27,15 @@ const AT = new Date("2026-11-18T12:00:00.123Z");
 const options = { skip: databaseSkip };
 
 async function before018(t: TestContext): Promise<Pool> {
+  return before(t, "018");
+}
+
+/** A schema migrated up to, not including, `version`. */
+async function before(t: TestContext, version: string): Promise<Pool> {
   const { pool } = await throwawaySchema(t);
   const dir = await mkdtemp(path.join(tmpdir(), "pulse-685-"));
   t.after(() => rm(dir, { recursive: true, force: true }));
-  for (const m of (await loadMigrations()).filter((m) => m.version < "018"))
+  for (const m of (await loadMigrations()).filter((m) => m.version < version))
     await writeFile(path.join(dir, `${m.version}_${m.name}.sql`), m.sql);
   await migrate(pool, { dir, clock: () => AT });
   return pool;
@@ -81,7 +91,7 @@ test(
       [AT],
     );
     await vote(pool, "legacy", "b:browser");
-    assert.deepEqual((await migrate(pool)).applied, ["018"]);
+    assert.deepEqual((await migrate(pool)).applied, ["018", "019"]);
     assert.deepEqual(
       (await pool.query("select id, vote_privacy from polls")).rows,
       [{ id: "legacy", vote_privacy: "anonymous" }],
@@ -124,7 +134,7 @@ test(
     );
     // Fixed by hand, it runs.
     await pool.query("update member_profile set display_name = 'Ada'");
-    assert.deepEqual((await migrate(pool)).applied, ["018"]);
+    assert.deepEqual((await migrate(pool)).applied, ["018", "019"]);
     await assert.rejects(
       pool.query("update member_profile set display_name = 'verified voter'"),
       /member_profile_name_not_reserved/,
@@ -225,5 +235,86 @@ test(
     await pool.query("delete from vote where poll_id = 'pub'");
     await pool.query("delete from polls where id = 'pub2'");
     assert.equal(await count(pool, "select count(*) as n from public_vote"), 0);
+  },
+);
+
+// Migration 019: the reserved name in every spelling that reads the same
+// (ADR-0048 decision 8), held to the same table as `isReservedName`.
+async function profile(pool: Pool, voter: string, name: string) {
+  await pool.query(
+    "insert into member_profile (voter_id, public_id, display_name, bio, visible, created_at, updated_at) values ($1, $2, $3, '', true, $4, $4)",
+    [voter, randomUUID(), name, AT],
+  );
+}
+
+test(
+  "019_reserves_every_spelling_the_app_check_reserves_and_no_other",
+  options,
+  async (t) => {
+    const pool = await migratedSchema(t);
+    await account(pool, "ada");
+    await profile(pool, "ada", "Ada");
+    // Trimmed, as the app stores every name (015 refuses any other).
+    const rename = (name: string) =>
+      pool.query("update member_profile set display_name = $1", [name.trim()]);
+    for (const name of RESERVED_SPELLINGS) {
+      assert.equal(isReservedName(name), true);
+      await assert.rejects(
+        rename(name),
+        /member_profile_name_not_reserved/,
+        JSON.stringify(name),
+      );
+    }
+    for (const name of ALLOWED_SPELLINGS) {
+      assert.equal(isReservedName(name), false);
+      await rename(name);
+    }
+  },
+);
+
+test(
+  "019_key_reserves_the_same_spellings_whatever_the_collation",
+  options,
+  async (t) => {
+    // lower() follows the locale; the key must not (under "C", U+0130 would
+    // stay itself and "Ver\u0130fied voter" would pass).
+    const pool = await migratedSchema(t);
+    for (const collation of ["C", "POSIX", "default"])
+      for (const [name, reserved] of [
+        ...RESERVED_SPELLINGS.map((n) => [n.trim(), true] as const),
+        ...ALLOWED_SPELLINGS.map((n) => [n, false] as const),
+      ]) {
+        const { rows } = await pool.query(
+          `select pulse_reserved_name_key($1::text collate "${collation}") = 'verifiedvoter' as hit`,
+          [name],
+        );
+        assert.equal(
+          rows[0].hit,
+          reserved,
+          `${collation} ${JSON.stringify(name)}`,
+        );
+      }
+  },
+);
+
+test(
+  "019_refuses_to_run_over_a_hidden_reserved_name_and_leaves_018s_check",
+  options,
+  async (t) => {
+    const pool = await before(t, "019");
+    await account(pool, "ada");
+    await profile(pool, "ada", "Verified\u200D voter");
+    await assert.rejects(migrate(pool), (error: Error) => {
+      assert.match(String(error.cause), /re-run 019/);
+      return true;
+    });
+    // 018's check is still there.
+    await assert.rejects(
+      pool.query("update member_profile set display_name = 'verified voter'"),
+      /member_profile_name_not_reserved/,
+    );
+    // Fixed by hand, it runs.
+    await pool.query("update member_profile set display_name = 'Ada'");
+    assert.deepEqual((await migrate(pool)).applied, ["019"]);
   },
 );
