@@ -336,6 +336,13 @@ describe("when the answer to the press is lost", () => {
     expect(
       await screen.findByText("We could not finish signing you in."),
     ).toBeTruthy();
+    // True whoever /me named, or if it failed: it never claims nobody is in.
+    expect(
+      screen.getByText(
+        `Pulse could not confirm that this browser is signed in as ${ME.email}. Try again to check the link.`,
+      ),
+    ).toBeTruthy();
+    expect(screen.queryByText(/not signed in/)).toBeNull();
     expect(onSignedIn).not.toHaveBeenCalled();
     expect(redeem).toHaveBeenCalledTimes(1);
   });
@@ -400,5 +407,72 @@ describe("when the answer to the press is lost", () => {
       await screen.findByRole("button", { name: "Ask for a new link" }),
     ).toBeTruthy();
     expect(redeem).toHaveBeenCalledTimes(1);
+  });
+});
+
+/*
+ * Pulse answered the press, and the answer was no (403, 429, 5xx). It was
+ * reached, so the heading must not say it was not; the server's sentence and
+ * the Try again control stay.
+ */
+describe("when Pulse answers the press with a refusal", () => {
+  for (const status of [403, 429, 503]) {
+    it(`does not blame the connection for a ${status}`, async () => {
+      const redeem = vi.fn(() =>
+        Promise.reject(new ApiError(status, "Too many tries. Wait a moment.")),
+      );
+      const me = vi.fn(() => Promise.resolve(null));
+      render(
+        <Redeem
+          api={stubApi({ checkLink, redeem, me })}
+          token="abc"
+          onSignedIn={noop}
+          onAskAgain={noop}
+        />,
+      );
+      await userEvent.click(await continueButton());
+      expect(
+        await screen.findByText("Pulse could not sign you in."),
+      ).toBeTruthy();
+      expect(screen.getByText("Too many tries. Wait a moment.")).toBeTruthy();
+      expect(screen.queryByText("We could not reach pulse.")).toBeNull();
+      expect(screen.getByRole("button", { name: "Try again" })).toBeTruthy();
+      expect(me).not.toHaveBeenCalled();
+      expect(redeem).toHaveBeenCalledTimes(1);
+    });
+  }
+});
+
+// The live region wraps the heading and the line under it; it must space
+// them the way the column spaces the email-entry screen's, not run them on.
+describe("spacing inside the announced block", () => {
+  it("gives the confirm and stopped blocks the spaced wrapper", async () => {
+    render(
+      <Redeem
+        api={stubApi({ checkLink })}
+        token="abc"
+        onSignedIn={noop}
+        onAskAgain={noop}
+      />,
+    );
+    const heading = await screen.findByText("Sign in to Pulse");
+    expect(heading.closest('[role="status"]')?.classList).toContain(
+      "signin__said",
+    );
+    cleanup();
+    render(
+      <Redeem
+        api={stubApi({
+          checkLink: () => Promise.reject(new ApiError(0, "offline")),
+        })}
+        token="abc"
+        onSignedIn={noop}
+        onAskAgain={noop}
+      />,
+    );
+    const stopped = await screen.findByText("We could not reach pulse.");
+    expect(stopped.closest('[role="status"]')?.classList).toContain(
+      "signin__said",
+    );
   });
 });

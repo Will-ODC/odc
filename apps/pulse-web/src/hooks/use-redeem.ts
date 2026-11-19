@@ -13,7 +13,7 @@ import type { ViewData } from "./view-data.js";
 export type RedeemView =
   | ViewData<{ email: string; signingIn: boolean }>
   | { status: "signedIn"; me: Me }
-  | { status: "lost" };
+  | { status: "lost"; email: string };
 
 /**
  * Read the link on arrival; spend it only when the person says so.
@@ -81,11 +81,11 @@ export function useRedeem(
             setView(
               me !== null && me.email === email
                 ? { status: "signedIn", me }
-                : { status: "lost" },
+                : { status: "lost", email },
             );
           },
           () => {
-            if (current.current === token) setView({ status: "lost" });
+            if (current.current === token) setView({ status: "lost", email });
           },
         );
       },
@@ -114,6 +114,11 @@ function failure(err: unknown): ViewData<never> {
    */
   if (err instanceof ApiError && (err.status === 410 || err.status === 400)) {
     return { status: "empty", message: err.message };
+  }
+  // Pulse answered (403, 429, 5xx): say so through the status code, so the
+  // screen does not blame the connection. Status 0 is no answer at all.
+  if (err instanceof ApiError && err.status !== 0) {
+    return { status: "error", message: err.message, statusCode: err.status };
   }
   if (err instanceof ApiError) {
     return { status: "error", message: err.message };

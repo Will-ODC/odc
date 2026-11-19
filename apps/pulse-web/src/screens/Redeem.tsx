@@ -66,8 +66,9 @@ export function Redeem({
   }
 
   /*
-   * The press went out and no answer came back, and this browser is not
-   * signed in as the address offered. Whether the link was spent is unknown,
+   * The press went out and no answer came back, and `/me` did not show this
+   * browser signed in as the address offered (nobody, someone else, or `/me`
+   * failed too), so the sentence claims only what is known. Whether the link was spent is unknown,
    * so Try again reads it again (GET only) and the person presses Continue
    * themself. A spent link then lands on the used-link view, which offers a
    * new one; an unspent one is not thrown away, so no outstanding-link cap.
@@ -76,7 +77,7 @@ export function Redeem({
     return (
       <Stopped
         title="We could not finish signing you in."
-        sentence="Pulse did not answer, and this browser is not signed in. Try again to check the link."
+        sentence={`Pulse could not confirm that this browser is signed in as ${view.email}. Try again to check the link.`}
         action="Try again"
         variant="primary"
         onAct={retry}
@@ -85,11 +86,16 @@ export function Redeem({
   }
 
   // Retry checks the link again. A lost response may follow a successful
-  // redemption, so the screen cannot promise the link is still usable.
+  // redemption, so the screen cannot promise the link is still usable. With a
+  // status code Pulse did answer, so the title does not blame the connection.
   if (view.status === "error") {
     return (
       <Stopped
-        title="We could not reach pulse."
+        title={
+          view.statusCode === undefined
+            ? "We could not reach pulse."
+            : "Pulse could not sign you in."
+        }
         sentence={view.message}
         action="Try again"
         variant="secondary"
@@ -139,7 +145,7 @@ function Confirm({
 
   return (
     <ScreenFrame>
-      <div role="status" aria-live="polite">
+      <div className="signin__said" role="status" aria-live="polite">
         <h1 className="signin__title" tabIndex={-1} ref={heading}>
           Sign in to Pulse
         </h1>
@@ -190,7 +196,7 @@ function Stopped({
 
   return (
     <ScreenFrame>
-      <div role="status" aria-live="polite">
+      <div className="signin__said" role="status" aria-live="polite">
         <h1 className="signin__title" tabIndex={-1} ref={heading}>
           {title}
         </h1>
