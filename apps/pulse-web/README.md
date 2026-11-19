@@ -47,8 +47,9 @@ For local testing, run both apps with their `dev` commands and open
 choose **Open local mailbox**, then open its sign-in link. The page shows the
 address. Press **Continue as** followed by the address to sign in. If that
 press gets no answer, the page checks `GET /api/me` once: signed in as that
-address counts as success; otherwise it offers a new link. It never resends
-the redemption on its own. The same
+address counts as success; otherwise **Try again** reads the link again
+and shows **Continue as** once more (or the used-link view, if it was spent).
+It never resends the redemption on its own. The same
 sign-in and redemption flow runs locally and in production; local mail is
 captured instead of delivered. Startup and reset scenarios are documented in
 [the API README](../pulse/README.md#run-it-on-your-computer).

@@ -26,7 +26,7 @@ export type RedeemView =
  * link and set the session cookie. The POST is never sent again; instead
  * `GET /api/me` says whether this browser is now signed in as the address the
  * person agreed to. If so, that is success; if not (or that check fails too),
- * the view is `lost` and the screen offers a new link.
+ * the view is `lost`, and the screen's Try again reads the link again.
  */
 export function useRedeem(
   api: PulseApi,

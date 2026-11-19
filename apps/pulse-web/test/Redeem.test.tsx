@@ -334,7 +334,7 @@ describe("when the answer to the press is lost", () => {
     );
     await userEvent.click(await continueButton());
     expect(
-      await screen.findByRole("button", { name: "Ask for a new link" }),
+      await screen.findByText("We could not finish signing you in."),
     ).toBeTruthy();
     expect(onSignedIn).not.toHaveBeenCalled();
     expect(redeem).toHaveBeenCalledTimes(1);
@@ -344,7 +344,7 @@ describe("when the answer to the press is lost", () => {
     ["nobody is signed in", () => Promise.resolve(null)],
     ["the check fails too", () => Promise.reject(new ApiError(0, "offline"))],
   ] as const) {
-    it(`offers a new link, without reposting, when ${name}`, async () => {
+    it(`Try again re-reads the link, never re-posts, when ${name}`, async () => {
       const redeem = vi.fn(lost);
       const read = vi.fn(checkLink);
       const onAskAgain = vi.fn();
@@ -358,14 +358,47 @@ describe("when the answer to the press is lost", () => {
         />,
       );
       await userEvent.click(await continueButton());
-      await userEvent.click(
-        await screen.findByRole("button", { name: "Ask for a new link" }),
-      );
-      expect(onAskAgain).toHaveBeenCalledTimes(1);
-      expect(onSignedIn).not.toHaveBeenCalled();
+      await screen.findByText("We could not finish signing you in.");
+      expect(
+        screen.queryByRole("button", { name: "Ask for a new link" }),
+      ).toBeNull();
+      await userEvent.click(screen.getByRole("button", { name: "Try again" }));
+
+      await continueButton();
+      expect(read.mock.calls).toEqual([["abc"], ["abc"]]);
       expect(redeem).toHaveBeenCalledTimes(1);
-      expect(read).toHaveBeenCalledTimes(1);
-      expect(screen.queryByRole("button", { name: /Continue as/ })).toBeNull();
+      expect(onAskAgain).not.toHaveBeenCalled();
+      expect(onSignedIn).not.toHaveBeenCalled();
     });
   }
+
+  it("Try again lands on the used-link view when the link was spent", async () => {
+    const read = vi
+      .fn()
+      .mockResolvedValueOnce(ME.email)
+      .mockRejectedValueOnce(
+        new ApiError(410, "That link has already been used.", "already_used"),
+      );
+    const redeem = vi.fn(lost);
+    render(
+      <Redeem
+        api={stubApi({
+          checkLink: read,
+          redeem,
+          me: () => Promise.resolve(null),
+        })}
+        token="abc"
+        onSignedIn={noop}
+        onAskAgain={noop}
+      />,
+    );
+    await userEvent.click(await continueButton());
+    await userEvent.click(
+      await screen.findByRole("button", { name: "Try again" }),
+    );
+    expect(
+      await screen.findByRole("button", { name: "Ask for a new link" }),
+    ).toBeTruthy();
+    expect(redeem).toHaveBeenCalledTimes(1);
+  });
 });

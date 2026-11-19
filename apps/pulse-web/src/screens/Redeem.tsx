@@ -67,18 +67,19 @@ export function Redeem({
 
   /*
    * The press went out and no answer came back, and this browser is not
-   * signed in as the address offered. The link may or may not be spent, and
-   * sending it again is not this screen's to do unasked, so it offers the one
-   * way forward that does not depend on knowing.
+   * signed in as the address offered. Whether the link was spent is unknown,
+   * so Try again reads it again (GET only) and the person presses Continue
+   * themself. A spent link then lands on the used-link view, which offers a
+   * new one; an unspent one is not thrown away, so no outstanding-link cap.
    */
   if (view.status === "lost") {
     return (
       <Stopped
         title="We could not finish signing you in."
-        sentence="Pulse did not answer, and this browser is not signed in. Ask for a new link to try again."
-        action="Ask for a new link"
+        sentence="Pulse did not answer, and this browser is not signed in. Try again to check the link."
+        action="Try again"
         variant="primary"
-        onAct={onAskAgain}
+        onAct={retry}
       />
     );
   }
