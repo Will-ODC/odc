@@ -200,7 +200,13 @@ Plain `RESEND_API_KEY` and `DATABASE_URL` are ignored.
 work out who voted what. Make it at least 32 characters
 (`openssl rand -base64 32`) and different from `PULSE_SESSION_SECRET`; the
 server refuses otherwise. Changing it means anyone who confirms again is
-counted as a new confirmed voter.
+counted as a new confirmed voter. It also seals the public-vote list's page
+cursors, so a change ends any cursor a client holds (it starts again from the
+first page).
+
+The public-vote list (`GET /api/polls/:id/public-votes`) is limited per client
+address by `publicVotesRateLimit`, 60 requests a minute by default. Like every
+pulse limit it is held in memory, so each API instance counts separately.
 
 Keep the API port private. The API trusts the client IP only when it comes
 from a private address, such as nginx's.

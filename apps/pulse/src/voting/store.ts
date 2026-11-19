@@ -222,13 +222,14 @@ export interface VotingStore {
   ): Promise<RemovalResult>;
   /**
    * A page of a public-vote poll's list, in list-key order after `after`,
-   * with one extra row. Empty for an anonymous, hidden or unknown poll.
+   * with one extra row. `undefined` for an anonymous, hidden or unknown poll,
+   * so a caller cannot serve a hidden poll's page by forgetting a check.
    */
   listPublicVotes(
     pollId: string,
     limit: number,
     after?: string,
-  ): Promise<PublicVoteEntry[]>;
+  ): Promise<PublicVoteEntry[] | undefined>;
   results(pollId: string): Promise<Results>;
 }
 
@@ -649,10 +650,10 @@ export class InMemoryVotingStore implements VotingStore {
     pollId: string,
     limit: number,
     after: string = FIRST_LIST_KEY,
-  ): Promise<PublicVoteEntry[]> {
+  ): Promise<PublicVoteEntry[] | undefined> {
     assertListKey(after);
     // The in-memory store has no hidden polls.
-    if (this.#polls.get(pollId)?.votePrivacy !== "public") return [];
+    if (this.#polls.get(pollId)?.votePrivacy !== "public") return undefined;
     return [...this.#publicVotes.entries()]
       .flatMap(([key, link]) => {
         const vote = this.#votes.get(key);

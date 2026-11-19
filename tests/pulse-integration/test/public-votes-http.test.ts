@@ -116,10 +116,10 @@ describe("public-vote polls over HTTP", () => {
     await app.close();
   });
 
-  async function signedIn() {
+  async function signedIn(email = EMAIL) {
     const one = browser(base);
-    await one.api.requestLink(EMAIL, false);
-    const link = mailer.lastTo(EMAIL)?.body ?? "";
+    await one.api.requestLink(email, false);
+    const link = mailer.lastTo(email)?.body ?? "";
     const me = await one.api.redeem(
       new URL(link).searchParams.get("token") ?? "",
     );
@@ -200,5 +200,80 @@ describe("public-vote polls over HTTP", () => {
       .catch((error) => error);
     expect(refused).toMatchObject({ status: 400, code: "reserved_name" });
     expect(await jo.api.myProfile()).toBeNull();
+  });
+
+  /** An acknowledged public cast from this browser, as step 4a's card will send. */
+  async function castPublic(
+    who: Awaited<ReturnType<typeof signedIn>>,
+    ballot: number[],
+  ) {
+    const reply = await who.fetch(`${base}/polls/pub/votes`, {
+      method: "POST",
+      headers: { "content-type": "application/json" },
+      body: JSON.stringify({ ballot, publicVote: true }),
+    });
+    expect(reply.status).toBe(200);
+  }
+
+  it("the public list pages through opaque cursors in the URL and is never cached", async () => {
+    for (const [i, email] of [
+      "ana@student.ubc.ca",
+      "ben@student.ubc.ca",
+      "cat@student.ubc.ca",
+    ].entries()) {
+      await castPublic(await signedIn(email), [i % 2]);
+    }
+    const seen: unknown[] = [];
+    let url = `${base}/polls/pub/public-votes?limit=2`;
+    for (;;) {
+      const reply = await fetch(url);
+      expect(reply.status).toBe(200);
+      expect(reply.headers.get("cache-control")).toBe("no-store");
+      expect(reply.headers.getSetCookie()).toEqual([]);
+      const page = (await reply.json()) as {
+        items: { name: string | null; choices: number[] }[];
+        nextCursor: string | null;
+      };
+      seen.push(...page.items);
+      if (page.nextCursor === null) break;
+      expect(page.nextCursor).toMatch(/^[A-Za-z0-9_-]+$/);
+      url = `${base}/polls/pub/public-votes?limit=2&cursor=${page.nextCursor}`;
+    }
+    // Nobody has a profile, so every name is null ("Verified voter").
+    expect(seen).toHaveLength(3);
+    expect(
+      seen.every((item) => (item as { name: unknown }).name === null),
+    ).toBe(true);
+    const missing = await fetch(`${base}/polls/missing/public-votes`);
+    expect(missing.status).toBe(404);
+    expect(missing.headers.get("cache-control")).toBe("no-store");
+  });
+
+  it("removing one's own public vote works over HTTP and only from the web origin", async () => {
+    const jo = await signedIn();
+    await castPublic(jo, [1]);
+
+    const session = jo
+      .cookies()
+      .split("; ")
+      .find((pair) => pair.startsWith("pulse_session="));
+    const foreign = await fetch(`${base}/polls/pub/votes/mine`, {
+      method: "DELETE",
+      headers: { cookie: session ?? "", origin: "https://evil.example" },
+    });
+    expect(foreign.status).toBe(403);
+    expect((await votes.results("pub")).voters).toBe(1);
+
+    const removed = await jo.fetch(`${base}/polls/pub/votes/mine`, {
+      method: "DELETE",
+    });
+    expect(removed.status).toBe(200);
+    expect(await removed.json()).toMatchObject({
+      status: "removed",
+      results: { voters: 0, votePrivacy: "public" },
+    });
+    expect(await jo.api.myBallot("pub")).toBeNull();
+    const list = await fetch(`${base}/polls/pub/public-votes`);
+    expect(await list.json()).toEqual({ items: [], nextCursor: null });
   });
 });
