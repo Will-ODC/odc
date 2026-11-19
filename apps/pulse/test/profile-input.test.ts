@@ -97,6 +97,24 @@ test("migration_019_drops_nothing_the_app_check_keeps", async () => {
       assert.ok(ignored.test(String.fromCodePoint(c)), c.toString(16));
 });
 
+test("migration_019s_locale_free_lower_casing_agrees_wherever_it_matters", () => {
+  // 019 lower-cases with translate(A-Z and U+0130), never lower(), so the
+  // database's locale cannot change it. Wherever the app's key is made only
+  // of a-z (as "verifiedvoter" is), that mapping must give the same key.
+  const ignored = new RegExp(IGNORED_IN_NAME.source, "gu");
+  for (let c = 0x80; c < 0x110000; c++) {
+    if (c >= 0xd800 && c <= 0xdfff) continue;
+    const k = String.fromCodePoint(c).normalize("NFKC");
+    const app = k.toLowerCase().replace(ignored, "");
+    if (!/^[a-z]+$/.test(app)) continue;
+    const database = k
+      .replace(/[A-Z]/g, (ch) => ch.toLowerCase())
+      .replace(/\u0130/g, "i")
+      .replace(ignored, "");
+    assert.equal(database, app, c.toString(16));
+  }
+});
+
 /** The code point ranges of 019's bracket expression. */
 async function migration019Ranges(): Promise<[number, number][]> {
   const sql = await readFile(

@@ -14,10 +14,19 @@
 -- `isReservedName` too, so the database never refuses a name the app allows.
 -- Existing rows that the new rule reserves are never renamed silently: the
 -- migration refuses, and they are fixed by hand.
+--
+-- Lower-casing is not lower(), which follows the database's locale (under
+-- "C" it leaves U+0130 alone; under Turkish it turns I into dotless i). The
+-- key maps A-Z and U+0130 to a-z and i by translate(), the same in every
+-- locale. These are the only characters that, after NFKC, lower-case into
+-- the letters of 'verifiedvoter' (checked over every code point), so the key
+-- reaches 'verifiedvoter' exactly when the app's does.
 create function pulse_reserved_name_key(name text) returns text
 language sql immutable strict parallel safe
 return regexp_replace(
-  lower(normalize(name, nfkc)),
+  translate(normalize(name, nfkc),
+            'ABCDEFGHIJKLMNOPQRSTUVWXYZ' || U&'\0130',
+            'abcdefghijklmnopqrstuvwxyzi'),
   '[' || '\u0009-\u000D\u0020-\u0023\u0025-\u002A\u002C-\u002F\u003A-\u003B\u003F-'
        || '\u0040\u005B-\u005D\u005F\u007B\u007D\u00A0-\u00A1\u00A7\u00AB\u00AD'
        || '\u00B6-\u00B7\u00BB\u00BF\u0300-\u036F\u037E\u0387\u0483-\u0489\u055A-'

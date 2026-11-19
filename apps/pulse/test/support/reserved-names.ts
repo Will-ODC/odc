@@ -21,6 +21,8 @@ export const RESERVED_SPELLINGS: readonly string[] = [
   "Verifiedvoter",
   "verified-voter",
   "Verified. Voter!",
+  "Ver\u0130fied voter",
+  "VER\u0130F\u0130ED VOTER",
   "\uFF36\uFF45\uFF52\uFF49\uFF46\uFF49\uFF45\uFF44 \uFF56\uFF4F\uFF54\uFF45\uFF52",
   ...hidingMarks.map((c) => `Verified${String.fromCodePoint(c)} voter`),
   ...hidingMarks.map((c) => `Verified voter${String.fromCodePoint(c)}`),

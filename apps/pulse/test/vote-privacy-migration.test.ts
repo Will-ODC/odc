@@ -273,6 +273,31 @@ test(
 );
 
 test(
+  "019_key_reserves_the_same_spellings_whatever_the_collation",
+  options,
+  async (t) => {
+    // lower() follows the locale; the key must not (under "C", U+0130 would
+    // stay itself and "Ver\u0130fied voter" would pass).
+    const pool = await migratedSchema(t);
+    for (const collation of ["C", "POSIX", "default"])
+      for (const [name, reserved] of [
+        ...RESERVED_SPELLINGS.map((n) => [n.trim(), true] as const),
+        ...ALLOWED_SPELLINGS.map((n) => [n, false] as const),
+      ]) {
+        const { rows } = await pool.query(
+          `select pulse_reserved_name_key($1::text collate "${collation}") = 'verifiedvoter' as hit`,
+          [name],
+        );
+        assert.equal(
+          rows[0].hit,
+          reserved,
+          `${collation} ${JSON.stringify(name)}`,
+        );
+      }
+  },
+);
+
+test(
   "019_refuses_to_run_over_a_hidden_reserved_name_and_leaves_018s_check",
   options,
   async (t) => {
