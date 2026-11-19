@@ -27,24 +27,29 @@ In production, nginx serves the page on port 8080 over IPv4 and IPv6 and sends
 
 ## Pages
 
-| Path                   | What it shows                                                           |
-| ---------------------- | ----------------------------------------------------------------------- |
-| `/`                    | Home: public poll browser, newest first.                                |
-| `/about`               | About: the former welcome content and Start voting.                     |
-| `/start`               | What has been done so far, and what ODC is for.                         |
-| `/browse?community=ID` | Community questions, newest first; General by default.                  |
-| `/questions`           | The four starting questions.                                            |
-| `/?poll=ID`            | The live vote page for one poll. Old `/conversation` links still work.  |
-| `/new`                 | Post a question after signing in, then open its vote page.              |
-| `/profile`             | Create, update, hide or share the signed-in member's public profile.    |
-| `/u/<publicId>`        | A public member profile, or unavailable if it is absent or hidden.      |
-| `/trust`               | "How votes count": a short guide to counting and its limits.            |
-| `/sign-in?token=…`     | Where emailed sign-in links land; goes straight back to where you were. |
-| `/preview/chat`        | A prototype with sample data only.                                      |
+| Path                   | What it shows                                                          |
+| ---------------------- | ---------------------------------------------------------------------- |
+| `/`                    | Home: public poll browser, newest first.                               |
+| `/about`               | About: the former welcome content and Start voting.                    |
+| `/start`               | What has been done so far, and what ODC is for.                        |
+| `/browse?community=ID` | Community questions, newest first; General by default.                 |
+| `/questions`           | The four starting questions.                                           |
+| `/?poll=ID`            | The live vote page for one poll. Old `/conversation` links still work. |
+| `/new`                 | Post a question after signing in, then open its vote page.             |
+| `/profile`             | Create, update, hide or share the signed-in member's public profile.   |
+| `/u/<publicId>`        | A public member profile, or unavailable if it is absent or hidden.     |
+| `/trust`               | "How votes count": a short guide to counting and its limits.           |
+| `/sign-in?token=…`     | Confirm the email address to sign in, then return to where you were.   |
+| `/preview/chat`        | A prototype with sample data only.                                     |
 
 For local testing, run both apps with their `dev` commands and open
 `http://localhost:5173/sign-in?next=new`. Enter any test email; on Check your email,
-choose **Open local mailbox**, then click its actual sign-in link. The same
+choose **Open local mailbox**, then open its sign-in link. The page shows the
+address. Press **Continue as** followed by the address to sign in. If that
+press gets no answer, the page checks `GET /api/me` once: signed in as that
+address counts as success; otherwise **Try again** reads the link again
+and shows **Continue as** once more (or the used-link view, if it was spent).
+It never resends the redemption on its own. The same
 sign-in and redemption flow runs locally and in production; local mail is
 captured instead of delivered. Startup and reset scenarios are documented in
 [the API README](../pulse/README.md#run-it-on-your-computer).

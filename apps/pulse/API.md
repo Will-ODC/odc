@@ -214,7 +214,8 @@ that a gateway may have sent after the provider had already delivered the email
 
 Reports whether a link is still good. **Consumes nothing.** Mail scanners and
 prefetchers follow every URL in an email; if looking spent the link, people would
-arrive to find it already used.
+arrive to find it already used. Pulse web also uses this read to show the
+address before asking the person to sign in.
 
 | Status | Body                                                   | When                |
 | ------ | ------------------------------------------------------ | ------------------- |
@@ -228,7 +229,8 @@ arrive to find it already used.
 { "token": "…" }
 ```
 
-The click. Spends the link and sets the session cookie. Same 400/410 answers as the
+Spends the link and sets the session cookie. Pulse web sends this request
+only after the person presses the **Continue as** button naming the address. Same 400/410 answers as the
 GET, plus 403 `origin_not_allowed` for a missing or foreign `Origin` (see "Request
 origin"), which spends nothing. On success:
 
