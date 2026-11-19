@@ -461,7 +461,18 @@ whether this is a screen in `apps/pulse-web` or a separate surface. Read P6
 before starting and reuse its established posting authority where applicable;
 do not silently broaden those permissions to links or assurance gates.
 
-## P12 — Poll thumbnails · READY TO BUILD
+## P12 — Pictures on every item (polls first) · READY TO BUILD
+
+**Extended 2026-11-18 (ADR-0049, accepted).** Operator: "All polls, posts,
+questions or whatever goes on main page should take images as well, like
+Rediit." Contributions (#701) and discussion topics (#541) take one picture
+each by ADR-0047's rules, in the same store with their own owner kind. Every
+posting form uses one shared picture field (#700, mockup first). Every
+listing row of every kind carries `image` with the same default chain as
+polls: the poster's upload, then the community default, then the tile
+(operator E1, 2026-11-18). One picture per item (E2). The site owner's soft
+delete also covers topics (E3). ADR-0049 section 9 is the build order; the
+scope notes below mark where it widens a step.
 
 Operator direction, 2026-11-12: every poll gets a thumbnail, Reddit-style.
 The poster can upload one with the question; otherwise a default shows: one
@@ -483,8 +494,8 @@ It adds migrations 013 and 014, so every P12 migration takes the next free
 number after #572 merges (015 or later, never 013 or 014). It also turns
 Home/Browse into one date-ordered list of polls and contributions, so the
 thumbnail column (step 3) and the Home banner (step 9) are built on that list
-and wait for #572. Contribution rows carry no picture; they get an empty slot
-of the thumbnail's size so titles stay aligned (ADR-0047 §6).
+and wait for #572. Contribution rows had no picture and an empty slot under
+ADR-0047 §6; ADR-0049 replaces that with #701 and the shared default chain.
 
 Steps, in order. Each is one PR on `pulse/<issue>-<short>`, with tests,
 fresh review (plus `odc-ui-reviewer` for screens) and green CI before the
@@ -513,7 +524,9 @@ next dependent step starts.
    - Upload quotas and the 24-hour pending sweep, with Postgres and in-memory
      conformance tests; nginx upload location; `DEPLOY.md` and `API.md`
      updated; CI builds the musl image.
-2. **Add a picture in the posting form.** #580. Depends on 1.
+2. **Add a picture in the posting form.** #580. Depends on 1 and on #700.
+   - First #700 (ADR-0049 §7): one shared picture field for every posting
+     form, mockup approved by the operator before the component is built.
    - Optional picture on `/new` with local preview (`img-src 'self' blob:`),
      required description and Remove before publishing.
    - Publish waits for the upload; type, size, busy and network errors are
@@ -526,6 +539,9 @@ next dependent step starts.
      same size, so all titles stay aligned. A failed picture never hides the
      title, state or link.
    - One listing request per page, checked by a test; mockup approved first.
+   - ADR-0049: one row design for every kind; reads `image` from both
+     listings, so contribution rows show a thumbnail or tile like polls (the
+     empty slot above is dropped) once #701's server PR merges.
 4. **Picture on the question page.** #296 (rescoped). Depends on 1.
    - Display picture under the question with its description; defaults show
      as a small tile; failures leave no empty frame and voting stays usable.
@@ -549,6 +565,9 @@ next dependent step starts.
      it, counted from when it stopped being shown (the hide, or else the
      removal); this overrides step 5's immediate delete.
    - Poll reports never hide a poll; they wait for the site owner (step 7).
+   - ADR-0049: one picture target per owner kind with pictures when built
+     (`contribution_image` too if #701 merged first); 3 reporters hide any
+     kind's picture.
 7. **Site owner soft-deletes polls.** #584; minimal #234. Depends on 6.
    - Site-owner review list of poll and picture reports, without reporter
      identities.
@@ -572,6 +591,9 @@ next dependent step starts.
      `purged_at`; only `voter_id` and `request_key` keep meaning, `canonical`
      is emptied and the counts zeroed. A late retry is refused without
      content and never re-publishes the contribution (ADR-0047 §9).
+   - ADR-0049: purge also deletes every `image` row owned by the
+     contribution, with its bytes; a soft-deleted contribution's picture is
+     never served.
    - Re-check #572's migrations as merged (013, 014 today: `contribution_id`
      `not null`, `no action` reference) and list in the PR every reference to
      a contribution and what purge does to it.
@@ -589,6 +611,26 @@ next dependent step starts.
      governance picture and a link to their list; it never casts a vote. It
      sits above #572's mixed list and leaves that list's order and rows
      unchanged.
+   - ADR-0049: community defaults also apply to contributions and topics
+     (operator E1).
+
+**Contributions take a picture (#701, ADR-0049).** After step 1; its web PR
+also after #700. At least a server PR and a web PR. It can run alongside
+steps 2–6.
+
+- Migration (next free number; 018 is ADR-0048's) adds owner kind
+  `contribution` to `image` and `content_change`, and `contribution.image_id`;
+  never edits 016.
+- `POST /api/contributions` accepts `image: { id, alt }`; every contribution
+  body and row carries `image` (`upload`, else the tile until step 9).
+- Poster-only `DELETE`/`PUT /api/contributions/:id/image`, signalled by the
+  existing `canManage`; audit rows; `API.md`, `DEPLOY.md` (manual emergency
+  path) and `README.md` updated.
+- Adds the `contribution_image` report target if step 6 merged first.
+
+Discussion topics (#541) take pictures by ADR-0049 §6 when built: owner kind
+`topic` in their own migration, the shared field, `topic_image` reports, the
+same default chain, and site-owner soft delete with restore and purge (E3).
 
 Steps 3 and 4 can run in parallel after 1 (step 3 also after #572); step 9
 can start once steps 1 and 3 are merged. Until step 7, the only emergency path

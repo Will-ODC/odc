@@ -27,24 +27,29 @@ In production, nginx serves the page on port 8080 over IPv4 and IPv6 and sends
 
 ## Pages
 
-| Path                   | What it shows                                                           |
-| ---------------------- | ----------------------------------------------------------------------- |
-| `/`                    | Home: public poll browser, newest first.                                |
-| `/about`               | About: the former welcome content and Start voting.                     |
-| `/start`               | What has been done so far, and what ODC is for.                         |
-| `/browse?community=ID` | Community questions, newest first; General by default.                  |
-| `/questions`           | The four starting questions.                                            |
-| `/?poll=ID`            | The live vote page for one poll. Old `/conversation` links still work.  |
-| `/new`                 | Post a question after signing in, then open its vote page.              |
-| `/profile`             | Create, update, hide or share the signed-in member's public profile.    |
-| `/u/<publicId>`        | A public member profile, or unavailable if it is absent or hidden.      |
-| `/trust`               | "How votes count": a short guide to counting and its limits.            |
-| `/sign-in?token=…`     | Where emailed sign-in links land; goes straight back to where you were. |
-| `/preview/chat`        | A prototype with sample data only.                                      |
+| Path                   | What it shows                                                          |
+| ---------------------- | ---------------------------------------------------------------------- |
+| `/`                    | Home: public poll browser, newest first.                               |
+| `/about`               | About: the former welcome content and Start voting.                    |
+| `/start`               | What has been done so far, and what ODC is for.                        |
+| `/browse?community=ID` | Community questions, newest first; General by default.                 |
+| `/questions`           | The four starting questions.                                           |
+| `/?poll=ID`            | The live vote page for one poll. Old `/conversation` links still work. |
+| `/new`                 | Post a question after signing in, then open its vote page.             |
+| `/profile`             | Create, update, hide or share the signed-in member's public profile.   |
+| `/u/<publicId>`        | A public member profile, or unavailable if it is absent or hidden.     |
+| `/trust`               | "How votes count": a short guide to counting and its limits.           |
+| `/sign-in?token=…`     | Confirm the email address to sign in, then return to where you were.   |
+| `/preview/chat`        | A prototype with sample data only.                                     |
 
 For local testing, run both apps with their `dev` commands and open
 `http://localhost:5173/sign-in?next=new`. Enter any test email; on Check your email,
-choose **Open local mailbox**, then click its actual sign-in link. The same
+choose **Open local mailbox**, then open its sign-in link. The page shows the
+address. Press **Continue as** followed by the address to sign in. If that
+press gets no answer, the page checks `GET /api/me` once: signed in as that
+address counts as success; otherwise **Try again** reads the link again
+and shows **Continue as** once more (or the used-link view, if it was spent).
+It never resends the redemption on its own. The same
 sign-in and redemption flow runs locally and in production; local mail is
 captured instead of delivered. Startup and reset scenarios are documented in
 [the API README](../pulse/README.md#run-it-on-your-computer).
@@ -228,8 +233,19 @@ sets `$remote_addr` from that header and sends both `X-Real-IP` and a fresh
 `PULSE_TRUSTED_PROXY_HOPS=1`, so two clients have distinct rate-limit buckets.
 The API must remain private and nginx's peer address must pass its private
 proxy check. Real-IP mode also forwards Railway's `X-Forwarded-Proto` when
-it is `http` or `https`, falling back to `$scheme` otherwise. Terminate TLS
-and set HSTS at the edge; point Railway's web target port at `8080`.
+it is `http` or exactly lowercase `https`, falling back to `$scheme` otherwise.
+Terminate TLS at Railway's edge and point its web target port at `8080`.
+
+Railway's edge cannot add response headers, so nginx supplies
+`Strict-Transport-Security: max-age=31536000` when real-IP mode is enabled
+and the edge reports exactly `X-Forwarded-Proto: https`. The shared security
+policy adds it with `always` on pages, assets, both API locations, the JSON
+413 upload refusal and nginx errors. It adds neither `includeSubDomains` nor
+`preload`. Default/compose mode never sends HSTS, even if a client supplies
+`X-Forwarded-Proto: https`; real-IP mode omits it for `http`, missing or any
+other protocol value. Enable this mode only once HTTPS works on the public
+hostname, restrict access to the web port to the edge, and redirect public
+HTTP to HTTPS at the edge.
 
 The access log stays query/referrer-free. The global nginx error log uses
 `crit` because ordinary upstream failures at `error` level include the full
@@ -242,7 +258,8 @@ on a deployed instance handling real sign-in links.
 After building the image, run `sh apps/pulse-web/test/nginx-smoke.sh pulse-web:smoke`
 from the repository root. This Docker smoke test uses a throwaway private
 upstream to check both proxy locations, path/query preservation, real-IP mode
-on/off, address-based rate-limit buckets, DNS replacement without a web restart,
+on/off, conditional HSTS (including HTTP/default-mode absence, 413 and errors),
+address-based rate-limit buckets, DNS replacement without a web restart,
 and token-free stdout/stderr after forced upstream failures. It needs Docker,
 curl and the `nginx:1.29-alpine` image; cleanup removes its containers/network.
 The normal Pulse integration suites separately check the actual API behavior.
@@ -281,7 +298,7 @@ every location: local `add_header` directives otherwise suppress inherited
 headers. CSP permits same-origin scripts and fonts and the inline styles used
 by results and charts. The nginx policy and font imports are checked by
 `test/security-headers.test.ts`. See [the deployment runbook](../pulse/DEPLOY.md)
-for HTTPS and HSTS at the TLS terminator.
+for HTTPS setup; Railway's conditional nginx HSTS behavior is documented above.
 
 ## Keep these rules
 

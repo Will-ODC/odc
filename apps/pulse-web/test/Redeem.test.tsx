@@ -12,11 +12,15 @@ afterEach(cleanup);
 const ME = { id: "v1", email: "jo@student.ubc.ca", community: "ubc" };
 const noop = () => {};
 
+const checkLink = () => Promise.resolve(ME.email);
+const continueButton = () =>
+  screen.findByRole("button", { name: `Continue as ${ME.email}` });
+
 describe("opening the emailed link", () => {
   it("says it is working before the server answers", () => {
     render(
       <Redeem
-        api={stubApi({ redeem: () => new Promise(() => {}) })}
+        api={stubApi({ checkLink: () => new Promise(() => {}) })}
         token="abc"
         onSignedIn={noop}
         onAskAgain={noop}
@@ -24,76 +28,33 @@ describe("opening the emailed link", () => {
     );
     expect(screen.getByText("Loading…")).toBeTruthy();
   });
-
-  it("spends the token it was given", async () => {
-    const redeem = vi.fn(() => Promise.resolve(ME));
-    const onSignedIn = vi.fn();
-    render(
-      <Redeem
-        api={stubApi({ redeem })}
-        token="abc123"
-        onSignedIn={onSignedIn}
-        onAskAgain={noop}
-      />,
-    );
-    await waitFor(() => expect(onSignedIn).toHaveBeenCalled());
-    expect(redeem).toHaveBeenCalledWith("abc123");
-  });
-
-  /*
-   * No "You are in · Continue" screen (operator walkthrough, 2026-10-21):
-   * signing in goes straight on to where the person was, once.
-   */
-  it("goes straight on, once, without a screen to press through", async () => {
-    const onSignedIn = vi.fn();
-    render(
-      <Redeem
-        api={stubApi({ redeem: () => Promise.resolve(ME) })}
-        token="abc"
-        onSignedIn={onSignedIn}
-        onAskAgain={noop}
-      />,
-    );
-    await waitFor(() => expect(onSignedIn).toHaveBeenCalledTimes(1));
-    expect(screen.queryByRole("button", { name: "Continue" })).toBeNull();
-    expect(screen.queryByText("You are in.")).toBeNull();
-  });
 });
 
-/*
- * The guard this suite exists for.
- *
- * `POST /api/sign-in/redeem` spends the link, so a second call can only answer
- * `410 already_used`. StrictMode runs every effect twice in development on
- * purpose — so without the once-only guard, every developer who clicked a link
- * in dev would be told it was already used, by their own second request.
- *
- * Drop the `sent` ref in use-redeem.ts and this test goes red on two calls.
- * Replace it with an early return instead — the obvious fix, and the one
- * written first — and it goes red the other way: StrictMode's cleanup marks
- * the first run dead, so nobody is listening and the screen never leaves
- * "Loading…". Both failures are real, which is why this test drives the whole
- * StrictMode double-mount rather than asserting a call count on a bare render.
- */
 describe("spending the token exactly once", () => {
-  it("redeems once even though StrictMode runs the effect twice", async () => {
-    const redeem = vi.fn(() => Promise.resolve(ME));
+  it("ignores a second press while redemption is pending under StrictMode", async () => {
+    let finish!: (me: typeof ME) => void;
+    const redeem = vi.fn(
+      () => new Promise<typeof ME>((resolve) => (finish = resolve)),
+    );
     const onSignedIn = vi.fn();
+    const user = userEvent.setup();
     render(
       <StrictMode>
         <Redeem
-          api={stubApi({ redeem })}
+          api={stubApi({ checkLink, redeem })}
           token="abc"
           onSignedIn={onSignedIn}
           onAskAgain={noop}
         />
       </StrictMode>,
     );
-    await waitFor(() => expect(onSignedIn).toHaveBeenCalled());
-    expect(redeem).toHaveBeenCalledTimes(1);
-    // Where to return is read and forgotten in `onSignedIn`: twice would
-    // send the second call to the default.
-    expect(onSignedIn).toHaveBeenCalledTimes(1);
+    const button = await continueButton();
+    expect(redeem).not.toHaveBeenCalled();
+    await user.dblClick(button);
+    expect(button.getAttribute("aria-disabled")).toBe("true");
+    expect(redeem).toHaveBeenCalledExactlyOnceWith("abc");
+    finish(ME);
+    await waitFor(() => expect(onSignedIn).toHaveBeenCalledTimes(1));
   });
 
   /*
@@ -104,12 +65,13 @@ describe("spending the token exactly once", () => {
   it("goes on once even when handed a new callback after signing in", async () => {
     const first = vi.fn();
     const later = vi.fn();
-    const api = stubApi({ redeem: () => Promise.resolve(ME) });
+    const api = stubApi({ checkLink, redeem: () => Promise.resolve(ME) });
     const { rerender } = render(
       <StrictMode>
         <Redeem api={api} token="abc" onSignedIn={first} onAskAgain={noop} />
       </StrictMode>,
     );
+    await userEvent.click(await continueButton());
     await waitFor(() => expect(first).toHaveBeenCalledTimes(1));
     rerender(
       <StrictMode>
@@ -138,7 +100,7 @@ describe("when the link has run out", () => {
       render(
         <Redeem
           api={stubApi({
-            redeem: () => Promise.reject(new ApiError(410, sentence, code)),
+            checkLink: () => Promise.reject(new ApiError(410, sentence, code)),
           })}
           token="abc"
           onSignedIn={noop}
@@ -146,6 +108,7 @@ describe("when the link has run out", () => {
         />,
       );
       expect(await screen.findByText(sentence)).toBeTruthy();
+      expect(screen.queryByRole("button", { name: /Continue as/ })).toBeNull();
     });
   }
 
@@ -153,7 +116,7 @@ describe("when the link has run out", () => {
     render(
       <Redeem
         api={stubApi({
-          redeem: () =>
+          checkLink: () =>
             Promise.reject(
               new ApiError(400, "That link is incomplete.", "bad_request"),
             ),
@@ -171,7 +134,7 @@ describe("when the link has run out", () => {
     render(
       <Redeem
         api={stubApi({
-          redeem: () =>
+          checkLink: () =>
             Promise.reject(
               new ApiError(410, "That link has expired.", "expired"),
             ),
@@ -192,7 +155,7 @@ describe("when the link has run out", () => {
     render(
       <Redeem
         api={stubApi({
-          redeem: () =>
+          checkLink: () =>
             Promise.reject(
               new ApiError(410, "That link has expired.", "expired"),
             ),
@@ -222,7 +185,7 @@ describe("when the link has run out", () => {
  */
 describe("when the server cannot be reached", () => {
   const offline = () =>
-    stubApi({ redeem: () => Promise.reject(new TypeError("offline")) });
+    stubApi({ checkLink: () => Promise.reject(new TypeError("offline")) });
 
   it("blames the connection, not the link", async () => {
     render(
@@ -234,7 +197,6 @@ describe("when the server cannot be reached", () => {
       />,
     );
     expect(await screen.findByText("We could not reach pulse.")).toBeTruthy();
-    expect(screen.getByText(/Your link is still good\./)).toBeTruthy();
   });
 
   it("never offers to throw the working token away", async () => {
@@ -256,14 +218,15 @@ describe("when the server cannot be reached", () => {
   });
 
   it("asks again with the same token when they retry", async () => {
-    const redeem = vi
+    const read = vi
       .fn()
       .mockRejectedValueOnce(new TypeError("offline"))
-      .mockResolvedValueOnce(ME);
+      .mockResolvedValueOnce(ME.email);
+    const redeem = vi.fn(async () => ME);
     const onSignedIn = vi.fn();
     render(
       <Redeem
-        api={stubApi({ redeem })}
+        api={stubApi({ checkLink: read, redeem })}
         token="abc123"
         onSignedIn={onSignedIn}
         onAskAgain={noop}
@@ -275,9 +238,12 @@ describe("when the server cannot be reached", () => {
     expect(retry.className).toBe("btn btn--secondary signin__go");
     await userEvent.click(retry);
 
+    const button = await continueButton();
+    expect(read.mock.calls).toEqual([["abc123"], ["abc123"]]);
+    expect(redeem).not.toHaveBeenCalled();
+    await userEvent.click(button);
     await waitFor(() => expect(onSignedIn).toHaveBeenCalledTimes(1));
-    expect(redeem).toHaveBeenCalledTimes(2);
-    expect(redeem).toHaveBeenLastCalledWith("abc123");
+    expect(redeem).toHaveBeenCalledExactlyOnceWith("abc123");
   });
 });
 
@@ -293,7 +259,7 @@ describe("telling somebody who cannot see the screen", () => {
       "a spent link",
       () =>
         stubApi({
-          redeem: () =>
+          checkLink: () =>
             Promise.reject(
               new ApiError(410, "That link has expired.", "expired"),
             ),
@@ -302,7 +268,8 @@ describe("telling somebody who cannot see the screen", () => {
     ],
     [
       "a failed request",
-      () => stubApi({ redeem: () => Promise.reject(new TypeError("offline")) }),
+      () =>
+        stubApi({ checkLink: () => Promise.reject(new TypeError("offline")) }),
       "We could not reach pulse.",
     ],
   ] as const;
@@ -320,4 +287,192 @@ describe("telling somebody who cannot see the screen", () => {
       expect(heading.closest('[role="status"]')).toBeTruthy();
     });
   }
+});
+
+/*
+ * The press reached the server, the server spent the link and set the session
+ * cookie, and the answer was lost on the way back. Reposting would only hear
+ * "already used", so the screen asks who is signed in instead (GET), and only
+ * if that is not the address it offered does it stop. It never reposts.
+ */
+describe("when the answer to the press is lost", () => {
+  const lost = () =>
+    Promise.reject(new ApiError(0, "We could not reach pulse."));
+
+  it("goes on when the browser is already signed in as that address", async () => {
+    const redeem = vi.fn(lost);
+    const me = vi.fn(() => Promise.resolve(ME));
+    const onSignedIn = vi.fn();
+    render(
+      <Redeem
+        api={stubApi({ checkLink, redeem, me })}
+        token="abc"
+        onSignedIn={onSignedIn}
+        onAskAgain={noop}
+      />,
+    );
+    expect(me).not.toHaveBeenCalled();
+    await userEvent.click(await continueButton());
+    await waitFor(() => expect(onSignedIn).toHaveBeenCalledTimes(1));
+    expect(redeem).toHaveBeenCalledExactlyOnceWith("abc");
+    expect(me).toHaveBeenCalledTimes(1);
+  });
+
+  it("does not go on as somebody else's account", async () => {
+    const redeem = vi.fn(lost);
+    const me = vi.fn(() =>
+      Promise.resolve({ ...ME, email: "someone@student.ubc.ca" }),
+    );
+    const onSignedIn = vi.fn();
+    render(
+      <Redeem
+        api={stubApi({ checkLink, redeem, me })}
+        token="abc"
+        onSignedIn={onSignedIn}
+        onAskAgain={noop}
+      />,
+    );
+    await userEvent.click(await continueButton());
+    expect(
+      await screen.findByText("We could not finish signing you in."),
+    ).toBeTruthy();
+    // True whoever /me named, or if it failed: it never claims nobody is in.
+    expect(
+      screen.getByText(
+        `Pulse could not confirm that this browser is signed in as ${ME.email}. Try again to check the link.`,
+      ),
+    ).toBeTruthy();
+    expect(screen.queryByText(/not signed in/)).toBeNull();
+    expect(onSignedIn).not.toHaveBeenCalled();
+    expect(redeem).toHaveBeenCalledTimes(1);
+  });
+
+  for (const [name, answer] of [
+    ["nobody is signed in", () => Promise.resolve(null)],
+    ["the check fails too", () => Promise.reject(new ApiError(0, "offline"))],
+  ] as const) {
+    it(`Try again re-reads the link, never re-posts, when ${name}`, async () => {
+      const redeem = vi.fn(lost);
+      const read = vi.fn(checkLink);
+      const onAskAgain = vi.fn();
+      const onSignedIn = vi.fn();
+      render(
+        <Redeem
+          api={stubApi({ checkLink: read, redeem, me: answer })}
+          token="abc"
+          onSignedIn={onSignedIn}
+          onAskAgain={onAskAgain}
+        />,
+      );
+      await userEvent.click(await continueButton());
+      await screen.findByText("We could not finish signing you in.");
+      expect(
+        screen.queryByRole("button", { name: "Ask for a new link" }),
+      ).toBeNull();
+      await userEvent.click(screen.getByRole("button", { name: "Try again" }));
+
+      await continueButton();
+      expect(read.mock.calls).toEqual([["abc"], ["abc"]]);
+      expect(redeem).toHaveBeenCalledTimes(1);
+      expect(onAskAgain).not.toHaveBeenCalled();
+      expect(onSignedIn).not.toHaveBeenCalled();
+    });
+  }
+
+  it("Try again lands on the used-link view when the link was spent", async () => {
+    const read = vi
+      .fn()
+      .mockResolvedValueOnce(ME.email)
+      .mockRejectedValueOnce(
+        new ApiError(410, "That link has already been used.", "already_used"),
+      );
+    const redeem = vi.fn(lost);
+    render(
+      <Redeem
+        api={stubApi({
+          checkLink: read,
+          redeem,
+          me: () => Promise.resolve(null),
+        })}
+        token="abc"
+        onSignedIn={noop}
+        onAskAgain={noop}
+      />,
+    );
+    await userEvent.click(await continueButton());
+    await userEvent.click(
+      await screen.findByRole("button", { name: "Try again" }),
+    );
+    expect(
+      await screen.findByRole("button", { name: "Ask for a new link" }),
+    ).toBeTruthy();
+    expect(redeem).toHaveBeenCalledTimes(1);
+  });
+});
+
+/*
+ * Pulse answered the press, and the answer was no (403, 429, 5xx). It was
+ * reached, so the heading must not say it was not; the server's sentence and
+ * the Try again control stay.
+ */
+describe("when Pulse answers the press with a refusal", () => {
+  for (const status of [403, 429, 503]) {
+    it(`does not blame the connection for a ${status}`, async () => {
+      const redeem = vi.fn(() =>
+        Promise.reject(new ApiError(status, "Too many tries. Wait a moment.")),
+      );
+      const me = vi.fn(() => Promise.resolve(null));
+      render(
+        <Redeem
+          api={stubApi({ checkLink, redeem, me })}
+          token="abc"
+          onSignedIn={noop}
+          onAskAgain={noop}
+        />,
+      );
+      await userEvent.click(await continueButton());
+      expect(
+        await screen.findByText("Pulse could not sign you in."),
+      ).toBeTruthy();
+      expect(screen.getByText("Too many tries. Wait a moment.")).toBeTruthy();
+      expect(screen.queryByText("We could not reach pulse.")).toBeNull();
+      expect(screen.getByRole("button", { name: "Try again" })).toBeTruthy();
+      expect(me).not.toHaveBeenCalled();
+      expect(redeem).toHaveBeenCalledTimes(1);
+    });
+  }
+});
+
+// The live region wraps the heading and the line under it; it must space
+// them the way the column spaces the email-entry screen's, not run them on.
+describe("spacing inside the announced block", () => {
+  it("gives the confirm and stopped blocks the spaced wrapper", async () => {
+    render(
+      <Redeem
+        api={stubApi({ checkLink })}
+        token="abc"
+        onSignedIn={noop}
+        onAskAgain={noop}
+      />,
+    );
+    const heading = await screen.findByText("Sign in to Pulse");
+    expect(heading.closest('[role="status"]')?.classList).toContain(
+      "signin__said",
+    );
+    cleanup();
+    render(
+      <Redeem
+        api={stubApi({
+          checkLink: () => Promise.reject(new ApiError(0, "offline")),
+        })}
+        token="abc"
+        onSignedIn={noop}
+        onAskAgain={noop}
+      />,
+    );
+    const stopped = await screen.findByText("We could not reach pulse.");
+    expect(stopped.closest('[role="status"]')?.classList).toContain(
+      "signin__said",
+    );
+  });
 });

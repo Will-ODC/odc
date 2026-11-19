@@ -38,10 +38,10 @@ Repo discipline still applies: tests ship with the change, there is one small
 branch per change, named for its ticket (`pulse/<issue>-<short>`, #310), and
 the same CI runs.
 
-## Where it stands (2026-11-14)
+## Where it stands (2026-11-18)
 
 Per-PR history is in `git log origin/master -- apps/pulse apps/pulse-web`.
-**Open Pulse PRs: none.** Next migration: **018**.
+**Open Pulse-related PRs:** #696 (this memory PR), #698 (skill rule, operator merges), #699 for #697 (home list width, in review). Next migration: **018**.
 
 - **Sign-in (pillar 1) is built.** Magic-link sign-in and redeem; open sign-up
   with community as an optional label (ADR-0030); a community picker when an
@@ -80,7 +80,8 @@ Per-PR history is in `git log origin/master -- apps/pulse apps/pulse-web`.
   stores pictures in neutral `image`/`image_bytes` keyed by
   `owner_kind`/`owner_id` and serves them; nginx answers uploads over 10 MiB
   with the API's JSON 413; #594 checks sharp loads in the API image. Not
-  built: #580, #427, #296, then #586 after #427.
+  built: #700, #580, #701, #427, #296, then #586 after #427. Pictures now
+  extend to every main-page item (operator 2026-11-18; ADR-0049).
 - **MCP:** public reads `get_poll`/`get_results` at `/api/mcp` (PR #323).
   ADR-0036 (voting from AI apps) is proposed only; discovery (#291) unbuilt.
 - **Infrastructure:** Postgres (ADR-0020/0021/0023), Resend mail (ADR-0027),
@@ -102,39 +103,51 @@ Per-PR history is in `git log origin/master -- apps/pulse apps/pulse-web`.
    prerequisites.
 2. **Published starting questions** for `/questions`, and comments (#297).
    The explainer video (#339) comes later.
-3. **A host and DNS.** The host is not chosen; DNS for `onlinedemocracy.org`
-   still needs configuring.
+3. **Railway and DNS.** Railway is the chosen host. Configure the Railway
+   services and DNS for `onlinedemocracy.org` before the pilot.
 4. **A sending domain verified with Resend** (SPF/DKIM). DNS work, not code.
 5. **The proxy-hop and rate-limit prerequisites** in `apps/pulse/DEPLOY.md`.
 6. **A memory floor for picture decoding.** `apps/pulse/DEPLOY.md` states none
    for 40 MP uploads (#593); add one before deploy.
 
-A small invited pilot comes only after 3-6. The operator chose Railway as the
-host (2026-11-15; see the direction below); the pilot still waits for 3-6 and
-the pre-pilot tickets #681-#684.
+All pre-pilot code fixes (#681-#684, #691) are merged; no Railway deploy has
+happened. The pilot waits for 3-6 above: the operator's Railway setup, DNS and
+the live checks in `apps/pulse/DEPLOY.md` (HSTS, client rate limits) on the
+public hostname, before inviting anyone.
 
 ## Current operator direction and next work (2026-11-15)
 
 0. **Deploy on Railway (operator, 2026-11-15); work split 50/50 Codex/Claude.**
    Auth audit `docs/audits/pulse-auth-2026-11-15.md` (Codex, read-only,
-   FIX-BEFORE-PILOT; no passwords exist). Before the pilot: #681 sign in only
-   after a click naming the account (audit finding 1, confirmed by Claude),
-   #682 nginx for Railway (API address, runtime DNS, real client IP, log
-   check), #683 `__Host-` cookies and Origin on votes/suggestions, #684 Railway
-   section in `DEPLOY.md`. After the pilot: #678 ballot revocation, #679 atomic
-   link limit, #680 idle timeout and owner re-sign-in.
+   FIX-BEFORE-PILOT; no passwords exist). All pre-pilot fixes merged
+   (2026-11-18 unless noted): #682 nginx for Railway in #688 (`6c48a1e`,
+   2026-11-15) and #683 `__Host-` cookies and Origin checks in #687
+   (`f4a27fd`, 2026-11-15); #684 Railway
+   section of `apps/pulse/DEPLOY.md` in #689 (`ad5b15d`); #691 nginx sends HSTS
+   in real-IP mode when the edge reports https in #693 (`0cb347e`); #681 sign-in only after a click naming the account, with lost-answer
+   recovery via `/api/me` and a GET-only Try again, in #695 (`9e17d8d`); #692
+   flaky `Profile.test.tsx` in #694 (`eaa5f88`). After the pilot: #678 ballot
+   revocation, #679 atomic link limit, #680 idle timeout and owner re-sign-in.
+   New ticket #697 (home list spans width between rails), PR #699 in review. Skill PR #698 (keep
+   a healthy queued backlog) awaits the operator's merge.
    **Per-poll anonymous or visible votes (#685, operator 2026-11-15):** chosen
-   once at creation, clearly shown, simple; needs an ADR and #681 first.
+   once at creation, clearly shown, simple. ADR-0048 (#690, `3289d74`) decided
+   it; the build follows its decision 14 ship order, step 1 (migration 018 +
+   stores) starting.
    Rules (operator, 2026-11-15): the poll's setting decides and the voter
    never chooses; anonymous polls show nobody's details; visible polls need
    an email sign-in to vote and show the voter's profile name, which hiding
    the profile later does not remove; a voter with no profile name shows as
    an unnamed verified voter, with no prompt for a name.
 
-1. **Next: #580, a picture in the posting form.** Waiting on the operator's
-   answer to "mockup first, or build from the plan and review screenshots?".
-   Then #427 (thumbnails and context excerpt length), #296 (picture on the
-   question page), #586 after #427.
+1. **Next: pictures on every main-page item.** Operator direction
+   2026-11-18: "All polls, posts, questions or whatever goes on main page
+   should take images as well, like Rediit." ADR-0047 covered polls only, so
+   ADR-0049 (in progress) extends it to contributions and discussion topics.
+   Order: ADR-0049 → #700 (one shared picture field, mockup first, for
+   operator review) → #580 (poll form) and #701 (contributions take a
+   picture) → #427 (thumbnails for every item in the main list), #296
+   (picture on the question page), #586 after #427. #541 topics use #700.
 2. **Audits 2026-11-14 are complete; none changed product code:**
    [targeted tests](../docs/audits/pulse-tests-2026-11-14.md) → #613/#614;
    [simplicity](../docs/audits/pulse-simplicity-2026-11-14.md) → #616;
@@ -192,7 +205,6 @@ the pre-pilot tickets #681-#684.
   from every device (server computes the ADR-0040 code per poll)? Reverses
   ADR-0040's "accepted limit" wording; owner-only versus public was asked and
   not answered. Separate from #685, whose rules are settled.
-- **#580:** mockup first, or build from the plan and review screenshots?
 - **Continuation (#425):** operator direction 2026-11-15: Next and Previous
   move through Suggested votes (detail on the issue). Still open: do answered
   questions keep My votes Previous/Next, what Next does on a phone (no rail),

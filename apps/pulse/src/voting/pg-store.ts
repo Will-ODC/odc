@@ -11,9 +11,16 @@ import {
   type Poll,
   type PollMethod,
   type Publication,
+  type VotePrivacy,
 } from "./poll.js";
 import {
+  FIRST_LIST_KEY,
   UnknownPollError,
+  VotePrivacyError,
+  assertBallotIdentity,
+  assertListKey,
+  assertPublicCast,
+  newPublicVoterId,
   assertCastOptions,
   assertConfirmation,
   assertLockKey,
@@ -24,6 +31,9 @@ import {
   type ConfirmingPerson,
   type Results,
   type HistoryVote,
+  type PublicCastOptions,
+  type PublicVoteEntry,
+  type RemovalResult,
   type Vote,
   type VoteBefore,
   type VotingStore,
@@ -65,8 +75,9 @@ export class PostgresVotingStore implements VotingStore {
     await inTransaction(this.#pool, async (client) => {
       const { rowCount } = await client.query(
         "insert into polls" +
-          " (id, question, method, created_at, closes_at, accepts_suggestions, context)" +
-          " values ($1, $2, $3, $4, $5, $6, $7) on conflict (id) do nothing",
+          " (id, question, method, created_at, closes_at, accepts_suggestions, context," +
+          " vote_privacy)" +
+          " values ($1, $2, $3, $4, $5, $6, $7, $8) on conflict (id) do nothing",
         [
           poll.id,
           poll.question,
@@ -75,6 +86,7 @@ export class PostgresVotingStore implements VotingStore {
           poll.closesAt ?? null,
           poll.acceptsSuggestions,
           poll.context ?? null,
+          poll.votePrivacy,
         ],
       );
       // The same refusal, and the same error, as the in-memory store.
@@ -113,7 +125,7 @@ export class PostgresVotingStore implements VotingStore {
     // leaves the creation store, so no projection can copy it by mistake.
     const { rows } = await this.#pool.query<PollRow>(
       "select p.id, p.question, p.context, p.method, p.created_at, p.closes_at," +
-        " p.accepts_suggestions, p.attribution_kind, p.author_name," +
+        " p.accepts_suggestions, p.vote_privacy, p.attribution_kind, p.author_name," +
         " c.id as community_id, c.label as community_label," +
         ` ${IMAGE_COLUMNS}` +
         " from polls p left join community c on c.id = p.community" +
@@ -140,6 +152,8 @@ export class PostgresVotingStore implements VotingStore {
       next: choices.rows.map((choice) => choice.next_poll_id),
       createdAt: row.created_at,
       acceptsSuggestions: row.accepts_suggestions,
+      // `polls_vote_privacy_check` (018) admits only the two values.
+      votePrivacy: row.vote_privacy as VotePrivacy,
     };
     const publication = publicationOf(row);
     const image = pollImageOf(row);
@@ -161,9 +175,10 @@ export class PostgresVotingStore implements VotingStore {
         method: PollMethod;
         created_at: Date;
         closes_at: Date | null;
+        vote_privacy: VotePrivacy;
       } & ImageColumns
     >(
-      "select p.id, p.question, p.method, p.created_at, p.closes_at," +
+      "select p.id, p.question, p.method, p.created_at, p.closes_at, p.vote_privacy," +
         ` ${IMAGE_COLUMNS}` +
         " from polls p left join image i on i.id = p.image_id" +
         " where p.community = $1 and not p.hidden" +
@@ -185,6 +200,7 @@ export class PostgresVotingStore implements VotingStore {
         method: p.method,
         createdAt: p.created_at,
         ...(p.closes_at ? { closesAt: p.closes_at } : {}),
+        votePrivacy: p.vote_privacy,
         ...(image ? { image } : {}),
       };
     });
@@ -198,6 +214,7 @@ export class PostgresVotingStore implements VotingStore {
   ): Promise<CastResult> {
     const poll = await this.#requirePoll(pollId);
     if (voterId.trim() === "") throw new TypeError("voterId must not be empty");
+    assertBallotIdentity(poll, voterId);
     validateBallot(poll, ballot);
     assertCastOptions(options);
 
@@ -286,7 +303,10 @@ export class PostgresVotingStore implements VotingStore {
         "select v.poll_id from vote v" +
           " join polls p on p.id = v.poll_id" +
           " where v.voter_id = $1" +
-          "   and (p.closes_at is null or p.closes_at > $2)",
+          "   and (p.closes_at is null or p.closes_at > $2)" +
+          // Never a public vote (ADR-0048 decision 6); 018 also keeps cookie
+          // rows off public-vote polls.
+          "   and p.vote_privacy = 'anonymous'",
         [voterId, now],
       );
       // Every code is made and checked before anything is locked or written.
@@ -396,12 +416,16 @@ export class PostgresVotingStore implements VotingStore {
   }
 
   async voteHistory(
-    voterId: string,
+    voterId: string | undefined,
     limit: number,
     before?: VoteBefore,
+    accountId?: string,
   ): Promise<HistoryVote[]> {
-    // The page is cut in the subquery, in vote_history_idx order, so the scan
-    // stops at limit + 1; only those rows are joined to their polls.
+    // The page is cut in each half, so each scan stops at limit + 1: this
+    // browser's ballots in vote_history_idx order, and the account's public
+    // votes through public_vote_account_idx (ADR-0048). One `or` would
+    // defeat the ordered index scan. `union` drops a row both halves name;
+    // only those limit + 1 rows are joined to their polls.
     const { rows } = await this.#pool.query<{
       poll_id: string;
       cast_at: Date;
@@ -415,17 +439,25 @@ export class PostgresVotingStore implements VotingStore {
         " filter (where c.position is not null), '{}') as ballot," +
         " coalesce(array_agg(c.label order by c.position)" +
         " filter (where c.position is not null), '{}') as labels" +
-        " from (select id, poll_id, cast_at from vote" +
-        " where voter_id = $1" +
-        ' and ($2::timestamptz is null or (cast_at, poll_id collate "C")' +
-        ' < ($2::timestamptz, $3::text collate "C"))' +
+        " from (select * from" +
+        " ((select id, poll_id, cast_at from vote where voter_id = $1" +
+        `${page("")})` +
+        " union (select v.id, v.poll_id, v.cast_at from public_vote pv" +
+        " join vote v on v.id = pv.vote_id where pv.account_id = $5" +
+        `${page("v.")})) h` +
         ' order by cast_at desc, poll_id collate "C" desc limit $4) v' +
         " left join polls p on p.id = v.poll_id" +
         " left join vote_choice vc on vc.vote_id = v.id" +
         " left join poll_choice c on c.id = vc.choice_id and c.poll_id = v.poll_id" +
         " group by v.id, v.poll_id, v.cast_at, p.question, p.closes_at" +
         ' order by v.cast_at desc, v.poll_id collate "C" desc',
-      [voterId, before?.castAt ?? null, before?.pollId ?? null, limit + 1],
+      [
+        voterId ?? null,
+        before?.castAt ?? null,
+        before?.pollId ?? null,
+        limit + 1,
+        accountId ?? null,
+      ],
     );
     return rows.map((row) => ({
       pollId: row.poll_id,
@@ -440,6 +472,161 @@ export class PostgresVotingStore implements VotingStore {
               ...(row.closes_at ? { closesAt: row.closes_at } : {}),
             },
           }),
+    }));
+  }
+
+  async castPublic(
+    pollId: string,
+    accountId: string,
+    ballot: readonly number[],
+    options: PublicCastOptions,
+  ): Promise<CastResult> {
+    const poll = await this.#requirePoll(pollId);
+    assertPublicCast(poll, accountId, ballot, options);
+    const choices = [...ballot].sort((a, b) => a - b);
+    // Refusals throw and roll back; `closed` is an outcome that wrote nothing.
+    return inTransaction(this.#pool, async (client) => {
+      await lockPerson(client, options.lockKey);
+      // The clock is read after the lock: a cast that waited past the close
+      // is closed. `closes_at` never changes, so the poll read above holds.
+      const now = this.#clock();
+      if (!isOpen(poll, now)) return { status: "closed" } as const;
+      // Found through public_vote, never by recomputing the code, so a
+      // re-cast after a key rotation still finds it (ADR-0048 decision 3).
+      const { rows } = await client.query<{ id: string; voter_id: string }>(
+        "select v.id, v.voter_id from public_vote pv" +
+          " join vote v on v.id = pv.vote_id" +
+          " where pv.poll_id = $1 and pv.account_id = $2 for update",
+        [pollId, accountId],
+      );
+      let held = rows[0];
+      if (held) {
+        // A re-cast keeps the row, its voter_id, code and list key.
+        await client.query("update vote set cast_at = $2 where id = $1", [
+          held.id,
+          now,
+        ]);
+        await client.query("delete from vote_choice where vote_id = $1", [
+          held.id,
+        ]);
+      } else {
+        held = { id: this.#newId(), voter_id: newPublicVoterId() };
+        await client.query(
+          "insert into vote (id, poll_id, voter_id, cast_at, confirmation)" +
+            " values ($1, $2, $3, $4, $5)",
+          [held.id, pollId, held.voter_id, now, options.confirmation],
+        );
+        await client.query(
+          "insert into public_vote" +
+            " (vote_id, poll_id, voter_id, vote_privacy, account_id, list_key)" +
+            " values ($1, $2, $3, 'public', $4, $5)",
+          [held.id, pollId, held.voter_id, accountId, randomUUID()],
+        );
+      }
+      await client.query(
+        "insert into vote_choice (vote_id, choice_id)" +
+          " select $1, id from poll_choice" +
+          " where poll_id = $2 and position = any($3::int[])",
+        [held.id, pollId, choices],
+      );
+      const vote: Vote = {
+        pollId,
+        voterId: held.voter_id,
+        choices,
+        castAt: now,
+      };
+      return { status: rows[0] ? "changed" : "counted", vote } as const;
+    });
+  }
+
+  async publicVoteOf(
+    pollId: string,
+    accountId: string,
+  ): Promise<Vote | undefined> {
+    const { rows } = await this.#pool.query<{
+      voter_id: string;
+      cast_at: Date;
+      position: number | null;
+    }>(
+      "select v.voter_id, v.cast_at, c.position from public_vote pv" +
+        " join vote v on v.id = pv.vote_id" +
+        " left join vote_choice vc on vc.vote_id = v.id" +
+        " left join poll_choice c" +
+        "   on c.id = vc.choice_id and c.poll_id = v.poll_id" +
+        " where pv.poll_id = $1 and pv.account_id = $2" +
+        " order by c.position",
+      [pollId, accountId],
+    );
+    const first = rows[0];
+    if (!first) return undefined;
+    return {
+      pollId,
+      voterId: first.voter_id,
+      choices: rows.flatMap((row) =>
+        row.position === null ? [] : [row.position],
+      ),
+      castAt: first.cast_at,
+    };
+  }
+
+  async removePublicVote(
+    pollId: string,
+    accountId: string,
+    lockKey: bigint,
+  ): Promise<RemovalResult> {
+    const poll = await this.#requirePoll(pollId);
+    if (poll.votePrivacy !== "public")
+      throw new VotePrivacyError("an anonymous poll's votes are not removed");
+    assertLockKey(lockKey);
+    return inTransaction(this.#pool, async (client) => {
+      await lockPerson(client, lockKey);
+      const now = this.#clock();
+      // vote_choice and public_vote cascade: the answer and the name go
+      // together (ADR-0048 decision 10).
+      const { rowCount } = await client.query(
+        "delete from vote v using public_vote pv, polls p" +
+          " where pv.vote_id = v.id and pv.poll_id = $1" +
+          " and pv.account_id = $2 and p.id = $1" +
+          " and (p.closes_at is null or p.closes_at > $3)",
+        [pollId, accountId, now],
+      );
+      if (rowCount) return { status: "removed" } as const;
+      return isOpen(poll, now)
+        ? ({ status: "none" } as const)
+        : ({ status: "closed" } as const);
+    });
+  }
+
+  async listPublicVotes(
+    pollId: string,
+    limit: number,
+    after: string = FIRST_LIST_KEY,
+  ): Promise<PublicVoteEntry[]> {
+    assertListKey(after);
+    // ADR-0048 decision 7's statement: one snapshot pairs each name with its
+    // answer, hidden polls are filtered here, not by the caller, and the
+    // profile's `visible` flag is deliberately not read (decision 8).
+    const { rows } = await this.#pool.query<{
+      name: string | null;
+      list_key: string;
+      choices: number[];
+    }>(
+      "select m.display_name as name, pv.list_key," +
+        " array(select pc.position from vote_choice vc" +
+        "   join poll_choice pc on pc.id = vc.choice_id" +
+        "   where vc.vote_id = pv.vote_id order by pc.position) as choices" +
+        " from public_vote pv" +
+        " join polls p on p.id = pv.poll_id and not p.hidden" +
+        "   and p.vote_privacy = 'public'" +
+        " left join member_profile m on m.voter_id = pv.account_id" +
+        " where pv.poll_id = $1 and pv.list_key > $2" +
+        " order by pv.list_key limit $3 + 1",
+      [pollId, after, limit],
+    );
+    return rows.map((row) => ({
+      name: row.name,
+      choices: row.choices,
+      listKey: row.list_key,
     }));
   }
 
@@ -480,6 +667,18 @@ export class PostgresVotingStore implements VotingStore {
     if (!poll) throw new UnknownPollError(pollId);
     return poll;
   }
+}
+
+/**
+ * One half of a history page, its vote columns read through `v`: after the
+ * cursor, newest first, limit + 1.
+ */
+function page(v: string): string {
+  return (
+    ` and ($2::timestamptz is null or (${v}cast_at, ${v}poll_id collate "C")` +
+    ' < ($2::timestamptz, $3::text collate "C"))' +
+    ` order by ${v}cast_at desc, ${v}poll_id collate "C" desc limit $4`
+  );
 }
 
 /**
@@ -542,6 +741,7 @@ interface PollRow extends ImageColumns {
   created_at: Date;
   closes_at: Date | null;
   accepts_suggestions: boolean;
+  vote_privacy: string;
   attribution_kind: string | null;
   author_name: string | null;
   community_id: string | null;

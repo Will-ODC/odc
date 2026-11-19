@@ -115,6 +115,7 @@ export function stubApi(over: Partial<PulseApi> = {}): PulseApi {
         related: [],
       } satisfies SuggestResult),
     requestLink: unused("requestLink"),
+    checkLink: unused("checkLink"),
     redeem: unused("redeem"),
     // Nobody signed in: what the server says to a browser with no session.
     me: () => Promise.resolve(null),

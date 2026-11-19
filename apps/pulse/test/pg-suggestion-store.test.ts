@@ -18,8 +18,8 @@ async function writePolls(pool: Pool, polls: readonly Poll[]): Promise<void> {
   for (const poll of polls) {
     await pool.query(
       "insert into polls" +
-        " (id, question, method, created_at, closes_at, accepts_suggestions)" +
-        " values ($1, $2, $3, $4, $5, $6)",
+        " (id, question, method, created_at, closes_at, accepts_suggestions," +
+        " vote_privacy) values ($1, $2, $3, $4, $5, $6, 'anonymous')",
       [
         poll.id,
         poll.question,

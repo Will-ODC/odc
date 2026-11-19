@@ -68,6 +68,19 @@ export class HttpPulseApi implements PulseApi {
       : { status: "sent" };
   }
 
+  async checkLink(token: string): Promise<string> {
+    // The non-consuming GET. The token rides in the query string, as it does
+    // in the emailed link; the server and nginx keep query strings out of logs.
+    const body = await this.#send<unknown>(
+      "GET",
+      `/sign-in/redeem?token=${encodeURIComponent(token)}`,
+    );
+    const email = stringField(body, "email");
+    if (email === undefined)
+      throw new ApiError(200, "pulse sent a response the app couldn't read.");
+    return email;
+  }
+
   async redeem(token: string): Promise<Me> {
     // The server also reports `firstTime`; nothing in the client's types asks
     // for it yet, so it is read and dropped here rather than half-carried.

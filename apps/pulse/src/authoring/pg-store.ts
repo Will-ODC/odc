@@ -165,7 +165,7 @@ export class PostgresCreationStore implements CreationStore {
         now,
       );
       await client.query(
-        "insert into polls (id, question, method, created_at, closes_at, accepts_suggestions, community, created_by, attribution_kind, author_name, image_id, context) values ($1, $2, $3, $4, $5, false, $6, $7, $8, $9, $10, $11)",
+        "insert into polls (id, question, method, created_at, closes_at, accepts_suggestions, community, created_by, attribution_kind, author_name, image_id, context, vote_privacy) values ($1, $2, $3, $4, $5, false, $6, $7, $8, $9, $10, $11, $12)",
         [
           poll.id,
           poll.question,
@@ -178,6 +178,8 @@ export class PostgresCreationStore implements CreationStore {
           input.attribution.kind === "named" ? input.attribution.name : null,
           pending?.id ?? null,
           poll.context ?? null,
+          // Anonymous until creation takes "public" (ADR-0048 step 4b).
+          poll.votePrivacy,
         ],
       );
       for (const [position, label] of poll.choices.entries())

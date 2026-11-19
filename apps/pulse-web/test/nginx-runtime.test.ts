@@ -108,9 +108,22 @@ describe("nginx runtime settings", () => {
       "map $http_x_forwarded_proto $pulse_forwarded_proto",
     );
     expect(mode).toContain("http http;");
-    expect(mode).toContain("https https;");
+    expect(mode).toContain("~^https$ https;");
     expect(mode).toContain("default $scheme;");
   });
+
+  it.each(["", "X-Real-IP"])(
+    "preserves the conditional HSTS map when rendering mode %j",
+    (mode) => {
+      const { config } = render({ PULSE_REAL_IP_HEADER: mode });
+      expect(config).toContain(
+        'map $pulse_forwarded_proto $pulse_hsts {\n    default "";\n    ~^https$ "max-age=31536000";\n}',
+      );
+      expect(config.indexOf("map $pulse_forwarded_proto")).toBeLessThan(
+        config.indexOf("server {"),
+      );
+    },
+  );
 
   it.each(["1", "65535"])(
     "accepts port %s for upstream and resolver",

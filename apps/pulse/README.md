@@ -185,8 +185,8 @@ The server will not start without these:
 | `PULSE_MAIL_FROM`        | the sender, e.g. `pulse <sign-in@your-domain.org>`     |
 
 Optional: `PULSE_MAIL_REPLY_TO`, `PULSE_PORT` (8080), `PULSE_HOST` (`0.0.0.0`),
-`PULSE_TRUSTED_PROXY_HOPS` (1, the shipped nginx; 2 behind a host edge; 1–4 —
-see DEPLOY.md),
+`PULSE_TRUSTED_PROXY_HOPS` (1 with the shipped nginx; valid range 1–4, see
+[the deploy guide](DEPLOY.md#proxy-configuration-required-before-going-live)),
 `PULSE_DATABASE_SCHEMA`, `PULSE_OWNER_EMAIL` (the owner, who may grant
 unlimited posting; unset means nobody, and a value that is not an address
 stops the start). `PULSE_WEB_ORIGIN` is also the only `Origin` that sign-in,
@@ -208,6 +208,10 @@ from a private address, such as nginx's.
 **Upgrading:** stop every old API instance before starting the new one.
 Migrations run on start. An old instance left running can break sign-in and
 sign-out, fail on new community labels, or record votes without confirmation.
+Migration 018 (ADR-0048) also refuses to run while any member profile is
+named "Verified voter", in any case or spacing; rename or delete those
+profiles by hand, then start again. After it, an old instance fails on every
+poll it creates.
 
 ## MCP
 

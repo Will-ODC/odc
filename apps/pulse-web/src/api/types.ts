@@ -228,7 +228,12 @@ export interface PulseApi {
      */
     community?: string,
   ): Promise<RequestLinkResult>;
-  /** Redeem the token from the emailed link. */
+  /**
+   * Which address the emailed link signs in as. Spends nothing, so the screen
+   * can ask the person before it signs them in (#681).
+   */
+  checkLink(token: string): Promise<string>;
+  /** Redeem the token from the emailed link. Spends it and signs in. */
   redeem(token: string): Promise<Me>;
   me(): Promise<Me | null>;
   /**
