@@ -41,7 +41,7 @@ the same CI runs.
 ## Where it stands (2026-11-19)
 
 Per-PR history is in `git log origin/master -- apps/pulse apps/pulse-web`.
-**Open Pulse-related PRs:** #698 (skill rule, operator merges), #705 (this memory PR). Next migration: **019** (018 merged in #703).
+**Open Pulse-related PRs:** #698 (skill rule, operator merges), and this memory PR. Next migration: **020** (019 merged in #706). New ticket #707 (open polls from the main page without a reload; no urgency). #425 Next/Previous is on hold (operator, 2026-11-19).
 
 - **Sign-in (pillar 1) is built.** Magic-link sign-in and redeem; open sign-up
   with community as an optional label (ADR-0030); a community picker when an
@@ -133,8 +133,18 @@ public hostname, before inviting anyone.
    **Per-poll anonymous or visible votes (#685, operator 2026-11-15):** chosen
    once at creation, clearly shown, simple. ADR-0048 (#690, `3289d74`) decided
    it; the build follows its decision 14 ship order. Step 1 (migration 018 +
-   both stores) merged in #703 (`2a7b644`, 2026-11-18). Next: step 2, API
-   routes and `API.md`, with creation still refusing `"public"`.
+   both stores) merged in #703 (`2a7b644`, 2026-11-18). Step 2 merged
+   2026-11-19 in two PRs: #706 (`592681c`) public-vote casting, `/ballot` and
+   `/my-votes` private no-store, `votePrivacy` on reads, and a structural
+   "Verified voter" rule (app plus migration 019, locale-free, shown on the
+   profile name field); #708 (`1939bac`) the public vote list (sealed
+   cursor, hidden filter, live names, capped per-address limiter) and
+   removing your own public vote. Creation still refuses `"public"`. Next:
+   step 3 (MCP, `$http_host`, proxy smoke test). Step 4a must reword two
+   server messages: "Choose a valid page of votes." → "Start again from the
+   first page of votes."; the anonymous-poll removal message should add "You
+   can still change your answer." ADR-0048 still quotes two messages #706
+   reworded.
    Rules (operator, 2026-11-15): the poll's setting decides and the voter
    never chooses; anonymous polls show nobody's details; visible polls need
    an email sign-in to vote and show the voter's profile name, which hiding
