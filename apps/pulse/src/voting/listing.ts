@@ -1,6 +1,6 @@
 import { z } from "zod";
 import { publicPollImage, type PollImage } from "../images/public.js";
-import { isOpen, type PollMethod } from "./poll.js";
+import { isOpen, type PollMethod, type VotePrivacy } from "./poll.js";
 
 /** Only public ordering/display fields; no author or voter data. */
 export interface PollSummary {
@@ -9,6 +9,8 @@ export interface PollSummary {
   method: PollMethod;
   createdAt: Date;
   closesAt?: Date;
+  /** Fixed at creation (ADR-0048); not served until the routes name it. */
+  votePrivacy: VotePrivacy;
   /** The poster's visible picture, as on `Poll`; absent draws the tile. */
   image?: PollImage;
 }

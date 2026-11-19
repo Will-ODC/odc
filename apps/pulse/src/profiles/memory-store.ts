@@ -1,6 +1,10 @@
 import { randomUUID } from "node:crypto";
 import { InMemoryVoterStore } from "../identity/store.js";
-import { normalizeProfile, type ProfileInput } from "./input.js";
+import {
+  isReservedName,
+  normalizeProfile,
+  type ProfileInput,
+} from "./input.js";
 import {
   ProfileStoreError,
   type MemberProfile,
@@ -15,6 +19,18 @@ interface State {
   profiles: Map<string, MemberProfile>;
 }
 const databases = new WeakMap<InMemoryVoterStore, State>();
+
+/**
+ * Each account's profile name, visible or not, for the in-memory voting
+ * store's public-vote list (ADR-0048 decision 8). Read at call time, so a
+ * rename relabels every public vote, as Postgres's join does.
+ */
+export function memoryDisplayNames(
+  voters: InMemoryVoterStore,
+): (accountId: string) => string | undefined {
+  return (accountId) =>
+    databases.get(voters)?.profiles.get(accountId)?.displayName;
+}
 
 export class InMemoryMemberProfileStore implements MemberProfileStore {
   readonly #voters: InMemoryVoterStore;
@@ -60,6 +76,9 @@ export class InMemoryMemberProfileStore implements MemberProfileStore {
 
   save(actor: ProfileActor, input: ProfileInput): Promise<MemberProfile> {
     const normalized = normalizeProfile(input);
+    // The database check of 018, mirrored (ADR-0048 decision 8).
+    if (isReservedName(normalized.displayName))
+      return Promise.reject(new Error("the profile name is reserved"));
     return this.#voters.exclusive(async () => {
       await this.#verify(actor);
       const current = this.#state.profiles.get(actor.voterId);
