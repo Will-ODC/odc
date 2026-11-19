@@ -402,6 +402,17 @@ for (const kind of ["memory", "postgres"] as const) {
     assert.equal((await h.context("owner")).json().canPostUnlimited, true);
   });
 
+  it("creation_still_refuses_a_vote_privacy_until_public_votes_ship", async (t) => {
+    // ADR-0048 decision 14: the API takes the setting only at step 4b, once
+    // the web client shows the notice; until then it is an unknown key.
+    const h = await harness(t, kind);
+    for (const votePrivacy of ["public", "anonymous"]) {
+      const reply = await h.publish("guest", question({ votePrivacy }));
+      assert.equal(reply.statusCode, 400, reply.body);
+      assert.equal(reply.json().error, "bad_request");
+    }
+  });
+
   it("publishing_answers_201_then_the_same_request_replays_with_200", async (t) => {
     const h = await harness(t, kind);
     const key = randomUUID();
@@ -426,6 +437,7 @@ for (const kind of ["memory", "postgres"] as const) {
         ).toISOString(),
         open: true,
         image: { kind: "tile" },
+        votePrivacy: "anonymous",
         community: { id: "pulse-general", label: "General" },
         attribution: { kind: "anonymous" },
       },

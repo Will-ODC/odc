@@ -25,6 +25,7 @@ test("a_poll_without_a_publication_has_only_public_keys_and_null_context", () =>
     "closesAt",
     "open",
     "image",
+    "votePrivacy",
   ]);
   assert.deepEqual(publicPoll(poll, AT), {
     id: "p",
@@ -37,7 +38,22 @@ test("a_poll_without_a_publication_has_only_public_keys_and_null_context", () =>
     closesAt: null,
     open: true,
     image: { kind: "tile" },
+    votePrivacy: "anonymous",
   });
+});
+
+test("a_public_vote_poll_reads_with_its_setting", () => {
+  const named = createPoll(
+    {
+      id: "pv",
+      question: "Q",
+      choices: ["A", "B"],
+      method: "single",
+      votePrivacy: "public",
+    },
+    AT,
+  );
+  assert.equal(publicPoll(named, AT).votePrivacy, "public");
 });
 
 test("an_unknown_attribution_kind_is_refused_not_published_as_anonymous", () => {
@@ -80,6 +96,7 @@ const saved: PublishedPublicPoll = {
     height: 480,
     alt: "Plot",
   },
+  votePrivacy: "anonymous",
   community: { id: "campus", label: "Campus" },
   attribution: { kind: "named", name: "Ada" },
 };
@@ -97,6 +114,24 @@ test("a_replayed_creation_response_saved_before_pictures_and_context_reads_as_ti
     context: null,
     image: { kind: "tile" },
   });
+});
+
+test("a_replayed_creation_response_saved_before_vote_privacy_reads_as_anonymous", () => {
+  const { votePrivacy: _privacy, ...legacy } = saved;
+  void _privacy;
+  assert.deepEqual(publicPollReplay(legacy), saved);
+  assert.equal(
+    publicPollReplay({ ...legacy, votePrivacy: "public" }).votePrivacy,
+    "public",
+  );
+});
+
+test("a_replayed_creation_response_with_an_unknown_vote_privacy_is_refused", () => {
+  const odd = {
+    ...structuredClone(saved),
+    votePrivacy: "named",
+  } as unknown as PublishedPublicPoll;
+  assert.throws(() => publicPollReplay(odd), TypeError);
 });
 
 test("a_replayed_creation_response_drops_fields_it_does_not_name", () => {

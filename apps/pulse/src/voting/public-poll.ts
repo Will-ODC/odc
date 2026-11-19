@@ -10,6 +10,7 @@ import {
   type PollCommunity,
   type PollMethod,
   type Publication,
+  type VotePrivacy,
 } from "./poll.js";
 
 /**
@@ -33,6 +34,8 @@ export interface PublicPoll {
   open: boolean;
   /** The poster's picture or the tile (ADR-0047); always present. */
   image: PublicPollImage;
+  /** Fixed at creation (ADR-0048); every seed and legacy poll is anonymous. */
+  votePrivacy: VotePrivacy;
   community?: PollCommunity;
   attribution?: Attribution;
 }
@@ -67,6 +70,7 @@ export function publicPoll(poll: Poll, now: Date): PublicPoll {
     closesAt: poll.closesAt ? poll.closesAt.toISOString() : null,
     open: isOpen(poll, now),
     image: publicPollImage(poll.image),
+    votePrivacy: poll.votePrivacy,
   };
   if (poll.publication === undefined) return body;
   const { community, attribution } = poll.publication;
@@ -94,13 +98,15 @@ function publicAttribution(attribution: Attribution): Attribution {
  * A saved creation response, rebuilt field by field for a replay. Snapshots
  * keep their original openness and close time. One saved before poll context
  * existed has no `context` and reads as `null`; one saved before pictures has
- * no `image` and reads as the tile. Every other field, `image` and `context`
- * included, is returned as it was saved.
+ * no `image` and reads as the tile; one saved before ADR-0048 has no
+ * `votePrivacy` and reads as anonymous, which every poll then was. Every other
+ * field, `image` and `context` included, is returned as it was saved.
  */
 export function publicPollReplay(
-  poll: Omit<PublishedPublicPoll, "context" | "image"> & {
+  poll: Omit<PublishedPublicPoll, "context" | "image" | "votePrivacy"> & {
     context?: string | null;
     image?: PublicPollImage;
+    votePrivacy?: VotePrivacy;
   },
 ): PublishedPublicPoll {
   return {
@@ -114,7 +120,15 @@ export function publicPollReplay(
     closesAt: poll.closesAt,
     open: poll.open,
     image: copyPublicPollImage(poll.image),
+    votePrivacy: replayedPrivacy(poll.votePrivacy),
     community: { id: poll.community.id, label: poll.community.label },
     attribution: publicAttribution(poll.attribution),
   };
+}
+
+function replayedPrivacy(saved: VotePrivacy | undefined): VotePrivacy {
+  if (saved === undefined || saved === "anonymous") return "anonymous";
+  if (saved === "public") return "public";
+  // Refuse rather than guess, as for an attribution kind.
+  throw new TypeError("unknown vote privacy");
 }
