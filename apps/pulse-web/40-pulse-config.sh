@@ -57,7 +57,8 @@ real_ip_recursive off;
 map $http_x_forwarded_proto $pulse_forwarded_proto {
     default $scheme;
     http http;
-    https https;
+    # Literal map keys ignore case; only an exact lowercase https enables HSTS.
+    ~^https$ https;
 }
 EOF
         ;;
