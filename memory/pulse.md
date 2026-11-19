@@ -38,10 +38,10 @@ Repo discipline still applies: tests ship with the change, there is one small
 branch per change, named for its ticket (`pulse/<issue>-<short>`, #310), and
 the same CI runs.
 
-## Where it stands (2026-11-18)
+## Where it stands (2026-11-19)
 
 Per-PR history is in `git log origin/master -- apps/pulse apps/pulse-web`.
-**Open Pulse-related PRs:** #696 (this memory PR), #698 (skill rule, operator merges), #699 for #697 (home list width, in review). Next migration: **018**.
+**Open Pulse-related PRs:** #698 (skill rule, operator merges), #705 (this memory PR). Next migration: **019** (018 merged in #703).
 
 - **Sign-in (pillar 1) is built.** Magic-link sign-in and redeem; open sign-up
   with community as an optional label (ADR-0030); a community picker when an
