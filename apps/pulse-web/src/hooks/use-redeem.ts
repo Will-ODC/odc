@@ -12,7 +12,8 @@ import type { ViewData } from "./view-data.js";
  */
 export type RedeemView =
   | ViewData<{ email: string; signingIn: boolean }>
-  | { status: "signedIn"; me: Me };
+  | { status: "signedIn"; me: Me }
+  | { status: "lost" };
 
 /**
  * Read the link on arrival; spend it only when the person says so.
@@ -20,6 +21,12 @@ export type RedeemView =
  * GET reads the address. A confirmation event sends the POST, and a ref
  * prevents a second press while it is pending. Retry reads the link again
  * before presenting another confirmation.
+ *
+ * If the POST's answer never arrives, the server may still have spent the
+ * link and set the session cookie. The POST is never sent again; instead
+ * `GET /api/me` says whether this browser is now signed in as the address the
+ * person agreed to. If so, that is success; if not (or that check fails too),
+ * the view is `lost` and the screen offers a new link.
  */
 export function useRedeem(
   api: PulseApi,
@@ -63,7 +70,24 @@ export function useRedeem(
         if (current.current === token) setView({ status: "signedIn", me });
       },
       (err: unknown) => {
-        if (current.current === token) setView(failure(err));
+        if (current.current !== token) return;
+        if (!unanswered(err)) {
+          setView(failure(err));
+          return;
+        }
+        api.me().then(
+          (me) => {
+            if (current.current !== token) return;
+            setView(
+              me !== null && me.email === email
+                ? { status: "signedIn", me }
+                : { status: "lost" },
+            );
+          },
+          () => {
+            if (current.current === token) setView({ status: "lost" });
+          },
+        );
       },
     );
   }, [api, token, view]);
@@ -71,6 +95,11 @@ export function useRedeem(
   const retry = useCallback(() => setAttempt((n) => n + 1), []);
 
   return { view, confirm, retry };
+}
+
+/** No answer came back, so whether the server acted is unknown. */
+function unanswered(err: unknown): boolean {
+  return !(err instanceof ApiError) || err.status === 0;
 }
 
 function failure(err: unknown): ViewData<never> {

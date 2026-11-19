@@ -288,3 +288,84 @@ describe("telling somebody who cannot see the screen", () => {
     });
   }
 });
+
+/*
+ * The press reached the server, the server spent the link and set the session
+ * cookie, and the answer was lost on the way back. Reposting would only hear
+ * "already used", so the screen asks who is signed in instead (GET), and only
+ * if that is not the address it offered does it stop. It never reposts.
+ */
+describe("when the answer to the press is lost", () => {
+  const lost = () =>
+    Promise.reject(new ApiError(0, "We could not reach pulse."));
+
+  it("goes on when the browser is already signed in as that address", async () => {
+    const redeem = vi.fn(lost);
+    const me = vi.fn(() => Promise.resolve(ME));
+    const onSignedIn = vi.fn();
+    render(
+      <Redeem
+        api={stubApi({ checkLink, redeem, me })}
+        token="abc"
+        onSignedIn={onSignedIn}
+        onAskAgain={noop}
+      />,
+    );
+    expect(me).not.toHaveBeenCalled();
+    await userEvent.click(await continueButton());
+    await waitFor(() => expect(onSignedIn).toHaveBeenCalledTimes(1));
+    expect(redeem).toHaveBeenCalledExactlyOnceWith("abc");
+    expect(me).toHaveBeenCalledTimes(1);
+  });
+
+  it("does not go on as somebody else's account", async () => {
+    const redeem = vi.fn(lost);
+    const me = vi.fn(() =>
+      Promise.resolve({ ...ME, email: "someone@student.ubc.ca" }),
+    );
+    const onSignedIn = vi.fn();
+    render(
+      <Redeem
+        api={stubApi({ checkLink, redeem, me })}
+        token="abc"
+        onSignedIn={onSignedIn}
+        onAskAgain={noop}
+      />,
+    );
+    await userEvent.click(await continueButton());
+    expect(
+      await screen.findByRole("button", { name: "Ask for a new link" }),
+    ).toBeTruthy();
+    expect(onSignedIn).not.toHaveBeenCalled();
+    expect(redeem).toHaveBeenCalledTimes(1);
+  });
+
+  for (const [name, answer] of [
+    ["nobody is signed in", () => Promise.resolve(null)],
+    ["the check fails too", () => Promise.reject(new ApiError(0, "offline"))],
+  ] as const) {
+    it(`offers a new link, without reposting, when ${name}`, async () => {
+      const redeem = vi.fn(lost);
+      const read = vi.fn(checkLink);
+      const onAskAgain = vi.fn();
+      const onSignedIn = vi.fn();
+      render(
+        <Redeem
+          api={stubApi({ checkLink: read, redeem, me: answer })}
+          token="abc"
+          onSignedIn={onSignedIn}
+          onAskAgain={onAskAgain}
+        />,
+      );
+      await userEvent.click(await continueButton());
+      await userEvent.click(
+        await screen.findByRole("button", { name: "Ask for a new link" }),
+      );
+      expect(onAskAgain).toHaveBeenCalledTimes(1);
+      expect(onSignedIn).not.toHaveBeenCalled();
+      expect(redeem).toHaveBeenCalledTimes(1);
+      expect(read).toHaveBeenCalledTimes(1);
+      expect(screen.queryByRole("button", { name: /Continue as/ })).toBeNull();
+    });
+  }
+});

@@ -65,6 +65,24 @@ export function Redeem({
     );
   }
 
+  /*
+   * The press went out and no answer came back, and this browser is not
+   * signed in as the address offered. The link may or may not be spent, and
+   * sending it again is not this screen's to do unasked, so it offers the one
+   * way forward that does not depend on knowing.
+   */
+  if (view.status === "lost") {
+    return (
+      <Stopped
+        title="We could not finish signing you in."
+        sentence="Pulse did not answer, and this browser is not signed in. Ask for a new link to try again."
+        action="Ask for a new link"
+        variant="primary"
+        onAct={onAskAgain}
+      />
+    );
+  }
+
   // Retry checks the link again. A lost response may follow a successful
   // redemption, so the screen cannot promise the link is still usable.
   if (view.status === "error") {

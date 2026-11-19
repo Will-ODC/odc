@@ -45,7 +45,10 @@ In production, nginx serves the page on port 8080 over IPv4 and IPv6 and sends
 For local testing, run both apps with their `dev` commands and open
 `http://localhost:5173/sign-in?next=new`. Enter any test email; on Check your email,
 choose **Open local mailbox**, then open its sign-in link. The page shows the
-address. Press **Continue as** followed by the address to sign in. The same
+address. Press **Continue as** followed by the address to sign in. If that
+press gets no answer, the page checks `GET /api/me` once: signed in as that
+address counts as success; otherwise it offers a new link. It never resends
+the redemption on its own. The same
 sign-in and redemption flow runs locally and in production; local mail is
 captured instead of delivered. Startup and reset scenarios are documented in
 [the API README](../pulse/README.md#run-it-on-your-computer).

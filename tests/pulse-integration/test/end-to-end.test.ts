@@ -198,6 +198,36 @@ describe("the client against the real server", () => {
     expect(await api.myBallot(POLL_ID)).toEqual([1]);
   });
 
+  /*
+   * The screen's recovery (#681) rests on this: when the redeem answer is cut
+   * off after its headers arrive, the cookie is already set, so `me` reports
+   * the address and nothing needs to be posted again.
+   */
+  it("a redeem whose answer is cut off still leaves the browser signed in", async () => {
+    await api.requestLink("jo@student.ubc.ca", true);
+    const token = tokenFromLink(mailer.lastTo("jo@student.ubc.ca")?.body ?? "");
+    const cutOff: typeof fetch = async (input, init) => {
+      const response = await jar.fetch(input, init);
+      if (
+        init?.method === "POST" &&
+        String(input).endsWith("/sign-in/redeem")
+      ) {
+        await response.body?.cancel();
+        return new Response(
+          new ReadableStream({
+            start: (c) => c.error(new TypeError("connection reset")),
+          }),
+          { status: response.status, headers: response.headers },
+        );
+      }
+      return response;
+    };
+    const lossy = new HttpPulseApi(baseUrl, cutOff);
+
+    await expect(lossy.redeem(token)).rejects.toMatchObject({ status: 0 });
+    expect(await lossy.me()).toMatchObject({ email: "jo@student.ubc.ca" });
+  });
+
   it("signs a member in from an emailed link, votes, and signs out again", async () => {
     expect(await api.me()).toBeNull();
 
