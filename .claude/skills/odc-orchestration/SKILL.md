@@ -82,6 +82,13 @@ The task list the app shows under the orchestrator's latest message (the
 - **Queued work stays on the list** as pending items prefixed `Queued:`, in
   the order it will start, with its blocker in a few words:
   `Queued: #595 after #592 merges`.
+- **Keep a healthy backlog** (operator, 2026-11-18). The list always holds
+  queued work, not only the units in hand. When the queued items run low, pull
+  the next open GitHub issues that serve the goal (`gh issue list`), in the
+  order the workstream's memory entry gives, and add them as `Queued:` items.
+  An issue waiting on an operator answer stays on the list with that blocker,
+  but does not count toward a healthy backlog. Before queuing, check that a merged PR has not already
+  delivered it; if one has, report it for closing rather than queuing it.
 - Update it when a unit starts, finishes, is handed to the other side, or is
   paused (say so: `Codex (paused, usage): #593 renumber`). When a turn's
   reply sums up where things stand, write the same grouping in text: Codex,
