@@ -224,7 +224,12 @@ vote_id from public_vote where account_id = $acct)`, served by
      is answered 404 like a missing one:
 
      ```sql
-     select m.display_name as name, pv.list_key, pv.vote_id
+     select m.display_name as name, pv.list_key,
+            array(select pc.position
+                    from vote_choice vc
+                    join poll_choice pc on pc.id = vc.choice_id
+                   where vc.vote_id = pv.vote_id
+                   order by pc.position) as choices
        from public_vote pv
        join polls p on p.id = pv.poll_id and not p.hidden
                     and p.vote_privacy = 'public'
@@ -234,11 +239,19 @@ vote_id from public_vote where account_id = $acct)`, served by
       limit $3 + 1;
      ```
 
-     The choices for those `vote_id`s are read in the same snapshot and
-     returned as indices; `vote_id` and `list_key` never leave the store's
-     result except as the sealed cursor. The in-memory store has no hidden
-     polls (as today) and its conformance case hides a poll in the Postgres
-     store and expects 404 there.
+     - **One statement, one snapshot.** The choices come from the subquery in
+       the same statement, so under Pulse's default `read committed` a
+       concurrent re-cast or removal can never pair one vote's name with
+       another moment's answer. A second query would see a newer snapshot.
+     - **The first page** passes `$2 = '00000000-0000-0000-0000-000000000000'`.
+       `list_key` is a random version-4 UUID, whose version bits are never
+       zero, so no key equals or sorts below it. Later pages pass the
+       `list_key` from the opened cursor.
+     - `pc.position` is the poll-order index the wire uses (`ChoiceResult.index`).
+       `list_key` never leaves the store's result except inside the sealed
+       cursor, and `vote_id` is not selected at all. The in-memory store has no hidden
+       polls (as today) and its conformance case hides a poll in the Postgres
+       store and expects 404 there.
 
    - **Limiting by the real caller.** The route's limiter keys on
      `request.ip`, which behind nginx is the forwarded client (one trusted
@@ -248,6 +261,11 @@ vote_id from public_vote where account_id = $acct)`, served by
      logged or sent anywhere else), the limiter's `allowList` passes them, and
      the MCP route counts `get_public_votes` against `publicVotesRateLimit`
      itself, keyed on the MCP caller's `request.ip` (decision 11).
+   - **One bucket per address, shared by both paths.** `publicVotesRateLimit`
+     is a single in-memory counter keyed on the client address, which the HTTP
+     route and the MCP route both consult. It is not two
+     `@fastify/rate-limit` route configs, which would keep separate counts and
+     let one scraper take 60 a minute over HTTP and 60 more over MCP.
    - `limit` is 1–50, default 20. Rows are ordered by `public_vote.list_key`, a
      random value fixed at first cast, so re-casts never skip or repeat
      entries. The order is not chronological.
@@ -337,18 +355,33 @@ vote_id from public_vote where account_id = $acct)`, served by
     - The client (`mcp/client.ts` maps every 404 to `not_found`) maps the
       route's 409 to the tool error `anonymous_poll`.
     - It is limited by the MCP route's 120 requests/minute per IP, and each
-      call also counts against `publicVotesRateLimit` for the MCP caller's IP
-      (decision 7); an over-limit call is the tool error `rate_limited`.
+      call also counts against the **same** `publicVotesRateLimit` bucket as
+      that address's HTTP calls (decision 7). An over-limit call is the
+      existing tool error `too_many_requests` (`mcp/client.ts`).
     - **The trusted production MCP origin is `PULSE_WEB_ORIGIN`.** Today
       `main.ts` passes no `mcp` options, so the route trusts only loopback
       `Host` values and refuses every request that arrives through nginx,
       which forwards the browser's `Host`. `main.ts` passes
       `mcp: { publicOrigin: config.webOrigin }`, the one public origin that
-      serves both page and API. The route then accepts exactly that `Host`,
+      serves both page and API. The route then accepts exactly that `Host`
+      (the origin's host **with its port**, as the route compares it today),
       and an `Origin`, when sent, only if it equals it exactly; nothing is
       derived from request headers. `apiBaseUrl` stays unset, so upstream
       reads go to loopback and never back out through the proxy.
       `dev-server.ts` does the same with its `webOrigin`.
+    - **nginx forwards `$http_host`, not `$host`.** `$host` drops the port and
+      lowercases, so behind an origin with a port (the compose stack's
+      `http://127.0.0.1:8080`) the exact `Host` check would refuse every MCP
+      call, and the smoke test could only pass on a port-less HTTPS origin
+      that CI does not have. Step 3 changes both `proxy_set_header Host`
+      lines in `apps/pulse-web/nginx.conf` to `$http_host`, the client's
+      `Host` verbatim. Chosen over limiting the smoke test to HTTPS because
+      the API's check is an exact comparison with configuration, so its input
+      should be the header as sent, and because the same image then works on
+      Railway (no port) and locally (port) with one rule. This is no wider
+      trust: nginx's `server_name _` already passes any `Host`, and the API
+      still accepts only the configured one. A request with no `Host` never
+      matches the configured host, so the API refuses it.
     - **Public-proxy smoke test.** Step 3 adds a check that runs the built web
       image in front of the real API image (with a throwaway Postgres and one
       public-vote poll written by SQL), and through the nginx port asserts:
@@ -454,6 +487,7 @@ None is updated in this PR, which carries only the ADR. The implementing PRs
   `publicVotesRateLimit`, and the MCP section (reachable at
   `PULSE_WEB_ORIGIN/api/mcp` in production).
 - `apps/pulse/src/main.ts` and `dev-server.ts`: the `mcp.publicOrigin` wiring.
+- `apps/pulse-web/nginx.conf`: `proxy_set_header Host $http_host` (decision 11).
 - `apps/pulse-web/README.md`: the public-proxy smoke test and its CI job.
 - `docs/decisions/0040-…` and `0046-…` status lines: "scoped to anonymous
   polls by ADR-0048".
