@@ -436,7 +436,12 @@ for (const [kind, skip, stores] of kinds) {
     it("a_profile_named_verified_voter_is_400_reserved_name_and_not_saved", async (t) => {
       const w = await world(t, stores);
       const ada = await w.account("ada");
-      for (const displayName of ["Verified voter", "  verified   VOTER "]) {
+      for (const displayName of [
+        "Verified voter",
+        "  verified   VOTER ",
+        "Verified\u200D voter",
+        "Verified \u200Cvoter",
+      ]) {
         const reply = await w.app.inject({
           method: "PUT",
           url: "/api/me/profile",

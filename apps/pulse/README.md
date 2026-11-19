@@ -211,7 +211,9 @@ sign-out, fail on new community labels, or record votes without confirmation.
 Migration 018 (ADR-0048) also refuses to run while any member profile is
 named "Verified voter", in any case or spacing; rename or delete those
 profiles by hand, then start again. After it, an old instance fails on every
-poll it creates.
+poll it creates. Migration 019 refuses in the same way when the name is
+hidden with invisible joiners or marks (for example a zero-width joiner
+between the words), and then refuses those spellings too.
 
 ## MCP
 

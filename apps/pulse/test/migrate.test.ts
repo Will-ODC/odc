@@ -113,6 +113,7 @@ test("applies_a_fresh_schema", { skip }, async () => {
       "016",
       "017",
       "018",
+      "019",
     ]);
     assert.deepEqual(await tablesIn(pool, schema), TABLES);
   });

@@ -64,13 +64,27 @@ export function normalizeProfile(value: unknown): ProfileInput {
 }
 
 /**
+ * The invisible characters the display-name rule lets through: the joiners
+ * it allows (U+200C, U+200D) and the invisible marks, which are not format
+ * characters (U+034F and the variation selectors). Ignored when comparing a
+ * name with the reserved one, so none of them can hide it.
+ */
+const INVISIBLE =
+  /\u200C|\u200D|\u034F|[\uFE00-\uFE0F]|[\u{E0100}-\u{E01EF}]/gu;
+
+/**
  * "Verified voter" is what a public vote shows for an account with no profile
  * name (ADR-0048 decision 8), so no profile may take it, in any case or
- * spacing. The same rule as `member_profile_name_not_reserved` (018).
+ * spacing, or with invisible characters in it. The same rule as
+ * `member_profile_name_not_reserved` (migration 019).
  */
 export function isReservedName(displayName: string): boolean {
   return (
-    displayName.trim().replace(/\s+/g, " ").toLowerCase() === "verified voter"
+    displayName
+      .replace(INVISIBLE, "")
+      .replace(/\s+/g, " ")
+      .trim()
+      .toLowerCase() === "verified voter"
   );
 }
 

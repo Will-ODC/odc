@@ -77,6 +77,11 @@ test("the_reserved_name_is_caught_untrimmed_in_any_case_or_spacing", () => {
     "Verified voter",
     " Verified voter",
     "VERIFIED \t voter\n",
+    "Verified\u200D voter",
+    "Verified \u200Cvoter",
+    "\u200D Verified voter",
+    "Verified\u034F voter\uFE0F",
+    "Verified voter\u{E0100}",
   ])
     assert.equal(isReservedName(name), true, name);
   for (const name of ["Verified voters", "Verifiedvoter", "Ada"])

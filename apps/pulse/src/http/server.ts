@@ -617,6 +617,7 @@ export async function createServer(deps: ServerDeps): Promise<FastifyInstance> {
       const poll = await deps.votes.getPoll(pollId(request));
       if (!poll) return notFoundPoll(reply);
       if (poll.votePrivacy === "public") {
+        // No confirmation key needed: no public vote can exist without one.
         const voter = await currentVoter(request);
         const vote = voter
           ? await deps.votes.publicVoteOf(poll.id, voter.id)
