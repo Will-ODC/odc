@@ -601,7 +601,7 @@ export class PostgresVotingStore implements VotingStore {
     pollId: string,
     limit: number,
     after: string = FIRST_LIST_KEY,
-  ): Promise<PublicVoteEntry[]> {
+  ): Promise<PublicVoteEntry[] | undefined> {
     assertListKey(after);
     // ADR-0048 decision 7's statement: one snapshot pairs each name with its
     // answer, hidden polls are filtered here, not by the caller, and the
@@ -623,6 +623,18 @@ export class PostgresVotingStore implements VotingStore {
         " order by pv.list_key limit $3 + 1",
       [pollId, after, limit],
     );
+    // An empty page is either the end of a listed poll's list or a poll that
+    // is not listed. Rows found above came through the same filter, so only
+    // here is the poll itself asked; a hide racing between the two is
+    // answered as hidden, which shows nothing.
+    if (rows.length === 0) {
+      const listed = await this.#pool.query(
+        "select 1 from polls where id = $1 and not hidden" +
+          " and vote_privacy = 'public'",
+        [pollId],
+      );
+      return listed.rowCount ? [] : undefined;
+    }
     return rows.map((row) => ({
       name: row.name,
       choices: row.choices,

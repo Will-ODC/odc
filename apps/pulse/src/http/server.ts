@@ -17,6 +17,11 @@ import type { Voter, VoterStore } from "../identity/store.js";
 import type { ConfirmationKey } from "../voting/confirmation.js";
 import { publicPoll } from "../voting/public-poll.js";
 import { historyPage, parseHistoryQuery } from "../voting/history.js";
+import {
+  parsePublicVotesQuery,
+  PublicVotesCursor,
+  publicVotesPage,
+} from "../voting/public-list.js";
 import { parsePollListQuery, pollListPage } from "../voting/listing.js";
 import { isOpen, type Poll } from "../voting/poll.js";
 import {
@@ -32,6 +37,7 @@ import {
   type Suggestion,
   type SuggestionStore,
 } from "../voting/suggestions.js";
+import { AddressLimit, type AddressLimitOptions } from "./address-limit.js";
 import { registerCreationRoutes } from "./creation.js";
 import { registerImageRoutes, type ImageRouteDeps } from "./images.js";
 import { registerMcpReads, type McpReadOptions } from "./mcp/route.js";
@@ -107,6 +113,12 @@ export interface ServerDeps {
   suggestRateLimit?: { max: number; timeWindow: string };
   /** Poll-creation and posting-permission requests per client per window, per route. */
   creationRateLimit?: { max: number; timeWindow: string };
+  /**
+   * Public-vote list reads per client address per window, in milliseconds
+   * (ADR-0048 decision 7); default 60 a minute. One counter per address,
+   * which MCP's `get_public_votes` will share, not a route config.
+   */
+  publicVotesRateLimit?: AddressLimitOptions;
   /** Overridable so tests get a ballot identity they can predict. */
   newBallotId?: () => string;
   /**
@@ -738,6 +750,122 @@ export async function createServer(deps: ServerDeps): Promise<FastifyInstance> {
     },
   );
 
+  /**
+   * A public-vote poll's names and answers (ADR-0048 decision 7). No session,
+   * no cookie, never cached, and one per-address allowance. The store's page
+   * query filters hidden polls itself and answers `undefined` for one, so a
+   * hidden poll is a 404 however it races a hide.
+   */
+  const publicVotesLimit = new AddressLimit(
+    deps.publicVotesRateLimit ?? { max: 60, timeWindow: 60_000 },
+    now,
+  );
+  const limitPublicVotes = async (
+    request: FastifyRequest,
+    reply: FastifyReply,
+  ) => {
+    const verdict = publicVotesLimit.take(request.ip);
+    if (verdict.allowed) return;
+    reply.header("Retry-After", String(verdict.retryAfterSeconds));
+    await reply.code(429).send({
+      error: "too_many_requests",
+      message: "Too many tries just now. Try again a little later.",
+    });
+  };
+  const listCursor = deps.confirmationKey
+    ? new PublicVotesCursor(deps.confirmationKey)
+    : undefined;
+
+  app.get(
+    "/api/polls/:id/public-votes",
+    { onRequest: [noStore, limitPublicVotes] },
+    async (request, reply) => {
+      const query = parsePublicVotesQuery(request.query);
+      if (!query) return badListQuery(reply);
+      const poll = await deps.votes.getPoll(pollId(request));
+      if (!poll) return notFoundPoll(reply);
+      if (poll.votePrivacy !== "public") {
+        return reply.code(409).send({
+          error: "anonymous_poll",
+          message: "This poll's votes are anonymous, so no names are shown.",
+        });
+      }
+      if (!listCursor) {
+        return publicVotesUnavailable(
+          reply,
+          "The votes on this poll cannot be shown just now. Try again later.",
+        );
+      }
+      let after: string | undefined;
+      if (query.cursor !== undefined) {
+        after = listCursor.open(poll.id, query.cursor);
+        if (after === undefined) return badListQuery(reply);
+      }
+      const entries = await deps.votes.listPublicVotes(
+        poll.id,
+        query.limit,
+        after,
+      );
+      if (!entries) return notFoundPoll(reply);
+      return reply.send(
+        publicVotesPage(poll.id, entries, query.limit, listCursor),
+      );
+    },
+  );
+
+  /**
+   * Remove the signed-in account's public vote while the poll is open, its
+   * answer and its name together (ADR-0048 decision 10). Anonymous polls have
+   * no removal: their ballots are found by cookie or code, not by account.
+   * No body.
+   */
+  app.delete(
+    "/api/polls/:id/votes/mine",
+    { onRequest: sameOrigin },
+    async (request, reply) => {
+      const poll = await deps.votes.getPoll(pollId(request));
+      if (!poll) return notFoundPoll(reply);
+      if (poll.votePrivacy !== "public") {
+        return reply.code(409).send({
+          error: "anonymous_poll",
+          message: "This poll's votes are anonymous and cannot be removed.",
+        });
+      }
+      const key = deps.confirmationKey;
+      if (!key) {
+        return publicVotesUnavailable(
+          reply,
+          "Your vote cannot be removed just now. Try again later.",
+        );
+      }
+      const voter = await currentVoter(request);
+      if (!voter) {
+        return reply.code(401).send({
+          error: "sign_in_required",
+          message: "Sign in with your email to remove your vote.",
+        });
+      }
+      try {
+        const outcome = await deps.votes.removePublicVote(
+          poll.id,
+          voter.id,
+          key.lockKeyFor(voter.id),
+        );
+        if (outcome.status === "closed") {
+          return reply.send({ status: "closed" });
+        }
+        const results = await deps.votes.results(poll.id);
+        return reply.send({
+          status: outcome.status,
+          results: withPrivacy(poll, results),
+        });
+      } catch (error) {
+        if (error instanceof UnknownPollError) return notFoundPoll(reply);
+        throw error;
+      }
+    },
+  );
+
   app.get("/api/polls/:id/suggestions", async (request, reply) => {
     const poll = await deps.votes.getPoll(pollId(request));
     if (!poll) return notFoundPoll(reply);
@@ -876,11 +1004,21 @@ function withPrivacy(poll: Poll, results: Results) {
   return { ...results, votePrivacy: poll.votePrivacy };
 }
 
-/** ADR-0048 decision 5: nothing public is written without the key. */
-function publicVotesUnavailable(reply: FastifyReply) {
-  return reply.code(503).send({
-    error: "public_votes_unavailable",
-    message: "Voting on this poll is unavailable just now. Try again later.",
+/**
+ * ADR-0048 decision 5: nothing public is written without the key, and the
+ * list, whose cursor is sealed with it, is not served either.
+ */
+function publicVotesUnavailable(
+  reply: FastifyReply,
+  message = "Voting on this poll is unavailable just now. Try again later.",
+) {
+  return reply.code(503).send({ error: "public_votes_unavailable", message });
+}
+
+function badListQuery(reply: FastifyReply) {
+  return reply.code(400).send({
+    error: "bad_request",
+    message: "Choose a valid page of votes.",
   });
 }
 

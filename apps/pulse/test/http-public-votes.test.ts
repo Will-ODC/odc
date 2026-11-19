@@ -40,11 +40,14 @@ const HOUR = 3_600_000;
 const SESSION = "pulse_session";
 const BALLOT = "pulse_ballot";
 const PRIVATE = "private, no-store";
+const NO_STORE = "no-store";
 
 interface Stores {
   voters: VoterStore;
   votes: VotingStore;
   profiles: MemberProfileStore;
+  /** Postgres only: the in-memory store has no hidden polls. */
+  hide?: (pollId: string) => Promise<void>;
 }
 
 const kinds: [string, string | false, typeof memoryStores][] = [
@@ -75,18 +78,29 @@ async function postgresStores(
     voters: new PostgresVoterStore(pool),
     votes: new PostgresVotingStore(pool, clock),
     profiles: new PostgresMemberProfileStore(pool, { clock }),
+    async hide(pollId) {
+      await pool.query("update polls set hidden = true where id = $1", [
+        pollId,
+      ]);
+    },
   };
 }
 
 async function world(
   t: TestContext,
   stores: typeof memoryStores,
-  { withoutKey = false } = {},
+  {
+    withoutKey = false,
+    publicVotesRateLimit,
+  }: {
+    withoutKey?: boolean;
+    publicVotesRateLimit?: { max: number; timeWindow: number };
+  } = {},
 ) {
   let now = START;
   const clock = () => now;
-  const { voters, votes, profiles } = await stores(t, clock);
-  const signer = new SessionSigner(SECRET, { ttlSeconds: 3600, clock });
+  const { voters, votes, profiles, hide } = await stores(t, clock);
+  const signer = new SessionSigner(SECRET, { ttlSeconds: 86_400, clock });
   const claims = new ClaimService(
     {
       membership: new DomainAllowlist(new StaticDomainSource([])),
@@ -111,6 +125,7 @@ async function world(
       ...(withoutKey
         ? {}
         : { confirmationKey: new ConfirmationKey(CONFIRMATION_KEY) }),
+      ...(publicVotesRateLimit ? { publicVotesRateLimit } : {}),
     }),
     WEB_ORIGIN,
   );
@@ -163,16 +178,39 @@ async function world(
   const voterCount = async (pollId: string) =>
     (await votes.results(pollId)).voters;
 
+  /** Give an account a profile name; `visible: false` hides the profile. */
+  async function name(id: string, displayName: string, visible = true) {
+    await profiles.save(
+      { voterId: id, sessionGeneration: 0 },
+      { displayName, bio: "", visible },
+    );
+  }
+  const remove = (pollId: string, cookie?: string, { noOrigin = false } = {}) =>
+    app.inject({
+      method: "DELETE",
+      url: `/api/polls/${pollId}/votes/mine`,
+      headers: {
+        ...(cookie === undefined ? {} : { cookie }),
+        ...(noOrigin ? { origin: undefined } : {}),
+      },
+    });
+
   return {
     app,
     votes,
     profiles,
+    hide,
     account,
+    name,
     cast,
     get,
+    remove,
     voterCount,
     close: () => {
       now = new Date(closesAt.getTime() + 1);
+    },
+    advance: (ms: number) => {
+      now = new Date(now.getTime() + ms);
     },
   };
 }
@@ -473,6 +511,308 @@ for (const [kind, skip, stores] of kinds) {
         },
       });
       assert.equal(fine.statusCode, 200, fine.body);
+    });
+
+    it("the_public_list_shows_live_names_with_null_for_no_profile_and_nothing_else", async (t) => {
+      const w = await world(t, stores);
+      const ada = await w.account("ada");
+      const bo = await w.account("bo");
+      const cy = await w.account("cy");
+      await w.name("ada", "Ada");
+      // A hidden profile still names its public votes (decision 8).
+      await w.name("cy", "Cy", false);
+      await w.cast("pub", { ballot: [1], publicVote: true }, ada);
+      await w.cast("pub", { ballot: [0], publicVote: true }, bo);
+      await w.cast("pub", { ballot: [0], publicVote: true }, cy);
+
+      const reply = await w.get("/api/polls/pub/public-votes", ada);
+      assert.equal(reply.statusCode, 200, reply.body);
+      assert.equal(reply.headers["cache-control"], NO_STORE);
+      noCookieSet(reply);
+      const body = reply.json();
+      assert.deepEqual(Object.keys(body).sort(), ["items", "nextCursor"]);
+      assert.equal(body.nextCursor, null);
+      for (const item of body.items)
+        assert.deepEqual(Object.keys(item).sort(), ["choices", "name"]);
+      assert.deepEqual(
+        body.items
+          .map((i: { name: string | null; choices: number[] }) => [
+            i.name,
+            i.choices,
+          ])
+          .sort(),
+        [
+          ["Ada", [1]],
+          ["Cy", [0]],
+          [null, [0]],
+        ].sort(),
+      );
+      // Never the account, address, list key or cast time.
+      const keys = (await w.votes.listPublicVotes("pub", 20))!.map(
+        (e) => e.listKey,
+      );
+      for (const secret of ["ada", "bo", "example.test", ...keys])
+        assert.ok(!reply.body.includes(`"${secret}`), secret);
+      assert.ok(!reply.body.includes("2026-"));
+
+      // Names are read live: a rename relabels the vote.
+      await w.name("ada", "Ada Lovelace");
+      const renamed = await w.get("/api/polls/pub/public-votes");
+      assert.ok(
+        renamed
+          .json()
+          .items.some((i: { name: string }) => i.name === "Ada Lovelace"),
+      );
+    });
+
+    it("the_public_list_pages_with_sealed_cursors_that_never_repeat", async (t) => {
+      const w = await world(t, stores);
+      for (const id of ["ada", "bo", "cy"]) {
+        const cookie = await w.account(id);
+        await w.name(id, id.toUpperCase());
+        await w.cast("pub", { ballot: [0], publicVote: true }, cookie);
+      }
+      const seen: string[] = [];
+      let url = "/api/polls/pub/public-votes?limit=1";
+      for (let page = 0; page < 3; page++) {
+        const reply = await w.get(url);
+        assert.equal(reply.statusCode, 200, reply.body);
+        const body = reply.json();
+        assert.equal(body.items.length, 1);
+        seen.push(body.items[0].name);
+        if (page < 2) {
+          assert.equal(typeof body.nextCursor, "string");
+          // Opaque: the cursor carries neither the poll nor a list key in the
+          // clear, and the same position seals differently each time.
+          const decoded = Buffer.from(body.nextCursor, "base64url").toString(
+            "latin1",
+          );
+          assert.ok(!decoded.includes("pub"));
+          const again = (await w.get(url)).json().nextCursor;
+          assert.notEqual(again, body.nextCursor);
+          url = `/api/polls/pub/public-votes?limit=1&cursor=${body.nextCursor}`;
+        } else {
+          assert.equal(body.nextCursor, null);
+        }
+      }
+      assert.deepEqual([...seen].sort(), ["ADA", "BO", "CY"]);
+    });
+
+    it("a_tampered_foreign_or_malformed_list_query_is_400", async (t) => {
+      const w = await world(t, stores);
+      await w.votes.createPoll({
+        id: "pub2",
+        question: "Which pool?",
+        choices: ["A", "B"],
+        method: "single",
+        votePrivacy: "public",
+      });
+      for (const id of ["ada", "bo"]) {
+        const cookie = await w.account(id);
+        await w.cast("pub", { ballot: [0], publicVote: true }, cookie);
+        await w.cast("pub2", { ballot: [0], publicVote: true }, cookie);
+      }
+      const cursorOf = async (pollId: string) =>
+        (await w.get(`/api/polls/${pollId}/public-votes?limit=1`)).json()
+          .nextCursor as string;
+      const good = await cursorOf("pub");
+      const bytes = Buffer.from(good, "base64url");
+      bytes[bytes.length - 1] = (bytes[bytes.length - 1] ?? 0) ^ 1;
+      const tampered = bytes.toString("base64url");
+      const foreign = await cursorOf("pub2");
+      for (const query of [
+        `cursor=${tampered}`,
+        `cursor=${foreign}`,
+        "cursor=AAAA",
+        "cursor=not*base64",
+        "limit=0",
+        "limit=51",
+        "limit=abc",
+        "page=2",
+      ]) {
+        const reply = await w.get(`/api/polls/pub/public-votes?${query}`);
+        assert.equal(reply.statusCode, 400, query);
+        assert.equal(reply.json().error, "bad_request", query);
+        assert.equal(reply.headers["cache-control"], NO_STORE, query);
+      }
+      assert.equal(
+        (await w.get(`/api/polls/pub/public-votes?cursor=${good}`)).statusCode,
+        200,
+      );
+    });
+
+    it("the_public_list_is_404_unknown_409_anonymous_and_404_hidden", async (t) => {
+      const w = await world(t, stores);
+      const missing = await w.get("/api/polls/missing/public-votes");
+      assert.equal(missing.statusCode, 404);
+      assert.equal(missing.json().error, "not_found");
+      assert.equal(missing.headers["cache-control"], NO_STORE);
+
+      const anonymous = await w.get("/api/polls/anon/public-votes");
+      assert.equal(anonymous.statusCode, 409);
+      assert.equal(anonymous.json().error, "anonymous_poll");
+      assert.equal(anonymous.headers["cache-control"], NO_STORE);
+      noCookieSet(anonymous);
+
+      // A listed poll with no votes is an empty page.
+      assert.deepEqual((await w.get("/api/polls/pub/public-votes")).json(), {
+        items: [],
+        nextCursor: null,
+      });
+      if (!w.hide) return;
+      const ada = await w.account("ada");
+      await w.cast("pub", { ballot: [0], publicVote: true }, ada);
+      await w.hide("pub");
+      const hidden = await w.get("/api/polls/pub/public-votes");
+      assert.equal(hidden.statusCode, 404);
+      assert.equal(hidden.json().error, "not_found");
+    });
+
+    it("a_closed_public_poll_stays_listed", async (t) => {
+      const w = await world(t, stores);
+      const ada = await w.account("ada");
+      await w.cast("pub", { ballot: [1], publicVote: true }, ada);
+      w.close();
+      const reply = await w.get("/api/polls/pub/public-votes");
+      assert.deepEqual(reply.json(), {
+        items: [{ name: null, choices: [1] }],
+        nextCursor: null,
+      });
+    });
+
+    it("without_a_confirmation_key_the_public_list_is_503", async (t) => {
+      const w = await world(t, stores, { withoutKey: true });
+      const reply = await w.get("/api/polls/pub/public-votes");
+      assert.equal(reply.statusCode, 503);
+      assert.equal(reply.json().error, "public_votes_unavailable");
+      assert.equal(reply.headers["cache-control"], NO_STORE);
+      // 409 still comes first for an anonymous poll.
+      assert.equal(
+        (await w.get("/api/polls/anon/public-votes")).statusCode,
+        409,
+      );
+    });
+
+    it("the_public_list_is_limited_per_address_in_one_bucket", async (t) => {
+      const w = await world(t, stores, {
+        publicVotesRateLimit: { max: 2, timeWindow: 60_000 },
+      });
+      const from = (remoteAddress: string, pollId = "pub") =>
+        w.app.inject({
+          url: `/api/polls/${pollId}/public-votes`,
+          remoteAddress,
+        });
+      assert.equal((await from("10.0.0.1")).statusCode, 200);
+      // Every answer counts, a 404 included, so probing costs the same.
+      assert.equal((await from("10.0.0.1", "missing")).statusCode, 404);
+      const over = await from("10.0.0.1");
+      assert.equal(over.statusCode, 429);
+      assert.equal(over.json().error, "too_many_requests");
+      assert.equal(over.headers["cache-control"], NO_STORE);
+      assert.equal(over.headers["retry-after"], "60");
+      // Another address has its own bucket; other routes are not counted.
+      assert.equal((await from("10.0.0.2")).statusCode, 200);
+      assert.equal((await w.get("/api/polls/pub")).statusCode, 200);
+      w.advance(60_000);
+      assert.equal((await from("10.0.0.1")).statusCode, 200);
+    });
+
+    it("removing_ones_public_vote_takes_the_answer_and_the_name_and_may_vote_again", async (t) => {
+      const w = await world(t, stores);
+      const ada = await w.account("ada");
+      const bo = await w.account("bo");
+      await w.name("ada", "Ada");
+      await w.cast("pub", { ballot: [1], publicVote: true }, ada);
+      await w.cast("pub", { ballot: [0], publicVote: true }, bo);
+
+      const removed = await w.remove("pub", ada);
+      assert.equal(removed.statusCode, 200, removed.body);
+      noCookieSet(removed);
+      assert.equal(removed.json().status, "removed");
+      assert.equal(removed.json().results.voters, 1);
+      assert.equal(removed.json().results.confirmedVoters, 1);
+      assert.equal(removed.json().results.votePrivacy, "public");
+      assert.deepEqual(
+        removed.json().results.choices.map((c: { count: number }) => c.count),
+        [1, 0],
+      );
+      assert.deepEqual(
+        (await w.get("/api/polls/pub/public-votes")).json().items,
+        [{ name: null, choices: [0] }],
+      );
+      assert.deepEqual((await w.get("/api/polls/pub/ballot", ada)).json(), {
+        ballot: null,
+      });
+
+      // Repeating it is harmless.
+      const again = await w.remove("pub", ada);
+      assert.equal(again.json().status, "none");
+      assert.equal(again.json().results.voters, 1);
+
+      const back = await w.cast("pub", { ballot: [0], publicVote: true }, ada);
+      assert.equal(back.json().status, "counted");
+      assert.equal(await w.voterCount("pub"), 2);
+    });
+
+    it("a_closed_poll_keeps_its_public_votes", async (t) => {
+      const w = await world(t, stores);
+      const ada = await w.account("ada");
+      await w.cast("pub", { ballot: [1], publicVote: true }, ada);
+      w.close();
+      const reply = await w.remove("pub", ada);
+      assert.equal(reply.statusCode, 200);
+      assert.deepEqual(reply.json(), { status: "closed" });
+      assert.equal(await w.voterCount("pub"), 1);
+      const none = await w.remove("pub", await w.account("bo"));
+      assert.deepEqual(none.json(), { status: "closed" });
+    });
+
+    it("removal_refuses_in_order_403_404_409_503_401_and_writes_nothing", async (t) => {
+      const w = await world(t, stores);
+      const ada = await w.account("ada");
+      await w.cast("pub", { ballot: [1], publicVote: true }, ada);
+      const anonymous = await w.cast("anon", { ballot: [0] });
+      const ballot = anonymous.cookies.find((c) => c.name === BALLOT)!;
+
+      const foreign = await w.remove("pub", ada, { noOrigin: true });
+      assert.equal(foreign.statusCode, 403);
+      assert.equal(foreign.json().error, "origin_not_allowed");
+
+      const missing = await w.remove("missing", ada);
+      assert.equal(missing.statusCode, 404);
+      assert.equal(missing.json().error, "not_found");
+
+      // An anonymous poll's ballot is never removed, cookie or session.
+      for (const cookie of [
+        `${ada}; ${BALLOT}=${ballot.value}`,
+        `${BALLOT}=${ballot.value}`,
+        undefined,
+      ]) {
+        const refused = await w.remove("anon", cookie);
+        assert.equal(refused.statusCode, 409);
+        assert.equal(refused.json().error, "anonymous_poll");
+        noCookieSet(refused);
+      }
+      assert.equal(await w.voterCount("anon"), 1);
+
+      const signedOut = await w.remove("pub");
+      assert.equal(signedOut.statusCode, 401);
+      assert.equal(signedOut.json().error, "sign_in_required");
+      // A ballot cookie is not a session.
+      const cookieOnly = await w.remove("pub", `${BALLOT}=${ballot.value}`);
+      assert.equal(cookieOnly.statusCode, 401);
+      noCookieSet(cookieOnly);
+      assert.equal(await w.voterCount("pub"), 1);
+    });
+
+    it("without_a_confirmation_key_removal_is_503_before_sign_in", async (t) => {
+      const w = await world(t, stores, { withoutKey: true });
+      for (const cookie of [undefined, await w.account("ada")]) {
+        const reply = await w.remove("pub", cookie);
+        assert.equal(reply.statusCode, 503);
+        assert.equal(reply.json().error, "public_votes_unavailable");
+      }
+      assert.equal((await w.remove("anon")).statusCode, 409);
     });
   });
 }

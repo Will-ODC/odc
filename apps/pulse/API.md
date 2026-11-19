@@ -532,12 +532,14 @@ or "Verified voter" when they have none, to everyone who can see the poll. So:
   `confirmedVoters` equals `voters`.
 - Signing out hides it from that browser but does not remove it.
 
+- Anyone who can see the poll can read its names and answers, a page at a time
+  (`GET /api/polls/:id/public-votes`).
+- The voter may remove their vote while the poll is open
+  (`DELETE /api/polls/:id/votes/mine`); after it closes the vote is fixed.
+
 **Not served yet.** No route creates a public-vote poll: `POST /api/polls` still
 refuses `votePrivacy` as an unknown property until the web client can show the
-notice (ADR-0048 step 4b). The list of names and answers
-(`GET /api/polls/:id/public-votes`) and removing one's own public vote
-(`DELETE /api/polls/:id/votes/mine`) come with the next change on #685; until then
-both answer 404.
+notice (ADR-0048 step 4b).
 
 ### The ballot cookie, and why voting needs no session
 
@@ -1010,6 +1012,116 @@ The `results` in the answer carry `votePrivacy`, as `GET …/results` does.
 | 404    | `error: "not_found"`                                | no such poll                                                   |
 | 409    | `error: "vote_privacy_mismatch"`                    | `publicVote: true` does not match the poll's setting           |
 | 503    | `error: "public_votes_unavailable"`                 | public-vote poll and no confirmation key configured            |
+
+### `GET /api/polls/:id/public-votes?limit=20&cursor=…`
+
+A public-vote poll's names and answers (ADR-0048). **No session**; no cookie is read
+for it or set. Every response, errors included, carries `Cache-Control: no-store`.
+
+```json
+{
+  "items": [
+    { "name": "Ada", "choices": [1] },
+    { "name": null, "choices": [0, 2] }
+  ],
+  "nextCursor": "q0x…"
+}
+```
+
+- `name` is the voter's **current** profile display name, read live, whether or not
+  the profile is visible; a rename relabels every public vote they have cast, closed
+  polls included. `null` means the voter has no profile: clients show it as
+  "Verified voter" in a distinct style, with no link. Names are self-chosen and not
+  unique.
+- `choices` are poll-order indices, ascending, matched on `ChoiceResult.index`.
+- Nothing else is sent: no email address, account id, ballot, vote id, cast time,
+  profile `publicId` or bio, and no profile link.
+- Order is fixed at each vote's first cast and is **not chronological**; a re-cast
+  keeps its place, so paging never skips or repeats an entry. A removed vote leaves
+  the list.
+- `limit` is 1–50, default 20. `nextCursor` is `null` on the last page. Otherwise
+  pass it back unchanged as `cursor`. It is opaque and sealed: it names this poll and
+  a position, cannot be read or forged, differs every time even for the same
+  position, and stops working if the server's confirmation key changes (then start
+  from the first page again).
+- Closed polls stay listed.
+- **Rate limit:** `publicVotesRateLimit`, 60 requests a minute per client address by
+  default, counting every answer from this route. It is one in-memory counter per
+  address (per process, like every pulse limit), which the planned MCP tool will
+  share. Over it: 429 `too_many_requests` with `Retry-After` in seconds.
+
+The checks run in this order:
+
+1. 429 `too_many_requests`.
+2. 400 `bad_request` for the query: a `limit` outside 1–50, a malformed `cursor`, or
+   any other parameter.
+3. 404 `not_found` for no such poll.
+4. 409 `anonymous_poll` when the poll's votes are anonymous, so a client can tell it
+   from a missing poll: "This poll's votes are anonymous, so no names are shown."
+5. 503 `public_votes_unavailable` when the server has no confirmation key, which seals
+   the cursor.
+6. 400 `bad_request` for a cursor that does not open or was given out for another
+   poll.
+7. 404 `not_found` for a hidden poll. The page is read through a query that leaves
+   hidden polls out, so a poll hidden while it is read is never served.
+
+| Status | Body                                | When                                                  |
+| ------ | ----------------------------------- | ----------------------------------------------------- |
+| 200    | `{ items, nextCursor }`             | a visible public-vote poll, open or closed            |
+| 400    | `error: "bad_request"`              | bad `limit`, a cursor that does not open, other query |
+| 404    | `error: "not_found"`                | no such poll, or a hidden one                         |
+| 409    | `error: "anonymous_poll"`           | the poll's votes are anonymous                        |
+| 429    | `error: "too_many_requests"`        | over `publicVotesRateLimit` for this address          |
+| 503    | `error: "public_votes_unavailable"` | no confirmation key configured                        |
+
+### `DELETE /api/polls/:id/votes/mine`
+
+Requires `Origin` exactly matching `PULSE_WEB_ORIGIN` (403 `origin_not_allowed`
+otherwise). No body. Removes the **signed-in account's** vote on a public-vote poll
+while the poll is open: its answer and its name go together, `voters`,
+`confirmedVoters` and the picked choices' counts fall by one, and the person may vote
+again while the poll is open. The ballot cookie is neither read nor minted, and
+signing out or "Forget my votes here" never removes a public vote; this route does.
+
+```json
+{
+  "status": "removed",
+  "results": { "pollId": "p1", "votePrivacy": "public", "…": "…" }
+}
+```
+
+- `removed`: the vote was removed; `results` are the fresh results, as from
+  `GET …/results`.
+- `none`: the account had no vote on this open poll; `results` as above. Repeating a
+  removal is harmless.
+- `{ "status": "closed" }` with no results: the poll has closed, and its votes stay
+  as they are, whether or not this account had one.
+
+**Anonymous polls have no removal.** Their ballots are found by cookie or code, not
+by account, so this route answers 409 for them, with or without a session or ballot
+cookie, and removes nothing.
+
+The checks run in this order, and a refusal changes nothing:
+
+1. 403 `origin_not_allowed`.
+2. 404 `not_found`.
+3. 409 `anonymous_poll`: "This poll's votes are anonymous and cannot be removed."
+4. 503 `public_votes_unavailable` when the server has no confirmation key.
+5. 401 `sign_in_required` without a valid session: "Sign in with your email to
+   remove your vote."
+
+The removal takes the person's vote lock first and reads the clock after it, so a
+removal that waited past the close answers `closed` and removes nothing.
+
+| Status | Body                                    | When                              |
+| ------ | --------------------------------------- | --------------------------------- |
+| 200    | `status: "removed" \| "none"` + results | the poll is open                  |
+| 200    | `status: "closed"`                      | the poll is past its closing time |
+| 401    | `error: "sign_in_required"`             | no valid session                  |
+| 403    | `error: "origin_not_allowed"`           | missing or foreign Origin         |
+| 404    | `error: "not_found"`                    | no such poll                      |
+| 409    | `error: "anonymous_poll"`               | the poll's votes are anonymous    |
+| 503    | `error: "public_votes_unavailable"`     | no confirmation key configured    |
 
 ## Options people add themselves
 
