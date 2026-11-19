@@ -1,13 +1,15 @@
 # ADR-0049: Every Pulse main-page item can carry a picture
 
-- **Status:** proposed. The open operator questions at the end are not
-  decided here; the steps that depend on them wait (section 9).
+- **Status:** accepted. Operator decisions of 2026-11-18, recorded under
+  "Operator decisions" below; the decider is the operator.
 - **Date:** 2026-11-18
 - **Phase:** 0 (Pulse, charter-exempt; issues #700, #701, #427, #541)
 - **Amends:** ADR-0047, narrowly: section 1's "pictures on contributions are
-  not planned" and section 6's "contribution rows carry no `image` object".
-  Every other ADR-0047 rule, including operator decisions D0–D9 and D4a, is
-  kept and applied to each new item kind as stated below.
+  not planned" and section 6's "contribution rows carry no `image` object"
+  (and their empty slot); and D0's "polls or contributions for now", which
+  E3 extends to discussion topics. Every other ADR-0047 rule, including
+  operator decisions D0–D9 and D4a, is kept and applied to each new item kind
+  as stated below.
 
 ## Context
 
@@ -48,6 +50,19 @@ The word "posts" in the direction is read as contributions and, when built,
 discussion topics: those are the only non-poll items the main page shows or
 is planned to show. If the operator meant another item kind, it follows the
 same rules by adding an owner kind (section 1).
+
+## Operator decisions (2026-11-18)
+
+Asked after the first draft of this ADR; answered by the operator the same
+day. Question text as asked, answer as given.
+
+- **E1 — "Default for a contribution or topic without a picture: the
+  community's default, a default per contribution type, or no default (the
+  empty slot)?"** Answer: "Same as polls": the community's default picture,
+  then a generated tile. The empty slot is dropped.
+- **E2 — "One picture or several per item?"** Answer: one picture per item.
+- **E3 — "Does the site owner's soft delete extend to discussion topics?"**
+  Answer: yes, same as polls and contributions.
 
 ## Decision
 
@@ -112,9 +127,7 @@ Unchanged and applied to contributions and topics as they apply to polls:
   kind would double what one account can store. Replacing counts toward it.
 - **Alt text required (D2)**, 1–300 code points; decorative (`alt=""`) in the
   list beside the title, the picture's text alternative on the item's page.
-- **One picture per item**, as built for polls. Galleries are an open question
-  (Q2); the store would take them additively (several `image` rows per owner
-  plus an order), so answering yes later needs no rework of this design.
+- **One picture per item (E2)**, as built for polls. No galleries.
 - **Bytes and `image` row go together**, with the retention exception for
   reported or auto-hidden pictures (ADR-0047 sections 1, 8, 9).
 - **What is public (ADR-0047 section 12):** the same `image` object fields
@@ -138,9 +151,9 @@ Unchanged and applied to contributions and topics as they apply to polls:
   anyone else. Polls keep ADR-0047 section 8's private route, because a
   poll's public body says nothing about the viewer.
 - **The site owner does not moderate pictures separately (D0).** Their tool is
-  soft-deleting the whole item: polls in #584, contributions in #585. Whether
-  that tool extends to topics is open (Q3), since D0 named only "polls or
-  contributions for now".
+  soft-deleting the whole item: polls in #584, contributions in #585, and
+  discussion topics (E3) in #541, with the same 30-day restore window and
+  purge (D8), which deletes every `image` row the topic owns.
 - **Purge:** #585's contribution purge deletes every `image` row whose owner
   is the contribution (current and still-retained earlier pictures), with any
   bytes left, in the same transaction, as #584 does for polls.
@@ -157,29 +170,27 @@ Unchanged and applied to contributions and topics as they apply to polls:
 
 - **Every public body and listing row of every kind carries `image`.** One
   server projection builds it for all kinds (today's `publicPollImage`
-  becomes kind-neutral). The shape is ADR-0047's, plus one value:
+  becomes kind-neutral). The shape is ADR-0047's, unchanged, with no new
+  value:
   - `{ "kind": "upload", displayUrl, thumbUrl, width, height, alt }`,
   - `{ "kind": "category", displayUrl, thumbUrl, width, height, alt }` (#586),
-  - `{ "kind": "tile" }`, drawn by the client from the community,
-  - **new:** `{ "kind": "none" }`, meaning no picture and no default; the
-    client draws an empty slot of the thumbnail's size so titles stay aligned.
-    This is exactly what ADR-0047 section 6 shows for contribution rows today,
-    moved from "field absent" to an explicit value, so the client handles one
-    shape for every row and the server alone decides the fallback.
-- **Polls:** unchanged: `upload`, then `category`, then `tile`. Never `none`.
-- **Contributions and topics:** `upload` when the poster attached a visible
-  picture. **Without one, the server sends `none` until the operator answers
-  Q1** (which default a contribution or topic shows). `none` keeps today's
-  decided behaviour (the empty slot), so building the rest does not wait; the
-  answer then changes only the server's fallback for that kind, with no client
-  or contract change beyond drawing values the client already draws.
+  - `{ "kind": "tile" }`, drawn by the client from the item's community.
+- **One default chain for every kind (E1, "same as polls"):** the poster's
+  visible `upload`, then the item's community default (`category`, once #586
+  builds defaults), then the `tile`. Until #586 lands, an item without an
+  upload shows the tile. A contribution's community is the one it already
+  carries; a topic uses its community if #541 gives it one, else General's,
+  as legacy polls do.
+- **The empty slot is dropped.** ADR-0047 section 6's empty slot for
+  contribution rows existed only because contributions had no picture; every
+  row now has an `image`, so no `none` value or empty slot is needed.
 - **Where `image` appears:** `GET /api/contributions` rows, `GET
 /api/contributions/:id`, `GET /api/profiles/:publicId/contributions` and
   `GET /api/me/contributions` rows, alongside polls' existing places. One
   listing request per page still supplies every thumbnail: no per-item fetch
   (#427's acceptance).
 - **The client's row** is one design for every kind (#427): thumbnail from
-  `thumbUrl`, tile, or empty slot, decorative, beside the title; a failed
+  `thumbUrl` or the tile, decorative, beside the title; a failed
   picture never hides the title, state or link.
 
 ### 5. Reporting and automatic hiding (#583)
@@ -204,9 +215,11 @@ Unchanged and applied to contributions and topics as they apply to polls:
 
 #541 takes a picture by these rules with no further ADR: owner kind `topic`,
 `topic.image_id`, attach in its creation route, poster remove/replace,
-`topic_image` reports, default per Q1. Its own design (mockup first, as its
+`topic_image` reports, the same default chain (E1), and site-owner soft
+delete with restore and purge (E3). Its own design (mockup first, as its
 ticket says) decides the topic's table, visibility and attribution; it must
-call `mayServe` for its kind and use the shared field (#700).
+call `mayServe` for its kind, treat a soft-deleted topic as not visible, and
+use the shared field (#700).
 
 ### 7. The shared picture field (#700)
 
@@ -227,33 +240,33 @@ variant's SHA-256 and no content (ADR-0047 section 9).
 
 ADR-0047's steps are unchanged; this ADR inserts and widens:
 
-| Order | Ticket | What                                                                                                                                                                                                             | Depends on                         | Scope change                                                                                                                                                                                                 |
-| ----- | ------ | ---------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- | ---------------------------------- | ------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------ |
-| 1     | #579   | Store, upload, poll `image` (built)                                                                                                                                                                              | —                                  | none                                                                                                                                                                                                         |
-| 2     | #700   | Shared picture field: mockup, operator approval, component                                                                                                                                                       | this ADR                           | none                                                                                                                                                                                                         |
-| 3     | #580   | Poll form adopts the field                                                                                                                                                                                       | 1, 2                               | already updated to use #700                                                                                                                                                                                  |
-| 4     | #701   | Contributions: migration (owner kind, `contribution.image_id`, audit kind), attach in creation, `image` on every contribution body and row (`upload`/`none`), page display, form via #700, poster remove/replace | 1, 2; #598 if first                | **Yes:** split into at least a server PR and a web PR (pipeline size); includes remove/replace (its acceptance already asks); fallback is `none` until Q1; adds `contribution_image` if #583 is merged first |
-| 5     | #427   | One thumbnail row for polls and contributions, reading `image` from both listings                                                                                                                                | 1; 4's server PR for contributions | **Yes:** may ship polls first, then contributions once 4's server part merges; handles `none`                                                                                                                |
-| 6     | #296   | Picture on the question page (polls)                                                                                                                                                                             | 1                                  | none                                                                                                                                                                                                         |
-| 7     | #582   | Poll remove/replace                                                                                                                                                                                              | 1, 3, 6                            | none                                                                                                                                                                                                         |
-| 8     | #583   | Reports and auto-hide                                                                                                                                                                                            | 1, 6, 7                            | **Yes:** targets per owner kind with pictures at build time (adds `contribution_image` if 4 merged first)                                                                                                    |
-| 9     | #584   | Poll soft delete (ADR-0047)                                                                                                                                                                                      | 8                                  | none                                                                                                                                                                                                         |
-| 10    | #585   | Contribution soft delete                                                                                                                                                                                         | 9, 4                               | **Yes:** purge deletes the contribution's `image` rows and bytes; `mayServe` treats a soft-deleted contribution as not visible                                                                               |
-| 11    | #586   | Community defaults, ODC decisions, Home banner                                                                                                                                                                   | 1, 5                               | **Only if Q1 is "community default":** the fallback for contributions (and topics) becomes `category` then `tile`                                                                                            |
-| later | #541   | Topics, with pictures by section 6                                                                                                                                                                               | 2, its own deps                    | none beyond what its body says; its migration adds owner kind `topic`                                                                                                                                        |
+| Order | Ticket | What                                                                                                                                                                                           | Depends on                         | Scope change                                                                                                                                                                     |
+| ----- | ------ | ---------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- | ---------------------------------- | -------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- |
+| 1     | #579   | Store, upload, poll `image` (built)                                                                                                                                                            | —                                  | none                                                                                                                                                                             |
+| 2     | #700   | Shared picture field: mockup, operator approval, component                                                                                                                                     | this ADR                           | cites ADR-0049                                                                                                                                                                   |
+| 3     | #580   | Poll form adopts the field                                                                                                                                                                     | 1, 2                               | already uses #700                                                                                                                                                                |
+| 4     | #701   | Contributions: migration (owner kind, `contribution.image_id`, audit kind), attach in creation, `image` on every contribution body and row, page display, form via #700, poster remove/replace | 1, 2; #598 if first                | **Yes:** at least a server PR and a web PR; includes remove/replace; fallback is the tile until #586, then the community default; adds `contribution_image` if #583 merged first |
+| 5     | #427   | One thumbnail row for polls and contributions, reading `image` from both listings                                                                                                              | 1; 4's server PR for contributions | **Yes:** contributions show thumbnails or tiles like polls (no empty slot); may ship polls first                                                                                 |
+| 6     | #296   | Picture on the question page (polls)                                                                                                                                                           | 1                                  | none                                                                                                                                                                             |
+| 7     | #582   | Poll remove/replace                                                                                                                                                                            | 1, 3, 6                            | none                                                                                                                                                                             |
+| 8     | #583   | Reports and auto-hide                                                                                                                                                                          | 1, 6, 7                            | **Yes:** a picture target per owner kind with pictures at build time (`contribution_image` if 4 merged first)                                                                    |
+| 9     | #584   | Poll soft delete (ADR-0047)                                                                                                                                                                    | 8                                  | none                                                                                                                                                                             |
+| 10    | #585   | Contribution soft delete                                                                                                                                                                       | 9, 4                               | **Yes:** purge deletes the contribution's `image` rows and bytes; a soft-deleted contribution's picture is never served                                                          |
+| 11    | #586   | Community defaults, ODC decisions, Home banner                                                                                                                                                 | 1, 5                               | **Yes:** the community default also applies to contributions (and topics), then the tile                                                                                         |
+| later | #541   | Topics, with pictures and soft delete by section 6                                                                                                                                             | 2, 9, its own deps                 | **Yes:** owner kind `topic` in its migration; `topic_image` reports; site-owner soft delete, restore and purge (E3)                                                              |
 
 Steps 2 and 6 can run in parallel; 4's server PR can start once this ADR is
-accepted, before #700 is approved, since it needs no UI. Ticket bodies are
-updated by whoever schedules each ticket, citing this table.
+accepted, before #700 is approved, since it needs no UI. The ticket bodies
+carry these scope notes (edited with this ADR).
 
 ## Consequences
 
 - Contributions gain a picture with no new table, route or dependency: one
   migration, one more owner kind in `mayServe`, one more field on the
   contribution schema and bodies.
-- The `image` contract gains `kind: "none"`. The web client must accept it.
-  Polls never produce it, so MCP `get_poll` and its exact-shape check are
-  unaffected.
+- The `image` contract is unchanged; contributions and topics reuse it, so
+  MCP `get_poll` and its exact-shape check are unaffected.
+- Topics gain site-owner soft delete (E3), the third kind with it.
 - Storage grows with contribution pictures under the same per-account quota;
   ADR-0047's size estimate holds within a factor of two.
 - Database backups now carry contribution pictures too (ADR-0047's backup
@@ -270,8 +283,7 @@ updated by whoever schedules each ticket, citing this table.
   contribution rows carry no picture and its step list no longer match.
   **Updated in this PR** (renamed to pictures on every item, the statement
   replaced, #700/#701 inserted, scope notes on #427, #583, #585, #586).
-- **`apps/pulse/API.md`:** documents contribution bodies without `image` and
-  `image` without `none`. **Changed by #701** (and #427/#586 as they touch
+- **`apps/pulse/API.md`:** documents contribution bodies without `image`. **Changed by #701** (and #427/#586 as they touch
   it), in the same PR as the code, not here, because API.md documents what is
   served.
 - **`apps/pulse/DEPLOY.md`:** the interim emergency path for contribution
@@ -280,28 +292,10 @@ updated by whoever schedules each ticket, citing this table.
   (`src/images/` described as poll pictures): **changed by #701's server PR**,
   when the code makes them untrue.
 - **`docs/plans/contributions.md`:** says nothing about pictures. No change.
-- **GitHub issues #701, #427, #583, #585, #586:** scope changes listed in
-  section 9; edited when each is scheduled, not in this PR.
+- **GitHub issues #701, #427, #583, #585, #586, #700, #541:** scope notes from
+  section 9 added to each body (existing text kept), alongside this PR.
 - **`memory/pulse.md`:** updated on master at merge time, not on this branch.
 - **`memory/INDEX.md`:** nothing conflicts; no change.
-
-## Open operator questions
-
-Not decided here, because each changes what people see and no ADR-0047
-decision answers it:
-
-- **Q1 — default for a contribution or topic without a picture.** Options: (a)
-  the community's default, then the letter tile, as polls (D4a read as
-  covering every item in a community); (b) a default per contribution type
-  (project, fundraiser, group buy, offer), uploaded by the site owner; (c) no
-  default, the empty slot (today's behaviour, which the build uses until
-  answered). #701's acceptance "shows its default" waits on this answer.
-- **Q2 — one picture or several per item?** "images ... like Reddit" may mean
-  galleries. The build keeps one per item (ADR-0047); several is additive
-  later.
-- **Q3 — does the site owner's soft delete extend to discussion topics?** D0
-  said "polls or contributions for now". If no, a topic picture's only
-  removal is by its poster or automatic hiding.
 
 ## Charter check
 

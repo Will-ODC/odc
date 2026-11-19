@@ -463,15 +463,16 @@ do not silently broaden those permissions to links or assurance gates.
 
 ## P12 — Pictures on every item (polls first) · READY TO BUILD
 
-**Extended 2026-11-18 (ADR-0049, proposed).** Operator: "All polls, posts,
+**Extended 2026-11-18 (ADR-0049, accepted).** Operator: "All polls, posts,
 questions or whatever goes on main page should take images as well, like
-Rediit." Contributions (#701) and discussion topics (#541) take a picture by
-ADR-0047's rules, in the same store with their own owner kind. Every posting
-form uses one shared picture field (#700, mockup first). Every listing row of
-every kind carries `image`; a contribution or topic without a picture sends
-`{ "kind": "none" }` (the empty slot) until the operator chooses its default
-(ADR-0049 Q1). ADR-0049 section 9 is the build order; the scope notes below
-mark where it widens a step.
+Rediit." Contributions (#701) and discussion topics (#541) take one picture
+each by ADR-0047's rules, in the same store with their own owner kind. Every
+posting form uses one shared picture field (#700, mockup first). Every
+listing row of every kind carries `image` with the same default chain as
+polls: the poster's upload, then the community default, then the tile
+(operator E1, 2026-11-18). One picture per item (E2). The site owner's soft
+delete also covers topics (E3). ADR-0049 section 9 is the build order; the
+scope notes below mark where it widens a step.
 
 Operator direction, 2026-11-12: every poll gets a thumbnail, Reddit-style.
 The poster can upload one with the question; otherwise a default shows: one
@@ -493,8 +494,8 @@ It adds migrations 013 and 014, so every P12 migration takes the next free
 number after #572 merges (015 or later, never 013 or 014). It also turns
 Home/Browse into one date-ordered list of polls and contributions, so the
 thumbnail column (step 3) and the Home banner (step 9) are built on that list
-and wait for #572. Contribution rows had no picture under ADR-0047 §6;
-ADR-0049 replaces that with #701 and the `none` value above.
+and wait for #572. Contribution rows had no picture and an empty slot under
+ADR-0047 §6; ADR-0049 replaces that with #701 and the shared default chain.
 
 Steps, in order. Each is one PR on `pulse/<issue>-<short>`, with tests,
 fresh review (plus `odc-ui-reviewer` for screens) and green CI before the
@@ -539,8 +540,8 @@ next dependent step starts.
      title, state or link.
    - One listing request per page, checked by a test; mockup approved first.
    - ADR-0049: one row design for every kind; reads `image` from both
-     listings and draws `none` as the empty slot. Contribution thumbnails
-     follow once #701's server PR merges.
+     listings, so contribution rows show a thumbnail or tile like polls (the
+     empty slot above is dropped) once #701's server PR merges.
 4. **Picture on the question page.** #296 (rescoped). Depends on 1.
    - Display picture under the question with its description; defaults show
      as a small tile; failures leave no empty frame and voting stays usable.
@@ -610,8 +611,8 @@ next dependent step starts.
      governance picture and a link to their list; it never casts a vote. It
      sits above #572's mixed list and leaves that list's order and rows
      unchanged.
-   - ADR-0049: contributions and topics use community defaults only if the
-     operator answers Q1 that way; otherwise they keep `none`.
+   - ADR-0049: community defaults also apply to contributions and topics
+     (operator E1).
 
 **Contributions take a picture (#701, ADR-0049).** After step 1; its web PR
 also after #700. At least a server PR and a web PR. It can run alongside
@@ -621,14 +622,15 @@ steps 2–6.
   `contribution` to `image` and `content_change`, and `contribution.image_id`;
   never edits 016.
 - `POST /api/contributions` accepts `image: { id, alt }`; every contribution
-  body and row carries `image` (`upload` or `none`).
+  body and row carries `image` (`upload`, else the tile until step 9).
 - Poster-only `DELETE`/`PUT /api/contributions/:id/image`, signalled by the
   existing `canManage`; audit rows; `API.md`, `DEPLOY.md` (manual emergency
   path) and `README.md` updated.
 - Adds the `contribution_image` report target if step 6 merged first.
 
 Discussion topics (#541) take pictures by ADR-0049 §6 when built: owner kind
-`topic` in their own migration, the shared field, `topic_image` reports.
+`topic` in their own migration, the shared field, `topic_image` reports, the
+same default chain, and site-owner soft delete with restore and purge (E3).
 
 Steps 3 and 4 can run in parallel after 1 (step 3 also after #572); step 9
 can start once steps 1 and 3 are merged. Until step 7, the only emergency path
