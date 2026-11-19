@@ -63,6 +63,17 @@ export function normalizeProfile(value: unknown): ProfileInput {
   };
 }
 
+/**
+ * "Verified voter" is what a public vote shows for an account with no profile
+ * name (ADR-0048 decision 8), so no profile may take it, in any case or
+ * spacing. The same rule as `member_profile_name_not_reserved` (018).
+ */
+export function isReservedName(displayName: string): boolean {
+  return (
+    displayName.trim().replace(/\s+/g, " ").toLowerCase() === "verified voter"
+  );
+}
+
 const UUID =
   /^[0-9a-f]{8}-[0-9a-f]{4}-[1-5][0-9a-f]{3}-[89ab][0-9a-f]{3}-[0-9a-f]{12}$/i;
 export function isPublicProfileId(value: string): boolean {

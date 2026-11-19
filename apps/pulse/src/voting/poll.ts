@@ -11,6 +11,15 @@ export type PollMethod = "single" | "approval";
 const METHODS: readonly PollMethod[] = ["single", "approval"];
 
 /**
+ * Whether a poll's votes are anonymous or shown with the voter's profile name
+ * (ADR-0048). The poll decides, once, at creation; it never changes. Every
+ * seed and legacy poll is anonymous.
+ */
+export type VotePrivacy = "anonymous" | "public";
+
+const VOTE_PRIVACIES: readonly VotePrivacy[] = ["anonymous", "public"];
+
+/**
  * How an authored poll is credited in public (ADR-0037). Anonymous carries
  * nothing else; named carries only the poster's own per-post display name,
  * which is a self-description, not a verified identity.
@@ -58,6 +67,8 @@ export interface Poll {
   closesAt?: Date;
   /** Whether people may add options of their own. */
   acceptsSuggestions: boolean;
+  /** Fixed at creation (ADR-0048). */
+  votePrivacy: VotePrivacy;
   /**
    * Present only on a poll published through creation (ADR-0037). Seed and
    * legacy polls have none, and none is ever invented for them.
@@ -82,6 +93,8 @@ export interface NewPoll {
   closesAt?: Date;
   /** Defaults to false: a poll takes suggestions only if it says so. */
   acceptsSuggestions?: boolean;
+  /** Defaults to anonymous (ADR-0048). */
+  votePrivacy?: VotePrivacy;
 }
 
 export const MIN_CHOICES = 2;
@@ -117,6 +130,13 @@ export function createPoll(input: NewPoll, now: Date = new Date()): Poll {
     throw new TypeError(`a poll may have at most ${MAX_CHOICES} choices`);
   }
 
+  const votePrivacy = input.votePrivacy ?? "anonymous";
+  if (!VOTE_PRIVACIES.includes(votePrivacy)) {
+    throw new TypeError(
+      `vote privacy must be one of: ${VOTE_PRIVACIES.join(", ")}`,
+    );
+  }
+
   const choices = input.choices.map((c) => c.trim());
   if (choices.some((c) => c === ""))
     throw new TypeError("a choice must not be empty");
@@ -140,6 +160,7 @@ export function createPoll(input: NewPoll, now: Date = new Date()): Poll {
     next: [...next],
     createdAt: now,
     acceptsSuggestions: input.acceptsSuggestions ?? false,
+    votePrivacy,
   };
   return input.closesAt ? { ...poll, closesAt: input.closesAt } : poll;
 }

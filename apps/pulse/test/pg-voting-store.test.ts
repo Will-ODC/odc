@@ -135,8 +135,8 @@ test(
     // order, so a missing ORDER BY would go unnoticed. Write them backwards.
     const pool = await migratedSchema(t);
     await pool.query(
-      "insert into polls (id, question, method, created_at, accepts_suggestions)" +
-        " values ('rev', 'Q', 'approval', $1, false)",
+      "insert into polls (id, question, method, created_at, accepts_suggestions," +
+        " vote_privacy) values ('rev', 'Q', 'approval', $1, false, 'anonymous')",
       [AT],
     );
     for (const [position, label] of [
@@ -594,8 +594,10 @@ async function authoredRow(
     );
   await pool.query(
     "insert into polls (id, question, method, created_at, closes_at," +
-      " accepts_suggestions, community, created_by, attribution_kind, author_name)" +
-      " values ($1, 'Q', 'single', $2, null, false, $3, 'author-account-7f3a', $4, $5)",
+      " accepts_suggestions, community, created_by, attribution_kind, author_name," +
+      " vote_privacy)" +
+      " values ($1, 'Q', 'single', $2, null, false, $3, 'author-account-7f3a', $4, $5," +
+      " 'anonymous')",
     [id, AT, community, attribution.kind, attribution.name],
   );
   for (const [position, label] of ["a", "b"].entries())

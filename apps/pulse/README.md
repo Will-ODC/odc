@@ -208,6 +208,10 @@ from a private address, such as nginx's.
 **Upgrading:** stop every old API instance before starting the new one.
 Migrations run on start. An old instance left running can break sign-in and
 sign-out, fail on new community labels, or record votes without confirmation.
+Migration 018 (ADR-0048) also refuses to run while any member profile is
+named "Verified voter", in any case or spacing; rename or delete those
+profiles by hand, then start again. After it, an old instance fails on every
+poll it creates.
 
 ## MCP
 
