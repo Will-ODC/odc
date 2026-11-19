@@ -29,6 +29,17 @@
   font-weight: 600;
 }
 
+/*
+ * The live region around a heading and its line. As a single column child it
+ * would run them together; space them as the column spaces the email-entry
+ * screen's heading and lede.
+ */
+.signin__said {
+  display: flex;
+  flex-direction: column;
+  gap: calc(var(--step) * 2);
+}
+
 .signin__address {
   color: var(--ink-soft);
   font-weight: 600;
@@ -62,6 +73,19 @@
 .signin__go,
 .signin__again {
   margin-top: var(--step);
+}
+
+/* "Continue as <address>": a long address wraps rather than widening the page. */
+.signin__address,
+.signin__continue {
+  overflow-wrap: anywhere;
+}
+
+.signin__aside {
+  margin: var(--step) 0 0;
+  font-size: var(--t-small);
+  line-height: 1.45;
+  color: var(--muted);
 }
 
 /* The phone version (#482): a 16px field, so the phone does not zoom in. */

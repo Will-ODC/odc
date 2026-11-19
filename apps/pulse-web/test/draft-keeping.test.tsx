@@ -48,12 +48,15 @@ describe("a kept draft", () => {
     render(
       <App
         api={stubApi({
+          checkLink: () => Promise.resolve(ME.email),
           redeem: () => Promise.resolve(ME),
           creationContext: () => Promise.resolve(CONTEXT),
         })}
       />,
     );
-    // Straight back to the form; no "Continue" between (2026-10-21).
+    await userEvent.click(
+      await screen.findByRole("button", { name: `Continue as ${ME.email}` }),
+    );
     expect(await question()).toBe("Kept question?");
   });
 
@@ -116,11 +119,17 @@ describe("a kept draft", () => {
     render(
       <App
         api={stubApi({
+          checkLink: () => Promise.resolve("next@example.org"),
           redeem: () =>
             Promise.resolve({ ...ME, id: "v2", email: "next@example.org" }),
           creationContext: () => Promise.resolve(CONTEXT),
         })}
       />,
+    );
+    await user.click(
+      await screen.findByRole("button", {
+        name: "Continue as next@example.org",
+      }),
     );
     expect(await question()).toBe("");
     expect(globalThis.localStorage.getItem("pulse.newPollDraft")).toBeNull();

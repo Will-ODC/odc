@@ -19,6 +19,13 @@ beforeEach(() => {
 });
 
 const ME = { id: "v1", email: "jo@student.ubc.ca", community: "ubc" };
+const checkLink = () => Promise.resolve(ME.email);
+
+async function continueSignIn() {
+  await userEvent.click(
+    await screen.findByRole("button", { name: `Continue as ${ME.email}` }),
+  );
+}
 
 /*
  * The break this file exists to hold shut.
@@ -31,17 +38,32 @@ const ME = { id: "v1", email: "jo@student.ubc.ca", community: "ubc" };
  * have passed the whole time it was broken.
  */
 describe("what the URL opens", () => {
-  it("spends the token from the emailed link", async () => {
+  it("checks the emailed link without signing in until the named button is pressed", async () => {
     let finishRedeem!: (me: typeof ME) => void;
     const redeem = vi.fn(
       () => new Promise<typeof ME>((resolve) => (finishRedeem = resolve)),
     );
     globalThis.history.replaceState(null, "", "/sign-in?token=abc123");
 
-    render(<App api={stubApi({ redeem })} />);
+    const checkLink = vi.fn(async () => ME.email);
+    const user = userEvent.setup();
+    render(<App api={stubApi({ checkLink, redeem })} />);
 
+    expect(redeem).not.toHaveBeenCalled();
+    const button = await screen.findByRole("button", {
+      name: `Continue as ${ME.email}`,
+    });
+    expect(checkLink).toHaveBeenCalledExactlyOnceWith("abc123");
+    expect(redeem).not.toHaveBeenCalled();
+    expect(
+      await screen.findByRole("heading", { name: "Sign in to Pulse" }),
+    ).toBe(document.activeElement);
+    await user.keyboard("{Enter}");
+    expect(redeem).not.toHaveBeenCalled();
+    await user.tab();
+    expect(document.activeElement).toBe(button);
+    await user.keyboard("{Enter}");
     expect(redeem).toHaveBeenCalledExactlyOnceWith("abc123");
-    expect(within(screen.getByRole("main")).getByText("Loading…")).toBeTruthy();
     // Settle redemption and its route change before waiting for the question's
     // own reads; one wait need not cover the whole chain of effects.
     await act(async () => finishRedeem(ME));
@@ -65,12 +87,14 @@ describe("what the URL opens", () => {
     render(
       <App
         api={stubApi({
+          checkLink,
           redeem: () => Promise.resolve(ME),
           me: () => Promise.resolve(ME),
           signOut: () => Promise.resolve(),
         })}
       />,
     );
+    await continueSignIn();
     const status = await screen.findByText("Signed in");
     const bar = within(screen.getAllByRole("banner")[0]!);
     await user.click(await bar.findByRole("button", { name: "Account" }));
@@ -157,8 +181,11 @@ describe("after the link is spent", () => {
    */
   it("leaves no spent link behind in the history", async () => {
     globalThis.history.replaceState(null, "", "/sign-in?token=abc123");
-    render(<App api={stubApi({ redeem: () => Promise.resolve(ME) })} />);
+    render(
+      <App api={stubApi({ checkLink, redeem: () => Promise.resolve(ME) })} />,
+    );
     const before = globalThis.history.length;
+    await continueSignIn();
 
     /*
      * In the ballot, not on the page: the left rail lists the questions
@@ -201,11 +228,13 @@ describe("after the link is spent", () => {
     render(
       <App
         api={stubApi({
+          checkLink,
           redeem: () => Promise.resolve(ME),
           poll: (id) => Promise.resolve(poll({ id, question: `Q ${id}` })),
         })}
       />,
     );
+    await continueSignIn();
     expect(
       await waitFor(() =>
         within(screen.getByRole("main")).getByRole("heading", {
@@ -231,7 +260,10 @@ describe("after the link is spent", () => {
     second.unmount();
 
     globalThis.history.replaceState(null, "", "/sign-in?token=abc123");
-    render(<App api={stubApi({ redeem: () => Promise.resolve(ME) })} />);
+    render(
+      <App api={stubApi({ checkLink, redeem: () => Promise.resolve(ME) })} />,
+    );
+    await continueSignIn();
     await waitFor(() =>
       within(screen.getByRole("main")).getByRole("heading", {
         name: poll().question,
@@ -251,6 +283,7 @@ describe("after the link is spent", () => {
     render(
       <App
         api={stubApi({
+          checkLink,
           redeem: () => Promise.resolve(ME),
           creationContext: () =>
             Promise.resolve({
@@ -262,6 +295,7 @@ describe("after the link is spent", () => {
         })}
       />,
     );
+    await continueSignIn();
     expect(await screen.findByLabelText("Your question")).toBeTruthy();
     expect(globalThis.location.pathname).toBe("/new");
   });
@@ -272,7 +306,7 @@ describe("after the link is spent", () => {
     render(
       <App
         api={stubApi({
-          redeem: () =>
+          checkLink: () =>
             Promise.reject(
               new ApiError(
                 410,
@@ -359,7 +393,7 @@ describe("the sign-in screens on the page", () => {
 
   it("puts what the emailed link opens in the page too", async () => {
     globalThis.history.replaceState(null, "", "/sign-in?token=abc123");
-    render(<App api={stubApi({ redeem: () => new Promise(() => {}) })} />);
+    render(<App api={stubApi({ checkLink: () => new Promise(() => {}) })} />);
 
     expect(
       await within(screen.getByRole("main")).findByText("Loading…"),

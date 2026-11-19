@@ -171,6 +171,7 @@ export function App({
         return (
           <SignInPage api={api}>
             <Redeem
+              key={at.token}
               api={api}
               token={at.token}
               /*

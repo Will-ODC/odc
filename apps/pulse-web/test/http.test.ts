@@ -311,6 +311,24 @@ describe("asking for a sign-in link", () => {
 });
 
 describe("redeeming a link", () => {
+  it("reads the account with GET before spending the link", async () => {
+    const calls = stubFetch({
+      body: JSON.stringify({ status: "ready", email: "jo@example.org" }),
+    });
+    expect(await new HttpPulseApi().checkLink("a+b/c=")).toBe("jo@example.org");
+    expect(calls).toHaveLength(1);
+    expect(calls[0]?.url).toBe("/api/sign-in/redeem?token=a%2Bb%2Fc%3D");
+    expect(calls[0]?.init.method).toBe("GET");
+    expect(calls[0]?.init.body).toBeUndefined();
+  });
+
+  it("rejects a response with no account address", async () => {
+    stubFetch({ body: JSON.stringify({ status: "ready" }) });
+    await expect(new HttpPulseApi().checkLink("token")).rejects.toBeInstanceOf(
+      ApiError,
+    );
+  });
+
   it("posts the token to the redeem path and unwraps the voter", async () => {
     const calls = stubFetch({
       body: JSON.stringify({
