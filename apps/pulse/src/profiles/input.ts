@@ -69,7 +69,9 @@ export function normalizeProfile(value: unknown): ProfileInput {
  * spacing. The same rule as `member_profile_name_not_reserved` (018).
  */
 export function isReservedName(displayName: string): boolean {
-  return displayName.replace(/\s+/g, " ").toLowerCase() === "verified voter";
+  return (
+    displayName.trim().replace(/\s+/g, " ").toLowerCase() === "verified voter"
+  );
 }
 
 const UUID =

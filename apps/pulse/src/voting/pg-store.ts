@@ -421,8 +421,11 @@ export class PostgresVotingStore implements VotingStore {
     before?: VoteBefore,
     accountId?: string,
   ): Promise<HistoryVote[]> {
-    // The page is cut in the subquery, in vote_history_idx order, so the scan
-    // stops at limit + 1; only those rows are joined to their polls.
+    // The page is cut in each half, so each scan stops at limit + 1: this
+    // browser's ballots in vote_history_idx order, and the account's public
+    // votes through public_vote_account_idx (ADR-0048). One `or` would
+    // defeat the ordered index scan. `union` drops a row both halves name;
+    // only those limit + 1 rows are joined to their polls.
     const { rows } = await this.#pool.query<{
       poll_id: string;
       cast_at: Date;
@@ -436,12 +439,12 @@ export class PostgresVotingStore implements VotingStore {
         " filter (where c.position is not null), '{}') as ballot," +
         " coalesce(array_agg(c.label order by c.position)" +
         " filter (where c.position is not null), '{}') as labels" +
-        " from (select id, poll_id, cast_at from vote" +
-        // The account's public votes through public_vote_account_idx.
-        " where (voter_id = $1" +
-        "   or id in (select vote_id from public_vote where account_id = $5))" +
-        ' and ($2::timestamptz is null or (cast_at, poll_id collate "C")' +
-        ' < ($2::timestamptz, $3::text collate "C"))' +
+        " from (select * from" +
+        " ((select id, poll_id, cast_at from vote where voter_id = $1" +
+        `${page("")})` +
+        " union (select v.id, v.poll_id, v.cast_at from public_vote pv" +
+        " join vote v on v.id = pv.vote_id where pv.account_id = $5" +
+        `${page("v.")})) h` +
         ' order by cast_at desc, poll_id collate "C" desc limit $4) v' +
         " left join polls p on p.id = v.poll_id" +
         " left join vote_choice vc on vc.vote_id = v.id" +
@@ -664,6 +667,18 @@ export class PostgresVotingStore implements VotingStore {
     if (!poll) throw new UnknownPollError(pollId);
     return poll;
   }
+}
+
+/**
+ * One half of a history page, its vote columns read through `v`: after the
+ * cursor, newest first, limit + 1.
+ */
+function page(v: string): string {
+  return (
+    ` and ($2::timestamptz is null or (${v}cast_at, ${v}poll_id collate "C")` +
+    ' < ($2::timestamptz, $3::text collate "C"))' +
+    ` order by ${v}cast_at desc, ${v}poll_id collate "C" desc limit $4`
+  );
 }
 
 /**

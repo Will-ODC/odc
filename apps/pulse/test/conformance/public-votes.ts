@@ -455,7 +455,10 @@ export function publicVoteConformance(
           "VERIFIED   Voter",
           " verified  voter ",
         ])
-          await assert.rejects(w.name("ada", name));
+          await assert.rejects(
+            w.name("ada", name),
+            /reserved|member_profile_name_not_reserved/,
+          );
         await w.name("ada", "Verified voters");
       });
     },

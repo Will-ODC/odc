@@ -151,6 +151,9 @@ test(
     try {
       await barrier.query("begin");
       await barrier.query(holdAda, [asAda.lockKey.toString()]);
+      const barrierPid = (
+        await barrier.query<{ pid: number }>("select pg_backend_pid() as pid")
+      ).rows[0]?.pid;
       pending = Promise.all([
         store.castPublic("p1", "ada", [1], asAda),
         store.removePublicVote("p1", "ada", asAda.lockKey),
@@ -158,7 +161,10 @@ test(
       pending.catch(() => undefined);
       for (let tries = 0; ; tries++) {
         const { rows } = await pool.query(
-          "select 1 from pg_locks where locktype = 'advisory' and not granted",
+          // Only waiters on this barrier: other test files run alongside.
+          "select 1 from pg_stat_activity" +
+            " where pg_backend_pid() <> pid and $1 = any(pg_blocking_pids(pid))",
+          [barrierPid],
         );
         if (rows.length >= 2) break;
         assert.ok(tries < 500, "the writes never waited on the person lock");
