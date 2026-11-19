@@ -80,7 +80,8 @@ Per-PR history is in `git log origin/master -- apps/pulse apps/pulse-web`.
   stores pictures in neutral `image`/`image_bytes` keyed by
   `owner_kind`/`owner_id` and serves them; nginx answers uploads over 10 MiB
   with the API's JSON 413; #594 checks sharp loads in the API image. Not
-  built: #580, #427, #296, then #586 after #427.
+  built: #700, #580, #701, #427, #296, then #586 after #427. Pictures now
+  extend to every main-page item (operator 2026-11-18; ADR-0049).
 - **MCP:** public reads `get_poll`/`get_results` at `/api/mcp` (PR #323).
   ADR-0036 (voting from AI apps) is proposed only; discovery (#291) unbuilt.
 - **Infrastructure:** Postgres (ADR-0020/0021/0023), Resend mail (ADR-0027),
@@ -139,10 +140,14 @@ public hostname, before inviting anyone.
    the profile later does not remove; a voter with no profile name shows as
    an unnamed verified voter, with no prompt for a name.
 
-1. **Next: #580, a picture in the posting form.** Waiting on the operator's
-   answer to "mockup first, or build from the plan and review screenshots?".
-   Then #427 (thumbnails and context excerpt length), #296 (picture on the
-   question page), #586 after #427.
+1. **Next: pictures on every main-page item.** Operator direction
+   2026-11-18: "All polls, posts, questions or whatever goes on main page
+   should take images as well, like Rediit." ADR-0047 covered polls only, so
+   ADR-0049 (in progress) extends it to contributions and discussion topics.
+   Order: ADR-0049 → #700 (one shared picture field, mockup first, for
+   operator review) → #580 (poll form) and #701 (contributions take a
+   picture) → #427 (thumbnails for every item in the main list), #296
+   (picture on the question page), #586 after #427. #541 topics use #700.
 2. **Audits 2026-11-14 are complete; none changed product code:**
    [targeted tests](../docs/audits/pulse-tests-2026-11-14.md) → #613/#614;
    [simplicity](../docs/audits/pulse-simplicity-2026-11-14.md) → #616;
@@ -200,7 +205,6 @@ public hostname, before inviting anyone.
   from every device (server computes the ADR-0040 code per poll)? Reverses
   ADR-0040's "accepted limit" wording; owner-only versus public was asked and
   not answered. Separate from #685, whose rules are settled.
-- **#580:** mockup first, or build from the plan and review screenshots?
 - **Continuation (#425):** operator direction 2026-11-15: Next and Previous
   move through Suggested votes (detail on the issue). Still open: do answered
   questions keep My votes Previous/Next, what Next does on a phone (no rail),
