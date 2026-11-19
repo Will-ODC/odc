@@ -249,6 +249,29 @@ test("the_web_origin_must_be_an_origin_and_nothing_more", () => {
   }
 });
 
+test("the_web_origin_is_https_or_plain_http_only_on_loopback_because_MCP_trusts_it", () => {
+  // MCP's one trusted origin is this one (ADR-0048 decision 11), and MCP
+  // refuses plaintext off loopback, so the start says so naming the variable.
+  for (const bad of ["http://pulse.example.org", "http://192.168.1.5:8080"]) {
+    assert.throws(
+      () => serveConfig({ ...COMPLETE, PULSE_WEB_ORIGIN: bad }),
+      /PULSE_WEB_ORIGIN must be https:\/\//,
+      `"${bad}" must be refused`,
+    );
+  }
+  for (const good of [
+    "https://pulse.example.org",
+    "http://127.0.0.1:8080",
+    "http://localhost:8080",
+    "http://[::1]:8080",
+  ]) {
+    assert.equal(
+      serveConfig({ ...COMPLETE, PULSE_WEB_ORIGIN: good }).webOrigin,
+      good,
+    );
+  }
+});
+
 test("a_port_is_a_port_or_the_start_fails", () => {
   assert.equal(serveConfig({ ...COMPLETE, PULSE_PORT: "3000" }).port, 3000);
   assert.equal(serveConfig({ ...COMPLETE, PULSE_PORT: "" }).port, DEFAULT_PORT);
@@ -965,3 +988,54 @@ for (const code of ["28000", "28P01", "XX000"]) {
     );
   });
 }
+
+test(
+  "the_served_wiring_trusts_exactly_the_web_origin_for_MCP",
+  { skip: databaseSkip },
+  async (t) => {
+    const { schema } = await throwawaySchema(t);
+    const config: ServeConfig = {
+      port: 0,
+      trustedProxyHops: 1,
+      host: "127.0.0.1",
+      secret: "a-secret-that-is-long-enough-x-x",
+      confirmationKey: "a-confirmation-key-that-is-long-enough-1234",
+      databaseUrl: process.env["PULSE_DATABASE_URL"] as string,
+      webOrigin: "https://pulse.example.org",
+      schema,
+      mailer: {
+        sendClaimLink: async () => undefined,
+        sendProofOfAction: async () => undefined,
+      },
+    };
+    const { app } = await buildServer(config, { log: () => undefined });
+    t.after(() => app.close());
+    await app.listen({ host: "127.0.0.1", port: 0 });
+    const list = (headers: Record<string, string | undefined>) =>
+      app.inject({
+        method: "POST",
+        url: "/api/mcp",
+        headers: {
+          accept: "application/json, text/event-stream",
+          "content-type": "application/json",
+          ...headers,
+        },
+        payload: { jsonrpc: "2.0", id: 1, method: "tools/list" },
+      });
+    // As nginx forwards a browser's request on the public origin: before
+    // this wiring, every one of these was refused.
+    const served = await list({
+      host: "pulse.example.org",
+      origin: "https://pulse.example.org",
+    });
+    assert.equal(served.statusCode, 200, served.body);
+    assert.match(served.body, /get_public_votes/);
+    for (const foreign of [
+      { host: "evil.example", origin: "https://pulse.example.org" },
+      { host: "pulse.example.org", origin: "https://evil.example" },
+      { host: "pulse.example.org:8443", origin: undefined },
+    ]) {
+      assert.equal((await list(foreign)).statusCode, 403);
+    }
+  },
+);

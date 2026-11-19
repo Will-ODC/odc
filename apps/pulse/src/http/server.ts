@@ -1,6 +1,6 @@
 import { registerContributionRoutes } from "./contributions.js";
 import type { ContributionsStore } from "../contributions/store.js";
-import { randomUUID } from "node:crypto";
+import { randomBytes, randomUUID, timingSafeEqual } from "node:crypto";
 import { logFault } from "../logging.js";
 import { BlockList, isIP } from "node:net";
 import cookie from "@fastify/cookie";
@@ -116,7 +116,7 @@ export interface ServerDeps {
   /**
    * Public-vote list reads per client address per window, in milliseconds
    * (ADR-0048 decision 7); default 60 a minute. One counter per address,
-   * which MCP's `get_public_votes` will share, not a route config.
+   * which MCP's `get_public_votes` shares, not a route config.
    */
   publicVotesRateLimit?: AddressLimitOptions;
   /** Overridable so tests get a ballot identity they can predict. */
@@ -760,10 +760,32 @@ export async function createServer(deps: ServerDeps): Promise<FastifyInstance> {
     deps.publicVotesRateLimit ?? { max: 60, timeWindow: 60_000 },
     now,
   );
+  /**
+   * MCP's own reads of the list reach this route from loopback, where every
+   * AI app would share one bucket; the MCP route counts its real caller
+   * itself, in this same counter. Those reads carry this header, a random
+   * value made here and never configured, logged or sent anywhere else
+   * (ADR-0048 decision 7). Any other value, or none, is counted as usual.
+   */
+  const internal = {
+    name: "x-pulse-internal",
+    value: randomBytes(32).toString("base64url"),
+  };
+  const internalValue = Buffer.from(internal.value);
+  const isInternal = (request: FastifyRequest) => {
+    const sent = request.headers[internal.name];
+    if (typeof sent !== "string") return false;
+    const bytes = Buffer.from(sent);
+    return (
+      bytes.length === internalValue.length &&
+      timingSafeEqual(bytes, internalValue)
+    );
+  };
   const limitPublicVotes = async (
     request: FastifyRequest,
     reply: FastifyReply,
   ) => {
+    if (isInternal(request)) return;
     const verdict = publicVotesLimit.take(request.ip);
     if (verdict.allowed) return;
     reply.header("Retry-After", String(verdict.retryAfterSeconds));
@@ -981,7 +1003,7 @@ export async function createServer(deps: ServerDeps): Promise<FastifyInstance> {
     currentVoter,
     ...(deps.profileRateLimit ? { rateLimit: deps.profileRateLimit } : {}),
   });
-  registerMcpReads(app, deps.mcp);
+  registerMcpReads(app, deps.mcp, { publicVotesLimit, internal });
   return app;
 }
 

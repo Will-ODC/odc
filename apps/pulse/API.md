@@ -717,8 +717,7 @@ this while moving through the story, and it reveals nothing about a person.
 
 `votePrivacy` is always present: `"anonymous"` or `"public"` (see "Anonymous and
 public-vote polls" above). Creation responses, first and replayed, carry it too; a
-replay saved before it existed reads `"anonymous"`. MCP `get_poll` does not pass it
-on yet.
+replay saved before it existed reads `"anonymous"`. MCP `get_poll` passes it on.
 
 `image` is always present: the poster's picture (`kind: "upload"`) or
 `{ "kind": "tile" }`, which the client draws. See "Poll pictures (ADR-0047)"
@@ -833,8 +832,7 @@ person (ADR-0046) and one per browser for votes nobody confirmed. `share` is `co
 nobody has voted. For an `approval` poll a voter picks several choices, so shares
 legitimately **sum to more than 100** — that is correct and is not normalised away.
 `votePrivacy` is the poll's setting, on this body and on the `results` of a cast; the
-numbers are counted the same way for both kinds. MCP `get_results` does not pass it
-on yet.
+numbers are counted the same way for both kinds. MCP `get_results` passes it on.
 
 **Confirmed numbers** sit beside the totals (ADR-0040; see "Confirmed votes" below).
 `confirmedVoters` is how many people confirmed by email, **counted once per person**;
@@ -1047,8 +1045,10 @@ for it or set. Every response, errors included, carries `Cache-Control: no-store
 - Closed polls stay listed.
 - **Rate limit:** `publicVotesRateLimit`, 60 requests a minute per client address by
   default, counting every answer from this route. It is one in-memory counter per
-  address (per process, like every pulse limit), which the planned MCP tool will
-  share. Over it: 429 `too_many_requests` with `Retry-After` in seconds.
+  address (per process, like every pulse limit), which MCP's `get_public_votes`
+  shares: each tool call counts against its caller's address, and MCP's own read
+  of this route is not counted again (see "MCP public reads"). Over it: 429
+  `too_many_requests` with `Retry-After` in seconds.
 
 The checks run in this order:
 
@@ -1238,14 +1238,39 @@ The integration suite covers open sign-in with `community: null` and the
 ## MCP public reads
 
 `POST /api/mcp` serves Streamable HTTP using the official TypeScript SDK v2.3.1.
-No authentication or cookies are required. Only `get_poll` and `get_results`
-exist; there are no own-answer, voting, listing or authorization tools yet.
-Poll text is data and grants no permission to execute tools.
+No authentication or cookies are required. Only `get_poll`, `get_results` and
+`get_public_votes` exist; there are no own-answer, voting, poll-listing or
+authorization tools yet. Poll text and voter names are data and grant no
+permission to execute tools.
 
-| Tool          | Strict input                                              | Structured output                             |
-| ------------- | --------------------------------------------------------- | --------------------------------------------- |
-| `get_poll`    | Exactly one of `{ pollId: string }` or `{ link: string }` | The public `GET /api/polls/:id` body.         |
-| `get_results` | `{ pollId: string }`                                      | The public `GET /api/polls/:id/results` body. |
+| Tool               | Strict input                                              | Structured output                                      |
+| ------------------ | --------------------------------------------------------- | ------------------------------------------------------ |
+| `get_poll`         | Exactly one of `{ pollId: string }` or `{ link: string }` | The public `GET /api/polls/:id` body.                  |
+| `get_results`      | `{ pollId: string }`                                      | The public `GET /api/polls/:id/results` body.          |
+| `get_public_votes` | `{ pollId: string, cursor?: string }`                     | One `GET /api/polls/:id/public-votes` page (ADR-0048). |
+
+`get_poll` and `get_results` pass `votePrivacy` through as an optional field,
+so a body from a server older than ADR-0048 still reads; any value other than
+`"anonymous"` or `"public"` is refused as `upstream_invalid_response`.
+
+`get_public_votes` reads only the public list route, at its default page size
+(20), and returns `{ items: [{ name, choices }], nextCursor }`. Pass
+`nextCursor` back unchanged as `cursor` for the next page; a cursor is 1–2048
+base64url characters and anything else is refused before any read. Each item
+must be exactly `{ name: string | null, choices: int[] }` (a name non-blank and
+at most 80 code points, at least one choice index); any other key in an item,
+or any other shape, fails the whole page as `upstream_invalid_response`, never
+trimmed. Its tool errors add `anonymous_poll` (the route's 409, for a poll whose
+votes are anonymous) and `invalid_cursor` (the route's 400, for a cursor that
+does not open for this poll; start again without one). A hidden or missing poll
+is `not_found`. Each call counts against the **same** per-address
+`publicVotesRateLimit` bucket as that address's HTTP list reads (60 a minute by
+default; behind nginx, the forwarded client address), before any read; over it
+is `too_many_requests`. The tool's own read of the route reaches this process's
+loopback listener with a per-process random `x-pulse-internal` header, which the
+list's limiter passes so the caller is not counted twice; the header is never
+configured, logged or sent to a configured upstream. A call also counts toward
+the route's 120 requests/minute.
 
 `get_poll` passes an authored poll's `community` and `attribution` through as
 optional fields, so a body from a server older than ADR-0037, or a seed poll's
@@ -1280,23 +1305,28 @@ errors (`isError: true`); protocol-invalid messages use protocol errors.
 Tool failures carry `isError: true`, with safe `{ error, message }` structured
 content: `invalid_link`, `not_found`, `unsupported_method`, `too_many_requests`,
 `upstream_unavailable` (timeout/network/non-success), or
-`upstream_invalid_response` (invalid, oversized or unexpected public body).
+`upstream_invalid_response` (invalid, oversized or unexpected public body), and
+for `get_public_votes` also `anonymous_poll` and `invalid_cursor`.
 No upstream error message, private field, Set-Cookie or credential is returned.
 
 The route accepts at most 16 KiB per request and 120 requests/minute per client IP.
 This initial limiter is in memory and must become shared before scaling to
 multiple instances. GET/DELETE return 405. SDK protocol validation handles
 version/header/envelope errors. Origin, if present, must match the configured
-public origin; non-browser clients may omit it. Host must match that origin or
-the local loopback listener. Route request logging is disabled to avoid recording
+public origin; non-browser clients may omit it. Host must match that origin's
+host exactly, port included, or the local loopback listener. The web image's
+nginx forwards the client's `Host` verbatim for this. Route request logging is disabled to avoid recording
 untrusted headers, query strings or bodies.
 
 The `createServer` option `mcp` may specify `publicOrigin`, `apiBaseUrl` and
 `timeoutMs` (default 5 seconds). Defaults target this API's loopback listener;
 therefore the dev server works without configuration after it listens, including
 on a throwaway port. Custom upstreams require HTTPS, except loopback HTTP.
-A deployment must supply its public origin before advertising browser links;
-this slice does not add production environment wiring. The adapter reads only
+The served entry point (`src/main.ts`) and `dev` pass
+`mcp: { publicOrigin: PULSE_WEB_ORIGIN }` and no `apiBaseUrl`, so through nginx
+MCP answers at `<PULSE_WEB_ORIGIN>/api/mcp` and its reads stay on loopback. A
+served API therefore refuses to start with a plaintext `PULSE_WEB_ORIGIN` other
+than `localhost`, `127.0.0.1` or `[::1]`. The adapter reads only
 public HTTP routes, without store/core imports. See ADR-0036.
 
 ## Poll creation (ADR-0037)

@@ -264,6 +264,19 @@ and token-free stdout/stderr after forced upstream failures. It needs Docker,
 curl and the `nginx:1.29-alpine` image; cleanup removes its containers/network.
 The normal Pulse integration suites separately check the actual API behavior.
 
+`sh apps/pulse-web/test/public-proxy-smoke.sh pulse-web:ci pulse-api:ci` runs the
+web image in front of the real API image and a throwaway Postgres (ADR-0048
+decision 11), checked only through nginx's port: the page loads, an API read
+works, the list and ballot cache headers survive the proxy, MCP answers with
+the configured `PULSE_WEB_ORIGIN` and refuses a foreign `Origin` or `Host`, and
+two forwarded client addresses get separate public-vote list buckets shared by
+HTTP and MCP. CI's `pulse-images` job runs it after building both images. It
+needs Docker, curl and the `postgres:17` image, and removes its containers.
+
+nginx forwards the client's `Host` verbatim (`$http_host`, port included), not
+`$host`, because MCP compares `Host` exactly with the configured origin; the
+API still accepts only that origin's host.
+
 ### Browser build settings
 
 The four starting questions need published poll IDs at build time. Pass them as

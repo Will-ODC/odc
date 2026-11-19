@@ -226,9 +226,11 @@ start again.
 
 ## MCP
 
-`POST /api/mcp` offers two read-only tools: `get_poll` and `get_results`. With
-`dev` running, point an MCP client at `http://127.0.0.1:8080/api/mcp` and ask
-for poll `ads-free`. Details are in [API.md](./API.md#mcp-public-reads).
+`POST /api/mcp` offers three read-only tools: `get_poll`, `get_results` and
+`get_public_votes` (a public-vote poll's names and answers). With `dev`
+running, point an MCP client at `http://127.0.0.1:8080/api/mcp` and ask for
+poll `ads-free`. A served API trusts `PULSE_WEB_ORIGIN` as MCP's public origin,
+so through nginx it answers at `<PULSE_WEB_ORIGIN>/api/mcp`. Details are in [API.md](./API.md#mcp-public-reads).
 
 ## Contributions
 

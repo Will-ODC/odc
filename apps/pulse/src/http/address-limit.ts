@@ -2,7 +2,7 @@
  * One in-memory request counter per client address, in fixed windows.
  *
  * `publicVotesRateLimit` (ADR-0048 decision 7) is one of these, consulted by
- * the HTTP list route and, from step 3, by MCP's `get_public_votes`, so one
+ * the HTTP list route and by MCP's `get_public_votes`, so one
  * address gets one allowance across both. Two `@fastify/rate-limit` route
  * configs would each keep their own count. Like every pulse limiter it is per
  * process, so a scaled-out deployment multiplies the allowance.
