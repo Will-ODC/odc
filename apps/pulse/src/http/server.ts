@@ -675,7 +675,7 @@ export async function createServer(deps: ServerDeps): Promise<FastifyInstance> {
           return reply.code(409).send({
             error: "vote_privacy_mismatch",
             message:
-              "How this poll's votes are shown has not reached this page. Reload to see it before you vote.",
+              "This poll's voting settings changed. Reload the page before you vote.",
           });
         }
 

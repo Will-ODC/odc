@@ -262,7 +262,7 @@ export async function registerProfileRoutes(
           throw new Refusal(
             400,
             "reserved_name",
-            "That name is reserved. Choose another.",
+            "That name is kept for voters without a profile name. Choose another.",
           );
         const actor = actorOf(request);
         // The draft's owner is a precondition, never a choice of write target.

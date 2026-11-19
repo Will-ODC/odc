@@ -437,7 +437,7 @@ separator, punctuation and whitespace, and the blank fillers U+3164, U+115F,
 U+1160, U+FFA0, U+2800 and U+1D159. So `" verified   VOTER "`, `"verified-voter"`,
 `"Verifiedvoter"` and the name with invisible joiners in it are all refused, while
 `"Verified voter 2"` is not. Such a write answers 400 `reserved_name`, "That name
-is reserved. Choose another.", and saves nothing; the database refuses the name
+is kept for voters without a profile name. Choose another.", and saves nothing; the database refuses the name
 too. Lookalike letters from other scripts are not caught.
 
 The first successful write generates the stable
@@ -949,8 +949,7 @@ see the ballot cookie above. A public-vote poll needs one (below).
 `bad_request`. A client sends `"publicVote": true` only from a vote card that showed
 the "Votes are public" notice. It must match the poll: a cast on a public-vote poll
 **without** it, or on an anonymous poll **with** it, is 409 `vote_privacy_mismatch`,
-"How this poll's votes are shown has not reached this page. Reload to see it before
-you vote." So a client that has never heard of public-vote polls can never cast a
+"This poll's voting settings changed. Reload the page before you vote." So a client that has never heard of public-vote polls can never cast a
 named vote, and one that believes a poll is public never files an anonymous vote.
 
 The ballot is validated the same way the client validates it before sending: every
