@@ -38,10 +38,10 @@ Repo discipline still applies: tests ship with the change, there is one small
 branch per change, named for its ticket (`pulse/<issue>-<short>`, #310), and
 the same CI runs.
 
-## Where it stands (2026-11-14)
+## Where it stands (2026-11-18)
 
 Per-PR history is in `git log origin/master -- apps/pulse apps/pulse-web`.
-**See [open pull requests](https://github.com/Will-ODC/odc/pulls) for current review status.** Next migration: **018**.
+**Open Pulse-related PRs:** #696 (this memory PR), #698 (skill rule, operator merges), #699 for #697 (home list width, in review). Next migration: **018**.
 
 - **Sign-in (pillar 1) is built.** Magic-link sign-in and redeem; open sign-up
   with community as an optional label (ADR-0030); a community picker when an
@@ -119,15 +119,15 @@ public hostname, before inviting anyone.
 0. **Deploy on Railway (operator, 2026-11-15); work split 50/50 Codex/Claude.**
    Auth audit `docs/audits/pulse-auth-2026-11-15.md` (Codex, read-only,
    FIX-BEFORE-PILOT; no passwords exist). All pre-pilot fixes merged
-   (2026-11-18 unless noted): #682 nginx for Railway in #688 (`6c48a1e`) and
-   #683 `__Host-` cookies and Origin checks in #687 (`f4a27fd`); #684 Railway
+   (2026-11-18 unless noted): #682 nginx for Railway in #688 (`6c48a1e`,
+   2026-11-15) and #683 `__Host-` cookies and Origin checks in #687
+   (`f4a27fd`, 2026-11-15); #684 Railway
    section of `apps/pulse/DEPLOY.md` in #689 (`ad5b15d`); #691 nginx sends HSTS
-   in real-IP mode when the edge reports https in #693 (`0cb347e`), #691
-   closed; #681 sign-in only after a click naming the account, with lost-answer
+   in real-IP mode when the edge reports https in #693 (`0cb347e`); #681 sign-in only after a click naming the account, with lost-answer
    recovery via `/api/me` and a GET-only Try again, in #695 (`9e17d8d`); #692
    flaky `Profile.test.tsx` in #694 (`eaa5f88`). After the pilot: #678 ballot
    revocation, #679 atomic link limit, #680 idle timeout and owner re-sign-in.
-   New ticket #697 (home list spans width between rails). Skill PR #698 (keep
+   New ticket #697 (home list spans width between rails), PR #699 in review. Skill PR #698 (keep
    a healthy queued backlog) awaits the operator's merge.
    **Per-poll anonymous or visible votes (#685, operator 2026-11-15):** chosen
    once at creation, clearly shown, simple. ADR-0048 (#690, `3289d74`) decided
