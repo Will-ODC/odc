@@ -39,8 +39,21 @@ public" / "Votes are anonymous".
    its own ADR. The name avoids `polls.attribution_kind = 'anonymous'`, which
    is about the poster.
 2. **Fixed at creation, held by the database.** No route changes it. A trigger
-   `polls_vote_privacy_fixed` (before update, the pattern of migration 016)
-   raises when `new.vote_privacy is distinct from old.vote_privacy`.
+   (before update, the pattern of migration 016) refuses any change:
+
+   ```sql
+   create function polls_vote_privacy_fixed() returns trigger
+   language plpgsql as $$
+   begin
+     if new.vote_privacy is distinct from old.vote_privacy then
+       raise exception 'a poll''s vote privacy is fixed at creation';
+     end if;
+     return new;
+   end $$;
+   create trigger polls_vote_privacy_fixed before update on polls
+     for each row execute function polls_vote_privacy_fixed();
+   ```
+
 3. **A public vote is not filed under the browser, and the database holds
    that.** The ballot cookie is shared by every anonymous vote from that
    browser, so an account stored beside a cookie-filed row would link the
@@ -76,10 +89,36 @@ public" / "Votes are anonymous".
      account beside a cookie-filed row. Because the key has no `on update`, a
      later `update vote set voter_id = …` on a linked row (the shape of the
      ADR-0046 move) is refused too.
-   - **A trigger, `vote_identity_matches_poll`** (before insert or update of
-     `voter_id, poll_id` on `vote`), raises when a row's `voter_id` starts
-     `pv:` on an anonymous poll, or does not on a public-vote poll. This is
-     safe because the setting never changes (decision 2).
+   - **A trigger** raises when a row's `voter_id` starts `pv:` on an
+     anonymous poll, or does not on a public-vote poll. This is safe because
+     the setting never changes (decision 2):
+
+     ```sql
+     create function vote_identity_matches_poll() returns trigger
+     language plpgsql as $$
+     declare
+       privacy text;
+     begin
+       select p.vote_privacy into privacy from polls p where p.id = new.poll_id;
+       if privacy = 'public' and new.voter_id not like 'pv:%' then
+         raise exception 'a public-vote poll''s votes are filed under a pv: identity';
+       elsif privacy = 'anonymous' and new.voter_id like 'pv:%' then
+         raise exception 'an anonymous poll''s votes are never filed under a pv: identity';
+       end if;
+       return new;
+     end $$;
+     create trigger vote_identity_matches_poll
+       before insert or update of voter_id, poll_id on vote
+       for each row execute function vote_identity_matches_poll();
+     ```
+
+   **This SQL was executed** (2026-11-18, PostgreSQL 16, on migrations
+   001–017 with existing rows) together with decisions 1, 2 and 8's SQL, and
+   every refusal above fired with the expected error. Also checked: an
+   unlinked anonymous row can still move its `voter_id` (the ADR-0046 shape),
+   a re-cast's `update vote set cast_at` passes, and deleting the vote or the
+   poll removes the `public_vote` row. The implementing migration copies this
+   SQL and keeps a test that runs these cases against Postgres.
 
    Migration 007's principle applies: the storage layer refuses these whatever
    the code above it does. Deleting the vote deletes the link. The ADR-0040
@@ -98,23 +137,37 @@ public" / "Votes are anonymous".
    - a second row per (poll, account);
    - a changed setting.
 
-4. **Casting on a public-vote poll** (`POST /api/polls/:id/votes`). The checks
-   run in this order:
-   1. 403 `origin_not_allowed`, the exact-Origin and JSON guard that #687 adds
-      to this route for all polls. If #687 has not merged, a public-vote cast
-      runs `requireWebOrigin` itself.
-   2. Today's 400 `bad_request` body-shape check, which already runs before the
-      poll lookup.
+4. **Casting on a public-vote poll** (`POST /api/polls/:id/votes`).
+   - **The voter's acknowledgement travels with the vote.** The body gains an
+     optional `"publicVote": true`. A client sends it only from a vote card
+     that showed the "Votes are public" notice beside the vote button (no extra
+     click and no name prompt, per the operator's rules). A cast on a
+     public-vote poll **without** it is refused, so a client built before this
+     ADR, which never shows the notice, can never publish a named vote. A cast
+     **with** it on an anonymous poll is refused too, so a client that thinks a
+     poll is public never files an anonymous vote while telling the voter it is
+     named. Both refusals are 409 `vote_privacy_mismatch`: "How this poll's
+     votes are shown has not reached this page. Reload to see it before you
+     vote." Old clients on anonymous polls send no field and are unaffected.
+
+   The checks run in this order:
+   1. 403 `origin_not_allowed`, the exact-Origin and JSON guard #687 put on
+      this route for all polls.
+   2. 400 `bad_request` for the body shape, which already runs before the poll
+      lookup. It now also refuses a `publicVote` that is present and not
+      `true`.
    3. 404 `not_found`.
-   4. 503 `public_votes_unavailable` (decision 5).
-   5. `closed`.
-   6. **401 `sign_in_required`** when there is no valid session: "Sign in with
+   4. **409 `vote_privacy_mismatch`**, as above, on either kind of poll.
+   5. 503 `public_votes_unavailable` (decision 5).
+   6. `closed`.
+   7. **401 `sign_in_required`** when there is no valid session: "Sign in with
       your email to vote on this poll. Your vote will be shown with your
       profile name."
-   7. `bad_ballot`.
+   8. `bad_ballot`.
 
    A refused cast writes nothing, makes no anonymous ballot and mints no ballot
-   cookie.
+   cookie. The mismatch check comes before 401, so an old client is never
+   walked through sign-in towards a named vote it did not describe.
    - **With a session**, a separate store method `castPublic(pollId, accountId,
 ballot, {confirmation, lockKey})` runs one transaction. It takes the
      person lock, then re-checks that the poll is open with the injected clock;
@@ -144,6 +197,13 @@ ballot, {confirmation, lockKey})` runs one transaction. It takes the
      Signed in, it returns the account's vote through `public_vote`, from any
      browser. Signed out, it returns `null`. The ballot cookie is neither read
      nor minted there.
+   - **`/ballot` is never cached.** Its answer depends on the session (and, on
+     anonymous polls, on the ballot cookie), so on every poll and every
+     outcome, 404 and errors included, it sends `Cache-Control: private,
+no-store` and `Vary: Cookie`, set in an `onRequest` hook as `/api/me`'s
+     `noStore` is. Without it a shared cache or the proxy could hand one
+     person's named answer to the next reader of the same URL. `/my-votes`
+     already sends `private, no-store` and gains `Vary: Cookie`.
    - `GET /api/my-votes`: the early empty-page return for a missing ballot
      cookie applies only when there is also no session. With a session, the
      list also includes that account's public votes (`… or v.id in (select
@@ -157,6 +217,37 @@ vote_id from public_vote where account_id = $acct)`, served by
    - Closed polls stay listed. A hidden poll answers 404 `not_found`, here and
      over MCP. An anonymous poll answers **409** `anonymous_poll`, so clients
      can tell it from 404.
+   - **The page query filters hidden polls itself.** `getPoll` does not filter
+     `polls.hidden`, so a route check alone would race a hide and would be one
+     forgotten line from leaking. The store's `listPublicVotes` reads only
+     through a join that excludes them, and an empty result on a hidden poll
+     is answered 404 like a missing one:
+
+     ```sql
+     select m.display_name as name, pv.list_key, pv.vote_id
+       from public_vote pv
+       join polls p on p.id = pv.poll_id and not p.hidden
+                    and p.vote_privacy = 'public'
+       left join member_profile m on m.voter_id = pv.account_id
+      where pv.poll_id = $1 and pv.list_key > $2
+      order by pv.list_key
+      limit $3 + 1;
+     ```
+
+     The choices for those `vote_id`s are read in the same snapshot and
+     returned as indices; `vote_id` and `list_key` never leave the store's
+     result except as the sealed cursor. The in-memory store has no hidden
+     polls (as today) and its conformance case hides a poll in the Postgres
+     store and expects 404 there.
+
+   - **Limiting by the real caller.** The route's limiter keys on
+     `request.ip`, which behind nginx is the forwarded client (one trusted
+     hop). MCP's own upstream reads reach the API from loopback, where every
+     AI app would share one bucket. So those reads carry a per-process random
+     header (`x-pulse-internal`, generated at start, never configured, never
+     logged or sent anywhere else), the limiter's `allowList` passes them, and
+     the MCP route counts `get_public_votes` against `publicVotesRateLimit`
+     itself, keyed on the MCP caller's `request.ip` (decision 11).
    - `limit` is 1–50, default 20. Rows are ordered by `public_vote.list_key`, a
      random value fixed at first cast, so re-casts never skip or repeat
      entries. The order is not chronological.
@@ -179,14 +270,27 @@ vote_id from public_vote where account_id = $acct)`, served by
    This is a separate allow-listed projection, not the profiles API, which hides
    hidden profiles. No profile row gives `null`, which the client renders as
    "Verified voter" in a distinct style, with no link.
-   - **The database reserves the label.** Migration 018 adds
-     `member_profile_name_not_reserved check (lower(regexp_replace(display_name,
-'\s+', ' ', 'g')) <> 'verified voter')`.
-   - **Existing names.** Before adding the check, the migration raises an
-     exception naming how many existing rows match. Pulse is not deployed, so
-     only development data can hit it. A database that does must be fixed by
-     hand: rename or delete the rows, then re-run. Profiles are never renamed
-     silently.
+   - **The database reserves the label**, after refusing to run over existing
+     rows that use it. Pulse is not deployed, so only development data can hit
+     that. A database that does must be fixed by hand: rename or delete the
+     rows, then re-run (018 runs in one transaction, so nothing is left half
+     applied; checked). Profiles are never renamed silently.
+
+     ```sql
+     do $$
+     declare
+       n bigint;
+     begin
+       select count(*) into n from member_profile
+        where lower(regexp_replace(display_name, '\s+', ' ', 'g')) = 'verified voter';
+       if n > 0 then
+         raise exception '% member profile(s) use the reserved name "Verified voter"; rename or delete them, then re-run 018', n;
+       end if;
+     end $$;
+     alter table member_profile add constraint member_profile_name_not_reserved
+       check (lower(regexp_replace(display_name, '\s+', ' ', 'g')) <> 'verified voter');
+     ```
+
    - `PUT /api/me/profile` refuses the name first, with 400 `reserved_name`.
    - Lookalike spellings (other scripts) are not caught. The distinct rendering
      is the main defence.
@@ -232,8 +336,29 @@ vote_id from public_vote where account_id = $acct)`, served by
       trimmed.
     - The client (`mcp/client.ts` maps every 404 to `not_found`) maps the
       route's 409 to the tool error `anonymous_poll`.
-    - It is limited by the MCP route's 120 requests/minute per IP, and its
-      upstream reads also count against `publicVotesRateLimit`.
+    - It is limited by the MCP route's 120 requests/minute per IP, and each
+      call also counts against `publicVotesRateLimit` for the MCP caller's IP
+      (decision 7); an over-limit call is the tool error `rate_limited`.
+    - **The trusted production MCP origin is `PULSE_WEB_ORIGIN`.** Today
+      `main.ts` passes no `mcp` options, so the route trusts only loopback
+      `Host` values and refuses every request that arrives through nginx,
+      which forwards the browser's `Host`. `main.ts` passes
+      `mcp: { publicOrigin: config.webOrigin }`, the one public origin that
+      serves both page and API. The route then accepts exactly that `Host`,
+      and an `Origin`, when sent, only if it equals it exactly; nothing is
+      derived from request headers. `apiBaseUrl` stays unset, so upstream
+      reads go to loopback and never back out through the proxy.
+      `dev-server.ts` does the same with its `webOrigin`.
+    - **Public-proxy smoke test.** Step 3 adds a check that runs the built web
+      image in front of the real API image (with a throwaway Postgres and one
+      public-vote poll written by SQL), and through the nginx port asserts:
+      `POST /api/mcp` with `Host` and `Origin` equal to `PULSE_WEB_ORIGIN`
+      lists `get_public_votes` and returns that poll's page; a foreign
+      `Origin` or `Host` gets 403; `/public-votes` carries `Cache-Control:
+no-store` and `/ballot` carries `private, no-store`; two forwarded
+      client addresses get separate `publicVotesRateLimit` buckets, and two
+      MCP callers from different addresses do too. It runs in CI beside the
+      pulse-web image build, not only by hand as `nginx-smoke.sh` does today.
     - There is no MCP voting tool. ADR-0036 (proposed) plans an account-scoped
       AI ballot, which on a public-vote poll would be a named vote; its
       implementer must reconcile it with this ADR.
@@ -262,9 +387,11 @@ vote_id from public_vote where account_id = $acct)`, served by
     ballot, then list and removal) if it passes about 400 lines.
     1. Migration 018 and both stores, with conformance cases.
     2. API routes and `API.md`, with creation still refusing `"public"`.
-    3. MCP `get_public_votes`.
-    4. **4a, web only:** the public-vote vote card, list, notices and `/trust`
-       copy. Nothing can trigger them yet. UI review.
+    3. MCP `get_public_votes`, the `PULSE_WEB_ORIGIN` wiring and the
+       public-proxy smoke test (decision 11).
+    4. **4a, web only:** the public-vote vote card (which sends
+       `publicVote: true` with the notice beside it), list, notices and
+       `/trust` copy. Nothing can trigger them yet. UI review.
     5. **4b, deployed only after 4a is live:** the API accepts `"public"` at
        creation, and the creation form shows the option. UI review.
 
@@ -314,13 +441,20 @@ None is updated in this PR, which carries only the ADR. The implementing PRs
   - `GET /api/polls/:id` and the listing (`votePrivacy`), and `/results`.
   - "Confirmed votes" and `POST /api/sign-in/redeem`: anonymous polls only.
   - `/ballot` and `/my-votes`: these now read the session for public votes.
-  - `POST …/votes`: the 401 and 503, and the order of checks.
+  - `POST …/votes`: `publicVote`, the 409 `vote_privacy_mismatch`, the 401
+    and 503, and the order of checks.
+  - `/ballot` and `/my-votes`: `Cache-Control: private, no-store` and
+    `Vary: Cookie`.
+  - "MCP public reads": the trusted origin is `PULSE_WEB_ORIGIN`.
   - The new `/public-votes` and `DELETE …/votes/mine` routes.
   - `POST /api/polls`, `PUT /api/me/profile` (`reserved_name`), and MCP
     (`get_public_votes`).
 - `apps/pulse-web/src/screens/Trust.tsx`: decision 13.
-- `apps/pulse/README.md`: the 018 upgrade note (Consequences, "Deploy") and
-  `publicVotesRateLimit`.
+- `apps/pulse/README.md`: the 018 upgrade note (Consequences, "Deploy"),
+  `publicVotesRateLimit`, and the MCP section (reachable at
+  `PULSE_WEB_ORIGIN/api/mcp` in production).
+- `apps/pulse/src/main.ts` and `dev-server.ts`: the `mcp.publicOrigin` wiring.
+- `apps/pulse-web/README.md`: the public-proxy smoke test and its CI job.
 - `docs/decisions/0040-…` and `0046-…` status lines: "scoped to anonymous
   polls by ADR-0048".
 - `docs/decisions/0036-…`: decision 11's note.
