@@ -523,10 +523,9 @@ next dependent step starts.
    - Upload quotas and the 24-hour pending sweep, with Postgres and in-memory
      conformance tests; nginx upload location; `DEPLOY.md` and `API.md`
      updated; CI builds the musl image.
-     2a. **Shared picture field.** #700 (ADR-0049 §7). Mockup approved by the
-     operator first, then one component every posting form uses.
-2. **Add a picture in the posting form.** #580. Depends on 1 and 2a (uses
-   #700's field).
+2. **Add a picture in the posting form.** #580. Depends on 1 and on #700.
+   - First #700 (ADR-0049 §7): one shared picture field for every posting
+     form, mockup approved by the operator before the component is built.
    - Optional picture on `/new` with local preview (`img-src 'self' blob:`),
      required description and Remove before publishing.
    - Publish waits for the upload; type, size, busy and network errors are
@@ -541,21 +540,10 @@ next dependent step starts.
    - One listing request per page, checked by a test; mockup approved first.
    - ADR-0049: one row design for every kind; reads `image` from both
      listings and draws `none` as the empty slot. Contribution thumbnails
-     follow once #701's server PR merges (step 4a).
+     follow once #701's server PR merges.
 4. **Picture on the question page.** #296 (rescoped). Depends on 1.
    - Display picture under the question with its description; defaults show
      as a small tile; failures leave no empty frame and voting stays usable.
-     4a. **Contributions take a picture.** #701 (ADR-0049). Depends on 1 and,
-     for its web PR, 2a; at least a server PR and a web PR.
-   - Migration (next free number; 018 is ADR-0048's) adds owner kind
-     `contribution` to `image` and `content_change`, and
-     `contribution.image_id`; never edits 016.
-   - `POST /api/contributions` accepts `image: { id, alt }`; every
-     contribution body and row carries `image` (`upload` or `none`).
-   - Poster-only `DELETE`/`PUT /api/contributions/:id/image`, signalled by
-     the existing `canManage`; audit rows; `API.md`, `DEPLOY.md` (manual
-     emergency path), `README.md` updated.
-   - Adds the `contribution_image` report target if step 6 merged first.
 5. **Poster removes or replaces the picture.** #582. Depends on 1, 2, 4.
    - `DELETE` and `PUT /api/polls/:id/image`, poster only; the old
      picture's `image` row and bytes deleted in the same transaction; audit
@@ -577,7 +565,7 @@ next dependent step starts.
      removal); this overrides step 5's immediate delete.
    - Poll reports never hide a poll; they wait for the site owner (step 7).
    - ADR-0049: one picture target per owner kind with pictures when built
-     (`contribution_image` too if 4a merged first); 3 reporters hide any
+     (`contribution_image` too if #701 merged first); 3 reporters hide any
      kind's picture.
 7. **Site owner soft-deletes polls.** #584; minimal #234. Depends on 6.
    - Site-owner review list of poll and picture reports, without reporter
@@ -624,6 +612,20 @@ next dependent step starts.
      unchanged.
    - ADR-0049: contributions and topics use community defaults only if the
      operator answers Q1 that way; otherwise they keep `none`.
+
+**Contributions take a picture (#701, ADR-0049).** After step 1; its web PR
+also after #700. At least a server PR and a web PR. It can run alongside
+steps 2–6.
+
+- Migration (next free number; 018 is ADR-0048's) adds owner kind
+  `contribution` to `image` and `content_change`, and `contribution.image_id`;
+  never edits 016.
+- `POST /api/contributions` accepts `image: { id, alt }`; every contribution
+  body and row carries `image` (`upload` or `none`).
+- Poster-only `DELETE`/`PUT /api/contributions/:id/image`, signalled by the
+  existing `canManage`; audit rows; `API.md`, `DEPLOY.md` (manual emergency
+  path) and `README.md` updated.
+- Adds the `contribution_image` report target if step 6 merged first.
 
 Discussion topics (#541) take pictures by ADR-0049 §6 when built: owner kind
 `topic` in their own migration, the shared field, `topic_image` reports.
