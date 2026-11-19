@@ -142,8 +142,9 @@ Unchanged and applied to contributions and topics as they apply to polls:
   `DELETE /api/contributions/:id/image` and `PUT /api/contributions/:id/image`
   with `{ "id": <pending uuid>, "alt": <text> }`; topics get the same under
   their own path in #541. Each writes a `content_change` row
-  (`image_remove`, `image_replace`; the action list is widened by the step
-  that first writes them, #582 for polls). Both answer the item's own 404 when
+  (`image_remove`, `image_replace`). #701's migration adds both actions to
+  the `content_change.action` check unless #582 has already added them;
+  whichever merges first adds them, the other reuses them. Both answer the item's own 404 when
   the item is not visible.
 - **How the poster learns they may do it:** for contributions, the existing
   `canManage` in `GET /api/contributions/:id` (session-derived, `no-store`) is
@@ -154,15 +155,20 @@ Unchanged and applied to contributions and topics as they apply to polls:
   soft-deleting the whole item: polls in #584, contributions in #585, and
   discussion topics (E3) in #541, with the same 30-day restore window and
   purge (D8), which deletes every `image` row the topic owns.
-- **Purge:** #585's contribution purge deletes every `image` row whose owner
-  is the contribution (current and still-retained earlier pictures), with any
-  bytes left, in the same transaction, as #584 does for polls.
+- **Purge:** #585's contribution purge, in one transaction, first sets
+  `contribution.image_id` to null (the foreign key would otherwise refuse the
+  delete), then deletes every `image` row whose owner is the contribution
+  (current and still-retained earlier pictures), with any bytes left, as
+  #584 does for polls.
 - **Interim emergency path (D9 applied).** Pictures ship before reporting and
   soft delete for contributions too. A contribution has no `hidden` flag, so
   until #585 the only emergency path for an abusive contribution picture is a
-  database operator, in one transaction, setting `contribution.image_id` to
-  null and deleting the `image` row (the cascade removes the bytes; the
-  triggers allow exactly this), recorded by hand. This is a real deletion, not
+  database operator, in one transaction: inserting a `content_change` row
+  (`image_remove`, actor kind `site_owner`, the display variant's SHA-256,
+  a reason), then setting `contribution.image_id` to null, then deleting the
+  `image` row (the cascade removes the bytes; the triggers allow exactly
+  this). The `image_remove` action exists by then, because contribution
+  pictures arrive only with #701, whose migration adds it (above). This is a real deletion, not
   a hide; it is accepted because no review exists yet to need the picture.
   `DEPLOY.md` states it beside the poll `hidden` path.
 
