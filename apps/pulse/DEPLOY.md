@@ -170,7 +170,9 @@ below; it ignores ambient `DATABASE_URL`, `RESEND_API_KEY`, and `PORT`.
 - `PULSE_WEB_ORIGIN` (required): exact public bare origin, such as
   `https://pulse.onlinedemocracy.org`; no path or trailing slash. It is used in
   emailed links and is the only accepted Origin for sign-in, link redemption,
-  sign-out and poll-creation mutations.
+  sign-out and poll-creation mutations. It is also MCP's one trusted public
+  origin, so it must be `https://` (plain `http://` only on localhost,
+  127.0.0.1 or [::1]); the API refuses to start otherwise.
 - `PULSE_MAIL_FROM` (required): From identity on the verified sending domain,
   for example `Pulse <sign-in@mail.onlinedemocracy.org>`.
 - `PULSE_MAIL_REPLY_TO` (optional): Reply-To address. If unset, no Reply-To is
@@ -231,6 +233,20 @@ GET /api/polls?community=pulse-general
 ```
 
 A `200` JSON response checks nginx routing, API startup, and a database query.
+Then check MCP through the same origin (ADR-0048 decision 11); a `403` means
+`PULSE_WEB_ORIGIN` does not match the public hostname exactly:
+
+```sh
+curl -sS -X POST https://<public-hostname>/api/mcp \
+  -H 'Origin: https://<public-hostname>' \
+  -H 'Content-Type: application/json' \
+  -H 'Accept: application/json, text/event-stream' \
+  --data '{"jsonrpc":"2.0","id":1,"method":"tools/list"}'
+```
+
+The answer lists `get_poll`, `get_results` and `get_public_votes`. CI's
+`pulse-images` job runs the same path against both images on every Pulse
+change (`apps/pulse-web/test/public-proxy-smoke.sh`).
 Also request a real sign-in link at an invited address before admitting the
 pilot; a page/API check does not prove mail delivery.
 

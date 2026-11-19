@@ -86,6 +86,12 @@ describe("nginx runtime settings", () => {
         .split("\n    }")[0];
       expect(block).toContain("proxy_pass http://$pulse_api_upstream;");
       // No URI suffix: nginx must preserve the complete API path and query.
+      // The client's Host verbatim, port included: MCP compares it with the
+      // configured origin exactly (ADR-0048 decision 11).
+      expect(block).toContain("proxy_set_header Host $http_host;");
+      expect(block).not.toContain("proxy_set_header Host $host;");
+      // A client's internal-header copy never reaches the API.
+      expect(block).toContain('proxy_set_header X-Pulse-Internal "";');
       expect(block).toContain("proxy_set_header X-Real-IP $remote_addr;");
       expect(block).toContain("proxy_set_header X-Forwarded-For $remote_addr;");
       expect(block).toContain(

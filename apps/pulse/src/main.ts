@@ -22,6 +22,7 @@ import { ResendMailer, resendConfig } from "./identity/resend-mailer.js";
 import { PostgresImageStore } from "./images/pg-store.js";
 import { ConfirmationKey } from "./voting/confirmation.js";
 import { PostgresVotingStore } from "./voting/pg-store.js";
+import { origin as mcpOrigin } from "./http/mcp/client.js";
 import { PostgresSuggestionStore } from "./voting/pg-suggestions.js";
 import { PostgresMemberProfileStore } from "./profiles/pg-store.js";
 
@@ -169,6 +170,15 @@ export function serveConfig(env: NodeJS.ProcessEnv = process.env): ServeConfig {
   };
 
   assertOrigin(checked.webOrigin);
+  // MCP trusts this origin too, and refuses a plaintext one off loopback;
+  // refused here, naming the variable, rather than as a bare MCP error.
+  try {
+    mcpOrigin(checked.webOrigin);
+  } catch {
+    throw new Error(
+      "PULSE_WEB_ORIGIN must be https://, or http:// only on localhost, 127.0.0.1 or [::1]",
+    );
+  }
   // Two separate secrets, so rotating or leaking one is not the other. The
   // same value in both would be the "derived from the session secret" the
   // operator ruled out (ADR-0040). Neither value is put in the message.
@@ -412,6 +422,11 @@ export async function buildServer(
       // The only origin creation mutations are accepted from (ADR-0037):
       // trusted configuration, the same origin sign-in links point at.
       webOrigin: config.webOrigin,
+      // MCP's one trusted public origin is the same one (ADR-0048 decision
+      // 11): nginx forwards the browser's Host and Origin, and the route
+      // accepts exactly this one. No `apiBaseUrl`, so its reads go to this
+      // process's loopback listener and never back out through the proxy.
+      mcp: { publicOrigin: config.webOrigin },
       // Not passed at all, so the default holds. `secureCookies` defaults to
       // true and `dev-server` is the only thing that sets it false; naming it
       // here would put the insecure value one edit away from the served path.

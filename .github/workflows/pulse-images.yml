@@ -76,6 +76,13 @@ jobs:
         if: steps.selection.outputs.images == 'true'
         id: build-web
         run: docker build -f apps/pulse-web/Dockerfile -t pulse-web:ci .
+      # Both images and a throwaway Postgres, checked only through nginx's
+      # port: the page, an API read, cache rules, MCP with the configured
+      # origin (foreign Origin/Host refused) and per-address list buckets
+      # (ADR-0048 decision 11). Cleans up its own containers.
+      - name: Public-proxy smoke test
+        if: steps.selection.outputs.images == 'true'
+        run: sh apps/pulse-web/test/public-proxy-smoke.sh pulse-web:ci pulse-api:ci
       - name: Scan the API image
         if: steps.selection.outputs.images == 'true'
         uses: aquasecurity/trivy-action@ed142fd0673e97e23eac54620cfb913e5ce36c25 # v0.36.0
