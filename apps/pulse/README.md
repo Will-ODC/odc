@@ -211,7 +211,12 @@ sign-out, fail on new community labels, or record votes without confirmation.
 Migration 018 (ADR-0048) also refuses to run while any member profile is
 named "Verified voter", in any case or spacing; rename or delete those
 profiles by hand, then start again. After it, an old instance fails on every
-poll it creates.
+poll it creates. Migration 019 widens the reserved name to any spelling
+that reads the same, ignoring case, spacing, punctuation, invisible
+characters and blank fillers (for example "Verified voter" with a
+zero-width joiner, or "verified-voter"). It refuses to run while any
+profile uses such a spelling; rename or delete those rows by hand, then
+start again.
 
 ## MCP
 

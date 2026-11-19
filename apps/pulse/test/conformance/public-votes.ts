@@ -454,6 +454,8 @@ export function publicVoteConformance(
           "Verified voter",
           "VERIFIED   Voter",
           " verified  voter ",
+          "Verified\u200D voter",
+          "Verified \u200Cvoter",
         ])
           await assert.rejects(
             w.name("ada", name),

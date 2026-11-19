@@ -48,7 +48,10 @@ import {
   type SuggestionStore,
 } from "./voting/suggestions.js";
 import { InMemoryVotingStore, type VotingStore } from "./voting/store.js";
-import { InMemoryMemberProfileStore } from "./profiles/memory-store.js";
+import {
+  InMemoryMemberProfileStore,
+  memoryDisplayNames,
+} from "./profiles/memory-store.js";
 import { PostgresMemberProfileStore } from "./profiles/pg-store.js";
 import type { MemberProfileStore } from "./profiles/store.js";
 
@@ -442,7 +445,10 @@ function inMemory(creation: { ownerEmail?: string }): Storage {
   // One voter store and one voting store, shared with the creation store:
   // a question someone posts is a poll the voting routes can read.
   const voters = new InMemoryVoterStore();
-  const votes = new InMemoryVotingStore();
+  // Public votes show each account's profile name, read live (ADR-0048).
+  const votes = new InMemoryVotingStore(undefined, {
+    displayNameOf: memoryDisplayNames(voters),
+  });
   return {
     kind: "memory",
     voters,

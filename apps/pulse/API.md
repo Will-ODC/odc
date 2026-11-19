@@ -246,8 +246,8 @@ One door: this creates the identity the first time and signs the same person bac
 every time after. There is no separate sign-up.
 
 **It also confirms this browser's votes** (ADR-0040). If the browser making the click
-holds a `__Host-pulse_ballot` cookie, every vote filed under it on a poll that
-is still open becomes a confirmed vote of the person signing in — see "Confirmed votes" below. A
+holds a `__Host-pulse_ballot` cookie, every vote filed under it on an anonymous poll
+that is still open becomes a confirmed vote of the person signing in — see "Confirmed votes" below. A
 closed poll's votes are left as they are, so its results stop changing when it closes.
 Nothing about this shows in the response, and no ballot cookie is minted here.
 
@@ -430,6 +430,16 @@ from the authenticated session account, the server returns 409 `account_changed`
 without writing anything. The editor clears the draft, reloads the session and
 profile, and tells the person their account changed.
 
+`displayName` may not read as **"Verified voter"**: that label is what a public
+vote shows for an account with no profile name (ADR-0048). The name is compared
+after NFKC normalization and lower-casing, ignoring every mark, format character,
+separator, punctuation and whitespace, and the blank fillers U+3164, U+115F,
+U+1160, U+FFA0, U+2800 and U+1D159. So `" verified   VOTER "`, `"verified-voter"`,
+`"Verifiedvoter"` and the name with invisible joiners in it are all refused, while
+`"Verified voter 2"` is not. Such a write answers 400 `reserved_name`, "That name
+is kept for voters without a profile name. Choose another.", and saves nothing; the database refuses the name
+too. Lookalike letters from other scripts are not caught.
+
 The first successful write generates the stable
 public id and creation time; later writes update the same row. Setting
 `visible` to `false` makes the public route unavailable without discarding the
@@ -442,6 +452,7 @@ minute by default, including refused requests. The PUT body limit is 2 KiB.
 | Status | Error                | Meaning                                      |
 | ------ | -------------------- | -------------------------------------------- |
 | 400    | `bad_request`        | Invalid JSON, shape, fields, text or type    |
+| 400    | `reserved_name`      | `displayName` is "Verified voter"            |
 | 401    | `signed_out`         | Missing, expired or revoked session          |
 | 403    | `origin_not_allowed` | PUT has a missing or foreign Origin          |
 | 409    | `account_changed`    | PUT draft owner differs from session account |
@@ -502,6 +513,32 @@ record — pulse is charter-exempt, so nothing here is append-only or hash-chain
 Polls are a **graph**: `next` names, for each choice, the poll that answering that way
 opens. Answering is also navigating.
 
+### Anonymous and public-vote polls (ADR-0048)
+
+Every poll carries `votePrivacy`, `"anonymous"` or `"public"`, fixed when it is
+created and never changed. Anonymous is the default, and every seed and older poll
+is anonymous: everything below about the ballot cookie, confirmation and sign-in
+describes anonymous polls, exactly as before.
+
+On a **public-vote poll** each vote is shown with the voter's profile display name,
+or "Verified voter" when they have none, to everyone who can see the poll. So:
+
+- Voting needs an email sign-in, and the cast must say `"publicVote": true`, which a
+  client sends only from a vote card that showed the "Votes are public" notice (see
+  `POST /api/polls/:id/votes`).
+- The vote is the **account's**, found by the session from any browser. It is never
+  filed under the ballot cookie, which public-vote routes neither read nor mint, and
+  sign-in never moves or confirms it. It is always confirmed, so on such a poll
+  `confirmedVoters` equals `voters`.
+- Signing out hides it from that browser but does not remove it.
+
+**Not served yet.** No route creates a public-vote poll: `POST /api/polls` still
+refuses `votePrivacy` as an unknown property until the web client can show the
+notice (ADR-0048 step 4b). The list of names and answers
+(`GET /api/polls/:id/public-votes`) and removing one's own public vote
+(`DELETE /api/polls/:id/votes/mine`) come with the next change on #685; until then
+both answer 404.
+
 ### The ballot cookie, and why voting needs no session
 
 `__Host-pulse_ballot`, `HttpOnly`, `SameSite=Lax`, `Secure`, path `/`,
@@ -514,7 +551,8 @@ person has ever given an address. Two consequences, both deliberate:
 
 - A vote counts the moment it is cast. Signing in afterwards **verifies** a person; it
   is never how their vote is found, and it never gates the vote.
-- **No account id and no address is ever stored beside an answer.** What a confirmed
+- **No account id and no address is ever stored beside an answer**, except on
+  public-vote polls, which are not filed under this cookie (ADR-0048). What a confirmed
   vote stores instead is a **one-way keyed code** (ADR-0040): HMAC-SHA256, under a key
   only the server holds (`PULSE_CONFIRMATION_KEY`), of the account id and the poll id.
   Precisely what that means:
@@ -556,15 +594,18 @@ once per browser.
 
 ### `GET /api/my-votes?limit=20&cursor=…`
 
-The current browser's saved answers, newest cast first. This route reads only
-the signed `__Host-pulse_ballot` cookie, including for someone who has not signed in.
-It never creates a cookie. With no valid ballot cookie it returns an empty page,
-even if a separate account session exists. `POST /api/sign-out` clears the ballot
-cookie, so this history disappears from that browser. A poll also leaves this list
+The current browser's saved answers, newest cast first: the ballots filed under
+the signed `__Host-pulse_ballot` cookie, including for someone who has not signed
+in, and, when a valid session is present, that account's votes on public-vote polls
+(ADR-0048), merged into the same order and cursor. It never creates a cookie. With
+neither a valid ballot cookie nor a session it returns an empty page.
+`POST /api/sign-out` clears both cookies, so this history disappears from that
+browser. A poll also leaves this list
 when the same person votes on it in another browser while signed in, and one can
 appear here when this browser signs in and the person's newer vote moves here
-(ADR-0046). Responses carry
-`Cache-Control: private, no-store`.
+(ADR-0046). Every response, errors included, carries
+`Cache-Control: private, no-store` and `Vary: Cookie`, because the answer depends
+on who is asking.
 
 ```json
 {
@@ -618,14 +659,15 @@ from 1 to 100. Each query parameter may occur once; unknown parameters are refus
       "createdAt": "2026-10-20T12:00:00.000Z",
       "closesAt": null,
       "open": true,
-      "image": { "kind": "tile" }
+      "image": { "kind": "tile" },
+      "votePrivacy": "anonymous"
     }
   ],
   "nextCursor": null
 }
 ```
 
-Each row carries the same `image` object as `GET /api/polls/:id` (see
+Each row carries the poll's `votePrivacy` and the same `image` object as `GET /api/polls/:id` (see
 "Poll pictures (ADR-0047)" below), so a page shows thumbnails without a read
 per poll.
 
@@ -666,9 +708,15 @@ this while moving through the story, and it reveals nothing about a person.
   "acceptsSuggestions": false,
   "closesAt": "2026-08-28T12:00:00.000Z",
   "open": true,
-  "image": { "kind": "tile" }
+  "image": { "kind": "tile" },
+  "votePrivacy": "anonymous"
 }
 ```
+
+`votePrivacy` is always present: `"anonymous"` or `"public"` (see "Anonymous and
+public-vote polls" above). Creation responses, first and replayed, carry it too; a
+replay saved before it existed reads `"anonymous"`. MCP `get_poll` does not pass it
+on yet.
 
 `image` is always present: the poster's picture (`kind: "upload"`) or
 `{ "kind": "tile" }`, which the client draws. See "Poll pictures (ADR-0047)"
@@ -769,6 +817,7 @@ The tally. No session required.
   "question": "Where next?",
   "method": "approval",
   "voters": 2,
+  "votePrivacy": "anonymous",
   "choices": [
     { "index": 0, "label": "Park", "count": 2, "share": 100 },
     { "index": 1, "label": "Library", "count": 1, "share": 50 },
@@ -781,6 +830,9 @@ The tally. No session required.
 person (ADR-0046) and one per browser for votes nobody confirmed. `share` is `count / voters * 100`, rounded to one decimal, `0` when
 nobody has voted. For an `approval` poll a voter picks several choices, so shares
 legitimately **sum to more than 100** — that is correct and is not normalised away.
+`votePrivacy` is the poll's setting, on this body and on the `results` of a cast; the
+numbers are counted the same way for both kinds. MCP `get_results` does not pass it
+on yet.
 
 **Confirmed numbers** sit beside the totals (ADR-0040; see "Confirmed votes" below).
 `confirmedVoters` is how many people confirmed by email, **counted once per person**;
@@ -820,6 +872,9 @@ has one ballot per poll, so the totals count them once too.
 
 #### Confirmed votes (ADR-0040)
 
+This describes anonymous polls. A public-vote poll's votes are always confirmed and
+are the account's own (see "Anonymous and public-vote polls").
+
 - A vote is **confirmed** when it is cast by someone signed in, or when the browser
   holding its ballot cookie signs in afterwards (`POST /api/sign-in/redeem`, open polls
   only).
@@ -846,8 +901,16 @@ has one ballot per poll, so the totals count them once too.
 ### `GET /api/polls/:id/ballot`
 
 This browser's own current ballot, so the UI can show what was picked. **No session
-required** — the ballot cookie is the identity, and one is minted if this browser has
-none yet.
+required** — on an anonymous poll the ballot cookie is the identity, and one is minted
+if this browser has none yet.
+
+On a **public-vote poll** it reads the session instead: signed in, the account's vote
+on this poll from any browser; signed out, `null`. The ballot cookie is neither read
+nor minted there.
+
+Every response, `404` and errors included, carries `Cache-Control: private, no-store`
+and `Vary: Cookie`, so no shared cache or proxy hands one person's answer to the next
+reader of the same URL.
 
 ```json
 { "ballot": [0, 2] }
@@ -875,12 +938,19 @@ Requires `Origin` exactly matching `PULSE_WEB_ORIGIN` (403
 `Content-Type: application/json` (parameters such as `charset=utf-8` allowed;
 missing or other types return 400 `bad_request`). Refused requests change nothing.
 
-Cast or change a ballot. **No session required**, on purpose — see the ballot cookie
-above.
+Cast or change a ballot. **No session required** on an anonymous poll, on purpose —
+see the ballot cookie above. A public-vote poll needs one (below).
 
 ```json
 { "ballot": [1, 2] }
 ```
+
+`publicVote` is optional; when present it must be `true`, and anything else is 400
+`bad_request`. A client sends `"publicVote": true` only from a vote card that showed
+the "Votes are public" notice. It must match the poll: a cast on a public-vote poll
+**without** it, or on an anonymous poll **with** it, is 409 `vote_privacy_mismatch`,
+"This poll's voting settings changed. Reload the page before you vote." So a client that has never heard of public-vote polls can never cast a
+named vote, and one that believes a poll is public never files an anonymous vote.
 
 The ballot is validated the same way the client validates it before sending: every
 entry is a whole number naming a choice this poll has, entries are distinct, and a
@@ -909,6 +979,25 @@ votes" above), and it **replaces** that person's vote on this poll in any other 
 had none, even if it replaced one elsewhere. Without a session, the vote keeps whatever
 confirmation it already had and replaces nothing elsewhere.
 
+**On a public-vote poll** a session is required, and the vote is the account's:
+`counted` for its first vote on the poll, `changed` after, from whichever browser.
+No ballot cookie is read or minted. The checks run in this order, and a refused cast
+writes nothing and mints no cookie:
+
+1. 403 `origin_not_allowed`, then 400 `bad_request` for the body.
+2. 404 `not_found`.
+3. 409 `vote_privacy_mismatch` (either kind of poll), before anything about the
+   person is read, so an old client is never walked through sign-in towards a named
+   vote it did not describe.
+4. 503 `public_votes_unavailable` when the server has no confirmation key; nothing
+   public is ever written without one.
+5. 200 `{ "status": "closed" }` when the poll has closed.
+6. 401 `sign_in_required`: "Sign in with your email to vote on this poll. Your vote
+   will be shown with your profile name."
+7. 400 `bad_ballot`.
+
+The `results` in the answer carry `votePrivacy`, as `GET …/results` does.
+
 | Status | Body                                                | When                                                           |
 | ------ | --------------------------------------------------- | -------------------------------------------------------------- |
 | 200    | `status: "counted" \| "changed"` + ballot + results | the ballot was recorded                                        |
@@ -916,7 +1005,11 @@ confirmation it already had and replaces nothing elsewhere.
 | 400    | `error: "bad_request"`                              | missing/wrong Content-Type or no ballot array of whole numbers |
 | 403    | `error: "origin_not_allowed"`                       | missing or foreign Origin                                      |
 | 400    | `error: "bad_ballot"`                               | the ballot is not a valid answer to this poll                  |
+| 400    | `error: "bad_request"`                              | `publicVote` present and not `true`                            |
+| 401    | `error: "sign_in_required"`                         | public-vote poll and no valid session                          |
 | 404    | `error: "not_found"`                                | no such poll                                                   |
+| 409    | `error: "vote_privacy_mismatch"`                    | `publicVote: true` does not match the poll's setting           |
+| 503    | `error: "public_votes_unavailable"`                 | public-vote poll and no confirmation key configured            |
 
 ## Options people add themselves
 

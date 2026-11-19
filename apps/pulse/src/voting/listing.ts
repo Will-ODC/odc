@@ -9,7 +9,7 @@ export interface PollSummary {
   method: PollMethod;
   createdAt: Date;
   closesAt?: Date;
-  /** Fixed at creation (ADR-0048); not served until the routes name it. */
+  /** Fixed at creation (ADR-0048). */
   votePrivacy: VotePrivacy;
   /** The poster's visible picture, as on `Poll`; absent draws the tile. */
   image?: PollImage;
@@ -97,6 +97,7 @@ export function pollListPage(
       closesAt: p.closesAt?.toISOString() ?? null,
       open: isOpen(p, now),
       image: publicPollImage(p.image),
+      votePrivacy: p.votePrivacy,
     })),
     nextCursor:
       rows.length > query.limit && last
