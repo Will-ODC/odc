@@ -136,3 +136,25 @@ test("an_address_limit_sweeps_expired_windows_and_refuses_bad_options", () => {
   ])
     assert.throws(() => new AddressLimit(options, () => now), RangeError);
 });
+
+test("an_address_limit_holds_at_most_its_capacity_evicting_the_oldest", () => {
+  const now = new Date("2026-11-19T12:00:00Z");
+  const limit = new AddressLimit({ max: 1, timeWindow: 60_000 }, () => now, 3);
+  for (const address of ["a", "b", "c"]) limit.take(address);
+  assert.equal(limit.take("a").allowed, false);
+  // Within one window, a fourth address drops the oldest, "a".
+  assert.deepEqual(limit.take("d"), { allowed: true });
+  assert.equal(limit.size, 3);
+  assert.equal(limit.take("b").allowed, false);
+  assert.equal(limit.take("d").allowed, false);
+  assert.deepEqual(limit.take("a"), { allowed: true });
+  assert.equal(limit.size, 3);
+  // Many addresses in one window never grow it past the cap.
+  const big = new AddressLimit({ max: 1, timeWindow: 60_000 }, () => now, 2000);
+  for (let i = 0; i < 50_000; i++) big.take(`2001:db8::${i.toString(16)}`);
+  assert.equal(big.size, 2000);
+  assert.throws(
+    () => new AddressLimit({ max: 1, timeWindow: 1 }, () => now, 0),
+    RangeError,
+  );
+});

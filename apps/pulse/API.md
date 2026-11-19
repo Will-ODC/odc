@@ -1097,6 +1097,9 @@ signing out or "Forget my votes here" never removes a public vote; this route do
 - `{ "status": "closed" }` with no results: the poll has closed, and its votes stay
   as they are, whether or not this account had one.
 
+A **hidden** public-vote poll still allows removal while it is open: the list no
+longer shows it, but the voter keeps the right to take their vote back.
+
 **Anonymous polls have no removal.** Their ballots are found by cookie or code, not
 by account, so this route answers 409 for them, with or without a session or ballot
 cookie, and removes nothing.

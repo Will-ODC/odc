@@ -100,6 +100,8 @@ async function world(
   let now = START;
   const clock = () => now;
   const { voters, votes, profiles, hide } = await stores(t, clock);
+  // A day, not an hour: close() jumps the clock past the one-hour poll, and
+  // a session must outlive that for the closed-poll removal tests.
   const signer = new SessionSigner(SECRET, { ttlSeconds: 86_400, clock });
   const claims = new ClaimService(
     {
