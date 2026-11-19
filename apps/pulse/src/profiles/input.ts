@@ -64,27 +64,28 @@ export function normalizeProfile(value: unknown): ProfileInput {
 }
 
 /**
- * The invisible characters the display-name rule lets through: the joiners
- * it allows (U+200C, U+200D) and the invisible marks, which are not format
- * characters (U+034F and the variation selectors). Ignored when comparing a
- * name with the reserved one, so none of them can hide it.
+ * What may not tell a name apart from the reserved one: every mark,
+ * format character, separator, punctuation and whitespace, and the blank
+ * letters and symbols that stand in for a space (U+3164, U+115F, U+1160,
+ * U+FFA0, the blank braille pattern U+2800 and the null notehead U+1D159).
+ * Other letters, digits and symbols are kept.
+ * Migration 019 writes the same set out as code point ranges.
  */
-const INVISIBLE =
-  /\u200C|\u200D|\u034F|[\uFE00-\uFE0F]|[\u{E0100}-\u{E01EF}]/gu;
+export const IGNORED_IN_NAME =
+  /[\p{M}\p{Cf}\p{Z}\p{P}\s\u3164\u115F\u1160\uFFA0\u2800\u{1D159}]/gu;
 
 /**
  * "Verified voter" is what a public vote shows for an account with no profile
- * name (ADR-0048 decision 8), so no profile may take it, in any case or
- * spacing, or with invisible characters in it. The same rule as
+ * name (ADR-0048 decision 8), so no profile may take it in any spelling that
+ * reads the same. Structural, not a list of tricks: NFKC-normalize,
+ * lower-case, drop `IGNORED_IN_NAME`, and compare with "verifiedvoter". The
+ * same rule as `pulse_reserved_name_key` and
  * `member_profile_name_not_reserved` (migration 019).
  */
 export function isReservedName(displayName: string): boolean {
   return (
-    displayName
-      .replace(INVISIBLE, "")
-      .replace(/\s+/g, " ")
-      .trim()
-      .toLowerCase() === "verified voter"
+    displayName.normalize("NFKC").toLowerCase().replace(IGNORED_IN_NAME, "") ===
+    "verifiedvoter"
   );
 }
 

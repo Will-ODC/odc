@@ -430,11 +430,15 @@ from the authenticated session account, the server returns 409 `account_changed`
 without writing anything. The editor clears the draft, reloads the session and
 profile, and tells the person their account changed.
 
-`displayName` may not be **"Verified voter"** in any letter case or spacing
-(`" verified   VOTER "` included): that label is what a public vote shows for an
-account with no profile name (ADR-0048). Such a write answers 400 `reserved_name`,
-"That name is reserved. Choose another.", and saves nothing; the database refuses
-the name too. Lookalike spellings in other scripts are not caught.
+`displayName` may not read as **"Verified voter"**: that label is what a public
+vote shows for an account with no profile name (ADR-0048). The name is compared
+after NFKC normalization and lower-casing, ignoring every mark, format character,
+separator, punctuation and whitespace, and the blank fillers U+3164, U+115F,
+U+1160, U+FFA0, U+2800 and U+1D159. So `" verified   VOTER "`, `"verified-voter"`,
+`"Verifiedvoter"` and the name with invisible joiners in it are all refused, while
+`"Verified voter 2"` is not. Such a write answers 400 `reserved_name`, "That name
+is reserved. Choose another.", and saves nothing; the database refuses the name
+too. Lookalike letters from other scripts are not caught.
 
 The first successful write generates the stable
 public id and creation time; later writes update the same row. Setting

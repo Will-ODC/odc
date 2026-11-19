@@ -1,10 +1,16 @@
 import assert from "node:assert/strict";
+import { readFile } from "node:fs/promises";
 import { test } from "node:test";
 import {
+  IGNORED_IN_NAME,
   isPublicProfileId,
   isReservedName,
   normalizeProfile,
 } from "../src/profiles/input.js";
+import {
+  ALLOWED_SPELLINGS,
+  RESERVED_SPELLINGS,
+} from "./support/reserved-names.js";
 
 test("profile_input_trims_plain_text_and_keeps_an_empty_bio", () => {
   assert.deepEqual(
@@ -72,18 +78,50 @@ test("public_profile_ids_are_canonical_random_uuid_shapes", () => {
   );
 });
 
-test("the_reserved_name_is_caught_untrimmed_in_any_case_or_spacing", () => {
-  for (const name of [
-    "Verified voter",
-    " Verified voter",
-    "VERIFIED \t voter\n",
-    "Verified\u200D voter",
-    "Verified \u200Cvoter",
-    "\u200D Verified voter",
-    "Verified\u034F voter\uFE0F",
-    "Verified voter\u{E0100}",
-  ])
-    assert.equal(isReservedName(name), true, name);
-  for (const name of ["Verified voters", "Verifiedvoter", "Ada"])
-    assert.equal(isReservedName(name), false, name);
+test("the_reserved_name_is_caught_in_every_spelling_that_reads_the_same", () => {
+  for (const name of RESERVED_SPELLINGS)
+    assert.equal(isReservedName(name), true, JSON.stringify(name));
+  for (const name of ALLOWED_SPELLINGS)
+    assert.equal(isReservedName(name), false, JSON.stringify(name));
 });
+
+test("migration_019_drops_nothing_the_app_check_keeps", async () => {
+  // PostgreSQL has no Unicode categories, so 019 spells the dropped set out
+  // as ranges. Every code point in them must be dropped by the app check
+  // too, so the database never refuses a name the app allows (a 500).
+  const ignored = new RegExp(IGNORED_IN_NAME.source, "u");
+  const ranges = await migration019Ranges();
+  assert.ok(ranges.length > 400);
+  for (const [from, to] of ranges)
+    for (let c = from; c <= to; c++)
+      assert.ok(ignored.test(String.fromCodePoint(c)), c.toString(16));
+});
+
+/** The code point ranges of 019's bracket expression. */
+async function migration019Ranges(): Promise<[number, number][]> {
+  const sql = await readFile(
+    new URL(
+      "../../migrations/019_reserved_name_invisibles.sql",
+      import.meta.url,
+    ),
+    "utf8",
+  );
+  const body = sql.slice(sql.indexOf("'[' ||"), sql.indexOf("|| ']'"));
+  const literal = [...body.matchAll(/'([^']*)'/g)]
+    .map((m) => m[1])
+    .slice(1)
+    .join("");
+  const one = String.raw`\\(?:u([0-9A-F]{4})|U([0-9A-F]{8}))`;
+  const range = new RegExp(`${one}(?:-${one})?`, "g");
+  const ranges: [number, number][] = [];
+  let consumed = 0;
+  for (const m of literal.matchAll(range)) {
+    assert.equal(m.index, consumed, "019's class is only escapes and ranges");
+    consumed += m[0].length;
+    const from = parseInt(m[1] ?? m[2]!, 16);
+    const toHex = m[3] ?? m[4];
+    ranges.push([from, toHex === undefined ? from : parseInt(toHex, 16)]);
+  }
+  assert.equal(consumed, literal.length);
+  return ranges;
+}

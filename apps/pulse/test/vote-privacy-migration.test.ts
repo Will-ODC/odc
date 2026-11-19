@@ -6,11 +6,16 @@ import path from "node:path";
 import { test, type TestContext } from "node:test";
 import type { Pool } from "pg";
 import { loadMigrations, migrate } from "../src/db/migrate.js";
+import { isReservedName } from "../src/profiles/input.js";
 import {
   databaseSkip,
   migratedSchema,
   throwawaySchema,
 } from "./support/database.js";
+import {
+  ALLOWED_SPELLINGS,
+  RESERVED_SPELLINGS,
+} from "./support/reserved-names.js";
 
 /**
  * ADR-0048 decision 3: the storage layer refuses what the stores above it
@@ -233,15 +238,8 @@ test(
   },
 );
 
-// Migration 019: the reserved name hidden by the invisible characters the
-// display-name rule allows (ADR-0048 decision 8).
-const HIDDEN_RESERVED = [
-  "Verified\u200D voter",
-  "Verified \u200Cvoter",
-  "\u200D Verified voter",
-  "Verified\uFE0F voter",
-];
-
+// Migration 019: the reserved name in every spelling that reads the same
+// (ADR-0048 decision 8), held to the same table as `isReservedName`.
 async function profile(pool: Pool, voter: string, name: string) {
   await pool.query(
     "insert into member_profile (voter_id, public_id, display_name, bio, visible, created_at, updated_at) values ($1, $2, $3, '', true, $4, $4)",
@@ -250,18 +248,27 @@ async function profile(pool: Pool, voter: string, name: string) {
 }
 
 test(
-  "019_refuses_the_reserved_name_with_invisible_joiners_or_marks",
+  "019_reserves_every_spelling_the_app_check_reserves_and_no_other",
   options,
   async (t) => {
     const pool = await migratedSchema(t);
     await account(pool, "ada");
-    for (const name of HIDDEN_RESERVED)
+    await profile(pool, "ada", "Ada");
+    // Trimmed, as the app stores every name (015 refuses any other).
+    const rename = (name: string) =>
+      pool.query("update member_profile set display_name = $1", [name.trim()]);
+    for (const name of RESERVED_SPELLINGS) {
+      assert.equal(isReservedName(name), true);
       await assert.rejects(
-        profile(pool, "ada", name),
+        rename(name),
         /member_profile_name_not_reserved/,
         JSON.stringify(name),
       );
-    await profile(pool, "ada", "Verified\u200D voters");
+    }
+    for (const name of ALLOWED_SPELLINGS) {
+      assert.equal(isReservedName(name), false);
+      await rename(name);
+    }
   },
 );
 
