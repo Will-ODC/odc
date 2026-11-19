@@ -1,6 +1,10 @@
 import assert from "node:assert/strict";
 import { test } from "node:test";
-import { isPublicProfileId, normalizeProfile } from "../src/profiles/input.js";
+import {
+  isPublicProfileId,
+  isReservedName,
+  normalizeProfile,
+} from "../src/profiles/input.js";
 
 test("profile_input_trims_plain_text_and_keeps_an_empty_bio", () => {
   assert.deepEqual(
@@ -66,4 +70,15 @@ test("public_profile_ids_are_canonical_random_uuid_shapes", () => {
     isPublicProfileId("f8cdca64-0d4f-0b99-75bc-e6b749843ad8"),
     false,
   );
+});
+
+test("the_reserved_name_is_caught_untrimmed_in_any_case_or_spacing", () => {
+  for (const name of [
+    "Verified voter",
+    " Verified voter",
+    "VERIFIED \t voter\n",
+  ])
+    assert.equal(isReservedName(name), true, name);
+  for (const name of ["Verified voters", "Verifiedvoter", "Ada"])
+    assert.equal(isReservedName(name), false, name);
 });

@@ -36,7 +36,7 @@ async function voter(pool: Pool, id: string, community: string | null = null) {
 
 async function authored(pool: Pool, id = "authored") {
   await pool.query(
-    "insert into polls (id, question, method, created_at, accepts_suggestions, community, created_by, attribution_kind) values ($1, 'Q', 'single', $2, false, 'pulse-general', 'owner', 'anonymous')",
+    "insert into polls (id, question, method, created_at, accepts_suggestions, community, created_by, attribution_kind, vote_privacy) values ($1, 'Q', 'single', $2, false, 'pulse-general', 'owner', 'anonymous', 'anonymous')",
     [id, AT],
   );
 }

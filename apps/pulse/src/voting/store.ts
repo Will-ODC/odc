@@ -6,6 +6,7 @@ import {
   type PollListQuery,
   type PollSummary,
 } from "./listing.js";
+import { randomUUID } from "node:crypto";
 import {
   createPoll,
   isOpen,
@@ -129,6 +130,32 @@ export interface ConfirmingPerson {
   lockKey: bigint;
 }
 
+/**
+ * A signed-in person casting on a public-vote poll (ADR-0048): their code and
+ * lock key, both required. The account id is passed beside them, because a
+ * public vote is found by account, never by recomputing the code.
+ */
+export interface PublicCastOptions {
+  confirmation: string;
+  lockKey: bigint;
+}
+
+/**
+ * One entry of a public-vote poll's list: the voter's current profile name,
+ * read live and whether or not the profile is visible (`null` without one),
+ * and the chosen positions, ascending. `listKey` orders the list and is
+ * random, fixed at first cast; it leaves the server only sealed in a cursor.
+ */
+export interface PublicVoteEntry {
+  name: string | null;
+  choices: number[];
+  listKey: string;
+}
+
+/** What removing one's public vote did (ADR-0048 decision 10). */
+export type RemovalResult =
+  { status: "removed" } | { status: "none" } | { status: "closed" };
+
 export interface VotingStore {
   /** Public summaries, newest first; at most limit + 1 rows. */
   listPolls(query: PollListQuery): Promise<PollSummary[]>;
@@ -159,14 +186,49 @@ export interface VotingStore {
   /** The voter's own ballot, so the UI can show what they picked. */
   voteOf(pollId: string, voterId: string): Promise<Vote | undefined>;
   /**
-   * The voter's current ballots, newest cast first (ties by poll id, bytewise),
-   * with one extra row so the caller can offer another page.
+   * The ballots filed under this ballot identity, and, given an account, that
+   * account's public votes (ADR-0048), newest cast first (ties by poll id,
+   * bytewise), with one extra row so the caller can offer another page.
    */
   voteHistory(
-    voterId: string,
+    voterId: string | undefined,
     limit: number,
     before?: VoteBefore,
+    accountId?: string,
   ): Promise<HistoryVote[]>;
+  /**
+   * Cast or re-cast an account's vote on a public-vote poll (ADR-0048). A
+   * first cast files it under a fresh `pv:` identity with this code and a
+   * random list key; a re-cast replaces the answer and cast time and keeps
+   * the rest. Serialized on the person's lock, and the poll's openness is
+   * read after it. Throws `VotePrivacyError` on an anonymous poll.
+   */
+  castPublic(
+    pollId: string,
+    accountId: string,
+    ballot: readonly number[],
+    options: PublicCastOptions,
+  ): Promise<CastResult>;
+  /** The account's vote on a public-vote poll, from any browser. */
+  publicVoteOf(pollId: string, accountId: string): Promise<Vote | undefined>;
+  /**
+   * Remove the account's public vote while the poll is open, with its name.
+   * Throws `VotePrivacyError` on an anonymous poll.
+   */
+  removePublicVote(
+    pollId: string,
+    accountId: string,
+    lockKey: bigint,
+  ): Promise<RemovalResult>;
+  /**
+   * A page of a public-vote poll's list, in list-key order after `after`,
+   * with one extra row. Empty for an anonymous, hidden or unknown poll.
+   */
+  listPublicVotes(
+    pollId: string,
+    limit: number,
+    after?: string,
+  ): Promise<PublicVoteEntry[]>;
   results(pollId: string): Promise<Results>;
 }
 
@@ -176,6 +238,60 @@ export class UnknownPollError extends Error {
     super(`no such poll: ${pollId}`);
     this.name = "UnknownPollError";
   }
+}
+
+/**
+ * Thrown when a write does not match the poll's vote privacy (ADR-0048): an
+ * account on an anonymous poll, a ballot identity on a public-vote one, or a
+ * `pv:` identity anywhere but through `castPublic`. Nothing is written.
+ */
+export class VotePrivacyError extends Error {
+  constructor(message: string) {
+    super(message);
+    this.name = "VotePrivacyError";
+  }
+}
+
+/** The prefix of every public vote's `voter_id`, and of nothing else. */
+export const PUBLIC_VOTER_PREFIX = "pv:";
+
+/** A fresh public-vote identity, derived from nothing (ADR-0048 decision 3). */
+export function newPublicVoterId(): string {
+  return `${PUBLIC_VOTER_PREFIX}${randomUUID()}`;
+}
+
+/** Every store's check that a cookie ballot may be filed on this poll. */
+export function assertBallotIdentity(poll: Poll, voterId: string): void {
+  if (poll.votePrivacy !== "anonymous")
+    throw new VotePrivacyError("a public-vote poll is cast with castPublic");
+  if (voterId.startsWith(PUBLIC_VOTER_PREFIX))
+    throw new VotePrivacyError("a ballot identity never starts pv:");
+}
+
+/** Every store's checks before a public cast writes anything. */
+export function assertPublicCast(
+  poll: Poll,
+  accountId: string,
+  ballot: readonly number[],
+  options: PublicCastOptions,
+): void {
+  if (poll.votePrivacy !== "public")
+    throw new VotePrivacyError("an anonymous poll takes no account");
+  if (accountId.trim() === "")
+    throw new TypeError("accountId must not be empty");
+  validateBallot(poll, ballot);
+  if (options.confirmation === undefined)
+    throw new TypeError("a public vote needs a confirmation");
+  assertCastOptions(options);
+}
+
+/** The first page's lower bound: below every version-4 UUID. */
+export const FIRST_LIST_KEY = "00000000-0000-0000-0000-000000000000";
+const UUID = /^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$/;
+
+/** Every store's check of a list position before reading. */
+export function assertListKey(key: string): void {
+  if (!UUID.test(key)) throw new TypeError("a list key is a lowercase UUID");
 }
 
 /**
@@ -227,6 +343,16 @@ export function validateBallot(poll: Poll, ballot: readonly number[]): void {
  */
 export class InMemoryVotingStore implements VotingStore {
   readonly #polls = new Map<string, Poll>();
+  /**
+   * `voteKey(pollId, voterId)` of a public vote → its account and list key:
+   * the in-memory `public_vote`. Every refusal its keys and triggers make in
+   * Postgres is made in code here (ADR-0048 decision 3).
+   */
+  readonly #publicVotes = new Map<
+    string,
+    { accountId: string; listKey: string }
+  >();
+  readonly #displayNameOf: (accountId: string) => string | undefined;
   readonly #seedCommunities = new Map<string, string>();
   /** `voteKey(pollId, voterId)` → vote. One row per voter per poll. */
   readonly #votes = new Map<string, Vote>();
@@ -238,8 +364,18 @@ export class InMemoryVotingStore implements VotingStore {
   readonly #confirmations = new Map<string, string>();
   readonly #clock: () => Date;
 
-  constructor(clock: () => Date = () => new Date()) {
+  /**
+   * `displayNameOf` reads an account's profile name, visible or not, as the
+   * Postgres store joins `member_profile` (ADR-0048 decision 8); the
+   * in-memory profile store gives one with `memoryDisplayNames`. Without it
+   * every public vote is unnamed.
+   */
+  constructor(
+    clock: () => Date = () => new Date(),
+    options: { displayNameOf?: (accountId: string) => string | undefined } = {},
+  ) {
     this.#clock = clock;
+    this.#displayNameOf = options.displayNameOf ?? (() => undefined);
   }
 
   /**
@@ -325,6 +461,7 @@ export class InMemoryVotingStore implements VotingStore {
           method: p.method,
           createdAt: p.createdAt,
           ...(p.closesAt ? { closesAt: p.closesAt } : {}),
+          votePrivacy: p.votePrivacy,
           ...(image ? { image } : {}),
         };
       });
@@ -338,6 +475,7 @@ export class InMemoryVotingStore implements VotingStore {
   ): Promise<CastResult> {
     const poll = this.#requirePoll(pollId);
     if (voterId.trim() === "") throw new TypeError("voterId must not be empty");
+    assertBallotIdentity(poll, voterId);
     validateBallot(poll, ballot);
     assertCastOptions(options);
 
@@ -380,7 +518,9 @@ export class InMemoryVotingStore implements VotingStore {
     for (const [key, vote] of this.#votes) {
       if (vote.voterId !== voterId) continue;
       const poll = this.#polls.get(vote.pollId);
-      if (!poll || !isOpen(poll, now)) continue;
+      // Never a public vote (ADR-0048 decision 6): its row stays where it is.
+      if (!poll || poll.votePrivacy !== "anonymous" || !isOpen(poll, now))
+        continue;
       const code = person.codeFor(vote.pollId);
       assertConfirmation(code);
       writes.push([key, vote, code]);
@@ -407,14 +547,17 @@ export class InMemoryVotingStore implements VotingStore {
   }
 
   async voteHistory(
-    voterId: string,
+    voterId: string | undefined,
     limit: number,
     before?: VoteBefore,
+    accountId?: string,
   ): Promise<HistoryVote[]> {
-    return [...this.#votes.values()]
+    return [...this.#votes.entries()]
       .filter(
-        (vote) =>
-          vote.voterId === voterId &&
+        ([key, vote]) =>
+          (vote.voterId === voterId ||
+            (accountId !== undefined &&
+              this.#publicVotes.get(key)?.accountId === accountId)) &&
           (before === undefined ||
             vote.castAt < before.castAt ||
             (vote.castAt.getTime() === before.castAt.getTime() &&
@@ -423,6 +566,7 @@ export class InMemoryVotingStore implements VotingStore {
                 Buffer.from(before.pollId),
               ) < 0)),
       )
+      .map(([, vote]) => vote)
       .sort(
         (a, b) =>
           b.castAt.getTime() - a.castAt.getTime() ||
@@ -447,6 +591,82 @@ export class InMemoryVotingStore implements VotingStore {
             : {}),
         };
       });
+  }
+
+  async castPublic(
+    pollId: string,
+    accountId: string,
+    ballot: readonly number[],
+    options: PublicCastOptions,
+  ): Promise<CastResult> {
+    const poll = this.#requirePoll(pollId);
+    assertPublicCast(poll, accountId, ballot, options);
+    const now = this.#clock();
+    if (!isOpen(poll, now)) return { status: "closed" };
+
+    const held = this.#publicKeyOf(pollId, accountId);
+    const voterId =
+      held === undefined
+        ? newPublicVoterId()
+        : (this.#votes.get(held)?.voterId as string);
+    const choices = [...ballot].sort((a, b) => a - b);
+    const vote: Vote = { pollId, voterId, choices, castAt: now };
+    const key = voteKey(pollId, voterId);
+    this.#votes.set(key, vote);
+    // A re-cast keeps its code, as Postgres keeps the row's (decision 3).
+    if (held === undefined) {
+      this.#confirmations.set(key, options.confirmation);
+      this.#publicVotes.set(key, { accountId, listKey: randomUUID() });
+    }
+    return { status: held === undefined ? "counted" : "changed", vote };
+  }
+
+  async publicVoteOf(
+    pollId: string,
+    accountId: string,
+  ): Promise<Vote | undefined> {
+    const key = this.#publicKeyOf(pollId, accountId);
+    return key === undefined ? undefined : this.#votes.get(key);
+  }
+
+  async removePublicVote(
+    pollId: string,
+    accountId: string,
+    lockKey: bigint,
+  ): Promise<RemovalResult> {
+    const poll = this.#requirePoll(pollId);
+    if (poll.votePrivacy !== "public")
+      throw new VotePrivacyError("an anonymous poll's votes are not removed");
+    assertLockKey(lockKey);
+    if (!isOpen(poll, this.#clock())) return { status: "closed" };
+    const key = this.#publicKeyOf(pollId, accountId);
+    if (key === undefined) return { status: "none" };
+    this.#forget(key);
+    return { status: "removed" };
+  }
+
+  async listPublicVotes(
+    pollId: string,
+    limit: number,
+    after: string = FIRST_LIST_KEY,
+  ): Promise<PublicVoteEntry[]> {
+    assertListKey(after);
+    // The in-memory store has no hidden polls.
+    if (this.#polls.get(pollId)?.votePrivacy !== "public") return [];
+    return [...this.#publicVotes.entries()]
+      .flatMap(([key, link]) => {
+        const vote = this.#votes.get(key);
+        return vote?.pollId === pollId && link.listKey > after
+          ? [{ vote, ...link }]
+          : [];
+      })
+      .sort((a, b) => (a.listKey < b.listKey ? -1 : 1))
+      .slice(0, limit + 1)
+      .map(({ vote, accountId, listKey }) => ({
+        name: this.#displayNameOf(accountId) ?? null,
+        choices: [...vote.choices],
+        listKey,
+      }));
   }
 
   async results(pollId: string): Promise<Results> {
@@ -494,9 +714,22 @@ export class InMemoryVotingStore implements VotingStore {
     return undefined;
   }
 
+  /** The key of the account's public vote on this poll. */
+  #publicKeyOf(pollId: string, accountId: string): string | undefined {
+    for (const [key, link] of this.#publicVotes) {
+      if (
+        link.accountId === accountId &&
+        this.#votes.get(key)?.pollId === pollId
+      )
+        return key;
+    }
+    return undefined;
+  }
+
   #forget(key: string): void {
     this.#votes.delete(key);
     this.#confirmations.delete(key);
+    this.#publicVotes.delete(key);
   }
 }
 

@@ -8,8 +8,8 @@ const AT = new Date("2026-09-11T12:00:00.123Z");
 
 function insertPoll(db: Pool | PoolClient, id: string) {
   return db.query(
-    "insert into polls (id, question, method, created_at, accepts_suggestions)" +
-      " values ($1, 'Q', 'single', $2, false)",
+    "insert into polls (id, question, method, created_at, accepts_suggestions," +
+      " vote_privacy) values ($1, 'Q', 'single', $2, false, 'anonymous')",
     [id, AT],
   );
 }
