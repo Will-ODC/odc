@@ -1269,7 +1269,8 @@ default; behind nginx, the forwarded client address), before any read; over it
 is `too_many_requests`. The tool's own read of the route reaches this process's
 loopback listener with a per-process random `x-pulse-internal` header, which the
 list's limiter passes so the caller is not counted twice; the header is never
-configured, logged or sent to a configured upstream. A call also counts toward
+configured, logged or sent to a configured upstream, and the web image's nginx
+drops any copy a client sends. A call also counts toward
 the route's 120 requests/minute.
 
 `get_poll` passes an authored poll's `community` and `attribution` through as
@@ -1313,16 +1314,19 @@ The route accepts at most 16 KiB per request and 120 requests/minute per client 
 This initial limiter is in memory and must become shared before scaling to
 multiple instances. GET/DELETE return 405. SDK protocol validation handles
 version/header/envelope errors. Origin, if present, must match the configured
-public origin; non-browser clients may omit it. Host must match that origin's
-host exactly, port included, or the local loopback listener. The web image's
-nginx forwards the client's `Host` verbatim for this. Route request logging is disabled to avoid recording
+public origin; non-browser clients may omit it. With a public origin configured,
+Host must equal that origin's host exactly, port included, compared without
+regard to case, and nothing else is accepted, not even this API's own loopback
+listener: the web image's nginx forwards the client's `Host` verbatim, so a
+loopback value would otherwise be a way in. Without one (in-process and `dev`),
+Host must name the loopback listener. Route request logging is disabled to avoid recording
 untrusted headers, query strings or bodies.
 
 The `createServer` option `mcp` may specify `publicOrigin`, `apiBaseUrl` and
 `timeoutMs` (default 5 seconds). Defaults target this API's loopback listener;
 therefore the dev server works without configuration after it listens, including
 on a throwaway port. Custom upstreams require HTTPS, except loopback HTTP.
-The served entry point (`src/main.ts`) and `dev` pass
+The served entry point (`src/main.ts`) passes
 `mcp: { publicOrigin: PULSE_WEB_ORIGIN }` and no `apiBaseUrl`, so through nginx
 MCP answers at `<PULSE_WEB_ORIGIN>/api/mcp` and its reads stay on loopback. A
 served API therefore refuses to start with a plaintext `PULSE_WEB_ORIGIN` other

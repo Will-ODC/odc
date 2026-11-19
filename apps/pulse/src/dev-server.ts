@@ -417,9 +417,6 @@ export async function buildDevServer(
       profiles: storage.profiles,
       // The client's origin, which is where creation requests come from.
       webOrigin: config.webOrigin,
-      // MCP trusts the client's origin, as the served wiring does (ADR-0048
-      // decision 11), so MCP works through the vite proxy too.
-      mcp: { publicOrigin: config.webOrigin },
       // Local development is http://, and a Secure cookie would never be
       // stored. Safe only because of the guard above — see DEV_ENVIRONMENTS.
       secureCookies: false,

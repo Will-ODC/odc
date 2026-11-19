@@ -1010,7 +1010,7 @@ test(
     };
     const { app } = await buildServer(config, { log: () => undefined });
     t.after(() => app.close());
-    await app.listen({ host: "127.0.0.1", port: 0 });
+    const listening = new URL(await app.listen({ host: "127.0.0.1", port: 0 }));
     const list = (headers: Record<string, string | undefined>) =>
       app.inject({
         method: "POST",
@@ -1030,10 +1030,24 @@ test(
     });
     assert.equal(served.statusCode, 200, served.body);
     assert.match(served.body, /get_public_votes/);
+    assert.equal(
+      (
+        await list({
+          host: "PULSE.example.org",
+          origin: "https://pulse.example.org",
+        })
+      ).statusCode,
+      200,
+    );
     for (const foreign of [
       { host: "evil.example", origin: "https://pulse.example.org" },
       { host: "pulse.example.org", origin: "https://evil.example" },
       { host: "pulse.example.org:8443", origin: undefined },
+      // nginx forwards the client's Host, so the API's own listener must
+      // not be a way in once a public origin is configured.
+      { host: listening.host, origin: undefined },
+      { host: `localhost:${listening.port}`, origin: undefined },
+      { host: "127.0.0.1:8080", origin: undefined },
     ]) {
       assert.equal((await list(foreign)).statusCode, 403);
     }

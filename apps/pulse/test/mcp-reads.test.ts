@@ -14,18 +14,27 @@ import {
 } from "../src/http/mcp/route.js";
 import { databaseUrl } from "../src/db/config.js";
 import { databaseSkip, throwawaySchema } from "./support/database.js";
+import { fetchWithHost } from "./support/host-fetch.js";
 import { idFromLink, origin } from "../src/http/mcp/client.js";
 import { PostgresCreationStore } from "../src/authoring/pg-store.js";
 import { PostgresVoterStore } from "../src/identity/pg-store.js";
 
-async function connect(t: TestContext, url: string, modern = true) {
+async function connect(
+  t: TestContext,
+  url: string,
+  modern = true,
+  host?: string,
+) {
   const client = new Client(
     { name: "pulse-test", version: "1" },
     { versionNegotiation: { mode: modern ? "auto" : "legacy" } },
   );
   t.after(() => client.close());
   await client.connect(
-    new StreamableHTTPClientTransport(new URL(`${url}/api/mcp`)),
+    new StreamableHTTPClientTransport(
+      new URL(`${url}/api/mcp`),
+      host ? { fetch: fetchWithHost(host) } : {},
+    ),
   );
   return client;
 }
@@ -98,7 +107,9 @@ async function adapter(
   });
   t.after(() => app.close());
   const url = await app.listen({ host: "127.0.0.1", port: 0 });
-  return { app, url, client: await connect(t, url) };
+  // As a proxy forwards it: the configured public origin's Host.
+  const host = new URL(options.publicOrigin ?? "https://pulse.test").host;
+  return { app, url, client: await connect(t, url, true, host) };
 }
 async function upstream(
   t: TestContext,
@@ -154,11 +165,9 @@ test("official SDK reads match dev API in modern and legacy modes without ballot
       assert.equal(direct.headers.get("set-cookie"), null);
       assert.notEqual(result.isError, true);
     }
-    // Links name the configured web origin (the client's), not the
-    // listener the API happens to be on.
     const link = await client.callTool({
       name: "get_poll",
-      arguments: { link: "http://localhost:5173/api/polls/ads-free" },
+      arguments: { link: `${url}/api/polls/ads-free` },
     });
     assert.equal((link.structuredContent as { id?: string })?.id, "ads-free");
     errorCode(
@@ -529,17 +538,21 @@ test("route refuses foreign origins, hosts, wrong methods and oversized bodies w
   const source = await upstream(t);
   const logs: string[] = [];
   const { app, url } = await adapter(t, source.url, {}, logs);
+  // The right Host, so the foreign Origin alone is what is refused.
   for (const headers of [{ origin: "https://evil.test" }]) {
-    const response = await fetch(`${url}/api/mcp?token=secret-query`, {
-      method: "POST",
-      headers: {
-        "content-type": "application/json",
-        cookie: "pulse_ballot=secret-cookie",
-        authorization: "Bearer secret-auth",
-        ...headers,
+    const response = await fetchWithHost("pulse.test")(
+      `${url}/api/mcp?token=secret-query`,
+      {
+        method: "POST",
+        headers: {
+          "content-type": "application/json",
+          cookie: "pulse_ballot=secret-cookie",
+          authorization: "Bearer secret-auth",
+          ...headers,
+        },
+        body: JSON.stringify({ token: "secret-body" }),
       },
-      body: JSON.stringify({ token: "secret-body" }),
-    });
+    );
     assert.equal(response.status, 403, await response.text());
   }
   assert.equal(
@@ -553,14 +566,15 @@ test("route refuses foreign origins, hosts, wrong methods and oversized bodies w
     ).statusCode,
     403,
   );
-  assert.equal((await fetch(`${url}/api/mcp`)).status, 405);
+  const proxied = fetchWithHost("pulse.test");
+  assert.equal((await proxied(`${url}/api/mcp`)).status, 405);
   assert.equal(
-    (await fetch(`${url}/api/mcp`, { method: "DELETE" })).status,
+    (await proxied(`${url}/api/mcp`, { method: "DELETE" })).status,
     405,
   );
   assert.equal(
     (
-      await fetch(`${url}/api/mcp`, {
+      await proxied(`${url}/api/mcp`, {
         method: "POST",
         headers: { "content-type": "application/json" },
         body: JSON.stringify({ text: "x".repeat(17000) }),
@@ -623,6 +637,7 @@ test("network failure and malformed JSON stay safe and do not forward caller cre
   t.after(() => client.close());
   await client.connect(
     new StreamableHTTPClientTransport(new URL(`${url}/api/mcp`), {
+      fetch: fetchWithHost("pulse.test"),
       requestInit: {
         headers: {
           cookie: "pulse_ballot=caller-secret",
@@ -926,4 +941,36 @@ test("get_public_votes_maps_the_list_routes_refusals_to_tool_errors", async (t) 
     errorCode(result, code);
     assert.doesNotMatch(JSON.stringify(result), /upstream words/);
   }
+});
+
+test("with_a_public_origin_only_its_host_is_accepted_case_insensitively_never_loopback", async (t) => {
+  const source = await upstream(t);
+  const { app, url } = await adapter(t, source.url);
+  const port = new URL(url).port;
+  const list = (host: string) =>
+    app.inject({
+      method: "POST",
+      url: "/api/mcp",
+      headers: {
+        host,
+        accept: "application/json, text/event-stream",
+        "content-type": "application/json",
+      },
+      payload: { jsonrpc: "2.0", id: 1, method: "tools/list" },
+    });
+  // Behind nginx, which forwards the client's Host, a loopback value would
+  // otherwise let any outside caller past the check.
+  for (const host of [
+    `127.0.0.1:${port}`,
+    `localhost:${port}`,
+    `[::1]:${port}`,
+    "127.0.0.1:8080",
+    "pulse.test:443",
+    "pulse.test.evil.example",
+    "",
+  ])
+    assert.equal((await list(host)).statusCode, 403, host);
+  for (const host of ["pulse.test", "PULSE.TEST", "Pulse.Test"])
+    assert.equal((await list(host)).statusCode, 200, host);
+  assert.deepEqual(source.requests, []);
 });

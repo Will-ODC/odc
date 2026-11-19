@@ -144,6 +144,10 @@ grep -q 'Ada Smoke' "$work/body" || fail 'MCP get_public_votes body'
 [ "$(mcp 198.51.100.2 "$list_tools" -H 'Origin: https://evil.example')" = 403 ] || fail 'foreign Origin accepted'
 [ "$(mcp 198.51.100.2 "$list_tools" -H 'Host: evil.example')" = 403 ] || fail 'foreign Host accepted'
 [ "$(mcp 198.51.100.2 "$list_tools" -H "Host: 127.0.0.1")" = 403 ] || fail 'Host without its port accepted'
+# The API's own loopback listener is no way in through the proxy.
+for host in 127.0.0.1:8080 localhost:8080 "[::1]:8080"; do
+    [ "$(mcp 198.51.100.2 "$list_tools" -H "Host: $host")" = 403 ] || fail "loopback Host $host accepted"
+done
 
 # publicVotesRateLimit: one bucket per forwarded client address (60 a
 # minute), shared by HTTP and MCP. Client A spends its own over HTTP ...
@@ -153,6 +157,9 @@ while [ "$i" -lt 60 ]; do
     i=$((i + 1))
 done
 [ "$(get 198.51.100.10 /api/polls/smoke-public/public-votes)" = 429 ] || fail "A's 61st read allowed"
+# A client's own internal header buys nothing (nginx drops it).
+[ "$(curl -sS --max-time 15 -o /dev/null -w '%{http_code}' -H 'X-Real-IP: 198.51.100.10' \
+    -H 'X-Pulse-Internal: guess' "$base/api/polls/smoke-public/public-votes")" = 429 ] || fail 'internal header bypassed the limit'
 # ... so its MCP call is refused from the same bucket ...
 [ "$(mcp 198.51.100.10 "$(call get_public_votes)")" = 200 ] || fail "A's MCP call"
 grep -q '"too_many_requests"' "$work/body" || fail "A's MCP call was not limited"
@@ -161,4 +168,4 @@ grep -q '"too_many_requests"' "$work/body" || fail "A's MCP call was not limited
 [ "$(mcp 198.51.100.11 "$(call get_public_votes)")" = 200 ] || fail "B's MCP call"
 grep -q 'Ada Smoke' "$work/body" || fail "B's MCP call shares A's bucket"
 
-echo 'PASS: page, API read, cache rules, MCP through nginx with the configured origin, foreign Origin/Host refused, per-address shared list buckets'
+echo 'PASS: page, API read, cache rules, MCP through nginx with the configured origin, foreign and loopback Host and foreign Origin refused, per-address shared list buckets'

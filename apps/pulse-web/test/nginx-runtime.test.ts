@@ -90,6 +90,8 @@ describe("nginx runtime settings", () => {
       // configured origin exactly (ADR-0048 decision 11).
       expect(block).toContain("proxy_set_header Host $http_host;");
       expect(block).not.toContain("proxy_set_header Host $host;");
+      // A client's internal-header copy never reaches the API.
+      expect(block).toContain('proxy_set_header X-Pulse-Internal "";');
       expect(block).toContain("proxy_set_header X-Real-IP $remote_addr;");
       expect(block).toContain("proxy_set_header X-Forwarded-For $remote_addr;");
       expect(block).toContain(

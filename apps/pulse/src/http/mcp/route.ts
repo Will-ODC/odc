@@ -177,9 +177,16 @@ export function registerMcpReads(
     config: { rateLimit: { max: 120, timeWindow: "1 minute" } },
     handler: async (request, reply) => {
       const own = publicOrigin ?? loopback();
-      const hosts = [own.host, loopback().host, `localhost:${loopback().port}`];
+      // With a public origin configured, exactly its host (port included)
+      // and nothing else: behind nginx, which forwards the client's Host, a
+      // loopback value would otherwise let any caller past this check. Only
+      // without one (in-process tests) does the loopback listener answer.
+      // Host names are case-insensitive, so both sides are compared lowered.
+      const hosts = publicOrigin
+        ? [own.host]
+        : [own.host, `localhost:${own.port}`];
       if (
-        !hosts.includes(request.headers.host ?? "") ||
+        !hosts.includes((request.headers.host ?? "").toLowerCase()) ||
         (request.headers.origin !== undefined &&
           request.headers.origin !== own.origin)
       ) {
