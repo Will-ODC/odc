@@ -156,7 +156,7 @@ const SEED = {
         "Members chip in",
         "One-off donations",
         "Grants",
-        "A cut of what moves through it",
+        "Community-approved ads that help the community",
       ],
       method: "single",
       next: [null, null, null, null],

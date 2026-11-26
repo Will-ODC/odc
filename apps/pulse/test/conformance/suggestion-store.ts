@@ -49,7 +49,7 @@ const funding = () =>
     "Members chip in",
     "One-off donations",
     "Grants",
-    "A cut of what moves through it",
+    "Community-approved ads that help the community",
   ]);
 
 /** Every poll the suite submits against. */
