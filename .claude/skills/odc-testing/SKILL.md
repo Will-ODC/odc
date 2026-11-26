@@ -19,26 +19,29 @@ import-boundary rules are in [`odc-service-boundaries`](../odc-service-boundarie
 
 1. **Unit tests** — every pure function: hashing, signature checks, tally math,
    consent-set logic. No network, no DB. Fast enough to run on every save.
-2. **API/contract tests** — check HTTP behavior against a real local instance
-   (real DB, throwaway data; a Pulse HTTP test may use the memory store when
-   the same storage behavior also runs on Postgres in the storage tests).
+2. **API/contract tests** — every endpoint, exercised over HTTP against a
+   real local instance (real DB, throwaway data; a Pulse HTTP test may use the
+   memory store when the same storage behavior also runs on Postgres in the
+   storage tests).
    Required cases per endpoint:
    - happy path with a schema-validated response body
    - each documented error (400 malformed, 401/403 unauthorized, 404, 409)
    - for a signed endpoint, all three authorization failures: wrong key,
      missing signature, replayed request
 
-   Beyond these required cases, choose further cases by risk, and run each
+   Beyond the required cases in this skill (these and the ODC-specific ones
+   below), choose further cases by risk, and run each
    only at the lowest layer that can catch the failure.
 
 3. **Storage tests** — check behavior that depends on Postgres (constraints,
    locks, grants, SQL) against real Postgres in an isolated schema. Where a
-   service has both a memory and a Postgres store, run the same tests against
+   service or app has both a memory and a Postgres store, run the same tests against
    both.
 4. **Integration tests** — only at real seams: identity→ledger registration
    ordering; tally rebuilt from a ledger export.
 
-Use real sockets only when testing behavior across the socket: proxy behavior,
+Beyond the API/contract tests above, use real sockets only when testing
+behavior across the socket: proxy behavior,
 cookies, origin and host checks, the dev proxy, the browser client's HTTP
 adapter end to end, and service-to-service calls at an integration seam.
 
@@ -76,7 +79,7 @@ adapter end to end, and service-to-service calls at an integration seam.
 ## Flaky tests
 
 A flaky test found outside the PR in hand gets an issue the day it is seen
-(one the PR in hand added is fixed on its branch). Quarantine it (skip or
+(one the PR in hand added or made flaky is fixed on its branch). Quarantine it (skip or
 retry) only with a named owner, a linked issue, and an expiry date in a comment
 at the skip or retry. Remove the quarantine or fix the test by that date.
 
