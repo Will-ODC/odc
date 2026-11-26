@@ -69,6 +69,9 @@ test(
         createdAt: joined.contribution.participations[0]!.createdAt,
       },
     ]);
+    // The API projects the picture separately from the stored public record.
+    const { image, ...persistedContribution } = joined.contribution;
+    assert.deepEqual(image, { kind: "tile" });
     assert.deepEqual(
       (
         await f.pool.query(
@@ -76,7 +79,7 @@ test(
           [id],
         )
       ).rows[0]!.public_record,
-      joined.contribution,
+      persistedContribution,
     );
 
     const updateKey = randomUUID();
