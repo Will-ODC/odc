@@ -21,20 +21,26 @@ import-boundary rules are in [`odc-service-boundaries`](../odc-service-boundarie
    consent-set logic. No network, no DB. Fast enough to run on every save.
 2. **API/contract tests** — check HTTP behavior against a real local instance
    (real DB, throwaway data; a Pulse HTTP test may use the memory store when
-   the shared conformance suite runs the same storage behavior on Postgres).
-   Choose cases by risk. Every endpoint keeps its happy
-   path with a schema-validated response body and each documented error
-   (400 malformed, 401/403 unauthorized, 404, 409). Cover authorization
-   failures that apply, such as a wrong key, missing signature, or replayed
-   request. A case need only run at the layer that can catch the failure.
+   the same storage behavior also runs on Postgres in the storage tests).
+   Required cases per endpoint:
+   - happy path with a schema-validated response body
+   - each documented error (400 malformed, 401/403 unauthorized, 404, 409)
+   - for a signed endpoint, all three authorization failures: wrong key,
+     missing signature, replayed request
+
+   Beyond these required cases, choose further cases by risk, and run each
+   only at the lowest layer that can catch the failure.
+
 3. **Storage tests** — check behavior that depends on Postgres (constraints,
-   locks, grants, SQL) against real Postgres in an isolated schema. Run the
-   same shared conformance suite against the memory and Postgres stores.
+   locks, grants, SQL) against real Postgres in an isolated schema. Where a
+   service has both a memory and a Postgres store, run the same tests against
+   both.
 4. **Integration tests** — only at real seams: identity→ledger registration
    ordering; tally rebuilt from a ledger export.
 
-Use real sockets only when testing behavior across the socket, such as proxy
-behavior, cookies, origin and host checks, or the dev proxy.
+Use real sockets only when testing behavior across the socket: proxy behavior,
+cookies, origin and host checks, the dev proxy, the browser client's HTTP
+adapter end to end, and service-to-service calls at an integration seam.
 
 ## ODC-specific required tests
 
@@ -69,7 +75,11 @@ behavior, cookies, origin and host checks, or the dev proxy.
 
 ## Flaky tests
 
-File an issue the day a flaky test is seen. Quarantine it (skip or retry)
-only with a named owner, a linked issue, and an expiry date in a comment at
-the skip or retry. Remove the quarantine or fix the test by that date. Never
-quarantine a privacy, auth, or vote-counting test.
+A flaky test found outside the PR in hand gets an issue the day it is seen
+(one the PR in hand added is fixed on its branch). Quarantine it (skip or
+retry) only with a named owner, a linked issue, and an expiry date in a comment
+at the skip or retry. Remove the quarantine or fix the test by that date.
+
+Never quarantine a privacy, auth or vote-counting test, any ODC-specific
+required test above, or a forced-overlap concurrency test: retrying one until
+it passes hides the failure it exists to catch.
