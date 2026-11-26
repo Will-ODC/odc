@@ -41,7 +41,7 @@
   :root {
     color-scheme: light;
     --page: #ffffff;
-    --subtle: #f6f7f6;
+    --hover: #f6f7f6;  /* tokens.css --hover */
     --line: #dfe3e1;
     --line-strong: #8a918d;
     --ink: #1b1f1d;
@@ -52,7 +52,7 @@
     --green-wash: #e6f4ea;
     --green-line: #a8d5b5;
     --red: #c5221f;
-    --red-wash: #fdecea;
+    --red-wash: #fdecea;  /* not in tokens.css yet: the component PR adds it, with a #499 dark value */
     --on-accent: #ffffff;
     --focus: var(--green);  /* tokens.css, not the light deck's dark gray */
     --r-card: 12px;
@@ -63,7 +63,7 @@
   * { box-sizing: border-box; }
   body {
     margin: 0;
-    background: var(--subtle);
+    background: var(--hover);
     color: var(--ink);
     font: 15px/1.5 var(--font);
     padding-block: 32px 64px;
@@ -147,7 +147,7 @@
   /* Empty: a quiet box with one button. The real file input is visually
      hidden; the button opens it, so keyboard and screen readers get a
      normal button with the field's label. */
-  .pic-empty { display: flex; align-items: center; gap: 14px; padding: 16px; border: 1px dashed var(--line-strong); border-radius: var(--r-card); background: var(--subtle); }
+  .pic-empty { display: flex; align-items: center; gap: 14px; padding: 16px; border: 1px dashed var(--line-strong); border-radius: var(--r-card); background: var(--hover); }
   .pic-empty .ico { width: 40px; height: 40px; border-radius: var(--r-control); background: var(--page); border: 1px solid var(--line); display: grid; place-items: center; color: var(--muted); flex: none; }
   .pic-empty .ico svg { width: 22px; height: 22px; }
   .pic-empty.bad { border: 1px solid var(--red); background: var(--red-wash); }
@@ -156,7 +156,7 @@
   /* Chosen: the preview, then one row with the file and the two controls. */
   .pic-card { border: 1px solid var(--line); border-radius: var(--r-card); overflow: hidden; background: var(--page); }
   .pic-card.bad { border-color: var(--red); }
-  .pic-view { position: relative; background: var(--subtle); display: grid; place-items: center; border-bottom: 1px solid var(--line); }
+  .pic-view { position: relative; background: var(--hover); display: grid; place-items: center; border-bottom: 1px solid var(--line); }
   .pic-view img { display: block; width: 100%; max-height: 260px; object-fit: contain; }
   .phone .pic-view img { max-height: 220px; }
   .pic-view.dim img { opacity: 0.5; }
@@ -170,9 +170,9 @@
   .pic-file b { color: var(--ink-soft); font-weight: 600; }
   .pic-acts { display: flex; gap: 4px; flex: none; }
   /* On a phone the controls get their own full-width row, 44 px tall. */
-  .phone .pic-row { display: grid; gap: 8px; padding: 10px 12px 12px; }
+  .phone .pic-row { display: grid; justify-content: stretch; gap: 8px; padding: 10px 12px 12px; }
   .phone .pic-acts { display: grid; grid-template-columns: 1fr 1fr; gap: 8px; }
-  .phone .pic-acts .btn { width: 100%; }
+  .phone .pic-acts .btn { width: 100%; height: 44px; }
   .phone .pic-acts .btn:only-child { grid-column: 1 / -1; }
   .pic-status { margin: 0; font-size: 13px; color: var(--muted); }
   .phone .pic-status { font-size: 14px; }
@@ -244,6 +244,8 @@
       <ul>
         <li>A refused file, a failed upload or a busy server changes only this field. The question, choices, title, description and every other field stay exactly as typed.</li>
         <li>After a network or busy error the chosen picture and its description stay too, with Try again beside Remove.</li>
+        <li>Remove clears the picture and its description; the rest of the draft stays.</li>
+        <li>Replace goes through the uploading state again. "Picture replaced…" is announced only once the new upload succeeds; until then the old description is kept.</li>
         <li>If Post refuses an expired or otherwise unavailable picture, the picture clears and focus moves to Choose a picture. Its description and the rest of the draft stay.</li>
       </ul>
       <h3>Keyboard and screen readers</h3>
@@ -296,6 +298,8 @@
     dimensionsUnknown: "This picture is too small or too large. Choose a different picture.",
     network: "The picture did not upload. Check your connection, then try again. Everything else you wrote is kept.",
     busy: "Pulse is busy with other pictures. Try again in a minute. Everything else you wrote is kept.",
+    signedOutNote: "No message of its own: the form shows its usual sign-in prompt.",
+    unavailableNow: "Pulse cannot take pictures right now. Try again later, or post without a picture. Everything else you wrote is kept.",
     hourly: "You have uploaded 20 pictures in the last hour, the most allowed. Try again later, or post without a picture.",
     pending: "You have 5 pictures that are not posted yet, the most allowed at once. Unposted pictures clear after a day.",
     waitPost: "Wait for the picture to finish uploading, or cancel it.",
@@ -518,18 +522,21 @@
     ["Hint", "descHint", "With a picture, or when its description is kept after the picture becomes unavailable."],
     ["Error", "descMissing", "Post pressed with a picture and zero code points after trimming. A description of only spaces counts as missing."],
     ["Error", "descLong", "Over 300 code points after trimming. Show the actual trimmed count."],
-    ["Error", "type", "The browser checks first, then the server. Only still JPEG, PNG and WebP are accepted. AVIF is refused too."],
+    ["Error", "type", "The browser checks first, then the server. Only still JPEG, PNG and WebP are accepted. AVIF is refused too. Server slug: unsupported_image."],
     ["Error", "size", "The browser refuses files over 10,485,760 bytes. Shown sizes use binary units (1 MB = 1,048,576 bytes)."],
     ["Error", "small", "The server sends image_dimensions without numbers. The browser measures the file locally to choose and fill this message when the shorter side is under 200 pixels."],
-    ["Error", "big", "The server sends image_dimensions without numbers. The browser measures the file locally to choose and fill this message when a side exceeds 8,000 pixels."],
+    ["Error", "big", "The server sends image_dimensions without numbers. The browser measures the file locally to choose and fill this message when a side exceeds 8,000 pixels. Say \u201ctall\u201d instead of \u201cwide\u201d when the height is the side over the limit."],
     ["Error", "bigMegapixels", "For image_dimensions, the browser measures the file locally to choose and fill this message when the area exceeds 40 megapixels and both sides are within the side limit (e.g. 7,000 × 7,000 pixels)."],
     ["Error", "dimensionsUnknown", "For image_dimensions when the browser cannot measure the file locally."],
     ["Error", "network", "The upload failed or timed out."],
-    ["Error", "busy", "The server answered busy (image_busy)."],
-    ["Error", "busy", "The upload returned 503 images_unavailable. Reuse the busy message."],
-    ["Error", "busy", "The upload returned 429 too_many_requests for the per-client request limit. Reuse the busy message."],
-    ["Error", "hourly", "20 uploads in the last hour."],
-    ["Error", "pending", "5 unposted pictures at once. Not drawn in a frame; same place as the hourly error."],
+    ["Error", "busy", "503 image_busy only."],
+    ["Error", "unavailableNow", "503 images_unavailable (pictures off or not configured). Not drawn; same place as the busy error."],
+    ["Error", "unavailableNow", "429 too_many_requests (this browser's request limit). Not drawn; same place as the busy error."],
+    ["Error", "size", "413 image_too_large, if the browser check was skipped: show the size message with the real size."],
+    ["Error", "network", "500 server_error: show the network message."],
+    ["Note", "signedOutNote", "401 signed_out (the session ended while the form was open): the form's existing signed-out handling runs; the picture is dropped, its description and the rest of the draft are kept."],
+    ["Error", "hourly", "429 upload_limit: 20 uploads in the last hour."],
+    ["Error", "pending", "429 pending_limit: 5 unposted pictures at once. Not drawn in a frame; same place as the hourly error."],
     ["Error", "waitPost", "Post pressed while still uploading."],
     ["Error", "unavailable", "Post returned 422 image_unavailable. The pending picture expired after 24 hours, is unknown or was already used. Clear the picture and keep its description and the rest of the draft."]
   ];
