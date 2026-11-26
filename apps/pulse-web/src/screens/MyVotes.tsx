@@ -9,7 +9,7 @@ import { pathOf } from "../flow/route.js";
 import { SiteBanner } from "../components/SiteBanner.js";
 import "./MyVotes.css";
 
-/** This browser's current ballots, read from the server on every visit (#329). */
+/** Browser ballots and the signed-in account’s public votes, read on every visit. */
 export function MyVotes({ api }: { api: PulseApi }) {
   const { data, more, loadMore, clear, retry, holdsVotes, voteRead } =
     useMyVotes(api);
@@ -41,8 +41,10 @@ export function MyVotes({ api }: { api: PulseApi }) {
       >
         <h1>My votes</h1>
         <p className="my-votes__note">
-          Answers saved in this browser. Signing out or forgetting votes here
-          clears access to them.
+          See your anonymous answers saved in this browser and, when signed in,
+          the public votes on your account. Signing out or choosing “Forget my
+          votes here” leaves public votes in the results. Sign in again to see
+          them here.
         </p>
         <ViewState data={data} onRetry={retry}>
           {(page) => <AnsweredList votes={page.votes} listRef={list} />}

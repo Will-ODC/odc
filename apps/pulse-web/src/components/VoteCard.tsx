@@ -8,6 +8,7 @@ import {
   validCardBallot,
 } from "../flow/vote-card.js";
 import type { Confirmation } from "../flow/vote-card.js";
+import { Button } from "./Button.js";
 import { ClosedNotice } from "./ClosedNotice.js";
 import { QuestionPager, type MyVotesNavigation } from "./QuestionPager.js";
 import { ResultsPanel } from "./ResultsPanel.js";
@@ -69,7 +70,13 @@ export interface VoteCardProps {
   choices: readonly CardChoice[];
   picked: readonly number[];
   status: VoteCardStatus;
-  privacyNote: string;
+  privacyNote: ReactNode;
+  signInToVoteHref?: string;
+  onRetrySession?: () => void;
+  votingUnavailable?: boolean;
+  removed?: boolean;
+  publicVotes?: ReactNode;
+  answerActions?: ReactNode;
   collapsed: boolean;
   other?: ReactNode;
   onPick: (picked: number[]) => void;
@@ -121,6 +128,12 @@ export function VoteCard({
   picked,
   status,
   privacyNote,
+  signInToVoteHref,
+  onRetrySession,
+  votingUnavailable = false,
+  removed = false,
+  publicVotes,
+  answerActions,
   collapsed,
   other,
   onPick,
@@ -143,7 +156,10 @@ export function VoteCard({
   const pending = useRef<HTMLParagraphElement>(null);
   const note = useRef<HTMLDivElement>(null);
   const previous = useRef({ kind: status.kind, collapsed });
-  const editable = status.kind === "answerable" || status.kind === "failed";
+  const editable =
+    !votingUnavailable &&
+    !signInToVoteHref &&
+    (status.kind === "answerable" || status.kind === "failed");
   const allowed =
     editable && !checking && validCardBallot(method, choices, picked);
   // Close keeps focus while a check runs: marked, not removed or disabled.
@@ -266,6 +282,7 @@ export function VoteCard({
           Change my answer
         </button>
       ) : null}
+      {answerActions}
       {trustHref ? (
         <a
           className="vote-card__info"
@@ -447,6 +464,7 @@ export function VoteCard({
                 compact={presentation === "results"}
                 yourChoices={picked}
                 panelRef={panel}
+                publicVotes={publicVotes}
                 {...(resultsHidden !== undefined && onResultsHidden
                   ? { hidden: resultsHidden, onHiddenChange: onResultsHidden }
                   : {})}
@@ -476,6 +494,7 @@ export function VoteCard({
                   value={choice.index}
                   checked={picked.includes(choice.index)}
                   aria-labelledby={`${id}-label-${choice.index}`}
+                  aria-disabled={signInToVoteHref ? true : undefined}
                   {...(choice.detail
                     ? { "aria-describedby": `${id}-detail-${choice.index}` }
                     : {})}
@@ -512,6 +531,7 @@ export function VoteCard({
                 or your community needs to confirm you first.
               </p>
             ) : null}
+            {removed ? <p role="status">Your vote was removed.</p> : null}
           </div>
           {checking ? (
             <p className="vote-card__note" role="status">
@@ -522,8 +542,17 @@ export function VoteCard({
               {status.message}
             </p>
           ) : null}
+          {onRetrySession ? (
+            <p className="vote-card__problem" role="alert">
+              We couldn't check whether you're signed in.
+            </p>
+          ) : null}
           <footer className="vote-card__foot">
-            <p className="vote-card__note">{privacyNote}</p>
+            {privacyNote ? (
+              <p id={`${id}-privacy`} className="vote-card__note">
+                {privacyNote}
+              </p>
+            ) : null}
             {inPage && closable ? (
               <button
                 type="button"
@@ -533,12 +562,32 @@ export function VoteCard({
                 Close
               </button>
             ) : null}
+            {signInToVoteHref ? (
+              <a
+                className="vote-card__signin"
+                href={signInToVoteHref}
+                aria-describedby={`${id}-privacy`}
+              >
+                Sign in with email to vote
+              </a>
+            ) : null}
+            {onRetrySession ? (
+              <Button
+                variant="secondary"
+                size="small"
+                type="button"
+                onClick={onRetrySession}
+              >
+                Try again
+              </Button>
+            ) : null}
             {editable || status.kind === "sending" ? (
               <button
                 type="button"
                 className="vote-card__submit"
                 disabled={!allowed}
                 aria-disabled={!allowed}
+                aria-describedby={`${id}-privacy`}
                 onClick={() => {
                   if (allowed) onSubmit([...picked]);
                 }}

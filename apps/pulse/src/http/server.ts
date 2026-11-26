@@ -850,7 +850,8 @@ export async function createServer(deps: ServerDeps): Promise<FastifyInstance> {
       if (poll.votePrivacy !== "public") {
         return reply.code(409).send({
           error: "anonymous_poll",
-          message: "This poll's votes are anonymous and cannot be removed.",
+          message:
+            "This poll's votes are anonymous and cannot be removed. You can still change your answer.",
         });
       }
       const key = deps.confirmationKey;
@@ -1040,7 +1041,7 @@ function publicVotesUnavailable(
 function badListQuery(reply: FastifyReply) {
   return reply.code(400).send({
     error: "bad_request",
-    message: "Choose a valid page of votes.",
+    message: "Start again from the first page of votes.",
   });
 }
 

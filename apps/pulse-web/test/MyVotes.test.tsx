@@ -196,14 +196,46 @@ it("clears visible answers after forgetting this browser's votes", async () => {
     />,
   );
   await screen.findByText("Your answer: Yes");
+  expect(screen.getByText(/leaves public votes in the results/)).toBeTruthy();
   await user.click(screen.getByRole("button", { name: "Account" }));
   await user.click(
     screen.getByRole("button", { name: "Forget my votes here" }),
   );
+  expect(
+    screen.getByText(/public votes stay visible in the results/),
+  ).toBeTruthy();
   await user.click(screen.getByRole("button", { name: "Forget them" }));
   await waitFor(() => expect(signOut).toHaveBeenCalledOnce());
   expect(
     await screen.findByText("No votes saved in this browser yet."),
   ).toBeTruthy();
   expect(screen.queryByText("Your answer: Yes")).toBeNull();
+});
+
+it("tags public history rows without reading each poll", async () => {
+  const poll = vi.fn(stubApi().poll);
+  const api = stubApi({
+    me: async () => ({ id: "ada", email: "ada@example.test", community: null }),
+    myVotes: async () =>
+      page([
+        vote({ votePrivacy: "anonymous" }),
+        vote({
+          pollId: "p2",
+          question: "Public question?",
+          votePrivacy: "public",
+        }),
+        vote({ pollId: "p3", question: "Earlier history row?" }),
+      ]),
+    poll,
+  });
+  render(<App api={api} route={{ kind: "myVotes" }} />);
+  const publicRow = (
+    await screen.findByRole("link", { name: "Public question?" })
+  ).closest("li")!;
+  const anonymousRow = screen
+    .getByRole("link", { name: "Keep it free?" })
+    .closest("li")!;
+  expect(await within(publicRow).findByText("Public")).toBeTruthy();
+  expect(within(anonymousRow).queryByText("Public")).toBeNull();
+  expect(poll).not.toHaveBeenCalled();
 });

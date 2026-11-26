@@ -29,14 +29,17 @@ export function cardStatus(poll: Poll, state: CastState): VoteCardStatus {
   }
 }
 
-export function closingNote(poll: Poll): string {
+export function closingNote(poll: Poll, canChange = true): string {
   if (!poll.open) return "This question has closed.";
-  if (poll.closesAt === null)
-    return "You can change your answer while this question is open.";
-  const date = new Date(poll.closesAt);
-  return Number.isNaN(date.getTime())
-    ? "You can change your answer while this question is open."
-    : `Closes ${readableDate(date)} · you can change your answer until then.`;
+  const date = poll.closesAt === null ? null : new Date(poll.closesAt);
+  if (!date || Number.isNaN(date.getTime()))
+    return canChange
+      ? "You can change your answer while this question is open."
+      : "";
+  const closes = `Closes ${readableDate(date)}`;
+  return canChange
+    ? `${closes} · you can change your answer until then.`
+    : `${closes}.`;
 }
 
 /** A calendar date in the same short style used by the poll page. */

@@ -63,6 +63,9 @@ export function AnsweredList({
               ? `Your answer: ${vote.choices.join(", ")}`
               : "Your answer couldn't be shown."}
           </span>
+          {vote.votePrivacy === "public" ? (
+            <span className="answered__tag">Public</span>
+          ) : null}
           <span className="answered__detail">
             {vote.open
               ? "Open · You can change your answer"

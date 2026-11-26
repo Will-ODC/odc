@@ -60,6 +60,7 @@ export function historyPage(votes: HistoryVote[], limit: number, now: Date) {
         ? [
             {
               pollId: vote.pollId,
+              votePrivacy: vote.poll.votePrivacy,
               question: vote.poll.question,
               choices: vote.poll.choices,
               ballot: vote.ballot,

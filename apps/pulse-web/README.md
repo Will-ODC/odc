@@ -125,11 +125,25 @@ The client uses the served routes in [`../pulse/API.md`](../pulse/API.md).
 Roadmap and planned API sections describe future work, not current client
 behavior.
 
+## Public-vote polls (#685)
+
+Start both dev servers and open [the public-vote demo](http://localhost:5173/?poll=public-vote-demo).
+The card shows the vote privacy before Submit and asks signed-out visitors to
+sign in with email. Results list public answers by current profile name or
+“Verified voter”, with more pages available when present. A signed-in voter
+can change or remove their public vote while the poll is open. The card checks
+the account again before removing a vote and restores the current account’s
+answer if the account changed. Signing out keeps the public poll open and
+clears the saved answer from view. The creation form still publishes
+anonymous-vote polls only.
+
 ## Saved answers (#484)
 
-My votes (`/my-votes`) lists answers saved in this browser, newest first. The
-vote page's My votes rail uses the same saved answers and updates after a
-successful cast or change; reopening an older answer keeps its position.
+My votes (`/my-votes`) lists anonymous answers saved in this browser and public
+votes on the signed-in account, newest first. Public votes carry a Public tag.
+The vote page's My votes rail uses the same list and updates after sign-in or a
+successful cast, change, or removal. Reopening an older answer keeps its
+position.
 Opening a rail question updates its URL, and Back returns to the previous
 question. Reloading restores the saved answer from the server; if that read
 takes more than 5 seconds, the question is asked unanswered rather than taking
@@ -155,7 +169,8 @@ reuse `AnsweredRail` and the screen’s existing `useMyVotes` read, including
 loading, empty, retry and See all my votes states.
 The rail keeps one status line for screen readers, which reads out Loading…,
 an error, or "Your votes are loaded." after Try again. Signing out or
-forgetting votes here clears the browser's saved-answer list.
+forgetting votes here clears the browser's saved-answer list. Public votes
+stay visible in the results and return to My votes after signing in again.
 When the open question was already a saved answer when it was opened (its row
 has been read from My votes (the rail's first page, or a later page read for
 the pager), its saved ballot was read back, or it was answered

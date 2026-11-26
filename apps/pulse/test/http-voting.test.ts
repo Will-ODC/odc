@@ -242,6 +242,7 @@ test("my votes belongs only to this browser and disappears after forgetting", as
     votes: [
       {
         pollId: "p1",
+        votePrivacy: "anonymous",
         question: "Where next?",
         choices: ["Park", "Rink"],
         ballot: [0, 2],

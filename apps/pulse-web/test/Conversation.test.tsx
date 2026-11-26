@@ -2377,3 +2377,38 @@ describe("the results after voting (#478, #480)", () => {
     ).toBeTruthy();
   });
 });
+
+it.each(["public", "anonymous"] as const)(
+  "clears a saved %s answer and its rail row on sign-out",
+  async (votePrivacy) => {
+    const user = userEvent.setup();
+    const question = poll({ votePrivacy });
+    let signedIn = true;
+    const api = stubApi({
+      me: async () => (signedIn ? voter : null),
+      poll: async () => question,
+      myBallot: async () => (signedIn ? [1] : null),
+      results: async () => ({ ...tally(question, [1]), votePrivacy }),
+      signOut: async () => {
+        signedIn = false;
+      },
+    });
+    render(<Conversation api={api} pollId={question.id} />);
+    await main().findByText(said("You picked Yes."));
+    const rail = within(screen.getByRole("navigation", { name: "My votes" }));
+    await rail.findByRole("link", { name: question.question });
+    await openAccount(user);
+    await user.click(banner().getByRole("button", { name: "Sign out" }));
+    await user.click(
+      banner().getByRole("button", { name: "Sign out everywhere" }),
+    );
+    if (votePrivacy === "public") {
+      await main().findByRole("link", { name: "Sign in with email to vote" });
+    } else {
+      const submit = await main().findByRole("button", { name: "Submit" });
+      expect(submit).toHaveProperty("disabled", true);
+    }
+    expect(main().queryByText(said("You picked Yes."))).toBeNull();
+    expect(rail.queryByRole("link", { name: question.question })).toBeNull();
+  },
+);

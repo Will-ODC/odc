@@ -431,10 +431,11 @@ export class PostgresVotingStore implements VotingStore {
       cast_at: Date;
       question: string | null;
       closes_at: Date | null;
+      vote_privacy: VotePrivacy | null;
       ballot: number[];
       labels: string[];
     }>(
-      "select v.poll_id, v.cast_at, p.question, p.closes_at," +
+      "select v.poll_id, v.cast_at, p.question, p.closes_at, p.vote_privacy," +
         " coalesce(array_agg(c.position order by c.position)" +
         " filter (where c.position is not null), '{}') as ballot," +
         " coalesce(array_agg(c.label order by c.position)" +
@@ -449,7 +450,7 @@ export class PostgresVotingStore implements VotingStore {
         " left join polls p on p.id = v.poll_id" +
         " left join vote_choice vc on vc.vote_id = v.id" +
         " left join poll_choice c on c.id = vc.choice_id and c.poll_id = v.poll_id" +
-        " group by v.id, v.poll_id, v.cast_at, p.question, p.closes_at" +
+        " group by v.id, v.poll_id, v.cast_at, p.question, p.closes_at, p.vote_privacy" +
         ' order by v.cast_at desc, v.poll_id collate "C" desc',
       [
         voterId ?? null,
@@ -463,11 +464,12 @@ export class PostgresVotingStore implements VotingStore {
       pollId: row.poll_id,
       castAt: row.cast_at,
       ballot: row.ballot,
-      ...(row.question === null
+      ...(row.question === null || row.vote_privacy === null
         ? {}
         : {
             poll: {
               question: row.question,
+              votePrivacy: row.vote_privacy,
               choices: row.labels,
               ...(row.closes_at ? { closesAt: row.closes_at } : {}),
             },

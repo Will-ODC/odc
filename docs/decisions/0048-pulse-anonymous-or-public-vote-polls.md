@@ -146,9 +146,9 @@ public" / "Votes are anonymous".
      ADR, which never shows the notice, can never publish a named vote. A cast
      **with** it on an anonymous poll is refused too, so a client that thinks a
      poll is public never files an anonymous vote while telling the voter it is
-     named. Both refusals are 409 `vote_privacy_mismatch`: "How this poll's
-     votes are shown has not reached this page. Reload to see it before you
-     vote." Old clients on anonymous polls send no field and are unaffected.
+     named. Both refusals are 409 `vote_privacy_mismatch`: "This poll's
+     voting settings changed. Reload the page before you vote." Old clients
+     on anonymous polls send no field and are unaffected.
 
    The checks run in this order:
    1. 403 `origin_not_allowed`, the exact-Origin and JSON guard #687 put on

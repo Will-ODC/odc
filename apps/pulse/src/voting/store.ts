@@ -14,6 +14,7 @@ import {
   type Poll,
   type PollMethod,
   type Publication,
+  type VotePrivacy,
 } from "./poll.js";
 
 /**
@@ -51,6 +52,7 @@ export interface HistoryVote {
   ballot: number[];
   poll?: {
     question: string;
+    votePrivacy: VotePrivacy;
     /** Labels of the chosen positions, in the same order as `ballot`. */
     choices: string[];
     closesAt?: Date;
@@ -585,6 +587,7 @@ export class InMemoryVotingStore implements VotingStore {
             ? {
                 poll: {
                   question: poll.question,
+                  votePrivacy: poll.votePrivacy,
                   choices: ballot.flatMap((at) => poll.choices[at] ?? []),
                   ...(poll.closesAt ? { closesAt: poll.closesAt } : {}),
                 },

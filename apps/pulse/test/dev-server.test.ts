@@ -230,6 +230,21 @@ test("lists every seed in General, and the web dev env points at exactly the fou
   await app.close();
 });
 
+test("the public-vote demo is available only when requested", async (t) => {
+  const config = devConfig({});
+  const defaultServer = await buildDevServer(config);
+  t.after(() => defaultServer.app.close());
+  const demoServer = await buildDevServer(config, {}, { publicVoteDemo: true });
+  t.after(() => demoServer.app.close());
+
+  const url = "/api/polls/public-vote-demo";
+  const missing = await defaultServer.app.inject({ url });
+  assert.equal(missing.statusCode, 404);
+  const poll = await demoServer.app.inject({ url });
+  assert.equal(poll.statusCode, 200);
+  assert.equal(poll.json().votePrivacy, "public");
+});
+
 test("the seed has one domain that asks which community, so the picker can be seen", async () => {
   const { app, mailer } = await buildDevServer(devConfig({}));
 

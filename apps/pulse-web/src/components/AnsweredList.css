@@ -60,6 +60,16 @@
   font-size: var(--t-small);
 }
 
+.answered__tag {
+  display: inline-block;
+  margin-top: calc(var(--step) / 2);
+  padding-inline: var(--step);
+  border-radius: var(--r-control);
+  background: var(--chip);
+  color: var(--muted);
+  font-size: var(--t-small);
+}
+
 .answered a[aria-current="page"] {
   color: var(--green-hover);
 }

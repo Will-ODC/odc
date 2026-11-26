@@ -614,6 +614,7 @@ on who is asking.
   "votes": [
     {
       "pollId": "question-id",
+      "votePrivacy": "anonymous",
       "question": "Should we open a garden?",
       "choices": ["Yes"],
       "ballot": [0],
@@ -628,6 +629,8 @@ on who is asking.
 
 Each entry is the current ballot for one poll: `ballot` holds the chosen
 positions in ascending order and `choices` their labels in the same order.
+The additive `votePrivacy` field is the poll's fixed setting, `"anonymous"` or
+`"public"`.
 `closesAt` is the poll's closing time or `null`, and `open` says whether it was
 open when this page was read. It has no account id, voter id, or confirmation code. Closed polls
 remain listed, and a changed answer moves to the top. `limit` defaults to 20
@@ -1061,7 +1064,7 @@ The checks run in this order:
 5. 503 `public_votes_unavailable` when the server has no confirmation key, which seals
    the cursor.
 6. 400 `bad_request` for a cursor that does not open or was given out for another
-   poll.
+   poll. Both query and cursor refusals say "Start again from the first page of votes."
 7. 404 `not_found` for a hidden poll. The page is read through a query that leaves
    hidden polls out, so a poll hidden while it is read is never served.
 
@@ -1108,7 +1111,8 @@ The checks run in this order, and a refusal changes nothing:
 
 1. 403 `origin_not_allowed`.
 2. 404 `not_found`.
-3. 409 `anonymous_poll`: "This poll's votes are anonymous and cannot be removed."
+3. 409 `anonymous_poll`: "This poll's votes are anonymous and cannot be removed.
+   You can still change your answer."
 4. 503 `public_votes_unavailable` when the server has no confirmation key.
 5. 401 `sign_in_required` without a valid session: "Sign in with your email to
    remove your vote."

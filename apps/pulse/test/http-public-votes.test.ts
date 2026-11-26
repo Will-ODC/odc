@@ -447,7 +447,7 @@ for (const [kind, skip, stores] of kinds) {
       privateToCookies(bad);
     });
 
-    it("my_votes_with_a_ballot_and_a_session_lists_both_newest_first", async (t) => {
+    it("my_votes_lists_both_ballots_newest_first_with_their_poll_privacy", async (t) => {
       const w = await world(t, stores);
       const ada = await w.account("ada");
       const anonymous = await w.cast("anon", { ballot: [0] });
@@ -459,8 +459,16 @@ for (const [kind, skip, stores] of kinds) {
         `${ada}; ${BALLOT}=${ballot.value}`,
       );
       assert.deepEqual(
-        both.json().votes.map((v: { pollId: string }) => v.pollId),
-        ["pub", "anon"],
+        both
+          .json()
+          .votes.map((v: { pollId: string; votePrivacy: string }) => [
+            v.pollId,
+            v.votePrivacy,
+          ]),
+        [
+          ["pub", "public"],
+          ["anon", "anonymous"],
+        ],
       );
       // The cookie alone shows only the anonymous ballot.
       const cookieOnly = await w.get(
@@ -634,7 +642,14 @@ for (const [kind, skip, stores] of kinds) {
       ]) {
         const reply = await w.get(`/api/polls/pub/public-votes?${query}`);
         assert.equal(reply.statusCode, 400, query);
-        assert.equal(reply.json().error, "bad_request", query);
+        assert.deepEqual(
+          reply.json(),
+          {
+            error: "bad_request",
+            message: "Start again from the first page of votes.",
+          },
+          query,
+        );
         assert.equal(reply.headers["cache-control"], NO_STORE, query);
       }
       assert.equal(
@@ -792,7 +807,11 @@ for (const [kind, skip, stores] of kinds) {
       ]) {
         const refused = await w.remove("anon", cookie);
         assert.equal(refused.statusCode, 409);
-        assert.equal(refused.json().error, "anonymous_poll");
+        assert.deepEqual(refused.json(), {
+          error: "anonymous_poll",
+          message:
+            "This poll's votes are anonymous and cannot be removed. You can still change your answer.",
+        });
         noCookieSet(refused);
       }
       assert.equal(await w.voterCount("anon"), 1);

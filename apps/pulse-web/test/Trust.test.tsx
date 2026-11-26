@@ -75,7 +75,8 @@ describe("what the page says", () => {
       .map((block) => block.textContent)
       .join(" ");
     const words = text.match(/\S+/g) ?? [];
-    expect(words.length).toBeLessThanOrEqual(350);
+    // The ADR-0048 decision 13 copy needed the room.
+    expect(words.length).toBeLessThanOrEqual(500);
   });
 
   it("defines the six basics in plain sentences", () => {
@@ -98,10 +99,26 @@ describe("what the page says", () => {
 
   it("states the present limits on checking and privacy", () => {
     render(<Trust />);
-    const today =
-      screen.getByRole("region", { name: "Today" }).textContent ?? "";
-    expect(today).toMatch(/No public vote record exists yet/);
-    expect(today).toMatch(/Only Pulse.s operators can check the count today/);
+    const todaySection = screen.getByRole("region", { name: "Today" });
+    const today = todaySection.textContent ?? "";
+    expect(
+      within(todaySection)
+        .getAllByRole("heading", { level: 3 })
+        .map((heading) => heading.textContent),
+    ).toEqual(["Anonymous votes", "Public votes"]);
+    expect(today).toMatch(
+      /Only Pulse.s operators can check the anonymous vote count today/,
+    );
+    expect(today).toContain(
+      "A poll can show votes publicly. Each poll says which before you vote.",
+    );
+    expect(today).not.toMatch(/person who creates a poll chooses/i);
+    expect(today).toMatch(/including AI apps/);
+    expect(today).toMatch(/Your email address is never shown/);
+    expect(today).toMatch(
+      /Changing your profile name updates all your public votes/,
+    );
+    expect(today).toMatch(/After the poll closes your vote is fixed/);
     expect(today).toMatch(
       /Email-confirmed votes store a code instead of your email/,
     );

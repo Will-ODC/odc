@@ -42,7 +42,11 @@ describe("who is signed in, and the way out", () => {
     );
     await user.click(screen.getByRole("button", { name: "Sign out" }));
     expect(onSignOut).not.toHaveBeenCalled();
-    expect(screen.getByText(/stop showing your answers/)).toBeTruthy();
+    expect(
+      screen.getByText(
+        /This browser will stop showing your anonymous answers. They still count, and public votes stay in the results/,
+      ),
+    ).toBeTruthy();
     await user.click(
       screen.getByRole("button", { name: "Sign out everywhere" }),
     );

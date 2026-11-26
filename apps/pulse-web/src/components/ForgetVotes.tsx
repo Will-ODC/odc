@@ -26,7 +26,7 @@ export function ForgetVotes({
   return (
     <TwoPress
       label="Forget my votes here"
-      question="Forget your votes on this browser? They still count, but this browser will no longer show or change them."
+      question="Forget your votes on this browser? This clears access to your anonymous answers here. They still count, and public votes stay visible in the results."
       confirmLabel="Forget them"
       pendingLabel="Forgetting…"
       progress={progress}

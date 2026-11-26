@@ -124,6 +124,7 @@ function asVote({ poll, ballot }: LocalAnswer, now: number): MyVote {
   const positions = [...ballot].sort((a, b) => a - b);
   return {
     pollId: poll.id,
+    ...(poll.votePrivacy ? { votePrivacy: poll.votePrivacy } : {}),
     question: poll.question,
     choices: positions
       .map((index) => poll.choices[index])

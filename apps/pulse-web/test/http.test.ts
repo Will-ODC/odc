@@ -113,9 +113,10 @@ describe("reading this browser's vote history", () => {
     expect(calls[0]?.init.credentials).toBe("same-origin");
   });
 
-  it("reads each answer's positions and closing time", async () => {
+  it("reads each answer's positions, closing time and vote privacy", async () => {
     const entry = {
       pollId: "p1",
+      votePrivacy: "public",
       question: "Keep it free?",
       choices: ["Yes", "Maybe"],
       ballot: [0, 2],
@@ -482,6 +483,46 @@ describe("ballots", () => {
     const calls = stubFetch({ body: JSON.stringify(outcome) });
     expect(await new HttpPulseApi().cast("p1", [0, 2])).toEqual(outcome);
     expect(calls[0]?.init.body).toBe(JSON.stringify({ ballot: [0, 2] }));
+  });
+});
+
+describe("public votes", () => {
+  it("sends acknowledgement alongside the ballot and retains the results privacy", async () => {
+    const outcome = {
+      status: "counted",
+      ballot: [1],
+      results: results({ votePrivacy: "public", voters: 1 }),
+    };
+    const calls = stubFetch({ body: JSON.stringify(outcome) });
+    expect(await new HttpPulseApi().cast("p1", [1], true)).toEqual(outcome);
+    expect(calls[0]?.init.body).toBe(
+      JSON.stringify({ ballot: [1], publicVote: true }),
+    );
+  });
+
+  it("passes the opaque cursor in the public-votes query", async () => {
+    const page = { items: [{ name: null, choices: [1] }], nextCursor: null };
+    const calls = stubFetch({ body: JSON.stringify(page) });
+    expect(
+      await new HttpPulseApi().publicVotes("p/1", "opaque+cursor"),
+    ).toEqual(page);
+    expect(calls[0]?.url).toBe(
+      "/api/polls/p%2F1/public-votes?cursor=opaque%2Bcursor",
+    );
+  });
+
+  it("deletes the signed-in user's vote with no request body", async () => {
+    const outcome = {
+      status: "removed",
+      results: results({ votePrivacy: "public" }),
+    };
+    const calls = stubFetch({ body: JSON.stringify(outcome) });
+    expect(await new HttpPulseApi().removeVote("p/1")).toEqual(outcome);
+    expect(calls[0]).toMatchObject({
+      url: "/api/polls/p%2F1/votes/mine",
+      init: { method: "DELETE", credentials: "same-origin" },
+    });
+    expect(calls[0]?.init.body).toBeUndefined();
   });
 });
 

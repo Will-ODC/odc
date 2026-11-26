@@ -201,12 +201,9 @@ export function App({
             api={api}
             pollId={at.pollId}
             onNavigate={browser.go}
-            // Replaced, so the back button does not return to a page that
-            // still believes someone is signed in.
-            onSignedOut={() => {
-              // "Signed in" is no longer true; leave nothing to read back.
+            onSignedOut={(stayOnPoll) => {
               setAnnounced("");
-              browser.replace({ kind: "signIn" });
+              if (!stayOnPoll) browser.replace({ kind: "signIn" });
             }}
             {...(justPosted === at.pollId
               ? {

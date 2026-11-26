@@ -156,7 +156,7 @@ const SEED = {
         "Members chip in",
         "One-off donations",
         "Grants",
-        "A cut of what moves through it",
+        "Community-approved ads that help the community",
       ],
       method: "single",
       next: [null, null, null, null],
@@ -180,6 +180,14 @@ const SEED = {
     ...launchQuestions(),
   ] satisfies NewPoll[],
 };
+
+const PUBLIC_VOTE_DEMO = {
+  id: "public-vote-demo",
+  question: "When should the community hold its next meetup?",
+  choices: ["Weekday evening", "Saturday morning", "Sunday afternoon"],
+  method: "single",
+  votePrivacy: "public",
+} satisfies NewPoll;
 
 /**
  * One more domain, shared by two communities, so the sign-in picker (P2) can
@@ -328,6 +336,8 @@ interface Storage {
 }
 
 export interface DevServerOptions {
+  /** The local CLI includes a public-vote poll for browser review. */
+  publicVoteDemo?: boolean;
   /**
    * Where the server's warnings go: a failed idle database connection, and a
    * database run without PULSE_SESSION_SECRET. Defaults to stderr.
@@ -386,7 +396,10 @@ export async function buildDevServer(
 
   const { pool } = storage;
   try {
-    await seedPolls(storage.votes);
+    await seedPolls(
+      storage.votes,
+      options.publicVoteDemo ? [...SEED.polls, PUBLIC_VOTE_DEMO] : SEED.polls,
+    );
 
     const mailer = new ConsoleMailer();
     const claims = new ClaimService(
@@ -514,8 +527,11 @@ async function inPostgres(
  * even if the seed has since been edited. To start the demo fresh, empty the
  * database: `docker compose … down` does, since it keeps nothing.
  */
-async function seedPolls(votes: VotingStore): Promise<void> {
-  for (const poll of SEED.polls) {
+async function seedPolls(
+  votes: VotingStore,
+  polls: readonly NewPoll[],
+): Promise<void> {
+  for (const poll of polls) {
     if (!(await votes.getPoll(poll.id))) {
       try {
         await votes.createPoll(poll);
@@ -530,7 +546,9 @@ async function seedPolls(votes: VotingStore): Promise<void> {
 }
 
 async function main(config: DevConfig): Promise<void> {
-  const { app } = await buildDevServer(config);
+  const { app } = await buildDevServer(config, process.env, {
+    publicVoteDemo: true,
+  });
   await app.listen({ port: config.port, host: "127.0.0.1" });
 
   // The bound port, not the requested one: they differ whenever port 0 was
@@ -555,6 +573,7 @@ async function main(config: DevConfig): Promise<void> {
       `  community "${SEED.community}" is @${SEED.domain}; any other address signs in with none`,
       `  @${SHARED_DOMAIN.domain} is asked to choose: ${SHARED_DOMAIN.communities.join(" or ")}`,
       ...SEED.polls.map((poll) => `  poll "${poll.id}": ${poll.question}`),
+      `  public-vote demo: ${config.webOrigin}/?poll=${PUBLIC_VOTE_DEMO.id}`,
       `  local mailbox: ${config.webOrigin}/api/dev/mailbox`,
       "  sign-in links are also printed here",
     ].join("\n"),

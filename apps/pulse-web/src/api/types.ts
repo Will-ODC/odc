@@ -12,8 +12,11 @@
  */
 
 export type PollMethod = "single" | "approval";
+export type VotePrivacy = "anonymous" | "public";
 
 export interface Poll {
+  /** Older API responses omit this field. */
+  votePrivacy?: VotePrivacy;
   id: string;
   question: string;
   /** Ordered; a ballot references positions in this array, never the text. */
@@ -125,11 +128,13 @@ export interface ChoiceResult {
 }
 
 export interface Results {
+  /** Older API responses omit this field. */
+  votePrivacy?: VotePrivacy;
   pollId: string;
   question: string;
   method: PollMethod;
   choices: ChoiceResult[];
-  /** Votes cast, one per browser — not the number of selections made. */
+  /** Ballots cast. A ballot can contain several selections. */
   voters: number;
   /**
    * People who confirmed by email, counted once per person (ADR-0040). Always
@@ -138,6 +143,19 @@ export interface Results {
    */
   confirmedVoters: number;
 }
+
+export interface PublicVote {
+  name: string | null;
+  choices: number[];
+}
+
+export interface PublicVotesPage {
+  items: PublicVote[];
+  nextCursor: string | null;
+}
+
+export type RemoveVoteOutcome =
+  { status: "removed" | "none"; results: Results } | { status: "closed" };
 
 export type CastOutcome =
   | { status: "counted"; ballot: Ballot; results: Results }
@@ -158,6 +176,8 @@ export interface Me {
 }
 
 export interface PollSummary {
+  /** Older API responses omit this field. */
+  votePrivacy?: VotePrivacy;
   id: string;
   question: string;
   method: PollMethod;
@@ -171,6 +191,7 @@ export interface PollPage {
 }
 
 export interface MyVote {
+  votePrivacy?: VotePrivacy;
   pollId: string;
   question: string;
   /** Labels of the chosen positions, in `ballot` order. */
@@ -246,7 +267,9 @@ export interface PulseApi {
   suggest(pollId: string, text: string): Promise<SuggestResult>;
   myBallot(pollId: string): Promise<Ballot | null>;
   results(pollId: string): Promise<Results>;
-  cast(pollId: string, ballot: Ballot): Promise<CastOutcome>;
+  cast(pollId: string, ballot: Ballot, publicVote?: true): Promise<CastOutcome>;
+  publicVotes(pollId: string, cursor?: string): Promise<PublicVotesPage>;
+  removeVote(pollId: string): Promise<RemoveVoteOutcome>;
   /** What the posting form needs for the signed-in account (ADR-0037). */
   creationContext(): Promise<CreationContext>;
   /**
