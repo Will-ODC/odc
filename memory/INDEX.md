@@ -32,8 +32,10 @@ Do not apply charter rules to `apps/**`, and do not relax them anywhere else.
 - **Pulse:** Railway is chosen. All pre-pilot code fixes (#681-#684, #691)
   are merged; no Railway deploy yet. Still needed: the operator's Railway
   setup, DNS and the DEPLOY.md live checks. Anonymous or public-vote polls:
-  ADR-0048 merged, steps 1-4a merged (#703, #706, #708, #710, #714), 4b next (#685; its deploy waits on 4a being live). Pictures extend
-  to every main-page item (operator 2026-11-18): ADR-0049 accepted; #700 mockup approved (#713), shared component merged (#717), poll form #580 merged (#720); Pulse test-audit item 1 merged (#723, #711 fixed), item 2 next, then #701 and #296 (docs/audits/pulse-tests-2026-11-26.md; odc-testing updated in #721).
+  ADR-0048 merged, steps 1-4a merged; 4b waits on 4a being live. Pictures
+  on every main-page item (ADR-0049): shared field and poll form merged.
+  Next: #701 contribution pictures, then #296. Test audit 2026-11-26: items
+  1, 2, 4 merged, 3 later.
   → `memory/pulse.md`
 
 ## Load order

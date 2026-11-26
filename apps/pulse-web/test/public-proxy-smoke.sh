@@ -120,7 +120,12 @@ list_tools='{"jsonrpc":"2.0","id":1,"method":"tools/list"}'
 # The site loads, and an API read works.
 [ "$(get 198.51.100.1 /)" = 200 ] || fail 'page did not load'
 grep -q '<div id="root">' "$work/body" || fail 'page is not the client'
-[ "$(get 198.51.100.1 /api/polls/smoke-public)" = 200 ] || fail 'poll read'
+marker_suffix=$(od -An -N16 -tx1 /dev/urandom | tr -d ' \n')
+query_marker="pulse-smoke-query-$marker_suffix"
+referer_marker="pulse-smoke-referer-$marker_suffix"
+[ "$(curl -sS --max-time 15 -o "$work/body" -w '%{http_code}' \
+    -H 'X-Real-IP: 198.51.100.1' --referer "https://example.test/$referer_marker" \
+    "$base/api/polls/smoke-public?smoke-marker-q=$query_marker")" = 200 ] || fail 'poll read'
 grep -q '"votePrivacy":"public"' "$work/body" || fail 'poll lacks votePrivacy'
 
 # Cache rules survive the proxy.
@@ -168,4 +173,14 @@ grep -q '"too_many_requests"' "$work/body" || fail "A's MCP call was not limited
 [ "$(mcp 198.51.100.11 "$(call get_public_votes)")" = 200 ] || fail "B's MCP call"
 grep -q 'Ada Smoke' "$work/body" || fail "B's MCP call shares A's bucket"
 
-echo 'PASS: page, API read, cache rules, MCP through nginx with the configured origin, foreign and loopback Host and foreign Origin refused, per-address shared list buckets'
+# The nginx image sends its access log to stdout.
+docker logs "$web" > "$work/web.log" 2>&1 || fail 'could not collect nginx logs'
+if grep -Fq "$query_marker" "$work/web.log"; then
+    fail "query marker $query_marker leaked into nginx logs"
+fi
+if grep -Fq "$referer_marker" "$work/web.log"; then
+    fail "Referer marker $referer_marker leaked into nginx logs"
+fi
+grep -Fq 'GET /api/polls/smoke-public HTTP/1.1" 200' "$work/web.log" || fail 'marked poll read missing from nginx access log'
+
+echo 'PASS: page, API read, cache rules, MCP through nginx with the configured origin, foreign and loopback Host and foreign Origin refused, per-address shared list buckets, query and Referer absent from nginx logs'
