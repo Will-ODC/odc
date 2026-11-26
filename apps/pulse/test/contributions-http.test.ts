@@ -801,19 +801,25 @@ test(
     // replay foreign key follows the renamed table and is restored with it.
     await f.pool.query("alter table contribution rename to contribution_saved");
     try {
+      // A sequence records the calls even though each failing statement rolls back.
+      await f.pool.query("create sequence fail_read_calls");
       await f.pool.query(
-        `create function fail_read(jsonb) returns jsonb language plpgsql as $$ begin raise exception 'private database detail'; end $$`,
+        `create function fail_read(jsonb) returns jsonb language plpgsql as $$ begin perform nextval('fail_read_calls'); raise exception 'private database detail'; end $$`,
       );
       await f.pool.query(
-        `create view contribution as select id, owner_id, created_at, fail_read(public_record) as public_record, private_messages from contribution_saved`,
+        `create view contribution as select id, owner_id, created_at, fail_read(public_record) as public_record, private_messages, image_id from contribution_saved`,
       );
-      for (const path of reads(id)) {
+      for (const [index, path] of reads(id).entries()) {
         const body = await errorResponse(
           await f.get(path, organizer),
           500,
           "server_error",
         );
         assert.ok(!body.message.includes("private database detail"));
+        const { rows } = await f.pool.query(
+          "select case when is_called then last_value::int else 0 end as calls from fail_read_calls",
+        );
+        assert.equal(rows[0]?.calls, index + 1);
       }
     } finally {
       await f.pool.query("drop view if exists contribution");

@@ -315,6 +315,26 @@ function postContribution(h: Harness, image?: unknown, key = randomUUID()) {
   });
 }
 
+function manageContributionPicture(
+  h: Harness,
+  method: "PUT" | "DELETE",
+  url: string,
+  who: Who | undefined,
+  payload?: unknown,
+  origin = ORIGIN,
+) {
+  return h.request({
+    method,
+    url,
+    headers: {
+      origin,
+      ...(who ? { cookie: h.cookie(who) } : {}),
+      ...(method === "PUT" ? { "content-type": "application/json" } : {}),
+    },
+    ...(method === "PUT" ? { payload: JSON.stringify(payload) } : {}),
+  });
+}
+
 async function pendingPicture(h: Harness) {
   const uploaded = await h.upload("member", await picture("jpeg"));
   assert.equal(uploaded.statusCode, 201, uploaded.body);
@@ -448,16 +468,7 @@ test("only the contribution poster can replace or remove its picture", async (t)
     origin = ORIGIN,
     payload: unknown = replacement,
   ) {
-    return h.request({
-      method,
-      url,
-      headers: {
-        origin,
-        ...(who ? { cookie: h.cookie(who) } : {}),
-        ...(method === "PUT" ? { "content-type": "application/json" } : {}),
-      },
-      ...(method === "PUT" ? { payload: JSON.stringify(payload) } : {}),
-    });
+    return manageContributionPicture(h, method, url, who, payload, origin);
   }
   for (const method of ["PUT", "DELETE"] as const) {
     refused(await manage(method), 401, "signed_out");
@@ -474,6 +485,14 @@ test("only the contribution poster can replace or remove its picture", async (t)
       "origin_not_allowed",
     );
   }
+  refused(
+    await manage("PUT", "member", path, ORIGIN, {
+      ...replacement,
+      alt: "a".repeat(32 * 1024),
+    }),
+    413,
+    "body_too_large",
+  );
   refused(
     await manage("PUT", "member", path, ORIGIN, {
       ...replacement,
@@ -576,6 +595,86 @@ test(
     );
   },
 );
+
+test("contribution picture management limits each method to 30 requests per minute", async (t) => {
+  const h = await harness(t, "memory");
+  const url = `/api/contributions/${randomUUID()}/image`;
+  const pending = await pendingPicture(h);
+  for (const method of ["PUT", "DELETE"] as const) {
+    const request = () =>
+      manageContributionPicture(h, method, url, "member", pending);
+    for (let index = 0; index < 30; index++) {
+      refused(await request(), 404, "not_found");
+    }
+    refused(await request(), 429, "too_many_requests");
+  }
+});
+
+for (const [sqlstate, status, error] of [
+  ["53000", 503, "contributions_unavailable"],
+  ["P0001", 500, "server_error"],
+] as const) {
+  test(
+    `postgres: contribution picture management rolls back on ${error} during audit`,
+    { skip: databaseSkip },
+    async (t) => {
+      const h = await harness(t, "postgres");
+      const pool = h.pool as Pool;
+      const initial = await pendingPicture(h);
+      const created = await postContribution(h, initial);
+      assert.equal(created.statusCode, 201, created.body);
+      const { contribution } = mutationSchema.parse(created.json());
+      const replacement = await pendingPicture(h);
+      await pool.query(
+        `create function fail_picture_audit() returns trigger language plpgsql as $$ begin raise exception 'private audit detail' using errcode = '${sqlstate}'; end $$`,
+      );
+      await pool.query(
+        "create trigger fail_picture_audit before insert on content_change for each row execute function fail_picture_audit()",
+      );
+      const url = `/api/contributions/${contribution.id}/image`;
+      for (const method of ["PUT", "DELETE"] as const) {
+        const reply = await manageContributionPicture(
+          h,
+          method,
+          url,
+          "member",
+          replacement,
+        );
+        refused(reply, status, error);
+        assert.equal(reply.body.includes("private audit detail"), false);
+        const detail = await h.get(`/api/contributions/${contribution.id}`);
+        assert.equal(detail.statusCode, 200, detail.body);
+        assert.deepEqual(
+          detailSchema.parse(detail.json()).contribution.image,
+          contribution.image,
+        );
+        assert.equal(
+          (await h.get(`/api/poll-images/${initial.id}/display.webp`))
+            .statusCode,
+          200,
+        );
+        assert.deepEqual(
+          (
+            await pool.query(
+              "select owner_kind, owner_id, alt from image where id = $1",
+              [replacement.id],
+            )
+          ).rows,
+          [{ owner_kind: null, owner_id: null, alt: null }],
+        );
+      }
+      await pool.query("drop trigger fail_picture_audit on content_change");
+      const retried = await manageContributionPicture(
+        h,
+        "PUT",
+        url,
+        "member",
+        replacement,
+      );
+      assert.equal(retried.statusCode, 200, retried.body);
+    },
+  );
+}
 
 /** Upload a picture, attach it to a new poll, and return both ids. */
 async function posted(h: Harness, bytes?: Buffer) {
