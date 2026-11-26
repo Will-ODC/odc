@@ -41,7 +41,7 @@ the same CI runs.
 ## Where it stands (2026-11-19)
 
 Per-PR history is in `git log origin/master -- apps/pulse apps/pulse-web`.
-**Open Pulse-related PRs:** #698 (skill rule, operator merges), and this memory PR. Next migration: **020** (019 merged in #706). New ticket #707 (open polls from the main page without a reload; no urgency). #425 Next/Previous is on hold (operator, 2026-11-19).
+**Open Pulse-related PRs:** this memory PR. Next migration: **020** (019 merged in #706). New ticket #707 (open polls from the main page without a reload; no urgency). New ticket #711: `Contributions.test.tsx` "forgets a sign-in error once the same person has signed in again" is flaky in CI. #425 Next/Previous is on hold (operator, 2026-11-19).
 
 - **Sign-in (pillar 1) is built.** Magic-link sign-in and redeem; open sign-up
   with community as an optional label (ADR-0030); a community picker when an
@@ -82,7 +82,7 @@ Per-PR history is in `git log origin/master -- apps/pulse apps/pulse-web`.
   with the API's JSON 413; #594 checks sharp loads in the API image. Not
   built: #700, #580, #701, #427, #296, then #586 after #427. Pictures now
   extend to every main-page item (operator 2026-11-18; ADR-0049).
-- **MCP:** public reads `get_poll`/`get_results` at `/api/mcp` (PR #323).
+- **MCP:** public reads `get_poll`/`get_results` at `/api/mcp` (PR #323); #710 (`3e6bf64`) adds `get_public_votes`, passes `votePrivacy` through, and makes MCP work through nginx (production `publicOrigin` = `PULSE_WEB_ORIGIN`; nginx forwards `$http_host` and blanks `X-Pulse-Internal`). MCP does not work through the 5173 Vite proxy; `apps/pulse/README.md` should say so (small nit, not ticketed).
   ADR-0036 (voting from AI apps) is proposed only; discovery (#291) unbuilt.
 - **Infrastructure:** Postgres (ADR-0020/0021/0023), Resend mail (ADR-0027),
   two images on one origin (ADR-0028), Trivy-scanned in CI and weekly,
@@ -129,7 +129,7 @@ public hostname, before inviting anyone.
    flaky `Profile.test.tsx` in #694 (`eaa5f88`). After the pilot: #678 ballot
    revocation, #679 atomic link limit, #680 idle timeout and owner re-sign-in.
    #697 (home list spans the width between rails) merged in #699 (`bb8f265`).
-   Skill PR #698 (keep a healthy queued backlog) awaits the operator's merge.
+   Skill PR #698 (keep a healthy queued backlog) merged in `d4c051a` (2026-11-19).
    **Per-poll anonymous or visible votes (#685, operator 2026-11-15):** chosen
    once at creation, clearly shown, simple. ADR-0048 (#690, `3289d74`) decided
    it; the build follows its decision 14 ship order. Step 1 (migration 018 +
@@ -139,8 +139,11 @@ public hostname, before inviting anyone.
    "Verified voter" rule (app plus migration 019, locale-free, shown on the
    profile name field); #708 (`1939bac`) the public vote list (sealed
    cursor, hidden filter, live names, capped per-address limiter) and
-   removing your own public vote. Creation still refuses `"public"`. Next:
-   step 3 (MCP, `$http_host`, proxy smoke test). Step 4a must reword two
+   removing your own public vote. Creation still refuses `"public"`. Step 3
+   merged in #710 (`3e6bf64`, 2026-11-19): MCP `get_public_votes` and
+   `votePrivacy`, nginx `$http_host`, and a public-proxy smoke test in the
+   `pulse-images` CI job. Next: step 4a (web card, in progress on branch
+   `pulse/685-vote-privacy-web`, not yet a PR), then 4b. Step 4a must reword two
    server messages: "Choose a valid page of votes." → "Start again from the
    first page of votes."; the anonymous-poll removal message should add "You
    can still change your answer." ADR-0048 still quotes two messages #706
