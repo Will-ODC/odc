@@ -41,7 +41,7 @@ the same CI runs.
 ## Where it stands (2026-11-19)
 
 Per-PR history is in `git log origin/master -- apps/pulse apps/pulse-web`.
-**Open Pulse-related PRs:** this memory PR. Next migration: **020** (019 merged in #706). New ticket #707 (open polls from the main page without a reload; no urgency). New ticket #711: `Contributions.test.tsx` "forgets a sign-in error once the same person has signed in again" is flaky in CI. #425 Next/Previous is on hold (operator, 2026-11-19).
+**Open Pulse-related PRs:** #714 (#685 step 4a, in review), and this memory PR. Next migration: **020** (019 merged in #706). New ticket #707 (open polls from the main page without a reload; no urgency). New ticket #711: `Contributions.test.tsx` "forgets a sign-in error once the same person has signed in again" is flaky in CI. #425 Next/Previous is on hold (operator, 2026-11-19).
 
 - **Sign-in (pillar 1) is built.** Magic-link sign-in and redeem; open sign-up
   with community as an optional label (ADR-0030); a community picker when an
@@ -142,8 +142,8 @@ public hostname, before inviting anyone.
    removing your own public vote. Creation still refuses `"public"`. Step 3
    merged in #710 (`3e6bf64`, 2026-11-19): MCP `get_public_votes` and
    `votePrivacy`, nginx `$http_host`, and a public-proxy smoke test in the
-   `pulse-images` CI job. Next: step 4a (web card, in progress on branch
-   `pulse/685-vote-privacy-web`, not yet a PR), then 4b. Step 4a must reword two
+   `pulse-images` CI job. Step 4a (web card) is PR #714, open and in
+   review (not merged); then 4b. Step 4a must reword two
    server messages: "Choose a valid page of votes." → "Start again from the
    first page of votes."; the anonymous-poll removal message should add "You
    can still change your answer." ADR-0048 still quotes two messages #706
@@ -161,9 +161,16 @@ public hostname, before inviting anyone.
    discussion topics. Operator answers E1-E3 (2026-11-18): no upload shows the
    community default, then a tile; one picture per item; site-owner soft
    delete covers topics. Order: #700 (one shared picture field, mockup first, for
-   operator review) → #580 (poll form) and #701 (contributions take a
+   operator review; mockup `docs/mockups/pulse-picture-field-v1.html` merged in #713 (`53de813`) and approved by the operator 2026-11-25, now the design of record, registered in `docs/mockups/CANDIDATE_CONTEXT.md`; next is the shared component in `apps/pulse-web`, not started) → #580 (poll form) and #701 (contributions take a
    picture) → #427 (thumbnails for every item in the main list), #296
    (picture on the question page), #586 after #427. #541 topics use #700.
+   Review nits the #700 component PR must carry: a failed Replace restores
+   the previous picture with Replace/Remove only (no Try again or Not
+   uploaded badge); Post with a not-uploaded picture is refused with focus
+   on Try again; say whether `unavailableNow` keeps the picture; the hourly
+   message could use Retry-After; `aria-describedby` on the description box
+   and Try again; add the `--red-wash` token to `tokens.css` with a `#499`
+   dark value.
 2. **Audits 2026-11-14 are complete; none changed product code:**
    [targeted tests](../docs/audits/pulse-tests-2026-11-14.md) → #613/#614;
    [simplicity](../docs/audits/pulse-simplicity-2026-11-14.md) → #616;
@@ -243,6 +250,10 @@ public hostname, before inviting anyone.
 - **#539 step 2:** one session provider.
 - **P2: should a later community pick move a returning voter?** Today it does
   not (ADR-0030 writes community once). `claim.test.ts` pins the current answer.
+- **2026-11-25: ADR-0048 has drifted.** Decision 8's reserved-name rule
+  describes whitespace collapsing only, but `API.md` and the code use NFKC
+  normalization and ignore marks, punctuation and blank filler characters.
+  Needs an architect update to the ADR.
 - **Contribution create without an Idempotency-Key or `accountId`** returns a
   misleading "20% savings" error. Whether to file a bug is the operator's call;
   none is filed.
