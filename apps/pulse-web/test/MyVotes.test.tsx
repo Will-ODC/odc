@@ -196,10 +196,14 @@ it("clears visible answers after forgetting this browser's votes", async () => {
     />,
   );
   await screen.findByText("Your answer: Yes");
+  expect(screen.getByText(/leaves public votes in the results/)).toBeTruthy();
   await user.click(screen.getByRole("button", { name: "Account" }));
   await user.click(
     screen.getByRole("button", { name: "Forget my votes here" }),
   );
+  expect(
+    screen.getByText(/public votes stay visible in the results/),
+  ).toBeTruthy();
   await user.click(screen.getByRole("button", { name: "Forget them" }));
   await waitFor(() => expect(signOut).toHaveBeenCalledOnce());
   expect(

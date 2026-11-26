@@ -1,11 +1,11 @@
-import type { RefObject } from "react";
+import type { ReactNode, RefObject } from "react";
 import type { Standing } from "../hooks/use-closed-results.js";
 import type { ViewData } from "../hooks/view-data.js";
 import { ResultsPanel } from "./ResultsPanel.js";
 import { ViewState } from "./ViewState.js";
 
 /**
- * A closed question's results, in place of the question, once asked for.
+ * Results when the reader asks to see them, without needing to vote.
  *
  * Unlike `<VoteCard>`, the counts are not already in hand - they are fetched
  * when "See results" is pressed - so this owes the other states too: loading,
@@ -24,6 +24,8 @@ export function ClosedResults({
   onClose,
   panelRef,
   explainHref,
+  ended = true,
+  publicVotes,
 }: {
   data: ViewData<Standing>;
   /** The question page's compact results layout, the only one this draws. */
@@ -34,6 +36,8 @@ export function ClosedResults({
   panelRef: RefObject<HTMLDivElement | null>;
   /** Where "What does this mean?" points (`/trust`); omit to leave it out. */
   explainHref?: string;
+  ended?: boolean;
+  publicVotes?: ReactNode;
 }) {
   if (data.status === "ready") {
     return (
@@ -41,7 +45,8 @@ export function ClosedResults({
         results={data.value.results}
         compact={compact}
         yourChoices={data.value.yourChoices}
-        ended
+        ended={ended}
+        publicVotes={publicVotes}
         panelRef={panelRef}
         explainHref={explainHref}
       />

@@ -122,6 +122,8 @@ export function stubApi(over: Partial<PulseApi> = {}): PulseApi {
     signOut: unused("signOut"),
     myBallot: () => Promise.resolve(null),
     results: unused("results"),
+    publicVotes: unused("publicVotes"),
+    removeVote: unused("removeVote"),
     creationContext: unused("creationContext"),
     createPoll: unused("createPoll"),
     ...over,

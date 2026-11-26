@@ -60,7 +60,11 @@ export interface CastVote {
  * either one left the suite green, which is the shape this codebase has already
  * had to remove once (PR #91).
  */
-export function useCastVote(api: PulseApi, pollId: string): CastVote {
+export function useCastVote(
+  api: PulseApi,
+  pollId: string,
+  publicVote?: true,
+): CastVote {
   const [state, setState] = useState<CastState>({ status: "idle" });
 
   const cast = useCallback(
@@ -72,7 +76,10 @@ export function useCastVote(api: PulseApi, pollId: string): CastVote {
       if (choice === undefined) return Promise.resolve({ status: "idle" });
       setState({ status: "casting", choice, ballot: submitted });
 
-      return api.cast(pollId, submitted).then(
+      const send = publicVote
+        ? api.cast(pollId, submitted, publicVote)
+        : api.cast(pollId, submitted);
+      return send.then(
         (outcome): CastState => {
           const settled: CastState =
             outcome.status === "closed"
@@ -98,7 +105,7 @@ export function useCastVote(api: PulseApi, pollId: string): CastVote {
         },
       );
     },
-    [api, pollId],
+    [api, pollId, publicVote],
   );
 
   const reset = useCallback(() => setState({ status: "idle" }), []);

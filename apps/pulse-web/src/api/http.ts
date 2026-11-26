@@ -11,6 +11,8 @@ import type {
   PollPage,
   ProfileRequest,
   PublicMemberProfile,
+  PublicVotesPage,
+  RemoveVoteOutcome,
   PulseApi,
   RequestLinkResult,
   Results,
@@ -204,11 +206,48 @@ export class HttpPulseApi implements PulseApi {
     );
   }
 
-  async cast(pollId: string, ballot: Ballot): Promise<CastOutcome> {
+  async publicVotes(pollId: string, cursor?: string): Promise<PublicVotesPage> {
+    const query =
+      cursor === undefined ? "" : `?cursor=${encodeURIComponent(cursor)}`;
+    const body = await this.#send<unknown>(
+      "GET",
+      `/polls/${encodeURIComponent(pollId)}/public-votes${query}`,
+      undefined,
+      undefined,
+      {},
+      AbortSignal.timeout(10000),
+    );
+    if (!isPublicVotesPage(body))
+      throw new ApiError(200, "We couldn't read the public votes. Try again.");
+    return body;
+  }
+
+  async removeVote(pollId: string): Promise<RemoveVoteOutcome> {
+    const body = await this.#send<unknown>(
+      "DELETE",
+      `/polls/${encodeURIComponent(pollId)}/votes/mine`,
+      undefined,
+      undefined,
+      {},
+      AbortSignal.timeout(10000),
+    );
+    if (!isRemoveVoteOutcome(body))
+      throw new ApiError(
+        200,
+        "We couldn't read the reply. Try removing your vote again.",
+      );
+    return body;
+  }
+
+  async cast(
+    pollId: string,
+    ballot: Ballot,
+    publicVote?: true,
+  ): Promise<CastOutcome> {
     const body = await this.#send<unknown>(
       "POST",
       `/polls/${encodeURIComponent(pollId)}/votes`,
-      { ballot },
+      { ballot, ...(publicVote === true ? { publicVote } : {}) },
     );
     // A yes the app cannot read: status 200, so the vote may be stored and
     // the screen asks which answer the server holds (#626).
@@ -464,13 +503,47 @@ function isCastOutcome(body: unknown): body is CastOutcome {
   if (outcome.status === "closed") return true;
   if (outcome.status !== "counted" && outcome.status !== "changed")
     return false;
-  const results = outcome.results;
-  if (!results || typeof results !== "object") return false;
-  const tally = results as Record<string, unknown>;
+
   return (
     Array.isArray(outcome.ballot) &&
     outcome.ballot.length > 0 &&
     outcome.ballot.every((n: unknown) => Number.isInteger(n)) &&
+    isTally(outcome.results)
+  );
+}
+
+function isPublicVotesPage(body: unknown): body is PublicVotesPage {
+  if (!body || typeof body !== "object") return false;
+  const { items, nextCursor } = body as Record<string, unknown>;
+  return (
+    (nextCursor === null ||
+      (typeof nextCursor === "string" && nextCursor.length > 0)) &&
+    Array.isArray(items) &&
+    items.every((item: unknown) => {
+      if (!item || typeof item !== "object") return false;
+      const { name, choices } = item as Record<string, unknown>;
+      return (
+        (name === null || typeof name === "string") &&
+        Array.isArray(choices) &&
+        choices.every((index: unknown) => Number.isInteger(index))
+      );
+    })
+  );
+}
+
+function isRemoveVoteOutcome(body: unknown): body is RemoveVoteOutcome {
+  if (!body || typeof body !== "object") return false;
+  const { status, results } = body as Record<string, unknown>;
+  return (
+    status === "closed" ||
+    ((status === "removed" || status === "none") && isTally(results))
+  );
+}
+
+function isTally(results: unknown): results is Results {
+  if (!results || typeof results !== "object") return false;
+  const tally = results as Record<string, unknown>;
+  return (
     typeof tally.pollId === "string" &&
     Array.isArray(tally.choices) &&
     typeof tally.voters === "number" &&

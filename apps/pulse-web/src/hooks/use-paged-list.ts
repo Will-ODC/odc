@@ -8,12 +8,14 @@ export interface PagedListPage<T> {
 }
 
 export type PagedListMore =
-  { status: "idle" | "loading" } | { status: "error"; message: string };
+  | { status: "idle" | "loading" }
+  | { status: "error"; message: string; statusCode?: number };
 
 interface PagedListOptions<T> {
   enabled?: boolean;
   fetchPage: (cursor?: string) => Promise<PagedListPage<T>>;
-  keyOf: (item: T) => string;
+  /** Omit when the API supplies no unique row identifier. */
+  keyOf?: (item: T) => string;
   emptyMessage: string;
   /**
    * What a failed first page says: this, or the server's own message for an
@@ -97,11 +99,10 @@ export function usePagedList<T>({
           setMore({ status: "error", message: moreErrorMessage });
           return;
         }
-        const items = new Map(
-          previous.items.map((item) => [keyOf(item), item]),
-        );
-        page.items.forEach((item) => items.set(keyOf(item), item));
-        const merged = [...items.values()];
+        const combined = [...previous.items, ...page.items];
+        const merged = keyOf
+          ? [...new Map(combined.map((item) => [keyOf(item), item])).values()]
+          : combined;
         setData(
           merged.length === 0 && page.nextCursor === null
             ? { status: "empty", message: emptyMessage }
@@ -119,6 +120,7 @@ export function usePagedList<T>({
         setMore({
           status: "error",
           message: messageFor(error, moreErrorMessage),
+          ...(error instanceof ApiError ? { statusCode: error.status } : {}),
         });
       },
     );

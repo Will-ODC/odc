@@ -29,7 +29,7 @@ const choices = [
   { index: 2, label: "Library" },
   { index: 9, label: "Rink" },
 ];
-const base: VoteCardProps = {
+const base = {
   question: "What should we build?",
   why: "Closes Wednesday · you can change your answer until then.",
   method: "single",
@@ -42,7 +42,7 @@ const base: VoteCardProps = {
   onSubmit: vi.fn(),
   onCollapse: vi.fn(),
   onClose: vi.fn(),
-};
+} satisfies VoteCardProps;
 function Harness(over: Partial<VoteCardProps>) {
   const [picked, setPicked] = useState<number[]>([...(over.picked ?? [])]);
   const [collapsed, setCollapsed] = useState(over.collapsed ?? false);

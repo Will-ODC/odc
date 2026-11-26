@@ -21,6 +21,13 @@ export function Trust({ banner }: { banner?: ReactNode }) {
         <p className="trust__lede">What happens now, and what comes next.</p>
 
         <Part id={`${id}-today`} title="Today">
+          <p className="trust__text">
+            The person who creates a poll chooses whether its votes are
+            anonymous or public. That setting is fixed for the life of the poll.
+            The vote card and results say “Votes are anonymous” or “Votes are
+            public”.
+          </p>
+          <h3>Anonymous votes</h3>
           <ul className="trust__list">
             <li>
               Press Submit to save your vote. Change it until the question
@@ -48,9 +55,31 @@ export function Trust({ banner }: { banner?: ReactNode }) {
             </li>
             <li>
               <strong>
-                No public vote record exists yet. Only Pulse&rsquo;s operators
-                can check the count today.
+                Only Pulse’s operators can check the anonymous vote count today.
               </strong>
+            </li>
+          </ul>
+          <h3>Public votes</h3>
+          <ul className="trust__list">
+            <li>
+              Sign in with your email to vote. Anyone who can see the poll,
+              including AI apps, can see your answer next to your current
+              profile name or “Verified voter” if you have no profile name. Your
+              email address is never shown.
+            </li>
+            <li>
+              “Verified” only means the voter confirmed an email address. People
+              choose their own profile names. Pulse does not check names.
+            </li>
+            <li>
+              Hiding your profile leaves your name on public votes. Changing
+              your profile name updates all your public votes, including on
+              closed polls.
+            </li>
+            <li>
+              You can change or remove your vote while the poll is open. After
+              the poll closes your vote is fixed. Signing out or choosing
+              “Forget my votes here” leaves it visible in the results.
             </li>
           </ul>
         </Part>

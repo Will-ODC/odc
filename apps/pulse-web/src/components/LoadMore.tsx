@@ -12,9 +12,11 @@ export function LoadMore({
   onLoadMore,
   itemSelector = "a",
   moreLabel = "more",
+  restartLabel,
 }: {
   itemSelector?: string;
   moreLabel?: string;
+  restartLabel?: string | undefined;
   more: PagedListMore;
   hasMore: boolean;
   itemCount: number;
@@ -58,11 +60,12 @@ export function LoadMore({
           onLoadMore();
         }}
       >
-        {loading
-          ? `Loading ${moreLabel}…`
-          : more.status === "error"
-            ? `Try loading ${moreLabel} again`
-            : `Load ${moreLabel}`}
+        {restartLabel ??
+          (loading
+            ? `Loading ${moreLabel}…`
+            : more.status === "error"
+              ? `Try loading ${moreLabel} again`
+              : `Load ${moreLabel}`)}
       </Button>
     </div>
   );

@@ -485,6 +485,46 @@ describe("ballots", () => {
   });
 });
 
+describe("public votes", () => {
+  it("sends acknowledgement alongside the ballot and retains the results privacy", async () => {
+    const outcome = {
+      status: "counted",
+      ballot: [1],
+      results: results({ votePrivacy: "public", voters: 1 }),
+    };
+    const calls = stubFetch({ body: JSON.stringify(outcome) });
+    expect(await new HttpPulseApi().cast("p1", [1], true)).toEqual(outcome);
+    expect(calls[0]?.init.body).toBe(
+      JSON.stringify({ ballot: [1], publicVote: true }),
+    );
+  });
+
+  it("passes the opaque cursor in the public-votes query", async () => {
+    const page = { items: [{ name: null, choices: [1] }], nextCursor: null };
+    const calls = stubFetch({ body: JSON.stringify(page) });
+    expect(
+      await new HttpPulseApi().publicVotes("p/1", "opaque+cursor"),
+    ).toEqual(page);
+    expect(calls[0]?.url).toBe(
+      "/api/polls/p%2F1/public-votes?cursor=opaque%2Bcursor",
+    );
+  });
+
+  it("deletes the signed-in user's vote with no request body", async () => {
+    const outcome = {
+      status: "removed",
+      results: results({ votePrivacy: "public" }),
+    };
+    const calls = stubFetch({ body: JSON.stringify(outcome) });
+    expect(await new HttpPulseApi().removeVote("p/1")).toEqual(outcome);
+    expect(calls[0]).toMatchObject({
+      url: "/api/polls/p%2F1/votes/mine",
+      init: { method: "DELETE", credentials: "same-origin" },
+    });
+    expect(calls[0]?.init.body).toBeUndefined();
+  });
+});
+
 describe("posting a question (ADR-0037)", () => {
   it("reads the form's context", async () => {
     const context = {

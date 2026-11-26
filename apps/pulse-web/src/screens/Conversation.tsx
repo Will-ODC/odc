@@ -9,7 +9,7 @@ import type { ReactNode } from "react";
 import { Button } from "../components/Button.js";
 import { useSuggestedVotes } from "../hooks/use-suggested-votes.js";
 import type { Ballot, MyVote, Poll, PulseApi, Results } from "../api/types.js";
-import { UNREACHABLE } from "../api/types.js";
+import { ApiError, UNREACHABLE } from "../api/types.js";
 import type { Route } from "../flow/route.js";
 import { cardStatus, closingNote, nextFor } from "../flow/conversation.js";
 import { byline } from "../flow/new-poll.js";
@@ -24,11 +24,14 @@ import { usePoll } from "../hooks/use-poll.js";
 import { useCastVote } from "../hooks/use-cast-vote.js";
 import type { CastState } from "../hooks/use-cast-vote.js";
 import { useClosedResults } from "../hooks/use-closed-results.js";
+import { usePublicVotes } from "../hooks/use-public-votes.js";
 import { useFreshResults } from "../hooks/use-fresh-results.js";
 import { useMyVotes, useMyVotesPlace } from "../hooks/use-my-votes.js";
 import { useWide } from "../hooks/use-wide.js";
 import { useSwipeLeft } from "../hooks/use-swipe.js";
 import type { Confirmation } from "../flow/vote-card.js";
+import { PublicVotes } from "../components/PublicVotes.js";
+import { TwoPress, type TwoPressProgress } from "../components/TwoPress.js";
 import { VoteCard } from "../components/VoteCard.js";
 import { ClosedResults } from "../components/ClosedResults.js";
 import { ViewState } from "../components/ViewState.js";
@@ -73,7 +76,8 @@ function confirmationOf(session: Session): Confirmation {
 }
 
 /** Hands the page a send and the promise of how it ends. */
-type Sent = (poll: Poll, outcome: Promise<CastState>) => void;
+type VoteUpdate = CastState | { status: "removed" };
+type Sent = (poll: Poll, outcome: Promise<VoteUpdate>) => void;
 
 /** Whether a poll's closing time has passed, by this browser's clock. */
 function hasClosed(poll: Poll): boolean {
@@ -171,7 +175,7 @@ export function Conversation({
   // This browser's saved answers, read on every visit, so the Answered list
   // survives navigation and reload (#484); this page's answers join it below.
   const mine = useMyVotes(api);
-  const { clear: clearMine } = mine;
+  const { clear: clearMine, retry: reloadMine } = mine;
   // Set by the rail's Try again, so a reload that ends well is read out too.
   const [railRetried, setRailRetried] = useState(false);
   // Counts forgettings, so a send from before one changes nothing after it.
@@ -198,10 +202,9 @@ export function Conversation({
   }, [pollId, clearMine]);
   // Signing out clears the ballot cookie (API.md), and the list with it.
   const signedOut = useCallback(() => {
-    setRailRetried(false);
-    clearMine();
+    forgotten();
     onSignedOut?.();
-  }, [clearMine, onSignedOut]);
+  }, [forgotten, onSignedOut]);
   const { session, progress, signOut, dismiss } = useSession(api, {
     onSignedOut: signedOut,
     onForgotten: forgotten,
@@ -250,7 +253,7 @@ export function Conversation({
     [api, counted, remembered, stamp],
   );
   const sent = useCallback(
-    (poll: Poll, outcome: Promise<CastState>) => {
+    (poll: Poll, outcome: Promise<VoteUpdate>) => {
       const sentIn = generation.current;
       const current = () => generation.current === sentIn;
       sends.current.set(poll.id, (sends.current.get(poll.id) ?? 0) + 1);
@@ -266,7 +269,12 @@ export function Conversation({
         const left = latest.current.unsettled.includes(poll.id);
         if (state.status === "counted")
           counted({ poll, ballot: state.ballot, results: state.results });
-        else if (left && state.status === "failed" && !state.refused) {
+        else if (state.status === "removed") {
+          setAnswers((old) => old.filter((one) => one.poll.id !== poll.id));
+          setRecentAnswers((old) => old.filter((id) => id !== poll.id));
+          clearMine();
+          reloadMine();
+        } else if (left && state.status === "failed" && !state.refused) {
           // The connection was lost: the answer may have been stored. Ask.
           await readBack(poll);
           if (!current()) return;
@@ -276,7 +284,7 @@ export function Conversation({
         if (latest.current.at === poll.id) setSettledAgain((n) => n + 1);
       });
     },
-    [counted, readBack],
+    [clearMine, counted, readBack, reloadMine],
   );
   // Whether the question on screen was reached with the browser's Back (or
   // Forward): it fades in rather than sliding in from the right (#560).
@@ -773,7 +781,19 @@ function LiveCard({
     pollClosed?: boolean,
   ) => ReactNode;
 }) {
-  const { state, cast, reset } = useCastVote(api, poll.id);
+  const publicPoll = poll.votePrivacy === "public";
+  const closesAt =
+    publicPoll && poll.closesAt ? Date.parse(poll.closesAt) : undefined;
+  useRedrawAt(
+    closesAt !== undefined && closesAt > Date.now() ? closesAt : undefined,
+  );
+  const [removalClosed, setRemovalClosed] = useState(false);
+  const [removal, setRemoval] = useState<TwoPressProgress>({ status: "idle" });
+  const { state, cast, reset } = useCastVote(
+    api,
+    poll.id,
+    publicPoll ? true : undefined,
+  );
   const [picked, setPicked] = useState<number[]>(saved?.ballot ?? []);
   const [showSaved, setShowSaved] = useState(Boolean(saved));
   const [collapsed, setCollapsed] = useState(false);
@@ -806,7 +826,10 @@ function LiveCard({
     }
     wasVisible.current = visible;
   }, [visible]);
-  const status = cardStatus(poll, state);
+  const pollClosed = removalClosed || (publicPoll && hasClosed(poll));
+  const status = pollClosed
+    ? { kind: "closed" as const }
+    : cardStatus(poll, state);
   const ballot = state.status === "counted" ? state.ballot : picked;
   const fresh = useFreshResults(api, poll.id, (results) =>
     onRemembered({ poll, ballot, results }),
@@ -883,6 +906,15 @@ function LiveCard({
     hadResults.current = resultView;
   }, [resultView, saved, visible, wide]);
   const shut = status.kind === "closed";
+  const wasShut = useRef(shut);
+  const { retry: reloadStanding } = closed;
+  const showingCachedStanding =
+    closed.showing && closed.data.status === "ready";
+  useEffect(() => {
+    if (!wasShut.current && shut && publicPoll && showingCachedStanding)
+      reloadStanding();
+    wasShut.current = shut;
+  }, [shut, publicPoll, showingCachedStanding, reloadStanding]);
   // A saved answer moves through My votes with Previous and Next (#528).
   // Any other question keeps the answer-selected Next (#502), and while a
   // saved answer's neighbours are still being read there is no Next at all.
@@ -921,7 +953,41 @@ function LiveCard({
   useLayoutEffect(() => {
     current.current = state;
   });
+  function remove() {
+    if (removal.status === "sending") return;
+    setRemoval({ status: "sending" });
+    onSent(
+      poll,
+      api.removeVote(poll.id).then(
+        (outcome): VoteUpdate => {
+          setRemoval({ status: "idle" });
+          if (outcome.status === "closed") {
+            setRemovalClosed(true);
+            closed.open();
+            return { status: "closed" };
+          }
+          setShowSaved(false);
+          setPicked([]);
+          fresh.clear();
+          reset();
+          closed.showResults(outcome.results);
+          return { status: "removed" };
+        },
+        (error: unknown): VoteUpdate => {
+          setRemoval({
+            status: "failed",
+            message:
+              error instanceof ApiError
+                ? error.message
+                : "We couldn't remove your vote. Try again.",
+          });
+          return { status: "idle" };
+        },
+      ),
+    );
+  }
   function change() {
+    if (removal.status === "sending") return;
     setShowSaved(false);
     fresh.clear();
     reset();
@@ -989,6 +1055,7 @@ function LiveCard({
       <button
         type="button"
         ref={show}
+        disabled={removal.status === "sending"}
         {...(showing.kind === "answered"
           ? { className: "conversation__handle--quiet" }
           : {})}
@@ -1005,6 +1072,46 @@ function LiveCard({
       </button>
     </div>
   );
+  const signInHref = pathOf({
+    kind: "signIn",
+    returnTo: { kind: "conversation", pollId: poll.id },
+  });
+  const privacyNote = publicPoll ? (
+    <>
+      <strong>Votes are public</strong>. Your answer is shown with your profile
+      name or as “Verified voter”.
+    </>
+  ) : (
+    "Votes are anonymous"
+  );
+  const showStandaloneResults = shut || (publicPoll && !saved && !resultView);
+  const listResults = showStandaloneResults
+    ? closed.showing && closed.data.status === "ready"
+      ? closed.data.value.results
+      : undefined
+    : showing.kind === "answered"
+      ? showing.results
+      : changing
+        ? saved?.results
+        : undefined;
+  const publicVotes = usePublicVotes(api, listResults);
+  const voteList =
+    listResults?.votePrivacy === "public" ? (
+      <PublicVotes choices={listResults.choices} {...publicVotes} />
+    ) : null;
+  const removeAction =
+    publicPoll && resultView && confirmation === "confirmed" ? (
+      <TwoPress
+        label="Remove my vote"
+        question="Remove your answer and name from the results? You can vote again while the poll is open."
+        confirmLabel="Remove vote"
+        pendingLabel="Removing vote…"
+        progress={removal}
+        onConfirm={remove}
+        onCancel={() => setRemoval({ status: "idle" })}
+      />
+    ) : null;
+  const needsSignIn = publicPoll && !shut && confirmation !== "confirmed";
   const card = (
     <div ref={wrapper}>
       <VoteCard
@@ -1012,7 +1119,9 @@ function LiveCard({
         inPage={wide}
         closable={closable}
         checking={checking}
-        {...(wide ? { onChangeAnswer: change } : {})}
+        {...(wide && removal.status !== "sending" && !needsSignIn
+          ? { onChangeAnswer: change }
+          : {})}
         question={poll.question}
         method={poll.method}
         choices={poll.choices.map((label, index) => ({ index, label }))}
@@ -1022,13 +1131,13 @@ function LiveCard({
             ? { kind: "failed", message: UNREACHABLE }
             : showing
         }
-        privacyNote="Your answer is private."
+        privacyNote={privacyNote}
+        {...(needsSignIn ? { signInToVoteHref: signInHref } : {})}
+        publicVotes={voteList}
+        answerActions={removeAction}
         trustHref={pathOf({ kind: "trust" })}
         confirmation={cardConfirmation}
-        confirmHref={pathOf({
-          kind: "signIn",
-          returnTo: { kind: "conversation", pollId: poll.id },
-        })}
+        {...(!publicPoll ? { confirmHref: signInHref } : {})}
         {...(fresh.problem
           ? {
               resultsProblem: {
@@ -1064,13 +1173,11 @@ function LiveCard({
         choices={poll.choices.map((label, index) => ({ index, label }))}
         picked={saved.ballot}
         status={{ kind: "answered", results: saved.results, changed: false }}
-        privacyNote="Your answer is private."
+        privacyNote={privacyNote}
+        publicVotes={voteList}
         trustHref={pathOf({ kind: "trust" })}
         confirmation={cardConfirmation}
-        confirmHref={pathOf({
-          kind: "signIn",
-          returnTo: { kind: "conversation", pollId: poll.id },
-        })}
+        {...(!publicPoll ? { confirmHref: signInHref } : {})}
         collapsed={false}
         onPick={() => {}}
         onSubmit={() => {}}
@@ -1083,27 +1190,34 @@ function LiveCard({
   const pager = myVotesNavigation ? (
     <QuestionPager navigation={myVotesNavigation} />
   ) : null;
-  // A closed question: See results, then Previous and Next on the same row,
-  // or under the results once they are open (#528).
-  const standing = shut ? (
+  // Offer results before voting on public polls. On closed questions, keep
+  // Previous and Next beside See results or under the open panel (#528).
+  const standing = showStandaloneResults ? (
     closed.showing ? (
       <>
         <ClosedResults
           data={closed.data}
           compact
+          ended={shut}
+          publicVotes={voteList}
           onRetry={closed.retry}
           onClose={closed.close}
           panelRef={closed.panelRef}
           explainHref={pathOf({ kind: "trust" })}
         />
-        {pager ? <div className="conversation__pager">{pager}</div> : null}
+        {shut && pager ? (
+          <div className="conversation__pager">{pager}</div>
+        ) : null}
       </>
     ) : (
       <div className="conversation__closed">
         <button type="button" ref={closed.triggerRef} onClick={closed.open}>
           See results
         </button>
-        {pager}
+        {shut && publicPoll ? (
+          <p>Votes are fixed after the poll closes.</p>
+        ) : null}
+        {shut ? pager : null}
       </div>
     )
   ) : showing.kind === "answered" ? (

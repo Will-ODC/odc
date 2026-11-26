@@ -634,7 +634,14 @@ for (const [kind, skip, stores] of kinds) {
       ]) {
         const reply = await w.get(`/api/polls/pub/public-votes?${query}`);
         assert.equal(reply.statusCode, 400, query);
-        assert.equal(reply.json().error, "bad_request", query);
+        assert.deepEqual(
+          reply.json(),
+          {
+            error: "bad_request",
+            message: "Start again from the first page of votes.",
+          },
+          query,
+        );
         assert.equal(reply.headers["cache-control"], NO_STORE, query);
       }
       assert.equal(
@@ -792,7 +799,11 @@ for (const [kind, skip, stores] of kinds) {
       ]) {
         const refused = await w.remove("anon", cookie);
         assert.equal(refused.statusCode, 409);
-        assert.equal(refused.json().error, "anonymous_poll");
+        assert.deepEqual(refused.json(), {
+          error: "anonymous_poll",
+          message:
+            "This poll's votes are anonymous and cannot be removed. You can still change your answer.",
+        });
         noCookieSet(refused);
       }
       assert.equal(await w.voterCount("anon"), 1);

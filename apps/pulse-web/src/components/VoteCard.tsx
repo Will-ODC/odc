@@ -69,7 +69,10 @@ export interface VoteCardProps {
   choices: readonly CardChoice[];
   picked: readonly number[];
   status: VoteCardStatus;
-  privacyNote: string;
+  privacyNote: ReactNode;
+  signInToVoteHref?: string;
+  publicVotes?: ReactNode;
+  answerActions?: ReactNode;
   collapsed: boolean;
   other?: ReactNode;
   onPick: (picked: number[]) => void;
@@ -121,6 +124,9 @@ export function VoteCard({
   picked,
   status,
   privacyNote,
+  signInToVoteHref,
+  publicVotes,
+  answerActions,
   collapsed,
   other,
   onPick,
@@ -143,7 +149,9 @@ export function VoteCard({
   const pending = useRef<HTMLParagraphElement>(null);
   const note = useRef<HTMLDivElement>(null);
   const previous = useRef({ kind: status.kind, collapsed });
-  const editable = status.kind === "answerable" || status.kind === "failed";
+  const editable =
+    !signInToVoteHref &&
+    (status.kind === "answerable" || status.kind === "failed");
   const allowed =
     editable && !checking && validCardBallot(method, choices, picked);
   // Close keeps focus while a check runs: marked, not removed or disabled.
@@ -447,12 +455,14 @@ export function VoteCard({
                 compact={presentation === "results"}
                 yourChoices={picked}
                 panelRef={panel}
+                publicVotes={publicVotes}
                 {...(resultsHidden !== undefined && onResultsHidden
                   ? { hidden: resultsHidden, onHiddenChange: onResultsHidden }
                   : {})}
               />
             )}
             {actions}
+            {answerActions}
           </div>
           {presentation === "card" ? (
             <p className="vote-card__note">{privacyNote}</p>
@@ -523,7 +533,9 @@ export function VoteCard({
             </p>
           ) : null}
           <footer className="vote-card__foot">
-            <p className="vote-card__note">{privacyNote}</p>
+            <p id={`${id}-privacy`} className="vote-card__note">
+              {privacyNote}
+            </p>
             {inPage && closable ? (
               <button
                 type="button"
@@ -533,12 +545,22 @@ export function VoteCard({
                 Close
               </button>
             ) : null}
+            {signInToVoteHref ? (
+              <a
+                className="vote-card__signin"
+                href={signInToVoteHref}
+                aria-describedby={`${id}-privacy`}
+              >
+                Sign in with email to vote
+              </a>
+            ) : null}
             {editable || status.kind === "sending" ? (
               <button
                 type="button"
                 className="vote-card__submit"
                 disabled={!allowed}
                 aria-disabled={!allowed}
+                aria-describedby={`${id}-privacy`}
                 onClick={() => {
                   if (allowed) onSubmit([...picked]);
                 }}

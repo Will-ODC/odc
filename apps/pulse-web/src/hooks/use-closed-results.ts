@@ -21,6 +21,8 @@ export interface ClosedResults {
   data: ViewData<Standing>;
   /** "See results": show the panel, and fetch if there is nothing to show. */
   open: () => void;
+  /** Fresh counts after removing the only ballot this viewer could mark. */
+  showResults: (results: Results) => void;
   /** "Try again", after a fetch that failed. */
   retry: () => void;
   /** "Close": back to the closed question. */
@@ -32,7 +34,7 @@ export interface ClosedResults {
 }
 
 /**
- * The results of a poll that has already closed, for anyone who asks.
+ * Results on request for closed polls and for readers of an open public poll.
  *
  * Fetched when "See results" is pressed, not when the closed question
  * arrives: most people reading a closed question will not ask, and a fetch on
@@ -92,6 +94,12 @@ export function useClosedResults(api: PulseApi, pollId: string): ClosedResults {
     if (data.status !== "ready") load();
   }, [data.status, load]);
 
+  const showResults = useCallback((results: Results) => {
+    ++latest.current;
+    setData({ status: "ready", value: { results, yourChoices: [] } });
+    setShowing(true);
+  }, []);
+
   const close = useCallback(() => setShowing(false), []);
 
   /**
@@ -110,7 +118,16 @@ export function useClosedResults(api: PulseApi, pollId: string): ClosedResults {
     }
   }, [showing, data.status]);
 
-  return { showing, data, open, retry: load, close, triggerRef, panelRef };
+  return {
+    showing,
+    data,
+    open,
+    showResults,
+    retry: load,
+    close,
+    triggerRef,
+    panelRef,
+  };
 }
 
 /**
