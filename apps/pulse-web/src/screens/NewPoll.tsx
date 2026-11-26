@@ -6,6 +6,7 @@ import { AppShell } from "../components/AppShell.js";
 import { Button } from "../components/Button.js";
 import { Choice } from "../components/Choice.js";
 import { Field } from "../components/Field.js";
+import { PictureField } from "../components/PictureField.js";
 import { ViewState } from "../components/ViewState.js";
 import { TwoPress } from "../components/TwoPress.js";
 import type { TwoPressProgress } from "../components/TwoPress.js";
@@ -28,6 +29,7 @@ import {
 import type { Draft, Problems } from "../flow/new-poll.js";
 import { useCreationContext } from "../hooks/use-creation-context.js";
 import { useMyVotes } from "../hooks/use-my-votes.js";
+import { usePictureField } from "../hooks/use-picture-field.js";
 import { useSession } from "../hooks/use-session.js";
 import { SiteBanner } from "../components/SiteBanner.js";
 import { browserStore } from "../flow/sign-in-return.js";
@@ -178,10 +180,24 @@ function PostForm({
   onSignedOut: (kept: boolean) => void;
 }) {
   // What was typed before a sign-in the post needed, when coming back from it.
-  const [draft, setDraft] = useState<Draft>(
-    () =>
-      (restoreDraft ? readDraft(browserStore(), now()) : null) ?? emptyDraft(),
+  const [restored] = useState(() =>
+    restoreDraft ? readDraft(browserStore(), now()) : null,
   );
+  const [draft, setDraft] = useState<Draft>(() => restored ?? emptyDraft());
+  const restoredDescription = useRef(restored?.pictureDescription);
+  const recoverDraft = useRef<() => void>(() => {});
+  const picture = usePictureField(() => recoverDraft.current(), api);
+  const { changeDescription, description, image } = picture;
+  useEffect(() => {
+    const saved = restoredDescription.current;
+    restoredDescription.current = undefined;
+    if (saved !== undefined) changeDescription(saved);
+  }, [changeDescription]);
+  useEffect(() => {
+    // An upload can outlast edits elsewhere in the draft. Keep the latest text.
+    recoverDraft.current = () =>
+      onSignedOut(keepDraft(draft, browserStore(), now(), description));
+  }, [draft, description, now, onSignedOut]);
   useEffect(() => forgetDraft(browserStore()), []);
   const [shown, setShown] = useState<Problems>({ choices: [] });
   const [sending, setSending] = useState<TwoPressProgress>({ status: "idle" });
@@ -212,13 +228,26 @@ function PostForm({
   const form = useRef<HTMLFormElement>(null);
   const heading = useRef<HTMLHeadingElement>(null);
 
+  const pictureId = image?.id;
+  useEffect(() => {
+    // The picture and its description are part of the server's replay input.
+    if (key.current === null) return;
+    key.current = null;
+    setSending({ status: "idle" });
+    setAsked((n) => n + 1);
+  }, [pictureId, description]);
+
   /** Set when something needs fixing; acted on once it is drawn. */
   const focusProblem = useRef(false);
   useEffect(() => {
     if (focusProblem.current) {
       focusProblem.current = false;
       // To the first field that needs attention, which says what to do.
-      form.current?.querySelector<HTMLElement>("[aria-invalid=true]")?.focus();
+      form.current
+        ?.querySelector<HTMLElement>(
+          "[aria-invalid=true]:not(.picture-field *)",
+        )
+        ?.focus();
     }
     if (focusChoice.current === null) return;
     const at = focusChoice.current;
@@ -244,6 +273,7 @@ function PostForm({
 
   /** The first press: check everything, and ask only when it can post. */
   function ready(): boolean {
+    if (!picture.checkPost()) return false;
     const problems = problemsOf(draft, needsPromise, now());
     setShown(problems);
     if (hasProblems(problems)) {
@@ -260,17 +290,31 @@ function PostForm({
   }
 
   async function post() {
-    if (inFlight.current || key.current === null) return;
+    if (inFlight.current || key.current === null || !picture.checkPost())
+      return;
     inFlight.current = true;
     setSending({ status: "sending" });
     try {
       onPosted(
-        await api.createPoll(key.current, requestOf(draft, needsPromise)),
+        await api.createPoll(
+          key.current,
+          requestOf(draft, needsPromise, image),
+        ),
       );
     } catch (err) {
       if (err instanceof ApiError && err.status === 401) {
-        // Kept for the way back from signing in, which opens a new tab.
-        onSignedOut(keepDraft(draft, browserStore(), now()));
+        picture.reportPostError("signed_out");
+        return;
+      }
+      if (
+        err instanceof ApiError &&
+        err.status === 422 &&
+        err.code === "image_unavailable"
+      ) {
+        picture.reportPostError("image_unavailable");
+        key.current = null;
+        setSending({ status: "idle" });
+        setAsked((n) => n + 1);
         return;
       }
       if (err instanceof ApiError && err.code === "purpose_required") {
@@ -348,7 +392,7 @@ function PostForm({
           )}
         </Field>
 
-        {/* #296 adds an optional context paragraph, links and a photo here. */}
+        <PictureField field={picture} />
 
         <fieldset className="post__group">
           <legend className="field__label">Choices</legend>

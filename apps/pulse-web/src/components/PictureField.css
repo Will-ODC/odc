@@ -128,17 +128,23 @@
 }
 
 .picture-field__file {
+  display: flex;
+  gap: calc(var(--step) / 2);
   min-inline-size: 0;
-  overflow: hidden;
-  text-overflow: ellipsis;
   white-space: nowrap;
   color: var(--muted);
   font-size: var(--t-small);
 }
 
-.picture-field__file b {
+.picture-field__filename {
+  overflow: hidden;
+  text-overflow: ellipsis;
   color: var(--ink-soft);
   font-weight: 600;
+}
+
+.picture-field__size {
+  flex: none;
 }
 
 .picture-field__actions {

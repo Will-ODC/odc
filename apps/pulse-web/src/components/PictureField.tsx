@@ -174,8 +174,12 @@ export function PictureField({ field }: { field: PictureFieldController }) {
           </div>
           <div className="picture-field__row">
             <span className="picture-field__file">
-              <b>{selection.picture.file.name}</b> ·{" "}
-              {pictureSize(selection.picture.file.size)}
+              <span className="picture-field__filename">
+                {selection.picture.file.name}
+              </span>
+              <span className="picture-field__size">
+                · {pictureSize(selection.picture.file.size)}
+              </span>
             </span>
             <div className="picture-field__actions">
               <Button

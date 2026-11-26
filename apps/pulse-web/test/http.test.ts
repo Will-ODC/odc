@@ -550,6 +550,10 @@ describe("posting a question (ADR-0037)", () => {
       choices: ["a", "b"],
       method: "single" as const,
       attribution: { kind: "anonymous" as const },
+      image: {
+        id: "0b8f4c1e-5d7a-4e2b-9c3d-1a2b3c4d5e6f",
+        alt: "Raised beds in the morning",
+      },
     };
     expect(await new HttpPulseApi().createPoll("k-1", request)).toEqual({
       id: "p9",
