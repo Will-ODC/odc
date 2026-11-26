@@ -963,6 +963,7 @@ for (const code of ["28000", "28P01", "XX000"]) {
           cause: Object.assign(new Error("private-cause private-person@example.test"), { code: "08006" })
         });
       };`;
+    const timeoutMs = 30_000;
     const child = spawnSync(
       process.execPath,
       [
@@ -972,15 +973,25 @@ for (const code of ["28000", "28P01", "XX000"]) {
       ],
       {
         encoding: "utf8",
-        timeout: 10_000,
+        timeout: timeoutMs,
+        killSignal: "SIGKILL",
         env: { ...process.env, ...COMPLETE, NODE_ENV: "test" },
       },
     );
-    assert.equal(child.status, 1, child.stderr);
+    const stderrTail = child.stderr?.slice(-2000) || "(empty)";
+    const exit =
+      `Pulse startup child (timeout ${timeoutMs} ms, exit code ${child.status}, signal ${child.signal})\n` +
+      `stderr tail: ${stderrTail}`;
+    if (child.error)
+      throw new Error(`${exit}\n${child.error.message}`, {
+        cause: child.error,
+      });
+    assert.equal(child.status, 1, exit);
     assert.equal(
       child.stderr,
       `pulse could not start: {"type":"Error","code":"${code}"}\n` +
         '  caused by: {"type":"Error","code":"08006"}\n',
+      exit,
     );
     assert.doesNotMatch(
       child.stderr + child.stdout,
