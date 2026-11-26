@@ -196,9 +196,10 @@ export class InMemoryCreationStore implements CreationStore {
         image !== undefined &&
         changeId !== undefined
       )
-        attachInMemory(images, pending, {
-          pollId: poll.id,
-          alt: image.alt,
+        attachInMemory(images, pending, image.alt, {
+          targetKind: "poll",
+          targetId: poll.id,
+          action: "image_attach",
           actorId: account.id,
           now,
           changeId,

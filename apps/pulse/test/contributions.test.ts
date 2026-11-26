@@ -6,7 +6,14 @@ import { PostgresContributionsStore } from "../src/contributions/pg-store.js";
 import { InMemoryVoterStore } from "../src/identity/store.js";
 import { PostgresVoterStore } from "../src/identity/pg-store.js";
 import { InMemoryVotingStore } from "../src/voting/store.js";
-import { PostgresVotingStore } from "../src/voting/pg-store.js";
+import {
+  InMemoryImageStore,
+  memoryImageDatabase,
+} from "../src/images/store.js";
+import { PostgresImageStore } from "../src/images/pg-store.js";
+import { PENDING_TTL_MS } from "../src/images/limits.js";
+import { processImage } from "../src/images/process.js";
+import { picture } from "./support/images.js";
 import {
   creationSchema,
   parse,
@@ -36,9 +43,7 @@ async function setup(t: TestContext, kind: "memory" | "postgres") {
   let clock = at;
   const pool = kind === "postgres" ? await migratedSchema(t) : undefined;
   const voters = pool ? new PostgresVoterStore(pool) : new InMemoryVoterStore();
-  const votes = pool
-    ? new PostgresVotingStore(pool)
-    : new InMemoryVotingStore();
+  const votes = new InMemoryVotingStore();
   for (const actor of [owner, helper, otherHelper])
     await voters.create(
       {
@@ -62,6 +67,12 @@ async function setup(t: TestContext, kind: "memory" | "postgres") {
   return {
     store,
     other,
+    images: pool
+      ? new PostgresImageStore(pool, { clock: () => clock })
+      : new InMemoryImageStore(voters as InMemoryVoterStore, votes, {
+          clock: () => clock,
+        }),
+    memoryPictures: memoryImageDatabase(votes),
     voters,
     pool,
     setTime: (value: Date) => {
@@ -71,6 +82,146 @@ async function setup(t: TestContext, kind: "memory" | "postgres") {
 }
 for (const kind of ["memory", "postgres"] as const) {
   const opts = { skip: kind === "postgres" ? databaseSkip : false };
+  test(
+    `${kind}: contribution pictures follow the current link and replay does not reattach`,
+    opts,
+    async (t) => {
+      const { store, other, images, pool, memoryPictures, setTime } =
+        await setup(t, kind);
+      const processed = await processImage(await picture("jpeg"));
+      const first = await images.savePending(owner, processed);
+      const second = await images.savePending(owner, processed);
+      const foreign = await images.savePending(helper, processed);
+      const attach = (id: string) => ({ id, alt: " Garden beds " });
+      const key = randomUUID();
+
+      await assert.rejects(
+        store.create(owner, key, { ...project, image: attach(foreign.id) }),
+        {
+          message: "image_unavailable",
+        },
+      );
+      assert.deepEqual((await store.list({})).contributions, []);
+      const input = { ...project, image: attach(first.id) };
+      const { contribution } = await store.create(owner, key, input);
+      const { id, image } = contribution;
+      assert.equal(image.kind, "upload");
+      if (image.kind !== "upload") throw new Error("expected upload");
+      assert.equal(image.alt, "Garden beds");
+      assert.equal(
+        (await images.servable(first.id, "thumb"))?.sha256,
+        processed.thumb.sha256,
+      );
+      assert.deepEqual(
+        (await other.listByOwner(owner.voterId, {})).contributions[0]?.image,
+        image,
+      );
+      await assert.rejects(store.create(owner, randomUUID(), input), {
+        message: "image_unavailable",
+      });
+      await assert.rejects(
+        store.create(owner, key, { ...project, image: attach(second.id) }),
+        {
+          message: "idempotency_conflict",
+        },
+      );
+
+      setTime(new Date(at.getTime() + PENDING_TTL_MS));
+      await assert.rejects(store.replacePicture(owner, id, attach(second.id)), {
+        message: "image_unavailable",
+      });
+      assert.deepEqual((await store.detail(id)).contribution.image, image);
+      const replacementImage = await processImage(
+        await picture("jpeg", 300, 400),
+      );
+      const replacement = await images.savePending(owner, replacementImage);
+      const replaced = await other.replacePicture(
+        owner,
+        id,
+        attach(replacement.id),
+      );
+      assert.equal(await images.servable(first.id, "display"), undefined);
+      assert.equal(
+        (await images.servable(replacement.id, "display"))?.sha256,
+        replacementImage.display.sha256,
+      );
+      const replay = await store.create(owner, key, input);
+      assert.equal(replay.replayed, true);
+      assert.deepEqual(replay.contribution.image, replaced.image);
+
+      const tile = { image: { kind: "tile" } };
+      assert.deepEqual(await other.removePicture(owner, id), tile);
+      assert.deepEqual(await other.removePicture(owner, id), tile);
+      assert.deepEqual(
+        (await store.create(owner, key, input)).contribution.image,
+        tile.image,
+      );
+      for (const removed of [first.id, replacement.id]) {
+        if (pool) {
+          assert.equal(
+            (await pool.query("select 1 from image where id = $1", [removed]))
+              .rowCount,
+            0,
+          );
+          assert.equal(
+            (
+              await pool.query(
+                "select 1 from image_bytes where image_id = $1",
+                [removed],
+              )
+            ).rowCount,
+            0,
+          );
+        } else {
+          assert.equal(memoryPictures.images.has(removed), false);
+        }
+      }
+      const audit = pool
+        ? (
+            await pool.query(
+              `select action, image_id as "imageId", image_sha256 as "imageSha256"
+           from content_change where target_kind = 'contribution' and target_id = $1`,
+              [id],
+            )
+          ).rows
+        : memoryPictures.changes.map(({ action, imageId, imageSha256 }) => ({
+            action,
+            imageId,
+            imageSha256,
+          }));
+      assert.deepEqual(
+        audit.sort((a, b) => a.action.localeCompare(b.action)),
+        [
+          {
+            action: "image_attach",
+            imageId: first.id,
+            imageSha256: processed.display.sha256,
+          },
+          {
+            action: "image_remove",
+            imageId: replacement.id,
+            imageSha256: replacementImage.display.sha256,
+          },
+          {
+            action: "image_replace",
+            imageId: replacement.id,
+            imageSha256: replacementImage.display.sha256,
+          },
+        ],
+      );
+      if (pool) {
+        const row = (
+          await pool.query(
+            "select image_id, public_record from contribution where id = $1",
+            [id],
+          )
+        ).rows[0];
+        assert.equal(row.image_id, null);
+        assert.equal("image" in row.public_record, false);
+      }
+    },
+  );
+
   test(
     `${kind}: publish, participate, close and report preserve identity and history`,
     opts,

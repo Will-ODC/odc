@@ -1529,10 +1529,11 @@ body over 1 KiB), 503 `creation_unavailable`, 500 `server_error`. All changes ar
 attributed to the owner. Context exposes only the caller's effective posting
 permission. No public grant listing or author/account inspection is introduced.
 
-## Poll pictures (ADR-0047)
+## Pictures (ADR-0047, ADR-0049)
 
-A poll may carry one picture, uploaded first and then attached with
-`POST /api/polls` (`image` above). Pictures are stored in Pulse's Postgres as
+A poll or contribution may carry one picture. Upload it first through the
+shared `/api/poll-images` route, then attach it at publication. The path keeps
+its historical name for uploads and both served variants. Pictures are stored in Pulse's Postgres as
 two re-encoded WebP variants; the original upload is never stored or served.
 
 ### `POST /api/poll-images`
@@ -1599,6 +1600,7 @@ account; a processing fault is logged by error class only.
 No session; no cookie is read or set. `:id` must be a lowercase UUID before
 anything is queried. A picture is served only while its owner allows it: for
 a poll, while it is that poll's current picture and the poll is not hidden.
+For a contribution, while it is the existing contribution's current picture.
 Community default pictures arrive with category defaults; none is served yet.
 Malformed, unknown, pending and unservable ids answer the same `404`, with
 the same body as any unknown path:
@@ -1623,7 +1625,8 @@ answers an upload body over 10 MiB itself, with the same `413`
 ### The public `image` field
 
 Every poll body (`GET /api/polls/:id`, the creation response, MCP `get_poll`)
-and every listing row carries `image`, built by one projection:
+and every poll listing row carries `image`. Contribution bodies and listing
+rows use the same projection:
 
 ```json
 {
@@ -1636,14 +1639,15 @@ and every listing row carries `image`, built by one projection:
 }
 ```
 
-or `{ "kind": "tile" }` when the poll has no servable picture, for which the
-client draws a generated tile. URLs are relative. `upload` appears exactly
+or `{ "kind": "tile" }` when the item has no servable picture, for which the
+client draws a generated tile. Category defaults (#586) will take precedence
+over the tile once served. URLs are relative. `upload` appears exactly
 when the picture route would serve it. Nothing else is ever in the object: no
 uploading account, file name, original type or size, upload time or hash. A
 creation response replayed from before pictures existed reads as the tile.
 
 Planned, not served (ADR-0047, plan P12 steps 5–9): category defaults
-(`kind: "category"`), removing or replacing a picture, reporting, and the
+(`kind: "category"`), removing or replacing a poll picture, reporting, and the
 site owner's soft delete.
 
 ## Contributions (#246, #247, #252)
@@ -1651,7 +1655,9 @@ site owner's soft delete.
 Public `GET /api/contributions?cursor=...` returns `{contributions,nextCursor}`,
 20 newest records at a time. Summaries omit participation and update arrays.
 `GET /api/contributions/:id` returns `{contribution,canManage}`. The optional
-session determines whether the reader is the organizer. When the owning account
+session sets `canManage` to true only for the owning account. Every
+contribution body and row includes the public `image` field described above,
+including public profiles and the signed-in member's list. When the owning account
 has a visible profile, `contribution` also contains
 `organizerProfile:{publicId,displayName}`. When that profile is hidden or
 missing, the field is absent and `organizerName` remains unchanged. The join is
@@ -1662,7 +1668,12 @@ Signed-in `POST /api/contributions` publishes a community contribution. Strict
 JSON requires `title` (160 characters), `description` (4000),
 `organizerName` (80), and `kind` (`project`, `fundraiser`, `group_buy`, `offer`).
 Text is trimmed and nonempty. Optional `communityBenefit` and `needs` accept
-up to 2000 characters each and default to empty strings.
+up to 2000 characters each and default to empty strings. Optional `image`
+is a strict `{id,alt}` object with the same rules as poll creation: a lowercase
+UUID naming the caller's pending picture and a trimmed description of 1–300
+Unicode code points, with no NUL or unpaired surrogate. Publication consumes
+the upload atomically. Unknown, expired, used or another account's picture
+IDs return 422 `image_unavailable`.
 
 The short posting form sends the required fields, plus `pollId` when the
 author links a related question (it accepts a question link or ID and sends
@@ -1722,7 +1733,9 @@ Pulse stores a revision reference with each key to reconstruct the original
 response. A message key is separate: it is stored with that message, so it is
 scoped to the sender and the contribution, and is never compared with keys
 used on the other three routes.
-Identical retries return the original `{contribution,replayed:true}` with 200.
+Identical retries return `{contribution,replayed:true}` with 200. Picture id
+and description are part of the canonical creation input. Replays keep the
+original contribution revision and project its current picture.
 First writes return 201 with `replayed:false`. Changed inputs or targets using
 the same key return 409. Session generation is checked in the transaction under
 the account lock shared with sign-out. Mutation body limit is 32 KiB strict UTF-8.
@@ -1730,9 +1743,30 @@ Reads allow 120 requests/minute, mutations 30/minute, per route and client IP.
 
 Errors use `{error,message}`. 400 `bad_request`; 401 `signed_out`; 403
 `origin_not_allowed` or `organizer_required`; 404 `not_found` or `poll_not_found`; 409
-`account_changed`, `idempotency_conflict`, `closed`, `record_full`, `sender_limit`; 413 `body_too_large`; 429
+`account_changed`, `idempotency_conflict`, `closed`, `record_full`, `sender_limit`; 413 `body_too_large`; 422 `image_unavailable`; 429
 `too_many_requests`, `posting_limit`; 503 `contributions_unavailable`; 500
 `server_error`. Origin/session checks precede body parsing. Required storage
 failures leave no partial writes. Production persists in Postgres, development
 uses its selected database or ephemeral memory. Payments, investments,
 independent evidence reviews and automatic reputation remain future work.
+
+### `PUT /api/contributions/:id/image` and `DELETE /api/contributions/:id/image`
+
+Only the signed-in poster may manage the picture. Both routes require the
+configured web Origin and use the 30 requests/minute mutation limit. PUT
+accepts strict UTF-8 JSON `{id,alt}` with the same pending upload and
+description rules as creation. DELETE takes no body. Both return 200 with
+`{image}` and `Cache-Control: no-store`. DELETE with no picture already
+attached returns the fallback and makes no change. These routes do not take
+an idempotency key. An accepted replacement consumes its pending upload.
+
+Replacing or removing deletes the old picture and both variants in the same
+transaction as the link change and audit entry. Removed URLs return 404 at
+the server and may remain in browser caches for up to one hour. The
+response exposes only the public image fields.
+
+Errors use `{error,message}`. 400 `bad_request` for invalid PUT JSON or fields;
+401 `signed_out`; 403 `origin_not_allowed` or `organizer_required`; 404
+`not_found` for a missing contribution; 413 `body_too_large` over 32 KiB for
+PUT; 422 `image_unavailable` for an unavailable pending upload on PUT; 429
+`too_many_requests`; 503 `contributions_unavailable`; 500 `server_error`.

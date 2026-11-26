@@ -1,4 +1,10 @@
 import { randomUUID } from "node:crypto";
+import { pictureInput, type PictureInput } from "../images/input.js";
+import {
+  publicImage,
+  type ItemImage,
+  type PublicImage,
+} from "../images/public.js";
 import type { PublicationActor } from "../authoring/store.js";
 import {
   ContributionError,
@@ -14,13 +20,16 @@ import {
   type UpdateInput,
   type ListQuery,
 } from "./input.js";
-export interface Contribution extends ContributionInput {
+export interface ContributionRecord extends Omit<ContributionInput, "image"> {
   id: string;
   community: { id: string; label: string };
   status: ContributionStatus;
   createdAt: string;
   participations: (ParticipationInput & { id: string; createdAt: string })[];
   updates: (UpdateInput & { id: string; createdAt: string })[];
+}
+export interface Contribution extends ContributionRecord {
+  image: PublicImage;
 }
 export type Summary = Omit<Contribution, "participations" | "updates">;
 /**
@@ -40,7 +49,8 @@ interface StoredMessage extends OrganizerMessage {
 }
 export interface StoredContribution {
   ownerId: string;
-  public: Contribution;
+  public: ContributionRecord;
+  image?: ItemImage;
   privateMessages?: StoredMessage[];
 }
 export interface MutationResult {
@@ -53,6 +63,10 @@ export interface Replay {
   participationCount: number;
   updateCount: number;
 }
+export type ContributionPictureChange =
+  | { action: "image_attach" | "image_replace"; input: PictureInput }
+  | { action: "image_remove" };
+
 export interface ContributionTransaction {
   community: { id: string; label: string };
   replay(key: string): Promise<Replay | undefined>;
@@ -62,6 +76,11 @@ export interface ContributionTransaction {
   senderEntries(kind: "participate", contributionId: string): Promise<number>;
   get(id: string): Promise<StoredContribution | undefined>;
   save(record: StoredContribution, isNew: boolean): Promise<void>;
+  setPicture(
+    id: string,
+    now: Date,
+    change: ContributionPictureChange,
+  ): Promise<ItemImage | undefined>;
   remember(key: string, replay: Replay): Promise<void>;
 }
 export interface ContributionRepository {
@@ -104,7 +123,7 @@ export class ContributionsStore {
     const record = await this.repository.read(id);
     if (!record) throw new ContributionError("not_found");
     return {
-      contribution: record.public,
+      contribution: project(record),
       canManage: record.ownerId === actorId,
       ownerId: record.ownerId,
     };
@@ -119,6 +138,7 @@ export class ContributionsStore {
     raw: unknown,
   ): Promise<MutationResult> {
     const input = parse(creationSchema, raw);
+    const { image, ...fields } = input;
     return this.mutate(actor, key, ["create", input], async (tx) => {
       const now = this.clock();
       if (
@@ -128,8 +148,8 @@ export class ContributionsStore {
         throw new ContributionError("posting_limit");
       if (input.pollId && !(await tx.visiblePoll(input.pollId)))
         throw new ContributionError("poll_not_found");
-      const contribution: Contribution = {
-        ...input,
+      const contribution: ContributionRecord = {
+        ...fields,
         id: randomUUID(),
         community: tx.community,
         status: "open",
@@ -138,7 +158,36 @@ export class ContributionsStore {
         updates: [],
       };
       await tx.save({ ownerId: actor.voterId, public: contribution }, true);
-      return contribution;
+      const attached =
+        image &&
+        (await tx.setPicture(contribution.id, now, {
+          action: "image_attach",
+          input: image,
+        }));
+      return { ...contribution, image: publicImage(attached) };
+    });
+  }
+  removePicture(actor: PublicationActor, id: string) {
+    return this.changePicture(actor, id, { action: "image_remove" });
+  }
+  async replacePicture(actor: PublicationActor, id: string, raw: unknown) {
+    return this.changePicture(actor, id, {
+      action: "image_replace",
+      input: parse(pictureInput, raw),
+    });
+  }
+  private changePicture(
+    actor: PublicationActor,
+    id: string,
+    change: ContributionPictureChange,
+  ) {
+    return this.repository.transaction(actor, async (tx) => {
+      const record = await this.required(tx, id);
+      if (record.ownerId !== actor.voterId)
+        throw new ContributionError("organizer_required");
+      return {
+        image: publicImage(await tx.setPicture(id, this.clock(), change)),
+      };
     });
   }
   async participate(
@@ -165,7 +214,7 @@ export class ContributionsStore {
         createdAt: this.clock().toISOString(),
       });
       await tx.save(record, false);
-      return record.public;
+      return project(record);
     });
   }
   async update(
@@ -188,7 +237,7 @@ export class ContributionsStore {
       });
       record.public.status = input.status;
       await tx.save(record, false);
-      return record.public;
+      return project(record);
     });
   }
   async messages(actor: PublicationActor, id: string) {
@@ -273,7 +322,7 @@ export class ContributionsStore {
         const updates = record.public.updates.slice(0, replay.updateCount);
         return {
           contribution: {
-            ...record.public,
+            ...project(record),
             status: updates.at(-1)?.status ?? "open",
             participations,
             updates,
@@ -292,20 +341,25 @@ export class ContributionsStore {
     });
   }
 }
-export function summary(record: Contribution): Summary {
+function project(record: StoredContribution): Contribution {
+  return { ...record.public, image: publicImage(record.image) };
+}
+export function summary(record: StoredContribution): Summary {
+  const { public: fields, image } = record;
   return {
-    id: record.id,
-    title: record.title,
-    description: record.description,
-    communityBenefit: record.communityBenefit,
-    needs: record.needs,
-    kind: record.kind,
-    organizerName: record.organizerName,
-    community: record.community,
-    pollId: record.pollId,
-    commercial: record.commercial,
-    fund: record.fund,
-    status: record.status,
-    createdAt: record.createdAt,
+    id: fields.id,
+    title: fields.title,
+    description: fields.description,
+    communityBenefit: fields.communityBenefit,
+    needs: fields.needs,
+    kind: fields.kind,
+    organizerName: fields.organizerName,
+    community: fields.community,
+    pollId: fields.pollId,
+    commercial: fields.commercial,
+    fund: fields.fund,
+    status: fields.status,
+    createdAt: fields.createdAt,
+    image: publicImage(image),
   };
 }

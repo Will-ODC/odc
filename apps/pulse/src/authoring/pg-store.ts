@@ -2,7 +2,7 @@ import { randomUUID } from "node:crypto";
 import type { Pool, PoolClient } from "pg";
 import { inTransaction } from "../db/transaction.js";
 import { parseEmail } from "../identity/email.js";
-import { attachToPoll, lockAttachablePending } from "../images/pg-store.js";
+import { attachPicture, lockAttachablePending } from "../images/pg-store.js";
 import { createPoll } from "../voting/poll.js";
 import {
   publicPoll as projectPoll,
@@ -190,9 +190,10 @@ export class PostgresCreationStore implements CreationStore {
       const image =
         pending === undefined || input.image === undefined
           ? undefined
-          : await attachToPoll(client, pending, {
-              pollId: poll.id,
-              alt: input.image.alt,
+          : await attachPicture(client, pending, input.image.alt, {
+              targetKind: "poll",
+              targetId: poll.id,
+              action: "image_attach",
               actorId: account.id,
               now,
               changeId: this.#newId(),

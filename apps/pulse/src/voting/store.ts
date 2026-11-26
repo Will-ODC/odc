@@ -1,4 +1,4 @@
-import type { PollImage } from "../images/public.js";
+import type { ItemImage } from "../images/public.js";
 import { memoryImageDatabase } from "../images/store.js";
 import { mayServe } from "../images/visibility.js";
 import {
@@ -396,7 +396,7 @@ export class InMemoryVotingStore implements VotingStore {
   async createPoll(
     input: NewPoll,
     publication?: Publication,
-    image?: PollImage,
+    image?: ItemImage,
   ): Promise<Poll> {
     if (this.#polls.has(input.id))
       throw new TypeError(`poll already exists: ${input.id}`);
@@ -434,7 +434,7 @@ export class InMemoryVotingStore implements VotingStore {
    * Postgres store reads it against `image`. The in-memory store has no
    * hidden polls.
    */
-  #shownImage(poll: Poll): PollImage | undefined {
+  #shownImage(poll: Poll): ItemImage | undefined {
     if (poll.image === undefined) return undefined;
     const link = memoryImageDatabase(this).images.get(poll.image.id);
     if (link === undefined || link.ownerId !== poll.id) return undefined;

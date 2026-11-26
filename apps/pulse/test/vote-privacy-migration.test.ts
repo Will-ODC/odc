@@ -91,7 +91,7 @@ test(
       [AT],
     );
     await vote(pool, "legacy", "b:browser");
-    assert.deepEqual((await migrate(pool)).applied, ["018", "019"]);
+    assert.deepEqual((await migrate(pool)).applied, ["018", "019", "020"]);
     assert.deepEqual(
       (await pool.query("select id, vote_privacy from polls")).rows,
       [{ id: "legacy", vote_privacy: "anonymous" }],
@@ -134,7 +134,7 @@ test(
     );
     // Fixed by hand, it runs.
     await pool.query("update member_profile set display_name = 'Ada'");
-    assert.deepEqual((await migrate(pool)).applied, ["018", "019"]);
+    assert.deepEqual((await migrate(pool)).applied, ["018", "019", "020"]);
     await assert.rejects(
       pool.query("update member_profile set display_name = 'verified voter'"),
       /member_profile_name_not_reserved/,
@@ -315,6 +315,6 @@ test(
     );
     // Fixed by hand, it runs.
     await pool.query("update member_profile set display_name = 'Ada'");
-    assert.deepEqual((await migrate(pool)).applied, ["019"]);
+    assert.deepEqual((await migrate(pool)).applied, ["019", "020"]);
   },
 );

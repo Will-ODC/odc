@@ -8,6 +8,9 @@ import sharp from "sharp";
 import { PURPOSE_VERSION } from "../src/authoring/input.js";
 import { InMemoryCreationStore } from "../src/authoring/memory-store.js";
 import { PostgresCreationStore } from "../src/authoring/pg-store.js";
+import { InMemoryContributionsStore } from "../src/contributions/memory-store.js";
+import { PostgresContributionsStore } from "../src/contributions/pg-store.js";
+import { InMemoryMemberProfileStore } from "../src/profiles/memory-store.js";
 import { createServer, type ServerDeps } from "../src/http/server.js";
 import { cookieNames, SessionSigner } from "../src/http/session.js";
 import {
@@ -36,6 +39,13 @@ import { PostgresVotingStore } from "../src/voting/pg-store.js";
 import { InMemorySuggestionStore } from "../src/voting/suggestions.js";
 import { InMemoryVotingStore } from "../src/voting/store.js";
 import { atBarrier } from "./support/barrier.js";
+import {
+  detailSchema,
+  mutationSchema,
+  pageSchema,
+  project,
+  summarySchema,
+} from "./support/contributions-http.js";
 import { databaseSkip, migratedSchema } from "./support/database.js";
 import {
   LEAKY_MAKE,
@@ -87,6 +97,8 @@ interface Reply {
 
 interface Harness {
   pool: Pool | undefined;
+  request(options: InjectOptions): Promise<Reply>;
+  cookie(who: Who): string;
   images: ImageStore;
   seen: string[];
   logs: string[];
@@ -138,7 +150,11 @@ async function harness(
     : new InMemoryCreationStore(
         voters as InMemoryVoterStore,
         votes as InMemoryVotingStore,
-        { clock, communityLabels: new Map([["campus", "Campus"]]) },
+        {
+          clock,
+          ownerEmail: ACCOUNTS.other.email,
+          communityLabels: new Map([["campus", "Campus"]]),
+        },
       );
   const defaultImages: ImageStore = pool
     ? new PostgresImageStore(pool, { clock })
@@ -175,6 +191,21 @@ async function harness(
     secureCookies: false,
     webOrigin: ORIGIN,
     creation,
+    contributions: pool
+      ? new PostgresContributionsStore(pool, clock)
+      : new InMemoryContributionsStore(
+          voters as InMemoryVoterStore,
+          votes as InMemoryVotingStore,
+          { clock },
+        ),
+    ...(!pool
+      ? {
+          profiles: new InMemoryMemberProfileStore(
+            voters as InMemoryVoterStore,
+            { clock },
+          ),
+        }
+      : {}),
     logger: { ...SERVED_LOGGER, level: "info", stream },
     ...(images === undefined ? {} : { images }),
     // Tests send more than ten uploads; the limit itself has its own test.
@@ -194,6 +225,8 @@ async function harness(
 
   return {
     pool,
+    request: send,
+    cookie,
     images: defaultImages,
     seen,
     logs,
@@ -263,6 +296,228 @@ function refused(reply: Reply, status: number, error: string): void {
   assert.ok((reply.json().message as string).length > 0);
   assert.equal(reply.headers["cache-control"], "no-store");
 }
+
+function postContribution(h: Harness, image?: unknown, key = randomUUID()) {
+  return h.request({
+    method: "POST",
+    url: "/api/contributions",
+    headers: {
+      origin: ORIGIN,
+      cookie: h.cookie("member"),
+      "content-type": "application/json",
+      "idempotency-key": key,
+    },
+    payload: {
+      ...project,
+      accountId: ACCOUNTS.member.id,
+      ...(image === undefined ? {} : { image }),
+    },
+  });
+}
+
+async function pendingPicture(h: Harness) {
+  const uploaded = await h.upload("member", await picture("jpeg"));
+  assert.equal(uploaded.statusCode, 201, uploaded.body);
+  assert.ok(uploaded.json().image);
+  return { id: uploaded.json().image!.id, alt: "Garden beds" };
+}
+
+test("contribution picture appears in the creation, detail, and listing contracts", async (t) => {
+  const h = await harness(t, "memory");
+  const noPicture = await postContribution(h);
+  assert.equal(noPicture.statusCode, 201, noPicture.body);
+  assert.deepEqual(mutationSchema.parse(noPicture.json()).contribution.image, {
+    kind: "tile",
+  });
+
+  const pending = await pendingPicture(h);
+  const created = await postContribution(h, {
+    ...pending,
+    alt: "  Garden beds  ",
+  });
+  assert.equal(created.statusCode, 201, created.body);
+  const { contribution } = mutationSchema.parse(created.json());
+  const { id, image } = contribution;
+  assert.deepEqual(image, {
+    kind: "upload",
+    displayUrl: `/api/poll-images/${pending.id}/display.webp`,
+    thumbUrl: `/api/poll-images/${pending.id}/thumb.webp`,
+    width: 400,
+    height: 300,
+    alt: pending.alt,
+  });
+  if (image.kind !== "upload") throw new Error("expected upload");
+  for (const url of [image.displayUrl, image.thumbUrl]) {
+    const result = await h.get(url);
+    assert.equal(result.statusCode, 200, result.body);
+    assert.equal(result.headers["content-type"], "image/webp");
+  }
+  const path = `/api/contributions/${id}`;
+  for (const who of [undefined, "other", "member"] as const) {
+    const read = await h.get(path, who ? { cookie: h.cookie(who) } : {});
+    assert.equal(read.statusCode, 200, read.body);
+    assert.equal(read.headers["cache-control"], "no-store");
+    assert.deepEqual(detailSchema.parse(read.json()), {
+      contribution,
+      canManage: who === "member",
+    });
+  }
+  const profile = await h.request({
+    method: "PUT",
+    url: "/api/me/profile",
+    headers: {
+      cookie: h.cookie("member"),
+      origin: ORIGIN,
+      "content-type": "application/json",
+    },
+    payload: {
+      ownerAccountId: ACCOUNTS.member.id,
+      displayName: "Gardener",
+      bio: "",
+      visible: true,
+    },
+  });
+  assert.equal(profile.statusCode, 200, profile.body);
+  const {
+    profile: { publicId },
+  } = profile.json() as { profile: { publicId: string } };
+  for (const url of [
+    "/api/contributions",
+    "/api/me/contributions",
+    `/api/profiles/${publicId}/contributions`,
+  ]) {
+    const list = await h.get(url, { cookie: h.cookie("member") });
+    assert.equal(list.statusCode, 200, list.body);
+    assert.deepEqual(
+      pageSchema.parse(list.json()).contributions.find((row) => row.id === id)
+        ?.image,
+      image,
+    );
+  }
+});
+
+for (const kind of ["memory", "postgres"] as const) {
+  test(
+    `${kind}: a pending picture is consumed only once across polls and contributions`,
+    { skip: kind === "postgres" ? databaseSkip : false },
+    async (t) => {
+      const h = await harness(t, kind);
+      refused(
+        await postContribution(h, { id: randomUUID(), alt: "Missing picture" }),
+        422,
+        "image_unavailable",
+      );
+      const forPoll = await pendingPicture(h);
+      refused(
+        await postContribution(h, { ...forPoll, alt: " " }),
+        400,
+        "bad_request",
+      );
+      assert.equal((await h.publish("member", forPoll)).statusCode, 201);
+      refused(await postContribution(h, forPoll), 422, "image_unavailable");
+      const forContribution = await pendingPicture(h);
+      assert.equal(
+        (await postContribution(h, forContribution)).statusCode,
+        201,
+      );
+      refused(
+        await h.publish("member", forContribution),
+        422,
+        "image_unavailable",
+      );
+    },
+  );
+}
+
+test("only the contribution poster can replace or remove its picture", async (t) => {
+  const h = await harness(t, "memory");
+  const initial = await pendingPicture(h);
+  const key = randomUUID();
+  const created = await postContribution(h, initial, key);
+  assert.equal(created.statusCode, 201, created.body);
+  const {
+    contribution: { id, image },
+  } = mutationSchema.parse(created.json());
+  if (image.kind !== "upload") throw new Error("expected upload");
+  const replacement = await pendingPicture(h);
+  const path = `/api/contributions/${id}/image`;
+  function manage(
+    method: "PUT" | "DELETE",
+    who?: Who,
+    url = path,
+    origin = ORIGIN,
+    payload: unknown = replacement,
+  ) {
+    return h.request({
+      method,
+      url,
+      headers: {
+        origin,
+        ...(who ? { cookie: h.cookie(who) } : {}),
+        ...(method === "PUT" ? { "content-type": "application/json" } : {}),
+      },
+      ...(method === "PUT" ? { payload: JSON.stringify(payload) } : {}),
+    });
+  }
+  for (const method of ["PUT", "DELETE"] as const) {
+    refused(await manage(method), 401, "signed_out");
+    // "other" is configured as site owner, but does not own this contribution.
+    refused(await manage(method, "other"), 403, "organizer_required");
+    refused(
+      await manage(method, "other", `/api/contributions/${randomUUID()}/image`),
+      404,
+      "not_found",
+    );
+    refused(
+      await manage(method, "member", path, "https://foreign.example"),
+      403,
+      "origin_not_allowed",
+    );
+  }
+  refused(
+    await manage("PUT", "member", path, ORIGIN, {
+      ...replacement,
+      alt: "\u0000",
+    }),
+    400,
+    "bad_request",
+  );
+  refused(
+    await manage("PUT", "member", path, ORIGIN, {
+      id: randomUUID(),
+      alt: "Missing",
+    }),
+    422,
+    "image_unavailable",
+  );
+  assert.equal((await h.get(image.displayUrl)).statusCode, 200);
+
+  const pictureResponse = summarySchema.pick({ image: true });
+  const replaced = await manage("PUT", "member");
+  assert.equal(replaced.statusCode, 200, replaced.body);
+  assert.equal(replaced.headers["cache-control"], "no-store");
+  const next = pictureResponse.parse(replaced.json()).image;
+  if (next.kind !== "upload") throw new Error("expected replacement");
+  assert.equal(
+    next.displayUrl,
+    `/api/poll-images/${replacement.id}/display.webp`,
+  );
+  assert.equal((await h.get(image.displayUrl)).statusCode, 404);
+  assert.equal((await h.get(next.displayUrl)).statusCode, 200);
+
+  const removed = await manage("DELETE", "member");
+  assert.equal(removed.statusCode, 200, removed.body);
+  assert.equal(removed.headers["cache-control"], "no-store");
+  assert.deepEqual(pictureResponse.parse(removed.json()).image, {
+    kind: "tile",
+  });
+  assert.equal((await h.get(next.thumbUrl)).statusCode, 404);
+  const replay = await postContribution(h, initial, key);
+  assert.equal(replay.statusCode, 200, replay.body);
+  assert.deepEqual(mutationSchema.parse(replay.json()).contribution.image, {
+    kind: "tile",
+  });
+});
 
 /** Upload a picture, attach it to a new poll, and return both ids. */
 async function posted(h: Harness, bytes?: Buffer) {

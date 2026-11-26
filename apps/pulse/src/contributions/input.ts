@@ -1,4 +1,5 @@
 import { z } from "zod";
+import { pictureInput } from "../images/input.js";
 export const MIN_SAVINGS_PERCENT = 20;
 const text = (max: number) =>
   z
@@ -44,6 +45,7 @@ const commercial = z
 export const creationSchema = z
   .object({
     title: text(160),
+    image: pictureInput.optional(),
     description: text(4000),
     communityBenefit: text(2000).or(z.literal("")).default(""),
     needs: text(2000).or(z.literal("")).default(""),
@@ -100,6 +102,7 @@ export class ContributionError extends Error {
       | "organizer_required"
       | "not_found"
       | "poll_not_found"
+      | "image_unavailable"
       | "idempotency_conflict"
       | "posting_limit"
       | "closed"

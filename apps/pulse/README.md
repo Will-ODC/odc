@@ -67,13 +67,13 @@ created before timestamps existed is dated at the first startup or redemption
 after upgrading, then gets the same 20-minute window. This does not delete the email
 credential belonging to an account that signed in.
 
-## Poll pictures
+## Pictures
 
-A signed-in poster may upload one picture with a question (ADR-0047). The
+A signed-in poster may upload one picture with a poll or contribution (ADR-0047 and ADR-0049). The
 server decodes JPEG, PNG and WebP by their content, refuses SVG, GIF, HEIC
 and animated files, and stores only two re-encoded WebP variants with all
 metadata (EXIF, GPS location, XMP, ICC) removed. Pictures live in Postgres
-beside the polls; one nobody attached within 24 hours is deleted at the next
+beside the items that use them; one nobody attached within 24 hours is deleted at the next
 startup or upload. See [API.md](./API.md) for the routes and the public
 `image` field, and [DEPLOY.md](./DEPLOY.md) for backups and the nginx limit.
 
