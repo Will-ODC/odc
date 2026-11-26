@@ -245,6 +245,9 @@
         <li>A refused file, a failed upload or a busy server changes only this field. The question, choices, title, description and every other field stay exactly as typed.</li>
         <li>After a network or busy error the chosen picture and its description stay too, with Try again beside Remove.</li>
         <li>Remove clears the picture and its description; the rest of the draft stays.</li>
+        <li>Cancel upload on a first choice returns the field to empty, with focus on Choose a picture. Cancel, or a failed upload, during Replace brings back the previous picture and its description, with focus on Replace; a failed Replace also shows the network or busy message.</li>
+        <li>Post pressed while a picture is uploading is refused with the wait message. Nothing posts on its own; the person presses Post again once the upload ends.</li>
+        <li>A description kept without a picture (after the picture became unavailable, or after signing in again) holds Post: the field shows the "descOrphan" message until the person chooses the picture again or clears the description. Nothing is dropped silently.</li>
         <li>Replace goes through the uploading state again. "Picture replaced…" is announced only once the new upload succeeds; until then the old description is kept.</li>
         <li>If Post refuses an expired or otherwise unavailable picture, the picture clears and focus moves to Choose a picture. Its description and the rest of the draft stay.</li>
       </ul>
@@ -299,9 +302,10 @@
     network: "The picture did not upload. Check your connection, then try again. Everything else you wrote is kept.",
     busy: "Pulse is busy with other pictures. Try again in a minute. Everything else you wrote is kept.",
     signedOutNote: "No message of its own: the form shows its usual sign-in prompt.",
+    descOrphan: "Choose the picture again, or clear its description to post without a picture.",
     unavailableNow: "Pulse cannot take pictures right now. Try again later, or post without a picture. Everything else you wrote is kept.",
     hourly: "You have uploaded 20 pictures in the last hour, the most allowed. Try again later, or post without a picture.",
-    pending: "You have 5 pictures that are not posted yet, the most allowed at once. Unposted pictures clear after a day.",
+    pending: "You have 5 pictures that are not posted yet, the most allowed at once. Unposted pictures clear after a day. Try again tomorrow, or post without a picture.",
     waitPost: "Wait for the picture to finish uploading, or cancel it.",
     unavailable: "This picture is no longer available. Choose it again. Its description and the rest of your draft are kept."
   };
@@ -513,7 +517,7 @@
     ["Button", "cancel", "While uploading."],
     ["Button", "retry", "After a network or busy error."],
     ["Status", "uploading", "While uploading (also read aloud)."],
-    ["Status", "uploaded", "Read aloud when the upload finishes."],
+    ["Status", "uploaded", "Shown under the picture and read aloud when the upload finishes; it clears on the next change."],
     ["Badge", "notUploaded", "On the preview after a network or busy error."],
     ["Status", "removed", "After Remove."],
     ["Status", "replaced", "After Replace."],
@@ -533,7 +537,8 @@
     ["Error", "unavailableNow", "503 images_unavailable (pictures off or not configured). Not drawn; same place as the busy error."],
     ["Error", "unavailableNow", "429 too_many_requests (this browser's request limit). Not drawn; same place as the busy error."],
     ["Error", "size", "413 image_too_large, if the browser check was skipped: show the size message with the real size."],
-    ["Error", "network", "500 server_error: show the network message."],
+    ["Error", "network", "500 server_error and 403 origin_not_allowed: show the network message."],
+    ["Error", "descOrphan", "Post pressed with a description kept but no picture. Not drawn; shown under the description box."],
     ["Note", "signedOutNote", "401 signed_out (the session ended while the form was open): the form's existing signed-out handling runs; the picture is dropped, its description and the rest of the draft are kept."],
     ["Error", "hourly", "429 upload_limit: 20 uploads in the last hour."],
     ["Error", "pending", "429 pending_limit: 5 unposted pictures at once. Not drawn in a frame; same place as the hourly error."],
