@@ -161,7 +161,7 @@ public hostname, before inviting anyone.
    Try again falls to body; the header shows "Sign in" while the session is
    unknown; keep `role="status"` mounted on the account-changed region;
    `PublicVotes` `key={position}` needs a comment; a `use-session` comment.
-   Possible flake, not yet ticketed (test-audit item 1 now covers it): `main.test.ts`
+   Possible flake, not yet ticketed (test-audit item 1 adds a clearer failure message for it; the cause is still unknown): `main.test.ts`
    `unexpected_startup_database_fault_does_not_log_personal_message_or_cause_28P01`
    failed once locally in a full run and passed alone.
    Rules (operator, 2026-11-15): the poll's setting decides and the voter
@@ -191,12 +191,7 @@ public hostname, before inviting anyone.
    not whether a picture existed (a 401 during upload before typing misses
    it); the question error has no warning icon while the picture errors do
    (unify the Field problem style); not checked on a device: the hidden file
-   input on iOS Safari. Leftover #717 nits for the next adopting PR (#701): sizes under 512 bytes show "0 KB" and sizes just under 1 MiB
-   show "1024 KB"; a long file name hides the size on phones; a Replace that
-   finishes in the background always takes focus (the mockup asks for it);
-   EXIF-rotated JPEGs may say "wide" for a tall photo; drop the unused
-   `createImageBitmap` stub in `PictureField.test.tsx`; add a hostile-JPEG
-   parser test; #499 must add a dark `--red-wash`.
+   input on iOS Safari. Leftover #717 nits still open (the size, file-name, stub and hostile-JPEG ones were fixed in #720): a Replace that finishes in the background always takes focus (the mockup asks for it); EXIF-rotated JPEGs may say "wide" for a tall photo; #499 must add a dark `--red-wash`.
 2. **Audits 2026-11-14 are complete; none changed product code:**
    [targeted tests](../docs/audits/pulse-tests-2026-11-14.md) → #613/#614;
    [simplicity](../docs/audits/pulse-simplicity-2026-11-14.md) → #616;
