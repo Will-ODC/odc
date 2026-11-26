@@ -20,6 +20,7 @@ import {
   ContributionsError,
   HttpContributionsApi,
 } from "../src/api/contributions.js";
+import type { Me } from "../src/api/types.js";
 import { routeFrom, pathOf, type ReturnTo } from "../src/flow/route.js";
 import { rememberReturn, takeReturn } from "../src/flow/sign-in-return.js";
 import { stubApi } from "./stub-api.js";
@@ -1730,7 +1731,28 @@ it("says beside each field what is missing instead of a browser bubble", async (
 
 it("forgets a sign-in error once the same person has signed in again", async () => {
   const user = userEvent.setup();
-  const { state, me } = switchableMe("helper");
+  const helper = {
+    id: "helper",
+    email: "helper@example.test",
+    community: null,
+  };
+  let replySignedOut!: (value: null) => void;
+  let replySignedIn!: (value: Me) => void;
+  const me = vi
+    .fn<() => Promise<Me | null>>()
+    .mockResolvedValueOnce(helper)
+    .mockImplementationOnce(
+      () =>
+        new Promise((resolve) => {
+          replySignedOut = resolve;
+        }),
+    )
+    .mockImplementationOnce(
+      () =>
+        new Promise((resolve) => {
+          replySignedIn = resolve;
+        }),
+    );
   const participate = vi
     .fn()
     .mockRejectedValue(new ContributionsError(401, "Sign in to continue."));
@@ -1745,14 +1767,21 @@ it("forgets a sign-in error once the same person has signed in again", async () 
   await user.type(screen.getByLabelText("How you can help"), "Tools");
   await user.click(screen.getByRole("button", { name: "Offer help" }));
   expect(await screen.findByText("Sign in to continue.")).toBeTruthy();
-  state.who = null;
   window.dispatchEvent(new Event("focus"));
-  await screen.findAllByRole("link", { name: "Sign in again in a new tab" });
-  state.who = "helper";
+  await act(async () => replySignedOut(null));
+  // The 401 already offered a sign-in link. Wait for the expiry notice.
+  const expired = await screen.findByText(/Your sign-in has ended/, {
+    selector: '[role="status"]',
+  });
+  expect(
+    within(expired).getByRole("link", { name: "Sign in again in a new tab" }),
+  ).toBeTruthy();
+  expect(screen.getByText("Sign in to continue.")).toBeTruthy();
+
   window.dispatchEvent(new Event("focus"));
-  await waitFor(() =>
-    expect(screen.queryByText("Sign in to continue.")).toBeNull(),
-  );
+  await act(async () => replySignedIn(helper));
+  expect(await screen.findByText(helper.email)).toBeTruthy();
+  expect(screen.queryByText("Sign in to continue.")).toBeNull();
   expect(
     (screen.getByLabelText("How you can help") as HTMLTextAreaElement).value,
   ).toBe("Tools");
