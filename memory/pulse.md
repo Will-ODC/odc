@@ -38,10 +38,10 @@ Repo discipline still applies: tests ship with the change, there is one small
 branch per change, named for its ticket (`pulse/<issue>-<short>`, #310), and
 the same CI runs.
 
-## Where it stands (2026-11-19)
+## Where it stands (2026-11-25)
 
 Per-PR history is in `git log origin/master -- apps/pulse apps/pulse-web`.
-**Open Pulse-related PRs:** #714 (#685 step 4a, in review), and this memory PR. Next migration: **020** (019 merged in #706). New ticket #707 (open polls from the main page without a reload; no urgency). New ticket #711: `Contributions.test.tsx` "forgets a sign-in error once the same person has signed in again" is flaky in CI. #425 Next/Previous is on hold (operator, 2026-11-19).
+**Open Pulse-related PRs:** none known besides this memory PR. Next migration: **020** (019 merged in #706). New ticket #707 (open polls from the main page without a reload; no urgency). New ticket #711: `Contributions.test.tsx` "forgets a sign-in error once the same person has signed in again" is flaky in CI. #425 Next/Previous is on hold (operator, 2026-11-19).
 
 - **Sign-in (pillar 1) is built.** Magic-link sign-in and redeem; open sign-up
   with community as an optional label (ADR-0030); a community picker when an
@@ -142,12 +142,28 @@ public hostname, before inviting anyone.
    removing your own public vote. Creation still refuses `"public"`. Step 3
    merged in #710 (`3e6bf64`, 2026-11-19): MCP `get_public_votes` and
    `votePrivacy`, nginx `$http_host`, and a public-proxy smoke test in the
-   `pulse-images` CI job. Step 4a (web card) is PR #714, open and in
-   review (not merged); then 4b. Step 4a must reword two
-   server messages: "Choose a valid page of votes." → "Start again from the
-   first page of votes."; the anonymous-poll removal message should add "You
-   can still change your answer." ADR-0048 still quotes two messages #706
-   reworded.
+   `pulse-images` CI job. Step 4a merged in #714 (`789c567`, 2026-11-25): the
+   vote card says "Votes are public." or "Votes are anonymous."; public polls
+   need email sign-in to vote (choices disabled while signed out); the public
+   vote list shows the profile name or "Verified voter"; you can change or
+   remove your own public vote while the poll is open (with an account
+   recheck); My votes has a Public tag; `/trust` copy covers public votes (it
+   does not claim creators can choose yet); `/api/my-votes` rows carry
+   `votePrivacy` (additive, both stores, `API.md`); two server messages
+   reworded; ADR-0048 decision 4 quote updated; the dev server seeds a public
+   poll at `?poll=public-vote-demo`. Production creation still refuses
+   `"public"`. **Next: step 4b** (the API accepts `"public"` at creation and
+   the creation form shows the option; UI review). ADR-0048 says 4b deploys
+   only after 4a is live in production. Pulse has no production deploy yet
+   (Railway setup is the operator's), so 4b's code may be built but its deploy
+   waits on 4a being live.
+   **Leftover #714 nits, for a later small PR:** focus after the session-check
+   Try again falls to body; the header shows "Sign in" while the session is
+   unknown; keep `role="status"` mounted on the account-changed region;
+   `PublicVotes` `key={position}` needs a comment; a `use-session` comment.
+   Possible flake, not yet ticketed: `main.test.ts`
+   `unexpected_startup_database_fault_does_not_log_personal_message_or_cause_28P01`
+   failed once locally in a full run and passed alone.
    Rules (operator, 2026-11-15): the poll's setting decides and the voter
    never chooses; anonymous polls show nobody's details; visible polls need
    an email sign-in to vote and show the voter's profile name, which hiding
