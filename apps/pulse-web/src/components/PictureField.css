@@ -1,0 +1,211 @@
+.picture-field__optional {
+  color: var(--muted);
+  font-weight: 500;
+}
+
+.picture-field__empty {
+  display: flex;
+  align-items: center;
+  gap: calc(var(--step) * 1.75);
+  padding: calc(var(--step) * 2);
+  background: var(--hover);
+  border: var(--hairline) dashed var(--line-strong);
+  border-radius: var(--r-card);
+}
+
+.picture-field__empty[data-invalid="true"] {
+  border-color: var(--red);
+  border-style: solid;
+  background: var(--red-wash);
+}
+
+.picture-field__icon {
+  display: grid;
+  place-items: center;
+  flex: none;
+  inline-size: calc(var(--step) * 5);
+  aspect-ratio: 1;
+  color: var(--muted);
+  background: var(--surface);
+  border: var(--hairline) solid var(--line);
+  border-radius: var(--r-control);
+}
+
+.picture-field__icon svg {
+  inline-size: calc(var(--step) * 2.75);
+}
+
+.picture-field__card {
+  min-inline-size: 0;
+  background: var(--surface);
+  border: var(--hairline) solid var(--line);
+  border-radius: var(--r-card);
+}
+
+.picture-field__card[data-invalid="true"] {
+  border-color: var(--red);
+}
+
+.picture-field__preview {
+  position: relative;
+  display: grid;
+  place-items: center;
+  overflow: hidden;
+  background: var(--hover);
+  border-radius: var(--r-card) var(--r-card) 0 0;
+  border-bottom: var(--hairline) solid var(--line);
+}
+
+.picture-field__preview img {
+  display: block;
+  inline-size: 100%;
+  min-block-size: calc(var(--touch) * 2);
+  max-block-size: calc(var(--step) * 32.5);
+  object-fit: contain;
+}
+
+.picture-field__preview[data-dim="true"] img {
+  opacity: 0.5;
+}
+
+.picture-field__overlay {
+  position: absolute;
+  inset: 0;
+  display: grid;
+  place-items: center;
+  pointer-events: none;
+}
+
+.picture-field__badge {
+  display: inline-flex;
+  align-items: center;
+  gap: var(--step);
+  padding: var(--step) calc(var(--step) * 1.75);
+  background: var(--surface);
+  border: var(--hairline) solid var(--line);
+  border-radius: var(--r-pill);
+  box-shadow: var(--shadow-pop);
+  font-size: var(--t-small);
+  font-weight: 600;
+}
+
+.picture-field__badge[data-invalid="true"] {
+  color: var(--red);
+  border-color: var(--red);
+}
+
+.picture-field__problem {
+  display: flex;
+  align-items: flex-start;
+  gap: calc(var(--step) * 0.75);
+}
+
+.picture-field__warning {
+  inline-size: calc(var(--step) * 2);
+  block-size: calc(var(--step) * 2);
+  flex: none;
+}
+
+.picture-field__problem .picture-field__warning {
+  margin-block-start: calc(var(--step) / 4);
+}
+
+.picture-field__badge .viewstate__pulse {
+  box-sizing: border-box;
+  inline-size: calc(var(--step) * 2);
+  block-size: calc(var(--step) * 2);
+  border-color: var(--line);
+  border-top-color: var(--green);
+  opacity: 1;
+}
+
+.picture-field__row {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: calc(var(--step) * 1.5);
+  padding: var(--step) var(--step) var(--step) calc(var(--step) * 1.75);
+}
+
+.picture-field__file {
+  min-inline-size: 0;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+  color: var(--muted);
+  font-size: var(--t-small);
+}
+
+.picture-field__file b {
+  color: var(--ink-soft);
+  font-weight: 600;
+}
+
+.picture-field__actions {
+  display: flex;
+  gap: calc(var(--step) / 2);
+  flex: none;
+}
+
+.picture-field .btn {
+  border-radius: var(--r-control);
+  font-size: var(--t-small);
+}
+
+.picture-field .btn--secondary {
+  border-color: var(--line-strong);
+}
+
+.picture-field__empty .btn,
+.picture-field__actions .btn--quiet {
+  padding: var(--step) calc(var(--step) * 2);
+}
+
+.picture-field__actions .btn--quiet {
+  color: var(--ink-soft);
+  text-decoration: none;
+}
+
+.picture-field__actions .btn--quiet:hover {
+  background: var(--hover);
+}
+
+.picture-field__description {
+  margin-block-start: var(--step);
+}
+
+.picture-field__description textarea {
+  min-block-size: calc(var(--touch) * 2);
+  resize: vertical;
+}
+
+@media (max-width: 699px) {
+  .picture-field .btn {
+    min-block-size: var(--touch);
+  }
+
+  .picture-field__preview img {
+    max-block-size: calc(var(--touch) * 5);
+  }
+
+  .picture-field__row {
+    display: grid;
+    justify-content: stretch;
+    gap: var(--step);
+    padding: calc(var(--step) * 1.5);
+  }
+
+  .picture-field__actions {
+    display: grid;
+    grid-template-columns: repeat(2, minmax(0, 1fr));
+    gap: var(--step);
+  }
+
+  .picture-field__actions .btn:only-child {
+    grid-column: 1 / -1;
+  }
+
+  .picture-field__description textarea {
+    min-block-size: calc(var(--touch) * 2 + var(--step));
+  }
+}

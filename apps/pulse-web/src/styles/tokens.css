@@ -33,6 +33,7 @@
   /* Status: red has one job, errors. A picked answer is green whatever it
      says (operator, 2026-11-07). */
   --red: #c5221f; /* 5.6:1 */
+  --red-wash: #fdecea;
 
   /* Keyboard focus uses the accent at 5:1 on white, without a black frame. */
   --focus: var(--green);
@@ -168,6 +169,8 @@
    * phone values of the tokens themselves are set once, below.
    */
 }
+
+/* #499 adds the dark value for --red-wash. */
 
 @media (max-width: 699px) {
   :root {

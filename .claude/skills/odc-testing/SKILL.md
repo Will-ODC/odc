@@ -19,13 +19,31 @@ import-boundary rules are in [`odc-service-boundaries`](../odc-service-boundarie
 
 1. **Unit tests** — every pure function: hashing, signature checks, tally math,
    consent-set logic. No network, no DB. Fast enough to run on every save.
-2. **API/contract tests** — every endpoint, exercised over HTTP against a real
-   local instance (real DB, throwaway data). Required cases per endpoint:
-   - happy path with schema-validated response body
+2. **API/contract tests** — every endpoint, exercised over HTTP against a
+   real local instance (real DB, throwaway data; a Pulse HTTP test may use the
+   memory store when the same storage behavior also runs on Postgres in the
+   storage tests).
+   Required cases per endpoint:
+   - happy path with a schema-validated response body
    - each documented error (400 malformed, 401/403 unauthorized, 404, 409)
-   - authorization failure: wrong key, missing signature, replayed request
-3. **Integration tests** — only at real seams: identity→ledger registration
+   - for a signed endpoint, all three authorization failures: wrong key,
+     missing signature, replayed request
+
+   Beyond the required cases in this skill (these and the ODC-specific ones
+   below), choose further cases by risk, and run each
+   only at the lowest layer that can catch the failure.
+
+3. **Storage tests** — check behavior that depends on Postgres (constraints,
+   locks, grants, SQL) against real Postgres in an isolated schema. Where a
+   service or app has both a memory and a Postgres store, run the same tests against
+   both.
+4. **Integration tests** — only at real seams: identity→ledger registration
    ordering; tally rebuilt from a ledger export.
+
+Beyond the API/contract tests above, use real sockets only when testing
+behavior across the socket: proxy behavior,
+cookies, origin and host checks, the dev proxy, the browser client's HTTP
+adapter end to end, and service-to-service calls at an integration seam.
 
 ## ODC-specific required tests
 
@@ -57,3 +75,14 @@ import-boundary rules are in [`odc-service-boundaries`](../odc-service-boundarie
   release); `Promise.all` alone may serialize and pass with the guard removed.
 - Coverage is a smell detector, not a goal: unexplained drops block merge,
   but 100% is not the target — the required cases above are.
+
+## Flaky tests
+
+A flaky test found outside the PR in hand gets an issue the day it is seen
+(one the PR in hand added or made flaky is fixed on its branch). Quarantine it (skip or
+retry) only with a named owner, a linked issue, and an expiry date in a comment
+at the skip or retry. Remove the quarantine or fix the test by that date.
+
+Never quarantine a privacy, auth or vote-counting test, any ODC-specific
+required test above, or a forced-overlap concurrency test: retrying one until
+it passes hides the failure it exists to catch.

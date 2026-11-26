@@ -271,6 +271,37 @@ export class HttpPulseApi implements PulseApi {
     return body.poll;
   }
 
+  async uploadPicture(file: File, signal: AbortSignal): Promise<string> {
+    const controller = new AbortController();
+    const abort = () => controller.abort(signal.reason);
+    if (signal.aborted) abort();
+    else signal.addEventListener("abort", abort, { once: true });
+
+    const mib = file.size / (1024 * 1024);
+    const timeout = setTimeout(
+      () => controller.abort(),
+      Math.min(60_000 + 30_000 * mib, 360_000),
+    );
+    try {
+      const body = await this.#send<{ image?: unknown } | null>(
+        "POST",
+        "/poll-images",
+        file,
+        undefined,
+        { "content-type": file.type },
+        controller.signal,
+      );
+      const id = stringField(body?.image, "id");
+      if (!id || !/^[0-9a-f]{8}(?:-[0-9a-f]{4}){3}-[0-9a-f]{12}$/.test(id)) {
+        throw new ApiError(201, "pulse sent a response the app couldn't read.");
+      }
+      return id;
+    } finally {
+      clearTimeout(timeout);
+      signal.removeEventListener("abort", abort);
+    }
+  }
+
   /**
    * `answer` is how a caller turns one particular refusal into a result: it
    * sees every non-2xx body and returns a value to resolve with, or undefined
@@ -296,7 +327,7 @@ export class HttpPulseApi implements PulseApi {
             : {}
           : {
               headers: { "content-type": "application/json", ...headers },
-              body: JSON.stringify(body),
+              body: body instanceof Blob ? body : JSON.stringify(body),
             }),
       });
     } catch {
