@@ -24,9 +24,7 @@ import { HttpPulseApi } from "../../../apps/pulse-web/src/api/http.js";
 import { ApiError } from "../../../apps/pulse-web/src/api/types.js";
 
 /**
- * ADR-0048 step 2 over a real socket, with today's browser client: a client
- * that has never heard of public-vote polls can never cast a named vote, and
- * the routes whose answer depends on the cookies say so to every cache.
+ * ADR-0048 over a real socket with the browser's HTTP adapter.
  * Public-vote polls are made through the voting store, because creation
  * still refuses the setting.
  */
@@ -58,7 +56,6 @@ function browser(base: string, seed = "") {
   };
   return {
     api: new HttpPulseApi(base, request),
-    fetch: request,
     cookies: () => cookie,
   };
 }
@@ -143,14 +140,10 @@ describe("public-vote polls over HTTP", () => {
 
   it("an acknowledged vote is the account's from a browser holding only the session", async () => {
     const jo = await signedIn();
-    const cast = await jo.fetch(`${base}/polls/pub/votes`, {
-      method: "POST",
-      headers: { "content-type": "application/json" },
-      body: JSON.stringify({ ballot: [1], publicVote: true }),
-    });
-    expect(cast.status).toBe(200);
-    expect(cast.headers.getSetCookie()).toEqual([]);
-    expect(await cast.json()).toMatchObject({
+    const cookiesBeforeCast = jo.cookies();
+    const cast = await jo.api.cast("pub", [1], true);
+    expect(jo.cookies()).toBe(cookiesBeforeCast);
+    expect(cast).toMatchObject({
       status: "counted",
       ballot: [1],
       results: { voters: 1, confirmedVoters: 1, votePrivacy: "public" },
@@ -169,6 +162,10 @@ describe("public-vote polls over HTTP", () => {
 
     // Signed out, there is no ballot and none is minted.
     const stranger = browser(base);
+    expect(await stranger.api.publicVotes("pub")).toEqual({
+      items: [{ name: null, choices: [1] }],
+      nextCursor: null,
+    });
     expect(await stranger.api.myBallot("pub")).toBeNull();
     expect(stranger.cookies()).toBe("");
   });
@@ -202,26 +199,15 @@ describe("public-vote polls over HTTP", () => {
     expect(await jo.api.myProfile()).toBeNull();
   });
 
-  /** An acknowledged public cast from this browser, as step 4a's card will send. */
-  async function castPublic(
-    who: Awaited<ReturnType<typeof signedIn>>,
-    ballot: number[],
-  ) {
-    const reply = await who.fetch(`${base}/polls/pub/votes`, {
-      method: "POST",
-      headers: { "content-type": "application/json" },
-      body: JSON.stringify({ ballot, publicVote: true }),
-    });
-    expect(reply.status).toBe(200);
-  }
-
   it("the public list pages through opaque cursors in the URL and is never cached", async () => {
     for (const [i, email] of [
       "ana@student.ubc.ca",
       "ben@student.ubc.ca",
       "cat@student.ubc.ca",
     ].entries()) {
-      await castPublic(await signedIn(email), [i % 2]);
+      const voter = await signedIn(email);
+      const cast = await voter.api.cast("pub", [i % 2], true);
+      expect(cast.status).toBe("counted");
     }
     const seen: unknown[] = [];
     let url = `${base}/polls/pub/public-votes?limit=2`;
@@ -251,7 +237,7 @@ describe("public-vote polls over HTTP", () => {
 
   it("removing one's own public vote works over HTTP and only from the web origin", async () => {
     const jo = await signedIn();
-    await castPublic(jo, [1]);
+    expect((await jo.api.cast("pub", [1], true)).status).toBe("counted");
 
     const session = jo
       .cookies()
@@ -264,16 +250,15 @@ describe("public-vote polls over HTTP", () => {
     expect(foreign.status).toBe(403);
     expect((await votes.results("pub")).voters).toBe(1);
 
-    const removed = await jo.fetch(`${base}/polls/pub/votes/mine`, {
-      method: "DELETE",
-    });
-    expect(removed.status).toBe(200);
-    expect(await removed.json()).toMatchObject({
+    const removed = await jo.api.removeVote("pub");
+    expect(removed).toMatchObject({
       status: "removed",
-      results: { voters: 0, votePrivacy: "public" },
+      results: { voters: 0, confirmedVoters: 0, votePrivacy: "public" },
     });
     expect(await jo.api.myBallot("pub")).toBeNull();
-    const list = await fetch(`${base}/polls/pub/public-votes`);
-    expect(await list.json()).toEqual({ items: [], nextCursor: null });
+    expect(await browser(base).api.publicVotes("pub")).toEqual({
+      items: [],
+      nextCursor: null,
+    });
   });
 });

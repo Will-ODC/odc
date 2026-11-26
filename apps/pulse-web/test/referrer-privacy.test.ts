@@ -2,6 +2,7 @@ import { readFileSync } from "node:fs";
 import { describe, expect, it } from "vitest";
 
 const html = readFileSync(new URL("../index.html", import.meta.url), "utf8");
+// public-proxy-smoke.sh checks query and Referer redaction in the built image.
 const nginx = readFileSync(new URL("../nginx.conf", import.meta.url), "utf8");
 
 describe("sign-in link privacy during page load", () => {
