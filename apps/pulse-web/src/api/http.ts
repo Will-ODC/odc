@@ -271,6 +271,22 @@ export class HttpPulseApi implements PulseApi {
     return body.poll;
   }
 
+  async uploadPicture(file: File, signal: AbortSignal): Promise<string> {
+    const body = await this.#send<{ image?: unknown } | null>(
+      "POST",
+      "/poll-images",
+      file,
+      undefined,
+      { "content-type": file.type },
+      AbortSignal.any([signal, AbortSignal.timeout(60000)]),
+    );
+    const id = stringField(body?.image, "id");
+    if (!id || !/^[0-9a-f]{8}(?:-[0-9a-f]{4}){3}-[0-9a-f]{12}$/.test(id)) {
+      throw new ApiError(201, "pulse sent a response the app couldn't read.");
+    }
+    return id;
+  }
+
   /**
    * `answer` is how a caller turns one particular refusal into a result: it
    * sees every non-2xx body and returns a value to resolve with, or undefined
@@ -296,7 +312,7 @@ export class HttpPulseApi implements PulseApi {
             : {}
           : {
               headers: { "content-type": "application/json", ...headers },
-              body: JSON.stringify(body),
+              body: body instanceof Blob ? body : JSON.stringify(body),
             }),
       });
     } catch {
