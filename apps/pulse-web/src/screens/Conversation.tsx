@@ -43,9 +43,8 @@ import {
   QuestionPager,
   type MyVotesNavigation,
 } from "../components/QuestionPager.js";
-import { usePublicVoteTags } from "../hooks/use-public-vote-tags.js";
 import { useSession } from "../hooks/use-session.js";
-import type { Session, SessionDeparture } from "../hooks/use-session.js";
+import type { Session } from "../hooks/use-session.js";
 import { SiteBanner } from "../components/SiteBanner.js";
 import "./Conversation.css";
 
@@ -213,20 +212,15 @@ export function Conversation({
     currentPoll.current = poll;
   }, []);
   // Signing out clears the ballot cookie (API.md), and the list with it.
-  const signedOut = useCallback(
-    (departure: SessionDeparture) => {
-      forgotten();
-      onSignedOut?.(
-        departure === "sessionChanged" ||
-          currentPoll.current?.votePrivacy === "public",
-      );
-    },
-    [forgotten, onSignedOut],
-  );
+  const signedOut = useCallback(() => {
+    forgotten();
+    onSignedOut?.(currentPoll.current?.votePrivacy === "public");
+  }, [forgotten, onSignedOut]);
   const [accountChangedAt, setAccountChangedAt] = useState<string | null>(null);
   const { session, progress, signOut, dismiss, recheck } = useSession(api, {
     onSignedOut: signedOut,
     onForgotten: forgotten,
+    watchSignOut: true,
   });
   const remembered = useCallback((answer: Answer) => {
     setAnswers((old) =>
@@ -326,7 +320,6 @@ export function Conversation({
   // Signing in confirms every vote already given here, so every result already
   // shown is missing it from the confirmed number.
   const previousSession = useRef(session);
-  const accountId = session.status === "signedIn" ? session.me.id : null;
   useEffect(() => {
     const before = previousSession.current;
     previousSession.current = session;
@@ -344,16 +337,8 @@ export function Conversation({
   );
   const saved = settledAnswers.find((one) => one.poll.id === at);
   const firstPage = mine.data.status === "ready" ? mine.data.value : undefined;
-  const serverVotes = usePublicVoteTags(
-    api,
-    accountId !== null ? firstPage?.votes : undefined,
-  );
   // The rail draws the first page and this page's answers, nothing more.
-  const answered = answeredList(
-    serverVotes ?? firstPage?.votes ?? [],
-    answers,
-    recentAnswers,
-  );
+  const answered = answeredList(firstPage?.votes ?? [], answers, recentAnswers);
   // A row whose question closes while this page is open says so then (#589).
   useRedrawAt(nextCloseAt(answered));
   // Previous and Next follow My votes (#528).
@@ -1062,7 +1047,11 @@ function LiveCard({
       closed.open();
       return { status: "closed" };
     } catch (error) {
-      if (!(error instanceof ApiError) || error.status === 0) {
+      if (
+        !(error instanceof ApiError) ||
+        error.status === 0 ||
+        error.status === 200
+      ) {
         try {
           if ((await api.myBallot(poll.id)) === null) {
             const checked = await recheck(true);
@@ -1223,6 +1212,7 @@ function LiveCard({
     ) : null;
   const voteUnavailable = publicPoll && accountId === null;
   const needsSignIn = publicPoll && !shut && session.status === "signedOut";
+  const sessionUnknown = publicPoll && !shut && session.status === "unknown";
   const card = (
     <div ref={wrapper}>
       <VoteCard
@@ -1246,6 +1236,9 @@ function LiveCard({
         votingUnavailable={voteUnavailable}
         removed={removed && state.status === "idle"}
         {...(needsSignIn ? { signInToVoteHref: signInHref } : {})}
+        {...(sessionUnknown
+          ? { onRetrySession: () => void recheck(true) }
+          : {})}
         publicVotes={voteList}
         answerActions={removeAction}
         trustHref={pathOf({ kind: "trust" })}

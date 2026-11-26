@@ -479,6 +479,9 @@ function isMyVotesPage(body: unknown): body is MyVotesPage {
       return (
         typeof row.pollId === "string" &&
         row.pollId.length > 0 &&
+        (row.votePrivacy === undefined ||
+          row.votePrivacy === "anonymous" ||
+          row.votePrivacy === "public") &&
         typeof row.question === "string" &&
         row.question.length > 0 &&
         Array.isArray(row.choices) &&

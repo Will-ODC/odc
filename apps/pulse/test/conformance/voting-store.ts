@@ -131,7 +131,11 @@ export function votingStoreConformance(
           pollId: "p1",
           castAt: later(3),
           ballot: [1],
-          poll: { question: "Question p1", choices: ["No"] },
+          poll: {
+            question: "Question p1",
+            votePrivacy: "anonymous",
+            choices: ["No"],
+          },
         });
         // Approval picks come back in position order, labels beside them.
         assert.deepEqual(rows[1]?.ballot, [0, 2]);

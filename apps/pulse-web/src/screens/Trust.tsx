@@ -22,11 +22,11 @@ export function Trust({ banner }: { banner?: ReactNode }) {
 
         <Part id={`${id}-today`} title="Today">
           <p className="trust__text">
-            Some polls show votes publicly. Each poll says which before you
+            A poll can show votes publicly. Each poll says which before you
             vote. That setting is fixed for the life of the poll. The vote card
             and results say “Votes are anonymous.” or “Votes are public.”
           </p>
-          <h3>Anonymous votes</h3>
+          <h3 className="trust__term">Anonymous votes</h3>
           <ul className="trust__list">
             <li>
               Press Submit to save your vote. Change it until the question
@@ -58,7 +58,7 @@ export function Trust({ banner }: { banner?: ReactNode }) {
               </strong>
             </li>
           </ul>
-          <h3>Public votes</h3>
+          <h3 className="trust__term">Public votes</h3>
           <ul className="trust__list">
             <li>
               Sign in with your email to vote. Anyone who can see the poll,

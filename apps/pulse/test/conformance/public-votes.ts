@@ -436,7 +436,11 @@ export function publicVoteConformance(
           pollId: "pub",
           castAt: later(1),
           ballot: [1],
-          poll: { question: "Where next?", choices: ["Library"] },
+          poll: {
+            question: "Where next?",
+            votePrivacy: "public",
+            choices: ["Library"],
+          },
         });
         // The same (cast_at, poll_id) cursor pages across both kinds.
         assert.deepEqual(

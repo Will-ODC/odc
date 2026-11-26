@@ -10,7 +10,7 @@ import userEvent from "@testing-library/user-event";
 import { afterEach, expect, it, vi } from "vitest";
 import { ApiError, type MyVote, type MyVotesPage } from "../src/api/types.js";
 import { App } from "../src/App.js";
-import { poll, stubApi } from "./stub-api.js";
+import { stubApi } from "./stub-api.js";
 
 afterEach(cleanup);
 
@@ -212,13 +212,21 @@ it("clears visible answers after forgetting this browser's votes", async () => {
   expect(screen.queryByText("Your answer: Yes")).toBeNull();
 });
 
-it("tags only public rows with privacy read from their polls", async () => {
+it("tags public history rows without reading each poll", async () => {
+  const poll = vi.fn(stubApi().poll);
   const api = stubApi({
     me: async () => ({ id: "ada", email: "ada@example.test", community: null }),
     myVotes: async () =>
-      page([vote(), vote({ pollId: "p2", question: "Public question?" })]),
-    poll: async (id) =>
-      poll({ id, votePrivacy: id === "p2" ? "public" : "anonymous" }),
+      page([
+        vote({ votePrivacy: "anonymous" }),
+        vote({
+          pollId: "p2",
+          question: "Public question?",
+          votePrivacy: "public",
+        }),
+        vote({ pollId: "p3", question: "Earlier history row?" }),
+      ]),
+    poll,
   });
   render(<App api={api} route={{ kind: "myVotes" }} />);
   const publicRow = (
@@ -229,4 +237,5 @@ it("tags only public rows with privacy read from their polls", async () => {
     .closest("li")!;
   expect(await within(publicRow).findByText("Public")).toBeTruthy();
   expect(within(anonymousRow).queryByText("Public")).toBeNull();
+  expect(poll).not.toHaveBeenCalled();
 });

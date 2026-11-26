@@ -65,6 +65,8 @@ export function useSession(
   after: {
     onSignedOut?: (departure: SessionDeparture) => void;
     onForgotten?: () => void;
+    /** Accept an explicit sign-out from another tab while signed in. */
+    watchSignOut?: boolean;
     /**
      * Keep asking while signed in, so a switch from account A straight to
      * account B in another tab reaches this page. For pages that show one
@@ -137,6 +139,7 @@ export function useSession(
    * and a failed request still changes nothing.
    */
   const recheckSignedIn = after.recheckSignedIn === true;
+  const watchSignOut = recheckSignedIn || after.watchSignOut === true;
   const settled =
     recheckSignedIn ||
     session.status === "signedOut" ||
@@ -204,14 +207,14 @@ export function useSession(
    * `me()` on every signed-out page load.
    */
   useLayoutEffect(() => {
-    if (!settled) return;
+    if (!settled && !watchSignOut) return;
     const ask = () => {
-      if (document.visibilityState !== "hidden") recheck();
+      if (settled && document.visibilityState !== "hidden") recheck();
     };
     const announced = (event: StorageEvent) => {
       if (event.key === SIGNED_IN_KEY) ask();
       // Another tab signed out on purpose: not an expiry to recover from.
-      else if (event.key === SIGNED_OUT_KEY && recheckSignedIn) {
+      else if (event.key === SIGNED_OUT_KEY && watchSignOut) {
         nextIdentity();
         setSession((current) =>
           current.status === "signedIn" ||
@@ -233,7 +236,7 @@ export function useSession(
       window.removeEventListener("storage", announced);
       document.removeEventListener("visibilitychange", ask);
     };
-  }, [settled, recheck, recheckSignedIn]);
+  }, [settled, recheck, watchSignOut]);
 
   /*
    * Whoever was signed in here is gone without this page's own Sign out: it

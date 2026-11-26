@@ -8,6 +8,7 @@ import {
   validCardBallot,
 } from "../flow/vote-card.js";
 import type { Confirmation } from "../flow/vote-card.js";
+import { Button } from "./Button.js";
 import { ClosedNotice } from "./ClosedNotice.js";
 import { QuestionPager, type MyVotesNavigation } from "./QuestionPager.js";
 import { ResultsPanel } from "./ResultsPanel.js";
@@ -71,6 +72,7 @@ export interface VoteCardProps {
   status: VoteCardStatus;
   privacyNote: ReactNode;
   signInToVoteHref?: string;
+  onRetrySession?: () => void;
   votingUnavailable?: boolean;
   removed?: boolean;
   publicVotes?: ReactNode;
@@ -127,6 +129,7 @@ export function VoteCard({
   status,
   privacyNote,
   signInToVoteHref,
+  onRetrySession,
   votingUnavailable = false,
   removed = false,
   publicVotes,
@@ -539,6 +542,11 @@ export function VoteCard({
               {status.message}
             </p>
           ) : null}
+          {onRetrySession ? (
+            <p className="vote-card__problem" role="alert">
+              We couldn't check whether you're signed in.
+            </p>
+          ) : null}
           <footer className="vote-card__foot">
             {privacyNote ? (
               <p id={`${id}-privacy`} className="vote-card__note">
@@ -562,6 +570,16 @@ export function VoteCard({
               >
                 Sign in with email to vote
               </a>
+            ) : null}
+            {onRetrySession ? (
+              <Button
+                variant="secondary"
+                size="small"
+                type="button"
+                onClick={onRetrySession}
+              >
+                Try again
+              </Button>
             ) : null}
             {editable || status.kind === "sending" ? (
               <button

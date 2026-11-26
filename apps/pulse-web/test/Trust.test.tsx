@@ -99,13 +99,18 @@ describe("what the page says", () => {
 
   it("states the present limits on checking and privacy", () => {
     render(<Trust />);
-    const today =
-      screen.getByRole("region", { name: "Today" }).textContent ?? "";
+    const todaySection = screen.getByRole("region", { name: "Today" });
+    const today = todaySection.textContent ?? "";
+    expect(
+      within(todaySection)
+        .getAllByRole("heading", { level: 3 })
+        .map((heading) => heading.textContent),
+    ).toEqual(["Anonymous votes", "Public votes"]);
     expect(today).toMatch(
       /Only Pulse.s operators can check the anonymous vote count today/,
     );
     expect(today).toContain(
-      "Some polls show votes publicly. Each poll says which before you vote.",
+      "A poll can show votes publicly. Each poll says which before you vote.",
     );
     expect(today).not.toMatch(/person who creates a poll chooses/i);
     expect(today).toMatch(/including AI apps/);

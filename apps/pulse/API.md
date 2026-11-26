@@ -614,6 +614,7 @@ on who is asking.
   "votes": [
     {
       "pollId": "question-id",
+      "votePrivacy": "anonymous",
       "question": "Should we open a garden?",
       "choices": ["Yes"],
       "ballot": [0],
@@ -628,6 +629,8 @@ on who is asking.
 
 Each entry is the current ballot for one poll: `ballot` holds the chosen
 positions in ascending order and `choices` their labels in the same order.
+The additive `votePrivacy` field is the poll's fixed setting, `"anonymous"` or
+`"public"`.
 `closesAt` is the poll's closing time or `null`, and `open` says whether it was
 open when this page was read. It has no account id, voter id, or confirmation code. Closed polls
 remain listed, and a changed answer moves to the top. `limit` defaults to 20

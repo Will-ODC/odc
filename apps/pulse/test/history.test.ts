@@ -8,7 +8,9 @@ const row = (pollId: string, poll = true): HistoryVote => ({
   pollId,
   castAt: AT,
   ballot: [0],
-  ...(poll ? { poll: { question: pollId, choices: ["Yes"] } } : {}),
+  ...(poll
+    ? { poll: { question: pollId, choices: ["Yes"], votePrivacy: "anonymous" } }
+    : {}),
 });
 
 test("a page whose rows' polls were all deleted is empty but keeps its cursor", () => {
@@ -26,7 +28,7 @@ test("a page whose rows' polls were all deleted is empty but keeps its cursor", 
   );
 });
 
-test("closesAt and open come from the poll; no cursor on the last page", () => {
+test("privacy, closesAt and open come from the poll; no cursor on the last page", () => {
   const closes = new Date("2026-08-09T11:00:00.000Z");
   const page = historyPage(
     [
@@ -34,7 +36,12 @@ test("closesAt and open come from the poll; no cursor on the last page", () => {
         pollId: "p",
         castAt: AT,
         ballot: [1],
-        poll: { question: "Q", choices: ["No"], closesAt: closes },
+        poll: {
+          question: "Q",
+          votePrivacy: "public",
+          choices: ["No"],
+          closesAt: closes,
+        },
       },
     ],
     20,
@@ -44,6 +51,7 @@ test("closesAt and open come from the poll; no cursor on the last page", () => {
     votes: [
       {
         pollId: "p",
+        votePrivacy: "public",
         question: "Q",
         choices: ["No"],
         ballot: [1],

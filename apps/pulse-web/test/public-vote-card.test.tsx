@@ -19,6 +19,7 @@ import type {
   RemoveVoteOutcome,
 } from "../src/api/types.js";
 import { SIGNED_IN_KEY } from "../src/flow/sign-in-return.js";
+import { SIGNED_OUT_KEY } from "../src/hooks/use-session.js";
 import { Conversation } from "../src/screens/Conversation.js";
 import { counted, poll, results, stubApi } from "./stub-api.js";
 
@@ -62,6 +63,9 @@ it("puts the public notice beside Submit before a signed-in voter casts or chang
   await user.click(submit);
   expect(cast).toHaveBeenNthCalledWith(1, question.id, [1], true);
   const list = await screen.findByRole("region", { name: "Public votes" });
+  expect(
+    within(list).getByRole("heading", { name: "Public votes", level: 3 }),
+  ).toBeTruthy();
   expect((await within(list).findByRole("listitem")).textContent).toBe(
     "Verified voter · Yes",
   );
@@ -307,7 +311,7 @@ it("describes anonymous votes without asking for a public list or sending acknow
   expect(publicVotes).not.toHaveBeenCalled();
 });
 
-it("shows neither voting action while the public poll's session is loading or unknown", async () => {
+it("keeps voting actions blank during the session check and offers a keyboard retry after it fails", async () => {
   let fail!: (reason: Error) => void;
   const me = vi.fn(
     () =>
@@ -328,13 +332,42 @@ it("shows neither voting action while the public poll's session is loading or un
       screen.queryByRole("link", { name: "Sign in with email to vote" }),
     ).toBeNull();
   };
+  const failure = "We couldn't check whether you're signed in.";
   expectNoAction();
+  expect(screen.queryByText(failure)).toBeNull();
+  expect(screen.queryByRole("button", { name: "Try again" })).toBeNull();
   await act(async () => fail(new Error("offline")));
   expectNoAction();
+  expect(await screen.findByText(failure)).toBeTruthy();
   me.mockResolvedValue(null);
-  fireEvent.focus(window);
+  screen.getByRole("button", { name: "Try again" }).focus();
+  await userEvent.setup().keyboard("{Enter}");
   await screen.findByRole("link", { name: "Sign in with email to vote" });
+  expect(screen.queryByText(failure)).toBeNull();
 });
+
+it.each(["anonymous", "public"] as const)(
+  "handles a sign-out in another tab when vote privacy is %s",
+  async (votePrivacy) => {
+    const me = vi.fn<() => Promise<Me | null>>(signedIn);
+    const current = { ...question, votePrivacy };
+    window.history.replaceState(null, "", `/?poll=${current.id}`);
+    render(<App api={stubApi({ me, poll: async () => current })} />);
+    await screen.findByRole("button", { name: "Account" });
+    await screen.findByRole("button", { name: "Submit" });
+
+    me.mockResolvedValue(null);
+    fireEvent(window, new StorageEvent("storage", { key: SIGNED_OUT_KEY }));
+
+    if (votePrivacy === "public") {
+      await screen.findByRole("link", { name: "Sign in with email to vote" });
+      expect(window.location.search).toBe(`?poll=${current.id}`);
+    } else {
+      await screen.findByLabelText("Your email");
+      expect(window.location.pathname).toBe("/sign-in");
+    }
+  },
+);
 
 it("restores the ballot and reloads My votes when sign-in arrives from another tab", async () => {
   const me = vi.fn<() => Promise<Me | null>>().mockResolvedValue(null);
@@ -350,9 +383,10 @@ it("restores the ballot and reloads My votes when sign-in arrives from another t
     votes: [],
     nextCursor: null,
   });
+  const getPoll = vi.fn(async () => question);
   const api = stubApi({
     me,
-    poll: async (id) => (id === question.id ? question : other),
+    poll: getPoll,
     myBallot,
     myVotes,
     results: async () => tally,
@@ -365,6 +399,7 @@ it("restores the ballot and reloads My votes when sign-in arrives from another t
     votes: [
       {
         pollId: other.id,
+        votePrivacy: "public",
         question: other.question,
         choices: ["Yes"],
         ballot: [1],
@@ -382,6 +417,7 @@ it("restores the ballot and reloads My votes when sign-in arrives from another t
     "li",
   )!;
   expect(await within(row).findByText("Public")).toBeTruthy();
+  expect(getPoll).not.toHaveBeenCalledWith(other.id);
   const restored = rail
     .getByRole("link", { name: question.question })
     .closest("li")!;
@@ -422,33 +458,36 @@ it("refreshes the account and ballot without deleting if the account switched", 
   expect(removeVote).not.toHaveBeenCalled();
 });
 
-it("reads back an unanswered removal and clears it when the ballot is gone", async () => {
-  const user = userEvent.setup();
-  const myBallot = vi
-    .fn<() => Promise<number[] | null>>()
-    .mockResolvedValue([1]);
-  const removeVote = vi.fn(async () => {
-    myBallot.mockResolvedValue(null);
-    throw new ApiError(0, "Connection lost.");
-  });
-  const api = stubApi({
-    me: signedIn,
-    myBallot,
-    removeVote,
-    poll: async () => question,
-    results: async () => (removeVote.mock.calls.length ? empty : tally),
-  });
-  render(<Conversation api={api} pollId={question.id} />);
-  await user.click(
-    await screen.findByRole("button", { name: "Remove my vote" }),
-  );
-  await user.click(screen.getByRole("button", { name: "Remove vote" }));
-  await screen.findByText("Your vote was removed.");
-  expect(myBallot).toHaveBeenCalledTimes(2);
-  expect(screen.queryByRole("region", { name: "Your answer" })).toBeNull();
-  const rail = within(screen.getByRole("navigation", { name: "My votes" }));
-  expect(rail.queryByRole("link", { name: question.question })).toBeNull();
-});
+it.each([0, 200])(
+  "reads back a removal whose reply was unreadable (status %i)",
+  async (status) => {
+    const user = userEvent.setup();
+    const myBallot = vi
+      .fn<() => Promise<number[] | null>>()
+      .mockResolvedValue([1]);
+    const removeVote = vi.fn(async () => {
+      myBallot.mockResolvedValue(null);
+      throw new ApiError(status, "Couldn't read the reply.");
+    });
+    const api = stubApi({
+      me: signedIn,
+      myBallot,
+      removeVote,
+      poll: async () => question,
+      results: async () => (removeVote.mock.calls.length ? empty : tally),
+    });
+    render(<Conversation api={api} pollId={question.id} />);
+    await user.click(
+      await screen.findByRole("button", { name: "Remove my vote" }),
+    );
+    await user.click(screen.getByRole("button", { name: "Remove vote" }));
+    await screen.findByText("Your vote was removed.");
+    expect(myBallot).toHaveBeenCalledTimes(2);
+    expect(screen.queryByRole("region", { name: "Your answer" })).toBeNull();
+    const rail = within(screen.getByRole("navigation", { name: "My votes" }));
+    expect(rail.queryByRole("link", { name: question.question })).toBeNull();
+  },
+);
 
 it("does not read or show the public list when the results have zero voters", async () => {
   const user = userEvent.setup();

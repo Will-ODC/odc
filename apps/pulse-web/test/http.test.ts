@@ -113,9 +113,10 @@ describe("reading this browser's vote history", () => {
     expect(calls[0]?.init.credentials).toBe("same-origin");
   });
 
-  it("reads each answer's positions and closing time", async () => {
+  it("reads each answer's positions, closing time and vote privacy", async () => {
     const entry = {
       pollId: "p1",
+      votePrivacy: "public",
       question: "Keep it free?",
       choices: ["Yes", "Maybe"],
       ballot: [0, 2],
