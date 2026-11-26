@@ -162,6 +162,32 @@ describe("posting with a picture", () => {
     expect(createPoll).not.toHaveBeenCalled();
   });
 
+  it("shows the missing question and picture description together and focuses the question", async () => {
+    const user = userEvent.setup();
+    const { createPoll } = show({
+      context: () => Promise.resolve(LATER),
+      uploadPicture: mockUpload(),
+    });
+    await screen.findByLabelText("Your question");
+    await choosePicture(user);
+    await screen.findByRole("button", { name: "Replace" });
+    button("Post question").focus();
+    await user.keyboard("{Enter}");
+    expect(screen.getByText("Write the question.")).toBeTruthy();
+    expect(
+      screen.getByText("Describe the picture before you post, or remove it."),
+    ).toBeTruthy();
+    expect(document.activeElement).toBe(field("Your question"));
+
+    await user.keyboard("Should we open a community garden?");
+    await user.click(button("Post question"));
+    expect(document.activeElement).toBe(descriptionField());
+    expect(
+      screen.getAllByText("Write this choice, or remove it."),
+    ).toHaveLength(2);
+    expect(createPoll).not.toHaveBeenCalled();
+  });
+
   it("keeps the draft and description when the server refuses the picture", async () => {
     const user = userEvent.setup();
     const createPoll = vi
@@ -213,6 +239,9 @@ describe("posting with a picture", () => {
     await user.click(button("Post question"));
     await user.click(button("Post it"));
     await screen.findByRole("link", { name: "Sign in to post" });
+    expect(
+      screen.getByText(/Choose your picture again after you sign in\./),
+    ).toBeTruthy();
     cleanup();
 
     const restored = show({ restoreDraft: true });
@@ -229,6 +258,8 @@ describe("posting with a picture", () => {
     await user.click(button("Post question"));
     expect(document.activeElement).toBe(descriptionField());
     expect(restored.createPoll).not.toHaveBeenCalled();
+    await user.clear(descriptionField());
+    expect(screen.queryByLabelText("Picture description")).toBeNull();
   });
 });
 
@@ -494,6 +525,26 @@ describe("choices", () => {
 });
 
 describe("closing time", () => {
+  it("rechecks the closing time on confirmation and focuses it if it expired", async () => {
+    const user = userEvent.setup();
+    let now = NOW;
+    const { createPoll } = show({
+      context: () => Promise.resolve(LATER),
+      now: () => now,
+    });
+    await fill(user);
+    await user.click(button("Change when it closes"));
+    await user.click(screen.getByRole("radio", { name: "At a time I pick" }));
+    const closing = screen.getByLabelText("Closing time");
+    await user.type(closing, "2026-10-20T12:01");
+    await user.click(button("Post question"));
+    now += 2 * 60_000;
+    await user.click(button("Post it"));
+    expect(screen.getByText("Pick a time after now.")).toBeTruthy();
+    expect(document.activeElement).toBe(closing);
+    expect(createPoll).not.toHaveBeenCalled();
+  });
+
   it("shows and focuses a kept closing time that expired during sign-in", async () => {
     const user = userEvent.setup();
     show({
@@ -837,6 +888,9 @@ describe("posting, confirmed in place", () => {
     expect(
       screen.getByText(/Your question was not posted. What you wrote is kept/),
     ).toBeTruthy();
+    expect(
+      screen.queryByText(/Choose your picture again after you sign in\./),
+    ).toBeNull();
     cleanup();
 
     // Back from that sign-in: the same words, kept only once, and the

@@ -375,7 +375,7 @@ describe("PictureField", () => {
     expect(screen.queryByRole("img")).toBeNull();
     expect(describePicture().value).toBe("Unfinished description");
     await user.click(button("Post"));
-    expect(describedBy(describePicture())[1]).toBe(orphan);
+    expect(describedBy(describePicture())).toEqual([orphan]);
     await finish();
     expect(screen.queryByRole("img")).toBeNull();
     await choose();
@@ -756,9 +756,10 @@ describe("PictureField", () => {
       "This picture is no longer available. Choose it again. Its description and the rest of your draft are kept.",
     ]);
     expect(describePicture().value).toBe("x");
+    expect(screen.queryByText(/^Required with a picture\./)).toBeNull();
     await user.click(button("Post"));
     expect(document.activeElement).toBe(describePicture());
-    expect(describedBy(describePicture())[1]).toBe(orphan);
+    expect(describedBy(describePicture())).toEqual([orphan]);
     expect(posted).not.toHaveBeenCalled();
     await user.keyboard("{End}{Backspace}");
     expect(
@@ -790,7 +791,7 @@ describe("PictureField", () => {
         screen.getByRole<HTMLInputElement>("textbox", { name: "Title" }).value,
       ).toBe("My draft");
       await user.click(button("Post"));
-      expect(describedBy(describePicture())[1]).toBe(orphan);
+      expect(describedBy(describePicture())).toEqual([orphan]);
       expect(posted).not.toHaveBeenCalled();
       await choose();
       await screen.findByRole("button", { name: "Replace" });

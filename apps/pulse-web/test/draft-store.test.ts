@@ -33,6 +33,38 @@ describe("a draft kept across sign-in", () => {
     expect(readDraft(store, 2)).toBeNull();
   });
 
+  it("keeps a picture description as written", () => {
+    const store = memory();
+    const pictureDescription = "  Raised beds in the morning  ";
+    keepDraft(DRAFT, store, 0, pictureDescription);
+    expect(readDraft(store, 1)).toEqual({ ...DRAFT, pictureDescription });
+  });
+
+  it("omits an empty picture description from storage", () => {
+    const store = memory();
+    keepDraft(DRAFT, store, 0, "");
+    expect(store.getItem("pulse.newPollDraft")).not.toContain(
+      '"pictureDescription"',
+    );
+    expect(readDraft(store, 1)).toEqual(DRAFT);
+  });
+
+  it.each([42, { text: "Raised beds" }, ""])(
+    "drops an invalid stored picture description %j and ignores one inside the draft",
+    (pictureDescription) => {
+      const store = memory();
+      store.setItem(
+        "pulse.newPollDraft",
+        JSON.stringify({
+          draft: { ...DRAFT, pictureDescription: "Tampered" },
+          pictureDescription,
+          at: 0,
+        }),
+      );
+      expect(readDraft(store, 1)).toEqual(DRAFT);
+    },
+  );
+
   /* #393 review: on a shared device the next person makes the promise. */
   it("never brings back a ticked promise, kept or written by hand", () => {
     const store = memory();

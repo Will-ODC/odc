@@ -67,7 +67,11 @@ export function readDraft(
       return null;
     if (!isDraft(draft)) return null;
     return {
-      ...draft,
+      question: draft.question,
+      choices: draft.choices,
+      method: draft.method,
+      closing: draft.closing,
+      attribution: draft.attribution,
       promised: false,
       ...(typeof pictureDescription === "string" && pictureDescription !== ""
         ? { pictureDescription }

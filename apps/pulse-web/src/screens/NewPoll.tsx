@@ -40,6 +40,8 @@ import "./NewPoll.css";
 export const ANONYMITY_NOTE =
   "Your name is hidden from other readers. Pulse keeps your account linked to this post to address abuse.";
 
+type KeptDraftNotice = { hasPictureDescription: boolean } | null;
+
 /**
  * Posting a question (ADR-0037).
  *
@@ -80,7 +82,7 @@ export function NewPoll({
     if (!restoreDraft) forgetDraft(browserStore());
   }, [restoreDraft]);
   /** Whether this page just kept a draft, to say so on the way to sign in. */
-  const [kept, setKept] = useState(false);
+  const [kept, setKept] = useState<KeptDraftNotice>(null);
   // The app's own bar, at every width, so a phone has a way home (operator
   // walkthrough, 2026-10-21). Signing out there shows the way back in.
   const mine = useMyVotes(api);
@@ -138,7 +140,7 @@ export function NewPoll({
   );
 }
 
-function SignedOut({ href, kept }: { href: string; kept: boolean }) {
+function SignedOut({ href, kept }: { href: string; kept: KeptDraftNotice }) {
   return (
     <>
       <h1 className="post__title">Post a question</h1>
@@ -150,6 +152,9 @@ function SignedOut({ href, kept }: { href: string; kept: boolean }) {
         <p className="post__lede" role="status">
           Your question was not posted. What you wrote is kept in this browser
           for an hour, and will be here after you sign in.
+          {kept.hasPictureDescription
+            ? " Choose your picture again after you sign in."
+            : null}
         </p>
       ) : null}
       <Button variant="primary" className="post__link-button" href={href}>
@@ -176,8 +181,8 @@ function PostForm({
   onPosted: (poll: Poll) => void;
   restoreDraft: boolean;
   onNeedPromise: () => void;
-  /** The session ended; `kept` says whether the draft was kept for after. */
-  onSignedOut: (kept: boolean) => void;
+  /** The session ended. Report what was kept for after sign-in. */
+  onSignedOut: (kept: KeptDraftNotice) => void;
 }) {
   // What was typed before a sign-in the post needed, when coming back from it.
   const [restored] = useState(() =>
@@ -195,8 +200,10 @@ function PostForm({
   }, [changeDescription]);
   useEffect(() => {
     // An upload can outlast edits elsewhere in the draft. Keep the latest text.
-    recoverDraft.current = () =>
-      onSignedOut(keepDraft(draft, browserStore(), now(), description));
+    recoverDraft.current = () => {
+      const kept = keepDraft(draft, browserStore(), now(), description);
+      onSignedOut(kept ? { hasPictureDescription: description !== "" } : null);
+    };
   }, [draft, description, now, onSignedOut]);
   useEffect(() => forgetDraft(browserStore()), []);
   const [shown, setShown] = useState<Problems>({ choices: [] });
@@ -271,18 +278,22 @@ function PostForm({
     }
   }
 
+  function validate(): boolean {
+    const problems = problemsOf(draft, needsPromise, now());
+    // Only the question comes before the picture in the form.
+    const pictureReady = picture.checkPost(!problems.question);
+    const draftInvalid = hasProblems(problems);
+    setShown(problems);
+    // A kept custom time can expire while signing in. Show its field and error.
+    if (problems.closing) setOpen((old) => ({ ...old, closing: true }));
+    focusProblem.current =
+      draftInvalid && (pictureReady || !!problems.question);
+    return pictureReady && !draftInvalid;
+  }
+
   /** The first press: check everything, and ask only when it can post. */
   function ready(): boolean {
-    if (!picture.checkPost()) return false;
-    const problems = problemsOf(draft, needsPromise, now());
-    setShown(problems);
-    if (hasProblems(problems)) {
-      // A kept custom time can expire while signing in. Its field and
-      // problem must be visible before the focus moves there.
-      if (problems.closing) setOpen((old) => ({ ...old, closing: true }));
-      focusProblem.current = true;
-      return false;
-    }
+    if (!validate()) return false;
     // Kept from an earlier press of this same question: an uncertain failure,
     // then Cancel, then Post question again must not post it twice.
     key.current ??= newKey();
@@ -290,8 +301,7 @@ function PostForm({
   }
 
   async function post() {
-    if (inFlight.current || key.current === null || !picture.checkPost())
-      return;
+    if (inFlight.current || key.current === null || !validate()) return;
     inFlight.current = true;
     setSending({ status: "sending" });
     try {
