@@ -519,6 +519,64 @@ test("only the contribution poster can replace or remove its picture", async (t)
   });
 });
 
+test(
+  "postgres: replacing a contribution picture erases its description from the creation retry record",
+  { skip: databaseSkip },
+  async (t) => {
+    const h = await harness(t, "postgres");
+    const pool = h.pool as Pool;
+    const initial = {
+      ...(await pendingPicture(h)),
+      alt: "Original garden beds",
+    };
+    const key = randomUUID();
+    const created = await postContribution(h, initial, key);
+    assert.equal(created.statusCode, 201, created.body);
+    const {
+      contribution: { id },
+    } = mutationSchema.parse(created.json());
+    const replacement = {
+      ...(await pendingPicture(h)),
+      alt: "New garden beds",
+    };
+    const replaced = await h.request({
+      method: "PUT",
+      url: `/api/contributions/${id}/image`,
+      headers: {
+        cookie: h.cookie("member"),
+        origin: ORIGIN,
+        "content-type": "application/json",
+      },
+      payload: replacement,
+    });
+    assert.equal(replaced.statusCode, 200, replaced.body);
+    const { rows } = await pool.query<{ canonical: string }>(
+      "select canonical from contribution_replay where voter_id = $1 and request_key = $2",
+      [ACCOUNTS.member.id, key],
+    );
+    assert.equal(rows.length, 1);
+    assert.equal(rows[0]!.canonical.includes(initial.alt), false);
+    const replayed = await postContribution(
+      h,
+      { ...initial, alt: ` ${initial.alt} ` },
+      key,
+    );
+    assert.equal(replayed.statusCode, 200, replayed.body);
+    const replay = mutationSchema.parse(replayed.json());
+    assert.equal(replay.replayed, true);
+    assert.equal(replay.contribution.id, id);
+    assert.deepEqual(
+      replay.contribution.image,
+      summarySchema.pick({ image: true }).parse(replaced.json()).image,
+    );
+    refused(
+      await postContribution(h, { ...initial, alt: replacement.alt }, key),
+      409,
+      "idempotency_conflict",
+    );
+  },
+);
+
 /** Upload a picture, attach it to a new poll, and return both ids. */
 async function posted(h: Harness, bytes?: Buffer) {
   const up = await h.upload("member", bytes ?? (await picture("jpeg")));
@@ -951,6 +1009,54 @@ test(
       [id],
     );
     assert.equal(audit.rows[0]?.n, 1);
+  },
+);
+
+test(
+  "postgres: a concurrent poll and contribution cannot both claim the same pending picture",
+  { skip: databaseSkip },
+  async (t) => {
+    const h = await harness(t, "postgres");
+    const pool = h.pool as Pool;
+    const pending = await pendingPicture(h);
+    const [poll, contribution] = await atBarrier(
+      pool,
+      "select 1 from voter where id = $1 for update",
+      [ACCOUNTS.member.id],
+      2,
+      () =>
+        Promise.all([
+          h.publish("member", pending),
+          postContribution(h, pending),
+        ]),
+    );
+    assert.deepEqual(
+      [poll.statusCode, contribution.statusCode].sort(),
+      [201, 422],
+    );
+    const expectedOwner =
+      poll.statusCode === 201
+        ? { kind: "poll", id: poll.json().poll!.id }
+        : {
+            kind: "contribution",
+            id: mutationSchema.parse(contribution.json()).contribution.id,
+          };
+    refused(
+      poll.statusCode === 422 ? poll : contribution,
+      422,
+      "image_unavailable",
+    );
+    const links = await pool.query(
+      "select 'poll' as kind, id::text from polls where image_id = $1 " +
+        "union all select 'contribution' as kind, id::text from contribution where image_id = $1",
+      [pending.id],
+    );
+    assert.deepEqual(links.rows, [expectedOwner]);
+    const owners = await pool.query(
+      "select owner_kind as kind, owner_id as id from image where id = $1",
+      [pending.id],
+    );
+    assert.deepEqual(owners.rows, [expectedOwner]);
   },
 );
 

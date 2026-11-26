@@ -1733,9 +1733,10 @@ Pulse stores a revision reference with each key to reconstruct the original
 response. A message key is separate: it is stored with that message, so it is
 scoped to the sender and the contribution, and is never compared with keys
 used on the other three routes.
-Identical retries return `{contribution,replayed:true}` with 200. Picture id
-and description are part of the canonical creation input. Replays keep the
-original contribution revision and project its current picture.
+Identical retries return `{contribution,replayed:true}` with 200. Pulse compares
+picture id and normalized description using a fingerprint in the creation retry
+record. Replays keep the original contribution revision and project its current
+picture.
 First writes return 201 with `replayed:false`. Changed inputs or targets using
 the same key return 409. Session generation is checked in the transaction under
 the account lock shared with sign-out. Mutation body limit is 32 KiB strict UTF-8.

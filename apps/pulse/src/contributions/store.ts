@@ -1,4 +1,4 @@
-import { randomUUID } from "node:crypto";
+import { createHash, randomUUID } from "node:crypto";
 import { pictureInput, type PictureInput } from "../images/input.js";
 import {
   publicImage,
@@ -139,7 +139,16 @@ export class ContributionsStore {
   ): Promise<MutationResult> {
     const input = parse(creationSchema, raw);
     const { image, ...fields } = input;
-    return this.mutate(actor, key, ["create", input], async (tx) => {
+    // Retry comparison survives removal without retaining the picture description.
+    const imageFingerprint =
+      image &&
+      createHash("sha256")
+        .update(JSON.stringify([image.id, image.alt]))
+        .digest("hex");
+    const replayInput = imageFingerprint
+      ? { ...fields, imageFingerprint }
+      : fields;
+    return this.mutate(actor, key, ["create", replayInput], async (tx) => {
       const now = this.clock();
       if (
         (await tx.recent(new Date(now.getTime() - 3_600_000).toISOString())) >=
