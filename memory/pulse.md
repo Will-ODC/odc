@@ -41,7 +41,7 @@ the same CI runs.
 ## Where it stands (2026-11-26)
 
 Per-PR history is in `git log origin/master -- apps/pulse apps/pulse-web`.
-**Open Pulse-related PRs:** none known besides this memory PR. Next Pulse order (2026-11-26): test-audit item 1, test-audit item 2, then #701 (contribution pictures); #296 (poll page picture); #685 step 4b (its deploy waits on 4a being live); the #714 nits. Next migration: **020** (019 merged in #706). New ticket #707 (open polls from the main page without a reload; no urgency). New ticket #711: `Contributions.test.tsx` "forgets a sign-in error once the same person has signed in again" is flaky in CI. #425 Next/Previous is on hold (operator, 2026-11-19).
+**Open Pulse-related PRs:** none known besides this memory PR. Next Pulse order (2026-11-26): test-audit item 2, then #701 (contribution pictures); #296 (poll page picture); #685 step 4b (its deploy waits on 4a being live); the #714 nits. Next migration: **020** (019 merged in #706). New ticket #707 (open polls from the main page without a reload; no urgency). #711 (`Contributions.test.tsx` "forgets a sign-in error once the same person has signed in again" flaky in CI) is fixed and closed in #723. #425 Next/Previous is on hold (operator, 2026-11-19).
 
 - **Sign-in (pillar 1) is built.** Magic-link sign-in and redeem; open sign-up
   with community as an optional label (ADR-0030); a community picker when an
@@ -161,9 +161,14 @@ public hostname, before inviting anyone.
    Try again falls to body; the header shows "Sign in" while the session is
    unknown; keep `role="status"` mounted on the account-changed region;
    `PublicVotes` `key={position}` needs a comment; a `use-session` comment.
-   Possible flake, not yet ticketed (test-audit item 1 adds a clearer failure message for it; the cause is still unknown): `main.test.ts`
+   Watch item, no ticket: `main.test.ts`
    `unexpected_startup_database_fault_does_not_log_personal_message_or_cause_28P01`
-   failed once locally in a full run and passed alone.
+   failed once locally in a full run and passed alone. Since #723 a failure
+   reports exit code, signal and stderr tail, so it is diagnosable; the cause
+   was not reproduced.
+   **Leftover #723 nits:** the `main.test` failure output could strip the
+   injected test markers from the stderr tail; the #711 test needs a comment
+   on why it no longer uses `switchableMe`.
    Rules (operator, 2026-11-15): the poll's setting decides and the voter
    never chooses; anonymous polls show nobody's details; visible polls need
    an email sign-in to vote and show the voter's profile name, which hiding
@@ -211,8 +216,10 @@ public hostname, before inviting anyone.
    operator approved items 1, 2 and 4 now, 3 later): item 4 is merged in #721
    (`9882ed7`), which adds to `odc-testing` risk-based cases beyond the
    required ones, a storage-test layer, real-socket scope and flaky-test
-   quarantine rules. Item 1 (queued): the #711 flaky test plus clearer failures
-   for the `main.test` startup case and the dev-proxy bind. Item 2 (queued):
+   quarantine rules. Item 1 is merged in #723 (`084217d`): the #711 flaky test now
+   defers session replies in order, the `main.test` startup cases report exit
+   code, signal and stderr tail (30 s allowance), and `dev-proxy.test.ts`
+   rejects with the bind error. Item 2 (next):
    the public-vote success path through the real web adapter, and an nginx log
    smoke test with a fake query and referrer marker. Item 3 (later): split the
    Conversation and Contributions tests and add a typed stub API.
