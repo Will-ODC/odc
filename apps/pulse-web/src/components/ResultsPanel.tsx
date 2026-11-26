@@ -2,6 +2,7 @@ import { Fragment, Suspense, lazy, useId, useState } from "react";
 import type { CSSProperties, ReactNode, RefObject } from "react";
 import type { ChoiceResult, Results } from "../api/types.js";
 import { percent, resultsChart } from "../flow/results-chart.js";
+import { votePrivacyNote } from "../flow/vote-card.js";
 import { Button } from "./Button.js";
 import { LoadBoundary } from "./LoadBoundary.js";
 import "./ResultsPanel.css";
@@ -172,10 +173,7 @@ export function ResultsPanel({
       ) : null}
       {results.votePrivacy ? (
         <p className="results__fine">
-          Votes are {results.votePrivacy}
-          {ended && results.votePrivacy === "public"
-            ? ". Votes are fixed after the poll closes."
-            : ""}
+          {votePrivacyNote(results.votePrivacy, ended)}
         </p>
       ) : null}
       {compact ? null : <p className="ballot__eyebrow">WHERE IT STANDS</p>}

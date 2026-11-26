@@ -71,7 +71,7 @@ it("puts the choices in the page under the question, with no drawer", async () =
   expect(within(voting).queryByRole("heading")).toBeNull();
   expect(within(voting).queryByRole("button", { name: "Close" })).toBeNull();
   expect(within(voting).getByRole("group", { name: p.question })).toBeTruthy();
-  expect(within(voting).getByText("Votes are anonymous")).toBeTruthy();
+  expect(within(voting).getByText("Votes are anonymous.")).toBeTruthy();
 });
 
 it("folds the answer into the You picked line, which takes focus and holds Change my answer", async () => {

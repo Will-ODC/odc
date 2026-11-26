@@ -48,6 +48,16 @@ describe("fitting a phone", () => {
     );
   });
 
+  it("stacks the vote button under a full-width privacy note below 700 px", () => {
+    const css = readFileSync(
+      new URL("../src/components/VoteCard.css", import.meta.url),
+      "utf8",
+    );
+    expect(css).toMatch(
+      /@media \(max-width: 699px\) \{\s*\.vote-card__foot \{[^}]*flex-direction: column;[^}]*\}\s*\.vote-card__foot > p \{[^}]*align-self: stretch;/,
+    );
+  });
+
   it("draws the sign-in frame's border inside its size", () => {
     expect(rule("components/ScreenFrame.css", ".screen")).toMatch(
       /box-sizing:\s*border-box/,

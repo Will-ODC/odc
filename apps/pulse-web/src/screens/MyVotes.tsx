@@ -4,6 +4,7 @@ import { AnsweredList } from "../components/AnsweredList.js";
 import { ViewState } from "../components/ViewState.js";
 import { LoadMore } from "../components/LoadMore.js";
 import { useMyVotes } from "../hooks/use-my-votes.js";
+import { usePublicVoteTags } from "../hooks/use-public-vote-tags.js";
 import { useSession } from "../hooks/use-session.js";
 import { pathOf } from "../flow/route.js";
 import { SiteBanner } from "../components/SiteBanner.js";
@@ -17,6 +18,12 @@ export function MyVotes({ api }: { api: PulseApi }) {
     onSignedOut: clear,
     onForgotten: clear,
   });
+  const tagged = usePublicVoteTags(
+    api,
+    session.status === "signedIn" && data.status === "ready"
+      ? data.value.votes
+      : undefined,
+  );
   const list = useRef<HTMLUListElement>(null);
 
   return (
@@ -47,7 +54,9 @@ export function MyVotes({ api }: { api: PulseApi }) {
           them here.
         </p>
         <ViewState data={data} onRetry={retry}>
-          {(page) => <AnsweredList votes={page.votes} listRef={list} />}
+          {(page) => (
+            <AnsweredList votes={tagged ?? page.votes} listRef={list} />
+          )}
         </ViewState>
         {data.status === "empty" ? (
           <p className="my-votes__more">

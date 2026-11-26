@@ -29,7 +29,7 @@ export function SignedIn({
       </span>
       <TwoPress
         label="Sign out"
-        question="Sign out on every device? Your answers still count, and public votes stay visible in the results."
+        question="Sign out on every device? This browser will stop showing your anonymous answers. They still count, and public votes stay in the results."
         confirmLabel="Sign out everywhere"
         pendingLabel="Signing out…"
         progress={progress}

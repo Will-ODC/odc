@@ -131,15 +131,19 @@ Start both dev servers and open [the public-vote demo](http://localhost:5173/?po
 The card shows the vote privacy before Submit and asks signed-out visitors to
 sign in with email. Results list public answers by current profile name or
 “Verified voter”, with more pages available when present. A signed-in voter
-can change or remove their public vote while the poll is open. The creation
-form still publishes anonymous-vote polls only.
+can change or remove their public vote while the poll is open. The card checks
+the account again before removing a vote and restores the current account’s
+answer if the account changed. Signing out keeps the public poll open and
+clears the saved answer from view. The creation form still publishes
+anonymous-vote polls only.
 
 ## Saved answers (#484)
 
 My votes (`/my-votes`) lists anonymous answers saved in this browser and public
-votes on the signed-in account, newest first. The vote page's My votes rail uses
-the same list and updates after a successful cast, change, or removal. Reopening
-an older answer keeps its position.
+votes on the signed-in account, newest first. Public votes carry a Public tag.
+The vote page's My votes rail uses the same list and updates after sign-in or a
+successful cast, change, or removal. Reopening an older answer keeps its
+position.
 Opening a rail question updates its URL, and Back returns to the previous
 question. Reloading restores the saved answer from the server; if that read
 takes more than 5 seconds, the question is asked unanswered rather than taking

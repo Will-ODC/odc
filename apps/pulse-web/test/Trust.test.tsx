@@ -75,6 +75,7 @@ describe("what the page says", () => {
       .map((block) => block.textContent)
       .join(" ");
     const words = text.match(/\S+/g) ?? [];
+    // The ADR-0048 decision 13 copy needed the room.
     expect(words.length).toBeLessThanOrEqual(500);
   });
 
@@ -103,6 +104,10 @@ describe("what the page says", () => {
     expect(today).toMatch(
       /Only Pulse.s operators can check the anonymous vote count today/,
     );
+    expect(today).toContain(
+      "Some polls show votes publicly. Each poll says which before you vote.",
+    );
+    expect(today).not.toMatch(/person who creates a poll chooses/i);
     expect(today).toMatch(/including AI apps/);
     expect(today).toMatch(/Your email address is never shown/);
     expect(today).toMatch(

@@ -49,7 +49,11 @@ export interface ClosedResults {
  * Focus follows the same pattern as `<VoteCard>`: into the panel on open,
  * back to the trigger on close, and nowhere on first render.
  */
-export function useClosedResults(api: PulseApi, pollId: string): ClosedResults {
+export function useClosedResults(
+  api: PulseApi,
+  pollId: string,
+  readBallot = true,
+): ClosedResults {
   const [showing, setShowing] = useState(false);
   const [data, setData] = useState<ViewData<Standing>>({ status: "loading" });
   const triggerRef = useRef<HTMLButtonElement>(null);
@@ -71,10 +75,12 @@ export function useClosedResults(api: PulseApi, pollId: string): ClosedResults {
     setData({ status: "loading" });
     Promise.all([
       api.results(pollId),
-      api.myBallot(pollId).then(
-        (ballot) => ballot ?? [],
-        () => [],
-      ),
+      readBallot
+        ? api.myBallot(pollId).then(
+            (ballot) => ballot ?? [],
+            () => [],
+          )
+        : [],
     ]).then(
       ([results, yourChoices]) => {
         if (request === latest.current) {
@@ -87,7 +93,7 @@ export function useClosedResults(api: PulseApi, pollId: string): ClosedResults {
         }
       },
     );
-  }, [api, pollId]);
+  }, [api, pollId, readBallot]);
 
   const open = useCallback(() => {
     setShowing(true);

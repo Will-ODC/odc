@@ -191,6 +191,7 @@ export interface PollPage {
 }
 
 export interface MyVote {
+  votePrivacy?: VotePrivacy;
   pollId: string;
   question: string;
   /** Labels of the chosen positions, in `ballot` order. */

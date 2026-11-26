@@ -39,6 +39,7 @@ export const SIGNED_OUT_KEY = "pulse.signedOut";
 
 /** How far a sign-out has got: the shape `TwoPress` renders. */
 export type SignOutProgress = TwoPressProgress;
+export type SessionDeparture = "signOut" | "sessionChanged";
 
 /** What one `recheck` found: who is signed in now, if it could say. */
 export type Recheck =
@@ -62,7 +63,7 @@ export type Recheck =
 export function useSession(
   api: PulseApi,
   after: {
-    onSignedOut?: () => void;
+    onSignedOut?: (departure: SessionDeparture) => void;
     onForgotten?: () => void;
     /**
      * Keep asking while signed in, so a switch from account A straight to
@@ -80,9 +81,10 @@ export function useSession(
   /**
    * Ask the server again who is signed in, now. Resolves with the account
    * this answer settled on (`null`: nobody), or `settled: false` when it
-   * failed or a newer question replaced it.
+   * failed or a newer question replaced it. Pass `true` to accept a
+   * signed-out reply even when this page normally only checks for sign-ins.
    */
-  recheck: () => Promise<Recheck>;
+  recheck: (acceptSignedOut?: boolean) => Promise<Recheck>;
 } {
   const [session, setSession] = useState<Session>({ status: "loading" });
   const [progress, setProgress] = useState<SignOutProgress>({
@@ -127,8 +129,8 @@ export function useSession(
    * also announces it through storage (`announceSignIn`), which reaches this
    * page even when it never lost focus, as with two windows side by side.
    *
-   * Only upgrades: a failed or signed-out answer leaves the session as it
-   * was, so a dropped connection never shows a signed-in person as signed out.
+   * Signed-in sessions are left alone by default. Failed reads never show a
+   * signed-in person as signed out.
    * With `recheckSignedIn` it also asks while signed in, takes a different
    * account's answer, and takes a definite signed-out answer (the person
    * signed out in another tab); the same account's answer changes nothing,
@@ -152,44 +154,47 @@ export function useSession(
    * the account it wrote for is no longer the one signed in. The same
    * question the focus and storage listeners below ask.
    */
-  const recheck = useCallback((): Promise<Recheck> => {
-    const ticket = nextIdentity();
-    return api.me().then(
-      (me): Recheck => {
-        if (!mounted.current || !isLatest(ticket)) return { settled: false };
-        if (me)
-          setSession((current) =>
-            current.status === "signedIn" && current.me.id === me.id
-              ? current
-              : { status: "signedIn", me },
-          );
-        // A definite "nobody" while signed in: signed out in another tab.
-        // A page showing one account's private data must stop showing it.
-        // With no sign-out announced, the session ran out (or was revoked):
-        // "expired", which the page may let the person recover from.
-        // While the first answer is still loading, this newer one has
-        // replaced it, so it settles the page: nobody is signed in.
-        else if (recheckSignedIn)
-          setSession((current) =>
-            current.status === "signedIn"
-              ? { status: "signedOut", ended: "expired" }
-              : current.status === "loading"
-                ? { status: "signedOut" }
-                : current,
-          );
-        return { settled: true, accountId: me?.id ?? null };
-      },
-      (): Recheck => {
-        // A failure changes nothing, except that a page still loading
-        // (its first answer replaced by this one) must not wait forever.
-        if (mounted.current && isLatest(ticket))
-          setSession((current) =>
-            current.status === "loading" ? { status: "unknown" } : current,
-          );
-        return { settled: false };
-      },
-    );
-  }, [api, recheckSignedIn]);
+  const recheck = useCallback(
+    (acceptSignedOut = recheckSignedIn): Promise<Recheck> => {
+      const ticket = nextIdentity();
+      return api.me().then(
+        (me): Recheck => {
+          if (!mounted.current || !isLatest(ticket)) return { settled: false };
+          if (me)
+            setSession((current) =>
+              current.status === "signedIn" && current.me.id === me.id
+                ? current
+                : { status: "signedIn", me },
+            );
+          // A definite "nobody" while signed in: signed out in another tab.
+          // A page showing one account's private data must stop showing it.
+          // With no sign-out announced, the session ran out (or was revoked):
+          // "expired", which the page may let the person recover from.
+          // While the first answer is still loading, this newer one has
+          // replaced it, so it settles the page: nobody is signed in.
+          else
+            setSession((current) =>
+              current.status === "signedIn" && acceptSignedOut
+                ? { status: "signedOut", ended: "expired" }
+                : current.status === "loading" || current.status === "unknown"
+                  ? { status: "signedOut" }
+                  : current,
+            );
+          return { settled: true, accountId: me?.id ?? null };
+        },
+        (): Recheck => {
+          // A failure changes nothing, except that a page still loading
+          // (its first answer replaced by this one) must not wait forever.
+          if (mounted.current && isLatest(ticket))
+            setSession((current) =>
+              current.status === "loading" ? { status: "unknown" } : current,
+            );
+          return { settled: false };
+        },
+      );
+    },
+    [api, recheckSignedIn],
+  );
   /*
    * A layout effect, not a passive one (#613): installed in the same
    * synchronous commit that first shows the signed-out controls, so no focus,
@@ -249,7 +254,7 @@ export function useSession(
       !(session.status === "signedOut" && session.ended === "here");
     if (session.status !== "loading" && session.status !== "unknown")
       previous.current = now;
-    if (left) departed.current?.();
+    if (left) departed.current?.("sessionChanged");
   }, [session]);
 
   // The hook's own guard, not only the button's: one request at a time.
@@ -274,7 +279,7 @@ export function useSession(
         if (signedIn) announceSignOut(browserStore());
         // A posting draft kept in this browser is not for whoever is next.
         forgetDraft(browserStore());
-        if (signedIn) onSignedOut?.();
+        if (signedIn) onSignedOut?.("signOut");
         else onForgotten?.();
       },
       () => {

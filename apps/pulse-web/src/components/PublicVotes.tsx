@@ -27,7 +27,7 @@ export function PublicVotes({
     retry();
   };
   return (
-    <section aria-labelledby={headingId}>
+    <section className="results__public-votes" aria-labelledby={headingId}>
       <h3 id={headingId} ref={heading} tabIndex={-1} className="results__title">
         Public votes
       </h3>

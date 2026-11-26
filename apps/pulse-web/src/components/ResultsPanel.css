@@ -295,3 +295,7 @@
     min-height: var(--touch);
   }
 }
+
+.results__public-votes .results__title {
+  margin-block-start: var(--step);
+}

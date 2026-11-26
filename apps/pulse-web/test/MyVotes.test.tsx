@@ -10,7 +10,7 @@ import userEvent from "@testing-library/user-event";
 import { afterEach, expect, it, vi } from "vitest";
 import { ApiError, type MyVote, type MyVotesPage } from "../src/api/types.js";
 import { App } from "../src/App.js";
-import { stubApi } from "./stub-api.js";
+import { poll, stubApi } from "./stub-api.js";
 
 afterEach(cleanup);
 
@@ -210,4 +210,23 @@ it("clears visible answers after forgetting this browser's votes", async () => {
     await screen.findByText("No votes saved in this browser yet."),
   ).toBeTruthy();
   expect(screen.queryByText("Your answer: Yes")).toBeNull();
+});
+
+it("tags only public rows with privacy read from their polls", async () => {
+  const api = stubApi({
+    me: async () => ({ id: "ada", email: "ada@example.test", community: null }),
+    myVotes: async () =>
+      page([vote(), vote({ pollId: "p2", question: "Public question?" })]),
+    poll: async (id) =>
+      poll({ id, votePrivacy: id === "p2" ? "public" : "anonymous" }),
+  });
+  render(<App api={api} route={{ kind: "myVotes" }} />);
+  const publicRow = (
+    await screen.findByRole("link", { name: "Public question?" })
+  ).closest("li")!;
+  const anonymousRow = screen
+    .getByRole("link", { name: "Keep it free?" })
+    .closest("li")!;
+  expect(await within(publicRow).findByText("Public")).toBeTruthy();
+  expect(within(anonymousRow).queryByText("Public")).toBeNull();
 });

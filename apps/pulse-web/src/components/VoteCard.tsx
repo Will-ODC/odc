@@ -71,6 +71,8 @@ export interface VoteCardProps {
   status: VoteCardStatus;
   privacyNote: ReactNode;
   signInToVoteHref?: string;
+  votingUnavailable?: boolean;
+  removed?: boolean;
   publicVotes?: ReactNode;
   answerActions?: ReactNode;
   collapsed: boolean;
@@ -125,6 +127,8 @@ export function VoteCard({
   status,
   privacyNote,
   signInToVoteHref,
+  votingUnavailable = false,
+  removed = false,
   publicVotes,
   answerActions,
   collapsed,
@@ -150,6 +154,7 @@ export function VoteCard({
   const note = useRef<HTMLDivElement>(null);
   const previous = useRef({ kind: status.kind, collapsed });
   const editable =
+    !votingUnavailable &&
     !signInToVoteHref &&
     (status.kind === "answerable" || status.kind === "failed");
   const allowed =
@@ -274,6 +279,7 @@ export function VoteCard({
           Change my answer
         </button>
       ) : null}
+      {answerActions}
       {trustHref ? (
         <a
           className="vote-card__info"
@@ -462,7 +468,6 @@ export function VoteCard({
               />
             )}
             {actions}
-            {answerActions}
           </div>
           {presentation === "card" ? (
             <p className="vote-card__note">{privacyNote}</p>
@@ -486,6 +491,7 @@ export function VoteCard({
                   value={choice.index}
                   checked={picked.includes(choice.index)}
                   aria-labelledby={`${id}-label-${choice.index}`}
+                  aria-disabled={signInToVoteHref ? true : undefined}
                   {...(choice.detail
                     ? { "aria-describedby": `${id}-detail-${choice.index}` }
                     : {})}
@@ -522,6 +528,7 @@ export function VoteCard({
                 or your community needs to confirm you first.
               </p>
             ) : null}
+            {removed ? <p role="status">Your vote was removed.</p> : null}
           </div>
           {checking ? (
             <p className="vote-card__note" role="status">
@@ -533,9 +540,11 @@ export function VoteCard({
             </p>
           ) : null}
           <footer className="vote-card__foot">
-            <p id={`${id}-privacy`} className="vote-card__note">
-              {privacyNote}
-            </p>
+            {privacyNote ? (
+              <p id={`${id}-privacy`} className="vote-card__note">
+                {privacyNote}
+              </p>
+            ) : null}
             {inPage && closable ? (
               <button
                 type="button"

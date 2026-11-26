@@ -36,3 +36,13 @@ it("closing copy does not invent a date", () => {
   expect(closingNote(poll({ closesAt: "invalid" }))).not.toContain("Invalid");
   expect(closingNote(poll({ open: false }))).toContain("closed");
 });
+
+it("keeps the deadline without inviting a visitor to change an answer", () => {
+  expect(closingNote(poll(), false)).toBe("");
+  const note = closingNote(
+    poll({ closesAt: "2026-12-01T18:00:00.000Z" }),
+    false,
+  );
+  expect(note).toMatch(/^Closes .+\.$/);
+  expect(note).not.toContain("you can change");
+});

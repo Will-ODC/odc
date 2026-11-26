@@ -1,4 +1,4 @@
-import type { PollMethod } from "../api/types.js";
+import type { PollMethod, VotePrivacy } from "../api/types.js";
 
 /** Selection and validation use choice indexes, never their display positions. */
 export function pickChoice(
@@ -63,4 +63,11 @@ export function countedNote(
   const status =
     confirmation === "confirmed" ? "Counted · confirmed by email" : "Counted";
   return changed ? `${status}. That replaces your earlier answer.` : status;
+}
+
+export function votePrivacyNote(privacy: VotePrivacy, ended = false): string {
+  if (privacy === "anonymous") return "Votes are anonymous.";
+  return ended
+    ? "Votes are public. This poll has closed, so votes are fixed."
+    : "Votes are public.";
 }

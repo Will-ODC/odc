@@ -10,7 +10,7 @@ import {
 import userEvent from "@testing-library/user-event";
 import { afterEach, beforeEach, describe, expect, it, vi } from "vitest";
 import { App } from "../src/App.js";
-import { poll, stubApi } from "./stub-api.js";
+import { poll, results, stubApi } from "./stub-api.js";
 
 afterEach(cleanup);
 beforeEach(() => {
@@ -102,6 +102,32 @@ describe("what the URL opens", () => {
     await user.click(bar.getByRole("button", { name: "Sign out everywhere" }));
     expect(await screen.findByLabelText("Your email")).toBeTruthy();
     expect(status.textContent).toBe("");
+  });
+
+  it("keeps the public poll open for signed-out visitors", async () => {
+    const user = userEvent.setup();
+    const publicPoll = poll({ votePrivacy: "public" });
+    window.history.replaceState(null, "", `/?poll=${publicPoll.id}`);
+    render(
+      <App
+        api={stubApi({
+          poll: async () => publicPoll,
+          me: async () => ME,
+          myBallot: async () => [1],
+          results: async () =>
+            results({ pollId: publicPoll.id, votePrivacy: "public" }),
+          signOut: async () => {},
+        })}
+      />,
+    );
+    await screen.findByRole("button", { name: "Remove my vote" });
+    const bar = within(screen.getAllByRole("banner")[0]!);
+    await user.click(bar.getByRole("button", { name: "Account" }));
+    await user.click(bar.getByRole("button", { name: "Sign out" }));
+    await user.click(bar.getByRole("button", { name: "Sign out everywhere" }));
+    await screen.findByRole("link", { name: "Sign in with email to vote" });
+    expect(screen.queryByRole("region", { name: "Your answer" })).toBeNull();
+    expect(window.location.search).toBe(`?poll=${publicPoll.id}`);
   });
 
   it("asks for a link when /sign-in carries no token", async () => {

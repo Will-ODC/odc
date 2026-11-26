@@ -12,7 +12,7 @@ export function usePublicVotes(api: PulseApi, results: Results | undefined) {
     [api, results],
   );
   return usePagedList({
-    enabled: results?.votePrivacy === "public",
+    enabled: results?.votePrivacy === "public" && results.voters > 0,
     fetchPage,
     emptyMessage: "No public votes yet. Check back for answers.",
     errorMessage: "We couldn't load the public votes. Try again.",
