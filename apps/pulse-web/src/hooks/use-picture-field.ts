@@ -1,4 +1,4 @@
-import { useEffect, useRef, useState } from "react";
+import { useCallback, useEffect, useRef, useState } from "react";
 import { ApiError, type PulseApi } from "../api/types.js";
 import {
   fileProblem,
@@ -219,25 +219,27 @@ export function usePictureField(onSignedOut: () => void, client: PulseApi) {
     descriptionProblem = "Describe the picture before you post, or remove it.";
   }
 
-  function checkPost(): boolean {
+  function checkPost(moveFocus = true): boolean {
     if (active.current || selection.status === "loading") {
       setProblem(waitForUpload);
-      setFocus({ target: "action" });
+      if (moveFocus) setFocus({ target: "action" });
       return false;
     }
     if (canPost) return true;
     setStatus("");
     setPostAttempted(true);
-    setFocus({
-      target: selection.status === "error" ? "action" : "description",
-    });
+    if (moveFocus) {
+      setFocus({
+        target: selection.status === "error" ? "action" : "description",
+      });
+    }
     return false;
   }
 
-  function changeDescription(value: string) {
+  const changeDescription = useCallback((value: string) => {
     setDescription(value);
-    if (selection.status !== "loading") setStatus("");
-  }
+    setStatus((current) => (current === UPLOADING_PICTURE ? current : ""));
+  }, []);
 
   return {
     selection,

@@ -11,6 +11,8 @@ import type { ReturnStore } from "./sign-in-return.js";
  * It holds only what the person typed for a public question. It is read
  * once, ignored after an hour like the sign-in return, and checked field by
  * field: anything this file did not write is dropped, never half-used.
+ * A picture's description is kept with the other text. Its file and pending
+ * upload belong to the original account's posting attempt.
  *
  * The purpose promise is never kept: on a shared device the next person to
  * sign in must make it themselves, or Post would record it for their account.
@@ -20,16 +22,23 @@ import type { ReturnStore } from "./sign-in-return.js";
 const KEY = "pulse.newPollDraft";
 export const DRAFT_LIFETIME_MS = 60 * 60 * 1000;
 
+type KeptDraft = Draft & { pictureDescription?: string };
+
 export function keepDraft(
   draft: Draft,
   store: ReturnStore | null,
   now: number = Date.now(),
+  pictureDescription = "",
 ): boolean {
   if (!store) return false;
   try {
     store.setItem(
       KEY,
-      JSON.stringify({ draft: { ...draft, promised: false }, at: now }),
+      JSON.stringify({
+        draft: { ...draft, promised: false },
+        ...(pictureDescription ? { pictureDescription } : {}),
+        at: now,
+      }),
     );
     return true;
   } catch {
@@ -42,17 +51,32 @@ export function keepDraft(
 export function readDraft(
   store: ReturnStore | null,
   now: number = Date.now(),
-): Draft | null {
+): KeptDraft | null {
   if (!store) return null;
   try {
     const raw = store.getItem(KEY);
     if (!raw) return null;
     const kept: unknown = JSON.parse(raw);
     if (typeof kept !== "object" || kept === null) return null;
-    const { draft, at } = kept as { draft?: unknown; at?: unknown };
+    const { draft, pictureDescription, at } = kept as {
+      draft?: unknown;
+      pictureDescription?: unknown;
+      at?: unknown;
+    };
     if (typeof at !== "number" || now - at > DRAFT_LIFETIME_MS || at > now)
       return null;
-    return isDraft(draft) ? { ...draft, promised: false } : null;
+    if (!isDraft(draft)) return null;
+    return {
+      question: draft.question,
+      choices: draft.choices,
+      method: draft.method,
+      closing: draft.closing,
+      attribution: draft.attribution,
+      promised: false,
+      ...(typeof pictureDescription === "string" && pictureDescription !== ""
+        ? { pictureDescription }
+        : {}),
+    };
   } catch {
     return null;
   }

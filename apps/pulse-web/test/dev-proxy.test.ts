@@ -9,7 +9,13 @@ it("preserves the browser Host through the real dev proxy for mailbox access", a
     response.statusCode = request.headers.host === expectedHost ? 200 : 403;
     response.end("mailbox");
   });
-  await new Promise<void>((resolve) => api.listen(0, "127.0.0.1", resolve));
+  await new Promise<void>((resolve, reject) => {
+    api.once("error", reject);
+    api.listen(0, "127.0.0.1", () => {
+      api.off("error", reject);
+      resolve();
+    });
+  });
   const address = api.address();
   if (!address || typeof address === "string")
     throw new Error("API did not bind");

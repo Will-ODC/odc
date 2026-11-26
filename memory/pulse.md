@@ -38,10 +38,10 @@ Repo discipline still applies: tests ship with the change, there is one small
 branch per change, named for its ticket (`pulse/<issue>-<short>`, #310), and
 the same CI runs.
 
-## Where it stands (2026-11-25)
+## Where it stands (2026-11-26)
 
 Per-PR history is in `git log origin/master -- apps/pulse apps/pulse-web`.
-**Open Pulse-related PRs:** none known besides this memory PR. Next migration: **020** (019 merged in #706). New ticket #707 (open polls from the main page without a reload; no urgency). New ticket #711: `Contributions.test.tsx` "forgets a sign-in error once the same person has signed in again" is flaky in CI. #425 Next/Previous is on hold (operator, 2026-11-19).
+**Open Pulse-related PRs:** none known. Next Pulse order (2026-11-26): #701 (contribution pictures: a server PR with migration 020 and poster-only image routes, then a web PR); #296 (show the poll's picture and context on the question page); #685 step 4b (its deploy waits on 4a being live); the #714 nits. Next migration: **020** (019 merged in #706). New ticket #707 (open polls from the main page without a reload; no urgency). #711 (`Contributions.test.tsx` "forgets a sign-in error once the same person has signed in again" flaky in CI) is fixed and closed in #723. #425 Next/Previous is on hold (operator, 2026-11-19).
 
 - **Sign-in (pillar 1) is built.** Magic-link sign-in and redeem; open sign-up
   with community as an optional label (ADR-0030); a community picker when an
@@ -80,7 +80,7 @@ Per-PR history is in `git log origin/master -- apps/pulse apps/pulse-web`.
   stores pictures in neutral `image`/`image_bytes` keyed by
   `owner_kind`/`owner_id` and serves them; nginx answers uploads over 10 MiB
   with the API's JSON 413; #594 checks sharp loads in the API image. Not
-  built (shared field #700 merged in #717): #580, #701, #427, #296, then #586 after #427. Pictures now
+  built (shared field #700 merged in #717; poll form #580 merged in #720): #701, #427, #296, then #586 after #427. Pictures now
   extend to every main-page item (operator 2026-11-18; ADR-0049).
 - **MCP:** public reads `get_poll`/`get_results` at `/api/mcp` (PR #323); #710 (`3e6bf64`) adds `get_public_votes`, passes `votePrivacy` through, and makes MCP work through nginx (production `publicOrigin` = `PULSE_WEB_ORIGIN`; nginx forwards `$http_host` and blanks `X-Pulse-Internal`). MCP does not work through the 5173 Vite proxy; `apps/pulse/README.md` should say so (small nit, not ticketed).
   ADR-0036 (voting from AI apps) is proposed only; discovery (#291) unbuilt.
@@ -161,9 +161,14 @@ public hostname, before inviting anyone.
    Try again falls to body; the header shows "Sign in" while the session is
    unknown; keep `role="status"` mounted on the account-changed region;
    `PublicVotes` `key={position}` needs a comment; a `use-session` comment.
-   Possible flake, not yet ticketed: `main.test.ts`
+   Watch item, no ticket: `main.test.ts`
    `unexpected_startup_database_fault_does_not_log_personal_message_or_cause_28P01`
-   failed once locally in a full run and passed alone.
+   failed once locally in a full run and passed alone. Since #723 a failure
+   reports exit code, signal and stderr tail, so it is diagnosable; the cause
+   was not reproduced.
+   **Leftover #723 nits:** the `main.test` failure output could strip the
+   injected test markers from the stderr tail; the #711 test needs a comment
+   on why it no longer uses `switchableMe`.
    Rules (operator, 2026-11-15): the poll's setting decides and the voter
    never chooses; anonymous polls show nobody's details; visible polls need
    an email sign-in to vote and show the voter's profile name, which hiding
@@ -176,17 +181,22 @@ public hostname, before inviting anyone.
    ADR-0049 (#704, `b614808`, accepted) extends it to contributions and
    discussion topics. Operator answers E1-E3 (2026-11-18): no upload shows the
    community default, then a tile; one picture per item; site-owner soft
-   delete covers topics. Order: #700 (one shared picture field; done: mockup `docs/mockups/pulse-picture-field-v1.html` merged in #713 (`53de813`), approved by the operator 2026-11-25, registered in `docs/mockups/CANDIDATE_CONTEXT.md`; component merged in #717 (`5885d9c`, 2026-11-26): `components/PictureField.tsx`, `hooks/use-picture-field.ts`, `hooks/picture-upload-errors.ts`, `uploadPicture` on `PulseApi`, and the `--red-wash` light token in `tokens.css`; no form adopts it yet; the issue's acceptance looks met, so it is ready to close, the operator closes it) → #580 (poll form) and #701 (contributions take a
+   delete covers topics. Order: #700 (one shared picture field; done: mockup `docs/mockups/pulse-picture-field-v1.html` merged in #713 (`53de813`), approved by the operator 2026-11-25, registered in `docs/mockups/CANDIDATE_CONTEXT.md`; component merged in #717 (`5885d9c`, 2026-11-26): `components/PictureField.tsx`, `hooks/use-picture-field.ts`, `hooks/picture-upload-errors.ts`, `uploadPicture` on `PulseApi`, and the `--red-wash` light token in `tokens.css`; the issue's acceptance looks met, so it is ready to close, the operator closes it; the poll form adopted it in #720) → #580 (poll form) and #701 (contributions take a
    picture) → #427 (thumbnails for every item in the main list), #296
    (picture on the question page), #586 after #427. #541 topics use #700.
-   **#580 must add CSP `img-src 'self' blob:` (ADR-0049) for local previews,
-   and check the hidden file input on iOS Safari.** Leftover #717 nits for the
-   adopting PR: sizes under 512 bytes show "0 KB" and sizes just under 1 MiB
-   show "1024 KB"; a long file name hides the size on phones; a Replace that
-   finishes in the background always takes focus (the mockup asks for it);
-   EXIF-rotated JPEGs may say "wide" for a tall photo; drop the unused
-   `createImageBitmap` stub in `PictureField.test.tsx`; add a hostile-JPEG
-   parser test; #499 must add a dark `--red-wash`.
+   **#580 merged in #720 (`f18804e`, 2026-11-26):** the poll form (`/new`)
+   uses the shared picture field: an optional picture under the question,
+   sent as `image { id, alt }` with `POST /api/polls`. Post and the
+   confirmation check the question and picture together. An expired picture
+   or session keeps the draft and the description (the draft store keeps only
+   the description string); the signed-out notice asks the person to choose
+   the picture again. The production CSP now has `img-src 'self' blob:`. The
+   poll page does not show the picture yet: that is #296 (open). Leftover
+   #720 nits: the "choose your picture again" line keys off the description,
+   not whether a picture existed (a 401 during upload before typing misses
+   it); the question error has no warning icon while the picture errors do
+   (unify the Field problem style); not checked on a device: the hidden file
+   input on iOS Safari. Leftover #717 nits still open (the size, file-name, stub and hostile-JPEG ones were fixed in #720): a Replace that finishes in the background always takes focus (the mockup asks for it); EXIF-rotated JPEGs may say "wide" for a tall photo; #499 must add a dark `--red-wash`.
 2. **Audits 2026-11-14 are complete; none changed product code:**
    [targeted tests](../docs/audits/pulse-tests-2026-11-14.md) → #613/#614;
    [simplicity](../docs/audits/pulse-simplicity-2026-11-14.md) → #616;
@@ -202,6 +212,22 @@ public hostname, before inviting anyone.
    A Claude review found the findings real but most tickets over-scoped; the
    operator-approved narrowed scope now heads each ticket body (2026-11-14),
    and the shared verifier gaps moved to contracts ticket #645.
+   **Pulse test audit 2026-11-26** (`docs/audits/pulse-tests-2026-11-26.md`;
+   operator approved items 1, 2 and 4 now, 3 later): item 4 is merged in #721
+   (`9882ed7`), which adds to `odc-testing` risk-based cases beyond the
+   required ones, a storage-test layer, real-socket scope and flaky-test
+   quarantine rules. Item 1 is merged in #723 (`084217d`): the #711 flaky test now
+   defers session replies in order, the `main.test` startup cases report exit
+   code, signal and stderr tail (30 s allowance), and `dev-proxy.test.ts`
+   rejects with the bind error. Item 2 is merged in #725 (`03a4cbc`): the
+   integration suite casts, lists and removes public votes through the real
+   `HttpPulseApi` adapter, and `apps/pulse-web/test/public-proxy-smoke.sh` (run
+   in the `pulse-images` CI job) sends random fake query and Referer markers
+   through nginx and fails if either reaches the access log, after checking the
+   marked request was logged. Item 3 (later): split the Conversation and
+   Contributions tests and add a typed stub API. Items 1, 2 and 4 are done.
+   **Leftover #725 nits:** the cookie check after a cast compares the jar rather
+   than asserting no Set-Cookie at all.
 3. **CI selection #619 merged (0d2828c).** `pulse-images` is not a
    required check yet. #612 merged in #671 (5afc07d, 2026-11-15): it reports
    on every PR ("no Pulse changes" in seconds otherwise) and runs the server's
