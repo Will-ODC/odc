@@ -33,7 +33,7 @@ Do not apply charter rules to `apps/**`, and do not relax them anywhere else.
   are merged; no Railway deploy yet. Still needed: the operator's Railway
   setup, DNS and the DEPLOY.md live checks. Anonymous or public-vote polls:
   ADR-0048 merged, steps 1-4a merged (#703, #706, #708, #710, #714), 4b next (#685; its deploy waits on 4a being live). Pictures extend
-  to every main-page item (operator 2026-11-18): ADR-0049 accepted; #700 mockup approved (#713), shared component next.
+  to every main-page item (operator 2026-11-18): ADR-0049 accepted; #700 mockup approved (#713) and shared component merged (#717); #580 adopts it next.
   → `memory/pulse.md`
 
 ## Load order
