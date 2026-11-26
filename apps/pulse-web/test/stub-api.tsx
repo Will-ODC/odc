@@ -126,6 +126,7 @@ export function stubApi(over: Partial<PulseApi> = {}): PulseApi {
     removeVote: unused("removeVote"),
     creationContext: unused("creationContext"),
     createPoll: unused("createPoll"),
+    uploadPicture: unused("uploadPicture"),
     ...over,
   } as PulseApi;
 }

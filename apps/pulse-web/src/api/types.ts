@@ -277,6 +277,7 @@ export interface PulseApi {
    * on a retry, so an uncertain failure never posts it twice.
    */
   createPoll(key: string, request: NewPollRequest): Promise<Poll>;
+  uploadPicture(file: File, signal: AbortSignal): Promise<string>;
 }
 
 /** One community an address may sign in to. Mirrors the server's entry. */
