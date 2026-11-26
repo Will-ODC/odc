@@ -41,7 +41,7 @@ the same CI runs.
 ## Where it stands (2026-11-26)
 
 Per-PR history is in `git log origin/master -- apps/pulse apps/pulse-web`.
-**Open Pulse-related PRs:** none known besides this memory PR. Next Pulse order (2026-11-26): test-audit item 2, then #701 (contribution pictures); #296 (poll page picture); #685 step 4b (its deploy waits on 4a being live); the #714 nits. Next migration: **020** (019 merged in #706). New ticket #707 (open polls from the main page without a reload; no urgency). #711 (`Contributions.test.tsx` "forgets a sign-in error once the same person has signed in again" flaky in CI) is fixed and closed in #723. #425 Next/Previous is on hold (operator, 2026-11-19).
+**Open Pulse-related PRs:** none known besides this memory PR. Next Pulse order (2026-11-26): #701 (contribution pictures; server half in flight with Codex on branch `pulse/701-contribution-picture-api`, migration 020, poster-only image routes; web half after it); #296 (show the poll's picture on the question page; starting next); #685 step 4b (its deploy waits on 4a being live); the #714 nits. Next migration: **020** (019 merged in #706). New ticket #707 (open polls from the main page without a reload; no urgency). #711 (`Contributions.test.tsx` "forgets a sign-in error once the same person has signed in again" flaky in CI) is fixed and closed in #723. #425 Next/Previous is on hold (operator, 2026-11-19).
 
 - **Sign-in (pillar 1) is built.** Magic-link sign-in and redeem; open sign-up
   with community as an optional label (ADR-0030); a community picker when an
@@ -219,10 +219,15 @@ public hostname, before inviting anyone.
    quarantine rules. Item 1 is merged in #723 (`084217d`): the #711 flaky test now
    defers session replies in order, the `main.test` startup cases report exit
    code, signal and stderr tail (30 s allowance), and `dev-proxy.test.ts`
-   rejects with the bind error. Item 2 (next):
-   the public-vote success path through the real web adapter, and an nginx log
-   smoke test with a fake query and referrer marker. Item 3 (later): split the
-   Conversation and Contributions tests and add a typed stub API.
+   rejects with the bind error. Item 2 is merged in #725 (`03a4cbc`): the
+   integration suite casts, lists and removes public votes through the real
+   `HttpPulseApi` adapter, and `apps/pulse-web/test/public-proxy-smoke.sh` (run
+   in the `pulse-images` CI job) sends random fake query and Referer markers
+   through nginx and fails if either reaches the access log, after checking the
+   marked request was logged. Item 3 (later): split the Conversation and
+   Contributions tests and add a typed stub API. Items 1, 2 and 4 are done.
+   **Leftover #725 nits:** the cookie check after a cast compares the jar rather
+   than asserting no Set-Cookie at all; the smoke could guard an empty marker.
 3. **CI selection #619 merged (0d2828c).** `pulse-images` is not a
    required check yet. #612 merged in #671 (5afc07d, 2026-11-15): it reports
    on every PR ("no Pulse changes" in seconds otherwise) and runs the server's
