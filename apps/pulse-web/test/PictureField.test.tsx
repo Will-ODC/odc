@@ -32,7 +32,6 @@ const orphan =
 const typeProblem =
   "Pulse cannot use this file. Choose a JPEG, PNG or WebP picture. GIF, SVG, HEIC and moving pictures are not accepted.";
 const uploadPicture = vi.fn<PulseApi["uploadPicture"]>();
-const bitmap = vi.fn<typeof createImageBitmap>();
 const createUrl = vi.fn();
 const revokeUrl = vi.fn();
 const api = stubApi({ uploadPicture });
@@ -202,10 +201,8 @@ function describedBy(control: HTMLElement) {
 
 beforeEach(() => {
   uploadPicture.mockReset().mockResolvedValue(firstId);
-  bitmap.mockReset();
   createUrl.mockReset().mockImplementation((file: File) => `blob:${file.name}`);
   revokeUrl.mockClear();
-  vi.stubGlobal("createImageBitmap", bitmap);
   vi.stubGlobal(
     "URL",
     class extends URL {
@@ -287,7 +284,6 @@ describe("PictureField", () => {
       photo,
       expect.any(AbortSignal),
     );
-    expect(bitmap).not.toHaveBeenCalled();
   });
 
   it("requires a non-blank description and counts trimmed Unicode code points", async () => {
@@ -379,7 +375,7 @@ describe("PictureField", () => {
     expect(screen.queryByRole("img")).toBeNull();
     expect(describePicture().value).toBe("Unfinished description");
     await user.click(button("Post"));
-    expect(describedBy(describePicture())[1]).toBe(orphan);
+    expect(describedBy(describePicture())).toEqual([orphan]);
     await finish();
     expect(screen.queryByRole("img")).toBeNull();
     await choose();
@@ -433,7 +429,6 @@ describe("PictureField", () => {
       expect(describedBy(chooseButton)).toEqual([hint, message]);
       expect(chooseButton.getAttribute("aria-invalid")).toBe("true");
       expect(document.activeElement).toBe(chooseButton);
-      expect(bitmap).not.toHaveBeenCalled();
       expect(uploadPicture).not.toHaveBeenCalled();
     },
   );
@@ -498,6 +493,20 @@ describe("PictureField", () => {
       genericDimensions,
     ],
     [
+      "JPEG with a long marker fill and an invalid segment length",
+      new File(
+        [
+          new Uint8Array([0xff, 0xd8]),
+          new Uint8Array(60 * 1024).fill(0xff),
+          new Uint8Array([0xe1, 0, 1]),
+          jpegFrame(9600, 300),
+        ],
+        "invalid-segment.jpg",
+        { type: "image/jpeg" },
+      ),
+      genericDimensions,
+    ],
+    [
       "JPEG SOF beyond the read limit",
       new File(
         [
@@ -526,19 +535,22 @@ describe("PictureField", () => {
       await screen.findByRole("button", { name: "Choose a picture" });
       expect(describedBy(button("Choose a picture"))).toEqual([hint, message]);
       expect(slice).toHaveBeenCalledExactlyOnceWith(0, 64 * 1024);
-      expect(bitmap).not.toHaveBeenCalled();
       slice.mockRestore();
     },
   );
 
-  it("shows a sub-MiB file size in KB", async () => {
+  it.each([
+    [48 * 1024, "48 KB"],
+    [511, "1 KB"],
+    [1024 * 1024 - 1, "1.0 MB"],
+  ])("shows the size of a %i-byte file as %s", async (bytes, size) => {
     const { choose } = renderForm();
     await choose(
-      new File([new Uint8Array(48 * 1024)], "small.jpg", {
+      new File([new Uint8Array(bytes)], "small.jpg", {
         type: "image/jpeg",
       }),
     );
-    expect(screen.getByText(/· 48 KB/)).toBeTruthy();
+    expect(screen.getByText(`· ${size}`)).toBeTruthy();
   });
 
   it("puts a decorative warning icon before each problem and in the failure badge", async () => {
@@ -744,9 +756,10 @@ describe("PictureField", () => {
       "This picture is no longer available. Choose it again. Its description and the rest of your draft are kept.",
     ]);
     expect(describePicture().value).toBe("x");
+    expect(screen.queryByText(/^Required with a picture\./)).toBeNull();
     await user.click(button("Post"));
     expect(document.activeElement).toBe(describePicture());
-    expect(describedBy(describePicture())[1]).toBe(orphan);
+    expect(describedBy(describePicture())).toEqual([orphan]);
     expect(posted).not.toHaveBeenCalled();
     await user.keyboard("{End}{Backspace}");
     expect(
@@ -778,7 +791,7 @@ describe("PictureField", () => {
         screen.getByRole<HTMLInputElement>("textbox", { name: "Title" }).value,
       ).toBe("My draft");
       await user.click(button("Post"));
-      expect(describedBy(describePicture())[1]).toBe(orphan);
+      expect(describedBy(describePicture())).toEqual([orphan]);
       expect(posted).not.toHaveBeenCalled();
       await choose();
       await screen.findByRole("button", { name: "Replace" });

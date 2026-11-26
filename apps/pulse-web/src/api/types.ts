@@ -73,6 +73,8 @@ export interface NewPollRequest {
   attribution: Attribution;
   /** Sent only on a first post, when the promise was just made. */
   purposeAcknowledgement?: string;
+  /** A pending upload and its required description. */
+  image?: { id: string; alt: string };
 }
 
 /**

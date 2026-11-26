@@ -154,7 +154,11 @@ export function attributionOf(draft: Draft): Attribution {
  * The request for a draft that has no problems. The promise is sent only
  * when the account has not made it yet: the server records it on success.
  */
-export function requestOf(draft: Draft, needsPromise: boolean): NewPollRequest {
+export function requestOf(
+  draft: Draft,
+  needsPromise: boolean,
+  image?: NewPollRequest["image"],
+): NewPollRequest {
   const at =
     draft.closing.kind === "chosen" ? chosenClose(draft.closing.local) : null;
   return {
@@ -164,6 +168,7 @@ export function requestOf(draft: Draft, needsPromise: boolean): NewPollRequest {
     ...(at ? { closesAt: at.toISOString() } : {}),
     attribution: attributionOf(draft),
     ...(needsPromise ? { purposeAcknowledgement: PURPOSE_VERSION } : {}),
+    ...(image ? { image } : {}),
   };
 }
 

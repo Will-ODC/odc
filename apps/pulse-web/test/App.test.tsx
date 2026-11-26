@@ -493,6 +493,7 @@ describe("a question just posted", () => {
     await user.click(await screen.findByLabelText("Your question"));
     await user.keyboard("Open a community garden?");
     await user.tab();
+    await user.tab();
     await user.keyboard("Yes");
     await user.tab();
     await user.keyboard("No");

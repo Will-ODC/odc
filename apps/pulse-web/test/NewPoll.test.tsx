@@ -14,6 +14,7 @@ import type {
   CreationContext,
   NewPollRequest,
   Poll,
+  PulseApi,
 } from "../src/api/types.js";
 import { ANONYMITY_NOTE, NewPoll } from "../src/screens/NewPoll.js";
 import { poll, stubApi } from "./stub-api.js";
@@ -22,6 +23,7 @@ beforeAll(installDialog);
 
 afterEach(() => {
   cleanup();
+  vi.unstubAllGlobals();
   globalThis.localStorage.clear();
 });
 
@@ -42,18 +44,24 @@ function show({
   keys = ["key-1", "key-2", "key-3"],
   now = () => NOW,
   restoreDraft = false,
+  uploadPicture,
 }: {
   context?: () => Promise<CreationContext>;
   createPoll?: Create;
   keys?: string[];
   now?: () => number;
   restoreDraft?: boolean;
+  uploadPicture?: PulseApi["uploadPicture"];
 } = {}) {
   const onPosted = vi.fn();
   const queue = [...keys];
   render(
     <NewPoll
-      api={stubApi({ creationContext: context, createPoll })}
+      api={stubApi({
+        creationContext: context,
+        createPoll,
+        ...(uploadPicture ? { uploadPicture } : {}),
+      })}
       signInHref="/sign-in?next=new"
       onPosted={onPosted}
       newKey={() => queue.shift() ?? "spare"}
@@ -72,10 +80,188 @@ async function fill(user: ReturnType<typeof userEvent.setup>) {
   await user.click(await screen.findByLabelText("Your question"));
   await user.keyboard("Should we open a community garden?");
   await user.tab();
+  expect(document.activeElement).toBe(button("Choose a picture"));
+  await user.tab();
   await user.keyboard("Yes");
   await user.tab(); // to choice 2 (no Remove buttons while there are two)
   await user.keyboard("No");
 }
+
+describe("posting with a picture", () => {
+  const id = "0b8f4c1e-5d7a-4e2b-9c3d-1a2b3c4d5e6f";
+  const description = "Raised beds in the morning";
+  const descriptionField = () =>
+    screen.getByRole<HTMLTextAreaElement>("textbox", {
+      name: "Picture description",
+    });
+
+  function mockUpload(upload: PulseApi["uploadPicture"] = async () => id) {
+    vi.stubGlobal(
+      "URL",
+      class extends URL {
+        static override createObjectURL = () => "blob:garden";
+        static override revokeObjectURL = () => {};
+      },
+    );
+    return vi.fn(upload);
+  }
+
+  async function choosePicture(user: ReturnType<typeof userEvent.setup>) {
+    const input = screen
+      .getByRole("group", { name: "Picture (optional)" })
+      .querySelector<HTMLInputElement>('input[type="file"]')!;
+    await user.upload(
+      input,
+      new File(["garden"], "garden.jpg", { type: "image/jpeg" }),
+    );
+  }
+
+  it("asks again after a picture edit and publishes the trimmed description", async () => {
+    const user = userEvent.setup();
+    const { createPoll } = show({
+      context: () => Promise.resolve(LATER),
+      uploadPicture: mockUpload(),
+    });
+    await fill(user);
+    await choosePicture(user);
+    await user.type(descriptionField(), "Garden");
+    await user.click(button("Post question"));
+    expect(button("Post it")).toBeTruthy();
+    await user.clear(descriptionField());
+    await user.type(descriptionField(), `  ${description}  `);
+    expect(screen.queryByRole("button", { name: "Post it" })).toBeNull();
+    await user.click(button("Post question"));
+    await user.click(button("Post it"));
+    expect(createPoll).toHaveBeenCalledExactlyOnceWith(
+      "key-2",
+      expect.objectContaining({ image: { id, alt: description } }),
+    );
+  });
+
+  it.each([
+    ["still uploading", () => new Promise<string>(() => {}), "Cancel upload"],
+    [
+      "upload failed",
+      () => Promise.reject(new ApiError(503, "Busy", "image_busy")),
+      "Try again",
+    ],
+    ["description is missing", () => Promise.resolve(id), "description"],
+  ])("refuses Post when the picture is %s", async (_case, upload, action) => {
+    const user = userEvent.setup();
+    const { createPoll } = show({
+      context: () => Promise.resolve(LATER),
+      uploadPicture: mockUpload(upload),
+    });
+    await fill(user);
+    await choosePicture(user);
+    await user.click(button("Post question"));
+    expect(document.activeElement).toBe(
+      action === "description" ? descriptionField() : button(action),
+    );
+    expect(screen.queryByRole("button", { name: "Post it" })).toBeNull();
+    expect(createPoll).not.toHaveBeenCalled();
+  });
+
+  it("shows the missing question and picture description together and focuses the question", async () => {
+    const user = userEvent.setup();
+    const { createPoll } = show({
+      context: () => Promise.resolve(LATER),
+      uploadPicture: mockUpload(),
+    });
+    await screen.findByLabelText("Your question");
+    await choosePicture(user);
+    await screen.findByRole("button", { name: "Replace" });
+    button("Post question").focus();
+    await user.keyboard("{Enter}");
+    expect(screen.getByText("Write the question.")).toBeTruthy();
+    expect(
+      screen.getByText("Describe the picture before you post, or remove it."),
+    ).toBeTruthy();
+    expect(document.activeElement).toBe(field("Your question"));
+
+    await user.keyboard("Should we open a community garden?");
+    await user.click(button("Post question"));
+    expect(document.activeElement).toBe(descriptionField());
+    expect(
+      screen.getAllByText("Write this choice, or remove it."),
+    ).toHaveLength(2);
+    expect(createPoll).not.toHaveBeenCalled();
+  });
+
+  it("keeps the draft and description when the server refuses the picture", async () => {
+    const user = userEvent.setup();
+    const createPoll = vi
+      .fn<Create>()
+      .mockRejectedValueOnce(new ApiError(422, "Expired", "image_unavailable"))
+      .mockResolvedValue(poll());
+    show({
+      context: () => Promise.resolve(LATER),
+      uploadPicture: mockUpload(),
+      createPoll,
+    });
+    await fill(user);
+    await choosePicture(user);
+    await user.type(descriptionField(), description);
+    await user.click(button("Post question"));
+    await user.click(button("Post it"));
+    const chooser = await screen.findByRole("button", {
+      name: "Choose a picture",
+      description: /This picture is no longer available/,
+    });
+    expect(document.activeElement).toBe(chooser);
+    expect(screen.queryByRole("img", { name: /Preview/ })).toBeNull();
+    expect(descriptionField().value).toBe(description);
+    expect((field("Choice 1") as HTMLInputElement).value).toBe("Yes");
+
+    await user.click(button("Post question"));
+    expect(document.activeElement).toBe(descriptionField());
+    expect(createPoll).toHaveBeenCalledOnce();
+    await user.clear(descriptionField());
+    await user.click(button("Post question"));
+    await user.click(button("Post it"));
+    const [key, request] = createPoll.mock.calls[1]!;
+    expect(key).toBe("key-2");
+    expect(request).not.toHaveProperty("image");
+    expect(request.question).toBe("Should we open a community garden?");
+    expect(request.choices).toEqual(["Yes", "No"]);
+  });
+
+  it("restores the description with the draft after a posting session expires", async () => {
+    const user = userEvent.setup();
+    const createPoll = vi
+      .fn<Create>()
+      .mockRejectedValue(new ApiError(401, "Sign in first.", "signed_out"));
+    show({ uploadPicture: mockUpload(), createPoll });
+    await fill(user);
+    await choosePicture(user);
+    await user.type(descriptionField(), description);
+    await user.click(screen.getByRole("checkbox"));
+    await user.click(button("Post question"));
+    await user.click(button("Post it"));
+    await screen.findByRole("link", { name: "Sign in to post" });
+    expect(
+      screen.getByText(/Choose your picture again after you sign in\./),
+    ).toBeTruthy();
+    cleanup();
+
+    const restored = show({ restoreDraft: true });
+    await screen.findByRole("textbox", { name: "Picture description" });
+    expect(descriptionField().value).toBe(description);
+    expect((field("Your question") as HTMLTextAreaElement).value).toBe(
+      "Should we open a community garden?",
+    );
+    expect((field("Choice 2") as HTMLInputElement).value).toBe("No");
+    expect(screen.queryByRole("img", { name: /Preview/ })).toBeNull();
+    expect((screen.getByRole("checkbox") as HTMLInputElement).checked).toBe(
+      false,
+    );
+    await user.click(button("Post question"));
+    expect(document.activeElement).toBe(descriptionField());
+    expect(restored.createPoll).not.toHaveBeenCalled();
+    await user.clear(descriptionField());
+    expect(screen.queryByLabelText("Picture description")).toBeNull();
+  });
+});
 
 describe("the four states", () => {
   it("says it is loading, then shows the form with where it posts", async () => {
@@ -339,6 +525,26 @@ describe("choices", () => {
 });
 
 describe("closing time", () => {
+  it("rechecks the closing time on confirmation and focuses it if it expired", async () => {
+    const user = userEvent.setup();
+    let now = NOW;
+    const { createPoll } = show({
+      context: () => Promise.resolve(LATER),
+      now: () => now,
+    });
+    await fill(user);
+    await user.click(button("Change when it closes"));
+    await user.click(screen.getByRole("radio", { name: "At a time I pick" }));
+    const closing = screen.getByLabelText("Closing time");
+    await user.type(closing, "2026-10-20T12:01");
+    await user.click(button("Post question"));
+    now += 2 * 60_000;
+    await user.click(button("Post it"));
+    expect(screen.getByText("Pick a time after now.")).toBeTruthy();
+    expect(document.activeElement).toBe(closing);
+    expect(createPoll).not.toHaveBeenCalled();
+  });
+
   it("shows and focuses a kept closing time that expired during sign-in", async () => {
     const user = userEvent.setup();
     show({
@@ -682,6 +888,9 @@ describe("posting, confirmed in place", () => {
     expect(
       screen.getByText(/Your question was not posted. What you wrote is kept/),
     ).toBeTruthy();
+    expect(
+      screen.queryByText(/Choose your picture again after you sign in\./),
+    ).toBeNull();
     cleanup();
 
     // Back from that sign-in: the same words, kept only once, and the

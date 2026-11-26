@@ -6,6 +6,7 @@ import { AppShell } from "../components/AppShell.js";
 import { Button } from "../components/Button.js";
 import { Choice } from "../components/Choice.js";
 import { Field } from "../components/Field.js";
+import { PictureField } from "../components/PictureField.js";
 import { ViewState } from "../components/ViewState.js";
 import { TwoPress } from "../components/TwoPress.js";
 import type { TwoPressProgress } from "../components/TwoPress.js";
@@ -28,6 +29,7 @@ import {
 import type { Draft, Problems } from "../flow/new-poll.js";
 import { useCreationContext } from "../hooks/use-creation-context.js";
 import { useMyVotes } from "../hooks/use-my-votes.js";
+import { usePictureField } from "../hooks/use-picture-field.js";
 import { useSession } from "../hooks/use-session.js";
 import { SiteBanner } from "../components/SiteBanner.js";
 import { browserStore } from "../flow/sign-in-return.js";
@@ -37,6 +39,8 @@ import "./NewPoll.css";
 /** ADR-0037's interim wording, until authorised moderator access exists. */
 export const ANONYMITY_NOTE =
   "Your name is hidden from other readers. Pulse keeps your account linked to this post to address abuse.";
+
+type KeptDraftNotice = { hasPictureDescription: boolean } | null;
 
 /**
  * Posting a question (ADR-0037).
@@ -78,7 +82,7 @@ export function NewPoll({
     if (!restoreDraft) forgetDraft(browserStore());
   }, [restoreDraft]);
   /** Whether this page just kept a draft, to say so on the way to sign in. */
-  const [kept, setKept] = useState(false);
+  const [kept, setKept] = useState<KeptDraftNotice>(null);
   // The app's own bar, at every width, so a phone has a way home (operator
   // walkthrough, 2026-10-21). Signing out there shows the way back in.
   const mine = useMyVotes(api);
@@ -136,7 +140,7 @@ export function NewPoll({
   );
 }
 
-function SignedOut({ href, kept }: { href: string; kept: boolean }) {
+function SignedOut({ href, kept }: { href: string; kept: KeptDraftNotice }) {
   return (
     <>
       <h1 className="post__title">Post a question</h1>
@@ -148,6 +152,9 @@ function SignedOut({ href, kept }: { href: string; kept: boolean }) {
         <p className="post__lede" role="status">
           Your question was not posted. What you wrote is kept in this browser
           for an hour, and will be here after you sign in.
+          {kept.hasPictureDescription
+            ? " Choose your picture again after you sign in."
+            : null}
         </p>
       ) : null}
       <Button variant="primary" className="post__link-button" href={href}>
@@ -174,14 +181,30 @@ function PostForm({
   onPosted: (poll: Poll) => void;
   restoreDraft: boolean;
   onNeedPromise: () => void;
-  /** The session ended; `kept` says whether the draft was kept for after. */
-  onSignedOut: (kept: boolean) => void;
+  /** The session ended. Report what was kept for after sign-in. */
+  onSignedOut: (kept: KeptDraftNotice) => void;
 }) {
   // What was typed before a sign-in the post needed, when coming back from it.
-  const [draft, setDraft] = useState<Draft>(
-    () =>
-      (restoreDraft ? readDraft(browserStore(), now()) : null) ?? emptyDraft(),
+  const [restored] = useState(() =>
+    restoreDraft ? readDraft(browserStore(), now()) : null,
   );
+  const [draft, setDraft] = useState<Draft>(() => restored ?? emptyDraft());
+  const restoredDescription = useRef(restored?.pictureDescription);
+  const recoverDraft = useRef<() => void>(() => {});
+  const picture = usePictureField(() => recoverDraft.current(), api);
+  const { changeDescription, description, image } = picture;
+  useEffect(() => {
+    const saved = restoredDescription.current;
+    restoredDescription.current = undefined;
+    if (saved !== undefined) changeDescription(saved);
+  }, [changeDescription]);
+  useEffect(() => {
+    // An upload can outlast edits elsewhere in the draft. Keep the latest text.
+    recoverDraft.current = () => {
+      const kept = keepDraft(draft, browserStore(), now(), description);
+      onSignedOut(kept ? { hasPictureDescription: description !== "" } : null);
+    };
+  }, [draft, description, now, onSignedOut]);
   useEffect(() => forgetDraft(browserStore()), []);
   const [shown, setShown] = useState<Problems>({ choices: [] });
   const [sending, setSending] = useState<TwoPressProgress>({ status: "idle" });
@@ -212,13 +235,26 @@ function PostForm({
   const form = useRef<HTMLFormElement>(null);
   const heading = useRef<HTMLHeadingElement>(null);
 
+  const pictureId = image?.id;
+  useEffect(() => {
+    // The picture and its description are part of the server's replay input.
+    if (key.current === null) return;
+    key.current = null;
+    setSending({ status: "idle" });
+    setAsked((n) => n + 1);
+  }, [pictureId, description]);
+
   /** Set when something needs fixing; acted on once it is drawn. */
   const focusProblem = useRef(false);
   useEffect(() => {
     if (focusProblem.current) {
       focusProblem.current = false;
       // To the first field that needs attention, which says what to do.
-      form.current?.querySelector<HTMLElement>("[aria-invalid=true]")?.focus();
+      form.current
+        ?.querySelector<HTMLElement>(
+          "[aria-invalid=true]:not(.picture-field *)",
+        )
+        ?.focus();
     }
     if (focusChoice.current === null) return;
     const at = focusChoice.current;
@@ -242,17 +278,22 @@ function PostForm({
     }
   }
 
+  function validate(): boolean {
+    const problems = problemsOf(draft, needsPromise, now());
+    // Only the question comes before the picture in the form.
+    const pictureReady = picture.checkPost(!problems.question);
+    const draftInvalid = hasProblems(problems);
+    setShown(problems);
+    // A kept custom time can expire while signing in. Show its field and error.
+    if (problems.closing) setOpen((old) => ({ ...old, closing: true }));
+    focusProblem.current =
+      draftInvalid && (pictureReady || !!problems.question);
+    return pictureReady && !draftInvalid;
+  }
+
   /** The first press: check everything, and ask only when it can post. */
   function ready(): boolean {
-    const problems = problemsOf(draft, needsPromise, now());
-    setShown(problems);
-    if (hasProblems(problems)) {
-      // A kept custom time can expire while signing in. Its field and
-      // problem must be visible before the focus moves there.
-      if (problems.closing) setOpen((old) => ({ ...old, closing: true }));
-      focusProblem.current = true;
-      return false;
-    }
+    if (!validate()) return false;
     // Kept from an earlier press of this same question: an uncertain failure,
     // then Cancel, then Post question again must not post it twice.
     key.current ??= newKey();
@@ -260,17 +301,30 @@ function PostForm({
   }
 
   async function post() {
-    if (inFlight.current || key.current === null) return;
+    if (inFlight.current || key.current === null || !validate()) return;
     inFlight.current = true;
     setSending({ status: "sending" });
     try {
       onPosted(
-        await api.createPoll(key.current, requestOf(draft, needsPromise)),
+        await api.createPoll(
+          key.current,
+          requestOf(draft, needsPromise, image),
+        ),
       );
     } catch (err) {
       if (err instanceof ApiError && err.status === 401) {
-        // Kept for the way back from signing in, which opens a new tab.
-        onSignedOut(keepDraft(draft, browserStore(), now()));
+        picture.reportPostError("signed_out");
+        return;
+      }
+      if (
+        err instanceof ApiError &&
+        err.status === 422 &&
+        err.code === "image_unavailable"
+      ) {
+        picture.reportPostError("image_unavailable");
+        key.current = null;
+        setSending({ status: "idle" });
+        setAsked((n) => n + 1);
         return;
       }
       if (err instanceof ApiError && err.code === "purpose_required") {
@@ -348,7 +402,7 @@ function PostForm({
           )}
         </Field>
 
-        {/* #296 adds an optional context paragraph, links and a photo here. */}
+        <PictureField field={picture} />
 
         <fieldset className="post__group">
           <legend className="field__label">Choices</legend>

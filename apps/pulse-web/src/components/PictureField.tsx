@@ -72,10 +72,12 @@ export function PictureField({ field }: { field: PictureFieldController }) {
 
   const uploading = selection.status === "loading";
   const failed = selection.status === "error";
+  const hasPicture = selection.status !== "empty";
+  const orphanDescription = !hasPicture && field.description !== "";
   // Keep the editor mounted if a first upload is refused while it has focus.
   const showDescription =
-    selection.status !== "empty" ||
-    field.description !== "" ||
+    hasPicture ||
+    orphanDescription ||
     (focus?.target === "focused-action" && descriptionFocused);
   const choose = () => input.current?.click();
   const controls = {
@@ -174,8 +176,12 @@ export function PictureField({ field }: { field: PictureFieldController }) {
           </div>
           <div className="picture-field__row">
             <span className="picture-field__file">
-              <b>{selection.picture.file.name}</b> ·{" "}
-              {pictureSize(selection.picture.file.size)}
+              <span className="picture-field__filename">
+                {selection.picture.file.name}
+              </span>
+              <span className="picture-field__size">
+                · {pictureSize(selection.picture.file.size)}
+              </span>
             </span>
             <div className="picture-field__actions">
               <Button
@@ -222,7 +228,7 @@ export function PictureField({ field }: { field: PictureFieldController }) {
           id={descriptionId}
           className="picture-field__description"
           label="Picture description"
-          hint={descriptionHint}
+          {...(orphanDescription ? {} : { hint: descriptionHint })}
           problem={undefined}
         >
           {(described) => (
@@ -232,12 +238,15 @@ export function PictureField({ field }: { field: PictureFieldController }) {
                 ref={description}
                 className="field__control"
                 aria-describedby={
-                  field.descriptionProblem
-                    ? `${described["aria-describedby"]} ${descriptionProblemId}`
-                    : described["aria-describedby"]
+                  [
+                    described["aria-describedby"],
+                    field.descriptionProblem ? descriptionProblemId : undefined,
+                  ]
+                    .filter(Boolean)
+                    .join(" ") || undefined
                 }
                 aria-invalid={Boolean(field.descriptionProblem)}
-                aria-required={selection.status !== "empty"}
+                aria-required={hasPicture}
                 value={field.description}
                 onBlur={() => setDescriptionFocused(false)}
                 onChange={(event) => {

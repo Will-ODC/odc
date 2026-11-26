@@ -13,7 +13,8 @@ const unavailableNow =
   "Pulse cannot take pictures right now. Try again later, or post without a picture. Everything else you wrote is kept.";
 
 export function pictureSize(bytes: number): string {
-  if (bytes < megabyte) return `${Math.round(bytes / 1024)} KB`;
+  const kilobytes = Math.max(1, Math.round(bytes / 1024));
+  if (kilobytes < 1024) return `${kilobytes} KB`;
   return `${(bytes / megabyte).toFixed(1)} MB`;
 }
 
