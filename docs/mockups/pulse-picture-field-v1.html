@@ -8,7 +8,7 @@
 <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
 <link rel="stylesheet" href="https://fonts.googleapis.com/css2?family=Inter:wght@400;500;600;700&display=swap">
 <!--
-  Pulse shared picture field, #700 (2026-11-25), for operator review.
+  Pulse shared picture field, #700, approved by the operator on 2026-11-25.
 
   One field that every posting form uses (ADR-0049 section 7): choose a
   picture, see a preview, describe it (required), Remove and Replace, an
@@ -18,7 +18,7 @@
 
   Rules it shows, and where they come from:
   - one picture per item, no galleries (ADR-0049 E2, section 2);
-  - JPEG, PNG or WebP only; no SVG, GIF, HEIC or moving pictures; at most
+  - JPEG, PNG or WebP only; no SVG, GIF, HEIC, AVIF or moving pictures; at most
     10 MiB, 40 megapixels and 8,000 px a side; at least 200 px on the shorter
     side (ADR-0047 section 3, kept by ADR-0049 section 2);
   - a description of 1 to 300 characters is required (ADR-0047 D2, section 5);
@@ -28,9 +28,8 @@
     (ADR-0047 section 11).
 
   Style: the light look of record, pulse-light-v1.html (#482). Like that deck,
-  this page commits to the light look in both host themes, because the light
-  look is what is being reviewed; the #499 dark tokens apply unchanged in the
-  app. One difference from that deck, on purpose: the focus ring is the green
+  this page commits to the approved light look in both host themes. The app
+  still uses the #499 dark tokens. The focus ring is the green
   of apps/pulse-web/src/styles/tokens.css (--focus: var(--green)), which is
   newer than the light deck's dark-gray ring.
 
@@ -202,7 +201,7 @@
 <body>
 <div class="doc">
   <header>
-    <span class="tag">#700 · mockup for operator review · illustrative data</span>
+    <span class="tag">#700 · approved by the operator on 2026-11-25 · illustrative data</span>
     <h1>One picture field for every posting form</h1>
     <p>The same field in the poll form and the contribution form, at desktop and phone width. One picture per post, a required description, and errors that never clear what you wrote. Discussion topics (#541) will use the same field.</p>
   </header>
@@ -227,7 +226,7 @@
 
   <section class="group" aria-labelledby="s-copy">
     <h2 id="s-copy">Every message the field can show</h2>
-    <p class="lede">Each string below is used exactly as written in the frames above. Limits are ADR-0047's, kept by ADR-0049.</p>
+    <p class="lede">The table lists the exact wording, including variants without a frame. Limits are ADR-0047's, kept by ADR-0049.</p>
     <div class="copy-wrap" data-render="copy"></div>
   </section>
 
@@ -245,6 +244,7 @@
       <ul>
         <li>A refused file, a failed upload or a busy server changes only this field. The question, choices, title, description and every other field stay exactly as typed.</li>
         <li>After a network or busy error the chosen picture and its description stay too, with Try again beside Remove.</li>
+        <li>If Post refuses an expired or otherwise unavailable picture, the picture clears and focus moves to Choose a picture. Its description and the rest of the draft stay.</li>
       </ul>
       <h3>Keyboard and screen readers</h3>
       <ul>
@@ -287,15 +287,19 @@
     descHint: "Required with a picture. Say what it shows, for people who cannot see it. Up to 300 characters.",
     descMissing: "Describe the picture before you post, or remove it.",
     descLong: "Keep the description to 300 characters. It is 312 now.",
+    exampleDescLong: "A hand-drawn plan of the new playground shows two swings, a slide and a sandpit beside the path. A low fence runs along the back, with a gate near the swings. A bench faces the sandpit. A second bench sits next to a tree near the path. The slide has a ladder on the left and a broad patch of grass at the bottom.",
     type: "Pulse cannot use this file. Choose a JPEG, PNG or WebP picture. GIF, SVG, HEIC and moving pictures are not accepted.",
     size: "This picture is 14.2 MB. Choose one of 10 MB or less.",
     small: "This picture is too small: 150 pixels on its shorter side. Choose one at least 200 pixels on each side.",
     big: "This picture is too large: 9,600 pixels wide. Choose one up to 8,000 pixels on each side and 40 megapixels in all.",
+    bigMegapixels: "This picture is too large: 49 megapixels. Choose one up to 40 megapixels and 8,000 pixels on each side.",
+    dimensionsUnknown: "This picture is too small or too large. Choose a different picture.",
     network: "The picture did not upload. Check your connection, then try again. Everything else you wrote is kept.",
     busy: "Pulse is busy with other pictures. Try again in a minute. Everything else you wrote is kept.",
     hourly: "You have uploaded 20 pictures in the last hour, the most allowed. Try again later, or post without a picture.",
     pending: "You have 5 pictures that are not posted yet, the most allowed at once. Unposted pictures clear after a day.",
-    waitPost: "Wait for the picture to finish uploading, or cancel it."
+    waitPost: "Wait for the picture to finish uploading, or cancel it.",
+    unavailable: "This picture is no longer available. Choose it again. Its description and the rest of your draft are kept."
   };
 
   /* ---------------- Illustrative pictures (inline SVG, obviously fake) ---- */
@@ -328,7 +332,7 @@
 
   /* ---------------- The one field ---------------- */
   // state: empty | uploading | chosen | missing | long | type | size | small |
-  //        big | network | busy | hourly | removed | replaced | waitPost
+  //        big | network | busy | hourly | removed | replaced | waitPost | unavailable
   // o: { id, img, file, desc, focus: "choose" | "desc" | "replace" }
   var n = 0;
   function problem(id, text) {
@@ -344,7 +348,7 @@
     h += '<span class="field__label" id="' + id + '-label">' + C.label + ' <span class="opt">' + C.optional + '</span></span>';
     h += '<p class="field__hint" id="' + id + '-hint">' + C.hint + '</p>';
 
-    var emptyStates = { empty: 1, type: 1, size: 1, small: 1, big: 1, hourly: 1, removed: 1 };
+    var emptyStates = { empty: 1, type: 1, size: 1, small: 1, big: 1, hourly: 1, removed: 1, unavailable: 1 };
     if (emptyStates[state]) {
       var bad = state !== "empty" && state !== "removed";
       var describedBy = id + "-hint" + (bad ? " " + id + "-problem" : "");
@@ -356,6 +360,7 @@
       if (bad) h += problem(id, C[state]);
       if (state === "removed") h += '<p class="pic-status" role="status">' + C.removed + '</p>';
       else h += '<p class="sr" role="status"></p>';
+      if (state === "unavailable") h += description(id, state, desc, o.focus);
       return h + '</div>';
     }
 
@@ -380,17 +385,19 @@
     else if (state === "chosen" && o.announce) h += '<p class="pic-status" role="status">' + C.uploaded + '</p>';
     else if (uploading) h += '<p class="sr" role="status">' + C.uploading + '</p>';
 
-    // The required description, inside the same group.
+    return h + description(id, state, desc, o.focus) + '</div>';
+  }
+
+  function description(id, state, desc, focus) {
     var dBad = state === "missing" || state === "long";
-    var dText = state === "missing" ? "" : (state === "long" ? desc + " The slide faces the morning sun, and the sandpit has a lid for winter nights." : desc);
-    var dFocus = o.focus === "desc" || state === "missing";
-    h += '<div class="field pic-desc">';
+    var dText = state === "missing" ? "" : desc;
+    var dFocus = focus === "desc" || state === "missing";
+    var h = '<div class="field pic-desc">';
     h += '<label class="field__label" for="' + id + '-desc">' + C.descLabel + '</label>';
     h += '<p class="field__hint" id="' + id + '-dhint">' + C.descHint + '</p>';
     h += '<div class="input tall' + (dBad ? " bad" : "") + (dFocus ? " focus" : "") + (dText ? "" : " muted") + '" id="' + id + '-desc" role="textbox" aria-multiline="true"' + (dBad ? ' aria-invalid="true"' : "") + '>' + (dText || "&nbsp;") + '</div>';
     if (state === "missing") h += problem(id + "-d", C.descMissing);
     if (state === "long") h += problem(id + "-d", C.descLong);
-    h += '</div>';
     return h + '</div>';
   }
 
@@ -449,8 +456,9 @@
     ["uploading", "<b>Uploading.</b> The upload starts as soon as a file is chosen. The local preview is shown dimmed; the description can be typed meanwhile."],
     ["chosen", "<b>Chosen and uploaded.</b> Preview, file name and size, Replace and Remove. The description appears with the picture and says it is required.", { announce: true, focus: "desc" }],
     ["missing", "<b>Description missing, after pressing Post.</b> The required-description rule: focus moves here and the post waits."],
-    ["long", "<b>Description too long.</b> 300 characters at most."],
+    ["long", "<b>Description too long.</b> 300 characters at most.", { desc: C.exampleDescLong }],
     ["waitPost", "<b>Post pressed while uploading.</b> The post waits; nothing else on the form changes."],
+    ["unavailable", "<b>Error: picture unavailable after pressing Post.</b> The picture clears. Choose it again. Its description and the rest of the draft stay.", { focus: "choose" }],
     ["type", "<b>Error: file type.</b> The file is refused before upload. Nothing was kept from it."],
     ["size", "<b>Error: file too big.</b> Checked in the browser, so a large file is refused at once."],
     ["small", "<b>Error: picture too small.</b> Under 200 pixels on its shorter side (checked by the server)."],
@@ -506,19 +514,24 @@
     ["Status", "removed", "After Remove."],
     ["Status", "replaced", "After Replace."],
     ["Preview alt", "previewAlt", "The preview image's text alternative."],
-    ["Label", "descLabel", "With a picture."],
-    ["Hint", "descHint", "With a picture."],
-    ["Error", "descMissing", "Post pressed with a picture and no description."],
-    ["Error", "descLong", "Over 300 characters (the number is the real count)."],
-    ["Error", "type", "Not JPEG, PNG or WebP, or animated (browser check, then the server's)."],
-    ["Error", "size", "Over 10 MB (the size is the real one)."],
-    ["Error", "small", "Under 200 pixels on the shorter side (the number is the real one)."],
-    ["Error", "big", "Over 8,000 pixels a side or 40 megapixels (the number is the real one)."],
+    ["Label", "descLabel", "With a picture, or when its description is kept after the picture becomes unavailable."],
+    ["Hint", "descHint", "With a picture, or when its description is kept after the picture becomes unavailable."],
+    ["Error", "descMissing", "Post pressed with a picture and zero code points after trimming. A description of only spaces counts as missing."],
+    ["Error", "descLong", "Over 300 code points after trimming. Show the actual trimmed count."],
+    ["Error", "type", "The browser checks first, then the server. Only still JPEG, PNG and WebP are accepted. AVIF is refused too."],
+    ["Error", "size", "The browser refuses files over 10,485,760 bytes. Shown sizes use binary units (1 MB = 1,048,576 bytes)."],
+    ["Error", "small", "The server sends image_dimensions without numbers. The browser measures the file locally to choose and fill this message when the shorter side is under 200 pixels."],
+    ["Error", "big", "The server sends image_dimensions without numbers. The browser measures the file locally to choose and fill this message when a side exceeds 8,000 pixels."],
+    ["Error", "bigMegapixels", "For image_dimensions, the browser measures the file locally to choose and fill this message when the area exceeds 40 megapixels and both sides are within the side limit (e.g. 7,000 × 7,000 pixels)."],
+    ["Error", "dimensionsUnknown", "For image_dimensions when the browser cannot measure the file locally."],
     ["Error", "network", "The upload failed or timed out."],
     ["Error", "busy", "The server answered busy (image_busy)."],
+    ["Error", "busy", "The upload returned 503 images_unavailable. Reuse the busy message."],
+    ["Error", "busy", "The upload returned 429 too_many_requests for the per-client request limit. Reuse the busy message."],
     ["Error", "hourly", "20 uploads in the last hour."],
     ["Error", "pending", "5 unposted pictures at once. Not drawn in a frame; same place as the hourly error."],
-    ["Error", "waitPost", "Post pressed while still uploading."]
+    ["Error", "waitPost", "Post pressed while still uploading."],
+    ["Error", "unavailable", "Post returned 422 image_unavailable. The pending picture expired after 24 hours, is unknown or was already used. Clear the picture and keep its description and the rest of the draft."]
   ];
   var t = '<table class="copy"><thead><tr><th>Kind</th><th>Text</th><th>When</th></tr></thead><tbody>';
   rows.forEach(function (r) {
