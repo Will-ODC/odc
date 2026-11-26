@@ -170,10 +170,7 @@
    */
 }
 
-/* The dark override uses the theme selector from #499. */
-[data-theme="dark"] {
-  --red-wash: #352321;
-}
+/* #499 adds the dark value for --red-wash. */
 
 @media (max-width: 699px) {
   :root {

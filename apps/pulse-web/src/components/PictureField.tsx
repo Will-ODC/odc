@@ -1,4 +1,4 @@
-import { useId, useLayoutEffect, useRef } from "react";
+import { useCallback, useId, useLayoutEffect, useRef, useState } from "react";
 import { PICTURE_TYPES, pictureSize } from "../hooks/picture-upload-errors.js";
 import {
   UPLOADING_PICTURE,
@@ -15,20 +15,68 @@ const descriptionHint =
   "Required with a picture. Say what it shows, for people who cannot see it. Up to 300 characters.";
 const ready = { status: "ready", value: null } as const;
 
+function WarningIcon() {
+  return (
+    <svg
+      className="picture-field__warning"
+      viewBox="0 0 16 16"
+      fill="none"
+      stroke="currentColor"
+      strokeWidth="1.6"
+      strokeLinecap="round"
+      aria-hidden="true"
+    >
+      <circle cx="8" cy="8" r="6.5" />
+      <path d="M8 4.6v4.2M8 11.2v.2" />
+    </svg>
+  );
+}
+
+function Problem({ id, message }: { id: string; message: string }) {
+  return (
+    <p className="field__problem picture-field__problem" id={id}>
+      <WarningIcon />
+      <span>{message}</span>
+    </p>
+  );
+}
+
 export function PictureField({ field }: { field: PictureFieldController }) {
   const id = useId();
   const input = useRef<HTMLInputElement>(null);
   const action = useRef<HTMLButtonElement>(null);
+  const detachedFocusedAction = useRef(false);
   const description = useRef<HTMLTextAreaElement>(null);
+  const [descriptionFocused, setDescriptionFocused] = useState(false);
   const { focus, problem, selection } = field;
+
+  const bindAction = useCallback((button: HTMLButtonElement | null) => {
+    // A refused file can unmount the focused Cancel button before effects run.
+    if (!button && action.current === document.activeElement)
+      detachedFocusedAction.current = true;
+    action.current = button;
+  }, []);
 
   useLayoutEffect(() => {
     if (focus?.target === "action") action.current?.focus();
     if (focus?.target === "description") description.current?.focus();
+    if (
+      focus?.target === "focused-action" &&
+      detachedFocusedAction.current &&
+      document.activeElement === document.body
+    ) {
+      action.current?.focus();
+    }
+    detachedFocusedAction.current = false;
   }, [focus]);
 
   const uploading = selection.status === "loading";
   const failed = selection.status === "error";
+  // Keep the editor mounted if a first upload is refused while it has focus.
+  const showDescription =
+    selection.status !== "empty" ||
+    field.description !== "" ||
+    (focus?.target === "focused-action" && descriptionFocused);
   const choose = () => input.current?.click();
   const controls = {
     empty: { label: "Choose a picture", onClick: choose },
@@ -38,6 +86,8 @@ export function PictureField({ field }: { field: PictureFieldController }) {
   }[selection.status];
   const hintId = `${id}-hint`;
   const problemId = `${id}-problem`;
+  const descriptionId = `${id}-description`;
+  const descriptionProblemId = `${descriptionId}-problem`;
   const actionProps = {
     onClick: controls.onClick,
     "aria-describedby": problem ? `${hintId} ${problemId}` : hintId,
@@ -49,6 +99,9 @@ export function PictureField({ field }: { field: PictureFieldController }) {
       className="picture-field field"
       role="group"
       aria-labelledby={`${id}-label`}
+      onFocus={() =>
+        setDescriptionFocused(document.activeElement === description.current)
+      }
     >
       <span className="field__label" id={`${id}-label`}>
         Picture <span className="picture-field__optional">(optional)</span>
@@ -85,7 +138,7 @@ export function PictureField({ field }: { field: PictureFieldController }) {
             </svg>
           </span>
           <Button
-            ref={action}
+            ref={bindAction}
             type="button"
             variant="secondary"
             {...actionProps}
@@ -111,7 +164,9 @@ export function PictureField({ field }: { field: PictureFieldController }) {
                 <span className="picture-field__badge" data-invalid={failed}>
                   {uploading ? (
                     <span className="viewstate__pulse" aria-hidden="true" />
-                  ) : null}
+                  ) : (
+                    <WarningIcon />
+                  )}
                   {uploading ? UPLOADING_PICTURE : "Not uploaded"}
                 </span>
               </div>
@@ -124,7 +179,7 @@ export function PictureField({ field }: { field: PictureFieldController }) {
             </span>
             <div className="picture-field__actions">
               <Button
-                ref={action}
+                ref={bindAction}
                 type="button"
                 variant="secondary"
                 size="small"
@@ -146,11 +201,7 @@ export function PictureField({ field }: { field: PictureFieldController }) {
           </div>
         </div>
       )}
-      {problem ? (
-        <p className="field__problem" id={problemId}>
-          {problem}
-        </p>
-      ) : null}
+      {problem ? <Problem id={problemId} message={problem} /> : null}
       <div className="visually-hidden">
         <ViewState
           data={ready}
@@ -166,27 +217,48 @@ export function PictureField({ field }: { field: PictureFieldController }) {
           {field.status}
         </p>
       ) : null}
-      {selection.status !== "empty" || field.description !== "" ? (
+      {showDescription ? (
         <Field
-          id={`${id}-description`}
+          id={descriptionId}
           className="picture-field__description"
           label="Picture description"
           hint={descriptionHint}
-          problem={field.descriptionProblem}
+          problem={undefined}
         >
           {(described) => (
-            <textarea
-              {...described}
-              id={`${id}-description`}
-              ref={description}
-              className="field__control"
-              aria-invalid={Boolean(field.descriptionProblem)}
-              aria-required={selection.status !== "empty"}
-              value={field.description}
-              onChange={(event) =>
-                field.changeDescription(event.currentTarget.value)
-              }
-            />
+            <>
+              <textarea
+                id={descriptionId}
+                ref={description}
+                className="field__control"
+                aria-describedby={
+                  field.descriptionProblem
+                    ? `${described["aria-describedby"]} ${descriptionProblemId}`
+                    : described["aria-describedby"]
+                }
+                aria-invalid={Boolean(field.descriptionProblem)}
+                aria-required={selection.status !== "empty"}
+                value={field.description}
+                onBlur={() => setDescriptionFocused(false)}
+                onChange={(event) => {
+                  const value = event.currentTarget.value;
+                  if (
+                    selection.status === "empty" &&
+                    value === "" &&
+                    document.activeElement === event.currentTarget
+                  ) {
+                    action.current?.focus();
+                  }
+                  field.changeDescription(value);
+                }}
+              />
+              {field.descriptionProblem ? (
+                <Problem
+                  id={descriptionProblemId}
+                  message={field.descriptionProblem}
+                />
+              ) : null}
+            </>
           )}
         </Field>
       ) : null}

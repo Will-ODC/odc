@@ -272,19 +272,34 @@ export class HttpPulseApi implements PulseApi {
   }
 
   async uploadPicture(file: File, signal: AbortSignal): Promise<string> {
-    const body = await this.#send<{ image?: unknown } | null>(
-      "POST",
-      "/poll-images",
-      file,
-      undefined,
-      { "content-type": file.type },
-      AbortSignal.any([signal, AbortSignal.timeout(60000)]),
+    const controller = new AbortController();
+    const abort = () => controller.abort(signal.reason);
+    if (signal.aborted) abort();
+    else signal.addEventListener("abort", abort, { once: true });
+
+    const mib = file.size / (1024 * 1024);
+    const timeout = setTimeout(
+      () => controller.abort(),
+      Math.min(60_000 + 30_000 * mib, 360_000),
     );
-    const id = stringField(body?.image, "id");
-    if (!id || !/^[0-9a-f]{8}(?:-[0-9a-f]{4}){3}-[0-9a-f]{12}$/.test(id)) {
-      throw new ApiError(201, "pulse sent a response the app couldn't read.");
+    try {
+      const body = await this.#send<{ image?: unknown } | null>(
+        "POST",
+        "/poll-images",
+        file,
+        undefined,
+        { "content-type": file.type },
+        controller.signal,
+      );
+      const id = stringField(body?.image, "id");
+      if (!id || !/^[0-9a-f]{8}(?:-[0-9a-f]{4}){3}-[0-9a-f]{12}$/.test(id)) {
+        throw new ApiError(201, "pulse sent a response the app couldn't read.");
+      }
+      return id;
+    } finally {
+      clearTimeout(timeout);
+      signal.removeEventListener("abort", abort);
     }
-    return id;
   }
 
   /**

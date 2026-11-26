@@ -1,14 +1,11 @@
 import { useEffect, useRef, useState } from "react";
-import { HttpPulseApi } from "../api/http.js";
-import { ApiError } from "../api/types.js";
+import { ApiError, type PulseApi } from "../api/types.js";
 import {
-  dimensionsProblem,
   fileProblem,
   measurePicture,
   uploadProblem,
 } from "./picture-upload-errors.js";
 
-const api = new HttpPulseApi();
 export const UPLOADING_PICTURE = "Uploading picture…";
 const waitForUpload = "Wait for the picture to finish uploading, or cancel it.";
 
@@ -29,19 +26,19 @@ const empty: Selection = { status: "empty" };
 
 /**
  * Keep this hook in the posting form so the draft can survive its sign-in
- * prompt. Call checkPost on submit, and pass image only when it returns true.
+ * prompt. Pass the form's api prop as client. Call checkPost on submit, and
+ * pass image only when it returns true.
  * Forward Post errors to reportPostError; signed_out also calls onSignedOut.
  */
-export function usePictureField(
-  onSignedOut: () => void,
-  client: Pick<HttpPulseApi, "uploadPicture"> = api,
-) {
+export function usePictureField(onSignedOut: () => void, client: PulseApi) {
   const [selection, setSelection] = useState<Selection>(empty);
   const [description, setDescription] = useState("");
   const [problem, setProblem] = useState<string>();
   const [status, setStatus] = useState("");
   const [postAttempted, setPostAttempted] = useState(false);
-  const [focus, setFocus] = useState<{ target: "action" | "description" }>();
+  const [focus, setFocus] = useState<{
+    target: "action" | "focused-action" | "description";
+  }>();
   const active = useRef<Attempt | null>(null);
   const urls = useRef(new Set<string>());
 
@@ -71,7 +68,10 @@ export function usePictureField(
     setPostAttempted(false);
   }
 
-  function reportPostError(code: "image_unavailable" | "signed_out") {
+  function reportPostError(
+    code: "image_unavailable" | "signed_out",
+    target: "action" | "focused-action" = "action",
+  ) {
     clearSelection();
     if (code === "signed_out") {
       onSignedOut();
@@ -80,7 +80,7 @@ export function usePictureField(
         "This picture is no longer available. Choose it again. Its description and the rest of your draft are kept.",
       );
     }
-    setFocus({ target: "action" });
+    setFocus({ target });
   }
 
   function fail(attempt: Attempt, message: string, retry = false) {
@@ -96,7 +96,9 @@ export function usePictureField(
     }
     setStatus("");
     setProblem(message);
-    setFocus({ target: "action" });
+    setFocus({
+      target: attempt.fallback.status === "ready" ? "action" : "focused-action",
+    });
   }
 
   async function upload(picture: Picture) {
@@ -114,23 +116,23 @@ export function usePictureField(
     setPostAttempted(false);
     setFocus({ target: "action" });
 
-    const dimensions = await measurePicture(picture.file);
-    if (active.current !== attempt) return;
-    const invalidDimensions = dimensionsProblem(dimensions);
-    if (invalidDimensions) {
-      active.current = null;
-      fail(attempt, invalidDimensions);
-      return;
-    }
-
     let id: string;
     try {
       id = await client.uploadPicture(picture.file, attempt.controller.signal);
     } catch (error) {
       if (active.current !== attempt) return;
+      const code = error instanceof ApiError ? error.code : undefined;
+      const dimensions =
+        code === "image_dimensions"
+          ? await measurePicture(picture.file)
+          : undefined;
+      if (active.current !== attempt) return;
       active.current = null;
-      if (error instanceof ApiError && error.code === "signed_out") {
-        reportPostError("signed_out");
+      if (code === "signed_out") {
+        reportPostError(
+          "signed_out",
+          attempt.fallback.status === "ready" ? "action" : "focused-action",
+        );
       } else {
         const refusal = uploadProblem(error, picture.file, dimensions);
         fail(attempt, refusal.message, refusal.retry);
@@ -186,7 +188,7 @@ export function usePictureField(
       setSelection(attempt.fallback);
       setProblem(undefined);
     }
-    if (attempt.fallback.status !== "error") {
+    if (attempt.fallback.status === "ready") {
       setDescription(attempt.description);
     }
     setStatus("");
@@ -224,6 +226,7 @@ export function usePictureField(
       return false;
     }
     if (canPost) return true;
+    setStatus("");
     setPostAttempted(true);
     setFocus({
       target: selection.status === "error" ? "action" : "description",

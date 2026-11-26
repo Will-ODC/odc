@@ -94,6 +94,22 @@
   border-color: var(--red);
 }
 
+.picture-field__problem {
+  display: flex;
+  align-items: flex-start;
+  gap: calc(var(--step) * 0.75);
+}
+
+.picture-field__warning {
+  inline-size: calc(var(--step) * 2);
+  block-size: calc(var(--step) * 2);
+  flex: none;
+}
+
+.picture-field__problem .picture-field__warning {
+  margin-block-start: calc(var(--step) / 4);
+}
+
 .picture-field__badge .viewstate__pulse {
   box-sizing: border-box;
   inline-size: calc(var(--step) * 2);

@@ -2,6 +2,8 @@ import { ApiError } from "../api/types.js";
 
 export const PICTURE_TYPES = "image/jpeg,image/png,image/webp";
 const megabyte = 1024 * 1024;
+const headerLimit = 64 * 1024;
+type Dimensions = { width: number; height: number };
 
 const unsupported =
   "Pulse cannot use this file. Choose a JPEG, PNG or WebP picture. GIF, SVG, HEIC and moving pictures are not accepted.";
@@ -11,6 +13,7 @@ const unavailableNow =
   "Pulse cannot take pictures right now. Try again later, or post without a picture. Everything else you wrote is kept.";
 
 export function pictureSize(bytes: number): string {
+  if (bytes < megabyte) return `${Math.round(bytes / 1024)} KB`;
   return `${(bytes / megabyte).toFixed(1)} MB`;
 }
 
@@ -23,20 +26,107 @@ export function fileProblem(file: File): string | undefined {
   if (file.size > 10 * megabyte) return sizeProblem(file.size);
 }
 
-export async function measurePicture(file: File) {
-  try {
-    const bitmap = await createImageBitmap(file);
-    const { width, height } = bitmap;
-    bitmap.close();
-    return { width, height };
-  } catch {
-    // A decoder failure leaves the content and dimensions checks to the API.
-    return undefined;
+function jpegDimensions(data: DataView): Dimensions | undefined {
+  // Skip length-prefixed segments (including EXIF) until a Start of Frame.
+  let offset = 2;
+  while (offset < data.byteLength && data.getUint8(offset) === 0xff) {
+    do {
+      offset++;
+    } while (offset < data.byteLength && data.getUint8(offset) === 0xff);
+    if (offset === data.byteLength) return;
+    const marker = data.getUint8(offset++);
+    if (marker === 0x01) continue; // TEM has no segment length.
+    if (marker < 0xc0 || (marker >= 0xd0 && marker <= 0xda)) return;
+    if (offset + 2 > data.byteLength) return;
+    const length = data.getUint16(offset);
+    if (length < 2 || offset + length > data.byteLength) return;
+
+    const isFrame =
+      marker <= 0xcf && marker !== 0xc4 && marker !== 0xc8 && marker !== 0xcc;
+    if (isFrame) {
+      if (length < 11) return;
+      return {
+        width: data.getUint16(offset + 5),
+        height: data.getUint16(offset + 3),
+      };
+    }
+    offset += length;
   }
 }
 
-export function dimensionsProblem(
-  dimensions: Awaited<ReturnType<typeof measurePicture>>,
+function webpDimensions(data: DataView): Dimensions | undefined {
+  if (data.byteLength < 20 || data.getUint32(8) !== 0x57454250) return;
+  const chunkSize = data.getUint32(16, true);
+  // Each supported layout puts its image or canvas header in the first chunk.
+  switch (data.getUint32(12)) {
+    case 0x56503820: // VP8: key-frame signature, then two 14-bit dimensions.
+      if (
+        chunkSize < 10 ||
+        data.byteLength < 30 ||
+        (data.getUint8(20) & 1) !== 0 ||
+        data.getUint16(23) !== 0x9d01 ||
+        data.getUint8(25) !== 0x2a
+      )
+        return;
+      return {
+        width: data.getUint16(26, true) & 0x3fff,
+        height: data.getUint16(28, true) & 0x3fff,
+      };
+    case 0x5650384c: {
+      // VP8L: signature, then two packed 14-bit values.
+      if (chunkSize < 5 || data.byteLength < 25 || data.getUint8(20) !== 0x2f)
+        return;
+      const packed = data.getUint32(21, true);
+      return {
+        width: (packed & 0x3fff) + 1,
+        height: ((packed >>> 14) & 0x3fff) + 1,
+      };
+    }
+    case 0x56503858: // VP8X: two little-endian 24-bit canvas values.
+      if (chunkSize !== 10 || data.byteLength < 30) return;
+      return {
+        width: (data.getUint32(23, true) >>> 8) + 1,
+        height: (data.getUint32(26, true) >>> 8) + 1,
+      };
+  }
+}
+
+function headerDimensions(data: DataView): Dimensions | undefined {
+  if (data.byteLength < 2) return;
+  if (data.getUint16(0) === 0xffd8) return jpegDimensions(data);
+  if (data.byteLength < 4) return;
+  if (data.getUint32(0) === 0x52494646) return webpDimensions(data); // RIFF
+  if (
+    data.byteLength >= 33 &&
+    data.getUint32(0) === 0x89504e47 &&
+    data.getUint32(4) === 0x0d0a1a0a &&
+    data.getUint32(8) === 13 &&
+    data.getUint32(12) === 0x49484452 // IHDR
+  ) {
+    return { width: data.getUint32(16), height: data.getUint32(20) };
+  }
+}
+
+export async function measurePicture(
+  file: File,
+): Promise<Dimensions | undefined> {
+  try {
+    const bytes = await new Promise<ArrayBuffer>((resolve, reject) => {
+      const reader = new FileReader();
+      reader.onload = () => resolve(reader.result as ArrayBuffer);
+      reader.onerror = () => reject(reader.error);
+      reader.readAsArrayBuffer(file.slice(0, headerLimit));
+    });
+    const dimensions = headerDimensions(new DataView(bytes));
+    if (dimensions && dimensions.width > 0 && dimensions.height > 0)
+      return dimensions;
+  } catch {
+    // A missing or unreadable header leaves the generic server refusal copy.
+  }
+}
+
+function dimensionsProblem(
+  dimensions: Dimensions | undefined,
 ): string | undefined {
   if (!dimensions) return;
   const { width, height } = dimensions;
@@ -59,7 +149,7 @@ export function dimensionsProblem(
 export function uploadProblem(
   error: unknown,
   file: File,
-  dimensions: Awaited<ReturnType<typeof measurePicture>>,
+  dimensions: Dimensions | undefined,
 ): { message: string; retry?: true } {
   switch (error instanceof ApiError ? error.code : undefined) {
     case "unsupported_image":

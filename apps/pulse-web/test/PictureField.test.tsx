@@ -10,9 +10,10 @@ import {
 } from "@testing-library/react";
 import userEvent from "@testing-library/user-event";
 import { afterEach, beforeEach, describe, expect, it, vi } from "vitest";
-import { HttpPulseApi } from "../src/api/http.js";
+import { ApiError, type PulseApi } from "../src/api/types.js";
 import { PictureField } from "../src/components/PictureField.js";
 import { usePictureField } from "../src/hooks/use-picture-field.js";
+import { stubApi } from "./stub-api.js";
 
 const firstId = "0b8f4c1e-5d7a-4e2b-9c3d-1a2b3c4d5e6f";
 const secondId = "1b8f4c1e-5d7a-4e2b-9c3d-1a2b3c4d5e6f";
@@ -30,12 +31,11 @@ const orphan =
   "Choose the picture again, or clear its description to post without a picture.";
 const typeProblem =
   "Pulse cannot use this file. Choose a JPEG, PNG or WebP picture. GIF, SVG, HEIC and moving pictures are not accepted.";
-const fetchUpload = vi.fn<typeof fetch>();
+const uploadPicture = vi.fn<PulseApi["uploadPicture"]>();
 const bitmap = vi.fn<typeof createImageBitmap>();
-const closeBitmap = vi.fn();
 const createUrl = vi.fn();
 const revokeUrl = vi.fn();
-const client = new HttpPulseApi("/api", fetchUpload);
+const api = stubApi({ uploadPicture });
 const describePicture = () =>
   screen.getByRole<HTMLTextAreaElement>("textbox", {
     name: "Picture description",
@@ -43,42 +43,96 @@ const describePicture = () =>
 const button = (name: string) => screen.getByRole("button", { name });
 const status = () => screen.getByRole("status").textContent;
 
-function success(id = firstId) {
-  return Response.json(
-    { image: { id, width: 800, height: 600 } },
-    { status: 201 },
-  );
+const tooSmall =
+  "This picture is too small: 150 pixels on its shorter side. Choose one at least 200 pixels on each side.";
+const tooWide =
+  "This picture is too large: 9,600 pixels wide. Choose one up to 8,000 pixels on each side and 40 megapixels in all.";
+const tooTall =
+  "This picture is too large: 9,600 pixels tall. Choose one up to 8,000 pixels on each side and 40 megapixels in all.";
+const tooManyPixels =
+  "This picture is too large: 49 megapixels. Choose one up to 40 megapixels and 8,000 pixels on each side.";
+const genericDimensions =
+  "This picture is too small or too large. Choose a different picture.";
+
+function jpegFrame(width: number, height: number) {
+  return new Uint8Array([
+    0xff,
+    0xc2,
+    0,
+    11,
+    8,
+    height >> 8,
+    height,
+    width >> 8,
+    width,
+    1,
+    1,
+    0x11,
+    0,
+  ]);
 }
 
-function refusal(status: number, error: string, retryAfter?: string) {
-  return Response.json(
-    { error, message: "Server wording" },
-    {
-      status,
-      headers: retryAfter === undefined ? {} : { "Retry-After": retryAfter },
-    },
-  );
+function pngHeader(width: number, height: number) {
+  const bytes = new Uint8Array(33);
+  bytes.set([
+    0x89, 0x50, 0x4e, 0x47, 13, 10, 26, 10, 0, 0, 0, 13, 73, 72, 68, 82,
+  ]);
+  const view = new DataView(bytes.buffer);
+  view.setUint32(16, width);
+  view.setUint32(20, height);
+  return bytes;
+}
+
+function webpHeader(tag: string, width: number, height: number) {
+  const size = tag === "VP8L" ? 5 : 10;
+  const bytes = new Uint8Array(20 + size + (size % 2));
+  const ascii = new TextEncoder();
+  bytes.set(ascii.encode("RIFF"), 0);
+  bytes.set(ascii.encode("WEBP" + tag), 8);
+  const view = new DataView(bytes.buffer);
+  view.setUint32(4, bytes.length - 8, true);
+  view.setUint32(16, size, true);
+  if (tag === "VP8 ") {
+    bytes.set([0x9d, 0x01, 0x2a], 23);
+    view.setUint16(26, width, true);
+    view.setUint16(28, height, true);
+  } else if (tag === "VP8L") {
+    bytes[20] = 0x2f;
+    view.setUint32(21, (width - 1) | ((height - 1) << 14), true);
+  } else {
+    bytes.set([width - 1, (width - 1) >> 8, (width - 1) >> 16], 24);
+    bytes.set([height - 1, (height - 1) >> 8, (height - 1) >> 16], 27);
+  }
+  return bytes;
+}
+
+function refusal(status: number, error: string, retryAfter?: number) {
+  return new ApiError(status, "Server wording", error, retryAfter);
 }
 
 function holdUpload() {
-  let finish!: (response: Response) => void;
-  fetchUpload.mockImplementationOnce(
+  let accept!: (id: string) => void;
+  let refuse!: (error: ApiError) => void;
+  uploadPicture.mockImplementationOnce(
     () =>
-      new Promise<Response>((resolve) => {
-        finish = resolve;
+      new Promise<string>((resolve, reject) => {
+        accept = resolve;
+        refuse = reject;
       }),
   );
-  return async (response = success()) => {
-    await waitFor(() => expect(finish).toBeTypeOf("function"));
-    await act(async () => finish(response));
+  return async (error?: ApiError) => {
+    await act(async () => {
+      if (error) refuse(error);
+      else accept(firstId);
+    });
   };
 }
 
 function renderForm() {
   const posted = vi.fn();
-  function Form() {
+  function Form({ api }: { api: PulseApi }) {
     const [signedOut, setSignedOut] = useState(false);
-    const field = usePictureField(() => setSignedOut(true), client);
+    const field = usePictureField(() => setSignedOut(true), api);
     return (
       <form
         onSubmit={(event) => {
@@ -116,7 +170,7 @@ function renderForm() {
       </form>
     );
   }
-  const view = render(<Form />);
+  const view = render(<Form api={api} />);
   const user = userEvent.setup();
   const fileInput = () =>
     view.container.querySelector<HTMLInputElement>('input[type="file"]')!;
@@ -147,13 +201,8 @@ function describedBy(control: HTMLElement) {
 }
 
 beforeEach(() => {
-  fetchUpload.mockReset().mockImplementation(async () => success());
-  bitmap.mockReset().mockResolvedValue({
-    width: 800,
-    height: 600,
-    close: closeBitmap,
-  } as ImageBitmap);
-  closeBitmap.mockClear();
+  uploadPicture.mockReset().mockResolvedValue(firstId);
+  bitmap.mockReset();
   createUrl.mockReset().mockImplementation((file: File) => `blob:${file.name}`);
   revokeUrl.mockClear();
   vi.stubGlobal("createImageBitmap", bitmap);
@@ -193,7 +242,7 @@ describe("PictureField", () => {
     expect(document.activeElement).toBe(button("Post"));
     await user.keyboard("{Enter}");
     expect(posted).toHaveBeenCalledWith(undefined);
-    expect(fetchUpload).not.toHaveBeenCalled();
+    expect(uploadPicture).not.toHaveBeenCalled();
   });
 
   it("previews the file during upload, refuses Post, and sends the trimmed attachment only on another Post", async () => {
@@ -234,19 +283,19 @@ describe("PictureField", () => {
       id: firstId,
       alt: "Two swings",
     });
-    expect(fetchUpload).toHaveBeenCalledExactlyOnceWith("/api/poll-images", {
-      method: "POST",
-      credentials: "same-origin",
-      headers: { "content-type": "image/jpeg" },
-      signal: expect.any(AbortSignal),
-      body: photo,
-    });
+    expect(uploadPicture).toHaveBeenCalledExactlyOnceWith(
+      photo,
+      expect.any(AbortSignal),
+    );
+    expect(bitmap).not.toHaveBeenCalled();
   });
 
   it("requires a non-blank description and counts trimmed Unicode code points", async () => {
     const { ready, user, posted } = renderForm();
-    await ready("   ");
+    await ready("");
+    expect(status()).toBe("Picture uploaded.");
     await user.click(button("Post"));
+    expect(screen.queryByText("Picture uploaded.")).toBeNull();
     const description = describePicture();
     expect(document.activeElement).toBe(description);
     expect(description.getAttribute("aria-invalid")).toBe("true");
@@ -295,7 +344,7 @@ describe("PictureField", () => {
 
   it("replaces the picture, keeps the description and focuses Replace", async () => {
     const finish = holdUpload();
-    fetchUpload.mockImplementationOnce(async () => success(secondId));
+    uploadPicture.mockResolvedValueOnce(secondId);
     const { choose, user, posted } = renderForm();
     await choose();
     await finish();
@@ -321,16 +370,16 @@ describe("PictureField", () => {
     const finish = holdUpload();
     const { choose, user } = renderForm();
     await choose();
-    await waitFor(() => expect(fetchUpload).toHaveBeenCalled());
-    const signal = fetchUpload.mock.calls[0]?.[1]?.signal;
+    expect(uploadPicture).toHaveBeenCalled();
+    const signal = uploadPicture.mock.calls[0]?.[1];
     await user.type(describePicture(), "Unfinished description");
     await user.click(button("Cancel upload"));
     expect(signal?.aborted).toBe(true);
     expect(document.activeElement).toBe(button("Choose a picture"));
     expect(screen.queryByRole("img")).toBeNull();
-    expect(
-      screen.queryByRole("textbox", { name: "Picture description" }),
-    ).toBeNull();
+    expect(describePicture().value).toBe("Unfinished description");
+    await user.click(button("Post"));
+    expect(describedBy(describePicture())[1]).toBe(orphan);
     await finish();
     expect(screen.queryByRole("img")).toBeNull();
     await choose();
@@ -346,7 +395,7 @@ describe("PictureField", () => {
       if (result === "invalid type") {
         await choose(new File(["gif"], "new.gif", { type: "image/gif" }));
         expect(status()).toBe(typeProblem);
-        expect(fetchUpload).toHaveBeenCalledTimes(1);
+        expect(uploadPicture).toHaveBeenCalledTimes(1);
       } else {
         const finish = holdUpload();
         await choose(replacement);
@@ -385,55 +434,11 @@ describe("PictureField", () => {
       expect(chooseButton.getAttribute("aria-invalid")).toBe("true");
       expect(document.activeElement).toBe(chooseButton);
       expect(bitmap).not.toHaveBeenCalled();
-      expect(fetchUpload).not.toHaveBeenCalled();
+      expect(uploadPicture).not.toHaveBeenCalled();
     },
   );
 
-  it.each([
-    [
-      150,
-      300,
-      "This picture is too small: 150 pixels on its shorter side. Choose one at least 200 pixels on each side.",
-    ],
-    [
-      9600,
-      300,
-      "This picture is too large: 9,600 pixels wide. Choose one up to 8,000 pixels on each side and 40 megapixels in all.",
-    ],
-    [
-      300,
-      9600,
-      "This picture is too large: 9,600 pixels tall. Choose one up to 8,000 pixels on each side and 40 megapixels in all.",
-    ],
-    [
-      7000,
-      7000,
-      "This picture is too large: 49 megapixels. Choose one up to 40 megapixels and 8,000 pixels on each side.",
-    ],
-  ])("refuses a %i × %i picture locally", async (width, height, message) => {
-    bitmap.mockResolvedValueOnce({
-      width,
-      height,
-      close: closeBitmap,
-    } as ImageBitmap);
-    const { choose } = renderForm();
-    await choose();
-    expect(describedBy(button("Choose a picture"))).toEqual([hint, message]);
-    expect(closeBitmap).toHaveBeenCalledOnce();
-    expect(fetchUpload).not.toHaveBeenCalled();
-  });
-
-  it("accepts exactly 10 MiB, a 200 pixel short side, and an 8,000 pixel side at 40 megapixels", async () => {
-    bitmap.mockResolvedValueOnce({
-      width: 200,
-      height: 8000,
-      close: closeBitmap,
-    } as ImageBitmap);
-    bitmap.mockResolvedValueOnce({
-      width: 5000,
-      height: 8000,
-      close: closeBitmap,
-    } as ImageBitmap);
+  it("accepts a file of exactly 10 MiB for upload", async () => {
     const { choose } = renderForm();
     await choose(
       new File([new Uint8Array(10_485_760)], "boundary.webp", {
@@ -443,7 +448,120 @@ describe("PictureField", () => {
     await screen.findByRole("button", { name: "Replace" });
     await choose(replacement);
     await waitFor(() => expect(status()).toMatch(/^Picture replaced/));
-    expect(fetchUpload).toHaveBeenCalledTimes(2);
+    expect(uploadPicture).toHaveBeenCalledTimes(2);
+  });
+
+  it.each([
+    [
+      "PNG IHDR",
+      new File([pngHeader(150, 300)], "small.png", { type: "image/png" }),
+      tooSmall,
+    ],
+    [
+      "JPEG SOF after metadata",
+      new File(
+        [
+          new Uint8Array([0xff, 0xd8, 0xff, 0xe1, 0, 5, 69, 120, 105, 0xff]),
+          jpegFrame(9600, 300),
+        ],
+        "wide.jpg",
+        { type: "image/jpeg" },
+      ),
+      tooWide,
+    ],
+    [
+      "WebP VP8",
+      new File([webpHeader("VP8 ", 300, 9600)], "tall.webp", {
+        type: "image/webp",
+      }),
+      tooTall,
+    ],
+    [
+      "WebP VP8L",
+      new File([webpHeader("VP8L", 7000, 7000)], "large.webp", {
+        type: "image/webp",
+      }),
+      tooManyPixels,
+    ],
+    [
+      "WebP VP8X, declared JPEG",
+      new File([webpHeader("VP8X", 9600, 300)], "wide.jpg", {
+        type: "image/jpeg",
+      }),
+      tooWide,
+    ],
+    [
+      "truncated PNG",
+      new File([pngHeader(150, 300).slice(0, 20)], "short.png", {
+        type: "image/png",
+      }),
+      genericDimensions,
+    ],
+    [
+      "JPEG SOF beyond the read limit",
+      new File(
+        [
+          new Uint8Array([0xff, 0xd8, 0xff, 0xe1, 0xff, 0xff]),
+          new Uint8Array(65_533),
+          jpegFrame(9600, 300),
+        ],
+        "metadata.jpg",
+        { type: "image/jpeg" },
+      ),
+      genericDimensions,
+    ],
+  ])(
+    "starts the upload before reading %s, then uses it for the server's dimension refusal",
+    async (_name, file, message) => {
+      const slice = vi.spyOn(file, "slice");
+      const finish = holdUpload();
+      const { choose } = renderForm();
+      await choose(file);
+      expect(uploadPicture).toHaveBeenCalledExactlyOnceWith(
+        file,
+        expect.any(AbortSignal),
+      );
+      expect(slice).not.toHaveBeenCalled();
+      await finish(refusal(422, "image_dimensions"));
+      await screen.findByRole("button", { name: "Choose a picture" });
+      expect(describedBy(button("Choose a picture"))).toEqual([hint, message]);
+      expect(slice).toHaveBeenCalledExactlyOnceWith(0, 64 * 1024);
+      expect(bitmap).not.toHaveBeenCalled();
+      slice.mockRestore();
+    },
+  );
+
+  it("shows a sub-MiB file size in KB", async () => {
+    const { choose } = renderForm();
+    await choose(
+      new File([new Uint8Array(48 * 1024)], "small.jpg", {
+        type: "image/jpeg",
+      }),
+    );
+    expect(screen.getByText(/· 48 KB/)).toBeTruthy();
+  });
+
+  it("puts a decorative warning icon before each problem and in the failure badge", async () => {
+    const { choose, user } = renderForm();
+    await choose(new File(["gif"], "new.gif", { type: "image/gif" }));
+    const fileProblem = screen.getByText(typeProblem, { selector: "span" });
+    expect(
+      fileProblem.previousElementSibling?.getAttribute("aria-hidden"),
+    ).toBe("true");
+
+    uploadPicture.mockRejectedValueOnce(refusal(503, "image_busy"));
+    await choose();
+    const badge = screen.getByText("Not uploaded");
+    expect(badge.firstElementChild?.getAttribute("aria-hidden")).toBe("true");
+
+    await user.type(describePicture(), "a");
+    await user.paste("a".repeat(300));
+    const descriptionProblem = screen.getByText(
+      "Keep the description to 300 characters. It is 301 now.",
+    );
+    expect(
+      descriptionProblem.previousElementSibling?.getAttribute("aria-hidden"),
+    ).toBe("true");
   });
 
   it.each([
@@ -469,7 +587,7 @@ describe("PictureField", () => {
     [
       429,
       "upload_limit",
-      "61",
+      61,
       "You have uploaded 20 pictures in the last hour, the most allowed. Try again in 2 minutes, or post without a picture.",
     ],
     [
@@ -481,8 +599,7 @@ describe("PictureField", () => {
   ])(
     "maps %i %s to the choose-again state (Retry-After %s)",
     async (code, slug, header, message) => {
-      bitmap.mockRejectedValueOnce(new Error("Decoder unavailable"));
-      fetchUpload.mockResolvedValueOnce(refusal(code, slug, header));
+      uploadPicture.mockRejectedValueOnce(refusal(code, slug, header));
       const { choose } = renderForm();
       await choose(
         new File([new Uint8Array(2_516_582)], "photo.jpg", {
@@ -506,18 +623,13 @@ describe("PictureField", () => {
     ],
     [503, "images_unavailable", unavailableNow],
     [429, "too_many_requests", unavailableNow],
-    [201, "malformed success", network],
   ])(
     "keeps the file and draft after %i %s, and retries the same file",
     async (code, slug, message) => {
       const { choose, user, posted } = renderForm();
       if (code === 0)
-        fetchUpload.mockRejectedValueOnce(new TypeError("Connection lost"));
-      else if (code === 201)
-        fetchUpload.mockResolvedValueOnce(
-          Response.json({ image: {} }, { status: 201 }),
-        );
-      else fetchUpload.mockResolvedValueOnce(refusal(code, slug));
+        uploadPicture.mockRejectedValueOnce(new TypeError("Connection lost"));
+      else uploadPicture.mockRejectedValueOnce(refusal(code, slug));
       await choose();
       const retry = await screen.findByRole("button", { name: "Try again" });
       expect(describedBy(retry)).toEqual([hint, message]);
@@ -530,9 +642,10 @@ describe("PictureField", () => {
       expect(posted).not.toHaveBeenCalled();
       await user.keyboard("{Enter}");
       await screen.findByRole("button", { name: "Replace" });
-      expect(
-        fetchUpload.mock.calls.map(([, options]) => options?.body),
-      ).toEqual([photo, photo]);
+      expect(uploadPicture.mock.calls.map(([file]) => file)).toEqual([
+        photo,
+        photo,
+      ]);
       expect(describePicture().value).toBe("Kept draft");
       expect(
         screen.getByRole<HTMLInputElement>("textbox", { name: "Title" }).value,
@@ -540,8 +653,75 @@ describe("PictureField", () => {
     },
   );
 
+  it.each([
+    ["Title", 503, "image_busy", "Pulse is busy", "Try again"],
+    ["Picture description", 503, "image_busy", "Pulse is busy", "Try again"],
+    ["Title", 415, "unsupported_image", typeProblem, "Choose a picture"],
+    [
+      "Picture description",
+      415,
+      "unsupported_image",
+      typeProblem,
+      "Choose a picture",
+    ],
+  ])(
+    "announces a failed first upload without moving the caret in %s (%i %s)",
+    async (name, code, slug, message, action) => {
+      const finish = holdUpload();
+      const { choose, user, posted } = renderForm();
+      await choose();
+      const editor = screen.getByRole<HTMLInputElement | HTMLTextAreaElement>(
+        "textbox",
+        { name },
+      );
+      await user.type(editor, "abc");
+      await user.keyboard("{ArrowLeft}");
+      const caret = editor.selectionStart;
+      await finish(refusal(code, slug));
+      expect(status()).toContain(message);
+      expect(screen.getByRole("status").getAttribute("aria-live")).toBe(
+        "polite",
+      );
+      expect(document.activeElement).toBe(editor);
+      expect(editor.selectionStart).toBe(caret);
+      if (action === "Try again") {
+        await user.click(button("Post"));
+        expect(document.activeElement).toBe(button(action));
+        expect(posted).not.toHaveBeenCalled();
+      }
+    },
+  );
+
+  it("transfers focus from Cancel to Choose when the server refuses a first file", async () => {
+    const finish = holdUpload();
+    const { choose } = renderForm();
+    await choose();
+    expect(document.activeElement).toBe(button("Cancel upload"));
+    await finish(refusal(415, "unsupported_image"));
+    expect(document.activeElement).toBe(button("Choose a picture"));
+    expect(status()).toBe(typeProblem);
+  });
+
+  it("keeps an empty description focused when a first file is refused", async () => {
+    const finish = holdUpload();
+    const { choose, user } = renderForm();
+    await choose();
+    await user.tab();
+    const editor = describePicture();
+    expect(document.activeElement).toBe(editor);
+    await finish(refusal(415, "unsupported_image"));
+    expect(document.activeElement).toBe(editor);
+    expect(editor.value).toBe("");
+    expect(status()).toBe(typeProblem);
+    await user.tab();
+    expect(document.activeElement).toBe(button("Post"));
+    expect(
+      screen.queryByRole("textbox", { name: "Picture description" }),
+    ).toBeNull();
+  });
+
   it("keeps the retryable problem and description if a retry is cancelled", async () => {
-    fetchUpload.mockRejectedValueOnce(new TypeError("Connection lost"));
+    uploadPicture.mockRejectedValueOnce(new TypeError("Connection lost"));
     const finish = holdUpload();
     const { choose, user } = renderForm();
     await choose();
@@ -556,20 +736,25 @@ describe("PictureField", () => {
 
   it("clears an expired image, keeps its description and blocks Post until the description is cleared", async () => {
     const { ready, user, posted } = renderForm();
-    await ready("Keep this description");
+    await ready("x");
     await user.click(button("Simulate expired picture"));
     expect(document.activeElement).toBe(button("Choose a picture"));
     expect(describedBy(button("Choose a picture"))).toEqual([
       hint,
       "This picture is no longer available. Choose it again. Its description and the rest of your draft are kept.",
     ]);
-    expect(describePicture().value).toBe("Keep this description");
+    expect(describePicture().value).toBe("x");
     await user.click(button("Post"));
     expect(document.activeElement).toBe(describePicture());
     expect(describedBy(describePicture())[1]).toBe(orphan);
     expect(posted).not.toHaveBeenCalled();
-    await user.clear(describePicture());
-    await user.click(button("Post"));
+    await user.keyboard("{End}{Backspace}");
+    expect(
+      screen.queryByRole("textbox", { name: "Picture description" }),
+    ).toBeNull();
+    expect(document.activeElement).toBe(button("Choose a picture"));
+    await user.tab();
+    await user.keyboard("{Enter}");
     expect(posted).toHaveBeenCalledExactlyOnceWith(undefined);
   });
 
@@ -609,9 +794,9 @@ describe("PictureField", () => {
     const finish = holdUpload();
     const { choose, unmount } = renderForm();
     await choose();
-    await waitFor(() => expect(fetchUpload).toHaveBeenCalled());
+    expect(uploadPicture).toHaveBeenCalled();
     unmount();
-    expect(fetchUpload.mock.calls[0]?.[1]?.signal?.aborted).toBe(true);
+    expect(uploadPicture.mock.calls[0]?.[1]?.aborted).toBe(true);
     expect(revokeUrl).toHaveBeenCalledWith("blob:playground.jpg");
     await finish();
   });
