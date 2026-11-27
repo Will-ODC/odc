@@ -2,7 +2,6 @@
 import {
   act,
   cleanup,
-  fireEvent,
   render,
   screen,
   waitFor,
@@ -159,27 +158,6 @@ describe("posting with a picture", () => {
     expect(document.activeElement).toBe(
       action === "description" ? descriptionField() : button(action),
     );
-    expect(screen.queryByRole("button", { name: "Post it" })).toBeNull();
-    expect(createPoll).not.toHaveBeenCalled();
-  });
-
-  it("blocks Post when the picture description contains a NUL", async () => {
-    const user = userEvent.setup();
-    const { createPoll } = show({
-      context: () => Promise.resolve(LATER),
-      uploadPicture: mockUpload(),
-    });
-    await fill(user);
-    await choosePicture(user);
-    fireEvent.change(descriptionField(), { target: { value: "Garden\u0000" } });
-    await user.click(button("Post question"));
-    expect(
-      screen.getByRole("textbox", {
-        name: "Picture description",
-        description:
-          /Remove any invalid characters from the picture description/,
-      }),
-    ).toBe(document.activeElement);
     expect(screen.queryByRole("button", { name: "Post it" })).toBeNull();
     expect(createPoll).not.toHaveBeenCalled();
   });

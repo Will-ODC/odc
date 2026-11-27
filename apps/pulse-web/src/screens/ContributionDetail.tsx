@@ -651,6 +651,14 @@ function ContributionPictureForm({
   onSignedOut: () => Promise<boolean>;
 }) {
   const [uploadSignedOut, setUploadSignedOut] = useState(false);
+  const [signInAttempt, retrySignIn] = useState(0);
+  const [needsPictureRefresh, setNeedsPictureRefresh] = useState(false);
+  async function refreshPicture() {
+    const detail = await client.detail(item.id).catch(() => undefined);
+    if (!detail) return;
+    onPictureChanged(detail.contribution.image);
+    setNeedsPictureRefresh(false);
+  }
   if (access === "expired" && uploadSignedOut) setUploadSignedOut(false);
   const picture = usePictureField(() => setUploadSignedOut(true), api, "save");
   const [removing, setRemoving] = useState<string | null>(null);
@@ -666,11 +674,14 @@ function ContributionPictureForm({
         onPictureChanged(await client.changePicture(item.id, change));
       } catch (error) {
         if (error instanceof ContributionsError) {
-          if (
+          if (error.code === "image_changed") {
+            setNeedsPictureRefresh(true);
+            await refreshPicture();
+            setRemoving(null);
+          } else if (
             error.status === 0 ||
             error.status >= 500 ||
-            error.code === "image_unavailable" ||
-            error.code === "image_changed"
+            error.code === "image_unavailable"
           ) {
             const attached = (await client.detail(item.id)).contribution.image;
             onPictureChanged(attached);
@@ -706,7 +717,14 @@ function ContributionPictureForm({
     return () => {
       live = false;
     };
-  }, [access, uploadSignedOut, errorStatus, onSignedOut, clearFailure]);
+  }, [
+    access,
+    uploadSignedOut,
+    errorStatus,
+    onSignedOut,
+    clearFailure,
+    signInAttempt,
+  ]);
   const signInAgain =
     access === "expired" || uploadSignedOut || save.errorStatus === 401;
   const canWrite = canManage && !signInAgain;
@@ -728,6 +746,7 @@ function ContributionPictureForm({
         : { status: "idle" };
   const showRemove =
     canWrite &&
+    !needsPictureRefresh &&
     postedPicture !== undefined &&
     (!save.pending || removingShown) &&
     picture.selection.status === "empty" &&
@@ -797,11 +816,31 @@ function ContributionPictureForm({
             {fieldError}
           </p>
         ) : null}
+        {needsPictureRefresh && !save.pending ? (
+          <Button
+            type="button"
+            variant="secondary"
+            onClick={() => void refreshPicture()}
+          >
+            Reload picture
+          </Button>
+        ) : null}
         {signInAgain ? (
-          <SignInAgain
-            href={`/sign-in?contribution=${encodeURIComponent(item.id)}`}
-            announce={false}
-          />
+          <>
+            <SignInAgain
+              href={`/sign-in?contribution=${encodeURIComponent(item.id)}`}
+              announce={false}
+            />
+            {access === "signedIn" ? (
+              <Button
+                type="button"
+                variant="secondary"
+                onClick={() => retrySignIn((n) => n + 1)}
+              >
+                Check sign-in again
+              </Button>
+            ) : null}
+          </>
         ) : null}
       </form>
     </details>
