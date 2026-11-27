@@ -461,3 +461,49 @@ it("keeps removal blocked for a conflicted public poll after signing out and bac
   ).toBeNull();
   expect(action("Reload picture")).toBeTruthy();
 });
+
+it("ignores the order of removal conflicts across a question remount", async () => {
+  let me: typeof poster | null = poster;
+  let image = originalImage;
+  let rejectOriginal!: (error: ApiError) => void;
+  const originalRemoval = new Promise<PublicImage>((_, reject) => {
+    rejectOriginal = reject;
+  });
+  const conflict = new ApiError(409, pictureChangedMessage, "image_changed");
+  const user = open({
+    me: async () => me,
+    poll: async () => ({ ...question, votePrivacy: "public", image }),
+    pollPictureAccess: async () => me === poster,
+    changePollPicture: async (id, change) => {
+      expect(id).toBe(question.id);
+      if ("expectedImageId" in change && change.expectedImageId === postedId)
+        return originalRemoval;
+      throw conflict;
+    },
+  });
+  await expand(user);
+  await confirmRemoval(user);
+  await user.keyboard("{Enter}");
+
+  me = null;
+  image = replacementImage;
+  await act(async () =>
+    window.dispatchEvent(new StorageEvent("storage", { key: SIGNED_OUT_KEY })),
+  );
+  expect(await screen.findByRole("img", { name: replacementAlt })).toBeTruthy();
+
+  me = poster;
+  await act(async () =>
+    window.dispatchEvent(new StorageEvent("storage", { key: SIGNED_IN_KEY })),
+  );
+  await expand(user);
+  await confirmRemoval(user);
+  await user.keyboard("{Enter}");
+  await screen.findByRole("button", { name: "Reload picture" });
+
+  await act(async () => rejectOriginal(conflict));
+  expect(
+    screen.queryByRole("button", { name: "Remove posted picture" }),
+  ).toBeNull();
+  expect(action("Reload picture")).toBeTruthy();
+});

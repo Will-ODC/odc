@@ -196,7 +196,7 @@ export function Conversation({
   // A sign-out resets the question card. Keep stale picture IDs across that
   // reset so a returning poster must still refresh before removing a picture.
   const [refusedPictures, setRefusedPictures] = useState(
-    () => new Map<string, string>(),
+    () => new Map<string, ReadonlySet<string>>(),
   );
   // This browser's saved answers, read on every visit, so the Answered list
   // survives navigation and reload (#484); this page's answers join it below.
@@ -446,11 +446,14 @@ export function Conversation({
             onPollLoaded: pollLoaded,
           }}
           removalConflict={{
-            imageId: refusedPictures.get(at) ?? null,
+            matches: (imageId) =>
+              refusedPictures.get(at)?.has(imageId) ?? false,
             remember: (imageId) =>
-              setRefusedPictures((current) =>
-                new Map(current).set(at, imageId),
-              ),
+              setRefusedPictures((current) => {
+                const refused = new Set(current.get(at));
+                refused.add(imageId);
+                return new Map(current).set(at, refused);
+              }),
           }}
           onRemembered={remembered}
           onReadBack={readBack}

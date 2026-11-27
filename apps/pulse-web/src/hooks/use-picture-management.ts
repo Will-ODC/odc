@@ -21,7 +21,7 @@ import { focusLost, useSendOutcome, type Access } from "./use-send-outcome.js";
 import type { TwoPressProgress } from "../components/TwoPress.js";
 
 export type PictureRemovalConflict = {
-  imageId: string | null;
+  matches: (imageId: string) => boolean;
   remember: (imageId: string) => void;
 };
 
@@ -214,7 +214,7 @@ export function usePictureManagement({
         : { status: "idle" };
   const stale =
     postedPicture !== undefined &&
-    postedPicture === (removalConflict?.imageId ?? refused);
+    (removalConflict?.matches(postedPicture) ?? postedPicture === refused);
   const showRemove =
     canWrite &&
     !stale &&
