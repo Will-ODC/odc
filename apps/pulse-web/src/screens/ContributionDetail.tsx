@@ -305,11 +305,16 @@ export function ContributionDetail({
     if (active === null || active === document.body) heading.current?.focus();
   }, [refreshError]);
   function changed(contribution: Contribution) {
-    // Participation and progress responses cannot change the picture.
+    const before =
+      data.status === "ready" ? data.value.contribution.image : undefined;
     replace((detail) => ({
       ...detail,
-      contribution: { ...contribution, image: detail.contribution.image },
+      contribution:
+        detail.contribution.image === before
+          ? contribution
+          : { ...contribution, image: detail.contribution.image },
     }));
+    if (JSON.stringify(before) !== JSON.stringify(contribution.image)) reload();
   }
   const suggestions = useSuggestedVotes({
     api,
@@ -645,8 +650,27 @@ function ContributionPictureForm({
     } catch (error) {
       if (error instanceof ContributionsError) {
         if (error.status === 401) onSignedOut();
-        else if (error.code === "image_unavailable")
-          picture.reportPostError("image_unavailable");
+        else if (
+          error.status === 0 ||
+          error.status >= 500 ||
+          error.code === "image_unavailable"
+        ) {
+          const {
+            contribution: { image: attached },
+          } = await client.detail(item.id);
+          onPictureChanged(attached);
+          if (
+            image === null
+              ? attached.kind !== "upload"
+              : attached.kind === "upload" &&
+                attached.displayUrl ===
+                  `/api/poll-images/${encodeURIComponent(image.id)}/display.webp` &&
+                attached.alt === image.alt
+          )
+            return;
+          if (error.code === "image_unavailable")
+            picture.reportPostError("image_unavailable");
+        }
       }
       throw error;
     }

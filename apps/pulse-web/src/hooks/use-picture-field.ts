@@ -90,7 +90,7 @@ export function usePictureField(
     setFocus({ target });
   }
 
-  function fail(attempt: Attempt, message: string, retry = false) {
+  function fail(attempt: Attempt, message?: string, retry = false) {
     if (attempt.fallback.status === "ready") {
       release(attempt.picture);
       setSelection(attempt.fallback);
@@ -135,7 +135,14 @@ export function usePictureField(
           : undefined;
       if (active.current !== attempt) return;
       active.current = null;
-      if (code === "signed_out") {
+      if (
+        code === "signed_out" &&
+        purpose === "save" &&
+        attempt.fallback.status === "ready"
+      ) {
+        fail(attempt);
+        onSignedOut();
+      } else if (code === "signed_out") {
         reportPostError(
           "signed_out",
           attempt.fallback.status === "ready" ? "action" : "focused-action",

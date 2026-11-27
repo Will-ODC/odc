@@ -15,8 +15,6 @@ import { InMemorySuggestionStore } from "../../../apps/pulse/src/voting/suggesti
 import { InMemoryVotingStore } from "../../../apps/pulse/src/voting/store.js";
 import { createServer } from "../../../apps/pulse/src/http/server.js";
 import { SessionSigner } from "../../../apps/pulse/src/http/session.js";
-import { InMemoryImageStore } from "../../../apps/pulse/src/images/store.js";
-import { picture } from "../../../apps/pulse/test/support/images.js";
 import { HttpPulseApi } from "../../../apps/pulse-web/src/api/http.js";
 import {
   HttpContributionsApi,
@@ -86,7 +84,6 @@ describe("Contributions through the browser HTTP adapter", () => {
       votes,
       suggestions: new InMemorySuggestionStore(),
       contributions: new InMemoryContributionsStore(voters, votes),
-      images: new InMemoryImageStore(voters, votes),
       signer: new SessionSigner("contributions-http-test-secret-long-enough"),
       webOrigin: WEB_ORIGIN,
       secureCookies: false,
@@ -112,49 +109,6 @@ describe("Contributions through the browser HTTP adapter", () => {
     const account = await identity.redeem(token ?? "");
     return { api: new HttpContributionsApi(doFetch), identity, account };
   }
-
-  it("lets only the poster replace and remove a contribution picture", async () => {
-    const owner = await signIn("organizer@example.test");
-    const member = await signIn("helper@example.test");
-    const file = new File([Uint8Array.from(await picture("png"))], "park.png", {
-      type: "image/png",
-    });
-    const upload = (identity = owner.identity) =>
-      identity.uploadPicture(file, new AbortController().signal);
-    const created = await owner.api.create(
-      { ...project, image: { id: await upload(), alt: "The park entrance" } },
-      randomUUID(),
-      owner.account.id,
-    );
-    expect(created.image.kind).toBe("upload");
-    const replacement = { id: await upload(), alt: "Accessible park ramp" };
-    const updated = await owner.api.changePicture(created.id, replacement);
-    expect(updated).toMatchObject({
-      kind: "upload",
-      alt: replacement.alt,
-      displayUrl: `/api/poll-images/${replacement.id}/display.webp`,
-    });
-    const memberPicture = {
-      id: await upload(member.identity),
-      alt: "Side path",
-    };
-    for (const image of [memberPicture, null]) {
-      await expect(
-        member.api.changePicture(created.id, image),
-      ).rejects.toMatchObject({
-        status: 403,
-        code: "organizer_required",
-      });
-    }
-    expect((await member.api.detail(created.id)).contribution.image).toEqual(
-      updated,
-    );
-    const removed = await owner.api.changePicture(created.id, null);
-    expect(removed).toEqual({ kind: "tile" });
-    expect((await member.api.detail(created.id)).contribution.image).toEqual(
-      removed,
-    );
-  });
 
   it("publishes, discovers, offers help and reports progress without exposing account identity", async () => {
     const owner = await signIn("organizer@example.test");

@@ -107,6 +107,7 @@ it.each([
       client={client({
         detail: async () => ({ contribution: fixture(), canManage: true }),
         changePicture: async () => {
+          if (!failsOnSave) return parkPicture;
           state.who = null;
           throw new ContributionsError(401, "Sign in.", "signed_out");
         },
@@ -146,9 +147,8 @@ it.each([
     window.dispatchEvent(new Event("focus"));
     await screen.findByText("Private messages", { selector: "summary" });
     expect(picture.queryByRole("link", { name: /Sign in again/ })).toBeNull();
-    expect(
-      picture.getByText("Choose the picture again before saving it."),
-    ).toBeTruthy();
+    await user.click(picture.getByRole("button", { name: "Save picture" }));
+    expect(await picture.findByText("Picture saved.")).toBeTruthy();
   }
 });
 
@@ -231,16 +231,23 @@ it.each([false, true])(
   },
 );
 
-it.each([false, true])(
-  "handles a replacement picture (expired: %s)",
-  async (expired) => {
+it.each(["saved", "expired", "lost reply"])(
+  "handles a replacement picture (%s)",
+  async (outcome) => {
+    const expired = outcome === "expired";
     const user = userEvent.setup();
-    const replacement = { ...parkPicture, alt: "A new ramp" };
+    const replacement = {
+      ...parkPicture,
+      alt: "A new ramp",
+      displayUrl: "/api/poll-images/replacement/display.webp",
+    };
     let item = fixture({ image: parkPicture });
     const changePicture = vi.fn<ContributionsApi["changePicture"]>(async () => {
       if (expired)
         throw new ContributionsError(422, "Expired.", "image_unavailable");
       item = { ...item, image: replacement };
+      if (outcome === "lost reply")
+        throw new ContributionsError(0, "Connection lost.");
       return replacement;
     });
     vi.stubGlobal(
