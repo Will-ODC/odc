@@ -191,7 +191,7 @@ public hostname, before inviting anyone.
    community default, then a tile; one picture per item; site-owner soft
    delete covers topics. Order: #700 (one shared picture field; done: mockup `docs/mockups/pulse-picture-field-v1.html` merged in #713 (`53de813`), approved by the operator 2026-11-25, registered in `docs/mockups/CANDIDATE_CONTEXT.md`; component merged in #717 (`5885d9c`, 2026-11-26): `components/PictureField.tsx`, `hooks/use-picture-field.ts`, `hooks/picture-upload-errors.ts`, `uploadPicture` on `PulseApi`, and the `--red-wash` light token in `tokens.css`; the issue's acceptance looks met, so it is ready to close, the operator closes it; the poll form adopted it in #720) → #580 (poll form) and #701 (contributions take a
    picture) → #427 (thumbnails for every item in the main list), #296
-   (picture on the question page), #586 after #427. #541 topics use #700.
+   (picture on the question page; done in #727), #586 after #427. #541 topics use #700.
    **#580 merged in #720 (`f18804e`, 2026-11-26):** the poll form (`/new`)
    uses the shared picture field: an optional picture under the question,
    sent as `image { id, alt }` with `POST /api/polls`. Post and the
@@ -199,7 +199,7 @@ public hostname, before inviting anyone.
    or session keeps the draft and the description (the draft store keeps only
    the description string); the signed-out notice asks the person to choose
    the picture again. The production CSP now has `img-src 'self' blob:`. The
-   poll page does not show the picture yet: that is #296 (open). Leftover
+   question page shows the picture since #727 (#296). Leftover
    #720 nits: the "choose your picture again" line keys off the description,
    not whether a picture existed (a 401 during upload before typing misses
    it); the question error has no warning icon while the picture errors do
