@@ -978,6 +978,7 @@ export async function createServer(deps: ServerDeps): Promise<FastifyInstance> {
     creation: deps.creation,
     webOrigin: deps.webOrigin,
     currentVoter,
+    publicVotesAvailable: deps.confirmationKey !== undefined,
     ...(deps.creationRateLimit ? { rateLimit: deps.creationRateLimit } : {}),
   });
   await registerImageRoutes(app, {

@@ -155,6 +155,7 @@ export class InMemoryCreationStore implements CreationStore {
           choices: input.choices,
           method: input.method,
           closesAt,
+          votePrivacy: input.votePrivacy ?? "anonymous",
         },
         now,
       );

@@ -39,6 +39,12 @@ export interface CreationRouteDeps {
    * replayed or not, because each costs an account lookup and a row lock.
    */
   rateLimit?: { max: number; timeWindow: string };
+  /**
+   * Whether the server holds the confirmation key. Without it a request for a
+   * public-vote poll answers 503 `public_votes_unavailable` and nothing is
+   * written (ADR-0048 decision 5).
+   */
+  publicVotesAvailable: boolean;
 }
 
 /** One refusal, in the `{ error, message }` envelope every route answers with. */
@@ -73,6 +79,12 @@ const TOO_MANY = () =>
     429,
     "too_many_requests",
     "Too many tries just now. Try again a little later.",
+  );
+const PUBLIC_VOTES_UNAVAILABLE = () =>
+  new Refusal(
+    503,
+    "public_votes_unavailable",
+    "Questions with public votes cannot be posted just now. Try again later.",
   );
 const TOO_LARGE = () =>
   new Refusal(413, "body_too_large", "That request is too large to send.");
@@ -227,6 +239,8 @@ export async function registerCreationRoutes(
       },
       async (request, reply) => {
         const key = request.headers["idempotency-key"];
+        if (!deps.publicVotesAvailable && asksForPublicVotes(request.body))
+          throw PUBLIC_VOTES_UNAVAILABLE();
         const result = await store(deps).publish(
           actor(request),
           typeof key === "string" ? key : "",
@@ -294,6 +308,15 @@ function actor(request: FastifyRequest): PublicationActor {
 
 function target(request: FastifyRequest): string {
   return (request.params as { voterId: string }).voterId;
+}
+
+/** The body names `votePrivacy: "public"`; the store validates the rest. */
+function asksForPublicVotes(body: unknown): boolean {
+  return (
+    typeof body === "object" &&
+    body !== null &&
+    (body as { votePrivacy?: unknown }).votePrivacy === "public"
+  );
 }
 
 /** `application/json`, with or without parameters, and nothing else. */

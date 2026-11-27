@@ -60,6 +60,22 @@ test("context_refuses_every_control_except_LF_even_before_trimming", () => {
     }
   }
 });
+test("vote_privacy_is_recorded_only_when_public_so_old_replay_keys_hold", () => {
+  // ADR-0048 decision 9.
+  assert.deepEqual(
+    normalizeCreation({ ...body, votePrivacy: "anonymous" }),
+    normalizeCreation(body),
+  );
+  assert.deepEqual(normalizeCreation({ ...body, votePrivacy: "public" }), {
+    ...normalizeCreation(body),
+    votePrivacy: "public",
+  });
+  for (const votePrivacy of ["Public", "", null, true, 1, ["public"]])
+    assert.throws(() => normalizeCreation({ ...body, votePrivacy }), {
+      code: "bad_request",
+    });
+});
+
 test("normalization_preserves_omitted_close_time_for_later_replays", () => {
   assert.deepEqual(normalizeCreation(body), {
     question: "Q",
