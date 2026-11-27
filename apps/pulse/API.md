@@ -537,9 +537,8 @@ or "Verified voter" when they have none, to everyone who can see the poll. So:
 - The voter may remove their vote while the poll is open
   (`DELETE /api/polls/:id/votes/mine`); after it closes the vote is fixed.
 
-**Not served yet.** No route creates a public-vote poll: `POST /api/polls` still
-refuses `votePrivacy` as an unknown property until the web client can show the
-notice (ADR-0048 step 4b).
+A public-vote poll is made by `POST /api/polls` with `"votePrivacy": "public"`
+(ADR-0048 step 4b). Nothing changes the setting afterwards.
 
 ### The ballot cookie, and why voting needs no session
 
@@ -1436,6 +1435,12 @@ Required `Idempotency-Key`: client-generated UUID, scoped to this account
   description are part of the canonical replay input, and a replay attaches
   nothing twice. A request without `image` has the same canonical input it
   always had.
+- `votePrivacy`: optional `"anonymous"` (the default) or `"public"`; anything
+  else, `null` included, is refused. It is fixed at creation and no route
+  changes it (see "Anonymous and public-vote polls"). It joins the canonical
+  replay input only when it is `"public"`, so saying `"anonymous"` replays like
+  saying nothing. Without the server's confirmation key, a `"public"` request
+  answers 503 `public_votes_unavailable` and writes nothing.
 - `id`, `community`, `createdBy`, `next`, `acceptsSuggestions`, owner/permission
   fields and summaries are not writable inputs. Suggestions are false,
   all next entries null, ID is server-generated.
@@ -1450,7 +1455,7 @@ Required `Idempotency-Key`: client-generated UUID, scoped to this account
 false | true }`. Public poll is the existing GET poll shape plus `community`
 (the object above) and `attribution`. Named attribution contains only `kind`
 and `name`; anonymous contains only `kind`. Never return account ID, email,
-credentials, internal metadata or idempotency key. Legacy polls may omit these
+credentials, internal metadata or idempotency key. `votePrivacy` is always present. Legacy polls may omit the other
 new public fields; no author is fabricated. `GET /api/polls/:id` and MCP
 `get_poll` already serve this public representation for authored polls, built
 by the same allow-listed projection. The `open: true` returned on a replay is
@@ -1476,19 +1481,20 @@ acknowledgement, idempotency, metadata, poll and choices share one transaction
 and per-account concurrency guard. A refusal/rollback/replay consumes no slot.
 Unlimited grants bypass this quota, not resource checks or authentication.
 
-| Status | Error                  | Meaning                                                                             |
-| ------ | ---------------------- | ----------------------------------------------------------------------------------- |
-| 400    | `bad_request`          | Malformed/unknown fields, invalid key, shape, field length or future time; not JSON |
-| 401    | `signed_out`           | Invalid, absent, expired or revoked session                                         |
-| 403    | `origin_not_allowed`   | Missing or foreign Origin                                                           |
-| 409    | `idempotency_conflict` | Key already used for different canonical input                                      |
-| 413    | `body_too_large`       | Body exceeds 32 KiB                                                                 |
-| 422    | `purpose_required`     | First post needs the v1 promise                                                     |
-| 422    | `image_unavailable`    | `image.id` is not the caller's pending picture (unknown, used or expired)           |
-| 429    | `too_many_requests`    | More than the per-client request limit (above); not a posting-quota answer          |
-| 429    | `posting_limit`        | Five creations in the rolling hour; integer Retry-After seconds                     |
-| 503    | `creation_unavailable` | Required storage unavailable; nothing partially committed                           |
-| 500    | `server_error`         | Unexpected fault; safe message, no private diagnostics                              |
+| Status | Error                      | Meaning                                                                             |
+| ------ | -------------------------- | ----------------------------------------------------------------------------------- |
+| 400    | `bad_request`              | Malformed/unknown fields, invalid key, shape, field length or future time; not JSON |
+| 401    | `signed_out`               | Invalid, absent, expired or revoked session                                         |
+| 403    | `origin_not_allowed`       | Missing or foreign Origin                                                           |
+| 409    | `idempotency_conflict`     | Key already used for different canonical input                                      |
+| 413    | `body_too_large`           | Body exceeds 32 KiB                                                                 |
+| 422    | `purpose_required`         | First post needs the v1 promise                                                     |
+| 422    | `image_unavailable`        | `image.id` is not the caller's pending picture (unknown, used or expired)           |
+| 429    | `too_many_requests`        | More than the per-client request limit (above); not a posting-quota answer          |
+| 429    | `posting_limit`            | Five creations in the rolling hour; integer Retry-After seconds                     |
+| 503    | `creation_unavailable`     | Required storage unavailable; nothing partially committed                           |
+| 503    | `public_votes_unavailable` | `votePrivacy: "public"` on a server without its confirmation key; nothing written   |
+| 500    | `server_error`             | Unexpected fault; safe message, no private diagnostics                              |
 
 Each uses the existing `{ error, message }` envelope. Auth/origin precede all
 account-bound lookups. Retry the same key and input after an uncertain result;

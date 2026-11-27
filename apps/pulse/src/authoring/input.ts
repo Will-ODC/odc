@@ -24,6 +24,12 @@ export interface CreationInput {
    * request without a picture keeps the canonical replay input it always had.
    */
   image?: PictureInput;
+  /**
+   * ADR-0048 decision 9: present only when it is `"public"`, so an anonymous
+   * request (the default, said or not) keeps the canonical replay input it
+   * always had.
+   */
+  votePrivacy?: "public";
 }
 export class CreationError extends Error {
   constructor(
@@ -80,6 +86,7 @@ export function normalizeCreation(value: unknown): CreationInput {
     "closesAt",
     "purposeAcknowledgement",
     "image",
+    "votePrivacy",
   ]);
   const question = text(row.question, 1000);
   let context: string | null = null;
@@ -130,6 +137,12 @@ export function normalizeCreation(value: unknown): CreationInput {
     if (!parsed.success) throw new CreationError("bad_request");
     image = parsed.data;
   }
+  if (
+    "votePrivacy" in row &&
+    row.votePrivacy !== "anonymous" &&
+    row.votePrivacy !== "public"
+  )
+    throw new CreationError("bad_request");
   return {
     question,
     ...(context === null ? {} : { context }),
@@ -140,5 +153,6 @@ export function normalizeCreation(value: unknown): CreationInput {
     purposeAcknowledgement:
       row.purposeAcknowledgement === PURPOSE_VERSION ? PURPOSE_VERSION : null,
     ...(image === undefined ? {} : { image }),
+    ...(row.votePrivacy === "public" ? { votePrivacy: "public" as const } : {}),
   };
 }

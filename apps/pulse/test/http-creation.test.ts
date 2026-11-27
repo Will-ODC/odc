@@ -27,6 +27,7 @@ import {
 import { SERVED_LOGGER } from "../src/main.js";
 import { PostgresVotingStore } from "../src/voting/pg-store.js";
 import { InMemorySuggestionStore } from "../src/voting/suggestions.js";
+import { ConfirmationKey } from "../src/voting/confirmation.js";
 import { InMemoryVotingStore, type VotingStore } from "../src/voting/store.js";
 import { databaseSkip, migratedSchema } from "./support/database.js";
 
@@ -35,6 +36,7 @@ const SECRET = "test-secret-that-is-long-enough-x";
 const ORIGIN = "https://pulse.example.org";
 const START = new Date("2026-10-20T12:00:00.000Z");
 const HOUR_S = 3600;
+const CONFIRMATION_KEY = "a-confirmation-key-for-tests-0123456789";
 
 /** The accounts every test starts with. Ids and addresses must never leak. */
 const ACCOUNTS = {
@@ -402,15 +404,136 @@ for (const kind of ["memory", "postgres"] as const) {
     assert.equal((await h.context("owner")).json().canPostUnlimited, true);
   });
 
-  it("creation_still_refuses_a_vote_privacy_until_public_votes_ship", async (t) => {
-    // ADR-0048 decision 14: the API takes the setting only at step 4b, once
-    // the web client shows the notice; until then it is an unknown key.
-    const h = await harness(t, kind);
-    for (const votePrivacy of ["public", "anonymous"]) {
-      const reply = await h.publish("guest", question({ votePrivacy }));
-      assert.equal(reply.statusCode, 400, reply.body);
-      assert.equal(reply.json().error, "bad_request");
+  it("creation_takes_public_votes_and_the_poll_reads_back_public", async (t) => {
+    // ADR-0048 decision 14 step 5: the API accepts "public" at creation.
+    const h = await harness(t, kind, {
+      confirmationKey: new ConfirmationKey(CONFIRMATION_KEY),
+    });
+    const key = randomUUID();
+    const first = await h.publish(
+      "guest",
+      question({ votePrivacy: "public" }),
+      {
+        key,
+      },
+    );
+    assert.equal(first.statusCode, 201, first.body);
+    const poll = first.json().poll;
+    assert.ok(poll);
+    assert.equal(poll.votePrivacy, "public");
+
+    const read = await h.app.inject({ url: `/api/polls/${poll.id}` });
+    assert.equal(read.statusCode, 200);
+    assert.equal(read.json().votePrivacy, "public");
+    const listed = await h.app.inject({
+      url: "/api/polls?community=pulse-general",
+    });
+    assert.equal(
+      (
+        listed.json() as { polls: { id: string; votePrivacy: string }[] }
+      ).polls.find((row) => row.id === poll.id)?.votePrivacy,
+      "public",
+    );
+
+    // The replay keeps the setting, and the same key with the other setting
+    // is a different request.
+    const again = await h.publish(
+      "guest",
+      question({ votePrivacy: "public" }),
+      {
+        key,
+      },
+    );
+    assert.equal(again.statusCode, 200, again.body);
+    assert.deepEqual(again.json().poll, poll);
+    refused(
+      await h.publish("guest", question(), { key }),
+      409,
+      "idempotency_conflict",
+    );
+
+    // It is a public-vote poll in every route: a signed-out cast that read
+    // the notice is asked to sign in, and one that did not is refused.
+    const cast = (body: unknown) =>
+      h.app.inject({
+        method: "POST",
+        url: `/api/polls/${poll.id}/votes`,
+        headers: { origin: ORIGIN },
+        payload: body as Record<string, unknown>,
+      });
+    assert.equal(
+      (await cast({ ballot: [0], publicVote: true })).json().error,
+      "sign_in_required",
+    );
+    assert.equal(
+      (await cast({ ballot: [0] })).json().error,
+      "vote_privacy_mismatch",
+    );
+  });
+
+  it("saying_anonymous_is_the_default_and_replays_like_saying_nothing", async (t) => {
+    const h = await harness(t, kind, {
+      confirmationKey: new ConfirmationKey(CONFIRMATION_KEY),
+    });
+    const key = randomUUID();
+    const first = await h.publish(
+      "guest",
+      question({ votePrivacy: "anonymous" }),
+      { key },
+    );
+    assert.equal(first.statusCode, 201, first.body);
+    assert.equal(first.json().poll?.votePrivacy, "anonymous");
+    const plain = await h.publish("guest", question(), { key });
+    assert.equal(plain.statusCode, 200, plain.body);
+    assert.equal(plain.json().replayed, true);
+  });
+
+  it("an_unknown_vote_privacy_is_a_bad_request_and_creates_nothing", async (t) => {
+    const h = await harness(t, kind, {
+      confirmationKey: new ConfirmationKey(CONFIRMATION_KEY),
+    });
+    for (const votePrivacy of ["Public", "named", "", null, true, ["public"]]) {
+      const key = randomUUID();
+      // The owner posts without the hourly limit, so every case reaches it.
+      refused(
+        await h.publish("owner", question({ votePrivacy }), { key }),
+        400,
+        "bad_request",
+      );
+      // The refused request did not use the key.
+      assert.equal(
+        (await h.publish("owner", question(), { key })).statusCode,
+        201,
+      );
     }
+  });
+
+  it("public_votes_need_the_confirmation_key_and_nothing_is_written_without_it", async (t) => {
+    // ADR-0048 decision 5.
+    const h = await harness(t, kind);
+    const key = randomUUID();
+    const reply = await h.publish(
+      "guest",
+      question({ votePrivacy: "public" }),
+      {
+        key,
+      },
+    );
+    refused(reply, 503, "public_votes_unavailable");
+    assert.equal(reply.headers["cache-control"], "no-store");
+    const listed = await h.app.inject({
+      url: "/api/polls?community=pulse-general",
+    });
+    assert.equal(
+      (listed.json() as { polls: unknown[] }).polls.length,
+      0,
+      listed.body,
+    );
+    // Anonymous creation is unaffected, and the key was never used.
+    assert.equal(
+      (await h.publish("guest", question(), { key })).statusCode,
+      201,
+    );
   });
 
   it("publishing_answers_201_then_the_same_request_replays_with_200", async (t) => {

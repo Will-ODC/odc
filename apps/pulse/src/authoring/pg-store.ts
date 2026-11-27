@@ -161,6 +161,7 @@ export class PostgresCreationStore implements CreationStore {
           choices: input.choices,
           method: input.method,
           closesAt,
+          votePrivacy: input.votePrivacy ?? "anonymous",
         },
         now,
       );
@@ -178,7 +179,6 @@ export class PostgresCreationStore implements CreationStore {
           input.attribution.kind === "named" ? input.attribution.name : null,
           pending?.id ?? null,
           poll.context ?? null,
-          // Anonymous until creation takes "public" (ADR-0048 step 4b).
           poll.votePrivacy,
         ],
       );
