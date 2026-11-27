@@ -457,6 +457,91 @@ for (const kind of ["memory", "postgres"] as const) {
   );
 }
 
+for (const kind of ["memory", "postgres"] as const) {
+  test(
+    `${kind}: a stale contribution picture confirmation leaves the replacement attached`,
+    { skip: kind === "postgres" && databaseSkip },
+    async (t) => {
+      const h = await harness(t, kind);
+      const original = await pendingPicture(h);
+      const created = await postContribution(h, original);
+      assert.equal(created.statusCode, 201, created.body);
+      const {
+        contribution: { id },
+      } = mutationSchema.parse(created.json());
+      const path = `/api/contributions/${id}/image`;
+      const remove = (expected: string, who: Who = "member") =>
+        manageContributionPicture(
+          h,
+          "DELETE",
+          `${path}?expectedImageId=${expected}`,
+          who,
+        );
+      const replacement = await pendingPicture(h);
+      const replaced = await manageContributionPicture(
+        h,
+        "PUT",
+        path,
+        "member",
+        replacement,
+      );
+      assert.equal(replaced.statusCode, 200, replaced.body);
+      refused(await remove(original.id, "other"), 403, "organizer_required");
+      refused(await remove("bad"), 400, "bad_request");
+      refused(
+        await remove(`${original.id}&expectedImageId=${replacement.id}`),
+        400,
+        "bad_request",
+      );
+      refused(await remove(original.id), 409, "image_changed");
+      const detail = await h.request({
+        method: "GET",
+        url: `/api/contributions/${id}`,
+      });
+      assert.deepEqual(
+        detailSchema.parse(detail.json()).contribution.image,
+        replaced.json().image,
+      );
+      assert.deepEqual((await remove(replacement.id)).json(), {
+        image: { kind: "tile" },
+      });
+      refused(await remove(replacement.id), 409, "image_changed");
+    },
+  );
+}
+
+test(
+  "postgres: concurrent removals cannot both reuse one picture confirmation",
+  { skip: databaseSkip },
+  async (t) => {
+    const h = await harness(t, "postgres");
+    const initial = await pendingPicture(h);
+    const created = await postContribution(h, initial);
+    assert.equal(created.statusCode, 201, created.body);
+    const {
+      contribution: { id },
+    } = mutationSchema.parse(created.json());
+    const path = `/api/contributions/${id}/image?expectedImageId=${initial.id}`;
+    const remove = () => manageContributionPicture(h, "DELETE", path, "member");
+    const replies = await atBarrier(
+      h.pool as Pool,
+      "select 1 from voter where id = $1 for update",
+      [ACCOUNTS.member.id],
+      2,
+      () => Promise.all([remove(), remove()]),
+    );
+    assert.deepEqual(
+      replies.map((reply) => reply.statusCode).sort(),
+      [200, 409],
+    );
+    refused(
+      replies.find((reply) => reply.statusCode === 409) as Reply,
+      409,
+      "image_changed",
+    );
+  },
+);
+
 test("only the contribution poster can replace or remove its picture", async (t) => {
   const h = await harness(t, "memory");
   const initial = await pendingPicture(h);
