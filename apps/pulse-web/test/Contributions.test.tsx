@@ -73,9 +73,19 @@ const parkPicture = {
   alt: "A ramp leading into the park",
 } as const;
 
-it("rechecks the session when a managed picture upload is signed out", async () => {
+it.each([
+  {
+    name: "rechecks the session when a managed picture upload is signed out",
+    failsOnSave: false,
+  },
+  {
+    name: "rechecks the session when Save picture returns 401",
+    failsOnSave: true,
+  },
+])("$name", async ({ failsOnSave }) => {
   const user = userEvent.setup();
   const { state, me } = switchableMe("ada");
+  let uploadCount = 0;
   vi.stubGlobal(
     "URL",
     class extends URL {
@@ -88,6 +98,7 @@ it("rechecks the session when a managed picture upload is signed out", async () 
       api={stubApi({
         me,
         uploadPicture: async () => {
+          if (++uploadCount === 1) return "replacement";
           state.who = null;
           throw new ApiError(401, "Sign in.", "signed_out");
         },
@@ -95,16 +106,41 @@ it("rechecks the session when a managed picture upload is signed out", async () 
       id="park"
       client={client({
         detail: async () => ({ contribution: fixture(), canManage: true }),
+        changePicture: async () => {
+          state.who = null;
+          throw new ContributionsError(401, "Sign in.", "signed_out");
+        },
       })}
     />,
   );
-  await user.click(await screen.findByText("Manage picture"));
+  const summary = await screen.findByText("Manage picture");
+  await user.click(summary);
   const field = screen.getByRole("group", { name: "Picture" });
-  await user.upload(
-    field.querySelector<HTMLInputElement>('input[type="file"]')!,
-    new File(["park"], "park.jpg", { type: "image/jpeg" }),
+  const input = field.querySelector<HTMLInputElement>('input[type="file"]')!;
+  const upload = (name: string) =>
+    user.upload(input, new File([name], name, { type: "image/jpeg" }));
+  await upload("park.jpg");
+  const description = screen.getByLabelText<HTMLTextAreaElement>(
+    "Picture description",
   );
-  await waitFor(() => expect(screen.queryByText("Manage picture")).toBeNull());
+  await user.type(description, parkPicture.alt);
+  if (failsOnSave)
+    await user.click(screen.getByRole("button", { name: "Save picture" }));
+  else await upload("ramp.jpg");
+
+  await screen.findByText(/to read your private messages/);
+  const panel = screen.getByText("Manage picture").closest("details")!;
+  expect(panel.open).toBe(true);
+  const picture = within(panel);
+  expect(
+    picture.getByLabelText<HTMLTextAreaElement>("Picture description").value,
+  ).toBe(parkPicture.alt);
+  const link = picture.getByRole("link", {
+    name: "Sign in again in a new tab",
+  });
+  expect(link.getAttribute("href")).toBe("/sign-in?contribution=park");
+  expect(link.getAttribute("target")).toBe("_blank");
+  expect(link.getAttribute("rel")).toBe("noreferrer");
 });
 
 it("shows the default contribution tile without an image element", async () => {
@@ -236,6 +272,9 @@ it.each([false, true])(
       ).toBeTruthy();
       expect(screen.getByRole("img", { name: parkPicture.alt })).toBeTruthy();
       expect((description as HTMLTextAreaElement).value).toBe(replacement.alt);
+      expect(
+        screen.queryByRole("button", { name: "Remove posted picture" }),
+      ).toBeNull();
       expect(document.activeElement).toBe(choose());
       expect(screen.queryByRole("alert")).toBeNull();
     } else {
@@ -1746,7 +1785,9 @@ it("keeps an organizer's unsent update through an expired session and same-accou
       })}
     />,
   );
-  await user.click(await screen.findByText("Post an update"));
+  const updateDisclosure = await screen.findByText("Post an update");
+  const updateForm = within(updateDisclosure.closest("details")!);
+  await user.click(updateDisclosure);
   await user.type(
     screen.getByLabelText("Progress update"),
     "Ramp is half built",
@@ -1754,8 +1795,8 @@ it("keeps an organizer's unsent update through an expired session and same-accou
   state.who = null;
   window.dispatchEvent(new Event("focus"));
   expect(
-    await screen.findAllByRole("link", { name: "Sign in again in a new tab" }),
-  ).toHaveLength(3); // the two expired forms and the private-messages note
+    await updateForm.findByRole("link", { name: "Sign in again in a new tab" }),
+  ).toBeTruthy();
   // The private inbox needs a live session; the draft does not.
   expect(
     screen.queryByText("Private messages", { selector: "summary" }),

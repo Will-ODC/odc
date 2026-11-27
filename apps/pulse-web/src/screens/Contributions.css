@@ -236,6 +236,9 @@
 .contribution-picture[open] {
   margin-bottom: var(--gutter);
 }
+.contribution-picture .contribution-error {
+  font-size: var(--t-small);
+}
 .contribution-picture-removal .two-press {
   justify-content: flex-start;
 }

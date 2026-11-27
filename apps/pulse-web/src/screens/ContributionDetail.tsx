@@ -216,8 +216,8 @@ export function ContributionDetail({
     data.value.accountId === accountId &&
     data.value.canManage;
   // The account last seen managing this record. If its session expires while
-  // an update is being written, the update form stays with its draft (the
-  // private inbox does not: that needs a live session to show).
+  // an update or picture change is being written, its draft stays. The
+  // private inbox needs a live session to show.
   const [managedBy, setManagedBy] = useState<string | null>(null);
   if (canManage && managedBy !== accountId) setManagedBy(accountId);
   else if (
@@ -391,9 +391,10 @@ export function ContributionDetail({
                   · {item.community.label}
                 </p>
               </header>
-              {canManage ? (
+              {canUpdate ? (
                 <ContributionPictureForm
                   key={`${item.id}:${drafts.generation}`}
+                  access={access}
                   api={api}
                   item={item}
                   client={client}
@@ -604,12 +605,14 @@ export function ContributionDetail({
   );
 }
 function ContributionPictureForm({
+  access,
   api,
   item,
   client,
   reload,
   onSignedOut,
 }: {
+  access: Access;
   api: PulseApi;
   item: Contribution;
   client: ContributionsApi;
@@ -617,6 +620,7 @@ function ContributionPictureForm({
   onSignedOut: () => void;
 }) {
   const [uploadSignedOut, setUploadSignedOut] = useState(false);
+  if (access === "expired" && uploadSignedOut) setUploadSignedOut(false);
   const picture = usePictureField(
     () => {
       setUploadSignedOut(true);
@@ -631,11 +635,11 @@ function ContributionPictureForm({
       try {
         await client.changePicture(item.id, image);
       } catch (error) {
-        if (
-          error instanceof ContributionsError &&
-          error.code === "image_unavailable"
-        )
-          picture.reportPostError("image_unavailable");
+        if (error instanceof ContributionsError) {
+          if (error.status === 401) onSignedOut();
+          else if (error.code === "image_unavailable")
+            picture.reportPostError("image_unavailable");
+        }
         throw error;
       }
     },
@@ -644,7 +648,7 @@ function ContributionPictureForm({
       reload();
     },
   );
-  const outcome = useSendOutcome(save, "signedIn");
+  const outcome = useSendOutcome(save, access);
   function submit(event: FormEvent<HTMLFormElement>) {
     event.preventDefault();
     if (picture.checkPost() && picture.image) {
@@ -663,13 +667,15 @@ function ContributionPictureForm({
   const showRemove =
     item.image.kind === "upload" &&
     picture.selection.status === "empty" &&
+    picture.description === "" &&
     !(removing && save.saved);
   const fieldError = uploadSignedOut
     ? "Sign in to change this picture."
     : removing
       ? undefined
       : error;
-  const signInAgain = uploadSignedOut || save.errorStatus === 401;
+  const signInAgain =
+    access === "expired" || uploadSignedOut || save.errorStatus === 401;
 
   return (
     <details className="contribution-disclosure contribution-picture">
@@ -730,9 +736,10 @@ function ContributionPictureForm({
           </p>
         ) : null}
         {signInAgain ? (
-          <a href={`/sign-in?contribution=${encodeURIComponent(item.id)}`}>
-            Sign in again
-          </a>
+          <SignInAgain
+            href={`/sign-in?contribution=${encodeURIComponent(item.id)}`}
+            announce={false}
+          />
         ) : null}
       </form>
     </details>
