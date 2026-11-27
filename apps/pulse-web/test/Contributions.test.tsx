@@ -2568,7 +2568,11 @@ it.each([
     "image_unavailable",
     "This picture is no longer available. Choose it again.",
   ],
-  [503, "images_unavailable", "Could not save this change. Please try again."],
+  [
+    503,
+    "contributions_unavailable",
+    "Could not save this change. Please try again.",
+  ],
 ])(
   "uses the expected copy for a picture refusal with status %s",
   async (status, error, message) => {
@@ -2576,7 +2580,12 @@ it.each([
       Response.json({ error, message: "Server picture message." }, { status }),
     );
     await expect(
-      api.changePicture("park", { id: "upload", alt: parkPicture.alt }),
+      api.changePicture(
+        "park",
+        error === "image_changed"
+          ? { expectedImageId: parkPictureId }
+          : { id: "upload", alt: parkPicture.alt },
+      ),
     ).rejects.toMatchObject({ status, code: error, message });
   },
 );

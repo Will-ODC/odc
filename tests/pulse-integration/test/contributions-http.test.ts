@@ -152,6 +152,9 @@ describe("Contributions through the browser HTTP adapter", () => {
     await expect(
       owner.api.changePicture(created.id, { expectedImageId: original.id }),
     ).rejects.toMatchObject({ status: 409, code: "image_changed" });
+    expect((await member.api.detail(created.id)).contribution.image).toEqual(
+      updated,
+    );
     for (const image of [memberPicture, { expectedImageId: replacement.id }]) {
       await expect(
         member.api.changePicture(created.id, image),
