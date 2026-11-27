@@ -398,6 +398,7 @@ export function ContributionDetail({
                   item={item}
                   client={client}
                   reload={reload}
+                  onSignedOut={() => void recheck()}
                 />
               ) : null}
               <section className="contribution-section">
@@ -607,14 +608,23 @@ function ContributionPictureForm({
   item,
   client,
   reload,
+  onSignedOut,
 }: {
   api: PulseApi;
   item: Contribution;
   client: ContributionsApi;
   reload: () => void;
+  onSignedOut: () => void;
 }) {
   const [uploadSignedOut, setUploadSignedOut] = useState(false);
-  const picture = usePictureField(() => setUploadSignedOut(true), api, "save");
+  const picture = usePictureField(
+    () => {
+      setUploadSignedOut(true);
+      onSignedOut();
+    },
+    api,
+    "save",
+  );
   const [removing, setRemoving] = useState(false);
   const save = useContributionSave<PictureInput | null>(
     async (image) => {
@@ -662,7 +672,7 @@ function ContributionPictureForm({
   const signInAgain = uploadSignedOut || save.errorStatus === 401;
 
   return (
-    <details className="contribution-disclosure">
+    <details className="contribution-disclosure contribution-picture">
       <summary className="contribution-button contribution-button--secondary">
         Manage picture
       </summary>
@@ -682,21 +692,23 @@ function ContributionPictureForm({
           ) : null}
         </fieldset>
         {showRemove ? (
-          <TwoPress
-            label="Remove posted picture"
-            question="Remove this picture from the contribution? The default picture shows instead."
-            confirmLabel="Remove picture"
-            pendingLabel="Removing picture…"
-            progress={removal}
-            onConfirm={() => {
-              setRemoving(true);
-              void save.submit(null);
-            }}
-            onCancel={() => {
-              setRemoving(false);
-              save.clearFailure();
-            }}
-          />
+          <div className="contribution-picture-removal">
+            <TwoPress
+              label="Remove posted picture"
+              question="Remove this picture from the contribution? The default picture shows instead."
+              confirmLabel="Remove picture"
+              pendingLabel="Removing picture…"
+              progress={removal}
+              onConfirm={() => {
+                setRemoving(true);
+                void save.submit(null);
+              }}
+              onCancel={() => {
+                setRemoving(false);
+                save.clearFailure();
+              }}
+            />
+          </div>
         ) : null}
         {(save.pending && !removing) || save.saved ? (
           <p ref={outcome.status} tabIndex={-1} role="status">

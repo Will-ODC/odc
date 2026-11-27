@@ -21,7 +21,7 @@ import {
   ContributionsError,
   HttpContributionsApi,
 } from "../src/api/contributions.js";
-import type { Me } from "../src/api/types.js";
+import { ApiError, type Me } from "../src/api/types.js";
 import { routeFrom, pathOf, type ReturnTo } from "../src/flow/route.js";
 import { rememberReturn, takeReturn } from "../src/flow/sign-in-return.js";
 import { stubApi } from "./stub-api.js";
@@ -72,6 +72,40 @@ const parkPicture = {
   height: 600,
   alt: "A ramp leading into the park",
 } as const;
+
+it("rechecks the session when a managed picture upload is signed out", async () => {
+  const user = userEvent.setup();
+  const { state, me } = switchableMe("ada");
+  vi.stubGlobal(
+    "URL",
+    class extends URL {
+      static override createObjectURL = () => "blob:park";
+      static override revokeObjectURL = () => {};
+    },
+  );
+  render(
+    <ContributionDetail
+      api={stubApi({
+        me,
+        uploadPicture: async () => {
+          state.who = null;
+          throw new ApiError(401, "Sign in.", "signed_out");
+        },
+      })}
+      id="park"
+      client={client({
+        detail: async () => ({ contribution: fixture(), canManage: true }),
+      })}
+    />,
+  );
+  await user.click(await screen.findByText("Manage picture"));
+  const field = screen.getByRole("group", { name: "Picture" });
+  await user.upload(
+    field.querySelector<HTMLInputElement>('input[type="file"]')!,
+    new File(["park"], "park.jpg", { type: "image/jpeg" }),
+  );
+  await waitFor(() => expect(screen.queryByText("Manage picture")).toBeNull());
+});
 
 it("shows the default contribution tile without an image element", async () => {
   render(<ContributionDetail api={stubApi()} id="park" client={client()} />);
@@ -2325,7 +2359,7 @@ it("rejects a malformed picture in a successful response", async () => {
 });
 
 it.each([
-  [400, "invalid_image", "Server picture message."],
+  [400, "bad_request", "Server picture message."],
   [401, "signed_out", "Server picture message."],
   [
     422,

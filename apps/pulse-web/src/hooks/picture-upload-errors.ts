@@ -168,7 +168,9 @@ export function uploadProblem(
     case "image_busy":
       return {
         message:
-          "Pulse is busy with other pictures. Try again in a minute. Everything else you wrote is kept.",
+          purpose === "save"
+            ? "Pulse is busy with other pictures. Try again in a minute."
+            : "Pulse is busy with other pictures. Try again in a minute. Everything else you wrote is kept.",
         retry: true,
       };
     case "images_unavailable":
@@ -199,6 +201,12 @@ export function uploadProblem(
             : "You have 5 pictures that are not posted yet, the most allowed at once. Unposted pictures clear after a day. Try again tomorrow, or post without a picture.",
       };
     default:
-      return { message: network, retry: true };
+      return {
+        message:
+          purpose === "save"
+            ? "The picture did not upload. Check your connection, then try again."
+            : network,
+        retry: true,
+      };
   }
 }
