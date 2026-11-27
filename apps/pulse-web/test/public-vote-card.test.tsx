@@ -137,10 +137,13 @@ it("reads public votes for a visitor, forwards the sealed cursor, and can restar
   more.focus();
   await user.keyboard("{Enter}");
   expect(publicVotes).toHaveBeenNthCalledWith(2, question.id, "sealed_token");
-  await vi.waitFor(() =>
-    expect(within(list).getAllByRole("listitem")).toHaveLength(2),
-  );
-  expect(document.activeElement).toBe(within(list).getAllByRole("listitem")[1]);
+  // React commits the new row, then runs the focus effect; on a slow machine
+  // the scheduler can yield between the two, so wait for the outcome (#733).
+  await vi.waitFor(() => {
+    const rows = within(list).getAllByRole("listitem");
+    expect(rows).toHaveLength(2);
+    expect(document.activeElement).toBe(rows[1]);
+  });
 
   await user.click(
     within(list).getByRole("button", { name: "Load more votes" }),
