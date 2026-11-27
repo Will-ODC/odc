@@ -5,6 +5,7 @@ import {
   fireEvent,
   render,
   screen,
+  waitFor,
   within,
 } from "@testing-library/react";
 import userEvent from "@testing-library/user-event";
@@ -348,6 +349,37 @@ it("keeps voting actions blank during the session check and offers a keyboard re
   await screen.findByRole("link", { name: "Sign in with email to vote" });
   expect(screen.queryByText(failure)).toBeNull();
 });
+
+// Signed in, the page's own arrival focus takes the question's heading, and
+// the card must not take it back.
+it.each([
+  ["signed out", null, { role: "link", name: "Sign in with email to vote" }],
+  [
+    "signed in",
+    session,
+    { role: "heading", name: question.question, level: 1 },
+  ],
+] as const)(
+  "moves focus from the session Try again to what replaces it when %s",
+  async (_, who, target) => {
+    const me = vi
+      .fn<() => Promise<Me | null>>()
+      .mockRejectedValueOnce(new Error("offline"))
+      .mockResolvedValue(who);
+    render(
+      <Conversation
+        api={stubApi({ me, poll: async () => question })}
+        pollId={question.id}
+      />,
+    );
+    const retry = await screen.findByRole("button", { name: "Try again" });
+    retry.focus();
+    await userEvent.setup().keyboard("{Enter}");
+    const { role, ...options } = target;
+    const next = await screen.findByRole(role, options);
+    await waitFor(() => expect(document.activeElement).toBe(next));
+  },
+);
 
 it.each(["anonymous", "public"] as const)(
   "handles a sign-out in another tab when vote privacy is %s",

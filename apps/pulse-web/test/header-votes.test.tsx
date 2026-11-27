@@ -62,6 +62,29 @@ describe.each(pages)("$name header (#487)", ({ route }) => {
   });
 });
 
+// While nobody knows who is signed in yet, neither control shows (#714).
+describe.each(pages)("$name header while the session loads", ({ route }) => {
+  it("shows neither Sign in nor Account", async () => {
+    render(
+      <App
+        route={route}
+        api={stubApi({
+          me: () => new Promise(() => {}),
+          myVotes: async () => ({ votes: [saved], nextCursor: null }),
+          listPolls: async () => ({ polls: [], nextCursor: null }),
+          creationContext: async () => {
+            throw new ApiError(401, "Sign in to post a question.");
+          },
+        })}
+      />,
+    );
+    const header = within(screen.getByRole("banner"));
+    await act(async () => {});
+    expect(header.queryByRole("link", { name: "Sign in" })).toBeNull();
+    expect(header.queryByRole("button", { name: "Account" })).toBeNull();
+  });
+});
+
 // The header is shared, so its other states are checked on one page.
 describe("header account states, on Home (#487)", () => {
   const route = pages[0]!.route;

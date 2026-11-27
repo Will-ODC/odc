@@ -244,6 +244,24 @@ export function VoteCard({
       counted.current?.focus();
   }, [confirmation]);
 
+  // The session check's "Try again" goes once the check succeeds. When focus
+  // fell with it, follow it to what replaced it: "Sign in with email to
+  // vote", or else the first choice. Focus elsewhere is left alone.
+  const sessionRetry = Boolean(onRetrySession);
+  const hadSessionRetry = useRef(sessionRetry);
+  useEffect(() => {
+    if (hadSessionRetry.current === sessionRetry) return;
+    hadSessionRetry.current = sessionRetry;
+    const active = document.activeElement;
+    if (sessionRetry || (active !== null && active !== document.body)) return;
+    const root = card.current;
+    (
+      root?.querySelector<HTMLElement>(".vote-card__signin") ??
+      root?.querySelector<HTMLInputElement>("input:checked:enabled") ??
+      root?.querySelector<HTMLInputElement>("input:enabled")
+    )?.focus();
+  }, [sessionRetry]);
+
   function onKeyDown(event: KeyboardEvent<HTMLElement>) {
     if (
       !editable ||
