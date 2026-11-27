@@ -42,6 +42,12 @@ In production, nginx serves the page on port 8080 over IPv4 and IPv6 and sends
 | `/sign-in?token=…`     | Confirm the email address to sign in, then return to where you were.   |
 | `/preview/chat`        | A prototype with sample data only.                                     |
 
+On a question page, the signed-in poster can open **Manage picture** to
+choose a replacement or confirm removal. The browser checks permission
+through the [private poll picture route](../pulse/API.md#get-apipollsidimage),
+including for questions posted anonymously. A question with no uploaded picture
+has no placeholder on its page.
+
 For local testing, run both apps with their `dev` commands and open
 `http://localhost:5173/sign-in?next=new`. Enter any test email; on Check your email,
 choose **Open local mailbox**, then open its sign-in link. The page shows the

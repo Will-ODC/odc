@@ -38,7 +38,7 @@ describe("fitting a phone", () => {
       /\.conversation__dock \{[^}]*right: 0;[^}]*left: 0;[^}]*width: auto;/,
     );
     expect(phone).toMatch(
-      /\.conversation button \{\s*min-height: var\(--touch\);/,
+      /\.conversation button:not\(:where\(\.picture-management \*\)\) \{\s*min-height: var\(--touch\);/,
     );
     expect(phone).toMatch(
       /\.conversation__dock \.vote-card \{[\s\S]*padding-inline-start: max\([\s\S]*safe-area-inset-left/,

@@ -8,7 +8,14 @@ import {
 import type { ReactNode } from "react";
 import { Button } from "../components/Button.js";
 import { useSuggestedVotes } from "../hooks/use-suggested-votes.js";
-import type { Ballot, MyVote, Poll, PulseApi, Results } from "../api/types.js";
+import type {
+  Ballot,
+  MyVote,
+  Poll,
+  PublicImage,
+  PulseApi,
+  Results,
+} from "../api/types.js";
 import { ApiError, UNREACHABLE } from "../api/types.js";
 import type { Route } from "../flow/route.js";
 import { cardStatus, closingNote, nextFor } from "../flow/conversation.js";
@@ -39,6 +46,9 @@ import { SuggestedVotesRail } from "../components/SuggestedVotesRail.js";
 import { AnsweredRail } from "../components/AnsweredRail.js";
 import { PostedBanner } from "../components/PostedBanner.js";
 import { CopyLink } from "../components/CopyLink.js";
+import { PictureManagement } from "../components/PictureManagement.js";
+import { usePictureManagement } from "../hooks/use-picture-management.js";
+import { usePollPictureAccess } from "../hooks/use-poll-picture-access.js";
 import { ItemPicture } from "../components/ItemPicture.js";
 import {
   QuestionPager,
@@ -222,6 +232,8 @@ export function Conversation({
     onSignedOut: signedOut,
     onForgotten: forgotten,
     watchSignOut: true,
+    watchSignIn: true,
+    onAccountChanged: forgotten,
   });
   const remembered = useCallback((answer: Answer) => {
     setAnswers((old) =>
@@ -536,7 +548,12 @@ function LoadedQuestion({
 }) {
   const fetched = usePoll(api, pollId);
   const poll = fetched.status === "ready" ? fetched.value : null;
-  const { session, onPollLoaded } = identity;
+  const { session, onPollLoaded, recheck } = identity;
+  const accountId = session.status === "signedIn" ? session.me.id : null;
+  const { canManage: canManagePicture, revoke: revokePictureAccess } =
+    usePollPictureAccess(api, poll?.id, accountId);
+  const [updatedImage, setUpdatedImage] = useState<PublicImage>();
+
   useLayoutEffect(() => {
     onPollLoaded(poll);
     return () => onPollLoaded(null);
@@ -595,6 +612,7 @@ function LoadedQuestion({
                   poll.votePrivacy !== "public" ||
                     session.status === "signedIn",
                 );
+                const image = updatedImage ?? poll.image;
                 return (
                   // One heading node while the card opens and closes, so focus
                   // on it survives; it is drawn afresh once the poll loads.
@@ -604,7 +622,7 @@ function LoadedQuestion({
                       {poll.question}
                     </h1>
                     <ItemPicture
-                      image={poll.image}
+                      image={image?.kind === "tile" ? undefined : image}
                       community={poll.community}
                     />
                     {poll.context ? (
@@ -624,6 +642,18 @@ function LoadedQuestion({
                           ).href
                         }
                         question={poll.question}
+                      />
+                    ) : null}
+                    {canManagePicture && accountId !== null ? (
+                      <PollPictureForm
+                        key={accountId}
+                        api={api}
+                        id={poll.id}
+                        accountId={accountId}
+                        image={image}
+                        onPictureChanged={setUpdatedImage}
+                        recheck={recheck}
+                        revokeAccess={revokePictureAccess}
                       />
                     ) : null}
                   </section>
@@ -694,6 +724,86 @@ function LoadedQuestion({
     />
   ) : (
     renderPage(null, null)
+  );
+}
+
+function PollPictureForm({
+  api,
+  id,
+  accountId,
+  image,
+  onPictureChanged,
+  recheck,
+  revokeAccess,
+}: {
+  api: PulseApi;
+  id: string;
+  accountId: string;
+  image: PublicImage | undefined;
+  onPictureChanged: (image: PublicImage) => void;
+  recheck: QuestionIdentity["recheck"];
+  revokeAccess: () => void;
+}) {
+  const recheckPictureAccess = useCallback(async () => {
+    // A picture write's 401 belongs to this draft. Keep the question mounted
+    // while its poster signs in again, and verify both account and permission.
+    const found = await recheck(false);
+    if (!found.settled || found.accountId !== accountId) return false;
+    const canManage = await api.pollPictureAccess(id).catch(() => undefined);
+    if (canManage === false) revokeAccess();
+    return canManage === true;
+  }, [api, id, accountId, recheck, revokeAccess]);
+  const pictureRequests = useRef(0);
+  const live = useRef(false);
+  useLayoutEffect(() => {
+    live.current = true;
+    return () => {
+      live.current = false;
+    };
+  }, []);
+  const management = usePictureManagement({
+    api,
+    image,
+    access: "signedIn",
+    canManage: true,
+    readPicture: async () => {
+      const request = ++pictureRequests.current;
+      const current = await api.poll(id, AbortSignal.timeout(15_000));
+      if (request !== pictureRequests.current) return undefined;
+      return current.image ?? { kind: "tile" };
+    },
+    changePicture: async (change) => {
+      pictureRequests.current += 1;
+      try {
+        return await api.changePollPicture(id, change);
+      } catch (error) {
+        if (
+          live.current &&
+          error instanceof ApiError &&
+          error.status === 403 &&
+          error.code === "poster_required"
+        ) {
+          revokeAccess();
+        }
+        throw error;
+      }
+    },
+    onPictureChanged: (updated) => {
+      if (live.current) onPictureChanged(updated);
+    },
+    onSignedOut: recheckPictureAccess,
+    retrySignInOnReturn: true,
+    reloadOnConflict: false,
+  });
+  return (
+    <PictureManagement
+      management={management}
+      signInHref={pathOf({
+        kind: "signIn",
+        returnTo: { kind: "conversation", pollId: id },
+      })}
+      removalQuestion="Remove this picture from the question?"
+    />
   );
 }
 

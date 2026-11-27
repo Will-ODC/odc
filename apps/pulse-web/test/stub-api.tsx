@@ -102,6 +102,8 @@ export function stubApi(over: Partial<PulseApi> = {}): PulseApi {
     listPolls: unused("listPolls"),
     myVotes: () => Promise.resolve({ votes: [], nextCursor: null }),
     poll: () => Promise.resolve(poll()),
+    pollPictureAccess: async () => false,
+    changePollPicture: unused("changePollPicture"),
     cast: () =>
       Promise.resolve({
         status: "counted" as const,

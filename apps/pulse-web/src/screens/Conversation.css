@@ -61,6 +61,9 @@
   color: var(--muted);
   line-height: 1.5;
 }
+.conversation__hero > .picture-management {
+  margin-top: var(--gutter);
+}
 .conversation__hero > .conversation__context {
   max-inline-size: var(--prose-measure);
   margin-block: 0 var(--step);
@@ -124,7 +127,7 @@
   overscroll-behavior: contain;
   pointer-events: auto;
 }
-.conversation button {
+.conversation button:not(:where(.picture-management *)) {
   font: inherit;
   font-size: var(--t-small);
   font-weight: 600;
@@ -135,10 +138,13 @@
   padding: var(--step) calc(var(--step) * 1.5);
   cursor: pointer;
 }
-.conversation button:hover:not(:disabled):not([aria-disabled="true"]) {
+.conversation
+  button:not(:where(.picture-management *)):hover:not(:disabled):not(
+    [aria-disabled="true"]
+  ) {
   background: var(--hover);
 }
-.conversation button:disabled {
+.conversation button:not(:where(.picture-management *)):disabled {
   cursor: default;
   opacity: 0.55;
 }
@@ -298,7 +304,7 @@
   .conversation__question:has(.conversation__help) .conversation__scroll {
     padding-bottom: var(--gutter);
   }
-  .conversation button {
+  .conversation button:not(:where(.picture-management *)) {
     min-height: var(--touch);
   }
 }

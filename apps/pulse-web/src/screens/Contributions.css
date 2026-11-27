@@ -131,10 +131,6 @@
   color: var(--muted);
   font-size: var(--t-small);
 }
-.contribution-expired {
-  color: var(--ink);
-  font-size: var(--t-body);
-}
 .contributions-empty {
   padding: calc(var(--gutter) * 2) 0;
   border-top: var(--hairline) solid var(--line);
@@ -159,9 +155,7 @@
   font-weight: 600;
   padding: var(--gutter) 0 calc(var(--step) * 2);
 }
-.contribution-form > :is(.contribution-button, .btn),
-.contribution-picture fieldset > .btn,
-.contribution-picture-removal {
+.contribution-form > :is(.contribution-button, .btn) {
   align-self: flex-start;
 }
 /* Native selects can ignore line-height. Match the text input's inherited
@@ -200,8 +194,7 @@
 .contribution-confirm > .field {
   margin-bottom: var(--step);
 }
-.contribution-error,
-.contribution-picture-removal .two-press__error {
+.contribution-error {
   color: var(--red);
 }
 .contribution-timeline li {
@@ -224,26 +217,13 @@
   --focus-ring-offset: calc(var(--hairline) * 3);
 }
 @media (max-width: 699px) {
-  .contribution-form > :is(.contribution-button, .btn),
-  .contribution-picture fieldset > .btn {
+  .contribution-form > :is(.contribution-button, .btn) {
     width: 100%;
   }
 }
 
 .contribution-disclosure[open] > summary {
   margin-bottom: var(--gutter);
-}
-.contribution-picture[open] {
-  margin-bottom: var(--gutter);
-}
-.contribution-picture .contribution-error {
-  font-size: var(--t-small);
-}
-.contribution-picture-removal .two-press {
-  justify-content: flex-start;
-}
-.contribution-picture-removal :is(.two-press__question, .two-press__error) {
-  text-align: start;
 }
 /* Try again, centred under the centred message it answers, as on Browse. */
 .contribution-retry {

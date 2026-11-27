@@ -1,4 +1,5 @@
-import type { PictureInput, PublicImage } from "./types.js";
+import type { PictureChange, PictureInput, PublicImage } from "./types.js";
+import { pictureChangedMessage, publicImage } from "./pictures.js";
 
 export type ContributionKind = "project" | "fundraiser" | "group_buy" | "offer";
 export type ContributionStatus =
@@ -70,8 +71,7 @@ export interface OrganizerMessage {
   message: string;
   createdAt: string;
 }
-export type ContributionPictureChange =
-  PictureInput | { expectedImageId: string };
+export type ContributionPictureChange = PictureChange;
 
 export interface ContributionsApi {
   sendMessage(
@@ -117,20 +117,6 @@ const statuses = ["open", "in_progress", "completed", "cancelled"];
 const isRecord = (value: unknown): value is Record<string, unknown> =>
   typeof value === "object" && value !== null;
 const text = (value: unknown): value is string => typeof value === "string";
-function publicImage(value: unknown): value is PublicImage {
-  if (!isRecord(value)) return false;
-  if (value.kind === "tile") return true;
-  return (
-    (value.kind === "upload" || value.kind === "category") &&
-    text(value.displayUrl) &&
-    text(value.thumbUrl) &&
-    text(value.alt) &&
-    typeof value.width === "number" &&
-    value.width > 0 &&
-    typeof value.height === "number" &&
-    value.height > 0
-  );
-}
 function summary(value: unknown): value is ContributionSummary {
   if (!isRecord(value)) return false;
   return (
@@ -208,8 +194,7 @@ function contribution(value: unknown): value is Contribution {
 export function accountChangedMessage(what = "this"): string {
   return `Your account changed, so ${what} wasn't sent.`;
 }
-export const pictureChangedMessage =
-  "The posted picture changed. Review it before removing.";
+export { pictureChangedMessage } from "./pictures.js";
 /** 409 codes that are not "someone else changed this": each says what to do. */
 const conflicts: Record<string, string> = {
   account_changed: accountChangedMessage(),

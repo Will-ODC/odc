@@ -1,0 +1,64 @@
+.picture-management[open] {
+  margin-bottom: var(--gutter);
+}
+.picture-management__summary {
+  display: inline-flex;
+  justify-content: center;
+  align-items: center;
+  min-height: var(--touch);
+  padding: var(--step) calc(var(--step) * 2);
+  border: var(--hairline) solid var(--green);
+  border-radius: var(--r-control);
+  background: var(--surface);
+  color: var(--green);
+  font: inherit;
+  font-weight: 600;
+  cursor: pointer;
+  box-sizing: border-box;
+}
+.picture-management__summary:hover {
+  background: var(--green-wash);
+  color: var(--green-hover);
+}
+.picture-management[open] > summary {
+  margin-bottom: var(--gutter);
+}
+.picture-management__form,
+.picture-management__form fieldset {
+  display: flex;
+  flex-direction: column;
+  gap: calc(var(--step) * 2);
+}
+.picture-management__form fieldset {
+  min-width: 0;
+  margin: 0;
+  padding: 0;
+  border: 0;
+}
+.picture-management__form textarea.field__control {
+  resize: vertical;
+}
+.picture-management__form > .btn,
+.picture-management__form fieldset > .btn,
+.picture-management__removal {
+  align-self: flex-start;
+}
+.picture-management__error,
+.picture-management__removal .two-press__error {
+  color: var(--red);
+}
+.picture-management__error {
+  font-size: var(--t-small);
+}
+.picture-management__removal .two-press {
+  justify-content: flex-start;
+}
+.picture-management__removal :is(.two-press__question, .two-press__error) {
+  text-align: start;
+}
+@media (max-width: 699px) {
+  .picture-management__form > .btn,
+  .picture-management__form fieldset > .btn {
+    width: 100%;
+  }
+}
