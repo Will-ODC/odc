@@ -773,7 +773,9 @@ it("keeps the draft and focuses the picture field when publishing refuses an exp
     }),
   ).toBeTruthy();
   expectDraft();
-  expect((description as HTMLTextAreaElement).value).toBe("A garden bed");
+  expect(
+    screen.getByLabelText<HTMLTextAreaElement>("Picture description").value,
+  ).toBe("A garden bed");
   expect(document.activeElement).toBe(
     screen.getByRole("button", { name: "Choose a picture" }),
   );

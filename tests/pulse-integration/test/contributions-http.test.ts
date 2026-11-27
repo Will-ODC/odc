@@ -121,12 +121,20 @@ describe("Contributions through the browser HTTP adapter", () => {
     });
     const upload = (identity = owner.identity) =>
       identity.uploadPicture(file, new AbortController().signal);
+    const original = { id: await upload(), alt: "The park entrance" };
     const created = await owner.api.create(
-      { ...project, image: { id: await upload(), alt: "The park entrance" } },
+      { ...project, image: original },
       randomUUID(),
       owner.account.id,
     );
     expect(created.image.kind).toBe("upload");
+    expect(
+      (await member.api.detail(created.id)).contribution.image,
+    ).toMatchObject({
+      kind: "upload",
+      alt: original.alt,
+      displayUrl: `/api/poll-images/${original.id}/display.webp`,
+    });
     const replacement = { id: await upload(), alt: "Accessible park ramp" };
     const updated = await owner.api.changePicture(created.id, replacement);
     expect(updated).toMatchObject({
