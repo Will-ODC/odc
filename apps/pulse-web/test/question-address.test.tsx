@@ -10,14 +10,8 @@ import {
 import userEvent from "@testing-library/user-event";
 import { afterEach, beforeAll, expect, it } from "vitest";
 import { App } from "../src/App.js";
-import {
-  CAST_RESULTS,
-  counted,
-  graph,
-  poll,
-  results,
-  stubApi,
-} from "./stub-api.js";
+import { castYes } from "./conversation-fixtures.js";
+import { graph, poll, results, stubApi } from "./stub-api.js";
 
 afterEach(cleanup);
 beforeAll(() => import("../src/components/BarChart.js"));
@@ -30,7 +24,7 @@ it("Next updates the address; Back and Forward restore the question and saved an
     <App
       api={stubApi({
         poll: graph([first, parks]),
-        cast: async () => counted(1, CAST_RESULTS),
+        cast: castYes,
       })}
     />,
   );

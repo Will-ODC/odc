@@ -24,6 +24,7 @@ export async function answer(label = "Yes") {
   await main().findByText("Counted");
   return user;
 }
+// The page's own bar comes first; an answered card can carry a header too.
 export const banner = () => within(screen.getAllByRole("banner")[0]!);
 /** The account's controls sit behind one button (walkthrough, 2026-10-21). */
 export async function openAccount(user: ReturnType<typeof userEvent.setup>) {

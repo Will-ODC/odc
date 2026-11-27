@@ -28,7 +28,6 @@ import {
   elapse,
   castYes,
 } from "./conversation-fixtures.js";
-
 import { tally } from "./pulse-server.js";
 
 afterEach(cleanup);

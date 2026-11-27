@@ -10,7 +10,8 @@ import {
 import userEvent from "@testing-library/user-event";
 import { afterEach, beforeAll, expect, it } from "vitest";
 import { App } from "../src/App.js";
-import { CAST_RESULTS, counted, graph, poll, stubApi } from "./stub-api.js";
+import { castYes } from "./conversation-fixtures.js";
+import { graph, poll, stubApi } from "./stub-api.js";
 
 beforeAll(() => import("../src/components/BarChart.js"));
 afterEach(cleanup);
@@ -40,7 +41,7 @@ it("a left swipe over an answered question opens the next one, like Next questio
     <App
       api={stubApi({
         poll: graph([first, parks]),
-        cast: async () => counted(1, CAST_RESULTS),
+        cast: castYes,
       })}
     />,
   );
@@ -82,7 +83,7 @@ it("fades in a question reached with Back, and slides in the next one again afte
     <App
       api={stubApi({
         poll: graph([first, parks]),
-        cast: async () => counted(1, CAST_RESULTS),
+        cast: castYes,
       })}
     />,
   );

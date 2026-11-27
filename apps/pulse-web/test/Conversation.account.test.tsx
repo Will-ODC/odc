@@ -20,7 +20,6 @@ import {
   castYes,
   said,
 } from "./conversation-fixtures.js";
-
 import { tally } from "./pulse-server.js";
 
 afterEach(cleanup);
@@ -29,7 +28,6 @@ afterEach(cleanup);
 beforeAll(() => import("../src/components/BarChart.js"));
 
 const voter = { id: "v1", community: null, email: "voter@example.org" };
-// The page's own bar comes first; an answered card can carry a header too.
 it("offers the way in when nobody is signed in", async () => {
   render(<Conversation api={stubApi()} pollId="ads-free" />);
   expect(await banner().findByRole("link", { name: "Sign in" })).toBeTruthy();
