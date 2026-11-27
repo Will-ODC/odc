@@ -114,6 +114,7 @@ test("applies_a_fresh_schema", { skip }, async () => {
       "017",
       "018",
       "019",
+      "020",
     ]);
     assert.deepEqual(await tablesIn(pool, schema), TABLES);
   });
@@ -592,6 +593,7 @@ test(
         "community_pkey",
         "content_change_pkey",
         "content_change_target_idx",
+        "contribution_image_id_key",
         "contribution_newest",
         "contribution_owner_recent",
         "contribution_pkey",

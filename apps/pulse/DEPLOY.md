@@ -118,16 +118,16 @@ that window. A pre-012 marker is dated at the first startup or redemption
 after upgrading and retained for the full window from then. Account email credentials and database backups have separate
 retention; this cleanup does not erase them from backups.
 
-### Poll pictures (ADR-0047)
+### Pictures (ADR-0047, ADR-0049)
 
-Uploaded poll pictures are stored in this database: `image` holds each
+Uploaded poll and contribution pictures are stored in this database: `image` holds each
 picture's size, owner link and description, `image_bytes` its two re-encoded
 WebP variants (about 150–300 KB and 15–30 KB). The original upload is never
 stored. **Database backups therefore contain picture bytes and descriptions,
 including pictures later removed or purged, for the backup retention period.**
 Plan backup size and retention with that in mind.
 
-A picture uploaded but not attached to a poll within 24 hours is deleted with
+A picture uploaded but not attached to an item within 24 hours is deleted with
 its bytes at the next API startup or upload. Like the sign-in sweep there is
 no scheduler; a failed sweep is logged and never stops startup or an upload.
 The same sweep removes `image_upload` rows (an account id and upload time,
@@ -150,6 +150,15 @@ emergency path for an abusive picture is a database operator setting the
 poll's existing `hidden` flag (`update polls set hidden = true where id =
 …`), which hides the poll and so its picture; served copies leave browser
 caches within an hour. Record by hand that this was done.
+
+For an abusive contribution picture before #585, the database operator uses
+one transaction. Lock the contribution row and read its current picture ID
+and display variant SHA-256. Insert a `content_change` row with
+`target_kind = 'contribution'`, `action = 'image_remove'`,
+`actor_kind = 'site_owner'`, the target and image IDs, the display SHA-256,
+a reason and the time. Set `contribution.image_id` to null, then delete the
+`image` row so both variants are deleted by cascade. The contribution
+shows its fallback, and the same browser cache window applies.
 
 ## API environment
 
