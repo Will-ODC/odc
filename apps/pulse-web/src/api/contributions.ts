@@ -70,6 +70,9 @@ export interface OrganizerMessage {
   message: string;
   createdAt: string;
 }
+export type ContributionPictureChange =
+  PictureInput | { expectedImageId: string };
+
 export interface ContributionsApi {
   sendMessage(
     id: string,
@@ -86,7 +89,10 @@ export interface ContributionsApi {
    */
   mine(cursor?: string, ownerAccountId?: string): Promise<ContributionPage>;
   detail(id: string): Promise<ContributionDetail>;
-  changePicture(id: string, image: PictureInput | null): Promise<PublicImage>;
+  changePicture(
+    id: string,
+    change: ContributionPictureChange,
+  ): Promise<PublicImage>;
   create(
     input: ContributionInput,
     key: string,
@@ -205,6 +211,7 @@ export function accountChangedMessage(what = "this"): string {
 /** 409 codes that are not "someone else changed this": each says what to do. */
 const conflicts: Record<string, string> = {
   account_changed: accountChangedMessage(),
+  image_changed: "The posted picture changed. Review it before removing.",
   sender_limit:
     "You have added as many entries to this contribution as one person can.",
   record_full: "This contribution has reached its entry limit.",
@@ -374,14 +381,18 @@ export class HttpContributionsApi implements ContributionsApi {
       );
     return { contribution: data.contribution, canManage: data.canManage };
   }
-  async changePicture(id: string, image: PictureInput | null) {
-    const data = await this.request(
-      `/${encodeURIComponent(id)}/image`,
-      image ?? undefined,
-      undefined,
-      undefined,
-      image === null ? "DELETE" : "PUT",
-    );
+  async changePicture(id: string, change: ContributionPictureChange) {
+    const path = `/${encodeURIComponent(id)}/image`;
+    const data =
+      "expectedImageId" in change
+        ? await this.request(
+            `${path}?${new URLSearchParams(change)}`,
+            undefined,
+            undefined,
+            undefined,
+            "DELETE",
+          )
+        : await this.request(path, change, undefined, undefined, "PUT");
     if (!publicImage(data.image))
       throw new ContributionsError(
         0,

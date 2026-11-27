@@ -7,12 +7,13 @@ import {
 } from "react";
 import type { FormEvent } from "react";
 import { useSuggestedVotes } from "../hooks/use-suggested-votes.js";
-import type { PictureInput, PulseApi } from "../api/types.js";
+import type { PulseApi } from "../api/types.js";
 import {
   accountChangedMessage,
   contributionsApi,
   ContributionsError,
   type ContributionsApi,
+  type ContributionPictureChange,
   type Contribution,
   type ParticipationKind,
   type UpdateInput,
@@ -305,17 +306,25 @@ export function ContributionDetail({
     if (active === null || active === document.body) heading.current?.focus();
   }, [refreshError]);
   function changed(contribution: Contribution) {
-    const before =
-      data.status === "ready" ? data.value.contribution.image : undefined;
-    replace((detail) => ({
-      ...detail,
-      contribution:
-        detail.contribution.image === before
-          ? contribution
-          : { ...contribution, image: detail.contribution.image },
-    }));
-    if (JSON.stringify(before) !== JSON.stringify(contribution.image)) reload();
+    replace((detail) =>
+      data.status === "ready" && detail.contribution === data.value.contribution
+        ? { ...detail, contribution }
+        : undefined,
+    );
   }
+  const recheckPictureAccess = useCallback(async () => {
+    const found = await recheck();
+    if (
+      !found.settled ||
+      found.accountId === null ||
+      found.accountId !== drafts.owner
+    )
+      return false;
+    return client.detail(id).then(
+      ({ canManage }) => canManage,
+      () => false,
+    );
+  }, [client, id, drafts.owner, recheck]);
   const suggestions = useSuggestedVotes({
     api,
     history: mine.data,
@@ -415,11 +424,11 @@ export function ContributionDetail({
                             ...detail,
                             contribution: { ...detail.contribution, image },
                           }
-                        : detail,
+                        : undefined,
                     );
                     reload();
                   }}
-                  onSignedOut={() => void recheck()}
+                  onSignedOut={recheckPictureAccess}
                 />
               ) : null}
               <section className="contribution-section">
@@ -639,64 +648,65 @@ function ContributionPictureForm({
   item: Contribution;
   client: ContributionsApi;
   onPictureChanged: (image: Contribution["image"]) => void;
-  onSignedOut: () => void;
+  onSignedOut: () => Promise<boolean>;
 }) {
   const [uploadSignedOut, setUploadSignedOut] = useState(false);
   if (access === "expired" && uploadSignedOut) setUploadSignedOut(false);
-  const picture = usePictureField(
-    () => {
-      setUploadSignedOut(true);
-      onSignedOut();
-    },
-    api,
-    "save",
-  );
+  const picture = usePictureField(() => setUploadSignedOut(true), api, "save");
   const [removing, setRemoving] = useState<string | null>(null);
   const postedPicture =
-    item.image.kind === "upload" ? item.image.displayUrl : null;
-  const readPicture = async () =>
-    (await client.detail(item.id)).contribution.image;
-  const save = useContributionSave<PictureInput | null>(async (image) => {
-    if (image === null) {
-      const attached = await readPicture();
-      if (attached.kind !== "upload" || attached.displayUrl !== postedPicture) {
-        onPictureChanged(attached);
-        if (attached.kind !== "upload") return;
-        throw new ContributionsError(
-          409,
-          "The posted picture changed. Review it before removing.",
-        );
-      }
-    }
-    try {
-      onPictureChanged(await client.changePicture(item.id, image));
-    } catch (error) {
-      if (error instanceof ContributionsError) {
-        if (error.status === 401) onSignedOut();
-        else if (
-          error.status === 0 ||
-          error.status >= 500 ||
-          error.code === "image_unavailable"
-        ) {
-          const attached = await readPicture();
-          onPictureChanged(attached);
+    item.image.kind === "upload"
+      ? /^\/api\/poll-images\/([^/]+)\/display\.webp$/.exec(
+          item.image.displayUrl,
+        )?.[1]
+      : undefined;
+  const save = useContributionSave<ContributionPictureChange>(
+    async (change) => {
+      try {
+        onPictureChanged(await client.changePicture(item.id, change));
+      } catch (error) {
+        if (error instanceof ContributionsError) {
           if (
-            image === null
-              ? attached.kind !== "upload"
-              : attached.kind === "upload" &&
-                attached.displayUrl ===
-                  `/api/poll-images/${encodeURIComponent(image.id)}/display.webp` &&
-                attached.alt === image.alt
-          )
-            return;
-          if (error.code === "image_unavailable")
-            picture.reportPostError("image_unavailable");
+            error.status === 0 ||
+            error.status >= 500 ||
+            error.code === "image_unavailable" ||
+            error.code === "image_changed"
+          ) {
+            const attached = (await client.detail(item.id)).contribution.image;
+            onPictureChanged(attached);
+            if (
+              "expectedImageId" in change
+                ? attached.kind !== "upload"
+                : attached.kind === "upload" &&
+                  attached.displayUrl ===
+                    `/api/poll-images/${encodeURIComponent(change.id)}/display.webp` &&
+                  attached.alt === change.alt
+            )
+              return;
+            if (error.code === "image_unavailable")
+              picture.reportPostError("image_unavailable");
+          }
         }
+        throw error;
       }
-      throw error;
-    }
-  }, picture.reset);
+    },
+    picture.reset,
+  );
   const outcome = useSendOutcome(save, access);
+  const { errorStatus, clearFailure } = save;
+  useEffect(() => {
+    if (access !== "signedIn" || (!uploadSignedOut && errorStatus !== 401))
+      return;
+    let live = true;
+    void onSignedOut().then((verified) => {
+      if (!live || !verified) return;
+      setUploadSignedOut(false);
+      clearFailure();
+    });
+    return () => {
+      live = false;
+    };
+  }, [access, uploadSignedOut, errorStatus, onSignedOut, clearFailure]);
   const signInAgain =
     access === "expired" || uploadSignedOut || save.errorStatus === 401;
   const canWrite = canManage && !signInAgain;
@@ -718,7 +728,7 @@ function ContributionPictureForm({
         : { status: "idle" };
   const showRemove =
     canWrite &&
-    postedPicture !== null &&
+    postedPicture !== undefined &&
     (!save.pending || removingShown) &&
     picture.selection.status === "empty" &&
     picture.description === "";
@@ -759,7 +769,7 @@ function ContributionPictureForm({
               progress={removal}
               onConfirm={() => {
                 setRemoving(postedPicture);
-                void save.submit(null);
+                void save.submit({ expectedImageId: postedPicture });
               }}
               onCancel={() => {
                 setRemoving(null);

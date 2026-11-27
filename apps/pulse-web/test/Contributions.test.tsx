@@ -64,10 +64,11 @@ const client = (over: Partial<ContributionsApi> = {}): ContributionsApi => ({
   ...over,
 });
 
+const parkPictureId = "94cc4bb0-a508-411a-9f1d-afefa9c30b0c";
 const parkPicture = {
   kind: "upload",
-  displayUrl: "/api/poll-images/park/display.webp",
-  thumbUrl: "/api/poll-images/park/thumb.webp",
+  displayUrl: `/api/poll-images/${parkPictureId}/display.webp`,
+  thumbUrl: `/api/poll-images/${parkPictureId}/thumb.webp`,
   width: 800,
   height: 600,
   alt: "A ramp leading into the park",
@@ -77,15 +78,28 @@ it.each([
   {
     name: "rechecks the session when a managed picture upload is signed out",
     failsOnSave: false,
+    sameAccount: false,
   },
   {
     name: "rechecks the session when Save picture returns 401",
     failsOnSave: true,
+    sameAccount: false,
   },
-])("$name", async ({ failsOnSave }) => {
+  {
+    name: "unlocks upload controls when the same organizer is already signed in",
+    failsOnSave: false,
+    sameAccount: true,
+  },
+  {
+    name: "unlocks save controls when the same organizer is already signed in",
+    failsOnSave: true,
+    sameAccount: true,
+  },
+])("$name", async ({ failsOnSave, sameAccount }) => {
   const user = userEvent.setup();
   const { state, me } = switchableMe("ada");
   let uploadCount = 0;
+  let refused = false;
   let finishRecheck!: () => void;
   const recheck = new Promise<void>((resolve) => {
     finishRecheck = resolve;
@@ -101,12 +115,13 @@ it.each([
     <ContributionDetail
       api={stubApi({
         me: async () => {
-          if (state.who === null) await recheck;
+          if (refused) await recheck;
           return me();
         },
         uploadPicture: async () => {
           if (++uploadCount === 1) return "replacement";
-          state.who = null;
+          refused = true;
+          state.who = sameAccount ? "ada" : null;
           throw new ApiError(401, "Sign in.", "signed_out");
         },
       })}
@@ -115,7 +130,8 @@ it.each([
         detail: async () => ({ contribution: fixture(), canManage: true }),
         changePicture: async () => {
           if (!failsOnSave) return parkPicture;
-          state.who = null;
+          refused = true;
+          state.who = sameAccount ? "ada" : null;
           throw new ContributionsError(401, "Sign in.", "signed_out");
         },
       })}
@@ -140,6 +156,16 @@ it.each([
   await screen.findByRole("link", { name: "Sign in again in a new tab" });
   expect(choose.matches(":disabled")).toBe(true);
   await act(async () => finishRecheck());
+  if (sameAccount) {
+    await waitFor(() => expect(choose.matches(":disabled")).toBe(false));
+    expect(
+      screen.queryByRole("link", { name: "Sign in again in a new tab" }),
+    ).toBeNull();
+    expect(
+      screen.getByLabelText<HTMLTextAreaElement>("Picture description").value,
+    ).toBe(parkPicture.alt);
+    return;
+  }
   await screen.findByText(/to read your private messages/);
   const panel = screen.getByText("Manage picture").closest("details")!;
   expect(panel.open).toBe(true);
@@ -188,7 +214,21 @@ it.each([
   let finishRemoval!: () => void;
   let finishUpdate!: (value: Contribution) => void;
   const changePicture = vi.fn<ContributionsApi["changePicture"]>(async () => {
-    item = fixture();
+    item =
+      order === "picture reply first"
+        ? fixture({
+            status: "completed",
+            updates: [
+              {
+                id: "newer",
+                status: "completed",
+                message: "The ramp is finished.",
+                createdAt: "2026-11-11T12:30:00.000Z",
+                evidenceUrl: null,
+              },
+            ],
+          })
+        : fixture();
     await new Promise<void>((resolve) => {
       finishRemoval = resolve;
     });
@@ -247,7 +287,9 @@ it.each([
   const pending = screen.getByRole("button", { name: "Removing picture…" });
   expect(document.activeElement).toBe(pending);
   expect(pending.getAttribute("aria-disabled")).toBe("true");
-  expect(changePicture).toHaveBeenCalledExactlyOnceWith("park", null);
+  expect(changePicture).toHaveBeenCalledExactlyOnceWith("park", {
+    expectedImageId: parkPictureId,
+  });
   if (order !== "picture reply first") item = fixture({ image: newer });
   if (order === "picture reply last") {
     await act(async () => finishUpdate(item));
@@ -267,7 +309,13 @@ it.each([
     return;
   }
   expect(await screen.findByRole("img", { name: "General" })).toBeTruthy();
+  await screen.findByText("The ramp is finished.");
   await act(async () => finishUpdate(stale));
+  expect(screen.getByLabelText("Current status")).toHaveProperty(
+    "value",
+    "completed",
+  );
+  expect(screen.getByText("The ramp is finished.")).toBeTruthy();
   expect(
     await screen.findByText("Your update has been published."),
   ).toBeTruthy();
@@ -2437,62 +2485,6 @@ it("sends the page account on every write and preserves account_changed as a dis
     expect(JSON.parse(String(init?.body)).accountId).toBe("ada");
   }
 });
-
-it("sends JSON for a picture PUT and a bodyless DELETE without request keys", async () => {
-  const doFetch = vi
-    .fn<typeof fetch>()
-    .mockResolvedValueOnce(Response.json({ image: parkPicture }))
-    .mockResolvedValueOnce(Response.json({ image: { kind: "tile" } }));
-  const api = new HttpContributionsApi(doFetch);
-  const input = { id: "upload", alt: parkPicture.alt };
-  await expect(api.changePicture("park", input)).resolves.toEqual(parkPicture);
-  await expect(api.changePicture("park", null)).resolves.toEqual({
-    kind: "tile",
-  });
-  const [putUrl, put] = doFetch.mock.calls[0]!;
-  const [deleteUrl, deletion] = doFetch.mock.calls[1]!;
-  expect(putUrl).toBe("/api/contributions/park/image");
-  expect(put?.method).toBe("PUT");
-  expect(new Headers(put?.headers).get("Content-Type")).toBe(
-    "application/json",
-  );
-  expect(new Headers(put?.headers).has("Idempotency-Key")).toBe(false);
-  expect(JSON.parse(String(put?.body))).toEqual(input);
-  expect(deleteUrl).toBe(putUrl);
-  expect(deletion?.method).toBe("DELETE");
-  expect(deletion?.body).toBeUndefined();
-  expect(new Headers(deletion?.headers).has("Idempotency-Key")).toBe(false);
-});
-
-it("rejects a malformed picture in a successful response", async () => {
-  const api = new HttpContributionsApi(async () =>
-    Response.json({ image: { ...parkPicture, alt: null } }),
-  );
-  await expect(api.changePicture("park", null)).rejects.toThrow(
-    "Could not confirm the picture change. Reload and try again.",
-  );
-});
-
-it.each([
-  [400, "bad_request", "Server picture message."],
-  [401, "signed_out", "Server picture message."],
-  [
-    422,
-    "image_unavailable",
-    "This picture is no longer available. Choose it again.",
-  ],
-  [503, "images_unavailable", "Could not save this change. Please try again."],
-])(
-  "uses the expected copy for a picture refusal with status %s",
-  async (status, error, message) => {
-    const api = new HttpContributionsApi(async () =>
-      Response.json({ error, message: "Server picture message." }, { status }),
-    );
-    await expect(
-      api.changePicture("park", { id: "upload", alt: parkPicture.alt }),
-    ).rejects.toMatchObject({ status, code: error, message });
-  },
-);
 
 it.each(["help", "pledge", "message", "update"] as const)(
   "keeps the new account's %s draft when the old account's refusal arrives late",

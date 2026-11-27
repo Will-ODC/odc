@@ -16,7 +16,8 @@ import type { ViewData } from "./view-data.js";
  *
  * `replace` installs a newer value the page got from a write (a successful
  * participation, say). A read that started before it carries an older
- * snapshot, so its answer is dropped and the view is read again.
+ * snapshot, so its answer is dropped and the view is read again. A write's
+ * updater can likewise decline a superseded snapshot to trigger a fresh read.
  */
 export function useContributionRead<T>(
   load: () => Promise<T>,
@@ -28,17 +29,17 @@ export function useContributionRead<T>(
   const [refresh, setRefresh] = useState(0);
   const [refreshError, setRefreshError] = useState<string>();
   const writes = useRef(0);
-  // What is on screen, for the read's failure handler below.
+  // Update immediately so a second reply in the same render batch sees it.
   const shown = useRef(data);
-  useEffect(() => {
-    shown.current = data;
-  }, [data]);
+  const show = useCallback((value: ViewData<T>) => {
+    shown.current = value;
+    setData(value);
+  }, []);
   useEffect(() => {
     let live = true;
     const writesAtStart = writes.current;
-    setData((current) =>
-      keepReady && current.status === "ready" ? current : { status: "loading" },
-    );
+    if (!keepReady || shown.current.status !== "ready")
+      show({ status: "loading" });
     load().then(
       (value) => {
         if (!live) return;
@@ -47,7 +48,7 @@ export function useContributionRead<T>(
           return;
         }
         setRefreshError(undefined);
-        setData({ status: "ready", value });
+        show({ status: "ready", value });
       },
       (error) => {
         if (!live) return;
@@ -64,23 +65,29 @@ export function useContributionRead<T>(
         // Something is on screen: keep it, and say the update failed.
         if (keepReady && shown.current.status === "ready")
           setRefreshError(failure.message);
-        else setData(failure);
+        else show(failure);
       },
     );
     return () => {
       live = false;
     };
-  }, [load, revision, refresh, keepReady]);
+  }, [load, revision, refresh, keepReady, show]);
   const reload = useCallback(() => setRevision((value) => value + 1), []);
-  const replace = useCallback((update: (value: T) => T) => {
-    writes.current += 1;
-    setData((current) =>
-      current.status === "ready"
-        ? { status: "ready", value: update(current.value) }
-        : current,
-    );
-  }, []);
-  return { data, reload, setData, replace, refreshError };
+  const replace = useCallback(
+    (update: (value: T) => T | undefined) => {
+      const current = shown.current;
+      if (current.status !== "ready") return;
+      const value = update(current.value);
+      writes.current += 1;
+      if (value === undefined) {
+        reload();
+        return;
+      }
+      show({ status: "ready", value });
+    },
+    [reload, show],
+  );
+  return { data, reload, replace, refreshError };
 }
 
 /** Retains a request key across uncertain retries, rotating when the payload changes. */
