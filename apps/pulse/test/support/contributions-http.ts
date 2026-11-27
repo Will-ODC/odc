@@ -55,6 +55,23 @@ export const summarySchema = z
       .strict()
       .nullable(),
     community: z.object({ id: z.string(), label: z.string() }).strict(),
+    image: z.discriminatedUnion("kind", [
+      z.object({ kind: z.literal("tile") }).strict(),
+      z
+        .object({
+          kind: z.literal("upload"),
+          displayUrl: z
+            .string()
+            .regex(/^\/api\/poll-images\/[0-9a-f-]+\/display\.webp$/),
+          thumbUrl: z
+            .string()
+            .regex(/^\/api\/poll-images\/[0-9a-f-]+\/thumb\.webp$/),
+          width: z.number().int().min(1).max(1600),
+          height: z.number().int().min(1).max(1600),
+          alt: z.string().min(1),
+        })
+        .strict(),
+    ]),
     status,
     createdAt: timestamp,
   })

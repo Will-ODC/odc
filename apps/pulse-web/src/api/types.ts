@@ -14,11 +14,26 @@
 export type PollMethod = "single" | "approval";
 export type VotePrivacy = "anonymous" | "public";
 
+export type PollImage =
+  | {
+      kind: "upload" | "category";
+      displayUrl: string;
+      thumbUrl: string;
+      width: number;
+      height: number;
+      alt: string;
+    }
+  | { kind: "tile" };
+
 export interface Poll {
   /** Older API responses omit this field. */
   votePrivacy?: VotePrivacy;
   id: string;
   question: string;
+  /** Plain text from the poster, or null when absent. */
+  context?: string | null;
+  /** Older poll responses may lack a picture. */
+  image?: PollImage;
   /** Ordered; a ballot references positions in this array, never the text. */
   choices: string[];
   method: PollMethod;

@@ -33,9 +33,10 @@ Do not apply charter rules to `apps/**`, and do not relax them anywhere else.
   are merged; no Railway deploy yet. Still needed: the operator's Railway
   setup, DNS and the DEPLOY.md live checks. Anonymous or public-vote polls:
   ADR-0048 merged, steps 1-4a merged; 4b waits on 4a being live. Pictures
-  on every main-page item (ADR-0049): shared field and poll form merged.
-  Next: #701 contribution pictures, then #296. Test audit 2026-11-26: items
-  1, 2, 4 merged, 3 later.
+  on every main-page item (ADR-0049): shared field, poll form, #296 question
+  page and #701 server half merged. Next: #701 web half, then test-audit
+  item 3 (items 1, 2, 4 merged). Open decision: rich-text contribution
+  descriptions versus the single picture.
   → `memory/pulse.md`
 
 ## Load order

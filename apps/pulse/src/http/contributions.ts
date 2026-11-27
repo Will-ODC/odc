@@ -14,6 +14,7 @@ interface Deps {
 }
 const actor = Symbol("contribution actor");
 type Authenticated = FastifyRequest & { [actor]?: Voter };
+const picturePath = "/api/contributions/:id/image";
 const errors = {
   bad_request: [
     400,
@@ -24,6 +25,10 @@ const errors = {
   organizer_required: [403, "Only the organizer can do that."],
   origin_not_allowed: [403, "Open this site to send that request."],
   not_found: [404, "That contribution could not be found."],
+  image_unavailable: [
+    422,
+    "That picture is no longer available. Add it again.",
+  ],
   poll_not_found: [404, "Check the related poll ID or leave that field blank."],
   idempotency_conflict: [
     409,
@@ -50,8 +55,16 @@ const errors = {
   ],
   server_error: [500, "Something went wrong. Try again."],
 } as const;
+const pictureMessages: Partial<Record<keyof typeof errors, string>> = {
+  bad_request: "Check the picture and its description, then try again.",
+  signed_out: "Sign in to change this picture.",
+};
 function refuse(reply: FastifyReply, code: keyof typeof errors) {
-  const [status, message] = errors[code];
+  const [status, defaultMessage] = errors[code];
+  const message =
+    reply.routeOptions.url === picturePath
+      ? (pictureMessages[code] ?? defaultMessage)
+      : defaultMessage;
   return reply.code(status).send({ error: code, message });
 }
 export async function registerContributionRoutes(
@@ -112,8 +125,9 @@ export async function registerContributionRoutes(
       if (!voter) return refuse(reply, "signed_out");
       (request as Authenticated)[actor] = voter;
       if (
+        request.method !== "DELETE" &&
         request.headers["content-type"]?.split(";")[0]?.trim().toLowerCase() !==
-        "application/json"
+          "application/json"
       )
         return refuse(reply, "bad_request");
     };
@@ -121,8 +135,13 @@ export async function registerContributionRoutes(
       onRequest: readGuard,
       config: { rateLimit: { max: 120, timeWindow: "1 minute" } },
     };
-    const writeOptions = {
+    const pictureOptions = {
       onRequest: mutationGuard,
+      bodyLimit: 32 * 1024,
+      config: { rateLimit: { max: 30, timeWindow: "1 minute" } },
+    };
+    const writeOptions = {
+      ...pictureOptions,
       preHandler: async (request: FastifyRequest, reply: FastifyReply) => {
         const body = request.body;
         if (!body || typeof body !== "object" || Array.isArray(body))
@@ -136,8 +155,6 @@ export async function registerContributionRoutes(
           return refuse(reply, "account_changed");
         request.body = fields;
       },
-      bodyLimit: 32 * 1024,
-      config: { rateLimit: { max: 30, timeWindow: "1 minute" } },
     };
     scope.get("/api/contributions", readOptions, async (request) =>
       store().list(listQuery(request.query)),
@@ -199,6 +216,24 @@ export async function registerContributionRoutes(
         return reply.code(result.replayed ? 200 : 201).send(result);
       },
     );
+    for (const method of ["PUT", "DELETE"] as const) {
+      scope.route({
+        method,
+        url: picturePath,
+        ...pictureOptions,
+        handler: async (request) => {
+          const voter = (request as Authenticated)[actor];
+          if (!voter) throw new ContributionError("signed_out");
+          const who = {
+            voterId: voter.id,
+            sessionGeneration: voter.sessionGeneration ?? 0,
+          };
+          return method === "PUT"
+            ? store().replacePicture(who, id(request), request.body)
+            : store().removePicture(who, id(request));
+        },
+      });
+    }
     for (const operation of ["create", "participate", "update"] as const) {
       const path =
         operation === "create"

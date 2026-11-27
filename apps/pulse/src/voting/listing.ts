@@ -1,5 +1,5 @@
 import { z } from "zod";
-import { publicPollImage, type PollImage } from "../images/public.js";
+import { publicImage, type ItemImage } from "../images/public.js";
 import { isOpen, type PollMethod, type VotePrivacy } from "./poll.js";
 
 /** Only public ordering/display fields; no author or voter data. */
@@ -12,7 +12,7 @@ export interface PollSummary {
   /** Fixed at creation (ADR-0048). */
   votePrivacy: VotePrivacy;
   /** The poster's visible picture, as on `Poll`; absent draws the tile. */
-  image?: PollImage;
+  image?: ItemImage;
 }
 export interface PollBoundary {
   createdAt: Date;
@@ -96,7 +96,7 @@ export function pollListPage(
       createdAt: p.createdAt.toISOString(),
       closesAt: p.closesAt?.toISOString() ?? null,
       open: isOpen(p, now),
-      image: publicPollImage(p.image),
+      image: publicImage(p.image),
       votePrivacy: p.votePrivacy,
     })),
     nextCursor:

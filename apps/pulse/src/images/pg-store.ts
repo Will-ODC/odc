@@ -9,12 +9,13 @@ import {
   type Variant,
 } from "./limits.js";
 import type { ProcessedImage } from "./process.js";
-import type { PollImage } from "./public.js";
+import type { ItemImage } from "./public.js";
 import {
   ImageStoreError,
   type ImageActor,
   type ImageStore,
   type ImageStoreOptions,
+  type PictureChange,
   type SavedImage,
   type ServedVariant,
 } from "./store.js";
@@ -91,12 +92,16 @@ export class PostgresImageStore implements ImageStore {
       poll_id: string | null;
       poll_image_id: string | null;
       poll_hidden: boolean | null;
+      contribution_id: string | null;
+      contribution_image_id: string | null;
     }>(
       "select i.owner_kind, i.owner_id, b.bytes, b.sha256," +
-        " p.id as poll_id, p.image_id as poll_image_id, p.hidden as poll_hidden" +
+        " p.id as poll_id, p.image_id as poll_image_id, p.hidden as poll_hidden," +
+        " c.id as contribution_id, c.image_id as contribution_image_id" +
         " from image i" +
         " join image_bytes b on b.image_id = i.id and b.variant = $2" +
         " left join polls p on i.owner_kind = 'poll' and p.id = i.owner_id" +
+        " left join contribution c on i.owner_kind = 'contribution' and c.id = i.owner_id" +
         " where i.id = $1",
       [id, variant],
     );
@@ -114,7 +119,13 @@ export class PostgresImageStore implements ImageStore {
         : row.owner_kind === "community"
           ? // No community default can be set before plan step 9.
             { kind: "community", defaultImageId: null }
-          : undefined;
+          : row.owner_kind === "contribution" && row.contribution_id !== null
+            ? {
+                kind: "contribution",
+                currentImageId: row.contribution_image_id,
+                visible: true,
+              }
+            : undefined;
     const link = { id, ownerKind: row.owner_kind, ownerId: row.owner_id };
     if (!mayServe(link, owner)) return undefined;
     return { bytes: row.bytes, sha256: row.sha256 };
@@ -164,46 +175,43 @@ export async function lockAttachablePending(
   return rows[0];
 }
 
-/**
- * Attach a locked pending picture to a poll, and write the audit row in the
- * same transaction. The poll row must already name the picture in `image_id`.
- */
-export async function attachToPoll(
+/** Attach a locked pending picture and record it in the same transaction. */
+export async function attachPicture(
   client: PoolClient,
   image: { id: string; width: number; height: number; sha256: string },
-  attach: {
-    pollId: string;
-    alt: string;
-    actorId: string;
-    now: Date;
-    changeId: string;
-  },
-): Promise<PollImage> {
+  alt: string,
+  change: PictureChange,
+): Promise<ItemImage> {
   const updated = await client.query(
-    "update image set owner_kind = 'poll', owner_id = $2, alt = $3," +
-      " attached_at = $4 where id = $1 and owner_kind is null",
-    [image.id, attach.pollId, attach.alt, attach.now],
+    "update image set owner_kind = $1, owner_id = $2, alt = $3," +
+      " attached_at = $4 where id = $5 and owner_kind is null",
+    [change.targetKind, change.targetId, alt, change.now, image.id],
   );
   if (updated.rowCount !== 1) throw new Error("picture was not pending");
+  await insertPictureChange(client, image, change);
+  return { id: image.id, width: image.width, height: image.height, alt };
+}
+
+export async function insertPictureChange(
+  client: PoolClient,
+  image: { id: string; sha256: string },
+  change: PictureChange,
+): Promise<void> {
   await client.query(
     "insert into content_change (id, target_kind, target_id, image_id," +
       " image_sha256, action, actor_kind, actor_id, changed_at)" +
-      " values ($1, 'poll', $2, $3, $4, 'image_attach', 'poster', $5, $6)",
+      " values ($1, $2, $3, $4, $5, $6, 'poster', $7, $8)",
     [
-      attach.changeId,
-      attach.pollId,
+      change.changeId,
+      change.targetKind,
+      change.targetId,
       image.id,
       image.sha256,
-      attach.actorId,
-      attach.now,
+      change.action,
+      change.actorId,
+      change.now,
     ],
   );
-  return {
-    id: image.id,
-    width: image.width,
-    height: image.height,
-    alt: attach.alt,
-  };
 }
 
 async function account(

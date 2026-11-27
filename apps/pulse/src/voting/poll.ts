@@ -1,4 +1,4 @@
-import type { PollImage } from "../images/public.js";
+import type { ItemImage } from "../images/public.js";
 
 /**
  * How a poll is answered. Mirrors `PollMethod` in the client
@@ -78,7 +78,7 @@ export interface Poll {
    * The poster's picture, present only while it may be served (ADR-0047,
    * `mayServe`). Absent means the client draws the tile.
    */
-  image?: PollImage;
+  image?: ItemImage;
 }
 
 export interface NewPoll {

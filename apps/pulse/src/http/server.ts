@@ -74,7 +74,7 @@ export interface ServerDeps {
   creation?: CreationStore;
   contributions?: ContributionsStore;
   /**
-   * Poll pictures (ADR-0047). Optional like `creation`: without one, uploads
+   * Item pictures (ADR-0047, ADR-0049). Optional like `creation`: without one, uploads
    * answer 503 `images_unavailable` and every picture URL is the one 404.
    */
   images?: ImageRouteDeps["images"];

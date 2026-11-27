@@ -2,11 +2,11 @@
  * Whether a picture may be served, decided per owner kind in this one
  * function (ADR-0047 sections 1 and 4). The in-memory and Postgres picture
  * stores call it for the picture routes, and the in-memory and Postgres
- * voting stores call it for the `image` field of poll bodies and listings,
- * so a body never points at a picture its route would refuse.
+ * voting and contribution stores call it before projecting a picture in a
+ * body or listing.
  */
 
-export type OwnerKind = "poll" | "community";
+export type OwnerKind = "poll" | "contribution" | "community";
 
 /** A picture's link to what shows it. Both null while it is pending. */
 export interface ImageLink {
@@ -21,12 +21,17 @@ export interface ImageLink {
  *
  * - `poll`: the poll's current picture, and whether the poll is visible
  *   (today: not `hidden`; soft delete joins this in a later step).
+ * - `contribution`: the existing contribution's current picture.
  * - `community`: the community's current default picture. Nothing sets one
  *   until category defaults are built (ADR-0047 section 6, plan step 9), so
  *   the stores report `null` and no community picture is served yet.
  */
 export type OwnerState =
-  | { kind: "poll"; currentImageId: string | null; visible: boolean }
+  | {
+      kind: "poll" | "contribution";
+      currentImageId: string | null;
+      visible: boolean;
+    }
   | { kind: "community"; defaultImageId: string | null };
 
 export function mayServe(
@@ -38,6 +43,7 @@ export function mayServe(
   if (owner === undefined || owner.kind !== image.ownerKind) return false;
   switch (owner.kind) {
     case "poll":
+    case "contribution":
       return owner.visible && owner.currentImageId === image.id;
     case "community":
       return owner.defaultImageId === image.id;
