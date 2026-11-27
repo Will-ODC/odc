@@ -1682,7 +1682,8 @@ invalid request, 403 `origin_not_allowed` or `poster_required`, and 409
 `image_changed` for a DELETE precondition mismatch. PUT may return 413
 `body_too_large` above 32 KiB or 422 `image_unavailable` for an unavailable
 pending upload. The routes may return 429 `too_many_requests` (30 requests
-per minute per route), 503 `images_unavailable`, or 500 `server_error`.
+per minute for each mutation route and 120 per minute for GET, per client
+IP), 503 `images_unavailable`, or 500 `server_error`.
 
 Planned (ADR-0047, P12): category defaults (`kind: "category"`), reporting,
 and the site owner's soft delete.

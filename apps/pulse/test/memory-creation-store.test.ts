@@ -3,9 +3,15 @@ import { randomUUID } from "node:crypto";
 import { test } from "node:test";
 import { InMemoryCreationStore } from "../src/authoring/memory-store.js";
 import { InMemoryVoterStore } from "../src/identity/store.js";
+import { processImage } from "../src/images/process.js";
+import {
+  InMemoryImageStore,
+  memoryImageDatabase,
+} from "../src/images/store.js";
 import type { NewPoll } from "../src/voting/poll.js";
 import { InMemoryVotingStore } from "../src/voting/store.js";
 import { AT, body, member } from "./conformance/creation-store.js";
+import { picture } from "./support/images.js";
 
 async function identity() {
   const voters = new InMemoryVoterStore();
@@ -21,6 +27,54 @@ async function identity() {
   );
   return voters;
 }
+
+test("picture edits delete the stored attachment even when it cannot be served", async () => {
+  const voters = await identity();
+  const clock = () => AT;
+  const voting = new InMemoryVotingStore(clock);
+  const store = new InMemoryCreationStore(voters, voting, { clock });
+  const images = new InMemoryImageStore(voters, voting, { clock });
+  const processed = await processImage(await picture("png"));
+  const original = await images.savePending(member, processed);
+  const replacement = await images.savePending(member, processed);
+  const { poll } = await store.publish(member, randomUUID(), {
+    ...body,
+    image: { id: original.id, alt: "The old garden" },
+  });
+  const db = memoryImageDatabase(voting);
+
+  async function makeUnservable(id: string) {
+    assert.equal((await voting.getPoll(poll.id))?.image?.id, id);
+    const row = db.images.get(id);
+    assert.ok(row);
+    // A mismatched owner link makes the picture unservable today.
+    row.ownerId = "another-poll";
+    assert.equal((await voting.getPoll(poll.id))?.image, undefined);
+    assert.equal(await images.servable(id, "display"), undefined);
+  }
+
+  await makeUnservable(original.id);
+  await store.changePicture(member, poll.id, {
+    action: "image_replace",
+    input: { id: replacement.id, alt: "The replacement garden" },
+  });
+  assert.equal(db.images.has(original.id), false);
+
+  await makeUnservable(replacement.id);
+  await store.changePicture(member, poll.id, {
+    action: "image_remove",
+    expectedImageId: replacement.id,
+  });
+  assert.equal(db.images.has(replacement.id), false);
+  assert.deepEqual(
+    db.changes.map(({ action, imageId }) => [action, imageId]),
+    [
+      ["image_attach", original.id],
+      ["image_replace", replacement.id],
+      ["image_remove", replacement.id],
+    ],
+  );
+});
 
 test("sign_out_waits_for_a_publication_already_in_progress_then_refuses_old_session_replay", async () => {
   let release!: () => void;

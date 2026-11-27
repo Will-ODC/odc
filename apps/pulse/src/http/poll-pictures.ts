@@ -98,7 +98,7 @@ export async function registerPollPictureRoutes(
         json(request, text, done);
       },
     );
-    const options = {
+    const mutationOptions = {
       bodyLimit: 32 * 1024,
       config: { rateLimit: { max: 30, timeWindow: "1 minute" } },
       // The rate limiter runs first, before authentication or body parsing.
@@ -133,11 +133,15 @@ export async function registerPollPictureRoutes(
         return payload;
       },
     };
-    scope.get(path, options, async (request) => {
+    const readOptions = {
+      ...mutationOptions,
+      config: { rateLimit: { max: 120, timeWindow: "1 minute" } },
+    };
+    scope.get(path, readOptions, async (request) => {
       const { store, who, id } = authorized(request);
       return { canManage: await store.canManagePicture(who.voterId, id) };
     });
-    scope.put(path, options, async (request, reply) => {
+    scope.put(path, mutationOptions, async (request, reply) => {
       const { store, who, id } = authorized(request);
       const input = pictureInput.safeParse(request.body);
       if (!input.success) return refuse(reply, "bad_request");
@@ -147,7 +151,7 @@ export async function registerPollPictureRoutes(
       });
       return { image: publicImage(image) };
     });
-    scope.delete(path, options, async (request, reply) => {
+    scope.delete(path, mutationOptions, async (request, reply) => {
       const { store, who, id } = authorized(request);
       const query = pictureRemovalQuery.safeParse(request.query);
       if (!query.success) return refuse(reply, "bad_request");

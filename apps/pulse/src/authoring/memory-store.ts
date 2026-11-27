@@ -236,13 +236,12 @@ export class InMemoryCreationStore implements CreationStore, PollPictureStore {
   ): Promise<ItemImage | undefined> {
     return this.#state.voters.exclusive(async () => {
       await this.#account(actor);
-      const poll = await this.#voting.getPoll(id);
-      if (!poll) throw new UnknownPollError(id);
+      if (!(await this.#voting.getPoll(id))) throw new UnknownPollError(id);
       if (this.#state.publications.get(id)?.authorId !== actor.voterId)
         throw new PollPictureError("poster_required");
 
       const db = memoryImageDatabase(this.#voting);
-      const oldId = poll.image?.id;
+      const oldId = this.#voting.getPollPictureId(id);
       const now = this.#clock();
       if (operation.action === "image_remove") {
         if (

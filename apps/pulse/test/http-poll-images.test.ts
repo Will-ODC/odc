@@ -2,6 +2,7 @@ import assert from "node:assert/strict";
 import { createHash, randomUUID } from "node:crypto";
 import { test, type TestContext } from "node:test";
 import type { InjectOptions, LightMyRequestResponse } from "fastify";
+import type { Pool } from "pg";
 import { PURPOSE_VERSION } from "../src/authoring/input.js";
 import { InMemoryCreationStore } from "../src/authoring/memory-store.js";
 import { PostgresCreationStore } from "../src/authoring/pg-store.js";
@@ -28,6 +29,7 @@ import {
 import { PostgresVotingStore } from "../src/voting/pg-store.js";
 import { InMemoryVotingStore } from "../src/voting/store.js";
 import { InMemorySuggestionStore } from "../src/voting/suggestions.js";
+import { atBarrier } from "./support/barrier.js";
 import { databaseSkip, migratedSchema } from "./support/database.js";
 import { picture } from "./support/images.js";
 
@@ -479,12 +481,125 @@ for (const backend of ["memory", "postgres"] as const) {
   );
 }
 
-test("poll picture permission requests are limited even without a session", async (t) => {
+function racePictureEdits<T>(
+  pool: Pool,
+  pollId: string,
+  run: () => Promise<T>,
+) {
+  // Both edits queue on the voter before one proceeds to the poll. Require
+  // the poll read to wait: its later UPDATE would also block on this row.
+  return atBarrier(
+    pool,
+    "select 1 from polls where id = $1 for update",
+    [pollId],
+    2,
+    () =>
+      atBarrier(
+        pool,
+        "select 1 from voter where id = $1 for update",
+        [POSTER.id],
+        2,
+        run,
+      ),
+    /^select\b.*\bfrom polls\b/i,
+  );
+}
+
+test(
+  "postgres: concurrent poll picture removals cannot both reuse one confirmation",
+  { skip: databaseSkip },
+  async (t) => {
+    const h = await harness(t, "postgres");
+    assert.ok(h.pool);
+    const original = await h.upload();
+    const pollId = await h.publish(original);
+    const before = await h.audit(pollId);
+    const remove = () =>
+      h.edit("DELETE", pollId, { who: POSTER, expected: original });
+    const replies = await racePictureEdits(h.pool, pollId, () =>
+      Promise.all([remove(), remove()]),
+    );
+    const [removed, stale] = replies.sort(
+      (a, b) => a.statusCode - b.statusCode,
+    );
+    assert.equal(removed.statusCode, 200, removed.body);
+    assert.deepEqual(removed.json(), { image: TILE });
+    refused(stale, 409, "image_changed");
+    assert.deepEqual(await h.stored(original), {
+      metadata: false,
+      variants: 0,
+    });
+    const audit = await h.audit(pollId);
+    assert.deepEqual(audit.slice(0, -1), before);
+    assert.equal(audit.at(-1)?.action, "image_remove");
+    assert.equal(audit.at(-1)?.imageId, original);
+  },
+);
+
+test(
+  "postgres: concurrent replacement and removal leave a consistent poll picture",
+  { skip: databaseSkip },
+  async (t) => {
+    const h = await harness(t, "postgres");
+    assert.ok(h.pool);
+    const original = await h.upload();
+    const replacement = await h.upload();
+    const pollId = await h.publish(original);
+    const alt = "The replacement garden";
+    const image = uploaded(replacement, alt);
+    const [put, del] = await racePictureEdits(h.pool, pollId, () =>
+      Promise.all([
+        h.edit("PUT", pollId, { who: POSTER, input: { id: replacement, alt } }),
+        h.edit("DELETE", pollId, { who: POSTER }),
+      ]),
+    );
+    assert.equal(put.statusCode, 200, put.body);
+    assert.deepEqual(put.json(), { image });
+    assert.equal(del.statusCode, 200, del.body);
+    assert.deepEqual(del.json(), { image: TILE });
+
+    const poll = await h.send({ url: `/api/polls/${pollId}` });
+    assert.equal(poll.statusCode, 200, poll.body);
+    const { image: finalImage } = poll.json<{ image: PublicImage }>();
+    const {
+      rows: [link],
+    } = await h.pool.query<{ image_id: string | null }>(
+      "select image_id from polls where id = $1",
+      [pollId],
+    );
+    const kept = finalImage.kind === "upload";
+    assert.deepEqual(finalImage, kept ? image : TILE);
+    assert.equal(link?.image_id, kept ? replacement : null);
+    assert.deepEqual(await h.stored(original), {
+      metadata: false,
+      variants: 0,
+    });
+    assert.deepEqual(await h.stored(replacement), {
+      metadata: kept,
+      variants: kept ? 2 : 0,
+    });
+    const audit = await h.audit(pollId);
+    assert.deepEqual(
+      audit.map(({ action, imageId }) => [action, imageId]).sort(),
+      [
+        ["image_attach", original],
+        ["image_remove", kept ? original : replacement],
+        ["image_replace", replacement],
+      ],
+    );
+  },
+);
+
+test("poll picture reads and removals have separate limits even without a session", async (t) => {
   const h = await harness(t, "memory");
-  for (let attempt = 0; attempt < 30; attempt++) {
+  for (let attempt = 0; attempt < 120; attempt++) {
     refused(await h.edit("GET", "absent-poll"), 401, "signed_out");
   }
   refused(await h.edit("GET", "absent-poll"), 429, "too_many_requests");
+  for (let attempt = 0; attempt < 30; attempt++) {
+    refused(await h.edit("DELETE", "absent-poll"), 401, "signed_out");
+  }
+  refused(await h.edit("DELETE", "absent-poll"), 429, "too_many_requests");
 });
 
 test("poll picture routes distinguish storage outages from unexpected faults", async (t) => {
