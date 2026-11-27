@@ -82,10 +82,9 @@ it("opens the first question expanded without selecting or sending an answer", a
     name: poll().question,
     level: 1,
   });
-  const tile = main().getByRole("img", { name: "General" });
-  expect(heading.nextElementSibling).toBe(tile);
+  expect(main().queryByRole("img", { name: "General" })).toBeNull();
   expect(
-    tile.nextElementSibling?.contains(
+    heading.nextElementSibling?.contains(
       main().getByRole("button", { name: /Copy link to/ }),
     ),
   ).toBe(true);
@@ -148,25 +147,30 @@ describe("question pictures and context (#296)", () => {
     },
   );
 
-  it.each(["category", "tile"] as const)(
-    "renders a small tile for a %s picture",
-    async (kind) => {
-      const p = poll({
-        image: kind === "category" ? { kind, ...picture } : { kind },
-        community: { id: "parks", label: "Parks" },
-      });
-      render(
-        <Conversation api={stubApi({ poll: async () => p })} pollId={p.id} />,
-      );
-      const heading = await main().findByRole("heading", { level: 1 });
-      const tile = main().getByRole("img", {
-        name: kind === "category" ? picture.alt : "Parks",
-      });
-      expect(heading.nextElementSibling).toBe(tile);
-      expect(tile.classList.contains("item-picture--tile")).toBe(true);
-      if (kind === "tile") expect(tile.textContent).toBe("P");
-    },
-  );
+  it("renders the category picture at the small default size", async () => {
+    const p = poll({ image: { kind: "category", ...picture } });
+    render(
+      <Conversation api={stubApi({ poll: async () => p })} pollId={p.id} />,
+    );
+    const heading = await main().findByRole("heading", { level: 1 });
+    const image = main().getByRole("img", { name: picture.alt });
+    expect(heading.nextElementSibling).toBe(image);
+    expect(image.classList.contains("item-picture--tile")).toBe(true);
+  });
+
+  it("puts context directly after the question for a tile picture", async () => {
+    const p = poll({
+      image: { kind: "tile" },
+      community: { id: "parks", label: "Parks" },
+      context,
+    });
+    render(
+      <Conversation api={stubApi({ poll: async () => p })} pollId={p.id} />,
+    );
+    const heading = await main().findByRole("heading", { level: 1 });
+    expect(main().queryByRole("img", { name: "Parks" })).toBeNull();
+    expect(heading.nextElementSibling).toBe(main().getByText(/The first line/));
+  });
 
   it.each(["upload", "category"] as const)(
     "removes the %s picture on error while keeping context and voting",

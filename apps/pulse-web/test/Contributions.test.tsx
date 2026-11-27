@@ -231,11 +231,16 @@ it("asks for the picture again when a signed-out upload drops it", async () => {
   ).toBeTruthy();
 });
 
-it("shows the default contribution tile without an image element", async () => {
+it("puts the organizer byline directly after the title for a tile picture", async () => {
   render(<ContributionDetail api={stubApi()} id="park" client={client()} />);
-  const tile = await screen.findByRole("img", { name: "General" });
-  expect(tile.tagName).toBe("SPAN");
-  expect(tile.closest("header")?.querySelector("img")).toBeNull();
+  const heading = await screen.findByRole("heading", {
+    name: fixture().title,
+    level: 1,
+  });
+  expect(screen.queryByRole("img", { name: "General" })).toBeNull();
+  expect(heading.nextElementSibling).toBe(
+    screen.getByText("Organized by Test organizer · General"),
+  );
 });
 
 it.each([
@@ -338,7 +343,9 @@ it.each([
   await user.keyboard("{Enter}");
   const confirm = screen.getByRole("button", { name: "Remove picture" });
   expect(document.activeElement).toBe(confirm);
-  expect(screen.getByText(/The default picture shows instead/)).toBeTruthy();
+  expect(
+    screen.getByText("Remove this picture from the contribution?"),
+  ).toBeTruthy();
   await user.click(screen.getByRole("button", { name: "Cancel" }));
   expect(document.activeElement).toBe(remove());
   expect(changePicture).not.toHaveBeenCalled();
@@ -379,10 +386,10 @@ it.each([
     if (gone) {
       failReads = false;
       await user.click(screen.getByRole("button", { name: "Reload picture" }));
-      await screen.findByRole("img", { name: "General" });
-      expect(document.activeElement).toBe(
-        screen.getByText("Picture reloaded."),
-      );
+      const reloaded = await screen.findByText("Picture reloaded.");
+      expect(screen.queryByRole("img", { name: "General" })).toBeNull();
+      expect(screen.queryByRole("img", { name: parkPicture.alt })).toBeNull();
+      expect(document.activeElement).toBe(reloaded);
       return;
     }
     if (failReads) {
@@ -434,7 +441,8 @@ it.each([
     expect(screen.getByRole("img", { name: newer.alt })).toBeTruthy();
     return;
   }
-  expect(await screen.findByRole("img", { name: "General" })).toBeTruthy();
+  expect(screen.queryByRole("img", { name: "General" })).toBeNull();
+  expect(screen.queryByRole("img", { name: parkPicture.alt })).toBeNull();
   await screen.findByText("The ramp is finished.");
   await act(async () => finishUpdate(stale));
   expect(screen.getByLabelText("Current status")).toHaveProperty(
