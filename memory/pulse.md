@@ -222,7 +222,7 @@ public hostname, before inviting anyone.
    should take images as well, like Rediit." ADR-0047 covered polls only, so
    ADR-0049 (#704, `b614808`, accepted) extends it to contributions and
    discussion topics. Operator answers E1-E3 (2026-11-18): no upload shows the
-   community default, then a tile (list rows only, ADR-0050); one picture per item; site-owner soft
+   community default, then a tile [amended 2026-11-27 by ADR-0050: the tile is for list rows only]; one picture per item; site-owner soft
    delete covers topics. Order: #700 (one shared picture field; done: mockup `docs/mockups/pulse-picture-field-v1.html` merged in #713 (`53de813`), approved by the operator 2026-11-25, registered in `docs/mockups/CANDIDATE_CONTEXT.md`; component merged in #717 (`5885d9c`, 2026-11-26): `components/PictureField.tsx`, `hooks/use-picture-field.ts`, `hooks/picture-upload-errors.ts`, `uploadPicture` on `PulseApi`, and the `--red-wash` light token in `tokens.css`; the issue's acceptance looks met, so it is ready to close, the operator closes it; the poll form adopted it in #720) → #580 (poll form) and #701 (contributions take a
    picture) → #427 (thumbnails for every item in the main list), #296
    (picture on the question page; done in #727), #586 after #427. #541 topics use #700.
