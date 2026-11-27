@@ -1,0 +1,28 @@
+.question-picture {
+  display: block;
+  margin-block-end: var(--step);
+  border-radius: var(--r-control);
+}
+
+.question-picture--upload {
+  inline-size: auto;
+  block-size: auto;
+  max-inline-size: 100%;
+  max-block-size: var(--question-picture-max-height);
+  object-fit: contain;
+}
+
+.question-picture--tile {
+  inline-size: var(--question-picture-tile-size);
+  block-size: var(--question-picture-tile-size);
+  object-fit: cover;
+}
+
+span.question-picture--tile {
+  box-sizing: border-box;
+  display: grid;
+  place-items: center;
+  color: var(--ink);
+  border: var(--hairline) solid var(--line);
+  font-weight: 600;
+}

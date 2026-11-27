@@ -49,7 +49,7 @@
   overflow-wrap: anywhere;
 }
 /* Who posted it, tucked under the question it belongs to. */
-.conversation__hero > .conversation__byline {
+.conversation__hero > h1 + .conversation__byline {
   margin-top: calc(var(--step) * -2);
 }
 /* Focused on arrival for screen readers only; see `.welcome h1:focus`. */
@@ -60,6 +60,14 @@
   font-size: var(--t-small);
   color: var(--muted);
   line-height: 1.5;
+}
+.conversation__hero > .conversation__context {
+  max-inline-size: var(--prose-measure);
+  margin-block: 0 var(--step);
+  color: var(--ink);
+  font-size: var(--t-body);
+  white-space: pre-wrap;
+  overflow-wrap: anywhere;
 }
 /* "Loading…" sits a step clear of what follows it. */
 .conversation__column > .viewstate {
