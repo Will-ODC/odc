@@ -155,8 +155,12 @@ it.each([
   const choose = await screen.findByRole("button", { name: "Replace" });
   await screen.findByRole("link", { name: "Sign in again in a new tab" });
   expect(choose.matches(":disabled")).toBe(true);
+  if (sameAccount) window.dispatchEvent(new Event("focus"));
   await act(async () => finishRecheck());
   if (sameAccount) {
+    await user.click(
+      screen.getByRole("button", { name: "Check sign-in again" }),
+    );
     await waitFor(() => expect(choose.matches(":disabled")).toBe(false));
     expect(
       screen.queryByRole("link", { name: "Sign in again in a new tab" }),
@@ -201,6 +205,8 @@ it.each([
   "picture reply first",
   "picture reply last",
   "lost removal reply",
+  "picture already removed",
+  "conflict refresh fails",
 ])("manages the displayed picture safely (%s)", async (order) => {
   const canManage = order !== "visitor";
   const newer = {
@@ -208,7 +214,10 @@ it.each([
     displayUrl: "/api/poll-images/newer/display.webp",
     alt: "Another picture",
   };
+  const conflict =
+    order === "picture already removed" || order === "conflict refresh fails";
   let holdReads = false;
+  let failReads = false;
   const user = userEvent.setup();
   let item = fixture({ image: parkPicture });
   let finishRemoval!: () => void;
@@ -234,6 +243,8 @@ it.each([
     });
     if (order === "lost removal reply")
       throw new ContributionsError(0, "Connection lost.");
+    if (conflict)
+      throw new ContributionsError(409, "Picture changed.", "image_changed");
     return { kind: "tile" };
   });
   render(
@@ -243,6 +254,8 @@ it.each([
       client={client({
         detail: async () => {
           if (holdReads) await new Promise(() => {});
+          if (failReads)
+            throw new ContributionsError(0, "Could not read picture.");
           return { contribution: item, canManage };
         },
         changePicture,
@@ -261,7 +274,7 @@ it.each([
     expect(screen.queryByRole("img", { name: parkPicture.alt })).toBeNull();
     return;
   }
-  if (order !== "lost removal reply") {
+  if (!conflict && order !== "lost removal reply") {
     await user.click(await screen.findByText("Post an update"));
     await user.type(screen.getByLabelText("Progress update"), "Ramp started");
     await user.click(screen.getByLabelText(/I confirm this status and update/));
@@ -296,7 +309,24 @@ it.each([
     await screen.findByRole("img", { name: newer.alt });
     holdReads = true;
   }
+  if (order === "picture already removed") item = fixture();
+  failReads = order === "conflict refresh fails";
   await act(async () => finishRemoval());
+  if (conflict) {
+    expect(await screen.findByText("Picture changed.")).toBeTruthy();
+    expect(screen.queryByText("Picture removed.")).toBeNull();
+    expect(screen.queryByRole("button", { name: "Remove picture" })).toBeNull();
+    if (failReads) {
+      expect(
+        screen.queryByRole("button", { name: "Remove posted picture" }),
+      ).toBeNull();
+      failReads = false;
+      await user.click(screen.getByRole("button", { name: "Reload picture" }));
+      await screen.findByRole("img", { name: newer.alt });
+      expect(remove()).toBeTruthy();
+    }
+    return;
+  }
   if (order === "lost removal reply") {
     await screen.findByRole("img", { name: newer.alt });
     expect(remove()).toBeTruthy();
