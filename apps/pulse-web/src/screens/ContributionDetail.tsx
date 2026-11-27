@@ -833,7 +833,7 @@ function ContributionPictureForm({
             <TwoPress
               key={postedPicture}
               label="Remove posted picture"
-              question="Remove this picture from the contribution? The default picture shows instead."
+              question="Remove this picture from the contribution?"
               confirmLabel="Remove picture"
               pendingLabel="Removing picture…"
               progress={removal}

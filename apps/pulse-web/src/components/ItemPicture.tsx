@@ -8,7 +8,7 @@ const tileColors = [
   "var(--hover)",
 ] as const;
 
-function CommunityTile({ id, label }: PostingCommunity) {
+export function CommunityTile({ id, label }: PostingCommunity) {
   const colorIndex = Array.from(id).reduce(
     (hash, character) =>
       (hash * 31 + (character.codePointAt(0) ?? 0)) % tileColors.length,
@@ -48,18 +48,10 @@ function DisplayImage({
 
 export function ItemPicture({
   image,
-  community,
 }: {
   image: PublicImage | undefined;
   community: PostingCommunity | undefined;
 }) {
-  if (!image) return null;
-  if (image.kind === "tile") {
-    return (
-      <CommunityTile
-        {...(community ?? { id: "pulse-general", label: "General" })}
-      />
-    );
-  }
+  if (!image || image.kind === "tile") return null;
   return <DisplayImage key={image.displayUrl} image={image} />;
 }

@@ -1639,10 +1639,11 @@ rows use the same projection:
 }
 ```
 
-or `{ "kind": "tile" }` when the item has no servable picture, for which the
-client draws a generated tile. Category defaults (#586) will take precedence
-over the tile once served. URLs are relative. `upload` appears exactly
-when the picture route would serve it. Nothing else is ever in the object: no
+or `{ "kind": "tile" }` when the item has no servable picture, reserved for a
+generated list-row thumbnail (#427) and skipped on the item page (ADR-0050).
+Category defaults (#586) will take precedence over the tile once served. URLs
+are relative. `upload` appears exactly when the picture route would serve it.
+Nothing else is ever in the object: no
 uploading account, file name, original type or size, upload time or hash. A
 poll creation response replayed from before pictures existed returns the tile.
 
