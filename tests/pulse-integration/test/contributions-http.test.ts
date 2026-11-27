@@ -149,7 +149,10 @@ describe("Contributions through the browser HTTP adapter", () => {
       id: await upload(member.identity),
       alt: "Side path",
     };
-    for (const image of [memberPicture, null]) {
+    await expect(
+      owner.api.changePicture(created.id, { expectedImageId: original.id }),
+    ).rejects.toMatchObject({ status: 409, code: "image_changed" });
+    for (const image of [memberPicture, { expectedImageId: replacement.id }]) {
       await expect(
         member.api.changePicture(created.id, image),
       ).rejects.toMatchObject({
@@ -160,7 +163,9 @@ describe("Contributions through the browser HTTP adapter", () => {
         updated,
       );
     }
-    const removed = await owner.api.changePicture(created.id, null);
+    const removed = await owner.api.changePicture(created.id, {
+      expectedImageId: replacement.id,
+    });
     expect(removed).toEqual({ kind: "tile" });
     expect((await member.api.detail(created.id)).contribution.image).toEqual(
       removed,

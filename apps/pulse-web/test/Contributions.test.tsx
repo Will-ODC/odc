@@ -2486,6 +2486,71 @@ it("sends the page account on every write and preserves account_changed as a dis
   }
 });
 
+it("sends JSON for a picture PUT and a bodyless DELETE without request keys", async () => {
+  const doFetch = vi
+    .fn<typeof fetch>()
+    .mockResolvedValueOnce(Response.json({ image: parkPicture }))
+    .mockResolvedValueOnce(Response.json({ image: { kind: "tile" } }));
+  const api = new HttpContributionsApi(doFetch);
+  const input = { id: "upload", alt: parkPicture.alt };
+  await expect(api.changePicture("park", input)).resolves.toEqual(parkPicture);
+  await expect(
+    api.changePicture("park", { expectedImageId: parkPictureId }),
+  ).resolves.toEqual({
+    kind: "tile",
+  });
+  const [putUrl, put] = doFetch.mock.calls[0]!;
+  const [deleteUrl, deletion] = doFetch.mock.calls[1]!;
+  expect(putUrl).toBe("/api/contributions/park/image");
+  expect(put?.method).toBe("PUT");
+  expect(new Headers(put?.headers).get("Content-Type")).toBe(
+    "application/json",
+  );
+  expect(new Headers(put?.headers).has("Idempotency-Key")).toBe(false);
+  expect(JSON.parse(String(put?.body))).toEqual(input);
+  expect(deleteUrl).toBe(`${putUrl}?expectedImageId=${parkPictureId}`);
+  expect(deletion?.method).toBe("DELETE");
+  expect(deletion?.body).toBeUndefined();
+  expect(new Headers(deletion?.headers).has("Idempotency-Key")).toBe(false);
+});
+
+it("rejects a malformed picture in a successful response", async () => {
+  const api = new HttpContributionsApi(async () =>
+    Response.json({ image: { ...parkPicture, alt: null } }),
+  );
+  await expect(
+    api.changePicture("park", { expectedImageId: parkPictureId }),
+  ).rejects.toThrow(
+    "Could not confirm the picture change. Reload and try again.",
+  );
+});
+
+it.each([
+  [400, "bad_request", "Server picture message."],
+  [401, "signed_out", "Server picture message."],
+  [
+    409,
+    "image_changed",
+    "The posted picture changed. Review it before removing.",
+  ],
+  [
+    422,
+    "image_unavailable",
+    "This picture is no longer available. Choose it again.",
+  ],
+  [503, "images_unavailable", "Could not save this change. Please try again."],
+])(
+  "uses the expected copy for a picture refusal with status %s",
+  async (status, error, message) => {
+    const api = new HttpContributionsApi(async () =>
+      Response.json({ error, message: "Server picture message." }, { status }),
+    );
+    await expect(
+      api.changePicture("park", { id: "upload", alt: parkPicture.alt }),
+    ).rejects.toMatchObject({ status, code: error, message });
+  },
+);
+
 it.each(["help", "pledge", "message", "update"] as const)(
   "keeps the new account's %s draft when the old account's refusal arrives late",
   async (form) => {
