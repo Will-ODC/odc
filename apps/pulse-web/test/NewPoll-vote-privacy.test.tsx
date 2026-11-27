@@ -124,6 +124,8 @@ describe("whether votes are anonymous or public (ADR-0048)", () => {
     expect(describedBy(group)).toBe(
       `${VOTE_PRIVACY_NOTE} ${PUBLIC_VOTES_NOTE}`,
     );
+    // Arrowing onto the public radio reads who sees each answer too.
+    expect(describedBy(radio("Votes are public"))).toContain(PUBLIC_VOTES_NOTE);
     expect(PUBLIC_VOTES_NOTE).toMatch(/sign in with their email to vote/);
     expect(PUBLIC_VOTES_NOTE).toMatch(/including AI apps/);
     expect(PUBLIC_VOTES_NOTE).toMatch(/“Verified voter”/);

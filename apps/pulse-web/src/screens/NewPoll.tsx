@@ -739,6 +739,9 @@ function PostForm({
                 <Choice
                   name={`${id}-vote-privacy`}
                   checked={draft.votePrivacy === "public"}
+                  {...(draft.votePrivacy === "public"
+                    ? { describedBy: `${id}-public-votes` }
+                    : {})}
                   onPick={() =>
                     edit((old) => ({ ...old, votePrivacy: "public" }))
                   }
