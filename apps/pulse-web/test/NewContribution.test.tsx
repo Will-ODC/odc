@@ -1,5 +1,12 @@
 // @vitest-environment jsdom
-import { act, cleanup, render, screen, waitFor } from "@testing-library/react";
+import {
+  act,
+  cleanup,
+  fireEvent,
+  render,
+  screen,
+  waitFor,
+} from "@testing-library/react";
 import userEvent from "@testing-library/user-event";
 import { afterEach, expect, it, vi } from "vitest";
 import { ContributionsError } from "../src/api/contributions.js";
@@ -724,3 +731,108 @@ it("takes back the confirm complaint as soon as the box is ticked, and a field's
     screen.getByLabelText("Title").getAttribute("aria-invalid"),
   ).toBeNull();
 });
+
+const pictureId = "0b8f4c1e-5d7a-4e2b-9c3d-1a2b3c4d5e6f";
+const publish = () =>
+  screen.getByRole("button", { name: "Publish contribution" });
+
+async function choosePicture(user: ReturnType<typeof userEvent.setup>) {
+  vi.stubGlobal(
+    "URL",
+    class extends URL {
+      static override createObjectURL = () => "blob:garden";
+      static override revokeObjectURL = () => {};
+    },
+  );
+  const input = screen
+    .getByRole("group", { name: "Picture (optional)" })
+    .querySelector<HTMLInputElement>('input[type="file"]')!;
+  await user.upload(
+    input,
+    new File(["garden"], "garden.jpg", { type: "image/jpeg" }),
+  );
+}
+
+it("keeps the contribution draft after an upload failure and publishes the picture after retry", async () => {
+  const uploadPicture = vi
+    .fn<PulseApi["uploadPicture"]>()
+    .mockRejectedValueOnce(new Error("Offline"))
+    .mockResolvedValueOnce(pictureId);
+  const { user, create } = setup({ uploadPicture });
+  await writeDraft(user);
+  await choosePicture(user);
+  const retry = await screen.findByRole("button", {
+    name: "Try again",
+    description: /The picture did not upload/,
+  });
+  expectDraft();
+  await user.click(publish());
+  expect(create).not.toHaveBeenCalled();
+  await user.click(retry);
+  await screen.findByRole("button", { name: "Replace" });
+  await user.type(
+    screen.getByLabelText("Picture description"),
+    "  A garden bed  ",
+  );
+  await user.click(publish());
+  expect(create).toHaveBeenCalledExactlyOnceWith(
+    expect.objectContaining({ image: { id: pictureId, alt: "A garden bed" } }),
+    expect.any(String),
+    "ada",
+  );
+});
+
+it("keeps the draft and focuses the picture field when publishing refuses an expired picture", async () => {
+  const { user, create } = setup({ uploadPicture: async () => pictureId });
+  create.mockRejectedValueOnce(
+    new ContributionsError(422, "Picture expired.", "image_unavailable"),
+  );
+  await writeDraft(user);
+  await choosePicture(user);
+  await screen.findByRole("button", { name: "Replace" });
+  const description = screen.getByLabelText("Picture description");
+  await user.type(description, "A garden bed");
+  await user.click(publish());
+  expect(
+    await screen.findByRole("button", {
+      name: "Choose a picture",
+      description:
+        /This picture is no longer available\. Choose it again\. Its description and the rest of your draft are kept\./,
+    }),
+  ).toBeTruthy();
+  expectDraft();
+  expect(
+    screen.getByLabelText<HTMLTextAreaElement>("Picture description").value,
+  ).toBe("A garden bed");
+  expect(document.activeElement).toBe(
+    screen.getByRole("button", { name: "Choose a picture" }),
+  );
+  expect(screen.queryByRole("alert")).toBeNull();
+});
+
+it.each([
+  ["   ", "Describe the picture before you post, or remove it."],
+  [
+    "garden\0bed",
+    "Remove any invalid characters from the picture description.",
+  ],
+  [
+    "garden\uD800",
+    "Remove any invalid characters from the picture description.",
+  ],
+  ["🌱".repeat(301), "Keep the description to 300 characters. It is 301 now."],
+])(
+  "blocks an invalid picture description and explains how to fix it (%#)",
+  async (value, message) => {
+    const { user, create } = setup({ uploadPicture: async () => pictureId });
+    await writeDraft(user);
+    await choosePicture(user);
+    await screen.findByRole("button", { name: "Replace" });
+    const description = screen.getByLabelText("Picture description");
+    fireEvent.change(description, { target: { value } });
+    await user.click(publish());
+    expect(create).not.toHaveBeenCalled();
+    expect(screen.getByText(message)).toBeTruthy();
+    expect(document.activeElement).toBe(description);
+  },
+);
