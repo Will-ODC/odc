@@ -486,6 +486,14 @@ for (const kind of ["memory", "postgres"] as const) {
         replacement,
       );
       assert.equal(replaced.statusCode, 200, replaced.body);
+      const audit = async () =>
+        (
+          await h.pool?.query(
+            "select * from content_change where target_kind = 'contribution' and target_id = $1 order by id",
+            [id],
+          )
+        )?.rows;
+      const beforeRefusals = await audit();
       refused(await remove(original.id, "other"), 403, "organizer_required");
       refused(await remove("bad"), 400, "bad_request");
       refused(
@@ -494,13 +502,7 @@ for (const kind of ["memory", "postgres"] as const) {
         "bad_request",
       );
       refused(await remove(original.id), 409, "image_changed");
-      if (h.pool) {
-        const { rows } = await h.pool.query(
-          "select action from content_change where image_id = $1",
-          [replacement.id],
-        );
-        assert.deepEqual(rows, [{ action: "image_replace" }]);
-      }
+      assert.deepEqual(await audit(), beforeRefusals);
       const detail = await h.request({
         method: "GET",
         url: `/api/contributions/${id}`,
@@ -512,7 +514,9 @@ for (const kind of ["memory", "postgres"] as const) {
       assert.deepEqual((await remove(replacement.id)).json(), {
         image: { kind: "tile" },
       });
+      const afterRemoval = await audit();
       refused(await remove(replacement.id), 409, "image_changed");
+      assert.deepEqual(await audit(), afterRemoval);
     },
   );
 }
