@@ -38,7 +38,7 @@ Repo discipline still applies: tests ship with the change, there is one small
 branch per change, named for its ticket (`pulse/<issue>-<short>`, #310), and
 the same CI runs.
 
-## Where it stands (2026-11-26)
+## Where it stands (2026-11-27)
 
 Per-PR history is in `git log origin/master -- apps/pulse apps/pulse-web`.
 **Open Pulse-related PRs (2026-11-27):** the #701 stack #736 → #732 → #734 (server removal guard, web half, HTTP tests) and #730 (test-audit item 3). Work is split since 2026-11-27: Codex builds and code-reviews those four; Claude runs their browser UI reviews, merged #733 (#735), and takes the #714 nits next. PR #718 (orchestration skill) merged as `76517a6`. Next Pulse order (2026-11-26): #701 web half (PictureField in the contribution form, picture on the contribution page, picture after reload across API and client, plus the #728 nits below); then test-audit item 3; #685 step 4b (its deploy waits on 4a being live); the #714 nits. The #727 web nits ride the #701 web branch where they touch the same files, otherwise the next web branch. Next migration: **021** (020 merged in #728). Future, no ticket to build yet: #729 (epic, smart-contract milestone payouts for contributions; blocked on an ADR for chain, currency, key custody, refund rule and legal position). New ticket #707 (open polls from the main page without a reload; no urgency). #711 (`Contributions.test.tsx` "forgets a sign-in error once the same person has signed in again" flaky in CI) is fixed and closed in #723. #425 Next/Previous is on hold (operator, 2026-11-19).
