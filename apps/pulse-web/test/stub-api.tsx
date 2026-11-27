@@ -17,6 +17,7 @@ export function poll(over: Partial<Poll> = {}): Poll {
     acceptsSuggestions: false,
     closesAt: null,
     open: true,
+    image: { kind: "tile" },
     ...over,
   };
 }

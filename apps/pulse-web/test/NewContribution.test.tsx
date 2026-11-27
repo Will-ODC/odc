@@ -9,11 +9,13 @@ import type {
 } from "../src/api/contributions.js";
 import { NewContribution } from "../src/screens/NewContribution.js";
 import { SIGNED_OUT_KEY } from "../src/hooks/use-session.js";
+import type { PulseApi } from "../src/api/types.js";
 import { stubApi } from "./stub-api.js";
 
 afterEach(() => {
   cleanup();
   vi.restoreAllMocks();
+  vi.unstubAllGlobals();
 });
 const fixture = (over: Partial<Contribution> = {}): Contribution => ({
   id: "park",
@@ -24,6 +26,7 @@ const fixture = (over: Partial<Contribution> = {}): Contribution => ({
   kind: "project",
   organizerName: "Test organizer",
   community: { id: "pulse-general", label: "General" },
+  image: { kind: "tile" },
   pollId: null,
   commercial: null,
   fund: null,
@@ -37,6 +40,7 @@ const client = (over: Partial<ContributionsApi> = {}): ContributionsApi => ({
   list: async () => ({ contributions: [fixture()], nextCursor: null }),
   forProfile: async () => ({ contributions: [], nextCursor: null }),
   mine: async () => ({ contributions: [], nextCursor: null }),
+  changePicture: async () => ({ kind: "tile" }),
   sendMessage: async () => {},
   messages: async () => [],
   detail: async () => ({ contribution: fixture(), canManage: false }),
@@ -46,7 +50,7 @@ const client = (over: Partial<ContributionsApi> = {}): ContributionsApi => ({
   ...over,
 });
 
-function setup() {
+function setup(over: Partial<PulseApi> = {}) {
   const state = { who: "ada" as string | null };
   const me = vi.fn(async () =>
     state.who === null
@@ -59,7 +63,7 @@ function setup() {
   });
   render(
     <NewContribution
-      api={stubApi({ me, signOut })}
+      api={stubApi({ me, signOut, ...over })}
       client={client({ create })}
       onCreated={vi.fn()}
     />,
@@ -325,7 +329,37 @@ it("focuses the first missing field before an invalid related question", async (
   expect(create).not.toHaveBeenCalled();
 });
 
-it.each([503, 401, undefined])(
+it("focuses an undescribed picture before a later missing field", async () => {
+  vi.stubGlobal(
+    "URL",
+    class extends URL {
+      static override createObjectURL = () => "blob:park";
+      static override revokeObjectURL = () => {};
+    },
+  );
+  const { user, create } = setup({ uploadPicture: async () => "park-picture" });
+  await user.type(await screen.findByLabelText("Title"), "Garden");
+  await user.type(screen.getByLabelText("Description"), "Grow food.");
+  await user.upload(
+    screen
+      .getByRole("group", { name: /^Picture/ })
+      .querySelector<HTMLInputElement>('input[type="file"]')!,
+    new File(["park"], "park.jpg", { type: "image/jpeg" }),
+  );
+  const description = await screen.findByLabelText("Picture description");
+  await user.click(
+    screen.getByRole("button", { name: "Publish contribution" }),
+  );
+  expect(document.activeElement).toBe(description);
+  expect(
+    screen
+      .getByLabelText("Organizer’s public name")
+      .getAttribute("aria-invalid"),
+  ).toBe("true");
+  expect(create).not.toHaveBeenCalled();
+});
+
+it.each([503, 422, 401, undefined])(
   "focuses the outcome after a deferred keyboard submission fails (%s)",
   async (status) => {
     const { user, create } = setup();
@@ -360,7 +394,7 @@ it.each([503, 401, undefined])(
     // the top; any other failure is the alert beside Publish.
     const outcome =
       status === 401
-        ? await screen.findByRole("status")
+        ? await screen.findByText(/Your sign-in has ended/)
         : await screen.findByRole("alert");
     await waitFor(() => expect(document.activeElement).toBe(outcome));
     expect(outcome.getAttribute("tabindex")).toBe("-1");

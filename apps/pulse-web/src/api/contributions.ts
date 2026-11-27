@@ -1,3 +1,5 @@
+import type { PictureInput, PublicImage } from "./types.js";
+
 export type ContributionKind = "project" | "fundraiser" | "group_buy" | "offer";
 export type ContributionStatus =
   "open" | "in_progress" | "completed" | "cancelled";
@@ -17,18 +19,20 @@ export interface ContributionInput {
   kind: ContributionKind;
   organizerName: string;
   pollId?: string;
+  image?: PictureInput;
   commercial?: CommercialOffer | null;
   fund?: { name: string; percentage: number } | null;
 }
 export interface ContributionSummary extends Omit<
   ContributionInput,
-  "pollId" | "commercial" | "fund" | "communityBenefit" | "needs"
+  "pollId" | "commercial" | "fund" | "communityBenefit" | "needs" | "image"
 > {
   id: string;
   communityBenefit: string;
   needs: string;
   community: { id: string; label: string };
   pollId: string | null;
+  image: PublicImage;
   commercial: CommercialOffer | null;
   fund: { name: string; percentage: number } | null;
   status: ContributionStatus;
@@ -66,6 +70,9 @@ export interface OrganizerMessage {
   message: string;
   createdAt: string;
 }
+export type ContributionPictureChange =
+  PictureInput | { expectedImageId: string };
+
 export interface ContributionsApi {
   sendMessage(
     id: string,
@@ -82,6 +89,10 @@ export interface ContributionsApi {
    */
   mine(cursor?: string, ownerAccountId?: string): Promise<ContributionPage>;
   detail(id: string): Promise<ContributionDetail>;
+  changePicture(
+    id: string,
+    change: ContributionPictureChange,
+  ): Promise<PublicImage>;
   create(
     input: ContributionInput,
     key: string,
@@ -106,6 +117,20 @@ const statuses = ["open", "in_progress", "completed", "cancelled"];
 const isRecord = (value: unknown): value is Record<string, unknown> =>
   typeof value === "object" && value !== null;
 const text = (value: unknown): value is string => typeof value === "string";
+function publicImage(value: unknown): value is PublicImage {
+  if (!isRecord(value)) return false;
+  if (value.kind === "tile") return true;
+  return (
+    (value.kind === "upload" || value.kind === "category") &&
+    text(value.displayUrl) &&
+    text(value.thumbUrl) &&
+    text(value.alt) &&
+    typeof value.width === "number" &&
+    value.width > 0 &&
+    typeof value.height === "number" &&
+    value.height > 0
+  );
+}
 function summary(value: unknown): value is ContributionSummary {
   if (!isRecord(value)) return false;
   return (
@@ -125,6 +150,7 @@ function summary(value: unknown): value is ContributionSummary {
     isRecord(value.community) &&
     text(value.community.id) &&
     text(value.community.label) &&
+    publicImage(value.image) &&
     (value.pollId === null || text(value.pollId)) &&
     (value.commercial === null ||
       (isRecord(value.commercial) &&
@@ -182,9 +208,12 @@ function contribution(value: unknown): value is Contribution {
 export function accountChangedMessage(what = "this"): string {
   return `Your account changed, so ${what} wasn't sent.`;
 }
+export const pictureChangedMessage =
+  "The posted picture changed. Review it before removing.";
 /** 409 codes that are not "someone else changed this": each says what to do. */
 const conflicts: Record<string, string> = {
   account_changed: accountChangedMessage(),
+  image_changed: pictureChangedMessage,
   sender_limit:
     "You have added as many entries to this contribution as one person can.",
   record_full: "This contribution has reached its entry limit.",
@@ -209,11 +238,14 @@ export class HttpContributionsApi implements ContributionsApi {
     body?: unknown,
     key?: string,
     base = "/api/contributions",
+    method: "GET" | "POST" | "PUT" | "DELETE" = body === undefined
+      ? "GET"
+      : "POST",
   ): Promise<Record<string, unknown>> {
     let response: Response;
     try {
       response = await this.doFetch(`${base}${path}`, {
-        method: body === undefined ? "GET" : "POST",
+        method,
         credentials: "same-origin",
         signal: AbortSignal.timeout(15000),
         ...(body === undefined
@@ -221,7 +253,7 @@ export class HttpContributionsApi implements ContributionsApi {
           : {
               headers: {
                 "Content-Type": "application/json",
-                "Idempotency-Key": key ?? "",
+                ...(key === undefined ? {} : { "Idempotency-Key": key }),
               },
               body: JSON.stringify(body),
             }),
@@ -230,12 +262,16 @@ export class HttpContributionsApi implements ContributionsApi {
       throw new ContributionsError(0, "Connection lost. Please try again.");
     }
     if (!response.ok) {
-      const code = await response
-        .json()
-        .then((value: unknown) =>
-          isRecord(value) && typeof value.error === "string" ? value.error : "",
-        )
-        .catch(() => "");
+      const refusal: unknown = await response.json().catch(() => null);
+      const code =
+        isRecord(refusal) && text(refusal.error) ? refusal.error : "";
+      const pictureMessage =
+        (method === "PUT" || method === "DELETE") &&
+        (response.status === 400 || response.status === 401) &&
+        isRecord(refusal) &&
+        text(refusal.message)
+          ? refusal.message
+          : undefined;
       const messages: Record<number, string> = {
         400: "Check the details and try again.",
         401: "Sign in to continue. Your entries are still here.",
@@ -251,8 +287,11 @@ export class HttpContributionsApi implements ContributionsApi {
       };
       throw new ContributionsError(
         response.status,
-        messages[response.status] ??
-          (body === undefined
+        (code === "image_unavailable"
+          ? "This picture is no longer available. Choose it again."
+          : pictureMessage) ??
+          messages[response.status] ??
+          (method === "GET"
             ? "Could not load this. Try again."
             : "Could not save this change. Please try again."),
         code,
@@ -343,6 +382,25 @@ export class HttpContributionsApi implements ContributionsApi {
         "This contribution could not be read. Please try again.",
       );
     return { contribution: data.contribution, canManage: data.canManage };
+  }
+  async changePicture(id: string, change: ContributionPictureChange) {
+    const path = `/${encodeURIComponent(id)}/image`;
+    const data =
+      "expectedImageId" in change
+        ? await this.request(
+            `${path}?${new URLSearchParams(change)}`,
+            undefined,
+            undefined,
+            undefined,
+            "DELETE",
+          )
+        : await this.request(path, change, undefined, undefined, "PUT");
+    if (!publicImage(data.image))
+      throw new ContributionsError(
+        0,
+        "Could not confirm the picture change. Reload and try again.",
+      );
+    return data.image;
   }
   private async save(
     path: string,

@@ -1,10 +1,10 @@
-.question-picture {
+.item-picture {
   display: block;
-  margin-block-end: var(--step);
+  margin-block-end: var(--gutter);
   border-radius: var(--r-control);
 }
 
-.question-picture--upload {
+.item-picture--upload {
   inline-size: auto;
   block-size: auto;
   max-inline-size: 100%;
@@ -12,13 +12,13 @@
   object-fit: contain;
 }
 
-.question-picture--tile {
-  inline-size: var(--question-picture-tile-size);
-  block-size: var(--question-picture-tile-size);
+.item-picture--tile {
+  inline-size: var(--item-picture-tile-size);
+  block-size: var(--item-picture-tile-size);
   object-fit: cover;
 }
 
-span.question-picture--tile {
+span.item-picture--tile {
   box-sizing: border-box;
   display: grid;
   place-items: center;

@@ -14,7 +14,9 @@
 export type PollMethod = "single" | "approval";
 export type VotePrivacy = "anonymous" | "public";
 
-export type PollImage =
+export type PictureInput = { id: string; alt: string };
+
+export type PublicImage =
   | {
       kind: "upload" | "category";
       displayUrl: string;
@@ -33,7 +35,7 @@ export interface Poll {
   /** Plain text from the poster, or null when absent. */
   context?: string | null;
   /** Older poll responses may lack a picture. */
-  image?: PollImage;
+  image?: PublicImage;
   /** Ordered; a ballot references positions in this array, never the text. */
   choices: string[];
   method: PollMethod;
@@ -89,7 +91,7 @@ export interface NewPollRequest {
   /** Sent only on a first post, when the promise was just made. */
   purposeAcknowledgement?: string;
   /** A pending upload and its required description. */
-  image?: { id: string; alt: string };
+  image?: PictureInput;
 }
 
 /**

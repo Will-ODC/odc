@@ -116,7 +116,7 @@
   --contributions-measure: 760px;
 
   --question-picture-max-height: min(var(--rail), 30dvh);
-  --question-picture-tile-size: calc(var(--step) * 6);
+  --item-picture-tile-size: calc(var(--step) * 6);
 
   /*
    * Whether a screen shows its own wordmark.

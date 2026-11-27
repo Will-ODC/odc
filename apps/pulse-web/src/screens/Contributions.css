@@ -96,7 +96,7 @@
   margin-bottom: var(--gutter);
 }
 .contribution-detail-heading h1 {
-  margin-top: var(--step);
+  margin: var(--step) 0 var(--gutter);
 }
 .contribution-detail-heading > p {
   font-size: var(--t-small);
@@ -159,7 +159,9 @@
   font-weight: 600;
   padding: var(--gutter) 0 calc(var(--step) * 2);
 }
-.contribution-form > :is(.contribution-button, .btn) {
+.contribution-form > :is(.contribution-button, .btn),
+.contribution-picture fieldset > .btn,
+.contribution-picture-removal {
   align-self: flex-start;
 }
 /* Native selects can ignore line-height. Match the text input's inherited
@@ -198,7 +200,8 @@
 .contribution-confirm > .field {
   margin-bottom: var(--step);
 }
-.contribution-error {
+.contribution-error,
+.contribution-picture-removal .two-press__error {
   color: var(--red);
 }
 .contribution-timeline li {
@@ -221,13 +224,26 @@
   --focus-ring-offset: calc(var(--hairline) * 3);
 }
 @media (max-width: 699px) {
-  .contribution-form > :is(.contribution-button, .btn) {
+  .contribution-form > :is(.contribution-button, .btn),
+  .contribution-picture fieldset > .btn {
     width: 100%;
   }
 }
 
 .contribution-disclosure[open] > summary {
   margin-bottom: var(--gutter);
+}
+.contribution-picture[open] {
+  margin-bottom: var(--gutter);
+}
+.contribution-picture .contribution-error {
+  font-size: var(--t-small);
+}
+.contribution-picture-removal .two-press {
+  justify-content: flex-start;
+}
+.contribution-picture-removal :is(.two-press__question, .two-press__error) {
+  text-align: start;
 }
 /* Try again, centred under the centred message it answers, as on Browse. */
 .contribution-retry {

@@ -108,7 +108,7 @@ function fromStoreError(error: ImageStoreError): Refusal {
       return new Refusal(
         429,
         "pending_limit",
-        "You have five pictures not yet posted. Post a question with one, or try again later.",
+        "You have five pictures not yet posted. Post one with a question or contribution, or try again later.",
       );
   }
 }

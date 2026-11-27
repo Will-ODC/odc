@@ -39,7 +39,7 @@ import { SuggestedVotesRail } from "../components/SuggestedVotesRail.js";
 import { AnsweredRail } from "../components/AnsweredRail.js";
 import { PostedBanner } from "../components/PostedBanner.js";
 import { CopyLink } from "../components/CopyLink.js";
-import { QuestionPicture } from "../components/QuestionPicture.js";
+import { ItemPicture } from "../components/ItemPicture.js";
 import {
   QuestionPager,
   type MyVotesNavigation,
@@ -603,7 +603,7 @@ function LoadedQuestion({
                     <h1 ref={heading} tabIndex={-1}>
                       {poll.question}
                     </h1>
-                    <QuestionPicture
+                    <ItemPicture
                       image={poll.image}
                       community={poll.community}
                     />

@@ -4,6 +4,7 @@ export const PICTURE_TYPES = "image/jpeg,image/png,image/webp";
 const megabyte = 1024 * 1024;
 const headerLimit = 64 * 1024;
 type Dimensions = { width: number; height: number };
+export type PicturePurpose = "post" | "save";
 
 const unsupported =
   "Pulse cannot use this file. Choose a JPEG, PNG or WebP picture. GIF, SVG, HEIC and moving pictures are not accepted.";
@@ -151,6 +152,7 @@ export function uploadProblem(
   error: unknown,
   file: File,
   dimensions: Dimensions | undefined,
+  purpose: PicturePurpose = "post",
 ): { message: string; retry?: true } {
   switch (error instanceof ApiError ? error.code : undefined) {
     case "unsupported_image":
@@ -166,12 +168,20 @@ export function uploadProblem(
     case "image_busy":
       return {
         message:
-          "Pulse is busy with other pictures. Try again in a minute. Everything else you wrote is kept.",
+          purpose === "save"
+            ? "Pulse is busy with other pictures. Try again in a minute."
+            : "Pulse is busy with other pictures. Try again in a minute. Everything else you wrote is kept.",
         retry: true,
       };
     case "images_unavailable":
     case "too_many_requests":
-      return { message: unavailableNow, retry: true };
+      return {
+        message:
+          purpose === "save"
+            ? "Pulse cannot take pictures right now. Try again later."
+            : unavailableNow,
+        retry: true,
+      };
     case "upload_limit": {
       const seconds = (error as ApiError).retryAfter;
       const minutes = Math.ceil((seconds ?? 0) / 60);
@@ -180,15 +190,23 @@ export function uploadProblem(
           ? `in ${minutes} ${minutes === 1 ? "minute" : "minutes"}`
           : "later";
       return {
-        message: `You have uploaded 20 pictures in the last hour, the most allowed. Try again ${wait}, or post without a picture.`,
+        message: `You have uploaded 20 pictures in the last hour, the most allowed. Try again ${wait}${purpose === "post" ? ", or post without a picture" : ""}.`,
       };
     }
     case "pending_limit":
       return {
         message:
-          "You have 5 pictures that are not posted yet, the most allowed at once. Unposted pictures clear after a day. Try again tomorrow, or post without a picture.",
+          purpose === "save"
+            ? "You have 5 unused pictures, the most allowed at once. Unused pictures clear after a day. Try again tomorrow."
+            : "You have 5 pictures that are not posted yet, the most allowed at once. Unposted pictures clear after a day. Try again tomorrow, or post without a picture.",
       };
     default:
-      return { message: network, retry: true };
+      return {
+        message:
+          purpose === "save"
+            ? "The picture did not upload. Check your connection, then try again."
+            : network,
+        retry: true,
+      };
   }
 }
