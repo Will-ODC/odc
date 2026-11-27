@@ -1,6 +1,10 @@
 import type { FastifyInstance, FastifyRequest, FastifyReply } from "fastify";
 import type { Voter } from "../identity/store.js";
-import { ContributionError, listQuery } from "../contributions/input.js";
+import {
+  ContributionError,
+  expectedPictureId,
+  listQuery,
+} from "../contributions/input.js";
 import type { ContributionsStore } from "../contributions/store.js";
 import type { MemberProfileStore } from "../profiles/store.js";
 import { isStorageUnavailable } from "../db/unavailable.js";
@@ -25,6 +29,10 @@ const errors = {
   organizer_required: [403, "Only the organizer can do that."],
   origin_not_allowed: [403, "Open this site to send that request."],
   not_found: [404, "That contribution could not be found."],
+  image_changed: [
+    409,
+    "The picture changed, so it wasn't removed. Check it and try again.",
+  ],
   image_unavailable: [
     422,
     "That picture is no longer available. Add it again.",
@@ -230,7 +238,11 @@ export async function registerContributionRoutes(
           };
           return method === "PUT"
             ? store().replacePicture(who, id(request), request.body)
-            : store().removePicture(who, id(request));
+            : store().removePicture(
+                who,
+                id(request),
+                expectedPictureId(request.query),
+              );
         },
       });
     }

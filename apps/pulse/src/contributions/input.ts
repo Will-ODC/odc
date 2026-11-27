@@ -103,6 +103,7 @@ export class ContributionError extends Error {
       | "not_found"
       | "poll_not_found"
       | "image_unavailable"
+      | "image_changed"
       | "idempotency_conflict"
       | "posting_limit"
       | "closed"
@@ -126,6 +127,12 @@ export function requestKey(value: string): string {
   )
     throw new ContributionError("bad_request");
   return value.toLowerCase();
+}
+const pictureRemovalQuery = z.object({
+  expectedImageId: pictureInput.shape.id.optional(),
+});
+export function expectedPictureId(raw: unknown): string | undefined {
+  return parse(pictureRemovalQuery, raw).expectedImageId;
 }
 export interface ListQuery {
   before?: { createdAt: string; id: string };

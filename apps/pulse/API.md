@@ -1756,10 +1756,16 @@ independent evidence reviews and automatic reputation remain future work.
 Only the signed-in poster may manage the picture. Both routes require the
 configured web Origin and use the 30 requests/minute mutation limit. PUT
 accepts strict UTF-8 JSON `{id,alt}` with the same pending upload and
-description rules as creation. DELETE takes no body. Both return 200 with
-`{image}` and `Cache-Control: no-store`. DELETE with no picture already
-attached returns the fallback and makes no change. These routes do not take
-an idempotency key. An accepted replacement consumes its pending upload.
+description rules as creation. DELETE takes no body. Its optional
+`expectedImageId` query parameter identifies the upload the poster confirmed,
+using one lowercase UUID from the picture's public URL. Pulse compares it to the current
+attachment inside the removal transaction. A mismatch, including a missing
+attachment, returns 409 `image_changed` and leaves the picture and audit trail
+untouched. Read the current contribution before asking for confirmation again.
+DELETE without the parameter still returns the fallback when no picture is
+attached. Successful requests return 200 with `{image}` and
+`Cache-Control: no-store`. These routes do not take an idempotency key. An
+accepted replacement consumes its pending upload.
 
 Replacing or removing deletes the old picture and both variants in the same
 transaction as the link change and audit entry. Removed URLs return 404 at
