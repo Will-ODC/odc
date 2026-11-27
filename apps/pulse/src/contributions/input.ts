@@ -1,5 +1,5 @@
 import { z } from "zod";
-import { pictureInput } from "../images/input.js";
+import { pictureInput, pictureRemovalQuery } from "../images/input.js";
 export const MIN_SAVINGS_PERCENT = 20;
 const text = (max: number) =>
   z
@@ -128,9 +128,6 @@ export function requestKey(value: string): string {
     throw new ContributionError("bad_request");
   return value.toLowerCase();
 }
-const pictureRemovalQuery = z.object({
-  expectedImageId: pictureInput.shape.id.optional(),
-});
 export function expectedPictureId(raw: unknown): string | undefined {
   return parse(pictureRemovalQuery, raw).expectedImageId;
 }

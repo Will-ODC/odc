@@ -4,9 +4,17 @@ import {
   attachInMemory,
   attachablePending,
   memoryImageDatabase,
+  recordPictureChange,
+  type PictureChange,
 } from "../images/store.js";
+import type { ItemImage } from "../images/public.js";
 import { InMemoryVoterStore, type Voter } from "../identity/store.js";
-import { InMemoryVotingStore } from "../voting/store.js";
+import { InMemoryVotingStore, UnknownPollError } from "../voting/store.js";
+import {
+  PollPictureError,
+  type PollPictureEdit,
+  type PollPictureStore,
+} from "./poll-picture.js";
 import { createPoll, type Publication } from "../voting/poll.js";
 import {
   publicPoll as projectPoll,
@@ -47,7 +55,7 @@ interface MemoryDatabase {
 const databases = new WeakMap<InMemoryVotingStore, MemoryDatabase>();
 
 /** Same-process reference only; deployed instances must use Postgres. */
-export class InMemoryCreationStore implements CreationStore {
+export class InMemoryCreationStore implements CreationStore, PollPictureStore {
   readonly #state: MemoryDatabase;
   readonly #voting: InMemoryVotingStore;
   readonly #ownerEmail: string | null;
@@ -211,6 +219,70 @@ export class InMemoryCreationStore implements CreationStore {
       this.#state.acknowledgements.add(account.id);
       this.#state.replays.set(replayKey, { canonical, poll: publicPoll });
       return { poll: structuredClone(publicPoll), replayed: false };
+    });
+  }
+
+  canManagePicture(voterId: string, id: string): Promise<boolean> {
+    return this.#state.voters.exclusive(async () => {
+      if (!(await this.#voting.getPoll(id))) throw new UnknownPollError(id);
+      return this.#state.publications.get(id)?.authorId === voterId;
+    });
+  }
+
+  changePicture(
+    actor: PublicationActor,
+    id: string,
+    operation: PollPictureEdit,
+  ): Promise<ItemImage | undefined> {
+    return this.#state.voters.exclusive(async () => {
+      await this.#account(actor);
+      const poll = await this.#voting.getPoll(id);
+      if (!poll) throw new UnknownPollError(id);
+      if (this.#state.publications.get(id)?.authorId !== actor.voterId)
+        throw new PollPictureError("poster_required");
+
+      const db = memoryImageDatabase(this.#voting);
+      const oldId = poll.image?.id;
+      const now = this.#clock();
+      if (operation.action === "image_remove") {
+        if (
+          operation.expectedImageId !== undefined &&
+          operation.expectedImageId !== oldId
+        )
+          throw new PollPictureError("image_changed");
+        if (oldId === undefined) return undefined;
+      }
+      const change: PictureChange = {
+        targetKind: "poll",
+        targetId: id,
+        action: operation.action,
+        actorId: actor.voterId,
+        now,
+        changeId: this.#newId(),
+      };
+
+      // Complete the link, image and audit changes without yielding.
+      let image: ItemImage | undefined;
+      if (operation.action === "image_replace") {
+        const { id: pendingId, alt } = operation.input;
+        const pending = attachablePending(db, pendingId, actor.voterId, now);
+        if (!pending) throw new PollPictureError("image_unavailable");
+        image = {
+          id: pending.id,
+          width: pending.width,
+          height: pending.height,
+          alt,
+        };
+        this.#voting.setPollPicture(id, image);
+        attachInMemory(db, pending, alt, change);
+      } else {
+        const old = oldId === undefined ? undefined : db.images.get(oldId);
+        if (!old) throw new Error("current poll picture missing");
+        this.#voting.setPollPicture(id, undefined);
+        recordPictureChange(db, old, change);
+      }
+      if (oldId !== undefined) db.images.delete(oldId);
+      return image;
     });
   }
 

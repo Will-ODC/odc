@@ -18,3 +18,7 @@ export const pictureInput = z
   .strict();
 
 export type PictureInput = z.infer<typeof pictureInput>;
+
+export const pictureRemovalQuery = z.object({
+  expectedImageId: pictureInput.shape.id.optional(),
+});

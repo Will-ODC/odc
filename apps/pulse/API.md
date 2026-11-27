@@ -1532,7 +1532,8 @@ permission. No public grant listing or author/account inspection is introduced.
 ## Pictures (ADR-0047, ADR-0049)
 
 A poll or contribution may carry one picture. Upload it first through the
-shared `/api/poll-images` route, then attach it at publication. The path keeps
+shared `/api/poll-images` route, then attach it at publication or when
+replacing the item's picture. The path keeps
 its historical name for uploads and both served variants. Pictures are stored in Pulse's Postgres as
 two re-encoded WebP variants; the original upload is never stored or served.
 
@@ -1646,9 +1647,45 @@ when the picture route would serve it. Nothing else is ever in the object: no
 uploading account, file name, original type or size, upload time or hash. A
 poll creation response replayed from before pictures existed returns the tile.
 
-Planned, not served (ADR-0047, plan P12 steps 5–9): category defaults
-(`kind: "category"`), removing or replacing a poll picture, reporting, and the
-site owner's soft delete.
+### `GET /api/polls/:id/image`
+
+A signed-in account gets `200 { "canManage": true }` if it published the
+visible poll and `200 { "canManage": false }` otherwise. This applies to polls
+with or without an uploaded picture. Every response carries
+`Cache-Control: private, no-store`. This route returns no attribution or
+poster identifiers. The public poll response carries no viewer permissions.
+
+### `PUT /api/polls/:id/image` and `DELETE /api/polls/:id/image`
+
+Only the account that published the poll can change its picture. Both routes
+require a signed-in session and the configured web Origin. PUT accepts strict
+UTF-8 JSON `{ "id": <uuid>, "alt": <text> }` using the same pending upload
+and description rules as publication. DELETE takes no body and accepts an
+optional `expectedImageId` query parameter, a single lowercase UUID from the
+current picture's public URL. It is compared inside the removal transaction.
+A mismatch, including a missing attachment, leaves the picture and audit
+trail untouched. DELETE without the parameter succeeds without an audit
+entry when no picture is attached.
+
+Both return `200 { "image": ... }` with `Cache-Control: private, no-store`
+and the public image fields described above. A successful PUT consumes the
+pending upload. Each change records one audit entry and deletes any old
+picture row and both variants in the same transaction as the poll link
+change. Removed URLs return 404 at the server and may remain in browsers'
+caches for up to one hour. The poll's question, choices, closing time and
+attribution stay fixed. Voters receive no notification.
+
+Errors use `{error,message}`. All three routes return 401 `signed_out` for a
+missing, expired or revoked session, and the usual poll 404 `not_found` for a
+hidden or missing poll. PUT and DELETE also return 400 `bad_request` for an
+invalid request, 403 `origin_not_allowed` or `poster_required`, and 409
+`image_changed` for a DELETE precondition mismatch. PUT may return 413
+`body_too_large` above 32 KiB or 422 `image_unavailable` for an unavailable
+pending upload. The routes may return 429 `too_many_requests` (30 requests
+per minute per route), 503 `images_unavailable`, or 500 `server_error`.
+
+Planned (ADR-0047, P12): category defaults (`kind: "category"`), reporting,
+and the site owner's soft delete.
 
 ## Contributions (#246, #247, #252)
 
