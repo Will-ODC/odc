@@ -6,55 +6,75 @@ import { SIGNED_IN_KEY } from "../flow/sign-in-return.js";
 export function usePollPictureAccess(
   api: PulseApi,
   pollId: string | undefined,
-  accountId: string | null,
+  sessionAccountId: string | null,
 ) {
   const [permission, setPermission] = useState<{
     api: PulseApi;
     pollId: string;
-    accountId: string;
+    sessionAccountId: string;
+    ownerId: string;
   } | null>(null);
   useEffect(() => {
     setPermission(null);
-    if (!pollId || accountId === null) return;
-    let live = true;
-    void api.pollPictureAccess(pollId).then(
-      (canManage) => {
-        if (live && canManage === true)
-          setPermission({ api, pollId, accountId });
-      },
-      () => {},
-    );
-    // Revoke this account's editor without changing the voting session.
-    const checkAccount = (event: StorageEvent) => {
-      if (event.key !== SIGNED_IN_KEY) return;
-      void api.me().then(
-        (me) => {
-          if (!live || !me || me.id === accountId) return;
-          live = false;
-          setPermission(null);
-        },
-        () => {},
-      );
+    if (!pollId || sessionAccountId === null) return;
+    let latestRequest = 0;
+    let retryOnFocus = false;
+
+    // The picture editor follows the current account independently of voting.
+    const refresh = async (readCurrentAccount: boolean) => {
+      const request = ++latestRequest;
+      retryOnFocus = false;
+      try {
+        const ownerId = readCurrentAccount
+          ? (await api.me())?.id
+          : sessionAccountId;
+        if (request !== latestRequest || !ownerId) return;
+        setPermission((current) =>
+          current?.ownerId === ownerId ? current : null,
+        );
+        const canManage = await api.pollPictureAccess(pollId);
+        if (request !== latestRequest) return;
+        setPermission(
+          canManage === true
+            ? { api, pollId, sessionAccountId, ownerId }
+            : null,
+        );
+      } catch {
+        if (request === latestRequest) retryOnFocus = true;
+      }
     };
-    window.addEventListener("storage", checkAccount);
+
+    void refresh(false);
+    const onStorage = (event: StorageEvent) => {
+      if (event.key === SIGNED_IN_KEY) void refresh(true);
+    };
+    const onFocus = () => {
+      if (retryOnFocus) void refresh(true);
+    };
+    window.addEventListener("storage", onStorage);
+    window.addEventListener("focus", onFocus);
     return () => {
-      live = false;
-      window.removeEventListener("storage", checkAccount);
+      latestRequest += 1;
+      window.removeEventListener("storage", onStorage);
+      window.removeEventListener("focus", onFocus);
     };
-  }, [api, pollId, accountId]);
-  const canManage =
-    permission !== null &&
-    permission.api === api &&
+  }, [api, pollId, sessionAccountId]);
+
+  const ownerId =
+    permission?.api === api &&
     permission.pollId === pollId &&
-    permission.accountId === accountId;
+    permission.sessionAccountId === sessionAccountId
+      ? permission.ownerId
+      : null;
   const revoke = useCallback(() => {
     setPermission((current) =>
       current?.api === api &&
       current.pollId === pollId &&
-      current.accountId === accountId
+      current.sessionAccountId === sessionAccountId &&
+      current.ownerId === ownerId
         ? null
         : current,
     );
-  }, [api, pollId, accountId]);
-  return { canManage, revoke };
+  }, [api, pollId, sessionAccountId, ownerId]);
+  return { ownerId, revoke };
 }

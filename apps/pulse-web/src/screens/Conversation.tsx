@@ -548,7 +548,7 @@ function LoadedQuestion({
   const poll = fetched.status === "ready" ? fetched.value : null;
   const { session, onPollLoaded } = identity;
   const accountId = session.status === "signedIn" ? session.me.id : null;
-  const { canManage: canManagePicture, revoke: revokePictureAccess } =
+  const { ownerId: pictureOwnerId, revoke: revokePictureAccess } =
     usePollPictureAccess(api, poll?.id, accountId);
   const [updatedImage, setUpdatedImage] = useState<PublicImage>();
 
@@ -642,12 +642,12 @@ function LoadedQuestion({
                         question={poll.question}
                       />
                     ) : null}
-                    {canManagePicture && accountId !== null ? (
+                    {pictureOwnerId !== null ? (
                       <PollPictureForm
-                        key={accountId}
+                        key={pictureOwnerId}
                         api={api}
                         id={poll.id}
-                        accountId={accountId}
+                        accountId={pictureOwnerId}
                         image={image}
                         onPictureChanged={setUpdatedImage}
                         revokeAccess={revokePictureAccess}

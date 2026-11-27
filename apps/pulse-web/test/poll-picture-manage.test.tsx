@@ -273,6 +273,7 @@ it("keeps the uploaded draft through expiry and rechecks permission before it ca
   expect(description).toHaveProperty("value", replacementAlt);
   expect(action("Save picture").closest("fieldset")?.disabled).toBe(true);
   expect(pollPictureAccess).toHaveBeenCalledTimes(1);
+  pollPictureAccess.mockClear();
 
   me = poster;
   await act(async () =>
@@ -281,7 +282,7 @@ it("keeps the uploaded draft through expiry and rechecks permission before it ca
   await waitFor(() =>
     expect(screen.queryByText("Sign in again in a new tab")).toBeNull(),
   );
-  expect(pollPictureAccess).toHaveBeenCalledTimes(2);
+  expect(pollPictureAccess).toHaveBeenCalledWith(question.id);
   expect(document.activeElement).toBe(
     field.getByRole("button", { name: "Replace" }),
   );
@@ -294,9 +295,15 @@ it("keeps the uploaded draft through expiry and rechecks permission before it ca
   });
 });
 
-it("drops the open editor when another account signs in", async () => {
+it("closes the editor for another account and restores access for the returning poster", async () => {
   let me = poster;
-  const pollPictureAccess = vi.fn(async () => me === poster);
+  let denyVisitor!: () => void;
+  const visitorPermission = new Promise<boolean>((resolve) => {
+    denyVisitor = () => resolve(false);
+  });
+  const pollPictureAccess = vi.fn(() =>
+    me === poster ? Promise.resolve(true) : visitorPermission,
+  );
   const user = open({ me: async () => me, pollPictureAccess });
   await expand(user);
 
@@ -306,4 +313,31 @@ it("drops the open editor when another account signs in", async () => {
   );
   await waitFor(() => expect(screen.queryByText("Manage picture")).toBeNull());
   expect(screen.getByText("Posted anonymously")).toBeTruthy();
+
+  me = poster;
+  await act(async () =>
+    window.dispatchEvent(new StorageEvent("storage", { key: SIGNED_IN_KEY })),
+  );
+  const manage = await screen.findByText("Manage picture", {
+    selector: "summary",
+  });
+  expect(manage.closest("details")?.open).toBe(false);
+
+  await act(async () => denyVisitor());
+  expect(screen.getByText("Manage picture")).toBe(manage);
+});
+
+it("rechecks picture permission on focus after a temporary failure", async () => {
+  const pollPictureAccess = vi
+    .fn(async () => true)
+    .mockRejectedValueOnce(
+      new ApiError(503, "Try again.", "images_unavailable"),
+    );
+  open({ pollPictureAccess });
+
+  await waitFor(() => expect(pollPictureAccess).toHaveBeenCalledTimes(1));
+  expect(screen.queryByText("Manage picture")).toBeNull();
+
+  await act(async () => window.dispatchEvent(new Event("focus")));
+  expect(await screen.findByText("Manage picture")).toBeTruthy();
 });
