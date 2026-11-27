@@ -494,6 +494,13 @@ for (const kind of ["memory", "postgres"] as const) {
         "bad_request",
       );
       refused(await remove(original.id), 409, "image_changed");
+      if (h.pool) {
+        const { rows } = await h.pool.query(
+          "select action from content_change where image_id = $1",
+          [replacement.id],
+        );
+        assert.deepEqual(rows, [{ action: "image_replace" }]);
+      }
       const detail = await h.request({
         method: "GET",
         url: `/api/contributions/${id}`,
