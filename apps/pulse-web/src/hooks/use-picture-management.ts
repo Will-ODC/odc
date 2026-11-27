@@ -1,4 +1,10 @@
-import { useEffect, useLayoutEffect, useRef, useState } from "react";
+import {
+  useCallback,
+  useEffect,
+  useLayoutEffect,
+  useRef,
+  useState,
+} from "react";
 import type { FormEvent } from "react";
 import { ContributionsError } from "../api/contributions.js";
 import { pictureChangedMessage } from "../api/pictures.js";
@@ -13,6 +19,11 @@ import { usePictureField } from "./use-picture-field.js";
 import { useSave } from "./use-save.js";
 import { focusLost, useSendOutcome, type Access } from "./use-send-outcome.js";
 import type { TwoPressProgress } from "../components/TwoPress.js";
+
+export type PictureRemovalConflict = {
+  imageId: string | null;
+  remember: (imageId: string) => void;
+};
 
 export function usePictureManagement({
   access,
@@ -35,10 +46,7 @@ export function usePictureManagement({
   changePicture: (change: PictureChange) => Promise<PublicImage>;
   retrySignInOnReturn?: boolean;
   reloadOnConflict?: boolean;
-  removalConflict?: {
-    imageId: string | null;
-    remember: (imageId: string) => void;
-  };
+  removalConflict?: PictureRemovalConflict;
   onPictureChanged: (image: PublicImage) => void;
   onSignedOut: () => Promise<boolean>;
 }) {
@@ -128,6 +136,16 @@ export function usePictureManagement({
   const signInStatus = useRef<HTMLParagraphElement>(null);
   const checkSignIn = useRef<HTMLButtonElement>(null);
   const checkingHadFocus = useRef(false);
+  const rememberSignInFocus = useCallback(() => {
+    const active = document.activeElement;
+    checkingHadFocus.current ||=
+      checkSignIn.current === active ||
+      Boolean(signInStatus.current?.contains(active));
+  }, []);
+  const checkAgain = useCallback(() => {
+    rememberSignInFocus();
+    retrySignIn((n) => n + 1);
+  }, [rememberSignInFocus]);
   const { errorStatus, clearFailure } = save;
   useEffect(() => {
     if (access !== "signedIn" || (!uploadSignedOut && errorStatus !== 401))
@@ -135,11 +153,7 @@ export function usePictureManagement({
     let live = true;
     void onSignedOut().then((verified) => {
       if (!live || !verified) return;
-      const active = document.activeElement;
-      checkingHadFocus.current =
-        retrySignInOnReturn &&
-        (checkSignIn.current === active ||
-          Boolean(signInStatus.current?.contains(active)));
+      if (retrySignInOnReturn) rememberSignInFocus();
 
       setUploadSignedOut(false);
       clearFailure();
@@ -155,6 +169,7 @@ export function usePictureManagement({
     clearFailure,
     signInAttempt,
     retrySignInOnReturn,
+    rememberSignInFocus,
   ]);
   const signInAgain =
     access === "expired" || uploadSignedOut || save.errorStatus === 401;
@@ -162,17 +177,16 @@ export function usePictureManagement({
   const choosePicture = useRef<HTMLFieldSetElement>(null);
   useEffect(() => {
     if (!retrySignInOnReturn || !signInAgain || access !== "signedIn") return;
-    const check = () => retrySignIn((n) => n + 1);
     const announced = (event: StorageEvent) => {
-      if (event.key === SIGNED_IN_KEY) check();
+      if (event.key === SIGNED_IN_KEY) checkAgain();
     };
-    window.addEventListener("focus", check);
+    window.addEventListener("focus", checkAgain);
     window.addEventListener("storage", announced);
     return () => {
-      window.removeEventListener("focus", check);
+      window.removeEventListener("focus", checkAgain);
       window.removeEventListener("storage", announced);
     };
-  }, [retrySignInOnReturn, signInAgain, access]);
+  }, [retrySignInOnReturn, signInAgain, access, checkAgain]);
   useLayoutEffect(() => {
     if (
       signInAgain &&
@@ -259,9 +273,6 @@ export function usePictureManagement({
   function reloadPicture() {
     clearStatus();
     void refreshPicture().then((read) => setReload(read ? "done" : "failed"));
-  }
-  function checkAgain() {
-    retrySignIn((n) => n + 1);
   }
   return {
     submit,

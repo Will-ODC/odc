@@ -47,7 +47,10 @@ import { AnsweredRail } from "../components/AnsweredRail.js";
 import { PostedBanner } from "../components/PostedBanner.js";
 import { CopyLink } from "../components/CopyLink.js";
 import { PictureManagement } from "../components/PictureManagement.js";
-import { usePictureManagement } from "../hooks/use-picture-management.js";
+import {
+  usePictureManagement,
+  type PictureRemovalConflict,
+} from "../hooks/use-picture-management.js";
 import { usePollPictureAccess } from "../hooks/use-poll-picture-access.js";
 import { ItemPicture } from "../components/ItemPicture.js";
 import {
@@ -190,6 +193,11 @@ export function Conversation({
   const [heldBefore, setHeldBefore] = useState(false);
   // Bumped when the votes are forgotten, so the question starts over.
   const [round, setRound] = useState(0);
+  // A sign-out resets the question card. Keep stale picture IDs across that
+  // reset so a returning poster must still refresh before removing a picture.
+  const [refusedPictures, setRefusedPictures] = useState(
+    () => new Map<string, string>(),
+  );
   // This browser's saved answers, read on every visit, so the Answered list
   // survives navigation and reload (#484); this page's answers join it below.
   const mine = useMyVotes(api);
@@ -437,6 +445,13 @@ export function Conversation({
             onAccountChanged: setAccountChangedAt,
             onPollLoaded: pollLoaded,
           }}
+          removalConflict={{
+            imageId: refusedPictures.get(at) ?? null,
+            remember: (imageId) =>
+              setRefusedPictures((current) =>
+                new Map(current).set(at, imageId),
+              ),
+          }}
           onRemembered={remembered}
           onReadBack={readBack}
           onHeldBallot={foundHeldBallot}
@@ -462,6 +477,7 @@ function Question({
   saved,
   waiting,
   identity,
+  removalConflict,
   onRemembered,
   onReadBack,
   onHeldBallot,
@@ -475,6 +491,7 @@ function Question({
   saved?: Answer;
   waiting: boolean;
   identity: QuestionIdentity;
+  removalConflict: PictureRemovalConflict;
   onRemembered: (answer: Answer) => void;
   /**
    * Asks the server which answer it holds for a poll, and lists it, unless
@@ -497,6 +514,7 @@ function Question({
       {...(saved ? { saved } : {})}
       waiting={waiting}
       identity={identity}
+      removalConflict={removalConflict}
       onRemembered={onRemembered}
       onReadBack={onReadBack}
       onHeldBallot={onHeldBallot}
@@ -515,6 +533,7 @@ function LoadedQuestion({
   saved,
   waiting,
   identity,
+  removalConflict,
   onRemembered,
   onReadBack,
   onHeldBallot,
@@ -530,6 +549,7 @@ function LoadedQuestion({
   /** A send left behind for this question has not settled yet. */
   waiting: boolean;
   identity: QuestionIdentity;
+  removalConflict: PictureRemovalConflict;
   onRemembered: (answer: Answer) => void;
   /**
    * Asks the server which answer it holds for a poll, and lists it, unless
@@ -554,7 +574,6 @@ function LoadedQuestion({
     revoke: revokePictureAccess,
   } = usePollPictureAccess(api, poll?.id, accountId);
   const [updatedImage, setUpdatedImage] = useState<PublicImage>();
-  const [refusedPicture, setRefusedPicture] = useState<string | null>(null);
 
   useLayoutEffect(() => {
     onPollLoaded(poll);
@@ -654,10 +673,7 @@ function LoadedQuestion({
                         accountId={pictureOwnerId}
                         image={image}
                         checkingAccount={checkingPictureAccount}
-                        removalConflict={{
-                          imageId: refusedPicture,
-                          remember: setRefusedPicture,
-                        }}
+                        removalConflict={removalConflict}
                         onPictureChanged={setUpdatedImage}
                         revokeAccess={revokePictureAccess}
                       />
@@ -748,10 +764,7 @@ function PollPictureForm({
   accountId: string;
   image: PublicImage | undefined;
   checkingAccount: boolean;
-  removalConflict: {
-    imageId: string | null;
-    remember: (imageId: string) => void;
-  };
+  removalConflict: PictureRemovalConflict;
   onPictureChanged: (image: PublicImage) => void;
   revokeAccess: () => void;
 }) {

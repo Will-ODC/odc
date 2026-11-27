@@ -12,6 +12,7 @@ import { afterEach, expect, it, vi } from "vitest";
 import { pictureChangedMessage } from "../src/api/pictures.js";
 import { ApiError, type PublicImage, type PulseApi } from "../src/api/types.js";
 import { SIGNED_IN_KEY } from "../src/flow/sign-in-return.js";
+import { SIGNED_OUT_KEY } from "../src/hooks/use-session.js";
 import { Conversation } from "../src/screens/Conversation.js";
 import { poll, stubApi } from "./stub-api.js";
 
@@ -274,11 +275,19 @@ it("keeps the uploaded draft through expiry and rechecks permission before it ca
   expect(action("Save picture").closest("fieldset")?.disabled).toBe(true);
   expect(pollPictureAccess).toHaveBeenCalledTimes(1);
   pollPictureAccess.mockClear();
+  let confirmPermission!: () => void;
+  const checkedPermission = new Promise<boolean>((resolve) => {
+    confirmPermission = () => resolve(true);
+  });
+  pollPictureAccess.mockImplementation(() => checkedPermission);
 
   me = poster;
   await act(async () =>
     window.dispatchEvent(new StorageEvent("storage", { key: SIGNED_IN_KEY })),
   );
+  // A browser blurs the notice when the permission check hides the editor.
+  signIn.parentElement?.blur();
+  await act(async () => confirmPermission());
   await waitFor(() =>
     expect(screen.queryByText("Sign in again in a new tab")).toBeNull(),
   );
@@ -407,6 +416,38 @@ it("keeps removal blocked for a conflicted picture after switching accounts", as
   me = visitor;
   await act(async () =>
     window.dispatchEvent(new StorageEvent("storage", { key: SIGNED_IN_KEY })),
+  );
+  expect(screen.queryByText("Manage picture")).toBeNull();
+
+  me = poster;
+  await act(async () =>
+    window.dispatchEvent(new StorageEvent("storage", { key: SIGNED_IN_KEY })),
+  );
+  await expand(user);
+  expect(
+    screen.queryByRole("button", { name: "Remove posted picture" }),
+  ).toBeNull();
+  expect(action("Reload picture")).toBeTruthy();
+});
+
+it("keeps removal blocked for a conflicted public poll after signing out and back in", async () => {
+  let me: typeof poster | null = poster;
+  const user = open({
+    me: async () => me,
+    poll: async () => ({ ...question, votePrivacy: "public" }),
+    pollPictureAccess: async () => me === poster,
+    changePollPicture: async () => {
+      throw new ApiError(409, pictureChangedMessage, "image_changed");
+    },
+  });
+  await expand(user);
+  await confirmRemoval(user);
+  await user.keyboard("{Enter}");
+  await screen.findByText(pictureChangedMessage);
+
+  me = null;
+  await act(async () =>
+    window.dispatchEvent(new StorageEvent("storage", { key: SIGNED_OUT_KEY })),
   );
   expect(screen.queryByText("Manage picture")).toBeNull();
 
