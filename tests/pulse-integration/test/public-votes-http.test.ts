@@ -1,6 +1,7 @@
 import { afterEach, beforeEach, describe, expect, it } from "vitest";
 // Test setup imports both apps directly; this workspace declares both dependencies.
 // The production browser app uses only the public HTTP API.
+import { InMemoryCreationStore } from "../../../apps/pulse/src/authoring/memory-store.js";
 import {
   DomainAllowlist,
   StaticDomainSource,
@@ -22,11 +23,15 @@ import { createServer } from "../../../apps/pulse/src/http/server.js";
 import { SessionSigner } from "../../../apps/pulse/src/http/session.js";
 import { HttpPulseApi } from "../../../apps/pulse-web/src/api/http.js";
 import { ApiError } from "../../../apps/pulse-web/src/api/types.js";
+import {
+  emptyDraft,
+  requestOf,
+} from "../../../apps/pulse-web/src/flow/new-poll.js";
 
 /**
  * ADR-0048 over a real socket with the browser's HTTP adapter.
- * Public-vote polls are made through the voting store, because creation
- * still refuses the setting.
+ * Most cases seed their public-vote poll through the voting store; one
+ * creates it through `POST /api/polls` as the posting form does.
  */
 
 type PulseServer = Awaited<ReturnType<typeof createServer>>;
@@ -95,6 +100,7 @@ describe("public-vote polls over HTTP", () => {
       voters,
       votes,
       profiles: new InMemoryMemberProfileStore(voters),
+      creation: new InMemoryCreationStore(voters, votes),
       suggestions: new InMemorySuggestionStore(),
       signer: new SessionSigner("a-test-secret-long-enough-x-x-x-x"),
       confirmationKey: new ConfirmationKey(
@@ -122,6 +128,35 @@ describe("public-vote polls over HTTP", () => {
     );
     return { ...one, me };
   }
+
+  it("a question posted with public votes takes a named vote and lists it", async () => {
+    const jo = await signedIn();
+    // The request the posting form builds when "Votes are public" is picked.
+    const request = requestOf(
+      {
+        ...emptyDraft(),
+        question: "Which day for the clean-up?",
+        choices: ["Saturday", "Sunday"],
+        votePrivacy: "public",
+      },
+      true,
+    );
+    expect(request.votePrivacy).toBe("public");
+    const posted = await jo.api.createPoll(crypto.randomUUID(), request);
+    expect(posted.votePrivacy).toBe("public");
+    expect((await jo.api.poll(posted.id)).votePrivacy).toBe("public");
+
+    const cast = await jo.api.cast(posted.id, [1], true);
+    expect(cast).toMatchObject({
+      status: "counted",
+      results: { voters: 1, votePrivacy: "public" },
+    });
+    expect(jo.cookies()).not.toContain("pulse_ballot=");
+    expect(await browser(base).api.publicVotes(posted.id)).toEqual({
+      items: [{ name: null, choices: [1] }],
+      nextCursor: null,
+    });
+  });
 
   it("today's client is refused with 409 and nothing is written or minted", async () => {
     const jo = await signedIn();

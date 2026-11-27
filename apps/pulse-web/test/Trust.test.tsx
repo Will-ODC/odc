@@ -109,10 +109,10 @@ describe("what the page says", () => {
     expect(today).toMatch(
       /Only Pulse.s operators can check the anonymous vote count today/,
     );
+    // ADR-0048 decision 13, now that creation offers the choice (step 4b).
     expect(today).toContain(
-      "A poll can show votes publicly. Each poll says which before you vote.",
+      "The person who posts a poll chooses once whether its votes are anonymous or public, and that choice can’t be changed. Each poll says which before you vote.",
     );
-    expect(today).not.toMatch(/person who creates a poll chooses/i);
     expect(today).toMatch(/including AI apps/);
     expect(today).toMatch(/Your email address is never shown/);
     expect(today).toMatch(
