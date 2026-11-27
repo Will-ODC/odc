@@ -36,6 +36,8 @@ export function PublicVotes({
           <>
             <ul ref={list} className="results__list">
               {items.map((vote, position) => (
+                // Position, not name: rows carry no id, two can be identical,
+                // pages only append, and a row holds no state of its own.
                 <li key={position} tabIndex={-1}>
                   {vote.name === null ? (
                     <em>Verified voter</em>

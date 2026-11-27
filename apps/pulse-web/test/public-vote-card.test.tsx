@@ -5,6 +5,7 @@ import {
   fireEvent,
   render,
   screen,
+  waitFor,
   within,
 } from "@testing-library/react";
 import userEvent from "@testing-library/user-event";
@@ -137,10 +138,13 @@ it("reads public votes for a visitor, forwards the sealed cursor, and can restar
   more.focus();
   await user.keyboard("{Enter}");
   expect(publicVotes).toHaveBeenNthCalledWith(2, question.id, "sealed_token");
-  await vi.waitFor(() =>
-    expect(within(list).getAllByRole("listitem")).toHaveLength(2),
-  );
-  expect(document.activeElement).toBe(within(list).getAllByRole("listitem")[1]);
+  // React commits the new row, then runs the focus effect; on a slow machine
+  // the scheduler can yield between the two, so wait for the outcome (#733).
+  await vi.waitFor(() => {
+    const rows = within(list).getAllByRole("listitem");
+    expect(rows).toHaveLength(2);
+    expect(document.activeElement).toBe(rows[1]);
+  });
 
   await user.click(
     within(list).getByRole("button", { name: "Load more votes" }),
@@ -344,6 +348,69 @@ it("keeps voting actions blank during the session check and offers a keyboard re
   await userEvent.setup().keyboard("{Enter}");
   await screen.findByRole("link", { name: "Sign in with email to vote" });
   expect(screen.queryByText(failure)).toBeNull();
+});
+
+// Signed in, the card hands focus to nothing of its own: the question's
+// heading (the page's usual arrival focus target) is what ends up focused.
+it.each([
+  ["signed out", null, { role: "link", name: "Sign in with email to vote" }],
+  [
+    "signed in",
+    session,
+    { role: "heading", name: question.question, level: 1 },
+  ],
+] as const)(
+  "moves focus from the session Try again to what replaces it when %s",
+  async (_, who, target) => {
+    const me = vi
+      .fn<() => Promise<Me | null>>()
+      .mockRejectedValueOnce(new Error("offline"))
+      .mockResolvedValue(who);
+    render(
+      <Conversation
+        api={stubApi({ me, poll: async () => question })}
+        pollId={question.id}
+      />,
+    );
+    const retry = await screen.findByRole("button", { name: "Try again" });
+    retry.focus();
+    await userEvent.setup().keyboard("{Enter}");
+    const { role, ...options } = target;
+    const next = await screen.findByRole(role, options);
+    await waitFor(() => expect(document.activeElement).toBe(next));
+  },
+);
+
+it("leaves focus alone when it moved elsewhere before the session check finished", async () => {
+  let resolve!: (value: Me | null) => void;
+  const me = vi
+    .fn<() => Promise<Me | null>>()
+    .mockRejectedValueOnce(new Error("offline"))
+    .mockImplementationOnce(
+      () =>
+        new Promise<Me | null>((res) => {
+          resolve = res;
+        }),
+    );
+  render(
+    <Conversation
+      api={stubApi({ me, poll: async () => question })}
+      pollId={question.id}
+    />,
+  );
+  const retry = await screen.findByRole("button", { name: "Try again" });
+  retry.focus();
+  await userEvent.setup().keyboard("{Enter}");
+  const heading = screen.getByRole("heading", {
+    name: question.question,
+    level: 1,
+  });
+  heading.tabIndex = -1;
+  heading.focus();
+  expect(document.activeElement).toBe(heading);
+  await act(async () => resolve(null));
+  await screen.findByRole("link", { name: "Sign in with email to vote" });
+  expect(document.activeElement).toBe(heading);
 });
 
 it.each(["anonymous", "public"] as const)(
