@@ -112,6 +112,8 @@ interface Harness {
   get(url: string, headers?: Record<string, string>): Promise<Reply>;
   /** The stored bytes of both variants, read straight from the store's tables. */
   stored(id: string): Promise<Buffer[]>;
+  /** The audit trail of one contribution, from the content_change table or the memory change log. */
+  contributionAudit(id: string): Promise<unknown[]>;
 }
 
 async function harness(
@@ -270,6 +272,19 @@ async function harness(
     },
     get(url, headers = {}) {
       return send({ method: "GET", url, headers });
+    },
+    async contributionAudit(id) {
+      if (pool) {
+        const { rows } = await pool.query(
+          "select * from content_change where target_kind = 'contribution' and target_id = $1 order by id",
+          [id],
+        );
+        return rows;
+      }
+      return memoryImageDatabase(votes as InMemoryVotingStore).changes.filter(
+        (change) =>
+          change.targetKind === "contribution" && change.targetId === id,
+      );
     },
     async stored(id) {
       if (pool) {
@@ -486,14 +501,9 @@ for (const kind of ["memory", "postgres"] as const) {
         replacement,
       );
       assert.equal(replaced.statusCode, 200, replaced.body);
-      const audit = async () =>
-        (
-          await h.pool?.query(
-            "select * from content_change where target_kind = 'contribution' and target_id = $1 order by id",
-            [id],
-          )
-        )?.rows;
+      const audit = () => h.contributionAudit(id);
       const beforeRefusals = await audit();
+      assert.ok(beforeRefusals.length > 0, "the audit comparison must be real");
       refused(await remove(original.id, "other"), 403, "organizer_required");
       refused(await remove("bad"), 400, "bad_request");
       refused(

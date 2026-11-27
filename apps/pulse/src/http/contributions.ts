@@ -29,7 +29,10 @@ const errors = {
   organizer_required: [403, "Only the organizer can do that."],
   origin_not_allowed: [403, "Open this site to send that request."],
   not_found: [404, "That contribution could not be found."],
-  image_changed: [409, "The contribution picture has changed."],
+  image_changed: [
+    409,
+    "The picture changed, so it wasn't removed. Check it and try again.",
+  ],
   image_unavailable: [
     422,
     "That picture is no longer available. Add it again.",
