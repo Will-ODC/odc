@@ -41,7 +41,7 @@ the same CI runs.
 ## Where it stands (2026-11-26)
 
 Per-PR history is in `git log origin/master -- apps/pulse apps/pulse-web`.
-**Open Pulse-related PRs:** none for Pulse code; PR #718 (orchestration skill, hand-off note at each merge) waits on the operator's merge. Next Pulse order (2026-11-26): #701 web half (PictureField in the contribution form, picture on the contribution page, picture after reload across API and client, plus the #728 nits below); then test-audit item 3; #685 step 4b (its deploy waits on 4a being live); the #714 nits. The #727 web nits ride the #701 web branch where they touch the same files, otherwise the next web branch. Next migration: **021** (020 merged in #728). Future, no ticket to build yet: #729 (epic, smart-contract milestone payouts for contributions; blocked on an ADR for chain, currency, key custody, refund rule and legal position). New ticket #707 (open polls from the main page without a reload; no urgency). #711 (`Contributions.test.tsx` "forgets a sign-in error once the same person has signed in again" flaky in CI) is fixed and closed in #723. #425 Next/Previous is on hold (operator, 2026-11-19).
+**Open Pulse-related PRs:** none for Pulse code (work split since 2026-11-27: Codex holds #732, #734 and #730; Claude did #733 and runs the UI reviews, then the #714 nits); PR #718 (orchestration skill, hand-off note at each merge) waits on the operator's merge. Next Pulse order (2026-11-26): #701 web half (PictureField in the contribution form, picture on the contribution page, picture after reload across API and client, plus the #728 nits below); then test-audit item 3; #685 step 4b (its deploy waits on 4a being live); the #714 nits. The #727 web nits ride the #701 web branch where they touch the same files, otherwise the next web branch. Next migration: **021** (020 merged in #728). Future, no ticket to build yet: #729 (epic, smart-contract milestone payouts for contributions; blocked on an ADR for chain, currency, key custody, refund rule and legal position). New ticket #707 (open polls from the main page without a reload; no urgency). #711 (`Contributions.test.tsx` "forgets a sign-in error once the same person has signed in again" flaky in CI) is fixed and closed in #723. #425 Next/Previous is on hold (operator, 2026-11-19).
 
 - **Sign-in (pillar 1) is built.** Magic-link sign-in and redeem; open sign-up
   with community as an optional label (ADR-0030); a community picker when an
@@ -83,6 +83,9 @@ Per-PR history is in `git log origin/master -- apps/pulse apps/pulse-web`.
   (2026-11-26, #727, `89742bd`): the question page shows the poll's picture
   under the question (description as alt), plain-text context, then the
   byline; a poll with no upload shows the small default tile (ADR-0047 §6).
+  #733 (2026-11-27, #735, `ae51df6`): test-only fix; `public-vote-card.test.tsx`
+  waits for focus inside `vi.waitFor` after "Load more votes" (the check ran
+  before LoadMore's focus effect on slow CI). Component unchanged.
   #701 server half (#728, `e6cd870`, migration 020): `image` on every
   contribution body and row (tile fallback until #586); poster-only
   PUT/DELETE `/api/contributions/:id/image`, signalled by `canManage`; the
