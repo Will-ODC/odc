@@ -55,6 +55,12 @@ function show({
 
 const CHANGE = "Change whether votes are anonymous or public";
 const button = (name: string) => screen.getByRole("button", { name });
+/** What a screen reader reads as the element's description. */
+const describedBy = (el: HTMLElement) =>
+  (el.getAttribute("aria-describedby") ?? "")
+    .split(" ")
+    .map((id) => document.getElementById(id)?.textContent ?? "")
+    .join(" ");
 const radio = (name: string) =>
   screen.getByRole<HTMLInputElement>("radio", { name });
 
@@ -105,6 +111,7 @@ describe("whether votes are anonymous or public (ADR-0048)", () => {
     expect(group.getAttribute("aria-describedby")).toBe(
       screen.getByText(VOTE_PRIVACY_NOTE).id,
     );
+    expect(describedBy(group)).toBe(VOTE_PRIVACY_NOTE);
     expect(document.activeElement).toBe(radio("Votes are anonymous"));
     expect(screen.queryByText(PUBLIC_VOTES_NOTE)).toBeNull();
 
@@ -113,6 +120,10 @@ describe("whether votes are anonymous or public (ADR-0048)", () => {
     await user.keyboard(" ");
     expect(radio("Votes are public").checked).toBe(true);
     expect(screen.getByText(PUBLIC_VOTES_NOTE)).toBeTruthy();
+    // Both notes describe the group: the once-note and who sees each answer.
+    expect(describedBy(group)).toBe(
+      `${VOTE_PRIVACY_NOTE} ${PUBLIC_VOTES_NOTE}`,
+    );
     expect(PUBLIC_VOTES_NOTE).toMatch(/sign in with their email to vote/);
     expect(PUBLIC_VOTES_NOTE).toMatch(/including AI apps/);
     expect(PUBLIC_VOTES_NOTE).toMatch(/“Verified voter”/);
@@ -159,7 +170,9 @@ describe("whether votes are anonymous or public (ADR-0048)", () => {
     await user.click(radio("Votes are public"));
     await user.click(button("Post question"));
     await user.click(button("Post it"));
-    expect(await screen.findByText(message)).toBeTruthy();
+    const alert = await screen.findByRole("alert");
+    expect(alert.textContent).toContain(message);
+    await waitFor(() => expect(document.activeElement).toBe(button("Post it")));
   });
 
   it("keeps a public choice across the sign-in a post needed", async () => {

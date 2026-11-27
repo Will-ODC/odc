@@ -159,12 +159,6 @@ export function attributionOf(draft: Draft): Attribution {
 }
 
 /**
- * `POST /api/polls` with the setting ADR-0048 added. Sent only when it is
- * `"public"`, so an anonymous question's request is the one it always was.
- */
-export type PollRequest = NewPollRequest & { votePrivacy?: "public" };
-
-/**
  * The request for a draft that has no problems. The promise is sent only
  * when the account has not made it yet: the server records it on success.
  */
@@ -172,7 +166,7 @@ export function requestOf(
   draft: Draft,
   needsPromise: boolean,
   image?: NewPollRequest["image"],
-): PollRequest {
+): NewPollRequest {
   const at =
     draft.closing.kind === "chosen" ? chosenClose(draft.closing.local) : null;
   return {

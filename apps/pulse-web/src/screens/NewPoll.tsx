@@ -717,7 +717,11 @@ function PostForm({
           >
             <fieldset
               className="post__group"
-              aria-describedby={`${id}-vote-privacy`}
+              aria-describedby={
+                draft.votePrivacy === "public"
+                  ? `${id}-vote-privacy ${id}-public-votes`
+                  : `${id}-vote-privacy`
+              }
             >
               <legend className="field__label">
                 Whether votes are anonymous or public
@@ -743,7 +747,9 @@ function PostForm({
                 </Choice>
               </div>
               {draft.votePrivacy === "public" ? (
-                <p className="post__hint">{PUBLIC_VOTES_NOTE}</p>
+                <p className="post__hint" id={`${id}-public-votes`}>
+                  {PUBLIC_VOTES_NOTE}
+                </p>
               ) : null}
             </fieldset>
           </Setting>
