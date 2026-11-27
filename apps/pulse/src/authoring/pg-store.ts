@@ -2,12 +2,24 @@ import { randomUUID } from "node:crypto";
 import type { Pool, PoolClient } from "pg";
 import { inTransaction } from "../db/transaction.js";
 import { parseEmail } from "../identity/email.js";
-import { attachPicture, lockAttachablePending } from "../images/pg-store.js";
+import {
+  attachPicture,
+  insertPictureChange,
+  lockAttachablePending,
+} from "../images/pg-store.js";
+import type { ItemImage } from "../images/public.js";
+import type { PictureChange } from "../images/store.js";
 import { createPoll } from "../voting/poll.js";
 import {
   publicPoll as projectPoll,
   publicPollReplay,
 } from "../voting/public-poll.js";
+import { UnknownPollError } from "../voting/store.js";
+import {
+  PollPictureError,
+  type PollPictureEdit,
+  type PollPictureStore,
+} from "./poll-picture.js";
 import {
   CreationError,
   HOUR_MS,
@@ -38,7 +50,7 @@ interface AccountRow {
   session_generation: string;
 }
 /** Internal store only. HTTP must validate expiry/origin before passing an actor. */
-export class PostgresCreationStore implements CreationStore {
+export class PostgresCreationStore implements CreationStore, PollPictureStore {
   readonly #pool: Pool;
   readonly #ownerEmail: string | null;
   readonly #clock: () => Date;
@@ -259,6 +271,90 @@ export class PostgresCreationStore implements CreationStore {
         "insert into posting_permission_change (id, voter_id, enabled, changed_by, changed_at) values ($1, $2, $3, $4, $5)",
         [this.#newId(), target, enabled, actor.voterId, now],
       );
+    });
+  }
+
+  async canManagePicture(voterId: string, id: string): Promise<boolean> {
+    const { rows } = await this.#pool.query<{ can_manage: boolean }>(
+      "select coalesce(created_by = $2, false) as can_manage" +
+        " from polls where id = $1 and not hidden",
+      [id, voterId],
+    );
+    const poll = rows[0];
+    if (!poll) throw new UnknownPollError(id);
+    return poll.can_manage;
+  }
+
+  changePicture(
+    actor: PublicationActor,
+    id: string,
+    operation: PollPictureEdit,
+  ): Promise<ItemImage | undefined> {
+    return inTransaction(this.#pool, async (client) => {
+      await this.#account(client, actor);
+      // Serialize edits and visibility changes on the poll itself. Keep the
+      // precondition in this transaction so it sees the current attachment.
+      const {
+        rows: [poll],
+      } = await client.query<{
+        created_by: string | null;
+        image_id: string | null;
+      }>(
+        "select created_by, image_id from polls where id = $1 and not hidden for update",
+        [id],
+      );
+      if (!poll) throw new UnknownPollError(id);
+      if (poll.created_by !== actor.voterId)
+        throw new PollPictureError("poster_required");
+
+      const oldId = poll.image_id;
+      if (operation.action === "image_remove") {
+        if (
+          operation.expectedImageId !== undefined &&
+          operation.expectedImageId !== oldId
+        )
+          throw new PollPictureError("image_changed");
+        if (oldId === null) return undefined;
+      }
+
+      const now = this.#clock();
+      const change: PictureChange = {
+        targetKind: "poll",
+        targetId: id,
+        action: operation.action,
+        actorId: actor.voterId,
+        now,
+        changeId: this.#newId(),
+      };
+      let image: ItemImage | undefined;
+      if (operation.action === "image_replace") {
+        const { id: pendingId, alt } = operation.input;
+        const pending = await lockAttachablePending(
+          client,
+          pendingId,
+          actor.voterId,
+          now,
+        );
+        if (!pending) throw new PollPictureError("image_unavailable");
+        image = await attachPicture(client, pending, alt, change);
+      } else {
+        const {
+          rows: [old],
+        } = await client.query<{ id: string; sha256: string }>(
+          "select image_id as id, sha256 from image_bytes" +
+            " where image_id = $1 and variant = 'display'",
+          [oldId],
+        );
+        if (!old) throw new Error("current poll picture missing");
+        await insertPictureChange(client, old, change);
+      }
+      await client.query("update polls set image_id = $2 where id = $1", [
+        id,
+        image?.id ?? null,
+      ]);
+      if (oldId !== null)
+        await client.query("delete from image where id = $1", [oldId]);
+      return image;
     });
   }
 

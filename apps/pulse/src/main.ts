@@ -403,6 +403,10 @@ export async function buildServer(
       );
     }
 
+    const creation = new PostgresCreationStore(
+      pool,
+      config.ownerEmail === undefined ? {} : { ownerEmail: config.ownerEmail },
+    );
     const app = await createServer({
       claims,
       images,
@@ -412,12 +416,8 @@ export async function buildServer(
       signer: new SessionSigner(config.secret),
       confirmationKey: new ConfirmationKey(config.confirmationKey),
       contributions: new PostgresContributionsStore(pool),
-      creation: new PostgresCreationStore(
-        pool,
-        config.ownerEmail === undefined
-          ? {}
-          : { ownerEmail: config.ownerEmail },
-      ),
+      creation,
+      pollPictures: creation,
       profiles: new PostgresMemberProfileStore(pool, { clock }),
       // The only origin creation mutations are accepted from (ADR-0037):
       // trusted configuration, the same origin sign-in links point at.

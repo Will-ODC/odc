@@ -12,6 +12,7 @@ import Fastify, {
   type FastifyServerOptions,
 } from "fastify";
 import type { CreationStore } from "../authoring/store.js";
+import type { PollPictureStore } from "../authoring/poll-picture.js";
 import type { ClaimService } from "../identity/claim.js";
 import type { Voter, VoterStore } from "../identity/store.js";
 import type { ConfirmationKey } from "../voting/confirmation.js";
@@ -42,6 +43,7 @@ import { registerCreationRoutes } from "./creation.js";
 import { registerImageRoutes, type ImageRouteDeps } from "./images.js";
 import { registerMcpReads, type McpReadOptions } from "./mcp/route.js";
 import { requireWebOrigin } from "./origin.js";
+import { notFoundPoll, registerPollPictureRoutes } from "./poll-pictures.js";
 import { registerProfileRoutes } from "./profiles.js";
 import type { MemberProfileStore } from "../profiles/store.js";
 import { cookieNames, SessionSigner } from "./session.js";
@@ -72,6 +74,7 @@ export interface ServerDeps {
    * creation routes answer 503 `creation_unavailable` and nothing is created.
    */
   creation?: CreationStore;
+  pollPictures?: PollPictureStore;
   contributions?: ContributionsStore;
   /**
    * Item pictures (ADR-0047, ADR-0049). Optional like `creation`: without one, uploads
@@ -991,6 +994,11 @@ export async function createServer(deps: ServerDeps): Promise<FastifyInstance> {
       ? { readRateLimit: deps.imageReadRateLimit }
       : {}),
   });
+  await registerPollPictureRoutes(app, {
+    pictures: deps.pollPictures,
+    webOrigin: deps.webOrigin,
+    currentVoter,
+  });
   await registerContributionRoutes(app, {
     contributions: deps.contributions,
     profiles: deps.profiles,
@@ -1043,12 +1051,6 @@ function badListQuery(reply: FastifyReply) {
     error: "bad_request",
     message: "Start again from the first page of votes.",
   });
-}
-
-function notFoundPoll(reply: FastifyReply) {
-  return reply
-    .code(404)
-    .send({ error: "not_found", message: "There is no such poll." });
 }
 
 /**

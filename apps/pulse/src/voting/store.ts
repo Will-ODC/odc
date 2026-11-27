@@ -412,6 +412,19 @@ export class InMemoryVotingStore implements VotingStore {
     return poll;
   }
 
+  /** The stored attachment for authoring, independent of serving visibility. */
+  getPollPictureId(pollId: string): string | undefined {
+    return this.#polls.get(pollId)?.image?.id;
+  }
+
+  /** Called under the authoring store's write lock alongside its image changes. */
+  setPollPicture(pollId: string, image: ItemImage | undefined): void {
+    const poll = this.#polls.get(pollId);
+    if (!poll) throw new UnknownPollError(pollId);
+    if (image === undefined) delete poll.image;
+    else poll.image = { ...image };
+  }
+
   async setSeedCommunity(pollId: string, community: string): Promise<void> {
     const poll = this.#polls.get(pollId);
     if (!poll || poll.publication)

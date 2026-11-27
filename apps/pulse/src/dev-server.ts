@@ -10,6 +10,7 @@ import type { Pool } from "pg";
 import { InMemoryCreationStore } from "./authoring/memory-store.js";
 import { ownerEmail } from "./authoring/owner.js";
 import { PostgresCreationStore } from "./authoring/pg-store.js";
+import type { PollPictureStore } from "./authoring/poll-picture.js";
 import type { CreationStore } from "./authoring/store.js";
 import { databaseUrl } from "./db/config.js";
 import { migrate } from "./db/migrate.js";
@@ -327,7 +328,7 @@ interface Storage {
   suggestions: SuggestionStore;
   claims: ClaimStore;
   domains: AllowedDomainSource;
-  creation: CreationStore;
+  creation: CreationStore & PollPictureStore;
   images: ImageStore;
   contributions: ContributionsStore;
   profiles: MemberProfileStore;
@@ -425,6 +426,7 @@ export async function buildDevServer(
       signer: new SessionSigner(config.secret),
       confirmationKey: new ConfirmationKey(config.confirmationKey),
       creation: storage.creation,
+      pollPictures: storage.creation,
       images: storage.images,
       contributions: storage.contributions,
       profiles: storage.profiles,

@@ -12,6 +12,8 @@ import type { Pool } from "pg";
  *
  * Throws if the waiters never arrive, which is itself a failure: the work did
  * not take the lock the test is about.
+ * Use `firstWaiterQuery` to require a particular statement at the head of
+ * the queue when later statements could also wait on the barrier.
  */
 export async function atBarrier<T>(
   pool: Pool,
@@ -19,6 +21,7 @@ export async function atBarrier<T>(
   params: unknown[],
   waiters: number,
   run: () => Promise<T>,
+  firstWaiterQuery?: RegExp,
 ): Promise<T> {
   const barrier = await pool.connect();
   try {
@@ -32,8 +35,12 @@ export async function atBarrier<T>(
     pending.catch(() => undefined);
     const deadline = Date.now() + 5000;
     for (;;) {
-      const { rows } = await pool.query<{ pid: number; blockers: number[] }>(
-        "select pid, pg_blocking_pids(pid) as blockers from pg_stat_activity" +
+      const { rows } = await pool.query<{
+        pid: number;
+        blockers: number[];
+        query: string;
+      }>(
+        "select pid, pg_blocking_pids(pid) as blockers, query from pg_stat_activity" +
           " where cardinality(pg_blocking_pids(pid)) > 0",
       );
       // Everyone blocked by the barrier, or by someone already counted.
@@ -42,7 +49,16 @@ export async function atBarrier<T>(
       while (grew) {
         grew = false;
         for (const row of rows)
-          if (!held.has(row.pid) && row.blockers.some((b) => held.has(b))) {
+          if (
+            !held.has(row.pid) &&
+            row.blockers.some(
+              (b) =>
+                held.has(b) &&
+                (b !== pid ||
+                  !firstWaiterQuery ||
+                  firstWaiterQuery.test(row.query)),
+            )
+          ) {
             held.add(row.pid);
             grew = true;
           }
