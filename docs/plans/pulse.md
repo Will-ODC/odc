@@ -543,8 +543,10 @@ next dependent step starts.
      listings, so contribution rows show a thumbnail or tile like polls (the
      empty slot above is dropped) once #701's server PR merges.
 4. **Picture on the question page.** #296 (rescoped). Depends on 1.
-   - Display picture under the question with its description; defaults show
-     as a small tile; failures leave no empty frame and voting stays usable.
+   - Show the uploaded picture under the question with its description.
+     With no upload, a `tile` fallback shows no picture on the question page.
+     Item-page display of a `category` default is open (ADR-0050).
+     Failures leave no empty frame and voting stays usable.
 5. **Poster removes or replaces the picture.** #582. Depends on 1, 2, 4.
    - `DELETE` and `PUT /api/polls/:id/image`, poster only; the old
      picture's `image` row and bytes deleted in the same transaction; audit
