@@ -77,15 +77,28 @@ it.each([
   {
     name: "rechecks the session when a managed picture upload is signed out",
     failsOnSave: false,
+    sameAccount: false,
   },
   {
     name: "rechecks the session when Save picture returns 401",
     failsOnSave: true,
+    sameAccount: false,
   },
-])("$name", async ({ failsOnSave }) => {
+  {
+    name: "unlocks upload controls when the same organizer is already signed in",
+    failsOnSave: false,
+    sameAccount: true,
+  },
+  {
+    name: "unlocks save controls when the same organizer is already signed in",
+    failsOnSave: true,
+    sameAccount: true,
+  },
+])("$name", async ({ failsOnSave, sameAccount }) => {
   const user = userEvent.setup();
   const { state, me } = switchableMe("ada");
   let uploadCount = 0;
+  let refused = false;
   let finishRecheck!: () => void;
   const recheck = new Promise<void>((resolve) => {
     finishRecheck = resolve;
@@ -101,12 +114,13 @@ it.each([
     <ContributionDetail
       api={stubApi({
         me: async () => {
-          if (state.who === null) await recheck;
+          if (refused) await recheck;
           return me();
         },
         uploadPicture: async () => {
           if (++uploadCount === 1) return "replacement";
-          state.who = null;
+          refused = true;
+          state.who = sameAccount ? "ada" : null;
           throw new ApiError(401, "Sign in.", "signed_out");
         },
       })}
@@ -115,7 +129,8 @@ it.each([
         detail: async () => ({ contribution: fixture(), canManage: true }),
         changePicture: async () => {
           if (!failsOnSave) return parkPicture;
-          state.who = null;
+          refused = true;
+          state.who = sameAccount ? "ada" : null;
           throw new ContributionsError(401, "Sign in.", "signed_out");
         },
       })}
@@ -140,6 +155,16 @@ it.each([
   await screen.findByRole("link", { name: "Sign in again in a new tab" });
   expect(choose.matches(":disabled")).toBe(true);
   await act(async () => finishRecheck());
+  if (sameAccount) {
+    await waitFor(() => expect(choose.matches(":disabled")).toBe(false));
+    expect(
+      screen.queryByRole("link", { name: "Sign in again in a new tab" }),
+    ).toBeNull();
+    expect(
+      screen.getByLabelText<HTMLTextAreaElement>("Picture description").value,
+    ).toBe(parkPicture.alt);
+    return;
+  }
   await screen.findByText(/to read your private messages/);
   const panel = screen.getByText("Manage picture").closest("details")!;
   expect(panel.open).toBe(true);
@@ -188,7 +213,21 @@ it.each([
   let finishRemoval!: () => void;
   let finishUpdate!: (value: Contribution) => void;
   const changePicture = vi.fn<ContributionsApi["changePicture"]>(async () => {
-    item = fixture();
+    item =
+      order === "picture reply first"
+        ? fixture({
+            status: "completed",
+            updates: [
+              {
+                id: "newer",
+                status: "completed",
+                message: "The ramp is finished.",
+                createdAt: "2026-11-11T12:30:00.000Z",
+                evidenceUrl: null,
+              },
+            ],
+          })
+        : fixture();
     await new Promise<void>((resolve) => {
       finishRemoval = resolve;
     });
@@ -267,7 +306,13 @@ it.each([
     return;
   }
   expect(await screen.findByRole("img", { name: "General" })).toBeTruthy();
+  await screen.findByText("The ramp is finished.");
   await act(async () => finishUpdate(stale));
+  expect(screen.getByLabelText("Current status")).toHaveProperty(
+    "value",
+    "completed",
+  );
+  expect(screen.getByText("The ramp is finished.")).toBeTruthy();
   expect(
     await screen.findByText("Your update has been published."),
   ).toBeTruthy();

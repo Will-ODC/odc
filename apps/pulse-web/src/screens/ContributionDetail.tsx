@@ -305,17 +305,25 @@ export function ContributionDetail({
     if (active === null || active === document.body) heading.current?.focus();
   }, [refreshError]);
   function changed(contribution: Contribution) {
-    const before =
-      data.status === "ready" ? data.value.contribution.image : undefined;
-    replace((detail) => ({
-      ...detail,
-      contribution:
-        detail.contribution.image === before
-          ? contribution
-          : { ...contribution, image: detail.contribution.image },
-    }));
-    if (JSON.stringify(before) !== JSON.stringify(contribution.image)) reload();
+    replace((detail) =>
+      data.status === "ready" && detail.contribution === data.value.contribution
+        ? { ...detail, contribution }
+        : undefined,
+    );
   }
+  const recheckPictureAccess = useCallback(async () => {
+    const found = await recheck();
+    if (
+      !found.settled ||
+      found.accountId === null ||
+      found.accountId !== drafts.owner
+    )
+      return false;
+    return client.detail(id).then(
+      ({ canManage }) => canManage,
+      () => false,
+    );
+  }, [client, id, drafts.owner, recheck]);
   const suggestions = useSuggestedVotes({
     api,
     history: mine.data,
@@ -415,11 +423,11 @@ export function ContributionDetail({
                             ...detail,
                             contribution: { ...detail.contribution, image },
                           }
-                        : detail,
+                        : undefined,
                     );
                     reload();
                   }}
-                  onSignedOut={() => void recheck()}
+                  onSignedOut={recheckPictureAccess}
                 />
               ) : null}
               <section className="contribution-section">
@@ -639,18 +647,11 @@ function ContributionPictureForm({
   item: Contribution;
   client: ContributionsApi;
   onPictureChanged: (image: Contribution["image"]) => void;
-  onSignedOut: () => void;
+  onSignedOut: () => Promise<boolean>;
 }) {
   const [uploadSignedOut, setUploadSignedOut] = useState(false);
   if (access === "expired" && uploadSignedOut) setUploadSignedOut(false);
-  const picture = usePictureField(
-    () => {
-      setUploadSignedOut(true);
-      onSignedOut();
-    },
-    api,
-    "save",
-  );
+  const picture = usePictureField(() => setUploadSignedOut(true), api, "save");
   const [removing, setRemoving] = useState<string | null>(null);
   const postedPicture =
     item.image.kind === "upload" ? item.image.displayUrl : null;
@@ -672,8 +673,7 @@ function ContributionPictureForm({
       onPictureChanged(await client.changePicture(item.id, image));
     } catch (error) {
       if (error instanceof ContributionsError) {
-        if (error.status === 401) onSignedOut();
-        else if (
+        if (
           error.status === 0 ||
           error.status >= 500 ||
           error.code === "image_unavailable"
@@ -697,6 +697,20 @@ function ContributionPictureForm({
     }
   }, picture.reset);
   const outcome = useSendOutcome(save, access);
+  const { errorStatus, clearFailure } = save;
+  useEffect(() => {
+    if (access !== "signedIn" || (!uploadSignedOut && errorStatus !== 401))
+      return;
+    let live = true;
+    void onSignedOut().then((verified) => {
+      if (!live || !verified) return;
+      setUploadSignedOut(false);
+      clearFailure();
+    });
+    return () => {
+      live = false;
+    };
+  }, [access, uploadSignedOut, errorStatus, onSignedOut, clearFailure]);
   const signInAgain =
     access === "expired" || uploadSignedOut || save.errorStatus === 401;
   const canWrite = canManage && !signInAgain;
