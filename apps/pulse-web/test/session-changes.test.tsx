@@ -39,6 +39,7 @@ const contribution = {
   kind: "project" as const,
   organizerName: "Test organizer",
   community: { id: "pulse-general", label: "General" },
+  image: { kind: "tile" as const },
   pollId: null,
   commercial: null,
   fund: null,
@@ -49,6 +50,7 @@ const contribution = {
 };
 const client = {
   list: async () => ({ contributions: [contribution], nextCursor: null }),
+  changePicture: async () => ({ kind: "tile" }),
   sendMessage: async () => {},
   messages: async () => [],
   detail: async () => ({ contribution, canManage: false }),

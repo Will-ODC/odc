@@ -22,6 +22,7 @@ import {
 afterEach(() => {
   cleanup();
   vi.restoreAllMocks();
+  vi.unstubAllGlobals();
 });
 
 it("round trips contribution routes and sign-in returns including case-sensitive IDs", () => {
@@ -55,6 +56,7 @@ it("round trips contribution routes and sign-in returns including case-sensitive
     expect(takeReturn(storage, 101)).toEqual(to);
   }
 });
+
 it("filters Home to contributions and can load older results", async () => {
   const listPolls = vi.fn();
   const list = vi
@@ -93,6 +95,7 @@ it("filters Home to contributions and can load older results", async () => {
   ).toBeTruthy();
   expect(list).toHaveBeenLastCalledWith("older");
 });
+
 it("ignores a late contribution page after the list source changes", async () => {
   let finish!: (value: {
     contributions: Contribution[];
@@ -139,6 +142,7 @@ it("ignores a late contribution page after the list source changes", async () =>
   );
   expect(screen.queryByRole("link", { name: "Late old page" })).toBeNull();
 });
+
 it("lists tagged contributions between newer and older polls on Home", async () => {
   const user = userEvent.setup();
   const poll = (id: string, question: string, createdAt: string) => ({

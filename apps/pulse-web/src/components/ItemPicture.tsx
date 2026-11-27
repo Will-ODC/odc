@@ -1,6 +1,6 @@
 import { useState } from "react";
-import type { PollImage, PostingCommunity } from "../api/types.js";
-import "./QuestionPicture.css";
+import type { PublicImage, PostingCommunity } from "../api/types.js";
+import "./ItemPicture.css";
 
 const tileColors = [
   "var(--green-wash)",
@@ -8,7 +8,7 @@ const tileColors = [
   "var(--hover)",
 ] as const;
 
-function CommunityTile({ id, label }: PostingCommunity) {
+export function CommunityTile({ id, label }: PostingCommunity) {
   const colorIndex = Array.from(id).reduce(
     (hash, character) =>
       (hash * 31 + (character.codePointAt(0) ?? 0)) % tileColors.length,
@@ -16,7 +16,7 @@ function CommunityTile({ id, label }: PostingCommunity) {
   );
   return (
     <span
-      className="question-picture question-picture--tile"
+      className="item-picture item-picture--tile"
       role="img"
       aria-label={label}
       style={{ backgroundColor: tileColors[colorIndex] }}
@@ -29,14 +29,14 @@ function CommunityTile({ id, label }: PostingCommunity) {
 function DisplayImage({
   image,
 }: {
-  image: Exclude<PollImage, { kind: "tile" }>;
+  image: Exclude<PublicImage, { kind: "tile" }>;
 }) {
   const [failed, setFailed] = useState(false);
   if (failed) return null;
   const size = image.kind === "upload" ? "upload" : "tile";
   return (
     <img
-      className={`question-picture question-picture--${size}`}
+      className={`item-picture item-picture--${size}`}
       src={image.displayUrl}
       alt={image.alt}
       width={image.width}
@@ -46,20 +46,12 @@ function DisplayImage({
   );
 }
 
-export function QuestionPicture({
+export function ItemPicture({
   image,
-  community,
 }: {
-  image: PollImage | undefined;
+  image: PublicImage | undefined;
   community: PostingCommunity | undefined;
 }) {
-  if (!image) return null;
-  if (image.kind === "tile") {
-    return (
-      <CommunityTile
-        {...(community ?? { id: "pulse-general", label: "General" })}
-      />
-    );
-  }
+  if (!image || image.kind === "tile") return null;
   return <DisplayImage key={image.displayUrl} image={image} />;
 }

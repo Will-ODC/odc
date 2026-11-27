@@ -3,8 +3,8 @@ import { act, cleanup, render, screen, waitFor } from "@testing-library/react";
 import userEvent from "@testing-library/user-event";
 import { afterEach, expect, it, vi } from "vitest";
 import { ContributionDetail } from "../src/screens/ContributionDetail.js";
-import { ContributionsError } from "../src/api/contributions.js";
 import type { Contribution } from "../src/api/contributions.js";
+import { ContributionsError } from "../src/api/contributions.js";
 import { stubApi } from "./stub-api.js";
 import {
   contributionFixture as fixture,
@@ -15,6 +15,7 @@ import {
 afterEach(() => {
   cleanup();
   vi.restoreAllMocks();
+  vi.unstubAllGlobals();
 });
 
 it("opens a private message only on request and reuses the key on retry", async () => {

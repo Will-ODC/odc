@@ -173,8 +173,9 @@ export function useSession(
           // A page showing one account's private data must stop showing it.
           // With no sign-out announced, the session ran out (or was revoked):
           // "expired", which the page may let the person recover from.
-          // While the first answer is still loading, this newer one has
-          // replaced it, so it settles the page: nobody is signed in.
+          // While the first answer is still loading, or unknown (a failed
+          // first check), this newer one replaces it, so it settles the
+          // page, on every page that uses this hook: nobody is signed in.
           else
             setSession((current) =>
               current.status === "signedIn" && acceptSignedOut

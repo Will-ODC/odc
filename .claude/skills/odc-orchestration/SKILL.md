@@ -192,6 +192,14 @@ slip in. Then follow the merge checklist in `odc-pipeline` (memory on
 `master`). Stacked PRs follow `odc-pipeline`'s stack rules. Tell the operator
 what was merged in one line per PR.
 
+**Keep the run's hand-off note current at each merge** (operator, 2026-11-26).
+After every merge, update the run's hand-off file in the Claude memory
+directory: what merged, what is in flight (branches, PRs, worktrees, the stack's
+checkout), open operator questions, and the next step. A run can stop without
+warning when usage runs out; the note is what the next session starts from.
+This is the local note only: repo `memory/` still changes at merge time through
+the `odc-pipeline` checklist.
+
 ### Use Codex where it helps
 
 When Claude orchestrates, Codex (the `codex` CLI) is a different model that has
@@ -267,7 +275,8 @@ green, a lead's report. At about 90% (operator, 2026-10-20):
 2. Bring in any changes left in subagent worktrees, then commit the work in
    progress to its branch. Only the orchestrator or the lead commits, and
    subagents keep their git guardrails. Push it.
-3. Update memory so the next session can continue: the goal, sessions,
+3. Bring the hand-off note (kept current at each merge, see "Merging") up to
+   date so the next session can continue: the goal, sessions,
    branches, PRs, open questions, merge order and the next step. Use the
    Claude memory directory. Each lead writes its own memory file; only the
    orchestrator edits the `MEMORY.md` index line. Repo `memory/` changes only

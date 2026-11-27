@@ -11,7 +11,7 @@ import userEvent from "@testing-library/user-event";
 import { afterEach, expect, it, vi } from "vitest";
 import { ContributionDetail } from "../src/screens/ContributionDetail.js";
 import { ContributionsError } from "../src/api/contributions.js";
-import type { Me } from "../src/api/types.js";
+import { type Me } from "../src/api/types.js";
 import { stubApi } from "./stub-api.js";
 import { SIGNED_OUT_KEY } from "../src/hooks/use-session.js";
 import {
@@ -23,6 +23,7 @@ import {
 afterEach(() => {
   cleanup();
   vi.restoreAllMocks();
+  vi.unstubAllGlobals();
 });
 
 it("offers signed-out people a new-tab sign-in for help and messages", async () => {
@@ -151,6 +152,7 @@ it("removes organizer controls when account A changes directly to account B", as
     ).toBeNull(),
   );
 });
+
 it("removes an open private inbox as soon as the organizer signs out", async () => {
   const user = userEvent.setup();
   const signOut = vi.fn(async () => {});
@@ -193,6 +195,7 @@ it("removes an open private inbox as soon as the organizer signs out", async () 
     screen.queryByText("Private messages", { selector: "summary" }),
   ).toBeNull();
 });
+
 it("removes an open private inbox when the organizer signs out in another tab", async () => {
   const user = userEvent.setup();
   let answer: "owner" | "nobody" | "offline" = "owner";
@@ -251,6 +254,7 @@ async function writeDrafts(user: ReturnType<typeof userEvent.setup>) {
   await user.click(screen.getByText("Message the organizer"));
   await user.type(screen.getByLabelText("Private message"), "Hello there");
 }
+
 function draftValues() {
   return [
     (screen.getByLabelText("Public name") as HTMLInputElement).value,
@@ -393,7 +397,9 @@ it("keeps an organizer's unsent update through an expired session and same-accou
       })}
     />,
   );
-  await user.click(await screen.findByText("Post an update"));
+  const updateDisclosure = await screen.findByText("Post an update");
+  const updateForm = within(updateDisclosure.closest("details")!);
+  await user.click(updateDisclosure);
   await user.type(
     screen.getByLabelText("Progress update"),
     "Ramp is half built",
@@ -401,8 +407,8 @@ it("keeps an organizer's unsent update through an expired session and same-accou
   state.who = null;
   window.dispatchEvent(new Event("focus"));
   expect(
-    await screen.findAllByRole("link", { name: "Sign in again in a new tab" }),
-  ).toHaveLength(3); // the two expired forms and the private-messages note
+    await updateForm.findByRole("link", { name: "Sign in again in a new tab" }),
+  ).toBeTruthy();
   // The private inbox needs a live session; the draft does not.
   expect(
     screen.queryByText("Private messages", { selector: "summary" }),

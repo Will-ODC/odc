@@ -34,8 +34,8 @@ Do not apply charter rules to `apps/**`, and do not relax them anywhere else.
   setup, DNS and the DEPLOY.md live checks. Anonymous or public-vote polls:
   ADR-0048 merged, steps 1-4a merged; 4b waits on 4a being live. Pictures
   on every main-page item (ADR-0049): shared field, poll form, #296 question
-  page and #701 server half merged. Next: #701 web half, then test-audit
-  item 3 (items 1, 2, 4 merged). Open decision: rich-text contribution
+  page and #701 merged (#734 tests too); ADR-0050: the letter tile is a
+  list-row placeholder only. Next test-audit item 3 (#730, open; items 1, 2, 4 merged). Open decisions: whether a #586 community default shows on an item page (ADR-0050); rich-text contribution
   descriptions versus the single picture.
   → `memory/pulse.md`
 

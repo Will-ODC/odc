@@ -14,6 +14,7 @@ import {
 afterEach(() => {
   cleanup();
   vi.restoreAllMocks();
+  vi.unstubAllGlobals();
 });
 
 it("links the organizer by profile id while keeping the contribution byline", async () => {

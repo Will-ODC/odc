@@ -176,8 +176,13 @@ export class ContributionsStore {
       return { ...contribution, image: publicImage(attached) };
     });
   }
-  removePicture(actor: PublicationActor, id: string) {
-    return this.changePicture(actor, id, { action: "image_remove" });
+  removePicture(actor: PublicationActor, id: string, expectedImageId?: string) {
+    return this.changePicture(
+      actor,
+      id,
+      { action: "image_remove" },
+      expectedImageId,
+    );
   }
   async replacePicture(actor: PublicationActor, id: string, raw: unknown) {
     return this.changePicture(actor, id, {
@@ -189,11 +194,14 @@ export class ContributionsStore {
     actor: PublicationActor,
     id: string,
     change: ContributionPictureChange,
+    expectedImageId?: string,
   ) {
     return this.repository.transaction(actor, async (tx) => {
       const record = await this.required(tx, id);
       if (record.ownerId !== actor.voterId)
         throw new ContributionError("organizer_required");
+      if (expectedImageId !== undefined && expectedImageId !== record.image?.id)
+        throw new ContributionError("image_changed");
       return {
         image: publicImage(await tx.setPicture(id, this.clock(), change)),
       };

@@ -3,10 +3,12 @@ import { cleanup, fireEvent, render } from "@testing-library/react";
 import userEvent from "@testing-library/user-event";
 import { afterEach, beforeAll, describe, expect, it } from "vitest";
 import { Conversation } from "../src/screens/Conversation.js";
-import { answer, castYes, main } from "./conversation-fixtures.js";
 import { poll, results, stubApi } from "./stub-api.js";
+import { main, answer, castYes } from "./conversation-fixtures.js";
 
 afterEach(cleanup);
+// ResultsPanel lazy-loads the chart; load its module up front so a cold
+// test run does not outwait findBy's default timeout transforming Recharts.
 beforeAll(() => import("../src/components/BarChart.js"));
 
 describe("question pictures and context (#296)", () => {
@@ -55,25 +57,30 @@ describe("question pictures and context (#296)", () => {
     },
   );
 
-  it.each(["category", "tile"] as const)(
-    "renders a small tile for a %s picture",
-    async (kind) => {
-      const p = poll({
-        image: kind === "category" ? { kind, ...picture } : { kind },
-        community: { id: "parks", label: "Parks" },
-      });
-      render(
-        <Conversation api={stubApi({ poll: async () => p })} pollId={p.id} />,
-      );
-      const heading = await main().findByRole("heading", { level: 1 });
-      const tile = main().getByRole("img", {
-        name: kind === "category" ? picture.alt : "Parks",
-      });
-      expect(heading.nextElementSibling).toBe(tile);
-      expect(tile.classList.contains("question-picture--tile")).toBe(true);
-      if (kind === "tile") expect(tile.textContent).toBe("P");
-    },
-  );
+  it("renders the category picture at the small default size", async () => {
+    const p = poll({ image: { kind: "category", ...picture } });
+    render(
+      <Conversation api={stubApi({ poll: async () => p })} pollId={p.id} />,
+    );
+    const heading = await main().findByRole("heading", { level: 1 });
+    const image = main().getByRole("img", { name: picture.alt });
+    expect(heading.nextElementSibling).toBe(image);
+    expect(image.classList.contains("item-picture--tile")).toBe(true);
+  });
+
+  it("puts context directly after the question for a tile picture", async () => {
+    const p = poll({
+      image: { kind: "tile" },
+      community: { id: "parks", label: "Parks" },
+      context,
+    });
+    render(
+      <Conversation api={stubApi({ poll: async () => p })} pollId={p.id} />,
+    );
+    const heading = await main().findByRole("heading", { level: 1 });
+    expect(main().queryByRole("img", { name: "Parks" })).toBeNull();
+    expect(heading.nextElementSibling).toBe(main().getByText(/The first line/));
+  });
 
   it.each(["upload", "category"] as const)(
     "removes the %s picture on error while keeping context and voting",
@@ -94,6 +101,7 @@ describe("question pictures and context (#296)", () => {
 
   it("puts context directly after the question when the picture field is absent", async () => {
     const p = poll({ context });
+    delete p.image;
     render(
       <Conversation api={stubApi({ poll: async () => p })} pollId={p.id} />,
     );

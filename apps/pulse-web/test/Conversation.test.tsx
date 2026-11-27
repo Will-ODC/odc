@@ -42,6 +42,7 @@ it("links a counted vote to the trust page (#351)", async () => {
       .getAttribute("href"),
   ).toBe("/trust");
 });
+
 it("opens the first question expanded without selecting or sending an answer", async () => {
   const cast = vi.fn();
   render(<Conversation api={stubApi({ cast })} pollId="ads-free" />);
@@ -49,12 +50,12 @@ it("opens the first question expanded without selecting or sending an answer", a
     name: poll().question,
     level: 1,
   });
+  expect(main().queryByRole("img", { name: "General" })).toBeNull();
   expect(
     heading.nextElementSibling?.contains(
       main().getByRole("button", { name: /Copy link to/ }),
     ),
   ).toBe(true);
-  expect(main().queryByRole("img")).toBeNull();
   // No "Message" box until an assistant exists (walkthrough, 2026-10-21).
   expect(screen.queryByRole("textbox", { name: "Message" })).toBeNull();
   expect(screen.queryByText(/assistant is not available/)).toBeNull();
@@ -98,6 +99,7 @@ it("keeps a manually closed card closed and preserves its unsent pick on reopen"
   );
   expect(cast).not.toHaveBeenCalled();
 });
+
 it("shows loading, empty and errors with a working retry", async () => {
   const fetchPoll = vi.fn().mockImplementationOnce(() => new Promise(() => {}));
   const { unmount } = render(
@@ -120,6 +122,7 @@ it("shows loading, empty and errors with a working retry", async () => {
     await main().findByRole("heading", { name: poll().question, level: 1 }),
   ).toBeTruthy();
 });
+
 it("puts one results banner after the question and before the thread, with voting in the drawer", async () => {
   const p = poll();
   let attempt = 0;
@@ -373,6 +376,7 @@ it("opens the next question's card even if the previous card was closed (#401)",
   await main().findByRole("heading", { name: p.question, level: 1 });
   expect(main().queryByRole("region")).not.toBeNull();
 });
+
 it("sends every approval pick, follows its lowest-index edge, and retains the conversation", async () => {
   const p = poll({
     method: "approval",
@@ -444,6 +448,7 @@ it("sends every approval pick, follows its lowest-index edge, and retains the co
   ).toBeTruthy();
   expect(cast).toHaveBeenCalledOnce();
 });
+
 it("does not show Next when the steering choice ends the run", async () => {
   const p = poll({ next: [null, "elsewhere"] });
   render(
@@ -466,6 +471,7 @@ it("does not show Next when the steering choice ends the run", async () => {
     within(card()).queryByRole("button", { name: "Next question" }),
   ).toBeNull();
 });
+
 it("refuses a known closed poll and lets a non-voter read final results", async () => {
   const p = poll({ open: false });
   const cast = vi.fn();
@@ -502,6 +508,7 @@ it("refuses a known closed poll and lets a non-voter read final results", async 
   expect(within(card()).getByText("This one has closed.")).toBeTruthy();
   expect(cast).not.toHaveBeenCalled();
 });
+
 it("handles a poll closing during submit without offering another cast", async () => {
   const cast = vi.fn(async () => ({ status: "closed" as const }));
   render(<Conversation api={stubApi({ cast })} pollId="ads-free" />);
@@ -517,6 +524,7 @@ it("handles a poll closing during submit without offering another cast", async (
   expect(main().queryByText(closingNote(poll()))).toBeNull();
   expect(cast).toHaveBeenCalledOnce();
 });
+
 it("a failed send keeps the picks for retry", async () => {
   const p = poll();
   const cast = vi
@@ -541,6 +549,7 @@ it("a failed send keeps the picks for retry", async () => {
   await main().findByText("Counted");
   expect(cast).toHaveBeenLastCalledWith(p.id, [1]);
 });
+
 it("keyboard-only picking and confirmation casts exactly once", async () => {
   let release: ((value: CastOutcome) => void) | undefined;
   const cast = vi.fn(

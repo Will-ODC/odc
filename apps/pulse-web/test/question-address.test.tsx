@@ -20,14 +20,7 @@ it("Next updates the address; Back and Forward restore the question and saved an
   const first = poll({ next: [null, "parks"] });
   const parks = poll({ id: "parks", question: "More parks?" });
   history.replaceState(null, "", "/?poll=ads-free");
-  render(
-    <App
-      api={stubApi({
-        poll: graph([first, parks]),
-        cast: castYes,
-      })}
-    />,
-  );
+  render(<App api={stubApi({ poll: graph([first, parks]), cast: castYes })} />);
   const user = userEvent.setup();
   const main = () => within(screen.getByRole("main"));
   await main().findByRole("heading", { name: first.question, level: 1 });

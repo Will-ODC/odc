@@ -14,6 +14,7 @@ import {
 afterEach(() => {
   cleanup();
   vi.restoreAllMocks();
+  vi.unstubAllGlobals();
 });
 
 it.each(["help", "pledge", "message", "update"] as const)(

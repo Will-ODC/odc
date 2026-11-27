@@ -1,5 +1,12 @@
 // @vitest-environment jsdom
-import { act, cleanup, render, screen, waitFor } from "@testing-library/react";
+import {
+  act,
+  cleanup,
+  fireEvent,
+  render,
+  screen,
+  waitFor,
+} from "@testing-library/react";
 import userEvent from "@testing-library/user-event";
 import { afterEach, expect, it, vi } from "vitest";
 import { ContributionsError } from "../src/api/contributions.js";
@@ -9,11 +16,13 @@ import type {
 } from "../src/api/contributions.js";
 import { NewContribution } from "../src/screens/NewContribution.js";
 import { SIGNED_OUT_KEY } from "../src/hooks/use-session.js";
+import type { PulseApi } from "../src/api/types.js";
 import { stubApi } from "./stub-api.js";
 
 afterEach(() => {
   cleanup();
   vi.restoreAllMocks();
+  vi.unstubAllGlobals();
 });
 const fixture = (over: Partial<Contribution> = {}): Contribution => ({
   id: "park",
@@ -24,6 +33,7 @@ const fixture = (over: Partial<Contribution> = {}): Contribution => ({
   kind: "project",
   organizerName: "Test organizer",
   community: { id: "pulse-general", label: "General" },
+  image: { kind: "tile" },
   pollId: null,
   commercial: null,
   fund: null,
@@ -37,6 +47,7 @@ const client = (over: Partial<ContributionsApi> = {}): ContributionsApi => ({
   list: async () => ({ contributions: [fixture()], nextCursor: null }),
   forProfile: async () => ({ contributions: [], nextCursor: null }),
   mine: async () => ({ contributions: [], nextCursor: null }),
+  changePicture: async () => ({ kind: "tile" }),
   sendMessage: async () => {},
   messages: async () => [],
   detail: async () => ({ contribution: fixture(), canManage: false }),
@@ -46,7 +57,7 @@ const client = (over: Partial<ContributionsApi> = {}): ContributionsApi => ({
   ...over,
 });
 
-function setup() {
+function setup(over: Partial<PulseApi> = {}) {
   const state = { who: "ada" as string | null };
   const me = vi.fn(async () =>
     state.who === null
@@ -59,7 +70,7 @@ function setup() {
   });
   render(
     <NewContribution
-      api={stubApi({ me, signOut })}
+      api={stubApi({ me, signOut, ...over })}
       client={client({ create })}
       onCreated={vi.fn()}
     />,
@@ -325,7 +336,37 @@ it("focuses the first missing field before an invalid related question", async (
   expect(create).not.toHaveBeenCalled();
 });
 
-it.each([503, 401, undefined])(
+it("focuses an undescribed picture before a later missing field", async () => {
+  vi.stubGlobal(
+    "URL",
+    class extends URL {
+      static override createObjectURL = () => "blob:park";
+      static override revokeObjectURL = () => {};
+    },
+  );
+  const { user, create } = setup({ uploadPicture: async () => "park-picture" });
+  await user.type(await screen.findByLabelText("Title"), "Garden");
+  await user.type(screen.getByLabelText("Description"), "Grow food.");
+  await user.upload(
+    screen
+      .getByRole("group", { name: /^Picture/ })
+      .querySelector<HTMLInputElement>('input[type="file"]')!,
+    new File(["park"], "park.jpg", { type: "image/jpeg" }),
+  );
+  const description = await screen.findByLabelText("Picture description");
+  await user.click(
+    screen.getByRole("button", { name: "Publish contribution" }),
+  );
+  expect(document.activeElement).toBe(description);
+  expect(
+    screen
+      .getByLabelText("Organizer’s public name")
+      .getAttribute("aria-invalid"),
+  ).toBe("true");
+  expect(create).not.toHaveBeenCalled();
+});
+
+it.each([503, 422, 401, undefined])(
   "focuses the outcome after a deferred keyboard submission fails (%s)",
   async (status) => {
     const { user, create } = setup();
@@ -360,7 +401,7 @@ it.each([503, 401, undefined])(
     // the top; any other failure is the alert beside Publish.
     const outcome =
       status === 401
-        ? await screen.findByRole("status")
+        ? await screen.findByText(/Your sign-in has ended/)
         : await screen.findByRole("alert");
     await waitFor(() => expect(document.activeElement).toBe(outcome));
     expect(outcome.getAttribute("tabindex")).toBe("-1");
@@ -690,3 +731,108 @@ it("takes back the confirm complaint as soon as the box is ticked, and a field's
     screen.getByLabelText("Title").getAttribute("aria-invalid"),
   ).toBeNull();
 });
+
+const pictureId = "0b8f4c1e-5d7a-4e2b-9c3d-1a2b3c4d5e6f";
+const publish = () =>
+  screen.getByRole("button", { name: "Publish contribution" });
+
+async function choosePicture(user: ReturnType<typeof userEvent.setup>) {
+  vi.stubGlobal(
+    "URL",
+    class extends URL {
+      static override createObjectURL = () => "blob:garden";
+      static override revokeObjectURL = () => {};
+    },
+  );
+  const input = screen
+    .getByRole("group", { name: "Picture (optional)" })
+    .querySelector<HTMLInputElement>('input[type="file"]')!;
+  await user.upload(
+    input,
+    new File(["garden"], "garden.jpg", { type: "image/jpeg" }),
+  );
+}
+
+it("keeps the contribution draft after an upload failure and publishes the picture after retry", async () => {
+  const uploadPicture = vi
+    .fn<PulseApi["uploadPicture"]>()
+    .mockRejectedValueOnce(new Error("Offline"))
+    .mockResolvedValueOnce(pictureId);
+  const { user, create } = setup({ uploadPicture });
+  await writeDraft(user);
+  await choosePicture(user);
+  const retry = await screen.findByRole("button", {
+    name: "Try again",
+    description: /The picture did not upload/,
+  });
+  expectDraft();
+  await user.click(publish());
+  expect(create).not.toHaveBeenCalled();
+  await user.click(retry);
+  await screen.findByRole("button", { name: "Replace" });
+  await user.type(
+    screen.getByLabelText("Picture description"),
+    "  A garden bed  ",
+  );
+  await user.click(publish());
+  expect(create).toHaveBeenCalledExactlyOnceWith(
+    expect.objectContaining({ image: { id: pictureId, alt: "A garden bed" } }),
+    expect.any(String),
+    "ada",
+  );
+});
+
+it("keeps the draft and focuses the picture field when publishing refuses an expired picture", async () => {
+  const { user, create } = setup({ uploadPicture: async () => pictureId });
+  create.mockRejectedValueOnce(
+    new ContributionsError(422, "Picture expired.", "image_unavailable"),
+  );
+  await writeDraft(user);
+  await choosePicture(user);
+  await screen.findByRole("button", { name: "Replace" });
+  const description = screen.getByLabelText("Picture description");
+  await user.type(description, "A garden bed");
+  await user.click(publish());
+  expect(
+    await screen.findByRole("button", {
+      name: "Choose a picture",
+      description:
+        /This picture is no longer available\. Choose it again\. Its description and the rest of your draft are kept\./,
+    }),
+  ).toBeTruthy();
+  expectDraft();
+  expect(
+    screen.getByLabelText<HTMLTextAreaElement>("Picture description").value,
+  ).toBe("A garden bed");
+  expect(document.activeElement).toBe(
+    screen.getByRole("button", { name: "Choose a picture" }),
+  );
+  expect(screen.queryByRole("alert")).toBeNull();
+});
+
+it.each([
+  ["   ", "Describe the picture before you post, or remove it."],
+  [
+    "garden\0bed",
+    "Remove any invalid characters from the picture description.",
+  ],
+  [
+    "garden\uD800",
+    "Remove any invalid characters from the picture description.",
+  ],
+  ["🌱".repeat(301), "Keep the description to 300 characters. It is 301 now."],
+])(
+  "blocks an invalid picture description and explains how to fix it (%#)",
+  async (value, message) => {
+    const { user, create } = setup({ uploadPicture: async () => pictureId });
+    await writeDraft(user);
+    await choosePicture(user);
+    await screen.findByRole("button", { name: "Replace" });
+    const description = screen.getByLabelText("Picture description");
+    fireEvent.change(description, { target: { value } });
+    await user.click(publish());
+    expect(create).not.toHaveBeenCalled();
+    expect(screen.getByText(message)).toBeTruthy();
+    expect(document.activeElement).toBe(description);
+  },
+);

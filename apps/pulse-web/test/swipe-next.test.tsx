@@ -37,14 +37,7 @@ it("a left swipe over an answered question opens the next one, like Next questio
   const first = poll({ next: [null, "parks"] });
   const parks = poll({ id: "parks", question: "More parks?" });
   history.replaceState(null, "", "/?poll=ads-free");
-  render(
-    <App
-      api={stubApi({
-        poll: graph([first, parks]),
-        cast: castYes,
-      })}
-    />,
-  );
+  render(<App api={stubApi({ poll: graph([first, parks]), cast: castYes })} />);
   const user = userEvent.setup();
   const heading = await main().findByRole("heading", {
     name: first.question,
@@ -79,14 +72,7 @@ it("fades in a question reached with Back, and slides in the next one again afte
   const first = poll({ next: [null, "parks"] });
   const parks = poll({ id: "parks", question: "More parks?" });
   history.replaceState(null, "", "/?poll=ads-free");
-  render(
-    <App
-      api={stubApi({
-        poll: graph([first, parks]),
-        cast: castYes,
-      })}
-    />,
-  );
+  render(<App api={stubApi({ poll: graph([first, parks]), cast: castYes })} />);
   const user = userEvent.setup();
   const back = () =>
     screen.getByRole("main").classList.contains("conversation__main--back");

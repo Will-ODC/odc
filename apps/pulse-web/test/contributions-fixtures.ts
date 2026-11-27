@@ -16,6 +16,7 @@ export const contributionFixture = (
   kind: "project",
   organizerName: "Test organizer",
   community: { id: "pulse-general", label: "General" },
+  image: { kind: "tile" },
   pollId: null,
   commercial: null,
   fund: null,
@@ -40,6 +41,7 @@ export const stubContributionsApi = (
     contributions: [contributionFixture()],
     nextCursor: null,
   }),
+  changePicture: async () => ({ kind: "tile" }),
   sendMessage: async () => {},
   messages: async () => [],
   detail: async () => ({
@@ -51,6 +53,16 @@ export const stubContributionsApi = (
   update: async () => contributionFixture(),
   ...over,
 });
+
+export const parkPictureId = "94cc4bb0-a508-411a-9f1d-afefa9c30b0c";
+export const parkPicture = {
+  kind: "upload",
+  displayUrl: `/api/poll-images/${parkPictureId}/display.webp`,
+  thumbUrl: `/api/poll-images/${parkPictureId}/thumb.webp`,
+  width: 800,
+  height: 600,
+  alt: "A ramp leading into the park",
+} as const;
 
 /** A `me()` the test can switch between accounts, nobody, or offline. */
 export function switchableMe(start: string | null) {

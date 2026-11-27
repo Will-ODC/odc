@@ -11,16 +11,16 @@ import { afterEach, beforeAll, expect, it, vi } from "vitest";
 import { ApiError } from "../src/api/types.js";
 import type { Ballot } from "../src/api/types.js";
 import { Conversation } from "../src/screens/Conversation.js";
+import { tally } from "./pulse-server.js";
 import { poll, stubApi } from "./stub-api.js";
 import {
   main,
+  said,
   answer,
   banner,
   openAccount,
   castYes,
-  said,
 } from "./conversation-fixtures.js";
-import { tally } from "./pulse-server.js";
 
 afterEach(cleanup);
 // ResultsPanel lazy-loads the chart; load its module up front so a cold
@@ -28,6 +28,7 @@ afterEach(cleanup);
 beforeAll(() => import("../src/components/BarChart.js"));
 
 const voter = { id: "v1", community: null, email: "voter@example.org" };
+
 it("offers the way in when nobody is signed in", async () => {
   render(<Conversation api={stubApi()} pollId="ads-free" />);
   expect(await banner().findByRole("link", { name: "Sign in" })).toBeTruthy();

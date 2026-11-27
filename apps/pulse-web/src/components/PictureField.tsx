@@ -106,7 +106,13 @@ export function PictureField({ field }: { field: PictureFieldController }) {
       }
     >
       <span className="field__label" id={`${id}-label`}>
-        Picture <span className="picture-field__optional">(optional)</span>
+        Picture
+        {field.purpose === "post" ? (
+          <>
+            {" "}
+            <span className="picture-field__optional">(optional)</span>
+          </>
+        ) : null}
       </span>
       <p className="field__hint" id={hintId}>
         {hint}

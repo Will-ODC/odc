@@ -11,6 +11,7 @@ import userEvent from "@testing-library/user-event";
 import { afterEach, beforeAll, describe, expect, it, vi } from "vitest";
 import type { Ballot, CastOutcome } from "../src/api/types.js";
 import { Conversation } from "../src/screens/Conversation.js";
+import { tally } from "./pulse-server.js";
 import { graph, poll, stubApi } from "./stub-api.js";
 import {
   main,
@@ -24,7 +25,6 @@ import {
   fromServer,
   elapse,
 } from "./conversation-fixtures.js";
-import { tally } from "./pulse-server.js";
 
 afterEach(cleanup);
 // ResultsPanel lazy-loads the chart; load its module up front so a cold
@@ -237,16 +237,19 @@ describe("the Answered list (#484)", () => {
     const finish = (outcome: CastOutcome) => pending.shift()!(outcome);
     return { state, cast, finish };
   }
+
   const rows = () =>
     voteLinks()
       .getAllByRole("link")
       .map((link) => link.textContent);
+
   async function pick(label: string) {
     const user = userEvent.setup();
     await user.click(within(card()).getByRole("radio", { name: label }));
     await user.click(within(card()).getByRole("button", { name: "Submit" }));
     return user;
   }
+
   async function changeTo(label: string) {
     const user = userEvent.setup();
     // One way to change an answer: the drawer's handle (#478).

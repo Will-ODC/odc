@@ -13,6 +13,7 @@ import {
 afterEach(() => {
   cleanup();
   vi.restoreAllMocks();
+  vi.unstubAllGlobals();
 });
 
 it("requires sign-in before creating and retains the intended return", async () => {
