@@ -88,6 +88,7 @@ export function useContributionSave<T>(
   const [failure, setFailure] = useState<{
     message: string;
     status?: number;
+    code?: string | undefined;
   }>();
   const [saved, setSaved] = useState(false);
   const sending = useRef(false);
@@ -113,7 +114,7 @@ export function useContributionSave<T>(
             ? reason.message
             : "Could not save. Please try again.",
         ...(reason instanceof ContributionsError
-          ? { status: reason.status }
+          ? { status: reason.status, code: reason.code }
           : {}),
       });
     } finally {

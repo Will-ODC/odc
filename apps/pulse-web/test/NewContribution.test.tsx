@@ -336,7 +336,7 @@ it("focuses the first missing field before an invalid related question", async (
   expect(create).not.toHaveBeenCalled();
 });
 
-it.each([503, 401, undefined])(
+it.each([503, 422, 401, undefined])(
   "focuses the outcome after a deferred keyboard submission fails (%s)",
   async (status) => {
     const { user, create } = setup();
@@ -752,6 +752,32 @@ it("keeps the contribution draft after an upload failure and publishes the pictu
     expect.any(String),
     "ada",
   );
+});
+
+it("keeps the draft and focuses the picture field when publishing refuses an expired picture", async () => {
+  const { user, create } = setup({ uploadPicture: async () => pictureId });
+  create.mockRejectedValueOnce(
+    new ContributionsError(422, "Picture expired.", "image_unavailable"),
+  );
+  await writeDraft(user);
+  await choosePicture(user);
+  await screen.findByRole("button", { name: "Replace" });
+  const description = screen.getByLabelText("Picture description");
+  await user.type(description, "A garden bed");
+  await user.click(publish());
+  expect(
+    await screen.findByRole("button", {
+      name: "Choose a picture",
+      description:
+        /This picture is no longer available\. Choose it again\. Its description and the rest of your draft are kept\./,
+    }),
+  ).toBeTruthy();
+  expectDraft();
+  expect((description as HTMLTextAreaElement).value).toBe("A garden bed");
+  expect(document.activeElement).toBe(
+    screen.getByRole("button", { name: "Choose a picture" }),
+  );
+  expect(screen.queryByRole("alert")).toBeNull();
 });
 
 it.each([

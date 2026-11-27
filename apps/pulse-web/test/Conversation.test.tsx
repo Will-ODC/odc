@@ -163,7 +163,7 @@ describe("question pictures and context (#296)", () => {
         name: kind === "category" ? picture.alt : "Parks",
       });
       expect(heading.nextElementSibling).toBe(tile);
-      expect(tile.classList.contains("question-picture--tile")).toBe(true);
+      expect(tile.classList.contains("item-picture--tile")).toBe(true);
       if (kind === "tile") expect(tile.textContent).toBe("P");
     },
   );

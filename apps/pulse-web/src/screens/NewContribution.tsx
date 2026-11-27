@@ -279,7 +279,7 @@ function ContributionForm({
   }, [expired, clearFailure]);
   const outcome = useRef<HTMLParagraphElement>(null);
   const pollNotFound = save.errorStatus === 404;
-  const pictureUnavailable = save.errorStatus === 422;
+  const pictureUnavailable = save.failure?.code === "image_unavailable";
   const pollProblem = pollUnreadable
     ? "This is not a question link or ID. Paste the question’s link, or leave this blank."
     : pollNotFound
@@ -289,7 +289,7 @@ function ContributionForm({
   // when publishing disabled the button, unless the person has moved on.
   const { failure } = save;
   useEffect(() => {
-    if (!failure || failure.status === 422) return;
+    if (!failure || failure.code === "image_unavailable") return;
     if (failure.status === 404) pollField.current?.focus();
     else if (
       document.activeElement === null ||
@@ -419,6 +419,7 @@ function ContributionForm({
             />
           )}
         </Field>
+        <PictureField field={picture} />
         <Field
           id="contribution-organizer"
           label="Organizer’s public name"
@@ -460,7 +461,6 @@ function ContributionForm({
             />
           )}
         </Field>
-        <PictureField field={picture} />
       </fieldset>
       <div className="contribution-confirm">
         <Field

@@ -16,7 +16,7 @@ function CommunityTile({ id, label }: PostingCommunity) {
   );
   return (
     <span
-      className="question-picture question-picture--tile"
+      className="item-picture item-picture--tile"
       role="img"
       aria-label={label}
       style={{ backgroundColor: tileColors[colorIndex] }}
@@ -36,7 +36,7 @@ function DisplayImage({
   const size = image.kind === "upload" ? "upload" : "tile";
   return (
     <img
-      className={`question-picture question-picture--${size}`}
+      className={`item-picture item-picture--${size}`}
       src={image.displayUrl}
       alt={image.alt}
       width={image.width}

@@ -258,6 +258,7 @@ export class HttpContributionsApi implements ContributionsApi {
         isRecord(refusal) && text(refusal.error) ? refusal.error : "";
       const pictureMessage =
         (method === "PUT" || method === "DELETE") &&
+        (response.status === 400 || response.status === 401) &&
         isRecord(refusal) &&
         text(refusal.message)
           ? refusal.message

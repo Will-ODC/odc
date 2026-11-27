@@ -4,6 +4,7 @@ import {
   fileProblem,
   measurePicture,
   uploadProblem,
+  type PicturePurpose,
 } from "./picture-upload-errors.js";
 
 export const UPLOADING_PICTURE = "Uploading picture…";
@@ -30,7 +31,11 @@ const empty: Selection = { status: "empty" };
  * pass image only when it returns true.
  * Forward Post errors to reportPostError; signed_out also calls onSignedOut.
  */
-export function usePictureField(onSignedOut: () => void, client: PulseApi) {
+export function usePictureField(
+  onSignedOut: () => void,
+  client: PulseApi,
+  purpose: PicturePurpose = "post",
+) {
   const [selection, setSelection] = useState<Selection>(empty);
   const [description, setDescription] = useState("");
   const [problem, setProblem] = useState<string>();
@@ -77,7 +82,9 @@ export function usePictureField(onSignedOut: () => void, client: PulseApi) {
       onSignedOut();
     } else {
       setProblem(
-        "This picture is no longer available. Choose it again. Its description and the rest of your draft are kept.",
+        purpose === "save"
+          ? "This picture is no longer available. Choose it again. Its description is kept."
+          : "This picture is no longer available. Choose it again. Its description and the rest of your draft are kept.",
       );
     }
     setFocus({ target });
@@ -134,7 +141,7 @@ export function usePictureField(onSignedOut: () => void, client: PulseApi) {
           attempt.fallback.status === "ready" ? "action" : "focused-action",
         );
       } else {
-        const refusal = uploadProblem(error, picture.file, dimensions);
+        const refusal = uploadProblem(error, picture.file, dimensions, purpose);
         fail(attempt, refusal.message, refusal.retry);
       }
       return;
@@ -220,14 +227,16 @@ export function usePictureField(onSignedOut: () => void, client: PulseApi) {
   let descriptionProblem: string | undefined;
   if (orphan && postAttempted) {
     descriptionProblem =
-      "Choose the picture again, or clear its description to post without a picture.";
+      purpose === "save"
+        ? "Choose the picture again before saving it."
+        : "Choose the picture again, or clear its description to post without a picture.";
   } else if (invalidCharacters) {
     descriptionProblem =
       "Remove any invalid characters from the picture description.";
   } else if (count > 300) {
     descriptionProblem = `Keep the description to 300 characters. It is ${count} now.`;
   } else if (selection.status === "ready" && count === 0 && postAttempted) {
-    descriptionProblem = "Describe the picture before you post, or remove it.";
+    descriptionProblem = `Describe the picture before you ${purpose}, or remove it.`;
   }
 
   function checkPost(moveFocus = true): boolean {
@@ -253,6 +262,7 @@ export function usePictureField(onSignedOut: () => void, client: PulseApi) {
   }, []);
 
   return {
+    purpose,
     selection,
     problem,
     status,

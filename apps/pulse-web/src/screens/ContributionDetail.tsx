@@ -34,6 +34,7 @@ import { Button } from "../components/Button.js";
 import { Choice } from "../components/Choice.js";
 import { ItemPicture } from "../components/ItemPicture.js";
 import { PictureField } from "../components/PictureField.js";
+import { TwoPress, type TwoPressProgress } from "../components/TwoPress.js";
 import { usePictureField } from "../hooks/use-picture-field.js";
 import {
   useContributionRead,
@@ -389,16 +390,16 @@ export function ContributionDetail({
                   )}{" "}
                   · {item.community.label}
                 </p>
-                {canManage ? (
-                  <ContributionPictureForm
-                    key={`${item.id}:${drafts.generation}`}
-                    api={api}
-                    item={item}
-                    client={client}
-                    reload={reload}
-                  />
-                ) : null}
               </header>
+              {canManage ? (
+                <ContributionPictureForm
+                  key={`${item.id}:${drafts.generation}`}
+                  api={api}
+                  item={item}
+                  client={client}
+                  reload={reload}
+                />
+              ) : null}
               <section className="contribution-section">
                 <h2>Description</h2>
                 <p className="contribution-prose">{item.description}</p>
@@ -613,8 +614,8 @@ function ContributionPictureForm({
   reload: () => void;
 }) {
   const [uploadSignedOut, setUploadSignedOut] = useState(false);
-  const picture = usePictureField(() => setUploadSignedOut(true), api);
-  const [notice, setNotice] = useState("");
+  const picture = usePictureField(() => setUploadSignedOut(true), api, "save");
+  const [removing, setRemoving] = useState(false);
   const save = useContributionSave<PictureInput | null>(
     async (image) => {
       try {
@@ -627,7 +628,6 @@ function ContributionPictureForm({
           picture.reportPostError("image_unavailable");
         throw error;
       }
-      setNotice(image ? "Picture saved." : "Picture removed.");
     },
     () => {
       picture.reset();
@@ -637,17 +637,29 @@ function ContributionPictureForm({
   const outcome = useSendOutcome(save, "signedIn");
   function submit(event: FormEvent<HTMLFormElement>) {
     event.preventDefault();
-    if (picture.checkPost() && picture.image) void save.submit(picture.image);
+    if (picture.checkPost() && picture.image) {
+      setRemoving(false);
+      void save.submit(picture.image);
+    }
   }
-  const error = uploadSignedOut
+  const error =
+    save.failure?.code === "image_unavailable" ? undefined : save.error;
+  const removal: TwoPressProgress =
+    removing && save.pending
+      ? { status: "sending" }
+      : removing && error
+        ? { status: "failed", message: error }
+        : { status: "idle" };
+  const showRemove =
+    item.image.kind === "upload" &&
+    picture.selection.status === "empty" &&
+    !(removing && save.saved);
+  const fieldError = uploadSignedOut
     ? "Sign in to change this picture."
-    : save.errorStatus === 422
+    : removing
       ? undefined
-      : save.error;
-  function removePostedPicture() {
-    if (window.confirm("Remove this picture from the contribution?"))
-      void save.submit(null);
-  }
+      : error;
+  const signInAgain = uploadSignedOut || save.errorStatus === 401;
 
   return (
     <details className="contribution-disclosure">
@@ -668,35 +680,47 @@ function ContributionPictureForm({
           {picture.image ? (
             <Button variant="primary">Save picture</Button>
           ) : null}
-          {item.image.kind === "upload" ? (
-            <Button
-              type="button"
-              variant="secondary"
-              onClick={removePostedPicture}
-            >
-              Remove posted picture
-            </Button>
-          ) : null}
         </fieldset>
-        {save.pending || save.saved ? (
+        {showRemove ? (
+          <TwoPress
+            label="Remove posted picture"
+            question="Remove this picture from the contribution? The default picture shows instead."
+            confirmLabel="Remove picture"
+            pendingLabel="Removing picture…"
+            progress={removal}
+            onConfirm={() => {
+              setRemoving(true);
+              void save.submit(null);
+            }}
+            onCancel={() => {
+              setRemoving(false);
+              save.clearFailure();
+            }}
+          />
+        ) : null}
+        {(save.pending && !removing) || save.saved ? (
           <p ref={outcome.status} tabIndex={-1} role="status">
-            {save.pending ? "Saving picture change…" : notice}
+            {save.pending
+              ? "Saving picture change…"
+              : removing
+                ? "Picture removed."
+                : "Picture saved."}
           </p>
         ) : null}
-        {error ? (
+        {fieldError ? (
           <p
             className="contribution-error"
             ref={outcome.alert}
             tabIndex={-1}
             role="alert"
           >
-            {error}{" "}
-            {uploadSignedOut || save.errorStatus === 401 ? (
-              <a href={`/sign-in?contribution=${encodeURIComponent(item.id)}`}>
-                Sign in again
-              </a>
-            ) : null}
+            {fieldError}
           </p>
+        ) : null}
+        {signInAgain ? (
+          <a href={`/sign-in?contribution=${encodeURIComponent(item.id)}`}>
+            Sign in again
+          </a>
         ) : null}
       </form>
     </details>
