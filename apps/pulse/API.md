@@ -1758,7 +1758,7 @@ configured web Origin and use the 30 requests/minute mutation limit. PUT
 accepts strict UTF-8 JSON `{id,alt}` with the same pending upload and
 description rules as creation. DELETE takes no body. Its optional
 `expectedImageId` query parameter identifies the upload the poster confirmed,
-using the ID in the picture's public URL. Pulse compares it to the current
+using one lowercase UUID from the picture's public URL. Pulse compares it to the current
 attachment inside the removal transaction. A mismatch, including a missing
 attachment, returns 409 `image_changed` and leaves the picture and audit trail
 untouched. Read the current contribution before asking for confirmation again.
