@@ -10,7 +10,7 @@ import {
 import userEvent from "@testing-library/user-event";
 import { afterEach, beforeAll, expect, it } from "vitest";
 import { App } from "../src/App.js";
-import { graph, poll, stubApi } from "./stub-api.js";
+import { CAST_RESULTS, counted, graph, poll, stubApi } from "./stub-api.js";
 
 beforeAll(() => import("../src/components/BarChart.js"));
 afterEach(cleanup);
@@ -36,7 +36,14 @@ it("a left swipe over an answered question opens the next one, like Next questio
   const first = poll({ next: [null, "parks"] });
   const parks = poll({ id: "parks", question: "More parks?" });
   history.replaceState(null, "", "/?poll=ads-free");
-  render(<App api={stubApi({ poll: graph([first, parks]) })} />);
+  render(
+    <App
+      api={stubApi({
+        poll: graph([first, parks]),
+        cast: async () => counted(1, CAST_RESULTS),
+      })}
+    />,
+  );
   const user = userEvent.setup();
   const heading = await main().findByRole("heading", {
     name: first.question,
@@ -71,7 +78,14 @@ it("fades in a question reached with Back, and slides in the next one again afte
   const first = poll({ next: [null, "parks"] });
   const parks = poll({ id: "parks", question: "More parks?" });
   history.replaceState(null, "", "/?poll=ads-free");
-  render(<App api={stubApi({ poll: graph([first, parks]) })} />);
+  render(
+    <App
+      api={stubApi({
+        poll: graph([first, parks]),
+        cast: async () => counted(1, CAST_RESULTS),
+      })}
+    />,
+  );
   const user = userEvent.setup();
   const back = () =>
     screen.getByRole("main").classList.contains("conversation__main--back");

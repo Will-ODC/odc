@@ -10,7 +10,14 @@ import {
 import userEvent from "@testing-library/user-event";
 import { afterEach, beforeAll, expect, it } from "vitest";
 import { App } from "../src/App.js";
-import { graph, poll, results, stubApi } from "./stub-api.js";
+import {
+  CAST_RESULTS,
+  counted,
+  graph,
+  poll,
+  results,
+  stubApi,
+} from "./stub-api.js";
 
 afterEach(cleanup);
 beforeAll(() => import("../src/components/BarChart.js"));
@@ -19,7 +26,14 @@ it("Next updates the address; Back and Forward restore the question and saved an
   const first = poll({ next: [null, "parks"] });
   const parks = poll({ id: "parks", question: "More parks?" });
   history.replaceState(null, "", "/?poll=ads-free");
-  render(<App api={stubApi({ poll: graph([first, parks]) })} />);
+  render(
+    <App
+      api={stubApi({
+        poll: graph([first, parks]),
+        cast: async () => counted(1, CAST_RESULTS),
+      })}
+    />,
+  );
   const user = userEvent.setup();
   const main = () => within(screen.getByRole("main"));
   await main().findByRole("heading", { name: first.question, level: 1 });

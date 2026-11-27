@@ -89,7 +89,7 @@ export function counted(choice: number, of: Results) {
  * `myVotes`, which answer "nobody signed in", "no ballot here" and "no saved
  * answers". Every conversation asks all three, for the bar across the top and
  * the Answered list (#484), and a fresh browser is the ordinary case, not a
- * mistake to flag.
+ * mistake to flag. Tests that cast a vote supply their expected outcome.
  */
 export function stubApi(over: Partial<PulseApi> = {}): PulseApi {
   const unused = (name: string) => () =>
@@ -101,12 +101,7 @@ export function stubApi(over: Partial<PulseApi> = {}): PulseApi {
     listPolls: unused("listPolls"),
     myVotes: () => Promise.resolve({ votes: [], nextCursor: null }),
     poll: () => Promise.resolve(poll()),
-    cast: () =>
-      Promise.resolve({
-        status: "counted" as const,
-        ballot: [1],
-        results: CAST_RESULTS,
-      }),
+    cast: unused("cast"),
     suggestions: () => Promise.resolve([] as Suggestion[]),
     suggest: () =>
       Promise.resolve({
@@ -128,7 +123,7 @@ export function stubApi(over: Partial<PulseApi> = {}): PulseApi {
     createPoll: unused("createPoll"),
     uploadPicture: unused("uploadPicture"),
     ...over,
-  } as PulseApi;
+  };
 }
 
 /** Answers each poll id from a map, and 404s anything else. */
