@@ -18,7 +18,7 @@ export function SignInAgain({
 }) {
   return (
     <p
-      className="contribution-expired"
+      className="sign-in-again"
       ref={statusRef}
       tabIndex={statusRef ? -1 : undefined}
       {...(announce ? { role: "status" } : {})}

@@ -345,6 +345,7 @@ it.each([
       failReads = false;
       await user.click(screen.getByRole("button", { name: "Reload picture" }));
       const reloaded = await screen.findByText("Picture reloaded.");
+      expect(screen.queryByText("Picture changed.")).toBeNull();
       expect(screen.queryByRole("img", { name: "General" })).toBeNull();
       expect(screen.queryByRole("img", { name: parkPicture.alt })).toBeNull();
       expect(document.activeElement).toBe(reloaded);
@@ -505,6 +506,13 @@ it.each(["saved", "expired", "expired, check fails", "lost reply"])(
       expect(screen.queryByRole("img", { name: parkPicture.alt })).toBeNull();
       expect(choose()).toBeTruthy();
       expect(picture.queryByLabelText("Picture description")).toBeNull();
+      await user.click(
+        screen.getByRole("button", { name: "Remove posted picture" }),
+      );
+      expect(
+        screen.getByRole("button", { name: "Remove picture" }),
+      ).toBeTruthy();
+      expect(screen.queryByText("Picture saved.")).toBeNull();
     }
   },
 );

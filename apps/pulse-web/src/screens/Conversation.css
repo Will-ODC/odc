@@ -26,10 +26,11 @@
    * a phone sits on the bottom edge: its measured height (`--dock-space`, set
    * by the page as it opens and closes) and a gutter, never less than before.
    */
-  padding-bottom: max(
+  --conversation-dock-clearance: max(
     calc(var(--gutter) + var(--step) * 8 + env(safe-area-inset-bottom)),
     calc(var(--dock-space, 0px) + var(--gutter))
   );
+  padding-bottom: var(--conversation-dock-clearance);
 }
 .conversation__question {
   display: flex;
@@ -60,9 +61,6 @@
   font-size: var(--t-small);
   color: var(--muted);
   line-height: 1.5;
-}
-.conversation__hero > .picture-management {
-  margin-top: var(--gutter);
 }
 .conversation__hero > .conversation__context {
   max-inline-size: var(--prose-measure);
@@ -304,6 +302,11 @@
   .conversation__question:has(.conversation__help) .conversation__scroll {
     padding-bottom: var(--gutter);
   }
+  /* Treat the area behind the open sheet as outside the visible scrollport. */
+  .conversation__question:has(.conversation__dock .vote-card)
+    .conversation__scroll {
+    scroll-padding-bottom: var(--conversation-dock-clearance);
+  }
   .conversation button:not(:where(.picture-management *)) {
     min-height: var(--touch);
   }
@@ -339,6 +342,9 @@
   }
   .conversation__hero h1 {
     text-wrap: balance;
+  }
+  .conversation__hero > .picture-management:not([open]) {
+    margin-bottom: var(--gutter);
   }
   .conversation__vote--page {
     margin-bottom: var(--gutter);

@@ -1,5 +1,6 @@
 import { useCallback, useEffect, useState } from "react";
 import type { PulseApi } from "../api/types.js";
+import { SIGNED_IN_KEY } from "../flow/sign-in-return.js";
 
 /** The public poll and its attribution carry no management permission. */
 export function usePollPictureAccess(
@@ -23,8 +24,22 @@ export function usePollPictureAccess(
       },
       () => {},
     );
+    // Revoke this account's editor without changing the voting session.
+    const checkAccount = (event: StorageEvent) => {
+      if (event.key !== SIGNED_IN_KEY) return;
+      void api.me().then(
+        (me) => {
+          if (!live || !me || me.id === accountId) return;
+          live = false;
+          setPermission(null);
+        },
+        () => {},
+      );
+    };
+    window.addEventListener("storage", checkAccount);
     return () => {
       live = false;
+      window.removeEventListener("storage", checkAccount);
     };
   }, [api, pollId, accountId]);
   const canManage =

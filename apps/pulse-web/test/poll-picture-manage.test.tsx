@@ -165,6 +165,7 @@ it("lets the anonymous poster replace and remove an upload without changing the 
   expect(screen.queryByRole("img", { name: originalAlt })).toBeNull();
 
   await confirmRemoval(user);
+  expect(screen.queryByText("Picture saved.")).toBeNull();
   expect(changePollPicture).toHaveBeenCalledTimes(1);
   await user.keyboard("{Enter}");
   const removed = await screen.findByText("Picture removed.");
@@ -231,6 +232,7 @@ it("keeps removal hidden after a conflict until a reload shows a newer picture",
   await user.click(action("Reload picture"));
   expect(await screen.findByRole("img", { name: replacementAlt })).toBeTruthy();
   expect(document.activeElement).toBe(action("Remove posted picture"));
+  expect(screen.queryByText(pictureChangedMessage)).toBeNull();
 });
 
 it("keeps the uploaded draft through expiry and rechecks permission before it can be saved", async () => {

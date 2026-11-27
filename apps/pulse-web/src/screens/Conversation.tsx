@@ -232,8 +232,6 @@ export function Conversation({
     onSignedOut: signedOut,
     onForgotten: forgotten,
     watchSignOut: true,
-    watchSignIn: true,
-    onAccountChanged: forgotten,
   });
   const remembered = useCallback((answer: Answer) => {
     setAnswers((old) =>
@@ -548,7 +546,7 @@ function LoadedQuestion({
 }) {
   const fetched = usePoll(api, pollId);
   const poll = fetched.status === "ready" ? fetched.value : null;
-  const { session, onPollLoaded, recheck } = identity;
+  const { session, onPollLoaded } = identity;
   const accountId = session.status === "signedIn" ? session.me.id : null;
   const { canManage: canManagePicture, revoke: revokePictureAccess } =
     usePollPictureAccess(api, poll?.id, accountId);
@@ -652,7 +650,6 @@ function LoadedQuestion({
                         accountId={accountId}
                         image={image}
                         onPictureChanged={setUpdatedImage}
-                        recheck={recheck}
                         revokeAccess={revokePictureAccess}
                       />
                     ) : null}
@@ -733,7 +730,6 @@ function PollPictureForm({
   accountId,
   image,
   onPictureChanged,
-  recheck,
   revokeAccess,
 }: {
   api: PulseApi;
@@ -741,18 +737,19 @@ function PollPictureForm({
   accountId: string;
   image: PublicImage | undefined;
   onPictureChanged: (image: PublicImage) => void;
-  recheck: QuestionIdentity["recheck"];
   revokeAccess: () => void;
 }) {
   const recheckPictureAccess = useCallback(async () => {
-    // A picture write's 401 belongs to this draft. Keep the question mounted
-    // while its poster signs in again, and verify both account and permission.
-    const found = await recheck(false);
-    if (!found.settled || found.accountId !== accountId) return false;
-    const canManage = await api.pollPictureAccess(id).catch(() => undefined);
-    if (canManage === false) revokeAccess();
-    return canManage === true;
-  }, [api, id, accountId, recheck, revokeAccess]);
+    // Check the editor's account and permission without updating voting state.
+    const me = await api.me().catch(() => null);
+    if (!me) return false;
+    if (me.id === accountId) {
+      const canManage = await api.pollPictureAccess(id).catch(() => undefined);
+      if (canManage !== false) return canManage === true;
+    }
+    revokeAccess();
+    return false;
+  }, [api, id, accountId, revokeAccess]);
   const pictureRequests = useRef(0);
   const live = useRef(false);
   useLayoutEffect(() => {

@@ -10,7 +10,8 @@ import {
 import userEvent from "@testing-library/user-event";
 import { afterEach, beforeEach, describe, expect, it, vi } from "vitest";
 import { App } from "../src/App.js";
-import { poll, results, stubApi } from "./stub-api.js";
+import { SIGNED_IN_KEY } from "../src/flow/sign-in-return.js";
+import { CAST_RESULTS, poll, results, stubApi } from "./stub-api.js";
 
 afterEach(cleanup);
 beforeEach(() => {
@@ -102,6 +103,39 @@ describe("what the URL opens", () => {
     await user.click(bar.getByRole("button", { name: "Sign out everywhere" }));
     expect(await screen.findByLabelText("Your email")).toBeTruthy();
     expect(status.textContent).toBe("");
+  });
+
+  it("keeps the answer and sign-in announcement when another tab signs in on a non-public question", async () => {
+    let account = ME;
+    const question = poll({ votePrivacy: "anonymous" });
+    globalThis.history.replaceState(null, "", "/sign-in?token=abc123");
+    render(
+      <App
+        api={stubApi({
+          checkLink,
+          redeem: async () => ME,
+          me: async () => account,
+          poll: async () => question,
+          myBallot: async () => (account === ME ? [1] : null),
+          results: async () => CAST_RESULTS,
+        })}
+      />,
+    );
+    await continueSignIn();
+    const announcement = await screen.findByText("Signed in");
+    const answer = await screen.findByRole("region", { name: "Your answer" });
+    expect(answer.textContent).toContain("You picked Yes.");
+
+    account = { ...ME, id: "v2", email: "bea@example.test" };
+    await act(async () => {
+      window.dispatchEvent(new StorageEvent("storage", { key: SIGNED_IN_KEY }));
+    });
+
+    expect(window.location.search).toBe(`?poll=${question.id}`);
+    expect(announcement.textContent).toBe("Signed in");
+    expect(
+      screen.getByRole("region", { name: "Your answer" }).textContent,
+    ).toContain("You picked Yes.");
   });
 
   it("keeps the public poll open for signed-out visitors", async () => {

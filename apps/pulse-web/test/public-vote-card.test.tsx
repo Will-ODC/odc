@@ -19,7 +19,7 @@ import type {
   PublicVotesPage,
   RemoveVoteOutcome,
 } from "../src/api/types.js";
-import { SIGNED_IN_KEY } from "../src/flow/sign-in-return.js";
+import { rememberReturn, SIGNED_IN_KEY } from "../src/flow/sign-in-return.js";
 import { SIGNED_OUT_KEY } from "../src/hooks/use-session.js";
 import { Conversation } from "../src/screens/Conversation.js";
 import { counted, poll, results, stubApi } from "./stub-api.js";
@@ -491,7 +491,7 @@ it("restores the ballot and reloads My votes when sign-in arrives from another t
   expect(within(restored).getByText("Public")).toBeTruthy();
 });
 
-it("refreshes the account and ballot without deleting if the account switched", async () => {
+it("refreshes the account and ballot and clears the sign-in announcement if a vote recheck finds a switch", async () => {
   const user = userEvent.setup();
   const me = vi.fn(signedIn);
   const myBallot = vi.fn(async () => [1]);
@@ -501,13 +501,20 @@ it("refreshes the account and ballot without deleting if the account switched", 
   }));
   const api = stubApi({
     me,
+    checkLink: async () => session.email,
+    redeem: async () => session,
     myBallot,
     removeVote,
     poll: async () => question,
     results: async () => tally,
   });
-  window.history.replaceState(null, "", `/?poll=${question.id}`);
+  rememberReturn({ kind: "conversation", pollId: question.id }, localStorage);
+  window.history.replaceState(null, "", "/sign-in?token=abc123");
   render(<App api={api} />);
+  await user.click(
+    await screen.findByRole("button", { name: `Continue as ${session.email}` }),
+  );
+  const announcement = await screen.findByText("Signed in");
   await user.click(
     await screen.findByRole("button", { name: "Remove my vote" }),
   );
@@ -518,6 +525,7 @@ it("refreshes the account and ballot without deleting if the account switched", 
     "Your account changed. Check your answer before trying again.",
   );
   expect(message.getAttribute("role")).toBe("status");
+  await waitFor(() => expect(announcement.textContent).toBe(""));
   const answer = await screen.findByRole("region", { name: "Your answer" });
   expect(answer.textContent).toContain("You picked No.");
   await user.click(screen.getByRole("button", { name: "Account" }));

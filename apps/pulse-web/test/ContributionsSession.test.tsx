@@ -521,9 +521,8 @@ it("shows the expiry notice above the message form's privacy note", async () => 
   const form = (await screen.findByLabelText("Private message")).closest(
     "form",
   )!;
-  await waitFor(() =>
-    expect(form.firstElementChild?.className).toBe("contribution-expired"),
-  );
+  const notice = await within(form).findByText(/Your sign-in has ended\./);
+  expect(form.firstElementChild).toBe(notice);
 });
 
 it("gives an organizer whose sign-in ended a heading and a sign-in link for their messages", async () => {

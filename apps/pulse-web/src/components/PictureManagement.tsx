@@ -17,6 +17,7 @@ export function PictureManagement({
   const {
     submit,
     edit,
+    askRemoval,
     remove,
     cancelRemoval,
     reloadPicture,
@@ -64,6 +65,7 @@ export function PictureManagement({
               confirmLabel="Remove picture"
               pendingLabel="Removing picture…"
               progress={removal}
+              onAsk={askRemoval}
               onConfirm={remove}
               onCancel={cancelRemoval}
             />

@@ -225,12 +225,19 @@ export function usePictureManagement({
     )?.focus();
   }, [reloaded]);
 
-  function edit() {
+  function clearStatus() {
     setReload(undefined);
-    setUploadRefused(false);
-    setUploadSignedOut(false);
     save.clearFailure();
     save.clearSaved();
+  }
+  function edit() {
+    clearStatus();
+    setUploadRefused(false);
+    setUploadSignedOut(false);
+  }
+  function askRemoval() {
+    clearStatus();
+    return true;
   }
   function remove() {
     if (!postedPicture) return;
@@ -243,7 +250,7 @@ export function usePictureManagement({
     save.clearFailure();
   }
   function reloadPicture() {
-    setReload(undefined);
+    clearStatus();
     void refreshPicture().then((read) => setReload(read ? "done" : "failed"));
   }
   function checkAgain() {
@@ -252,6 +259,7 @@ export function usePictureManagement({
   return {
     submit,
     edit,
+    askRemoval,
     remove,
     cancelRemoval,
     reloadPicture,

@@ -65,15 +65,8 @@ export function useSession(
   after: {
     onSignedOut?: (departure: SessionDeparture) => void;
     onForgotten?: () => void;
-    /** An account switch can keep the current page open after clearing drafts. */
-    onAccountChanged?: () => void;
     /** Accept an explicit sign-out from another tab while signed in. */
     watchSignOut?: boolean;
-    /**
-     * While signed in, accept an announced account switch. A form can handle
-     * its own expiry without sending the page away from its draft.
-     */
-    watchSignIn?: boolean;
     /**
      * Keep asking while signed in, so a switch from account A straight to
      * account B in another tab reaches this page. For pages that show one
@@ -147,7 +140,6 @@ export function useSession(
    */
   const recheckSignedIn = after.recheckSignedIn === true;
   const watchSignOut = recheckSignedIn || after.watchSignOut === true;
-  const watchSignIn = after.watchSignIn === true;
   const settled =
     recheckSignedIn ||
     session.status === "signedOut" ||
@@ -216,15 +208,12 @@ export function useSession(
    * `me()` on every signed-out page load.
    */
   useLayoutEffect(() => {
-    if (!settled && !watchSignOut && !watchSignIn) return;
+    if (!settled && !watchSignOut) return;
     const ask = () => {
       if (settled && document.visibilityState !== "hidden") recheck();
     };
     const announced = (event: StorageEvent) => {
-      if (event.key === SIGNED_IN_KEY) {
-        if (settled) ask();
-        else if (watchSignIn) void recheck(false);
-      }
+      if (event.key === SIGNED_IN_KEY) ask();
       // Another tab signed out on purpose: not an expiry to recover from.
       else if (event.key === SIGNED_OUT_KEY && watchSignOut) {
         nextIdentity();
@@ -248,7 +237,7 @@ export function useSession(
       window.removeEventListener("storage", announced);
       document.removeEventListener("visibilitychange", ask);
     };
-  }, [settled, recheck, watchSignOut, watchSignIn]);
+  }, [settled, recheck, watchSignOut]);
 
   /*
    * Whoever was signed in here is gone without this page's own Sign out: it
@@ -256,10 +245,9 @@ export function useSession(
    * them. What this page holds for them (their votes, say) must go as it
    * would after Sign out here, which runs `onSignedOut` itself.
    */
-  const { onAccountChanged, onSignedOut, onForgotten } = after;
-  const departure = useRef({ onAccountChanged, onSignedOut });
+  const departed = useRef(after.onSignedOut);
   useEffect(() => {
-    departure.current = { onAccountChanged, onSignedOut };
+    departed.current = after.onSignedOut;
   });
   const previous = useRef<string | null>(null);
   useEffect(() => {
@@ -270,15 +258,12 @@ export function useSession(
       !(session.status === "signedOut" && session.ended === "here");
     if (session.status !== "loading" && session.status !== "unknown")
       previous.current = now;
-    if (left) {
-      const { onAccountChanged, onSignedOut } = departure.current;
-      if (now !== null && onAccountChanged) onAccountChanged();
-      else onSignedOut?.("sessionChanged");
-    }
+    if (left) departed.current?.("sessionChanged");
   }, [session]);
 
   // The hook's own guard, not only the button's: one request at a time.
   const sending = useRef(false);
+  const { onSignedOut, onForgotten } = after;
   const signedIn = session.status === "signedIn";
 
   const signOut = useCallback(() => {

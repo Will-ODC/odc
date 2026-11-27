@@ -501,13 +501,6 @@ function messageFrom(parsed: unknown): string | undefined {
   return stringField(parsed, "message");
 }
 
-/**
- * The sentence for a refusal whose body carried none — a proxy's own error page
- * (nginx's 502 or 504), a dropped upstream. The person reads it, so it says what
- * happened and whether to try again; it never shows the status number. Each
- * wording matches what the server itself says for that status, so one failure
- * reads the same whether pulse answered or a proxy did.
- */
 function unconfirmedPictureChange(): ApiError {
   return new ApiError(
     0,
@@ -515,6 +508,13 @@ function unconfirmedPictureChange(): ApiError {
   );
 }
 
+/**
+ * The sentence for a refusal whose body carried none — a proxy's own error page
+ * (nginx's 502 or 504), a dropped upstream. The person reads it, so it says what
+ * happened and whether to try again; it never shows the status number. Each
+ * wording matches what the server itself says for that status, so one failure
+ * reads the same whether pulse answered or a proxy did.
+ */
 function fallbackMessage(status: number): string {
   if (status >= 500) {
     return "Something went wrong. Try again.";
