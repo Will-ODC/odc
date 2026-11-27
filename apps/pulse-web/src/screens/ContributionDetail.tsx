@@ -418,8 +418,11 @@ export function ContributionDetail({
                   item={item}
                   client={client}
                   onPictureChanged={(image) => {
+                    // Compared by value: a newer read with the same picture
+                    // is no reason to drop this one (#732).
                     replace((detail) =>
-                      detail.contribution.image === item.image
+                      JSON.stringify(detail.contribution.image) ===
+                      JSON.stringify(item.image)
                         ? {
                             ...detail,
                             contribution: { ...detail.contribution, image },
@@ -652,12 +655,13 @@ function ContributionPictureForm({
 }) {
   const [uploadSignedOut, setUploadSignedOut] = useState(false);
   const [signInAttempt, retrySignIn] = useState(0);
-  const [needsPictureRefresh, setNeedsPictureRefresh] = useState(false);
+  // The picture a removal was refused for (409 image_changed). Removal stays
+  // off while that picture is the one shown, however it came back on screen,
+  // so it is offered again only once a read has shown another (API.md).
+  const [refused, setRefused] = useState<string | null>(null);
   async function refreshPicture() {
     const detail = await client.detail(item.id).catch(() => undefined);
-    if (!detail) return;
-    onPictureChanged(detail.contribution.image);
-    setNeedsPictureRefresh(false);
+    if (detail) onPictureChanged(detail.contribution.image);
   }
   if (access === "expired" && uploadSignedOut) setUploadSignedOut(false);
   const picture = usePictureField(() => setUploadSignedOut(true), api, "save");
@@ -674,8 +678,8 @@ function ContributionPictureForm({
         onPictureChanged(await client.changePicture(item.id, change));
       } catch (error) {
         if (error instanceof ContributionsError) {
-          if (error.code === "image_changed") {
-            setNeedsPictureRefresh(true);
+          if (error.code === "image_changed" && "expectedImageId" in change) {
+            setRefused(change.expectedImageId);
             await refreshPicture();
             setRemoving(null);
           } else if (
@@ -683,17 +687,25 @@ function ContributionPictureForm({
             error.status >= 500 ||
             error.code === "image_unavailable"
           ) {
-            const attached = (await client.detail(item.id)).contribution.image;
-            onPictureChanged(attached);
-            if (
-              "expectedImageId" in change
-                ? attached.kind !== "upload"
-                : attached.kind === "upload" &&
-                  attached.displayUrl ===
-                    `/api/poll-images/${encodeURIComponent(change.id)}/display.webp` &&
-                  attached.alt === change.alt
-            )
-              return;
+            // If this check cannot be read, the refusal stands: an unusable
+            // upload is asked for again (its description kept), and a lost
+            // reply keeps its error and Save for a retry with the same key.
+            const attached = await client.detail(item.id).then(
+              (detail) => detail.contribution.image,
+              () => undefined,
+            );
+            if (attached) {
+              onPictureChanged(attached);
+              if (
+                "expectedImageId" in change
+                  ? attached.kind !== "upload"
+                  : attached.kind === "upload" &&
+                    attached.displayUrl ===
+                      `/api/poll-images/${encodeURIComponent(change.id)}/display.webp` &&
+                    attached.alt === change.alt
+              )
+                return;
+            }
             if (error.code === "image_unavailable")
               picture.reportPostError("image_unavailable");
           }
@@ -744,9 +756,10 @@ function ContributionPictureForm({
       : removingShown && error
         ? { status: "failed", message: error }
         : { status: "idle" };
+  const stale = postedPicture !== undefined && postedPicture === refused;
   const showRemove =
     canWrite &&
-    !needsPictureRefresh &&
+    !stale &&
     postedPicture !== undefined &&
     (!save.pending || removingShown) &&
     picture.selection.status === "empty" &&
@@ -816,7 +829,7 @@ function ContributionPictureForm({
             {fieldError}
           </p>
         ) : null}
-        {needsPictureRefresh && !save.pending ? (
+        {stale && !save.pending ? (
           <Button
             type="button"
             variant="secondary"

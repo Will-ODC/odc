@@ -207,6 +207,7 @@ it.each([
   "lost removal reply",
   "picture already removed",
   "conflict refresh fails",
+  "update reply before conflict refresh",
 ])("manages the displayed picture safely (%s)", async (order) => {
   const canManage = order !== "visitor";
   const newer = {
@@ -214,9 +215,13 @@ it.each([
     displayUrl: "/api/poll-images/newer/display.webp",
     alt: "Another picture",
   };
+  const late = order === "update reply before conflict refresh";
   const conflict =
-    order === "picture already removed" || order === "conflict refresh fails";
-  let holdReads = false;
+    late ||
+    order === "picture already removed" ||
+    order === "conflict refresh fails";
+  let held: Promise<void> | undefined;
+  let release!: () => void;
   let failReads = false;
   const user = userEvent.setup();
   let item = fixture({ image: parkPicture });
@@ -253,7 +258,7 @@ it.each([
       id="park"
       client={client({
         detail: async () => {
-          if (holdReads) await new Promise(() => {});
+          if (held) await held;
           if (failReads)
             throw new ContributionsError(0, "Could not read picture.");
           return { contribution: item, canManage };
@@ -274,7 +279,7 @@ it.each([
     expect(screen.queryByRole("img", { name: parkPicture.alt })).toBeNull();
     return;
   }
-  if (!conflict && order !== "lost removal reply") {
+  if ((!conflict && order !== "lost removal reply") || late) {
     await user.click(await screen.findByText("Post an update"));
     await user.type(screen.getByLabelText("Progress update"), "Ramp started");
     await user.click(screen.getByLabelText(/I confirm this status and update/));
@@ -307,15 +312,28 @@ it.each([
   if (order === "picture reply last") {
     await act(async () => finishUpdate(item));
     await screen.findByRole("img", { name: newer.alt });
-    holdReads = true;
+    held = new Promise(() => {});
   }
+  if (late) held = new Promise((resolve) => (release = resolve));
   if (order === "picture already removed") item = fixture();
   failReads = order === "conflict refresh fails";
   await act(async () => finishRemoval());
+  if (late) {
+    // While the conflict refresh is out, the update's reply lands with a
+    // fresh copy of the refused picture; the refresh's own follow-up read
+    // then never answers.
+    await act(async () => finishUpdate(fixture({ image: { ...parkPicture } })));
+    held = new Promise(() => {});
+    await act(async () => release());
+  }
   if (conflict) {
     expect(await screen.findByText("Picture changed.")).toBeTruthy();
     expect(screen.queryByText("Picture removed.")).toBeNull();
     expect(screen.queryByRole("button", { name: "Remove picture" })).toBeNull();
+    if (late) {
+      await screen.findByRole("img", { name: newer.alt });
+      expect(remove()).toBeTruthy();
+    }
     if (failReads) {
       expect(
         screen.queryByRole("button", { name: "Remove posted picture" }),
@@ -352,10 +370,11 @@ it.each([
   expect(screen.queryByRole("img", { name: parkPicture.alt })).toBeNull();
 });
 
-it.each(["saved", "expired", "lost reply"])(
+it.each(["saved", "expired", "expired, check fails", "lost reply"])(
   "handles a replacement picture (%s)",
   async (outcome) => {
-    const expired = outcome === "expired";
+    const expired = outcome.startsWith("expired");
+    let checkFails = false;
     const user = userEvent.setup();
     const replacement = {
       ...parkPicture,
@@ -364,6 +383,7 @@ it.each(["saved", "expired", "lost reply"])(
     };
     let item = fixture({ image: parkPicture });
     const changePicture = vi.fn<ContributionsApi["changePicture"]>(async () => {
+      checkFails = outcome === "expired, check fails";
       if (expired)
         throw new ContributionsError(422, "Expired.", "image_unavailable");
       item = { ...item, image: replacement };
@@ -386,7 +406,10 @@ it.each(["saved", "expired", "lost reply"])(
         })}
         id="park"
         client={client({
-          detail: async () => ({ contribution: item, canManage: true }),
+          detail: async () => {
+            if (checkFails) throw new ContributionsError(0, "Read failed.");
+            return { contribution: item, canManage: true };
+          },
           changePicture,
         })}
       />,
@@ -429,6 +452,7 @@ it.each(["saved", "expired", "lost reply"])(
       ).toBeNull();
       expect(document.activeElement).toBe(choose());
       expect(screen.queryByRole("alert")).toBeNull();
+      expect(screen.queryByRole("button", { name: "Save picture" })).toBeNull();
     } else {
       expect(await screen.findByText("Picture saved.")).toBeTruthy();
       expect(
