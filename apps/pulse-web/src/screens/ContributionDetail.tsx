@@ -404,15 +404,21 @@ export function ContributionDetail({
                 <ContributionPictureForm
                   key={`${item.id}:${drafts.generation}`}
                   access={access}
+                  canManage={canManage && accountId === drafts.owner}
                   api={api}
                   item={item}
                   client={client}
-                  onPictureChanged={(image) =>
-                    replace((detail) => ({
-                      ...detail,
-                      contribution: { ...detail.contribution, image },
-                    }))
-                  }
+                  onPictureChanged={(image) => {
+                    replace((detail) =>
+                      detail.contribution.image === item.image
+                        ? {
+                            ...detail,
+                            contribution: { ...detail.contribution, image },
+                          }
+                        : detail,
+                    );
+                    reload();
+                  }}
                   onSignedOut={() => void recheck()}
                 />
               ) : null}
@@ -620,6 +626,7 @@ export function ContributionDetail({
 }
 function ContributionPictureForm({
   access,
+  canManage,
   api,
   item,
   client,
@@ -627,6 +634,7 @@ function ContributionPictureForm({
   onSignedOut,
 }: {
   access: Access;
+  canManage: boolean;
   api: PulseApi;
   item: Contribution;
   client: ContributionsApi;
@@ -643,8 +651,23 @@ function ContributionPictureForm({
     api,
     "save",
   );
-  const [removing, setRemoving] = useState(false);
+  const [removing, setRemoving] = useState<string | null>(null);
+  const postedPicture =
+    item.image.kind === "upload" ? item.image.displayUrl : null;
+  const readPicture = async () =>
+    (await client.detail(item.id)).contribution.image;
   const save = useContributionSave<PictureInput | null>(async (image) => {
+    if (image === null) {
+      const attached = await readPicture();
+      if (attached.kind !== "upload" || attached.displayUrl !== postedPicture) {
+        onPictureChanged(attached);
+        if (attached.kind !== "upload") return;
+        throw new ContributionsError(
+          409,
+          "The posted picture changed. Review it before removing.",
+        );
+      }
+    }
     try {
       onPictureChanged(await client.changePicture(item.id, image));
     } catch (error) {
@@ -655,9 +678,7 @@ function ContributionPictureForm({
           error.status >= 500 ||
           error.code === "image_unavailable"
         ) {
-          const {
-            contribution: { image: attached },
-          } = await client.detail(item.id);
+          const attached = await readPicture();
           onPictureChanged(attached);
           if (
             image === null
@@ -676,33 +697,36 @@ function ContributionPictureForm({
     }
   }, picture.reset);
   const outcome = useSendOutcome(save, access);
+  const signInAgain =
+    access === "expired" || uploadSignedOut || save.errorStatus === 401;
+  const canWrite = canManage && !signInAgain;
   function submit(event: FormEvent<HTMLFormElement>) {
     event.preventDefault();
-    if (picture.checkPost() && picture.image) {
-      setRemoving(false);
+    if (canWrite && picture.checkPost() && picture.image) {
+      setRemoving(null);
       void save.submit(picture.image);
     }
   }
   const error =
     save.failure?.code === "image_unavailable" ? undefined : save.error;
+  const removingShown = removing !== null && removing === postedPicture;
   const removal: TwoPressProgress =
-    removing && save.pending
+    removingShown && save.pending
       ? { status: "sending" }
-      : removing && error
+      : removingShown && error
         ? { status: "failed", message: error }
         : { status: "idle" };
   const showRemove =
-    item.image.kind === "upload" &&
+    canWrite &&
+    postedPicture !== null &&
+    (!save.pending || removingShown) &&
     picture.selection.status === "empty" &&
-    picture.description === "" &&
-    !(removing && save.saved);
+    picture.description === "";
   const fieldError = uploadSignedOut
     ? "Sign in to change this picture."
-    : removing
+    : removingShown
       ? undefined
       : error;
-  const signInAgain =
-    access === "expired" || uploadSignedOut || save.errorStatus === 401;
 
   return (
     <details className="contribution-disclosure contribution-picture">
@@ -718,7 +742,7 @@ function ContributionPictureForm({
           save.clearSaved();
         }}
       >
-        <fieldset disabled={save.pending}>
+        <fieldset disabled={!canWrite || save.pending}>
           <PictureField field={picture} />
           {picture.image ? (
             <Button variant="primary">Save picture</Button>
@@ -727,17 +751,18 @@ function ContributionPictureForm({
         {showRemove ? (
           <div className="contribution-picture-removal">
             <TwoPress
+              key={postedPicture}
               label="Remove posted picture"
               question="Remove this picture from the contribution? The default picture shows instead."
               confirmLabel="Remove picture"
               pendingLabel="Removing picture…"
               progress={removal}
               onConfirm={() => {
-                setRemoving(true);
+                setRemoving(postedPicture);
                 void save.submit(null);
               }}
               onCancel={() => {
-                setRemoving(false);
+                setRemoving(null);
                 save.clearFailure();
               }}
             />

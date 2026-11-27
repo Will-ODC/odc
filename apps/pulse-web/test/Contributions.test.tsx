@@ -86,6 +86,10 @@ it.each([
   const user = userEvent.setup();
   const { state, me } = switchableMe("ada");
   let uploadCount = 0;
+  let finishRecheck!: () => void;
+  const recheck = new Promise<void>((resolve) => {
+    finishRecheck = resolve;
+  });
   vi.stubGlobal(
     "URL",
     class extends URL {
@@ -96,7 +100,10 @@ it.each([
   render(
     <ContributionDetail
       api={stubApi({
-        me,
+        me: async () => {
+          if (state.who === null) await recheck;
+          return me();
+        },
         uploadPicture: async () => {
           if (++uploadCount === 1) return "replacement";
           state.who = null;
@@ -129,6 +136,10 @@ it.each([
     await user.click(screen.getByRole("button", { name: "Save picture" }));
   else await upload("ramp.jpg");
 
+  const choose = await screen.findByRole("button", { name: "Replace" });
+  await screen.findByRole("link", { name: "Sign in again in a new tab" });
+  expect(choose.matches(":disabled")).toBe(true);
+  await act(async () => finishRecheck());
   await screen.findByText(/to read your private messages/);
   const panel = screen.getByText("Manage picture").closest("details")!;
   expect(panel.open).toBe(true);
@@ -159,77 +170,109 @@ it("shows the default contribution tile without an image element", async () => {
   expect(tile.closest("header")?.querySelector("img")).toBeNull();
 });
 
-it.each([false, true])(
-  "gates picture management and keeps removal after a late update (canManage: %s)",
-  async (canManage) => {
-    const user = userEvent.setup();
-    let item = fixture({ image: parkPicture });
-    let finishRemoval!: () => void;
-    let finishUpdate!: (value: Contribution) => void;
-    const changePicture = vi.fn<ContributionsApi["changePicture"]>(async () => {
-      await new Promise<void>((resolve) => {
-        finishRemoval = resolve;
-      });
-      item = fixture();
-      return item.image;
+it.each([
+  "visitor",
+  "picture reply first",
+  "picture reply last",
+  "lost removal reply",
+])("manages the displayed picture safely (%s)", async (order) => {
+  const canManage = order !== "visitor";
+  const newer = {
+    ...parkPicture,
+    displayUrl: "/api/poll-images/newer/display.webp",
+    alt: "Another picture",
+  };
+  let holdReads = false;
+  const user = userEvent.setup();
+  let item = fixture({ image: parkPicture });
+  let finishRemoval!: () => void;
+  let finishUpdate!: (value: Contribution) => void;
+  const changePicture = vi.fn<ContributionsApi["changePicture"]>(async () => {
+    item = fixture();
+    await new Promise<void>((resolve) => {
+      finishRemoval = resolve;
     });
-    render(
-      <ContributionDetail
-        api={stubApi({ me: switchableMe("ada").me })}
-        id="park"
-        client={client({
-          detail: async () => ({ contribution: item, canManage }),
-          changePicture,
-          update: () =>
-            new Promise((resolve) => {
-              finishUpdate = resolve;
-            }),
-        })}
-      />,
-    );
-    const image = await screen.findByRole("img", { name: parkPicture.alt });
-    expect(image.getAttribute("src")).toBe(parkPicture.displayUrl);
-    if (!canManage) {
-      expect(screen.queryByText("Manage picture")).toBeNull();
-      fireEvent.error(image);
-      expect(screen.queryByRole("img", { name: parkPicture.alt })).toBeNull();
-      return;
-    }
+    if (order === "lost removal reply")
+      throw new ContributionsError(0, "Connection lost.");
+    return { kind: "tile" };
+  });
+  render(
+    <ContributionDetail
+      api={stubApi({ me: switchableMe("ada").me })}
+      id="park"
+      client={client({
+        detail: async () => {
+          if (holdReads) await new Promise(() => {});
+          return { contribution: item, canManage };
+        },
+        changePicture,
+        update: () =>
+          new Promise((resolve) => {
+            finishUpdate = resolve;
+          }),
+      })}
+    />,
+  );
+  const image = await screen.findByRole("img", { name: parkPicture.alt });
+  expect(image.getAttribute("src")).toBe(parkPicture.displayUrl);
+  if (!canManage) {
+    expect(screen.queryByText("Manage picture")).toBeNull();
+    fireEvent.error(image);
+    expect(screen.queryByRole("img", { name: parkPicture.alt })).toBeNull();
+    return;
+  }
+  if (order !== "lost removal reply") {
     await user.click(await screen.findByText("Post an update"));
     await user.type(screen.getByLabelText("Progress update"), "Ramp started");
     await user.click(screen.getByLabelText(/I confirm this status and update/));
     await user.click(screen.getByRole("button", { name: "Publish update" }));
-    const stale = item;
-    await user.click(await screen.findByText("Manage picture"));
-    const remove = () =>
-      screen.getByRole("button", {
-        name: "Remove posted picture",
-      });
-    expect(remove().closest("header")).toBeNull();
-    remove().focus();
-    await user.keyboard("{Enter}");
-    const confirm = screen.getByRole("button", { name: "Remove picture" });
-    expect(document.activeElement).toBe(confirm);
-    expect(screen.getByText(/The default picture shows instead/)).toBeTruthy();
-    await user.click(screen.getByRole("button", { name: "Cancel" }));
-    expect(document.activeElement).toBe(remove());
-    expect(changePicture).not.toHaveBeenCalled();
-    await user.keyboard("{Enter}");
-    await user.keyboard("{Enter}");
-    const pending = screen.getByRole("button", { name: "Removing picture…" });
-    expect(document.activeElement).toBe(pending);
-    expect(pending.getAttribute("aria-disabled")).toBe("true");
-    expect(changePicture).toHaveBeenCalledExactlyOnceWith("park", null);
-    await act(async () => finishRemoval());
-    expect(await screen.findByText("Picture removed.")).toBeTruthy();
-    expect(await screen.findByRole("img", { name: "General" })).toBeTruthy();
-    await act(async () => finishUpdate(stale));
-    expect(
-      await screen.findByText("Your update has been published."),
-    ).toBeTruthy();
-    expect(screen.queryByRole("img", { name: parkPicture.alt })).toBeNull();
-  },
-);
+  }
+  const stale = item;
+  await user.click(await screen.findByText("Manage picture"));
+  const remove = () =>
+    screen.getByRole("button", {
+      name: "Remove posted picture",
+    });
+  expect(remove().closest("header")).toBeNull();
+  remove().focus();
+  await user.keyboard("{Enter}");
+  const confirm = screen.getByRole("button", { name: "Remove picture" });
+  expect(document.activeElement).toBe(confirm);
+  expect(screen.getByText(/The default picture shows instead/)).toBeTruthy();
+  await user.click(screen.getByRole("button", { name: "Cancel" }));
+  expect(document.activeElement).toBe(remove());
+  expect(changePicture).not.toHaveBeenCalled();
+  await user.keyboard("{Enter}");
+  await user.keyboard("{Enter}");
+  const pending = screen.getByRole("button", { name: "Removing picture…" });
+  expect(document.activeElement).toBe(pending);
+  expect(pending.getAttribute("aria-disabled")).toBe("true");
+  expect(changePicture).toHaveBeenCalledExactlyOnceWith("park", null);
+  if (order !== "picture reply first") item = fixture({ image: newer });
+  if (order === "picture reply last") {
+    await act(async () => finishUpdate(item));
+    await screen.findByRole("img", { name: newer.alt });
+    holdReads = true;
+  }
+  await act(async () => finishRemoval());
+  if (order === "lost removal reply") {
+    await screen.findByRole("img", { name: newer.alt });
+    expect(remove()).toBeTruthy();
+    expect(screen.queryByRole("button", { name: "Remove picture" })).toBeNull();
+    return;
+  }
+  expect(await screen.findByText("Picture removed.")).toBeTruthy();
+  if (order === "picture reply last") {
+    expect(screen.getByRole("img", { name: newer.alt })).toBeTruthy();
+    return;
+  }
+  expect(await screen.findByRole("img", { name: "General" })).toBeTruthy();
+  await act(async () => finishUpdate(stale));
+  expect(
+    await screen.findByText("Your update has been published."),
+  ).toBeTruthy();
+  expect(screen.queryByRole("img", { name: parkPicture.alt })).toBeNull();
+});
 
 it.each(["saved", "expired", "lost reply"])(
   "handles a replacement picture (%s)",
