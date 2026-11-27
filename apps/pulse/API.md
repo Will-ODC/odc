@@ -672,9 +672,9 @@ from 1 to 100. Each query parameter may occur once; unknown parameters are refus
 }
 ```
 
-Each row carries the poll's `votePrivacy` and the same `image` object as `GET /api/polls/:id` (see
-"Poll pictures (ADR-0047)" below), so a page shows thumbnails without a read
-per poll.
+Each row carries the poll's `votePrivacy` and the same `image` object as
+`GET /api/polls/:id` (see "Pictures (ADR-0047, ADR-0049)" below), so a page
+shows thumbnails without a read per poll.
 
 Lists open and closed polls in that community, excluding hidden polls and legacy
 polls without a community. No private author, account, ballot or vote data is
@@ -723,8 +723,8 @@ public-vote polls" above). Creation responses, first and replayed, carry it too;
 replay saved before it existed reads `"anonymous"`. MCP `get_poll` passes it on.
 
 `image` is always present: the poster's picture (`kind: "upload"`) or
-`{ "kind": "tile" }`, which the client draws. See "Poll pictures (ADR-0047)"
-below.
+`{ "kind": "tile" }`, which the client draws. See
+"Pictures (ADR-0047, ADR-0049)" below.
 
 `next` has one entry per choice, position for position, and `null` where that choice
 ends the run. Always the same length as `choices`.
@@ -1644,7 +1644,7 @@ client draws a generated tile. Category defaults (#586) will take precedence
 over the tile once served. URLs are relative. `upload` appears exactly
 when the picture route would serve it. Nothing else is ever in the object: no
 uploading account, file name, original type or size, upload time or hash. A
-creation response replayed from before pictures existed reads as the tile.
+poll creation response replayed from before pictures existed returns the tile.
 
 Planned, not served (ADR-0047, plan P12 steps 5–9): category defaults
 (`kind: "category"`), removing or replacing a poll picture, reporting, and the
@@ -1766,8 +1766,12 @@ transaction as the link change and audit entry. Removed URLs return 404 at
 the server and may remain in browser caches for up to one hour. The
 response exposes only the public image fields.
 
-Errors use `{error,message}`. 400 `bad_request` for invalid PUT JSON or fields;
-401 `signed_out`; 403 `origin_not_allowed` or `organizer_required`; 404
-`not_found` for a missing contribution; 413 `body_too_large` over 32 KiB for
-PUT; 422 `image_unavailable` for an unavailable pending upload on PUT; 429
-`too_many_requests`; 503 `contributions_unavailable`; 500 `server_error`.
+Errors use `{error,message}`. Both routes return 400 `bad_request` with
+"Check the picture and its description, then try again." for malformed requests,
+including invalid PUT JSON or fields and a missing or incorrect PUT Content-Type.
+Both return 401 `signed_out` with "Sign in to change this picture." for a missing,
+expired or revoked session. Other errors include 403 `origin_not_allowed` or
+`organizer_required`; 404 `not_found` for a missing contribution; 413
+`body_too_large` over 32 KiB for PUT; 422 `image_unavailable` for an unavailable
+pending upload on PUT; 429 `too_many_requests`; 503 `contributions_unavailable`;
+500 `server_error`.

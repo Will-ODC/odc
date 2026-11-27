@@ -289,11 +289,18 @@ async function harness(
   };
 }
 
-function refused(reply: Reply, status: number, error: string): void {
+function refused(
+  reply: Reply,
+  status: number,
+  error: string,
+  message?: string,
+): void {
   assert.equal(reply.statusCode, status, reply.body);
-  assert.equal(reply.json().error, error);
-  assert.equal(typeof reply.json().message, "string");
-  assert.ok((reply.json().message as string).length > 0);
+  const body = reply.json();
+  assert.equal(body.error, error);
+  assert.equal(typeof body.message, "string");
+  assert.ok((body.message as string).length > 0);
+  if (message !== undefined) assert.equal(body.message, message);
   assert.equal(reply.headers["cache-control"], "no-store");
 }
 
@@ -432,6 +439,7 @@ for (const kind of ["memory", "postgres"] as const) {
         await postContribution(h, { ...forPoll, alt: " " }),
         400,
         "bad_request",
+        "Check the fields and try again. Commercial offers need at least 20% savings.",
       );
       assert.equal((await h.publish("member", forPoll)).statusCode, 201);
       refused(await postContribution(h, forPoll), 422, "image_unavailable");
@@ -471,7 +479,12 @@ test("only the contribution poster can replace or remove its picture", async (t)
     return manageContributionPicture(h, method, url, who, payload, origin);
   }
   for (const method of ["PUT", "DELETE"] as const) {
-    refused(await manage(method), 401, "signed_out");
+    refused(
+      await manage(method),
+      401,
+      "signed_out",
+      "Sign in to change this picture.",
+    );
     // "other" is configured as site owner, but does not own this contribution.
     refused(await manage(method, "other"), 403, "organizer_required");
     refused(
@@ -493,13 +506,29 @@ test("only the contribution poster can replace or remove its picture", async (t)
     413,
     "body_too_large",
   );
+  const badPictureMessage =
+    "Check the picture and its description, then try again.";
+  for (const payload of [
+    { ...replacement, alt: "" },
+    { ...replacement, alt: "\u0000" },
+    { ...replacement, unexpected: true },
+  ]) {
+    refused(
+      await manage("PUT", "member", path, ORIGIN, payload),
+      400,
+      "bad_request",
+      badPictureMessage,
+    );
+  }
   refused(
-    await manage("PUT", "member", path, ORIGIN, {
-      ...replacement,
-      alt: "\u0000",
+    await h.request({
+      method: "PUT",
+      url: path,
+      headers: { origin: ORIGIN, cookie: h.cookie("member") },
     }),
     400,
     "bad_request",
+    badPictureMessage,
   );
   refused(
     await manage("PUT", "member", path, ORIGIN, {

@@ -14,6 +14,7 @@ interface Deps {
 }
 const actor = Symbol("contribution actor");
 type Authenticated = FastifyRequest & { [actor]?: Voter };
+const picturePath = "/api/contributions/:id/image";
 const errors = {
   bad_request: [
     400,
@@ -54,8 +55,16 @@ const errors = {
   ],
   server_error: [500, "Something went wrong. Try again."],
 } as const;
+const pictureMessages: Partial<Record<keyof typeof errors, string>> = {
+  bad_request: "Check the picture and its description, then try again.",
+  signed_out: "Sign in to change this picture.",
+};
 function refuse(reply: FastifyReply, code: keyof typeof errors) {
-  const [status, message] = errors[code];
+  const [status, defaultMessage] = errors[code];
+  const message =
+    reply.routeOptions.url === picturePath
+      ? (pictureMessages[code] ?? defaultMessage)
+      : defaultMessage;
   return reply.code(status).send({ error: code, message });
 }
 export async function registerContributionRoutes(
@@ -210,7 +219,7 @@ export async function registerContributionRoutes(
     for (const method of ["PUT", "DELETE"] as const) {
       scope.route({
         method,
-        url: "/api/contributions/:id/image",
+        url: picturePath,
         ...pictureOptions,
         handler: async (request) => {
           const voter = (request as Authenticated)[actor];
