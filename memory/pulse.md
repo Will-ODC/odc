@@ -41,7 +41,7 @@ the same CI runs.
 ## Where it stands (2026-11-27)
 
 Per-PR history is in `git log origin/master -- apps/pulse apps/pulse-web`.
-**Open Pulse-related PRs (2026-11-27):** the #701 stack #736 → #732 → #734 (server removal guard, web half, HTTP tests) and #730 (test-audit item 3). Work is split since 2026-11-27: Codex builds and code-reviews those four; Claude runs their browser UI reviews, merged #733 (#735), and takes the #714 nits next. PR #718 (orchestration skill) merged as `76517a6`. Next Pulse order (2026-11-26): #701 web half (PictureField in the contribution form, picture on the contribution page, picture after reload across API and client, plus the #728 nits below); then test-audit item 3; #685 step 4b (its deploy waits on 4a being live); the #714 nits. The #727 web nits ride the #701 web branch where they touch the same files, otherwise the next web branch. Next migration: **021** (020 merged in #728). Future, no ticket to build yet: #729 (epic, smart-contract milestone payouts for contributions; blocked on an ADR for chain, currency, key custody, refund rule and legal position). New ticket #707 (open polls from the main page without a reload; no urgency). #711 (`Contributions.test.tsx` "forgets a sign-in error once the same person has signed in again" flaky in CI) is fixed and closed in #723. #425 Next/Previous is on hold (operator, 2026-11-19).
+**Open Pulse-related PRs (2026-11-27):** #734 (#701 HTTP tests, based on master; needs a master sync and review), #730 (test-audit item 3), and drafts #739/#740 (#685 step 4b server/web, built, unreviewed, held until 4a is live per ADR-0048; operator approved their extra copy 2026-11-27). Codex ran out of usage 2026-11-27; Claude took over its units. #738, #736 and #732 merged 2026-11-27 (#701 is done apart from #734's tests). PR #718 (orchestration skill) merged as `76517a6`. Next Pulse order: #734, #730, the #739/#740 reviews, the fifth #714 nit and the #727 web nits, then #582. Next migration: **021** (020 merged in #728). Future, no ticket to build yet: #729 (epic, smart-contract milestone payouts for contributions; blocked on an ADR for chain, currency, key custody, refund rule and legal position). New ticket #707 (open polls from the main page without a reload; no urgency). #711 (`Contributions.test.tsx` "forgets a sign-in error once the same person has signed in again" flaky in CI) is fixed and closed in #723. #425 Next/Previous is on hold (operator, 2026-11-19).
 
 - **Sign-in (pillar 1) is built.** Magic-link sign-in and redeem; open sign-up
   with community as an optional label (ADR-0030); a community picker when an
@@ -86,11 +86,33 @@ Per-PR history is in `git log origin/master -- apps/pulse apps/pulse-web`.
   #733 (2026-11-27, #735, `ae51df6`): test-only fix; `public-vote-card.test.tsx`
   waits for focus inside `vi.waitFor` after "Load more votes" (the check ran
   before LoadMore's focus effect on slow CI). Component unchanged.
+  #738 (`c16a678`, 2026-11-27, part of #685): four of the five #714 nits.
+  VoteCard moves focus after the session-check Try again (to "Sign in with
+  email to vote", else the first choice; focus elsewhere is left alone); a
+  test that the header shows neither Sign in nor Account while the session
+  loads (no code change; the header keeps "Sign in" when the check fails,
+  "unknown"); comments on `PublicVotes` key and `use-session`.
+  #701 server precondition (#736, `03152e0`, no migration): DELETE
+  `/api/contributions/:id/image` takes optional `expectedImageId`; a mismatch
+  returns 409 `image_changed` ("The picture changed, so it wasn't removed.
+  Check it and try again."), with no picture or audit change; legacy requests
+  are unchanged.
+  #701 web half (#732, `23855fb`, closes #701): picture field on the
+  new-contribution form; picture on the contribution page (description as
+  alt, tile fallback); organizer replace/remove with removal bound to the
+  shown upload; after a 409, removal stays hidden and "Reload picture" shows
+  until a newer picture loads. Shared `ItemPicture` (renamed from the
+  question picture; token `--item-picture-tile-size`). Leftover #732 nits:
+  TwoPress confirm/cancel are 22 px tall, 8 px apart (make 44 px, style
+  confirm as destructive); split the seven-way it.each in
+  `Contributions.test.tsx`; the PUT/DELETE 401 fieldError hide has no test;
+  typing in Picture description clears `uploadRefused`, so "Choose your
+  picture again" can vanish while the picture is gone.
   #701 server half (#728, `e6cd870`, migration 020): `image` on every
   contribution body and row (tile fallback until #586); poster-only
   PUT/DELETE `/api/contributions/:id/image`, signalled by `canManage`; the
   picture routes have their own 400 and 401 messages. Not built (shared field
-  #700 merged in #717; poll form #580 merged in #720): #701 web half, #427,
+  #700 merged in #717; poll form #580 merged in #720): #427,
   then #586 after #427. Pictures now
   extend to every main-page item (operator 2026-11-18; ADR-0049).
 - **MCP:** public reads `get_poll`/`get_results` at `/api/mcp` (PR #323); #710 (`3e6bf64`) adds `get_public_votes`, passes `votePrivacy` through, and makes MCP work through nginx (production `publicOrigin` = `PULSE_WEB_ORIGIN`; nginx forwards `$http_host` and blanks `X-Pulse-Internal`). MCP does not work through the 5173 Vite proxy; `apps/pulse/README.md` should say so (small nit, not ticketed).
@@ -168,10 +190,8 @@ public hostname, before inviting anyone.
    only after 4a is live in production. Pulse has no production deploy yet
    (Railway setup is the operator's), so 4b's code may be built but its deploy
    waits on 4a being live.
-   **Leftover #714 nits, for a later small PR:** focus after the session-check
-   Try again falls to body; the header shows "Sign in" while the session is
-   unknown; keep `role="status"` mounted on the account-changed region;
-   `PublicVotes` `key={position}` needs a comment; a `use-session` comment.
+   **Leftover #714 nit (the other four closed in #738):** keep `role="status"`
+   mounted on the account-changed region in `screens/Conversation.tsx`.
    Watch item, no ticket: `main.test.ts`
    `unexpected_startup_database_fault_does_not_log_personal_message_or_cause_28P01`
    failed once locally in a full run and passed alone. Since #723 a failure
@@ -207,7 +227,7 @@ public hostname, before inviting anyone.
    not whether a picture existed (a 401 during upload before typing misses
    it); the question error has no warning icon while the picture errors do
    (unify the Field problem style); not checked on a device: the hidden file
-   input on iOS Safari. Leftover #727 nits (web, next Pulse web branch): the picture-to-context gap is 8 px (match the hero gap); the tile is aria-labelled and repeats the community name (consider aria-hidden); tile colours borrow `--hover`/`--chip`/`--green-wash` (add dedicated tile tokens); the stub `poll()` in `test/stub-api.tsx` omits `image` though the API always sends it; the tile hash moves to a shared module when #427 lands; the `Conversation.css` byline comment is stale. Leftover #728 nits (for the #701 web half): the 429 pending_limit message in `apps/pulse/src/http/images.ts` still says "Post a question with one" (mention contributions); a malformed `image` on `POST /api/contributions` still returns the offer-pricing catch-all (the web form validates the description client-side); `API.md` PUT/DELETE says "poster" while the code says "organizer"; the picture-message choice compares route URL strings (prefer per-route config); add a test that signed-out `POST /api/contributions` still says "Sign in to contribute."; the retry fingerprint is an unkeyed SHA-256 of [id, alt]. Leftover #717 nits still open (the size, file-name, stub and hostile-JPEG ones were fixed in #720): a Replace that finishes in the background always takes focus (the mockup asks for it); EXIF-rotated JPEGs may say "wide" for a tall photo; #499 must add a dark `--red-wash`.
+   input on iOS Safari. Leftover #727 nits (web, next Pulse web branch): the picture-to-context gap is 8 px (match the hero gap); the tile is aria-labelled and repeats the community name (consider aria-hidden); tile colours borrow `--hover`/`--chip`/`--green-wash` (add dedicated tile tokens); the stub `poll()` in `test/stub-api.tsx` omits `image` though the API always sends it; the tile hash moves to a shared module when #427 lands; the `Conversation.css` byline comment is stale. Leftover #728 nits (the pending_limit copy in `images.ts` was fixed in #732): a malformed `image` on `POST /api/contributions` still returns the offer-pricing catch-all (the web form validates the description client-side); `API.md` PUT/DELETE says "poster" while the code says "organizer"; the picture-message choice compares route URL strings (prefer per-route config); add a test that signed-out `POST /api/contributions` still says "Sign in to contribute."; the retry fingerprint is an unkeyed SHA-256 of [id, alt]. Leftover #717 nits still open (the size, file-name, stub and hostile-JPEG ones were fixed in #720): a Replace that finishes in the background always takes focus (the mockup asks for it); EXIF-rotated JPEGs may say "wide" for a tall photo; #499 must add a dark `--red-wash`.
 2. **Audits 2026-11-14 are complete; none changed product code:**
    [targeted tests](../docs/audits/pulse-tests-2026-11-14.md) → #613/#614;
    [simplicity](../docs/audits/pulse-simplicity-2026-11-14.md) → #616;
