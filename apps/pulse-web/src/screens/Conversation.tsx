@@ -8,7 +8,14 @@ import {
 import type { ReactNode } from "react";
 import { Button } from "../components/Button.js";
 import { useSuggestedVotes } from "../hooks/use-suggested-votes.js";
-import type { Ballot, MyVote, Poll, PulseApi, Results } from "../api/types.js";
+import type {
+  Ballot,
+  MyVote,
+  Poll,
+  PublicImage,
+  PulseApi,
+  Results,
+} from "../api/types.js";
 import { ApiError, UNREACHABLE } from "../api/types.js";
 import type { Route } from "../flow/route.js";
 import { cardStatus, closingNote, nextFor } from "../flow/conversation.js";
@@ -39,6 +46,12 @@ import { SuggestedVotesRail } from "../components/SuggestedVotesRail.js";
 import { AnsweredRail } from "../components/AnsweredRail.js";
 import { PostedBanner } from "../components/PostedBanner.js";
 import { CopyLink } from "../components/CopyLink.js";
+import { PictureManagement } from "../components/PictureManagement.js";
+import {
+  usePictureManagement,
+  type PictureRemovalConflict,
+} from "../hooks/use-picture-management.js";
+import { usePollPictureAccess } from "../hooks/use-poll-picture-access.js";
 import { ItemPicture } from "../components/ItemPicture.js";
 import {
   QuestionPager,
@@ -180,6 +193,11 @@ export function Conversation({
   const [heldBefore, setHeldBefore] = useState(false);
   // Bumped when the votes are forgotten, so the question starts over.
   const [round, setRound] = useState(0);
+  // A sign-out resets the question card. Keep stale picture IDs across that
+  // reset so a returning poster must still refresh before removing a picture.
+  const [refusedPictures, setRefusedPictures] = useState(
+    () => new Map<string, ReadonlySet<string>>(),
+  );
   // This browser's saved answers, read on every visit, so the Answered list
   // survives navigation and reload (#484); this page's answers join it below.
   const mine = useMyVotes(api);
@@ -427,6 +445,16 @@ export function Conversation({
             onAccountChanged: setAccountChangedAt,
             onPollLoaded: pollLoaded,
           }}
+          removalConflict={{
+            matches: (imageId) =>
+              refusedPictures.get(at)?.has(imageId) ?? false,
+            remember: (imageId) =>
+              setRefusedPictures((current) => {
+                const refused = new Set(current.get(at));
+                refused.add(imageId);
+                return new Map(current).set(at, refused);
+              }),
+          }}
           onRemembered={remembered}
           onReadBack={readBack}
           onHeldBallot={foundHeldBallot}
@@ -452,6 +480,7 @@ function Question({
   saved,
   waiting,
   identity,
+  removalConflict,
   onRemembered,
   onReadBack,
   onHeldBallot,
@@ -465,6 +494,7 @@ function Question({
   saved?: Answer;
   waiting: boolean;
   identity: QuestionIdentity;
+  removalConflict: PictureRemovalConflict;
   onRemembered: (answer: Answer) => void;
   /**
    * Asks the server which answer it holds for a poll, and lists it, unless
@@ -487,6 +517,7 @@ function Question({
       {...(saved ? { saved } : {})}
       waiting={waiting}
       identity={identity}
+      removalConflict={removalConflict}
       onRemembered={onRemembered}
       onReadBack={onReadBack}
       onHeldBallot={onHeldBallot}
@@ -505,6 +536,7 @@ function LoadedQuestion({
   saved,
   waiting,
   identity,
+  removalConflict,
   onRemembered,
   onReadBack,
   onHeldBallot,
@@ -520,6 +552,7 @@ function LoadedQuestion({
   /** A send left behind for this question has not settled yet. */
   waiting: boolean;
   identity: QuestionIdentity;
+  removalConflict: PictureRemovalConflict;
   onRemembered: (answer: Answer) => void;
   /**
    * Asks the server which answer it holds for a poll, and lists it, unless
@@ -537,6 +570,14 @@ function LoadedQuestion({
   const fetched = usePoll(api, pollId);
   const poll = fetched.status === "ready" ? fetched.value : null;
   const { session, onPollLoaded } = identity;
+  const accountId = session.status === "signedIn" ? session.me.id : null;
+  const {
+    ownerId: pictureOwnerId,
+    checkingAccount: checkingPictureAccount,
+    revoke: revokePictureAccess,
+  } = usePollPictureAccess(api, poll?.id, accountId);
+  const [updatedImage, setUpdatedImage] = useState<PublicImage>();
+
   useLayoutEffect(() => {
     onPollLoaded(poll);
     return () => onPollLoaded(null);
@@ -595,6 +636,7 @@ function LoadedQuestion({
                   poll.votePrivacy !== "public" ||
                     session.status === "signedIn",
                 );
+                const image = updatedImage ?? poll.image;
                 return (
                   // One heading node while the card opens and closes, so focus
                   // on it survives; it is drawn afresh once the poll loads.
@@ -604,7 +646,7 @@ function LoadedQuestion({
                       {poll.question}
                     </h1>
                     <ItemPicture
-                      image={poll.image}
+                      image={image?.kind === "tile" ? undefined : image}
                       community={poll.community}
                     />
                     {poll.context ? (
@@ -624,6 +666,19 @@ function LoadedQuestion({
                           ).href
                         }
                         question={poll.question}
+                      />
+                    ) : null}
+                    {pictureOwnerId !== null ? (
+                      <PollPictureForm
+                        key={pictureOwnerId}
+                        api={api}
+                        id={poll.id}
+                        accountId={pictureOwnerId}
+                        image={image}
+                        checkingAccount={checkingPictureAccount}
+                        removalConflict={removalConflict}
+                        onPictureChanged={setUpdatedImage}
+                        revokeAccess={revokePictureAccess}
                       />
                     ) : null}
                   </section>
@@ -694,6 +749,92 @@ function LoadedQuestion({
     />
   ) : (
     renderPage(null, null)
+  );
+}
+
+function PollPictureForm({
+  api,
+  id,
+  accountId,
+  image,
+  checkingAccount,
+  removalConflict,
+  onPictureChanged,
+  revokeAccess,
+}: {
+  api: PulseApi;
+  id: string;
+  accountId: string;
+  image: PublicImage | undefined;
+  checkingAccount: boolean;
+  removalConflict: PictureRemovalConflict;
+  onPictureChanged: (image: PublicImage) => void;
+  revokeAccess: () => void;
+}) {
+  const recheckPictureAccess = useCallback(async () => {
+    // Check the editor's account and permission without updating voting state.
+    const me = await api.me().catch(() => null);
+    if (!me) return false;
+    if (me.id === accountId) {
+      const canManage = await api.pollPictureAccess(id).catch(() => undefined);
+      if (canManage !== false) return canManage === true;
+    }
+    revokeAccess();
+    return false;
+  }, [api, id, accountId, revokeAccess]);
+  const pictureRequests = useRef(0);
+  const live = useRef(false);
+  useLayoutEffect(() => {
+    live.current = true;
+    return () => {
+      live.current = false;
+    };
+  }, []);
+  const management = usePictureManagement({
+    api,
+    image,
+    access: "signedIn",
+    canManage: !checkingAccount,
+    removalConflict,
+    readPicture: async () => {
+      const request = ++pictureRequests.current;
+      const current = await api.poll(id, AbortSignal.timeout(15_000));
+      if (request !== pictureRequests.current) return undefined;
+      return current.image ?? { kind: "tile" };
+    },
+    changePicture: async (change) => {
+      pictureRequests.current += 1;
+      try {
+        return await api.changePollPicture(id, change);
+      } catch (error) {
+        if (
+          live.current &&
+          error instanceof ApiError &&
+          error.status === 403 &&
+          error.code === "poster_required"
+        ) {
+          revokeAccess();
+        }
+        throw error;
+      }
+    },
+    onPictureChanged: (updated) => {
+      if (live.current) onPictureChanged(updated);
+    },
+    onSignedOut: recheckPictureAccess,
+    retrySignInOnReturn: true,
+    reloadOnConflict: false,
+  });
+  return (
+    <PictureManagement
+      management={management}
+      hidden={checkingAccount}
+      signInHref={pathOf({
+        kind: "signIn",
+        returnTo: { kind: "conversation", pollId: id },
+      })}
+      removalQuestion="Remove this picture from the question?"
+    />
   );
 }
 

@@ -15,6 +15,7 @@ export type PollMethod = "single" | "approval";
 export type VotePrivacy = "anonymous" | "public";
 
 export type PictureInput = { id: string; alt: string };
+export type PictureChange = PictureInput | { expectedImageId: string };
 
 export type PublicImage =
   | {
@@ -281,7 +282,12 @@ export interface PulseApi {
    * now stops working. Resolves once the server has done it.
    */
   signOut(): Promise<void>;
-  poll(pollId: string): Promise<Poll>;
+  poll(pollId: string, signal?: AbortSignal): Promise<Poll>;
+  pollPictureAccess(pollId: string): Promise<boolean>;
+  changePollPicture(
+    pollId: string,
+    change: PictureChange,
+  ): Promise<PublicImage>;
   suggestions(pollId: string): Promise<Suggestion[]>;
   suggest(pollId: string, text: string): Promise<SuggestResult>;
   myBallot(pollId: string): Promise<Ballot | null>;

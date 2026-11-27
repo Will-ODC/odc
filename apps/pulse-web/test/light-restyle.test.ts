@@ -77,7 +77,10 @@ describe("the light look's invariants (#482)", () => {
       ["components/DecisionDialog.css", ".decision__close"],
       ["components/CopyLink.css", ".copy-link button"],
       ["components/TopBanner.css", ".banner__actions > .banner__sign-in"],
-      ["screens/Conversation.css", ".conversation button"],
+      [
+        "screens/Conversation.css",
+        ".conversation button:not(:where(.picture-management *))",
+      ],
       ["components/Button.css", ".btn--secondary"],
     ];
     for (const [file, selector] of buttons) {

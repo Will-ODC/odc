@@ -1,3 +1,4 @@
+import { pictureChangedMessage, publicImage } from "./pictures.js";
 import { ApiError, UNREACHABLE } from "./types.js";
 import type {
   Ballot,
@@ -7,9 +8,11 @@ import type {
   MyVotesPage,
   MemberProfile,
   NewPollRequest,
+  PictureChange,
   Poll,
   PollPage,
   ProfileRequest,
+  PublicImage,
   PublicMemberProfile,
   PublicVotesPage,
   RemoveVoteOutcome,
@@ -161,8 +164,68 @@ export class HttpPulseApi implements PulseApi {
     return body;
   }
 
-  async poll(pollId: string): Promise<Poll> {
-    return this.#send("GET", `/polls/${encodeURIComponent(pollId)}`);
+  async poll(pollId: string, signal?: AbortSignal): Promise<Poll> {
+    return this.#send(
+      "GET",
+      `/polls/${encodeURIComponent(pollId)}`,
+      undefined,
+      undefined,
+      {},
+      signal,
+    );
+  }
+
+  async pollPictureAccess(pollId: string): Promise<boolean> {
+    const body = await this.#send<{ canManage?: unknown } | null>(
+      "GET",
+      `/polls/${encodeURIComponent(pollId)}/image`,
+      undefined,
+      undefined,
+      {},
+      AbortSignal.timeout(15_000),
+    );
+    if (typeof body?.canManage !== "boolean")
+      throw new ApiError(200, "pulse sent a response the app couldn't read.");
+    return body.canManage;
+  }
+
+  async changePollPicture(
+    pollId: string,
+    change: PictureChange,
+  ): Promise<PublicImage> {
+    const path = `/polls/${encodeURIComponent(pollId)}/image`;
+    const remove = "expectedImageId" in change;
+    const body = await this.#send<{ image?: unknown } | null>(
+      remove ? "DELETE" : "PUT",
+      remove
+        ? `${path}?${new URLSearchParams({ expectedImageId: change.expectedImageId })}`
+        : path,
+      remove ? undefined : change,
+      undefined,
+      {},
+      AbortSignal.timeout(15_000),
+    ).catch((error: unknown) => {
+      if (error instanceof ApiError) {
+        if (error.status === 200) throw unconfirmedPictureChange();
+        if (error.code === "image_changed")
+          throw new ApiError(
+            error.status,
+            pictureChangedMessage,
+            error.code,
+            error.retryAfter,
+          );
+        if (error.code === "image_unavailable")
+          throw new ApiError(
+            error.status,
+            "This picture is no longer available. Choose it again.",
+            error.code,
+            error.retryAfter,
+          );
+      }
+      throw error;
+    });
+    if (!publicImage(body?.image)) throw unconfirmedPictureChange();
+    return body.image;
   }
 
   async myBallot(pollId: string): Promise<Ballot | null> {
@@ -436,6 +499,13 @@ function chooseCommunity(
 /** Server errors carry a plain sentence in `message`; show that, never the status. */
 function messageFrom(parsed: unknown): string | undefined {
   return stringField(parsed, "message");
+}
+
+function unconfirmedPictureChange(): ApiError {
+  return new ApiError(
+    0,
+    "Could not confirm the picture change. Reload and try again.",
+  );
 }
 
 /**

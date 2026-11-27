@@ -20,12 +20,25 @@ function rule(file: string, selector: string): string {
 describe("fitting a phone", () => {
   it("pads the conversation by the open Voting drawer's measured height, never less than before (#528)", () => {
     const padding =
-      /padding-bottom:([^;]*);/.exec(
+      /--conversation-dock-clearance:([^;]*);/.exec(
         rule("screens/Conversation.css", ".conversation__scroll"),
       )?.[1] ?? "";
     expect(padding).toMatch(/^\s*max\(/);
     expect(padding).toContain("env(safe-area-inset-bottom)");
     expect(padding).toContain("var(--dock-space");
+    expect(rule("screens/Conversation.css", ".conversation__scroll")).toContain(
+      "padding-bottom: var(--conversation-dock-clearance);",
+    );
+  });
+
+  it("scrolls focused picture controls above the open phone voting sheet", () => {
+    const css = readFileSync(
+      new URL("../src/screens/Conversation.css", import.meta.url),
+      "utf8",
+    );
+    expect(css.slice(css.indexOf("@media (max-width: 699px)"))).toMatch(
+      /\.conversation__question:has\(\.conversation__dock \.vote-card\)\s+\.conversation__scroll \{\s*scroll-padding-bottom: var\(--conversation-dock-clearance\);/,
+    );
   });
 
   it("gives the phone version thumb-sized targets and a full-width sheet (#482)", () => {
@@ -38,7 +51,7 @@ describe("fitting a phone", () => {
       /\.conversation__dock \{[^}]*right: 0;[^}]*left: 0;[^}]*width: auto;/,
     );
     expect(phone).toMatch(
-      /\.conversation button \{\s*min-height: var\(--touch\);/,
+      /\.conversation button:not\(:where\(\.picture-management \*\)\) \{\s*min-height: var\(--touch\);/,
     );
     expect(phone).toMatch(
       /\.conversation__dock \.vote-card \{[\s\S]*padding-inline-start: max\([\s\S]*safe-area-inset-left/,
