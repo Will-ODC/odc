@@ -154,6 +154,7 @@ it.each([
 
   const choose = await screen.findByRole("button", { name: "Replace" });
   await screen.findByRole("link", { name: "Sign in again in a new tab" });
+  expect(screen.queryByText("Sign in to change this picture.")).toBeNull();
   expect(choose.matches(":disabled")).toBe(true);
   if (sameAccount) window.dispatchEvent(new Event("focus"));
   await act(async () => finishRecheck());
@@ -220,6 +221,7 @@ it.each([
     late ||
     order === "picture already removed" ||
     order === "conflict refresh fails";
+  const session = switchableMe("ada");
   let held: Promise<void> | undefined;
   let release!: () => void;
   let failReads = false;
@@ -254,7 +256,7 @@ it.each([
   });
   render(
     <ContributionDetail
-      api={stubApi({ me: switchableMe("ada").me })}
+      api={stubApi({ me: session.me })}
       id="park"
       client={client({
         detail: async () => {
@@ -338,16 +340,38 @@ it.each([
       expect(
         screen.queryByRole("button", { name: "Remove posted picture" }),
       ).toBeNull();
+      const reload = () =>
+        screen.getByRole("button", { name: "Reload picture" });
+      await user.click(reload());
+      expect(
+        await screen.findByText("Could not load the picture. Try again."),
+      ).toBeTruthy();
+      // Signed out, there is nothing to reload the picture for.
+      session.state.who = null;
+      window.dispatchEvent(new Event("focus"));
+      await screen.findByText(/to read your private messages/);
+      expect(
+        screen.queryByRole("button", { name: "Reload picture" }),
+      ).toBeNull();
+      session.state.who = "ada";
+      window.dispatchEvent(new Event("focus"));
+      await screen.findByText("Private messages", { selector: "summary" });
       failReads = false;
-      await user.click(screen.getByRole("button", { name: "Reload picture" }));
+      await user.click(reload());
       await screen.findByRole("img", { name: newer.alt });
-      expect(remove()).toBeTruthy();
+      expect(document.activeElement).toBe(remove());
     }
     return;
   }
   if (order === "lost removal reply") {
     await screen.findByRole("img", { name: newer.alt });
     expect(remove()).toBeTruthy();
+    expect(
+      screen.getByText(
+        "The posted picture changed. Review it before removing.",
+      ),
+    ).toBeTruthy();
+    expect(screen.queryByText("Connection lost.")).toBeNull();
     expect(screen.queryByRole("button", { name: "Remove picture" })).toBeNull();
     return;
   }

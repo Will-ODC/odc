@@ -329,6 +329,36 @@ it("focuses the first missing field before an invalid related question", async (
   expect(create).not.toHaveBeenCalled();
 });
 
+it("focuses an undescribed picture before a later missing field", async () => {
+  vi.stubGlobal(
+    "URL",
+    class extends URL {
+      static override createObjectURL = () => "blob:park";
+      static override revokeObjectURL = () => {};
+    },
+  );
+  const { user, create } = setup({ uploadPicture: async () => "park-picture" });
+  await user.type(await screen.findByLabelText("Title"), "Garden");
+  await user.type(screen.getByLabelText("Description"), "Grow food.");
+  await user.upload(
+    screen
+      .getByRole("group", { name: /^Picture/ })
+      .querySelector<HTMLInputElement>('input[type="file"]')!,
+    new File(["park"], "park.jpg", { type: "image/jpeg" }),
+  );
+  const description = await screen.findByLabelText("Picture description");
+  await user.click(
+    screen.getByRole("button", { name: "Publish contribution" }),
+  );
+  expect(document.activeElement).toBe(description);
+  expect(
+    screen
+      .getByLabelText("Organizer’s public name")
+      .getAttribute("aria-invalid"),
+  ).toBe("true");
+  expect(create).not.toHaveBeenCalled();
+});
+
 it.each([503, 422, 401, undefined])(
   "focuses the outcome after a deferred keyboard submission fails (%s)",
   async (status) => {
