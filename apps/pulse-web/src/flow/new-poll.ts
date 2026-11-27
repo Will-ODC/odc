@@ -1,4 +1,9 @@
-import type { Attribution, NewPollRequest, PollMethod } from "../api/types.js";
+import type {
+  Attribution,
+  NewPollRequest,
+  PollMethod,
+  VotePrivacy,
+} from "../api/types.js";
 
 /**
  * The posting form's decisions, kept out of React (ADR-0037).
@@ -32,6 +37,8 @@ export interface Draft {
   closing: { kind: "default" } | { kind: "chosen"; local: string };
   /** `name` is kept while anonymous, so switching back does not lose it. */
   attribution: { kind: "anonymous" | "named"; name: string };
+  /** Whether votes are shown with voters' names, fixed once posted (ADR-0048). */
+  votePrivacy: VotePrivacy;
   /** The first-post promise, ticked. Ignored once the account has made it. */
   promised: boolean;
 }
@@ -43,6 +50,7 @@ export function emptyDraft(): Draft {
     method: "single",
     closing: { kind: "default" },
     attribution: { kind: "anonymous", name: "" },
+    votePrivacy: "anonymous",
     promised: false,
   };
 }
@@ -169,6 +177,7 @@ export function requestOf(
     attribution: attributionOf(draft),
     ...(needsPromise ? { purposeAcknowledgement: PURPOSE_VERSION } : {}),
     ...(image ? { image } : {}),
+    ...(draft.votePrivacy === "public" ? { votePrivacy: "public" } : {}),
   };
 }
 
@@ -230,4 +239,11 @@ export function postedAsSummary(draft: Draft): string {
   if (draft.attribution.kind === "anonymous") return "Posted anonymously";
   const name = draft.attribution.name.trim();
   return name === "" ? "Posted under a name you choose" : `Posted by ${name}`;
+}
+
+/** The vote card's own words (ADR-0048 decision 13), never "posted anonymously". */
+export function votePrivacySummary(draft: Draft): string {
+  return draft.votePrivacy === "public"
+    ? "Votes are public"
+    : "Votes are anonymous";
 }

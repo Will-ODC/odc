@@ -72,6 +72,8 @@ export function readDraft(
       method: draft.method,
       closing: draft.closing,
       attribution: draft.attribution,
+      // A draft kept before the setting existed reads as the default.
+      votePrivacy: draft.votePrivacy ?? "anonymous",
       promised: false,
       ...(typeof pictureDescription === "string" && pictureDescription !== ""
         ? { pictureDescription }
@@ -90,7 +92,9 @@ export function forgetDraft(store: ReturnStore | null): void {
   }
 }
 
-function isDraft(value: unknown): value is Draft {
+function isDraft(
+  value: unknown,
+): value is Omit<Draft, "votePrivacy"> & Partial<Pick<Draft, "votePrivacy">> {
   if (typeof value !== "object" || value === null) return false;
   const d = value as Record<string, unknown>;
   const closing = d.closing as Record<string, unknown> | null | undefined;
@@ -111,6 +115,9 @@ function isDraft(value: unknown): value is Draft {
     attribution !== null &&
     (attribution.kind === "anonymous" || attribution.kind === "named") &&
     typeof attribution.name === "string" &&
+    (d.votePrivacy === undefined ||
+      d.votePrivacy === "anonymous" ||
+      d.votePrivacy === "public") &&
     typeof d.promised === "boolean"
   );
 }

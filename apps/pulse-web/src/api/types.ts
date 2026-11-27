@@ -90,6 +90,8 @@ export interface NewPollRequest {
   purposeAcknowledgement?: string;
   /** A pending upload and its required description. */
   image?: { id: string; alt: string };
+  /** ADR-0048: sent only as `"public"`; left out, the votes are anonymous. */
+  votePrivacy?: VotePrivacy;
 }
 
 /**

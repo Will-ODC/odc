@@ -22,9 +22,10 @@ export function Trust({ banner }: { banner?: ReactNode }) {
 
         <Part id={`${id}-today`} title="Today">
           <p className="trust__text">
-            A poll can show votes publicly. Each poll says which before you
-            vote. That setting is fixed for the life of the poll. The vote card
-            and results say “Votes are anonymous.” or “Votes are public.”
+            The person who posts a poll chooses once whether its votes are
+            anonymous or public, and that choice can&rsquo;t be changed. Each
+            poll says which before you vote. The vote card and results say
+            “Votes are anonymous.” or “Votes are public.”
           </p>
           <h3 className="trust__term">Anonymous votes</h3>
           <ul className="trust__list">

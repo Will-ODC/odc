@@ -25,6 +25,7 @@ import {
   problemsOf,
   questionProblem,
   requestOf,
+  votePrivacySummary,
 } from "../flow/new-poll.js";
 import type { Draft, Problems } from "../flow/new-poll.js";
 import { useCreationContext } from "../hooks/use-creation-context.js";
@@ -39,6 +40,14 @@ import "./NewPoll.css";
 /** ADR-0037's interim wording, until authorised moderator access exists. */
 export const ANONYMITY_NOTE =
   "Your name is hidden from other readers. Pulse keeps your account linked to this post to address abuse.";
+
+/** Beside the vote setting, open or not: it is picked once (ADR-0048). */
+export const VOTE_PRIVACY_NOTE =
+  "You choose this once. It can't be changed after you post.";
+
+/** What a public-vote question means for its voters (ADR-0048 decision 13). */
+export const PUBLIC_VOTES_NOTE =
+  "People sign in with their email to vote. Anyone who can see the question, including AI apps, sees each answer next to the voter's profile name, or “Verified voter” if they have none. Email addresses are never shown.";
 
 type KeptDraftNotice = { hasPictureDescription: boolean } | null;
 
@@ -221,6 +230,7 @@ function PostForm({
     method: false,
     closing: false,
     attribution: false,
+    votePrivacy: false,
   });
   /**
    * The press's own guard, not only the button's: two presses inside one
@@ -697,6 +707,59 @@ function PostForm({
           <p className="post__hint" id={`${id}-anonymity`}>
             {ANONYMITY_NOTE}
           </p>
+
+          <Setting
+            summary={votePrivacySummary(draft)}
+            label="whether votes are anonymous or public"
+            open={open.votePrivacy}
+            onOpen={() => setOpen((old) => ({ ...old, votePrivacy: true }))}
+            describedBy={`${id}-vote-privacy`}
+          >
+            <fieldset
+              className="post__group"
+              aria-describedby={
+                draft.votePrivacy === "public"
+                  ? `${id}-vote-privacy ${id}-public-votes`
+                  : `${id}-vote-privacy`
+              }
+            >
+              <legend className="field__label">
+                Whether votes are anonymous or public
+              </legend>
+              <div className="choice-list">
+                <Choice
+                  name={`${id}-vote-privacy`}
+                  checked={draft.votePrivacy === "anonymous"}
+                  onPick={() =>
+                    edit((old) => ({ ...old, votePrivacy: "anonymous" }))
+                  }
+                >
+                  Votes are anonymous
+                </Choice>
+                <Choice
+                  name={`${id}-vote-privacy`}
+                  checked={draft.votePrivacy === "public"}
+                  {...(draft.votePrivacy === "public"
+                    ? { describedBy: `${id}-public-votes` }
+                    : {})}
+                  onPick={() =>
+                    edit((old) => ({ ...old, votePrivacy: "public" }))
+                  }
+                >
+                  Votes are public
+                </Choice>
+              </div>
+              {draft.votePrivacy === "public" ? (
+                <p className="post__hint" id={`${id}-public-votes`}>
+                  {PUBLIC_VOTES_NOTE}
+                </p>
+              ) : null}
+            </fieldset>
+          </Setting>
+          {/* Beside the vote setting, open or not (ADR-0048). */}
+          <p className="post__hint" id={`${id}-vote-privacy`}>
+            {VOTE_PRIVACY_NOTE}
+          </p>
         </div>
 
         {needsPromise ? (
@@ -741,7 +804,11 @@ function PostForm({
         key={asked}
         variant="primary"
         label="Post question"
-        question="Post it? It can't be changed."
+        question={
+          draft.votePrivacy === "public"
+            ? "Post it with public votes? It can't be changed."
+            : "Post it? It can't be changed."
+        }
         confirmLabel="Post it"
         pendingLabel="Posting…"
         progress={sending}

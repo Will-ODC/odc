@@ -7,12 +7,15 @@ export function Choice({
   value,
   checked,
   onPick,
+  describedBy,
   children,
 }: {
   name: string;
   value?: string;
   checked: boolean;
   onPick: () => void;
+  /** Id of a hint read when focus lands on this option. */
+  describedBy?: string;
   children: ReactNode;
 }) {
   return (
@@ -23,6 +26,7 @@ export function Choice({
         value={value}
         checked={checked}
         onChange={onPick}
+        {...(describedBy ? { "aria-describedby": describedBy } : {})}
       />
       <span>{children}</span>
     </label>

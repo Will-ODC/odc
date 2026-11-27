@@ -12,7 +12,8 @@ Postgres, mail service or running application is required.
   participation and progress through the browser HTTP adapter, including owner
   permissions, retries, public identity projection and commercial savings rules.
 - `test/public-votes-http.test.ts` checks public-vote polls (ADR-0048) over a
-  real socket: today's client is refused a named vote, an acknowledged vote is
+  real socket: a question posted with public votes takes a named vote and
+  lists it, a client that showed no notice is refused a named vote, an acknowledged vote is
   the account's from any browser, the per-cookie reads tell caches so, the
   public list pages through opaque cursors and is never cached, and removing
   one's own vote works only from the web origin.
