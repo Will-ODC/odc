@@ -1,6 +1,6 @@
 import { useState } from "react";
-import type { PollImage, PostingCommunity } from "../api/types.js";
-import "./QuestionPicture.css";
+import type { PublicImage, PostingCommunity } from "../api/types.js";
+import "./ItemPicture.css";
 
 const tileColors = [
   "var(--green-wash)",
@@ -29,7 +29,7 @@ function CommunityTile({ id, label }: PostingCommunity) {
 function DisplayImage({
   image,
 }: {
-  image: Exclude<PollImage, { kind: "tile" }>;
+  image: Exclude<PublicImage, { kind: "tile" }>;
 }) {
   const [failed, setFailed] = useState(false);
   if (failed) return null;
@@ -46,11 +46,11 @@ function DisplayImage({
   );
 }
 
-export function QuestionPicture({
+export function ItemPicture({
   image,
   community,
 }: {
-  image: PollImage | undefined;
+  image: PublicImage | undefined;
   community: PostingCommunity | undefined;
 }) {
   if (!image) return null;

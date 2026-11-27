@@ -2,6 +2,7 @@
 import {
   act,
   cleanup,
+  fireEvent,
   render,
   screen,
   waitFor,
@@ -38,6 +39,7 @@ const fixture = (over: Partial<Contribution> = {}): Contribution => ({
   kind: "project",
   organizerName: "Test organizer",
   community: { id: "pulse-general", label: "General" },
+  image: { kind: "tile" },
   pollId: null,
   commercial: null,
   fund: null,
@@ -51,6 +53,7 @@ const client = (over: Partial<ContributionsApi> = {}): ContributionsApi => ({
   list: async () => ({ contributions: [fixture()], nextCursor: null }),
   forProfile: async () => ({ contributions: [fixture()], nextCursor: null }),
   mine: async () => ({ contributions: [fixture()], nextCursor: null }),
+  changePicture: async () => ({ kind: "tile" }),
   sendMessage: async () => {},
   messages: async () => [],
   detail: async () => ({ contribution: fixture(), canManage: false }),
@@ -59,6 +62,70 @@ const client = (over: Partial<ContributionsApi> = {}): ContributionsApi => ({
   update: async () => fixture(),
   ...over,
 });
+
+const parkPicture = {
+  kind: "upload",
+  displayUrl: "/api/poll-images/park/display.webp",
+  thumbUrl: "/api/poll-images/park/thumb.webp",
+  width: 800,
+  height: 600,
+  alt: "A ramp leading into the park",
+} as const;
+
+it("shows the default contribution tile without an image element", async () => {
+  render(<ContributionDetail api={stubApi()} id="park" client={client()} />);
+  const tile = await screen.findByRole("img", { name: "General" });
+  expect(tile.tagName).toBe("SPAN");
+  expect(tile.closest("header")?.querySelector("img")).toBeNull();
+});
+
+it.each([false, true])(
+  "shows the picture with alt and gates management (canManage: %s)",
+  async (canManage) => {
+    const user = userEvent.setup();
+    let item = fixture({ image: parkPicture });
+    const changePicture = vi.fn<ContributionsApi["changePicture"]>(async () => {
+      item = fixture();
+      return item.image;
+    });
+    render(
+      <ContributionDetail
+        api={stubApi({ me: switchableMe("ada").me })}
+        id="park"
+        client={client({
+          detail: async () => ({ contribution: item, canManage }),
+          changePicture,
+        })}
+      />,
+    );
+    const image = await screen.findByRole("img", { name: parkPicture.alt });
+    expect(image.getAttribute("src")).toBe(parkPicture.displayUrl);
+    if (!canManage) {
+      expect(screen.queryByText("Manage picture")).toBeNull();
+      fireEvent.error(image);
+      expect(screen.queryByRole("img", { name: parkPicture.alt })).toBeNull();
+      return;
+    }
+    await user.click(await screen.findByText("Manage picture"));
+    expect(
+      screen.getByRole("button", { name: "Choose a picture" }),
+    ).toBeTruthy();
+    const confirm = vi
+      .spyOn(window, "confirm")
+      .mockReturnValueOnce(false)
+      .mockReturnValueOnce(true);
+    const remove = screen.getByRole("button", {
+      name: "Remove posted picture",
+    });
+    await user.click(remove);
+    expect(changePicture).not.toHaveBeenCalled();
+    await user.click(remove);
+    expect(confirm).toHaveBeenCalledTimes(2);
+    expect(changePicture).toHaveBeenCalledExactlyOnceWith("park", null);
+    expect(await screen.findByText("Picture removed.")).toBeTruthy();
+    expect(await screen.findByRole("img", { name: "General" })).toBeTruthy();
+  },
+);
 
 it("links the organizer by profile id while keeping the contribution byline", async () => {
   render(

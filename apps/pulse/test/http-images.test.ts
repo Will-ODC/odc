@@ -1098,6 +1098,7 @@ for (const kind of ["memory", "postgres"] as const) {
       await h.upload("member", await picture("jpeg")),
       429,
       "pending_limit",
+      "You have five pictures not yet posted. Post one with a question or contribution, or try again later.",
     );
     assert.equal(decoded, 5);
   });

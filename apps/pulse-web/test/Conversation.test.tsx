@@ -82,12 +82,13 @@ it("opens the first question expanded without selecting or sending an answer", a
     name: poll().question,
     level: 1,
   });
+  const tile = main().getByRole("img", { name: "General" });
+  expect(heading.nextElementSibling).toBe(tile);
   expect(
-    heading.nextElementSibling?.contains(
+    tile.nextElementSibling?.contains(
       main().getByRole("button", { name: /Copy link to/ }),
     ),
   ).toBe(true);
-  expect(main().queryByRole("img")).toBeNull();
   // No "Message" box until an assistant exists (walkthrough, 2026-10-21).
   expect(screen.queryByRole("textbox", { name: "Message" })).toBeNull();
   expect(screen.queryByText(/assistant is not available/)).toBeNull();
@@ -186,6 +187,7 @@ describe("question pictures and context (#296)", () => {
 
   it("puts context directly after the question when the picture field is absent", async () => {
     const p = poll({ context });
+    delete p.image;
     render(
       <Conversation api={stubApi({ poll: async () => p })} pollId={p.id} />,
     );

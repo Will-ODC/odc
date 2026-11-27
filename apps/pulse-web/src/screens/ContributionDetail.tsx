@@ -7,7 +7,7 @@ import {
 } from "react";
 import type { FormEvent } from "react";
 import { useSuggestedVotes } from "../hooks/use-suggested-votes.js";
-import type { PulseApi } from "../api/types.js";
+import type { PictureInput, PulseApi } from "../api/types.js";
 import {
   accountChangedMessage,
   contributionsApi,
@@ -32,6 +32,9 @@ import { ViewState } from "../components/ViewState.js";
 import { Field } from "../components/Field.js";
 import { Button } from "../components/Button.js";
 import { Choice } from "../components/Choice.js";
+import { ItemPicture } from "../components/ItemPicture.js";
+import { PictureField } from "../components/PictureField.js";
+import { usePictureField } from "../hooks/use-picture-field.js";
 import {
   useContributionRead,
   useContributionSave,
@@ -372,6 +375,7 @@ export function ContributionDetail({
                 <h1 ref={heading} tabIndex={-1}>
                   {item.title}
                 </h1>
+                <ItemPicture image={item.image} community={item.community} />
                 <p>
                   Organized by{" "}
                   {item.organizerProfile ? (
@@ -385,6 +389,15 @@ export function ContributionDetail({
                   )}{" "}
                   · {item.community.label}
                 </p>
+                {canManage ? (
+                  <ContributionPictureForm
+                    key={`${item.id}:${drafts.generation}`}
+                    api={api}
+                    item={item}
+                    client={client}
+                    reload={reload}
+                  />
+                ) : null}
               </header>
               <section className="contribution-section">
                 <h2>Description</h2>
@@ -588,6 +601,108 @@ export function ContributionDetail({
     </AppShell>
   );
 }
+function ContributionPictureForm({
+  api,
+  item,
+  client,
+  reload,
+}: {
+  api: PulseApi;
+  item: Contribution;
+  client: ContributionsApi;
+  reload: () => void;
+}) {
+  const [uploadSignedOut, setUploadSignedOut] = useState(false);
+  const picture = usePictureField(() => setUploadSignedOut(true), api);
+  const [notice, setNotice] = useState("");
+  const save = useContributionSave<PictureInput | null>(
+    async (image) => {
+      try {
+        await client.changePicture(item.id, image);
+      } catch (error) {
+        if (
+          error instanceof ContributionsError &&
+          error.code === "image_unavailable"
+        )
+          picture.reportPostError("image_unavailable");
+        throw error;
+      }
+      setNotice(image ? "Picture saved." : "Picture removed.");
+    },
+    () => {
+      picture.reset();
+      reload();
+    },
+  );
+  const outcome = useSendOutcome(save, "signedIn");
+  function submit(event: FormEvent<HTMLFormElement>) {
+    event.preventDefault();
+    if (picture.checkPost() && picture.image) void save.submit(picture.image);
+  }
+  const error = uploadSignedOut
+    ? "Sign in to change this picture."
+    : save.errorStatus === 422
+      ? undefined
+      : save.error;
+  function removePostedPicture() {
+    if (window.confirm("Remove this picture from the contribution?"))
+      void save.submit(null);
+  }
+
+  return (
+    <details className="contribution-disclosure">
+      <summary className="contribution-button contribution-button--secondary">
+        Manage picture
+      </summary>
+      <form
+        className="contribution-form"
+        onSubmit={submit}
+        onChange={() => {
+          setUploadSignedOut(false);
+          save.clearFailure();
+          save.clearSaved();
+        }}
+      >
+        <fieldset disabled={save.pending}>
+          <PictureField field={picture} />
+          {picture.image ? (
+            <Button variant="primary">Save picture</Button>
+          ) : null}
+          {item.image.kind === "upload" ? (
+            <Button
+              type="button"
+              variant="secondary"
+              onClick={removePostedPicture}
+            >
+              Remove posted picture
+            </Button>
+          ) : null}
+        </fieldset>
+        {save.pending || save.saved ? (
+          <p ref={outcome.status} tabIndex={-1} role="status">
+            {save.pending ? "Saving picture change…" : notice}
+          </p>
+        ) : null}
+        {error ? (
+          <p
+            className="contribution-error"
+            ref={outcome.alert}
+            tabIndex={-1}
+            role="alert"
+          >
+            {error}{" "}
+            {uploadSignedOut || save.errorStatus === 401 ? (
+              <a href={`/sign-in?contribution=${encodeURIComponent(item.id)}`}>
+                Sign in again
+              </a>
+            ) : null}
+          </p>
+        ) : null}
+      </form>
+    </details>
+  );
+}
+
 const noRefusals = { participation: false, message: false, update: false };
 
 /**

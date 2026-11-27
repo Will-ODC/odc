@@ -195,24 +195,35 @@ export function usePictureField(onSignedOut: () => void, client: PulseApi) {
     setFocus({ target: "action" });
   }
 
-  function remove() {
+  function reset() {
     clearSelection();
     setDescription("");
+  }
+
+  function remove() {
+    reset();
     setStatus("Picture removed.");
     setFocus({ target: "action" });
   }
 
   const alt = description.trim();
   const count = [...alt].length;
+  const invalidCharacters = alt.includes("\0") || /[\uD800-\uDFFF]/u.test(alt);
   const orphan = selection.status === "empty" && description !== "";
   const canPost =
     (selection.status === "empty" && !orphan) ||
-    (selection.status === "ready" && count > 0 && count <= 300);
+    (selection.status === "ready" &&
+      count > 0 &&
+      count <= 300 &&
+      !invalidCharacters);
 
   let descriptionProblem: string | undefined;
   if (orphan && postAttempted) {
     descriptionProblem =
       "Choose the picture again, or clear its description to post without a picture.";
+  } else if (invalidCharacters) {
+    descriptionProblem =
+      "Remove any invalid characters from the picture description.";
   } else if (count > 300) {
     descriptionProblem = `Keep the description to 300 characters. It is ${count} now.`;
   } else if (selection.status === "ready" && count === 0 && postAttempted) {
@@ -252,6 +263,7 @@ export function usePictureField(onSignedOut: () => void, client: PulseApi) {
     retry,
     cancel,
     remove,
+    reset,
     changeDescription,
     canPost,
     image: selection.status === "ready" ? { id: selection.id, alt } : undefined,

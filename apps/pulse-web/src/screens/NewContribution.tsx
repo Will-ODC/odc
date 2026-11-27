@@ -14,6 +14,8 @@ import { SiteBanner } from "../components/SiteBanner.js";
 import { useMyVotes, useVotesFollowSession } from "../hooks/use-my-votes.js";
 import { useSession } from "../hooks/use-session.js";
 import { Field } from "../components/Field.js";
+import { PictureField } from "../components/PictureField.js";
+import { usePictureField } from "../hooks/use-picture-field.js";
 import { Button } from "../components/Button.js";
 import { useContributionSave } from "../hooks/use-contributions.js";
 import { contributionKinds, pollReference } from "../flow/contributions.js";
@@ -116,7 +118,9 @@ export function NewContribution({
         ) : accountId !== null || expired ? (
           <ContributionForm
             key={draft.generation}
+            api={api}
             client={client}
+            onSignedOut={() => void recheck()}
             accountId={accountId ?? ""}
             onAccountChanged={() => {
               const mounted = mountedDraft.current;
@@ -187,14 +191,18 @@ const requiredMessages: Record<RequiredField, string> = {
 };
 
 function ContributionForm({
+  api,
   client,
+  onSignedOut,
   onCreated,
   expired,
   accountId,
   onAccountChanged,
   onEdit,
 }: {
+  api: PulseApi;
   client: ContributionsApi;
+  onSignedOut: () => void;
   onCreated: (id: string) => void;
   expired: boolean;
   accountId: string;
@@ -202,6 +210,7 @@ function ContributionForm({
   /** The person changed a field or pressed Publish. */
   onEdit: () => void;
 }) {
+  const picture = usePictureField(onSignedOut, api);
   const resultId = useRef("");
   const formRef = useRef<HTMLFormElement>(null);
   const focusProblem = useRef(false);
@@ -211,7 +220,9 @@ function ContributionForm({
   useEffect(() => {
     if (!focusProblem.current) return;
     focusProblem.current = false;
-    formRef.current?.querySelector<HTMLElement>("[aria-invalid=true]")?.focus();
+    formRef.current
+      ?.querySelector<HTMLElement>("[aria-invalid=true]:not(.picture-field *)")
+      ?.focus();
   }, [problems]);
   function checkRequired(field: RequiredField) {
     const form = formRef.current;
@@ -250,6 +261,11 @@ function ContributionForm({
           error.code === "account_changed"
         )
           onAccountChanged();
+        if (error instanceof ContributionsError && input.image) {
+          if (error.code === "image_unavailable")
+            picture.reportPostError("image_unavailable");
+          if (error.status === 401) onSignedOut();
+        }
         throw error;
       }
     },
@@ -263,6 +279,7 @@ function ContributionForm({
   }, [expired, clearFailure]);
   const outcome = useRef<HTMLParagraphElement>(null);
   const pollNotFound = save.errorStatus === 404;
+  const pictureUnavailable = save.errorStatus === 422;
   const pollProblem = pollUnreadable
     ? "This is not a question link or ID. Paste the question’s link, or leave this blank."
     : pollNotFound
@@ -272,7 +289,7 @@ function ContributionForm({
   // when publishing disabled the button, unless the person has moved on.
   const { failure } = save;
   useEffect(() => {
-    if (!failure) return;
+    if (!failure || failure.status === 422) return;
     if (failure.status === 404) pollField.current?.focus();
     else if (
       document.activeElement === null ||
@@ -297,16 +314,20 @@ function ContributionForm({
       if (!value(field)) missing[field] = requiredMessages[field];
     setProblems(missing);
     setPollUnreadable(pollId === undefined);
-    if (Object.keys(missing).length || pollId === undefined) {
+    const invalidForm = Object.keys(missing).length > 0 || pollId === undefined;
+    const pictureReady = picture.checkPost(!invalidForm);
+    if (invalidForm) {
       focusProblem.current = true;
       return;
     }
+    if (!pictureReady) return;
     void save.submit({
       title: value("title"),
       description: value("description"),
       organizerName: value("organizer"),
       kind: value("kind") as ContributionKind,
       ...(pollId ? { pollId } : {}),
+      ...(picture.image ? { image: picture.image } : {}),
     });
   }
   return (
@@ -334,6 +355,9 @@ function ContributionForm({
             Sign in again in a new tab
           </a>{" "}
           to send it.
+          {picture.description && !picture.image
+            ? " Choose your picture again after you sign in."
+            : null}
         </p>
       ) : null}
       <fieldset disabled={save.pending || expired}>
@@ -436,6 +460,7 @@ function ContributionForm({
             />
           )}
         </Field>
+        <PictureField field={picture} />
       </fieldset>
       <div className="contribution-confirm">
         <Field
@@ -464,7 +489,11 @@ function ContributionForm({
         </Field>
         <p>Keep personal contact and payment details out of your post.</p>
       </div>
-      {save.error && !expired && !pollNotFound && save.errorStatus !== 401 ? (
+      {save.error &&
+      !expired &&
+      !pollNotFound &&
+      !pictureUnavailable &&
+      save.errorStatus !== 401 ? (
         <p
           ref={outcome}
           role="alert"

@@ -424,6 +424,7 @@ it("loads the final contributions page by keyboard and focuses its first new con
     status: "open",
     createdAt,
     community: { id: "pulse-general", label: "General" },
+    image: { kind: "tile" },
     communityBenefit: "",
     needs: "",
     pollId: null,
