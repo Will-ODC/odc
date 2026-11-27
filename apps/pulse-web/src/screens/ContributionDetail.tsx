@@ -666,7 +666,7 @@ function ContributionPictureForm({
     <PictureManagement
       management={management}
       signInHref={`/sign-in?contribution=${encodeURIComponent(id)}`}
-      removalQuestion="Remove this picture from the contribution? The default picture shows instead."
+      removalQuestion="Remove this picture from the contribution?"
     />
   );
 }
