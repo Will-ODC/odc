@@ -9,7 +9,7 @@ import {
   type Variant,
 } from "./limits.js";
 import type { ProcessedImage } from "./process.js";
-import type { PollImage } from "./public.js";
+import type { ItemImage } from "./public.js";
 import { mayServe, type OwnerKind } from "./visibility.js";
 
 /** The signed-in account uploading, as the creation routes pass it. */
@@ -94,7 +94,7 @@ export interface MemoryContentChange {
   targetId: string;
   imageId: string | null;
   imageSha256: string | null;
-  action: "image_attach";
+  action: "image_attach" | "image_remove" | "image_replace";
   actorKind: "poster" | "site_owner" | "auto";
   actorId: string | null;
   changedAt: Date;
@@ -103,6 +103,8 @@ export interface MemoryContentChange {
 export interface MemoryImageDatabase {
   images: Map<string, MemoryImage>;
   changes: MemoryContentChange[];
+  /** Current image links for contributions, equivalent to contribution.image_id. */
+  contributionImages: Map<string, string>;
   /**
    * One record per accepted upload, as Postgres's `image_upload`: what the
    * hourly quota counts, so deleting a picture never refunds an upload.
@@ -119,7 +121,12 @@ export function memoryImageDatabase(
 ): MemoryImageDatabase {
   let found = databases.get(voting);
   if (!found) {
-    found = { images: new Map(), changes: [], uploads: [] };
+    found = {
+      images: new Map(),
+      changes: [],
+      uploads: [],
+      contributionImages: new Map(),
+    };
     databases.set(voting, found);
   }
   return found;
@@ -147,38 +154,69 @@ export function attachablePending(
   return image;
 }
 
-/** Attach a pending picture to a poll and record it; the caller checked it. */
+export interface PictureChange {
+  targetKind: "poll" | "contribution";
+  targetId: string;
+  action: MemoryContentChange["action"];
+  actorId: string;
+  now: Date;
+  changeId: string;
+}
+
+/** Attach a pending picture and record it; the caller checked it. */
 export function attachInMemory(
   db: MemoryImageDatabase,
   image: MemoryImage,
-  attach: {
-    pollId: string;
-    alt: string;
-    actorId: string;
-    now: Date;
-    changeId: string;
-  },
-): PollImage {
-  image.ownerKind = "poll";
-  image.ownerId = attach.pollId;
-  image.alt = attach.alt;
-  image.attachedAt = attach.now.getTime();
+  alt: string,
+  change: PictureChange,
+): void {
+  image.ownerKind = change.targetKind;
+  image.ownerId = change.targetId;
+  image.alt = alt;
+  image.attachedAt = change.now.getTime();
+  recordPictureChange(db, image, change);
+}
+
+export function recordPictureChange(
+  db: MemoryImageDatabase,
+  image: MemoryImage,
+  change: PictureChange,
+): void {
   db.changes.push({
-    id: attach.changeId,
-    targetKind: "poll",
-    targetId: attach.pollId,
+    id: change.changeId,
+    targetKind: change.targetKind,
+    targetId: change.targetId,
     imageId: image.id,
     imageSha256: image.variants.display.sha256,
-    action: "image_attach",
+    action: change.action,
     actorKind: "poster",
-    actorId: attach.actorId,
-    changedAt: attach.now,
+    actorId: change.actorId,
+    changedAt: change.now,
   });
+}
+
+export function contributionImageInMemory(
+  db: MemoryImageDatabase,
+  contributionId: string,
+): ItemImage | undefined {
+  const id = db.contributionImages.get(contributionId);
+  const image = id === undefined ? undefined : db.images.get(id);
+  if (
+    !image ||
+    image.alt === null ||
+    image.ownerId !== contributionId ||
+    !mayServe(image, {
+      kind: "contribution",
+      currentImageId: id ?? null,
+      visible: true,
+    })
+  )
+    return undefined;
   return {
     id: image.id,
     width: image.width,
     height: image.height,
-    alt: attach.alt,
+    alt: image.alt,
   };
 }
 
@@ -245,6 +283,12 @@ export class InMemoryImageStore implements ImageStore {
   ): Promise<ServedVariant | undefined> {
     const image = this.#db.images.get(id);
     if (!image) return undefined;
+    if (image.ownerKind === "contribution") {
+      return image.ownerId !== null &&
+        contributionImageInMemory(this.#db, image.ownerId)?.id === id
+        ? copy(image.variants[variant])
+        : undefined;
+    }
     const poll =
       image.ownerKind === "poll" && image.ownerId !== null
         ? await this.#voting.getPoll(image.ownerId)
@@ -264,22 +308,24 @@ export class InMemoryImageStore implements ImageStore {
     return copy(image.variants[variant]);
   }
 
-  async sweepPending(): Promise<number> {
-    const now = this.#clock().getTime();
-    // Upload records the hourly quota can no longer count.
-    this.#db.uploads = this.#db.uploads.filter(
-      (upload) => upload.uploadedAt > now - UPLOAD_WINDOW_MS,
-    );
-    const cutoff = now - PENDING_TTL_MS;
-    let swept = 0;
-    for (const [id, image] of this.#db.images) {
-      if (image.ownerKind === null && image.uploadedAt <= cutoff) {
-        // Row and bytes are one object: they go together.
-        this.#db.images.delete(id);
-        swept++;
+  sweepPending(): Promise<number> {
+    return this.#voters.exclusive(async () => {
+      const now = this.#clock().getTime();
+      // Upload records the hourly quota can no longer count.
+      this.#db.uploads = this.#db.uploads.filter(
+        (upload) => upload.uploadedAt > now - UPLOAD_WINDOW_MS,
+      );
+      const cutoff = now - PENDING_TTL_MS;
+      let swept = 0;
+      for (const [id, image] of this.#db.images) {
+        if (image.ownerKind === null && image.uploadedAt <= cutoff) {
+          // Row and bytes are one object: they go together.
+          this.#db.images.delete(id);
+          swept++;
+        }
       }
-    }
-    return swept;
+      return swept;
+    });
   }
 
   #allowance(voterId: string, now: Date): void {

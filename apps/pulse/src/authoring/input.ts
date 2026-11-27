@@ -1,4 +1,4 @@
-import { IMAGE_ID, MAX_ALT_LENGTH } from "../images/limits.js";
+import { pictureInput, type PictureInput } from "../images/input.js";
 import {
   createPoll,
   normalizePollContext,
@@ -23,7 +23,7 @@ export interface CreationInput {
    * (ADR-0047 sections 2 and 5). Absent, not null, when there is none, so a
    * request without a picture keeps the canonical replay input it always had.
    */
-  image?: { id: string; alt: string };
+  image?: PictureInput;
 }
 export class CreationError extends Error {
   constructor(
@@ -124,14 +124,11 @@ export function normalizeCreation(value: unknown): CreationInput {
     row.purposeAcknowledgement !== PURPOSE_VERSION
   )
     throw new CreationError("bad_request");
-  let image: { id: string; alt: string } | undefined;
+  let image: PictureInput | undefined;
   if ("image" in row) {
-    const i = object(row.image, ["id", "alt"]);
-    // Lowercase only: picture ids are minted lowercase, and one spelling
-    // keeps the canonical replay input and the picture URL the same.
-    if (typeof i.id !== "string" || !IMAGE_ID.test(i.id))
-      throw new CreationError("bad_request");
-    image = { id: i.id, alt: text(i.alt, MAX_ALT_LENGTH) };
+    const parsed = pictureInput.safeParse(row.image);
+    if (!parsed.success) throw new CreationError("bad_request");
+    image = parsed.data;
   }
   return {
     question,

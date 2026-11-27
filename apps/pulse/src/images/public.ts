@@ -1,10 +1,10 @@
 /**
- * A poll's picture as its store hands it over: the poster's visible upload.
- * Present on a `Poll` or `PollSummary` only when `mayServe` allows it, so the
+ * An item's picture as its store hands it over: the poster's visible upload.
+ * Present on a read only when `mayServe` allows it, so the
  * body and the picture route always agree. Never the uploading account,
  * upload time, original type or size.
  */
-export interface PollImage {
+export interface ItemImage {
   id: string;
   /** Size of the display variant. */
   width: number;
@@ -13,12 +13,12 @@ export interface PollImage {
 }
 
 /**
- * The public `image` field of a poll body and a listing row (ADR-0047
+ * The public `image` field of an item body and a listing row (ADR-0047
  * sections 6 and 12). `upload` is the poster's visible picture; `tile` means
  * the client draws the generated tile. Category defaults (`category`) arrive
  * with plan step 9. Nothing else is ever in it.
  */
-export type PublicPollImage =
+export type PublicImage =
   | {
       kind: "upload";
       displayUrl: string;
@@ -34,8 +34,8 @@ export function imageUrl(id: string, variant: "display" | "thumb"): string {
   return `/api/poll-images/${id}/${variant}.webp`;
 }
 
-/** The one projection of a poll's picture, field by field. */
-export function publicPollImage(image: PollImage | undefined): PublicPollImage {
+/** The one projection of an item's picture, field by field. */
+export function publicImage(image: ItemImage | undefined): PublicImage {
   if (image === undefined) return { kind: "tile" };
   return {
     kind: "upload",
@@ -53,8 +53,8 @@ export function publicPollImage(image: PollImage | undefined): PublicPollImage {
  * and reads as the tile.
  */
 export function copyPublicPollImage(
-  image: PublicPollImage | undefined,
-): PublicPollImage {
+  image: PublicImage | undefined,
+): PublicImage {
   if (image === undefined || image.kind !== "upload") return { kind: "tile" };
   return {
     kind: "upload",

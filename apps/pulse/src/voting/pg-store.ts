@@ -1,7 +1,7 @@
 import { randomUUID } from "node:crypto";
 import type { Pool, PoolClient } from "pg";
 import { inTransaction } from "../db/transaction.js";
-import type { PollImage } from "../images/public.js";
+import type { ItemImage } from "../images/public.js";
 import { mayServe, type OwnerKind } from "../images/visibility.js";
 import type { PollListQuery, PollSummary } from "./listing.js";
 import {
@@ -721,7 +721,7 @@ interface ImageColumns {
  */
 function pollImageOf(
   row: { id: string } & ImageColumns,
-): PollImage | undefined {
+): ItemImage | undefined {
   if (row.image_id === null) return undefined;
   const served = mayServe(
     {

@@ -1,7 +1,7 @@
 import {
   copyPublicPollImage,
-  publicPollImage,
-  type PublicPollImage,
+  publicImage,
+  type PublicImage,
 } from "../images/public.js";
 import {
   isOpen,
@@ -33,7 +33,7 @@ export interface PublicPoll {
   closesAt: string | null;
   open: boolean;
   /** The poster's picture or the tile (ADR-0047); always present. */
-  image: PublicPollImage;
+  image: PublicImage;
   /** Fixed at creation (ADR-0048); every seed and legacy poll is anonymous. */
   votePrivacy: VotePrivacy;
   community?: PollCommunity;
@@ -69,7 +69,7 @@ export function publicPoll(poll: Poll, now: Date): PublicPoll {
     acceptsSuggestions: poll.acceptsSuggestions,
     closesAt: poll.closesAt ? poll.closesAt.toISOString() : null,
     open: isOpen(poll, now),
-    image: publicPollImage(poll.image),
+    image: publicImage(poll.image),
     votePrivacy: poll.votePrivacy,
   };
   if (poll.publication === undefined) return body;
@@ -105,7 +105,7 @@ function publicAttribution(attribution: Attribution): Attribution {
 export function publicPollReplay(
   poll: Omit<PublishedPublicPoll, "context" | "image" | "votePrivacy"> & {
     context?: string | null;
-    image?: PublicPollImage;
+    image?: PublicImage;
     votePrivacy?: VotePrivacy;
   },
 ): PublishedPublicPoll {
