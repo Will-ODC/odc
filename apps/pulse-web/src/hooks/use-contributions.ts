@@ -72,9 +72,13 @@ export function useContributionRead<T>(
     };
   }, [load, revision, refresh, keepReady]);
   const reload = useCallback(() => setRevision((value) => value + 1), []);
-  const replace = useCallback((value: T) => {
+  const replace = useCallback((update: (value: T) => T) => {
     writes.current += 1;
-    setData({ status: "ready", value });
+    setData((current) =>
+      current.status === "ready"
+        ? { status: "ready", value: update(current.value) }
+        : current,
+    );
   }, []);
   return { data, reload, setData, replace, refreshError };
 }

@@ -119,8 +119,8 @@ describe("Contributions through the browser HTTP adapter", () => {
     const file = new File([Uint8Array.from(await picture("png"))], "park.png", {
       type: "image/png",
     });
-    const upload = () =>
-      owner.identity.uploadPicture(file, new AbortController().signal);
+    const upload = (identity = owner.identity) =>
+      identity.uploadPicture(file, new AbortController().signal);
     const created = await owner.api.create(
       { ...project, image: { id: await upload(), alt: "The park entrance" } },
       randomUUID(),
@@ -134,15 +134,21 @@ describe("Contributions through the browser HTTP adapter", () => {
       alt: replacement.alt,
       displayUrl: `/api/poll-images/${replacement.id}/display.webp`,
     });
+    const memberPicture = {
+      id: await upload(member.identity),
+      alt: "Side path",
+    };
+    for (const image of [memberPicture, null]) {
+      await expect(
+        member.api.changePicture(created.id, image),
+      ).rejects.toMatchObject({
+        status: 403,
+        code: "organizer_required",
+      });
+    }
     expect((await member.api.detail(created.id)).contribution.image).toEqual(
       updated,
     );
-    await expect(
-      member.api.changePicture(created.id, null),
-    ).rejects.toMatchObject({
-      status: 403,
-      code: "organizer_required",
-    });
     const removed = await owner.api.changePicture(created.id, null);
     expect(removed).toEqual({ kind: "tile" });
     expect((await member.api.detail(created.id)).contribution.image).toEqual(

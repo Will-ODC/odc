@@ -225,7 +225,7 @@ export function usePictureField(
       !invalidCharacters);
 
   let descriptionProblem: string | undefined;
-  if (orphan && postAttempted) {
+  if (orphan && (postAttempted || (purpose === "save" && !problem))) {
     descriptionProblem =
       purpose === "save"
         ? "Choose the picture again before saving it."

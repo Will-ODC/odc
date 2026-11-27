@@ -141,6 +141,15 @@ it.each([
   expect(link.getAttribute("href")).toBe("/sign-in?contribution=park");
   expect(link.getAttribute("target")).toBe("_blank");
   expect(link.getAttribute("rel")).toBe("noreferrer");
+  if (!failsOnSave) {
+    state.who = "ada";
+    window.dispatchEvent(new Event("focus"));
+    await screen.findByText("Private messages", { selector: "summary" });
+    expect(picture.queryByRole("link", { name: /Sign in again/ })).toBeNull();
+    expect(
+      picture.getByText("Choose the picture again before saving it."),
+    ).toBeTruthy();
+  }
 });
 
 it("shows the default contribution tile without an image element", async () => {
@@ -151,11 +160,12 @@ it("shows the default contribution tile without an image element", async () => {
 });
 
 it.each([false, true])(
-  "shows the picture with alt and gates management (canManage: %s)",
+  "gates picture management and keeps removal after a late update (canManage: %s)",
   async (canManage) => {
     const user = userEvent.setup();
     let item = fixture({ image: parkPicture });
     let finishRemoval!: () => void;
+    let finishUpdate!: (value: Contribution) => void;
     const changePicture = vi.fn<ContributionsApi["changePicture"]>(async () => {
       await new Promise<void>((resolve) => {
         finishRemoval = resolve;
@@ -170,6 +180,10 @@ it.each([false, true])(
         client={client({
           detail: async () => ({ contribution: item, canManage }),
           changePicture,
+          update: () =>
+            new Promise((resolve) => {
+              finishUpdate = resolve;
+            }),
         })}
       />,
     );
@@ -181,6 +195,11 @@ it.each([false, true])(
       expect(screen.queryByRole("img", { name: parkPicture.alt })).toBeNull();
       return;
     }
+    await user.click(await screen.findByText("Post an update"));
+    await user.type(screen.getByLabelText("Progress update"), "Ramp started");
+    await user.click(screen.getByLabelText(/I confirm this status and update/));
+    await user.click(screen.getByRole("button", { name: "Publish update" }));
+    const stale = item;
     await user.click(await screen.findByText("Manage picture"));
     const remove = () =>
       screen.getByRole("button", {
@@ -204,6 +223,11 @@ it.each([false, true])(
     await act(async () => finishRemoval());
     expect(await screen.findByText("Picture removed.")).toBeTruthy();
     expect(await screen.findByRole("img", { name: "General" })).toBeTruthy();
+    await act(async () => finishUpdate(stale));
+    expect(
+      await screen.findByText("Your update has been published."),
+    ).toBeTruthy();
+    expect(screen.queryByRole("img", { name: parkPicture.alt })).toBeNull();
   },
 );
 

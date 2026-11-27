@@ -305,7 +305,11 @@ export function ContributionDetail({
     if (active === null || active === document.body) heading.current?.focus();
   }, [refreshError]);
   function changed(contribution: Contribution) {
-    if (data.status === "ready") replace({ ...data.value, contribution });
+    // Participation and progress responses cannot change the picture.
+    replace((detail) => ({
+      ...detail,
+      contribution: { ...contribution, image: detail.contribution.image },
+    }));
   }
   const suggestions = useSuggestedVotes({
     api,
@@ -398,7 +402,12 @@ export function ContributionDetail({
                   api={api}
                   item={item}
                   client={client}
-                  reload={reload}
+                  onPictureChanged={(image) =>
+                    replace((detail) => ({
+                      ...detail,
+                      contribution: { ...detail.contribution, image },
+                    }))
+                  }
                   onSignedOut={() => void recheck()}
                 />
               ) : null}
@@ -609,14 +618,14 @@ function ContributionPictureForm({
   api,
   item,
   client,
-  reload,
+  onPictureChanged,
   onSignedOut,
 }: {
   access: Access;
   api: PulseApi;
   item: Contribution;
   client: ContributionsApi;
-  reload: () => void;
+  onPictureChanged: (image: Contribution["image"]) => void;
   onSignedOut: () => void;
 }) {
   const [uploadSignedOut, setUploadSignedOut] = useState(false);
@@ -630,24 +639,18 @@ function ContributionPictureForm({
     "save",
   );
   const [removing, setRemoving] = useState(false);
-  const save = useContributionSave<PictureInput | null>(
-    async (image) => {
-      try {
-        await client.changePicture(item.id, image);
-      } catch (error) {
-        if (error instanceof ContributionsError) {
-          if (error.status === 401) onSignedOut();
-          else if (error.code === "image_unavailable")
-            picture.reportPostError("image_unavailable");
-        }
-        throw error;
+  const save = useContributionSave<PictureInput | null>(async (image) => {
+    try {
+      onPictureChanged(await client.changePicture(item.id, image));
+    } catch (error) {
+      if (error instanceof ContributionsError) {
+        if (error.status === 401) onSignedOut();
+        else if (error.code === "image_unavailable")
+          picture.reportPostError("image_unavailable");
       }
-    },
-    () => {
-      picture.reset();
-      reload();
-    },
-  );
+      throw error;
+    }
+  }, picture.reset);
   const outcome = useSendOutcome(save, access);
   function submit(event: FormEvent<HTMLFormElement>) {
     event.preventDefault();
