@@ -7,12 +7,13 @@ import {
 } from "react";
 import type { FormEvent } from "react";
 import { useSuggestedVotes } from "../hooks/use-suggested-votes.js";
-import type { PictureInput, PulseApi } from "../api/types.js";
+import type { PulseApi } from "../api/types.js";
 import {
   accountChangedMessage,
   contributionsApi,
   ContributionsError,
   type ContributionsApi,
+  type ContributionPictureChange,
   type Contribution,
   type ParticipationKind,
   type UpdateInput,
@@ -654,48 +655,43 @@ function ContributionPictureForm({
   const picture = usePictureField(() => setUploadSignedOut(true), api, "save");
   const [removing, setRemoving] = useState<string | null>(null);
   const postedPicture =
-    item.image.kind === "upload" ? item.image.displayUrl : null;
-  const readPicture = async () =>
-    (await client.detail(item.id)).contribution.image;
-  const save = useContributionSave<PictureInput | null>(async (image) => {
-    if (image === null) {
-      const attached = await readPicture();
-      if (attached.kind !== "upload" || attached.displayUrl !== postedPicture) {
-        onPictureChanged(attached);
-        if (attached.kind !== "upload") return;
-        throw new ContributionsError(
-          409,
-          "The posted picture changed. Review it before removing.",
-        );
-      }
-    }
-    try {
-      onPictureChanged(await client.changePicture(item.id, image));
-    } catch (error) {
-      if (error instanceof ContributionsError) {
-        if (
-          error.status === 0 ||
-          error.status >= 500 ||
-          error.code === "image_unavailable"
-        ) {
-          const attached = await readPicture();
-          onPictureChanged(attached);
+    item.image.kind === "upload"
+      ? /^\/api\/poll-images\/([^/]+)\/display\.webp$/.exec(
+          item.image.displayUrl,
+        )?.[1]
+      : undefined;
+  const save = useContributionSave<ContributionPictureChange>(
+    async (change) => {
+      try {
+        onPictureChanged(await client.changePicture(item.id, change));
+      } catch (error) {
+        if (error instanceof ContributionsError) {
           if (
-            image === null
-              ? attached.kind !== "upload"
-              : attached.kind === "upload" &&
-                attached.displayUrl ===
-                  `/api/poll-images/${encodeURIComponent(image.id)}/display.webp` &&
-                attached.alt === image.alt
-          )
-            return;
-          if (error.code === "image_unavailable")
-            picture.reportPostError("image_unavailable");
+            error.status === 0 ||
+            error.status >= 500 ||
+            error.code === "image_unavailable" ||
+            error.code === "image_changed"
+          ) {
+            const attached = (await client.detail(item.id)).contribution.image;
+            onPictureChanged(attached);
+            if (
+              "expectedImageId" in change
+                ? attached.kind !== "upload"
+                : attached.kind === "upload" &&
+                  attached.displayUrl ===
+                    `/api/poll-images/${encodeURIComponent(change.id)}/display.webp` &&
+                  attached.alt === change.alt
+            )
+              return;
+            if (error.code === "image_unavailable")
+              picture.reportPostError("image_unavailable");
+          }
         }
+        throw error;
       }
-      throw error;
-    }
-  }, picture.reset);
+    },
+    picture.reset,
+  );
   const outcome = useSendOutcome(save, access);
   const { errorStatus, clearFailure } = save;
   useEffect(() => {
@@ -732,7 +728,7 @@ function ContributionPictureForm({
         : { status: "idle" };
   const showRemove =
     canWrite &&
-    postedPicture !== null &&
+    postedPicture !== undefined &&
     (!save.pending || removingShown) &&
     picture.selection.status === "empty" &&
     picture.description === "";
@@ -773,7 +769,7 @@ function ContributionPictureForm({
               progress={removal}
               onConfirm={() => {
                 setRemoving(postedPicture);
-                void save.submit(null);
+                void save.submit({ expectedImageId: postedPicture });
               }}
               onCancel={() => {
                 setRemoving(null);
