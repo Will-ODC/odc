@@ -41,7 +41,7 @@ the same CI runs.
 ## Where it stands (2026-11-26)
 
 Per-PR history is in `git log origin/master -- apps/pulse apps/pulse-web`.
-**Open Pulse-related PRs:** none known. Next Pulse order (2026-11-26): #701 (contribution pictures: a server PR with migration 020 and poster-only image routes, then a web PR); #296 (show the poll's picture and context on the question page); #685 step 4b (its deploy waits on 4a being live); the #714 nits. Next migration: **020** (019 merged in #706). New ticket #707 (open polls from the main page without a reload; no urgency). #711 (`Contributions.test.tsx` "forgets a sign-in error once the same person has signed in again" flaky in CI) is fixed and closed in #723. #425 Next/Previous is on hold (operator, 2026-11-19).
+**Open Pulse-related PRs:** none for Pulse code; PR #718 (orchestration skill, hand-off note at each merge) waits on the operator's merge. Next Pulse order (2026-11-26): #701 web half (PictureField in the contribution form, picture on the contribution page, picture after reload across API and client, plus the #728 nits below); then test-audit item 3; #685 step 4b (its deploy waits on 4a being live); the #714 nits. The #727 web nits ride the #701 web branch where they touch the same files, otherwise the next web branch. Next migration: **021** (020 merged in #728). Future, no ticket to build yet: #729 (epic, smart-contract milestone payouts for contributions; blocked on an ADR for chain, currency, key custody, refund rule and legal position). New ticket #707 (open polls from the main page without a reload; no urgency). #711 (`Contributions.test.tsx` "forgets a sign-in error once the same person has signed in again" flaky in CI) is fixed and closed in #723. #425 Next/Previous is on hold (operator, 2026-11-19).
 
 - **Sign-in (pillar 1) is built.** Magic-link sign-in and redeem; open sign-up
   with community as an optional label (ADR-0030); a community picker when an
@@ -79,8 +79,16 @@ Per-PR history is in `git log origin/master -- apps/pulse apps/pulse-web`.
 - **Poll pictures (P12, ADR-0047): step 1 only.** #593 (#579, migration 016)
   stores pictures in neutral `image`/`image_bytes` keyed by
   `owner_kind`/`owner_id` and serves them; nginx answers uploads over 10 MiB
-  with the API's JSON 413; #594 checks sharp loads in the API image. Not
-  built (shared field #700 merged in #717; poll form #580 merged in #720): #701, #427, #296, then #586 after #427. Pictures now
+  with the API's JSON 413; #594 checks sharp loads in the API image. #296
+  (2026-11-26, #727, `89742bd`): the question page shows the poll's picture
+  under the question (description as alt), plain-text context, then the
+  byline; a poll with no upload shows the small default tile (ADR-0047 §6).
+  #701 server half (#728, `e6cd870`, migration 020): `image` on every
+  contribution body and row (tile fallback until #586); poster-only
+  PUT/DELETE `/api/contributions/:id/image`, signalled by `canManage`; the
+  picture routes have their own 400 and 401 messages. Not built (shared field
+  #700 merged in #717; poll form #580 merged in #720): #701 web half, #427,
+  then #586 after #427. Pictures now
   extend to every main-page item (operator 2026-11-18; ADR-0049).
 - **MCP:** public reads `get_poll`/`get_results` at `/api/mcp` (PR #323); #710 (`3e6bf64`) adds `get_public_votes`, passes `votePrivacy` through, and makes MCP work through nginx (production `publicOrigin` = `PULSE_WEB_ORIGIN`; nginx forwards `$http_host` and blanks `X-Pulse-Internal`). MCP does not work through the 5173 Vite proxy; `apps/pulse/README.md` should say so (small nit, not ticketed).
   ADR-0036 (voting from AI apps) is proposed only; discovery (#291) unbuilt.
@@ -196,7 +204,7 @@ public hostname, before inviting anyone.
    not whether a picture existed (a 401 during upload before typing misses
    it); the question error has no warning icon while the picture errors do
    (unify the Field problem style); not checked on a device: the hidden file
-   input on iOS Safari. Leftover #717 nits still open (the size, file-name, stub and hostile-JPEG ones were fixed in #720): a Replace that finishes in the background always takes focus (the mockup asks for it); EXIF-rotated JPEGs may say "wide" for a tall photo; #499 must add a dark `--red-wash`.
+   input on iOS Safari. Leftover #727 nits (web, next Pulse web branch): the picture-to-context gap is 8 px (match the hero gap); the tile is aria-labelled and repeats the community name (consider aria-hidden); tile colours borrow `--hover`/`--chip`/`--green-wash` (add dedicated tile tokens); the stub `poll()` in `test/stub-api.tsx` omits `image` though the API always sends it; the tile hash moves to a shared module when #427 lands; the `Conversation.css` byline comment is stale. Leftover #728 nits (for the #701 web half): the 429 pending_limit message in `apps/pulse/src/http/images.ts` still says "Post a question with one" (mention contributions); a malformed `image` on `POST /api/contributions` still returns the offer-pricing catch-all (the web form validates the description client-side); `API.md` PUT/DELETE says "poster" while the code says "organizer"; the picture-message choice compares route URL strings (prefer per-route config); add a test that signed-out `POST /api/contributions` still says "Sign in to contribute."; the retry fingerprint is an unkeyed SHA-256 of [id, alt]. Leftover #717 nits still open (the size, file-name, stub and hostile-JPEG ones were fixed in #720): a Replace that finishes in the background always takes focus (the mockup asks for it); EXIF-rotated JPEGs may say "wide" for a tall photo; #499 must add a dark `--red-wash`.
 2. **Audits 2026-11-14 are complete; none changed product code:**
    [targeted tests](../docs/audits/pulse-tests-2026-11-14.md) → #613/#614;
    [simplicity](../docs/audits/pulse-simplicity-2026-11-14.md) → #616;
@@ -266,6 +274,12 @@ public hostname, before inviting anyone.
 
 ## Open decisions (operator)
 
+- **Rich-text contribution descriptions with images, or the single picture of
+  #701:** operator (2026-11-26): decide after #701's web half is built and the
+  two can be compared. Rich text would sit on top of the single picture (the
+  main-page thumbnail still needs one chosen picture); it needs server-side
+  cleaning of stored rich text, per-image reporting and removal (#583 assumes
+  one picture per item), and its own upload limits. No ticket until decided.
 - **Cross-device vote history:** let a signed-in account see its own votes
   from every device (server computes the ADR-0040 code per poll)? Reverses
   ADR-0040's "accepted limit" wording; owner-only versus public was asked and
