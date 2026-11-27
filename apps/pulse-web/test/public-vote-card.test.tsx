@@ -350,8 +350,8 @@ it("keeps voting actions blank during the session check and offers a keyboard re
   expect(screen.queryByText(failure)).toBeNull();
 });
 
-// Signed in, the page's own arrival focus takes the question's heading, and
-// the card must not take it back.
+// Signed in, the card hands focus to nothing of its own: the question's
+// heading (the page's usual arrival focus target) is what ends up focused.
 it.each([
   ["signed out", null, { role: "link", name: "Sign in with email to vote" }],
   [
@@ -380,6 +380,38 @@ it.each([
     await waitFor(() => expect(document.activeElement).toBe(next));
   },
 );
+
+it("leaves focus alone when it moved elsewhere before the session check finished", async () => {
+  let resolve!: (value: Me | null) => void;
+  const me = vi
+    .fn<() => Promise<Me | null>>()
+    .mockRejectedValueOnce(new Error("offline"))
+    .mockImplementationOnce(
+      () =>
+        new Promise<Me | null>((res) => {
+          resolve = res;
+        }),
+    );
+  render(
+    <Conversation
+      api={stubApi({ me, poll: async () => question })}
+      pollId={question.id}
+    />,
+  );
+  const retry = await screen.findByRole("button", { name: "Try again" });
+  retry.focus();
+  await userEvent.setup().keyboard("{Enter}");
+  const heading = screen.getByRole("heading", {
+    name: question.question,
+    level: 1,
+  });
+  heading.tabIndex = -1;
+  heading.focus();
+  expect(document.activeElement).toBe(heading);
+  await act(async () => resolve(null));
+  await screen.findByRole("link", { name: "Sign in with email to vote" });
+  expect(document.activeElement).toBe(heading);
+});
 
 it.each(["anonymous", "public"] as const)(
   "handles a sign-out in another tab when vote privacy is %s",

@@ -256,7 +256,7 @@ export function VoteCard({
     if (sessionRetry || (active !== null && active !== document.body)) return;
     const root = card.current;
     (
-      root?.querySelector<HTMLElement>(".vote-card__signin") ??
+      root?.querySelector<HTMLElement>("[data-session-signin]") ??
       root?.querySelector<HTMLInputElement>("input:checked:enabled") ??
       root?.querySelector<HTMLInputElement>("input:enabled")
     )?.focus();
@@ -583,6 +583,7 @@ export function VoteCard({
             {signInToVoteHref ? (
               <a
                 className="vote-card__signin"
+                data-session-signin=""
                 href={signInToVoteHref}
                 aria-describedby={`${id}-privacy`}
               >
