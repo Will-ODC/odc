@@ -12,6 +12,7 @@ import {
   accountChangedMessage,
   contributionsApi,
   ContributionsError,
+  pictureChangedMessage,
   type ContributionsApi,
   type ContributionPictureChange,
   type Contribution,
@@ -418,8 +419,11 @@ export function ContributionDetail({
                   item={item}
                   client={client}
                   onPictureChanged={(image) => {
+                    // Compared by value: a newer read with the same picture
+                    // is no reason to drop this one (#732).
                     replace((detail) =>
-                      detail.contribution.image === item.image
+                      JSON.stringify(detail.contribution.image) ===
+                      JSON.stringify(item.image)
                         ? {
                             ...detail,
                             contribution: { ...detail.contribution, image },
@@ -652,15 +656,28 @@ function ContributionPictureForm({
 }) {
   const [uploadSignedOut, setUploadSignedOut] = useState(false);
   const [signInAttempt, retrySignIn] = useState(0);
-  const [needsPictureRefresh, setNeedsPictureRefresh] = useState(false);
+  // The picture a removal was refused for (409 image_changed). Removal stays
+  // off while that picture is the one shown, however it came back on screen,
+  // so it is offered again only once a read has shown another (API.md).
+  const [refused, setRefused] = useState<string | null>(null);
+  // "Reload picture": whether the last press could not read, or did.
+  const [reload, setReload] = useState<"failed" | "done">();
   async function refreshPicture() {
     const detail = await client.detail(item.id).catch(() => undefined);
-    if (!detail) return;
-    onPictureChanged(detail.contribution.image);
-    setNeedsPictureRefresh(false);
+    if (detail) onPictureChanged(detail.contribution.image);
+    return detail !== undefined;
   }
   if (access === "expired" && uploadSignedOut) setUploadSignedOut(false);
-  const picture = usePictureField(() => setUploadSignedOut(true), api, "save");
+  // A signed-out upload may drop the chosen picture: say to choose it again.
+  const [uploadRefused, setUploadRefused] = useState(false);
+  const picture = usePictureField(
+    () => {
+      setUploadSignedOut(true);
+      setUploadRefused(true);
+    },
+    api,
+    "save",
+  );
   const [removing, setRemoving] = useState<string | null>(null);
   const postedPicture =
     item.image.kind === "upload"
@@ -674,8 +691,9 @@ function ContributionPictureForm({
         onPictureChanged(await client.changePicture(item.id, change));
       } catch (error) {
         if (error instanceof ContributionsError) {
-          if (error.code === "image_changed") {
-            setNeedsPictureRefresh(true);
+          if (error.code === "image_changed" && "expectedImageId" in change) {
+            setRefused(change.expectedImageId);
+            setReload(undefined);
             await refreshPicture();
             setRemoving(null);
           } else if (
@@ -683,17 +701,38 @@ function ContributionPictureForm({
             error.status >= 500 ||
             error.code === "image_unavailable"
           ) {
-            const attached = (await client.detail(item.id)).contribution.image;
-            onPictureChanged(attached);
-            if (
-              "expectedImageId" in change
-                ? attached.kind !== "upload"
-                : attached.kind === "upload" &&
-                  attached.displayUrl ===
-                    `/api/poll-images/${encodeURIComponent(change.id)}/display.webp` &&
-                  attached.alt === change.alt
-            )
-              return;
+            // If this check cannot be read, the refusal stands: an unusable
+            // upload is asked for again (its description kept), and a lost
+            // reply keeps its error and Save for a retry with the same key.
+            const attached = await client.detail(item.id).then(
+              (detail) => detail.contribution.image,
+              () => undefined,
+            );
+            if (attached) {
+              onPictureChanged(attached);
+              if (
+                "expectedImageId" in change
+                  ? attached.kind !== "upload"
+                  : attached.kind === "upload" &&
+                    attached.displayUrl ===
+                      `/api/poll-images/${encodeURIComponent(change.id)}/display.webp` &&
+                    attached.alt === change.alt
+              )
+                return;
+              // The removal's reply was lost and another picture is shown:
+              // no error for a picture this page never confirmed.
+              if (
+                "expectedImageId" in change &&
+                attached.kind === "upload" &&
+                attached.displayUrl !==
+                  `/api/poll-images/${change.expectedImageId}/display.webp`
+              )
+                throw new ContributionsError(
+                  409,
+                  pictureChangedMessage,
+                  "image_changed",
+                );
+            }
             if (error.code === "image_unavailable")
               picture.reportPostError("image_unavailable");
           }
@@ -732,6 +771,7 @@ function ContributionPictureForm({
     event.preventDefault();
     if (canWrite && picture.checkPost() && picture.image) {
       setRemoving(null);
+      setReload(undefined);
       void save.submit(picture.image);
     }
   }
@@ -744,18 +784,27 @@ function ContributionPictureForm({
       : removingShown && error
         ? { status: "failed", message: error }
         : { status: "idle" };
+  const stale = postedPicture !== undefined && postedPicture === refused;
   const showRemove =
     canWrite &&
-    !needsPictureRefresh &&
+    !stale &&
     postedPicture !== undefined &&
     (!save.pending || removingShown) &&
     picture.selection.status === "empty" &&
     picture.description === "";
-  const fieldError = uploadSignedOut
-    ? "Sign in to change this picture."
-    : removingShown
-      ? undefined
-      : error;
+  // Signed out: the sign-in prompt below says so on its own.
+  const fieldError = removingShown || signInAgain ? undefined : error;
+  const reloaded = reload === "done" && !stale;
+  const removalBox = useRef<HTMLDivElement>(null);
+  const reloadedStatus = useRef<HTMLParagraphElement>(null);
+  // The pressed "Reload picture" goes once the newer picture shows: put
+  // focus on what can be done with it, or say it has been reloaded.
+  useLayoutEffect(() => {
+    if (!reloaded || !focusLost()) return;
+    (
+      removalBox.current?.querySelector("button") ?? reloadedStatus.current
+    )?.focus();
+  }, [reloaded]);
 
   return (
     <details className="contribution-disclosure contribution-picture">
@@ -766,6 +815,8 @@ function ContributionPictureForm({
         className="contribution-form"
         onSubmit={submit}
         onChange={() => {
+          setReload(undefined);
+          setUploadRefused(false);
           setUploadSignedOut(false);
           save.clearFailure();
           save.clearSaved();
@@ -778,7 +829,7 @@ function ContributionPictureForm({
           ) : null}
         </fieldset>
         {showRemove ? (
-          <div className="contribution-picture-removal">
+          <div className="contribution-picture-removal" ref={removalBox}>
             <TwoPress
               key={postedPicture}
               label="Remove posted picture"
@@ -787,6 +838,7 @@ function ContributionPictureForm({
               pendingLabel="Removing picture…"
               progress={removal}
               onConfirm={() => {
+                setReload(undefined);
                 setRemoving(postedPicture);
                 void save.submit({ expectedImageId: postedPicture });
               }}
@@ -816,20 +868,40 @@ function ContributionPictureForm({
             {fieldError}
           </p>
         ) : null}
-        {needsPictureRefresh && !save.pending ? (
-          <Button
-            type="button"
-            variant="secondary"
-            onClick={() => void refreshPicture()}
-          >
-            Reload picture
-          </Button>
+        {reloaded && !showRemove ? (
+          <p ref={reloadedStatus} tabIndex={-1} role="status">
+            Picture reloaded.
+          </p>
+        ) : null}
+        {stale && canWrite && !save.pending ? (
+          <>
+            {reload === "failed" ? (
+              <p className="contribution-error" role="alert">
+                Could not load the picture. Try again.
+              </p>
+            ) : null}
+            <Button
+              type="button"
+              variant="secondary"
+              onClick={() => {
+                setReload(undefined);
+                void refreshPicture().then((read) =>
+                  setReload(read ? "done" : "failed"),
+                );
+              }}
+            >
+              Reload picture
+            </Button>
+          </>
         ) : null}
         {signInAgain ? (
           <>
             <SignInAgain
               href={`/sign-in?contribution=${encodeURIComponent(item.id)}`}
               announce={false}
+              chooseAgain={
+                uploadRefused && picture.selection.status === "empty"
+              }
             />
             {access === "signedIn" ? (
               <Button
@@ -883,9 +955,11 @@ type Access = "loading" | "signedIn" | "expired" | "signedOut";
 function SignInAgain({
   href,
   announce = true,
+  chooseAgain = false,
 }: {
   href: string;
   announce?: boolean;
+  chooseAgain?: boolean;
 }) {
   return (
     <p
@@ -897,6 +971,7 @@ function SignInAgain({
         Sign in again in a new tab
       </a>{" "}
       to send it.
+      {chooseAgain ? " Choose your picture again after you sign in." : null}
     </p>
   );
 }

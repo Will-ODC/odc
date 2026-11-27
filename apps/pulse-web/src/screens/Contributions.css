@@ -96,7 +96,7 @@
   margin-bottom: var(--gutter);
 }
 .contribution-detail-heading h1 {
-  margin-top: var(--step);
+  margin: var(--step) 0 var(--gutter);
 }
 .contribution-detail-heading > p {
   font-size: var(--t-small);

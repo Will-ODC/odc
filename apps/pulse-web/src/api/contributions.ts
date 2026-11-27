@@ -208,10 +208,12 @@ function contribution(value: unknown): value is Contribution {
 export function accountChangedMessage(what = "this"): string {
   return `Your account changed, so ${what} wasn't sent.`;
 }
+export const pictureChangedMessage =
+  "The posted picture changed. Review it before removing.";
 /** 409 codes that are not "someone else changed this": each says what to do. */
 const conflicts: Record<string, string> = {
   account_changed: accountChangedMessage(),
-  image_changed: "The posted picture changed. Review it before removing.",
+  image_changed: pictureChangedMessage,
   sender_limit:
     "You have added as many entries to this contribution as one person can.",
   record_full: "This contribution has reached its entry limit.",

@@ -220,9 +220,8 @@ function ContributionForm({
   useEffect(() => {
     if (!focusProblem.current) return;
     focusProblem.current = false;
-    formRef.current
-      ?.querySelector<HTMLElement>("[aria-invalid=true]:not(.picture-field *)")
-      ?.focus();
+    // The first in page order, the picture's description included.
+    formRef.current?.querySelector<HTMLElement>("[aria-invalid=true]")?.focus();
   }, [problems]);
   function checkRequired(field: RequiredField) {
     const form = formRef.current;

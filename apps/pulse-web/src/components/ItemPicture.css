@@ -1,6 +1,6 @@
 .item-picture {
   display: block;
-  margin-block-end: var(--step);
+  margin-block-end: var(--gutter);
   border-radius: var(--r-control);
 }
 
@@ -13,8 +13,8 @@
 }
 
 .item-picture--tile {
-  inline-size: var(--question-picture-tile-size);
-  block-size: var(--question-picture-tile-size);
+  inline-size: var(--item-picture-tile-size);
+  block-size: var(--item-picture-tile-size);
   object-fit: cover;
 }
 
