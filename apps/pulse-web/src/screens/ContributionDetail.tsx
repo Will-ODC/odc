@@ -668,7 +668,16 @@ function ContributionPictureForm({
     return detail !== undefined;
   }
   if (access === "expired" && uploadSignedOut) setUploadSignedOut(false);
-  const picture = usePictureField(() => setUploadSignedOut(true), api, "save");
+  // A signed-out upload may drop the chosen picture: say to choose it again.
+  const [uploadRefused, setUploadRefused] = useState(false);
+  const picture = usePictureField(
+    () => {
+      setUploadSignedOut(true);
+      setUploadRefused(true);
+    },
+    api,
+    "save",
+  );
   const [removing, setRemoving] = useState<string | null>(null);
   const postedPicture =
     item.image.kind === "upload"
@@ -762,6 +771,7 @@ function ContributionPictureForm({
     event.preventDefault();
     if (canWrite && picture.checkPost() && picture.image) {
       setRemoving(null);
+      setReload(undefined);
       void save.submit(picture.image);
     }
   }
@@ -783,7 +793,7 @@ function ContributionPictureForm({
     picture.selection.status === "empty" &&
     picture.description === "";
   // Signed out: the sign-in prompt below says so on its own.
-  const fieldError = removingShown ? undefined : error;
+  const fieldError = removingShown || signInAgain ? undefined : error;
   const reloaded = reload === "done" && !stale;
   const removalBox = useRef<HTMLDivElement>(null);
   const reloadedStatus = useRef<HTMLParagraphElement>(null);
@@ -806,6 +816,7 @@ function ContributionPictureForm({
         onSubmit={submit}
         onChange={() => {
           setReload(undefined);
+          setUploadRefused(false);
           setUploadSignedOut(false);
           save.clearFailure();
           save.clearSaved();
@@ -827,6 +838,7 @@ function ContributionPictureForm({
               pendingLabel="Removing picture…"
               progress={removal}
               onConfirm={() => {
+                setReload(undefined);
                 setRemoving(postedPicture);
                 void save.submit({ expectedImageId: postedPicture });
               }}
@@ -887,6 +899,9 @@ function ContributionPictureForm({
             <SignInAgain
               href={`/sign-in?contribution=${encodeURIComponent(item.id)}`}
               announce={false}
+              chooseAgain={
+                uploadRefused && picture.selection.status === "empty"
+              }
             />
             {access === "signedIn" ? (
               <Button
@@ -940,9 +955,11 @@ type Access = "loading" | "signedIn" | "expired" | "signedOut";
 function SignInAgain({
   href,
   announce = true,
+  chooseAgain = false,
 }: {
   href: string;
   announce?: boolean;
+  chooseAgain?: boolean;
 }) {
   return (
     <p
@@ -954,6 +971,7 @@ function SignInAgain({
         Sign in again in a new tab
       </a>{" "}
       to send it.
+      {chooseAgain ? " Choose your picture again after you sign in." : null}
     </p>
   );
 }

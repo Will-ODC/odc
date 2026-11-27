@@ -194,6 +194,43 @@ it.each([
   }
 });
 
+it("asks for the picture again when a signed-out upload drops it", async () => {
+  const user = userEvent.setup();
+  const { state, me } = switchableMe("ada");
+  vi.stubGlobal(
+    "URL",
+    class extends URL {
+      static override createObjectURL = () => "blob:park";
+      static override revokeObjectURL = () => {};
+    },
+  );
+  render(
+    <ContributionDetail
+      api={stubApi({
+        me,
+        uploadPicture: async () => {
+          state.who = null;
+          throw new ApiError(401, "Sign in.", "signed_out");
+        },
+      })}
+      id="park"
+      client={client({
+        detail: async () => ({ contribution: fixture(), canManage: true }),
+      })}
+    />,
+  );
+  await user.click(await screen.findByText("Manage picture"));
+  await user.upload(
+    screen
+      .getByRole("group", { name: "Picture" })
+      .querySelector<HTMLInputElement>('input[type="file"]')!,
+    new File(["park"], "park.jpg", { type: "image/jpeg" }),
+  );
+  expect(
+    await screen.findByText(/Choose your picture again after you sign in\./),
+  ).toBeTruthy();
+});
+
 it("shows the default contribution tile without an image element", async () => {
   render(<ContributionDetail api={stubApi()} id="park" client={client()} />);
   const tile = await screen.findByRole("img", { name: "General" });
@@ -208,6 +245,7 @@ it.each([
   "lost removal reply",
   "picture already removed",
   "conflict refresh fails",
+  "removed elsewhere, refresh fails",
   "update reply before conflict refresh",
 ])("manages the displayed picture safely (%s)", async (order) => {
   const canManage = order !== "visitor";
@@ -217,8 +255,10 @@ it.each([
     alt: "Another picture",
   };
   const late = order === "update reply before conflict refresh";
+  const gone = order === "removed elsewhere, refresh fails";
   const conflict =
     late ||
+    gone ||
     order === "picture already removed" ||
     order === "conflict refresh fails";
   const session = switchableMe("ada");
@@ -250,7 +290,7 @@ it.each([
     });
     if (order === "lost removal reply")
       throw new ContributionsError(0, "Connection lost.");
-    if (conflict)
+    if (conflict && changePicture.mock.calls.length === 1)
       throw new ContributionsError(409, "Picture changed.", "image_changed");
     return { kind: "tile" };
   });
@@ -317,8 +357,8 @@ it.each([
     held = new Promise(() => {});
   }
   if (late) held = new Promise((resolve) => (release = resolve));
-  if (order === "picture already removed") item = fixture();
-  failReads = order === "conflict refresh fails";
+  if (order === "picture already removed" || gone) item = fixture();
+  failReads = order === "conflict refresh fails" || gone;
   await act(async () => finishRemoval());
   if (late) {
     // While the conflict refresh is out, the update's reply lands with a
@@ -335,6 +375,15 @@ it.each([
     if (late) {
       await screen.findByRole("img", { name: newer.alt });
       expect(remove()).toBeTruthy();
+    }
+    if (gone) {
+      failReads = false;
+      await user.click(screen.getByRole("button", { name: "Reload picture" }));
+      await screen.findByRole("img", { name: "General" });
+      expect(document.activeElement).toBe(
+        screen.getByText("Picture reloaded."),
+      );
+      return;
     }
     if (failReads) {
       expect(
@@ -360,6 +409,11 @@ it.each([
       await user.click(reload());
       await screen.findByRole("img", { name: newer.alt });
       expect(document.activeElement).toBe(remove());
+      await user.keyboard("{Enter}");
+      await user.keyboard("{Enter}");
+      await act(async () => finishRemoval());
+      expect(await screen.findByText("Picture removed.")).toBeTruthy();
+      expect(screen.queryByText("Picture reloaded.")).toBeNull();
     }
     return;
   }
