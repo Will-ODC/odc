@@ -23,6 +23,7 @@ export function usePictureManagement({
   changePicture,
   retrySignInOnReturn = false,
   reloadOnConflict = true,
+  removalConflict,
   onPictureChanged,
   onSignedOut,
 }: {
@@ -34,6 +35,10 @@ export function usePictureManagement({
   changePicture: (change: PictureChange) => Promise<PublicImage>;
   retrySignInOnReturn?: boolean;
   reloadOnConflict?: boolean;
+  removalConflict?: {
+    imageId: string | null;
+    remember: (imageId: string) => void;
+  };
   onPictureChanged: (image: PublicImage) => void;
   onSignedOut: () => Promise<boolean>;
 }) {
@@ -74,7 +79,7 @@ export function usePictureManagement({
     } catch (error) {
       if (error instanceof ContributionsError || error instanceof ApiError) {
         if (error.code === "image_changed" && "expectedImageId" in change) {
-          setRefused(change.expectedImageId);
+          (removalConflict?.remember ?? setRefused)(change.expectedImageId);
           setReload(undefined);
           if (reloadOnConflict) await refreshPicture();
           setRemoving(null);
@@ -193,7 +198,9 @@ export function usePictureManagement({
       : removingShown && error
         ? { status: "failed", message: error }
         : { status: "idle" };
-  const stale = postedPicture !== undefined && postedPicture === refused;
+  const stale =
+    postedPicture !== undefined &&
+    postedPicture === (removalConflict?.imageId ?? refused);
   const showRemove =
     canWrite &&
     !stale &&

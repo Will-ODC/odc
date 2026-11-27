@@ -14,8 +14,10 @@ export function usePollPictureAccess(
     sessionAccountId: string;
     ownerId: string;
   } | null>(null);
+  const [checkingAccount, setCheckingAccount] = useState(false);
   useEffect(() => {
     setPermission(null);
+    setCheckingAccount(false);
     if (!pollId || sessionAccountId === null) return;
     let latestRequest = 0;
     let retryOnFocus = false;
@@ -24,16 +26,22 @@ export function usePollPictureAccess(
     const refresh = async (readCurrentAccount: boolean) => {
       const request = ++latestRequest;
       retryOnFocus = false;
+      if (readCurrentAccount) setCheckingAccount(true);
       try {
         const ownerId = readCurrentAccount
           ? (await api.me())?.id
           : sessionAccountId;
-        if (request !== latestRequest || !ownerId) return;
+        if (request !== latestRequest) return;
+        if (!ownerId) {
+          retryOnFocus = true;
+          return;
+        }
         setPermission((current) =>
           current?.ownerId === ownerId ? current : null,
         );
         const canManage = await api.pollPictureAccess(pollId);
         if (request !== latestRequest) return;
+        setCheckingAccount(false);
         setPermission(
           canManage === true
             ? { api, pollId, sessionAccountId, ownerId }
@@ -76,5 +84,5 @@ export function usePollPictureAccess(
         : current,
     );
   }, [api, pollId, sessionAccountId, ownerId]);
-  return { ownerId, revoke };
+  return { ownerId, checkingAccount, revoke };
 }

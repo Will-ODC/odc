@@ -548,9 +548,13 @@ function LoadedQuestion({
   const poll = fetched.status === "ready" ? fetched.value : null;
   const { session, onPollLoaded } = identity;
   const accountId = session.status === "signedIn" ? session.me.id : null;
-  const { ownerId: pictureOwnerId, revoke: revokePictureAccess } =
-    usePollPictureAccess(api, poll?.id, accountId);
+  const {
+    ownerId: pictureOwnerId,
+    checkingAccount: checkingPictureAccount,
+    revoke: revokePictureAccess,
+  } = usePollPictureAccess(api, poll?.id, accountId);
   const [updatedImage, setUpdatedImage] = useState<PublicImage>();
+  const [refusedPicture, setRefusedPicture] = useState<string | null>(null);
 
   useLayoutEffect(() => {
     onPollLoaded(poll);
@@ -649,6 +653,11 @@ function LoadedQuestion({
                         id={poll.id}
                         accountId={pictureOwnerId}
                         image={image}
+                        checkingAccount={checkingPictureAccount}
+                        removalConflict={{
+                          imageId: refusedPicture,
+                          remember: setRefusedPicture,
+                        }}
                         onPictureChanged={setUpdatedImage}
                         revokeAccess={revokePictureAccess}
                       />
@@ -729,6 +738,8 @@ function PollPictureForm({
   id,
   accountId,
   image,
+  checkingAccount,
+  removalConflict,
   onPictureChanged,
   revokeAccess,
 }: {
@@ -736,6 +747,11 @@ function PollPictureForm({
   id: string;
   accountId: string;
   image: PublicImage | undefined;
+  checkingAccount: boolean;
+  removalConflict: {
+    imageId: string | null;
+    remember: (imageId: string) => void;
+  };
   onPictureChanged: (image: PublicImage) => void;
   revokeAccess: () => void;
 }) {
@@ -762,7 +778,8 @@ function PollPictureForm({
     api,
     image,
     access: "signedIn",
-    canManage: true,
+    canManage: !checkingAccount,
+    removalConflict,
     readPicture: async () => {
       const request = ++pictureRequests.current;
       const current = await api.poll(id, AbortSignal.timeout(15_000));
@@ -795,6 +812,7 @@ function PollPictureForm({
   return (
     <PictureManagement
       management={management}
+      hidden={checkingAccount}
       signInHref={pathOf({
         kind: "signIn",
         returnTo: { kind: "conversation", pollId: id },

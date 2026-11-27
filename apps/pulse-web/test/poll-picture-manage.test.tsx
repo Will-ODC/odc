@@ -341,3 +341,82 @@ it("rechecks picture permission on focus after a temporary failure", async () =>
   await act(async () => window.dispatchEvent(new Event("focus")));
   expect(await screen.findByText("Manage picture")).toBeTruthy();
 });
+
+it("hides the previous poster's draft while an account change is unverified", async () => {
+  mockPreviewUrl();
+  let me = poster;
+  let failAccountRead = false;
+  const user = open({
+    me: async () => {
+      if (failAccountRead) throw new ApiError(503, "Try again.");
+      return me;
+    },
+    pollPictureAccess: async () => me === poster,
+    uploadPicture: async () => replacementId,
+  });
+  await expand(user);
+  await user.upload(
+    picturePicker(),
+    new File(["new"], "bench.jpg", { type: "image/jpeg" }),
+  );
+  await user.type(
+    await screen.findByRole("textbox", { name: "Picture description" }),
+    replacementAlt,
+  );
+
+  me = visitor;
+  failAccountRead = true;
+  await act(async () =>
+    window.dispatchEvent(new StorageEvent("storage", { key: SIGNED_IN_KEY })),
+  );
+  expect(
+    screen.queryByRole("textbox", { name: "Picture description" }),
+  ).toBeNull();
+  expect(screen.getByText("Manage picture").closest("details")?.hidden).toBe(
+    true,
+  );
+
+  failAccountRead = false;
+  await act(async () => window.dispatchEvent(new Event("focus")));
+  expect(screen.queryByText("Manage picture")).toBeNull();
+
+  me = poster;
+  await act(async () =>
+    window.dispatchEvent(new StorageEvent("storage", { key: SIGNED_IN_KEY })),
+  );
+  const field = await expand(user);
+  expect(
+    field.queryByRole("textbox", { name: "Picture description" }),
+  ).toBeNull();
+});
+
+it("keeps removal blocked for a conflicted picture after switching accounts", async () => {
+  let me = poster;
+  const user = open({
+    me: async () => me,
+    pollPictureAccess: async () => me === poster,
+    changePollPicture: async () => {
+      throw new ApiError(409, pictureChangedMessage, "image_changed");
+    },
+  });
+  await expand(user);
+  await confirmRemoval(user);
+  await user.keyboard("{Enter}");
+  await screen.findByText(pictureChangedMessage);
+
+  me = visitor;
+  await act(async () =>
+    window.dispatchEvent(new StorageEvent("storage", { key: SIGNED_IN_KEY })),
+  );
+  expect(screen.queryByText("Manage picture")).toBeNull();
+
+  me = poster;
+  await act(async () =>
+    window.dispatchEvent(new StorageEvent("storage", { key: SIGNED_IN_KEY })),
+  );
+  await expand(user);
+  expect(
+    screen.queryByRole("button", { name: "Remove posted picture" }),
+  ).toBeNull();
+  expect(action("Reload picture")).toBeTruthy();
+});

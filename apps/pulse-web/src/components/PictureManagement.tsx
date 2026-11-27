@@ -9,10 +9,12 @@ export function PictureManagement({
   management,
   removalQuestion,
   signInHref,
+  hidden = false,
 }: {
   management: PictureManagementController;
   removalQuestion: string;
   signInHref: string;
+  hidden?: boolean;
 }) {
   const {
     submit,
@@ -43,7 +45,7 @@ export function PictureManagement({
     checkSignIn,
   } = management;
   return (
-    <details className="picture-management">
+    <details className="picture-management" hidden={hidden}>
       <summary className="picture-management__summary">Manage picture</summary>
       <form
         className="picture-management__form"
